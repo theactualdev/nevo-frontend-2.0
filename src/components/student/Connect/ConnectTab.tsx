@@ -39,6 +39,7 @@ export function ConnectTab() {
     loading,
     failed,
     openThread: fetchThread,
+    markThreadRead,
     reply: sendLive,
     retry: retryLive,
   } = useStudentThreads();
@@ -131,9 +132,16 @@ export function ConnectTab() {
 
   const openThread = (id: string) => {
     setActiveId(id);
+    /*
+     * This cleared the dot on the FIXTURE array only - `setThreads` is
+     * `setFixtureThreads` - so a signed-in child's unread marker never moved
+     * and came back on every reload. The live clear is the write below, which
+     * the teacher console has made since the endpoint shipped.
+     */
     setThreads((ts) =>
       ts.map((t) => (t.id === id ? { ...t, unread: false } : t)),
     );
+    markThreadRead(id);
     setMobileView("thread");
   };
 

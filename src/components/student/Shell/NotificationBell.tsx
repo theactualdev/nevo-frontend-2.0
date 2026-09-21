@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
  * marks unread, no numbers anywhere.
  */
 export function NotificationBell({ className }: { className?: string }) {
-  const { notifications, unreadCount, failed } = useNotifications();
+  const { notifications, unreadCount, failed, markRead } = useNotifications();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
@@ -103,19 +103,42 @@ export function NotificationBell({ className }: { className?: string }) {
                 );
                 const row =
                   "flex items-start gap-3 rounded-[10px] px-3 py-3 text-left transition-colors hover:bg-nevo-cream-elevated";
-                return n.href ? (
-                  <Link
-                    key={n.id}
-                    href={n.href}
-                    onClick={() => setOpen(false)}
-                    className={row}
-                  >
-                    {body}
-                  </Link>
-                ) : (
+                /*
+                 * OPENING IT IS READING IT, on both kinds of row.
+                 *
+                 * A row without `navigatesTo` still gets a button, because it
+                 * now does something - it clears its own dot. It stays a plain
+                 * element only while it is already read, so nothing pretends
+                 * to be actionable when there is nothing left to do.
+                 */
+                if (n.href) {
+                  return (
+                    <Link
+                      key={n.id}
+                      href={n.href}
+                      onClick={() => {
+                        if (!n.read) markRead(n.id);
+                        setOpen(false);
+                      }}
+                      className={row}
+                    >
+                      {body}
+                    </Link>
+                  );
+                }
+                return n.read ? (
                   <div key={n.id} className={row}>
                     {body}
                   </div>
+                ) : (
+                  <button
+                    key={n.id}
+                    type="button"
+                    onClick={() => markRead(n.id)}
+                    className={cn(row, "w-full cursor-pointer")}
+                  >
+                    {body}
+                  </button>
                 );
               })}
             </div>

@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { useContext } from "react";
 import { NotificationContext, NotificationProvider } from "./NotificationContext";
 
@@ -38,12 +44,34 @@ vi.mock("@/hooks/useHydrated", () => ({
   useHydrated: () => hydrated.value,
 }));
 
+const listResult = vi.hoisted(() => ({
+  value: new Promise<unknown>(() => {}) as Promise<unknown>,
+}));
+const markRead = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/api/notifications", () => ({
-  notificationsApi: { list: () => new Promise(() => {}) },
+  notificationsApi: {
+    list: () => listResult.value,
+    markRead: (id: string) => markRead(id),
+  },
 }));
 
 const token = vi.hoisted(() => ({ value: undefined as string | undefined }));
 vi.mock("@/lib/auth/session", () => ({ getToken: () => token.value }));
+
+/** One unread row, as the feed returns them. */
+const feedOf = (read: boolean) => ({
+  notifications: [
+    {
+      notificationId: "n-1",
+      title: "A new lesson is ready",
+      description: null,
+      createdAt: new Date().toISOString(),
+      read,
+      navigatesTo: null,
+    },
+  ],
+  unreadCount: read ? 0 : 1,
+});
 
 /*
  * THE SAMPLES ARE MOCKED WITH A FABRICATION ON PURPOSE.
@@ -192,5 +220,94 @@ describe("the live path, which was already right", () => {
 
     expect(shown().count).toBe("0");
     expect(shown().failed).toBe("false");
+  });
+});
+
+describe("marking a notification read", () => {
+  /**
+   * THE CHILD'S BELL COULD NOT CLEAR ITS OWN DOT.
+   *
+   * `notificationsApi.markRead` has existed since the endpoint shipped and the
+   * admin panel has called it all along. The student bell called neither it nor
+   * `markAllRead`, so a notification stayed unread for a child who had read it,
+   * and the only thing that ever changed the state was a teacher or an admin
+   * opening the same row on their own screen.
+   *
+   * A port, not a build - which is why the interesting assertions here are the
+   * failure behaviour rather than the happy path.
+   */
+  const Probe2 = () => {
+    const ctx = useContext(NotificationContext)!;
+    return (
+      <div>
+        <span data-testid="unread">{ctx.unreadCount}</span>
+        <span data-testid="read">
+          {String(ctx.notifications[0]?.read ?? "none")}
+        </span>
+        <button type="button" onClick={() => ctx.markRead("n-1")}>
+          mark
+        </button>
+      </div>
+    );
+  };
+
+  const mount2 = () =>
+    render(
+      <NotificationProvider>
+        <Probe2 />
+      </NotificationProvider>,
+    );
+
+  beforeEach(() => {
+    hydrated.value = true;
+    hasSession.value = true;
+    token.value = "a-real-token";
+    markRead.mockReset().mockResolvedValue(undefined);
+    listResult.value = Promise.resolve(feedOf(false));
+  });
+
+  it("tells the server, and clears the dot straight away", async () => {
+    mount2();
+    await waitFor(() =>
+      expect(screen.getByTestId("unread").textContent).toBe("1"),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "mark" }));
+
+    expect(screen.getByTestId("read").textContent).toBe("true");
+    expect(screen.getByTestId("unread").textContent).toBe("0");
+    await waitFor(() => expect(markRead).toHaveBeenCalledWith("n-1"));
+  });
+
+  it("puts the dot back when the write does not land", async () => {
+    /*
+     * The half that matters. A notification shown as read but never marked is
+     * a message the child never sees again; a dot that returns is only the
+     * truthful state of a write that failed.
+     */
+    markRead.mockRejectedValue(new Error("offline"));
+    mount2();
+    await waitFor(() =>
+      expect(screen.getByTestId("unread").textContent).toBe("1"),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "mark" }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("read").textContent).toBe("false"),
+    );
+    expect(screen.getByTestId("unread").textContent).toBe("1");
+  });
+
+  it("does not write for a signed-out visitor", async () => {
+    // The samples are not anybody's notifications, and there is no token to
+    // write with.
+    token.value = undefined;
+    hasSession.value = false;
+    mount2();
+
+    fireEvent.click(screen.getByRole("button", { name: "mark" }));
+
+    await waitFor(() => expect(markRead).not.toHaveBeenCalled());
   });
 });
