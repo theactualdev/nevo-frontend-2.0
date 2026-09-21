@@ -9,9 +9,15 @@ const { LiveClassInsights } = await import("./LiveClassInsights");
 /**
  * C09 Insights for a real class.
  *
- * The distinction these tests exist to protect is the one the hook spells out
- * in its own type: `empty` means every read landed and there was nothing in
- * them; `failed` means every read failed. NEVER THE SAME THING.
+ * The distinction these tests exist to protect used to be two states and is
+ * now four: the engine says a class is `gathering` or `settled`, a failed
+ * read is neither, and a narrative that failed on its own is neither again.
+ *
+ * `empty` IS GONE, and it was the defect. It meant "every read landed and
+ * there was nothing in them", computed here from three array lengths - so a
+ * class having a genuinely good week was told Nevo was still gathering
+ * insights about it. The engine now says which, and the contract's own enum
+ * description is that bug written down.
  *
  * Collapsing them is not a cosmetic slip. "Still gathering insights for Year 7
  * Maths" shown over three failed requests is an AFFIRMATIVE, FALSE CLAIM about
@@ -30,8 +36,13 @@ const state = (over: Partial<ReturnType<typeof useClassInsights>> = {}) => ({
   concepts: [],
   flags: [],
   loading: false,
-  empty: false,
   failed: false,
+  state: null,
+  summary: null,
+  lookingAhead: null,
+  gathering: false,
+  settledWeek: false,
+  narrativeFailed: false,
   ...over,
 });
 
@@ -71,8 +82,10 @@ describe("LiveClassInsights - telling the three states apart", () => {
     expect(screen.queryByText(/Still gathering/)).not.toBeInTheDocument();
   });
 
-  it("says it is still gathering when the reads genuinely came back empty", () => {
-    useClassInsights.mockReturnValue(state({ empty: true }));
+  it("says it is still gathering only when the ENGINE says so", () => {
+    // This used to be keyed on three empty arrays. The engine owns the
+    // threshold now, and the console renders what it is given.
+    useClassInsights.mockReturnValue(state({ gathering: true }));
     render(<LiveClassInsights {...CLASS} />);
 
     expect(
@@ -81,10 +94,78 @@ describe("LiveClassInsights - telling the three states apart", () => {
     expect(screen.queryByText(/couldn’t load/i)).not.toBeInTheDocument();
   });
 
-  it("prefers the failure message when a read both failed and is empty", () => {
+  it("A SETTLED WEEK IS NOT A NEW CLASS, and no longer reads as one", () => {
+    /*
+     * THE DEFECT, in one test. A class with nothing flagged, no
+     * misconception above the floor and no mastery rows yet is either a
+     * class having a good week or a class Nevo has not seen. The console
+     * could not tell, and told every one of them the same thing.
+     */
+    useClassInsights.mockReturnValue(
+      state({
+        settledWeek: true,
+        summary: "A calm week. Everyone is moving through the material.",
+      }),
+    );
+    render(<LiveClassInsights {...CLASS} />);
+
+    expect(screen.queryByText(/Still gathering/)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/A calm week. Everyone is moving through the material./),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/A settled week/)).toBeInTheDocument();
+  });
+
+  it("shows the engine's written week, in its own words", () => {
+    // The summary and the looking-ahead line were fixture-only on every
+    // screen that draws them: the endpoint shipped on 15 Sep and nothing
+    // called it until today.
+    useClassInsights.mockReturnValue(
+      state({
+        summary: "Eight students slowed on the same step this week.",
+        lookingAhead: "Common denominators are coming up on Thursday.",
+      }),
+    );
+    render(<LiveClassInsights {...CLASS} />);
+
+    expect(
+      screen.getByText(/Eight students slowed on the same step/),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Looking ahead")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Common denominators are coming up/),
+    ).toBeInTheDocument();
+  });
+
+  it("says the summary is missing rather than letting a blank screen speak", () => {
+    // The narrative failed on its own and the three sections are empty. An
+    // empty screen would read as a quiet class, which is the claim this
+    // whole file exists to stop making.
+    useClassInsights.mockReturnValue(state({ narrativeFailed: true }));
+    render(<LiveClassInsights {...CLASS} />);
+
+    expect(screen.getByText(/couldn’t load this week’s summary/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Still gathering/)).not.toBeInTheDocument();
+  });
+
+  it("says nothing about a missing summary when the sections have content", () => {
+    useClassInsights.mockReturnValue(
+      state({
+        narrativeFailed: true,
+        flags: [
+          { id: "f1", name: "Amara", note: "Stopped halfway", isSudden: false },
+        ],
+      }),
+    );
+    render(<LiveClassInsights {...CLASS} />);
+
+    expect(screen.queryByText(/couldn’t load this week’s summary/i)).not.toBeInTheDocument();
+  });
+
+  it("prefers the failure message when everything failed", () => {
     // `failed` is checked first by design: an empty result set produced BY a
     // failure is a failure, and claiming otherwise is the false claim again.
-    useClassInsights.mockReturnValue(state({ failed: true, empty: true }));
+    useClassInsights.mockReturnValue(state({ failed: true, gathering: true }));
     render(<LiveClassInsights {...CLASS} />);
 
     expect(
