@@ -175,6 +175,19 @@ export interface CalculationSegment {
    */
   scaffold?: { kind: string; parts: number; rows: number[] };
   /**
+   * The generated manipulative a `drag` step is built on (21 Sep).
+   *
+   * SEPARATE FROM `scaffold` ABOVE, deliberately. That one is the authored
+   * demo's, and its `rows` is `number[]` - the numerators of the fractions
+   * being added. The wire's `rows` is a count of piece rows. Folding them into
+   * one field would draw a bar with as many divisions as there are addends.
+   *
+   * `target` is how many pieces the child places, resolved from the drag
+   * step's own answer rather than computed here - rule 3 keeps the frontend
+   * out of deciding what a correct quantity is.
+   */
+  manipulative?: { kind: string; parts: number; target: number };
+  /**
    * How the equation should read as the child works, one entry per step, plus
    * the opening state at index 0 where the backend gives one. Authored
    * fraction content has none and renders its own bars instead.
