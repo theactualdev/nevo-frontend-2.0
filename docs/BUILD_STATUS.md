@@ -3780,6 +3780,41 @@ the distinction is now the sharper one worth keeping straight.
 **Still the nothing-state when an instruction arrives empty.** Neither field is
 required, so that is a real case rather than a defensive one.
 
+### MAIN IS RED: the contract gate, 21 Sep — parent lane, and it blocks every PR
+
+**`npm run contract` fails on `origin/main`**, not on any one branch. Reproduced
+on a clean checkout of main with the same two findings:
+
+```
+src/lib/api/consents.ts:144   POST /api/v1/consents/parent/complete requires "grantedTypes", not sent
+src/lib/api/parent.ts:257     POST /api/v1/consents/parent/complete requires "grantedTypes", not sent
+```
+
+**The spec moved today.** A fetch this morning had
+`CompleteParentConsentRequest.required = [token]`. A fetch this afternoon has
+`[token, grantedTypes]`, and the schema also gained `childDateOfBirth` and
+`parentRelationship`. Nothing in the repo changed; the wire did.
+
+**Why this is not a two-line fix by whoever finds it.** `parent.ts:257`'s own
+docblock records a design ruling: *"The token is the whole request - there is
+nothing to choose, because design ruled one blanket consent and one tap, and the
+invitation already carries which `consentTypes` it covers."* The client has no
+per-type choice to report, so inventing a list would be fabricating a consent
+record - which is the most serious version of this codebase's recurring failure
+mode and is NDPA-relevant.
+
+**The honest fix, and the data is already in hand.**
+`GET /api/v1/consents/parent/{token}` returns `ParentConsentInvitationResponse`
+with `consentTypes`, and `parent.ts:73` already types it. The parent screen
+therefore already knows the exact set it showed the parent before they tapped.
+Echoing that set back as `grantedTypes` is not a guess - it is the set they were
+shown and agreed to, which is precisely what a blanket one-tap consent means.
+
+**Not taken from here.** It is the parent lane's screen, the signature and its
+call site both move, and consent is not a file to reach into from another lane
+on an assumption. Flagged rather than fixed; it is a short job for whoever owns
+it, and main stays red until it is done.
+
 ### BUILT: co-construction reaches generated content, 21 Sep
 
 `CalculationVariant.manipulative` landed as `Manipulative`
