@@ -8,15 +8,19 @@ import { cn } from "@/lib/utils";
 /**
  * C09 Insights for a real class.
  *
- * Three sections have sources and are here: the shared misconception, the
- * class-mastery panel, and what is flagged. C09's written summary, its
- * per-student recommendations and C14 A2's "looking ahead" have none, so they
- * are absent - the frame's own principle for a quiet week is that a section
- * with nothing true to say is not drawn at all, and inventing prose about a
- * real class would be the worst kind of filler.
+ * THE WRITTEN WEEK IS LIVE (21 Sep). C09's summary and C14 A2's looking
+ * ahead were recorded here as having no source; the endpoint has been
+ * deployed since 15 Sep and nothing called it, so both screens that draw
+ * this prose drew it from fixtures. They are the engine's words now.
  *
- * A class with nothing in any of the three gets C09's sparse card, which is
- * exactly true of a class Nevo has not analysed yet.
+ * AND THE QUIET-WEEK READING IS THE ENGINE'S TOO. This screen used to be
+ * handed an `empty` computed from three array lengths, which could not tell
+ * a settled week from a new class - so a class having a good week was told
+ * Nevo was still gathering insights about it. `state` says which, and the
+ * two now read differently on purpose.
+ *
+ * The per-student recommendations still have no source and stay absent
+ * rather than becoming invented prose about a real class.
  */
 
 const SECTION_H =
@@ -36,8 +40,18 @@ export function LiveClassInsights({
   classId: string;
   className: string;
 }) {
-  const { misconceptions, concepts, flags, loading, empty, failed } =
-    useClassInsights(classId);
+  const {
+    misconceptions,
+    concepts,
+    flags,
+    loading,
+    failed,
+    summary,
+    lookingAhead,
+    gathering,
+    settledWeek,
+    narrativeFailed,
+  } = useClassInsights(classId);
 
   if (loading) {
     return (
@@ -76,7 +90,7 @@ export function LiveClassInsights({
     );
   }
 
-  if (empty) {
+  if (gathering) {
     return (
       <div className="mt-8 flex max-w-[640px] items-start gap-4 rounded-xl bg-nevo-cream-elevated p-7 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
         <span className="mt-px size-[22px] shrink-0 text-nevo-violet xl:size-6">
@@ -99,12 +113,39 @@ export function LiveClassInsights({
     );
   }
 
+  const nothingElse =
+    misconceptions.length === 0 && concepts.length === 0 && flags.length === 0;
+
   const lead = [...misconceptions].sort(
     (a, b) => b.studentCount - a.studentCount,
   )[0];
 
   return (
     <>
+      {summary && (
+        <div className="mt-[18px] max-w-[760px] rounded-xl bg-nevo-cream-elevated px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-[22px] xl:px-[26px] xl:py-6">
+          <p className="text-[14.5px] leading-[1.6] text-nevo-near-black/82 xl:text-[15.5px]">
+            {summary}
+          </p>
+          {settledWeek && (
+            /* A calm week is a RESULT, not an absence. Before the engine
+               said which was which, this class got "still gathering". */
+            <p className="mt-2.5 text-[13.5px] leading-[1.55] text-nevo-near-black/60">
+              A settled week. Nothing here needs you.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* The written week failed on its own, and the sections below it did
+          not. Saying nothing would let an empty screen read as a quiet
+          class, which is the claim this hook exists to stop making. */}
+      {narrativeFailed && nothingElse && (
+        <p className="mt-[18px] max-w-[660px] text-[14.5px] leading-[1.55] text-nevo-near-black/68">
+          {`We couldn${"\u2019"}t load this week${"\u2019"}s summary for ${className}. Nothing has changed for the class - you can try again in a moment.`}
+        </p>
+      )}
+
       {lead && (
         <div className="mt-[18px] rounded-xl bg-nevo-violet/14 px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-[22px] xl:px-[26px] xl:py-6">
           <span className="text-[11px] font-bold tracking-[0.14em] text-nevo-navy uppercase">
@@ -194,6 +235,20 @@ export function LiveClassInsights({
                 reading={c.reading}
               />
             ))}
+          </div>
+        </>
+      )}
+
+      {lookingAhead && (
+        <>
+          {/* C14 A2's forward look, in the treatment the designed screen
+              gives it: violet left rule, its own heading, below the week
+              it follows from. The engine writes it. */}
+          <h3 className={SECTION_H}>Looking ahead</h3>
+          <div className="mt-3.5 max-w-[660px] rounded-xl border-l-[3px] border-nevo-violet bg-nevo-cream-elevated px-5 py-[18px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-4 xl:px-6 xl:py-[22px]">
+            <p className="text-[14.5px] leading-[1.6] text-nevo-near-black/82 xl:text-[15.5px]">
+              {lookingAhead}
+            </p>
           </div>
         </>
       )}

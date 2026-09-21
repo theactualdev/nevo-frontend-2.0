@@ -531,6 +531,40 @@ export const conversationEvidenceApi = {
     ),
 };
 
+/**
+ * Which of three things the weekly class view is saying.
+ *
+ * THE ENGINE OWNS THIS NOW, and the enum's own description in the contract
+ * says why, in the words of the defect it closes: the console was deciding
+ * it from the length of three arrays, which put a threshold in the client
+ * and could not tell a settled week from a new class - so a class having a
+ * good week was told insights were still being gathered.
+ *
+ * `summary` is the schema's default and is what an omitted field means.
+ * It is optional on the response, so a server that says nothing is saying
+ * `summary`, never `unknown`.
+ */
+export type ClassInsightState = "summary" | "settled" | "gathering";
+
+/**
+ * C09's written summary and C14 A2's looking-ahead line, for one class.
+ *
+ * `weeklySummary` and `lookingAhead` are REQUIRED and non-nullable, so the
+ * engine cannot express an empty week by absence - which is what design's
+ * 16 Sep ruling asked for and the contract could not support. `state` is
+ * how it says so instead: the prose always arrives, and the state says how
+ * to read it.
+ */
+export interface ClassInsightsNarrative {
+  classId: string;
+  className: string;
+  weeklySummary: string;
+  lookingAhead: string;
+  generatedAt: string;
+  /** Optional on the wire; absent means `summary`, per the schema. */
+  state?: ClassInsightState;
+}
+
 export const classInsightsApi = {
   /**
    * Shared misconceptions. `minimumStudents` filters out one-offs.
@@ -547,4 +581,14 @@ export const classInsightsApi = {
 
   mastery: (classId: string) =>
     api.get<ClassMasteryRow[]>(`/api/mastery/class/${classId}`),
+
+  /**
+   * The written week: C09's summary and C14 A2's looking-ahead line.
+   *
+   * Deployed since 15 Sep and called by nothing until today. Both screens
+   * that draw this prose drew it from fixtures, so a signed-in teacher read
+   * a summary of a class that was not theirs, or nothing at all.
+   */
+  narrative: (classId: string) =>
+    api.get<ClassInsightsNarrative>(`/api/v1/classes/${classId}/insights`),
 };
