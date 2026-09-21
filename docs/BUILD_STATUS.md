@@ -2259,6 +2259,19 @@ material about a named child, **this console reopens**, and it reopens on its
 most sensitive screens rather than its edges. Closed is a statement about
 engineering, not a bet on the ruling.
 
+**IT GOES TO COUNSEL DISCLOSED, NOT WITHDRAWN — confirmed 21 Sep, and this is
+the operative instruction.** Accommodations, the IEP export and per-learner
+adaptation counts **stay built and stay shipping** while Oladayo rules. Nobody
+is to pre-emptively strip them the way the per-child transformation metrics
+were struck: those were withdrawn by a product ruling (SCRUM-169), whereas this
+is a question put to a lawyer with the surface described as it stands. Removing
+it first would make the disclosure inaccurate — we would be asking him to rule
+on something that no longer exists — and would cost the SENCo surface for a
+ruling that may never go against us.
+
+**Build nothing new on it, remove nothing from it, wait.** The other three
+reopen triggers still apply to the rest of the console.
+
 **One thing already checked, so nobody re-checks it in a panic.** SCRUM-169
 strikes the four per-child transformation metrics and warns that *"the document
 now with Oladayo Akande states that nothing in the product describes a child …
