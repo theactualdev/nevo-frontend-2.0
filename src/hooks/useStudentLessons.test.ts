@@ -105,3 +105,75 @@ describe("which lessons reach a child's Lessons tab", () => {
     expect(result.current.live).toBe(true);
   });
 });
+
+describe("what the live row carries onto the card", () => {
+  /**
+   * THE HOOK'S OWN DOCBLOCK WAS OUT OF DATE, AND THE SCREEN BELIEVED IT.
+   *
+   * It said assignments carry no subject and no time estimate. Both had
+   * shipped - `subject` on 31 Aug, `estimatedMinutes` on 1 Sep - and the
+   * nested `LessonSummaryResponse` carries them, checked against the deployed
+   * spec rather than against the comment. So a signed-in child's list was
+   * ungrouped and read "4 sections" where the designed one reads "About 12
+   * min", for no reason but a stale sentence.
+   */
+  const withLesson = (over: Record<string, unknown>) =>
+    read([
+      {
+        id: "a-1",
+        status: "assigned",
+        availableFrom: null,
+        lesson: { id: "l-1", title: "Adding Fractions", segmentCount: 4, ...over },
+      },
+    ]);
+
+  const first = () => renderHook(() => useStudentLessons()).result.current.lessons[0];
+
+  it("carries the subject the lesson was uploaded with", () => {
+    withLesson({ subject: "Mathematics" });
+
+    expect(first().subject).toBe("Mathematics");
+  });
+
+  it("carries no subject when the lesson has none", () => {
+    // Only the staged upload routes can set one, so most lessons have none -
+    // and a subject invented for them would name something nobody chose.
+    withLesson({ subject: null });
+
+    expect(first().subject).toBeUndefined();
+  });
+
+  it("treats a blank subject as no subject", () => {
+    withLesson({ subject: "   " });
+
+    expect(first().subject).toBeUndefined();
+  });
+
+  it("says about how long the lesson takes", () => {
+    // "About" because it is estimated from word count at a school reading
+    // pace - a planning figure, not a measurement of this child.
+    withLesson({ estimatedMinutes: 12 });
+
+    expect(first().timeEstimate).toBe("About 12 min");
+  });
+
+  it("falls back to the section count when nobody estimated one", () => {
+    /*
+     * ZERO AND ABSENT BOTH MEAN "NO ESTIMATE". `estimatedMinutes` is floored
+     * per content type so a real lesson is never 0, which makes 0 - its schema
+     * default - the unset case rather than a very short lesson. Neither may be
+     * drawn as "0 min".
+     */
+    withLesson({ estimatedMinutes: 0 });
+    expect(first().timeEstimate).toBe("4 sections");
+
+    withLesson({});
+    expect(first().timeEstimate).toBe("4 sections");
+  });
+
+  it("counts one section as a section", () => {
+    withLesson({ segmentCount: 1 });
+
+    expect(first().timeEstimate).toBe("1 section");
+  });
+});

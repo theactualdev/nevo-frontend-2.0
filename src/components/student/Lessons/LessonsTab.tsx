@@ -80,6 +80,21 @@ export function LessonsTab() {
   }, [source, query, filter]);
 
   const noResults = groups.length === 0;
+  /*
+   * WHAT IS ACTUALLY NARROWING THE LIST.
+   *
+   * The empty state said "No lessons match your search" and offered "Clear
+   * search", which cleared the query alone. Two things were wrong with that.
+   *
+   * A status chip empties the list just as easily as a search does, and with
+   * no query typed the copy blamed a search the child never made. And after
+   * tapping "Clear search" with a chip still on, the screen stayed empty - the
+   * one control offered did not restore anything, which reads as the button
+   * being broken rather than as the chip still being on.
+   *
+   * So the copy names whichever is narrowing, and the control clears both.
+   */
+  const searching = query.trim().length > 0;
   /** Nothing has been assigned yet - different from a search finding nothing. */
   const nothingAssigned = live && liveLessons.length === 0;
 
@@ -228,17 +243,24 @@ export function LessonsTab() {
             className="w-[170px]"
           />
           <h2 className="mt-5 text-lg font-medium text-nevo-near-black">
-            No lessons match your search
+            {searching
+              ? "No lessons match your search"
+              : "Nothing in that group yet"}
           </h2>
           <p className="mt-1.5 max-w-[280px] text-sm leading-[1.5] text-nevo-near-black/60">
-            Try a different word, or clear the search to see everything.
+            {searching
+              ? "Try a different word, or see everything."
+              : "Try another group, or see everything."}
           </p>
           <button
             type="button"
-            onClick={() => setQuery("")}
+            onClick={() => {
+              setQuery("");
+              setFilter("all");
+            }}
             className="mt-5 h-11 cursor-pointer rounded-[10px] px-[22px] text-[15px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
           >
-            Clear search
+            Show all lessons
           </button>
         </div>
       ) : (
