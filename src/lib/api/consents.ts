@@ -52,6 +52,31 @@ export type ConsentType =
 export type ConsentStatus = "not_sent" | "pending" | "confirmed" | "withdrawn";
 
 /**
+ * How Nevo reaches a parent. EMAIL, AND NOTHING ELSE.
+ *
+ * The backend half of SCRUM-162 landed on 20 Sep and we did not notice for a
+ * day. Three separate comments in this codebase - here, in `parent.ts` and in
+ * `useConsentRequests.ts` - each said *"the deployed enum is still
+ * `["email","sms"]` (re-checked 21 Sep)"*. It was not. `ParentContactMethod` is a
+ * one-member enum and has been since the ruling.
+ *
+ * That reasoning was sound when written, which is why it survived: keeping a
+ * value the API still sends is correct, and deleting one it still sends is the
+ * `fromContent` defect exactly. The PREMISE expired, not the logic. A comment
+ * stating a fact about the contract is a claim with a shelf life, and nothing
+ * re-checks it when the contract moves.
+ *
+ * Backend's own reason for keeping the member rather than deleting the enum:
+ * *"a contact method is still a fact a consent record states, and a record
+ * that states nothing cannot say how a parent was reached."*
+ *
+ * The ruling: *"You cannot collect personal data you have no use for. Four
+ * hundred parents' phone numbers that nothing ever sends to are four hundred
+ * pieces of personal data with no lawful purpose."*
+ */
+export type ParentContactMethod = "email";
+
+/**
  * GET /students/me/consent-gate.
  *
  * Named for the endpoint, not for a gate we implement - see the header. Kept
@@ -119,7 +144,7 @@ export interface ParentLink {
   parentId: string | null;
   parentName: string;
   parentContact: string;
-  contactMethod: "email" | "sms";
+  contactMethod: ParentContactMethod;
   accountCreated: boolean;
 }
 
@@ -149,7 +174,7 @@ export const consentsApi = {
     payload: {
       parentName: string;
       parentContact: string;
-      contactMethod: "email" | "sms";
+      contactMethod: ParentContactMethod;
       consentTypes?: ConsentType[];
     },
   ) =>
