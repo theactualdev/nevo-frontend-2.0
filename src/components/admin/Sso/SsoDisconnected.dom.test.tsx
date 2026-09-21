@@ -33,6 +33,9 @@ vi.mock("@/lib/api/sso", async (importOriginal) => {
         reauthorisedAt: null,
         lastSuccessfulSyncAt: "2026-09-08T06:00:00Z",
         nextScheduledSyncAt: null,
+        credentialExpiresAt: null,
+        credentialExpiresInDays: null,
+        credentialExpiringSoon: false,
         disconnectedAt: "2026-09-12T10:00:00Z",
         dataFlow: [
           { key: "name", description: "Name", purpose: "so people appear as themselves" },

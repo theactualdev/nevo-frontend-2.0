@@ -76,6 +76,33 @@ export interface SsoStatus {
   lastSuccessfulSyncAt: string | null;
   nextScheduledSyncAt: string | null;
   disconnectedAt: string | null;
+  /**
+   * WHEN THE SIGNING CREDENTIAL LAPSES - the only fully predictable lockout in
+   * the product, and invisible to us until 21 Sep.
+   *
+   * All three arrived together and none was read. The screen that needs them
+   * (D17's IT home) had the card DELIBERATELY absent with a TODO(api) above it,
+   * so the field landing and the card appearing were never going to be the same
+   * event unless somebody went looking.
+   *
+   * WE ASKED FOR "certificateExpiresAt" AND BACKEND BUILT "credentialExpiresAt".
+   * Every re-check afterwards searched for the name WE had proposed:
+   * docs/BUILD_STATUS.md still records *"`certificate` is 0 occurrences
+   * spec-wide"*, which was true and meant nothing. A capability we ask for can
+   * be delivered under a name we did not choose. Grep for the capability.
+   *
+   * "credentialExpiringSoon" IS THE SERVER'S JUDGEMENT AND MUST NOT BE
+   * RECOMPUTED. It is not "credentialExpiresInDays < 30", and the frontend does
+   * not get to decide what "soon" means for a school's signing credential - see
+   * rule 3. Read the boolean; render the number only as description.
+   *
+   * "credentialExpiresInDays" is NULLABLE while "credentialExpiringSoon" is
+   * not, so "expiring soon, days unknown" is a real state that the copy has to
+   * survive without printing "in null days".
+   */
+  credentialExpiresAt: string | null;
+  credentialExpiresInDays: number | null;
+  credentialExpiringSoon: boolean;
   dataFlow: SsoDataFlowCategory[];
 }
 

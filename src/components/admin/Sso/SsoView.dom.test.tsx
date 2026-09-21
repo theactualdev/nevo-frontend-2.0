@@ -86,6 +86,9 @@ const CONNECTED: SsoStatus = {
   reauthorisedAt: null,
   lastSuccessfulSyncAt: "2026-09-08T06:00:00Z",
   nextScheduledSyncAt: null,
+  credentialExpiresAt: null,
+  credentialExpiresInDays: null,
+  credentialExpiringSoon: false,
   disconnectedAt: null,
   dataFlow: [],
 };

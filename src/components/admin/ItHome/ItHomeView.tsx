@@ -25,19 +25,22 @@ import { attentionCount, itHomeRows } from "./itHomeRows";
  * IT contractor does not hold, so their first sight of Nevo was a refusal. See
  * `adminHomeForScopes`.
  *
- * TWO THINGS THE FRAME DRAWS THAT THE CONTRACT CANNOT FILL:
+ * ONE THING THE FRAME DRAWS THAT THE CONTRACT CANNOT FILL:
  *
  * - "2 connected · Microsoft + Google". `GET /admin/sso/status` returns ONE
  *   `SsoConnectionHealthResponse` with a single `provider`. One provider per
  *   school is what the data model says, so the card NAMES the provider rather
  *   than counting providers. This is a product question, not a missing
  *   endpoint - do not file it as one.
- * - "SSO signing certificate renews in 40 days". There is no certificate or
- *   expiry field anywhere in the contract; the only `expiry*` fields belong to
- *   payment cards. The card is absent rather than invented.
  *
- * TODO(api): a certificate expiry on the SSO status, if IT is meant to be
- * warned before a signing certificate lapses. Nothing today can see it coming.
+ * THE SECOND ONE IS NOW BUILT. "SSO signing certificate renews in 40 days" sat
+ * here for weeks as a deliberate absence, under a `TODO(api)` asking for a
+ * certificate expiry. Backend shipped it on 21 Sep as `credentialExpiresAt` /
+ * `credentialExpiresInDays` / `credentialExpiringSoon`, and we did not notice
+ * for a day because every re-check grepped for "certificate" - the word in OUR
+ * ask, not the word in THEIR schema. It renders as a glance row rather than a
+ * standalone card, so it sorts against everything else wanting attention
+ * instead of competing with it. See `itHomeRows`.
  *
  * A FAILED HISTORY READ NEVER READS AS HEALTH. The reassuring clause is
  * suppressed and replaced with the admission - the same correction D10 needed

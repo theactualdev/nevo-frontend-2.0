@@ -21,6 +21,9 @@ const status = (over: Partial<SsoStatus> = {}): SsoStatus => ({
   reauthorisedAt: null,
   lastSuccessfulSyncAt: "2026-09-14T06:00:00Z",
   nextScheduledSyncAt: null,
+  credentialExpiresAt: null,
+  credentialExpiresInDays: null,
+  credentialExpiringSoon: false,
   disconnectedAt: null,
   dataFlow: [],
   ...over,
@@ -131,6 +134,94 @@ describe("itHomeRows", () => {
       false,
     );
     expect(keys(rows)).not.toContain("imported");
+  });
+
+  it("reads the server's own judgement of \"soon\", and never recomputes it", () => {
+    // THE WHOLE POINT OF THIS TEST. A 25-day expiry with the server saying
+    // NOT soon must produce nothing. Any client-side "days < 30" would fire
+    // here, which is rule 3 - the frontend does not decide what soon means
+    // for a school's signing credential.
+    const rows = itHomeRows(
+      status({ credentialExpiresInDays: 25, credentialExpiringSoon: false }),
+      null,
+      false,
+    );
+    expect(keys(rows)).not.toContain("credential");
+  });
+
+  it("raises the credential when the server says soon, even with no day count", () => {
+    // `credentialExpiresInDays` is nullable and `credentialExpiringSoon` is not,
+    // so this is a real state. The row must still appear, and must not print
+    // the null.
+    const rows = itHomeRows(
+      status({ credentialExpiresInDays: null, credentialExpiringSoon: true }),
+      null,
+      false,
+    );
+    const row = rows.find((r) => r.key === "credential")!;
+    expect(row).toBeDefined();
+    expect(row.title).not.toMatch(/null|undefined|NaN/);
+    expect(row.title).toMatch(/expires soon/i);
+  });
+
+  it("counts a day rather than days when there is one left", () => {
+    const rows = itHomeRows(
+      status({ credentialExpiresInDays: 1, credentialExpiringSoon: true }),
+      null,
+      false,
+    );
+    expect(rows.find((r) => r.key === "credential")!.title).toMatch(
+      /in 1 day$/,
+    );
+  });
+
+  it("says a lapsed credential has expired, not that it expires in 0 days", () => {
+    const rows = itHomeRows(
+      status({ credentialExpiresInDays: 0, credentialExpiringSoon: true }),
+      null,
+      false,
+    );
+    const row = rows.find((r) => r.key === "credential")!;
+    expect(row.title).toMatch(/has expired/i);
+    expect(row.title).not.toMatch(/0 day/);
+    // "Nothing has changed yet" is false once it has lapsed.
+    expect(row.sub).not.toMatch(/nothing has changed/i);
+  });
+
+  it("does not tell a school its access needs renewing twice", () => {
+    // `needs_attention` already owns the renewal message. Saying both makes
+    // the urgent one read as the lesser of two.
+    const rows = itHomeRows(
+      status({
+        status: "needs_attention",
+        credentialExpiresInDays: 3,
+        credentialExpiringSoon: true,
+      }),
+      null,
+      false,
+    );
+    expect(keys(rows)).toContain("reauthorise");
+    expect(keys(rows)).not.toContain("credential");
+  });
+
+  it("does not claim what lapsing does, because the contract does not say", () => {
+    const rows = itHomeRows(
+      status({ credentialExpiresInDays: 12, credentialExpiringSoon: true }),
+      null,
+      false,
+    );
+    const row = rows.find((r) => r.key === "credential")!;
+    const text = `${row.title} ${row.sub}`;
+    expect(text).not.toMatch(/locked out|lose access|stop working|cannot sign in/i);
+  });
+
+  it("counts the credential as something wanting a decision", () => {
+    const rows = itHomeRows(
+      status({ credentialExpiresInDays: 12, credentialExpiringSoon: true }),
+      null,
+      false,
+    );
+    expect(attentionCount(rows)).toBe(1);
   });
 
   it("sends every row to IT & SSO, never to a roster screen", () => {
