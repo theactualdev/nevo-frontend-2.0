@@ -76,9 +76,27 @@ export function CalculationSolver({
    * authored.
    */
   const scaffold = calculation.scaffold;
-  const parts = scaffold?.parts ?? 0;
   const rows = scaffold?.rows ?? [];
-  const sum = rows.reduce((a, b) => a + b, 0);
+  /*
+   * ── What the tap-to-build layer is built from ──────────────────────────
+   *
+   * TWO SOURCES, and the authored one still wins where it exists. The demo's
+   * `scaffold` carries `{parts, rows}` and drives the drawn bars AND the tray.
+   * Generated content has no scaffold and, since 21 Sep, may carry a
+   * `manipulative` instead - `{kind, parts, target}`, resolved in
+   * `fromContent` from the wire's `kind, parts, rows`.
+   *
+   * They are kept apart rather than merged because the two `rows` mean
+   * different things: the authored one is the numerators being added, the
+   * wire's is a count of piece rows. The bars below stay scaffold-only - there
+   * is still nothing authored to draw them from on generated content - while
+   * the TRAY now works from either.
+   */
+  const manipulative = calculation.manipulative;
+  const parts = scaffold?.parts ?? manipulative?.parts ?? 0;
+  const sum = scaffold
+    ? rows.reduce((a, b) => a + b, 0)
+    : (manipulative?.target ?? 0);
   const last = steps[lastIndex];
   const numericAnswer = isNumericStep(last)
     ? last.answer

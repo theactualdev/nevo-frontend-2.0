@@ -3780,17 +3780,47 @@ the distinction is now the sharper one worth keeping straight.
 **Still the nothing-state when an instruction arrives empty.** Neither field is
 required, so that is a real case rather than a defensive one.
 
-### ANSWERED: `Manipulative`, 21 Sep — not yet built
+### BUILT: co-construction reaches generated content, 21 Sep
 
-`CalculationVariant.manipulative` now carries `Manipulative`
-(`kind, parts, rows, labels`, with `kind` and `parts` required), which is the
-`kind`/`parts`/`rows` ask from 17 Sep in the shape §4 described. It unblocks
-co-construction: `fromContent`'s adapter refuses `expectedInput: "drag"` steps
-today because there is nothing to build a tray from, so generated content has no
-manipulative at all and §4's *"the one place modalities layer rather than
-switch"* cannot happen.
+`CalculationVariant.manipulative` landed as `Manipulative`
+(`kind, parts, rows, labels`) and is now read. Before it, `drag` steps were
+refused because there was nothing to build a tray from, which dropped the whole
+variant to text - so §4's *"the one place modalities layer rather than switch"*
+could not happen on any generated lesson.
 
-Not built yet. Next after the hint and the questions.
+**ONE KIND IS DRAWN: `fraction_bar`.** The wire names five - `fraction_bar`,
+`number_line`, `array`, `place_value`, `counters` - and design has drawn exactly
+one of them: 17b's tap-a-quarter-into-a-four-part-bar. Checked across the whole
+student frame set on 21 Sep; `number_line` appears only in the component
+library, the intelligence layer and the UDL frames, never as a calculation
+manipulative, and the other three appear nowhere.
+
+**FOR DESIGN: the other four kinds need frames**, or a ruling that the pipeline
+should not emit them. Inventing them would mean inventing four interactions, and
+§4 is explicit that the interaction IS the mechanism - a wrong one is a
+different task rather than a lesser version of the right one. Until then a
+variant carrying one of them refuses its drag step and reads as text, which is
+the honest reduced form.
+
+**Two collisions worth knowing about.**
+
+`Manipulative.rows` is NOT the player's `rows`. On the wire it is how many rows
+of pieces to lay out (1-20, default 1); on the authored
+`CalculationSegment.scaffold` it is `number[]`, the numerators of the fractions
+being added. They are carried in separate fields for that reason - folding them
+would draw a bar with as many divisions as there are addends. This is the second
+time `CalculationVariant` has collided by name with a player type; the first is
+why `fromContent` aliases its imports.
+
+`target` - how many pieces the child places - is read off the drag step's own
+answer, never computed. "3" and "3/4" both mean three pieces of a four-part bar;
+anything that is not a whole number the bar can hold refuses rather than clamps,
+because rule 3 keeps the frontend out of deciding what a correct quantity is.
+
+**A drag step with no drawable manipulative is still refused**, exactly as
+before. Handing a child a number pad for a task that asks them to build is the
+same substitution §4 forbids for the scaffold image - a different task wearing
+the right prompt - and most content still carries no manipulative at all.
 
 ### Two list items are smaller than recorded, 21 Sep
 

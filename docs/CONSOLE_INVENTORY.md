@@ -1092,7 +1092,7 @@ daily lesson path.
 | 11. **Visual generation is failing** | Not a schema gap — every image 400s, so `visualVariant` is null library-wide, the visual channel is dead and the modality-suggestion pill is structurally unreachable. Backend has the diagnostic deployed |
 | ~~13. `offer_hint` has no hint to show~~ **DELIVERED 20 Sep** | `ProactiveAdjustmentResponse` now carries **`hint`**. Asked 17 Sep, landed 20 Sep. **Unconsumed** — nothing in `src/` reads it. The original reasoning stands and is why the field was needed: `reason` is the reasoning frame 38 forbids showing, and `confidence` is an engine parameter rule 3 keeps off every screen. `FrustrationHint` takes a string and now has one |
 | ~~14. `show_socratic_panel` has no questions~~ **DELIVERED 20 Sep** | `ProactiveAdjustmentResponse` now carries **`guidedQuestions`**. `ConfusionSupport` takes 2-3 guided prompts and there is now a field for them. **Unconsumed** |
-| ~~15. `CalculationVariant` carries no manipulative structure~~ **DELIVERED 20 Sep** | `CalculationVariant.manipulative` now exists, typed as a new **`Manipulative`** schema `{kind, parts, rows, labels}` with a `ManipulativeKind` enum — exactly the `kind, parts, rows` that frontend §4 specifies, plus `labels`. **Unconsumed.** This is what `expectedInput: "drag"` on generated content was refused for, and what §4's *"the one place modalities layer rather than switch"* was waiting on |
+| ~~15. `CalculationVariant` carries no manipulative structure~~ **DELIVERED 20 Sep** | `CalculationVariant.manipulative` now exists, typed as a new **`Manipulative`** schema `{kind, parts, rows, labels}` with a `ManipulativeKind` enum — exactly the `kind, parts, rows` that frontend §4 specifies, plus `labels`. **CONSUMED 21 Sep.** `drag` steps are accepted where the manipulative can be drawn, and the tap-to-build tray works from generated structure as well as the authored scaffold. **One of the five kinds is drawn — `fraction_bar`, the only one with a frame (17b). `number_line`, `array`, `place_value` and `counters` are refused rather than approximated; see S-C 13.** This is what `expectedInput: "drag"` on generated content was refused for, and what §4's *"the one place modalities layer rather than switch"* was waiting on |
 | 16. **`proactiveAdjustment.action` has no enum** | Documentation, added 17 Sep. A bare `string`, so §4's six values are the design's list and not the contract's. Unrecognised values resolve to null and render nothing, which is safe — confirming the vocabulary turns a guess into a contract |
 | 12. **Zero-Tag rejects ordinary English** | Raised by backend 16 Sep: "treatment", "be patient" and "water treatment" are refused, and a lesson containing one degrades silently to deterministic splitting. Flagged as a compliance decision rather than a bug. **Not a backend ask — traced 16 Sep and the frontend half is ours: the teacher is told nothing.** See S-A item 18 |
 
@@ -1153,6 +1153,15 @@ daily lesson path.
     that just now" and cannot sign in on ANY door. `STUDENT_PIN_LENGTH` therefore stays
     at 6 until the pattern is relaxed to four, at which point it is a one-line change
     and all three PIN screens follow it. See `lib/constants/auth.ts`.
+13. **Four manipulative kinds with no frame.** Added 21 Sep. The wire emits
+    `fraction_bar`, `number_line`, `array`, `place_value` and `counters`; design has drawn
+    only the first — 17b's tap-a-quarter-into-a-four-part-bar. Checked across the whole
+    student frame set: `number_line` appears in the component library, the intelligence
+    layer and the UDL frames, never as a calculation manipulative, and the other three
+    appear nowhere. The four are refused rather than approximated, because §4 says the
+    interaction IS the mechanism — a wrong interaction is a different task, not a lesser
+    version of the right one — so a variant carrying one reads as text.
+    **Needed: frames, or a ruling that the pipeline should not emit those kinds.**
 
 ## S-D. Not a gap — do not re-open
 

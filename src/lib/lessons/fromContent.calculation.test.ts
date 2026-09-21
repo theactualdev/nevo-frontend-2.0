@@ -269,3 +269,175 @@ describe("a calculation this app cannot honestly mark", () => {
     });
   });
 });
+
+describe("the manipulative a drag step is built on", () => {
+  /**
+   * §4: *"Backend supplies structure: kind, parts, rows. You render the
+   * manipulative. Do not substitute a static scaffold image, because the
+   * interaction is the mechanism."*
+   *
+   * The wire had no such structure until 21 Sep, so `drag` steps were refused
+   * and the whole variant dropped to text - which meant §4's *"the one place
+   * modalities layer rather than switch"* could not happen on any generated
+   * lesson. `CalculationVariant.manipulative` is that structure.
+   *
+   * ONLY `fraction_bar` is drawn. The wire names five kinds and design has
+   * drawn one of them; inventing the other four would be inventing four
+   * interactions, and a wrong interaction is a different task rather than a
+   * lesser version of the right one.
+   */
+  const fractionVariant = (over: Record<string, unknown> = {}) =>
+    ({
+      type: "fraction_add_like",
+      fullEquation: "1/4 + 2/4",
+      answer: "3/4",
+      completionStatement: "You built three quarters.",
+      scaffoldImage: null,
+      manipulative: { kind: "fraction_bar", parts: 4, rows: 1, labels: [] },
+      steps: [
+        step({
+          stepId: "d-1",
+          stepNumber: 1,
+          prompt: "Build the total.",
+          expectedInput: "drag",
+          answer: "3/4",
+          equationState: "1/4 + 2/4 = ?",
+        }),
+      ],
+      ...over,
+    }) as unknown as never;
+
+  const built = (variant: unknown) =>
+    lessonFromContent(
+      {
+        id: "l-1",
+        title: "Adding quarters",
+        segments: [
+          segment({
+            contentType: "calculation",
+            availableModalities: ["text", "interactive"],
+            calculationVariant: variant as never,
+          }),
+        ],
+      } as unknown as LessonDetailResponse,
+      [],
+    );
+
+  const calcOf = (variant: unknown) => {
+    const lesson = built(variant);
+    if (!lesson) throw new Error("no lesson");
+    return lesson.segments[0].calculation;
+  };
+
+  it("keeps the drag step instead of dropping the whole variant", () => {
+    const calc = calcOf(fractionVariant());
+
+    expect(calc?.steps).toHaveLength(1);
+  });
+
+  it("carries the parts and the target the tray needs", () => {
+    const calc = calcOf(fractionVariant());
+
+    expect(calc?.manipulative).toEqual({
+      kind: "fraction_bar",
+      parts: 4,
+      target: 3,
+    });
+  });
+
+  it("offers the kinesthetic layer only when there is one to offer", () => {
+    // Compared against a variant that still BUILDS - a numeric-only one - so
+    // the difference measured is the layer rather than the whole calculation
+    // disappearing underneath it.
+    const withIt = calcOf(fractionVariant());
+    const without = calcOf(
+      fractionVariant({
+        manipulative: null,
+        steps: [
+          step({ stepId: "n-1", expectedInput: "numeric", answer: 3 }),
+        ],
+      }),
+    );
+
+    expect(withIt?.modalities).toContain("kinesthetic");
+    expect(without?.steps).toHaveLength(1);
+    expect(without?.modalities).not.toContain("kinesthetic");
+  });
+
+  it("reads a bare count as well as a fraction", () => {
+    // "3" and "3/4" both mean three pieces of a four-part bar.
+    const calc = calcOf(
+      fractionVariant({
+        steps: [
+          step({
+            stepId: "d-1",
+            expectedInput: "drag",
+            answer: "3",
+          }),
+        ],
+      }),
+    );
+
+    expect(calc?.manipulative?.target).toBe(3);
+  });
+
+  it("draws none of the four kinds nobody has designed", () => {
+    /*
+     * A kind we cannot draw leaves the drag step with nothing to build on, so
+     * it is refused - and a calculation missing a step is not a calculation,
+     * which drops the whole variant to text. That cascade is the pre-existing
+     * all-or-nothing rule and it is the honest outcome: better a lesson that
+     * reads than one with an invented interaction in the middle of it.
+     */
+    for (const kind of ["number_line", "array", "place_value", "counters"]) {
+      expect(
+        calcOf(
+          fractionVariant({
+            manipulative: { kind, parts: 4, rows: 1, labels: [] },
+          }),
+        ),
+        kind,
+      ).toBeUndefined();
+    }
+  });
+
+  it("refuses a target the bar cannot hold", () => {
+    /*
+     * Rule 3: the frontend computes no quantity of its own. An answer that is
+     * not a whole number of pieces this bar can hold is not something to clamp
+     * into one - there is nothing to build, so nothing is offered.
+     */
+    for (const answer of ["9/4", "0", "-1", "three", "3.5"]) {
+      expect(
+        calcOf(
+          fractionVariant({
+            steps: [step({ stepId: "d-1", expectedInput: "drag", answer })],
+          }),
+        ),
+        answer,
+      ).toBeUndefined();
+    }
+  });
+
+  it("refuses a bar with no parts to divide", () => {
+    expect(
+      calcOf(
+        fractionVariant({
+          manipulative: { kind: "fraction_bar", parts: 0, rows: 1, labels: [] },
+        }),
+      ),
+    ).toBeUndefined();
+  });
+
+  it("still refuses a drag step that nobody can be right about", () => {
+    // Same rule numeric and text steps follow: a step with no answer cannot be
+    // marked, so it is not drawn.
+    expect(
+      calcOf(
+        fractionVariant({
+          steps: [step({ stepId: "d-1", expectedInput: "drag", answer: null })],
+        }),
+      ),
+    ).toBeUndefined();
+  });
+});

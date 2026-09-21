@@ -25,6 +25,38 @@ import {
  * rendered as a broken player or a missing image.
  */
 
+/**
+ * What a learner drags, when a calculation step asks them to. Landed 21 Sep.
+ *
+ * This is the `kind, parts, rows` §4 has always described and the wire never
+ * had: *"Backend supplies structure: kind, parts, rows. You render the
+ * manipulative. Do not substitute a static scaffold image, because the
+ * interaction is the mechanism."* Without it, `drag` steps were refused on
+ * generated content, so §4's *"the one place modalities layer rather than
+ * switch"* could not happen outside the authored demo.
+ *
+ * `rows` IS NOT THE PLAYER'S `rows`, and the collision is worth naming: here it
+ * is how many rows of pieces to lay out (1-20, default 1); on the player's
+ * authored `CalculationSegment.scaffold` it is `number[]`, the numerators of
+ * the fractions being added. Mapping one onto the other would draw a bar with
+ * as many divisions as there are addends.
+ */
+export type ManipulativeKind =
+  | "fraction_bar"
+  | "number_line"
+  | "array"
+  | "place_value"
+  | "counters";
+
+export interface Manipulative {
+  kind: ManipulativeKind;
+  /** Divisions in the whole. Required; 1-100. */
+  parts: number;
+  /** Rows of pieces to lay out. 1-20, default 1. */
+  rows?: number;
+  labels?: string[];
+}
+
 export interface TextVariant {
   body: string;
   keyPoints: string[];
@@ -143,6 +175,8 @@ export interface CalculationVariant {
   answer?: string | number | boolean | null;
   steps: CalculationStep[];
   scaffoldImage: ScaffoldImage | null;
+  /** The structure a `drag` step is built on. Null on older content. */
+  manipulative?: Manipulative | null;
   completionStatement: string;
 }
 

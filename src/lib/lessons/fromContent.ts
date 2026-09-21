@@ -264,9 +264,13 @@ function calculationFor(
   const variant = segment.calculationVariant;
   if (!variant || variant.steps.length === 0) return undefined;
 
+  // Resolved once: every step needs to know whether a drag has anything to be
+  // built on, and it is a property of the variant rather than of the step.
+  const manipulative = manipulativeFor(variant);
+
   const steps: CalculationStep[] = [];
   for (const step of variant.steps) {
-    const built = calcStepFor(step);
+    const built = calcStepFor(step, manipulative !== undefined);
     if (!built) return undefined;
     steps.push(built);
   }
@@ -302,6 +306,7 @@ function calculationFor(
     steps,
     completion: variant.completionStatement,
     modalities: calcModalitiesFor(variant),
+    ...(manipulative ? { manipulative } : {}),
   };
 }
 
@@ -317,7 +322,11 @@ function calculationFor(
  * a lesson parsed before the 0057 migration carries none of them. A step with
  * no answer cannot be marked, so it is refused rather than drawn.
  */
-function calcStepFor(step: WireCalculationStep): CalculationStep | undefined {
+function calcStepFor(
+  step: WireCalculationStep,
+  /** Whether this variant carries a manipulative the player can draw. */
+  hasManipulative: boolean,
+): CalculationStep | undefined {
   const answer = step.answer;
   const hasAnswer = answer != null && String(answer).trim() !== "";
 
@@ -356,31 +365,102 @@ function calcStepFor(step: WireCalculationStep): CalculationStep | undefined {
   }
 
   /*
-   * `drag` has no player equivalent yet and is deliberately not faked.
+   * `drag` IS the co-construction, and it now has structure to be built on.
    *
-   * It is a manipulative - the child builds the answer by placing pieces - and
-   * the solver's tray is built for the fraction scaffold's parts, which
-   * generated content does not have. Rendering it as a multiple choice would
-   * turn "show me how you got there" into "pick one", which is a different
-   * task and a different signal. Refusing drops the whole variant to text,
-   * which is honest. Needs the tray generalised, then a design ruling on what
-   * it is built from.
+   * The step still renders as a numeric one: the manipulative is a LAYER the
+   * child turns on over it, not a replacement for it, which is §4's "the one
+   * place modalities layer rather than switch". What the manipulative needs -
+   * the parts and the target - comes off the variant, not the step, so it is
+   * resolved once in `manipulativeFor` and the step only has to be markable.
+   *
+   * Refused without an answer, exactly as numeric and text are: a step nobody
+   * can be right about is not a step.
    */
+  if (step.expectedInput === "drag") {
+    /*
+     * ONLY WHERE THERE IS SOMETHING TO BUILD.
+     *
+     * Without a drawable manipulative this stays refused, exactly as it was
+     * before the structure existed. A drag step asks the child to construct a
+     * quantity; handing them a number pad instead is the same substitution §4
+     * forbids for the scaffold image - a different task wearing the right
+     * prompt. The old behaviour was correct for content with no structure, and
+     * most content still has none.
+     */
+    if (!hasAnswer || !hasManipulative) return undefined;
+    return {
+      prompt: step.prompt,
+      input: "numeric",
+      answer: String(answer).trim(),
+      hint: step.hint,
+      ...(step.unit?.trim() ? { unit: step.unit.trim() } : {}),
+    };
+  }
+
   return undefined;
+}
+
+/**
+ * The structure behind a `drag` step, when there is one we can actually draw.
+ *
+ * ONLY `fraction_bar`. The wire names five kinds - `fraction_bar`,
+ * `number_line`, `array`, `place_value`, `counters` - and design has drawn
+ * exactly one of them: 17b's tap-a-quarter-into-a-four-part-bar. The other
+ * four have no frame at all, checked across the student set on 21 Sep.
+ *
+ * Drawing them anyway would mean inventing four interactions, and §4 is
+ * explicit that the interaction IS the mechanism - a wrong one is not a
+ * lesser version of the right one, it is a different task. So the rest refuse
+ * and the calculation renders without a kinesthetic layer, which is the
+ * honest reduced form. Filed for design.
+ *
+ * `target` comes off the drag step's own answer. The frontend computes no
+ * quantity of its own (rule 3): if the answer does not resolve to a whole
+ * number of pieces the bar can hold, there is nothing to build and the
+ * manipulative is refused rather than clamped.
+ */
+function manipulativeFor(
+  variant: WireCalculationVariant,
+): { kind: string; parts: number; target: number } | undefined {
+  const m = variant.manipulative;
+  if (!m || m.kind !== "fraction_bar") return undefined;
+
+  const parts = Math.trunc(m.parts);
+  if (!Number.isFinite(parts) || parts < 1) return undefined;
+
+  const drag = variant.steps.find((st) => st.expectedInput === "drag");
+  const raw = drag?.answer;
+  if (raw == null) return undefined;
+
+  // "3" and "3/4" both mean three pieces of a four-part bar. Anything else is
+  // not a count, and guessing at one would be inventing the child's answer.
+  const text = String(raw).trim();
+  const numerator = /^(\d+)\s*\/\s*\d+$/.exec(text)?.[1] ?? text;
+  if (!/^\d+$/.test(numerator)) return undefined;
+
+  const target = Number(numerator);
+  if (target < 1 || target > parts) return undefined;
+
+  return { kind: m.kind, parts, target };
 }
 
 /**
  * Which layers this calculation actually has.
  *
  * Interactive always - it IS the co-construction. Audio only where a step
- * carries narration, which no generated content does yet. Kinesthetic is
- * absent by construction while `drag` is refused above; the two land together
- * or not at all.
+ * carries narration. Kinesthetic where the variant carries a manipulative this
+ * player can draw, which since 21 Sep is a real possibility rather than a
+ * standing no.
  */
 function calcModalitiesFor(variant: WireCalculationVariant): CalcModality[] {
   const modalities: CalcModality[] = [CALC_MODALITY.INTERACTIVE];
   if (variant.steps.some((s) => s.narrationAudio)) {
     modalities.push(CALC_MODALITY.AUDIO);
+  }
+  // Offered only where there is something to build. Claiming the layer without
+  // the structure is what `availableModalities` did for months.
+  if (manipulativeFor(variant)) {
+    modalities.push(CALC_MODALITY.KINESTHETIC);
   }
   return modalities;
 }
