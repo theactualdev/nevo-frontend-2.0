@@ -1223,6 +1223,55 @@ a signed-in child gets an invented unread dot on the first frame of every page.
 See the retraction under ACTION NEEDED above for the sites and the reason the
 grep everyone used could not find them.
 
+### FOR THE TEACHER SESSION — Insights is half-unblocked. 21 Sep.
+
+**Read the caveat before you build it.** The Insights row has been filed since
+16 Sep as *"design ruled and the ruling cannot be built on the current
+contract"*. Half of it can now.
+
+**What landed (20 Sep).** `ClassInsightsNarrativeResponse.state`, a new
+`ClassInsightState` enum: `summary | settled | gathering`. Backend's own schema
+description names the defect it fixes — *"The console was deciding this itself
+from the length of three arrays, which put a threshold in the client and could
+not tell a settled week"*. That is the ruling's first half: **the engine owns
+the threshold.**
+
+**It is OPTIONAL, not required.** `state` carries `default: "summary"` and is
+absent from the `required` list. So an older backend build can omit it, and
+absence must be treated as *unknown* rather than silently as "summary" — which
+would reintroduce a client-side assumption in the one place the ruling was
+about. Rule 5 applies: absence is an instruction.
+
+**What did NOT land.** `weeklySummary` and `lookingAhead` are still **required,
+non-nullable `string`**, unchanged since 17 Sep. The ruling wanted them nullable
+with absence meaning "render the empty state". So the engine still cannot send
+nothing. Building on `state` alone gets you the threshold, not the empty state.
+
+**It probably closes a gate finding too.** `npm run architecture` flags
+`useClassInsights.ts:151` for deciding `empty` from array lengths — which is
+exactly what `state` replaces. Wire one, check the other.
+
+#### THE CLAUSE 8.2 CAVEAT — do not skip this
+
+**Unblocking Insights means rendering more backend-authored prose about a class,
+and generated prose is live with counsel right now.** SCRUM-164 (SC-03) states
+that the export-annotations question *"bears on the clause 8.2 question now with
+counsel"*, and the principle it turns on is attribution: *"A parent reading the
+document should never be unsure which words are Nevo's and which are the
+school's. Neither should a regulator."*
+
+**I have not seen the text of clause 8.2** — it is in counsel's draft, not this
+repo; our own DPA placeholder stops at "clause 8". So this is a flag, not a
+ruling.
+
+What it means practically: `weeklySummary` and `lookingAhead` are Nevo-authored
+sentences about a class that a teacher may quote to a parent. If 8.2 lands as an
+attribution requirement, the constraint is on **how generated prose is presented
+and marked**, not on whether the field exists. Build the threshold half if you
+want it; **do not also invest in new surfaces that present generated prose as the
+school's own voice until 8.2 is answered**, because that is the part that would
+be reworked.
+
 ### FOR THE STUDENT SESSION — the signals wall clock. 17 Sep.
 
 `npm run architecture` flags two sites and will keep flagging them:
@@ -2197,9 +2246,30 @@ sitting in this list unspoken, which is the state that produced "NONE".
   open list. *A blocked list that never shrinks stops being read as a decision
   and starts being read as weather.*
 
-**Reopen this console for exactly three things:** a pre-launch row below landing,
-a defect a real school hits, or a design ruling that changes a screen. Not for
-the deferred list.
+**Reopen this console for exactly four things:** a pre-launch row below landing,
+a defect a real school hits, a design ruling that changes a screen, or **a
+counsel ruling on the learning support surface**. Not for the deferred list.
+
+**THE FOURTH IS NEW, 21 SEP, AND IT IS NOT HYPOTHETICAL.** The learning support
+surface — accommodations, the IEP export, per-learner adaptation counts — is the
+largest omission in the pack now with counsel, and SCRUM-164 records that the
+export annotations question *"bears on the clause 8.2 question now with
+counsel"*. If Oladayo rules against how that surface attributes or presents
+material about a named child, **this console reopens**, and it reopens on its
+most sensitive screens rather than its edges. Closed is a statement about
+engineering, not a bet on the ruling.
+
+**One thing already checked, so nobody re-checks it in a panic.** SCRUM-169
+strikes the four per-child transformation metrics and warns that *"the document
+now with Oladayo Akande states that nothing in the product describes a child …
+While any per-child metric renders, that statement is untrue and a lawyer is
+relying on it."* **Verified 21 Sep: none of them renders anywhere.** All four
+names appear in exactly one place in `src/` — a docblock at
+`Reports/ReportsView.tsx:24-40` explaining why they were never built —
+`getTransformationMetrics()` is called with **no arguments**, so school-wide
+only and never `scope=student`, and nothing in the SENCo profile, the student
+record or the IEP export references them. The statement counsel is relying on
+holds. SCRUM-169 can close on the admin side.
 
 ### Blocked on backend — SPLIT INTO PRE-LAUNCH AND v1.5, 16 Sep
 
