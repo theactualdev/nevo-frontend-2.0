@@ -3730,6 +3730,32 @@ their draft. A `useHydrated` gate means neither screen is drawn before the
 client can see the session - and it is scoped to token arrivals, so every
 ordinary arrival keeps its server render.
 
+### FOR BACKEND: relax the PIN pattern to four digits, 21 Sep
+
+**Design settled the PIN length at FOUR on 21 Sep** - the 28c redraw stands, and
+the question is closed on the design side. It cannot be implemented yet, and the
+reason is a contract constraint rather than a disagreement.
+
+Every PIN field on the deployed spec carries `pattern: ^\d{6}$`, checked 21 Sep:
+`PinLoginRequest.pin`, `PinUpdateRequest.pin`, `JoinRequest.pin` and
+`UnifiedLoginRequest.pin`.
+
+**What shipping four against today's wire would do.** The screens would collect
+four digits and submit; the server would refuse the shape with a 422 before
+judging the credential; `classifyLoginFailure` maps anything that is not 401 or
+403 to "ours", so the child reads *"We couldn't check that just now - that's on
+us, not you."* No child could sign in on any door - the remembered-device
+unlock, the unknown-device form, or PIN creation.
+
+**The ask: relax the pattern to four digits, and say what happens to accounts
+already issued a six-digit PIN.** The second half matters more than the first. A
+child holding a six-digit PIN on a four-box screen cannot enter their last two
+digits, and the screens auto-submit the moment the boxes fill - so they would be
+locked out just as completely, and told it was their mistake.
+
+`STUDENT_PIN_LENGTH` is the single constant all three PIN screens read. Once the
+wire allows four, it is a one-line change.
+
 ### ANSWERED: the hint and the guided questions, 21 Sep
 
 Both asks filed on 17 Sep are on the wire, checked against the deployed spec

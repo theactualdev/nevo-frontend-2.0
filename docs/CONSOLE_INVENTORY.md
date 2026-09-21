@@ -1142,12 +1142,17 @@ daily lesson path.
     rather than closed the same way: a teacher deliberately typed these words TO this
     child, so withholding them is not neutral the way withholding a generated highlight
     is.** Small once sited.
-12. **Four PIN boxes or six.** Raised 31 Aug and still open, now re-drawn. `STUDENT_PIN_LENGTH`
-    is 6 to match the accounts backend issues; frame 00 draws four and says "try 1234",
-    and **28c drew four again in both orientations on 17 Sep**. The disagreement did not
-    get resolved, it got redrawn. A child with a six-digit PIN on a four-box screen is
-    told their PIN is wrong, because the login screen cannot tell a rejected PIN from a
-    rejected identifier.
+12. ~~**Four PIN boxes or six.**~~ **SETTLED 21 Sep: FOUR. The 28c redraw stands, and
+    this is not to be raised again.** Closed as a design question.
+    **Implementing it is a BACKEND change, not a frontend one, and that is a contract
+    fact rather than a reopening.** The deployed spec constrains every PIN field with
+    `pattern: ^\d{6}$` - `PinLoginRequest`, `PinUpdateRequest`, `JoinRequest` and
+    `UnifiedLoginRequest`, checked 21 Sep. A four-digit PIN is refused by the server
+    with a 422 before it can be judged right or wrong, and `classifyLoginFailure` maps
+    anything that is not 401/403 to "ours" - so the child is told "we couldn't check
+    that just now" and cannot sign in on ANY door. `STUDENT_PIN_LENGTH` therefore stays
+    at 6 until the pattern is relaxed to four, at which point it is a one-line change
+    and all three PIN screens follow it. See `lib/constants/auth.ts`.
 
 ## S-D. Not a gap — do not re-open
 
