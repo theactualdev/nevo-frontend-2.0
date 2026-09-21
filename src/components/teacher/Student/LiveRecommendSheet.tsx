@@ -30,12 +30,19 @@ import { cn } from "@/lib/utils";
  * is here and what it holds is sent.
  *
  * WHAT THE CONFIRMATION DOES NOT SAY. C08c's line is "She'll see your note
- * when she opens it." The note genuinely reaches her - `students/me/dashboard`
- * returns `assignments: AssignmentResponse[]` and the note rides on each row -
- * but no student screen RENDERS it yet, so that sentence would be a promise
- * about a surface that does not show it. The confirmation says the note went
- * with the lesson, which is exactly what happened. When the student console
- * renders it, C08c's wording becomes true and should replace this.
+ * when she opens it." The confirmation says the note went with the lesson,
+ * which is exactly what happened and is all that may be claimed.
+ *
+ * THE REASON IS NOT THE ONE THIS COMMENT USED TO GIVE. It said the note
+ * genuinely reaches the child and was merely unrendered, so C08c's wording
+ * would become true as soon as the student console drew it. That treated the
+ * transport as the ruling: the field rides `students/me/dashboard`, so the
+ * child must be the audience.
+ *
+ * Design has not ruled who the note is for (21 Sep). The prior question is
+ * whether it is for the teacher's own use or is intended to reach the PARENT,
+ * and placement waits on that answer. So this wording stays until the ruling
+ * lands, and it may not be C08c's wording that replaces it.
  *
  * ONE PART OF THE FRAME IS STILL NOT BUILT, deliberately:
  *

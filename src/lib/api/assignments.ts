@@ -33,13 +33,22 @@ export interface Assignment {
   /** When it is DUE - a different thing. */
   dueAt: string | null;
   /**
-   * What the teacher wrote to the child when they set it. Shipped 15 Sep.
+   * What a teacher wrote when they set the lesson. Shipped 15 Sep.
    *
-   * This rides on the STUDENT's dashboard too: `GET /api/v1/students/me/dashboard`
-   * returns `assignments: AssignmentResponse[]`, so the note reaches the child
-   * it was written for. Until 15 Sep this field was missing from the type, which
-   * meant `useStudentDashboard` - which passes `Assignment[]` straight through -
-   * would have dropped a teacher's words before any screen could render them.
+   * WHO IT IS FOR IS NOT SETTLED, and this comment used to say it was: it
+   * called the note "what the teacher wrote to the child" and treated the
+   * transport as the answer, because the field rides the student's own
+   * dashboard read. Design has not ruled it. The open question is whether a
+   * note is for the teacher's own use or is meant to reach the PARENT, and
+   * placement cannot be ruled until that is answered (design, 21 Sep).
+   *
+   * SO NOTHING RENDERS IT ANYWHERE, and nothing should until the ruling
+   * lands. A note written as a private reminder, or for a parent, shown to
+   * the child it is about is not a layout mistake - it is the wrong
+   * audience reading a teacher's words about them.
+   *
+   * The field stays on the type. It arrives on every assignment row, and a
+   * type that omitted it would drop it silently the day the ruling lands.
    */
   note: string | null;
   assignedAt: string;
@@ -78,10 +87,14 @@ export const assignmentsApi = {
    * `availableFrom` landed on 31 Aug 2026 and is what the wizard's step 3
    * has always been asking for.
    *
-   * `note` landed 15 Sep. It is a message to the CHILD, not a label for the
-   * teacher's own list: it comes back on the student's dashboard alongside the
-   * lesson. Send it only where a teacher was actually given a box to write in
-   * - a note assembled on their behalf would be words they never chose.
+   * `note` landed 15 Sep. Send it ONLY where a teacher was actually given a
+   * box to write in - a note assembled on their behalf would be words they
+   * never chose.
+   *
+   * This used to add "it is a message to the CHILD", inferred from the field
+   * riding the student's dashboard read. That inference is not design's
+   * ruling and the ruling is outstanding: teacher's own use, or intended for
+   * the parent. See `AssignmentResponse.note`.
    */
   create: (payload: {
     lessonIds: string[];
