@@ -24,6 +24,7 @@ import {
 } from "./csv";
 import { confirmedSent, needsManualDelivery } from "./deliveryCopy";
 import { LinkHandout } from "./LinkHandout";
+import { RejectedRows } from "./RejectedRows";
 
 /**
  * D19 bulk import: upload, read, preview, send, confirm.
@@ -202,13 +203,30 @@ export function BulkImportModal({
           </span>
         </div>
         {skipped > 0 ? (
-          <p className="mt-4 text-center text-[14.5px] leading-[1.6] text-nevo-near-black/72">
-            {skipped} {skipped === 1 ? "row was" : "rows were"} skipped due to
-            errors.
-            {isStudent && result.created.length > 0
-              ? " Each student's parent contact was recorded; your school still needs to record consent for them."
-              : ""}
-          </p>
+          <>
+            {isStudent && result.created.length > 0 ? (
+              <p className="mt-4 text-center text-[14.5px] leading-[1.6] text-nevo-near-black/72">
+                Each student&rsquo;s parent contact was recorded; your school
+                still needs to record consent for them.
+              </p>
+            ) : null}
+            {/*
+              * CL-06. This was ONE SENTENCE - "N rows were skipped due to
+              * errors" - over data that already carried every row number and
+              * every reason. `BulkInvitationResponse.rejected` is
+              * `{row, reason}` with both required, and our own parser produces
+              * `{line, error}`; the screen added the two lengths together and
+              * threw the rest away one step from the render. An admin
+              * importing thirty classes was handed a count and left to find
+              * the four themselves.
+              */}
+            <RejectedRows
+              broken={broken}
+              rejected={result.rejected}
+              isStudent={isStudent}
+              filename={`nevo-${noun}-not-imported.csv`}
+            />
+          </>
         ) : isStudent && result.created.length > 0 ? (
           /* Was: "Each parent has been sent a consent request." The bulk
              response is `{created, rejected}` and carries no delivery state at
