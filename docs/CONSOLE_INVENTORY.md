@@ -924,16 +924,25 @@ were filed as a backend blocker they never were.
 Nothing on this list is waiting for anybody. The first four are the ones that change what
 a child experiences rather than what a screen looks like.
 
-**Struck through are shipped. Items 1, 2, 3 and 10 landed on 16 Sep, along with two
-findings from the drift audit that were not on this list at all: the parked baseline now
-proves whose it is before it is sent, and a withdrawn guardian stops the profiling run.
-Items 4 and 11 landed on 17 Sep, and so did two things this list never carried: the rotate
-prompt now has a way through (S-C 8), and the engine's proactive instruction reaches the
-screen (S-B 1). Everything unstruck below is still open.**
+**Struck through are shipped. Items 1, 2, 3 and 10 landed on 16 Sep, items 4 and 11 on
+17 Sep, and items 6, 7, 8 and 9 on 18 Sep. Everything unstruck below is still open.**
 
-**Priority, set by design on 17 Sep: affect and density came first and affect is done.
-Everything remaining on this list waits behind the density half — the child's Simplify /
-Expand / Slower control — which is blocked on authored content (S-B 4).**
+**MORE SHIPPED OFF-LIST THAN ON IT, which is worth knowing before trusting the numbers
+here.** Six of these were never list items: the parked baseline proves whose it is before
+it is sent and a withdrawn guardian stops the profiling run (16 Sep, drift audit); the
+rotate prompt has a way through (17 Sep, S-C 8); the engine's proactive instruction
+reaches the screen and the code no longer names a child's state (17 Sep, S-B 1); Slower
+reaches live content and holds for the lesson (17–18 Sep, S-B 4); the shared-device picker
+and the join-link hand-over (18 Sep, S-C 1); two fixture leaks emptied, one of which
+reached signed-in children (18 Sep); and the PIN could not be typed on a laptop on EITHER
+door (18 Sep) — the unlock screen's field was never focused, and the unknown-device screen
+had no field at all while the on-screen pad hides itself when it sees a real keyboard.
+
+**Priority as design set it on 17 Sep — affect and density first — is now spent: affect
+is done and Slower shipped. The one piece of density still blocked is Simplify, and it is
+FROZEN rather than queued: design escalated the `textVariant` question directly and the
+instruction is to build nothing that depends on either field until it is answered. See
+`BUILD_STATUS.md`.**
 
 1. ~~**Store the session an invite-link child is now handed.**~~ **DONE 16 Sep (#414).** Stored at the call site, not inside `acceptJoin`, because the teacher path redeems the same link and signs in afterwards. Delivery A, today. Declare
    `session` and `consentStatus` on `acceptJoin` (`invites.ts:160`) and `setSession` from
@@ -966,8 +975,11 @@ Expand / Slower control — which is blocked on authored content (S-B 4).**
    not build a surface for it". One difference makes it worth asking rather than closing:
    a teacher deliberately typed these words TO this child, so withholding them is not
    neutral the way withholding a generated highlight is. See S-C 11. **S once sited**
-6. **Bounce a signed-in child off `/student/onboarding`.** The root only. This is the
-   door a baseline reached the wrong child's account through. **S**
+6. ~~**Bounce a signed-in child off `/student/onboarding`.**~~ **DONE 17 Sep (#443).**
+   The root only — onboarding ends by storing the session, so the later steps are
+   legitimately reached WITH one. A trailing slash bypassed the equality check and fell
+   through to the pre-auth allowance, which is fixed and tested. The guard had no tests at
+   all, so the whole student branch is now covered. **S**
 7. ~~**Fix Subject Detail's lesson list.**~~ **DONE 18 Sep.** It showed the whole-student
    history under one subject's heading. `LessonProgress` carries no subject, so it could
    not be filtered here — the narrowed `progress/{subject}` read was already being made
@@ -1042,10 +1054,14 @@ Each re-checked against the deployed spec on 16 Sep.
 
 ## S-C. Blocked on design
 
-1. **Frame 28c does not exist.** The shared-classroom-tablet picker is design's own answer
-   to a known defect and the frame was never delivered. Only `28` and `28a` are in the
-   design repo. **This is the single most-cited student blocker and it is waiting on one
-   frame.** **Design took this on 17 Sep — "mine, and overdue". Still open, now owned.**
+1. ~~**Frame 28c does not exist.**~~ **DELIVERED 17 Sep AND BUILT 18 Sep (#455, #457).**
+   The longest-standing student blocker, closed. The tablet remembers up to six children,
+   ages them out after thirty days, and asks which one is here; a join link arriving on a
+   signed-in tablet hands the tablet over rather than onboarding under the wrong session.
+   Three departures from the frame are flagged in `BUILD_STATUS.md`: the avatar shape is
+   stored per child rather than derived from list position, the picker shows even for a
+   single remembered child, and landscape padding follows the frame's declared grid rather
+   than its stated padding, which disagree with each other.
 2. ~~**What the Interactive channel IS.**~~ **RULED 17 Sep: do not build against
    `expectedInteraction` either way.** The wire sends a question; the player draws tickable
    steps; the field defaults to `teacher_review`. Design's ruling is that the frontend
@@ -1056,8 +1072,11 @@ Each re-checked against the deployed spec on 16 Sep.
 4. ~~**A slot for `highlights`**~~ **RULED 17 Sep: do not build a surface for it.**
    Required on the wire, carried to the screen, and it stays carried and unrendered rather
    than being given a home that would be fabrication.
-5. **The invented class list** at a real URL, and whether the demo walkthrough should be
-   reachable by typing.
+5. ~~**The invented class list** at a real URL,~~ **DELETED 18 Sep (#451)** — fourteen
+   invented class names rendered whenever no school code had verified, which was not only
+   the walkthrough: a child who typed their real code in a private or storage-blocked
+   browser landed there too. **What remains for design is the second half only: whether
+   the demo walkthrough should be reachable by typing a URL at all.**
 6. **QR scanning** — whether pointing a child at their device's camera app is the accepted
    path, given this is the primary button on the welcome sheet.
 7. **A system voice reading to six-year-olds** in a calibration activity.
@@ -1070,6 +1089,21 @@ Each re-checked against the deployed spec on 16 Sep.
    times a day.
 10. **The nothing-landed result copy**, and **`invalid_session`** — whether it needs words
     of its own.
+11. **Where the teacher's note goes.** Added 18 Sep, and the reference from list S-A item
+    5 that had nowhere to point until now. `AssignmentResponse.note` reaches the child on
+    `students/me/dashboard` and `useStudentDashboard` passes it through, so the data is
+    here — but **neither frame 19 (Home Dashboard) nor frame 21 (Lesson Preview Sheet) has
+    a slot for it**, checked. That is the `highlights` situation (item 4), where the
+    ruling was "do not build a surface for it". **One difference is why this is asked
+    rather than closed the same way: a teacher deliberately typed these words TO this
+    child, so withholding them is not neutral the way withholding a generated highlight
+    is.** Small once sited.
+12. **Four PIN boxes or six.** Raised 31 Aug and still open, now re-drawn. `STUDENT_PIN_LENGTH`
+    is 6 to match the accounts backend issues; frame 00 draws four and says "try 1234",
+    and **28c drew four again in both orientations on 17 Sep**. The disagreement did not
+    get resolved, it got redrawn. A child with a six-digit PIN on a four-box screen is
+    told their PIN is wrong, because the login screen cannot tell a rejected PIN from a
+    rejected identifier.
 
 ## S-D. Not a gap — do not re-open
 
