@@ -188,7 +188,6 @@ export function ParentConsent({
                type it would both duplicate a fact we hold and open the door
                the binding exists to close. */
             contact={invitation.parentContact}
-            contactMethod={invitation.parentContactMethod}
             onSkip={() => setPhase("skipped")}
           />
 
@@ -436,21 +435,27 @@ export function ParentConsent({
  *     D02 was right and this deviation is withdrawn.** Parent contact is email
  *     only. The frame's wording is the wording.
  *
- *     `contactMethod` is still a prop, and still `email | sms`, because the
- *     deployed enum still is (21 Sep) and a pre-ruling invitation can still
- *     declare SMS. It is used to stay truthful about an OLD record, never to
- *     offer a channel. Do not delete it until the backend half of SCRUM-162
- *     lands; a type that drops a value the API still sends erases live data.
+ *     THE BACKEND HALF HAS NOW LANDED. `ParentContactMethod` is a one-member
+ *     enum on the deployed contract and has been since 20 Sep - we went on
+ *     asserting otherwise in three comments for a day. So the prop is gone and
+ *     the branch with it: there is no second channel to be truthful about.
+ *
+ *     What we give up by hard-coding D02's wording is the legacy case - an
+ *     invitation created before the ruling whose `parentContact` is a phone
+ *     number would now be labelled "Your email address". We accept that rather
+ *     than branch on the contact string, because inferring a channel from the
+ *     shape of an address is the exact guess `useConsentRequests` had removed
+ *     from it, and that hook refuses to create such a request at all. If one
+ *     ever surfaces it is a data bug with a visible symptom, which is better
+ *     than a client that quietly keeps a withdrawn channel alive.
  */
 function AccountSetup({
   token,
   contact,
-  contactMethod,
   onSkip,
 }: {
   token: string;
   contact: string;
-  contactMethod: ParentContactMethod;
   onSkip: () => void;
 }) {
   const [step, setStep] = useState<"confirm" | "code">("confirm");
@@ -459,7 +464,6 @@ function AccountSetup({
   const [error, setError] = useState<string | null>(null);
   const [resent, setResent] = useState(false);
 
-  const byEmail = contactMethod === "email";
   const code = digits.join("");
 
   async function send(isResend: boolean) {
@@ -530,7 +534,7 @@ function AccountSetup({
           progress.
         </p>
         <p className="mt-4 text-[14px] font-medium text-nevo-near-black/80">
-          {byEmail ? "Your email address" : "Your phone number"}
+          Your email address
         </p>
         <p className="mt-1.5 rounded-[10px] border border-nevo-navy/20 bg-nevo-cream px-3.5 py-3.5 text-[16px] break-all text-nevo-near-black">
           {contact}
@@ -564,7 +568,7 @@ function AccountSetup({
   return (
     <div className="mt-7 w-full max-w-[340px] text-left">
       <p className="text-[15px] font-semibold text-nevo-near-black">
-        {byEmail ? "Check your email." : "Check your phone."}
+        Check your email.
       </p>
       <p className="mt-2 text-[14.5px] leading-[1.55] text-nevo-near-black/72">
         {"We’ve sent a code to " + contact + ". Enter it below to finish setting up your account."}

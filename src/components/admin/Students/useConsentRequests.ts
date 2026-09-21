@@ -60,13 +60,17 @@ const IDLE: ConsentRequestState = { kind: "idle" };
  * have no use for."* Nevo no longer sends anything by SMS, so nothing here may
  * ask it to.
  *
- * **The enum stays `email | sms` and that is not an oversight.**
- * `ParentContactMethod` is still `["email","sms"]` on the deployed contract
- * (re-checked 21 Sep) and is referenced by `ParentConsentRequest`,
- * `ParentLinkResponse` and `ParentConsentInvitationResponse`. The backend half
- * of SCRUM-162 has not landed. Deleting the value from our types while the API
- * still sends it is how a type erases live data - the `fromContent` defect,
- * exactly. So we stop CHOOSING it; we do not pretend it cannot arrive.
+ * **The enum is now `email` alone, and this comment said otherwise for a day.**
+ * It read: *"`ParentContactMethod` is still `["email","sms"]` on the deployed
+ * contract (re-checked 21 Sep)"*. The backend half of SCRUM-162 had landed on
+ * 20 Sep. The same false assertion sat in `parent.ts` and `consents.ts`, all
+ * three written on the evidence of one probe and none re-run.
+ *
+ * The constant below survives the correction unchanged, which is the point
+ * worth keeping: it was right for a reason that did not depend on the enum.
+ * We stopped CHOOSING sms because the ruling says Nevo has no use for a phone
+ * number, not because the type forbade it. Code that follows the ruling rather
+ * than the type is still correct when the type catches up.
  */
 const CONTACT_METHOD = "email" as const;
 

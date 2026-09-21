@@ -336,25 +336,30 @@ describe("setting up a parent account", () => {
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
   });
 
-  it("says phone, not email, for an SMS-first parent", async () => {
-    // `ParentContactMethod` is email | sms and Nigeria is SMS-first. D02's
-    // copy is email-only; following the method the school recorded is ours.
+  it("offers email and never a phone, whatever the record says", async () => {
+    /*
+     * THE REVERSE OF WHAT THIS TEST USED TO PIN. It asserted that an
+     * `sms` invitation produced "Check your phone", which was the deviation
+     * SCRUM-162 withdrew: Nevo collects an email address and nothing else, so
+     * no screen may offer a second channel.
+     *
+     * The contact here is deliberately a phone number - the legacy row the
+     * old code branched on. The screen must still not invent an SMS route
+     * out of it.
+     */
     render(
       <ParentConsent
         token={TOKEN}
-        invitation={inv({
-          parentContact: "+2348012345678",
-          parentContactMethod: "sms",
-        })}
+        invitation={inv({ parentContact: "+2348012345678" })}
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /Yes, I give my consent/ }));
     await screen.findByText(/that[’']s all we needed/i);
 
-    expect(screen.getByText("Your phone number")).toBeInTheDocument();
+    expect(screen.queryByText("Your phone number")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /^Continue$/ }));
-    expect(await screen.findByText("Check your phone.")).toBeInTheDocument();
-    expect(screen.queryByText("Check your email.")).not.toBeInTheDocument();
+    expect(await screen.findByText("Check your email.")).toBeInTheDocument();
+    expect(screen.queryByText("Check your phone.")).not.toBeInTheDocument();
   });
 
   it("will not verify until all four digits are in", async () => {
