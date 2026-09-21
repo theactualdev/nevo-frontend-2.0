@@ -21,7 +21,26 @@ import { api } from "./client";
  * `granted` alone cannot implement the ruling. Read `status`.
  */
 
-export type ConsentType = "data_processing" | "camera" | "offline_storage";
+/**
+ * What a consent record grants. FOUR values, not three — `cross_border_transfer`
+ * was added on 21 Sep and this type did not have it.
+ *
+ * A union that omits a value the API sends does not prevent the value, it
+ * erases it: a `cross_border_transfer` consent would have arrived, failed every
+ * comparison, and rendered as nothing. That is the `fromContent` defect and it
+ * is the third time this shape has cost something here.
+ *
+ * It is also the member that matters most. The contract's own description:
+ * *"Each is asked and answered on its own. A parent agreeing to their child
+ * using Nevo has not thereby agreed to anything else, which is the whole point
+ * of the fourth one below."* Cross-border transfer of a Nigerian child's data
+ * is precisely the thing a parent must agree to separately or not at all.
+ */
+export type ConsentType =
+  | "data_processing"
+  | "camera"
+  | "offline_storage"
+  | "cross_border_transfer";
 
 /**
  * All four values the deployed `ConsentStatus` schema carries.
@@ -139,9 +158,18 @@ export const consentsApi = {
       payload,
     ),
 
-  /** Parent action page (public, tokenised link - no session). */
-  completeParentConsent: (token: string) =>
-    api.post("/api/v1/consents/parent/complete", { token }),
+  /**
+   * Parent action page (public, tokenised link - no session).
+   *
+   * `grantedTypes` became REQUIRED on 21 Sep and this sent `{token}` alone, so
+   * the call 422'd and no consent was recorded. The long version is on
+   * `parentApi.completeConsent`, which is the caller that actually runs; this
+   * is its admin-surface twin and is kept in step deliberately, because two
+   * clients of one endpoint drifting apart is how the first gets fixed and the
+   * second does not.
+   */
+  completeParentConsent: (token: string, grantedTypes: ConsentType[]) =>
+    api.post("/api/v1/consents/parent/complete", { token, grantedTypes }),
 
   /** Admin surface: a student's parent/guardian links. */
   listParentLinks: (studentId: string) =>

@@ -117,7 +117,28 @@ export function ParentConsent({
   async function consent() {
     setPhase("sending");
     try {
-      const res = await parentApi.completeConsent(token);
+      /*
+       * `grantedTypes` is what the INVITATION asked about, not a list this
+       * screen composes. Backend used to infer it from the token and now
+       * requires it stated; sending the invitation's own list keeps what a
+       * parent grants exactly as it was.
+       *
+       * THE ONE-TAP RULING AND THE CONTRACT NOW DISAGREE, and this is the
+       * raise rather than the resolution. Design ruled on 7 Sep that one
+       * blanket "Yes" is correct because the DSA defines the scope. The
+       * contract's new `ConsentType` description says the opposite: *"Each is
+       * asked and answered on its own."* Both cannot hold on a screen with one
+       * button.
+       *
+       * It does not bite yet: the invitation path only ever requests
+       * `data_processing`, so one tap grants one thing and the two positions
+       * agree by accident. The first invitation carrying two types — most
+       * obviously `cross_border_transfer`, which the contract singles out — is
+       * the moment this screen starts recording a consent nobody was
+       * separately asked for. Needs a design ruling before that happens, not
+       * after.
+       */
+      const res = await parentApi.completeConsent(token, invitation.consentTypes);
       setReceipt(res.receiptSentTo);
       setPhase("done");
     } catch (e) {
