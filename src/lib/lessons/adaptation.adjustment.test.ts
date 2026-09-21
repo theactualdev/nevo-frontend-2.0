@@ -31,7 +31,10 @@ const lesson = (): Lesson =>
     ],
   }) as unknown as Lesson;
 
-const response = (action: string | null): AdaptResponse =>
+const response = (
+  action: string | null,
+  extra: Record<string, unknown> = {},
+): AdaptResponse =>
   ({
     lessonId: "l-1",
     source: "engine",
@@ -44,6 +47,7 @@ const response = (action: string | null): AdaptResponse =>
           reason: "erratic tap coordinates on segment 1",
           confidence: 0.82,
           triggerSignals: ["tap_precision", "dwell"],
+          ...extra,
         }
       : null,
   }) as unknown as AdaptResponse;
@@ -83,6 +87,112 @@ describe("the engine's proactive instruction", () => {
     );
 
     const serialised = JSON.stringify(plan);
+    expect(serialised).not.toContain("erratic tap");
+    expect(serialised).not.toContain("0.82");
+    expect(serialised).not.toContain("tap_precision");
+  });
+});
+
+describe("what the instruction actually shows", () => {
+  /**
+   * THREE OF THE FOUR AFFECTIVE RESPONSES WERE DARK.
+   *
+   * The actions were readable from the day they shipped; what `offer_hint` and
+   * `show_socratic_panel` had no way to render was the CONTENT. Both asks were
+   * filed on 17 Sep and answered on 21 Sep with `hint` and `guidedQuestions`.
+   *
+   * Neither is in the schema's `required` list, so an instruction arriving with
+   * nothing to show is a real case, not a defensive one - and it stays the
+   * nothing-state, because an empty hint card is worse than no hint.
+   */
+  it("carries the hint that `offer_hint` exists to show", () => {
+    const plan = toAdaptationPlan(
+      response(ADJUSTMENT_ACTIONS.OFFER_HINT, {
+        hint: "Start with where the light lands.",
+      }),
+      lesson(),
+    );
+
+    expect(plan.hint).toBe("Start with where the light lands.");
+  });
+
+  it("carries the questions the socratic panel opens", () => {
+    const plan = toAdaptationPlan(
+      response(ADJUSTMENT_ACTIONS.SHOW_SOCRATIC_PANEL, {
+        guidedQuestions: ["Where does the energy come from?", "What changes?"],
+      }),
+      lesson(),
+    );
+
+    expect(plan.guidedQuestions).toEqual([
+      "Where does the energy come from?",
+      "What changes?",
+    ]);
+  });
+
+  it("ties the content to the instruction it serves", () => {
+    /*
+     * A hint arriving beside `modulate_density` is not a hint anybody asked to
+     * show. The action IS the instruction; the text serves it. Dropping it here
+     * beats trusting every future consumer to check which action it belongs to.
+     */
+    const plan = toAdaptationPlan(
+      response(ADJUSTMENT_ACTIONS.MODULATE_DENSITY, {
+        hint: "Start with where the light lands.",
+        guidedQuestions: ["Where does the energy come from?"],
+      }),
+      lesson(),
+    );
+
+    expect(plan.hint ?? null).toBeNull();
+    expect(plan.guidedQuestions ?? null).toBeNull();
+  });
+
+  it("renders the nothing-state when an instruction arrives empty", () => {
+    // Rule 5, and the honest case: neither field is required by the schema.
+    const hintOnly = toAdaptationPlan(
+      response(ADJUSTMENT_ACTIONS.OFFER_HINT),
+      lesson(),
+    );
+    const socratic = toAdaptationPlan(
+      response(ADJUSTMENT_ACTIONS.SHOW_SOCRATIC_PANEL),
+      lesson(),
+    );
+
+    expect(hintOnly.adjustment).toBe(ADJUSTMENT_ACTIONS.OFFER_HINT);
+    expect(hintOnly.hint ?? null).toBeNull();
+    expect(socratic.guidedQuestions ?? null).toBeNull();
+  });
+
+  it("treats blank text as nothing sent", () => {
+    // A whitespace hint would open a card with nothing in it.
+    const plan = toAdaptationPlan(
+      response(ADJUSTMENT_ACTIONS.OFFER_HINT, { hint: "   " }),
+      lesson(),
+    );
+    const panel = toAdaptationPlan(
+      response(ADJUSTMENT_ACTIONS.SHOW_SOCRATIC_PANEL, {
+        guidedQuestions: ["", "  "],
+      }),
+      lesson(),
+    );
+
+    expect(plan.hint ?? null).toBeNull();
+    expect(panel.guidedQuestions ?? null).toBeNull();
+  });
+
+  it("still never carries the reasoning, even beside content it may show", () => {
+    // The distinction the new fields make sharper: these two are child-facing
+    // by design; `reason` and `confidence` are the reasoning frame 38 forbids.
+    const plan = toAdaptationPlan(
+      response(ADJUSTMENT_ACTIONS.OFFER_HINT, {
+        hint: "Start with where the light lands.",
+      }),
+      lesson(),
+    );
+
+    const serialised = JSON.stringify(plan);
+    expect(serialised).toContain("Start with where the light lands.");
     expect(serialised).not.toContain("erratic tap");
     expect(serialised).not.toContain("0.82");
     expect(serialised).not.toContain("tap_precision");

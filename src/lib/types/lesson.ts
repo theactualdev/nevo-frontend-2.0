@@ -358,6 +358,16 @@ export interface AdaptationPlan {
    */
   adjustment?: AdjustmentAction | null;
   /**
+   * The hint `offer_hint` shows, when the engine sent one.
+   *
+   * Carried ONLY when the action is `offer_hint` - see `toAdaptationPlan`. The
+   * action is the instruction and the text serves it; a hint arriving under a
+   * different instruction is not a hint anybody asked to show.
+   */
+  hint?: string | null;
+  /** Likewise, the questions `show_socratic_panel` opens. */
+  guidedQuestions?: string[];
+  /**
    * Active UDL accommodations (37c / SCRUM-71, backend-owned). Cross-session
    * delivery themes, never a label.
    *

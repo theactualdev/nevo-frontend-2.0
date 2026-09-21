@@ -626,6 +626,24 @@ export function LessonPlayer({
    * empty card - rule 5, and an empty hint is worse than no hint.
    */
   const action = plan?.adjustment ?? segPlan?.adjustment ?? null;
+  /*
+   * WHAT THE INSTRUCTION SHOWS, engine first and authored second - the same
+   * order the instruction itself resolves in.
+   *
+   * These arrived on 21 Sep and are the reason `offer_hint` and
+   * `show_socratic_panel` were dark: the actions were readable all along and
+   * there was nothing to put on screen, so three of §4's four affective
+   * responses could not reach a signed-in child at all.
+   *
+   * Still nothing-state when the engine sends an instruction with no content.
+   * An empty hint card is worse than no hint, and the translator has already
+   * dropped a hint that arrived under the wrong action.
+   */
+  const hintText = plan?.hint ?? segPlan?.hint ?? null;
+  const guidedQuestions =
+    plan?.guidedQuestions?.length
+      ? plan.guidedQuestions
+      : (segPlan?.socraticPrompts ?? []);
   // §4: "Secondary UI to 40% opacity, transitions slow, gentler copy variants."
   const softened = action === ADJUSTMENT_ACTIONS.MODULATE_DENSITY;
   // §4: "'Ready for something harder?' pill, scaffold withdraws." The pill
@@ -1171,10 +1189,10 @@ export function LessonPlayer({
               />
             )}
           {action === ADJUSTMENT_ACTIONS.SHOW_SOCRATIC_PANEL &&
-            (segPlan?.socraticPrompts?.length ?? 0) > 0 && (
+            guidedQuestions.length > 0 && (
               <SocraticPanel
                 key={`socratic-${segment.id}`}
-                prompts={segPlan!.socraticPrompts!}
+                prompts={guidedQuestions}
               />
             )}
           <div
@@ -1244,8 +1262,8 @@ export function LessonPlayer({
             />
           </div>
           {/* §4 `offer_hint`: the unrequested hint under the content. */}
-          {action === ADJUSTMENT_ACTIONS.OFFER_HINT && segPlan?.hint && (
-            <HintOverlay hint={segPlan.hint} />
+          {action === ADJUSTMENT_ACTIONS.OFFER_HINT && hintText && (
+            <HintOverlay hint={hintText} />
           )}
         </div>
       </div>

@@ -3717,6 +3717,79 @@ their draft. A `useHydrated` gate means neither screen is drawn before the
 client can see the session - and it is scoped to token arrivals, so every
 ordinary arrival keeps its server render.
 
+### ANSWERED: the hint and the guided questions, 21 Sep
+
+Both asks filed on 17 Sep are on the wire, checked against the deployed spec
+rather than taken on trust: `ProactiveAdjustmentResponse` now carries `hint`
+(nullable string) and `guidedQuestions` (string array), and both are ABSENT from
+the schema's `required` list.
+
+**What it unblocks.** `offer_hint` and `show_socratic_panel` were readable from
+the day the action shipped and had nothing to render, so three of §4's four
+affective responses could not reach a signed-in child at all. They can now.
+
+**Carried only under the action they serve.** A hint arriving beside
+`modulate_density` is dropped at the translator. The action is the instruction
+and the text serves it; stopping it there beats trusting every future consumer
+to check which action a string belongs to. Blank strings are treated as nothing
+sent, because a whitespace hint opens a card with nothing in it.
+
+**`reason` and `confidence` are still not carried.** These two new fields are
+child-facing by design; that pair is the reasoning frame 38 forbids showing, and
+the distinction is now the sharper one worth keeping straight.
+
+**Still the nothing-state when an instruction arrives empty.** Neither field is
+required, so that is a real case rather than a defensive one.
+
+### ANSWERED: `Manipulative`, 21 Sep — not yet built
+
+`CalculationVariant.manipulative` now carries `Manipulative`
+(`kind, parts, rows, labels`, with `kind` and `parts` required), which is the
+`kind`/`parts`/`rows` ask from 17 Sep in the shape §4 described. It unblocks
+co-construction: `fromContent`'s adapter refuses `expectedInput: "drag"` steps
+today because there is nothing to build a tray from, so generated content has no
+manipulative at all and §4's *"the one place modalities layer rather than
+switch"* cannot happen.
+
+Not built yet. Next after the hint and the questions.
+
+### Two list items are smaller than recorded, 21 Sep
+
+Raised by Olayinka and verified:
+
+- **Mark a thread/notification read is a PORT, not a build.**
+  `notificationsApi.markRead` and `markAllRead` exist and are already called by
+  `components/admin/Notifications/NotificationsPanel.tsx` and
+  `NotificationsView.tsx`. The student `NotificationBell` calls neither.
+- **Ask Nevo lesson scoping is PROVIDER PLACEMENT, not wiring.** `AskNevo.tsx`
+  already reads `useContext(LessonContext)?.lessonId` and sends it. It resolves
+  to null because `LessonProvider` is mounted in
+  `app/student/lessons/[lessonId]/layout.tsx` while `AskNevo` renders from
+  `StudentShell`, which sits above that layout.
+
+### SCRUM-167/168 takes the picker's names away, 21 Sep
+
+Name and age leave student entry entirely, routing straight to the assessment
+gated on consent. The join token is not to be relied on for a name.
+
+**The consequence for 28c, which is worth deciding before it ships.** The
+picker's names come from `rememberOnboardedStudent`, which takes the first word
+of the draft's `name` - collected by the step being removed. So every newly
+remembered child is nameless, and 28c-4 stops being the edge case and becomes
+the norm.
+
+Nothing breaks: the nameless tile is built and tested. But the frame's premise
+inverts. It says *"the enlarged first name is the primary identifier and the
+shape is a secondary cue for a child still learning to read"* - with no names,
+the secondary cue is the only cue, and six children choose between six abstract
+shapes on a shared tablet.
+
+**The remedy is already written down as a TODO in `session.ts`:** the student app
+does not read `GET /api/v1/users/me` yet, and the teacher console already does
+through `useCurrentUser`. That would supply a real name after sign-in, which is
+where a name can still legitimately come from. Worth routing in as part of
+167/168 rather than discovering it on a classroom tablet.
+
 ### FROZEN: build nothing on `textVariant` or `segment.body`, 18 Sep
 
 **Design's instruction, and it is a stop rather than a queue item:** *"Do not

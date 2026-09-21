@@ -155,7 +155,30 @@ export interface AdaptResponse {
   source: string;
   segments: SegmentAdaptationResponse[];
   breakSuggestion: BreakSuggestionResponse;
-  proactiveAdjustment: { action: string; reason: string } | null;
+  /**
+   * The engine's instruction, and - since 21 Sep - the content two of its six
+   * actions need to mean anything.
+   *
+   * `hint` and `guidedQuestions` were the two asks filed on 17 Sep: `offer_hint`
+   * had no hint to show and `show_socratic_panel` had no questions, so both
+   * rendered the nothing-state on every real lesson. Three of the four
+   * affective responses were unreachable for a signed-in child.
+   *
+   * NEITHER IS IN THE SCHEMA'S `required` LIST, checked against the deployed
+   * spec, so absent stays a genuine case rather than a defensive one - an
+   * instruction can still arrive with nothing to render, and rule 5 says the
+   * nothing-state is the answer.
+   *
+   * `reason` and `confidence` ride the same object and remain off-limits:
+   * these two are child-facing by design, that pair is the reasoning frame 38
+   * forbids showing.
+   */
+  proactiveAdjustment: {
+    action: string;
+    reason: string;
+    hint?: string | null;
+    guidedQuestions?: string[];
+  } | null;
   modalitySuggestion: ModalitySuggestionResponse | null;
 }
 

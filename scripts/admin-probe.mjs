@@ -66,11 +66,11 @@ async function main() {
     return;
   }
   console.log("  role     :", JSON.stringify(body.role));
-  console.log("  user_id  :", body.user_id ? "<uuid present>" : "MISSING");
-  console.log("  expires  :", body.expires_at);
+  console.log("  userId   :", body.userId ? "<uuid present>" : "MISSING");
+  console.log("  expires  :", body.expiresAt);
 
   const auth = {
-    Authorization: `Bearer ${body.access_token}`,
+    Authorization: `Bearer ${body.accessToken}`,
     Accept: "application/json",
   };
 
@@ -120,8 +120,8 @@ async function main() {
     console.log("  distinct role    :", distinct(team, "role"));
     console.log(
       "  null identity    :",
-      `first_name ${team.filter((m) => m.first_name === null).length}/${team.length},`,
-      `last_name ${team.filter((m) => m.last_name === null).length}/${team.length},`,
+      `firstName ${team.filter((m) => m.firstName === null).length}/${team.length},`,
+      `lastName ${team.filter((m) => m.lastName === null).length}/${team.length},`,
       `email ${team.filter((m) => m.email === null).length}/${team.length}`,
     );
     console.log("  scopes per row   :", JSON.stringify(team.map((m) => m.scopes)));
