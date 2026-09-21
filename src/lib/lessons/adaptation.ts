@@ -5,7 +5,10 @@ import type {
 } from "@/lib/api/intelligence";
 import type { LessonSegment as ContentSegment } from "@/lib/api/lessons";
 import { MODALITY, type Modality } from "@/lib/constants";
-import { asAdjustmentAction } from "@/lib/constants/affect";
+import {
+  ADJUSTMENT_ACTIONS,
+  asAdjustmentAction,
+} from "@/lib/constants/affect";
 import { SCAFFOLD_LEVELS, type ScaffoldLevel } from "@/lib/constants/scaffold";
 import type { AdaptationPlan, Lesson, SegmentAdaptation } from "@/lib/types";
 
@@ -122,6 +125,29 @@ export function toAdaptationPlan(
    */
   const adjustment = asAdjustmentAction(res.proactiveAdjustment?.action);
 
+  /*
+   * THE CONTENT IS TIED TO THE INSTRUCTION IT SERVES.
+   *
+   * `hint` and `guidedQuestions` landed on 21 Sep and answer the two asks that
+   * left three of the four affective responses unreachable. They are carried
+   * only under the action they belong to: the action is the instruction, and a
+   * hint arriving beside `modulate_density` is not a hint anybody asked to
+   * show. Stopping it here beats trusting every future consumer to check.
+   *
+   * An instruction can still arrive with nothing to render - neither field is
+   * required by the schema - and that is rule 5, not a fault.
+   */
+  const hint =
+    adjustment === ADJUSTMENT_ACTIONS.OFFER_HINT
+      ? (res.proactiveAdjustment?.hint?.trim() ?? "")
+      : "";
+  const guidedQuestions =
+    adjustment === ADJUSTMENT_ACTIONS.SHOW_SOCRATIC_PANEL
+      ? (res.proactiveAdjustment?.guidedQuestions ?? []).filter(
+          (q) => q.trim() !== "",
+        )
+      : [];
+
   const segments: SegmentAdaptation[] = res.segments.flatMap((row) => {
     const modalities = offered.get(row.segmentId);
     // A plan row for a segment the player does not have is dropped rather than
@@ -160,5 +186,7 @@ export function toAdaptationPlan(
     lessonId: res.lessonId,
     segments,
     ...(adjustment ? { adjustment } : {}),
+    ...(hint ? { hint } : {}),
+    ...(guidedQuestions.length > 0 ? { guidedQuestions } : {}),
   };
 }
