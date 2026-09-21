@@ -21,6 +21,7 @@ import {
   PlusIcon,
   ROW_DIVIDER,
 } from "../Roster/primitives";
+import { BulkClassSheet } from "./BulkClassSheet";
 import { ClassFormSheet } from "./ClassFormSheet";
 import { NoAccess, failureKind } from "../NoAccess";
 
@@ -108,6 +109,7 @@ export function ClassesView() {
   const [year, setYear] = useState("");
   const [showArchived, setShowArchived] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [bulking, setBulking] = useState(false);
   /** The row that just arrived, so it can be marked for one shot. */
   const [justCreated, setJustCreated] = useState<string | null>(null);
   /**
@@ -240,10 +242,25 @@ export function ClassesView() {
             * back. Introduced by the fix that narrowed `ssoSourced`.
             */}
           {phase === "ready" && activeClasses.length > 0 && !ssoSourced ? (
-            <button type="button" onClick={() => setCreating(true)} className={PRIMARY_BTN}>
-              <PlusIcon />
-              Create a class
-            </button>
+            <>
+              {/*
+                * CL-04 sits BESIDE create, behind the same `!ssoSourced` guard.
+                * A school whose classes come from the directory must not be
+                * offered either door (SCRUM-97), and a bulk one would be the
+                * worse of the two to leave standing - it makes a dozen at once.
+                */}
+              <button
+                type="button"
+                onClick={() => setBulking(true)}
+                className={GHOST_BTN}
+              >
+                Add several
+              </button>
+              <button type="button" onClick={() => setCreating(true)} className={PRIMARY_BTN}>
+                <PlusIcon />
+                Create a class
+              </button>
+            </>
           ) : null}
         </div>
 
@@ -449,6 +466,25 @@ export function ClassesView() {
           onSaved={(id) => {
             setCreating(false);
             setJustCreated(id);
+            load(showArchived);
+          }}
+        />
+      ) : null}
+
+      {/*
+        * The sheet fetches its own class list, with archived included -
+        * see its docblock. Passing this view's `classes` would inherit the
+        * "Show archived" toggle and silently miss archived collisions.
+        *
+        * No `justCreated` badge, deliberately. That is SCRUM-40's one-shot
+        * for a single arriving row; a dozen rows pulsing at once is noise,
+        * and the sheet's own result already names what was made.
+        */}
+      {bulking ? (
+        <BulkClassSheet
+          onClose={() => setBulking(false)}
+          onCreated={() => {
+            setBulking(false);
             load(showArchived);
           }}
         />

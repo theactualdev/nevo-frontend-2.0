@@ -169,6 +169,39 @@ export interface AdminClass {
   archivedAt: string | null;
 }
 
+/**
+ * One class in a bulk create. Only `name` is required by the contract; the
+ * rest are sent when the composer has them.
+ */
+export interface ClassWrite {
+  name: string;
+  yearGroup?: string | null;
+  section?: string | null;
+  academicSession?: string | null;
+  capacity?: number | null;
+}
+
+/**
+ * Why one class in a bulk create was not made — `{index, field, value, reason}`,
+ * every field required.
+ *
+ * `index` is into the array WE sent, so unlike the invitation import's `row`
+ * there is no numbering ambiguity: the rejection can be paired with the exact
+ * class the admin asked for. `value` carries the offending input, so the
+ * screen never has to guess which part of the row was wrong.
+ */
+export interface ClassRejection {
+  index: number;
+  field: string;
+  value: string;
+  reason: string;
+}
+
+export interface BulkClassResponse {
+  created: { id: string; code: string }[];
+  rejected: ClassRejection[];
+}
+
 export const classesApi = {
   /**
    * Every class in the school. Archived rows are excluded by default and a
@@ -194,6 +227,26 @@ export const classesApi = {
    */
   create: (payload: { name: string; yearGroup: string | null }) =>
     api.post<{ id: string; code: string | null }>("/api/v1/classes", payload),
+
+  /**
+   * Create many classes in one call. SCRUM-149 CL-04, and the reason it
+   * exists: *"A real Nigerian secondary school runs twelve to thirty classes.
+   * Nobody types thirty one at a time."*
+   *
+   * `POST /api/v1/classes/bulk` landed 21 Sep. `ClassWrite` accepts
+   * `{name, yearGroup, section, academicSession, capacity}` with only `name`
+   * required — a wider shape than single create, which still takes
+   * `{name, yearGroup}` alone.
+   *
+   * PARTIAL SUCCESS IS THE NORMAL OUTCOME, not an error. The response is
+   * `{created, rejected}`, and `ClassRejection` carries `{index, field, value,
+   * reason}` per row — backend's own description says why: *"a school creating
+   * thirty classes will not notice a count of failures — and did not, when an
+   * import of four hundred children reported only that some rows failed."*
+   * Render every rejection; never a count.
+   */
+  createMany: (classes: ClassWrite[]) =>
+    api.post<BulkClassResponse>("/api/v1/classes/bulk", { classes }),
 
   /** Rename or re-year a class. Does not rewrite assignment history. */
   update: (classId: string, payload: { name: string; yearGroup: string | null }) =>
