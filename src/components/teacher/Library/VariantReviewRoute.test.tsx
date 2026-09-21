@@ -144,10 +144,21 @@ describe("a signed-in teacher's own lesson", () => {
     ).toBeInTheDocument();
   });
 
-  it("offers four tabs, not the five variants the contract carries", () => {
-    // `calculationVariant` is real and C16d draws no tab for it. Showing it
-    // would mean inventing a tab, a label and a layout. Raised with design;
-    // this pins the decision so it is changed deliberately, not by accident.
+  it("offers a tab for every variant the contract carries", () => {
+    /*
+     * THIS TEST ASSERTED THE GAP until 21 Sep. It read "offers four tabs,
+     * not the five variants the contract carries", and its fixture named the
+     * calculation variant's completion statement "SHOULD NOT RENDER".
+     *
+     * The reasoning was sound at the time: C16d drew no fifth tab, so drawing
+     * one meant inventing a label and a layout. What nobody checked was
+     * whether design had already ruled - SCRUM-136, 14 Sep, seven days before
+     * this test was still holding the line: show it, call it Calculation,
+     * steps in sequence, completion statement beneath.
+     *
+     * A teacher could not see one of the five forms their own lesson reaches
+     * a child in, and a passing test said that was on purpose.
+     */
     useLessonDetail.mockReturnValue(
       state({
         lesson: {
@@ -156,11 +167,32 @@ describe("a signed-in teacher's own lesson", () => {
           segments: [
             seg({
               calculationVariant: {
-                type: "worked",
+                type: "co_construction",
                 fullEquation: "5x + 2 = 3x + 10",
-                steps: [],
+                steps: [
+                  {
+                    stepId: "s1",
+                    stepNumber: 1,
+                    prompt: "Take 3x from both sides.",
+                    expectedInput: "numeric",
+                    hint: "The x terms belong together.",
+                    confirmationText: "",
+                    visualUpdate: "",
+                    equationState: "2x + 2 = 10",
+                  },
+                  {
+                    stepId: "s2",
+                    stepNumber: 2,
+                    prompt: "Now take 2 from both sides.",
+                    expectedInput: "numeric",
+                    hint: "Clear the constant.",
+                    confirmationText: "",
+                    visualUpdate: "",
+                    equationState: "2x = 8",
+                  },
+                ],
                 scaffoldImage: null,
-                completionStatement: "SHOULD NOT RENDER",
+                completionStatement: "So x is 4.",
               },
             }),
           ],
@@ -170,9 +202,117 @@ describe("a signed-in teacher's own lesson", () => {
 
     render(<VariantReviewRoute fixture={null} lessonId="l-1" sectionIndex={1} />);
 
-    expect(screen.getAllByRole("tab")).toHaveLength(4);
-    expect(screen.queryByRole("tab", { name: /calculation/i })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("tab")).toHaveLength(5);
+    fireEvent.click(screen.getByRole("tab", { name: "Calculation" }));
+
+    expect(screen.getByText("5x + 2 = 3x + 10")).toBeInTheDocument();
+    expect(screen.getByText("Take 3x from both sides.")).toBeInTheDocument();
+    expect(screen.getByText("Now take 2 from both sides.")).toBeInTheDocument();
+    expect(screen.getByText("So x is 4.")).toBeInTheDocument();
+  });
+
+  it("shows the equation as it reads after each step", () => {
+    // How a teacher checks the working actually works, rather than that the
+    // prompts sound plausible.
+    useLessonDetail.mockReturnValue(
+      state({
+        lesson: {
+          id: "l-1",
+          title: "Solving linear equations",
+          segments: [
+            seg({
+              calculationVariant: {
+                type: "co_construction",
+                fullEquation: "5x + 2 = 3x + 10",
+                steps: [
+                  {
+                    stepId: "s1",
+                    stepNumber: 1,
+                    prompt: "Take 3x from both sides.",
+                    expectedInput: "numeric",
+                    hint: "",
+                    confirmationText: "",
+                    visualUpdate: "",
+                    equationState: "2x + 2 = 10",
+                  },
+                ],
+                scaffoldImage: null,
+                completionStatement: "",
+              },
+            }),
+          ],
+        },
+      }),
+    );
+
+    render(<VariantReviewRoute fixture={null} lessonId="l-1" sectionIndex={1} />);
+    fireEvent.click(screen.getByRole("tab", { name: "Calculation" }));
+
+    expect(screen.getByText("2x + 2 = 10")).toBeInTheDocument();
+  });
+
+  it("shows no answers, the way the interactive tab shows no answer key", () => {
+    // A teacher reading whether the working is sound does not need them, and
+    // the tab beside this one already withholds its `answerKey` on exactly
+    // that reasoning.
+    useLessonDetail.mockReturnValue(
+      state({
+        lesson: {
+          id: "l-1",
+          title: "Solving linear equations",
+          segments: [
+            seg({
+              calculationVariant: {
+                type: "co_construction",
+                fullEquation: "5x + 2 = 3x + 10",
+                answer: "SHOULD NOT RENDER",
+                steps: [
+                  {
+                    stepId: "s1",
+                    stepNumber: 1,
+                    prompt: "Take 3x from both sides.",
+                    expectedInput: "numeric",
+                    hint: "NOR SHOULD THIS",
+                    answer: "NOR THIS",
+                    confirmationText: "",
+                    visualUpdate: "",
+                    equationState: "2x + 2 = 10",
+                  },
+                ],
+                scaffoldImage: null,
+                completionStatement: "So x is 4.",
+              },
+            }),
+          ],
+        },
+      }),
+    );
+
+    render(<VariantReviewRoute fixture={null} lessonId="l-1" sectionIndex={1} />);
+    fireEvent.click(screen.getByRole("tab", { name: "Calculation" }));
+
     expect(screen.queryByText("SHOULD NOT RENDER")).not.toBeInTheDocument();
+    expect(screen.queryByText("NOR SHOULD THIS")).not.toBeInTheDocument();
+    expect(screen.queryByText("NOR THIS")).not.toBeInTheDocument();
+  });
+
+  it("says so when a section has no worked steps at all", () => {
+    useLessonDetail.mockReturnValue(
+      state({
+        lesson: {
+          id: "l-1",
+          title: "Solving linear equations",
+          segments: [seg({ calculationVariant: null })],
+        },
+      }),
+    );
+
+    render(<VariantReviewRoute fixture={null} lessonId="l-1" sectionIndex={1} />);
+    fireEvent.click(screen.getByRole("tab", { name: "Calculation" }));
+
+    expect(
+      screen.getByText(/has not generated worked steps/i),
+    ).toBeInTheDocument();
   });
 
   it("renders the console's own copy for a review reason, never the raw token", () => {
