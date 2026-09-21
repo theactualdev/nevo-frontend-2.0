@@ -13,6 +13,8 @@ import type {
 } from "@/lib/api/lessons";
 import { cn } from "@/lib/utils";
 import { LessonDetailActions } from "./LessonDetailActions";
+import { ReviewSection } from "./ReviewSection";
+import { useSegmentReview } from "@/hooks/useSegmentReview";
 
 /**
  * Lesson detail for a real lesson (C06b), built from what
@@ -215,7 +217,18 @@ export function LiveLessonDetail({
   const segments = [...lesson.segments].sort(
     (a, b) => a.sequenceOrder - b.sequenceOrder,
   );
-  const needsReview = segments.filter((s) => s.needsReview).length;
+  /*
+   * THE SECTIONS A TEACHER HAS TO SETTLE, and the review they do on them.
+   *
+   * `needsReview` is the parser's own flag and never changes; `approved` is
+   * what a teacher has done about it. Both matter: a section that wanted a
+   * look and has been checked still belongs in this list, showing as
+   * checked, or a teacher who accepts one watches it vanish and wonders
+   * what they just did.
+   */
+  const reviewable = segments.filter((s) => s.needsReview);
+  const hadReview = reviewable.length > 0;
+  const review = useSegmentReview(lesson.id, segments);
   /**
    * C06b's reason line names the SECTION, not the parser's reason codes.
    * `reviewReasons` has no vocabulary in the contract - we would be printing
@@ -300,7 +313,7 @@ export function LiveLessonDetail({
               <h2 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
                 {lesson.title}
               </h2>
-              {needsReview > 0 && (
+              {review.remaining > 0 && (
                 <span className="inline-flex shrink-0 items-center gap-[5px] rounded-full bg-nevo-violet/34 py-[3px] pr-[11px] pl-2 text-[11.5px] font-semibold whitespace-nowrap text-nevo-navy">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                     <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
@@ -313,7 +326,7 @@ export function LiveLessonDetail({
             {/* C06b's violet reason line sits ABOVE the grey meta, so the
                 reason is read before the statistics. The section number comes
                 from the flagged segment itself - never a parser token. */}
-            {needsReview > 0 && (
+            {review.remaining > 0 && (
               <p className="mt-2 text-[14.5px] font-medium text-nevo-navy">
                 {reviewLine}
               </p>
@@ -335,10 +348,23 @@ export function LiveLessonDetail({
                 ` · Due ${new Date(nextDue).toLocaleDateString("en-GB", { day: "numeric", month: "long" })}`}
             </span>
           </div>
-          <LessonDetailActions lessonId={lesson.id} />
+          <LessonDetailActions lessonId={lesson.id} outstanding={review.remaining} />
         </div>
 
-        {needsReview > 0 && (
+        {/*
+          THE REVIEW ITSELF, not a sign pointing at one (SCRUM-153).
+
+          This banner used to say sections wanted a look and leave it there,
+          and the only control that could settle one lived on another screen,
+          behind a link inside a row. A teacher who uploaded a lesson was told
+          it needed checking, told to do the checking on a page called "My
+          Lessons" that has never existed, and could not assign their own
+          lesson. It stopped a demonstration on 19 September.
+
+          LR-03's copy, and LR-04's live count: how many are left, and what
+          that means for the one action a teacher came here to take.
+        */}
+        {review.remaining > 0 ? (
           <div className="mt-6 flex max-w-[660px] items-start gap-3.5 rounded-[12px] bg-nevo-violet/14 px-[18px] py-4">
             <span className="mt-px shrink-0 text-nevo-navy">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -348,11 +374,37 @@ export function LiveLessonDetail({
             </span>
             <p className="text-[14.5px] leading-[1.55] text-nevo-near-black/78">
               <strong className="font-semibold text-nevo-near-black">
-                {`${needsReview} ${needsReview === 1 ? "section wants" : "sections want"} a look:`}
+                {`${review.remaining} ${review.remaining === 1 ? "section is" : "sections are"} waiting for you:`}
               </strong>{" "}
-              Nevo wasn&rsquo;t confident it read these correctly. They&rsquo;re
-              marked below.
+              Nevo is unsure it read these parts correctly. Open each one to
+              check it, then accept it.
             </p>
+          </div>
+        ) : (
+          hadReview && (
+            /* LR-05, quiet: the state changes and the assign button comes
+               alive. No modal, no congratulation. */
+            <p className="mt-6 max-w-[660px] text-[14.5px] leading-[1.55] text-nevo-near-black/68">
+              You have checked every section Nevo was unsure about. This
+              lesson is ready to assign.
+            </p>
+          )
+        )}
+
+        {/* The cards themselves, directly under what they are about. */}
+        {reviewable.length > 0 && (
+          <div className="mt-4 flex max-w-[860px] flex-col gap-2.5">
+            {reviewable.map((s) => (
+              <ReviewSection
+                key={s.id}
+                segment={s}
+                index={s.sequenceOrder}
+                approved={review.isApproved(s)}
+                approving={review.approving === s.id}
+                failed={review.failed === s.id}
+                onAccept={() => review.approve(s.id)}
+              />
+            ))}
           </div>
         )}
 

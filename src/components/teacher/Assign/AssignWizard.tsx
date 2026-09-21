@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ApiError, apiErrorCode } from "@/lib/api/client";
@@ -245,6 +246,14 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
   const [submitting, setSubmitting] = useState(false);
   const signedIn = useHasSession();
   const [error, setError] = useState("");
+  /**
+   * Where the refusal sends them, when there is somewhere to send them.
+   *
+   * SCRUM-153's rule, and the one this screen broke: Nevo never points a
+   * teacher at a page by a name that is not in the sidebar, and a message
+   * that names a destination makes it reachable in one click.
+   */
+  const [errorHref, setErrorHref] = useState("");
   // The teacher's real library when there is one; the frame's four otherwise.
   const { cards, live } = useLessonLibrary();
   const lessons = live
@@ -362,6 +371,7 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
 
     setSubmitting(true);
     setError("");
+    setErrorHref("");
     const lessonIds = [...chosen];
     /*
      * ONE REQUEST FOR A STUDENT PICK, one per class otherwise.
@@ -417,9 +427,23 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
     );
 
     if (failed.length === targets.length) {
+      /*
+       * "OPEN IT FROM MY LESSONS" WAS THIS LINE, and no such page has ever
+       * existed - the sidebar has Library. A teacher whose lesson was
+       * refused was sent looking for a screen that is not there, which is
+       * how a demonstration ended on 19 September (SCRUM-153, item 1).
+       *
+       * One lesson is the case that can be pointed at precisely. Several
+       * chosen at once cannot name one, so that message names none rather
+       * than picking a lesson for them.
+       */
+      const single = lessonIds.length === 1 ? lessonIds[0] : null;
+      setErrorHref(notApproved && single ? `/teacher/lessons/${single}` : "");
       setError(
         notApproved
-          ? "This lesson still has sections waiting for your approval, so it cannot go to students yet. Open it from My Lessons and approve each section, then assign it."
+          ? single
+            ? "This lesson still has sections waiting for you, so it cannot go to students yet."
+            : "One of these lessons still has sections waiting for you, so it cannot go to students yet. Open it from your Library and check them."
           : "We couldn’t assign that just now. Nothing has been sent - try again.",
       );
       return;
@@ -797,6 +821,17 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
         <div className="shrink-0 px-7 pb-3 xl:px-8">
           <p className="mx-auto max-w-[560px] rounded-[10px] bg-nevo-violet/14 px-[14px] py-3 text-[13.5px] leading-[1.5] text-nevo-near-black/78">
             {error}
+            {errorHref && (
+              <>
+                {" "}
+                <Link
+                  href={errorHref}
+                  className="font-semibold text-nevo-navy underline-offset-2 hover:underline"
+                >
+                  Open the lesson and check them
+                </Link>
+              </>
+            )}
           </p>
         </div>
       )}
