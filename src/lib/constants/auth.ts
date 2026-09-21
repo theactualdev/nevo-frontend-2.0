@@ -23,13 +23,21 @@
  * the 9pm call. Whichever way that lands, it is this constant that changes,
  * and all three PIN screens follow it.
  *
- * STILL UNSETTLED ON 18 SEP, AND DESIGN HAS NOW DRAWN FOUR AGAIN. The 28c
- * hand-off draws a four-box PIN row in both orientations, which makes it the
- * second frame family asserting four while the backend issues six. The
- * disagreement did not get resolved; it got redrawn. Worth settling before a
- * school does it for us - a child with a six-digit PIN on a four-box screen is
- * told their PIN is wrong, because the login screen cannot tell a rejected PIN
- * from a rejected identifier.
+ * SETTLED ON 21 SEP: FOUR. The 28c redraw stands and the design question is
+ * closed. It is not to be reopened here or anywhere else.
+ *
+ * THIS CONSTANT STILL READS 6, AND CHANGING IT IS A BACKEND CHANGE.
+ * That is a contract fact, not a reopening of the decision. Every PIN field on
+ * the deployed spec carries `pattern: ^\d{6}$` - `PinLoginRequest`,
+ * `PinUpdateRequest`, `JoinRequest` and `UnifiedLoginRequest`, checked 21 Sep.
+ * A four-digit PIN is refused with a 422 before the server ever judges it, and
+ * `classifyLoginFailure` maps everything that is not 401/403 to "ours" - so a
+ * child would be told "we couldn't check that just now" and could not sign in
+ * on any door at all, on a device that remembers them or one that does not.
+ *
+ * So the order is: backend relaxes the pattern to four, then this becomes `4`
+ * and all three PIN screens follow it, because they all read this and nothing
+ * else. One line, once the wire allows it.
  */
 export const STUDENT_PIN_LENGTH = 6;
 
