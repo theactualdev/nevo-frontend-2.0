@@ -239,7 +239,7 @@ describe("a lesson that has not been approved", () => {
     send();
 
     expect(
-      await screen.findByText(/waiting for your approval/i),
+      await screen.findByText(/waiting for you/i),
     ).toBeInTheDocument();
   });
 
@@ -249,7 +249,7 @@ describe("a lesson that has not been approved", () => {
     fireEvent.click(screen.getByRole("button", { name: /Amara Okafor/ }));
     send();
 
-    await screen.findByText(/waiting for your approval/i);
+    await screen.findByText(/waiting for you/i);
     expect(screen.queryByText(/try again/i)).not.toBeInTheDocument();
   });
 
@@ -261,7 +261,38 @@ describe("a lesson that has not been approved", () => {
     send();
 
     expect(await screen.findByText(/try again/i)).toBeInTheDocument();
-    expect(screen.queryByText(/waiting for your approval/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/waiting for you/i)).not.toBeInTheDocument();
+  });
+
+  it("NAMES NO PAGE THAT DOES NOT EXIST (SCRUM-153)", async () => {
+    /*
+     * This message used to read "Open it from My Lessons and approve each
+     * section". There is no My Lessons - the sidebar has Library - and a
+     * teacher whose lesson was refused went looking for a screen that is not
+     * there. It is item 1 of the bug that stopped a demonstration on
+     * 19 September, and I wrote the line.
+     */
+    refuse();
+    toStudents();
+    fireEvent.click(screen.getByRole("button", { name: /Amara Okafor/ }));
+    send();
+
+    await screen.findByText(/waiting for you/i);
+    expect(screen.queryByText(/My Lessons/i)).not.toBeInTheDocument();
+  });
+
+  it("takes the teacher to the lesson in one click", async () => {
+    // The rule the flow broke: if a message names a destination, that
+    // destination is reachable in one click from the message.
+    refuse();
+    toStudents();
+    fireEvent.click(screen.getByRole("button", { name: /Amara Okafor/ }));
+    send();
+
+    const link = await screen.findByRole("link", {
+      name: /Open the lesson and check them/i,
+    });
+    expect(link).toHaveAttribute("href", "/teacher/lessons/l-1");
   });
 });
 
