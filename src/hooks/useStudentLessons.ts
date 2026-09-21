@@ -20,11 +20,16 @@ import { useStudentDashboard } from "./useStudentDashboard";
  * exactly the two halves this screen needs. Home already reads it, so this
  * costs no extra call.
  *
- * WHAT THE CONTRACT CANNOT ANSWER. Assignments carry no subject and no
- * "what you'll do" description, so the live list is ungrouped and its preview
- * omits both rather than inventing them - the teacher library hides its own
- * subject filter for the same reason. There is no adaptive time estimate
- * either; the segment count is the honest stand-in Home already uses.
+ * WHAT THE CONTRACT CANNOT ANSWER, corrected 21 Sep. This said assignments
+ * carry no subject and no time estimate, and both halves were out of date: the
+ * nested `LessonSummaryResponse` has carried `subject` since 31 Aug and
+ * `estimatedMinutes` since 1 Sep, checked against the deployed spec rather
+ * than against this comment. They are read now, so a signed-in child's list
+ * groups by subject like the designed one and says how long a lesson is.
+ *
+ * What the contract still cannot answer is the "what you'll do" description -
+ * nothing writes one for a child, and a generated stand-in would be us
+ * describing a lesson we have not read. The preview still omits it.
  *
  * STATUS is real, though, and that matters: it comes from the student's own
  * progress rows, so the filter chips filter on something true instead of on a
@@ -81,6 +86,25 @@ export function useStudentLessons(): StudentLessons {
         const row = latest.get(a.lesson.id);
         const status = statusFrom(row?.status);
         const count = a.lesson.segmentCount;
+        /*
+         * ZERO AND ABSENT BOTH MEAN "NO ESTIMATE", and neither may be drawn as
+         * "0 min". `estimatedMinutes` is floored per content type, so a real
+         * lesson is never 0 - which makes 0 (its schema default) indisputably
+         * the unset case rather than a very short lesson.
+         *
+         * "About" because it is a planning figure estimated from word count at
+         * a school reading pace, not a measurement of this child. The segment
+         * count stays as the fallback: it is the honest thing to say when
+         * nobody has estimated anything.
+         */
+        const minutes = a.lesson.estimatedMinutes;
+        const timeEstimate =
+          minutes && minutes > 0
+            ? `About ${minutes} min`
+            : `${count} ${count === 1 ? "section" : "sections"}`;
+        // Free text from the staged upload routes, so it is shown as written
+        // or not at all - blank is not a subject.
+        const subject = a.lesson.subject?.trim();
         // Coarse on purpose, like Home: whether segmentPosition is 0- or
         // 1-based is unstated, so this may be off by a segment. It drives a
         // bar, never a number shown to a child.
@@ -93,7 +117,8 @@ export function useStudentLessons(): StudentLessons {
           id: a.lesson.id,
           lessonId: a.lesson.id,
           title: a.lesson.title,
-          timeEstimate: `${count} ${count === 1 ? "section" : "sections"}`,
+          timeEstimate,
+          ...(subject ? { subject } : {}),
           status,
           ...(progress !== undefined ? { progress } : {}),
         };

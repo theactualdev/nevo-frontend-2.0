@@ -1017,8 +1017,19 @@ instruction is to build nothing that depends on either field until it is answere
 11. ~~**Wire `record-review`.**~~ **DONE 17 Sep,** on the back of item 4: the write is
     posted once per lesson, filtered to the questions that actually came in as review, so
     a lesson with no review content sends nothing rather than an empty call. **M**
-12. **The Lessons tab pair** — show `subject` and `estimatedMinutes`; make "Clear search"
-    clear the status chip too. **S**
+12. ~~**The Lessons tab pair**~~ **DONE 21 Sep, and the first half was a stale comment
+    rather than a gap.** `useStudentLessons` said in its own docblock that assignments
+    carry no subject and no time estimate; both had shipped — `subject` 31 Aug,
+    `estimatedMinutes` 1 Sep — and the nested `LessonSummaryResponse` carries them,
+    checked against the deployed spec. A signed-in child's list was ungrouped and read
+    "4 sections" where the designed one reads "About 12 min", for no reason but that
+    sentence. 0 and absent both fall back to the section count, because
+    `estimatedMinutes` is floored per content type so a real lesson is never 0.
+    **The second half was bigger than "clear the chip too":** the empty state said "No
+    lessons match your search" and offered "Clear search", but a status chip empties the
+    list just as easily — so with nothing typed the copy blamed a search the child never
+    made, and the one control offered restored nothing because the chip stayed on. The
+    copy now names whichever is narrowing and the control clears both. **S**
 13. ~~**Mark a thread read, and mark a notification read.**~~ **DONE 21 Sep — a PORT, as
     Olayinka said.** `notificationsApi.markRead` and `messagesApi.markThreadRead` have both
     existed since their endpoints shipped and both were already called by other consoles.
