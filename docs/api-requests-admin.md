@@ -268,9 +268,21 @@ had consumed them. **That is our defect, not yours** — recorded here so the
 next person to read that table treats it as a claim to check rather than a
 fact.
 
-## 5 · NEW — the SSO signing certificate
+## 5 · ~~NEW — the SSO signing certificate~~ **DELIVERED. Closed 21 Sep.**
 
-The only ask on this page you have not seen before.
+**You built it and we did not notice for a day.** It shipped as
+`credentialExpiresAt`, `credentialExpiresInDays` and `credentialExpiringSoon`
+on `SsoConnectionHealthResponse` — a better answer than the one asked for,
+because `credentialExpiringSoon` puts the judgement of "soon" on the side that
+knows the provider's renewal behaviour, rather than leaving us to pick a number.
+All three are now read, and the IT-home row is gated on the boolean.
+
+**The ask is left below unedited, because how we missed it is worth more than
+the ask.** We named the field `certificateExpiresAt`. You named it
+`credential…`. Every re-check we ran grepped for "certificate" — our word, not
+yours — and reported the row still open. If you deliver something under a name
+other than the one we proposed, **say so in the reply**; we will not find it
+otherwise, and this one was our top-priority pre-launch row.
 
 D17's IT home draws *"SSO signing certificate renews in 40 days"*. **No
 certificate or expiry field exists anywhere in the contract.** The only

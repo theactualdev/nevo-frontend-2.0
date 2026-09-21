@@ -32,6 +32,23 @@ Keep this current. Three rules make it useful rather than decorative:
      takes under a minute and would have caught all four.
    - **A count is not a measurement.** "50 markers" is not "50 problems", and
      promoting one into the other is how item 3 of the admin handoff was wrong.
+   - **GREP FOR THE CAPABILITY, NOT FOR THE NAME WE PROPOSED. Added 21 Sep.**
+     We asked backend for a certificate expiry and named it
+     "certificateExpiresAt". They built "credentialExpiresAt",
+     "credentialExpiresInDays" and "credentialExpiringSoon". Every re-check
+     afterwards searched for the word in OUR ask — this file recorded
+     *"certificate is 0 occurrences spec-wide"*, which was **true, and meant
+     nothing**. The row stayed marked open for a day after it shipped, and the
+     person who caught it had made the same mistake that morning filtering on
+     /cert/i. A capability we ask for is very often delivered under a name we
+     did not choose, because backend names it from their model and we name it
+     from our screen.
+   - **A NEW ENDPOINT NOBODY CALLS IS INVISIBLE TO EVERY GATE WE HAVE.**
+     scripts/contract-check.mjs check 2 lists spec fields the client ignores —
+     but only on endpoints the client already calls. A whole resource we have
+     never touched produces no output at all, from any gate. That is exactly
+     how the age-check surface sat unbuilt and unreported. **Diff the spec's
+     path list, not only its schemas.**
    - When a claim here is falsified, **retract it in place rather than editing it
      silently**, so the next reader can see the direction this file drifts.
    - The highest-yield question is not "what is blocked?" but **"what shipped
@@ -2284,6 +2301,89 @@ only and never `scope=student`, and nothing in the SENCo profile, the student
 record or the IEP export references them. The statement counsel is relying on
 holds. SCRUM-169 can close on the admin side.
 
+---
+
+## THE AGE CHECK — a whole feature shipped, and nothing renders it. 21 Sep
+
+**Found by reading `CompleteParentConsentRequest` in full instead of adding the
+one field CI was red on.** The `grantedTypes` 422 was the visible symptom of a
+ruling landing. This is the rest of it, and it is not a field — it is a
+resource, two endpoints, three schemas and a boolean that can stop a child using
+the product.
+
+### What is deployed
+
+| | |
+|---|---|
+| `GET /api/v1/age-checks` | **Never called.** The exception queue. |
+| `POST /api/v1/age-checks/{age_check_id}/resolve` | **Never called.** Takes `AgeCheckResolution {agreedDateOfBirth, note?}`. |
+| `AgeCheckState` | `matched \| mismatch \| resolved \| awaiting_parent` |
+| `AgeCheckResponse.blocksAccess: boolean` | **Required.** A child who cannot use Nevo. |
+| `CompleteParentConsentRequest.childDateOfBirth` | Optional, **never sent**. |
+| `CompleteParentConsentRequest.parentRelationship` | Optional, **never sent**. |
+| `ParentConsentCompletionResponse.declinedTypes` | **Never read.** |
+| `ParentConsentCompletionResponse.ageCheck` | **Never read.** Defaults `awaiting_parent`. |
+
+The contract's own statement of the rule, on `AgeCheckState`:
+
+> *"The school gives one on the roster and the parent gives one when they
+> consent. They are compared rather than trusted, because a date of birth
+> decides whether a child is old enough for the product to be offered to them at
+> all, and a single unverified source is not a check."*
+
+### Why no gate caught it
+
+`contract-check.mjs` check 2 reports spec fields the client ignores — but only
+on endpoints the client already calls. `/api/v1/age-checks` is called by
+nothing, so it produced no output from any of the four gates. `declinedTypes`
+and `ageCheck` appeared in the advisory only because they hang off
+`/consents/parent/complete`, which we do call. **The two most consequential
+things here were the two the tooling could not see.** See rule 3.
+
+### The three things this needs, and none of them is ours alone
+
+1. **The parent screen never asks for a date of birth.** `childDateOfBirth` is
+   optional, so nothing 422s — the check simply never runs, and `ageCheck` stays
+   `awaiting_parent` for every consent we have ever completed. Adding a DOB field
+   to D01b is a **design change to a statutory screen**, not a wiring job.
+2. **`blocksAccess` has no owner.** It is required on every `AgeCheckResponse`
+   and nothing in any console reads it. If it is ever true, a child is locked out
+   and **no screen in the product explains why** — not the student's, not the
+   teacher's, not the admin's. This is the part that should be settled first.
+3. **The admin queue is buildable today and is a reopen trigger.** `GET
+   /age-checks` plus `POST /{id}/resolve` is a straightforward exception list:
+   two dates, a name, a state, and a resolution that requires the agreed date.
+   Every field on `AgeCheckResponse` is required, so there is no absence to
+   design around. **No frame draws it**, which is the blocker — rule 10.
+
+### What we must not do
+
+**Not compute the comparison.** `state` is server-derived and `blocksAccess` is
+server-derived. Comparing `schoolDateOfBirth` to `parentDateOfBirth` in the
+client to decide what to show is rule 3, and it would be a client deciding
+whether a child is old enough for the product.
+
+**Not render an age as a judgement about a child.** `studentFirstName` and two
+dates on an admin screen is a record; anything that reads as a verdict on the
+child rather than a disagreement between two adults' paperwork is Zero-Tag.
+
+### The one-tap conflict, now sharper
+
+Raised at the call site in PR #479 and it has not gone away. `ConsentType`'s
+description: *"Each is asked and answered on its own. A parent agreeing to
+their child using Nevo has not thereby agreed to anything else."*
+`CompleteParentConsentRequest`: *"an empty list is a parent saying no to
+everything, which is a real answer"*. `declinedTypes` exists on the response so
+a decline can be recorded.
+
+D01b is **one button**. It cannot express a partial grant and it cannot express
+a decline. Today that is survivable because invitations only ever request
+`data_processing`, so the single Yes grants exactly what was asked — but
+`cross_border_transfer` is modelled and is precisely the thing a parent must be
+able to refuse separately. **Design ruling needed before any invitation requests
+a second type.**
+
+
 ### Blocked on backend — SPLIT INTO PRE-LAUNCH AND v1.5, 16 Sep
 
 This was one undifferentiated table, which meant fifteen items arrived at backend
@@ -2291,22 +2391,26 @@ carrying equal weight — so the three that can hurt a school queued behind a
 six-year rate table nobody needs yet. **Three are pre-launch. One more is
 pre-launch and is not backend's at all. The rest are v1.5.**
 
-#### PRE-LAUNCH — three backend asks, and they are small
+#### PRE-LAUNCH — ~~three~~ **TWO** backend asks, and they are small
 
-**Send order, set 17 Sep: SSO certificate → IEP shares read → term cap.** The
-term cap held first place on the grounds that it is the only one actively
-destroying something a school typed, and it lost to a fact — **no four-term
-school is onboarded yet**, so it is damaging nobody today. The certificate is the
-one failure here that is invisible until the morning it happens. **A quiet loss
-you can still discover ranks below a silent one you cannot see coming.** If a
-four-term school onboards before this lands, the cap moves back to first the same
-day. Full reasoning in `api-requests-admin.md`.
+**~~Send order, set 17 Sep: SSO certificate → IEP shares read → term cap.~~
+FIRST PLACE HAS SHIPPED, 21 Sep. Send order is now: IEP shares read → term
+cap.**
+
+The original ordering stands as written, because the reasoning held: the term
+cap is the only one actively destroying something a school typed, and it lost
+first place to the fact that **no four-term school is onboarded yet**, so it is
+damaging nobody today. The credential expiry was the one failure invisible until
+the morning it happens. **A quiet loss you can still discover ranks below a
+silent one you cannot see coming.** If a four-term school onboards before the
+cap lands, it moves back to first the same day. Full reasoning in
+`api-requests-admin.md`.
 
 | | |
 |---|---|
 | **`AcademicConfig.termStartDates` has `maxItems: 3`, and it LOSES DATA** | A four-term school has its fourth term start silently dropped — no 422, no warning — and is then invoiced on a calendar it did not choose. `SchoolSettings.tsx:508` renders an "Add a term" control for exactly that case, per SCRUM-99's "a quiet action for schools running four terms". Underneath it is a **product disagreement, not a schema nit**: the field description says *"Nigerian schools run three terms"*. Either answer is fine — raise the cap, or return a 422 and we pull the control. Silent truncation is the only outcome we cannot handle. |
 | **Nothing reads back whether an IEP was shared — SAFETY** | `IepExportShareResponse` exists as a schema; the only deployed op is `POST /exports/iep/{export_id}/share`. There is no GET, and `IepExportResponse` carries no shares. On reload a SENCo cannot tell whether a child's SEN report already reached a guardian, so the screen can neither confirm a send nor prevent a duplicate one. Ask: `GET /api/v1/exports/iep/{export_id}/shares` — no new schema, the record is already written and simply never read. |
-| **`SsoConnectionHealthResponse` has no certificate expiry — LOCKOUT** | `certificate` is 0 occurrences spec-wide. The schema carries six dates about the connection and not the one that ends it. A lapsed signing certificate does not degrade SSO, it **stops** it: every teacher and child at that school locked out on one morning, with nothing in the console having said it was coming. It is the only fully predictable lockout in the product and it is currently invisible. One nullable field: `certificateExpiresAt: string \| null`. |
+| ~~**`SsoConnectionHealthResponse` has no certificate expiry — LOCKOUT**~~ **DELIVERED 21 SEP, AND BUILT THE SAME DAY.** Retracted in place rather than deleted, because the way this row stayed open is the lesson. It read *"`certificate` is 0 occurrences spec-wide"* — a true statement about a substring, presented as a measurement of a capability. Backend built it as `credentialExpiresAt` / `credentialExpiresInDays` / `credentialExpiringSoon`. Now read by `SsoStatus` and rendered as an IT-home glance row gated on the server's own `credentialExpiringSoon` — **never on a day count of ours**, which would be rule 3. |
 
 #### PRE-LAUNCH, AND NOT BACKEND'S — the DPA wording
 
