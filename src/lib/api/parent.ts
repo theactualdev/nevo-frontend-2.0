@@ -65,10 +65,17 @@ export interface ParentInvitation {
   parentContactMethod: ParentContactMethod;
   status: ConsentStatus;
   /**
-   * What THIS invitation asks for. `ConsentType` has three members, but the
-   * invitation path only ever requests `data_processing` today - camera and
-   * offline storage are modelled and never asked for. So D01b's single "Yes"
-   * grants exactly what is in here, which is currently one thing.
+   * What THIS invitation asks for, and what is now sent as `grantedTypes`.
+   *
+   * `ConsentType` has FOUR members since 21 Sep, but the invitation path only
+   * ever requests `data_processing` today - camera, offline storage and
+   * cross-border transfer are modelled and never asked for. So D01b's single
+   * "Yes" grants exactly what is in here, which is currently one thing.
+   *
+   * That "currently" is load-bearing. The contract now says each type is
+   * "asked and answered on its own", and this screen has one button - so the
+   * day an invitation arrives carrying two, the single Yes starts recording a
+   * consent nobody was separately asked for. Raised at the call site.
    */
   consentTypes: ConsentType[];
   expiresAt: string;
@@ -253,9 +260,30 @@ export const parentApi = {
    * roster row to Confirmed, so it is the single consequential action on that
    * screen. Unauthenticated, like everything else a parent touches.
    */
-  completeConsent: (token: string) =>
+  /**
+   * BREAKING CHANGE, 21 Sep: `grantedTypes` is now REQUIRED.
+   *
+   * `CompleteParentConsentRequest` requires `{token, grantedTypes}`, and this
+   * sent `{token}` alone — so every parent tapping "Yes" was getting a 422 and
+   * no consent was being recorded anywhere. Caught by `npm run contract`, not
+   * by a person, which is the argument for that gate.
+   *
+   * What is sent is the invitation's OWN `consentTypes` — the types the school
+   * asked about — so nothing about what a parent grants changes. Backend used
+   * to infer exactly this list from the token; it now wants it stated.
+   *
+   * RAISED, NOT RESOLVED: the new `ConsentType` description says *"Each is
+   * asked and answered on its own. A parent agreeing to their child using Nevo
+   * has not thereby agreed to anything else"* — which contradicts design's
+   * 7 Sep one-blanket-consent-one-tap ruling that `ParentConsent` is built on.
+   * It does not bite today because the invitation path only ever requests
+   * `data_processing`, so one tap grants one thing. It WILL bite the first
+   * time an invitation carries two. See the raise in `ParentConsent.tsx`.
+   */
+  completeConsent: (token: string, grantedTypes: ConsentType[]) =>
     api.post<ParentConsentCompletion>("/api/v1/consents/parent/complete", {
       token,
+      grantedTypes,
     }),
 
   /**

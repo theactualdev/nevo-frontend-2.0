@@ -155,12 +155,33 @@ describe("the request", () => {
 });
 
 describe("giving consent", () => {
-  it("sends the token, which is the whole request", async () => {
+  /*
+   * THIS USED TO ASSERT "the token, which is the whole request" — and on
+   * 21 Sep it stopped being the whole request. `CompleteParentConsentRequest`
+   * made `grantedTypes` REQUIRED, so the call 422'd and no consent was
+   * recorded for anyone. `npm run contract` caught it; this test did not,
+   * because it pinned the shape we were sending rather than the shape the
+   * endpoint wanted.
+   */
+  it("sends the token AND the invitation's own consent types", async () => {
     render(<ParentConsent token={TOKEN} invitation={inv()} />);
     fireEvent.click(screen.getByRole("button", { name: /Yes, I give my consent/ }));
 
-    expect(completeConsent).toHaveBeenCalledWith(TOKEN);
+    expect(completeConsent).toHaveBeenCalledWith(TOKEN, ["data_processing"]);
     expect(await screen.findByText(/that[’']s all we needed/i)).toBeInTheDocument();
+  });
+
+  it("never grants a type the invitation did not ask about", async () => {
+    // The grant comes from the invitation, never composed here. Widening it
+    // would record a consent the parent was never shown — and the contract
+    // now says each type is "asked and answered on its own", with
+    // cross-border transfer named as the reason why.
+    render(<ParentConsent token={TOKEN} invitation={inv()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Yes, I give my consent/ }));
+
+    const sent = completeConsent.mock.calls[0][1] as string[];
+    expect(sent).toEqual(["data_processing"]);
+    expect(sent).not.toContain("cross_border_transfer");
   });
 
   it("never reports success on a failure", async () => {
