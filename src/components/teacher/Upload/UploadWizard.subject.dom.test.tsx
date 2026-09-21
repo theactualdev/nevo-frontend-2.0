@@ -1,23 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-const { upload, awaitParseRun, detail, useCurrentUser, start } = vi.hoisted(
-  () => ({
-    upload: vi.fn(),
-    awaitParseRun: vi.fn(),
-    detail: vi.fn(),
-    useCurrentUser: vi.fn(),
-    start: vi.fn(),
-  }),
-);
-vi.mock("@/lib/api/content", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/api/content")>();
-  return {
-    ...actual,
-    contentApi: { ...actual.contentApi, upload },
-    awaitParseRun,
-  };
-});
+const { detail, useCurrentUser, start } = vi.hoisted(() => ({
+  detail: vi.fn(),
+  useCurrentUser: vi.fn(),
+  start: vi.fn(),
+}));
 vi.mock("@/lib/api/lessons", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/lessons")>();
   return { ...actual, lessonsApi: { ...actual.lessonsApi, detail } };
@@ -85,21 +73,13 @@ const dropFile = () => {
 };
 
 beforeEach(() => {
-  upload.mockReset().mockResolvedValue({
-    lessonId: "l-1",
-    parseRunId: "run-1",
-    status: "processing",
-    pollUrl: "/api/content/parse-runs/run-1",
-  });
-  awaitParseRun
-    .mockReset()
-    .mockResolvedValue({ status: "completed", finished: true, failureReason: null });
   detail.mockReset().mockResolvedValue({
     id: "l-1",
     title: "Fractions",
     segmentCount: 1,
     reviewSegmentCount: 0,
     segments: [],
+    modules: [],
     confirmationSummary: null,
   });
   start.mockReset();
@@ -146,7 +126,31 @@ describe("the subject on an upload", () => {
 
     dropFile();
 
-    await waitFor(() => expect(upload).toHaveBeenCalledWith(expect.any(File), "English"));
+    await waitFor(() =>
+      expect(start).toHaveBeenCalledWith(expect.any(File), "lesson", "English"),
+    );
+  });
+
+  it("calls the scope what the contract calls it", async () => {
+    /*
+     * THE ONE TRANSLATION IN THE MOVE, and a 422 if it is dropped. This
+     * wizard names its scopes single / unit / term, after C07c. The upload
+     * body takes `^(lesson|unit|term)$`, so two of the three already agree
+     * and the third does not - and "single" would be refused by a validator
+     * that says nothing a teacher could act on.
+     *
+     * Asserted on its own rather than only inside the case above, where a
+     * reader would take the string for part of the subject.
+     */
+    render(<UploadWizard />);
+    chooseScope(/one lesson/i);
+    fireEvent.click(screen.getByRole("button", { name: /continue/i }));
+
+    dropFile();
+
+    await waitFor(() => expect(start).toHaveBeenCalled());
+    expect(start.mock.calls[0][1]).toBe("lesson");
+    expect(start.mock.calls[0][1]).not.toBe("single");
   });
 
   it("sends nothing when the teacher left it unset", async () => {
@@ -157,7 +161,7 @@ describe("the subject on an upload", () => {
     dropFile();
 
     await waitFor(() =>
-      expect(upload).toHaveBeenCalledWith(expect.any(File), undefined),
+      expect(start).toHaveBeenCalledWith(expect.any(File), "lesson", undefined),
     );
   });
 

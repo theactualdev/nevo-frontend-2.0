@@ -8,6 +8,7 @@ import {
   type UploadStructure,
   type UploadSegment,
 } from "@/lib/api/uploads";
+import { ApiError } from "@/lib/api/client";
 import { getToken } from "@/lib/auth/session";
 
 /**
@@ -54,18 +55,26 @@ export interface StagedUpload {
   /** The parse failed, or the request did. */
   failed: boolean;
   /**
-   * WHICH of those two, because they are not the same thing to say.
+   * WHICH of the three, because they are not the same thing to say.
    *
-   * `parse` - Nevo read the file and could not finish. The server says
-   *   why in `error`, and the file is not the problem to solve.
+   * `file` - the server read the request and refused THIS FILE. A 4xx on
+   *   the upload is an answer about the document, so a different one is the
+   *   thing to try.
+   * `parse` - Nevo took the file and could not finish reading it. The
+   *   server says why in `error`, and the file is not the problem to solve.
    * `request` - the call itself failed, or answered 5xx. That is the
-   *   connection, and trying again is the right advice.
+   *   connection, and trying the SAME file again is the right advice.
    *
-   * Both used to set `failed` alone, and the screen said "We couldn't
-   * read that one" over either - blaming a teacher's file for our own
-   * server. Backend asked for the split on 18 Sep.
+   * The first two used to set `failed` alone and the screen said "We
+   * couldn't read that one" over either - blaming a teacher's file for our
+   * own server. Backend asked for that split on 18 Sep.
+   *
+   * `file` is the third, added when the single-lesson path moved onto this
+   * hook. That path classified an upload rejection by status and this one did
+   * not, so every refusal here - including a 422 about the document itself -
+   * was reported as our server being unreachable.
    */
-  failureKind: "parse" | "request" | null;
+  failureKind: "file" | "parse" | "request" | null;
   /** The server's own reason, when it gave one. */
   error: string | null;
   /** Still going, and long enough that a teacher deserves telling. */
@@ -91,9 +100,9 @@ export function useStagedUpload(): StagedUpload {
   const [retrying, setRetrying] = useState(false);
   const [lessonTitle, setLessonTitle] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
-  const [failureKind, setFailureKind] = useState<"parse" | "request" | null>(
-    null,
-  );
+  const [failureKind, setFailureKind] = useState<
+    "file" | "parse" | "request" | null
+  >(null);
   const [error, setError] = useState<string | null>(null);
   const [slow, setSlow] = useState(false);
   /**
@@ -136,9 +145,15 @@ export function useStagedUpload(): StagedUpload {
           setStatus(res.status);
           setStage(res.stage);
         })
-        .catch(() => {
+        .catch((err: unknown) => {
           setFailed(true);
-          setFailureKind("request");
+          // Any 4xx is the server's ANSWER about this file: it read the
+          // request and rejected it. Only a 5xx, or no status at all - the
+          // call never arrived - is ours.
+          const status = err instanceof ApiError ? err.status : undefined;
+          setFailureKind(
+            status !== undefined && status < 500 ? "file" : "request",
+          );
         });
     },
     [reset],
