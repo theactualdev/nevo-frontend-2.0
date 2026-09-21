@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { classesApi, type AdminClass } from "@/lib/api/classes";
 import { teachersApi, type TeacherSummary } from "@/lib/api/teachers";
 import { yearGroupOptions } from "@/lib/constants/yearGroups";
+import { collisionNote, findCollision } from "./duplicateName";
 import { cn } from "@/lib/utils";
 import {
   FailureLine,
@@ -65,7 +66,35 @@ export function ClassFormSheet({
       .catch(() => setTeachers([]));
   }, [editing]);
 
-  const canSave = name.trim().length > 0 && phase !== "saving";
+  /*
+   * CL-03's duplicate detection, which this sheet did not have: *"matching
+   * case-insensitively and ignoring surrounding whitespace, and the message
+   * names which existing class it collides with."* Without it a school could
+   * create "JSS 2A" twice and only discover it from the roster.
+   *
+   * ARCHIVED COUNTS, so the list is fetched with `includeArchived`. Archive is
+   * reversible and never deletes, so an archived "JSS 2A" is a name this
+   * school still holds; `collisionNote` says restore rather than rename.
+   *
+   * EDITING IS EXEMPT AGAINST ITSELF. Renaming a class to the name it already
+   * has is a no-op, not a collision, so the class being edited is excluded -
+   * otherwise saving without touching the name would refuse.
+   */
+  const [siblings, setSiblings] = useState<AdminClass[]>([]);
+  useEffect(() => {
+    classesApi
+      .list(true)
+      .then(setSiblings)
+      .catch(() => setSiblings([]));
+  }, []);
+
+  const collided = useMemo(() => {
+    const hit = findCollision(name, siblings);
+    return hit && hit.id !== existing?.id ? hit : null;
+  }, [name, siblings, existing?.id]);
+
+  const canSave =
+    name.trim().length > 0 && phase !== "saving" && collided === null;
 
   const submit = () => {
     if (!canSave) return;
@@ -172,9 +201,18 @@ export function ClassFormSheet({
           autoComplete="off"
           className={cn(FIELD, "cursor-text")}
         />
-        <p className="mt-2 text-[12.5px] leading-[1.5] text-nevo-near-black/55">
-          Name it however your school does.
-        </p>
+        {collided ? (
+          /* Violet, never red - this console's own rule for a problem. It
+             names the class rather than saying "that name is taken", because
+             an archived collision has a different remedy from a live one. */
+          <p className="mt-2 rounded-[10px] bg-nevo-violet/16 px-3.5 py-2.5 text-[13px] leading-[1.5] text-nevo-near-black/78">
+            {collisionNote(collided)}
+          </p>
+        ) : (
+          <p className="mt-2 text-[12.5px] leading-[1.5] text-nevo-near-black/55">
+            Name it however your school does.
+          </p>
+        )}
       </div>
 
       <div>
