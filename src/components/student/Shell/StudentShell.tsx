@@ -10,6 +10,7 @@ import { TEXT_ZOOM, useAccessibility } from "@/context/AccessibilityContext";
 import { useBehaviouralCapture } from "@/hooks";
 import { useConsentGate } from "@/hooks/useConsentGate";
 import { NotificationBell } from "./NotificationBell";
+import { isLessonRoute } from "./lessonRoutes";
 import { OfflineTakeover, useOnline } from "./OfflineTakeover";
 import { useHasSession } from "@/hooks/useHasSession";
 import { useHydrated } from "@/hooks/useHydrated";
@@ -162,8 +163,13 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
     if (pathname.startsWith("/student/onboarding")) return <>{children}</>;
     return (
       <div style={{ zoom: TEXT_ZOOM[textSize] }}>
+        {/*
+          Ask Nevo is rendered by the LESSON LAYOUT now, not here. As a sibling
+          of `children` it sat outside that route's `LessonProvider`, so the
+          lesson id it reads resolved to null and every question a child asked
+          from inside a lesson arrived unattached to one.
+        */}
         {children}
-        {isLesson(pathname) && <AskNevo />}
       </div>
     );
   }
@@ -280,12 +286,7 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
  * Only the BARE lesson route is the player; its sub-routes (e.g. `/summary`)
  * are ordinary in-shell screens and keep the sidebar/nav.
  */
-function isLesson(pathname: string): boolean {
-  return (
-    /^\/student\/lessons\/[^/]+\/?$/.test(pathname) ||
-    /^\/student\/lessons\/[^/]+\/review-session\/?$/.test(pathname)
-  );
-}
+const isLesson = isLessonRoute;
 
 /** Onboarding and the lesson player (`/student/lessons/<id>`) run without chrome. */
 function isFullScreen(pathname: string): boolean {

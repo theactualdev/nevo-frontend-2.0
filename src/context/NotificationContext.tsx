@@ -43,6 +43,16 @@ export interface NotificationContextValue {
    */
   failed: boolean;
   refresh: () => void;
+  /**
+   * Mark one notification read. Opening it IS reading it.
+   *
+   * Ported from the admin panel, which has had this since the endpoint
+   * shipped. The child's bell called neither `markRead` nor `markAllRead`, so
+   * a notification stayed unread for a child who had read it - the violet dot
+   * never cleared, and the only thing that ever changed it was a teacher or an
+   * admin opening the same row on their own screen.
+   */
+  markRead: (id: string) => void;
 }
 
 export const NotificationContext = createContext<
@@ -111,6 +121,38 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(() => setNonce((n) => n + 1), []);
 
+  /*
+   * Optimistic, then reconciled by the next read - the child is looking at the
+   * row either way, and a dot that lingers while the request is in flight
+   * reads as the tap not having worked.
+   *
+   * REVERTED ON FAILURE rather than left cleared. An unread notification shown
+   * as read is a message the child never sees again; the reverse is only a dot
+   * that comes back, which is the truthful state of a write that did not land.
+   */
+  const markRead = useCallback((id: string) => {
+    if (!getToken()) return;
+    let wasUnread = false;
+    setFeed((cur) => {
+      if (!cur) return cur;
+      wasUnread = cur.some((n) => n.notificationId === id && !n.read);
+      return cur.map((n) =>
+        n.notificationId === id ? { ...n, read: true } : n,
+      );
+    });
+    setUnread((u) => Math.max(0, u - 1));
+
+    void notificationsApi.markRead(id).catch(() => {
+      setFeed(
+        (cur) =>
+          cur?.map((n) =>
+            n.notificationId === id ? { ...n, read: !wasUnread } : n,
+          ) ?? cur,
+      );
+      if (wasUnread) setUnread((u) => u + 1);
+    });
+  }, []);
+
   const value = useMemo<NotificationContextValue>(() => {
     /*
      * NOTHING UNTIL THE CLIENT CAN SEE THE TOKEN, and this is the half that
@@ -129,7 +171,13 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
      * skeleton here.
      */
     if (!hydrated) {
-      return { notifications: [], unreadCount: 0, failed: false, refresh };
+      return {
+        notifications: [],
+        unreadCount: 0,
+        failed: false,
+        refresh,
+        markRead,
+      };
     }
     if (!signedIn) {
       return {
@@ -137,6 +185,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         unreadCount: SAMPLE_NOTIFICATIONS.filter((n) => !n.read).length,
         failed: false,
         refresh,
+        markRead,
       };
     }
     return {
@@ -144,8 +193,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       unreadCount: unread,
       failed,
       refresh,
+      markRead,
     };
-  }, [hydrated, signedIn, feed, unread, failed, refresh]);
+  }, [hydrated, signedIn, feed, unread, failed, refresh, markRead]);
 
   return (
     <NotificationContext.Provider value={value}>

@@ -1019,10 +1019,21 @@ instruction is to build nothing that depends on either field until it is answere
     a lesson with no review content sends nothing rather than an empty call. **M**
 12. **The Lessons tab pair** — show `subject` and `estimatedMinutes`; make "Clear search"
     clear the status chip too. **S**
-13. **Mark a thread read, and mark a notification read.** Both endpoints deployed, both
-    called by other consoles. **S**
-14. **Scope an Ask Nevo question to the lesson the child is in.** `lessonId` is
-    structurally null today. **S**
+13. ~~**Mark a thread read, and mark a notification read.**~~ **DONE 21 Sep — a PORT, as
+    Olayinka said.** `notificationsApi.markRead` and `messagesApi.markThreadRead` have both
+    existed since their endpoints shipped and both were already called by other consoles.
+    The child's bell called neither, and `ConnectTab` cleared `unread` on its FIXTURE array
+    only — so for a signed-in child the dot never cleared and came back on every reload.
+    The notification write reverts on failure: a notification shown as read but never
+    marked is a message the child never sees again. **S**
+14. ~~**Scope an Ask Nevo question to the lesson the child is in.**~~ **DONE 21 Sep —
+    PROVIDER PLACEMENT, not wiring, as Olayinka said.** `AskNevo` has always read
+    `useContext(LessonContext)?.lessonId` and always sent it; it resolved to null because
+    the component rendered from `StudentShell` as a SIBLING of `{children}`, while the
+    `LessonProvider` lives in the lesson route's own layout inside `children`. Moved into
+    that layout. The route test moved to `Shell/lessonRoutes.ts` and is shared rather than
+    copied, because `/review` and `/summary` sit under the same layout and are not the
+    player. **S**
 15. **Ask Nevo conversation history.** Endpoints deployed, types already written. **M**
 16. **The small honest ones** — the fourth `LessonMessage` for a missing lesson; the
     summary route applying the player's own `lesson.summary` gate; the unreachable

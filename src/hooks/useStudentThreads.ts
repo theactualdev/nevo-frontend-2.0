@@ -37,6 +37,11 @@ export interface StudentThreads {
   failed: boolean;
   openThread: (threadId: string) => void;
   /**
+   * Mark a thread read. Opening it is reading it, and this is the deliberate
+   * write that says so - the GET must not be what clears a child's badge.
+   */
+  markThreadRead: (threadId: string) => void;
+  /**
    * Write into a thread the child can already read.
    *
    * The message appears immediately as `sending` and is only marked
@@ -105,6 +110,37 @@ export function useStudentThreads(): StudentThreads {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  /**
+   * Opening a thread IS reading it, and the write is deliberate.
+   *
+   * The endpoint exists precisely so that clearing a badge is not a side
+   * effect of the GET above - a prefetch must not be able to clear a child's
+   * unread marker. The teacher console has called this since 1 Sep; the
+   * child's Connect tab cleared `unread` on its LOCAL fixture array only, so
+   * for a signed-in child the dot never cleared at all and came back on every
+   * reload.
+   *
+   * The response is the updated thread, so the badge reconciles from what the
+   * server says rather than from a local guess.
+   */
+  const markThreadRead = useCallback((threadId: string) => {
+    setLive(
+      (ts) => ts?.map((t) => (t.id === threadId ? { ...t, unread: false } : t)) ?? ts,
+    );
+    if (!getToken()) return;
+    void messagesApi
+      .markThreadRead(threadId)
+      .then((updated) => {
+        setLive(
+          (ts) =>
+            ts?.map((t) =>
+              t.id === threadId ? { ...t, unread: updated.unread } : t,
+            ) ?? ts,
+        );
+      })
+      .catch(() => {});
   }, []);
 
   const openThread = useCallback(
@@ -236,6 +272,9 @@ export function useStudentThreads(): StudentThreads {
       loading: false,
       failed: false,
       openThread,
+      // Nothing behind the fixtures to mark, and the designed screens keep
+      // their own local clear.
+      markThreadRead: () => {},
       reply,
       retry,
     };
@@ -246,6 +285,7 @@ export function useStudentThreads(): StudentThreads {
     loading: live === null && !failed,
     failed,
     openThread,
+    markThreadRead,
     reply,
     retry,
   };

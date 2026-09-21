@@ -71,14 +71,28 @@ afterEach(() => {
 });
 
 describe("StudentShell — where Ask Nevo is reachable", () => {
-  it("is reachable inside the lesson player", () => {
+  /*
+   * THE SHELL NO LONGER RENDERS IT ON A LESSON ROUTE, as of 21 Sep, and these
+   * two cases moved rather than disappeared.
+   *
+   * As a sibling of `{children}` the shell's copy sat OUTSIDE the lesson
+   * route's `LessonProvider`, so the lesson id Ask Nevo already reads and
+   * already sends resolved to null - every question asked from inside a lesson
+   * arrived unattached to one. It is rendered by the lesson layout now, and
+   * `app/student/lessons/[lessonId]/LessonAskNevo.dom.test.tsx` covers both
+   * that it appears there and that the id survives.
+   *
+   * What is asserted here is the half this file still owns: the shell stays
+   * out of the way on those routes.
+   */
+  it("leaves the lesson player to the layout that scopes it", () => {
     at("/student/lessons/abc-123");
-    expect(screen.getByTestId("ask-nevo")).toBeTruthy();
+    expect(screen.queryByTestId("ask-nevo")).toBeNull();
   });
 
-  it("is reachable inside a review session, which reuses the player", () => {
+  it("leaves the review session to it too, which reuses the player", () => {
     at("/student/lessons/abc-123/review-session");
-    expect(screen.getByTestId("ask-nevo")).toBeTruthy();
+    expect(screen.queryByTestId("ask-nevo")).toBeNull();
   });
 
   it("is reachable from the ordinary tabs", () => {
