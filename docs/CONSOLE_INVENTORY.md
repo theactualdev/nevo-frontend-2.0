@@ -324,7 +324,7 @@ it changes." Changed 16 Sep — `ClassDetail.tsx` now draws Roster and Lessons.
 | Parent consent (D01b) | LIVE | — | NONE | — |
 | Parent data management (D01c) | LIVE | Does not name the recipient address the frame names | FRONTEND; CONTENT | S |
 | Parent growth view (D15d) | LIVE | No school attribution. Backend reported 15 Sep that the statements are already gender-neutral and a regression test holds it — the one delivery of the eleven that cannot be checked against the spec, so it wants a spot-check on real prose before the row is closed | FRONTEND; VERIFY | S |
-| Parent account setup (D02) | PARTIAL | No route of its own; contact read-only where the frame draws it editable; SMS copy invented | DESIGN | M |
+| Parent account setup (D02) | PARTIAL | **DESIGN UNBLOCKED IT 21 Sep AND THE CONTRACT CANNOT SERVE IT — the blocker moved, it did not clear.** Design scoped a minimum: the contact field, nothing else. There is **no endpoint that writes a parent's contact from either direction** — `students/{id}/parent-links` is GET only, `parents/me/*` is GET only. `parent-consent-requests` takes a `parentContact` but sends *to* an address rather than updating the record; `auth/parent/request-code` authenticates against what the school already holds. Building the field anyway would break this console's own law: a screen that appears to act and does not is worse than one that admits the control is not built. **Ask filed at `api-requests-admin.md` §12, PRE-LAUNCH**, mirroring the `PATCH /api/v1/admin/email` + `admin/email-confirmation` quartet that landed the same morning — no new schemas needed. SMS copy no longer applies (SCRUM-162) | **BACKEND** (was DESIGN) | M |
 | Parent sign-in (D03) | LIVE | — (built 14 Sep at `/parent-sign-in`; takes email **or** phone, see the note) | NONE | — |
 
 **The parent lane no longer hangs on one token** (14 Sep). `/parent-sign-in` is built, and
@@ -1053,6 +1053,44 @@ instruction is to build nothing that depends on either field until it is answere
     fallback. The wizard's existing `fallback` phase is a different thing (an unreadable
     file), so this needs its own state. **S, and it is the twelfth field on the "written but
     never read" list.** Teacher-lane file, student-lane finding — raised to that session.
+
+## THE CONTRACT GAINED 25 PATHS ON 21 SEP — read this before planning anything
+
+`192 → 217 paths, 352 → 395 schemas` in one morning. Several long-standing
+blockers across three lanes closed at once and **none of it was announced**.
+Anything below dated earlier than 21 Sep should be re-probed before it is
+believed.
+
+**Closed by this release:**
+
+| landed | closes |
+|---|---|
+| `PATCH /api/v1/admin/email` + `admin/email-confirmation` GET/verify/resend | **Settings part one's email-change pair** — a pre-launch admin ask. `EmailChange`, `ConfirmationToken`, `EmailConfirmationState` all exist |
+| `POST /api/v1/classes/bulk` | SCRUM-149 CL-04/CL-05 bulk class creation — the SCRUM-148 dependency |
+| `GET /api/v1/onboarding` + `onboarding/imports`, `/classes`, `/confirm`, `/activate`, `/additions/quote` | SCRUM-149's onboarding sequencing |
+| `GET /api/metrics/transformation/class/{class_id}` and `/school/{school_id}` | The **aggregate** transformation metrics SCRUM-74-as-amended keeps. **These are class- and school-scoped. The per-child version stays struck (SCRUM-169) — do not read these as its return** |
+| `GET /api/v1/consents/form`, `POST /students/{id}/consents/written` | SCRUM-158's written-consent route, which is what SCRUM-162 relies on in place of SMS |
+| `GET /api/v1/student-entry/{token}`, `POST .../pin` | Student lane |
+| `GET /lessons/{id}/review`, key-point accept/patch/delete | Teacher lane |
+
+**LANDED, AND UNDER HOLD — do not build:**
+`POST /api/v1/exports/iep/{export_id}/annotations`,
+`GET /api/v1/exports/iep/{export_id}/composition`,
+`GET /api/v1/students/{student_id}/accommodation-history`, and
+`GET/POST /api/v1/learning-support/holders`.
+
+These are SCRUM-164's SC-03 and SC-04 — the export annotations and the
+change-over-time history. **They are the clause 8.2 surface now with counsel.**
+`BUILD_STATUS.md` records the instruction: the learning support surface goes to
+counsel **disclosed, not withdrawn** — build nothing new on it, remove nothing
+from it, wait. An endpoint appearing is not the ruling arriving. Whoever finds
+these and assumes they are a green light will be building the thing Oladayo is
+being asked about.
+
+**NOT closed, re-probed 21 Sep:** the three pre-launch backend asks all stand —
+no `certificateExpiresAt`, no `GET /exports/iep/{id}/shares`, `termStartDates`
+still capped at 3. And there is still **no way to write a parent's contact**,
+which is the new pre-launch ask at `api-requests-admin.md` §12.
 
 ## S-B. Blocked on backend — the exact ask
 

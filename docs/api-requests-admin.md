@@ -489,3 +489,74 @@ shipped a day earlier, and eleven rows had never been written down. If a respons
 description named the code or field that closes a known gap — the way your 401
 description on `login/password` names its three codes — a stale claim on our side
 would be visible to a diff rather than to whoever happens to re-read the comment.
+
+---
+
+# Addendum 3 — 21 September 2026: a stale parent contact has no remedy anywhere
+
+One ask, and it is **pre-launch**. It became urgent the moment SCRUM-162 made
+parent contact email-only, and it has an exact precedent you shipped today, so
+the design work is already done.
+
+## 12 · A parent cannot change their own email, and nobody can change it for them
+
+Design unblocked parent account setup on 21 Sep with a deliberately minimal
+scope: **the contact field, and nothing else.** We cannot build it. There is no
+endpoint that writes a parent's contact, from either direction:
+
+- `GET /api/v1/students/{student_id}/parent-links` is **GET only** — no admin
+  can correct a parent's address.
+- `/api/v1/parents/me/children` and `.../growth` are **GET only** — no parent
+  can correct their own.
+- `POST /api/v1/students/{id}/parent-consent-requests` takes a `parentContact`,
+  but that sends a request *to* an address; it does not update the record.
+- `POST /api/v1/auth/parent/request-code` takes a `contact`, but that
+  authenticates against what the school already holds.
+
+**Why this is pre-launch rather than a gap.** Before SCRUM-162 a wrong email was
+an inconvenience, because SMS was the other path. Email-only removes the other
+path. A single mistyped character in a school's import now means:
+
+- the parent never receives the consent request, so the school's consent record
+  cannot be completed;
+- the parent cannot sign in, so the data-rights surface NDPA s31 requires is
+  unreachable for that family;
+- **and nothing in the product can fix it** — not the parent, not the school
+  admin, not support.
+
+That is a family permanently locked out of the consent and data-rights
+machinery by a typo, with no remedy. We would rather not launch into it.
+
+### The ask: mirror what you shipped today for admins
+
+`PATCH /api/v1/admin/email` and the `admin/email-confirmation` trio landed in
+this morning's release and are exactly the right shape. We are asking for the
+same four operations, parent-scoped:
+
+| | mirrors |
+|---|---|
+| `PATCH /api/v1/parents/me/email` taking `EmailChange {email}` | `PATCH /api/v1/admin/email` |
+| `GET /api/v1/parents/me/email-confirmation` returning `EmailConfirmationState {status, email, expiresAt, message}` | `GET /api/v1/admin/email-confirmation` |
+| `POST /api/v1/parents/me/email-confirmation/verify` taking `ConfirmationToken {token}` | `POST /api/v1/admin/email-confirmation/verify` |
+| `POST /api/v1/parents/me/email-confirmation/resend` | `POST /api/v1/admin/email-confirmation/resend` |
+
+**No new schemas.** `EmailChange`, `ConfirmationToken` and
+`EmailConfirmationState` all exist and are reused as-is.
+
+**Confirm-before-switch matters more here than for admins**, and the pattern you
+chose already does it: the new address must be verified before it replaces the
+old one. Otherwise a typo in the *correction* locks the family out a second time
+with no way back, and this is the one account in the product with no colleague
+and no support route behind it.
+
+### If you would rather it were admin-side
+
+A `PATCH` on `parent-links` would also solve it, and is a smaller change. We
+have specified the parent-side version because it needs no school
+intervention — but a stale contact having *any* remedy is what matters. **Either
+shape closes this; please do not do both.**
+
+### What we are NOT asking for
+
+No phone field, per SCRUM-162. No name or relationship edit — design scoped this
+to the contact field alone and we are not widening it.
