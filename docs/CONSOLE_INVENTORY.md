@@ -61,7 +61,7 @@ walks every day.
 
 | row | blocked by | size |
 |---|---|---|
-| Home — pick back up and today's lessons (the teacher's note is on the wire and discarded) | FRONTEND | S |
+| Home — pick back up and today's lessons (the teacher's note is on the wire and discarded — **and must stay that way**, see item 19) | **DESIGN** | S |
 | Lessons tab — the grid | FRONTEND | S |
 | Lessons tab — empty states (a status chip tells the child their *search* found nothing) | FRONTEND | S |
 | Lesson preview sheet | FRONTEND; BACKEND (description) | S |
@@ -245,7 +245,7 @@ the contradiction survived a re-verification specifically looking for it.
 | Upload module / section review | **NOT BUILT** | **Demoted 16 Sep.** A signed-in teacher never sees the Photosynthesis six: `SectionReview` is dead code, reachable only through `runMockBeats`, gated on `!getToken()`. The live path always sets `parsed` and renders the read-only `UploadResult` instead (`UploadWizard.tsx:394-409`, :282-294). So on live there is **no module review at all** — no split, no merge, no rename, no re-order, no "keep it as one flow". The task is to build it, not to wire a fixture up | FRONTEND | **L** |
 | Structure preview (standalone) | ~~FIXTURE-ONLY~~ **DELETED 17 Sep** | The route served a hardcoded P5 Science fixture to signed-in teachers and discarded the in-flight poll on the way in. "Open and steer" is a callback now, and a caller that passes none renders no control | — | — |
 | Student observations (C16b) | LIVE | — (built 15 Sep: chips, seat, and the two markers) | NONE | — |
-| Recommend a lesson | PARTIAL | Built and live 15 Sep, note box included. The "Suggested" badge stays blocked — `Recommendation` is prose with no lesson id. The note is sent and stored; **no student screen renders it yet**, so the confirmation stops short of C08c's "She'll see your note when she opens it". **Fixture leak fixed 16 Sep**: the sheet offered eight invented lessons on a failed read, and its honest-empty copy was unreachable | BACKEND (badge); STUDENT CONSOLE (render) | S |
+| Recommend a lesson | PARTIAL | Built and live 15 Sep, note box included. The "Suggested" badge stays blocked — `Recommendation` is prose with no lesson id. The note is sent and stored and **nothing renders it, which is now the correct state**: design has not ruled who the note is for (see item 19), so the confirmation says the note went with the lesson rather than promising the child will read it. **Fixture leak fixed 16 Sep**: the sheet offered eight invented lessons on a failed read, and its honest-empty copy was unreachable | BACKEND (badge); **DESIGN (the note's audience)** | S |
 | Share with Learning Support | LIVE | — (built 15 Sep on `POST /api/v1/escalations`: `LiveShareSheet`, confirmed per C14 B5. The SENCo cannot yet SEE what arrives — see below) | NONE | — |
 | Session detail | LIVE | Built 17 Sep. Backend shipped `GET /api/v1/students/{id}/sessions`, which carries the id the panel needed; `useStudentSessions` reads the list, `LiveSessionPanel` opens one. The list also distinguishes a second visit from a first, which `progress.lessons` never could | — | — |
 | SSO callback | NOT BUILT | Component complete and live-wired; `slug` landed on `SchoolCodeResponse` 15 Sep, so the signed-out door can now reach it | FRONTEND | M |
@@ -457,11 +457,21 @@ statements, and the expired consent token, which was already handled.
     whitespace-only box sends no `note` key at all, so a child never gets an empty message
     from her teacher. `note: string | null` was also missing from the client's `Assignment`
     type, which would have dropped it before any screen could read it.
-    **The child still cannot see it.** `students/me/dashboard` returns the note on every
-    assignment row and `useStudentDashboard` passes it straight through, but nothing
-    renders it — so the confirmation says the note went with the lesson rather than
-    C08c's "She'll see your note when she opens it", and a test guards that wording.
-    Raised as a student-console task; when it lands, the copy and that test change.
+    **THE CHILD CANNOT SEE IT, AND THAT IS NOT THE DEFECT** — corrected 21 Sep, and
+    this entry had it wrong in a way that would have caused the harm. It was recorded
+    as a student-console task: the note rides `students/me/dashboard`, nothing renders
+    it, so somebody should render it. Two places in `assignments.ts` said the same
+    thing more strongly, calling the note "a message to the CHILD" — an inference
+    drawn from the transport, never a ruling.
+    **Design has not ruled who it is for.** The prior question is whether a note is for
+    the teacher's own use or is intended to reach the PARENT, and placement cannot be
+    ruled until that is answered. So nothing renders it on any surface, the
+    confirmation keeps saying the note went with the lesson rather than promising the
+    child will read it, and the test that guards that wording stays.
+    A note written as a private reminder, or for a parent, shown to the child it is
+    about is not a layout mistake. It is the wrong audience reading a teacher's words
+    about them, and the student console would have been within its rights to build it
+    off what this file and that comment said.
 20. **Class Insights narrative.** `weeklySummary` and `lookingAhead` at
     `GET /api/v1/classes/{class_id}/insights`. **M** — re-verified 16 Sep. The endpoint is
     live and unwrapped; there is no backend blocker. The real obstacle is a SHAPE MISMATCH
