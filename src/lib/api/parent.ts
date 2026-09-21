@@ -102,7 +102,27 @@ export interface ParentConsentCompletion {
   receiptSentTo: ParentContactMethod | null;
 }
 
-/** How a receipt actually reached the parent. */
+/**
+ * How a receipt actually reached the parent.
+ *
+ * **`sms` IS DEPRECATED BY SCRUM-162 (20 Sep) AND MUST NOT BE DELETED YET.**
+ *
+ * The ruling is that Nevo collects an email address and nothing else, so
+ * nothing in this codebase may CHOOSE `sms` any more - see
+ * `useConsentRequests.ts`, which now always sends `email` and refuses a
+ * non-email contact rather than falling through to SMS.
+ *
+ * But the deployed `ParentContactMethod` is still `["email","sms"]`
+ * (re-checked 21 Sep) on `ParentConsentRequest`, `ParentLinkResponse` and
+ * `ParentConsentInvitationResponse`. The backend half has not landed. Every
+ * invitation created before the ruling can still arrive declaring SMS, and a
+ * parent whose receipt genuinely went to their phone must not be told it went
+ * to their email.
+ *
+ * So this type keeps both values until the contract drops one. A type that
+ * omits a value the API still sends does not prevent the value - it erases it,
+ * silently, which is the `fromContent` defect this repo already paid for once.
+ */
 export type ParentContactMethod = "email" | "sms";
 
 /**

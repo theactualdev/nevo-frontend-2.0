@@ -209,14 +209,42 @@ describe("the receipt line", () => {
     await screen.findByText(/that[’']s all we needed/i);
   }
 
-  it("says phone when the copy went by SMS", async () => {
+  /*
+   * THESE TWO USED TO ASSERT THE CHANNEL - "sent to your phone" for `sms`,
+   * "sent to your email" for `email`. SCRUM-162 (20 Sep) makes parent contact
+   * email only, so the screen no longer names a channel at all.
+   *
+   * It does NOT simply hard-code "email", which was the obvious move and the
+   * wrong one: the deployed `ParentContactMethod` is still `email | sms` and
+   * the backend half has not landed, so an invitation created before the
+   * ruling can still arrive declaring SMS. Telling that parent their copy went
+   * to their email would be a lie, on the one page whose entire job is to be
+   * trustworthy. Method-neutral is true under both.
+   */
+  /*
+   * Scoped to the receipt line itself, not the whole screen. `AccountSetup`
+   * legitimately labels its contact field "Your email address" on the email
+   * path — that is the field the parent is looking at, not a claim about where
+   * a receipt went. An earlier draft asserted across the document and failed
+   * on that label, which would have been the wrong thing to "fix" in the code.
+   */
+  const receiptLine = () =>
+    screen.getByText(/copy of your consent has been sent/i);
+
+  it("confirms a copy was sent without naming a channel - sms record", async () => {
     await consentWith("sms");
-    expect(screen.getByText(/copy of your consent has been sent to your phone/i)).toBeInTheDocument();
+    expect(receiptLine()).toHaveTextContent(
+      /copy of your consent has been sent to you\./i,
+    );
+    expect(receiptLine()).not.toHaveTextContent(/your phone|your email/i);
   });
 
-  it("says email when the copy went by email", async () => {
+  it("confirms a copy was sent without naming a channel - email record", async () => {
     await consentWith("email");
-    expect(screen.getByText(/copy of your consent has been sent to your email/i)).toBeInTheDocument();
+    expect(receiptLine()).toHaveTextContent(
+      /copy of your consent has been sent to you\./i,
+    );
+    expect(receiptLine()).not.toHaveTextContent(/your phone|your email/i);
   });
 
   it("says NOTHING when no copy was sent", async () => {

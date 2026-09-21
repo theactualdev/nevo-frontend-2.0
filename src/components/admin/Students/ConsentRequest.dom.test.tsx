@@ -211,25 +211,31 @@ describe("sending a parent the consent request", () => {
     await waitFor(() => expect(list).toHaveBeenCalled());
     expect(screen.queryByRole("button", { name: "Send request" })).toBeNull();
   });
-  it("infers the channel from the contact when the record's is unusable", async () => {
+  it("refuses a phone number rather than inferring SMS from it", async () => {
     /*
-     * `ParentLink.contactMethod` is a bare `string` on our side while the
-     * endpoint takes the `email | sms` enum, so an unrecognised value would be
-     * passed straight through and 422'd. A phone number goes by SMS.
+     * THIS TEST IS INVERTED FROM WHAT IT USED TO ASSERT, and the inversion is
+     * the point. It pinned the fallback: an unrecognised `contactMethod` was
+     * decided by the contact itself, so a phone number "goes by SMS".
+     *
+     * SCRUM-162 (20 Sep) removes SMS entirely - "You cannot collect personal
+     * data you have no use for." Nothing may choose `sms` any more, and a
+     * contact we cannot email is refused rather than sent.
+     *
+     * Sending it as `contactMethod: "email"` instead would satisfy the ruling's
+     * letter, go nowhere, and tell the school it was queued - which is the
+     * invite defect this repo already paid for once.
      */
     list.mockResolvedValue([student()]);
     parentLinks.mockResolvedValue([
       link({ contactMethod: "whatsapp", parentContact: "+2348012345678" }),
     ]);
-    requestParentConsent.mockResolvedValue(receipt("sent"));
 
     render(<StudentsView />);
     await press();
 
-    await waitFor(() => expect(requestParentConsent).toHaveBeenCalled());
-    expect(requestParentConsent).toHaveBeenCalledWith(
-      "s1",
-      expect.objectContaining({ contactMethod: "sms" }),
+    await waitFor(() =>
+      expect(screen.getByText(/only have a phone number/i)).toBeInTheDocument(),
     );
+    expect(requestParentConsent).not.toHaveBeenCalled();
   });
 });

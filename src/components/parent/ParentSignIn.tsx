@@ -35,15 +35,29 @@ import { setSession } from "@/lib/auth/session";
  *
  * TWO DEVIATIONS FROM D03, both flagged to design rather than resolved here:
  *
- *  1. THE FIELD TAKES A PHONE NUMBER TOO. D03 says "Email only, no password"
- *     and labels the field "Email address". Design's 14 Sep ruling on the
- *     sister screen says the opposite about the medium: "write both paths
- *     properly... SMS is the path to get right, not the fallback." Those
- *     cannot both hold on a screen where the parent TYPES their contact, and
- *     `request-code` takes `contact`, not `email` - so email-only would lock
- *     out every parent whose school holds a phone number, which in Nigeria is
- *     most of them. Built to the newer ruling. If design wants email-only back
- *     it is a label and a validator, not a rebuild.
+ *  1. THE FIELD TAKES A PHONE NUMBER TOO. D03 says "Email only, no password";
+ *     design's 14 Sep ruling on the sister screen said the opposite - "SMS is
+ *     the path to get right, not the fallback" - and this was built to the
+ *     newer ruling.
+ *
+ *     **SCRUM-162 (20 Sep) REVERSES THAT AGAIN: parent contact is email only.**
+ *     D03 was right. The field has deliberately NOT been narrowed yet, and the
+ *     reason is worth stating because it looks like an omission:
+ *
+ *     This screen does not COLLECT a contact, it accepts one the school already
+ *     recorded. The data-minimisation argument the ruling rests on - "you cannot
+ *     collect personal data you have no use for" - is answered by the import
+ *     template and the consent record, both of which are email-only already.
+ *     Narrowing the field here collects nothing less; it only locks out every
+ *     parent whose school recorded a phone number before 20 Sep, which in
+ *     Nigeria is most of them, and it locks them out of the surface that exists
+ *     to give them control over their own child's data.
+ *
+ *     **The trigger to narrow it is the BACKEND half of SCRUM-162.** Once
+ *     `ParentContactMethod` loses `sms` and SMS sending is unwired, a code sent
+ *     to a phone goes nowhere, and accepting one becomes a dead end that fails
+ *     silently - which is worse than refusing it at the field. At that point
+ *     this is a label and a validator, as it always was. Not before.
  *  2. THE RESEND READS "Send it again". D03 draws "Resend code"; the 14 Sep
  *     ruling says "Send it again" and says it for both paths. Two parent auth
  *     screens with two wordings for one action is the worse outcome, so this
