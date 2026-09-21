@@ -12,13 +12,25 @@ import { lessonsApi, type LessonSegment } from "@/lib/api/lessons";
  * it needed a review, told to do it on a page that does not exist, and had no
  * way to assign their own lesson. It stopped a demonstration on 19 September.
  *
- * THE UNIT IS THE SECTION, NOT THE KEY POINT, and that is a contract fact
+ * THE UNIT IS THE SECTION, NOT THE KEY POINT, and that WAS a contract fact
  * rather than a preference. SCRUM-153 rules that only low-confidence key
  * points need settling, but `needsReview` and `reviewReasons` are properties
  * of a SEGMENT, `POST .../segments/{id}/approve` approves a segment, and
- * `textVariant.keyPoints` carries no per-point state or confidence at all.
- * Raised with backend; until a key point can carry its own signal, a teacher
- * settles a section.
+ * `textVariant.keyPoints` carried no per-point state or confidence at all.
+ * Raised with backend.
+ *
+ * BACKEND ANSWERED ON 21 SEP AND THIS HOOK IS NOW THE SMALLER HALF OF THE
+ * TICKET. `GET /api/v1/lessons/{id}/review` returns `KeyPointResponse` per
+ * point - `sourceText`, a MEASURED `confidence`, and a `reviewState` where
+ * only `unsure` blocks assignment - with `PATCH`, `DELETE` and `accept` on
+ * each. That is LR-02's source text, and the amend and remove this console
+ * declined to draw because nothing could carry them.
+ *
+ * Nothing here is wrong: approving a segment is still a real thing the
+ * contract does, and this is what a teacher has today. But the ticket's unit
+ * is reachable now, so do not read the paragraph above as a standing reason
+ * to build at the section level. See `docs/CONSOLE_INVENTORY.md`, the 21 Sep
+ * contract section.
  *
  * COUNTS COME FROM THE SERVER, never from counting what is on screen. The
  * approve response returns `approvedSegmentCount`, `segmentCount` and

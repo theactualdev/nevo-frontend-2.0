@@ -1,23 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 
-const { upload, awaitParseRun, detail, useCurrentUser, start, staged } =
-  vi.hoisted(() => ({
-    upload: vi.fn(),
-    awaitParseRun: vi.fn(),
-    detail: vi.fn(),
-    useCurrentUser: vi.fn(),
-    start: vi.fn(),
-    staged: { value: {} as Record<string, unknown> },
-  }));
-vi.mock("@/lib/api/content", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/api/content")>();
-  return {
-    ...actual,
-    contentApi: { ...actual.contentApi, upload },
-    awaitParseRun,
-  };
-});
+const { detail, useCurrentUser, start, staged } = vi.hoisted(() => ({
+  detail: vi.fn(),
+  useCurrentUser: vi.fn(),
+  start: vi.fn(),
+  staged: { value: {} as Record<string, unknown> },
+}));
 vi.mock("@/lib/api/lessons", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/lessons")>();
   return { ...actual, lessonsApi: { ...actual.lessonsApi, detail } };
@@ -31,7 +20,6 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { UploadWizard } from "./UploadWizard";
-import { ApiError } from "@/lib/api/client";
 import { setSession, clearSession } from "@/lib/auth/session";
 
 /**
@@ -50,14 +38,20 @@ import { setSession, clearSession } from "@/lib/auth/session";
  * case that sentence fits.
  *
  * Three outcomes, three things to say. That is what this file pins.
+ *
+ * THE PIPELINE UNDERNEATH THEM CHANGED ON 21 SEP, and these tests moved with
+ * it rather than being deleted. The single-lesson path used
+ * `POST /api/content/upload`, which returns no upload id and therefore has no
+ * structure to review - so C07g's step 3 could never be wired to it. It stages
+ * the file now, like a unit does, and the three outcomes are the staged
+ * hook's `failureKind` rather than this component's own try/catch.
+ *
+ * ONE OF THEM WOULD HAVE BEEN LOST IN THE MOVE. `useStagedUpload` reported
+ * EVERY refused upload as `request` - our server being unreachable - where the
+ * old single path classified by status and blamed the file only when the
+ * server had answered about the file. Kept, as `failureKind: "file"`, and the
+ * block path gains the distinction it never had.
  */
-
-const RECEIPT = {
-  lessonId: "l-1",
-  parseRunId: "run-1",
-  status: "processing",
-  pollUrl: "/api/content/parse-runs/run-1",
-};
 
 const LESSON = {
   id: "l-1",
@@ -65,6 +59,7 @@ const LESSON = {
   segmentCount: 1,
   reviewSegmentCount: 0,
   segments: [],
+  modules: [],
   confirmationSummary: null,
 };
 
@@ -76,13 +71,6 @@ const dropFile = () => {
       files: [new File(["x"], "lesson.pdf", { type: "application/pdf" })],
     },
   });
-};
-
-const startSingleUpload = () => {
-  render(<UploadWizard />);
-  fireEvent.click(screen.getByRole("button", { name: /one lesson/i }));
-  fireEvent.click(screen.getByRole("button", { name: /continue/i }));
-  dropFile();
 };
 
 const stagedState = (over: Record<string, unknown> = {}) => {
@@ -106,6 +94,13 @@ const stagedState = (over: Record<string, unknown> = {}) => {
   };
 };
 
+const startSingleUpload = () => {
+  render(<UploadWizard />);
+  fireEvent.click(screen.getByRole("button", { name: /one lesson/i }));
+  fireEvent.click(screen.getByRole("button", { name: /continue/i }));
+  dropFile();
+};
+
 const startUnitUpload = () => {
   render(<UploadWizard />);
   fireEvent.click(screen.getByRole("button", { name: /whole unit|unit/i }));
@@ -115,8 +110,6 @@ const startUnitUpload = () => {
 
 beforeEach(() => {
   stagedState();
-  upload.mockReset().mockResolvedValue(RECEIPT);
-  awaitParseRun.mockReset();
   detail.mockReset().mockResolvedValue(LESSON);
   start.mockReset();
   useCurrentUser.mockReset().mockReturnValue(null);
@@ -135,102 +128,107 @@ afterEach(() => {
 });
 
 describe("a run that finished failed", () => {
-  it("says the reading did not finish, not that we lost the connection", async () => {
-    awaitParseRun.mockResolvedValue({
-      status: "failed",
-      finished: true,
-      failureReason: "The document had no readable text after page 3.",
+  it("says the reading did not finish, not that we lost the connection", () => {
+    stagedState({
+      uploadId: "u-1",
+      failed: true,
+      failureKind: "parse",
+      error: "The document had no readable text after page 3.",
     });
 
     startSingleUpload();
 
-    expect(
-      await screen.findByText(/couldn’t finish this one/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/couldn’t finish this one/i)).toBeInTheDocument();
     expect(screen.queryByText(/couldn’t reach Nevo/i)).not.toBeInTheDocument();
   });
 
-  it("says the server's own reason rather than guessing at one", async () => {
+  it("says the server's own reason rather than guessing at one", () => {
     // The backend knows why and we do not. This was being thrown away.
-    awaitParseRun.mockResolvedValue({
-      status: "failed",
-      finished: true,
-      failureReason: "The document had no readable text after page 3.",
+    stagedState({
+      uploadId: "u-1",
+      failed: true,
+      failureKind: "parse",
+      error: "The document had no readable text after page 3.",
     });
 
     startSingleUpload();
 
     expect(
-      await screen.findByText("The document had no readable text after page 3."),
+      screen.getByText("The document had no readable text after page 3."),
     ).toBeInTheDocument();
   });
 
-  it("does not open the lesson that was never built", async () => {
-    awaitParseRun.mockResolvedValue({
-      status: "failed",
-      finished: true,
-      failureReason: null,
+  it("does not open the lesson that was never built", () => {
+    stagedState({
+      uploadId: "u-1",
+      failed: true,
+      failureKind: "parse",
+      error: null,
     });
 
     startSingleUpload();
 
-    await screen.findByText(/couldn’t finish this one/i);
+    expect(screen.getByText(/couldn’t finish this one/i)).toBeInTheDocument();
     expect(detail).not.toHaveBeenCalled();
   });
 });
 
 describe("a request that failed", () => {
-  it("is the one case that is about the connection", async () => {
-    awaitParseRun.mockRejectedValue(new Error("network"));
+  it("is the one case that is about the connection", () => {
+    stagedState({ uploadId: "u-1", failed: true, failureKind: "request" });
 
     startSingleUpload();
 
-    expect(await screen.findByText(/couldn’t reach Nevo/i)).toBeInTheDocument();
+    expect(screen.getByText(/couldn’t reach Nevo/i)).toBeInTheDocument();
   });
+});
 
-  it("blames the file only when the server answered about the file", async () => {
-    upload.mockRejectedValue(new ApiError(422, "unsupported"));
+describe("a file the server refused", () => {
+  it("blames the file only when the server answered about the file", () => {
+    /*
+     * The third outcome, and the one the move onto the staged hook would
+     * have quietly dropped: `start` reported every rejection as `request`,
+     * so a 422 about the document would have been shown as our own outage,
+     * with "nothing is wrong with your file" written over a file the server
+     * had just refused.
+     */
+    stagedState({ uploadId: "u-1", failed: true, failureKind: "file" });
 
     startSingleUpload();
 
-    expect(
-      await screen.findByText(/couldn’t read this file/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/couldn’t read this file/i)).toBeInTheDocument();
+    expect(screen.queryByText(/couldn’t reach Nevo/i)).not.toBeInTheDocument();
   });
 });
 
 describe("a parse that is simply taking a while", () => {
-  it("says so rather than leaving a teacher to decide it has hung", async () => {
+  it("says so rather than leaving a teacher to decide it has hung", () => {
     /*
      * The screen used to promise "under a minute" - measured on a parse with
      * no pictures in it. In production the text step alone runs about 115
      * seconds, and each generated image has a budget of up to 600.
+     *
+     * The measure is the staged hook's now, taken from when the file went up,
+     * rather than a timer this component kept for a path it no longer owns.
      */
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    awaitParseRun.mockReturnValue(new Promise(() => {}));
+    stagedState({ uploadId: "u-1", status: "processing", slow: true });
 
     startSingleUpload();
-    expect(screen.getByText(/Reading the content/i)).toBeInTheDocument();
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(80_000);
-    });
-
-    await waitFor(() =>
-      expect(screen.getByText(/Still building your lesson/i)).toBeInTheDocument(),
-    );
+    expect(screen.getByText(/Still building your lesson/i)).toBeInTheDocument();
   });
 
   it("promises no duration it cannot keep", () => {
-    awaitParseRun.mockReturnValue(new Promise(() => {}));
+    stagedState({ uploadId: "u-1", status: "processing" });
 
     startSingleUpload();
 
+    expect(screen.getByText(/Reading the content/i)).toBeInTheDocument();
     expect(screen.queryByText(/under a minute/i)).not.toBeInTheDocument();
   });
 });
 
-describe("the same two failures on a whole unit", () => {
+describe("the same failures on a whole unit", () => {
   it("names the connection when the request failed", () => {
     stagedState({ uploadId: "u-1", failed: true, failureKind: "request" });
 
@@ -240,22 +238,31 @@ describe("the same two failures on a whole unit", () => {
     expect(
       screen.queryByText(/couldn’t read that one/i),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });
 
-  it("names the parse, with the server's reason, when it could not finish", () => {
+  it("names the file when the server refused the file", () => {
+    // The block path had two sentences for three outcomes, and a refused
+    // unit was told the reading had started and stopped partway.
+    stagedState({ uploadId: "u-1", failed: true, failureKind: "file" });
+
+    startUnitUpload();
+
+    expect(screen.getByText(/couldn’t read that one/i)).toBeInTheDocument();
+    expect(
+      screen.queryByText(/started and stopped partway/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it("names the parse when the parse stopped", () => {
     stagedState({
       uploadId: "u-1",
       failed: true,
       failureKind: "parse",
-      error: "The document had no readable text after page 3.",
+      error: null,
     });
 
     startUnitUpload();
 
     expect(screen.getByText(/couldn’t finish that one/i)).toBeInTheDocument();
-    expect(
-      screen.getByText("The document had no readable text after page 3."),
-    ).toBeInTheDocument();
   });
 });

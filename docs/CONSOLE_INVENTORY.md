@@ -242,7 +242,7 @@ the contradiction survived a re-verification specifically looking for it.
 | Teacher onboarding | PARTIAL | **Sharpened 21 Sep.** Activation itself is LIVE: `/auth/teacher/activate` reads the invite token and sets a password, and `/teacher/onboarding` is a redirect onto it so links already in inboxes still land. What is unbuilt is C01's own beats — the join-confirm and the profile-setup step. Worth settling before building: a teacher's name and subjects already arrive from `users/me` and are editable on the profile screen, so the question for design is what a newly activated teacher is ASKED rather than shown | FRONTEND; DESIGN (what it asks) | M |
 | Profile & settings | LIVE | Built 18 Sep. `POST /api/v1/users/me/profile-photo` was deployed all along; the reason nothing could be built on it is that `profileImageUrl` was missing from the `CurrentUser` client type, so the field arrived on every identity read and was dropped. One `AvatarDisc` now serves the rail, the profile header and the dialog, and it falls back to initials when a stored URL dies | — | — |
 | Parse progress ladder | LIVE | — (three rungs keyed to `UploadStage`, driven by the live stage; design ruling 14 Sep) | NONE | — |
-| Upload module / section review | **NOT BUILT** | **Demoted 16 Sep.** A signed-in teacher never sees the Photosynthesis six: `SectionReview` is dead code, reachable only through `runMockBeats`, gated on `!getToken()`. The live path always sets `parsed` and renders the read-only `UploadResult` instead (`UploadWizard.tsx:394-409`, :282-294). So on live there is **no module review at all** — no split, no merge, no rename, no re-order, no "keep it as one flow". The task is to build it, not to wire a fixture up | FRONTEND | **L** |
+| Upload module / section review | **LIVE** | **Built 21 Sep, and the reason it had not been is worth keeping.** The row was right that `SectionReview` is fixture-only and gated on `!getToken()` — but wiring it where it stood was impossible, not merely undone. `PUT /api/v1/uploads/{id}/structure` is the **only** endpoint that writes module boundaries; nothing amends the modules on an existing lesson and `LessonDetailResponse.modules` is read-only. The single path used `POST /api/content/upload`, whose `ParseAcceptedResponse` carries `lessonId` and `parseRunId` and **no upload id** — so there was no upload to ask about. **`POST /api/v1/uploads` takes `scope` with pattern `^(lesson\|unit\|term)$` and a default of `lesson`**: the staged pipeline was built with a single lesson as its base case and the single path was simply not using it. It does now (`LiveModuleReview.tsx`), so split, merge, rename, re-order and "keep it as one flow" are live, persisted, and committed with the frame's own "Looks right, continue". `SectionReview` is kept for the signed-out walkthrough and gated on `sample` | — | — |
 | Structure preview (standalone) | ~~FIXTURE-ONLY~~ **DELETED 17 Sep** | The route served a hardcoded P5 Science fixture to signed-in teachers and discarded the in-flight poll on the way in. "Open and steer" is a callback now, and a caller that passes none renders no control | — | — |
 | Student observations (C16b) | LIVE | — (built 15 Sep: chips, seat, and the two markers) | NONE | — |
 | Recommend a lesson | PARTIAL | Built and live 15 Sep, note box included. The "Suggested" badge stays blocked — `Recommendation` is prose with no lesson id. The note is sent and stored and **nothing renders it, which is now the correct state**: design has not ruled who the note is for (see item 19), so the confirmation says the note went with the lesson rather than promising the child will read it. **Fixture leak fixed 16 Sep**: the sheet offered eight invented lessons on a failed read, and its honest-empty copy was unreachable | BACKEND (badge); **DESIGN (the note's audience)** | S |
@@ -1054,6 +1054,34 @@ instruction is to build nothing that depends on either field until it is answere
     file), so this needs its own state. **S, and it is the twelfth field on the "written but
     never read" list.** Teacher-lane file, student-lane finding — raised to that session.
 
+## A SINGLE-LESSON UPLOAD IS A STAGED UPLOAD NOW — 21 Sep
+
+Both scopes go through `POST /api/v1/uploads`. Three things follow, and none of
+them is obvious from the diff:
+
+1. **The lesson lands in the library on CONFIRM, not on upload.** The content
+   route created it the moment the receipt arrived; the staged route creates it
+   when the teacher presses "Looks right, continue". A teacher who abandons the
+   review no longer leaves a lesson behind — which also means nothing exists to
+   regenerate until they finish.
+2. **`contentApi.upload` now has no caller.** It is kept: it is not deprecated
+   in the spec (`content_upload_content`, where the content *read* routes are
+   openly marked `_compatibility`), and backend reported a production run on it
+   on 18 Sep. `awaitParseRun` keeps its other caller in `useLessonRegenerate`,
+   so the polling work from that report is untouched.
+3. **The one thing nobody here can verify** is whether the two pipelines
+   generate identical lesson content. The block path has relied on the staged
+   one since 1 Sep and our own proxy treats both as generation routes
+   (`LONG_RUNNING`), which is the evidence there is. It is visible rather than
+   silent if it is wrong — the outcome screen renders the real lesson's
+   segments straight afterwards — but **it is a question for Teslim**.
+
+While moving it, `useStagedUpload` was found to report every refused upload as
+`request` — our own server being unreachable — where the single path had always
+classified by status. A 422 about the document would have been answered with
+"nothing is wrong with your file". Third kind added (`file`), and the block path
+gains a distinction it never had.
+
 ## THE CONTRACT GAINED 25 PATHS ON 21 SEP — read this before planning anything
 
 `192 → 217 paths, 352 → 395 schemas` in one morning. Several long-standing
@@ -1071,7 +1099,7 @@ believed.
 | `GET /api/metrics/transformation/class/{class_id}` and `/school/{school_id}` | The **aggregate** transformation metrics SCRUM-74-as-amended keeps. **These are class- and school-scoped. The per-child version stays struck (SCRUM-169) — do not read these as its return** |
 | `GET /api/v1/consents/form`, `POST /students/{id}/consents/written` | SCRUM-158's written-consent route, which is what SCRUM-162 relies on in place of SMS |
 | `GET /api/v1/student-entry/{token}`, `POST .../pin` | Student lane |
-| `GET /lessons/{id}/review`, key-point accept/patch/delete | Teacher lane |
+| `GET /lessons/{id}/review`, key-point accept/patch/delete | Teacher lane — **and it unblocks SCRUM-153's remainder AND dates what shipped for it.** `KeyPointResponse` carries `sourceText` (LR-02's "what Nevo drew from"), a measured `confidence`, and `KeyPointReviewState` where only `unsure` blocks assignment; `GET /review` answers the cards and the count in one read, and its description names the screen — *"everything the lesson page's needs-review state renders"*. **The review built on 19 Sep settles a SEGMENT, because that was the only unit the contract carried** (`useSegmentReview.ts` says so, and says it was raised with backend). The ticket's unit is the key point. That component's docblock is now stale and the amend/remove controls it declined to draw have endpoints |
 
 **LANDED, AND UNDER HOLD — do not build:**
 `POST /api/v1/exports/iep/{export_id}/annotations`,

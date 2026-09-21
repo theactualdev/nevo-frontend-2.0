@@ -3,9 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { awaitParseRun, contentApi } from "@/lib/api/content";
 import { lessonsApi, type LessonDetailResponse } from "@/lib/api/lessons";
-import { ApiError } from "@/lib/api/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useStagedUpload } from "@/hooks/useStagedUpload";
 import { getToken } from "@/lib/auth/session";
@@ -15,6 +13,7 @@ import {
   ParseFallback,
   type FallbackKind,
 } from "./ParseFallback";
+import { LiveModuleReview } from "./LiveModuleReview";
 import { PARSE_STAGES, ParseProgress, rungFor } from "./ParseProgress";
 import { SectionReview } from "./SectionReview";
 import { LiveStructureTree } from "./LiveStructureTree";
@@ -225,18 +224,6 @@ export function UploadWizard() {
   const lastFile = useRef<File | null>(null);
   const [parseStage, setParseStage] = useState(0);
   const [fallbackKind, setFallbackKind] = useState<FallbackKind>("unreadable");
-  /** The server's own reason, when a run finished failed. */
-  const [failureReason, setFailureReason] = useState<string | null>(null);
-  /**
-   * The parse has been going long enough to say so.
-   *
-   * Backend's figures from production: the text step alone runs about 115
-   * seconds, and each generated picture has a budget of up to 600 seconds,
-   * two at a time. A teacher watching a spinner that promised a minute
-   * concludes it has hung - and before today it eventually agreed with
-   * them and reported a failure.
-   */
-  const [longWait, setLongWait] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   /** The screen is showing fixture content, never the teacher's own file. */
   const [sample, setSample] = useState(false);
@@ -245,17 +232,58 @@ export function UploadWizard() {
   const [parsed, setParsed] = useState<LessonDetailResponse | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const longWaitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(
     () => () => {
       if (timer.current) clearTimeout(timer.current);
-      if (longWaitTimer.current) clearTimeout(longWaitTimer.current);
     },
     [],
   );
 
   const isBlock = scope !== null && scope !== "single";
+  /**
+   * The single lesson's parse has settled and its structure is on screen.
+   *
+   * Derived rather than a phase of its own, which is how the block path
+   * already does it: the staged upload owns when the review can begin, and a
+   * phase would only be a second copy of that answer, kept in step by hand.
+   */
+  const singleReview =
+    !isBlock &&
+    phase === "processing" &&
+    staged.uploadId !== null &&
+    staged.structure !== null &&
+    (staged.status === "ready" || staged.status === "confirmed");
+
+  /**
+   * The fallback screen, and which failure it is about, from either source.
+   *
+   * The demo beats set a phase; a staged parse reports its failure through a
+   * poll, and DERIVING it from that is the point - an effect that pushed
+   * `staged.failed` into `phase` would be a second copy of the answer, one
+   * cascading render behind the first.
+   *
+   * C07f is the designed screen for a file that could not be read, and the
+   * single path has shown it since 18 Sep. The pipeline underneath changed;
+   * what a teacher meets when a parse fails should not.
+   */
+  const fallback: { kind: FallbackKind; reason: string | null } | null =
+    phase === "fallback"
+      ? /* The demo beats name a shape, never a reason - only a real server has one. */
+        { kind: fallbackKind, reason: null }
+      : !isBlock && phase === "processing" && staged.failed
+        ? {
+            kind:
+              staged.failureKind === "request"
+                ? "unreachable"
+                : staged.failureKind === "file"
+                  ? "unreadable"
+                  : "parseFailed",
+            // The server's own reason when it gave one: it knows why and we
+            // do not.
+            reason: staged.error,
+          }
+        : null;
   const stepTotal = scope === null ? "N" : scope === "single" ? 3 : 5;
   const stepNum = {
     scope: 1,
@@ -272,45 +300,35 @@ export function UploadWizard() {
   const progress = {
     scope: scope ? (scope === "single" ? "33%" : "20%") : "8%",
     file: scope === "single" ? "40%" : "24%",
-    processing: scope === "single" ? "70%" : "50%",
+    processing: scope === "single" ? (singleReview ? "85%" : "70%") : "50%",
     review: "85%",
     done: "100%",
     blockParsed: "80%",
     demoStructure: "90%",
     fallback: "55%",
-  }[phase];
+  }[fallback ? "fallback" : phase];
 
   const blockName = fileName.replace(/\.[^.]+$/, "");
   const heading = {
     scope: "What are you uploading?",
     // C07e's dedicated screen: "Breaking down '<block>'" supersedes the
     // component frame's generic "While we read your block" head.
-    processing: isBlock ? `Breaking down '${blockName}'` : "Getting it ready",
+    processing: isBlock
+      ? `Breaking down '${blockName}'`
+      : singleReview
+        ? "How should this lesson be split up?"
+        : "Getting it ready",
     file: "Choose a file",
     review: "How should this lesson be split up?",
     done: "Added to your library",
     blockParsed: "Here's how we've broken it up",
     demoStructure: "Adjust anything before it goes to your library",
-    fallback: FALLBACK_HEADINGS[fallbackKind],
-  }[phase];
+    fallback: FALLBACK_HEADINGS[fallback?.kind ?? fallbackKind],
+  }[fallback ? "fallback" : phase];
 
   const stopTimer = () => {
     if (timer.current) clearTimeout(timer.current);
     timer.current = null;
-  };
-
-  /**
-   * How long before the screen says a long wait is normal.
-   *
-   * Inside the text step's own 115 seconds, so the line arrives while the
-   * parse is still doing ordinary work rather than after it looks stuck.
-   */
-  const LONG_WAIT_MS = 75_000;
-
-  const stopLongWait = () => {
-    if (longWaitTimer.current) clearTimeout(longWaitTimer.current);
-    longWaitTimer.current = null;
-    setLongWait(false);
   };
 
   const startFile = (file: File) => {
@@ -327,79 +345,29 @@ export function UploadWizard() {
       return;
     }
 
-    // THE BLOCK PATH IS REAL NOW. `structure.lessons[]` shipped on 1 Sep, so
-    // a unit becoming several lessons can be expressed and rendered - which
-    // is the thing that kept this on a mock beat. It stages the file and
-    // polls; the structure view takes over from `staged`.
-    if (isBlock && scope) {
-      staged.start(file, scope, subject || undefined);
+    /*
+     * BOTH SCOPES STAGE THE FILE NOW, and this is the change that gives a
+     * single lesson its review step at all.
+     *
+     * `POST /api/v1/uploads` takes `scope`, its pattern is
+     * `^(lesson|unit|term)$` and its default is `lesson`: the staged
+     * pipeline was built with one lesson as its base case. The single path was
+     * using `POST /api/content/upload` instead, whose receipt carries a
+     * lesson id and a parse run id and NO upload id - so there was no upload
+     * to ask about, and `PUT /uploads/{id}/structure` is the only endpoint
+     * in the contract that writes module boundaries. That is why C07g's step
+     * 3 could be drawn and never wired.
+     *
+     * What a teacher gains: the sections Nevo proposed, and the split, merge,
+     * rename and re-order the frame has always promised. What changes
+     * otherwise: the lesson lands in the library on confirm rather than on
+     * upload, which is the step the frame draws as "Looks right, continue".
+     */
+    if (scope) {
+      staged.start(file, scope === "single" ? "lesson" : scope, subject || undefined);
       return;
     }
 
-    // The wait is the teacher's, not the parse's: this says a long one is
-    // normal rather than leaving them to decide the screen has hung.
-    setLongWait(false);
-    longWaitTimer.current = setTimeout(() => setLongWait(true), LONG_WAIT_MS);
-
-    // THREE STEPS NOW, NOT ONE. `POST /api/content/upload` answers 202 with a
-    // receipt (`lessonId`, `parseRunId`, `pollUrl`) and the parse carries on
-    // without us, so the finished lesson is not in that response. Poll the run
-    // until `finished`, then read the lesson that was created.
-    //
-    // `finished` covers `failed` as well as the two completed statuses, so a
-    // run that genuinely could not be done arrives here as a run with a
-    // `failureReason` - not as a hang. That is the point of polling it rather
-    // than the lesson.
-    void contentApi
-      .upload(file, subject || undefined)
-      .then(async (accepted) => {
-        const run = await awaitParseRun(accepted.parseRunId);
-        /*
-         * A RUN THAT FINISHED FAILED IS ITS OWN OUTCOME.
-         *
-         * This used to throw `new ApiError(500, run.failureReason)`, which
-         * fell into the catch below, matched `status >= 500`, and reported
-         * a parse the backend had answered on as a connection problem -
-         * discarding, on the way, the reason it had already written.
-         * Backend asked for the split on 18 Sep and they were right.
-         */
-        stopLongWait();
-        if (run.status === "failed") {
-          setFailureReason(run.failureReason ?? null);
-          setFallbackKind("parseFailed");
-          setPhase("fallback");
-          return null;
-        }
-        return lessonsApi.detail(accepted.lessonId);
-      })
-      .then((lesson) => {
-        if (!lesson) return;
-        setParsed(lesson);
-        setPhase("review");
-      })
-      .catch((err: unknown) => {
-        // WHOSE FAULT IS IT? Any 4xx is the server's ANSWER about this file -
-        // it read the request and rejected it. Only a 5xx, or no status at
-        // all (the network never got there), is ours.
-        //
-        // This used to test `status === 400` alone, and `/api/content/upload`
-        // documents 200 and 422 only - so the file-fault branch never fired
-        // and every unreadable file was reported as "we couldn't reach Nevo",
-        // blaming our infrastructure for a file the backend had read and
-        // answered on.
-        //
-        // What reaches here is a REQUEST that failed. A run answering
-        // `processing` is not one: it means Nevo was reached and is still
-        // working, and `awaitParseRun` keeps asking rather than calling it
-        // a failure at five minutes - which is how a teacher was shown a
-        // snag for a lesson that had finished half a second earlier.
-        stopLongWait();
-        const status = err instanceof ApiError ? err.status : undefined;
-        const ourFault = status === undefined || status >= 500;
-        setFailureReason(null);
-        setFallbackKind(ourFault ? "unreachable" : "unreadable");
-        setPhase("fallback");
-      });
   };
 
   const runMockBeats = (name: string) => {
@@ -436,6 +404,7 @@ export function UploadWizard() {
 
   const reset = () => {
     stopTimer();
+    staged.reset();
     setPhase("scope");
     setScope(null);
     setSubject("");
@@ -467,9 +436,9 @@ export function UploadWizard() {
             it later.
           </p>
         )}
-        {phase === "review" && (
+        {(singleReview || (phase === "review" && sample)) && (
           <p className="mt-1.5 max-w-[560px] text-sm leading-[1.55] text-nevo-near-black/62">
-            We&rsquo;ve broken this lesson into modules that flow well. Adjust
+            We&rsquo;ve broken this lesson into sections that flow well. Adjust
             anything, rename a section, or keep it as one continuous flow.
           </p>
         )}
@@ -485,9 +454,8 @@ export function UploadWizard() {
         )}
       </div>
 
-      {phase === "review" &&
-        (parsed ? (
-          <UploadResult
+      {phase === "review" && parsed && (
+        <UploadResult
             lesson={parsed}
             fileName={fileName}
             onUploadAnother={() => {
@@ -497,19 +465,72 @@ export function UploadWizard() {
             /* In place: the re-read lesson replaces this one, same id, same
                row in the library. That is the whole point of regenerate over
                re-upload. */
-            onRegenerated={setParsed}
-          />
-        ) : (
-          <SectionReview
-            onBack={() => setPhase("file")}
-            onDone={() => setPhase("done")}
-          />
-        ))}
+          onRegenerated={setParsed}
+        />
+      )}
 
-      {phase === "fallback" && (
+      {/* The designed walkthrough, on fixture content, for a visitor with no
+          token. A signed-in teacher reaches the live review above. */}
+      {phase === "review" && sample && (
+        <SectionReview
+          onBack={() => setPhase("file")}
+          onDone={() => setPhase("done")}
+        />
+      )}
+
+      {/* THE SINGLE LESSON'S OWN REVIEW - C07g step 3, live. */}
+      {singleReview && staged.uploadId && staged.structure && (
+        <LiveModuleReview
+          uploadId={staged.uploadId}
+          structure={staged.structure}
+          segments={staged.segments}
+          banner={
+            staged.failedPages.length > 0 ? (
+              <div className="mb-5 max-w-[660px] rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4">
+                <p className="text-[14.5px] leading-[1.55] text-nevo-near-black/82">
+                  {faintPagesLine(staged.failedPages)}
+                </p>
+                <button
+                  type="button"
+                  onClick={staged.retryFailedPages}
+                  disabled={staged.retrying}
+                  className="mt-3 inline-flex h-[42px] cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 bg-nevo-cream-elevated px-[18px] text-[14px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6 disabled:cursor-default disabled:opacity-55"
+                >
+                  {staged.retrying
+                    ? "Reading them again…"
+                    : staged.failedPages.length === 1
+                      ? "Read that page again"
+                      : "Read those pages again"}
+                </button>
+              </div>
+            ) : null
+          }
+          onBack={() => {
+            staged.reset();
+            setPhase("file");
+          }}
+          onConfirmed={(lessonId) => {
+            /*
+             * The lesson exists the moment confirm answers. Reading it back is
+             * what lets the outcome screen offer "Try that again" over the
+             * real thing - so a failure to READ it is not a failure to add it,
+             * and says the lesson is ready rather than that something broke.
+             */
+            void lessonsApi
+              .detail(lessonId)
+              .then((lesson) => {
+                setParsed(lesson);
+                setPhase("review");
+              })
+              .catch(() => setPhase("done"));
+          }}
+        />
+      )}
+
+      {fallback && (
         <ParseFallback
-          kind={fallbackKind}
-          reason={failureReason}
+          kind={fallback.kind}
+          reason={fallback.reason}
           blockName={blockName}
           onBack={() => setPhase("file")}
           onTryAnother={() => setPhase("file")}
@@ -524,7 +545,7 @@ export function UploadWizard() {
       )}
 
       {/* Body */}
-      {phase !== "review" && phase !== "fallback" && (
+      {phase !== "review" && !fallback && !singleReview && (
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-[22px] xl:px-8 xl:py-7">
           {phase === "scope" && (
             <div className="flex max-w-[640px] flex-col gap-3.5">
@@ -782,9 +803,14 @@ export function UploadWizard() {
                 */
                 <div className="max-w-[600px] rounded-[16px] bg-nevo-cream-elevated p-8 shadow-elevation-1">
                   <h3 className="text-[17px] font-semibold text-nevo-near-black">
+                    {/* Three answers, because a refused file, a parse that
+                        stopped and a call that never landed are three
+                        different things to be told. */}
                     {staged.failureKind === "request"
                       ? "We couldn’t reach Nevo just then"
-                      : "Nevo couldn’t finish that one"}
+                      : staged.failureKind === "file"
+                        ? "We couldn’t read that one"
+                        : "Nevo couldn’t finish that one"}
                   </h3>
                   <p className="mt-2 text-sm leading-[1.55] text-nevo-near-black/62">
                     {/* The server's own reason when it gave one - it knows why
@@ -792,7 +818,9 @@ export function UploadWizard() {
                     {staged.error ??
                       (staged.failureKind === "request"
                         ? "Nothing is wrong with your file, and nothing you did is lost. Try again in a moment."
-                        : "The reading started and stopped partway. Nothing you did is lost.")}
+                        : staged.failureKind === "file"
+                          ? "Nevo couldn’t find lesson text in that file. A PDF, Word file or slides with readable text works best."
+                          : "The reading started and stopped partway. Nothing you did is lost.")}
                   </p>
                   <button
                     type="button"
@@ -857,9 +885,13 @@ export function UploadWizard() {
                   "This usually takes under a minute" was measured on a
                   parse with no pictures in it, and it set a teacher up to
                   read a normal wait as a hang.
+
+                  `slow` is the staged upload's own measure, taken from when
+                  the file went up. It replaces a timer this component kept
+                  for the path it no longer owns.
                 */}
                 <p className="mt-1.5 text-[14.5px] leading-[1.5] text-nevo-near-black/66">
-                  {longWait
+                  {staged.slow
                     ? "Still building your lesson. This can take a few minutes when there are pictures to make, and it keeps going if you leave this open."
                     : "Reading the content and building the read, listen and watch versions."}
                 </p>
