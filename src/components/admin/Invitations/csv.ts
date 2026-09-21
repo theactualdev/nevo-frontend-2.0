@@ -31,6 +31,20 @@ export interface ParsedRow {
   classId: string | null;
 }
 
+/**
+ * The downloadable templates.
+ *
+ * **ALREADY COMPLIANT WITH SCRUM-162 (20 Sep), verified 21 Sep - do not "fix"
+ * it by adding a phone column.** The ruling asks for `guardian_phone` to be
+ * removed and the parent email to become required rather than optional. There
+ * has never been a phone column here, and `parseInviteCsv` already rejects a
+ * student row whose `parentContact` is missing ("Every student needs a parent
+ * or guardian contact") or is not an email ("That parent email doesn't look
+ * right"). Both conditions the ruling asks for are met.
+ *
+ * If a school asks for a phone column, that is the trigger in the ruling to
+ * reconsider the whole position - not a change to make here.
+ */
 export const TEMPLATE: Record<InviteRole, string> = {
   teacher: "name,email,class\nFolake Adeyemi,adeyemi.f@school.edu.ng,JSS 2A\n",
   student:

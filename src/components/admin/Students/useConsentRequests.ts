@@ -40,19 +40,39 @@ export type ConsentRequestState =
   | { kind: "done"; parentName: string; delivery: ConsentDeliveryStatus }
   /** No guardian contact on the record, so there is nobody to send to. */
   | { kind: "noContact" }
+  /**
+   * There IS a contact, but it is not an email address - a phone number, from
+   * before SCRUM-162. Distinct from `noContact` because the school's next
+   * action is different: add an email to a record that already has a guardian,
+   * rather than find a guardian.
+   */
+  | { kind: "needsEmail"; parentName: string }
   | { kind: "failed" };
 
 const IDLE: ConsentRequestState = { kind: "idle" };
 
 /**
- * `ParentLink.contactMethod` is a bare `string` on our side while the endpoint
- * takes the `email | sms` enum, so an unrecognised value is decided by the
- * contact itself rather than passed through and 422'd.
+ * SCRUM-162 (20 Sep): parent contact is EMAIL ONLY. No phone, no SMS.
+ *
+ * This function used to pick a method, and would choose `sms` for any contact
+ * without an `@` - including one the school had never said was a phone. That
+ * is the behaviour the ruling removes: *"You cannot collect personal data you
+ * have no use for."* Nevo no longer sends anything by SMS, so nothing here may
+ * ask it to.
+ *
+ * **The enum stays `email | sms` and that is not an oversight.**
+ * `ParentContactMethod` is still `["email","sms"]` on the deployed contract
+ * (re-checked 21 Sep) and is referenced by `ParentConsentRequest`,
+ * `ParentLinkResponse` and `ParentConsentInvitationResponse`. The backend half
+ * of SCRUM-162 has not landed. Deleting the value from our types while the API
+ * still sends it is how a type erases live data - the `fromContent` defect,
+ * exactly. So we stop CHOOSING it; we do not pretend it cannot arrive.
  */
-function methodFor(link: { contactMethod: string; parentContact: string }) {
-  const declared = link.contactMethod?.toLowerCase();
-  if (declared === "email" || declared === "sms") return declared;
-  return link.parentContact.includes("@") ? "email" : "sms";
+const CONTACT_METHOD = "email" as const;
+
+/** An address we can actually email. Deliberately the same test the CSV import uses. */
+function isEmail(contact: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.trim());
 }
 
 export function useConsentRequests() {
@@ -80,11 +100,26 @@ export function useConsentRequests() {
             set(studentId, { kind: "noContact" });
             return;
           }
+          /*
+           * A PHONE NUMBER IS NO LONGER SOMETHING WE CAN SEND TO (SCRUM-162).
+           * Before the ruling this fell through to `contactMethod: "sms"`.
+           * Sending it as `"email"` instead would be worse than refusing: the
+           * request would go nowhere and the school would be told it was
+           * queued. Refusing names the record that needs an email, which is
+           * the action the ruling actually requires of the school.
+           */
+          if (!isEmail(link.parentContact)) {
+            set(studentId, {
+              kind: "needsEmail",
+              parentName: link.parentName,
+            });
+            return;
+          }
           return consentsApi
             .requestParentConsent(studentId, {
               parentName: link.parentName,
               parentContact: link.parentContact,
-              contactMethod: methodFor(link),
+              contactMethod: CONTACT_METHOD,
             })
             .then((receipt) =>
               set(studentId, {
@@ -123,6 +158,10 @@ export function consentRequestLine(
             `Consent request queued for ${state.parentName}. It goes out shortly.`;
     case "noContact":
       return `There’s no parent contact on ${studentName}’s record yet, so there’s nobody to send this to.`;
+    case "needsEmail":
+      // Names the guardian, so the admin knows the record is not empty - it is
+      // the wrong KIND of contact. "Never a dead end": it says what to add.
+      return `We only have a phone number for ${state.parentName}. Consent requests go by email, so ${studentName}’s record needs an email address for them.`;
     case "failed":
       return "That didn’t send, and nothing has changed. Try again in a moment.";
     default:

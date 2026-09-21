@@ -14,8 +14,22 @@ import {
  * D01b Parent Consent (SCRUM-80).
  *
  * What a parent opens when the school sends a consent request. Unauthenticated,
- * phone-first, no Nevo account: a link by SMS or email. Plain language, no
- * jargon, no dark patterns.
+ * no Nevo account: a link by email. Plain language, no jargon, no dark
+ * patterns.
+ *
+ * EMAIL ONLY, SCRUM-162 (20 Sep). This screen was built phone-first - "a link
+ * by SMS or email" - because Nigeria is SMS-first and that was the standing
+ * position. The ruling reverses it on data-minimisation grounds: *"You cannot
+ * collect personal data you have no use for."* Deliverability, which was the
+ * argument for keeping phone, is answered instead by the written-consent route
+ * (SCRUM-158) - a paper form in the child's bag - which covers the gap better
+ * than SMS did.
+ *
+ * WHAT THAT DOES NOT MEAN: that no record says `sms`. The deployed
+ * `ParentContactMethod` is still `email | sms` (re-checked 21 Sep) and the
+ * backend half of the ruling has not landed, so an invitation created before it
+ * can still arrive here declaring SMS. The receipt line below is therefore
+ * written to be true under either value rather than asserting a channel.
  *
  * ONE BLANKET CONSENT, ONE TAP. Design ruled this on 7 Sep: the DSA already
  * defines the scope of processing, so the single "Yes" is correct and there are
@@ -159,8 +173,7 @@ export function ParentConsent({
 
           {receipt && (
             <p className="mt-6 text-center text-[12px] leading-[1.5] text-nevo-near-black/50">
-              A copy of your consent has been sent to your{" "}
-              {receipt === "sms" ? "phone" : "email"}.
+              A copy of your consent has been sent to you.
             </p>
           )}
         </div>
@@ -181,8 +194,7 @@ export function ParentConsent({
           </p>
           {receipt && (
             <p className="mt-6 text-[12px] leading-[1.5] text-nevo-near-black/50">
-              A copy of your consent has been sent to your{" "}
-              {receipt === "sms" ? "phone" : "email"}.
+              A copy of your consent has been sent to you.
             </p>
           )}
         </div>
@@ -398,9 +410,16 @@ export function ParentConsent({
  *     send or, if we dropped the token to make it work, hand whoever opens the
  *     link a way to point a child's account at themselves. So it is shown, not
  *     offered.
- *  2. D02 SAYS "EMAIL" THROUGHOUT. `parentContactMethod` is `email | sms`, and
- *     Nigeria is SMS-first, so the copy follows the method the school recorded.
- *     The email wording is the frame's; the SMS wording is ours.
+ *  2. ~~D02 SAYS "EMAIL" THROUGHOUT, and the copy follows the method the school
+ *     recorded because Nigeria is SMS-first.~~ **RESOLVED BY SCRUM-162 (20 Sep):
+ *     D02 was right and this deviation is withdrawn.** Parent contact is email
+ *     only. The frame's wording is the wording.
+ *
+ *     `contactMethod` is still a prop, and still `email | sms`, because the
+ *     deployed enum still is (21 Sep) and a pre-ruling invitation can still
+ *     declare SMS. It is used to stay truthful about an OLD record, never to
+ *     offer a channel. Do not delete it until the backend half of SCRUM-162
+ *     lands; a type that drops a value the API still sends erases live data.
  */
 function AccountSetup({
   token,
