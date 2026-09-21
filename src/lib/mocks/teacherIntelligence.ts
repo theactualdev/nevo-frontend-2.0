@@ -169,11 +169,39 @@ export const ADAPTATIONS_FOOTNOTE_DESKTOP_TAIL =
 
 /* ---- C16d Variant Review (SCRUM-37) ---- */
 
-export const VARIANT_TABS = ["Text", "Visual", "Audio", "Interactive"] as const;
+/**
+ * FIVE TABS AS OF 21 SEP (SCRUM-136), and the fifth was not a judgement
+ * call this repo got to make.
+ *
+ * `calculationVariant` has been on the lesson contract all along, carrying
+ * worked steps and a completion statement, and the teacher preview showed
+ * it nowhere - so a teacher could not see one of the five forms their own
+ * lesson might reach a student in. The component said adding a tab would
+ * mean "inventing a tab, its label and its layout" and left it to design.
+ * Design ruled it on 14 Sep and the ruling is exact: show it, label it
+ * "Calculation", same shape as the other tabs, steps in sequence, the
+ * completion statement beneath them.
+ *
+ * THE LABEL IS "CALCULATION" AND THE PROSE SAYS "WORKED STEPS". Both are
+ * deliberate and neither is a slip to tidy: the tab sits in a row of
+ * modality names (Text, Visual, Audio, Interactive), while the review
+ * reasons describe what went wrong in sentences, where `reviewReasons.ts`
+ * requires "the worked steps" and forbids "calculation variant".
+ */
+export const VARIANT_TABS = [
+  "Text",
+  "Visual",
+  "Audio",
+  "Interactive",
+  "Calculation",
+] as const;
 export type VariantTab = (typeof VARIANT_TABS)[number];
 
 export const VARIANT_ORIENTATION =
-  "Nevo generates these four variants for every segment. During the lesson, the system decides which variant each student sees based on how they are engaging. You do not need to assign specific variants to specific students.";
+  // "these four variants" was true until the calculation tab landed. A
+  // sentence that counts is a sentence that goes wrong the day the count
+  // changes, so this one no longer counts.
+  "Nevo generates every one of these variants for each segment. During the lesson, the system decides which variant a student sees based on how they are engaging. You do not need to assign specific variants to specific students.";
 
 /** Preview paragraphs per variant. Hand-written for the slowed JSS 2A
  *  section; every other section gets an honest derived preview. */
@@ -191,6 +219,10 @@ const LINEAR_EQUATIONS_S4: Record<VariantTab, string[]> = {
   ],
   Interactive: [
     "Students drag x-blocks off both sides of an on-screen balance until x remains on one side only. The equation updates live with every move, and a gentle check-in appears if the scale tips.",
+  ],
+  Calculation: [
+    "5x + 2 = 3x + 10, worked one step at a time. Students are asked for each move rather than shown it: take 3x from both sides, then 2 from both sides, then divide by 2.",
+    "The equation is redrawn after every step, so a student sees 2x + 2 = 10 before they are asked what to do with the 2.",
   ],
 };
 
@@ -216,6 +248,11 @@ function derivedVariants(
     ],
     Interactive: [
       `A hands-on version of ${subject} - students work each step themselves and Nevo checks in as they go.`,
+    ],
+    Calculation: [
+      practice
+        ? `${subject} worked one step at a time, with the equation redrawn after each move a student makes.`
+        : `The calculation inside ${subject}, broken into steps a student works through rather than watches.`,
     ],
   };
 }

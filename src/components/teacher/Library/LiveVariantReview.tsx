@@ -36,11 +36,16 @@ import { cn } from "@/lib/utils";
  * So this screen asks for nothing new - it reads what `useLessonDetail` had
  * already loaded for the lesson page and thrown away.
  *
- * FOUR TABS, NOT FIVE, and that is deliberate. `calculationVariant` is the
- * fifth variant on the contract and C16d draws no tab for it, so adding one
- * would mean inventing a tab, its label and its layout. Raised with design;
- * until they answer, a segment's calculation variant is simply not shown here,
- * which is a gap worth knowing about rather than a gap worth guessing at.
+ * FIVE TABS AS OF 21 SEP. This said four was deliberate: `calculationVariant`
+ * is the fifth variant on the contract, C16d drew no tab for it, and adding
+ * one "would mean inventing a tab, its label and its layout". Right to raise,
+ * wrong to leave sitting - design had already ruled it on 14 Sep in SCRUM-136,
+ * and the ruling answers all three: show it, label it "Calculation", follow
+ * the shape of the other tabs, steps in sequence, completion statement
+ * beneath them.
+ *
+ * Nothing below is invented. What is NOT rendered is listed where it is not
+ * rendered, with the same care as what is.
  *
  * WHAT IS NOT RENDERED, and why:
  *  - `interactiveVariant.answerKey`. The frame draws nothing for it, and a
@@ -196,32 +201,96 @@ function VariantBody({
     );
   }
 
-  const v = segment.interactiveVariant;
-  if (!v)
+  if (tab === "Interactive") {
+    const v = segment.interactiveVariant;
+    if (!v)
+      return (
+        <Empty>
+          Nevo has not generated an interactive version of this section.
+        </Empty>
+      );
     return (
-      <Empty>
-        Nevo has not generated an interactive version of this section.
-      </Empty>
+      <div className="flex flex-col gap-2.5">
+        <Para>{v.prompt}</Para>
+        {v.instructions && <Para>{v.instructions}</Para>}
+        {v.options.length > 0 && (
+          <ul className="mt-0.5 flex flex-col gap-1.5">
+            {v.options.map((o, i) => (
+              <li
+                key={`${String(o)}-${i}`}
+                className="rounded-[8px] bg-nevo-cream px-3 py-2 text-[13.5px] leading-[1.5] text-nevo-near-black/72"
+              >
+                {String(o)}
+              </li>
+            ))}
+          </ul>
+        )}
+        {v.expectedInteraction && (
+          <p className="text-[12.5px] text-nevo-near-black/55">
+            {`Students respond by: ${v.expectedInteraction}.`}
+          </p>
+        )}
+      </div>
     );
+  }
+
+  /*
+   * THE FIFTH FORM (SCRUM-136). A calculation variant is the one a student
+   * WORKS rather than reads, and a teacher could not see it at all.
+   *
+   * WHAT IS NOT DRAWN, and why - the same list the interactive tab keeps:
+   *  - Each step's `answer`, and the variant's own. A teacher reading whether
+   *    the steps are right does not need them, and the interactive tab
+   *    already withholds its `answerKey` on exactly that reasoning.
+   *  - `hint`. It is what a child gets when they are stuck, not part of
+   *    judging whether the working is sound, and the ruling does not ask for
+   *    it. One line to add if design wants it.
+   *  - `scaffoldImage` and `manipulative`. Both nullable, neither drawn in
+   *    any frame, and a picture placed here would be a guess at layout.
+   */
+  const v = segment.calculationVariant;
+  if (!v)
+    return <Empty>Nevo has not generated worked steps for this section.</Empty>;
   return (
-    <div className="flex flex-col gap-2.5">
-      <Para>{v.prompt}</Para>
-      {v.instructions && <Para>{v.instructions}</Para>}
-      {v.options.length > 0 && (
-        <ul className="mt-0.5 flex flex-col gap-1.5">
-          {v.options.map((o, i) => (
+    <div className="flex flex-col gap-3">
+      {v.fullEquation && (
+        <p className="font-mono text-[15px] tracking-[0.01em] text-nevo-near-black">
+          {v.fullEquation}
+        </p>
+      )}
+      {v.steps.length > 0 ? (
+        <ol className="flex flex-col gap-2">
+          {v.steps.map((step, i) => (
             <li
-              key={`${String(o)}-${i}`}
-              className="rounded-[8px] bg-nevo-cream px-3 py-2 text-[13.5px] leading-[1.5] text-nevo-near-black/72"
+              key={step.stepId}
+              className="flex gap-3 rounded-[8px] bg-nevo-cream px-3 py-2.5"
             >
-              {String(o)}
+              <span className="w-5 shrink-0 pt-px text-[12.5px] text-nevo-near-black/45 tabular-nums">
+                {/* The server's own numbering, not the row index: a variant
+                    may arrive with steps that do not start at one. */}
+                {step.stepNumber || i + 1}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[13.5px] leading-[1.5] text-nevo-near-black/82">
+                  {step.prompt}
+                </span>
+                {step.equationState && (
+                  /* What the equation reads once this step is done. It is
+                     how a teacher checks the working actually works. */
+                  <span className="mt-1 block font-mono text-[12.5px] text-nevo-near-black/55">
+                    {step.equationState}
+                  </span>
+                )}
+              </span>
             </li>
           ))}
-        </ul>
+        </ol>
+      ) : (
+        <Empty>The worked steps did not come through for this section.</Empty>
       )}
-      {v.expectedInteraction && (
-        <p className="text-[12.5px] text-nevo-near-black/55">
-          {`Students respond by: ${v.expectedInteraction}.`}
+      {v.completionStatement && (
+        <p className="text-[13.5px] leading-[1.55] text-nevo-near-black/72">
+          {v.completionStatement}
         </p>
       )}
     </div>
