@@ -13,10 +13,25 @@ import type { KeyPointAction } from "@/hooks/useLessonReview";
  * missing piece, and without it the product demanded a review it gave no means
  * to perform.
  *
+ * DRAWN AGAINST C06b, WHICH THIS DID NOT HAVE WHEN IT WAS BUILT. The review
+ * shipped on 22 Sep against the SCRUM-153 ticket; the frame landed in the
+ * design drop of 20 Sep and was not pulled until after. Every difference found
+ * in that diff is corrected here, and they were not all cosmetic - see the
+ * three marks below.
+ *
+ * THREE MARKS, NOT TWO, and this is the one that changed meaning. The first
+ * build drew a violet edge on anything outstanding and nothing at all on
+ * everything else, so a point NEVO was confident about looked identical to one
+ * the TEACHER had just settled. The frame separates them: an open ring for a
+ * point that wants a look, a filled tick for one a teacher has dealt with, and
+ * a quiet grey ring for one that never needed them. A teacher working down a
+ * list can see what they have done.
+ *
  * WHAT THE EXPANDED CARD SHOWS, and the order is the argument. The document's
- * own words come FIRST, then what Nevo made of them, because the question a
- * teacher is answering is "is that a fair reading of this" - and putting the
- * reading first invites them to check it against their memory instead.
+ * own words come FIRST - "From your file" - then what Nevo made of them,
+ * because the question being answered is "is that a fair reading of this", and
+ * putting the reading first invites them to check it against their memory
+ * instead.
  *
  * AN AMENDMENT SITS BESIDE WHAT NEVO READ, NEVER OVER IT. Backend asked for
  * that by name, and both fields exist for it. A teacher who rewrote a point
@@ -24,14 +39,11 @@ import type { KeyPointAction } from "@/hooks/useLessonReview";
  * and a screen that had overwritten it would leave them re-deciding from
  * nothing.
  *
- * THE MARKER KEYS OFF `outstanding`, NOT OFF CONFIDENCE. The server decides
- * what needs a teacher; confidence only explains why once the card is open.
- * Reading `low` as "needs attention" here would be this console deciding a
- * threshold the engine owns - and it would be wrong the moment backend
- * changes what grounds a point.
- *
- * Violet and quiet, per LR-03: a key point Nevo could not ground is an
- * ordinary outcome of reading a document, not a fault.
+ * THE MARK KEYS OFF `outstanding`, NOT OFF CONFIDENCE. The server decides what
+ * needs a teacher; confidence only explains why once the card is open. Reading
+ * `low` as "needs attention" here would be this console deciding a threshold
+ * the engine owns - and it would be wrong the moment backend changes what
+ * grounds a point.
  */
 
 /**
@@ -49,19 +61,48 @@ const WHY: Record<KeyPointConfidence, string> = {
   high: "This closely matches the text it came from.",
 };
 
-const Field = ({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) => (
-  <>
-    <h4 className="mt-4 text-[11px] font-bold tracking-[0.12em] text-nevo-near-black/50 uppercase">
-      {label}
-    </h4>
+/**
+ * Which of C06b's three marks this point wears.
+ *
+ * `outstanding` is the server's own answer and decides the first one. The
+ * other two are a display distinction the contract already carries:
+ * `accepted` and `amended` are things a TEACHER did, `settled` is a point
+ * Nevo could ground on its own. A `removed` point should not be in the list
+ * at all; if one arrives it reads as quiet rather than as settled work.
+ */
+function markOf(kp: KeyPoint): "flag" | "done" | "ok" {
+  if (kp.outstanding) return "flag";
+  if (kp.reviewState === "accepted" || kp.reviewState === "amended") {
+    return "done";
+  }
+  return "ok";
+}
+
+function Mark({ kind }: { kind: "flag" | "done" | "ok" }) {
+  if (kind === "done") {
+    return (
+      <span className="flex size-[22px] shrink-0 items-center justify-center rounded-full bg-nevo-navy">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#f7f1e6" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M20 6L9 17l-5-5" />
+        </svg>
+      </span>
+    );
+  }
+  return (
+    <span
+      className={cn(
+        "box-border size-[22px] shrink-0 rounded-full border-2",
+        kind === "flag" ? "border-nevo-violet" : "border-nevo-near-black/18",
+      )}
+      aria-hidden
+    />
+  );
+}
+
+const Eyebrow = ({ children }: { children: React.ReactNode }) => (
+  <span className="mt-4 block font-mono text-[10.5px] font-bold tracking-[0.1em] text-nevo-violet uppercase">
     {children}
-  </>
+  </span>
 );
 
 export function KeyPointCard({
@@ -86,7 +127,7 @@ export function KeyPointCard({
   const [confirmingRemove, setConfirmingRemove] = useState(false);
 
   const busy = working !== null;
-  const outstanding = keyPoint.outstanding;
+  const mark = markOf(keyPoint);
 
   const startEditing = () => {
     // Seeded from what is IN FORCE, which is the amendment where there is
@@ -112,35 +153,33 @@ export function KeyPointCard({
     <div
       className={cn(
         "overflow-hidden rounded-[12px] bg-nevo-cream-elevated shadow-elevation-1",
-        outstanding && "border-l-[3px] border-nevo-violet",
+        open && "outline-[1.5px] -outline-offset-[1.5px] outline-nevo-navy/40",
       )}
     >
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full cursor-pointer items-start gap-3 px-[20px] py-4 text-left transition-[filter] hover:brightness-[0.985]"
+        className="flex w-full cursor-pointer items-center gap-[13px] px-[20px] py-[17px] text-left transition-[filter] hover:brightness-[0.985]"
       >
-        <span className="min-w-0 flex-1">
-          <span className="block text-[15px] leading-[1.5] font-medium text-nevo-near-black">
-            {keyPoint.text}
-          </span>
-          <span className="mt-1 block text-[13px] leading-[1.5] text-nevo-near-black/58">
-            {/* Which part of the lesson this came from, named where the parse
-                named it and numbered where it did not. */}
-            {keyPoint.segmentTitle ?? `Section ${keyPoint.position}`}
-            {keyPoint.amendedText !== null && " · you changed this"}
-          </span>
+        <Mark kind={mark} />
+        <span className="min-w-0 flex-1 text-[15.5px] leading-[1.5] text-nevo-near-black">
+          {keyPoint.text}
         </span>
-        {outstanding && (
-          <span className="mt-0.5 shrink-0 rounded-full bg-nevo-violet/18 px-2.5 py-1 text-[11.5px] font-medium whitespace-nowrap text-nevo-near-black/72">
-            Worth a look
+        {mark === "flag" && (
+          <span className="shrink-0 rounded-full bg-nevo-violet/34 px-2.5 py-[3px] text-[11px] font-semibold whitespace-nowrap text-nevo-navy">
+            Worth a check
+          </span>
+        )}
+        {mark === "done" && (
+          <span className="shrink-0 rounded-full bg-nevo-navy/10 px-2.5 py-[3px] text-[11px] font-semibold whitespace-nowrap text-nevo-near-black/60">
+            Checked
           </span>
         )}
         <span
           className={cn(
-            "mt-px shrink-0 text-nevo-navy transition-transform",
-            open && "rotate-180",
+            "shrink-0 text-nevo-near-black/40 transition-transform",
+            open && "rotate-180 text-nevo-near-black/55",
           )}
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -150,49 +189,48 @@ export function KeyPointCard({
       </button>
 
       {open && (
-        <div className="border-t border-nevo-near-black/7 px-[20px] py-4">
-          {outstanding && (
-            <p className="max-w-[68ch] text-[13.5px] leading-[1.55] text-nevo-near-black/72">
+        <div className="border-t border-nevo-near-black/7 px-[20px] pt-0.5 pb-5 xl:pl-[55px]">
+          {keyPoint.outstanding && (
+            <p className="mt-3 max-w-[68ch] text-[13.5px] leading-[1.55] text-nevo-near-black/72">
               {WHY[keyPoint.confidence]}
             </p>
           )}
 
-          <Field label="What the document says">
-            {keyPoint.sourceText.trim() ? (
-              <p className="mt-2 max-w-[68ch] border-l-2 border-nevo-near-black/12 pl-3 text-[14px] leading-[1.6] text-nevo-near-black/82">
-                {keyPoint.sourceText}
-              </p>
-            ) : (
-              <p className="mt-2 text-[13.5px] text-nevo-near-black/55 italic">
-                Nevo didn&rsquo;t keep the passage this came from.
-              </p>
-            )}
-          </Field>
-
-          <Field label="What Nevo read">
-            <p className="mt-2 max-w-[68ch] text-[14px] leading-[1.6] text-nevo-near-black/82">
-              {keyPoint.extractedText}
+          <Eyebrow>From your file</Eyebrow>
+          {keyPoint.sourceText.trim() ? (
+            <p className="mt-[7px] max-w-[68ch] rounded-[10px] bg-nevo-navy/5 px-3.5 py-3 text-[14px] leading-[1.6] text-nevo-near-black/66">
+              {keyPoint.sourceText}
             </p>
-          </Field>
+          ) : (
+            <p className="mt-[7px] text-[13.5px] text-nevo-near-black/55 italic">
+              Nevo didn&rsquo;t keep the passage this came from.
+            </p>
+          )}
+
+          <Eyebrow>What Nevo read</Eyebrow>
+          <p className="mt-[7px] max-w-[68ch] text-[15px] leading-[1.55] text-nevo-near-black">
+            {keyPoint.extractedText}
+          </p>
 
           {keyPoint.amendedText !== null && (
-            <Field label="Your wording">
-              <p className="mt-2 max-w-[68ch] text-[14px] leading-[1.6] text-nevo-near-black/82">
+            <>
+              <Eyebrow>Your wording</Eyebrow>
+              <p className="mt-[7px] max-w-[68ch] text-[15px] leading-[1.55] text-nevo-near-black">
                 {keyPoint.amendedText}
               </p>
-            </Field>
+            </>
           )}
 
           {editing ? (
-            <div className="mt-4">
-              <label className="block text-[11px] font-bold tracking-[0.12em] text-nevo-near-black/50 uppercase">
+            <div className="mt-[18px]">
+              <label className="block font-mono text-[10.5px] font-bold tracking-[0.1em] text-nevo-violet uppercase">
                 Your wording
                 <textarea
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   rows={3}
                   autoFocus
-                  className="nevo-in mt-2 box-border w-full resize-none rounded-[9px] border-[1.5px] border-nevo-navy/22 bg-nevo-cream/50 px-3 py-[9px] text-[14px] leading-[1.55] font-normal tracking-normal text-nevo-near-black normal-case outline-none focus:border-nevo-navy focus:bg-nevo-cream"
+                  className="nevo-in mt-[7px] box-border w-full resize-none rounded-[10px] border-[1.5px] border-nevo-navy/22 bg-nevo-cream/50 px-3.5 py-3 text-[15px] leading-[1.55] font-normal tracking-normal text-nevo-near-black normal-case outline-none focus:border-nevo-navy focus:bg-nevo-cream"
                 />
               </label>
               <p className="mt-1.5 text-[12.5px] text-nevo-near-black/55">
@@ -201,81 +239,83 @@ export function KeyPointCard({
                 This is what a student will be taught. What Nevo read stays
                 above it.
               </p>
-              <div className="mt-3 flex flex-wrap items-center gap-3">
+              <div className="mt-[18px] flex flex-wrap items-center gap-2.5">
                 <button
                   type="button"
                   onClick={saveAmendment}
                   disabled={busy}
-                  className="inline-flex h-[42px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[18px] text-[14px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93 disabled:cursor-default disabled:opacity-55"
+                  className="inline-flex h-10 cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[18px] text-sm font-semibold text-nevo-cream transition-[filter] hover:brightness-93 disabled:cursor-default disabled:opacity-55"
                 >
                   Save this wording
                 </button>
                 <button
                   type="button"
                   onClick={() => setEditing(false)}
-                  className="inline-flex h-[42px] cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-near-black/18 px-[15px] text-[14px] font-semibold text-nevo-near-black transition-colors hover:bg-nevo-near-black/5"
+                  className="inline-flex h-10 cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 px-4 text-sm font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
                 >
                   Cancel
                 </button>
               </div>
             </div>
           ) : confirmingRemove ? (
-            <div className="mt-5">
+            <div className="mt-[18px]">
               <p className="max-w-[60ch] text-[13.5px] leading-[1.55] text-nevo-near-black/78">
                 {/* There is no undo on this route, so the screen says so
                     rather than letting a teacher discover it. */}
                 Students won&rsquo;t be taught this point. You can&rsquo;t put
                 it back from here.
               </p>
-              <div className="mt-3 flex flex-wrap items-center gap-3">
+              <div className="mt-3 flex flex-wrap items-center gap-2.5">
                 <button
                   type="button"
                   onClick={onRemove}
                   disabled={busy}
-                  className="inline-flex h-[42px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[18px] text-[14px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93 disabled:cursor-default disabled:opacity-55"
+                  className="inline-flex h-10 cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[18px] text-sm font-semibold text-nevo-cream transition-[filter] hover:brightness-93 disabled:cursor-default disabled:opacity-55"
                 >
                   {working === "remove" ? "Removing…" : "Yes, remove it"}
                 </button>
                 <button
                   type="button"
                   onClick={() => setConfirmingRemove(false)}
-                  className="inline-flex h-[42px] cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-near-black/18 px-[15px] text-[14px] font-semibold text-nevo-near-black transition-colors hover:bg-nevo-near-black/5"
+                  className="inline-flex h-10 cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 px-4 text-sm font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
                 >
                   Keep it
                 </button>
               </div>
             </div>
           ) : (
-            <div className="mt-5 flex flex-wrap items-center gap-3">
-              {/* LR-02's three actions. Accept is offered only where there is
+            <div className="mt-[18px] flex flex-wrap items-center gap-2.5">
+              {/* C06b's three actions. Accept is offered only where there is
                   something to accept - a point Nevo could ground has nothing
                   waiting on it, and a button that settles what is already
                   settled is a click for its own sake. */}
-              {outstanding && (
+              {keyPoint.outstanding && (
                 <button
                   type="button"
                   onClick={onAccept}
                   disabled={busy}
-                  className="inline-flex h-[42px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[18px] text-[14px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93 disabled:cursor-default disabled:opacity-55"
+                  className="inline-flex h-10 cursor-pointer items-center gap-[7px] rounded-[10px] bg-nevo-navy px-[18px] text-sm font-semibold text-nevo-cream transition-[filter] hover:brightness-93 disabled:cursor-default disabled:opacity-55"
                 >
-                  {working === "accept" ? "Accepting…" : "Accept as it is"}
+                  {working === "accept" ? "Accepting…" : "Accept"}
                 </button>
               )}
               <button
                 type="button"
                 onClick={startEditing}
                 disabled={busy}
-                className="inline-flex h-[42px] cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-near-black/18 px-[15px] text-[14px] font-semibold text-nevo-near-black transition-colors hover:bg-nevo-near-black/5 disabled:cursor-default disabled:opacity-55"
+                className="inline-flex h-10 cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 px-4 text-sm font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6 disabled:cursor-default disabled:opacity-55"
               >
-                {working === "amend" ? "Saving…" : "Change the wording"}
+                {working === "amend" ? "Saving…" : "Edit wording"}
               </button>
+              {/* Pushed to the far end and kept quiet, per the frame: it is
+                  the one action here that cannot be undone. */}
               <button
                 type="button"
                 onClick={() => setConfirmingRemove(true)}
                 disabled={busy}
-                className="inline-flex h-[42px] cursor-pointer items-center rounded-[10px] px-3 text-[14px] font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/6 disabled:cursor-default disabled:opacity-55"
+                className="ml-auto inline-flex h-10 cursor-pointer items-center rounded-[10px] px-3.5 text-sm font-medium text-nevo-near-black/55 transition-colors hover:bg-nevo-near-black/6 disabled:cursor-default disabled:opacity-55"
               >
-                Remove it
+                Remove
               </button>
             </div>
           )}

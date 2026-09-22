@@ -61,10 +61,10 @@ describe("the card a teacher can open", () => {
   it("opens", () => {
     show();
 
-    expect(screen.queryByText(/What the document says/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/From your file/i)).not.toBeInTheDocument();
     open();
 
-    expect(screen.getByText(/What the document says/i)).toBeInTheDocument();
+    expect(screen.getByText(/From your file/i)).toBeInTheDocument();
   });
 
   it("shows the document's own words, and what Nevo made of them", () => {
@@ -75,12 +75,6 @@ describe("the card a teacher can open", () => {
       screen.getByText(/rewrite both fractions over a common base/),
     ).toBeInTheDocument();
     expect(screen.getByText(/What Nevo read/i)).toBeInTheDocument();
-  });
-
-  it("names the section it came from, and numbers one the parse left unnamed", () => {
-    show({ segmentTitle: null });
-
-    expect(screen.getByText("Section 2")).toBeInTheDocument();
   });
 
   it("says so rather than showing an empty quote when the passage is gone", () => {
@@ -95,7 +89,34 @@ describe("whose judgement the marker is", () => {
   it("marks a point the SERVER says is outstanding", () => {
     show({ outstanding: true });
 
-    expect(screen.getByText("Worth a look")).toBeInTheDocument();
+    expect(screen.getByText("Worth a check")).toBeInTheDocument();
+  });
+
+  it("tells a point a TEACHER settled from one Nevo never doubted", () => {
+    /*
+     * THE ONE THAT CHANGED MEANING, not just wording. The first build drew a
+     * violet edge on anything outstanding and nothing at all on the rest, so
+     * a point Nevo was confident about looked identical to one the teacher
+     * had just accepted - and a teacher working down a list could not see
+     * what they had done. C06b draws three marks; the contract already
+     * carried the distinction in `reviewState`.
+     */
+    const { unmount } = render(
+      <KeyPointCard
+        keyPoint={kp({ outstanding: false, reviewState: "accepted" })}
+        working={null}
+        failed={false}
+        onAccept={vi.fn()}
+        onAmend={vi.fn()}
+        onRemove={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Checked")).toBeInTheDocument();
+    unmount();
+
+    show({ outstanding: false, reviewState: "settled" });
+    expect(screen.queryByText("Checked")).not.toBeInTheDocument();
+    expect(screen.queryByText("Worth a check")).not.toBeInTheDocument();
   });
 
   it("does not mark a grounded point, whatever its confidence says", () => {
@@ -108,7 +129,7 @@ describe("whose judgement the marker is", () => {
      */
     show({ outstanding: false, reviewState: "accepted", confidence: "low" });
 
-    expect(screen.queryByText("Worth a look")).not.toBeInTheDocument();
+    expect(screen.queryByText("Worth a check")).not.toBeInTheDocument();
   });
 
   it("explains what was measured, never prints the grade", () => {
@@ -149,10 +170,16 @@ describe("a point the teacher has already reworded", () => {
     expect(screen.getByText("Your wording")).toBeInTheDocument();
   });
 
-  it("says on the closed card that a teacher changed it", () => {
-    show({ amendedText: "Rewrite both fractions over a common base." });
+  it("says on the closed card that it has been dealt with", () => {
+    // C06b's "Checked" chip, which is how a teacher sees their own work in a
+    // list they are working down.
+    show({
+      amendedText: "Rewrite both fractions over a common base.",
+      outstanding: false,
+      reviewState: "amended",
+    });
 
-    expect(screen.getByText(/you changed this/)).toBeInTheDocument();
+    expect(screen.getByText("Checked")).toBeInTheDocument();
   });
 });
 
@@ -161,7 +188,7 @@ describe("the three actions", () => {
     const { onAccept } = show();
     open();
 
-    fireEvent.click(screen.getByRole("button", { name: "Accept as it is" }));
+    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
 
     expect(onAccept).toHaveBeenCalledTimes(1);
   });
@@ -173,17 +200,17 @@ describe("the three actions", () => {
     open();
 
     expect(
-      screen.queryByRole("button", { name: "Accept as it is" }),
+      screen.queryByRole("button", { name: "Accept" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Change the wording" }),
+      screen.getByRole("button", { name: "Edit wording" }),
     ).toBeInTheDocument();
   });
 
   it("sends the new wording", () => {
     const { onAmend } = show();
     open();
-    fireEvent.click(screen.getByRole("button", { name: "Change the wording" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit wording" }));
 
     fireEvent.change(screen.getByLabelText(/Your wording/), {
       target: { value: "  Rewrite both over a common base.  " },
@@ -201,7 +228,7 @@ describe("the three actions", () => {
       amendedText: "Rewrite both fractions over a common base.",
     });
     open();
-    fireEvent.click(screen.getByRole("button", { name: "Change the wording" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit wording" }));
 
     expect(screen.getByLabelText(/Your wording/)).toHaveValue(
       "Rewrite both fractions over a common base.",
@@ -213,7 +240,7 @@ describe("the three actions", () => {
     // a point a teacher only meant to clear.
     const { onAmend, onRemove } = show();
     open();
-    fireEvent.click(screen.getByRole("button", { name: "Change the wording" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit wording" }));
 
     fireEvent.change(screen.getByLabelText(/Your wording/), {
       target: { value: "   " },
@@ -227,7 +254,7 @@ describe("the three actions", () => {
   it("sends nothing when the wording did not change", () => {
     const { onAmend } = show();
     open();
-    fireEvent.click(screen.getByRole("button", { name: "Change the wording" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit wording" }));
     fireEvent.click(screen.getByRole("button", { name: "Save this wording" }));
 
     expect(onAmend).not.toHaveBeenCalled();
@@ -237,7 +264,7 @@ describe("the three actions", () => {
     const { onRemove } = show();
     open();
 
-    fireEvent.click(screen.getByRole("button", { name: "Remove it" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
     expect(onRemove).not.toHaveBeenCalled();
     expect(screen.getByText(/can’t put it back from here/)).toBeInTheDocument();
 
@@ -248,13 +275,13 @@ describe("the three actions", () => {
   it("lets a teacher change their mind about removing", () => {
     const { onRemove } = show();
     open();
-    fireEvent.click(screen.getByRole("button", { name: "Remove it" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Keep it" }));
 
     expect(onRemove).not.toHaveBeenCalled();
     expect(
-      screen.getByRole("button", { name: "Accept as it is" }),
+      screen.getByRole("button", { name: "Accept" }),
     ).toBeInTheDocument();
   });
 });
@@ -287,7 +314,7 @@ describe("when it does not land", () => {
 
     expect(screen.getByText(/didn’t go through/)).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Accept as it is" }),
+      screen.getByRole("button", { name: "Accept" }),
     ).toBeInTheDocument();
   });
 });
