@@ -86,6 +86,7 @@ const stagedState = (over: Record<string, unknown> = {}) => {
     failed: false,
     failureKind: null,
     error: null,
+    incident: null,
     slow: false,
     start,
     retryFailedPages: vi.fn(),
@@ -198,6 +199,61 @@ describe("a file the server refused", () => {
 
     expect(screen.getByText(/couldn’t read this file/i)).toBeInTheDocument();
     expect(screen.queryByText(/couldn’t reach Nevo/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("a failure nobody planned for", () => {
+  it("gives a teacher something to quote", () => {
+    /*
+     * A 500 is the one failure this console can say nothing useful about.
+     * Backend could not find the ~18 Sep one from their side because there
+     * was nothing to match on; this is the smallest thing that fixes that.
+     */
+    stagedState({
+      uploadId: "u-1",
+      failed: true,
+      failureKind: "request",
+      incident: "a1b2c3d4",
+    });
+
+    startSingleUpload();
+
+    expect(screen.getByText("a1b2c3d4")).toBeInTheDocument();
+    expect(screen.getByText(/quote/i)).toBeInTheDocument();
+  });
+
+  it("says nothing when there is no reference", () => {
+    // Most failures. An empty "quote this" line is worse than none.
+    stagedState({ uploadId: "u-1", failed: true, failureKind: "request" });
+
+    startSingleUpload();
+
+    expect(screen.queryByText(/quote/i)).not.toBeInTheDocument();
+  });
+
+  it("offers no reference for a file the server explained", () => {
+    // A refused file has a REASON, and a reason beats a reference. The
+    // incident line must not follow a teacher onto a screen that already
+    // told them what to do about it.
+    stagedState({ uploadId: "u-1", failed: true, failureKind: "file" });
+
+    startSingleUpload();
+
+    expect(screen.getByText(/couldn’t read this file/i)).toBeInTheDocument();
+    expect(screen.queryByText(/quote/i)).not.toBeInTheDocument();
+  });
+
+  it("gives a unit's teacher the same thing", () => {
+    stagedState({
+      uploadId: "u-1",
+      failed: true,
+      failureKind: "request",
+      incident: "a1b2c3d4",
+    });
+
+    startUnitUpload();
+
+    expect(screen.getByText("a1b2c3d4")).toBeInTheDocument();
   });
 });
 

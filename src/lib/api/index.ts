@@ -4,6 +4,7 @@ export {
   request,
   ApiError,
   apiErrorCode,
+  incidentId,
   BASE_URL,
   type RequestOptions,
 } from "./client";

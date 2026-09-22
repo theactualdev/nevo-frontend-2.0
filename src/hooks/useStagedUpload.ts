@@ -8,7 +8,7 @@ import {
   type UploadStructure,
   type UploadSegment,
 } from "@/lib/api/uploads";
-import { ApiError } from "@/lib/api/client";
+import { ApiError, incidentId } from "@/lib/api/client";
 import { getToken } from "@/lib/auth/session";
 
 /**
@@ -77,6 +77,16 @@ export interface StagedUpload {
   failureKind: "file" | "parse" | "request" | null;
   /** The server's own reason, when it gave one. */
   error: string | null;
+  /**
+   * The backend's reference for a failure nobody planned for.
+   *
+   * A 500 is the one failure this console can say nothing useful about, and
+   * until now it could not help a teacher report one either: a staged upload
+   * answered 500 on ~18 Sep and backend could not find it from their side,
+   * because there was nothing to match on. Null for every failure that is not
+   * an unhandled one, which is most of them.
+   */
+  incident: string | null;
   /** Still going, and long enough that a teacher deserves telling. */
   slow: boolean;
   start: (file: File, scope: string, subject?: string) => void;
@@ -104,6 +114,7 @@ export function useStagedUpload(): StagedUpload {
     "file" | "parse" | "request" | null
   >(null);
   const [error, setError] = useState<string | null>(null);
+  const [incident, setIncident] = useState<string | null>(null);
   const [slow, setSlow] = useState(false);
   /**
    * Bumped after every poll so the effect below always re-schedules.
@@ -128,6 +139,7 @@ export function useStagedUpload(): StagedUpload {
     setFailed(false);
     setFailureKind(null);
     setError(null);
+    setIncident(null);
     setSlow(false);
     setTick(0);
     startedAt.current = null;
@@ -147,6 +159,7 @@ export function useStagedUpload(): StagedUpload {
         })
         .catch((err: unknown) => {
           setFailed(true);
+          setIncident(incidentId(err instanceof ApiError ? err.detail : null));
           // Any 4xx is the server's ANSWER about this file: it read the
           // request and rejected it. Only a 5xx, or no status at all - the
           // call never arrived - is ours.
@@ -224,10 +237,11 @@ export function useStagedUpload(): StagedUpload {
           }
           setTick((n) => n + 1);
         })
-        .catch(() => {
+        .catch((err: unknown) => {
           if (cancelled) return;
           setFailed(true);
           setFailureKind("request");
+          setIncident(incidentId(err instanceof ApiError ? err.detail : null));
         });
     }, POLL_MS);
     return () => {
@@ -249,6 +263,7 @@ export function useStagedUpload(): StagedUpload {
     failed,
     failureKind,
     error,
+    incident,
     slow,
     start,
     retryFailedPages,
