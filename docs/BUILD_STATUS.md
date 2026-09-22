@@ -2303,6 +2303,73 @@ holds. SCRUM-169 can close on the admin side.
 
 ---
 
+---
+
+## 22 September — four things shipped, and what is carried
+
+**Built and merged**
+
+| | |
+|---|---|
+| SSO credential expiry | #481, then **corrected by #486**. See below — the correction matters more than the build. |
+| IEP shares read | #488. Pre-launch row closed. `revoked` renders as its own sentence; a failed read is held apart from an empty one. |
+| SCRUM-151 confirm route | #491. `/auth/admin/confirm/[token]`, five outcomes kept apart, no resend button (see below). |
+| `ParentContactMethod` | #483. Narrowed to `email`; three comments of ours had been asserting a two-member enum for a day after it dropped to one. |
+
+### The correction worth reading: null is not health
+
+#481 gated the IT-home warning on the server's `credentialExpiringSoon` and
+rendered **nothing** when `credentialExpiresAt` was null. That was wrong, and it
+was wrong in this file's favourite direction.
+
+The expiry **cannot be read back from the provider** — it is an OAuth client
+secret recorded by hand at setup, not a SAML certificate we can interrogate. So
+null does not mean "fine", it means **the school never told us**, and therefore
+that nothing can warn them. Rendering nothing let the hero go on saying
+*"Nothing needs your attention"* to the one school we cannot protect.
+
+**Rule 5 read backwards.** Absence is an instruction to render the state that
+corresponds to nothing — not to render nothing. Worth generalising: every
+`?? null` that resolves to "show no warning" is this defect waiting to happen,
+and the question to ask of each is *"is this null the absence of a problem, or
+the absence of knowledge?"*
+
+### A contract's security block is a design constraint
+
+SCRUM-151's three operations split by audience, and the split decided the
+screen:
+
+```
+POST /verify    public        the token IS the credential
+GET  /          HTTPBearer
+POST /resend    HTTPBearer
+```
+
+Anybody opening a confirmation link is by definition not signed in, so the
+expired-link screen **cannot offer a resend button** — the only endpoint that
+could send one needs a session the reader does not have. Read the `security`
+block before drawing the control; it is the cheapest design input in the
+document and nothing else in these docs had been reading it.
+
+### Carried, and NOT verified by this session
+
+Relayed 22 Sep and recorded so they are not lost. **Each needs re-deriving
+before it is planned around** — rule 3, and three of these are claims about
+documents this session has not opened.
+
+- **SCRUM-149's import result is now built on derivation, not rejection.** If
+  so it changes `RejectedRows` (#473), which lists server rejections per row.
+  The spec doc has not been read here. Read it before touching that component.
+- **Per-child transformation metrics are formally withdrawn.** Nothing in this
+  console rendered them, so this closes an ask rather than changing code.
+- **The learning support surface goes to counsel DISCLOSED, not withdrawn.**
+  Accommodations, the IEP export and per-learner adaptation counts stay built
+  while Oladayo rules. The reopen trigger stands; the surface does not come
+  down in the meantime.
+- **D15d changed 101 lines.** Re-pull the design repo before the growth-view
+  prose check. That check is still waiting on parent logins.
+
+
 ## THE AGE CHECK — a whole feature shipped, and nothing renders it. 21 Sep
 
 **Found by reading `CompleteParentConsentRequest` in full instead of adding the
@@ -2391,25 +2458,32 @@ carrying equal weight — so the three that can hurt a school queued behind a
 six-year rate table nobody needs yet. **Three are pre-launch. One more is
 pre-launch and is not backend's at all. The rest are v1.5.**
 
-#### PRE-LAUNCH — ~~three~~ **TWO** backend asks, and they are small
+#### PRE-LAUNCH — ~~three~~ ~~two~~ **ONE**, and it is no longer waiting on delivery
 
 **~~Send order, set 17 Sep: SSO certificate → IEP shares read → term cap.~~
-FIRST PLACE HAS SHIPPED, 21 Sep. Send order is now: IEP shares read → term
-cap.**
+TWO OF THE THREE SHIPPED ON 21 SEP AND ARE BUILT.** The list is down to the
+term cap, which was last in the order and is now the whole of it.
 
-The original ordering stands as written, because the reasoning held: the term
-cap is the only one actively destroying something a school typed, and it lost
-first place to the fact that **no four-term school is onboarded yet**, so it is
-damaging nobody today. The credential expiry was the one failure invisible until
-the morning it happens. **A quiet loss you can still discover ranks below a
-silent one you cannot see coming.** If a four-term school onboards before the
-cap lands, it moves back to first the same day. Full reasoning in
-`api-requests-admin.md`.
+The ordering stands as written, because the reasoning held: the term cap is the
+only one actively destroying something a school typed, and it lost first place
+to the fact that **no four-term school is onboarded yet**, so it is damaging
+nobody today. The other two were the ones that could hurt somebody first. **A
+quiet loss you can still discover ranks below a silent one you cannot see
+coming.**
+
+**IT IS NOW A DISAGREEMENT, NOT A QUEUE POSITION. 22 Sep.** Backend is refusing
+the cap on billing grounds. That changes what this row IS: it stops being work
+we are waiting for and becomes a decision somebody has to make, and the row
+below is written for the wrong audience until that decision exists. The one
+outcome the frontend cannot absorb is unchanged and is the thing to put in front
+of whoever rules — **silent truncation**. Raise the cap or return a 422; either
+is buildable, and we pull the "Add a term" control the same day if it is 422.
+Full reasoning in `api-requests-admin.md`.
 
 | | |
 |---|---|
 | **`AcademicConfig.termStartDates` has `maxItems: 3`, and it LOSES DATA** | A four-term school has its fourth term start silently dropped — no 422, no warning — and is then invoiced on a calendar it did not choose. `SchoolSettings.tsx:508` renders an "Add a term" control for exactly that case, per SCRUM-99's "a quiet action for schools running four terms". Underneath it is a **product disagreement, not a schema nit**: the field description says *"Nigerian schools run three terms"*. Either answer is fine — raise the cap, or return a 422 and we pull the control. Silent truncation is the only outcome we cannot handle. |
-| **Nothing reads back whether an IEP was shared — SAFETY** | `IepExportShareResponse` exists as a schema; the only deployed op is `POST /exports/iep/{export_id}/share`. There is no GET, and `IepExportResponse` carries no shares. On reload a SENCo cannot tell whether a child's SEN report already reached a guardian, so the screen can neither confirm a send nor prevent a duplicate one. Ask: `GET /api/v1/exports/iep/{export_id}/shares` — no new schema, the record is already written and simply never read. |
+| ~~**Nothing reads back whether an IEP was shared — SAFETY**~~ **DELIVERED 21 SEP, BUILT 22 SEP.** `GET /api/v1/exports/iep/{export_id}/shares` landed exactly as asked — no new schema, the record had been written all along and simply never read. The SENCo screen now shows who holds a child's SEN report and when it reached them, and **renders `revoked` as its own sentence rather than a dimmer `shared`**: a revoked share is a guardian who no longer has the report, and the two must not read alike. A failed read of the list is held apart from an empty one, because "this hasn't been shared with anyone" is the worst sentence available on that screen and a 500 must never produce it. `TODO(api): sharedByName` remains — the history says when and to whom, never by whom. |
 | ~~**`SsoConnectionHealthResponse` has no certificate expiry — LOCKOUT**~~ **DELIVERED 21 SEP, AND BUILT THE SAME DAY.** Retracted in place rather than deleted, because the way this row stayed open is the lesson. It read *"`certificate` is 0 occurrences spec-wide"* — a true statement about a substring, presented as a measurement of a capability. Backend built it as `credentialExpiresAt` / `credentialExpiresInDays` / `credentialExpiringSoon`. Now read by `SsoStatus` and rendered as an IT-home glance row gated on the server's own `credentialExpiringSoon` — **never on a day count of ours**, which would be rule 3. |
 
 #### PRE-LAUNCH, AND NOT BACKEND'S — the DPA wording

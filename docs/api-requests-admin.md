@@ -341,6 +341,29 @@ told you about, because our own blocked list had four rows on it and stopped.
 
 ---
 
+## ~~READ THIS FIRST — only three of the fifteen are pre-launch~~ **ONE, as of 22 Sep**
+
+**Two of the three shipped on 21 September and are built.** The signing-credential
+expiry (§5) and the IEP shares read (§7b) are closed. What remains of the
+pre-launch list is §7a, the term cap — and that one is **no longer waiting on
+delivery, it is waiting on a decision**, because you are refusing it on billing
+grounds.
+
+That refusal is a legitimate answer and we are not asking you to reverse it. We
+are asking you to pick either of the two outcomes the frontend can handle, since
+the one it cannot is the one currently deployed:
+
+> Raise the cap, **or** return a 422 and we pull the "Add a term" control the
+> same day. **Silent truncation is the only outcome we cannot absorb** — a
+> four-term school loses its fourth term start with no error, and is then
+> invoiced on a calendar it did not choose.
+
+If billing is the reason the cap cannot move, then 422 is the answer and it
+costs you less than raising it. Everything below this line predates that and is
+left unedited.
+
+---
+
 ## READ THIS FIRST — only three of the fifteen are pre-launch
 
 Everything we have sent you across both addenda arrived carrying equal weight,
@@ -417,11 +440,22 @@ guardian. The screen can neither confirm a send nor prevent a duplicate one, on
 a document about a named child's special educational needs. **This is a safety
 row, not a convenience one.**
 
-### `GET /api/v1/exports/iep/{export_id}/shares`
+### ~~`GET /api/v1/exports/iep/{export_id}/shares`~~ **DELIVERED 21 SEP. Thank you.**
 
-Returns the `IepExportShareResponse` rows that already exist. No new schema, no
-new shape — the record is being written and never read, which is the same defect
-the rights-log endpoint was built to fix.
+It landed exactly as asked — the existing `IepExportShareResponse` rows, no new
+schema, no new shape. Built on 22 Sep.
+
+One thing the build surfaced that is worth you knowing, because it changed how
+the screen reads: **`status: "revoked"` carries more weight than we expected.**
+A revoked share is a guardian who NO LONGER holds a child's SEN report, so it
+renders as its own sentence rather than a greyed variant of "shared with" —
+those two must not look alike on a screen a SENCo scans before a meeting.
+
+**One ask follows from it:** `sharedByName` on `IepExportShareResponse`. The
+record names the sharer as `sharedByUserId` and nothing resolves a user id to a
+name, so the history can say **when** and **to whom** but never **by whom** —
+on a record of who has seen a child's SEN report. It is the same ask as
+`reviewedByName` on `IepExport` (§6) and they should probably land together.
 
 ## 8 · D09 Reports — an entire screen with no contract
 
