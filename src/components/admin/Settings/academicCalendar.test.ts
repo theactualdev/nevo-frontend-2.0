@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { SchoolTerm } from "@/lib/api/school";
 import {
   termIssues,
+  TERM_STARTS_STORED,
   termStartDatesFrom,
   unresolvedLine,
 } from "./academicCalendar";
@@ -129,12 +130,37 @@ describe("termStartDatesFrom", () => {
     ).toEqual(["2026-09-07"]);
   });
 
-  it("respects the contract's cap of three", () => {
+  it("sends the fourth date rather than quietly dropping it", () => {
+    /*
+     * THE INVERSE OF WHAT THIS TEST USED TO ASSERT, and its old name is the
+     * reason it survived: "respects the contract's cap of three" made a
+     * client-side `.slice(0, 3)` sound like compliance. It was data loss.
+     *
+     * The cap is real and backend enforces it with a 422. That refusal is a
+     * school being TOLD. Cutting the date off here meant the request was
+     * never made, the save reported success, and the school believed a fourth
+     * term start had been stored - on the record every period figure in the
+     * product resolves through.
+     *
+     * The form caps the inputs at three so this normally cannot arise; a
+     * calendar stored before that cap existed still can, and must fail loudly.
+     */
     const four = [
       ...NIGERIAN_YEAR,
       term({ id: "t4", name: "Fourth term", start: "2027-08-01" }),
     ];
-    expect(termStartDatesFrom(four)).toHaveLength(3);
+    expect(termStartDatesFrom(four)).toEqual([
+      "2026-09-07",
+      "2027-01-11",
+      "2027-04-19",
+      "2027-08-01",
+    ]);
+  });
+
+  it("keeps the cap available to the form as a number, not a magic 3", () => {
+    // The form stops at this rather than repeating the literal, so the two
+    // cannot disagree if backend ever moves it.
+    expect(TERM_STARTS_STORED).toBe(3);
   });
 
   it("drops a row it cannot read rather than sending a bad date", () => {

@@ -40,6 +40,29 @@ export class ApiError extends Error {
 }
 
 /**
+ * The backend's own EXPLANATION, out of the same error body `apiErrorCode`
+ * reads. `{ detail: { code, message } }`, and on a 422 the message is written
+ * for the person who has to act on it.
+ *
+ * WORTH READING RATHER THAN SWALLOWING. Backend rewrote the term-dates 422 on
+ * 22 Sep from Pydantic's stock *"List should have at most 3 items"* to a
+ * sentence that says one invoice is issued per term start - and a screen that
+ * catches with `() => setPhase("failed")` throws that away and shows "that
+ * didn't save" instead. Where the server has troubled to explain, show the
+ * explanation.
+ *
+ * Null for any shape that is not that, so a caller falls back to its own
+ * generic line rather than rendering `undefined`.
+ */
+export function apiErrorMessage(detail: unknown): string | null {
+  if (!detail || typeof detail !== "object") return null;
+  const inner = (detail as { detail?: unknown }).detail;
+  if (!inner || typeof inner !== "object") return null;
+  const message = (inner as { message?: unknown }).message;
+  return typeof message === "string" && message.trim() ? message : null;
+}
+
+/**
  * The backend's own name for what went wrong, out of an error body.
  *
  * FastAPI nests it: `{ detail: { code, message } }`, so `ApiError.detail` is the
