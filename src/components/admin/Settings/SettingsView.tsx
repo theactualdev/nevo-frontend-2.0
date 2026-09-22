@@ -180,11 +180,22 @@ export function SaveRow({
   onSave,
   disabled,
   savedLabel = "Saved",
+  failureNote,
 }: {
   phase: "idle" | "saving" | "saved" | "failed";
   onSave: () => void;
   disabled?: boolean;
   savedLabel?: string;
+  /**
+   * The server's own reason, when it gave one.
+   *
+   * Optional, so the three savers that have nothing better to say keep the
+   * generic line. Where the backend has written a 422 message for the person
+   * who has to act on it - the term cap explains that billing issues one
+   * invoice per term start - showing "that didn't save" instead throws away
+   * the only sentence that would let them fix it.
+   */
+  failureNote?: string | null;
 }) {
   return (
     <div className="mt-6 flex flex-wrap items-center gap-3">
@@ -202,8 +213,9 @@ export function SaveRow({
         </span>
       ) : null}
       {phase === "failed" ? (
-        <span className="text-[13px] text-nevo-navy">
-          That didn&rsquo;t save. Nothing changed - try again in a moment.
+        <span className="max-w-[46ch] text-[13px] leading-[1.5] text-nevo-navy">
+          {failureNote ??
+            "That didn’t save. Nothing changed - try again in a moment."}
         </span>
       ) : null}
     </div>

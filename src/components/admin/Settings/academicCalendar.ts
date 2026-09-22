@@ -116,16 +116,41 @@ export function unresolvedLine(issues: TermIssue[]): string | null {
 }
 
 /**
- * The three ISO dates Nevo actually reads, earliest first.
+ * How many term starts Nevo stores. `AcademicConfig.termStartDates` carries
+ * `maxItems: 3` and backend confirmed on 22 Sep that it stays there.
  *
- * `AcademicConfig.termStartDates` is `format: date` with `maxItems: 3`, so
- * this emits `2026-09-14`, never a date-time, and never more than three.
+ * It is not an arbitrary validation number and the reason is worth carrying:
+ * **billing issues one invoice per term start, so a fourth date is a fourth
+ * invoice.** A four-term calendar is a pricing decision before it is a
+ * validation one, which is why the cap does not simply move.
  *
- * TODO(api): `maxItems: 3` cannot express a four-term year, and this screen
- * offers "Add a term" for exactly that case - SCRUM-99 calls it "a quiet
- * action for schools running four terms". A four-term school currently has its
- * fourth start silently dropped. Either the cap moves or the action should not
- * be offered; guessing which is not this file's call.
+ * Exported so the form can stop at three rather than letting somebody enter a
+ * fourth and meet a 422 - the schema advertises the limit precisely so the
+ * inputs can be capped before anyone submits.
+ */
+export const TERM_STARTS_STORED = 3;
+
+/**
+ * The ISO dates Nevo reads, earliest first.
+ *
+ * `format: date`, so this emits `2026-09-14` and never a date-time.
+ *
+ * **IT NO LONGER TRUNCATES, AND THE TRUNCATION WAS OURS.** This used to end
+ * `.slice(0, 3)`, under a `TODO(api)` blaming `maxItems: 3` for a four-term
+ * school losing its fourth start. The cap was never what dropped it: backend
+ * answers 422 for a fourth date and always did, so the request that would have
+ * been refused **was never made**. We cut the fourth date off client-side and
+ * then reported the save as a success.
+ *
+ * That is the worse half of the defect we filed against somebody else. A 422
+ * is a school being told; a silent slice is a school being told the opposite
+ * of what happened, by us, on the record every period figure in the product
+ * resolves through.
+ *
+ * So the extra date now goes to the server and the server refuses it with a
+ * message that says why. The form caps at `TERM_STARTS_STORED` so that
+ * normally cannot arise; a calendar stored before the cap existed still can,
+ * and must fail loudly rather than quietly.
  */
 export function termStartDatesFrom(terms: SchoolTerm[]): string[] {
   return terms
@@ -133,6 +158,5 @@ export function termStartDatesFrom(terms: SchoolTerm[]): string[] {
     .filter((s): s is string => typeof s === "string" && s.length > 0)
     .filter((s) => !Number.isNaN(Date.parse(s)))
     .sort((a, b) => Date.parse(a) - Date.parse(b))
-    .map((s) => s.slice(0, 10))
-    .slice(0, 3);
+    .map((s) => s.slice(0, 10));
 }

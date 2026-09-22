@@ -16,10 +16,12 @@ import {
   defaultYearGroupLabel,
   setYearGroupLabels,
 } from "@/lib/constants/yearGroups";
+import { ApiError, apiErrorMessage } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 import { CARD } from "../Roster/primitives";
 import {
   termIssues,
+  TERM_STARTS_STORED,
   termStartDatesFrom,
   unresolvedLine,
 } from "./academicCalendar";
@@ -98,6 +100,8 @@ export function SchoolSettings() {
 
   const [academic, setAcademic] = useState<AcademicConfig>({});
   const [calendar, setCalendar] = useState<Phase>("idle");
+  /** The server's own 422 wording, when it gave one. See `SaveRow`. */
+  const [calendarNote, setCalendarNote] = useState<string | null>(null);
 
   const [labels, setLabels] = useState<Record<string, string>>({});
   const [taxonomy, setTaxonomy] = useState<Phase>("idle");
@@ -163,6 +167,7 @@ export function SchoolSettings() {
 
   const saveCalendar = () => {
     setCalendar("saving");
+    setCalendarNote(null);
     schoolApi
       .saveAcademic({
         yearStart: academic.yearStart,
@@ -189,7 +194,21 @@ export function SchoolSettings() {
         setCalendar("saved");
         setTimeout(() => setCalendar("idle"), 2200);
       })
-      .catch(() => setCalendar("failed"));
+      .catch((err: unknown) => {
+        /*
+         * THE 422 HERE SAYS SOMETHING WORTH REPEATING. A fourth term start is
+         * refused because billing issues one invoice per term start, and
+         * backend rewrote the message on 22 Sep from Pydantic's stock "List
+         * should have at most 3 items" to a sentence a school can act on.
+         * Catching with `() => setCalendar("failed")` discarded it and showed
+         * "that didn't save" - which is exactly the complaint we had raised
+         * about the stock message, reproduced on our side.
+         */
+        setCalendarNote(
+          err instanceof ApiError ? apiErrorMessage(err.detail) : null,
+        );
+        setCalendar("failed");
+      });
   };
 
   const saveTaxonomy = () => {
@@ -490,23 +509,51 @@ export function SchoolSettings() {
             ))}
           </div>
 
-          <button
-            type="button"
-            onClick={() =>
-              setTerms([
-                ...terms,
-                {
-                  id: `term-${terms.length + 1}-${terms.length}`,
-                  name: `Term ${terms.length + 1}`,
-                  start: "",
-                  end: "",
-                },
-              ])
-            }
-            className="mt-3 cursor-pointer text-sm font-semibold text-nevo-navy hover:opacity-75"
-          >
-            Add a term
-          </button>
+          {/*
+            * CAPPED AT THREE, AND SAYING SO RATHER THAN JUST STOPPING.
+            *
+            * SCRUM-99 called this "a quiet action for schools running four
+            * terms", and it was offered without limit - so a school added a
+            * fourth term, filled in its date, pressed Save and was told it had
+            * saved. `termStartDatesFrom` then cut the fourth date off before
+            * the request was built.
+            *
+            * The cap is not ours to negotiate here (backend, 22 Sep: billing
+            * issues one invoice per term start, so a fourth date is a fourth
+            * invoice and a four-term calendar is a pricing decision). What IS
+            * ours is not pretending the control exists and then quietly
+            * undoing it. The schema advertises `maxItems: 3` precisely so the
+            * inputs can stop before anyone submits.
+            *
+            * A LINE, NOT A DISABLED BUTTON. A control that can never re-enable
+            * is not a state of the control, it is the absence of one - the
+            * same reasoning `ConsoleSessionExpired` uses for a paused account.
+            */}
+          {terms.length < TERM_STARTS_STORED ? (
+            <button
+              type="button"
+              onClick={() =>
+                setTerms([
+                  ...terms,
+                  {
+                    id: `term-${terms.length + 1}-${terms.length}`,
+                    name: `Term ${terms.length + 1}`,
+                    start: "",
+                    end: "",
+                  },
+                ])
+              }
+              className="mt-3 cursor-pointer text-sm font-semibold text-nevo-navy hover:opacity-75"
+            >
+              Add a term
+            </button>
+          ) : (
+            <p className="m-0 mt-3 max-w-[54ch] text-[12.5px] leading-[1.55] text-nevo-near-black/55">
+              Nevo stores three term starts. Each one begins a billing period,
+              so a fourth is a pricing change rather than a calendar setting -
+              talk to us and we&rsquo;ll sort it out with you.
+            </p>
+          )}
           <p className="m-0 mt-2 text-[12.5px] text-nevo-near-black/50">
             {terms.length === 0
               ? "No terms set yet."
@@ -520,6 +567,7 @@ export function SchoolSettings() {
           </p>
         ) : null}
         <SaveRow
+          failureNote={calendarNote}
           phase={calendar}
           onSave={saveCalendar}
           disabled={issues.length > 0}
