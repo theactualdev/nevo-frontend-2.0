@@ -49,6 +49,31 @@ export function LessonEndingRoute({
   // resolves. Draw the skeleton rather than deciding wrongly.
   if (!hydrated || loading) return <LessonLoadingSkeleton />;
 
+  /*
+   * THE SUMMARY ROUTE APPLIES THE PLAYER'S OWN GATE.
+   *
+   * `LessonPlayer` offers "See summary" only when `lesson.summary` exists, so
+   * from inside the app this screen is unreachable without one. The ROUTE had
+   * no such gate: typed, bookmarked, or opened from a link, it rendered
+   * `LessonSummaryScreen` for any lesson at all - and every block in that
+   * screen is `summary?.…`, so a lesson without one drew a page of headings
+   * with nothing under them.
+   *
+   * "Isn't ready yet" is the truthful version of that, and it is the message
+   * this route already uses for a lesson with no segments. Review is NOT
+   * gated the same way: it reads the child's own answers, not the summary.
+   */
+  if (lesson && screen === "summary" && !lesson.summary) {
+    return (
+      <LessonMessage
+        title="This lesson isn’t ready yet"
+        body="There’s no summary for it yet. Your teacher will know when there is."
+        actionLabel="Back to my lessons"
+        onAction={() => router.push(LESSONS_HREF)}
+      />
+    );
+  }
+
   if (lesson) {
     const view =
       screen === "summary" ? (

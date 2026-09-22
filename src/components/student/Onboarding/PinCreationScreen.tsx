@@ -254,10 +254,26 @@ export function PinCreationScreen({
               error={error}
             />
             <p role="alert" className="mt-4 min-h-5 text-sm text-nevo-violet">
+              {/*
+                NAMES THE FAILURE THAT ACTUALLY HAPPENED.
+                
+                `error` IS the child's - the two entries did not match, and
+                typing again is exactly the fix.
+                
+                `saveFailed` never is. By the time it can fire the two entries
+                have already matched; what failed is the write. That can be a
+                403 because a teacher is signed in on this tablet, a network
+                that dropped, or a shape the server refused - and not one of
+                them is fixed by retyping. "Type it again to confirm" sent a
+                child round a loop that could not end, and blamed them for it.
+                
+                The same distinction the login screen draws between "that PIN
+                didn't match" and "that's on us, not you".
+              */}
               {error
                 ? "Those didn't match - let's try once more"
                 : saveFailed
-                  ? "That didn't save - type it again to confirm"
+                  ? "We couldn't save that just now - that's on us, not you. Your teacher can help."
                   : ""}
             </p>
           </>

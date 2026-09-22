@@ -117,3 +117,24 @@ describe("StudentShell — where Ask Nevo is reachable", () => {
     expect(screen.getByText("lesson body")).toBeTruthy();
   });
 });
+
+describe("the top-bar avatar", () => {
+  it("goes to the profile instead of doing nothing", () => {
+    /*
+     * It was an inert `span` - the one avatar in the app that looked like
+     * every other console's way into a profile and answered a tap with
+     * nothing. Profile is in the nav too, so this was never a dead end; it
+     * just taught a child their tap had missed.
+     */
+    at("/student/dashboard");
+
+    // Two of them now - the nav item and the avatar - and both lead to the
+    // same place, which is the point.
+    const links = screen.getAllByRole("link", { name: "Profile" });
+
+    expect(links.length).toBeGreaterThan(1);
+    for (const link of links) {
+      expect(link).toHaveAttribute("href", "/student/profile");
+    }
+  });
+});
