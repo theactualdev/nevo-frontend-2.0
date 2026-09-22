@@ -1045,7 +1045,17 @@ instruction is to build nothing that depends on either field until it is answere
     that layout. The route test moved to `Shell/lessonRoutes.ts` and is shared rather than
     copied, because `/review` and `/summary` sit under the same layout and are not the
     player. **S**
-15. **Ask Nevo conversation history.** Endpoints deployed, types already written. **M**
+15. ~~**Ask Nevo conversation history.**~~ **DONE 21 Sep.** Everything but the surface was
+    already built: `askNevoApi.threads`, `.thread` and `recentThreads` have been typed and
+    wrapped since the endpoints shipped and nothing called them, so the drawer opened with
+    no memory of any conversation a child had ever had with it. Built to frame 26 — a
+    clock in the top bar, a flat most-recent-first list **inside the same sheet**, an entry
+    opening read-only with the composer still there. The 90-day window and 50-entry cap are
+    applied client-side by `recentThreads`, because the endpoint declares no parameters at
+    all. **Signed-in only:** the designed walkthrough has no server history, so a clock
+    there would open an empty list that reads as a child with no conversations rather than
+    a visitor with no account. A failed read says so rather than rendering as an empty
+    history. **M**
 16. **The small honest ones** — the fourth `LessonMessage` for a missing lesson; the
     summary route applying the player's own `lesson.summary` gate; the unreachable
     baseline failure state; the `linkError` prop that has no caller; PIN creation naming

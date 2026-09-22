@@ -2,12 +2,18 @@
 
 import { useContext, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Mic, MessageCircle, Send } from "lucide-react";
+import { ChevronLeft, Clock, Mic, MessageCircle, Send } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { NevoKeyboard, useNevoKeyboardDock } from "@/components/shared";
 import { SampleRegion } from "@/components/shared/SampleRegion";
 import { useDraggablePill } from "./useDraggablePill";
+import { useAskNevoHistory } from "@/hooks/useAskNevoHistory";
+import { useHasSession } from "@/hooks/useHasSession";
 import { askNevoApi, asUuid } from "@/lib/api";
+import type {
+  ThreadSummary,
+  ThreadTranscript,
+} from "@/lib/api/askNevo";
 import { LessonContext } from "@/context/LessonContext";
 import { useAuth } from "@/hooks";
 import { cn, randomId } from "@/lib/utils";
@@ -142,6 +148,18 @@ export function AskNevo() {
   const [input, setInput] = useState("");
   const [recording, setRecording] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  /*
+   * FRAME 26: *"A quiet clock icon in the drawer's top bar opens a flat,
+   * most-recent-first list of past conversations inside the same sheet.
+   * Tapping an entry opens it read-only, with the input still there to start
+   * something new. Same drawer, same styling: no new screen, no modal."*
+   *
+   * So this is a view within one sheet rather than a route or a dialog, and
+   * the composer below never leaves.
+   */
+  const [view, setView] = useState<"chat" | "history">("chat");
+  const signedIn = useHasSession();
+  const history = useAskNevoHistory(open && signedIn);
   const kb = useNevoKeyboardDock();
   const threadRef = useRef<HTMLDivElement | null>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -306,12 +324,66 @@ export function AskNevo() {
           className="flex h-[88%] flex-col gap-0 rounded-t-[20px] border-0! bg-nevo-cream p-0 text-nevo-near-black shadow-[0_-8px_32px_rgba(0,0,0,0.16)] sm:inset-x-auto! sm:top-0! sm:right-0! sm:left-auto! sm:h-full! sm:w-[412px] sm:rounded-none! sm:shadow-[-8px_0_32px_rgba(0,0,0,0.16)] lg:w-[460px]"
         >
           {/* Header */}
-          <div className="flex h-14 shrink-0 items-center border-b border-nevo-near-black/8 px-5">
+          <div className="flex h-14 shrink-0 items-center gap-2 border-b border-nevo-near-black/8 px-5">
+            {history.transcript || view === "history" ? (
+              <button
+                type="button"
+                aria-label="Back"
+                onClick={() => {
+                  if (history.transcript || history.transcriptFailed) {
+                    history.closeThread();
+                  } else {
+                    setView("chat");
+                  }
+                }}
+                className="-ml-2 flex size-9 cursor-pointer items-center justify-center rounded-full text-nevo-near-black/70 transition-colors hover:bg-nevo-near-black/6"
+              >
+                <ChevronLeft className="size-5" strokeWidth={2} />
+              </button>
+            ) : null}
             <SheetTitle className="text-[17px] font-semibold text-nevo-near-black">
-              Ask Nevo
+              {view === "history" ? "Past conversations" : "Ask Nevo"}
             </SheetTitle>
+            {/*
+              SIGNED-IN ONLY. There is no server history behind the designed
+              walkthrough, so offering a clock to a signed-out visitor would
+              open an empty list that looks like a child with no conversations
+              rather than a visitor with no account.
+            */}
+            {signedIn && view === "chat" && (
+              <button
+                type="button"
+                aria-label="Past conversations"
+                onClick={() => {
+                  history.refresh();
+                  setView("history");
+                }}
+                className="ml-auto flex size-10 cursor-pointer items-center justify-center rounded-full text-nevo-near-black/60 transition-colors hover:bg-nevo-near-black/6"
+              >
+                <Clock className="size-[19px]" strokeWidth={2} />
+              </button>
+            )}
           </div>
 
+          {/* Past conversations - the same sheet, never a new screen. */}
+          {view === "history" ? (
+            <div className="min-h-0 flex-1 overflow-y-auto p-5">
+              {history.transcript || history.transcriptFailed ? (
+                <ReadOnlyThread
+                  transcript={history.transcript}
+                  failed={history.transcriptFailed}
+                />
+              ) : (
+                <ThreadList
+                  threads={history.threads}
+                  loading={history.loading}
+                  failed={history.failed}
+                  onOpen={history.openThread}
+                />
+              )}
+            </div>
+          ) : (
+          <>
           {/* Thread */}
           <div ref={threadRef} className="min-h-0 flex-1 overflow-y-auto p-5">
             <p className="mb-3 text-[15px] font-medium text-nevo-near-black">
@@ -403,8 +475,15 @@ export function AskNevo() {
               )}
             </div>
           </div>
+          </>
+          )}
 
-          {/* Composer */}
+          {/*
+            Composer - OUTSIDE the view switch on purpose. Frame 26: reading a
+            past conversation leaves "the input still there to start something
+            new", so history is somewhere to look rather than somewhere to be
+            stuck. Typing from a transcript returns to the live thread.
+          */}
           <div className="relative shrink-0 border-t border-nevo-near-black/8 px-4 py-3">
             <div
               className={cn(
@@ -484,4 +563,142 @@ export function AskNevo() {
       </Sheet>
     </>
   );
+}
+
+/**
+ * A flat, most-recent-first list of past conversations (frame 26, state 2).
+ *
+ * The ninety-day window and the fifty-entry cap are applied by
+ * `recentThreads` before this ever sees them - the endpoint takes no
+ * parameters, so the rule the frame states cannot be asked for.
+ */
+function ThreadList({
+  threads,
+  loading,
+  failed,
+  onOpen,
+}: {
+  threads: ThreadSummary[];
+  loading: boolean;
+  failed: boolean;
+  onOpen: (threadId: string) => void;
+}) {
+  if (loading) {
+    return (
+      <p className="pt-6 text-center text-sm text-nevo-near-black/55">
+        Getting your conversations…
+      </p>
+    );
+  }
+
+  /*
+   * COULD NOT ASK IS NOT THE SAME AS NOTHING TO SHOW, and a child who has
+   * talked to Nevo every day should never be told they have never talked to
+   * it because a request failed.
+   */
+  if (failed) {
+    return (
+      <p className="pt-6 text-center text-sm leading-[1.5] text-nevo-near-black/60">
+        We couldn&rsquo;t load these just now.
+      </p>
+    );
+  }
+
+  if (threads.length === 0) {
+    return (
+      <p className="pt-6 text-center text-sm leading-[1.5] text-nevo-near-black/60">
+        Nothing here yet. Anything you ask will show up so you can look back at
+        it.
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex flex-col">
+      {threads.map((t) => (
+        <button
+          key={t.threadId}
+          type="button"
+          onClick={() => onOpen(t.threadId)}
+          className="flex w-full cursor-pointer flex-col items-start gap-1 rounded-[10px] px-3 py-3 text-left transition-colors hover:bg-nevo-cream-elevated"
+        >
+          <span className="text-[15px] leading-[1.4] font-medium text-nevo-near-black">
+            {t.title}
+          </span>
+          <span className="text-[12.5px] text-nevo-near-black/50">
+            {agoLabel(t.lastMessageAt)}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * One past conversation, read-only (frame 26, state 3).
+ *
+ * Read-only is the whole point: it is a record of what was said, so there is
+ * nothing here to retry, rate or continue. Starting something new is what the
+ * composer below is for, and it never left.
+ */
+function ReadOnlyThread({
+  transcript,
+  failed,
+}: {
+  transcript: ThreadTranscript | null;
+  failed: boolean;
+}) {
+  if (failed) {
+    return (
+      <p className="pt-6 text-center text-sm leading-[1.5] text-nevo-near-black/60">
+        We couldn&rsquo;t open that one just now.
+      </p>
+    );
+  }
+  if (!transcript) {
+    return (
+      <p className="pt-6 text-center text-sm text-nevo-near-black/55">
+        Opening…
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      {transcript.messages.map((m) =>
+        m.author === "asker" ? (
+          <div key={m.messageId} className="flex justify-end">
+            <div className="max-w-[82%] rounded-2xl rounded-br-[5px] bg-nevo-navy/15 px-3.5 py-2.5 text-[15px] leading-[1.4]">
+              {m.text}
+            </div>
+          </div>
+        ) : (
+          <div key={m.messageId} className="flex justify-start">
+            <div className="max-w-[88%] rounded-2xl rounded-bl-[5px] bg-nevo-violet/22 px-3.5 py-3 text-[15px] leading-[1.5]">
+              {m.text}
+            </div>
+          </div>
+        ),
+      )}
+    </div>
+  );
+}
+
+/**
+ * "2h", "yesterday", "3 Sep". Never a precise timestamp: this is a list to
+ * find a conversation in, not a record of when a child was on their tablet.
+ */
+function agoLabel(iso: string): string {
+  const at = Date.parse(iso);
+  if (Number.isNaN(at)) return "";
+  const mins = Math.floor((Date.now() - at) / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  if (hours < 48) return "yesterday";
+  return new Date(at).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+  });
 }
