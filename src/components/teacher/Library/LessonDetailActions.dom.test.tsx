@@ -72,7 +72,7 @@ describe("what is left to check", () => {
         outstandingKeyPoints={2}
       />,
     );
-    expect(screen.getByText("2 key points still to check below.")).toBeInTheDocument();
+    expect(screen.getByText("2 key points still to check")).toBeInTheDocument();
 
     rerender(
       <LessonDetailActions
@@ -81,7 +81,7 @@ describe("what is left to check", () => {
         outstandingKeyPoints={1}
       />,
     );
-    expect(screen.getByText("1 key point still to check below.")).toBeInTheDocument();
+    expect(screen.getByText("1 key point still to check")).toBeInTheDocument();
   });
 
   it("names sections when a section is what is holding it", () => {
@@ -93,7 +93,7 @@ describe("what is left to check", () => {
       />,
     );
 
-    expect(screen.getByText("1 section still to check below.")).toBeInTheDocument();
+    expect(screen.getByText("1 section still to check")).toBeInTheDocument();
   });
 
   it("names both when both are outstanding", () => {
@@ -112,7 +112,7 @@ describe("what is left to check", () => {
     );
 
     expect(
-      screen.getByText("2 key points and 1 section still to check below."),
+      screen.getByText("2 key points and 1 section still to check"),
     ).toBeInTheDocument();
   });
 });

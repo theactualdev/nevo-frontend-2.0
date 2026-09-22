@@ -95,7 +95,10 @@ export function LessonDetailActions({
         <span className="max-w-[260px] text-right text-[13px] leading-[1.5] text-nevo-near-black/62">
           {/* The server says it is not ready and we do not always know why -
               a refusal we cannot itemise still has to say something true. */}
-          {left ? `${left} still to check below.` : "Still being checked."}
+          {/* C06b: "2 key points still to check". The "below" this used to
+              carry was true on the lesson page and false everywhere else
+              this component is drawn. */}
+          {left ? `${left} still to check` : "Still being checked."}
         </span>
       )}
     </div>

@@ -297,16 +297,19 @@ export function LiveLessonDetail({
       : []),
   ].join(" and ");
 
-  const reviewLine = (() => {
-    const flagged = segments
-      .map((seg, i) => ({ seg, n: i + 1 }))
-      .filter(({ seg }) => seg.needsReview);
-    if (flagged.length === 0) return "";
-    if (flagged.length === 1) {
-      return `Worth a look - a few lines in Section ${flagged[0].n} didn't scan cleanly.`;
-    }
-    return `Worth a look - a few lines in ${flagged.length} sections didn't scan cleanly.`;
-  })();
+  /**
+   * C06b's sub-line, verbatim.
+   *
+   * What stood here named a SECTION and how cleanly it scanned - the old unit
+   * and the old complaint, written before a key point could carry anything.
+   * The frame names what is actually waiting and what it holds up.
+   */
+  const reviewLine =
+    outstandingPoints > 0
+      ? "A few key points need a quick check before you assign."
+      : outstandingSections > 0
+        ? "A few sections need a quick check before you assign."
+        : "";
 
   // Group by module where the parser made any. A segment the modules do not
   // claim still has to appear - a lesson that silently hid a section would be
@@ -385,7 +388,12 @@ export function LiveLessonDetail({
               </p>
             )}
             <span className="mt-[5px] block text-[14.5px] text-nevo-near-black/60">
-              {`${lesson.segmentCount} ${lesson.segmentCount === 1 ? "section" : "sections"}`}
+              {/* C06b counts KEY POINTS while a review is open and sections
+                  otherwise - the meta line describes the thing the screen is
+                  currently about. */}
+              {waiting > 0 && review.keyPoints.length > 0
+                ? plural(review.keyPoints.length, "key point", "key points")
+                : plural(lesson.segmentCount, "section", "sections")}
               {students > 0 &&
                 ` · Assigned to ${students} ${students === 1 ? "student" : "students"}`}
               {nextDue &&
@@ -432,21 +440,32 @@ export function LiveLessonDetail({
                   confident it's read this correctly. They are marked below."
                   was the sentence this replaces, and it does not parse. */}
               Nevo is unsure it read these parts correctly. Open each one to
-              check it, then accept or change it.
+              check it, then accept or change it. Nothing you did is lost.
             </p>
           </div>
         ) : (
-          hadReview && (
-            /* LR-05, quiet: the state changes and the assign button comes
-               alive. No modal, no congratulation.
-
-               SCRUM-152's system message is the other half of this beat and
-               is not built in this console, so the state change stands alone
-               rather than being faked with a banner here. */
-            <p className="mt-6 max-w-[660px] text-[14.5px] leading-[1.55] text-nevo-near-black/68">
-              You have checked everything Nevo was unsure about. This lesson is
-              ready to assign.
-            </p>
+          assignments.length === 0 && (
+            /*
+             * LR-05, and C06b draws it as a STATE rather than a sentence.
+             *
+             * What stood here was a line of my own - "you have checked
+             * everything Nevo was unsure about" - written before the frame
+             * was pulled. The frame has no such acknowledgement: a lesson
+             * with nothing outstanding simply IS the ready state, whether it
+             * was reviewed or arrived clean, and it says what a teacher can
+             * do next rather than what they just did.
+             *
+             * SCRUM-152's system message is the other half of this beat and
+             * is not built in this console yet.
+             */
+            <div className="mt-6 max-w-[660px] rounded-[12px] bg-nevo-navy/6 px-[18px] py-4">
+              <p className="text-[15px] font-semibold text-nevo-near-black">
+                Ready when you are
+              </p>
+              <p className="mt-1 text-[14.5px] leading-[1.55] text-nevo-near-black/70">
+                {`Nevo has prepared this lesson into ${plural(lesson.segmentCount, "section", "sections")}. Assign it to a class and it'll open for students at the time you choose.`}
+              </p>
+            </div>
           )
         )}
 
@@ -456,7 +475,10 @@ export function LiveLessonDetail({
             ordinary case; a flagged section is the rarer second reason a
             lesson is held. */}
         {review.keyPoints.length > 0 && (
-          <div className="mt-4 flex max-w-[860px] flex-col gap-2.5">
+          <h3 className={cn(SECTION_H, "mt-7")}>Key points Nevo found</h3>
+        )}
+        {review.keyPoints.length > 0 && (
+          <div className="mt-3 flex max-w-[860px] flex-col gap-2.5">
             {review.keyPoints.map((kp) => (
               <KeyPointCard
                 key={kp.id}
