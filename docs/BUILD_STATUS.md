@@ -4194,6 +4194,32 @@ sign-out destination still use it.
 carry their own pad rather than calling `NevoKeyboard`'s new presentation prop.
 That is a separate change to a shared component used by more than this screen.
 
+### The bell is markable now, 22 Sep - closing the hole that hid the leak
+
+Flagged on 18 Sep and left open then: `NotificationBell` carried no
+`SampleRegion`, and `StudentShell` mounts it outside both `MaybeSample`
+wrappers, which cover the identity block and the avatar only. So when the bell
+was inventing *"Ms Okafor sent you a message"*, the end-to-end sweep whose whole
+job is to catch a console degrading to fixtures had nothing to assert against.
+The leak was found by reading the file.
+
+**THE MARK FOLLOWS THE BRANCH, NOT THE ROWS**, and that is the decision worth
+recording. `SAMPLE_NOTIFICATIONS` is empty, so a mark that followed the rows
+would mark nothing - and the failure this exists to catch is precisely the one
+that leaves no rows behind: a SIGNED-IN child falling into the signed-out branch
+and being told *"Nothing new right now"*, which is a claim about their feed that
+nobody checked. That is exactly what the missing `useHydrated` guard did on
+every student page until 18 Sep.
+
+The unhydrated branch is deliberately NOT marked. It is a blank while the client
+works out who is here, not a fixture, and marking it would put the attribute on
+every page for everyone for a frame - which makes the mark mean nothing.
+
+**`MaybeSample` moved to `components/shared/SampleRegion.tsx`.** It was private
+to `StudentShell` and a second caller wanted it; two versions of "mark this only
+if it is a fixture" eventually disagree about what counts, and the mark is only
+worth anything while every surface means the same thing by it.
+
 ### Two fixture leaks emptied, 18 Sep - and one of them reached signed-in children
 
 Both found in an admin-side sweep and handed over. Rule 5 in each case, not

@@ -29,3 +29,27 @@ export function SampleRegion({
     </div>
   );
 }
+
+/**
+ * `SampleRegion`, but only when the region is actually showing samples.
+ *
+ * Lived privately in `StudentShell` until a second caller wanted it. Promoted
+ * rather than copied: two versions of "mark this only if it is a fixture"
+ * eventually disagree about what counts, and the mark is only worth anything
+ * while every surface means the same thing by it.
+ *
+ * `display: contents` means the unmarked branch and the marked one lay out
+ * identically, so nothing about the design changes either way.
+ */
+export function MaybeSample({
+  showing,
+  kind,
+  children,
+}: {
+  showing: boolean;
+  kind: string;
+  children: ReactNode;
+}) {
+  if (!showing) return <>{children}</>;
+  return <SampleRegion kind={kind}>{children}</SampleRegion>;
+}
