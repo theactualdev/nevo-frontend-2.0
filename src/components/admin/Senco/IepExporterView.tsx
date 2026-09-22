@@ -2,7 +2,11 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { exportApi, type IepExport } from "@/lib/api/export";
+import {
+  exportApi,
+  type IepExport,
+  type IepExportShare,
+} from "@/lib/api/export";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { studentsApi, type AdminStudentRow, type ParentLink } from "@/lib/api/students";
 import { cn } from "@/lib/utils";
@@ -39,11 +43,22 @@ import {
  * prevent - so the field is absent, and the person pressing Finalise is the
  * person named. Raised with design.
  *
- * WHAT THE SCREEN MAY SAY ABOUT SHARING. Nothing reads share state back.
- * An export carries `status` (draft|final) and its three review fields and
- * NOTHING about who it went to; shares live on a separate record that exactly
- * one endpoint writes and none reads. So the client knows only what it did
- * itself, this session, and every claim here is scoped to that.
+ * WHAT THE SCREEN MAY SAY ABOUT SHARING. **It can now read share state back,
+ * and this paragraph used to say the opposite.** `GET /exports/iep/{id}/shares`
+ * landed 21 Sep - a pre-launch blocker - and the record had been written all
+ * along with nothing reading it.
+ *
+ * Before that the screen knew only what it had done itself, that session, so
+ * every claim about sharing was scoped to one page load and a reload erased
+ * it. What it may say is now wider, and the discipline that replaces the old
+ * scoping is: **a failed read of the share list is not an empty share list.**
+ * Those are held apart below, because conflating them is how a SENCo gets told
+ * a report reached nobody when we simply could not look.
+ *
+ * `status` is `shared | revoked` and the difference is not cosmetic: a revoked
+ * share is a guardian who NO LONGER holds the report. Rendering one as "shared
+ * with" states the opposite of the truth about who can read a child's SEN
+ * report.
  *
  * The draft banner's "Not shared with anyone" is design's own draft-only pill
  * (D08:130) and now renders only while the export's own status is "draft",
@@ -54,8 +69,10 @@ import {
  * with Save and Finalise re-armed on it, against design's rule that
  * finalisation is irreversible.
  *
- * TODO(api): no endpoint lists an export's shares, so a reload cannot tell a
- * SENCo whether a report already reached a guardian. Raised with backend.
+ * TODO(api): `sharedByName` on `IepExportShareResponse`. The share record
+ * names the sharer as `sharedByUserId` and nothing resolves a user id to a
+ * name, so the history says WHEN and TO WHOM but not BY WHOM. Same ask as
+ * `reviewedByName` below, and the line stays unbuilt rather than guessed.
  *
  * TODO(api): "Download PDF" has no endpoint. `exports/iep` has no `.pdf`
  * route - the only PDF in the whole API is the compliance audit's - so the
@@ -78,6 +95,64 @@ const LABEL = "mb-[7px] block text-[12.5px] font-semibold text-nevo-near-black/6
 
 const FIELD =
   "h-[50px] w-full rounded-[10px] border-[1.5px] border-nevo-near-black/16 bg-nevo-cream px-[15px] text-[15px] text-nevo-near-black outline-none transition-colors focus:border-nevo-navy";
+
+/**
+ * The guardian's name for a share's `parentId`, or null.
+ *
+ * NULL IS A REAL ANSWER. `ParentLink.parentId` is nullable and a guardian can
+ * be unlinked after a share, so a share can legitimately name a person this
+ * screen cannot. The caller states the event without a name rather than
+ * inventing one.
+ */
+function guardianName(guardians: ParentLink[], parentId: string): string | null {
+  const match = guardians.find((g) => g.parentId === parentId);
+  return match?.parentName?.trim() ? match.parentName : null;
+}
+
+/** "14 September 2026" - a share is a dated event, never "3 days ago". */
+function shareDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+/**
+ * One line of share history.
+ *
+ * A REVOKED SHARE IS NOT A SHARE. It renders as its own sentence rather than
+ * a greyed variant of the same one, because the fact a SENCo needs off this
+ * line is whether that guardian can read the report NOW.
+ *
+ * The name is optional and its absence is not filled. `parentId` resolves
+ * against the guardian list the screen already holds, and a guardian who has
+ * since been unlinked resolves to nothing - in which case the line still
+ * states the event and simply does not name a person. Inventing "Unknown
+ * guardian" would put a phrase on a child's SEN record that names nobody.
+ */
+function ShareLine({ name, at, revoked }: { name: string | null; at: string; revoked: boolean }) {
+  const when = shareDate(at);
+  const who = name ?? "a linked guardian";
+  return (
+    <li className="m-0 text-[13.5px] leading-[1.55] text-nevo-near-black/72">
+      {revoked ? (
+        <>
+          <span className="font-semibold text-nevo-near-black">{who}</span> no
+          longer has access{when ? ` - shared ${when}, since withdrawn` : ", since withdrawn"}.
+        </>
+      ) : (
+        <>
+          Shared with{" "}
+          <span className="font-semibold text-nevo-near-black">{who}</span>
+          {when ? ` on ${when}` : ""}.
+        </>
+      )}
+    </li>
+  );
+}
 
 /** ISO yyyy-mm-dd, which is what the endpoint's `date` format wants. */
 function iso(d: Date): string {
@@ -102,6 +177,14 @@ export function IepExporterView() {
   const [guardians, setGuardians] = useState<ParentLink[]>([]);
   const [guardiansFailed, setGuardiansFailed] = useState(false);
   const [shareFailed, setShareFailed] = useState(false);
+  /*
+   * NULL IS "WE HAVE NOT LOOKED", NOT "NOBODY". The empty array is a real
+   * answer - this export has reached no guardian - and it is now a fact rather
+   * than an assumption, so the two must not collapse into one another. See
+   * `sharesFailed` for the third state.
+   */
+  const [shares, setShares] = useState<IepExportShare[] | null>(null);
+  const [sharesFailed, setSharesFailed] = useState(false);
   const [savedAt, setSavedAt] = useState(false);
 
   // The clock is read in an effect, never during render. Default period is the
@@ -253,13 +336,44 @@ export function IepExporterView() {
       .catch(() => setPhase("failed"));
   };
 
+  /*
+   * Read back who this export has already reached.
+   *
+   * Runs on every export that exists, not only after a share, because the
+   * whole point of the endpoint is the RELOAD case: a SENCo returning to a
+   * report they sent last week, or after the share that failed to confirm.
+   */
+  const loadShares = useCallback((exportId: string) => {
+    exportApi
+      .listShares(exportId)
+      .then((s) => {
+        setShares(s);
+        setSharesFailed(false);
+      })
+      .catch(() => {
+        // Left as null rather than [], so nothing downstream can read this as
+        // "shared with nobody".
+        setShares(null);
+        setSharesFailed(true);
+      });
+  }, []);
+
+  useEffect(() => {
+    if (draft?.id) loadShares(draft.id);
+  }, [draft?.id, loadShares]);
+
   const share = (parentId: string) => {
     if (!draft) return;
     setPhase("sharing");
     setShareFailed(false);
     exportApi
       .share(draft.id, { parentId })
-      .then(() => setPhase("shared"))
+      .then(() => {
+        setPhase("shared");
+        // The history is now the authority on what happened, including for the
+        // attempt that came before this one and did not confirm.
+        loadShares(draft.id);
+      })
       .catch(() => {
         // A failed SHARE is the one write here whose outcome the client
         // genuinely cannot know: a transport failure (ApiError status 0) can
@@ -267,6 +381,15 @@ export function IepExporterView() {
         // can honestly say nothing happened; this cannot.
         setShareFailed(true);
         setPhase("failed");
+        /*
+         * A FAILED SHARE IS EXACTLY WHEN THE HISTORY IS WORTH READING. The
+         * failure mode this screen has always warned about is a transport
+         * error that still committed the share server-side. That used to be
+         * unknowable and the copy said so. Now we can simply look, and if a
+         * record came back the SENCo is told it arrived rather than left to
+         * "check their account".
+         */
+        loadShares(draft.id);
       });
   };
 
@@ -546,17 +669,47 @@ export function IepExporterView() {
               </p>
 
               {/*
-                * The unconfirmed share follows the SENCo to the place they
-                * would repeat it. "Go back" now returns a finalised export
-                * here rather than to the draft editor, and the warning lived
-                * only on the failure panel they just left - so without this
-                * they would be one click from sending a second copy of
-                * something that may already have arrived. Nothing can read
-                * share state back: the API has no endpoint that lists shares,
-                * so this session's own memory of the attempt is the only
-                * record there is.
+                * WHERE THIS REPORT HAS ALREADY GONE. Three states, and they
+                * are three because two of them used to be one: a failed read
+                * is not an empty history, and telling a SENCo "not shared with
+                * anyone" because a GET fell over is the worst sentence on this
+                * screen.
                 */}
-              {shareFailed && phase !== "shared" ? (
+              {sharesFailed ? (
+                <p className="m-0 mt-3.5 text-[13.5px] leading-[1.55] text-nevo-near-black/62">
+                  We couldn&rsquo;t check who this has already been shared
+                  with. Don&rsquo;t read that as nobody.
+                </p>
+              ) : shares && shares.length > 0 ? (
+                <ul className="m-0 mt-3.5 list-none space-y-1.5 p-0">
+                  {shares.map((s) => (
+                    <ShareLine
+                      key={s.id}
+                      name={guardianName(guardians, s.parentId)}
+                      at={s.sharedAt}
+                      revoked={s.status === "revoked"}
+                    />
+                  ))}
+                </ul>
+              ) : shares ? (
+                <p className="m-0 mt-3.5 text-[13.5px] leading-[1.55] text-nevo-near-black/62">
+                  This hasn&rsquo;t been shared with anyone yet.
+                </p>
+              ) : null}
+
+              {/*
+                * The unconfirmed share follows the SENCo to the place they
+                * would repeat it. "Go back" returns a finalised export here
+                * rather than to the draft editor, so without this they would
+                * be one click from sending a second copy of something that may
+                * already have arrived.
+                *
+                * THE HISTORY NOW ANSWERS IT. If the failed attempt did commit
+                * server-side, the list above says so plainly and this warning
+                * is suppressed - it only fires when we looked and found
+                * nothing, which is the case where sending again is right.
+                */}
+              {shareFailed && phase !== "shared" && !(shares && shares.length > 0) ? (
                 <p className="m-0 mt-3 rounded-[10px] bg-nevo-violet/24 px-4 py-3 text-[13.5px] leading-[1.55] text-nevo-navy">
                   The last attempt didn&rsquo;t confirm. It may still have
                   reached them &ndash; check their account before sending
