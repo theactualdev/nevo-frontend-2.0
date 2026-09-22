@@ -72,6 +72,56 @@ describe("an upload the server refused", () => {
   });
 });
 
+describe("the reference for a failure nobody planned for", () => {
+  it("keeps the incident id off an unhandled error", async () => {
+    /*
+     * The whole point. A staged upload answered 500 on ~18 Sep and backend
+     * could not find it from their side, because nothing on this end kept
+     * anything to match on. `ApiError.detail` held the body all along.
+     */
+    create.mockRejectedValue(
+      new ApiError(500, "server", { incidentId: "a1b2c3d4" }),
+    );
+
+    const result = await upload();
+
+    expect(result.current.incident).toBe("a1b2c3d4");
+  });
+
+  it("keeps nothing when the body carried no reference", async () => {
+    // Most failures, and a screen that invented one would be worse than a
+    // screen that says nothing.
+    create.mockRejectedValue(new ApiError(422, "unsupported"));
+
+    const result = await upload();
+
+    expect(result.current.incident).toBeNull();
+  });
+
+  it("keeps nothing from a plain-text error page", async () => {
+    // Which is what the 18 Sep 500 actually returned.
+    create.mockRejectedValue(new ApiError(500, "server", "Internal Server Error"));
+
+    const result = await upload();
+
+    expect(result.current.incident).toBeNull();
+  });
+
+  it("does not carry one upload's reference over to the next", async () => {
+    create.mockRejectedValue(
+      new ApiError(500, "server", { incidentId: "a1b2c3d4" }),
+    );
+    const { result } = renderHook(() => useStagedUpload());
+    act(() => result.current.start(new File(["x"], "one.pdf"), "lesson"));
+    await waitFor(() => expect(result.current.incident).toBe("a1b2c3d4"));
+
+    create.mockResolvedValue({ uploadId: "u-2", status: "processing", stage: "lessons" });
+    act(() => result.current.start(new File(["x"], "two.pdf"), "lesson"));
+
+    await waitFor(() => expect(result.current.incident).toBeNull());
+  });
+});
+
 describe("an upload that never landed", () => {
   it("is ours when the server broke", async () => {
     create.mockRejectedValue(new ApiError(503, "down"));

@@ -60,6 +60,49 @@ export function apiErrorCode(detail: unknown): string | null {
   return typeof code === "string" && code ? code : null;
 }
 
+/**
+ * The backend's own reference for an error nobody planned for.
+ *
+ * WHAT THIS IS FOR. A 500 reaches a teacher as "something went wrong on our
+ * side", which is all we can honestly say and all they can honestly report.
+ * A staged upload answered 500 on ~18 Sep and backend could not find it from
+ * their side at all; there was nothing to match on. Every unhandled error
+ * carries an `incidentId` now, and `ApiError.detail` has held the parsed
+ * body all along - so the id already reaches this client and is dropped.
+ * This is the reader that stops it being dropped.
+ *
+ * NOT IN THE CONTRACT, deliberately on their side and awkwardly on ours:
+ * `incidentId` appears nowhere in the deployed OpenAPI document (re-checked
+ * 22 Sep, 225 paths, 404 schemas), because an UNHANDLED error is by
+ * definition not a documented response. So the shape is backend's word
+ * rather than something we can type, and both plausible shapes are read:
+ * top level, and nested under `detail` the way FastAPI nests its own error
+ * bodies - see `apiErrorCode` directly above.
+ *
+ * REFUSES ANYTHING THAT IS NOT AN IDENTIFIER. A plain-text 500 - Starlette's
+ * default page, which is exactly what that 18 Sep failure returned - leaves
+ * `detail` as a long string, and a proxy's own error page can carry a
+ * `detail` object of its own. Printing either at a teacher under "quote
+ * this" would be worse than printing nothing: they would quote it, and it
+ * would match nothing.
+ */
+export function incidentId(detail: unknown): string | null {
+  if (!detail || typeof detail !== "object") return null;
+  const candidates = [
+    (detail as { incidentId?: unknown }).incidentId,
+    ((detail as { detail?: unknown }).detail as { incidentId?: unknown })
+      ?.incidentId,
+  ];
+  for (const value of candidates) {
+    if (typeof value !== "string") continue;
+    const id = value.trim();
+    // An identifier, not a sentence: no spaces, and short enough to read
+    // aloud down a phone line, which is how this will actually be quoted.
+    if (id.length > 0 && id.length <= 64 && !/\s/.test(id)) return id;
+  }
+  return null;
+}
+
 /** User-friendly message per the Design System — never raw technical errors. */
 function friendlyMessage(status: number): string {
   if (status === 0)

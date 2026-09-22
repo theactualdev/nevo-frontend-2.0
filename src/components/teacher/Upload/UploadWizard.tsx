@@ -10,6 +10,7 @@ import { getToken } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 import {
   FALLBACK_HEADINGS,
+  IncidentLine,
   ParseFallback,
   type FallbackKind,
 } from "./ParseFallback";
@@ -531,6 +532,7 @@ export function UploadWizard() {
         <ParseFallback
           kind={fallback.kind}
           reason={fallback.reason}
+          incident={staged.incident}
           blockName={blockName}
           onBack={() => setPhase("file")}
           onTryAnother={() => setPhase("file")}
@@ -822,6 +824,11 @@ export function UploadWizard() {
                           ? "Nevo couldn’t find lesson text in that file. A PDF, Word file or slides with readable text works best."
                           : "The reading started and stopped partway. Nothing you did is lost.")}
                   </p>
+                  {/* The unit path's own failure card. Same line, same
+                      reason: a 500 is the one failure we can say nothing
+                      useful about, so the least we can do is let a teacher
+                      report it precisely. */}
+                  <IncidentLine id={staged.incident} />
                   <button
                     type="button"
                     onClick={() => {

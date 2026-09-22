@@ -1153,11 +1153,23 @@ means no `code`, no `message` and **no `incidentId`**: that field did not exist
 yet, so there is nothing for Teslim to match on for THIS occurrence. Asking for
 one back is the wrong shape of answer.
 
-**What makes the next one answerable.** Every unhandled error carries an
-`incidentId` now, and `ApiError.detail` already holds the parsed body — but
-nothing in `src/` reads it, so the id reaches us and is dropped. Until something
-surfaces it, a teacher cannot quote what Teslim needs. Small, and worth doing
-before the next report rather than after.
+**What makes the next one answerable — BUILT 22 Sep.** Every unhandled error
+carries an `incidentId` now, and `ApiError.detail` already held the parsed body,
+so the id was reaching us and being dropped. `incidentId()` in `lib/api/client.ts`
+reads it (top level, and nested the way FastAPI nests its error bodies),
+`useStagedUpload` keeps it, and the upload's "we couldn't reach Nevo" state
+offers it as something to quote.
+
+**It is not in the contract and cannot be.** `incidentId` appears nowhere in the
+deployed OpenAPI document — re-checked 22 Sep at 225 paths and 404 schemas —
+because an unhandled error is by definition not a documented response. So the
+shape is backend's word, both plausible shapes are read, and anything that is not
+an identifier is refused: a Starlette error page leaves `detail` as a long
+string, and printing that under "quote this" would have a teacher quoting
+something that matches nothing.
+
+**Only where the fault is ours.** A refused file has a reason, and a reason beats
+a reference — the line stays off those screens.
 
 ## THE CONTRACT GAINED 25 PATHS ON 21 SEP — read this before planning anything
 

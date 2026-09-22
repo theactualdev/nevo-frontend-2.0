@@ -64,9 +64,30 @@ const ghostBtn =
 const ghostBtnSm =
   "inline-flex cursor-pointer items-center gap-[7px] rounded-[9px] border-[1.5px] border-nevo-navy/30 px-[13px] py-2 text-[12.5px] font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/6";
 
+/**
+ * The backend's reference for this failure, offered quietly.
+ *
+ * NOT AN ERROR CODE SHOUTED AT A TEACHER. It appears only where the screen has
+ * already admitted the fault is ours and has nothing else to tell them - and
+ * it is phrased as something to quote if they choose to, never as an
+ * instruction. Absent for every failure that is not an unhandled one, which is
+ * most of them: a file we could not read has a reason, and a reason is better
+ * than a reference.
+ */
+export function IncidentLine({ id }: { id?: string | null }) {
+  if (!id) return null;
+  return (
+    <p className="mt-4 text-[12.5px] leading-[1.5] text-nevo-near-black/50">
+      If you tell us about this, quote{" "}
+      <span className="font-mono text-nevo-near-black/70">{id}</span>.
+    </p>
+  );
+}
+
 export function ParseFallback({
   kind,
   reason,
+  incident,
   blockName,
   onBack,
   onTryAnother,
@@ -76,6 +97,8 @@ export function ParseFallback({
   kind: FallbackKind;
   /** The server's own failure reason, on `parseFailed`. */
   reason?: string | null;
+  /** The backend's reference, when the failure was an unhandled one. */
+  incident?: string | null;
   blockName: string;
   onBack: () => void;
   onTryAnother: () => void;
@@ -272,6 +295,7 @@ export function ParseFallback({
               {reason ??
                 "The reading started and stopped partway. Nothing you did is lost."}
             </p>
+            <IncidentLine id={incident} />
             <div className="mt-[22px] flex flex-wrap items-center justify-center gap-3">
               <button
                 type="button"
@@ -312,6 +336,7 @@ export function ParseFallback({
             <p className="mt-[9px] max-w-[420px] text-[14.5px] leading-[1.6] text-nevo-near-black/70">
               Nothing is wrong with your file. Please try again in a moment.
             </p>
+            <IncidentLine id={incident} />
             <div className="mt-[22px] flex flex-wrap items-center justify-center gap-3">
               <button
                 type="button"
