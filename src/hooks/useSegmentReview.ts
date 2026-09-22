@@ -19,25 +19,21 @@ import { lessonsApi, type LessonSegment } from "@/lib/api/lessons";
  * `textVariant.keyPoints` carried no per-point state or confidence at all.
  * Raised with backend.
  *
- * BACKEND ANSWERED ON 21 SEP AND THIS HOOK IS NOW THE SMALLER HALF OF THE
- * TICKET. `GET /api/v1/lessons/{id}/review` returns `KeyPointResponse` per
- * point - `sourceText`, a MEASURED `confidence`, and a `reviewState` where
- * only `unsure` blocks assignment - with `PATCH`, `DELETE` and `accept` on
- * each. That is LR-02's source text, and the amend and remove this console
- * declined to draw because nothing could carry them.
+ * BACKEND ANSWERED ON 21 SEP, AND THIS HOOK IS NOW THE SMALLER HALF OF THE
+ * TICKET - not its fallback. `useLessonReview` beside it settles key points,
+ * which is the ticket's own unit; this settles the OTHER thing that holds a
+ * lesson back. Backend's ruling, in its own words: *"outstanding now means a
+ * segment Nevo itself flagged and nobody approved, OR an ungrounded key
+ * point. A lesson nobody doubted assigns with no clicking."*
  *
- * Nothing here is wrong: approving a segment is still a real thing the
- * contract does, and this is what a teacher has today. But the ticket's unit
- * is reachable now, so do not read the paragraph above as a standing reason
- * to build at the section level. See `docs/CONSOLE_INVENTORY.md`, the 21 Sep
- * contract section.
+ * So both survive, and neither is the gate. `readyToAssign` is, and it is the
+ * only thing that sees both halves - which is why `approve` takes a callback:
+ * settling the last SECTION moves a verdict that lives in the other read.
  *
  * COUNTS COME FROM THE SERVER, never from counting what is on screen. The
  * approve response returns `approvedSegmentCount`, `segmentCount` and
- * `lessonApproved`, so the remaining count and the moment assignment unlocks
- * are the server's answer - which matters because the 409 gate that refuses
- * an assignment is the same server's answer, and a screen that disagreed with
- * it would unlock a button that then fails.
+ * `lessonApproved`, so the remaining count is the server's answer. `ready`
+ * here is now only about sections; the screen asks `readyToAssign`.
  */
 
 export interface SegmentReview {
@@ -51,7 +47,16 @@ export interface SegmentReview {
   approving: string | null;
   /** The section whose approval did not land. */
   failed: string | null;
-  approve: (segmentId: string) => void;
+  /**
+   * Approve one section.
+   *
+   * `onApproved` exists because this is no longer the whole review: a
+   * lesson is also held by an ungrounded key point, and `readyToAssign` -
+   * which accounts for both - lives in a different read. Without a callback
+   * the teacher settles the last section and Assign stays grey until they
+   * reload.
+   */
+  approve: (segmentId: string, onApproved?: () => void) => void;
   /** Has this section been approved, counting what we have just done? */
   isApproved: (segment: LessonSegment) => boolean;
 }
@@ -81,7 +86,7 @@ export function useSegmentReview(
   );
 
   const approve = useCallback(
-    (segmentId: string) => {
+    (segmentId: string, onApproved?: () => void) => {
       if (approving) return;
       setApproving(segmentId);
       setFailed(null);
@@ -95,6 +100,7 @@ export function useSegmentReview(
             total: res.segmentCount,
             lessonApproved: res.lessonApproved,
           });
+          onApproved?.();
         })
         .catch(() => {
           // The section is still outstanding and the gate still holds. Saying

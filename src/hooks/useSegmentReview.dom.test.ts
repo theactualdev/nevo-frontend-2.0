@@ -145,6 +145,40 @@ describe("accepting one", () => {
     expect(result.current.approving).toBe("s-1");
   });
 
+  it("tells the caller when an approval lands, so the rest can catch up", async () => {
+    /*
+     * A SECTION IS NO LONGER THE WHOLE REVIEW. Backend's ruling of 21 Sep:
+     * a lesson is held by a flagged segment nobody approved OR an ungrounded
+     * key point, and `readyToAssign` - which accounts for both - lives in a
+     * different read.
+     *
+     * So settling the last section has to tell that read to run again.
+     * Without this, the teacher finishes and Assign stays grey until they
+     * reload the page, which is a version of the bug this ticket is about.
+     */
+    approveSegment.mockResolvedValue(
+      approval({ approvedSegmentCount: 1, segmentCount: 1, lessonApproved: true }),
+    );
+    const onApproved = vi.fn();
+    const { result } = renderHook(() => useSegmentReview("l-1", [seg()]));
+
+    act(() => result.current.approve("s-1", onApproved));
+
+    await waitFor(() => expect(onApproved).toHaveBeenCalledTimes(1));
+  });
+
+  it("does not tell the caller about an approval that failed", async () => {
+    // Nothing moved, so there is nothing for the other half to catch up with.
+    approveSegment.mockRejectedValue(new Error("network"));
+    const onApproved = vi.fn();
+    const { result } = renderHook(() => useSegmentReview("l-1", [seg()]));
+
+    act(() => result.current.approve("s-1", onApproved));
+
+    await waitFor(() => expect(result.current.failed).toBe("s-1"));
+    expect(onApproved).not.toHaveBeenCalled();
+  });
+
   it("leaves the section outstanding when the approval did not land", async () => {
     // Nothing about the lesson changed, and the gate still holds - so the
     // control has to stay where it is.
