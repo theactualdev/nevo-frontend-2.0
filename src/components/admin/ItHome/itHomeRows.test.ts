@@ -21,8 +21,13 @@ const status = (over: Partial<SsoStatus> = {}): SsoStatus => ({
   reauthorisedAt: null,
   lastSuccessfulSyncAt: "2026-09-14T06:00:00Z",
   nextScheduledSyncAt: null,
-  credentialExpiresAt: null,
-  credentialExpiresInDays: null,
+  /*
+   * A SCHOOL THAT RECORDED ITS EXPIRY. This defaulted to null, which is now a
+   * state of its own - "nobody told us when this lapses" - so every test below
+   * that means "healthy" was quietly asserting the opposite.
+   */
+  credentialExpiresAt: "2026-12-20T00:00:00Z",
+  credentialExpiresInDays: 90,
   credentialExpiringSoon: false,
   disconnectedAt: null,
   dataFlow: [],
@@ -222,6 +227,47 @@ describe("itHomeRows", () => {
       false,
     );
     expect(attentionCount(rows)).toBe(1);
+  });
+
+  it("does not let an unrecorded expiry pass for health", () => {
+    /*
+     * THE DEFECT THIS ROW EXISTS FOR. The expiry cannot be read back from the
+     * provider - it is recorded by hand at setup - so null means the school
+     * never told us and we CANNOT warn them. The first version of this row
+     * rendered nothing here, and the hero then said "Nothing needs your
+     * attention" to exactly the school we cannot protect.
+     */
+    const rows = itHomeRows(status({ credentialExpiresAt: null }), null, false);
+    const row = rows.find((r) => r.key === "credential-unknown")!;
+    expect(row).toBeDefined();
+    expect(attentionCount(rows)).toBe(1);
+  });
+
+  it("does not claim an unrecorded expiry is something we can look up", () => {
+    const rows = itHomeRows(status({ credentialExpiresAt: null }), null, false);
+    const row = rows.find((r) => r.key === "credential-unknown")!;
+    // No endpoint records it, so the row must not offer to.
+    expect(row.sub).toMatch(/can't be read back|cannot be read back/i);
+    expect(`${row.title} ${row.action}`).not.toMatch(/add|record|enter|tell us/i);
+  });
+
+  it("stays quiet about an unknown expiry when there is no live connection", () => {
+    for (const s of ["disconnected", "needs_attention"] as const) {
+      const rows = itHomeRows(status({ status: s, credentialExpiresAt: null }), null, false);
+      expect(keys(rows)).not.toContain("credential-unknown");
+    }
+  });
+
+  it("raises the expiry once, never as both a warning and an unknown", () => {
+    // `credentialExpiringSoon` is independent of the date in the schema, so
+    // "soon, and no date" is expressible and must not produce two rows.
+    const rows = itHomeRows(
+      status({ credentialExpiresAt: null, credentialExpiringSoon: true }),
+      null,
+      false,
+    );
+    expect(keys(rows)).toContain("credential");
+    expect(keys(rows)).not.toContain("credential-unknown");
   });
 
   it("sends every row to IT & SSO, never to a roster screen", () => {

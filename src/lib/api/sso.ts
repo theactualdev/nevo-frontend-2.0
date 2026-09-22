@@ -91,14 +91,32 @@ export interface SsoStatus {
    * spec-wide"*, which was true and meant nothing. A capability we ask for can
    * be delivered under a name we did not choose. Grep for the capability.
    *
+   * IT IS AN OAUTH CLIENT SECRET, NOT A SAML SIGNING CERTIFICATE. We asked for
+   * the wrong thing by that name and the first build of this described the
+   * wrong thing too. What Nevo holds is the secret it uses to talk to the
+   * provider; the copy says "sign-in credential", which is true of what we hold.
+   *
    * "credentialExpiringSoon" IS THE SERVER'S JUDGEMENT AND MUST NOT BE
-   * RECOMPUTED. It is not "credentialExpiresInDays < 30", and the frontend does
-   * not get to decide what "soon" means for a school's signing credential - see
-   * rule 3. Read the boolean; render the number only as description.
+   * RECOMPUTED. It is not a day comparison of ours - see rule 3. Backend's
+   * window is 45 days, written here so the next reader knows what the boolean
+   * MEANS, never so that anything computes it. Read the boolean; render
+   * "credentialExpiresInDays" only as description.
    *
    * "credentialExpiresInDays" is NULLABLE while "credentialExpiringSoon" is
    * not, so "expiring soon, days unknown" is a real state that the copy has to
    * survive without printing "in null days".
+   *
+   * **NULL IS NOT HEALTH.** The expiry CANNOT BE READ BACK FROM THE PROVIDER -
+   * it is recorded by hand when the connection is set up. So
+   * "credentialExpiresAt: null" means THE SCHOOL NEVER TOLD US, and therefore
+   * that nothing can warn them before this credential lapses. It is a state of
+   * its own and the IT home renders it as one; the first version of that row
+   * rendered nothing, which let the hero go on saying "Nothing needs your
+   * attention" to the one school we cannot protect. Rule 5, read backwards.
+   *
+   * Nothing records it either: the only writes on this resource are reauthorise
+   * and disconnect. TODO(api): somewhere to record an expiry without
+   * reconnecting.
    */
   credentialExpiresAt: string | null;
   credentialExpiresInDays: number | null;

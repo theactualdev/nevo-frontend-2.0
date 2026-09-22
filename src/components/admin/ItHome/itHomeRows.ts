@@ -56,13 +56,20 @@ export function itHomeRows(
   }
 
   /*
-   * THE SIGNING CREDENTIAL, and the row this file existed without until 21 Sep.
+   * THE SIGN-IN CREDENTIAL, and the row this file existed without until 21 Sep.
+   *
+   * IT IS AN OAUTH CLIENT SECRET, NOT A SAML SIGNING CERTIFICATE. We asked for
+   * the wrong thing by that name and built the first version describing the
+   * wrong thing too. What Nevo holds is the secret it uses to talk to the
+   * provider, and the copy says "sign-in credential" because that is true of
+   * what we hold and does not claim a mechanism we got wrong once already.
    *
    * Gated on the server's own `credentialExpiringSoon`, never on a comparison
-   * of our own against `credentialExpiresInDays`. What counts as "soon" for a
-   * school's signing credential is a decision with a real consequence and it is
-   * not the frontend's to make (rule 3). The number is DESCRIPTION here, not a
-   * condition - which is why the row still renders when it is null.
+   * of our own against `credentialExpiresInDays`. What counts as "soon" here is
+   * a decision with a real consequence and it is not the frontend's to make
+   * (rule 3). Backend's window is 45 days, recorded here so the next reader
+   * knows what the boolean MEANS - never so that anything computes it. The
+   * number is DESCRIPTION, which is why the row still renders when it is null.
    *
    * SUPPRESSED WHEN "needs_attention" ALREADY FIRED. A school told in one
    * breath that its access needs renewing and that it will need renewing is
@@ -93,6 +100,44 @@ export function itHomeRows(
           ? "Reconnect to renew it."
           : "Nothing has changed yet. Reconnect to renew it.",
       action: "Reconnect",
+      href: IT,
+    });
+  }
+
+  /*
+   * NULL IS NOT HEALTH, AND THIS IS THE STATE WE SHIPPED AS SILENCE.
+   *
+   * The expiry CANNOT BE READ BACK FROM THE PROVIDER. It is recorded by hand
+   * when the connection is set up, so `credentialExpiresAt: null` does not mean
+   * "nothing to worry about" - it means THE SCHOOL NEVER TOLD US, and therefore
+   * that we cannot warn them before this credential lapses. The first version
+   * of this row rendered nothing at all in that case, so the hero above went on
+   * saying "Nothing needs your attention" to a school we cannot protect.
+   *
+   * That is rule 5 read backwards. Absence is an instruction to render the
+   * state that corresponds to nothing - not to render nothing.
+   *
+   * NO ENDPOINT RECORDS IT. The only writes on this resource are reauthorise
+   * and disconnect, so this row cannot offer a "tell us the date" action and
+   * does not pretend to. It states the gap and sends them where the connection
+   * is managed.
+   * TODO(api): somewhere to record an expiry without reconnecting.
+   *
+   * CONNECTED ONLY. A disconnected school has no live credential, and a school
+   * already told its access needs renewing does not need a second row saying we
+   * do not know when that access expires.
+   */
+  if (
+    !status.credentialExpiringSoon &&
+    status.credentialExpiresAt === null &&
+    status.status === "connected"
+  ) {
+    rows.push({
+      key: "credential-unknown",
+      kind: "soft",
+      title: "We don't know when your sign-in credential expires",
+      sub: "It's recorded when a provider is connected and can't be read back afterwards, so we can't warn you before this one lapses.",
+      action: "Open IT & SSO",
       href: IT,
     });
   }
