@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { mergeOnboardingDraft } from "@/lib/auth/onboarding";
+import { invitesApi } from "@/lib/api/invites";
 import { clearSession, getStoredDisplayName } from "@/lib/auth/session";
 import { useHasSession } from "@/hooks/useHasSession";
 import { useHydrated } from "@/hooks/useHydrated";
@@ -31,6 +32,10 @@ export function WelcomeScreen({
   linkError = false,
   joinToken,
 }: {
+  /**
+   * Force the dead-link message. Kept for callers that already know the link
+   * is bad; the screen now finds that out for itself too - see `badLink`.
+   */
   linkError?: boolean;
   /**
    * The token from a join link. `JoinLanding` has always sent students here
@@ -60,6 +65,45 @@ export function WelcomeScreen({
    * their account.
    */
   const needsHandover = Boolean(joinToken) && signedIn && !handedOver;
+
+  /*
+   * A DEAD LINK SAID SO AT THE END OF ONBOARDING, OR NEVER.
+   *
+   * `linkError` renders "This link isn't working right now, ask your teacher
+   * for a new one" and NOTHING EVER SET IT - the prop had no caller anywhere.
+   * So an expired or revoked invitation looked exactly like a good one: the
+   * child gave their name, their school, their class and sat the whole motor
+   * baseline, and the link was only redeemed at PIN creation - where it failed
+   * and they were told their PIN did not save.
+   *
+   * `GET /api/v1/join/{token}` is public and answers `status` as
+   * "valid" | "expired" | "revoked", and it is the same call the admin console's
+   * join landing already makes. So the screen can ask at the door.
+   *
+   * A FAILED LOOKUP IS NOT A DEAD LINK. A network that dropped says nothing
+   * about the invitation, and turning that into "ask your teacher for a new
+   * one" would send a child away from a link that works. Only an answer that
+   * names the link as bad closes the door.
+   */
+  const [tokenStatus, setTokenStatus] = useState<string | null>(null);
+  useEffect(() => {
+    if (!joinToken) return;
+    let cancelled = false;
+    void invitesApi
+      .lookupJoin(joinToken)
+      .then((res) => {
+        if (!cancelled) setTokenStatus(res.status);
+      })
+      .catch(() => {
+        // Deliberately not `linkError`: see above.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [joinToken]);
+
+  const badLink =
+    linkError || (tokenStatus !== null && tokenStatus !== "valid");
 
   useEffect(() => {
     // Only once the invitation is actually this child's. Writing it while a
@@ -128,7 +172,7 @@ export function WelcomeScreen({
           Let&apos;s get you learning
         </p>
 
-        {linkError ? (
+        {badLink ? (
           <p className="mt-10 w-full max-w-[480px] text-center text-sm text-nevo-near-black/70 sm:mt-11">
             This link isn&apos;t working right now, ask your teacher for a new one.
           </p>

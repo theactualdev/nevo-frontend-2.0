@@ -1056,11 +1056,41 @@ instruction is to build nothing that depends on either field until it is answere
     there would open an empty list that reads as a child with no conversations rather than
     a visitor with no account. A failed read says so rather than rendering as an empty
     history. **M**
-16. **The small honest ones** — the fourth `LessonMessage` for a missing lesson; the
-    summary route applying the player's own `lesson.summary` gate; the unreachable
-    baseline failure state; the `linkError` prop that has no caller; PIN creation naming
-    the failure that actually happened; the avatar selector; the inert top-bar avatar;
-    the flanker's `congruency` tag. **S each**
+16. **The small honest ones** — **FOUR DONE 22 Sep, TWO WERE ALREADY DONE, TWO NEED THE
+    NOTE'S AUTHOR.** The bucket was written as eight one-liners and it had drifted.
+    - ~~the summary route applying the player's own `lesson.summary` gate~~ **DONE.** The
+      player offers "See summary" only when there is one; the ROUTE had no such gate, so a
+      typed or bookmarked URL rendered a page of headings with nothing under them — every
+      block on that screen is `summary?.…`. Review is deliberately not gated the same way:
+      it reads the child's own answers.
+    - ~~the `linkError` prop that has no caller~~ **DONE, by wiring rather than deleting.**
+      It renders "This link isn't working right now" and nothing ever set it, so an expired
+      or revoked invitation looked exactly like a good one — the child gave their name,
+      school and class, sat the whole motor baseline, and the link was only redeemed at PIN
+      creation, where they were told their PIN did not save. `GET /api/v1/join/{token}` is
+      public and the admin console already calls it, so the screen asks at the door. **A
+      failed lookup is NOT treated as a dead link**: a dropped network says nothing about
+      the invitation, and a new link would fail the same way.
+    - ~~PIN creation naming the failure that actually happened~~ **DONE.** By the time
+      `saveFailed` can fire the two entries have already matched, so the failure is the
+      WRITE — a 403 because a teacher is signed in on the tablet, a dropped network, a
+      refused shape. None is fixed by retyping, and "type it again to confirm" sent a child
+      round a loop that could not end while blaming them for it.
+    - ~~the inert top-bar avatar~~ **DONE.** It was a `span`: the one avatar in the app
+      that looked like every other console's way into a profile and answered a tap with
+      nothing. Profile is in the nav too, so never a dead end — just a control that taught
+      a child their tap had missed.
+    - ~~the fourth `LessonMessage` for a missing lesson~~ **ALREADY DONE.**
+      `LessonEndingRoute` already splits empty ("isn't ready yet") from 404 ("couldn't find
+      that lesson"), alongside failed and the skeleton.
+    - ~~the flanker's `congruency` tag~~ **ALREADY DONE.** Both flanker picks pass
+      `congruency` into `trial_pick`, with a docblock on why.
+    - **the unreachable baseline failure state** — could not locate it from this
+      shorthand. Nothing in `ProfilingFlow`, `WarmUpRun` or the modules obviously matches.
+      **Needs whoever wrote the note to say which screen.**
+    - **the avatar selector** — likewise. There is no avatar-choosing UI in
+      `student/Profile`, so this may mean "build one" (a design question, since no frame
+      shows it) rather than "fix one". **Needs the same.**
 17. **The scaffolds subsystem** — three deployed endpoints with no client module at all.
     Worth a scoping pass before it is sized. **M**
 18. **Tell a teacher when their upload was silently degraded.** Traced 16 Sep after

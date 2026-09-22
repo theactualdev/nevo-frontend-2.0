@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { BottomNav, Sidebar } from "@/components/shared";
@@ -219,9 +220,20 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
               showing={showingFixtureIdentity}
               kind="student:identity"
             >
-              <span className="flex size-10 items-center justify-center rounded-full bg-nevo-navy text-sm font-semibold text-nevo-cream">
+              {/*
+                A LINK, not a decoration. It was an inert `span`: the one
+                avatar in the app that looked like every other console's way
+                into a profile and did nothing when tapped. Profile is in the
+                nav too, so this was never a dead end - just a control that
+                taught a child their tap had missed.
+              */}
+              <Link
+                href="/student/profile"
+                aria-label="Profile"
+                className="flex size-10 cursor-pointer items-center justify-center rounded-full bg-nevo-navy text-sm font-semibold text-nevo-cream transition-[filter] hover:brightness-110"
+              >
                 {student.initials}
-              </span>
+              </Link>
             </MaybeSample>
           </div>
         </header>
