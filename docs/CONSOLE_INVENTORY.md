@@ -128,7 +128,7 @@ belongs with the sweep in section E rather than being costed separately.
 
 | row | console | blocked by | size |
 |---|---|---|---|
-| Insights | teacher | BACKEND (nullability); FRONTEND | M |
+| Insights | teacher | LEGAL (clause 8.2); FRONTEND | M |
 | Lesson detail | teacher | DESIGN | M |
 | Compose message | teacher | FRONTEND | M |
 | Recommend a lesson — the "Suggested" badge only | teacher | BACKEND (badge) | S |
@@ -233,7 +233,7 @@ the contradiction survived a re-verification specifically looking for it.
 | Class detail + roster | **LIVE** | — **Lessons tab built 16 Sep**; Activity is RULED OUT, not missing. Design: a per-class activity feed "is a surveillance surface by default and we have nothing that needs it." The Lessons tab shipped because design made it conditional on whether the library can be filtered by class, and it cannot: `GET /api/content/lessons` takes `limit` and `scope` only, `LessonScope` is `mine or school`, `LessonSummaryResponse` carries no class. `GET /api/v1/assignments?classId=` answers it instead. Read-only by ruling | NONE | — |
 | Compose message | LIVE | **Deep link built 18 Sep, and the diagnosis in this row was half wrong.** The resolver was not the whole problem: all three LIVE callers - the flag card, the student profile and the session panel - linked to a bare `/teacher/connect`, and `LiveFlagCard.test.tsx` asserted that as correct. Connect derives whether to open compose from the `student` query, so the action opened the thread list and stopped. The callers now name the child by id, and the modal resolves it against the roster it already reads - matched on `studentId`, never on a name, because a school with two Amaras would otherwise address the message to whichever one the directory listed first | — | — |
 | Home dashboard | PARTIAL | **Activity counts done 17 Sep** — `completedCount`/`totalCount` were on the wire and absent from `ActivityRow`, so the live list was strictly poorer than the sample beside it; they render as a separate element that disappears when absent. What remains: the class trio's subject line, which has no teacher-readable source (see My Classes), and **"Good to know", which is inside a `SampleRegion` with no live field behind it at all** | BACKEND (subjects); DESIGN + BACKEND (good to know) | M |
-| Insights | PARTIAL | **HALF-UNBLOCKED 20 Sep — re-check before planning.** The ruling had two halves. (1) *The engine owns the threshold* — **DELIVERED**: `ClassInsightsNarrativeResponse.state` is a new `ClassInsightState` enum, `summary \| settled \| gathering`, and backend's own description names the defect it fixes: *"The console was deciding this itself from the length of three arrays, which put a threshold in the client."* Two caveats: it is **optional with `default: "summary"`, not required**, so an older build can omit it and the client must treat absence as unknown rather than as "summary"; and it is what the `useClassInsights.ts:151` gate finding is about, so wiring it should close that too. (2) *`weeklySummary`/`lookingAhead` nullable, absence meaning render-the-empty-state* — **NOT delivered**: both are still required non-nullable `string`, unchanged since 17 Sep. **See the clause 8.2 caveat in the BUILD_STATUS handoff before building this.** Per-student recommendations still fan out | **BACKEND (nullability)**; FRONTEND | M |
+| Insights | PARTIAL | **BOTH HALVES SETTLED 21 Sep, and one of them was never a gap.** (1) *The engine owns the threshold* — **DELIVERED and wired**: `ClassInsightState` is `summary \| settled \| gathering`, and `state` is **now REQUIRED** on `ClassInsightsNarrativeResponse` (it shipped optional-with-a-default on 20 Sep; this row's "treat absence as unknown" caveat is spent). Branch on `state`. (2) *`weeklySummary`/`lookingAhead` nullable, absence meaning render-the-empty-state* — **RETRACTED: this was a ruling, not a delivery.** They stay non-nullable deliberately, and design's reason is the point: the engine always writes both, because *a quiet week is a finding said in words, and a null would have you inferring again*. Reading their absence would be the client deciding what a quiet week means. Not a backend ask; do not file it as one. **Still open and unchanged: the class narrative naming an individual learner is at risk under clause 8.2. Contract-ready is not cleared.** Per-student recommendations still fan out | **LEGAL (clause 8.2)**; FRONTEND | M |
 | Student profile | LIVE | **All 4 drawn actions live 17 Sep** (message, recommend, share, open a session). The session row became startable when backend shipped `students/{id}/sessions` — list B item 0b is closed. **The noticing banner is live 17 Sep** from `flags?studentId=` (`useStudentFlags`); the row that said it wanted an endpoint was wrong, the route has taken `studentId` all along. It renders Nevo's own sentences, one per open flag, each dated — no "This week", which the contract cannot support. The `openFlagCount` callout survives as the fallback for a failed flags read. C08's evidence list stays out under the 30 Aug aggregate-only ruling, with `helpSeeking` shipping in its place | — | — |
 | Lesson detail | PARTIAL | **Reclassified 17 Sep: DESIGN-blocked, not a small.** The misleading half is already fixed — `classCount > 1` renders "progress shown for one class", so the screen no longer passes one class off as the whole picture. Showing ALL classes needs a layout the frame does not draw, and it sits beside C06b's unsettled mastery display. (The variant-review entry point shipped 14 Sep — re-verified 16 Sep, it renders once per section) | **DESIGN** | M |
 | Lesson assignment wizard | LIVE | — ("Specific students" built 15 Sep on `useStudentDirectory`, keyed by `studentId`) | NONE | — |
@@ -247,7 +247,7 @@ the contradiction survived a re-verification specifically looking for it.
 | Student observations (C16b) | LIVE | — (built 15 Sep: chips, seat, and the two markers) | NONE | — |
 | Recommend a lesson | PARTIAL | Built and live 15 Sep, note box included. The "Suggested" badge stays blocked — `Recommendation` is prose with no lesson id. The note is sent and stored and **nothing renders it, which is now the correct state**: design has not ruled who the note is for (see item 19), so the confirmation says the note went with the lesson rather than promising the child will read it. **Fixture leak fixed 16 Sep**: the sheet offered eight invented lessons on a failed read, and its honest-empty copy was unreachable | BACKEND (badge); **DESIGN (the note's audience)** | S |
 | Share with Learning Support | LIVE | — (built 15 Sep on `POST /api/v1/escalations`: `LiveShareSheet`, confirmed per C14 B5. The SENCo cannot yet SEE what arrives — see below) | NONE | — |
-| Session detail | LIVE | Built 17 Sep. Backend shipped `GET /api/v1/students/{id}/sessions`, which carries the id the panel needed; `useStudentSessions` reads the list, `LiveSessionPanel` opens one. The list also distinguishes a second visit from a first, which `progress.lessons` never could | — | — |
+| Session detail | LIVE, **and going to counsel** | Built 17 Sep. Backend shipped `GET /api/v1/students/{id}/sessions`, which carries the id the panel needed; `useStudentSessions` reads the list, `LiveSessionPanel` opens one. The list also distinguishes a second visit from a first, which `progress.lessons` never could. **Added 21 Sep: it is going into the counsel addendum as an UNDISCLOSED SURFACE.** Built and shipped is not the same as disclosed, and this row said LIVE in a way that read as closed. Same instruction as the learning-support surface: disclosed, not withdrawn — build nothing new on it, remove nothing from it, wait | — | — |
 | SSO callback | NOT BUILT | Component complete and live-wired; `slug` landed on `SchoolCodeResponse` 15 Sep, so the signed-out door can now reach it | FRONTEND | M |
 | Notifications page | NOT BUILT | Deliberate redirect — C13 is a popover | NONE | — |
 | Students index | NOT BUILT | Deliberate redirect to Classes | NONE | — |
@@ -1103,6 +1103,32 @@ classified by status. A 422 about the document would have been answered with
 "nothing is wrong with your file". Third kind added (`file`), and the block path
 gains a distinction it never had.
 
+### The 500 on that route, which is now every upload's route
+
+**Unresolved, and Teslim cannot find it from his side.** Everything this console
+observed, so it is written down rather than living in a chat log:
+
+| | |
+|---|---|
+| Request | `POST /api/v1/uploads`, through our proxy at `www.nevolearning.com/api/backend/api/v1/uploads` |
+| Status | `500`, in roughly 3 seconds |
+| Body | **plain text, not JSON** — Starlette's default error page, which is what an exception escaping the JSON error handler looks like |
+| File | ~270 KB PDF |
+| Scope | a unit or term: on the date it happened the single-lesson path still used `POST /api/content/upload`, so only the block path could reach this route |
+| When | ~18 Sep 2026, reported from a teacher session |
+
+Two things follow. **Three seconds rules out a timeout** — our proxy gives this
+route 240s — so it failed on the way in, not while parsing. And a plain-text body
+means no `code`, no `message` and **no `incidentId`**: that field did not exist
+yet, so there is nothing for Teslim to match on for THIS occurrence. Asking for
+one back is the wrong shape of answer.
+
+**What makes the next one answerable.** Every unhandled error carries an
+`incidentId` now, and `ApiError.detail` already holds the parsed body — but
+nothing in `src/` reads it, so the id reaches us and is dropped. Until something
+surfaces it, a teacher cannot quote what Teslim needs. Small, and worth doing
+before the next report rather than after.
+
 ## THE CONTRACT GAINED 25 PATHS ON 21 SEP — read this before planning anything
 
 `192 → 217 paths, 352 → 395 schemas` in one morning. Several long-standing
@@ -1120,7 +1146,7 @@ believed.
 | `GET /api/metrics/transformation/class/{class_id}` and `/school/{school_id}` | The **aggregate** transformation metrics SCRUM-74-as-amended keeps. **These are class- and school-scoped. The per-child version stays struck (SCRUM-169) — do not read these as its return** |
 | `GET /api/v1/consents/form`, `POST /students/{id}/consents/written` | SCRUM-158's written-consent route, which is what SCRUM-162 relies on in place of SMS |
 | `GET /api/v1/student-entry/{token}`, `POST .../pin` | Student lane |
-| `GET /lessons/{id}/review`, key-point accept/patch/delete | Teacher lane — **and it unblocks SCRUM-153's remainder AND dates what shipped for it.** `KeyPointResponse` carries `sourceText` (LR-02's "what Nevo drew from"), a measured `confidence`, and `KeyPointReviewState` where only `unsure` blocks assignment; `GET /review` answers the cards and the count in one read, and its description names the screen — *"everything the lesson page's needs-review state renders"*. **The review built on 19 Sep settles a SEGMENT, because that was the only unit the contract carried** (`useSegmentReview.ts` says so, and says it was raised with backend). The ticket's unit is the key point. That component's docblock is now stale and the amend/remove controls it declined to draw have endpoints |
+| `GET /lessons/{id}/review`, key-point accept/patch/delete | **BUILT 22 Sep.** Teacher lane — **it unblocked SCRUM-153's remainder AND dated what shipped for it.** `KeyPointResponse` carries `sourceText` (LR-02's "what Nevo drew from"), a measured `confidence`, and `KeyPointReviewState` where only `unsure` blocks assignment; `GET /review` answers the cards and the count in one read, and its description names the screen — *"everything the lesson page's needs-review state renders"*. **The review built on 19 Sep settles a SEGMENT, because that was the only unit the contract carried** (`useSegmentReview.ts` says so, and says it was raised with backend). The ticket's unit is the key point. That component's docblock is now stale and the amend/remove controls it declined to draw have endpoints |
 
 **LANDED, AND UNDER HOLD — do not build:**
 `POST /api/v1/exports/iep/{export_id}/annotations`,

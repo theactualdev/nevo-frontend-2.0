@@ -8,10 +8,16 @@ import Link from "next/link";
  * flagged.
  *
  * ASSIGN IS INACTIVE WHILE A REVIEW IS OUTSTANDING (SCRUM-153, LR-04), and
- * says how many are left rather than simply refusing. The gate is real: the
+ * says what is left rather than simply refusing. The gate is real: the
  * backend answers 409 `lesson_not_approved` at both assignment doors, so a
  * pressable button here was an invitation to a failure the screen already
  * knew about. One line, no modal, no wizard.
+ *
+ * `ready` IS THE SERVER'S ANSWER AND THE COUNTS ARE ONLY THE SENTENCE.
+ * Backend asked for that split by name - *"enable Assign on `readyToAssign`,
+ * not by counting the list yourself; client and server disagreeing about
+ * ready is how this started"* - so this takes the verdict and the numbers
+ * separately, and a caller cannot accidentally make the numbers the gate.
  *
  * EDIT IS GONE, and this is the part to put back first. LR-06 wants it to
  * open the lesson itself - title, key points, how Nevo should treat it - and
@@ -25,16 +31,38 @@ export function LessonDetailActions({
   lessonId,
   variantsHref,
   compact = false,
-  outstanding = 0,
+  ready = true,
+  outstandingKeyPoints = 0,
+  outstandingSections = 0,
 }: {
   lessonId: string;
   variantsHref?: string;
   compact?: boolean;
-  /** Sections still waiting for this teacher. */
-  outstanding?: number;
+  /**
+   * The SERVER's verdict on whether this lesson can go to a class.
+   *
+   * Defaults to true, which is what every other caller of this component
+   * wants: they draw the actions for a lesson that is not under review, and
+   * a default of false would silently disable Assign across the console.
+   */
+  ready?: boolean;
+  /** Key points Nevo could not ground, still waiting. */
+  outstandingKeyPoints?: number;
+  /** Flagged sections nobody has approved. */
+  outstandingSections?: number;
 }) {
   const h = compact ? "h-[42px] text-sm" : "h-11 text-[14.5px]";
-  const blocked = outstanding > 0;
+  const blocked = !ready;
+  const plural = (n: number, one: string, many: string) =>
+    `${n} ${n === 1 ? one : many}`;
+  const left = [
+    ...(outstandingKeyPoints > 0
+      ? [plural(outstandingKeyPoints, "key point", "key points")]
+      : []),
+    ...(outstandingSections > 0
+      ? [plural(outstandingSections, "section", "sections")]
+      : []),
+  ].join(" and ");
 
   return (
     <div className="flex flex-col items-end gap-2">
@@ -65,7 +93,9 @@ export function LessonDetailActions({
       </div>
       {blocked && (
         <span className="max-w-[260px] text-right text-[13px] leading-[1.5] text-nevo-near-black/62">
-          {`${outstanding} ${outstanding === 1 ? "section" : "sections"} still to check below.`}
+          {/* The server says it is not ready and we do not always know why -
+              a refusal we cannot itemise still has to say something true. */}
+          {left ? `${left} still to check below.` : "Still being checked."}
         </span>
       )}
     </div>

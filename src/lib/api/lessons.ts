@@ -162,6 +162,82 @@ export interface SegmentApproval {
   lessonApproved: boolean;
 }
 
+
+/**
+ * HOW WELL A KEY POINT IS GROUNDED IN THE TEXT IT CAME FROM.
+ *
+ * Not the model's own estimate, and the contract is emphatic about why:
+ * it was never asked for one, and a number a model volunteers about its own
+ * output is not evidence. This is MEASURED - the share of the key point's
+ * words that appear in the segment it was drawn from - so a `low` card is
+ * demonstrably absent from the source rather than a mood.
+ *
+ * Which is why the card's marker keys off `outstanding`, not off this: the
+ * server decides what needs a teacher, and this only explains why.
+ */
+export type KeyPointConfidence = "high" | "medium" | "low";
+
+/**
+ * Where a key point stands in a teacher's review.
+ *
+ * **Only `unsure` blocks assignment**, and that is the whole of SCRUM-153's
+ * scope ruling: a teacher never has to click through points Nevo could
+ * ground, or the review becomes a tax on the common case.
+ */
+export type KeyPointReviewState =
+  | "settled"
+  | "unsure"
+  | "accepted"
+  | "amended"
+  | "removed";
+
+/** One key point, and everything LR-02's expanded card needs. */
+export interface KeyPoint {
+  id: string;
+  segmentId: string;
+  /** Nullable: a parse can produce an untitled section. */
+  segmentTitle: string | null;
+  position: number;
+  /** What is in force - the amendment where there is one, else the parse. */
+  text: string;
+  /** What Nevo read. Kept BESIDE an amendment, never replaced by it. */
+  extractedText: string;
+  /** The teacher's own wording, when they have given one. */
+  amendedText: string | null;
+  /** The document's own words, which the key point was drawn from. */
+  sourceText: string;
+  confidence: KeyPointConfidence;
+  reviewState: KeyPointReviewState;
+  /** This one is still holding the lesson back. */
+  outstanding: boolean;
+  resolvedAt: string | null;
+  resolvedBy: string | null;
+}
+
+/**
+ * The lesson's review state - LR-04's count and LR-07's gate in one read.
+ *
+ * `outstandingCount` SITS BESIDE `keyPointCount` IN A KEY-POINT PAYLOAD, so
+ * it is read here as outstanding KEY POINTS. Backend's ruling is that a
+ * lesson is also held by a flagged segment nobody approved, and that half is
+ * not in this response at all - `readyToAssign` is what accounts for both.
+ * If the two ever disagree on screen, this is the assumption to check first.
+ */
+export interface LessonReview {
+  lessonId: string;
+  title: string;
+  outstandingCount: number;
+  keyPointCount: number;
+  /**
+   * The SERVER's answer to "can this go to a class", never ours.
+   *
+   * Backend asked for this by name: "enable Assign on `readyToAssign`, not
+   * by counting the list yourself. Client and server disagreeing about
+   * ready is how this started."
+   */
+  readyToAssign: boolean;
+  keyPoints: KeyPoint[];
+}
 export interface LessonDetailResponse extends LessonSummary {
   confirmationSummary: string | null;
   segments: LessonSegment[];
@@ -330,6 +406,42 @@ export const lessonsApi = {
       `/api/v1/lessons/${lessonId}/segments/${segmentId}/approve`,
     ),
 
+
+  /**
+   * Everything the needs-review state renders, in one read (SCRUM-153).
+   *
+   * One request rather than one per card: the screen shows the cards and
+   * the remaining count together, and a teacher opening a card should not
+   * cost a request to find out what Nevo read.
+   */
+  review: (lessonId: string) =>
+    api.get<LessonReview>(`/api/v1/lessons/${lessonId}/review`),
+
+  /**
+   * The three things a teacher can do to a key point.
+   *
+   * EACH RETURNS THE WHOLE REVIEW AGAIN, which is the reason none of them
+   * needs a follow-up read: LR-04's count and LR-05's flip to ready come
+   * back with the action that caused them. A client that recomputed either
+   * from the list it already had would be the disagreement this ticket
+   * exists to end.
+   */
+  acceptKeyPoint: (lessonId: string, keyPointId: string) =>
+    api.post<LessonReview>(
+      `/api/v1/lessons/${lessonId}/key-points/${keyPointId}/accept`,
+    ),
+
+  /** Replace the wording. `extractedText` survives it - see `KeyPoint`. */
+  amendKeyPoint: (lessonId: string, keyPointId: string, text: string) =>
+    api.patch<LessonReview>(
+      `/api/v1/lessons/${lessonId}/key-points/${keyPointId}`,
+      { text },
+    ),
+
+  removeKeyPoint: (lessonId: string, keyPointId: string) =>
+    api.del<LessonReview>(
+      `/api/v1/lessons/${lessonId}/key-points/${keyPointId}`,
+    ),
   /** The module grouping, which only the v1 alias returns. */
   modules: (lessonId: string) =>
     api
