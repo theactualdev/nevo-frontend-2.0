@@ -4638,6 +4638,60 @@ weak test let a mutation through here: asserting the absence only after
 awaiting "the call was made" passes whether or not the handler went on to fill
 the gap. The settle is what makes the assertion mean anything.
 
+### The teacher's note reaches the child, 23 Sep - and it ships unnamed
+
+Open since 18 Sep, ruled today. Design: *"It reaches the child. It appears on
+the lesson screen, attributed to the teacher by name, drawn so it is
+unmistakably a person's words rather than Nevo's. It never enters anything Nevo
+generates about that child, and it is never rewritten, summarised or adapted."*
+
+It nearly closed the way `highlights` did - *"do not build a surface for it"* -
+and the difference is why it was asked rather than closed: a generated
+highlight is Nevo's opinion about a child; this is a person who deliberately
+typed these words TO them, so withholding it is not neutral.
+
+**THE NAME DOES NOT EXIST ON THE WIRE, AND THIS IS THE ONE PART OF THE RULING
+THAT COULD NOT BE BUILT.** `AssignmentResponse` carries `note` and nothing
+saying who wrote it. Searched all 406 schemas: no `teacherName`, no
+`assignedBy`, no `assignerName`, no `setBy`. The two near-misses both fail:
+`lesson.createdByName` is whoever AUTHORED the lesson, a different person
+whenever a teacher assigns someone else's, and `/classes/{id}/teachers`
+returns a LIST rather than an author. **Putting one teacher's name on another
+teacher's words is worse than naming nobody**, so it is signed "Your teacher"
+and the field is a backend ask.
+
+**NOT IN THE DENSITY PATH, AND THAT IS THE POINT OF WHERE IT LIVES.**
+Everything inside `TextSegment` is subject to the reading density - Simplify
+swaps the body for a shorter authored one, Slower chunks it - and the
+accommodations reshape it further. "Never rewritten, summarised or adapted"
+means a teacher's sentence is not a variant of anything, so it never enters
+that component at all. `whitespace-pre-line` for the same reason: the line
+breaks they typed are theirs. Both are tested by adapting the lesson around it
+and checking the note did not move.
+
+**ON THE FIRST SEGMENT ONLY.** A note is about the work as a whole; repeating
+it above every segment turns a person's message into chrome - read once, then
+ignored. It sits at the top of the reading column rather than in the fixed
+header, so it scrolls away like the thing it is.
+
+**NO NEW TYPEFACE.** The tempting way to say "a person wrote this" is a serif,
+and this codebase defines no serif family - `--font-sans`, `--font-mono`,
+`--font-brand`, `--font-heading` are the whole set - so `font-serif` would
+fall through to whatever the browser has and read as a mistake rather than as a
+voice. Quoted, italic, carded and signed instead, all inside the system.
+
+**READ FROM THE CHILD'S OWN DASHBOARD**, not from `/assignments`, which is
+"every assignment the teacher can see" - a child asking it for their own row is
+the wrong actor on the wrong endpoint. And NOT carried in the URL beside
+`?assignment=`: a teacher's sentence in a query string is a private message in
+something a child can see, copy, share and truncate.
+
+**A FAILED READ SHOWS NOTHING.** "Your teacher wrote something we could not
+load" names a message a child cannot read and cannot ask for. A whitespace-only
+note is no note, because an empty card signed "Your teacher" is a message about
+nothing.
+
+
 ### Simplify is one path with two callers now, 23 Sep
 
 Design ruled it the same day: *"`simplify` is the same operation as the 17 Sep

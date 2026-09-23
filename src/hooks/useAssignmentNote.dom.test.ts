@@ -1,0 +1,121 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, renderHook, waitFor } from "@testing-library/react";
+import { useAssignmentNote } from "./useAssignmentNote";
+
+const { myDashboard } = vi.hoisted(() => ({ myDashboard: vi.fn() }));
+vi.mock("@/lib/api/students", () => ({ studentsApi: { myDashboard } }));
+
+/**
+ * Which assignment's note, and when there is none.
+ *
+ * The note rides a list of every assignment the child has, so picking the
+ * wrong row shows a child a message about a different lesson - written by a
+ * teacher, to them, about something else.
+ */
+
+const dash = (assignments: unknown[]) => ({ assignments });
+
+beforeEach(() => {
+  myDashboard.mockReset();
+});
+
+const settle = () =>
+  act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+describe("finding the right note", () => {
+  it("returns the note on the assignment this lesson was opened from", async () => {
+    myDashboard.mockResolvedValue(
+      dash([
+        { id: "a-1", note: "Not this one." },
+        { id: "a-2", note: "Take your time on question 3." },
+      ]),
+    );
+
+    const { result } = renderHook(() => useAssignmentNote("a-2"));
+
+    await waitFor(() =>
+      expect(result.current).toBe("Take your time on question 3."),
+    );
+  });
+
+  it("reads the child's own dashboard, not the teacher's assignment list", async () => {
+    // `/assignments` is "every assignment the teacher can see". A child asking
+    // it for their own row is the wrong actor on the wrong endpoint.
+    myDashboard.mockResolvedValue(dash([{ id: "a-1", note: "Hello." }]));
+
+    renderHook(() => useAssignmentNote("a-1"));
+
+    await waitFor(() => expect(myDashboard).toHaveBeenCalledTimes(1));
+  });
+
+  it("trims what it shows, so trailing whitespace is not a message", async () => {
+    myDashboard.mockResolvedValue(dash([{ id: "a-1", note: "  Well done.  " }]));
+
+    const { result } = renderHook(() => useAssignmentNote("a-1"));
+
+    await waitFor(() => expect(result.current).toBe("Well done."));
+  });
+});
+
+describe("when there is nothing to show", () => {
+  it("says nothing for a lesson opened from the library, and does not read", async () => {
+    // No assignment is the truth about it, not a missing note.
+    const { result } = renderHook(() => useAssignmentNote(undefined));
+
+    expect(result.current).toBeNull();
+    expect(myDashboard).not.toHaveBeenCalled();
+  });
+
+  it("says nothing when the assignment carries no note", async () => {
+    myDashboard.mockResolvedValue(dash([{ id: "a-1", note: null }]));
+
+    const { result } = renderHook(() => useAssignmentNote("a-1"));
+
+    await waitFor(() => expect(myDashboard).toHaveBeenCalled());
+    await settle();
+
+    expect(result.current).toBeNull();
+  });
+
+  it("treats a whitespace-only note as no note", async () => {
+    // An empty card signed "Your teacher" is a message about nothing.
+    myDashboard.mockResolvedValue(dash([{ id: "a-1", note: "   \n  " }]));
+
+    const { result } = renderHook(() => useAssignmentNote("a-1"));
+
+    await waitFor(() => expect(myDashboard).toHaveBeenCalled());
+    await settle();
+
+    expect(result.current).toBeNull();
+  });
+
+  it("says nothing when the assignment is not in the list", async () => {
+    myDashboard.mockResolvedValue(dash([{ id: "a-9", note: "Someone else's." }]));
+
+    const { result } = renderHook(() => useAssignmentNote("a-1"));
+
+    await waitFor(() => expect(myDashboard).toHaveBeenCalled());
+    await settle();
+
+    expect(result.current).toBeNull();
+  });
+
+  it("stays silent when the read fails", async () => {
+    /*
+     * "Your teacher wrote something we could not load" names a message a child
+     * cannot read and cannot ask for. Nothing is the kinder answer, and the
+     * lesson is unaffected either way.
+     */
+    myDashboard.mockRejectedValue(new Error("network"));
+
+    const { result } = renderHook(() => useAssignmentNote("a-1"));
+
+    await waitFor(() => expect(myDashboard).toHaveBeenCalled());
+    await settle();
+
+    expect(result.current).toBeNull();
+  });
+});
