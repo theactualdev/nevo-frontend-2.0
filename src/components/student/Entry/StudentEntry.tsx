@@ -14,20 +14,16 @@ import { WaitingOnConsent } from "./WaitingOnConsent";
  *
  * ## What this deliberately does NOT do
  *
- * **It does not hold a SIGNED-IN child.** Only the link path is ruled. Whether a
- * returning unconsented child signing in by PIN is held too is an open design
- * question (asked 22 Sep, re-asked 23 Sep), and it is the same question the
- * parent lane raised from the other side on 23 Sep - `ConsentGateResponse`
- * carries a required `blocked` that nothing reads, and the 7 Sep SCRUM-80
- * ruling ("Nevo is not the consent gate, the child proceeds normally") has not
- * been withdrawn in words. `consents.ts` holds that note. **Nothing here
- * touches that path.**
+ * **The other doors are handled elsewhere, and they are handled.** Design ruled
+ * on 23 Sep that the gate is on the child's state rather than the route, so PIN
+ * sign-in, the remembered-device unlock and the SSO callback all resolve
+ * consent too - through `lib/auth/entryGate`, which is the one copy of that
+ * rule. This component is the LINK's share of it and nothing more.
  *
- * **It does not read `accountReady` or `ageCheckPending`.** Both are declared
- * on the wire type so they stop being erased, and both are unanswered: the
- * first has two plausible readings that route a child to different screens,
- * and the second is a disputed date of birth, which is not a missing consent
- * and has no frame.
+ * **It does not read `accountReady`.** Declared on the wire type so it stops
+ * being erased, and still unanswered: the name carries two readings - "no
+ * account yet, create a PIN" and "not cleared to have one" - which route a
+ * child to different screens. Asked 23 Sep.
  *
  * **It does not poll.** One resolve. See `WaitingOnConsent`.
  */
@@ -58,7 +54,20 @@ export function StudentEntry({ token }: { token: string }) {
       .resolve(token)
       .then((state) => {
         if (!live.current) return;
-        if (state.consentState === "pending") {
+        /*
+         * TWO REASONS, ONE SCREEN, AND THE CHILD IS TOLD NEITHER. Design ruled
+         * the age check on 23 Sep: *"same screen as 00d, same words, different
+         * state underneath. The child is not told why."*
+         *
+         * The reasoning is worth keeping next to the code, because the obvious
+         * "improvement" here is to explain: a disputed date of birth is two
+         * adults disagreeing with each other, and telling a child invites them
+         * to go and settle it - which makes a child the arbiter between their
+         * parent and their school. From where they stand, Nevo is not ready
+         * for them yet, and that is true in both states. The adults are told in
+         * full, on the administrator's surface.
+         */
+        if (state.consentState === "pending" || state.ageCheckPending) {
           setHeld(true);
           return;
         }

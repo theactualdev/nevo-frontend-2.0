@@ -17,6 +17,7 @@ import {
   type LoginFailure,
 } from "@/lib/auth/loginFailure";
 import { rememberProfile } from "@/lib/auth/session";
+import { studentDestination } from "@/lib/auth/entryGate";
 import { useAuth } from "@/hooks";
 import { STUDENT_PIN_LENGTH, type UserRole } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -195,10 +196,15 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
           // "Welcome back" alone is a better greeting than their username.
         });
       setDone(true);
-      doneTimer.current = setTimeout(
-        () => router.push(next || "/student/dashboard"),
-        DONE_MS,
-      );
+      /*
+       * Consent is resolved before the child lands anywhere - design, 23 Sep:
+       * the gate is on the child's state, not on the door they used, and PIN
+       * sign-in is an entry path. The read happens INSIDE the "Welcome back"
+       * hold that already exists, so it costs a held child nothing and costs
+       * everybody else nothing either.
+       */
+      const destination = await studentDestination(next);
+      doneTimer.current = setTimeout(() => router.push(destination), DONE_MS);
     } catch (cause) {
       // Only the PIN clears. The other two fields stay, deliberately.
       setDigits("");

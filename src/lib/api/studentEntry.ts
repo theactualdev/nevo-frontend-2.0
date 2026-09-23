@@ -57,9 +57,12 @@ export interface StudentEntryState {
    *
    * `AgeCheckResponse.blocksAccess` is the same fact from the other direction,
    * and `AgeCheckState` (`matched | mismatch | resolved | awaiting_parent`)
-   * says why. The adults disagree with each other here, rather than one of them
-   * not having answered - a different situation and, on current frames, no
-   * screen. Declared, unread, raised to design 23 Sep.
+   * says why. **RULED 23 SEP: it holds the child at the SAME screen as a
+   * missing consent, with the same words, and the child is told neither
+   * reason.** Design: a disputed date of birth is two adults disagreeing with
+   * each other, and telling a child invites them to go and settle it - which
+   * makes a child the arbiter between their parent and their school. The adults
+   * are told in full on the administrator's surface. Read by `StudentEntry`.
    */
   ageCheckPending?: boolean;
 }

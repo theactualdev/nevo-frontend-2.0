@@ -21,6 +21,7 @@ import {
 import { ChildAvatar } from "@/components/student/Auth/ChildAvatar";
 import { ProfilePicker } from "@/components/student/Auth/ProfilePicker";
 import { useAuth } from "@/hooks";
+import { studentDestination } from "@/lib/auth/entryGate";
 import { STUDENT_PIN_LENGTH, type UserRole } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
@@ -207,10 +208,13 @@ export default function LoginPage() {
         // indefinitely.
         rememberChild(remembered);
         setDone(true);
-        doneTimer.current = setTimeout(
-          () => router.push("/student/dashboard"),
-          DONE_MS,
-        );
+        /*
+         * The remembered-device door resolves consent like every other one -
+         * design, 23 Sep: a child in the same state meets the same screen
+         * whichever door they use. Inside the existing hold, so it is free.
+         */
+        const destination = await studentDestination(null);
+        doneTimer.current = setTimeout(() => router.push(destination), DONE_MS);
       } catch (cause) {
         setDigits("");
         // 401/403 is the server's answer about these credentials. A 422 means

@@ -52,6 +52,19 @@ vi.mock("@/lib/api/users", async (importOriginal) => {
   return { ...actual, usersApi: { ...actual.usersApi, me } };
 });
 
+/*
+ * The consent gate this door now resolves before landing anywhere. Mocked at
+ * `@/lib/api/consents` rather than through the barrel, because `entryGate`
+ * imports the module directly - mocking the barrel would leave the real one in
+ * place and the assertion would pass through the failure branch instead of the
+ * branch it names.
+ */
+const { myConsentGate } = vi.hoisted(() => ({ myConsentGate: vi.fn() }));
+vi.mock("@/lib/api/consents", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/consents")>();
+  return { ...actual, consentsApi: { ...actual.consentsApi, myConsentGate } };
+});
+
 const push = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, replace: vi.fn(), back: vi.fn() }),
@@ -94,6 +107,16 @@ beforeEach(() => {
   // their own. A never-settling default keeps the name read OUT of the way, so
   // a test that does not mention it cannot accidentally depend on it.
   me.mockReturnValue(new Promise(() => {}));
+  myConsentGate.mockReset();
+  // Consent in, unless a test says otherwise. A door that held everybody would
+  // make every other assertion here pass for the wrong reason.
+  myConsentGate.mockResolvedValue({
+    studentId: "student-1",
+    granted: true,
+    blocked: false,
+    requiredType: "data_processing",
+    status: "confirmed",
+  });
   clearSession();
   window.localStorage.clear();
 });
@@ -156,6 +179,55 @@ describe("ReturningSignInScreen — signing back in", () => {
     });
 
     expect(push).toHaveBeenCalledWith("/student/lessons/frac-3");
+  });
+
+  it("holds a child the server says may not proceed, wherever they were headed", async () => {
+    /*
+     * Design, 23 Sep: the gate is on the child's consent state, not the route
+     * they arrived by, and PIN sign-in is an entry path. A child in the same
+     * state meets the same screen whichever door they use.
+     *
+     * The destination they ASKED for is the interesting part: being held has to
+     * beat a deep link, or a bookmarked lesson walks straight past the gate.
+     */
+    loginPin.mockResolvedValue(SESSION);
+    myConsentGate.mockResolvedValue({
+      studentId: "student-1",
+      granted: false,
+      blocked: true,
+      requiredType: "data_processing",
+      status: "pending",
+    });
+    render(<ReturningSignInScreen next="/student/lessons/frac-3" />);
+    fill();
+    await signInNow();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+
+    expect(push).toHaveBeenCalledWith("/student/waiting");
+    expect(push).not.toHaveBeenCalledWith("/student/lessons/frac-3");
+  });
+
+  it("signs them in before it asks, so a held child is still signed in", async () => {
+    // Being held is not a failed sign-in. They proved who they are; the
+    // answer to "may they start" is a different question, and the session has
+    // to exist for it to be askable at all - `consent-gate` is `students/me`.
+    loginPin.mockResolvedValue(SESSION);
+    myConsentGate.mockResolvedValue({
+      studentId: "student-1",
+      granted: false,
+      blocked: true,
+      requiredType: "data_processing",
+      status: "pending",
+    });
+    render(<ReturningSignInScreen />);
+    fill();
+    await signInNow();
+
+    expect(signIn).toHaveBeenCalled();
+    expect(getRememberedProfile()).not.toBeNull();
   });
 
   it("will not submit until all three are there", () => {
