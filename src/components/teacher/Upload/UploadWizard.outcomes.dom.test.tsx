@@ -130,6 +130,12 @@ afterEach(() => {
 
 describe("a run that finished failed", () => {
   it("says the reading did not finish, not that we lost the connection", () => {
+    /*
+     * The heading moved on 23 Sep - "Nevo couldn't finish this one" became
+     * "WE couldn't finish reading this one" - because design ruled that a
+     * failed parse is ours and the copy has to say so rather than implying
+     * the teacher handed us a bad file. What this test guards is unchanged.
+     */
     stagedState({
       uploadId: "u-1",
       failed: true,
@@ -139,7 +145,7 @@ describe("a run that finished failed", () => {
 
     startSingleUpload();
 
-    expect(screen.getByText(/couldn’t finish this one/i)).toBeInTheDocument();
+    expect(screen.getByText(/couldn’t finish reading this one/i)).toBeInTheDocument();
     expect(screen.queryByText(/couldn’t reach Nevo/i)).not.toBeInTheDocument();
   });
 
@@ -169,8 +175,55 @@ describe("a run that finished failed", () => {
 
     startSingleUpload();
 
-    expect(screen.getByText(/couldn’t finish this one/i)).toBeInTheDocument();
+    expect(screen.getByText(/couldn’t finish reading this one/i)).toBeInTheDocument();
     expect(detail).not.toHaveBeenCalled();
+  });
+});
+
+describe("a parse that stopped is not a file that was bad", () => {
+  it("owns the failure instead of pointing at the teacher's file", () => {
+    /*
+     * Design, 23 Sep: the failed-parse state must not borrow the unreadable
+     * one, because "unreadable is a file problem the teacher can fix by
+     * uploading something else. A failed parse is our problem, and the copy
+     * should say so rather than implying they gave us a bad file."
+     */
+    stagedState({ uploadId: "u-1", failed: true, failureKind: "parse", error: null });
+
+    startSingleUpload();
+
+    expect(screen.getByText(/ours to sort out/i)).toBeInTheDocument();
+  });
+
+  it("offers no hunt for a different file, because this one was fine", () => {
+    // "Try another file" belongs to the unreadable screen. Here it would send
+    // a teacher to find a replacement they do not need, one line after we
+    // said their file was not the problem.
+    stagedState({ uploadId: "u-1", failed: true, failureKind: "parse", error: null });
+
+    startSingleUpload();
+
+    expect(
+      screen.queryByRole("button", { name: /try another file/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /try this file again/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("still leads with the server's own reason where it gave one", () => {
+    stagedState({
+      uploadId: "u-1",
+      failed: true,
+      failureKind: "parse",
+      error: "The document had no readable text after page 3.",
+    });
+
+    startSingleUpload();
+
+    expect(
+      screen.getByText("The document had no readable text after page 3."),
+    ).toBeInTheDocument();
   });
 });
 

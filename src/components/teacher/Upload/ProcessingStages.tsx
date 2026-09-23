@@ -26,10 +26,22 @@ import { cn } from "@/lib/utils";
  * | Finding the sections      | `stage: "structure"`                  |
  * | Ready to assign           | `stage: "complete"`, `status: ready`  |
  *
- * **Preparing the adaptations has nothing.** There is no stage value for it,
- * and it is the one a teacher waits longest through - it is where the images
- * and the speech are made. Drawn from the enum it would be a rung that never
- * lights, or one that lights by guesswork; raised on SCRUM-172 instead.
+ * **The fifth stage is struck, not pending.** Design ruled on 23 Sep: *"do not
+ * hold it pending an enum. Adaptation in this product is generated on demand
+ * at serve time and discarded, which means no adaptation work happens at
+ * upload at all. There is no signal behind that stage because there is
+ * nothing behind that stage. Four stages is not a degraded version of five,
+ * it is the accurate one."* So the ask to backend is withdrawn and the brief
+ * is wrong rather than this build.
+ *
+ * WITH ONE CONTRADICTION STILL OPEN, and it is not mine to settle. Backend's
+ * own figures for this same route are about 115 seconds of text work plus up
+ * to 600 seconds per generated picture, AT UPLOAD - which is the measurement
+ * the long-wait copy on this screen was built from on 18 Sep. If pictures are
+ * made at upload then something IS prepared there, and design asked to be
+ * brought back to in exactly that case. Put to both on 23 Sep. If backend is
+ * right the fifth stage returns as the longest part of the wait; if design is
+ * right, the long-wait copy is describing work that does not happen.
  *
  * ONE THING MOVES. The running stage carries the motion and nothing else does,
  * per LU-01 - five spinners is a screen that looks busier than the work is.

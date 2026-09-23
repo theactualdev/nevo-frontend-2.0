@@ -280,20 +280,26 @@ export function ParseFallback({
           */
           <div className="mx-auto flex max-w-[560px] flex-col items-center pt-6 text-center xl:pt-10">
             <span className="flex size-14 shrink-0 items-center justify-center rounded-[16px] bg-nevo-violet/18 text-nevo-navy">
+              {/* NOT the document-with-a-mark, which is the unreadable
+                  screen's. A reading that stopped partway is not a fault in
+                  the page - it is ours - so this is a paused read rather than
+                  a flawed file. */}
               <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                <path d="M6 3h9l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
-                <path d="M14 3v6h6" />
-                <path d="M12 12v4M12 19h.01" />
+                <path d="M4 5a2 2 0 0 1 2-2h5v16H6a2 2 0 0 0-2 2z" />
+                <path d="M15 8v8M19 8v8" />
               </svg>
             </span>
             <h3 className="mt-[18px] text-xl font-semibold tracking-[-0.01em] text-nevo-near-black">
-              Nevo couldn&rsquo;t finish this one
+              We couldn&rsquo;t finish reading this one
             </h3>
             <p className="mt-[9px] max-w-[440px] text-[14.5px] leading-[1.6] text-nevo-near-black/70">
-              {/* The server's own reason when it gave one. It knows why and
-                  we do not, so nothing here guesses at the cause. */}
+              {/* "WE", not "Nevo couldn't" and not a word about the file.
+                  Design, 23 Sep: a failed parse is OUR problem and the copy
+                  should say so rather than implying they gave us a bad file.
+                  The server's own reason still leads where it gave one - it
+                  knows why and we do not. */}
               {reason ??
-                "The reading started and stopped partway. Nothing you did is lost."}
+                "The reading started and stopped partway. That is ours to sort out, not anything you did."}
             </p>
             <IncidentLine id={incident} />
             <div className="mt-[22px] flex flex-wrap items-center justify-center gap-3">
@@ -308,13 +314,11 @@ export function ParseFallback({
                 </svg>
                 Try this file again
               </button>
-              <button
-                type="button"
-                onClick={onTryAnother}
-                className={ghostBtn}
-              >
-                Try another file
-              </button>
+              {/* "Try another file" belongs to the UNREADABLE screen, where a
+                  different document is genuinely the remedy. Offering it here
+                  tells a teacher their file was the problem when we have just
+                  said it was not - and sends them to find one they do not
+                  need. One next action, chosen by the failure. */}
             </div>
           </div>
         )}
