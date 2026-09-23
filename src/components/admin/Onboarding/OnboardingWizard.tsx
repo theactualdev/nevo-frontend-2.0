@@ -3,8 +3,6 @@
 import { useState } from "react";
 import type { EnrolmentBand, SchoolAuthMethod } from "@/lib/api/school";
 import { cn } from "@/lib/utils";
-import { AuthMethodStep } from "./AuthMethodStep";
-import { BandStep } from "./BandStep";
 import { ConfirmEmailStep } from "./ConfirmEmailStep";
 import { DpaStep } from "./DpaStep";
 import { HandoverStep } from "./HandoverStep";
@@ -34,7 +32,7 @@ import { SignUpStep } from "./SignUpStep";
  * Written for a proprietor, not an IT specialist.
  */
 
-export type Step = 0 | 1 | 2 | 3 | 4 | 5;
+export type Step = 0 | 1 | 2 | 3;
 
 export interface WizardState {
   schoolName: string;
@@ -54,15 +52,21 @@ export interface WizardState {
 }
 
 /**
- * SIX TODAY, FOUR WHEN DESIGN ANSWERS. D01's rail is now Sign up · Confirm
- * email · DPA read-gate · School details, and it names neither the sign-in
- * method step nor the enrolment band. Email confirmation is inserted at its
- * frame position (step 2) because the ORDER is a compliance constraint and
- * cannot wait; the other two stay where they are because deleting 460 lines on
- * our reading of a step rail is not a call this file gets to make. See the
- * design ask raised 23 Sep.
+ * FOUR, AND DESIGN ANSWERED. Sign up · Confirm email · DPA read-gate ·
+ * handover. Both of the steps that made this six are gone, each for its own
+ * reason and neither on our own reading of a step rail:
+ *
+ *  - **The enrolment band is dead.** Flat pricing at ₦150,000 per student, and
+ *    the cost lives on D24's dashboard panel rather than in onboarding. This
+ *    file's own note had recorded the frame saying "no tiers, no plan to
+ *    choose" long before anybody acted on it.
+ *  - **The sign-in method is DEFERRED, not dead.** Every school is manual for
+ *    now - school code, CSV upload, staff signing in with their own email and
+ *    password - and nothing in the console asks about a provider. Backend's
+ *    SSO work stays; see `AuthMethodStep`, which is kept on disk and off the
+ *    flow.
  */
-const TOTAL = 6;
+const TOTAL = 4;
 
 export function OnboardingWizard() {
   const [step, setStep] = useState<Step>(0);
@@ -135,32 +139,14 @@ export function OnboardingWizard() {
         ) : null}
 
         {step === 2 ? (
-          <AuthMethodStep
-            selected={state.authMethod}
-            onSelect={(authMethod) => patch({ authMethod })}
+          <DpaStep
+            schoolName={state.schoolName}
             onBack={() => setStep(1)}
             onDone={() => setStep(3)}
           />
         ) : null}
 
-        {step === 3 ? (
-          <DpaStep
-            schoolName={state.schoolName}
-            onBack={() => setStep(2)}
-            onDone={() => setStep(4)}
-          />
-        ) : null}
-
-        {step === 4 ? (
-          <BandStep
-            selected={state.band}
-            onSelect={(band) => patch({ band })}
-            onBack={() => setStep(3)}
-            onDone={() => setStep(5)}
-          />
-        ) : null}
-
-        {step === 5 ? <HandoverStep state={state} /> : null}
+        {step === 3 ? <HandoverStep state={state} /> : null}
       </div>
     </main>
   );

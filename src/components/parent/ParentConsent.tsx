@@ -31,11 +31,20 @@ import {
  * can still arrive here declaring SMS. The receipt line below is therefore
  * written to be true under either value rather than asserting a channel.
  *
- * ONE BLANKET CONSENT, ONE TAP. Design ruled this on 7 Sep: the DSA already
- * defines the scope of processing, so the single "Yes" is correct and there are
- * no per-type toggles. `ConsentType` has three members but the invitation path
- * only ever requests `data_processing` today, so the tap grants exactly what
- * `invitation.consentTypes` carries - currently one thing.
+ * ONE BLANKET CONSENT, ONE TAP - AND A GUARD, settled by design 24 Sep.
+ *
+ * The single "Yes" stays. Per-type consent is NOT to be built: everything on
+ * the consent side is placeholder until counsel returns, *"including what a
+ * parent is actually consenting to"*, so drawing toggles now would be drawing
+ * them twice.
+ *
+ * What holds whatever counsel says is the refusal. An invitation carrying more
+ * than one type renders nothing at all rather than granting something the
+ * button never named - see `asksTooMuch`. It never grants anything, so it
+ * cannot be made wrong by a ruling.
+ *
+ * It should never fire today: the invitation path requests `data_processing`
+ * alone, so the tap grants exactly what `invitation.consentTypes` carries.
  *
  * NO PRONOUNS FOR A CHILD WE HAVE NOT BEEN TOLD ABOUT. This screen was written
  * from the Amara frame and carried "she" and "her" seven times - on the first
@@ -114,6 +123,33 @@ export function ParentConsent({
   const child = invitation.studentFirstName;
   const childLead = sentenceCase(child);
 
+  /*
+   * THE GUARD DESIGN ASKED FOR, 24 Sep, and the reason it is a REFUSAL rather
+   * than a fallback.
+   *
+   * One button cannot honestly grant two things. `ConsentType`'s own
+   * description - *"Each is asked and answered on its own... which is the
+   * whole point of the fourth one below"* - and a single "Yes, I give my
+   * consent" are not reconcilable, and the fourth one is cross-border transfer
+   * of a Nigerian child's data.
+   *
+   * Design's instruction: *"A digital invitation carrying more than one consent
+   * type refuses to render rather than granting something the button never
+   * named. That holds whatever counsel says, because it never grants
+   * anything."*
+   *
+   * WHY NOT LIST THE TYPES AND KEEP THE BUTTON. Because the button's label is
+   * the consent. A parent reading "Yes, I give my consent" under a paragraph
+   * about lessons has not agreed to their child's data leaving the country,
+   * however carefully a list above it was worded. Per-type consent is design's
+   * to draw and counsel's to word; until then there is nothing safe to render.
+   *
+   * IT SHOULD NEVER FIRE TODAY. The invitation path requests
+   * `data_processing` alone, so this is a tripwire on something that has not
+   * happened yet - which is the only moment it can be built calmly.
+   */
+  const asksTooMuch = invitation.consentTypes.length > 1;
+
   async function consent() {
     setPhase("sending");
     try {
@@ -146,6 +182,38 @@ export function ParentConsent({
       // same fix: the school issues a fresh link.
       setPhase(e instanceof ApiError && e.status === 404 ? "gone" : "failed");
     }
+  }
+
+  /*
+   * BEFORE EVERY OTHER BRANCH, including the phases. Nothing about this screen
+   * is safe to show when the invitation asks for more than the button names -
+   * not the explanation, not the school's contact details, and certainly not
+   * the button.
+   *
+   * It is addressed to the PARENT, not to us: no error tone, no "unsupported",
+   * nothing implying they did something wrong. They open a link and are told
+   * plainly that the school has to send a different one, with the school named
+   * so the next step is obvious.
+   */
+  if (asksTooMuch) {
+    return (
+      <Shell>
+        <div className={CARD}>
+          <h1 className="text-[21px] font-semibold text-nevo-near-black">
+            This request needs to come from your school again
+          </h1>
+          <p className={BODY}>
+            It asks about more than one thing, and we want you to be able to
+            answer each one separately rather than all at once. Nothing has been
+            recorded and nothing has changed for {child}.
+          </p>
+          <p className={BODY}>
+            Please contact {invitation.schoolName} and ask them to send the
+            request again.
+          </p>
+        </div>
+      </Shell>
+    );
   }
 
   if (phase === "gone") {

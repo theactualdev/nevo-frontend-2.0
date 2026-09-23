@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
+import { visibleText } from "@/test/visibleText";
 import { ApiError } from "@/lib/api/client";
 import type { ParentInvitation } from "@/lib/api/parent";
 
@@ -554,5 +555,65 @@ describe("having a question first", () => {
     expect(
       screen.getByRole("button", { name: /Yes, I give my consent/ }),
     ).toBeInTheDocument();
+  });
+});
+
+/**
+ * The guard design asked for on 24 Sep, and the reason it is a REFUSAL.
+ *
+ * *"A digital invitation carrying more than one consent type refuses to render
+ * rather than granting something the button never named. That holds whatever
+ * counsel says, because it never grants anything."*
+ *
+ * One button cannot honestly grant two things, and the second thing is likely
+ * to be cross-border transfer of a Nigerian child's data. It should never fire
+ * today — the invitation path requests `data_processing` alone — which is
+ * exactly why it could be built calmly.
+ */
+describe("an invitation that asks for more than one thing", () => {
+  const twoTypes = () =>
+    inv({ consentTypes: ["data_processing", "cross_border_transfer"] });
+
+  it("refuses to render the consent screen at all", async () => {
+    const { container } = render(
+      <ParentConsent token={TOKEN} invitation={twoTypes()} />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /Yes, I give my consent/ }),
+    ).toBeNull();
+    expect(visibleText(container)).toMatch(
+      /needs to come from your school again/i,
+    );
+  });
+
+  it("grants nothing, and says so", async () => {
+    const { container } = render(
+      <ParentConsent token={TOKEN} invitation={twoTypes()} />,
+    );
+
+    expect(completeConsent).not.toHaveBeenCalled();
+    expect(visibleText(container)).toMatch(/Nothing has been recorded/i);
+  });
+
+  it("blames nobody and names the school to go to", async () => {
+    // Addressed to the parent, not to us. No error tone, nothing implying they
+    // did something wrong.
+    const { container } = render(
+      <ParentConsent token={TOKEN} invitation={twoTypes()} />,
+    );
+
+    expect(visibleText(container)).toMatch(/Corona Secondary School/);
+    expect(visibleText(container)).not.toMatch(
+      /error|invalid|unsupported|something went wrong/i,
+    );
+  });
+
+  it("leaves the ordinary one-type invitation exactly as it was", async () => {
+    render(<ParentConsent token={TOKEN} invitation={inv()} />);
+
+    expect(
+      screen.getByRole("button", { name: /Yes, I give my consent/ }),
+    ).toBeEnabled();
   });
 });
