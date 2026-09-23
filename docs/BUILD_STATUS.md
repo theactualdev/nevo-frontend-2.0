@@ -2305,6 +2305,67 @@ holds. SCRUM-169 can close on the admin side.
 
 ---
 
+---
+
+## 23 September — the doors do not check who you are. HANDOFF, two lanes
+
+QA found a teacher's credentials accepted at the **admin** sign-in: success
+state, hold, push to an admin route, and only then `proxy.ts`'s role-cookie
+guard bounces them. The guard holds and nothing leaks — but a correct password
+produced what reads as a broken login.
+
+**All three password doors have it.** Each stores `session.role as UserRole` and
+never checks it:
+
+| Door | File | Owner |
+|---|---|---|
+| Admin | `admin/Auth/AdminSignIn.tsx` | **FIXED, #499** |
+| Teacher | `teacher/Auth/TeacherSignIn.tsx:145` | teacher lane |
+| Student | `student/Auth/ReturningSignInScreen.tsx:157` | student lane |
+
+This is the *one defect in N places* shape again. The admin one is fixed and the
+other two are **not** — they are left to their owners rather than edited from
+this session, because three sessions share one worktree.
+
+### The tool is built, so each remaining fix is small
+
+`src/lib/auth/consoleDoor.ts` holds the rule: `roleBelongsAt(door, role)`,
+`doorForRole`, `knownRole`, plus `DOOR_HREF` / `DOOR_LABEL` for the copy.
+`LoginFailure` has gained `"wrong_door"`.
+
+**`roleBelongsAt` is built from the same `isAdminRole` that `proxy.ts` uses, and
+that is the point.** A door that re-states the guard's rule in its own words is a
+second rule that can drift from the first — and the drift shows up as refused in
+one place, admitted in the other.
+
+Only `AdminSignIn` had `Record<LoginFailure, …>` maps, so the new union member
+breaks nothing in the other lanes. It will not *force* them to handle it either,
+which is worth knowing: add the maps when you fix them and the compiler starts
+helping.
+
+### Three things the fix has to do, not one
+
+1. **Check before `signIn()`,** not after. Storing then refusing still writes the
+   role-mirror cookie.
+2. **End the session.** The login SUCCEEDED, so one exists server-side; refusing
+   without `authApi.logout()` leaves somebody told "not here" holding a live
+   session for somewhere else.
+3. **Name the right door and link it.** Telling somebody their own role after
+   they have proved the account is theirs is not a disclosure — the leak would be
+   saying it *before* the password is checked. Without the link it is a dead end,
+   which is the reported bug minus the false success.
+
+`RETRYABLE.wrong_door` is **false**: the same credentials will be just as correct
+and just as wrong next time, and "Try again" sends them round the loop that
+produced the report.
+
+### Not a bug, and worth not "fixing"
+
+QA's second item — a bounced teacher reaching `/teacher/dashboard` — is correct
+behaviour. The session genuinely is a valid teacher session. It only looked wrong
+because the first bug made sign-in appear to have failed.
+
+
 ## 22 September — four things shipped, and what is carried
 
 **Built and merged**

@@ -6,8 +6,14 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/hooks";
 import { authApi } from "@/lib/api";
+import {
+  DOOR_HREF,
+  DOOR_LABEL,
+  doorForRole,
+  knownRole,
+  type ConsoleDoor,
+} from "@/lib/auth/consoleDoor";
 import { classifyLoginFailure, type LoginFailure } from "@/lib/auth/loginFailure";
-import type { UserRole } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 /**
@@ -105,11 +111,25 @@ const PAUSED_MSG = (
 const THROTTLED_MSG =
   "Too many attempts just now. Wait a few minutes before trying again.";
 
+/**
+ * The wrong-door line for a role no door serves - `parent_guardian`, or
+ * anything this build does not recognise.
+ *
+ * The named-door version below is better and is used whenever we can work out
+ * where they belong. This is the honest floor: we know the credentials were
+ * right and we know this is not their console, and we do not know more than
+ * that. It does not invite a retry, because retrying is the one thing that
+ * cannot help.
+ */
+const WRONG_DOOR_MSG =
+  "Those details are right, but this account can’t be used to sign in here. Check with whoever set up your Nevo account.";
+
 const MESSAGE: Record<LoginFailure, ReactNode> = {
   credentials: MISMATCH_MSG,
   ours: UNREACHABLE_MSG,
   paused: PAUSED_MSG,
   throttled: THROTTLED_MSG,
+  wrong_door: WRONG_DOOR_MSG,
 };
 
 /**
@@ -123,6 +143,12 @@ const RETRYABLE: Record<LoginFailure, boolean> = {
   ours: true,
   paused: false,
   throttled: false,
+  /*
+   * The same credentials will be just as correct next time, and just as wrong
+   * for this door. Offering "Try again" here would send somebody round the
+   * loop that produced the bug report - press, succeed, get refused, press.
+   */
+  wrong_door: false,
 };
 
 type Phase = "idle" | "signing" | "error" | "success";
@@ -178,6 +204,11 @@ export function AdminSignIn() {
   const [showPw, setShowPw] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
   const [failure, setFailure] = useState<LoginFailure | null>(null);
+  /**
+   * Where they actually belong, when we can tell. Null means a role no door
+   * serves, and the generic `WRONG_DOOR_MSG` covers that case.
+   */
+  const [wrongDoor, setWrongDoor] = useState<ConsoleDoor | null>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
@@ -203,9 +234,38 @@ export function AdminSignIn() {
     );
     Promise.race([live, cap])
       .then((session) => {
+        /*
+         * REFUSE AT THE DOOR, NOT AFTER IT.
+         *
+         * This used to cast `session.role as UserRole` straight into the
+         * session and push. A teacher signing in here was shown "You're in",
+         * held for the success beat, pushed to an admin route, and only then
+         * bounced by `proxy.ts` - so a correct password looked like a broken
+         * login. The guard held and nothing leaked; the door was still lying
+         * for a second and a half.
+         *
+         * `roleBelongsAt` is the guard's own `isAdminRole`, so the two cannot
+         * drift into refusing in one place and admitting in the other.
+         */
+        const role = knownRole(session.role);
+        const door = doorForRole(role);
+        if (door !== "admin" || !role) {
+          setWrongDoor(door);
+          setFailure("wrong_door");
+          setPhase("error");
+          /*
+           * The login SUCCEEDED, so a session exists server-side even though
+           * we are refusing. Leaving it would mean a person told "not here"
+           * is nonetheless carrying a live session for another console.
+           * `logout` clears locally in a `finally`, so a failed round trip
+           * still leaves nothing behind - and the screen never waits on it.
+           */
+          void authApi.logout().catch(() => {});
+          return;
+        }
         signIn({
           id: session.userId,
-          role: session.role as UserRole,
+          role,
           schoolId: "",
           method: "manual",
         });
@@ -344,7 +404,33 @@ export function AdminSignIn() {
 
       {errored && failure && (
         <p className="mt-3 rounded-[10px] bg-nevo-violet/16 px-4 py-3 text-[13.5px] leading-[1.5] text-nevo-near-black/78">
-          {MESSAGE[failure]}
+          {/*
+            * NAME THE RIGHT DOOR WHERE WE CAN, and link it.
+            *
+            * Telling somebody their own role is not a disclosure: they have
+            * just proved the account is theirs. The thing that would leak is
+            * saying it BEFORE the password is checked, and this branch is only
+            * reachable after a 200.
+            *
+            * Without the link this is a dead end - "not here" and no
+            * indication of where "here" is. That is the state the bug report
+            * described, minus the false success.
+            */}
+          {failure === "wrong_door" && wrongDoor ? (
+            <>
+              Those details are right, but this is the school admin sign-in.
+              Your account is a {DOOR_LABEL[wrongDoor]} account &ndash;{" "}
+              <Link
+                href={DOOR_HREF[wrongDoor]}
+                className="font-semibold text-nevo-navy underline underline-offset-2"
+              >
+                sign in as a {DOOR_LABEL[wrongDoor]}
+              </Link>
+              .
+            </>
+          ) : (
+            MESSAGE[failure]
+          )}
         </p>
       )}
 

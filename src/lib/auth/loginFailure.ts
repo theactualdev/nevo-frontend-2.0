@@ -24,7 +24,26 @@ import { ApiError, apiErrorCode } from "@/lib/api/client";
  * kill the jsdom worker outright. Classification is the half that can be wrong,
  * so it lives where it can be tested.
  */
-export type LoginFailure = "credentials" | "ours" | "paused" | "throttled";
+/**
+ * `wrong_door` is the one member `classifyLoginFailure` never returns.
+ *
+ * The other four describe a request the server refused. This one describes a
+ * request the server ACCEPTED, which the door then refuses: the credentials
+ * are correct and the account simply belongs to a different console. It is set
+ * at the call site, after a successful login, and it is a sign-in failure for
+ * the person in front of the screen even though nothing failed on the wire.
+ *
+ * Keeping it in this union rather than as a separate flag is what makes the
+ * doors' `Record<LoginFailure, ...>` maps do the work: a screen that handles
+ * failures cannot forget to handle this one, because the compiler will not let
+ * the map be built without it.
+ */
+export type LoginFailure =
+  | "credentials"
+  | "ours"
+  | "paused"
+  | "throttled"
+  | "wrong_door";
 
 export function classifyLoginFailure(cause: unknown): LoginFailure {
   const status = cause instanceof ApiError ? cause.status : 0;

@@ -2,17 +2,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { ApiError } from "@/lib/api/client";
 
-const { push, loginPassword, signIn } = vi.hoisted(() => ({
+const { push, loginPassword, signIn, logout } = vi.hoisted(() => ({
   push: vi.fn(),
   loginPassword: vi.fn(),
   signIn: vi.fn(),
+  logout: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, replace: push, prefetch: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
 }));
-vi.mock("@/lib/api", () => ({ authApi: { loginPassword } }));
+vi.mock("@/lib/api", () => ({ authApi: { loginPassword, logout } }));
 // The screen reads `signIn` off the auth context; mocking the hook is lighter
 // than wrapping every render in a provider, and nothing here exercises it.
 vi.mock("@/hooks", () => ({
@@ -44,6 +45,8 @@ beforeEach(() => {
   push.mockReset();
   loginPassword.mockReset();
   signIn.mockReset();
+  logout.mockReset();
+  logout.mockResolvedValue(undefined);
 });
 
 const submit = () => {
@@ -163,5 +166,101 @@ describe("a failure that is ours", () => {
 
     await screen.findByText(/Nothing on your end/i);
     expect(primary()).toHaveTextContent(/^Try again$/);
+  });
+});
+
+/**
+ * THE DOOR THAT CELEBRATED BEFORE IT CHECKED.
+ *
+ * A teacher's credentials were accepted here: the screen showed "You're in",
+ * held for the success beat, pushed to an admin route, and only then did
+ * `proxy.ts` bounce them back. The guard held, so nothing leaked - but a
+ * correct password produced what read as a broken login.
+ *
+ * These assert on what the door DOES, not on whether sign-in "failed":
+ * `signIn` must not be called, `push` must not be called, and the message must
+ * name where they belong. Asserting a failure state would have passed on the
+ * old code too, because the old code eventually failed as well - just later,
+ * somewhere else, and after saying the opposite.
+ */
+
+const accept = (role: string) =>
+  loginPassword.mockResolvedValueOnce({ userId: "u1", role });
+
+describe("a valid account at the wrong door", () => {
+  it("never stores the session or navigates", async () => {
+    accept("teacher");
+    submit();
+
+    await screen.findByText(/this is the school admin sign-in/i);
+    expect(signIn).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
+    // The success beat is the visible half of the bug.
+    expect(screen.queryByText(/You.re in/i)).not.toBeInTheDocument();
+  });
+
+  it("names the door they belong at, and links it", async () => {
+    accept("teacher");
+    submit();
+
+    const link = await screen.findByRole("link", { name: /sign in as a teacher/i });
+    expect(link).toHaveAttribute("href", "/auth/teacher");
+  });
+
+  it("does not leave a live session behind when it refuses", async () => {
+    // The login SUCCEEDED, so a session exists server-side. Refusing without
+    // ending it leaves somebody told "not here" holding a session for
+    // somewhere else.
+    accept("student");
+    submit();
+
+    await screen.findByText(/this is the school admin sign-in/i);
+    expect(logout).toHaveBeenCalled();
+  });
+
+  it("does not invite a retry that cannot work", async () => {
+    accept("teacher");
+    submit();
+
+    await screen.findByText(/this is the school admin sign-in/i);
+    expect(primary()).toHaveAccessibleName(/^Sign in$/i);
+    expect(screen.queryByRole("button", { name: /Try again/i })).not.toBeInTheDocument();
+  });
+
+  it("lets both real admin roles through", async () => {
+    // There is no plain "admin" - a proprietor comes back as `senco_admin`.
+    // A door checking `role === "admin"` would refuse every real admin, which
+    // is the failure mode `isAdminRole` exists to prevent.
+    for (const role of ["senco_admin", "other_admin"]) {
+      signIn.mockReset();
+      accept(role);
+      submit();
+
+      await vi.waitFor(() => expect(signIn).toHaveBeenCalled());
+      expect(signIn.mock.calls[0][0]).toMatchObject({ role });
+    }
+  });
+
+  it("refuses a role no door serves, without inventing one", async () => {
+    // A parent never signs in - they arrive by tokenised link - so there is
+    // genuinely nowhere to send them and the copy must not pretend otherwise.
+    accept("parent_guardian");
+    submit();
+
+    await screen.findByText(/can.t be used to sign in here/i);
+    expect(screen.queryByRole("link", { name: /sign in as a/i })).not.toBeInTheDocument();
+    expect(signIn).not.toHaveBeenCalled();
+  });
+
+  it("refuses a role this build has never heard of", async () => {
+    // `session.role as UserRole` was a cast, not a check: an unrecognised role
+    // went into the session and the role-mirror cookie, where proxy.ts matches
+    // no branch and bounces from everywhere with no explanation anywhere.
+    accept("district_inspector");
+    submit();
+
+    await screen.findByText(/can.t be used to sign in here/i);
+    expect(signIn).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
   });
 });
