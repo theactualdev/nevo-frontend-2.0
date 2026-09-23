@@ -23,24 +23,34 @@ import { incidentId } from "./client";
  */
 
 describe("reading the reference", () => {
-  it("takes one at the top level", () => {
-    expect(incidentId({ incidentId: "a1b2c3d4" })).toBe("a1b2c3d4");
-  });
-
-  it("takes one nested the way FastAPI nests its error bodies", () => {
-    // `apiErrorCode` beside it reads `{detail: {code}}`, so an id could
-    // plausibly arrive at either depth. Both, rather than guessing one.
-    expect(incidentId({ detail: { incidentId: "a1b2c3d4" } })).toBe("a1b2c3d4");
-  });
-
-  it("prefers the top level when a body somehow carries both", () => {
+  it("reads the one position backend confirmed", () => {
+    /*
+     * Nested under `detail`, beside `code: "unexpected_error"` - the same
+     * place `apiErrorCode` reads from. Twelve lowercase hex characters,
+     * `uuid4().hex[:12]`.
+     */
     expect(
-      incidentId({ incidentId: "outer", detail: { incidentId: "inner" } }),
-    ).toBe("outer");
+      incidentId({
+        detail: { code: "unexpected_error", incidentId: "9f2c4a7b1d3e" },
+      }),
+    ).toBe("9f2c4a7b1d3e");
+  });
+
+  it("no longer looks at the top level, because nothing puts one there", () => {
+    /*
+     * This USED to read both positions, because the field is not in the
+     * OpenAPI document and the shape was a guess. Backend settled it on
+     * 23 Sep - "always nested under detail... never at top level, you can
+     * drop that check" - so a top-level `incidentId` is now something this
+     * client has no reason to trust.
+     */
+    expect(incidentId({ incidentId: "9f2c4a7b1d3e" })).toBeNull();
   });
 
   it("trims it", () => {
-    expect(incidentId({ incidentId: "  a1b2c3d4  " })).toBe("a1b2c3d4");
+    expect(incidentId({ detail: { incidentId: "  9f2c4a7b1d3e  " } })).toBe(
+      "9f2c4a7b1d3e",
+    );
   });
 });
 
@@ -55,26 +65,30 @@ describe("refusing everything that is not one", () => {
 
   it("refuses a sentence dressed as an id", () => {
     // Whitespace is the tell: a reference has none, and a message has some.
-    expect(incidentId({ incidentId: "no incident recorded" })).toBeNull();
+    expect(
+      incidentId({ detail: { incidentId: "no incident recorded" } }),
+    ).toBeNull();
   });
 
   it("refuses something too long to read down a phone", () => {
-    expect(incidentId({ incidentId: "x".repeat(65) })).toBeNull();
+    expect(incidentId({ detail: { incidentId: "x".repeat(65) } })).toBeNull();
   });
 
   it("takes something exactly at the limit", () => {
     // The bound is inclusive, so a uuid-with-prefix does not fall off it.
-    expect(incidentId({ incidentId: "x".repeat(64) })).toBe("x".repeat(64));
+    expect(incidentId({ detail: { incidentId: "x".repeat(64) } })).toBe(
+      "x".repeat(64),
+    );
   });
 
   it("refuses an empty string", () => {
-    expect(incidentId({ incidentId: "" })).toBeNull();
-    expect(incidentId({ incidentId: "   " })).toBeNull();
+    expect(incidentId({ detail: { incidentId: "" } })).toBeNull();
+    expect(incidentId({ detail: { incidentId: "   " } })).toBeNull();
   });
 
   it("refuses a value that is not a string", () => {
-    expect(incidentId({ incidentId: 12345 })).toBeNull();
-    expect(incidentId({ incidentId: { id: "a1b2" } })).toBeNull();
+    expect(incidentId({ detail: { incidentId: 12345 } })).toBeNull();
+    expect(incidentId({ detail: { incidentId: { id: "a1b2" } } })).toBeNull();
   });
 
   it("refuses a body that carries no reference at all", () => {
