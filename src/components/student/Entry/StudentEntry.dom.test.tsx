@@ -133,16 +133,38 @@ describe("what it leaves alone", () => {
     expect(held()).toBeNull();
   });
 
-  it("does not hold on a pending age check, which is not a missing consent", async () => {
-    // The adults disagree with each other rather than one of them not having
-    // answered. Different situation, no frame, raised to design 23 Sep.
+});
+
+describe("a disputed date of birth", () => {
+  it("holds at the same screen, with the same words", async () => {
+    /*
+     * RULED 23 SEP. Two reasons, one screen, and the child is told neither.
+     * The obvious "improvement" here is to explain - and explaining invites a
+     * child to go and settle a disagreement between their parent and their
+     * school, which is the one thing that must never happen.
+     */
     resolve.mockResolvedValue(
       state({ consentState: "given", ageCheckPending: true }),
     );
 
     render(<StudentEntry token="t-1" />);
 
-    await waitFor(() => expect(replace).toHaveBeenCalled());
-    expect(held()).toBeNull();
+    await waitFor(() => expect(held()).toBeTruthy());
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it("says nothing about why, in either state", async () => {
+    // The screen is the same object in both cases, so this pins that no
+    // branch ever grows its own words.
+    resolve.mockResolvedValue(
+      state({ consentState: "given", ageCheckPending: true }),
+    );
+
+    render(<StudentEntry token="t-1" />);
+
+    await waitFor(() => expect(held()).toBeTruthy());
+    const text = (document.body.textContent ?? "").replace(/\s+/g, " ").trim();
+
+    expect(text).toBe("Nevo isn't quite ready for you yetIt will be soon.");
   });
 });

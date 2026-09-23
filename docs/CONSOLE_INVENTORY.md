@@ -1260,15 +1260,30 @@ date of birth is not a missing consent — and it needs its own ruling.
 when `consentState` is `pending` — which is the half frame 00d rules in its
 own words, *"A student's link routes here only when consent isn't in yet."*
 
-**What did NOT ship, and it is the half that matters most.** A SIGNED-IN child
-is not held. The parent lane raised on 23 Sep that `ConsentGateResponse`
-carries a required `blocked` nothing reads, that `admin/D25` PC-03 says *"a
-child stays out of lessons until they're cleared"*, and that the 7 Sep SCRUM-80
-ruling — *"Nevo is not the consent gate, the child proceeds normally"* — has
-never been withdrawn in words. They declared the field, left the behaviour, and
-said the enforcement lands in this lane. **It does, and it still needs the
-ruling.** Nothing built touches `students/me/consent-gate` or
-`processingWithdrawn`. **This is the open question, and it is design's.**
+**~~What did NOT ship~~ — SHIPPED 23 SEP, the same day, once design ruled.** *"The
+gate is on the child's consent state, not on the route they arrived by. Every entry
+path resolves consent before anything mounts, and PIN sign-in is an entry path."*
+All four doors resolve it through ONE copy of the rule, `lib/auth/entryGate` —
+the returning sign-in form, the remembered-device unlock, the SSO callback and the
+entry link. It reads `blocked`, the server's own answer to "may this child
+proceed?", rather than `granted`, which is false in three of the four consent
+states and so states no policy. **Being held is not a failed sign-in:** the child
+is signed in and the device remembers them first, because `consent-gate` is
+`students/me` and there is nothing to ask about until the session exists.
+**And the hold beats a deep link** — a bookmarked lesson in `?next=` would
+otherwise walk past the gate.
+
+**The age check holds at the same screen, with the same words, and the child is
+told neither reason.** A disputed date of birth is two adults disagreeing with each
+other; telling a child invites them to settle it, which makes them the arbiter
+between their parent and their school. The route is `/student/waiting`, not
+`/student/consent`, because a URL is something a child can read.
+
+**STILL UNRULED, and it is the parent lane's question rather than this one's.**
+Design ruled ENTRY. Nothing says whether a child already inside the app is stopped
+from opening a lesson — which is what `consent-gate`'s `blocked`, `admin/D25`
+PC-03 and the 7 Sep SCRUM-80 ruling disagree about. **The gate is deliberately NOT
+a mount guard**, so that question stays open rather than being answered by accident.
 
 **Also not shipped, deliberately:** the re-sequenced PIN creation. Frame 31
 draws "The Close → PIN Creation" with no name, school or class step, and

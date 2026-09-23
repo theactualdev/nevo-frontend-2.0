@@ -4577,6 +4577,59 @@ weak test let a mutation through here: asserting the absence only after
 awaiting "the call was made" passes whether or not the handler went on to fill
 the gap. The settle is what makes the assertion mean anything.
 
+### Every door resolves consent now, 23 Sep - the half that was unruled is ruled
+
+Design answered the same day. *"The gate is on the child's consent state, not on
+the route they arrived by. Every entry path resolves consent before anything
+mounts, and PIN sign-in is an entry path. A child in the same state meets the
+same screen whichever door they use."*
+
+**FOUR DOORS, ONE COPY OF THE RULE.** `lib/auth/entryGate` is the whole of it,
+used by the returning sign-in form, the remembered-device unlock, the SSO
+callback and - through `StudentEntry` - the entry link. Four copies of a rule
+that decides whether a child can start is three too many.
+
+**IT IS NOT A GUARD, AND THAT IS DELIBERATE.** Design ruled ENTRY. Whether a
+child already inside the app is stopped from opening a lesson is a different
+question and still unruled - it is what `consent-gate`'s `blocked`,
+`admin/D25` PC-03 and the 7 Sep SCRUM-80 ruling disagree about. Running this on
+every mount would answer it by accident.
+
+**`blocked`, NOT `granted`.** `granted` is false in three of the four consent
+states (`not_sent`, `pending`, `withdrawn`), so reading it would be the frontend
+deciding a policy out of a field that does not state one. `blocked` is the
+server's own answer to "may this child proceed?" - the field the parent lane
+declared on 23 Sep precisely so it would stop being discarded.
+
+**BEING HELD IS NOT A FAILED SIGN-IN.** The child is signed in, the device
+remembers them, and then the question is asked - it has to be in that order,
+because `consent-gate` is `students/me` and there is nothing to ask about until
+the session exists. Tested.
+
+**THE HOLD BEATS A DEEP LINK.** A bookmarked lesson in `?next=` would otherwise
+walk straight past the gate, so the destination a child asked for is the case
+the test names.
+
+### The age check holds at the same screen, and the child is told neither reason
+
+*"Same screen as 00d, same words, different state underneath. The child is not
+told why."*
+
+**THE REASONING IS THE PART TO KEEP**, because the obvious improvement here is
+to explain. Design: a disputed date of birth is two adults disagreeing with each
+other, and telling a child invites them to go and settle it - which makes a
+child the arbiter between their parent and their school. From where the child
+stands, Nevo is not ready for them yet, and that is true in both states. The
+adults are told in full on the administrator's surface.
+
+So `ageCheckPending` holds exactly as `consentState: "pending"` does, and a
+test pins that the screen's entire text is the same two sentences in both
+states - a later branch cannot grow its own words.
+
+**THE ROUTE SAYS NOTHING EITHER.** `/student/waiting`, not `/student/consent`.
+A URL is something a child can read.
+
+
 ### Consent is checked at entry now, 23 Sep - the half that is ruled
 
 Frame 31 and frame 00d, from the 22 Sep drop, and `/api/v1/student-entry`,

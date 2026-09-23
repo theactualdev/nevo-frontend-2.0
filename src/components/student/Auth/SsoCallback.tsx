@@ -8,6 +8,7 @@ import { Button } from "@/components/shared";
 import { useAuth, useSignals } from "@/hooks";
 import { authApi } from "@/lib/api/auth";
 import { setSession } from "@/lib/auth/session";
+import { studentDestination } from "@/lib/auth/entryGate";
 import {
   BUSY_PHASE,
   BUSY_REASON,
@@ -104,11 +105,16 @@ export function SsoCallback() {
         // invented school into the signed-in child.
         signIn({ id: res.userId, role, schoolId: "", method: "sso" });
         setPhase("success");
-        redirectTimer.current = setTimeout(() => {
-          // Where a first-ever sign-in goes is the SERVER's answer now. It used
-          // to be a mock's `isFirstUse` flag, which nothing real set.
-          router.replace(res.destination || "/student/dashboard");
-        }, SUCCESS_HOLD_MS);
+        // Where a first-ever sign-in goes is the SERVER's answer now. It used
+        // to be a mock's `isFirstUse` flag, which nothing real set. Consent is
+        // resolved on top of that answer, because SSO is an entry path like any
+        // other - and `studentDestination` leaves a teacher's or an admin's
+        // destination alone, since `consent-gate` is `students/me`.
+        void studentDestination(res.destination).then((destination) => {
+          redirectTimer.current = setTimeout(() => {
+            router.replace(destination);
+          }, SUCCESS_HOLD_MS);
+        });
       })
       .catch(() => setPhase("error"));
   }, [router, signIn, provider, code, state, incomplete]);
