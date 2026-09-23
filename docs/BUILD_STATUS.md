@@ -4638,6 +4638,57 @@ weak test let a mutation through here: asserting the absence only after
 awaiting "the call was made" passes whether or not the handler went on to fill
 the gap. The settle is what makes the assertion mean anything.
 
+### One warm-up a day, 23 Sep - and the cost was measurement, not tidiness
+
+Design confirmed the done state: *"yes, one exists, and it says nothing about
+performance. It closes and moves the child into the day's lesson."* **The screen
+already had exactly that.** What it lacked was a memory that it had happened.
+
+**THE WARM-UP WAS RE-SITTABLE ANY NUMBER OF TIMES A DAY**, and it is worth
+being clear that this was not a cosmetic row. Every run reduces to a feature
+vector and submits it, so a child who opened it four times sent four
+measurements of the same dimension on the same day - and the engine
+recalibrates on those. The fix is a guard before the run starts, not a
+disabled button after it.
+
+**NO SERVER ANSWER EXISTS, so this is a device memory.**
+`BaselinePromptResponse` is `{dimension}` and nothing else, re-checked 23 Sep
+and still list S-B 5's open ask. When the wire carries "done today",
+`warmUpDone.ts` is deleted and replaced by it.
+
+**KEYED PER CHILD, because the tablet is shared.** A flag on the device alone
+would tell the second child of the morning that they had already done a warm-up
+they have never seen - and the warm-up is the one thing on the dashboard
+addressed to them. Yesterday's entries are pruned on write rather than
+accumulating six children for ever.
+
+**IT IS NOT A CLAIM ABOUT A CHILD.** A note that an activity happened, in the
+same family as the device roster and the remembered rotate-prompt escape. Never
+sent anywhere, never a measurement, and nothing in it says how the child did -
+which is the line the done state itself already held.
+
+**THE FAILURE FALLS TOWARDS OFFERING IT.** Private mode, blocked storage, a
+corrupt value: all answer "not done", so a child does their warm-up twice
+rather than being told they already did one they did not.
+
+**DERIVED DURING RENDER, NOT SET FROM AN EFFECT.** The first version read the
+flag in an effect and called `setDone`, which is the `set-state-in-effect`
+purity rule this codebase has tripped before; lint caught it. `useHydrated` is
+the sanctioned shape - and it is also better, because the done state is right
+on the FIRST client render instead of after a flash of the activity.
+
+**A MUTATION SURVIVED AND THAT WAS THE USEFUL PART.** Removing the write
+entirely - so nothing is ever remembered - killed none of the first six tests,
+because they all seeded the flag with `markWarmUpDone` and then proved the
+GUARD reads it. Nothing proved the run ever writes it. The test that closes the
+loop completes a real run, unmounts, and re-renders.
+
+**STILL OPEN, AND IT IS A COPY QUESTION:** the dashboard card still reads
+"Begin warm-up" once today's is done, and tapping it lands on the done state.
+That is honest rather than wrong, but it is not what the card should say.
+Deliberately not invented - design has not given words for it.
+
+
 ### The teacher's note reaches the child, 23 Sep - and it ships unnamed
 
 Open since 18 Sep, ruled today. Design: *"It reaches the child. It appears on

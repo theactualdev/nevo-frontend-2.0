@@ -1449,9 +1449,17 @@ daily lesson path.
    so "My tablet doesn't turn" lets the child through and is remembered per device. Verified
    in a real 700x300 viewport, where the escape was clipped below the fold and both Welcome
    buttons behind it were too.
-9. ~~**A done state for the daily warm-up**~~ **RULED 23 SEP: yes, one exists.** It says
-   nothing about performance; it closes and moves the child into the day's lesson.
-   **Buildable.**
+9. ~~**A done state for the daily warm-up**~~ **RULED AND BUILT 23 SEP.** Design: yes,
+   one exists, it says nothing about performance, and it closes into the day's lesson —
+   which the screen already did. **The gap was that nothing REMEMBERED it**, and that
+   was a measurement problem rather than a tidiness one: every run reduces and submits a
+   feature vector, so four visits meant four measurements of the same dimension on the
+   same day. Guarded before the run starts, keyed per child because the tablet is shared,
+   and held on the device because `BaselinePromptResponse` is still `{dimension}` — when
+   the wire carries "done today", the local memory is deleted.
+   **Still open, and it is copy rather than a decision:** the dashboard card still reads
+   "Begin warm-up" once today's is done. Tapping it lands on the done state, which is
+   honest but not what the card should say. Not invented — design has given no words.
 10. **The nothing-landed result copy**, and **`invalid_session`** — **HALF RULED 23 SEP.**
     `invalid_session` **gets its own words**: design, *"nothing landed and a dead link are
     different problems with different next actions, and giving them the same copy sends a
