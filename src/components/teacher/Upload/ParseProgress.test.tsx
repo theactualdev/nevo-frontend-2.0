@@ -40,6 +40,21 @@ describe("rungFor", () => {
     expect(rungFor("some_future_stage" as never)).toBe(-1);
   });
 
+  it("holds the adaptations stage on the segments rung, not off the ladder", () => {
+    /*
+     * The wizard renders this ladder only while `rungFor(...) >= 0`. For as
+     * long as `adaptations` answered -1, a real upload drew the ladder,
+     * reached the second rung, and then had the whole ladder replaced by a
+     * bare spinner - through the longest part of the wait, which is the exact
+     * reading of "the product has hung" the ladder exists to prevent.
+     *
+     * It holds rather than gaining a rung: a fourth rung is design's to rule
+     * on, and "never draw a rung the backend doesn't report" was their words.
+     */
+    expect(rungFor("adaptations")).toBe(rungFor("structure"));
+    expect(rungFor("adaptations")).toBeGreaterThanOrEqual(0);
+  });
+
   it("carries design's labels verbatim", () => {
     expect(PARSE_STAGES.map((s) => s.label)).toEqual([
       "Reading your upload",

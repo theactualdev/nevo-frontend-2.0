@@ -34,8 +34,28 @@ export type UploadStatus =
   | "failed"
   | "cancelled";
 
-/** `UploadStage` in the spec. */
-export type UploadStage = "lessons" | "structure" | "complete";
+/**
+ * `UploadStage` in the spec.
+ *
+ * `adaptations` LANDED ON 23 SEP, between `structure` and `complete`, and it
+ * is the long one. Backend's own note on the enum: it "is the longest wait of
+ * the four by a wide margin - a generated picture alone can take ten minutes",
+ * and it covers pictures, narration and the two depth rewrites. Until it
+ * existed the parser reported `structure` through all of that, which is why
+ * both ladders in this console were built with no rung for it.
+ *
+ * ADDING IT HERE IS NOT COSMETIC. `rungFor` and `stageOf` match on these
+ * values, and while it was missing a real upload walked the block ladder to
+ * its second rung and then replaced it with a bare spinner, and the single
+ * ladder back to "Receiving the file" - both for the longest part of the
+ * wait, which is the exact reading of "the product has hung" that LU-01
+ * exists to prevent. Observed on a live upload, not reasoned about.
+ */
+export type UploadStage =
+  | "lessons"
+  | "structure"
+  | "adaptations"
+  | "complete";
 
 export interface StructureModule {
   title: string;
@@ -65,7 +85,21 @@ export interface UploadStructure {
    * the mirror alone, or a unit of four will read as one.
    */
   lessons?: StructureLesson[];
-  lessonId: string;
+  /**
+   * NULL UNTIL THERE IS A LESSON, as of 23 Sep.
+   *
+   * A job is polled from the moment it is created and a parse that is still
+   * running has produced nothing, so this is null for the whole processing
+   * window. It was required in the contract, and validating an empty
+   * structure on the way OUT is what made the status route answer 500 for
+   * precisely the period it exists to report on - every poll of every
+   * in-flight upload, since the staged route existed.
+   *
+   * SO IT IS NOT A READINESS SIGNAL. Read `status`. A caller that branches
+   * on this id cannot tell "still parsing" from "the parse died hours ago",
+   * because both have no lesson.
+   */
+  lessonId: string | null;
   modules: StructureModule[];
   /** Free-form in the contract; not rendered. */
   reviewNotes?: unknown[];
@@ -231,7 +265,12 @@ export function lessonsOf(structure: UploadStructure): StructureLesson[] {
   if (structure.lessons?.length) return structure.lessons;
   return [
     {
-      lessonId: structure.lessonId,
+      // Null means the parse has produced no lesson yet. Omitting the id is
+      // how this contract says NEW - the server mints one on confirm - so a
+      // null must not become a lesson to mint. The review screens gate on
+      // `status` before they ever reach here, which is what keeps that from
+      // happening; this line only refuses to convert the one into the other.
+      lessonId: structure.lessonId ?? undefined,
       title: "",
       sequenceOrder: 1,
       modules: structure.modules ?? [],

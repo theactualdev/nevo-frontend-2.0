@@ -123,7 +123,18 @@ export function LiveModuleReview({
   const setModules = (mods: StructureModule[]) => {
     setLessons((ls) =>
       ls.length === 0
-        ? [{ lessonId: structure.lessonId, title: "", sequenceOrder: 1, modules: mods }]
+        ? [
+            {
+              // Nullable in the contract since 23 Sep - a parse still running
+              // has produced no lesson. It cannot be null HERE, because this
+              // screen renders only once the upload reports ready, and an
+              // omitted id would tell confirm to mint a second lesson.
+              lessonId: structure.lessonId ?? undefined,
+              title: "",
+              sequenceOrder: 1,
+              modules: mods,
+            },
+          ]
         : ls.map((l, i) => (i === 0 ? { ...l, modules: mods } : l)),
     );
     setDirty(true);

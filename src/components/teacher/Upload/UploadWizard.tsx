@@ -269,10 +269,9 @@ export function UploadWizard() {
    * single path has shown it since 18 Sep. The pipeline underneath changed;
    * what a teacher meets when a parse fails should not.
    */
-  const fallback: { kind: FallbackKind; reason: string | null } | null =
+  const fallback: { kind: FallbackKind } | null =
     phase === "fallback"
-      ? /* The demo beats name a shape, never a reason - only a real server has one. */
-        { kind: fallbackKind, reason: null }
+      ? { kind: fallbackKind }
       : !isBlock && phase === "processing" && staged.failed
         ? {
             kind:
@@ -281,9 +280,6 @@ export function UploadWizard() {
                 : staged.failureKind === "file"
                   ? "unreadable"
                   : "parseFailed",
-            // The server's own reason when it gave one: it knows why and we
-            // do not.
-            reason: staged.error,
           }
         : null;
   const stepTotal = scope === null ? "N" : scope === "single" ? 3 : 5;
@@ -532,7 +528,6 @@ export function UploadWizard() {
       {fallback && (
         <ParseFallback
           kind={fallback.kind}
-          reason={fallback.reason}
           incident={staged.incident}
           blockName={blockName}
           onBack={() => setPhase("file")}
@@ -841,14 +836,16 @@ export function UploadWizard() {
                         : "Nevo couldn’t finish that one"}
                   </h3>
                   <p className="mt-2 text-sm leading-[1.55] text-nevo-near-black/62">
-                    {/* The server's own reason when it gave one - it knows why
-                        and we do not. */}
-                    {staged.error ??
-                      (staged.failureKind === "request"
-                        ? "Nothing is wrong with your file, and nothing you did is lost. Try again in a moment."
-                        : staged.failureKind === "file"
-                          ? "Nevo couldn’t find lesson text in that file. A PDF, Word file or slides with readable text works best."
-                          : "The reading started and stopped partway. Nothing you did is lost.")}
+                    {/* THE SERVER'S OWN REASON USED TO LEAD HERE. It cannot:
+                        `error` carries a database driver's exception, which
+                        nobody had seen until the status route stopped
+                        answering 500 on 23 Sep. Three sentences of ours, one
+                        per failure, and the reference below for reporting. */}
+                    {staged.failureKind === "request"
+                      ? "Nothing is wrong with your file, and nothing you did is lost. Try again in a moment."
+                      : staged.failureKind === "file"
+                        ? "Nevo couldn’t find lesson text in that file. A PDF, Word file or slides with readable text works best."
+                        : "The reading started and stopped partway. Nothing you did is lost."}
                   </p>
                   {/* The unit path's own failure card. Same line, same
                       reason: a 500 is the one failure we can say nothing

@@ -26,7 +26,7 @@ export type FallbackKind =
   | "noBoundary"
   | "partial"
   | "unreadable"
-  /** The parse started and could not finish. The server says why. */
+  /** The parse started and could not finish. */
   | "parseFailed"
   | "unreachable";
 
@@ -86,7 +86,6 @@ export function IncidentLine({ id }: { id?: string | null }) {
 
 export function ParseFallback({
   kind,
-  reason,
   incident,
   blockName,
   onBack,
@@ -95,8 +94,11 @@ export function ParseFallback({
   onContinueAnyway,
 }: {
   kind: FallbackKind;
-  /** The server's own failure reason, on `parseFailed`. */
-  reason?: string | null;
+  /**
+   * NO `reason`, AND THAT IS A DECISION RATHER THAN AN OMISSION - see the
+   * `parseFailed` branch below. The server's `error` is a driver exception,
+   * not a sentence.
+   */
   /** The backend's reference, when the failure was an unhandled one. */
   incident?: string | null;
   blockName: string;
@@ -275,8 +277,16 @@ export function ParseFallback({
 
             NOT DRAWN BY DESIGN. C07f has an unreadable file and a lost
             connection, and no state for work that started and could not
-            finish. This borrows the unreadable layout and says the server's
-            own reason where that screen guesses at scans and formats.
+            finish. Design ruled this one into existence on 23 Sep.
+
+            IT USED TO SAY THE SERVER'S OWN REASON HERE, on the argument that
+            the server knows why and we do not. That was written blind: the
+            status route answered 500 for every in-flight upload, so no real
+            `error` had ever been seen. The first one seen, on a live upload
+            on 23 Sep, was an asyncpg exception with the failing INSERT and
+            its bound UUIDs in it - and this paragraph is the sentence a
+            teacher reads when their lesson does not arrive. Knowing why is
+            not the same as having something to say.
           */
           <div className="mx-auto flex max-w-[560px] flex-col items-center pt-6 text-center xl:pt-10">
             <span className="flex size-14 shrink-0 items-center justify-center rounded-[16px] bg-nevo-violet/18 text-nevo-navy">
@@ -295,11 +305,9 @@ export function ParseFallback({
             <p className="mt-[9px] max-w-[440px] text-[14.5px] leading-[1.6] text-nevo-near-black/70">
               {/* "WE", not "Nevo couldn't" and not a word about the file.
                   Design, 23 Sep: a failed parse is OUR problem and the copy
-                  should say so rather than implying they gave us a bad file.
-                  The server's own reason still leads where it gave one - it
-                  knows why and we do not. */}
-              {reason ??
-                "The reading started and stopped partway. That is ours to sort out, not anything you did."}
+                  should say so rather than implying they gave us a bad file. */}
+              The reading started and stopped partway. That is ours to sort
+              out, not anything you did.
             </p>
             <IncidentLine id={incident} />
             <div className="mt-[22px] flex flex-wrap items-center justify-center gap-3">

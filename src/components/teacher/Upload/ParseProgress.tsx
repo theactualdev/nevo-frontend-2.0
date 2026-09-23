@@ -15,14 +15,20 @@ import { cn } from "@/lib/utils";
  */
 
 /**
- * THREE RUNGS, ONE PER `UploadStage`, and that is the whole rule.
+ * THREE RUNGS, AND NEVER ONE THE BACKEND DOES NOT REPORT.
  *
  * Design, 14 Sep: "never draw a rung the backend doesn't report." The ladder
  * had four rungs invented to match C07e's drawing, driven by a mock clock, and
- * `UploadStage` reports three - `lessons | structure | complete`. So a teacher
+ * `UploadStage` reported three - `lessons | structure | complete`. So a teacher
  * watched a four-step story about a three-step process, and on the LIVE path
  * did not see the ladder at all: a real upload id routed to a plain spinner,
  * because there was no honest way to map three values onto four rungs.
+ *
+ * `UploadStage` REPORTS FOUR AS OF 23 SEP - `adaptations` joined it - and this
+ * is still three rungs, which is that same rule rather than a lapse from it.
+ * A fourth rung is design's to rule on, and the ask sits in
+ * `ProcessingStages.tsx` where the same question is already recorded. What
+ * this file owes in the meantime is in `rungFor`.
  *
  * Labels are design's own words. `complete` is a rung like the others rather
  * than the ladder resolving, which was the reading design confirmed after I
@@ -41,8 +47,23 @@ export const PARSE_STAGES: { stage: UploadStage; label: string }[] = [
 /**
  * Where a stage sits on the ladder. `-1` for a value we do not know, and for
  * `null` - which the hook uses before the first poll answers.
+ *
+ * `adaptations` HOLDS ON THE SEGMENTS RUNG rather than answering `-1`, and
+ * that is not cosmetic: the wizard renders this ladder only while
+ * `rungFor(...) >= 0`. While the enum had a value this file did not know, a
+ * real upload drew the ladder, reached the second rung, and then had the
+ * whole ladder replaced by a bare spinner for the longest part of the wait.
+ * Watched happening on a live upload on 23 Sep, not reasoned about.
+ *
+ * A genuinely unknown value still answers `-1`, and that is a different case:
+ * a stage nobody has met cannot be placed, and the spinner is at least not a
+ * claim about where the parse has got to. `adaptations` can be placed,
+ * because backend said where it sits.
  */
 export function rungFor(stage: UploadStage | null | undefined): number {
+  if (stage === "adaptations") {
+    return PARSE_STAGES.findIndex((s) => s.stage === "structure");
+  }
   return PARSE_STAGES.findIndex((s) => s.stage === stage);
 }
 
