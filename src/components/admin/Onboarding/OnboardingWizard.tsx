@@ -5,6 +5,7 @@ import type { EnrolmentBand, SchoolAuthMethod } from "@/lib/api/school";
 import { cn } from "@/lib/utils";
 import { AuthMethodStep } from "./AuthMethodStep";
 import { BandStep } from "./BandStep";
+import { ConfirmEmailStep } from "./ConfirmEmailStep";
 import { DpaStep } from "./DpaStep";
 import { HandoverStep } from "./HandoverStep";
 import type { SchoolRegistration } from "@/lib/api/school";
@@ -33,7 +34,7 @@ import { SignUpStep } from "./SignUpStep";
  * Written for a proprietor, not an IT specialist.
  */
 
-export type Step = 0 | 1 | 2 | 3 | 4;
+export type Step = 0 | 1 | 2 | 3 | 4 | 5;
 
 export interface WizardState {
   schoolName: string;
@@ -52,7 +53,16 @@ export interface WizardState {
   registration: SchoolRegistration | null;
 }
 
-const TOTAL = 5;
+/**
+ * SIX TODAY, FOUR WHEN DESIGN ANSWERS. D01's rail is now Sign up · Confirm
+ * email · DPA read-gate · School details, and it names neither the sign-in
+ * method step nor the enrolment band. Email confirmation is inserted at its
+ * frame position (step 2) because the ORDER is a compliance constraint and
+ * cannot wait; the other two stay where they are because deleting 460 lines on
+ * our reading of a step rail is not a call this file gets to make. See the
+ * design ask raised 23 Sep.
+ */
+const TOTAL = 6;
 
 export function OnboardingWizard() {
   const [step, setStep] = useState<Step>(0);
@@ -109,33 +119,49 @@ export function OnboardingWizard() {
           />
         ) : null}
 
+        {/*
+          * BEFORE THE DPA, AND THAT IS THE POINT. D01: "Email confirm sits
+          * before the DPA so acceptance is tied to a verified owner." The DPA
+          * acceptance record names an administrator and is displayed on two
+          * screens; without this step it could name an address nobody had
+          * shown they owned.
+          */}
         {step === 1 ? (
-          <AuthMethodStep
-            selected={state.authMethod}
-            onSelect={(authMethod) => patch({ authMethod })}
+          <ConfirmEmailStep
+            schoolName={state.schoolName}
+            email={state.email}
             onBack={() => setStep(0)}
             onDone={() => setStep(2)}
           />
         ) : null}
 
         {step === 2 ? (
-          <DpaStep
-            schoolName={state.schoolName}
+          <AuthMethodStep
+            selected={state.authMethod}
+            onSelect={(authMethod) => patch({ authMethod })}
             onBack={() => setStep(1)}
             onDone={() => setStep(3)}
           />
         ) : null}
 
         {step === 3 ? (
-          <BandStep
-            selected={state.band}
-            onSelect={(band) => patch({ band })}
+          <DpaStep
+            schoolName={state.schoolName}
             onBack={() => setStep(2)}
             onDone={() => setStep(4)}
           />
         ) : null}
 
-        {step === 4 ? <HandoverStep state={state} /> : null}
+        {step === 4 ? (
+          <BandStep
+            selected={state.band}
+            onSelect={(band) => patch({ band })}
+            onBack={() => setStep(3)}
+            onDone={() => setStep(5)}
+          />
+        ) : null}
+
+        {step === 5 ? <HandoverStep state={state} /> : null}
       </div>
     </main>
   );
