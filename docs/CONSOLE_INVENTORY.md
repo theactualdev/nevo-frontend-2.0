@@ -1102,8 +1102,24 @@ instruction is to build nothing that depends on either field until it is answere
     - **the avatar selector** — likewise. There is no avatar-choosing UI in
       `student/Profile`, so this may mean "build one" (a design question, since no frame
       shows it) rather than "fix one". **Needs the same.**
-17. **The scaffolds subsystem** — three deployed endpoints with no client module at all.
-    Worth a scoping pass before it is sized. **M**
+17. **The scaffolds subsystem** — **SCOPED 23 Sep; the scoping pass this row asked for is
+    done and it is buildable.** Three paths, all unconsumed: `GET .../scaffolds/state/{student_id}/{concept_id}`,
+    `POST .../scaffolds/attempt`, `GET .../scaffolds/history/{student_id}`.
+    **The division of labour is already correct in the schema, which is why this is safe to
+    take.** We post what happened — `responseCorrect`, `responseTimeMs`, `hintCount` — and
+    `ScaffoldDecisionResponse` comes back carrying `nextIntensity`, `levelChanged`,
+    `changeReason` and **`studentMessage`**, a required string. The server decides and writes
+    the words; we render them. `ScaffoldIntensity` is `full_support | partial_support |
+    hints_only | independent` and `ScaffoldOutcome` is `correct | struggled`.
+    **Rule 3 and the Zero-Tag ruling both bite here and neither blocks it.** Never compute an
+    intensity, never render one: `currentIntensity`, `consecutiveCorrect`,
+    `responseTimeImprovementStreak` and `reducedHintStreak` on `ScaffoldStateResponse` are
+    engine parameters and belong on no screen — typed because the contract sends them, shown
+    to nobody, exactly as `stability` and `retrievability` are. `changeReason` is reasoning
+    and frame 38 forbids showing it. **`studentMessage` is the only field a child may read.**
+    **Still open, and it is a design question rather than a backend one:** where a scaffold
+    change is felt. Rule 7 says an adaptation transition is felt, not seen, so `levelChanged`
+    must not announce itself. **M**
 18. **Tell a teacher when their upload was silently degraded.** Traced 16 Sep after
     backend flagged the Zero-Tag rejection. `UploadWizard.tsx:285-290` awaits the parse run,
     tests `run.status === "failed"` and nothing else, then walks the teacher into the review
@@ -1182,6 +1198,79 @@ something that matches nothing.
 **Only where the fault is ours.** A refused file has a reason, and a reason beats
 a reference — the line stays off those screens.
 
+## RE-DERIVED 23 SEP — 8 MORE PATHS, AND ONE THAT CONTRADICTS US
+
+`217 → 225 paths, 395 → 406 schemas` since the 21 Sep re-probe. **Smaller than
+that release and more consequential**, because one of the additions is not a new
+capability but a **correction to a vocabulary we had already built against**.
+
+**Read the action row first.** `ProactiveAction` now exists as an enum and it
+shares only two values with `ADJUSTMENT_ACTIONS`. Two shipped behaviours can
+never fire and three live instructions silently do nothing. See S-B row 16. **No
+affective work should be taken until that is answered.**
+
+**Closed by this release:**
+
+| landed | closes |
+|---|---|
+| `SignalEventType` 27 → 31 | S-B 2, four of its five values |
+| `GET /students/{id}/sessions` returning `sessionId` | S-B 6, and teacher 0b |
+| `ProactiveAction` enum | S-B 16 — **as a contradiction, not a clearance** |
+| `/api/v1/student-entry/*` | the consent re-sequence, below |
+
+**Re-derived and STILL BLOCKED, so do not re-probe these until something is
+announced:** S-B 3 (no attempt store — `scaffolds/attempt` is a scaffold
+decision, not an answer record), S-B 5 (`BaselinePromptResponse` is still
+`{dimension}`), S-B 7 (`SchoolCodeResponse` still names the method, never the
+vendor), S-B 9 (no `currentPin` on `PinUpdateRequest`), S-B 10 (no description
+on either lesson schema).
+
+### The consent re-sequence has its endpoint — `/api/v1/student-entry`
+
+Two paths, **no consumer in `src/`**, and together they are the entry
+re-sequence scoped in `docs/SCOPE_CONSENT_AND_176.md` on 22 Sep.
+
+- `GET /api/v1/student-entry/{token}` → `StudentEntryState`
+  `{firstName, className, consentState, age, accountReady, ageCheckPending}`,
+  where `consentState` is **`given | pending`**.
+- `POST /api/v1/student-entry/{token}/pin` → sets the PIN and returns
+  `StudentEntrySession {userId, loginIdentifier, session}`.
+
+**It answers open question 1 of that scope doc.** The entry point is the token
+link, and the state resolves from the token rather than from a session — so the
+check can run before anything mounts, which is what "consent is checked at entry"
+requires. `consentState: "pending"` is the 00d condition; the read is a single
+resolve, which is what "no polling" requires.
+
+**It also carries `ageCheckPending`**, which ties to `/api/v1/age-checks`
+(`AgeCheckResponse.blocksAccess`, `AgeCheckState = matched | mismatch | resolved
+| awaiting_parent`). That is the age-check surface this file already records as
+having sat unbuilt and unreported. **Not the same screen as 00d** — a disputed
+date of birth is not a missing consent — and it needs its own ruling.
+
+### THE PIN LENGTH IS NOW INCONSISTENT WITHIN THE WIRE ITSELF
+
+Found 23 Sep, and it lands directly in the path of the entry work above.
+
+| schema | constraint |
+|---|---|
+| `PinChoice` (student-entry) | `minLength 4, maxLength 8, ^d+$` |
+| `JoinRequest.pin` | **no pattern** |
+| `UnifiedLoginRequest.pin` | **no pattern** |
+| `PinLoginRequest.pin` | `^d{6}$` |
+| `PinUpdateRequest.pin` | `^d{6}$` |
+
+**The creation doors have been relaxed and the unlock door has not.** A child can
+now be given a four-digit PIN at entry and then be refused by `PinLoginRequest`
+with a 422 on every subsequent sign-in — and `classifyLoginFailure` maps a
+non-401/403 to "ours", so they are told "we couldn't check that just now" and
+never learn why. **This is worse than the state S-C 12 recorded**, where four
+digits simply could not be created. Design settled on four and said not to raise
+it again; this is not a reopening of that ruling but a contract fact that blocks
+implementing it. `STUDENT_PIN_LENGTH` stays at 6 until `PinLoginRequest` is
+relaxed to match.
+
+
 ## THE CONTRACT GAINED 25 PATHS ON 21 SEP — read this before planning anything
 
 `192 → 217 paths, 352 → 395 schemas` in one morning. Several long-standing
@@ -1245,21 +1334,21 @@ daily lesson path.
 | Blocked | The ask |
 |---|---|
 | 1. ~~Affective adaptation~~ **MOSTLY WRONG, corrected 17 Sep (#441)** | The transport exists and is `AdaptResponse.proactiveAdjustment.action`, typed at `intelligence.ts:151` and read by nothing until #441. **The zero-match search was the error, not the finding:** frontend §4 says the frontend receives an INSTRUCTION and never knows which state is active, so the absence of `affect`/`frustration`/`boredom` on the wire is the design working. Do not re-run that search and re-draw this conclusion. `modulate_density` and `increase_difficulty` are applied; `offer_break` had a richer seam already. **Two narrow asks survive, as rows 13 and 14** |
-| 2. Break and boundary signals | `break_start`, `break_end`, `feeling_checkin`, `module_boundary_reached` and `module_boundary_action` are absent from `SignalEventType` (27 values). The consolidation break asks a child how they feel and the answer is discarded |
+| ~~2. Break and boundary signals~~ **FOUR OF FIVE DELIVERED, re-derived 23 Sep** | `SignalEventType` went 27 → 31 values and `break_start`, `break_end`, `feeling_checkin` and `module_boundary_reached` are all PRESENT. **Only `module_boundary_action` is still absent.** So the consolidation break can now report that it started, that it ended, and what the child answered — the answer no longer has to be discarded. What cannot yet be sent is what the child chose to do AT a module boundary, which is a narrower ask than this row used to carry. **Buildable now; re-ask for the fifth value only** |
 | 3. An assessment-attempt store | Nothing in the 188 paths reads back a child's per-question answers. `POST /api/mastery/update` is a mastery update, not an attempt record. Today "Review answers" works only in the tab the child answered in |
 | 4. Reading-density reshapes — **NOW ONE THIRD OF WHAT THIS ROW USED TO SAY** | Design split the control on 17 Sep and was right to. **Slower shipped** — it is not a rewording but "how much arrives at once", so the chunked flow the `attention` accommodation already used delivers it from the body the lesson has, with no authored content. **Expand is deferred** — it needs text that does not exist. **Simplify is the only blocked third**, and it now travels with a bigger question: the player never reads `textVariant` at all (it builds text from `segment.body`), so `keyPoints` has no reader in the child's app, while the teacher's review screen reads `textVariant`. One backend answer settles both — see the `textVariant` row below. Two other things this row wrongly swallowed: the ENGINE's `modulate_density` is a UI treatment, needs no content, shipped 17 Sep; and `slowerSteps` was authored all along (below) |
 | **FROZEN 18 Sep — what is `textVariant.body` relative to `segment.body`?** | **Design's instruction: build nothing that depends on either field until this is answered, including Simplify.** Escalated directly to Teslim as urgent rather than queued. If the inference holds, the teacher approves `textVariant` and the child reads `body` — so the approval gate protects text no child sees, and the text a child reads was reviewed by nobody. Design: this is the THIRD time the wire and the design have described different products (dimensions, `expectedInteraction`, this); a fourth should be raised the same way, as an inference flagged as one, before building either side. Found 17 Sep. `LessonSegment` carries both. `fromContent.ts:143` builds the child's text from `segment.body` and nothing student-side touches `segment.textVariant`. The teacher's `LiveVariantReview` reads `textVariant` and says "Nevo has not generated a written version of this section" when it is null. **Inference, flagged as one: `body` is parsed source and `textVariant` is generated — in which case the teacher approves one text and the child reads another.** Also asks whether `keyPoints` is a terser rendering of the whole segment (Simplify ships free) or highlights beside it (it cannot be Simplify) |
 | 5. Baseline and warm-up items | `BaselinePromptResponse` is `{dimension}`. Every stimulus and every answer is hardcoded, so the daily warm-up asks the same question each time that dimension comes round |
-| 6. A session id a child can address | Same as teacher item 0b. `GET /students/{id}/sessions/{session_id}` needs a uuid nothing returns |
+| ~~6. A session id a child can address~~ **DELIVERED, found 23 Sep** | `GET /api/v1/students/{student_id}/sessions` now returns `StudentSessionListResponse`, whose items are `StudentSessionSummaryResponse` and **carry `sessionId`** alongside `lessonId`, `completionStatus`, `sitting` and `signalCount`; the detail path resolves to `StudentSessionDetailResponse` with `narrative` and `sections`. The uuid nothing returned is now returned. **This closes teacher item 0b at the same time** — same paths, shared client |
 | 7. Student SSO | `SsoStartRequest` needs `provider`, and `SchoolCodeResponse.authMethod` names only the *method*, never the vendor. Children at an SSO school cannot sign in |
-| 8. Ask Nevo handoff | `AskNevoAnswer` carries no boundary field, so "I can't help with this, ask your teacher" cannot be triggered by anything |
+| 8. Ask Nevo handoff — **STILL BLOCKED, and the shape is now clearer, 23 Sep** | `AskNevoAnswer` no longer exists; the answer schema is **`AskResponse`** `{answer, blocks, plainText, answerFormat, questionCategory, interactionId, aiGatewayCallId, threadId}` and **still carries no boundary field**. `questionCategory` is NOT it — `lesson_help, profile_pattern, class_planning, family_message, flag_review, general` is a topic enum, not a refusal. **The half that landed is the reporting half:** `SignalEventType` now has `ask_nevo_cannot_help` and `ask_nevo_redirect_used`, so we can report a handoff we have no way to trigger. Re-ask for a field on `AskResponse` |
 | 9. `currentPin` on the PIN change | Frame 27 draws three steps beginning with the current PIN; no such field exists anywhere |
 | 10. A lesson description | The preview sheet's plain-language description has no field on any lesson schema |
 | 11. **Visual generation is failing** | Not a schema gap — every image 400s, so `visualVariant` is null library-wide, the visual channel is dead and the modality-suggestion pill is structurally unreachable. Backend has the diagnostic deployed |
 | ~~13. `offer_hint` has no hint to show~~ **DELIVERED 20 Sep** | `ProactiveAdjustmentResponse` now carries **`hint`**. Asked 17 Sep, landed 20 Sep. **Unconsumed** — nothing in `src/` reads it. The original reasoning stands and is why the field was needed: `reason` is the reasoning frame 38 forbids showing, and `confidence` is an engine parameter rule 3 keeps off every screen. `FrustrationHint` takes a string and now has one |
 | ~~14. `show_socratic_panel` has no questions~~ **DELIVERED 20 Sep** | `ProactiveAdjustmentResponse` now carries **`guidedQuestions`**. `ConfusionSupport` takes 2-3 guided prompts and there is now a field for them. **Unconsumed** |
 | ~~15. `CalculationVariant` carries no manipulative structure~~ **DELIVERED 20 Sep** | `CalculationVariant.manipulative` now exists, typed as a new **`Manipulative`** schema `{kind, parts, rows, labels}` with a `ManipulativeKind` enum — exactly the `kind, parts, rows` that frontend §4 specifies, plus `labels`. **CONSUMED 21 Sep.** `drag` steps are accepted where the manipulative can be drawn, and the tap-to-build tray works from generated structure as well as the authored scaffold. **One of the five kinds is drawn — `fraction_bar`, the only one with a frame (17b). `number_line`, `array`, `place_value` and `counters` are refused rather than approximated; see S-C 13.** This is what `expectedInput: "drag"` on generated content was refused for, and what §4's *"the one place modalities layer rather than switch"* was waiting on |
-| 16. **`proactiveAdjustment.action` has no enum** | Documentation, added 17 Sep. A bare `string`, so §4's six values are the design's list and not the contract's. Unrecognised values resolve to null and render nothing, which is safe — confirming the vocabulary turns a guess into a contract |
+| ~~16. **`proactiveAdjustment.action` has no enum**~~ **DELIVERED 23 Sep — AND IT DOES NOT MATCH OURS. DO NOT BUILD AFFECTIVE WORK UNTIL THIS IS ANSWERED** | `action` now `$ref`s **`ProactiveAction`**, and the contract's five are `simplify`, `slower`, `expand`, `offer_hint`, `show_socratic_panel`. `ADJUSTMENT_ACTIONS` in `constants/affect.ts` has `no_action`, `modulate_density`, `increase_difficulty`, `offer_hint`, `offer_break`, `show_socratic_panel`. **Only two overlap.** So `modulate_density` and `offer_break` — both built and shipped 17 Sep — can never fire, and `simplify`/`slower`/`expand` arriving today fall through `asAdjustmentAction` to null and do nothing, silently and by design. **The engine has adopted design's 17 Sep pace-control split as its action vocabulary.** This is the FOURTH time the wire and the design have described different products, and design's standing instruction after the third was to raise a fourth as an inference before building either side. **Mapping `modulate_density` onto `simplify` would be a guess** — the constants are deliberately untouched |
 | 12. **Zero-Tag rejects ordinary English** | Raised by backend 16 Sep: "treatment", "be patient" and "water treatment" are refused, and a lesson containing one degrades silently to deterministic splitting. Flagged as a compliance decision rather than a bug. **Not a backend ask — traced 16 Sep and the frontend half is ours: the teacher is told nothing.** See S-A item 18 |
 
 ## S-C. Blocked on design
@@ -1318,6 +1407,13 @@ daily lesson path.
     anything that is not 401/403 to "ours" - so the child is told "we couldn't check
     that just now" and cannot sign in on ANY door. `STUDENT_PIN_LENGTH` therefore stays
     at 6 until the pattern is relaxed to four, at which point it is a one-line change
+    **UPDATED 23 Sep: the constraint moved, and not consistently.** The new
+    `student-entry` route accepts 4-8 digits via `PinChoice`, and `JoinRequest` and
+    `UnifiedLoginRequest` have had their patterns removed entirely - but
+    `PinLoginRequest` and `PinUpdateRequest` still carry `^d{6}$`. So a four-digit
+    PIN can now be CREATED and can never be USED. See the 23 Sep section above.
+    The conclusion is unchanged and the reason for it is now different.
+
     and all three PIN screens follow it. See `lib/constants/auth.ts`.
 13. **Four manipulative kinds with no frame.** Added 21 Sep. The wire emits
     `fraction_bar`, `number_line`, `array`, `place_value` and `counters`; design has drawn
