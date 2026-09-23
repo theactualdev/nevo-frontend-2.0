@@ -80,8 +80,19 @@ export function useSegmentReview(
     [justApproved],
   );
 
+  /**
+   * The sections a teacher can actually settle here: the ones NEVO FLAGGED
+   * and nobody has approved.
+   *
+   * This counted every unapproved segment, which stopped being what
+   * "outstanding" means when backend re-ruled it on 21 Sep - *"a segment Nevo
+   * itself flagged and nobody approved, or an ungrounded key point"*. Only
+   * flagged sections are drawn, so counting the rest produced a number with
+   * no cards behind it, and QA met it as a lesson that could not be assigned
+   * after everything on screen was done.
+   */
   const outstanding = useMemo(
-    () => segments.filter((s) => !isApproved(s)),
+    () => segments.filter((s) => s.needsReview && !isApproved(s)),
     [segments, isApproved],
   );
 
@@ -115,12 +126,19 @@ export function useSegmentReview(
 
   return {
     outstanding,
-    // The server's tally wins where we have one. Before that, the count is
-    // the sections this page was handed - which is the same number, and is
-    // what a teacher is looking at.
-    remaining: serverCounts
-      ? Math.max(0, serverCounts.total - serverCounts.approved)
-      : outstanding.length,
+    /*
+     * COUNTED FROM THE CARDS, and that is an inversion worth stating.
+     *
+     * This used the approve response's `segmentCount - approvedSegmentCount`,
+     * on the principle that the server's tally beats ours. That principle is
+     * right for the GATE and wrong for this number: the server's tally is of
+     * every segment, and this sentence is about the cards in front of the
+     * teacher. Two different questions that happened to share a word.
+     *
+     * So: the verdict is `readyToAssign`, always. The count is what is on
+     * screen, always. Neither borrows from the other.
+     */
+    remaining: outstanding.length,
     ready: serverCounts ? serverCounts.lessonApproved : outstanding.length === 0,
     approving,
     failed,

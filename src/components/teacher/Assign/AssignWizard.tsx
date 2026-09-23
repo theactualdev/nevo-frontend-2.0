@@ -254,11 +254,34 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
    * that names a destination makes it reachable in one click.
    */
   const [errorHref, setErrorHref] = useState("");
-  // The teacher's real library when there is one; the frame's four otherwise.
-  const { cards, live } = useLessonLibrary();
+  /*
+   * THE SAME HOLE AS THE CLASS LIST, IN THE LIST BESIDE IT. QA, 22 Sep:
+   * "fodder lessons flash before the real ones."
+   *
+   * `live` is false for the ENTIRE in-flight window, not just a failure, so
+   * `: LESSONS` drew the frame's four invented lessons at every signed-in
+   * teacher for as long as their library took to arrive - and then swapped
+   * them for the real ones under the cursor. Worse than the flash: a lesson
+   * chosen in that window is a FIXTURE ID on its way to
+   * `POST /api/v1/assignments`.
+   *
+   * The comment forty lines above diagnoses this exactly, for classes, and
+   * the fix landed there and not here. `sample` is the honest signal - it is
+   * true only once the read has FAILED - and signed out, `useLiveQuery`
+   * reports `loading: false` at once, so the designed walkthrough keeps its
+   * four.
+   */
+  const {
+    cards,
+    live,
+    sample: lessonsSample,
+    loading: lessonsLoading,
+  } = useLessonLibrary();
   const lessons = live
     ? cards.map((c) => ({ id: c.id, title: c.title, meta: c.meta }))
-    : LESSONS;
+    : !signedIn || lessonsSample
+      ? LESSONS
+      : [];
 
   /** Tomorrow in `YYYY-MM-DD`, local. Called from a handler, never render. */
   const tomorrow = () => {
@@ -624,6 +647,16 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
 
             {step === 1 && (
               <div className="mt-[18px] flex flex-col gap-2.5 xl:mt-5 xl:gap-[11px]">
+                {/* Skeletons, not fixtures - the same answer the class list
+                    below already gives. A lesson that is never offered cannot
+                    be picked. */}
+                {lessonsLoading &&
+                  [0, 1, 2].map((i) => (
+                    <div
+                      key={`skeleton-${i}`}
+                      className="h-[74px] animate-pulse rounded-[12px] bg-nevo-cream-elevated"
+                    />
+                  ))}
                 {lessons.map((l) => (
                   <CheckCard
                     key={l.id}

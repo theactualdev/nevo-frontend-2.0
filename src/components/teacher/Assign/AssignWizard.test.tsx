@@ -372,3 +372,67 @@ describe("while the class list is still loading", () => {
     expect(create).not.toHaveBeenCalled();
   });
 });
+
+describe("the lessons a teacher is offered", () => {
+  it("offers none of the invented four while the library is still arriving", () => {
+    /*
+     * QA, 22 Sep: "fodder lessons flash before the real ones."
+     *
+     * `live` is false for the whole in-flight window, not just a failure, so
+     * the fallback drew the frame's four at every signed-in teacher until
+     * their library landed - and a lesson chosen in that window is a FIXTURE
+     * ID on its way to `POST /api/v1/assignments`. The class list beside it
+     * had the same hole, diagnosed in a comment forty lines up, and only the
+     * class half was fixed.
+     */
+    useLessonLibrary.mockReturnValue({
+      cards: [],
+      live: false,
+      sample: false,
+      loading: true,
+      slow: false,
+    });
+
+    render(<AssignWizard />);
+
+    expect(
+      screen.queryByText("Simplifying Algebraic Fractions"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps the designed four for a visitor with no session", () => {
+    // Signed out, `useLiveQuery` reports `loading: false` at once. The
+    // walkthrough is the one place those four belong.
+    useLessonLibrary.mockReturnValue({
+      cards: [],
+      live: false,
+      sample: false,
+      loading: false,
+      slow: false,
+    });
+    useHasSession.mockReturnValue(false);
+
+    render(<AssignWizard />);
+
+    expect(
+      screen.getByText("Simplifying Algebraic Fractions"),
+    ).toBeInTheDocument();
+  });
+
+  it("falls back to them when the read genuinely failed", () => {
+    // `sample` is the honest signal: true only once the read has failed.
+    useLessonLibrary.mockReturnValue({
+      cards: [],
+      live: false,
+      sample: true,
+      loading: false,
+      slow: false,
+    });
+
+    render(<AssignWizard />);
+
+    expect(
+      screen.getByText("Simplifying Algebraic Fractions"),
+    ).toBeInTheDocument();
+  });
+});

@@ -92,7 +92,7 @@ export function LessonDetailActions({
         )}
       </div>
       {blocked && (
-        <span className="max-w-[260px] text-right text-[13px] leading-[1.5] text-nevo-near-black/62">
+        <span className="text-right text-[13px] font-medium text-nevo-navy">
           {/* The server says it is not ready and we do not always know why -
               a refusal we cannot itemise still has to say something true. */}
           {/* C06b: "2 key points still to check". The "below" this used to

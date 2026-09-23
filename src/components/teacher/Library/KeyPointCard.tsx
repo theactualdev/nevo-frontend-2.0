@@ -121,10 +121,39 @@ export function KeyPointCard({
   onAmend: (text: string) => void;
   onRemove: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState(false);
+  /*
+   * A CARD THAT HAS BEEN DEALT WITH FOLDS ITSELF AWAY. QA, 22 Sep: accepted
+   * points should minimise "so the list shortens as you work down it".
+   *
+   * C06b draws a checked card as a COLLAPSED row with a tick, not a hidden
+   * one, so it closes rather than disappears - a teacher can reopen it and
+   * see what they accepted.
+   *
+   * DERIVED, NOT AN EFFECT. What is remembered is the version of the point a
+   * teacher opened; the card is open while that is still the version on
+   * screen. When the server answers, the version changes and the card closes
+   * on its own - no `useEffect` reaching in to set state after the fact,
+   * which this repo's lint refuses and is right to.
+   *
+   * Both halves of the stamp earn their place: `reviewState` catches an
+   * accept, and `text` catches an amendment to an already-amended point where
+   * the state does not move. A REFUSAL changes neither, so a card whose
+   * action failed stays open with its failure line where the teacher is
+   * looking.
+   */
+  const version = `${keyPoint.reviewState}:${keyPoint.text}`;
+  const [openedAt, setOpenedAt] = useState<string | null>(null);
+  const [editingAt, setEditingAt] = useState<string | null>(null);
+  const [removingAt, setRemovingAt] = useState<string | null>(null);
   const [draft, setDraft] = useState(keyPoint.text);
-  const [confirmingRemove, setConfirmingRemove] = useState(false);
+
+  const open = openedAt === version;
+  const editing = editingAt === version;
+  const confirmingRemove = removingAt === version;
+  const setOpen = (next: boolean) => setOpenedAt(next ? version : null);
+  const setEditing = (next: boolean) => setEditingAt(next ? version : null);
+  const setConfirmingRemove = (next: boolean) =>
+    setRemovingAt(next ? version : null);
 
   const busy = working !== null;
   const mark = markOf(keyPoint);
@@ -158,7 +187,7 @@ export function KeyPointCard({
     >
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => setOpen(!open)}
         aria-expanded={open}
         className="flex w-full cursor-pointer items-center gap-[13px] px-[20px] py-[17px] text-left transition-[filter] hover:brightness-[0.985]"
       >

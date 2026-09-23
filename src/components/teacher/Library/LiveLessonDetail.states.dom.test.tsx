@@ -144,6 +144,46 @@ describe("a lesson with nothing outstanding", () => {
   });
 });
 
+describe("the gate QA met", () => {
+  it("assigns on the server's verdict even with unapproved segments about", () => {
+    /*
+     * QA, 22 Sep: "assign still blocked after approving everything."
+     *
+     * The caller read `review.ready && outstandingSections === 0`, and that
+     * second clause was the thing backend asked by name not to do.
+     * `LessonDetailActions` has a test proving IT gates on `ready` - the
+     * count was ANDed in one line before it was passed, where that test
+     * could not see it. So this test is at the caller, deliberately.
+     */
+    useSegmentReview.mockReturnValue({
+      outstanding: [],
+      remaining: 5,
+      ready: false,
+      approving: null,
+      failed: null,
+      approve: vi.fn(),
+      isApproved: () => false,
+    });
+    reviewState({ ready: true, outstanding: 0 });
+
+    show();
+
+    expect(
+      screen.getByRole("link", { name: "Assign to a class" }),
+    ).toBeInTheDocument();
+  });
+
+  it("still refuses when the server refuses", () => {
+    reviewState({ ready: false, outstanding: 2, hadReview: true });
+
+    show();
+
+    expect(
+      screen.queryByRole("link", { name: "Assign to a class" }),
+    ).not.toBeInTheDocument();
+  });
+});
+
 describe("a lesson with key points waiting", () => {
   beforeEach(() => {
     reviewState({
