@@ -80,12 +80,14 @@ describe("the reference for a failure nobody planned for", () => {
      * anything to match on. `ApiError.detail` held the body all along.
      */
     create.mockRejectedValue(
-      new ApiError(500, "server", { incidentId: "a1b2c3d4" }),
+      new ApiError(500, "server", {
+        detail: { code: "unexpected_error", incidentId: "9f2c4a7b1d3e" },
+      }),
     );
 
     const result = await upload();
 
-    expect(result.current.incident).toBe("a1b2c3d4");
+    expect(result.current.incident).toBe("9f2c4a7b1d3e");
   });
 
   it("keeps nothing when the body carried no reference", async () => {
@@ -109,11 +111,13 @@ describe("the reference for a failure nobody planned for", () => {
 
   it("does not carry one upload's reference over to the next", async () => {
     create.mockRejectedValue(
-      new ApiError(500, "server", { incidentId: "a1b2c3d4" }),
+      new ApiError(500, "server", {
+        detail: { code: "unexpected_error", incidentId: "9f2c4a7b1d3e" },
+      }),
     );
     const { result } = renderHook(() => useStagedUpload());
     act(() => result.current.start(new File(["x"], "one.pdf"), "lesson"));
-    await waitFor(() => expect(result.current.incident).toBe("a1b2c3d4"));
+    await waitFor(() => expect(result.current.incident).toBe("9f2c4a7b1d3e"));
 
     create.mockResolvedValue({ uploadId: "u-2", status: "processing", stage: "lessons" });
     act(() => result.current.start(new File(["x"], "two.pdf"), "lesson"));

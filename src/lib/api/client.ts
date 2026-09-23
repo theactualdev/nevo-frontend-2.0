@@ -95,12 +95,20 @@ export function apiErrorCode(detail: unknown): string | null {
  * This is the reader that stops it being dropped.
  *
  * NOT IN THE CONTRACT, deliberately on their side and awkwardly on ours:
- * `incidentId` appears nowhere in the deployed OpenAPI document (re-checked
- * 22 Sep, 225 paths, 404 schemas), because an UNHANDLED error is by
- * definition not a documented response. So the shape is backend's word
- * rather than something we can type, and both plausible shapes are read:
- * top level, and nested under `detail` the way FastAPI nests its own error
- * bodies - see `apiErrorCode` directly above.
+ * `incidentId` appears nowhere in the deployed OpenAPI document, because an
+ * UNHANDLED error is by definition not a documented response. Backend's own
+ * words on that, 23 Sep: *"you're right that this means you're reading a
+ * field you can't type, and I don't have a good answer for that beyond this
+ * paragraph."*
+ *
+ * WHAT THAT PARAGRAPH SETTLED. It is **exactly twelve lowercase hex
+ * characters** - `uuid4().hex[:12]` - and it is **always nested under
+ * `detail`**, beside `code: "unexpected_error"` and a message. Never at the
+ * top level, so the second position this used to check is gone.
+ *
+ * The 64-character bound stays anyway. It costs nothing, it is the thing
+ * that refuses a Starlette error page, and backend has said they will tell
+ * us before lengthening the id rather than after.
  *
  * REFUSES ANYTHING THAT IS NOT AN IDENTIFIER. A plain-text 500 - Starlette's
  * default page, which is exactly what that 18 Sep failure returned - leaves
@@ -111,19 +119,16 @@ export function apiErrorCode(detail: unknown): string | null {
  */
 export function incidentId(detail: unknown): string | null {
   if (!detail || typeof detail !== "object") return null;
-  const candidates = [
-    (detail as { incidentId?: unknown }).incidentId,
-    ((detail as { detail?: unknown }).detail as { incidentId?: unknown })
-      ?.incidentId,
-  ];
-  for (const value of candidates) {
-    if (typeof value !== "string") continue;
-    const id = value.trim();
-    // An identifier, not a sentence: no spaces, and short enough to read
-    // aloud down a phone line, which is how this will actually be quoted.
-    if (id.length > 0 && id.length <= 64 && !/\s/.test(id)) return id;
-  }
-  return null;
+  // One position, confirmed. FastAPI nests its error bodies and this rides
+  // with them, the same way `apiErrorCode` reads `detail.code`.
+  const value = ((detail as { detail?: unknown }).detail as {
+    incidentId?: unknown;
+  })?.incidentId;
+  if (typeof value !== "string") return null;
+  const id = value.trim();
+  // An identifier, not a sentence: no spaces, and short enough to read aloud
+  // down a phone line, which is how this will actually be quoted.
+  return id.length > 0 && id.length <= 64 && !/\s/.test(id) ? id : null;
 }
 
 /** User-friendly message per the Design System — never raw technical errors. */
