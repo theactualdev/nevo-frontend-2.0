@@ -1368,7 +1368,7 @@ daily lesson path.
 | ~~2. Break and boundary signals~~ **FOUR OF FIVE DELIVERED, re-derived 23 Sep** | `SignalEventType` went 27 → 31 values and `break_start`, `break_end`, `feeling_checkin` and `module_boundary_reached` are all PRESENT. **Only `module_boundary_action` is still absent.** So the consolidation break can now report that it started, that it ended, and what the child answered — the answer no longer has to be discarded. What cannot yet be sent is what the child chose to do AT a module boundary, which is a narrower ask than this row used to carry. **Buildable now; re-ask for the fifth value only** |
 | 3. An assessment-attempt store | Nothing in the 188 paths reads back a child's per-question answers. `POST /api/mastery/update` is a mastery update, not an attempt record. Today "Review answers" works only in the tab the child answered in |
 | 4. Reading-density reshapes — **NOW ONE THIRD OF WHAT THIS ROW USED TO SAY** | Design split the control on 17 Sep and was right to. **Slower shipped** — it is not a rewording but "how much arrives at once", so the chunked flow the `attention` accommodation already used delivers it from the body the lesson has, with no authored content. **Expand is deferred** — it needs text that does not exist. **Simplify is the only blocked third**, and it now travels with a bigger question: the player never reads `textVariant` at all (it builds text from `segment.body`), so `keyPoints` has no reader in the child's app, while the teacher's review screen reads `textVariant`. One backend answer settles both — see the `textVariant` row below. Two other things this row wrongly swallowed: the ENGINE's `modulate_density` is a UI treatment, needs no content, shipped 17 Sep; and `slowerSteps` was authored all along (below) |
-| **FROZEN 18 Sep — what is `textVariant.body` relative to `segment.body`?** | **Design's instruction: build nothing that depends on either field until this is answered, including Simplify.** Escalated directly to Teslim as urgent rather than queued. If the inference holds, the teacher approves `textVariant` and the child reads `body` — so the approval gate protects text no child sees, and the text a child reads was reviewed by nobody. Design: this is the THIRD time the wire and the design have described different products (dimensions, `expectedInteraction`, this); a fourth should be raised the same way, as an inference flagged as one, before building either side. Found 17 Sep. `LessonSegment` carries both. `fromContent.ts:143` builds the child's text from `segment.body` and nothing student-side touches `segment.textVariant`. The teacher's `LiveVariantReview` reads `textVariant` and says "Nevo has not generated a written version of this section" when it is null. **Inference, flagged as one: `body` is parsed source and `textVariant` is generated — in which case the teacher approves one text and the child reads another.** Also asks whether `keyPoints` is a terser rendering of the whole segment (Simplify ships free) or highlights beside it (it cannot be Simplify) |
+| ~~**FROZEN 18 Sep — what is `textVariant.body` relative to `segment.body`?**~~ **SIMPLIFY UNFROZE 23 SEP; THE FIELD QUESTION DID NOT.** Design ruled that `simplify` on the wire IS the 17 Sep Simplify control — *"one is asked for by the child, one is decided by the engine, and what happens on screen is identical. Build it as a single path with two callers."* **So Simplify is an engine instruction applied to the live screen and no longer waits on `textVariant`.** The field question stays open on its own merits and is NOT closed by this: `fromContent.ts:143` still builds the child's text from `segment.body`, nothing student-side touches `segment.textVariant`, and the teacher's `LiveVariantReview` still reads `textVariant` — so the inference that a teacher approves one text while a child reads another is unanswered. Also still open: whether `keyPoints` is a terser rendering of the whole segment or highlights beside it. See `docs/RULINGS_23_SEP.md` |
 | 5. Baseline and warm-up items | `BaselinePromptResponse` is `{dimension}`. Every stimulus and every answer is hardcoded, so the daily warm-up asks the same question each time that dimension comes round |
 | ~~6. A session id a child can address~~ **DELIVERED, found 23 Sep** | `GET /api/v1/students/{student_id}/sessions` now returns `StudentSessionListResponse`, whose items are `StudentSessionSummaryResponse` and **carry `sessionId`** alongside `lessonId`, `completionStatus`, `sitting` and `signalCount`; the detail path resolves to `StudentSessionDetailResponse` with `narrative` and `sections`. The uuid nothing returned is now returned. **This closes teacher item 0b at the same time** — same paths, shared client |
 | 7. Student SSO | `SsoStartRequest` needs `provider`, and `SchoolCodeResponse.authMethod` names only the *method*, never the vendor. Children at an SSO school cannot sign in |
@@ -1398,7 +1398,9 @@ daily lesson path.
    builds no behaviour on it in either direction, and flags anything else of that shape.
    Closed as a question, open as a standing instruction.
 3. **The calculation scaffold** for anything that is not two like fractions, and whether
-   `scaffoldImage` replaces the drawn bar model.
+   `scaffoldImage` replaces the drawn bar model. **RULED 23 SEP: a real gap, and it stays
+   on the list rather than coming off it.** Design: *"it will break the first time a
+   teacher uploads a normal lesson. Not this week, but it is on the list."*
 4. ~~**A slot for `highlights`**~~ **RULED 17 Sep: do not build a surface for it.**
    Required on the wire, carried to the screen, and it stays carried and unrendered rather
    than being given a home that would be fabrication.
@@ -1406,28 +1408,40 @@ daily lesson path.
    invented class names rendered whenever no school code had verified, which was not only
    the walkthrough: a child who typed their real code in a private or storage-blocked
    browser landed there too. **What remains for design is the second half only: whether
-   the demo walkthrough should be reachable by typing a URL at all.**
-6. **QR scanning** — whether pointing a child at their device's camera app is the accepted
-   path, given this is the primary button on the welcome sheet.
-7. **A system voice reading to six-year-olds** in a calibration activity.
+   the demo walkthrough should be reachable by typing a URL at all.** **RULED 23 SEP:
+   IT IS REACHABLE. Design: *"I need to be able to send it."* Row closed.
+6. ~~**QR scanning**~~ **DEFERRED 23 SEP.** Closed as a question; the welcome sheet keeps
+   what it has.
+7. ~~**A system voice reading to six-year-olds**~~ **OUT OF SCOPE 23 SEP** — and the
+   reason is much larger than the item. Design: *"we are narrowing to secondary for
+   launch, which takes the youngest band and everything audio-led with it."*
+   **That clause is a product scope change and it arrived as the justification for
+   closing a minor row.** It reaches the baseline's four bands (`p13`, `p46`, `jss`,
+   `ss` — secondary is the last two), the probe item set, SCRUM-176's count, and
+   `MODALITY.AUDIO`, which is a channel the multi-modality system switches between
+   rather than a feature. **Nothing has been changed on the strength of it.** See
+   `docs/RULINGS_23_SEP.md` §3.
 8. ~~**No escape from the rotate prompt** — SEND-relevant.~~ **RULED AND SHIPPED 17 Sep
    (#435).** Design: *"Build it now."* A tablet clamped to a wheelchair tray does not turn,
    so "My tablet doesn't turn" lets the child through and is remembered per device. Verified
    in a real 700x300 viewport, where the escape was clipped below the fold and both Welcome
    buttons behind it were too.
-9. **A done state for the daily warm-up**, which is currently re-sittable any number of
-   times a day.
-10. **The nothing-landed result copy**, and **`invalid_session`** — whether it needs words
-    of its own.
-11. **Where the teacher's note goes.** Added 18 Sep, and the reference from list S-A item
-    5 that had nowhere to point until now. `AssignmentResponse.note` reaches the child on
-    `students/me/dashboard` and `useStudentDashboard` passes it through, so the data is
-    here — but **neither frame 19 (Home Dashboard) nor frame 21 (Lesson Preview Sheet) has
-    a slot for it**, checked. That is the `highlights` situation (item 4), where the
-    ruling was "do not build a surface for it". **One difference is why this is asked
-    rather than closed the same way: a teacher deliberately typed these words TO this
-    child, so withholding them is not neutral the way withholding a generated highlight
-    is.** Small once sited.
+9. ~~**A done state for the daily warm-up**~~ **RULED 23 SEP: yes, one exists.** It says
+   nothing about performance; it closes and moves the child into the day's lesson.
+   **Buildable.**
+10. **The nothing-landed result copy**, and **`invalid_session`** — **HALF RULED 23 SEP.**
+    `invalid_session` **gets its own words**: design, *"nothing landed and a dead link are
+    different problems with different next actions, and giving them the same copy sends a
+    child to try something that cannot work."* **The copy itself has not been supplied**,
+    so this is blocked on words rather than on a decision.
+11. ~~**Where the teacher's note goes.**~~ **RULED 23 SEP: IT REACHES THE CHILD.** Design:
+    *"it appears on the lesson screen, attributed to the teacher by name, drawn so it is
+    unmistakably a person's words rather than Nevo's. It never enters anything Nevo
+    generates about that child, and it is never rewritten, summarised or adapted."*
+    **Not the `highlights` ruling after all** — and the distinction that made it worth
+    asking rather than closing is the one that decided it. `AssignmentResponse.note`
+    already reaches the child on `students/me/dashboard` and `useStudentDashboard`
+    passes it through, so the data is here. **S-A 5 is unblocked and buildable.**
 12. ~~**Four PIN boxes or six.**~~ **SETTLED 21 Sep: FOUR. The 28c redraw stands, and
     this is not to be raised again.** Closed as a design question.
     **Implementing it is a BACKEND change, not a frontend one, and that is a contract
@@ -1446,16 +1460,13 @@ daily lesson path.
     The conclusion is unchanged and the reason for it is now different.
 
     and all three PIN screens follow it. See `lib/constants/auth.ts`.
-13. **Four manipulative kinds with no frame.** Added 21 Sep. The wire emits
-    `fraction_bar`, `number_line`, `array`, `place_value` and `counters`; design has drawn
-    only the first — 17b's tap-a-quarter-into-a-four-part-bar. Checked across the whole
-    student frame set: `number_line` appears in the component library, the intelligence
-    layer and the UDL frames, never as a calculation manipulative, and the other three
-    appear nowhere. The four are refused rather than approximated, because §4 says the
-    interaction IS the mechanism — a wrong interaction is a different task, not a lesser
-    version of the right one — so a variant carrying one reads as text.
-    **Needed: frames, or a ruling that the pipeline should not emit those kinds.**
-
+13. **Four manipulative kinds with no frame.** **RULED 23 SEP: emit them** — design,
+    *"draw them once as a shared set rather than per lesson, because they are
+    representations of a concept rather than decoration for a question."*
+    **Still blocked until that shared set arrives.** The ruling is that `number_line`,
+    `array`, `place_value` and `counters` are coming, not that they are here, so the
+    current refusal stands rather than being approximated — §4: the interaction IS the
+    mechanism, and a wrong interaction is a different task.
 ## S-D. Not a gap — do not re-open
 
 - **A child cannot start a conversation with a teacher.** `MessageRecipientType` has no
