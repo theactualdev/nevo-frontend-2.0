@@ -33,15 +33,15 @@ import { ClassQrDialog } from "./ClassQr";
  * Rows link to the student's profile, which reads live since the student
  * endpoints were wired.
  *
- * `observations` and `seatContext` reach this screen but are not drawn.
- * `observations` is no longer the untyped `string[]` that blocked it - it is
- * `{pattern, count}` over a closed five-value enum (backend, 3 Sep), so its
- * contents are now guaranteed by the schema rather than by an assurance, and
- * the phrasing for each pattern is the client's to write.
+ * `observations` and `seatContext` ARE drawn - see the roster rows below.
+ * This docblock said they were not, for a week after they were built on
+ * 15 Sep, which is the shape of stale note that gets a thing rebuilt: the
+ * next reader believes the file over the screen.
  *
- * What remains is a DESIGN question, not a contract one: C16b's observation
- * rows are not drawn on this screen, so these stay ordinary roster rows until
- * design says what an observation row looks like here.
+ * `observations` is `{pattern, count}` over a closed five-value enum
+ * (backend, 3 Sep), so its contents are guaranteed by the schema rather than
+ * by an assurance, and the phrasing for each pattern is ours - it lives in
+ * `constants/observations.ts` so the two screens that show them cannot drift.
  */
 export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
   const [qr, setQr] = useState<"none" | "dialog">("none");
