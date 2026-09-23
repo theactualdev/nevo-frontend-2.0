@@ -4638,6 +4638,56 @@ weak test let a mutation through here: asserting the absence only after
 awaiting "the call was made" passes whether or not the handler went on to fill
 the gap. The settle is what makes the assertion mean anything.
 
+### Simplify has text behind it now, 23 Sep - and it was never `textVariant`
+
+`depthVariants` landed on 22 Sep carrying `simplified` and `expanded`, written
+at parse time, and **nothing read it**. The twelfth field on the
+written-but-never-read list, on the one that finishes a mechanic.
+
+**THE ROW SAID "BLOCKED ON `textVariant`" FOR A WEEK AND THAT WAS THE WRONG
+FIELD.** Simplify needed text to switch to; `textVariant` was a guess at where
+it would come from, and the real answer arrived under a different name. The
+`textVariant` question is still open on its own merits - what it is relative to
+`segment.body`, and whether a teacher approves text no child reads - it was
+simply never what stood between the instruction and the screen.
+
+**BACKEND KEYED IT TO THE ENGINE'S OWN ACTION NAMES ON PURPOSE.** Their schema
+description: *"a client that has a plan saying `action: "simplify"` reads
+`depthVariants.simplified` without a lookup table."* So `ProactiveAction`,
+`DepthVariants` and the player's `Density` are three names for two halves of
+one instruction, and `fromContent` is where they meet.
+
+**EXPAND IS UNBLOCKED TOO.** Design deferred it on 17 Sep because *"it needs
+content that does not exist"*. It exists.
+
+**TWO WAYS A REWRITE IS NOT A REWRITE, and both are refused.** `body` defaults
+to `""` on the wire, so an empty one is a field that exists and says nothing;
+and a rewrite identical to the source is a toggle that re-renders the same
+prose. That second rule is not new - it is what the player already applies when
+it refuses to offer a density a segment cannot deliver. The key is OMITTED
+rather than set empty, because presence of the key is what the player tests.
+
+**`availableDepths` GOES BACK THE OTHER WAY.** The adapt request now names
+which rewrites each segment actually has, so the engine stops instructing one
+it has not got. **Omitted and `[]` are different answers** - backend's own
+distinction, *"omitted means 'I didn't say'"* - and we have read the segment, so
+`[]` is a positive claim rather than a silence.
+
+**THE PLAYER'S OWN GUARD STAYS.** Telling the engine what exists does not
+license removing the check on the rendering side: an instruction can still
+arrive on a plan built before this field, and rule 5 does not stop applying
+because an upstream got better. A test asserts the two sides agree on the same
+segment, because the failure worth catching is them drifting apart.
+
+**MY OWN FULL-SUITE CHECK WAS LYING ALL DAY.** `vitest --reporter=json`
+reported `2026 passed, 0 failed` while silently omitting SEVEN test files -
+173 tests - that pass when run directly. Exit code 0, nothing errored, the
+files simply absent from the results. Plain `npm test` on the same tree:
+**262 files, 2199 tests, all passing.** The JSON run cannot tell "green" from
+"did not run", and every "whole suite passes" in today's earlier entries rode on
+it. Re-verified with plain `npm test`; nothing was actually broken.
+
+
 ### A PIN change proves the old PIN now, 23 Sep - and it had to
 
 Backend added `currentPin` and **enforces** it: on `POST /api/v1/auth/pin` as a

@@ -137,11 +137,50 @@ function modalitiesFor(
  * frame always draws a heading.
  */
 function textFor(segment: ContentSegment, lessonTitle: string): TextContent {
+  const base = segment.body;
+  /*
+   * THE DENSITY RESHAPES EXIST NOW, and this said for months that they did not.
+   *
+   * `depthVariants` landed on 22 Sep carrying `simplified` and `expanded`,
+   * written at parse time and keyed by the engine's own action names - so
+   * `action: "simplify"` and `body.simplify` are two halves of one instruction
+   * and this is where they meet. Until this line, the engine could ask for a
+   * reshape the player had no text for, and the player correctly did nothing.
+   *
+   * Simplify was blocked on `textVariant` for a week. It was never
+   * `textVariant`; it was this field, which did not exist yet.
+   */
   return {
     heading: segment.title ?? lessonTitle,
-    // No density reshapes exist in the contract - see `TextContent.body`.
-    body: { default: segment.body },
+    body: {
+      default: base,
+      ...reshape("simplify", segment.depthVariants?.simplified?.body, base),
+      ...reshape("expand", segment.depthVariants?.expanded?.body, base),
+    },
   };
+}
+
+/**
+ * One depth key, or nothing at all.
+ *
+ * **TWO WAYS A REWRITE IS NOT A REWRITE**, and both end the same way. `body`
+ * defaults to `""` on the wire, so an empty one is a field that exists and
+ * says nothing. And a rewrite identical to the source is a toggle that
+ * re-renders the same prose - which this player already refuses to offer,
+ * because it is the screen telling a child it adapted when it did not.
+ *
+ * Omitting the key rather than carrying an empty string matters: the player
+ * offers only the densities a segment actually HAS, and it tests for the key's
+ * presence.
+ */
+function reshape(
+  key: "simplify" | "expand",
+  body: string | null | undefined,
+  base: string,
+): Partial<Record<"simplify" | "expand", string>> {
+  const text = body?.trim();
+  if (!text || text === base.trim()) return {};
+  return { [key]: text };
 }
 
 /**

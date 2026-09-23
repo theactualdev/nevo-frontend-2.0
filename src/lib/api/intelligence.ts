@@ -53,6 +53,23 @@ export interface AdaptSegment {
   availableModalities: string[];
   conceptId?: string | null;
   estimatedMinutes?: number | null;
+  /**
+   * Which rewrites this segment actually has, so the engine does not instruct
+   * one it has not got.
+   *
+   * **OMITTED AND EMPTY ARE DIFFERENT ANSWERS, and that is backend's own
+   * distinction:** *"omitting the field and sending [] are different answers -
+   * omitted means 'I didn't say' and you get today's behaviour exactly."* So
+   * `[]` is a positive claim that a segment has neither rewrite, and it is
+   * only ever sent when we have actually looked.
+   *
+   * This moves a check the player already makes to the side that can act on
+   * it. The player still refuses a density it cannot deliver - that guard is
+   * not removed, because an instruction can still arrive from a plan built
+   * before this field, and rule 5 does not stop applying because an upstream
+   * got better.
+   */
+  availableDepths?: ("simplified" | "expanded")[] | null;
 }
 
 /**
