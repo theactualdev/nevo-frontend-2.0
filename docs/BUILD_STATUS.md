@@ -4405,6 +4405,62 @@ sign-out destination still use it.
 carry their own pad rather than calling `NevoKeyboard`'s new presentation prop.
 That is a separate change to a shared component used by more than this screen.
 
+### Consent is checked at entry now, 23 Sep - the half that is ruled
+
+Frame 31 and frame 00d, from the 22 Sep drop, and `/api/v1/student-entry`,
+which landed some time before 23 Sep and had no consumer.
+
+**THE OLD SEQUENCE ASKED A CHILD FOR WHAT THE SCHOOL ALREADY KNEW.** It
+collected name, school and class, sat them through the whole baseline, and only
+redeemed the link at PIN creation. `GET /student-entry/{token}` resolves the
+child FROM the token - `firstName`, `className`, `age` - and says where
+consent stands before the first screen.
+
+**WHAT SHIPPED IS THE LINK PATH ONLY, AND THE SPLIT IS DELIBERATE.** Frame 00d
+rules that path in its own words: *"A student's link routes here only when
+consent isn't in yet."* A new route `/student/entry/{token}` resolves once and
+holds at 00d when `consentState` is `pending`.
+
+**WHAT DID NOT SHIP, AND WHY.** A SIGNED-IN child is not held. That is the
+unruled half: the parent lane raised on 23 Sep that `ConsentGateResponse`
+carries a required `blocked` nothing reads, that `admin/D25` PC-03 says *"a
+child stays out of lessons until they're cleared"*, and that the 7 Sep SCRUM-80
+ruling - *"Nevo is not the consent gate, the child proceeds normally"* - has not
+been withdrawn in words. They declared the field and left the behaviour, saying
+it lands in this lane. **It does, and it still needs the ruling**, so nothing
+here touches `students/me/consent-gate` or `processingWithdrawn`.
+
+**A FAILED READ IS NOT A MISSING CONSENT.** Same ruling `useConsentGate`
+already made for withdrawal: a dropped network, a bad minute and a child on 3G
+are indistinguishable from "not consented", and holding on any of them turns an
+outage into a wall a child cannot pass and cannot be told about. The destination
+validates the link itself, so a genuinely dead link is still refused there with
+words.
+
+**NO POLLING, AND THE TEST SUITE PINS THE ABSENCES.** 00d replaced a gate that
+polled, so the screen asserts no timer, no fetch, no button, no link, no
+progress and no status - a later reader adding "check again" would be making a
+reasonable local improvement that re-creates the screen this replaced. The
+resolve is one call per token, guarded by a ref rather than by the effect's
+cleanup: `router` belongs in the dependency list, so cancelling on re-run
+would abandon the only request and re-requesting would poll.
+
+**DECLARED AND DELIBERATELY UNREAD:** `accountReady` (two plausible readings -
+"no account yet, create a PIN" and "not cleared to have one" - which route a
+child to different screens) and `ageCheckPending` (a disputed date of birth is
+not a missing consent; `AgeCheckState` is `matched | mismatch | resolved |
+awaiting_parent`, it blocks access, and no frame draws it). Both asked 23 Sep.
+
+**THE RE-SEQUENCED PIN CREATION IS FILED, NOT BUILT.** Frame 31 draws
+"The Close -> PIN Creation" with no name, school or class step. Building it
+needs `accountReady` answered. Until then a consented child is handed to
+today's working onboarding, which is a reduction shipped knowingly rather than a
+guess.
+
+**ONE FRAME DIVERGENCE, FLAGGED:** the frame breathes the mark at 4s; the app's
+`--animate-nevo-breathe` is 5s. Took the app's token, because one rate across
+every breathing mark matters more than a second.
+
 ### The bell is markable now, 22 Sep - closing the hole that hid the leak
 
 Flagged on 18 Sep and left open then: `NotificationBell` carried no

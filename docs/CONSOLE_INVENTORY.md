@@ -1225,7 +1225,7 @@ decision, not an answer record), S-B 5 (`BaselinePromptResponse` is still
 vendor), S-B 9 (no `currentPin` on `PinUpdateRequest`), S-B 10 (no description
 on either lesson schema).
 
-### The consent re-sequence has its endpoint — `/api/v1/student-entry`
+### ~~The consent re-sequence has its endpoint~~ — **THE RULED HALF SHIPPED 23 SEP**
 
 Two paths, **no consumer in `src/`**, and together they are the entry
 re-sequence scoped in `docs/SCOPE_CONSENT_AND_176.md` on 22 Sep.
@@ -1247,6 +1247,30 @@ resolve, which is what "no polling" requires.
 | awaiting_parent`). That is the age-check surface this file already records as
 having sat unbuilt and unreported. **Not the same screen as 00d** — a disputed
 date of birth is not a missing consent — and it needs its own ruling.
+
+**What shipped:** a new route `/student/entry/{token}`, a typed
+`studentEntryApi`, and frame 00d. The link path resolves ONCE and holds at 00d
+when `consentState` is `pending` — which is the half frame 00d rules in its
+own words, *"A student's link routes here only when consent isn't in yet."*
+
+**What did NOT ship, and it is the half that matters most.** A SIGNED-IN child
+is not held. The parent lane raised on 23 Sep that `ConsentGateResponse`
+carries a required `blocked` nothing reads, that `admin/D25` PC-03 says *"a
+child stays out of lessons until they're cleared"*, and that the 7 Sep SCRUM-80
+ruling — *"Nevo is not the consent gate, the child proceeds normally"* — has
+never been withdrawn in words. They declared the field, left the behaviour, and
+said the enforcement lands in this lane. **It does, and it still needs the
+ruling.** Nothing built touches `students/me/consent-gate` or
+`processingWithdrawn`. **This is the open question, and it is design's.**
+
+**Also not shipped, deliberately:** the re-sequenced PIN creation. Frame 31
+draws "The Close → PIN Creation" with no name, school or class step, and
+building it needs `accountReady` answered — the name carries two readings that
+route a child to different screens. A consented child is handed to today's
+working onboarding meanwhile, which is a reduction shipped knowingly.
+
+**`accountReady` and `ageCheckPending` are declared and read by nothing**, so
+they stop being erased without anything branching on a guess.
 
 ### THE PIN LENGTH IS NOW INCONSISTENT WITHIN THE WIRE ITSELF
 
