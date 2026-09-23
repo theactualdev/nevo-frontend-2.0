@@ -20,6 +20,8 @@ import {
   signInChosen,
   teachersOnRoster,
 } from "./overviewGettingStarted";
+import { SetupPausedBanner } from "../SetupPausedBanner";
+import { useSetupGate } from "@/hooks/useSetupGate";
 import {
   readOnboarding,
   schoolApi,
@@ -183,6 +185,11 @@ function onDay(iso: string): string | null {
 }
 
 export function OverviewView() {
+  /*
+   * D01b AC-05. Paused is never true on a failed read, so a broken gate leaves
+   * this screen exactly as it was rather than greying every action on it.
+   */
+  const setup = useSetupGate();
   const [phase, setPhase] = useState<Phase>("loading");
   const [audit, setAudit] = useState<ComplianceAudit | null>(null);
   const [auditPhase, setAuditPhase] = useState<CardPhase>("loading");
@@ -403,6 +410,10 @@ export function OverviewView() {
             </span>
           )}
         </div>
+
+        {/* D01b AC-05. Renders only while the address is unconfirmed, and
+            never on a failed read - see `useSetupGate`. */}
+        <SetupPausedBanner />
 
         {phase === "loading" && (
           <div className={cn(CARD, "mt-6 h-[300px] animate-pulse")} />
@@ -675,13 +686,13 @@ export function OverviewView() {
                         <span
                           className={cn(
                             "shrink-0 text-[13.5px] font-semibold",
-                            k.href
+                            k.href && !setup.writesPaused
                               ? "text-nevo-navy"
                               : "text-nevo-near-black/45",
                           )}
                         >
                           {k.cta}
-                          {k.href ? " →" : ""}
+                          {k.href && !setup.writesPaused ? " →" : ""}
                         </span>
                       )}
                     </>
@@ -690,6 +701,35 @@ export function OverviewView() {
                     "flex items-start gap-4 px-[22px] py-[18px]",
                     i < 4 && "border-b border-nevo-near-black/7",
                   );
+                  /*
+                   * D01b AC-05: every action on this list is paused while the
+                   * address is unconfirmed, and each one SAYS SO - "Paused
+                   * until your email is confirmed." beneath it.
+                   *
+                   * A LINK, NOT A DISABLED LINK. An anchor cannot be disabled;
+                   * the row simply stops being one, so there is nothing to
+                   * click, nothing focusable that goes nowhere, and no hover
+                   * state promising something. The frame draws the same thing:
+                   * the action text stays visible and greys, rather than
+                   * vanishing and leaving a row that reads as already done.
+                   *
+                   * The note is `useSetupGate`'s, not composed here, so thirty
+                   * controls cannot end up with thirty wordings for one reason.
+                   */
+                  if (setup.writesPaused && k.href) {
+                    return (
+                      <div key={k.title} className={shell}>
+                        <span className="flex min-w-0 flex-1 flex-col">
+                          <span className="flex items-start gap-4">{row}</span>
+                          {setup.note ? (
+                            <span className="mt-1.5 pl-[34px] text-[12.5px] text-nevo-near-black/50">
+                              {setup.note}
+                            </span>
+                          ) : null}
+                        </span>
+                      </div>
+                    );
+                  }
                   return k.href ? (
                     <Link
                       key={k.title}

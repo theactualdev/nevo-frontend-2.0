@@ -19,6 +19,9 @@ const adaptationLog = vi.fn();
 const narrative = vi.fn();
 const overview = vi.fn();
 
+const setupGate = vi.fn();
+vi.mock("@/hooks/useSetupGate", () => ({ useSetupGate: () => setupGate() }));
+
 vi.mock("@/lib/api/schoolIntelligence", async (importOriginal) => {
   const actual =
     await importOriginal<typeof import("@/lib/api/schoolIntelligence")>();
@@ -76,6 +79,10 @@ beforeEach(() => {
   adaptationLog.mockResolvedValue({ events: [], total: 0, limit: 1, offset: 0 });
   narrative.mockRejectedValue(new Error("not under test"));
   overview.mockResolvedValue({ schoolId: "sch1", counts: { teachers: 3 } });
+  setupGate.mockReturnValue({
+    writesPaused: false, pause: null, resolved: true,
+    email: null, refresh: vi.fn(), note: null,
+  });
 });
 
 describe("Overview getting-started - the teachers row", () => {
@@ -209,3 +216,49 @@ describe("the roll-up reads and the page", () => {
   });
 });
 
+
+/**
+ * D01b AC-05 — the checklist while the address is unconfirmed.
+ *
+ * *"You can look around, but changes are paused until you confirm."* Each
+ * action on this list stops being an action and says why.
+ */
+describe("Overview getting-started - writes paused", () => {
+  const PAUSED = {
+    writesPaused: true,
+    pause: "email_unconfirmed" as const,
+    resolved: true,
+    email: "f.adebayo@brightgate.edu.ng",
+    refresh: vi.fn(),
+    note: "Paused until your email is confirmed.",
+  };
+
+  it("takes the links away and says why, once per action", async () => {
+    setupGate.mockReturnValue(PAUSED);
+    const { container } = render(<OverviewView />);
+
+    const row = await waitFor(() => stepRow(container, "Invite your teachers"));
+    expect(row.closest("a")).toBeNull();
+    expect(row.textContent).toMatch(/Paused until your email is confirmed\./);
+  });
+
+  it("keeps the action visible rather than vanishing it", async () => {
+    // A row whose action disappears reads as already done, which is the one
+    // thing a paused checklist must not imply.
+    setupGate.mockReturnValue(PAUSED);
+    const { container } = render(<OverviewView />);
+
+    const row = await waitFor(() => stepRow(container, "Invite your teachers"));
+    expect(row.textContent).toMatch(/Invite teachers/);
+    // ...but not dressed as a live link.
+    expect(row.textContent).not.toMatch(/→/);
+  });
+
+  it("leaves the rows alone when nothing is paused", async () => {
+    const { container } = render(<OverviewView />);
+
+    const row = await waitFor(() => stepRow(container, "Invite your teachers"));
+    expect(row.closest("a")).not.toBeNull();
+    expect(row.textContent).not.toMatch(/Paused until/);
+  });
+});
