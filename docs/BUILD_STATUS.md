@@ -88,7 +88,7 @@ session loads them without anyone having to remember to say so.
 `npm run architecture` (`scripts/architecture-check.mjs`) checks the rules a parser
 can check: Zero-Tag names, a modality on a person-shaped type, the wall clock on a
 signal, a result shown to a child, reward mechanics, gendered pronouns in copy. It is
-**warn-only in CI until these three are closed** — gating now would make every
+~~warn-only in CI until these three are closed~~ **BLOCKING since 23 Sep - all three are closed and `npm run architecture` exits 0** — gating now would make every
 session's first merge red for something they did not write, which is how a gate earns
 a permanent `--warn` and stops meaning anything. Close them, then delete the flag.
 

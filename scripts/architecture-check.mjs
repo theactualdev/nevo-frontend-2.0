@@ -316,6 +316,29 @@ const REL_OPS = new Set([
  * the other way too: reinstating the deleted `AUTO_FLAG` and adding a
  * `Demonstrated / Developing / Misconception` tier function both flag.
  */
+/**
+ * THE SUFFICIENCY RULE HAS ONE TOO, on the same two terms: every entry states
+ * why, and the entry is the reminder to remove it.
+ *
+ * `empty` is in the detector's name set because the real defect wore exactly
+ * that name - `useClassInsights` decided a class had told Nevo too little from
+ * `misconceptions.length === 0 && mastery.length === 0 && flags.length === 0`.
+ * Taking the NAME out of the set would have missed it. The discriminator is
+ * not the word or the operator, it is WHAT IS BEING COUNTED: three engine
+ * readings about a child, versus one list of notifications.
+ *
+ * That is not something this script can tell apart, and a rule that cannot
+ * should say so out loud rather than be quietly loosened until it matches
+ * nothing. Hence an entry, printed on every run.
+ */
+const SUFFICIENCY_ALLOWED = new Map([
+  [
+    "src/components/teacher/Shell/NotificationsPanel.tsx:empty",
+    "`empty = notes.length === 0` is ABSENCE, which rule 5 requires this console to detect and render - \"render the nothing-state, do not fill the gap\". Frontend section 6 is about deciding whether there is enough evidence ABOUT A CHILD; a panel with no notifications in it is not a judgement about anyone. Remove this entry the day `notes` carries anything the engine measured.",
+  ],
+]);
+const sufficiencyHits = new Set();
+
 const CLASSIFIER_ALLOWED = new Map([
   [
     "src/hooks/useTeacherHome.ts:band",
@@ -484,7 +507,10 @@ for (const abs of files) {
     // rule 3 - thresholds. Expression-level, not string-level: the breach is a
     // comparison, and by the time it reaches copy the decision is already made.
     if (!isTest && DECIDES.test(file)) {
-      if (sufficiencyVerdict(node, sf))
+      if (sufficiencyVerdict(node, sf)) {
+        const key = `${file}:${node.name.getText(sf)}`;
+        if (SUFFICIENCY_ALLOWED.has(key)) sufficiencyHits.add(key);
+        else
         add(
           "threshold",
           file,
@@ -492,6 +518,7 @@ for (const abs of files) {
           sf,
           `Sufficiency decided here, not by the engine: \`${node.getText(sf).slice(0, 90)}\``,
         );
+      }
       if (clockVsNumber(node, sf))
         add(
           "threshold",
@@ -589,6 +616,15 @@ for (const [kind, list] of Object.entries(byKind)) {
 // The allowlist is printed, never silent: an exception nobody sees is an
 // exception nobody removes. A stale entry is reported the same way, because
 // the entry is what reminds us the acceptance had a condition on it.
+if (SUFFICIENCY_ALLOWED.size > 0) {
+  console.log(`## Sufficiency cases allowed, with their reasons  (${SUFFICIENCY_ALLOWED.size})`);
+  for (const [key, why] of SUFFICIENCY_ALLOWED) {
+    const stale = sufficiencyHits.has(key) ? "" : "  [STALE - matched nothing]";
+    console.log(`   ${key}${stale}
+     ${why}`);
+  }
+  console.log("");
+}
 if (CLASSIFIER_ALLOWED.size > 0) {
   console.log(`## Classifier cases allowed, with their reasons  (${CLASSIFIER_ALLOWED.size})`);
   for (const [key, why] of CLASSIFIER_ALLOWED) {
