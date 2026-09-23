@@ -85,13 +85,16 @@ jobs:
       # Needs no network, and runs in the contract job because it asks the same
       # question: is this client still the thing the architecture describes?
       #
-      # WARN-ONLY, DELIBERATELY AND TEMPORARILY. Three findings stand on `main`
-      # at the time of writing (two in useSignals, one pronoun in SessionPanel).
-      # Gating before they are closed would mean every session's first merge is
-      # red for something they did not write, which is how a gate gets a
-      # permanent `--warn` and stops meaning anything. Close those three, then
-      # DELETE the flag. docs/BUILD_STATUS.md carries the list.
-      - run: npm run architecture:warn
+      # GATING NOW, as `--warn` always said it would. The three findings it was
+      # waiting on are closed: `useSignals`' two wall-clock stamps are gone,
+      # SessionPanel's pronoun tooltip is gone, and NotificationsPanel's
+      # `empty` is an allowlist entry whose reason prints on every run.
+      # `npm run architecture` exits 0 on `main` as of 23 Sep.
+      #
+      # If this turns your merge red for something you did not write, say so
+      # rather than restoring the flag - a gate that goes back to warning is
+      # exactly the failure the comment here used to describe.
+      - run: npm run architecture
       # Reaches the live API to fetch its OpenAPI document, so it fails when
       # the backend is down as well as when we disagree with it. That is
       # deliberate for now - a silent skip would let real drift through - but

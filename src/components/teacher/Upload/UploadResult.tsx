@@ -8,6 +8,7 @@ import type {
   LessonContentType,
   ParsedLessonSegment,
 } from "@/lib/api/content";
+import { SplitSourceNotice } from "@/components/teacher/Library/SplitSourceNotice";
 import { cn } from "@/lib/utils";
 
 /**
@@ -153,6 +154,11 @@ export function UploadResult({
       <p className="mt-[5px] text-[14.5px] text-nevo-near-black/60">
         {`From ${fileName} · ${lesson.segmentCount} ${lesson.segmentCount === 1 ? "section" : "sections"}`}
       </p>
+
+      {/* The first place a teacher meets the lesson, so the first place this
+          can be said. "Saved to your library" below is true either way and
+          says nothing about what was saved. */}
+      <SplitSourceNotice segments={segments} />
 
       <div className="mt-5 flex max-w-[660px] items-start gap-3.5 rounded-[12px] bg-nevo-cream-elevated px-[22px] py-5 shadow-elevation-1">
         <span className="mt-px shrink-0 text-nevo-navy">
