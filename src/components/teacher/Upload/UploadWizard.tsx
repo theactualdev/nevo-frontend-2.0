@@ -487,7 +487,7 @@ export function UploadWizard() {
           segments={staged.segments}
           banner={
             staged.failedPages.length > 0 ? (
-              <div className="mb-5 max-w-[660px] rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4">
+              <div className="mb-5 w-full rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4">
                 <p className="text-[14.5px] leading-[1.55] text-nevo-near-black/82">
                   {faintPagesLine(staged.failedPages)}
                 </p>
@@ -546,11 +546,36 @@ export function UploadWizard() {
         />
       )}
 
-      {/* Body */}
+      {/*
+        Body.
+
+        C07's 20 Sep drop is a LAYOUT change and nothing else: every step's
+        content went from a fixed column - 540, 560, 600, 640px, pinned to the
+        left edge - to `width:100%; max-width:<cap>` inside a centring body.
+        LR-01 makes the same complaint about the lesson page in words: "fills
+        the width; it currently crops into a column."
+
+        Two caps, and which step gets which is the frame's call, not a
+        rounding of it: the steps where a teacher is CHOOSING get the narrower
+        760 (a wide row of options is harder to compare, not easier), and the
+        steps where they are READING what Nevo produced get 860.
+      */}
       {phase !== "review" && !fallback && !singleReview && (
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-[22px] xl:px-8 xl:py-7">
+        <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-6 py-[22px] xl:px-8 xl:py-7">
+          <div
+            className={cn(
+              // `min-h-full` because `ParseProgress` centres itself against
+              // the FULL height of whatever holds it. Wrapping it in a plain
+              // auto-height div would have collapsed that to nothing, and the
+              // signed-out block demo is the only place that shows.
+              "w-full min-h-full",
+              phase === "file" || phase === "processing"
+                ? "max-w-[760px]"
+                : "max-w-[860px]",
+            )}
+          >
           {phase === "scope" && (
-            <div className="flex max-w-[640px] flex-col gap-3.5">
+            <div className="flex w-full flex-col gap-3.5">
               {SCOPES.map((s) => {
                 const on = scope === s.id;
                 return (
@@ -658,7 +683,7 @@ export function UploadWizard() {
           )}
 
           {phase === "file" && scope && (
-            <div className="max-w-[720px]">
+            <div className="w-full">
               <div className="inline-flex items-center gap-2 rounded-full bg-nevo-violet/16 py-1.5 pr-[13px] pl-[13px]">
                 <span className="text-[12.5px] font-semibold text-nevo-navy">
                   {SCOPE_CHIP[scope]}
@@ -768,7 +793,7 @@ export function UploadWizard() {
                     invented further.
                   */}
                   {staged.failedPages.length > 0 && (
-                    <div className="mb-5 max-w-[660px] rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4">
+                    <div className="mb-5 w-full rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4">
                       <p className="text-[14.5px] leading-[1.55] text-nevo-near-black/82">
                         {faintPagesLine(staged.failedPages)}
                       </p>
@@ -803,7 +828,7 @@ export function UploadWizard() {
                   teacher's file, and the advice was to go and find another
                   one. Backend asked for the split on 18 Sep.
                 */
-                <div className="max-w-[600px] rounded-[16px] bg-nevo-cream-elevated p-8 shadow-elevation-1">
+                <div className="w-full rounded-[16px] bg-nevo-cream-elevated p-8 shadow-elevation-1">
                   <h3 className="text-[17px] font-semibold text-nevo-near-black">
                     {/* Three answers, because a refused file, a parse that
                         stopped and a call that never landed are three
@@ -860,7 +885,7 @@ export function UploadWizard() {
                  */
                 <ParseProgress stage={rungFor(staged.stage)} />
               ) : (
-                <div className="flex max-w-[720px] items-center gap-5 rounded-[16px] bg-nevo-cream-elevated p-9 shadow-elevation-1">
+                <div className="flex w-full items-center gap-5 rounded-[16px] bg-nevo-cream-elevated p-9 shadow-elevation-1">
                   <span className="size-11 shrink-0 rounded-full border-4 border-nevo-navy/20 border-t-nevo-navy motion-safe:animate-spin motion-safe:[animation-duration:800ms]" />
                   <div>
                     <p className="text-[17px] font-semibold text-nevo-near-black">
@@ -882,7 +907,7 @@ export function UploadWizard() {
           )}
 
           {phase === "processing" && !isBlock && (
-            <div className="flex max-w-[720px] items-center gap-5 rounded-[16px] bg-nevo-cream-elevated p-9 shadow-elevation-1">
+            <div className="flex w-full items-center gap-5 rounded-[16px] bg-nevo-cream-elevated p-9 shadow-elevation-1">
               <span className="size-11 shrink-0 rounded-full border-4 border-nevo-navy/20 border-t-nevo-navy motion-safe:animate-spin motion-safe:[animation-duration:800ms]" />
               <div>
                 <h3 className="text-lg font-semibold text-nevo-near-black">
@@ -907,7 +932,7 @@ export function UploadWizard() {
           )}
 
           {phase === "done" && (
-            <div className="max-w-[720px] rounded-[16px] bg-nevo-cream-elevated p-8 shadow-elevation-1">
+            <div className="w-full rounded-[16px] bg-nevo-cream-elevated p-8 shadow-elevation-1">
               <div className="flex items-center gap-4">
                 <span className="flex size-[52px] shrink-0 items-center justify-center rounded-full bg-nevo-navy motion-safe:animate-nevo-pop">
                   <svg
@@ -953,7 +978,7 @@ export function UploadWizard() {
           )}
 
           {phase === "blockParsed" && (
-            <div className="max-w-[720px] rounded-[16px] bg-nevo-cream-elevated p-8 shadow-elevation-1">
+            <div className="w-full rounded-[16px] bg-nevo-cream-elevated p-8 shadow-elevation-1">
               <div className="flex items-center gap-4">
                 <span className="flex size-[52px] shrink-0 items-center justify-center rounded-full bg-nevo-navy motion-safe:animate-nevo-pop">
                   <svg
@@ -999,6 +1024,7 @@ export function UploadWizard() {
               </div>
             </div>
           )}
+          </div>
         </div>
       )}
 
