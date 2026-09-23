@@ -286,6 +286,94 @@ describe("the three actions", () => {
   });
 });
 
+describe("once a point has been dealt with", () => {
+  it("folds itself away, so the list shortens as a teacher works down it", () => {
+    // QA, 22 Sep. C06b draws a checked card as a COLLAPSED row with a tick,
+    // not a hidden one - so this closes rather than disappears.
+    const { rerender } = render(
+      <KeyPointCard
+        keyPoint={kp()}
+        working={null}
+        failed={false}
+        onAccept={vi.fn()}
+        onAmend={vi.fn()}
+        onRemove={vi.fn()}
+      />,
+    );
+    open();
+    expect(screen.getByText(/From your file/i)).toBeInTheDocument();
+
+    rerender(
+      <KeyPointCard
+        keyPoint={kp({ outstanding: false, reviewState: "accepted" })}
+        working={null}
+        failed={false}
+        onAccept={vi.fn()}
+        onAmend={vi.fn()}
+        onRemove={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText(/From your file/i)).not.toBeInTheDocument();
+    expect(screen.getByText("Checked")).toBeInTheDocument();
+  });
+
+  it("folds away on a re-worded point, where the state does not move", () => {
+    /*
+     * A mutation run found this. Dropping `text` from the version stamp
+     * killed nothing, because every other case here changes `reviewState`
+     * as well - and a teacher editing an already-amended point changes only
+     * the wording. Without it their card would sit open after the save,
+     * which is the exact complaint QA raised.
+     */
+    const amended = { outstanding: false, reviewState: "amended" as const };
+    const { rerender } = render(
+      <KeyPointCard
+        keyPoint={kp({ ...amended, text: "First wording." })}
+        working={null}
+        failed={false}
+        onAccept={vi.fn()}
+        onAmend={vi.fn()}
+        onRemove={vi.fn()}
+      />,
+    );
+    open();
+    expect(screen.getByText(/From your file/i)).toBeInTheDocument();
+
+    rerender(
+      <KeyPointCard
+        keyPoint={kp({ ...amended, text: "Second wording." })}
+        working={null}
+        failed={false}
+        onAccept={vi.fn()}
+        onAmend={vi.fn()}
+        onRemove={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText(/From your file/i)).not.toBeInTheDocument();
+  });
+
+  it("can still be opened afterwards", () => {
+    // Collapsed, not gone: a teacher can check what they accepted.
+    show({ outstanding: false, reviewState: "accepted" });
+
+    open();
+
+    expect(screen.getByText(/From your file/i)).toBeInTheDocument();
+  });
+
+  it("stays open on a refusal, where the teacher is looking", () => {
+    // The failure line is inside the card. Folding it away on a failed
+    // action would hide the only thing that explains it.
+    show({}, { failed: true });
+    open();
+
+    expect(screen.getByText(/didn’t go through/)).toBeInTheDocument();
+    expect(screen.getByText(/From your file/i)).toBeInTheDocument();
+  });
+});
+
 describe("while an action is in flight", () => {
   it("says which one, on the control that was pressed", () => {
     show({}, { working: "accept" });

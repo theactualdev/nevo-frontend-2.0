@@ -354,7 +354,13 @@ export function LiveLessonDetail({
         {/* C06b's header actions were mounted ONLY by the fixture component,
             so a signed-in teacher had no way into the assign flow from a real
             lesson - the console's best-wired write had no entry point. */}
-        <div className="mt-4 flex items-start justify-between gap-6">
+        {/* C06b: `display:flex; align-items:flex-start; justify-content:
+            space-between; gap:24px; flex-wrap:wrap`. Every part of that was
+            here except the wrap, so at a narrow width the title and the
+            actions squeezed against each other instead of stacking - which
+            is the likeliest thing behind QA's "Assign is off-centre",
+            reported twice and not reproducible at desktop width. */}
+        <div className="mt-4 flex flex-wrap items-start justify-between gap-6">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2.5">
               <h2 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
@@ -405,7 +411,24 @@ export function LiveLessonDetail({
             /* THE GATE IS `readyToAssign`, and the count is only what the
                line says. Backend asked for the split by name: a client that
                decides "ready" for itself is how this ticket started. */
-            ready={review.ready && outstandingSections === 0}
+            /*
+             * THE SERVER'S VERDICT, AND NOTHING ELSE. QA, 22 Sep: "assign
+             * still blocked after approving everything."
+             *
+             * This read `review.ready && outstandingSections === 0`, and
+             * that second clause is the exact thing backend asked for by
+             * name not to do - "enable Assign on `readyToAssign`, not by
+             * counting the list yourself". `LessonDetailActions` has a test
+             * proving IT gates on `ready`; the count was ANDed in here, one
+             * line before it was passed, where that test cannot see.
+             *
+             * What made it bite: the count was of EVERY unapproved segment,
+             * while only FLAGGED ones are drawn. A lesson with one flagged
+             * section among six left five "outstanding" after the teacher
+             * had settled everything on screen - blocked, with nothing left
+             * to click.
+             */
+            ready={review.ready}
             outstandingKeyPoints={outstandingPoints}
             outstandingSections={outstandingSections}
           />

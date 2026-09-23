@@ -118,20 +118,52 @@ describe("accepting one", () => {
     await waitFor(() => expect(result.current.ready).toBe(true));
   });
 
-  it("does not unlock on a local count when the server withholds it", async () => {
-    // Every section this page knows about is now approved, and the server
-    // still says the lesson is not. It knows about segments this page does
-    // not, and it is the one that answers the assignment.
+  it("counts the cards on screen, not the server's whole-lesson tally", async () => {
+    /*
+     * HALF OF THIS TEST WAS RIGHT AND HALF OF IT SHIPPED A BUG, and QA found
+     * the half that was wrong on 22 Sep: "assign still blocked after
+     * approving everything."
+     *
+     * It used to assert `remaining === 2`, from the approve response's
+     * `segmentCount - approvedSegmentCount`, on the principle that the
+     * server's tally beats ours. Right for the GATE; wrong for this number.
+     * The server counts EVERY segment; only FLAGGED ones are drawn. So a
+     * lesson with one flagged section among three left a teacher looking at
+     * "2 sections still to check" with no cards behind it - and, because the
+     * caller ANDed that count into the gate, unable to assign.
+     *
+     * The verdict is `readyToAssign`, always. This count is what is on
+     * screen, always. `lessonApproved` is still honoured below, because a
+     * server that withholds is still the one that answers.
+     */
     approveSegment.mockResolvedValue(
       approval({ approvedSegmentCount: 1, segmentCount: 3, lessonApproved: false }),
     );
-    const { result } = renderHook(() => useSegmentReview("l-1", [seg()]));
+    const { result } = renderHook(() =>
+      useSegmentReview("l-1", [seg(), seg({ id: "s-2", needsReview: false })]),
+    );
 
     act(() => result.current.approve("s-1"));
 
     await waitFor(() => expect(result.current.isApproved(seg())).toBe(true));
     expect(result.current.ready).toBe(false);
-    expect(result.current.remaining).toBe(2);
+    // One flagged section, now approved. The two the server is still counting
+    // are not this screen's to show or to name.
+    expect(result.current.remaining).toBe(0);
+  });
+
+  it("never counts a section Nevo did not flag", async () => {
+    // The cards are `needsReview` segments. A number that included the others
+    // describes nothing a teacher can act on.
+    const { result } = renderHook(() =>
+      useSegmentReview("l-1", [
+        seg({ id: "s-1", needsReview: true }),
+        seg({ id: "s-2", needsReview: false }),
+        seg({ id: "s-3", needsReview: false }),
+      ]),
+    );
+
+    expect(result.current.remaining).toBe(1);
   });
 
   it("sends one approval however many times the control is pressed", async () => {
