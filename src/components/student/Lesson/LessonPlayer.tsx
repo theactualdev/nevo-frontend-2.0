@@ -44,6 +44,7 @@ import {
 } from "./AffectiveLayer";
 import { AfterLessonAssessment } from "./AfterLessonAssessment";
 import { ADJUSTMENT_ACTIONS } from "@/lib/constants/affect";
+import { densityForAction } from "@/lib/lessons/densityForAction";
 import { isChunkable } from "@/lib/lessons/chunk";
 import { LESSON_STATUS } from "@/lib/api/lessons";
 import { schedulerApi } from "@/lib/api/scheduler";
@@ -827,7 +828,25 @@ export function LessonPlayer({
   // Frame contract: the manual pick is navy; the system's standing density is
   // violet (glow-once) and KEEPS showing beside a different manual pick. The
   // sparkle rides the unfollowed system chip (AdaptiveToggleBar).
-  const systemDensity: Density = segPlan?.density ?? DENSITY.SIMPLIFY;
+  /*
+   * ONE PATH, TWO CALLERS - design, 23 Sep. The engine's `simplify`, `slower`
+   * and `expand` are the same operation as the child's own chips, so they
+   * arrive as the SYSTEM's density and go through everything below exactly as
+   * the plan's own density did.
+   *
+   * It sits ahead of `segPlan?.density` because it is the live instruction for
+   * this lesson, while the per-segment density is authored content's standing
+   * choice; and a child's manual pick still beats both, on the next line.
+   *
+   * **A SEGMENT THAT CANNOT DELIVER IT STILL SHOWS ITS DEFAULT.**
+   * `densitySegments` below offers only what a segment can actually reshape
+   * into, so an instruction the content cannot honour lights no chip and
+   * claims no adaptation - `TextSegment` falls back to `body.default` on its
+   * own. That is the existing rule, not a new one, and it is why this needed
+   * no gate of its own.
+   */
+  const systemDensity: Density =
+    densityForAction(action) ?? segPlan?.density ?? DENSITY.SIMPLIFY;
   const effectiveDensity: Density = density ?? systemDensity;
   /*
    * Only the densities this segment can actually deliver.
