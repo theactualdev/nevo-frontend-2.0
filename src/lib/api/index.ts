@@ -111,6 +111,12 @@ export {
 } from "./askNevo";
 export { schedulerApi, type ConceptSchedule } from "./scheduler";
 export { consentsApi, type ConsentGateStatus } from "./consents";
+export {
+  studentEntryApi,
+  type EntryConsentState,
+  type StudentEntryState,
+  type StudentEntrySession,
+} from "./studentEntry";
 export { notificationsApi } from "./notifications";
 export { analyticsApi } from "./analytics";
 export { baselineApi } from "./baseline";
