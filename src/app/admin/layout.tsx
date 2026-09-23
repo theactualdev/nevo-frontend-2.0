@@ -11,6 +11,7 @@ import type { Metadata } from "next";
  */
 import { AdminShell } from "@/components/admin/Shell/AdminShell";
 import { PermissionProvider } from "@/context/PermissionContext";
+import { SetupGateProvider } from "@/context/SetupGateContext";
 
 // Signed-in product surface - never indexed.
 export const metadata: Metadata = {
@@ -25,7 +26,9 @@ export default function AdminLayout({
 }>) {
   return (
     <PermissionProvider>
+      <SetupGateProvider>
       <AdminShell>{children}</AdminShell>
+      </SetupGateProvider>
     </PermissionProvider>
   );
 }
