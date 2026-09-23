@@ -4405,6 +4405,70 @@ sign-out destination still use it.
 carry their own pad rather than calling `NevoKeyboard`'s new presentation prop.
 That is a separate change to a shared component used by more than this screen.
 
+### The scaffold indicator has a fourth circle it could never show, 23 Sep
+
+`/api/intelligence/scaffolds/*` - three deployed paths, no client module,
+which is what list item S-A 17 asked for. Read 37a first, as instructed, and it
+changed the shape of the work twice.
+
+**THE INDICATOR WAS ALREADY BUILT.** `ScaffoldIndicator` and
+`SCAFFOLD_LEVELS` have existed since the Intelligence Layer work. What was
+missing was a source, not a surface.
+
+**AND ITS FOURTH STATE WAS STRUCTURALLY UNREACHABLE.** 37a draws four circles -
+Full scaffold, Moderate, Light, Minimal. The adaptation plan's
+`ScaffoldingLevel` carries THREE values (`light | standard | strong`), so
+`minimal` - one filled dot, the child who is flying - has never once been
+shown to anybody. `adaptation.ts` maps what it can and is not wrong; it had no
+fourth value to map from. `ScaffoldIntensity` has exactly four, in the same
+order, and is the first source that fits the frame.
+
+**WHAT 37a SETTLED, AND IT IS NOT WHAT I ASSUMED.** I had asked design whether a
+support change announces itself, assuming rule 7 meant the indicator stayed
+invisible. It does not: the indicator is permanent, top-right of the player,
+opposite the exit. Rule 7 is honoured in HOW it changes - *"states cross-fade in
+400ms; the circles just update, the label never animates."* The question is
+answered and did not need asking.
+
+**NO WORDS ABOUT THE LEVEL REACH THE CHILD.** The pill is four dots plus the
+fixed word "Support". "Full scaffold", "Moderate", "Light" and "Minimal" are
+annotations on the design sheet labelling each variant - they are not copy, and
+nothing in the frame states a level in words.
+
+**WHICH LEAVES `studentMessage` HOMELESS.** It is REQUIRED on
+`ScaffoldDecisionResponse` and no frame has anywhere to put it. Typed so it is
+not erased, rendered nowhere, raised to design. This is the `highlights`
+situation and the ruling there was "do not build a surface for it".
+
+**NEVER RENDERED, and they arrive on the same object:** `consecutiveCorrect`,
+`responseTimeImprovementStreak`, `reducedHintStreak` - engine parameters,
+exactly as `stability` and `retrievability` are - and `changeReason`, which
+is the reasoning frame 38 forbids showing. The indicator has leaked an engine
+parameter once already, through its accessible name.
+
+**WIRED WHERE A CONCEPT EXISTS, WHICH IS A REVIEW SESSION.** The engine is keyed
+per student per concept and `LessonSegment` has never carried a `conceptId`.
+A review session is opened FOR a concept (`?concept=`), so it is the one place
+the question has a subject. The two sources never overlap: the plan answers
+where there is no concept, this answers where there is. **If a segment ever
+gains a `conceptId` that stops being true**, and which wins becomes a real
+question - flagged now rather than discovered then.
+
+**NO ATTEMPT IS POSTED, AND `problemId` IS WHY.** It is required on
+`ScaffoldAttemptRequest` and nothing in a lesson has one: `AssessmentQuestion`
+carries a prompt, options with ids and a `correctId`, and no id of its own.
+Deriving one from the question's position would key the server's per-problem
+history to an array index that moves the moment content is re-authored;
+deriving one from `correctId` would key it to the answer. The call is written
+and typed so it works the moment an identifier exists. Raised 23 Sep.
+
+**A read that does not answer shows nothing.** A concept never attempted and a
+dropped connection are both "we do not know", and the indicator is a statement
+about a child - so neither becomes a picture of how much help they need. A
+weak test let a mutation through here: asserting the absence only after
+awaiting "the call was made" passes whether or not the handler went on to fill
+the gap. The settle is what makes the assertion mean anything.
+
 ### Consent is checked at entry now, 23 Sep - the half that is ruled
 
 Frame 31 and frame 00d, from the 22 Sep drop, and `/api/v1/student-entry`,

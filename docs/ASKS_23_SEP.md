@@ -153,16 +153,29 @@ answered. It also blocks access, so the child does meet something.
 Does it get 00d's two lines, or a screen of its own — and is the child told
 anything about why?
 
-### 2d. Scaffolds, and the rule that transitions are felt rather than seen
+### 2d. ~~Scaffolds, and the rule that transitions are felt rather than seen~~
 
-The scaffold endpoints return `levelChanged: boolean` and `nextIntensity`
-(`full_support | partial_support | hints_only | independent`).
+**WITHDRAWN THE SAME DAY — frame 37a already answers it, and against my
+assumption.** I had asked whether a change of support level announces itself,
+assuming rule 7 meant the indicator stayed invisible. It does not: 37a puts a
+permanent four-circle indicator top-right of every lesson player, opposite the
+exit. Rule 7 lives in HOW it changes — *"states cross-fade in 400ms; the circles
+just update, the label never animates."* **Please ignore this question if it
+reached you.**
 
-An adaptation transition is felt, not seen — so I am assuming **nothing
-announces a change of support level**: no toast, no "we've made this one
-easier". Confirming rather than assuming, because the same response also carries
-a `studentMessage` string written by the server, and I need to know where that
-is allowed to appear and where it is not.
+**One thing DOES still need you, and it is narrower.** The pill is four dots
+plus the fixed word "Support"; the state names on the sheet are annotations
+rather than copy, so no words about a level reach the child anywhere on the
+frame. But `ScaffoldDecisionResponse.studentMessage` is **required on the wire**
+— the server writes a sentence to the child about the change — and there is
+nowhere on any frame to put it. It is typed and rendered nowhere. Is that the
+`highlights` ruling again ("do not build a surface for it"), or does it have a
+home we have not drawn?
+
+**And a frame defect worth knowing:** 37a ships with its dot styles as
+unsubstituted template variables (`{{ dF }}`, `{{ dO }}`), so the circles have
+no fill, size or colour in the file. The intent is unambiguous from the counts —
+4/3/2/1 filled — and the built component already matches, so nothing is blocked.
 
 ### 2e. Still open from before, unchanged
 

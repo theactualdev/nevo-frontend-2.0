@@ -26,6 +26,7 @@ import {
 import { useAccessibility } from "@/context/AccessibilityContext";
 import { useBreakMonitor, useLesson, useSignals } from "@/hooks";
 import { useRuntimeAdaptation } from "@/hooks/useRuntimeAdaptation";
+import { useScaffoldLevel } from "@/hooks/useScaffoldLevel";
 import type { AdaptSegment } from "@/lib/api/intelligence";
 import type { AdaptationPlan, Lesson, LessonSegment } from "@/lib/types";
 import { cn, randomId } from "@/lib/utils";
@@ -340,6 +341,12 @@ export function LessonPlayer({
    * wrong interval; telling a child their review did not count would be worse
    * and is not true - they did the work.
    */
+  /*
+   * 37a's indicator, sourced from the scaffolds engine where a concept exists.
+   * Null on an ordinary lesson, and null on a read that did not answer.
+   */
+  const conceptScaffold = useScaffoldLevel(reviewConceptId);
+
   const reviewRecorded = useRef(false);
   useEffect(() => {
     if (phase !== "complete" || !review || !reviewConceptId) return;
@@ -1082,9 +1089,20 @@ export function LessonPlayer({
           </h1>
           {/* 37a: the global scaffold indicator, opposite the exit. 37b:
               boredom pulses it once at the transition. */}
+          {/*
+            THE CONCEPT'S OWN LEVEL WINS WHERE THERE IS A CONCEPT, and the two
+            sources never overlap: the scaffolds engine is keyed per concept
+            and only a review session has one, while the plan answers for
+            ordinary segments that carry none. Null falls through to the plan,
+            because a read that never answered is not evidence about a child.
+
+            It is also the only way the fourth circle is ever reachable - the
+            plan's `ScaffoldingLevel` has three values and the frame draws
+            four. See `lib/lessons/scaffoldLevel.ts`.
+          */}
           <ScaffoldIndicator
             key={`scaf-${segment.id}`}
-            level={segPlan?.scaffold ?? "light"}
+            level={conceptScaffold ?? segPlan?.scaffold ?? "light"}
             pulse={stepUpOffered}
           />
         </div>
