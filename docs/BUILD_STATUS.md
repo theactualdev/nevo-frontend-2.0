@@ -4638,6 +4638,71 @@ weak test let a mutation through here: asserting the absence only after
 awaiting "the call was made" passes whether or not the handler went on to fill
 the gap. The settle is what makes the assertion mean anything.
 
+### Simplify is one path with two callers now, 23 Sep
+
+Design ruled it the same day: *"`simplify` is the same operation as the 17 Sep
+Simplify control. One is asked for by the child, one is decided by the engine,
+and what happens on screen is identical. Build it as a single path with two
+callers."*
+
+**THREE LIVE INSTRUCTIONS WERE ARRIVING AND DOING NOTHING.** `ProactiveAction`
+is `simplify | slower | expand | offer_hint | show_socratic_panel`;
+`ADJUSTMENT_ACTIONS` predated the enum and shared TWO values with it. So
+`simplify`, `slower` and `expand` fell through `asAdjustmentAction` to null
+and the interface did nothing - silently, because an unrecognised action doing
+nothing is rule 5 working exactly as written. **That is why no gate caught it,
+and it is the shape to watch for: the failure mode of a correct rule.**
+
+**THE JOIN IS `densityForAction`, AND IT IS A JOIN RATHER THAN A SECOND
+IMPLEMENTATION.** The child's chip sets `density`; the engine's instruction
+sets the system's density; both land in the same `effectiveDensity` and the
+same `TextSegment`. Two code paths that both "simplify" would eventually
+disagree about what simplifying is, and a child would get a different lesson
+depending on who asked.
+
+The three names are identical on both sides - `simplify`, `slower` and
+`expand` are `Density`'s own values - which is a coincidence deliberately not
+relied on. Mapping them explicitly means the day either list moves, it stops
+compiling rather than quietly mapping a new action onto an old reshape.
+
+**NO NEW GATE WAS NEEDED, and that is worth knowing rather than re-deriving.**
+`densitySegments` already offers only what a segment can actually reshape
+into, and `TextSegment` already falls back to `body.default`. So an
+instruction the content cannot honour renders the default, lights no chip and
+claims no adaptation. The existing rule - *"an offered density that re-renders
+identical prose is the player telling a child it adapted when it did not"* -
+covers the engine's caller as well as the child's.
+
+**AND NO NEW SIGNAL.** The per-segment density report stays gated on the plan's
+own density. Reporting `simplify_trigger` with `source: SYSTEM` because the
+engine asked us to simplify would be telling the engine what it already knows,
+and the existing comment warns about exactly that class of false signal.
+
+**A CHILD'S OWN PICK STILL BEATS THE INSTRUCTION.** In a system that
+deliberately tells a child nothing about what it is doing, the density control
+is the only place they can ask, and an engine instruction silently overriding
+that would take it away. Tested.
+
+**WHAT WAS NOT DELETED.** `modulate_density`, `increase_difficulty` and
+`offer_break` are not in the contract's enum and are HELD rather than removed,
+on design's instruction - *"do not declare it dead yet"*. Each now says in the
+constant why. `offer_break` is the one that is correctly absent: a break is
+not an adaptation instruction and already has its own signal on
+`AdaptResponse.breakSuggestion`.
+
+**`textVariant` IS STILL OPEN, and this did not close it.** What
+`textVariant.body` is relative to `segment.body` - and whether a teacher
+approves text no child reads - is unanswered. It was simply never what stood
+between this instruction and the screen.
+
+**ONE TEST OF MINE ASSERTED A BEHAVIOUR THIS CODEBASE DOES NOT HAVE.** The
+frame's standing density is `adaptive ?? Simplify`, so an authored segment
+already opens on its Simplify reshape before any engine speaks - which means
+"engine says simplify, Simplify appears" passes against a client that ignores
+the instruction completely. The decisive case is Expand, which is not the
+default and has to be asked for.
+
+
 ### Every door resolves consent now, 23 Sep - the half that was unruled is ruled
 
 Design answered the same day. *"The gate is on the child's consent state, not on

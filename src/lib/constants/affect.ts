@@ -25,10 +25,25 @@
  * those words must never reach the frontend, so their absence is the design
  * working, not a gap. The transport is `action`.
  *
- * `action` is a bare `string` in the deployed schema with no enum, so the six
- * below are §4's list rather than the contract's. Anything unrecognised
- * resolves to null and the interface does nothing, which is `no_action` and
- * also rule 5: absence is an instruction, do not fill the gap.
+ * **THE CONTRACT PUBLISHED ITS ENUM ON 23 SEP AND THIS LIST DID NOT MATCH IT.**
+ * `action` was a bare `string`; it now `$ref`s `ProactiveAction`, which is
+ * `simplify`, `slower`, `expand`, `offer_hint`, `show_socratic_panel`. Only two
+ * of those were here, so three live instructions were arriving and resolving to
+ * null - silently, because an unrecognised action doing nothing is rule 5
+ * working exactly as written, which is why no gate said anything.
+ *
+ * Design ruled the same day, and the ruling is the general one rather than a
+ * fix for this row: **the engine's published vocabulary IS the contract, and
+ * design and frontend conform to it.** Where design needs an instruction that
+ * does not exist, it is raised as a request to backend and nothing is built
+ * against a guessed name.
+ *
+ * So the five below marked CONTRACT are the enum, exactly. The rest are held,
+ * not confirmed, and each says why.
+ *
+ * Anything unrecognised still resolves to null and the interface does nothing,
+ * which is `no_action` and also rule 5: absence is an instruction, do not fill
+ * the gap.
  *
  * NEVER RENDERED, and they travel on the same object: `reason`, `confidence`
  * and `triggerSignals`. Frame 38 is explicit - "the learner is never shown any
@@ -36,12 +51,48 @@
  * `confidence` is an engine parameter, which rule 3 keeps off every screen.
  */
 export const ADJUSTMENT_ACTIONS = {
-  NONE: "no_action",
-  MODULATE_DENSITY: "modulate_density",
-  INCREASE_DIFFICULTY: "increase_difficulty",
+  /** CONTRACT. The child's Simplify control, decided by the engine instead. */
+  SIMPLIFY: "simplify",
+  /** CONTRACT. */
+  SLOWER: "slower",
+  /** CONTRACT. */
+  EXPAND: "expand",
+  /** CONTRACT. */
   OFFER_HINT: "offer_hint",
-  OFFER_BREAK: "offer_break",
+  /** CONTRACT. */
   SHOW_SOCRATIC_PANEL: "show_socratic_panel",
+
+  /**
+   * Not in the enum. Kept because the absence of an instruction is a state the
+   * player reasons about, not a value the engine sends.
+   */
+  NONE: "no_action",
+  /**
+   * NOT IN THE CONTRACT'S ENUM, AND HELD RATHER THAN DELETED, on design's
+   * explicit instruction of 23 Sep: *"do not declare it dead yet. Density
+   * dropping belongs to the affective channel, not to pace instructions, and
+   * those were designed as two separate systems."*
+   *
+   * Checked, and the answer went back to design: **there is no separate
+   * affective channel.** `proactiveAdjustment` IS it - `offer_hint` and
+   * `show_socratic_panel` live in the same five-value enum as the three pace
+   * instructions - so there are not two systems on the wire, and this value has
+   * nowhere to arrive from. The dim it drives (`AffectiveLayer`) still works
+   * and is still wired; nothing is deleted until design answers.
+   */
+  MODULATE_DENSITY: "modulate_density",
+  /** Not in the contract's enum. Held on the same instruction. */
+  INCREASE_DIFFICULTY: "increase_difficulty",
+  /**
+   * NOT IN THE ENUM, AND CORRECTLY SO - this one is not a gap.
+   *
+   * A break is not an adaptation instruction. `simplify`, `slower` and `expand`
+   * change the lesson while it continues; a break stops the pushing, which is a
+   * different kind of thing. **It already has its own signal** -
+   * `AdaptResponse.breakSuggestion`, read by `useRuntimeAdaptation` as
+   * `offeredBreak` - so the break works and only this constant is unreachable.
+   */
+  OFFER_BREAK: "offer_break",
 } as const;
 
 export type AdjustmentAction =
