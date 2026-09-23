@@ -14,6 +14,7 @@ import type {
 import { cn } from "@/lib/utils";
 import { LessonDetailActions } from "./LessonDetailActions";
 import { KeyPointCard } from "./KeyPointCard";
+import { SplitSourceNotice } from "./SplitSourceNotice";
 import { ReviewSection } from "./ReviewSection";
 import { useLessonReview } from "@/hooks/useLessonReview";
 import { useSegmentReview } from "@/hooks/useSegmentReview";
@@ -447,6 +448,11 @@ export function LiveLessonDetail({
           LR-03's copy, and LR-04's live count: how many are left, and what
           that means for the one action a teacher came here to take.
         */}
+        {/* BEFORE the review, because it changes what the review IS. A
+            teacher checking key points drawn from their own pasted text is
+            doing something different from checking Nevo's reading of it. */}
+        <SplitSourceNotice segments={segments} />
+
         {waiting > 0 ? (
           <div className="mt-6 flex max-w-[660px] items-start gap-3.5 rounded-[12px] bg-nevo-violet/14 px-[18px] py-4">
             <span className="mt-px shrink-0 text-nevo-navy">
