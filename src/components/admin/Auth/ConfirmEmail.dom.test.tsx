@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { ApiError } from "@/lib/api/client";
 import { visibleText } from "@/test/visibleText";
 import type { EmailConfirmationState } from "@/lib/api/emailConfirmation";
 import { ConfirmEmail } from "./ConfirmEmail";
@@ -15,6 +16,7 @@ import { ConfirmEmail } from "./ConfirmEmail";
  */
 
 const verify = vi.fn();
+const resend = vi.fn();
 
 vi.mock("@/lib/api/emailConfirmation", async (importOriginal) => {
   const actual =
@@ -24,6 +26,7 @@ vi.mock("@/lib/api/emailConfirmation", async (importOriginal) => {
     emailConfirmationApi: {
       ...actual.emailConfirmationApi,
       verify: (t: string) => verify(t),
+      resend: (tok?: string) => resend(tok),
     },
   };
 });
@@ -103,15 +106,20 @@ describe("ConfirmEmail", () => {
     expect(verify).toHaveBeenCalledTimes(2);
   });
 
-  it("never offers a resend, because resend needs a session this reader lacks", async () => {
-    // `POST /email-confirmation/resend` carries HTTPBearer. Anyone opening a
-    // confirmation link is not signed in, so a resend button would only 401.
+  it("offers the resend it once could not", async () => {
+    /*
+     * THE INVERSE OF WHAT THIS TEST USED TO ASSERT. It read "never offers a
+     * resend, because resend needs a session this reader lacks" - true when
+     * written, and the constraint is gone: backend widened resend to accept
+     * the token on 24 Sep. The old test would have kept the button out.
+     */
     verify.mockResolvedValue(state({ status: "expired", email: null, message: "Ran out." }));
     const { container } = render(<ConfirmEmail token="t6" />);
 
     await waitFor(() => expect(visibleText(container)).toMatch(/has expired/i));
-    expect(screen.queryByRole("button", { name: /resend|send.*again|new link/i })).toBeNull();
-    expect(visibleText(container)).toMatch(/sign in and we can send you a new link/i);
+    expect(screen.getByRole("button", { name: /Send a new link/i })).toBeEnabled();
+    // And it no longer sends them away to do it.
+    expect(visibleText(container)).not.toMatch(/sign in and we can send you a new link/i);
   });
 
   it("omits the address when the server named nobody", async () => {
@@ -169,18 +177,114 @@ describe("D01b's own copy", () => {
     expect(visibleText(container)).toMatch(/just sign in and carry on/i);
   });
 
-  it("does not draw AC-03's two buttons, which the contract cannot serve", async () => {
+  it("draws one of AC-03's two buttons, and still not the other", async () => {
     /*
-     * The frame draws "Send a new link" and "Change the email address".
-     * `resend` carries HTTPBearer and nothing writes an address at all, so
-     * both would 401 for somebody arriving from an email link. Absent rather
-     * than drawn-and-broken; raised in the component and in BUILD_STATUS.
+     * This asserted BOTH were absent because the contract served neither.
+     * Half of that has changed and half has not, which is why the test is
+     * split rather than deleted:
+     *
+     *  - "Send a new link" is built - resend takes the token now.
+     *  - "Change the email address" is still absent, and now for a REASON.
+     *    Backend declined to token-authenticate it: repointing an address from
+     *    a leaked link is a tenant takeover - change it, confirm it, then
+     *    reset the password. `/verify` transfers nothing; changing transfers
+     *    everything.
      */
     verify.mockResolvedValue(state({ status: "expired", email: "f@b.edu.ng", message: "x" }));
     const { container } = render(<ConfirmEmail token="t11" />);
 
     await waitFor(() => expect(visibleText(container)).toMatch(/has expired/i));
-    expect(screen.queryByRole("button", { name: /send a new link/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /send a new link/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /change the email/i })).toBeNull();
+  });
+});
+
+/**
+ * AC-03's "Send a new link", buildable since backend widened resend to accept
+ * the token (24 Sep).
+ *
+ * The 429 is the case worth testing hardest: one email every two minutes per
+ * account, and the budget is SHARED with the in-console resend, so a person
+ * who just asked from the other screen lands here on a refusal. Flattening
+ * that into "that didn't work" sends them pressing the button into the same
+ * wall.
+ */
+describe("sending a new link from a dead one", () => {
+  const expired = () =>
+    verify.mockResolvedValue(state({ status: "expired", email: "f@b.edu.ng" }));
+
+  it("sends the token it was opened with, whatever state it is in", async () => {
+    expired();
+    resend.mockResolvedValue(state({ status: "pending" }));
+    render(<ConfirmEmail token="tok-abcdefghij" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Send a new link/i }));
+    await waitFor(() => expect(resend).toHaveBeenCalledWith("tok-abcdefghij"));
+  });
+
+  it("confirms it went, without claiming it has arrived", async () => {
+    expired();
+    resend.mockResolvedValue(state({ status: "pending" }));
+    const { container } = render(<ConfirmEmail token="t" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Send a new link/i }));
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/Check your email in a minute or two/i),
+    );
+  });
+
+  it("draws the 429 as a wait, not as a failure", async () => {
+    expired();
+    resend.mockRejectedValue(
+      new ApiError(429, "too soon", {
+        detail: { code: "confirmation_recently_sent", retryAfterSeconds: 95 },
+      }),
+    );
+    const { container } = render(<ConfirmEmail token="t" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Send a new link/i }));
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/A link went out very recently/i),
+    );
+    // Rounded UP: 95s is "2 minutes", never "a minute", or they earn a second
+    // refusal that reads as the button being broken.
+    expect(visibleText(container)).toMatch(/Try again in 2 minutes/);
+    expect(visibleText(container)).not.toMatch(/couldn.t send/i);
+  });
+
+  it("survives a 429 that names no wait", async () => {
+    expired();
+    resend.mockRejectedValue(
+      new ApiError(429, "too soon", { detail: { code: "confirmation_recently_sent" } }),
+    );
+    const { container } = render(<ConfirmEmail token="t" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Send a new link/i }));
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/Give it a couple of minutes/i),
+    );
+    expect(visibleText(container)).not.toMatch(/null|undefined|NaN/);
+  });
+
+  it("does not call a transport failure a rate limit", async () => {
+    expired();
+    resend.mockRejectedValue(new Error("network"));
+    const { container } = render(<ConfirmEmail token="t" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Send a new link/i }));
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/couldn.t send that just now/i),
+    );
+    expect(visibleText(container)).not.toMatch(/very recently/i);
+  });
+
+  it("still does not offer to change the address", async () => {
+    // Backend declined to token-authenticate it: repointing an address with a
+    // leaked link is a tenant takeover. Absent for a reason now, not a gap.
+    expired();
+    render(<ConfirmEmail token="t" />);
+
+    await screen.findByRole("button", { name: /Send a new link/i });
     expect(screen.queryByRole("button", { name: /change the email/i })).toBeNull();
   });
 });
