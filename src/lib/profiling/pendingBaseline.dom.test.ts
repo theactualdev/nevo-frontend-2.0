@@ -141,6 +141,7 @@ describe("a baseline waiting for its account", () => {
     vi.spyOn(consentsApi, "myConsentGate").mockResolvedValue({
       studentId: "child-a",
       granted: false,
+      blocked: false,
       requiredType: "data_processing",
       status: "withdrawn",
     });
@@ -164,6 +165,7 @@ describe("a baseline waiting for its account", () => {
     vi.spyOn(consentsApi, "myConsentGate").mockResolvedValue({
       studentId: "child-a",
       granted: false,
+      blocked: false,
       requiredType: "data_processing",
       status: "pending",
     });
