@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { processingWithdrawn, type ConsentGateStatus } from "./consents";
+import { accessBlocked,
+  processingWithdrawn, type ConsentGateStatus } from "./consents";
 
 /**
  * Design's SCRUM-80 ruling (7 Sep), encoded.
@@ -17,9 +18,12 @@ import { processingWithdrawn, type ConsentGateStatus } from "./consents";
 const gate = (
   status: ConsentGateStatus["status"],
   granted: boolean,
+  /** Defaults false so every existing case keeps the meaning it had. */
+  blocked = false,
 ): ConsentGateStatus => ({
   studentId: "s-1",
   granted,
+  blocked,
   requiredType: "data_processing",
   status,
 });
@@ -58,5 +62,38 @@ describe("processingWithdrawn", () => {
     // remains the real enforcement point either way.
     expect(processingWithdrawn(null)).toBe(false);
     expect(processingWithdrawn(undefined)).toBe(false);
+  });
+});
+
+describe("accessBlocked", () => {
+  /*
+   * A SEPARATE READER FOR A SEPARATE RULING, and the tests say why.
+   *
+   * `processingWithdrawn` encodes the 7 Sep rule: withdrawal stops a child and
+   * nothing else does. `blocked` is the server's own verdict, and D25 PC-03
+   * ("A child stays out of lessons until they're cleared") reads like a
+   * reversal of that rule. Until somebody confirms which is current, the two
+   * must not collapse into one another - a widened `processingWithdrawn` would
+   * be a gate built by accident, under a name still saying "withdrawn".
+   */
+  it("reads the server's verdict, not the status", () => {
+    expect(accessBlocked(gate("pending", false, true))).toBe(true);
+    expect(accessBlocked(gate("confirmed", true, true))).toBe(true);
+    expect(accessBlocked(gate("pending", false, false))).toBe(false);
+  });
+
+  it("does not answer for a gate it has not read", () => {
+    expect(accessBlocked(null)).toBe(false);
+    expect(accessBlocked(undefined)).toBe(false);
+  });
+
+  it("stays independent of processingWithdrawn in both directions", () => {
+    // Blocked without withdrawal: the new ruling's case.
+    expect(processingWithdrawn(gate("pending", false, true))).toBe(false);
+    expect(accessBlocked(gate("pending", false, true))).toBe(true);
+    // Withdrawn without the server blocking: the old ruling's case, which
+    // must keep working while the question is open.
+    expect(processingWithdrawn(gate("withdrawn", false, false))).toBe(true);
+    expect(accessBlocked(gate("withdrawn", false, false))).toBe(false);
   });
 });
