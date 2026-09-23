@@ -85,6 +85,36 @@ describe("the card a teacher can open", () => {
   });
 });
 
+describe("which section a point came from", () => {
+  it("names it on the closed card", () => {
+    /*
+     * C06b draws neither card with it, and the first build followed the frame
+     * and flagged the omission rather than reinstating it quietly. Design
+     * ruled on 23 Sep: show it. "A teacher checking six points across four
+     * sections is reconciling them against the lesson they wrote, and without
+     * the section name they are doing that from memory."
+     */
+    show();
+
+    expect(screen.getByText("Adding unlike denominators")).toBeInTheDocument();
+  });
+
+  it("numbers one the parse left unnamed, rather than inventing a title", () => {
+    show({ segmentTitle: null });
+
+    expect(screen.getByText("Section 2")).toBeInTheDocument();
+  });
+
+  it("names it in the expanded card too, beside where the words came from", () => {
+    show();
+    open();
+
+    expect(
+      screen.getByText(/From your file · Adding unlike denominators/),
+    ).toBeInTheDocument();
+  });
+});
+
 describe("whose judgement the marker is", () => {
   it("marks a point the SERVER says is outstanding", () => {
     show({ outstanding: true });

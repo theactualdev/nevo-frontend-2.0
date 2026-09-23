@@ -192,8 +192,25 @@ export function KeyPointCard({
         className="flex w-full cursor-pointer items-center gap-[13px] px-[20px] py-[17px] text-left transition-[filter] hover:brightness-[0.985]"
       >
         <Mark kind={mark} />
-        <span className="min-w-0 flex-1 text-[15.5px] leading-[1.5] text-nevo-near-black">
-          {keyPoint.text}
+        <span className="min-w-0 flex-1">
+          <span className="block text-[15.5px] leading-[1.5] text-nevo-near-black">
+            {keyPoint.text}
+          </span>
+          {/*
+            WHICH SECTION THIS CAME FROM. C06b draws neither the collapsed nor
+            the expanded card with it, and the first build followed the frame
+            and said so rather than reinstating it quietly. Design ruled on
+            23 Sep: show it. A teacher checking six points across four sections
+            is reconciling them against the lesson they wrote, and without the
+            section name they are doing that from memory.
+
+            Quiet, per the ruling - it is context for the point above, not a
+            heading of its own. Named where the parse named it and numbered
+            where it did not, never a title invented on this side.
+          */}
+          <span className="mt-1 block text-[12.5px] leading-[1.4] text-nevo-near-black/50">
+            {keyPoint.segmentTitle ?? `Section ${keyPoint.position}`}
+          </span>
         </span>
         {mark === "flag" && (
           <span className="shrink-0 rounded-full bg-nevo-violet/34 px-2.5 py-[3px] text-[11px] font-semibold whitespace-nowrap text-nevo-navy">
@@ -225,7 +242,9 @@ export function KeyPointCard({
             </p>
           )}
 
-          <Eyebrow>From your file</Eyebrow>
+          <Eyebrow>
+            {`From your file · ${keyPoint.segmentTitle ?? `Section ${keyPoint.position}`}`}
+          </Eyebrow>
           {keyPoint.sourceText.trim() ? (
             <p className="mt-[7px] max-w-[68ch] rounded-[10px] bg-nevo-navy/5 px-3.5 py-3 text-[14px] leading-[1.6] text-nevo-near-black/66">
               {keyPoint.sourceText}

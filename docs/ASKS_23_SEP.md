@@ -232,28 +232,36 @@ Section 3 is answered at the foot.
 
 ## 1T · Backend (Teslim)
 
-### 1Ta. A stage value for "preparing the adaptations" — SCRUM-172, small
+### 1Ta. ~~A stage value for "preparing the adaptations"~~ — **WITHDRAWN, and one contradiction left behind**
 
-`UploadStage` is `lessons | structure | complete`. LU-01 names five stages and
-four of them have a real signal:
+**Design struck it the same day, 23 Sep:** *"do not hold it pending an enum.
+Adaptation in this product is generated on demand at serve time and discarded,
+which means no adaptation work happens at upload at all. There is no signal
+behind that stage because there is nothing behind that stage. Four stages is
+not a degraded version of five, it is the accurate one."*
 
-| stage | what says so |
-|---|---|
-| Receiving the file | the upload POST is in flight |
-| Reading the document | `stage: "lessons"` |
-| Finding the sections | `stage: "structure"` |
-| Ready to assign | `stage: "complete"`, or `status: ready` |
-| **Preparing the adaptations** | **nothing** |
+So the ask is withdrawn. The processing screen ships at four stages because
+four is right, not because the fifth is missing.
 
-It is the stage a teacher waits longest through — your own figures put the
-media work at up to 600 seconds per generated picture against about 115 for the
-text — so the ladder currently sits on "Finding the sections" for most of the
-wait. Accurate and unhelpful at once.
+**What has not been settled, and it is a question for both of them.** Backend's
+own figures for this same route are about **115 seconds of text work plus up to
+600 seconds per generated picture, at upload** — which is the measurement the
+long-wait copy on that screen was built from on 18 Sep. If pictures are made at
+upload then something *is* prepared there, and design asked to be brought back
+to in exactly that case: *"if Teslim says otherwise and something genuinely is
+prepared at upload, bring it back to me with what that work is and I will
+re-rule."*
 
-**The ask:** one more member of `UploadStage` between `structure` and
-`complete`, and the transition reported when it happens. Shipped without it
-(#511), because design's 14 Sep ruling is *"never draw a rung the backend
-doesn't report"* and LU-01 says "no invented progress" itself.
+Both cannot be right:
+
+- If **backend** is right, the fifth stage returns as the longest part of the
+  wait, and a teacher currently watches "Finding the sections" through all of
+  it.
+- If **design** is right, the long-wait copy is describing work that does not
+  happen, and the 600-second figure belongs to serve time rather than upload.
+
+Nobody needs to build anything until that is answered. It is recorded in
+`ProcessingStages.tsx` so the next reader meets it there too.
 
 ### 1Tb. `incidentId` — confirm the shape, because the spec cannot
 
