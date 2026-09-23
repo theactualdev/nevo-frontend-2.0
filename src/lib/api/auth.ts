@@ -102,7 +102,25 @@ export const authApi = {
    * could not be provisioned at all; it is now public and the two callers are
    * told apart by whether they send an `onboardingToken`.
    */
-  setPin: (pin: string) => api.post<Record<string, string>>("/api/v1/auth/pin", { pin }),
+  setPin: (pin: string, currentPin?: string) =>
+    api.post<Record<string, string>>("/api/v1/auth/pin", {
+      pin,
+      /*
+       * REQUIRED WHEN THE ACCOUNT ALREADY HAS A PIN, as of 23 Sep, and
+       * enforced: a wrong or missing one is a 403 `current_pin_required`.
+       *
+       * Omitted rather than sent as undefined-shaped null, because the two
+       * callers of this route are genuinely different requests. Setting a
+       * FIRST PIN - the SSO path - has nothing to prove and sends none;
+       * changing an existing one must. A null here would be us asserting
+       * "there is no current PIN" about an account that has one.
+       *
+       * This is the field frame 27 has drawn since the beginning ("Enter your
+       * current PIN", step 1 of 3) and that had nowhere to go until now. It
+       * was list S-B 9.
+       */
+      ...(currentPin ? { currentPin } : {}),
+    }),
 
   /**
    * PUBLIC. Exchange a class code - or a class the child picked inside a

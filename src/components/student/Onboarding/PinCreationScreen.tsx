@@ -293,8 +293,15 @@ export function PinCreationScreen({
   );
 }
 
-/** One row of four PIN boxes. `offset` is the absolute index of its first box. */
-function PinRow({
+/**
+ * One row of PIN boxes. `offset` is the absolute index of its first box.
+ *
+ * Exported because the change-PIN flow's first step draws the same boxes for
+ * the CURRENT pin. Two copies of "what a PIN entry looks like" eventually
+ * disagree about the caret, the error colour or the box count, and a child
+ * would meet two different-looking PIN rows inside one flow.
+ */
+export function PinRow({
   filled,
   offset,
   caretAt,
