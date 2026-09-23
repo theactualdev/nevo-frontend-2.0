@@ -4638,6 +4638,62 @@ weak test let a mutation through here: asserting the absence only after
 awaiting "the call was made" passes whether or not the handler went on to fill
 the gap. The settle is what makes the assertion mean anything.
 
+### A PIN change proves the old PIN now, 23 Sep - and it had to
+
+Backend added `currentPin` and **enforces** it: on `POST /api/v1/auth/pin` as a
+signed-in student whose account already has one, a wrong or missing
+`currentPin` is a 403 `current_pin_required`. **So this is not a new feature,
+it is a break we had to catch** - without it, changing a PIN would simply have
+stopped working the moment the deploy landed.
+
+**THE FRAME HAS DRAWN THIS SINCE THE BEGINNING.** Frame 27: *"Enter your
+current PIN · Step 1 of 3"*. It was list S-B 9, open because the field did not
+exist. It exists, so the step exists.
+
+**STEPS 2 AND 3 ARE `PinCreationScreen` UNCHANGED**, and it needed no new
+prop. `storePin` is the seam that already means "the caller knows how to store
+this", so the change screen passes one that proves the old PIN first. That
+component does not have to know this particular store has something to prove.
+
+**A WRONG CURRENT PIN IS THE CHILD'S, AND THE COPY HAS TO SAY SO.**
+`PinCreationScreen` renders *"we couldn't save that just now - that's on us,
+not you"* for a rejected write, and that sentence exists because an earlier
+version blamed a child for a failure no retype could fix. This is its mirror:
+retyping IS the fix, and calling it our fault sends a child to find an adult
+about something they could have solved. So `isCurrentPinRejected` is narrow -
+that code, on that status, nothing else - and the flow returns to step 1, which
+is the step that can fix it.
+
+**THE PROMISE DELIBERATELY NEVER SETTLES** on that path, and it is worth
+knowing why rather than tidying away. Resolving would tell `PinCreationScreen`
+the PIN was stored and send the child to Profile on a change that did not
+happen; rejecting would show them the "on us" copy about something that is
+theirs. Neither is true, and the flow has already moved - the state change
+unmounts that screen and its own cleanup marks it cancelled.
+
+**`PinRow` IS EXPORTED RATHER THAN COPIED.** Two sets of PIN boxes eventually
+disagree about the caret, the error colour or the count, and a child would meet
+two different-looking rows inside one flow.
+
+**THE PHYSICAL KEYBOARD IS WIRED ON STEP 1.** A child on a school laptop could
+not type into either PIN door until 18 Sep; a new PIN screen that only took
+taps would put that straight back, on the one door nobody would think to
+re-test.
+
+**A MUTATION SURVIVED THE SCREEN TESTS**, which is why there is a second test
+file. Removing `currentPin` from the request body entirely passed every
+screen test - the screen mocks `authApi.setPin` and only ever sees the
+arguments it passed in. The body is built in `auth.ts`, so it is asserted in
+`auth.setPin.test.ts`.
+
+**STILL TO DO, AND DELIBERATELY NOT IN THIS CHANGE:** `STUDENT_PIN_LENGTH` can
+drop to four now. All five carriers accept 4-8 digits (`^d+$`, re-checked
+23 Sep), so design's four-box ruling is finally implementable - but a length
+change touches three screens and the picker, and bundling it into an enforced
+break would muddle both. Six still works, including an administrator's
+generated reset.
+
+
 ### One warm-up a day, 23 Sep - and the cost was measurement, not tidiness
 
 Design confirmed the done state: *"yes, one exists, and it says nothing about
