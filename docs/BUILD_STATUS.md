@@ -2307,6 +2307,73 @@ holds. SCRUM-169 can close on the admin side.
 
 ---
 
+---
+
+## 23 September — the frame existed and we did not look
+
+`admin/D01b Email Confirmation & Access` landed in the design repo on **20 Sep**,
+in Lydia's consent-flow drop. SCRUM-151 was built on **22 Sep** with invented
+copy, under a component comment asserting *"NO DESIGN FRAME EXISTS FOR THIS
+SCREEN."* The frame was two days old and one `git pull` away.
+
+**An absent frame is a claim like any other, and it decays the same way.** The
+rule that already exists in this file for blockers — re-derive before planning
+around it — applies to "design has not drawn this" exactly as much. Pull the
+design repo before concluding there is nothing to build to.
+
+The state machine survived the diff unchanged, which is worth noting: that half
+was built to the contract and the contract was right. It was only the words that
+were invented, and words are the half a frame owns.
+
+### Fixed (#500)
+
+AC-03 and AC-04 now carry D01b's own sentences — the 24-hour lifetime, the
+address the link went to, *"perhaps on another device, or by clicking the link
+twice"*. Tests pin the frame's wording rather than a regex that would pass
+against either.
+
+### AC-03 draws two controls the contract cannot serve — RAISED, not built
+
+The frame puts **"Send a new link"** and **"Change the email address"** on the
+expired screen. `POST /admin/email-confirmation/resend` carries `HTTPBearer`,
+and **nothing writes an address change at all**. Anyone arriving from an email
+link is by definition not signed in, so both would 401.
+
+Absent rather than drawn-and-broken. `TODO(api)`: a **token-authenticated**
+resend — the expired token already proves which account it is, which is the
+whole reason the link works as a credential on `verify`.
+
+### AC-05 IS NOT BUILT, and it is the bigger half
+
+> *"Confirm your email to start setting up. You can look around, but changes
+> are paused until you confirm."*
+
+A signed-in but unconfirmed admin gets a **read-only console**: Overview renders,
+every write is paused with its own inline reason (*"Confirm your email first —
+we sent a link to…"*, *"Paused until your email is confirmed"*), and **"Resend
+it"** sits inline where it does work, because that surface is authenticated.
+
+This is a behaviour across the console, not a screen. `emailConfirmationApi.read()`
+was written in #491 and **is called by nothing** — it is exactly the read AC-05
+needs. Sized as its own piece of work; not started.
+
+### Frames NOT yet audited against what we shipped
+
+Only D01b has been diffed. The same drop changed six others, and two of them
+cover work built this week:
+
+| | |
+|---|---|
+| `D05 Classes` (224 lines) | the bulk create / CSV import shipped in #473/#478 |
+| `D08b Learner Profiles` (190) · `D15c SENCo Learner Metrics` (87) | changed by the transformation-metrics **ruling**, not a redesign |
+| `D01 School Onboarding` (319) · `D03` · `D04` · `D07` · `D16c` · `D19` | unaudited |
+| `D24 Getting to Active` (817) · `D24b` · `D25` / `D25a` · `D26` | **new, entirely unbuilt** |
+
+`D25 Consent (Written Route)` and `D25a Consent Form (Print)` matter for the
+consent work below: the written route is the answer backend gave for parents who
+do not use email, and no part of it exists in `src/`.
+
+
 ## 23 September — the doors do not check who you are. HANDOFF, two lanes
 
 QA found a teacher's credentials accepted at the **admin** sign-in: success
