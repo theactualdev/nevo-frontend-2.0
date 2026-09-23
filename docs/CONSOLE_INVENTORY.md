@@ -1102,24 +1102,31 @@ instruction is to build nothing that depends on either field until it is answere
     - **the avatar selector** — likewise. There is no avatar-choosing UI in
       `student/Profile`, so this may mean "build one" (a design question, since no frame
       shows it) rather than "fix one". **Needs the same.**
-17. **The scaffolds subsystem** — **SCOPED 23 Sep; the scoping pass this row asked for is
-    done and it is buildable.** Three paths, all unconsumed: `GET .../scaffolds/state/{student_id}/{concept_id}`,
-    `POST .../scaffolds/attempt`, `GET .../scaffolds/history/{student_id}`.
-    **The division of labour is already correct in the schema, which is why this is safe to
-    take.** We post what happened — `responseCorrect`, `responseTimeMs`, `hintCount` — and
-    `ScaffoldDecisionResponse` comes back carrying `nextIntensity`, `levelChanged`,
-    `changeReason` and **`studentMessage`**, a required string. The server decides and writes
-    the words; we render them. `ScaffoldIntensity` is `full_support | partial_support |
-    hints_only | independent` and `ScaffoldOutcome` is `correct | struggled`.
-    **Rule 3 and the Zero-Tag ruling both bite here and neither blocks it.** Never compute an
-    intensity, never render one: `currentIntensity`, `consecutiveCorrect`,
-    `responseTimeImprovementStreak` and `reducedHintStreak` on `ScaffoldStateResponse` are
-    engine parameters and belong on no screen — typed because the contract sends them, shown
-    to nobody, exactly as `stability` and `retrievability` are. `changeReason` is reasoning
-    and frame 38 forbids showing it. **`studentMessage` is the only field a child may read.**
-    **Still open, and it is a design question rather than a backend one:** where a scaffold
-    change is felt. Rule 7 says an adaptation transition is felt, not seen, so `levelChanged`
-    must not announce itself. **M**
+17. ~~**The scaffolds subsystem**~~ **BUILT 23 SEP — and 37a changed the shape of it
+    twice.** `scaffoldsApi` wraps all three paths; `levelForIntensity` maps the four
+    intensities to the indicator's four circles; `useScaffoldLevel` sources it in a
+    review session.
+    **The indicator was already built** — `ScaffoldIndicator` and `SCAFFOLD_LEVELS`
+    have existed since the Intelligence Layer work. What was missing was a source.
+    **AND ITS FOURTH CIRCLE WAS STRUCTURALLY UNREACHABLE.** 37a draws four states; the
+    adaptation plan's `ScaffoldingLevel` carries three (`light | standard | strong`),
+    so `minimal` — one filled dot, the child who is flying — has never been shown to
+    anybody. `ScaffoldIntensity` has exactly four, in the same order.
+    **37a answered the design question I had filed**, and against my assumption: the
+    indicator is permanent, not invisible. Rule 7 lives in HOW it changes — *"the circles
+    just update, the label never animates."* That row can be struck from the asks.
+    **`studentMessage` is required on the wire and has no home on any frame.** The pill
+    is four dots plus the fixed word "Support"; the state names are design annotations,
+    not copy. Typed, rendered nowhere, raised — the `highlights` situation.
+    **Never rendered:** `consecutiveCorrect`, `responseTimeImprovementStreak`,
+    `reducedHintStreak` (engine parameters) and `changeReason` (reasoning, frame 38).
+    **NO ATTEMPT IS POSTED, and `problemId` is why** — it is required and nothing in a
+    lesson has one. `AssessmentQuestion` has a prompt, options with ids and a
+    `correctId`, and no id of its own. An index keys the server's history to a position
+    that moves when content is re-authored. **Backend ask, filed 23 Sep.**
+    **Open, and it is not a blocker today:** the engine is per concept and
+    `LessonSegment` carries none, so only a review session has a subject for it. If a
+    segment ever gains a `conceptId`, which source wins becomes a real question.
 18. **Tell a teacher when their upload was silently degraded.** Traced 16 Sep after
     backend flagged the Zero-Tag rejection. `UploadWizard.tsx:285-290` awaits the parse run,
     tests `run.status === "failed"` and nothing else, then walks the teacher into the review

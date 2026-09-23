@@ -117,6 +117,15 @@ export {
   type StudentEntryState,
   type StudentEntrySession,
 } from "./studentEntry";
+export {
+  scaffoldsApi,
+  type ScaffoldIntensity,
+  type ScaffoldOutcome,
+  type ScaffoldState,
+  type ScaffoldAttempt,
+  type ScaffoldDecision,
+  type ScaffoldLogEntry,
+} from "./scaffolds";
 export { notificationsApi } from "./notifications";
 export { analyticsApi } from "./analytics";
 export { baselineApi } from "./baseline";
