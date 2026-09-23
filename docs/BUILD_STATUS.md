@@ -2311,6 +2311,114 @@ holds. SCRUM-169 can close on the admin side.
 
 ---
 
+---
+
+## D24 Getting to Active — audit against the onboarding wizard. 23 Sep
+
+### First, a correction
+
+**"We built a wizard and D24 says never a wizard" was wrong.** D24's *"Resumable,
+never a wizard"* describes OB-00, the dashboard a school lives in **between
+registering and paying** — a surface that does not exist at all. `OnboardingWizard`
+is D01 *registration*, which is still correctly a wizard. They are sequential
+phases, not competing designs. The real findings are different and are below.
+
+### D01 went from five steps to four, and two of ours were cut
+
+D01's own step rail, after the 20 Sep drop:
+
+> **1** Sign up · **2** Confirm email · **3** DPA read-gate · **4** School details
+> → Dashboard (OB-00)
+>
+> *"4 steps; the school code now lives on the dashboard overview"*
+
+Against what is built:
+
+| D01 now | We ship | |
+|---|---|---|
+| 1 Sign up | `SignUpStep` | matches |
+| 2 **Confirm email** (AC-01/AC-02) | — | **missing entirely** |
+| — | `AuthMethodStep` | **no longer in D01** |
+| — | `BandStep` | **no longer in D01** |
+| 3 DPA read-gate | `DpaStep` (step 3 of 5) | right content, wrong position |
+| 4 School details | — | **missing** |
+| → Dashboard (OB-00) | `HandoverStep` | replaced by landing on OB-00 |
+
+The indicator reads "Step N of 5". Neither `AuthMethodStep` (249 lines) nor
+`BandStep` (211) appears anywhere in D01 now — no mention of a sign-in method or
+a band. Whether they were cut or moved is a question for design; they are not on
+this flow.
+
+### The finding with actual weight: the DPA is accepted by an unverified address
+
+D01 states the ordering **and its reason**:
+
+> *"Email confirm sits before the DPA so acceptance is tied to a verified owner."*
+
+Our wizard has no email-confirmation step, so a proprietor reaches `DpaStep` and
+accepts having proved nothing about the address. **The DPA acceptance record is a
+compliance artefact** — it names an administrator, a version and a timestamp, and
+D12/D22 both display it. Right now that record can name an address nobody has
+shown they own.
+
+This is the one item here that is not a build backlog entry. It should go in front
+of counsel with the other six, because it changes what the acceptance record is
+worth rather than how a screen looks.
+
+The screens for it already exist: SCRUM-151 shipped `/auth/admin/confirm/[token]`
+(#491, #503) and `emailConfirmationApi`. What is missing is the wizard **step**
+and the ordering, not the machinery.
+
+### D24 itself: six endpoints, all deployed, none called
+
+The whole getting-to-active flow is unbuilt, and the contract supports every
+screen of it:
+
+| | |
+|---|---|
+| `GET /api/v1/onboarding` | **never called** — `OnboardingState`, described as *"Everything the onboarding screens render, in one read"*: `stage`, `classes`, `teacherCount`, `studentCount`, `rejected`, `invoiceId`, `amountDue`, `currency`, `periodLabel`, `canConfirm`, `canPay`, `canActivate` |
+| `POST /api/v1/onboarding/imports` | **never called** — OB-01 upload |
+| `PATCH /api/v1/onboarding/classes` | **never called** — OB-02 corrections; `ClassCorrection` is `{normalisedName, renameTo, drop}` |
+| `POST /api/v1/onboarding/confirm` | **never called** — OB-02 "Confirm 336 students" |
+| `POST /api/v1/onboarding/activate` | **never called** — OB-05 |
+| `POST /api/v1/onboarding/additions/quote` | **never called** — D24b's mid-term cost quote |
+
+`OnboardingState` is exactly the *"resumable, never a wizard"* shape: the server
+owns the stage and the three `can*` booleans, so the dashboard renders what it is
+told rather than deriving where a school has got to. **Nothing here needs a
+threshold computed on our side.**
+
+Billing is the half that is NOT missing — `bank-transfer-details`, `invoices`,
+`subscription`, `upcoming`, `manual-transfer` are all wired. So OB-04's transfer
+screen has its data; what it lacks is the screen.
+
+### What OB-00 requires that we have nowhere
+
+- **The console is reachable but read-only until active.** *"You can look around
+  the rest of your console — Classes, Teachers, Reports, Billing. You can't make
+  any changes until Brightgate is active."* That is the same shape as D01b's
+  AC-05 (writes paused until the email is confirmed), which is also unbuilt.
+  **Two separate reasons a console is read-only, and no read-only mode exists.**
+- **Three distinct moments**, not a progress bar: nothing uploaded (an
+  invitation), staff-only (a half-finished job), roster in (one question, one
+  answer). Each has its own copy and its own panel.
+- **The headcount panel is permanent**, not a step: *"Once a roster exists it sits
+  on the dashboard permanently, so the school sees its own number every time it
+  signs in."*
+- **The waiting state is not a spinner.** *"A school paying by transfer may leave
+  overnight and come back."* It must survive being left.
+- **Never red, never nagging** — including the not-yet-matched payment state.
+
+### Sizing, honestly
+
+OB-00 alone is three moments plus a read-only mode across the whole console.
+OB-01/02 is an upload and a derived-result screen with per-row rejections. OB-03
+is a standing panel. OB-04 is two states. OB-05 is one.
+
+That is not a day. It is the largest unbuilt thing in this console, and it is the
+path every school walks before any other screen matters.
+
+
 ## D05 Classes — audit against what we shipped. 23 Sep
 
 `admin/D05 Classes` changed **199 insertions / 25 deletions** in the 20 Sep drop.
