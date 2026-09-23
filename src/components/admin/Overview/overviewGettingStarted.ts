@@ -97,8 +97,22 @@ export function gettingStartedSteps(school: string): StartStep[] {
     },
     {
       title: "Send parent consent requests",
-      // Not "Students can begin lessons once a parent confirms" - they can
-      // begin either way, per SCRUM-80. This is the school's record.
+      /*
+       * THIS COMMENT SAID THE OPPOSITE UNTIL 23 SEP, and the sentence it was
+       * arguing against is now the true one.
+       *
+       * It read: "Not 'Students can begin lessons once a parent confirms' -
+       * they can begin either way, per SCRUM-80." That ruling is superseded. A
+       * child whose consent is not in cannot reach the assessment at all - see
+       * `00d Waiting on Consent` in the student frames, and the required
+       * `blocked` on `ConsentGateResponse`.
+       *
+       * The copy still says what the school DOES here rather than what it
+       * unlocks, because the unlocking is the student console's to state and
+       * this row is a checklist item rather than a warning. But the REASON has
+       * inverted, and the next person reasoning from the old comment would
+       * have reasoned from a falsehood.
+       */
       sub: "Your school records each parent's confirmation here.",
       cta: "Send requests",
       href: "/admin/students",
