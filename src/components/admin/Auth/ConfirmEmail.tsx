@@ -12,11 +12,16 @@ import {
 /**
  * SCRUM-151 - where an administrator's confirmation link lands.
  *
- * NO DESIGN FRAME EXISTS FOR THIS SCREEN. The route was settled with backend
- * (`/auth/admin/confirm/[token]`) and the contract is complete, so the wiring
- * and the state machine are built to the contract; the WORDING below is
- * provisional and design may replace it without touching anything else. The
- * headings are ours and the body is the server's - see `message`.
+ * ~~NO DESIGN FRAME EXISTS FOR THIS SCREEN.~~ **IT DID, AND WE DID NOT LOOK.**
+ * `admin/D01b Email Confirmation & Access` landed in the design repo on 20 Sep
+ * and this was built on 22 Sep with invented copy, under a comment asserting
+ * there was nothing to build to. The frame was two days old and one `git pull`
+ * away. **Pull the design repo before deciding a frame does not exist** - that
+ * absence is a claim like any other and it decayed the same way every other
+ * claim in this repo decays.
+ *
+ * The copy below is now D01b's own, AC-03 and AC-04 verbatim. The state machine
+ * survived the diff unchanged, which is the part that was built to the contract.
  *
  * FIVE OUTCOMES, NOT TWO. `EmailConfirmationStatus` is a closed five-member
  * enum and the contract is explicit that three of them are separate screens:
@@ -42,13 +47,43 @@ import {
 type Phase = "verifying" | "done" | "unreachable";
 
 /** Our structure, the server's explanation. */
+/** D01b's own words. AC-04 and AC-03 respectively; the rest have no frame. */
 const HEADING: Record<EmailConfirmationStatus, string> = {
   confirmed: "Your email address is confirmed",
-  already_confirmed: "This address was already confirmed",
-  expired: "This link has run out",
+  already_confirmed: "This email is already confirmed",
+  expired: "This link has expired",
+  /*
+   * NOT DRAWN. D01b draws expired and already-confirmed and stops, because a
+   * token that never existed is not a state a designer reaches by walking the
+   * happy path. It is still a state the contract returns, so it keeps our own
+   * wording rather than borrowing a neighbour's and saying the wrong thing.
+   */
   invalid: "This link doesn’t work",
   pending: "This address still needs confirming",
 };
+
+/**
+ * D01b's bodies, which say more than the server's `message` can.
+ *
+ * The frame names the 24-hour lifetime and the address the link went to. The
+ * server's `message` is one sentence with no knowledge of either, so where the
+ * frame has written copy it wins, and `message` is the fallback for the two
+ * states D01b does not draw.
+ *
+ * `email` is nullable - an invalid token identifies nobody - so the address
+ * clause is composed only when there is one, never as "sent to null".
+ */
+function bodyFor(status: EmailConfirmationStatus, email: string | null): string | null {
+  if (status === "expired") {
+    return email
+      ? `Confirmation links last 24 hours. We can send a fresh one to ${email}.`
+      : "Confirmation links last 24 hours. We can send a fresh one.";
+  }
+  if (status === "already_confirmed") {
+    return "You’ve confirmed this address already – perhaps on another device, or by clicking the link twice. Nothing more to do here; just sign in and carry on.";
+  }
+  return null;
+}
 
 /**
  * Whether signing in is the next step.
@@ -133,15 +168,20 @@ export function ConfirmEmail({ token }: { token: string }) {
             <h1 className="text-[30px] font-semibold tracking-[-0.015em] text-nevo-near-black">
               {HEADING[state.status]}
             </h1>
+            {/*
+              * The frame's body where it wrote one, the server's otherwise.
+              * D01b names the 24-hour lifetime and the address; `message` knows
+              * neither, so on the two states design drew, design wins.
+              */}
             <p className="mt-[13px] max-w-[420px] text-[17px] leading-[1.55] text-nevo-near-black/70">
-              {state.message}
+              {bodyFor(state.status, state.email) ?? state.message}
             </p>
             {/*
-              * The address, when the server named one. `email` is nullable
-              * because an invalid token identifies nobody, so this is absent
-              * rather than a blank line under the heading.
+              * The address on its own line, only where the body has not
+              * already named it. `email` is nullable - an invalid token
+              * identifies nobody - so this is absent rather than blank.
               */}
-            {state.email ? (
+            {state.email && !bodyFor(state.status, state.email) ? (
               <p className="mt-2.5 text-[14.5px] text-nevo-near-black/55">
                 {state.email}
               </p>
@@ -155,8 +195,20 @@ export function ConfirmEmail({ token }: { token: string }) {
               </Link>
             ) : null}
             {/*
-              * Where a fresh link actually comes from. Resend needs a session,
-              * so this is a sentence rather than a button - see the header.
+              * D01b AC-03 DRAWS TWO BUTTONS HERE THAT THE CONTRACT CANNOT
+              * SERVE: "Send a new link" and "Change the email address".
+              *
+              * `POST /admin/email-confirmation/resend` carries HTTPBearer, and
+              * nothing at all writes an address change. Somebody arriving from
+              * an expired link is not signed in, so both controls would 401 -
+              * a button that refuses everyone is worse than a sentence that
+              * tells them where to go.
+              *
+              * So the sentence stands and the buttons are ABSENT rather than
+              * drawn-and-broken. Raised rather than synthesised: this is a
+              * contract/design disagreement, not a copy decision.
+              * TODO(api): a token-authenticated resend, so AC-03 can be built
+              * as drawn. The token already proves which account it is.
               */}
             {state.status === "expired" || state.status === "pending" ? (
               <p className="mt-4 max-w-[360px] text-[13.5px] leading-[1.55] text-nevo-near-black/50">
