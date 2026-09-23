@@ -51,7 +51,21 @@ export function LessonDetailActions({
   /** Flagged sections nobody has approved. */
   outstandingSections?: number;
 }) {
-  const h = compact ? "h-[42px] text-sm" : "h-11 text-[14.5px]";
+  /*
+   * QA 5, "Assign to a class is off-centre" - reported twice, and it was
+   * never the button's POSITION. The label wrapped to two lines inside a
+   * fixed-height button, so the text sat high in a box that could not grow
+   * to hold it. At the width QA screenshotted it read as misaligned, which
+   * is exactly what it was, one level down from where I kept looking.
+   *
+   * C06b's own button is a single line - `height:44px; padding:0 20px;
+   * display:inline-flex; align-items:center` - and nothing about it invites
+   * a wrap. `whitespace-nowrap` is what makes that true at any width; the
+   * header's `flex-wrap` gives it somewhere to go when there is no room.
+   */
+  const h = compact
+    ? "h-[42px] text-sm whitespace-nowrap"
+    : "h-11 text-[14.5px] whitespace-nowrap";
   const blocked = !ready;
   const plural = (n: number, one: string, many: string) =>
     `${n} ${n === 1 ? one : many}`;

@@ -136,3 +136,27 @@ describe("Edit", () => {
     expect(screen.queryByRole("link", { name: "Edit" })).not.toBeInTheDocument();
   });
 });
+
+describe("the label QA photographed", () => {
+  it("never wraps, in either state", () => {
+    /*
+     * QA 5, reported twice. "Off-centre" was never the button's position:
+     * "Assign to a class" wrapped to two lines inside a fixed-height button,
+     * so the text sat high in a box that could not grow. C06b's button is a
+     * single line at 44px, and a wrap is what broke that.
+     *
+     * Asserted on the class because there is nothing else to assert on - a
+     * jsdom test cannot measure a line box - and because the class IS the
+     * decision here rather than decoration.
+     */
+    const { rerender } = render(<LessonDetailActions lessonId="l-1" ready />);
+    expect(
+      screen.getByRole("link", { name: "Assign to a class" }).className,
+    ).toContain("whitespace-nowrap");
+
+    rerender(<LessonDetailActions lessonId="l-1" ready={false} />);
+    expect(screen.getByText("Assign to a class").className).toContain(
+      "whitespace-nowrap",
+    );
+  });
+});

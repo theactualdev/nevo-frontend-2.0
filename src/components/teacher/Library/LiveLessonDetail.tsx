@@ -356,10 +356,13 @@ export function LiveLessonDetail({
             lesson - the console's best-wired write had no entry point. */}
         {/* C06b: `display:flex; align-items:flex-start; justify-content:
             space-between; gap:24px; flex-wrap:wrap`. Every part of that was
-            here except the wrap, so at a narrow width the title and the
-            actions squeezed against each other instead of stacking - which
-            is the likeliest thing behind QA's "Assign is off-centre",
-            reported twice and not reproducible at desktop width. */}
+            here except the wrap.
+
+            NOT the "off-centre" bug - that was the label wrapping inside the
+            button, one level down, and it is fixed where it happens. This is
+            frame fidelity: the actions get somewhere to go when the title
+            leaves them no room, instead of squeezing. Untested, and honestly
+            untestable in jsdom, which cannot measure a line box. */}
         <div className="mt-4 flex flex-wrap items-start justify-between gap-6">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2.5">
