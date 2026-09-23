@@ -165,6 +165,35 @@ export interface AdminClass {
   source: ClassSource | null;
   subjects: string[];
   studentCount: number;
+  /**
+   * FOUR FIELDS THAT WERE ARRIVING AND BEING DISCARDED, found auditing D05.
+   *
+   * `ClassSummaryResponse` carries `section`, `academicSession`, `capacity`
+   * and `teacherCount`, and this interface declared none of them. D05's list
+   * renders `{{ it.name }}` beside `{{ it.section }}` and its create sheets
+   * offer all three of the others, so the frame was drawing data the type said
+   * we did not have.
+   *
+   * THE CONTRACT GATE CANNOT SEE THIS ONE, and that is the point worth
+   * keeping. Check 2 lists spec fields named NOWHERE in the client - and
+   * `section`, `academicSession` and `capacity` are all named a few lines
+   * below on `ClassWrite`, so it stayed silent while the read type ignored
+   * them. Only `teacherCount`, which nothing anywhere mentioned, showed up.
+   *
+   * It is the third time this exact shape has cost something here: the same
+   * blind spot hid `ClassStudent.consent` - see its own note above, which
+   * describes the mechanism and did not stop it happening again. **A field
+   * being mentioned somewhere in a file is not the same as being read where
+   * it arrives.**
+   */
+  section: string | null;
+  academicSession: string | null;
+  capacity: number | null;
+  /**
+   * Teachers assigned. Kills the N+1 in `ClassesView`, which fetches
+   * `classTeachers` per row to build the teacher column.
+   */
+  teacherCount: number;
   /** Non-null means archived. Archive is reversible and never deletes. */
   archivedAt: string | null;
 }
@@ -218,14 +247,21 @@ export const classesApi = {
   /**
    * Create a class.
    *
+   * **THE "AND NOTHING ELSE" BELOW WAS TRUE AND IS NOT ANY MORE.** This said
+   * *"the deployed schema takes `{ name, yearGroup }` and nothing else"*, and
+   * `POST /api/v1/classes` now takes the full `ClassWrite` - the same body as
+   * the bulk route. So D05's single Add-a-class sheet, which draws Section,
+   * Academic session and Capacity, is buildable today; the sheet not offering
+   * them is ours to fix, not a contract gap. Widened here so the sheet can.
+   *
    * D5's create sheet offers an OPTIONAL PRIMARY TEACHER, and SCRUM-40's data
-   * note asks for `primary_teacher_id` on this body - but the deployed schema
-   * takes `{ name, yearGroup }` and nothing else. So the sheet creates, then
-   * assigns with the id this returns. Two calls, not one, and not atomic: if
-   * the assignment fails the class still exists, which the sheet says plainly
-   * rather than pretending the whole thing failed.
+   * note asks for `primary_teacher_id` on this body - that part is still
+   * absent from the schema. So the sheet creates, then assigns with the id
+   * this returns. Two calls, not one, and not atomic: if the assignment fails
+   * the class still exists, which the sheet says plainly rather than
+   * pretending the whole thing failed.
    */
-  create: (payload: { name: string; yearGroup: string | null }) =>
+  create: (payload: ClassWrite) =>
     api.post<{ id: string; code: string | null }>("/api/v1/classes", payload),
 
   /**

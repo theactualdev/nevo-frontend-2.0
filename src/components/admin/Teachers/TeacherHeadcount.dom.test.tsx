@@ -66,6 +66,10 @@ const klass = (id: string, studentCount: number, archivedAt: string | null = nul
   source: null,
   subjects: [],
   studentCount,
+  section: null,
+  academicSession: null,
+  capacity: null,
+  teacherCount: 0,
   archivedAt,
 });
 
