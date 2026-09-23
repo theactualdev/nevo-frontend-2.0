@@ -205,7 +205,10 @@ describe("a teacher's own lesson reaches the review", () => {
 
     uploadOneLesson();
 
-    expect(screen.getByText(/Getting "fractions.pdf" ready/)).toBeInTheDocument();
+    // The heading became the lesson's own name over a stage ladder
+    // (SCRUM-172). Still the processing screen, still not the review.
+    expect(screen.getByText("fractions")).toBeInTheDocument();
+    expect(screen.getByText("Reading the document")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Looks right, continue" }),
     ).not.toBeInTheDocument();

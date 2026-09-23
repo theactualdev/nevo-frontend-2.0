@@ -271,7 +271,11 @@ describe("a parse that is simply taking a while", () => {
 
     startSingleUpload();
 
-    expect(screen.getByText(/Still building your lesson/i)).toBeInTheDocument();
+    // SCRUM-172 replaced the spinner with the named ladder, so the sentence
+    // moved. What it guards did not: a wait that is running long says so,
+    // rather than leaving a teacher to decide the product has hung.
+    expect(screen.getByText(/taking a while/i)).toBeInTheDocument();
+    expect(screen.getByText(/hasn.t stalled/i)).toBeInTheDocument();
   });
 
   it("promises no duration it cannot keep", () => {
@@ -279,8 +283,13 @@ describe("a parse that is simply taking a while", () => {
 
     startSingleUpload();
 
-    expect(screen.getByText(/Reading the content/i)).toBeInTheDocument();
+    // The ladder is what a teacher reads now, and it promises nothing about
+    // how long any of it takes - which is the point of the assertion below.
+    expect(screen.getByText("Reading the document")).toBeInTheDocument();
     expect(screen.queryByText(/under a minute/i)).not.toBeInTheDocument();
+    // And the long-wait line stays off a wait that is not long yet - said
+    // over every upload it would stop meaning anything on the one that is.
+    expect(screen.queryByText(/taking a while/i)).not.toBeInTheDocument();
   });
 });
 

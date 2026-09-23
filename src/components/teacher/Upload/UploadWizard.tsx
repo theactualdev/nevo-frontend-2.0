@@ -16,6 +16,7 @@ import {
 } from "./ParseFallback";
 import { LiveModuleReview } from "./LiveModuleReview";
 import { PARSE_STAGES, ParseProgress, rungFor } from "./ParseProgress";
+import { ProcessingStages, stageOf } from "./ProcessingStages";
 import { SectionReview } from "./SectionReview";
 import { LiveStructureTree } from "./LiveStructureTree";
 import { StructureTree } from "./StructureTree";
@@ -907,27 +908,34 @@ export function UploadWizard() {
           )}
 
           {phase === "processing" && !isBlock && (
-            <div className="flex w-full items-center gap-5 rounded-[16px] bg-nevo-cream-elevated p-9 shadow-elevation-1">
-              <span className="size-11 shrink-0 rounded-full border-4 border-nevo-navy/20 border-t-nevo-navy motion-safe:animate-spin motion-safe:[animation-duration:800ms]" />
-              <div>
-                <h3 className="text-lg font-semibold text-nevo-near-black">
-                  {`Getting "${fileName}" ready`}
-                </h3>
-                {/*
-                  "This usually takes under a minute" was measured on a
-                  parse with no pictures in it, and it set a teacher up to
-                  read a normal wait as a hang.
+            /*
+             * SCRUM-172 LU-01. What stood here was a spinner and two
+             * sentences for work backend measures at about 115 seconds of
+             * text plus up to 600 per generated picture - "the time is
+             * currently dead... the only available conclusion is that the
+             * product has hung".
+             */
+            <div className="w-full rounded-[16px] bg-nevo-cream-elevated p-9 shadow-elevation-1">
+              <ProcessingStages
+                lessonName={blockName}
+                current={stageOf(staged.uploadId, staged.stage, staged.status)}
+              />
+              <p className="mt-6 max-w-[440px] text-[14.5px] leading-[1.5] text-nevo-near-black/60">
+                {/* The leave-and-return promise, in the frame's own words.
+                    It is TRUE and has been since the single path moved to
+                    the staged pipeline: the job has its own id server-side
+                    and nothing stops when this tab does.
 
-                  `slow` is the staged upload's own measure, taken from when
-                  the file went up. It replaces a timer this component kept
-                  for the path it no longer owns.
-                */}
-                <p className="mt-1.5 text-[14.5px] leading-[1.5] text-nevo-near-black/66">
-                  {staged.slow
-                    ? "Still building your lesson. This can take a few minutes when there are pictures to make, and it keeps going if you leave this open."
-                    : "Reading the content and building the read, listen and watch versions."}
-                </p>
-              </div>
+                    LU-02's action and LU-03's persistent indicator are what
+                    make it usable rather than merely true - a teacher who
+                    leaves today has no way back to this screen. Both are
+                    raised on the ticket; this sentence is deliberately a
+                    statement about the work rather than an invitation to go,
+                    until there is somewhere to come back from. */}
+                Carry on &mdash; we&rsquo;ll tell you when it&rsquo;s ready.
+                {staged.slow &&
+                  " This one is taking a while. It hasn’t stalled; a longer document takes longer to read."}
+              </p>
             </div>
           )}
 
