@@ -2309,6 +2309,89 @@ holds. SCRUM-169 can close on the admin side.
 
 ---
 
+---
+
+## D05 Classes — audit against what we shipped. 23 Sep
+
+`admin/D05 Classes` changed **199 insertions / 25 deletions** in the 20 Sep drop.
+It now carries OB-07: the list grouped by year group, a single Add-a-class sheet
+with duplicate detection before submit, and Add-several. We shipped CL-03/CL-04
+(#478) and CL-06 (#473) against the PREVIOUS version.
+
+**Two items below are defects and are fixed. The rest are divergences, listed so
+somebody can decide rather than discover.**
+
+### FIXED — four fields arriving and being discarded
+
+`ClassSummaryResponse` carries `section`, `academicSession`, `capacity` and
+`teacherCount`. `AdminClass` declared none of them. D05's list draws
+`{{ it.name }}` beside `{{ it.section }}` and its sheets offer the other three,
+so the frame was rendering data our type said we did not have.
+
+**The contract gate structurally could not see three of the four.** Check 2
+reports spec fields named NOWHERE in the client — and `section`,
+`academicSession` and `capacity` are all named on `ClassWrite` a few lines
+below, so it stayed silent. Only `teacherCount`, mentioned nowhere, surfaced.
+
+Third occurrence of that shape; `ClassStudent.consent` was the first and its own
+comment already describes the mechanism. **A field being mentioned somewhere in
+a file is not the same as being read where it arrives.**
+
+`teacherCount` also kills the N+1 in `ClassesView`, which fetches `classTeachers`
+once per row to build the teacher column.
+
+### FIXED — a comment that had become false
+
+`classesApi.create` said *"the deployed schema takes `{ name, yearGroup }` and
+nothing else"*. `POST /api/v1/classes` now takes the full `ClassWrite`. So D05's
+single sheet drawing Section, Academic session and Capacity is **buildable
+today** — the sheet not offering them is ours, not a contract gap.
+
+### NOT DONE — the list
+
+| Frame | We ship |
+|---|---|
+| Grouped by year group, with `{{ it.label }}` group headers | Flat list sorted by year, with a **Year column** the frame removed |
+| `{{ it.section }}` beside the name | Not rendered — the field was undeclared until this PR |
+| Header: *"2026/27 session · grouped by year group"* | Absent |
+| Primary button **"Add a class"** | "Create a class" |
+| Empty state: **"Add a class"** + **"Create from a staff or student file"** | "Create a class" + "Import from SSO" |
+| Empty copy: *"Add a class by hand, or upload your roster and Nevo builds your classes from it. Either way works — a class with no students in it yet is perfectly normal."* | The old *"Create your first class, then assign a teacher…"* |
+
+The empty-state copy is the one worth reading rather than skimming: the new line
+tells a school **an empty class is normal**, which is reassurance the old line
+does not give, on the screen where a school first doubts it has done this right.
+
+### NOT DONE — Add a class (single)
+
+`ClassFormSheet` has no Section, Academic session or Capacity. All three are now
+writable and readable. The frame's duplicate warning is also richer than ours:
+
+> *"This matches **JSS 2A**, which already exists in **Year 8**. Rename this one,
+> or open the existing class instead."*
+
+Ours (`duplicateName.ts`) says `"JSS 2A already exists."` — it names neither the
+**year group** of the collision nor the second action, **open the existing
+class**. Our archived-collision variant has no frame equivalent and should stay.
+
+### CLOSE — Add several
+
+`BulkClassSheet` matches the frame's shape. The copy differs:
+
+- Title: "Add several classes" → **"Add several at once"**
+- Subtitle: "…We'll name them for you." → **"…the sections you run. Nevo composes the names."**
+- Count: "N classes will be created" → **"…will be created in the 2026/27 session."**
+
+That last one is not only copy. It names the session, and `academicSession` is a
+real field we do not send — so the sheet creates classes with no session on
+them while the frame's own line promises one.
+
+### Not a divergence
+
+`RejectedRows` (CL-06) has no D05 equivalent — the frame draws no rejection list
+for bulk create. It is backed by `ClassRejection` in the contract and stays.
+
+
 ## 23 September — the frame existed and we did not look
 
 `admin/D01b Email Confirmation & Access` landed in the design repo on **20 Sep**,

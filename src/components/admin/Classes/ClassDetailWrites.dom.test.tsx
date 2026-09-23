@@ -27,6 +27,10 @@ const klass = (over: Partial<AdminClass> = {}): AdminClass => ({
   source: null,
   subjects: [],
   studentCount: 24,
+  section: null,
+  academicSession: null,
+  capacity: null,
+  teacherCount: 0,
   archivedAt: null,
   ...over,
 });
