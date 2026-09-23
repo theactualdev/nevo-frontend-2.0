@@ -2313,6 +2313,67 @@ holds. SCRUM-169 can close on the admin side.
 
 ---
 
+---
+
+## 23 September — the consent gate is real. RULING CONFIRMED · student-lane handoff
+
+**Settled: a child whose consent is not in cannot reach the assessment at all.**
+Not a lesson, not the baseline. The 7 Sep *"Nevo is not the consent gate"* ruling
+is superseded.
+
+**The screen exists and this session did not find it for a day.** The 20 Sep
+drop's own commit message says *"entry-point consent gate, admin/student/teacher
+screens"*, and we read only the admin frames. `student/14 Consent Gate` was
+**deleted** and `student/00d Waiting on Consent` (SE-01) added in the same
+commit — the gate moved from mid-flow to the entry point, which is the whole
+change. **Read the commit message of a design drop, not just the files you
+expected it to touch.**
+
+### SE-01, in full
+
+> **"Nevo isn't quite ready for you yet"**
+> *"It will be soon."*
+
+That is the entire content, and the constraints are as much the design as the
+words:
+
+- **No progress, no countdown, no refresh, no door held shut.**
+- A student's link routes here **only** when consent is not in.
+- When consent arrives, opening the same link goes **straight to the assessment**
+  — no action from the child, nothing to press.
+- Primary case is a **shared classroom tablet at 768×1024**; mobile 375×812
+  second. Not a desktop screen.
+
+It says Nevo is not ready. It does not say the child is blocked, and it never
+mentions consent, a parent, or a school — which is the Zero-Tag reading: a child
+is not told they are the subject of an administrative problem between adults.
+
+### Handoff — student lane
+
+| | |
+|---|---|
+| Read | `accessBlocked(gate)` in `lib/api/consents.ts` — already built, tested, no caller |
+| Route | SE-01 sits at the **entry point**, before the assessment |
+| Frame | `student/00d Waiting on Consent.dc.html` |
+| Do not | compute the condition. `ConsentGateResponse.blocked` is the server's verdict; `processingWithdrawn` is a **different** rule and the two are deliberately independent |
+
+`AgeCheckResponse.blocksAccess` reaches the same door by another route — a date
+of birth the school and the parent disagree on also holds a child until a person
+resolves it. Same screen, presumably; worth confirming rather than assuming.
+
+### Still unbuilt on the admin side
+
+D25 PC-03 is the roster view of this: *"Who is cleared to use Nevo, and how each
+consent was given. A child stays out of lessons until they're cleared."* — with
+cleared/outstanding counts and a digital-vs-written split. Nothing renders it.
+
+### Not a counsel question after all
+
+The DPA-before-verification finding is **build-only**: there are no real schools
+yet, so no acceptance record exists that was collected from an unverified
+address. It is a wizard reorder, not a remediation.
+
+
 ## D24 Getting to Active — audit against the onboarding wizard. 23 Sep
 
 ### First, a correction
