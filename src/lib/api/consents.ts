@@ -3,9 +3,24 @@ import { api } from "./client";
 /**
  * Consent endpoints (NDPA; SCRUM-80 family) - wired to the live backend.
  *
- * **THE 7 SEP RULING APPEARS TO HAVE BEEN REVERSED, AND THIS FILE STILL
- * IMPLEMENTS IT. RAISED 23 SEP, NOT YET RESOLVED - read this before you rely
- * on anything below.**
+ * **THE 7 SEP RULING IS SUPERSEDED. CONFIRMED 23 SEP. CONSENT IS A GATE.**
+ *
+ * A child whose consent is not in **cannot reach the assessment at all** - not
+ * a lesson, not the baseline. The gate is at the ENTRY POINT, not mid-flow.
+ *
+ * The screen exists and is `student/00d Waiting on Consent` (SE-01), which
+ * replaced `student/14 Consent Gate` in the 20 Sep drop. Its whole content:
+ *
+ *   "Nevo isn't quite ready for you yet" / "It will be soon."
+ *
+ * And its rules, which are as much the design as the words: **no progress, no
+ * countdown, no refresh, no door held shut.** When consent arrives, opening the
+ * same link goes straight to the assessment with no action from the child.
+ * Primary case is a shared classroom tablet at 768x1024.
+ *
+ * ROUTING IS THE STUDENT LANE'S. This file owns the READ - `accessBlocked`
+ * below - and the student console owns where SE-01 sits in its entry flow. See
+ * the handoff in docs/BUILD_STATUS.md.
  *
  * What this header used to assert, and what the code still does: *"NEVO IS NOT
  * THE CONSENT GATE. Design ruled on SCRUM-80 (7 Sep): the school warrants
@@ -13,23 +28,22 @@ import { api } from "./client";
  * recorded it yet - an administrative task of theirs, not a blocker for the
  * child. The child proceeds normally."*
  *
- * Two things now say the opposite:
+ * What this header used to assert, kept because the reversal is the point:
+ * *"NEVO IS NOT THE CONSENT GATE... the child proceeds normally."*
  *
- *  - `admin/D25 Consent (Written Route)`, PC-03, 20 Sep: **"A child stays out
- *    of lessons until they're cleared."**
- *  - `ConsentGateResponse` carries a REQUIRED `blocked: boolean` that this
- *    interface did not declare, so it has been arriving on every read and
- *    being discarded. A gate that reports whether a child is blocked is not
+ * Three things carry the new ruling:
+ *
+ *  - `student/00d Waiting on Consent` (SE-01), NEW - the entry gate, sitting
+ *    before the assessment.
+ *  - `admin/D25 Consent (Written Route)`, PC-03: **"A child stays out of
+ *    lessons until they're cleared."**
+ *  - `ConsentGateResponse.blocked`, required, and discarded by this interface
+ *    until 23 Sep. A gate that reports whether a child is blocked was never
  *    the shape of a thing that never blocks anyone.
  *
- * `AgeCheckResponse.blocksAccess` is the same shape from the other direction.
- *
- * NOTHING HERE ENFORCES EITHER READING YET, deliberately. Turning consent into
- * a gate decides whether a child can open a lesson, it lands in the student
- * lane rather than this one, and it is the kind of change that must not be
- * inferred from a frame caption by the session that happened to notice. The
- * FIELD is declared below so it stops being erased; the BEHAVIOUR waits for
- * the ruling to be confirmed in words.
+ * `AgeCheckResponse.blocksAccess` is the same rule reaching the same place by
+ * a different route: a date of birth the school and the parent disagree on
+ * also holds a child at the door until a person resolves it.
  *
  * The ONE exception is withdrawal. If a parent explicitly withdraws, that
  * child's data must stop being processed. So `granted` is not the field that
@@ -147,10 +161,11 @@ export function processingWithdrawn(
  * `blocked` into it would silently turn one rule into another under a name
  * that still says "withdrawn".
  *
- * **NO CALLER YET.** It exists so that the field has a reader the moment the
- * ruling is confirmed, and so that the reader is a named function rather than
- * an inline `gate.blocked` scattered across the student lane. Absence of a
- * caller is the honest state while the question is open; see the header.
+ * **NO CALLER IN THIS LANE, AND THAT IS NOT THE SAME AS NO CALLER WANTED.**
+ * The ruling is settled (23 Sep); the routing that acts on it belongs to the
+ * student console's entry flow, where SE-01 lives. This is the reader it
+ * should call, so that the rule is one named function rather than an inline
+ * `gate.blocked` in three places.
  */
 export function accessBlocked(
   gate: Pick<ConsentGateStatus, "blocked"> | null | undefined,
