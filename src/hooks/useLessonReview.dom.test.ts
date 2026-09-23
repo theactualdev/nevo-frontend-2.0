@@ -282,3 +282,83 @@ describe("refresh", () => {
     expect(review).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("the moment the last thing is settled", () => {
+  const openWith = async (onReady: () => void) => {
+    const { result } = renderHook(() => useLessonReview("l-1", onReady));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    return result;
+  };
+
+  it("tells the screen, once, when an action crosses it over", async () => {
+    // LR-05: "quiet state change plus the SCRUM-152 system message". This is
+    // the half that says the moment arrived.
+    accept.mockResolvedValue(REVIEW({ outstandingCount: 0, readyToAssign: true }));
+    const onReady = vi.fn();
+    const result = await openWith(onReady);
+
+    act(() => result.current.accept("kp-1"));
+
+    await waitFor(() => expect(onReady).toHaveBeenCalledTimes(1));
+  });
+
+  it("stays quiet for a lesson that was already ready when it opened", async () => {
+    /*
+     * A teacher opening a settled lesson has not just done anything, and
+     * congratulating them for last week's work is the kind of noise that
+     * teaches people to ignore the bar. Fired from the ACTION's response
+     * rather than an effect watching `ready`, which is what makes this
+     * distinction possible at all.
+     */
+    review.mockResolvedValue(REVIEW({ outstandingCount: 0, readyToAssign: true }));
+    const onReady = vi.fn();
+    await openWith(onReady);
+
+    expect(onReady).not.toHaveBeenCalled();
+  });
+
+  it("stays quiet when an action lands but something is still outstanding", async () => {
+    accept.mockResolvedValue(REVIEW({ outstandingCount: 1, readyToAssign: false }));
+    const onReady = vi.fn();
+    const result = await openWith(onReady);
+
+    act(() => result.current.accept("kp-1"));
+
+    await waitFor(() => expect(accept).toHaveBeenCalled());
+    expect(onReady).not.toHaveBeenCalled();
+  });
+
+  it("stays quiet when it never knew the lesson was not ready", async () => {
+    /*
+     * A mutation run found this had nothing behind it - `before === false`
+     * versus `before !== true` are different only when there was no previous
+     * answer at all, and that happens when the REVIEW READ FAILED.
+     *
+     * We never learned the lesson was outstanding, so we cannot say a teacher
+     * crossed anything. Announcing it would be congratulating them on a
+     * transition we did not see.
+     */
+    review.mockRejectedValue(new Error("network"));
+    accept.mockResolvedValue(REVIEW({ outstandingCount: 0, readyToAssign: true }));
+    const onReady = vi.fn();
+    const { result } = renderHook(() => useLessonReview("l-1", onReady));
+    await waitFor(() => expect(result.current.failed).toBe(true));
+
+    act(() => result.current.accept("kp-1"));
+
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    expect(onReady).not.toHaveBeenCalled();
+  });
+
+  it("stays quiet on a refresh that merely re-reports ready", async () => {
+    // `refresh` is a read, not a teacher's action. Only an action crosses.
+    const onReady = vi.fn();
+    const result = await openWith(onReady);
+    review.mockResolvedValue(REVIEW({ outstandingCount: 0, readyToAssign: true }));
+
+    act(() => result.current.refresh());
+
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    expect(onReady).not.toHaveBeenCalled();
+  });
+});

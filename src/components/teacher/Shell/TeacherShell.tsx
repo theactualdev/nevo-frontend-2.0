@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { TEXT_ZOOM, useAccessibility } from "@/context/AccessibilityContext";
 import { useSessionLapse } from "@/hooks/useSessionLapse";
 import { AskNevo } from "./AskNevo";
+import { SystemMessagesProvider } from "@/components/shared/SystemMessages";
 import { TeacherSidebar } from "./TeacherSidebar";
 
 /**
@@ -50,6 +51,10 @@ export function TeacherShell({ children }: { children: React.ReactNode }) {
   const inUpload = pathname.startsWith("/teacher/lessons/upload");
 
   return (
+    /* SCRUM-152's bar is console-wide by construction: it rides above the
+       content, clear of the sidebar, and any screen inside the shell can say
+       what happened without routing a prop down to it. */
+    <SystemMessagesProvider>
     <div className="flex h-dvh flex-row overflow-hidden bg-nevo-cream text-nevo-near-black">
       <TeacherSidebar />
       {/* "Larger text" is a console-wide preference, so the zoom lives on
@@ -64,5 +69,6 @@ export function TeacherShell({ children }: { children: React.ReactNode }) {
       {/* C15: Ask Nevo floats on every console surface except upload. */}
       {!inUpload && <AskNevo />}
     </div>
+    </SystemMessagesProvider>
   );
 }

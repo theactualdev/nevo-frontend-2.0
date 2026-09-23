@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { lessonsApi, type KeyPoint, type LessonReview } from "@/lib/api/lessons";
 
 /**
@@ -58,7 +58,20 @@ export interface LessonReviewState {
   refresh: () => void;
 }
 
-export function useLessonReview(lessonId: string): LessonReviewState {
+export function useLessonReview(
+  lessonId: string,
+  /**
+   * Called once, when the last thing holding this lesson is settled.
+   *
+   * LR-05 is "a quiet state change plus the SCRUM-152 system message", and
+   * this is the half that tells the screen the moment arrived. It fires from
+   * the ACTION's own response - not from an effect watching `ready` - so it
+   * cannot fire on a re-read that merely reports a lesson already ready, and
+   * a teacher opening a settled lesson is not congratulated for work they did
+   * last week.
+   */
+  onBecameReady?: () => void,
+): LessonReviewState {
   const [review, setReview] = useState<LessonReview | null>(null);
   const [failed, setFailed] = useState(false);
   /** Bumped by `refresh`, which is the only way to re-run the read. */
@@ -78,10 +91,22 @@ export function useLessonReview(lessonId: string): LessonReviewState {
    */
   const [hadReview, setHadReview] = useState(false);
 
-  const adopt = useCallback((next: LessonReview) => {
-    setReview(next);
-    if (next.outstandingCount > 0) setHadReview(true);
-  }, []);
+  /** What the last answer said, so a transition can be told from a repeat. */
+  const wasReady = useRef<boolean | null>(null);
+
+  const adopt = useCallback(
+    (next: LessonReview, fromAction = false) => {
+      setReview(next);
+      if (next.outstandingCount > 0) setHadReview(true);
+      const before = wasReady.current;
+      wasReady.current = next.readyToAssign;
+      // Only a real crossing, and only one a teacher caused.
+      if (fromAction && next.readyToAssign && before === false) {
+        onBecameReady?.();
+      }
+    },
+    [onBecameReady],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -120,7 +145,7 @@ export function useLessonReview(lessonId: string): LessonReviewState {
       void call()
         .then((res) => {
           setWorking(null);
-          adopt(res);
+          adopt(res, true);
         })
         .catch(() => {
           setWorking(null);
