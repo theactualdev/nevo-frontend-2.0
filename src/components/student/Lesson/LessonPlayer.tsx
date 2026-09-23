@@ -45,6 +45,7 @@ import {
 import { AfterLessonAssessment } from "./AfterLessonAssessment";
 import { ADJUSTMENT_ACTIONS } from "@/lib/constants/affect";
 import { densityForAction } from "@/lib/lessons/densityForAction";
+import { useAssignmentNote } from "@/hooks/useAssignmentNote";
 import { isChunkable } from "@/lib/lessons/chunk";
 import { LESSON_STATUS } from "@/lib/api/lessons";
 import { schedulerApi } from "@/lib/api/scheduler";
@@ -65,6 +66,7 @@ import { ScaffoldIndicator } from "./ScaffoldIndicator";
 import { QuickCheckSheet } from "./QuickCheckSheet";
 import { ReviewEntryScreen } from "./ReviewEntryScreen";
 import { type ReviewAnswer, saveReviewAnswers } from "./reviewStore";
+import { TeacherNote } from "./TeacherNote";
 import { TextSegment } from "./TextSegment";
 import { VisualSegment } from "./VisualSegment";
 
@@ -347,6 +349,12 @@ export function LessonPlayer({
    * Null on an ordinary lesson, and null on a read that did not answer.
    */
   const conceptScaffold = useScaffoldLevel(reviewConceptId);
+
+  /*
+   * What a teacher wrote when they set this lesson. Null for a lesson opened
+   * from the library, which has no assignment to carry one.
+   */
+  const teacherNote = useAssignmentNote(assignmentId);
 
   const reviewRecorded = useRef(false);
   useEffect(() => {
@@ -1215,6 +1223,17 @@ export function LessonPlayer({
             stepUpOffered && "rounded-[12px] border-2 border-nevo-violet/45",
           )}
         >
+          {/*
+            ON THE FIRST SEGMENT ONLY. A note is about the work as a whole,
+            and repeating it above every segment would turn a person's message
+            into chrome - read once, then ignored. It sits at the top of the
+            reading column rather than in the fixed header so it scrolls away
+            like the thing it is: something to read before starting, not a
+            banner about the lesson.
+
+            It is deliberately NOT inside the density path - see TeacherNote.
+          */}
+          {index === 0 && teacherNote && <TeacherNote note={teacherNote} />}
           {feedback && <FeedbackStrip message={feedback} />}
           {stepUpOffered && !spentEscalations.has(segment.id) && (
               <DifficultyOfferPill

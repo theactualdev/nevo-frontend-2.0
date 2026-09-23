@@ -35,20 +35,29 @@ export interface Assignment {
   /**
    * What a teacher wrote when they set the lesson. Shipped 15 Sep.
    *
-   * WHO IT IS FOR IS NOT SETTLED, and this comment used to say it was: it
-   * called the note "what the teacher wrote to the child" and treated the
-   * transport as the answer, because the field rides the student's own
-   * dashboard read. Design has not ruled it. The open question is whether a
-   * note is for the teacher's own use or is meant to reach the PARENT, and
-   * placement cannot be ruled until that is answered (design, 21 Sep).
+   * **RULED 23 SEP: IT IS FOR THE CHILD, AND IT REACHES THEM.** Design: *"it
+   * appears on the lesson screen, attributed to the teacher by name, drawn so
+   * it is unmistakably a person's words rather than Nevo's. It never enters
+   * anything Nevo generates about that child, and it is never rewritten,
+   * summarised or adapted."*
    *
-   * SO NOTHING RENDERS IT ANYWHERE, and nothing should until the ruling
-   * lands. A note written as a private reminder, or for a parent, shown to
-   * the child it is about is not a layout mistake - it is the wrong
-   * audience reading a teacher's words about them.
+   * That closes a question open since 21 Sep - teacher's own use, the parent,
+   * or the child - and it went the way it did for the reason it was asked
+   * rather than closed like `highlights`: a generated highlight is Nevo's
+   * opinion about a child, this is a person who deliberately typed these words
+   * TO them, so withholding it is not neutral.
    *
-   * The field stays on the type. It arrives on every assignment row, and a
-   * type that omitted it would drop it silently the day the ruling lands.
+   * Rendered by `TeacherNote`, from `useAssignmentNote`, on the first segment
+   * of the lesson the assignment was opened from. Deliberately outside the
+   * reading-density path, because "never adapted" means it is not a variant of
+   * anything.
+   *
+   * **NOTHING ON THE WIRE SAYS WHO WROTE IT.** This row has `note` and no
+   * author; no schema anywhere carries a `teacherName` or an `assignedBy`, and
+   * `lesson.createdByName` is whoever authored the LESSON, which is a
+   * different person whenever a teacher assigns someone else's. So the note
+   * ships attributed-but-unnamed and the field is a backend ask - naming the
+   * wrong teacher is worse than naming none.
    */
   note: string | null;
   assignedAt: string;

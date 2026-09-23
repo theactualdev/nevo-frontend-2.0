@@ -1449,14 +1449,16 @@ daily lesson path.
     different problems with different next actions, and giving them the same copy sends a
     child to try something that cannot work."* **The copy itself has not been supplied**,
     so this is blocked on words rather than on a decision.
-11. ~~**Where the teacher's note goes.**~~ **RULED 23 SEP: IT REACHES THE CHILD.** Design:
-    *"it appears on the lesson screen, attributed to the teacher by name, drawn so it is
+11. ~~**Where the teacher's note goes.**~~ **RULED AND BUILT 23 SEP.** Design: *"it
+    appears on the lesson screen, attributed to the teacher by name, drawn so it is
     unmistakably a person's words rather than Nevo's. It never enters anything Nevo
     generates about that child, and it is never rewritten, summarised or adapted."*
-    **Not the `highlights` ruling after all** — and the distinction that made it worth
-    asking rather than closing is the one that decided it. `AssignmentResponse.note`
-    already reaches the child on `students/me/dashboard` and `useStudentDashboard`
-    passes it through, so the data is here. **S-A 5 is unblocked and buildable.**
+    Built as `TeacherNote`, on the first segment, deliberately outside the reading-density
+    path because "never adapted" means it is not a variant of anything.
+    **ONE PART OF THE RULING COULD NOT BE BUILT: the name.** Nothing on the wire says who
+    wrote a note — no `teacherName`, `assignedBy` or equivalent in 406 schemas — and the two
+    near-misses both misattribute: `lesson.createdByName` is the lesson's AUTHOR, and
+    `/classes/{id}/teachers` is a list. It ships signed "Your teacher". **Backend ask filed.**
 12. ~~**Four PIN boxes or six.**~~ **SETTLED 21 Sep: FOUR. The 28c redraw stands, and
     this is not to be raised again.** Closed as a design question.
     **Implementing it is a BACKEND change, not a frontend one, and that is a contract
