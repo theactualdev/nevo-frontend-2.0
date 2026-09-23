@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { NevoLockup } from "@/components/shared/NevoLockup";
+import { ApiError } from "@/lib/api/client";
 import {
   emailConfirmationApi,
+  retryAfterSeconds,
   type EmailConfirmationState,
   type EmailConfirmationStatus,
 } from "@/lib/api/emailConfirmation";
@@ -36,17 +38,36 @@ import {
  * telling an administrator their link is dead when nothing of the kind is
  * known. `phase` holds them apart.
  *
- * THERE IS NO RESEND BUTTON, DELIBERATELY. `POST /email-confirmation/resend`
- * carries `HTTPBearer`, and somebody opening a confirmation link is by
- * definition not signed in. The only control that could send a fresh link
- * needs a session the reader does not have, so the expired screen sends them
- * to sign in - where a resend can actually happen - rather than offering a
- * button that would 401.
+ * ~~THERE IS NO RESEND BUTTON, DELIBERATELY.~~ **THERE IS ONE NOW, 24 Sep.**
+ * This read: *"the only control that could send a fresh link needs a session
+ * the reader does not have."* True when written - resend carried `HTTPBearer`.
+ * We asked for a token-authenticated resend, backend built it, and AC-03's
+ * button is now what the frame always drew.
+ *
+ * Kept rather than deleted because of what else came back with it: `/verify`
+ * had been DOCUMENTED as requiring a bearer and never did. It inherited the
+ * global security scheme, so the document declared the route closed to exactly
+ * the people who must call it. **A declared security block is a claim like any
+ * other.** Where a route's audience and its declaration disagree, the audience
+ * is the fact - and reasoning confidently from the declaration is how this
+ * screen was designed around a constraint that was not real.
  */
 
 type Phase = "verifying" | "done" | "unreachable";
 
-/** Our structure, the server's explanation. */
+/**
+ * "90 seconds" / "2 minutes" - a wait somebody can act on.
+ *
+ * Rounded UP, always. Telling a person to come back in a minute when the
+ * server will refuse for another ninety seconds earns a second refusal, and
+ * the second one reads as the button being broken.
+ */
+function waitLabel(seconds: number): string {
+  if (seconds <= 60) return "a minute";
+  const mins = Math.ceil(seconds / 60);
+  return `${mins} minutes`;
+}
+
 /** D01b's own words. AC-04 and AC-03 respectively; the rest have no frame. */
 const HEADING: Record<EmailConfirmationStatus, string> = {
   confirmed: "Your email address is confirmed",
@@ -105,6 +126,11 @@ const OFFERS_SIGN_IN: Record<EmailConfirmationStatus, boolean> = {
 export function ConfirmEmail({ token }: { token: string }) {
   const [phase, setPhase] = useState<Phase>("verifying");
   const [state, setState] = useState<EmailConfirmationState | null>(null);
+  const [resending, setResending] = useState(false);
+  const [resent, setResent] = useState(false);
+  /** undefined = not refused. null = refused, no wait given. */
+  const [tooSoon, setTooSoon] = useState<number | null | undefined>(undefined);
+  const [resendFailed, setResendFailed] = useState(false);
 
   /*
    * The request alone. No synchronous setState, because this runs from an
@@ -134,6 +160,32 @@ export function ConfirmEmail({ token }: { token: string }) {
   const retry = () => {
     setPhase("verifying");
     run();
+  };
+
+  /*
+   * The token goes with it, whatever state it is in - that is the credential
+   * here, and every dead-token state is a person wanting another email.
+   *
+   * `tooSoon` is `undefined` for "not refused", and `number | null` for
+   * "refused, with or without a wait". Three states, because collapsing the
+   * refusal into the generic failure is what loses the only useful fact.
+   */
+  const sendNewLink = () => {
+    setResending(true);
+    setResent(false);
+    setTooSoon(undefined);
+    setResendFailed(false);
+    emailConfirmationApi
+      .resend(token)
+      .then(() => setResent(true))
+      .catch((err: unknown) => {
+        if (err instanceof ApiError && err.status === 429) {
+          setTooSoon(retryAfterSeconds(err.detail));
+          return;
+        }
+        setResendFailed(true);
+      })
+      .finally(() => setResending(false));
   };
 
   return (
@@ -195,25 +247,70 @@ export function ConfirmEmail({ token }: { token: string }) {
               </Link>
             ) : null}
             {/*
-              * D01b AC-03 DRAWS TWO BUTTONS HERE THAT THE CONTRACT CANNOT
-              * SERVE: "Send a new link" and "Change the email address".
+              * "SEND A NEW LINK" - AC-03's own button, buildable since 24 Sep.
               *
-              * `POST /admin/email-confirmation/resend` carries HTTPBearer, and
-              * nothing at all writes an address change. Somebody arriving from
-              * an expired link is not signed in, so both controls would 401 -
-              * a button that refuses everyone is worse than a sentence that
-              * tells them where to go.
+              * It was absent under a comment saying the contract could not
+              * serve it: resend carried HTTPBearer, and nobody arriving from an
+              * email has a session. We asked for a token-authenticated resend
+              * and backend built it, with our argument sharpened - the new link
+              * goes to the address ON THE ACCOUNT, never to whoever presented
+              * the token, so holding a dead link buys nothing except sending
+              * mail to its rightful owner.
               *
-              * So the sentence stands and the buttons are ABSENT rather than
-              * drawn-and-broken. Raised rather than synthesised: this is a
-              * contract/design disagreement, not a copy decision.
-              * TODO(api): a token-authenticated resend, so AC-03 can be built
-              * as drawn. The token already proves which account it is.
+              * The token is sent whatever state it is in. Expired, superseded
+              * and already-used are all people with a reason to want another
+              * email, which is the whole point of the button.
+              *
+              * AC-03's SECOND control, "Change the email address", is still
+              * absent - now for a reason rather than a gap. Backend declined to
+              * token-authenticate it: repointing an address with a leaked link
+              * is a tenant takeover (change it, confirm it, then reset the
+              * password). `/verify` transfers nothing; changing transfers
+              * everything. Two ways to serve it are with design.
               */}
             {state.status === "expired" || state.status === "pending" ? (
-              <p className="mt-4 max-w-[360px] text-[13.5px] leading-[1.55] text-nevo-near-black/50">
-                Sign in and we can send you a new link.
-              </p>
+              <div className="mt-6 flex w-full max-w-[360px] flex-col items-center gap-3">
+                <button
+                  type="button"
+                  onClick={sendNewLink}
+                  disabled={resending}
+                  className="h-[48px] w-full cursor-pointer rounded-[10px] bg-nevo-navy px-5 text-[15px] font-semibold text-nevo-cream transition-[filter] hover:brightness-110 disabled:cursor-default disabled:opacity-60"
+                >
+                  {resending ? "Sending…" : "Send a new link"}
+                </button>
+
+                {resent ? (
+                  <p className="m-0 text-[13.5px] font-semibold text-nevo-navy">
+                    Sent. Check your email in a minute or two.
+                  </p>
+                ) : null}
+
+                {/*
+                  * 429 IS DRAWN, NOT JUST CAUGHT. One email every two minutes
+                  * per account, and that budget is SHARED with the in-console
+                  * resend - so somebody who just asked from the other screen
+                  * lands here on a refusal. "That didn't work" would send them
+                  * pressing the button into the same wall; the wait is the only
+                  * useful thing we know.
+                  *
+                  * `retryAfterSeconds` is nullable, so the copy works without a
+                  * number rather than printing a null.
+                  */}
+                {tooSoon !== undefined ? (
+                  <p className="m-0 max-w-[340px] text-[13.5px] leading-[1.5] text-nevo-navy">
+                    {tooSoon === null
+                      ? "A link went out very recently. Give it a couple of minutes, then try again."
+                      : `A link went out very recently. Try again in ${waitLabel(tooSoon)}.`}
+                  </p>
+                ) : null}
+
+                {resendFailed ? (
+                  <p className="m-0 max-w-[340px] text-[13.5px] leading-[1.5] text-nevo-navy">
+                    We couldn&rsquo;t send that just now. Nothing has changed
+                    &ndash; try again in a moment.
+                  </p>
+                ) : null}
+              </div>
             ) : null}
           </>
         ) : null}

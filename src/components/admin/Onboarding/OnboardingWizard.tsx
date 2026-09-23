@@ -130,7 +130,6 @@ export function OnboardingWizard() {
           <ConfirmEmailStep
             schoolName={state.schoolName}
             email={state.email}
-            onBack={() => setStep(0)}
             onDone={() => setStep(2)}
           />
         ) : null}

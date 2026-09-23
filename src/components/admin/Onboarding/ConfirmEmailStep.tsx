@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ApiError, apiErrorCode } from "@/lib/api/client";
 import {
   emailConfirmationApi,
   type EmailConfirmationStatus,
@@ -50,21 +51,33 @@ function isConfirmed(status: EmailConfirmationStatus | null): boolean {
   return status === "confirmed" || status === "already_confirmed";
 }
 
+/*
+ * NO BACK, AND THAT IS THE FRAME'S CALL. D01 step 2 offers exactly two
+ * actions - "Resend the link" and "That email isn't right - change it" - and
+ * Back was only ever standing in for the second one while we believed it could
+ * not be built. It went the moment the real control arrived: returning to
+ * sign-up, where the fields are locked because the school already exists,
+ * never did the thing the person wanted.
+ */
 export function ConfirmEmailStep({
   schoolName,
   email,
-  onBack,
   onDone,
 }: {
   schoolName: string;
   email: string;
-  onBack: () => void;
   onDone: () => void;
 }) {
   const [status, setStatus] = useState<EmailConfirmationStatus | null>(null);
   const [resending, setResending] = useState(false);
   const [resent, setResent] = useState(false);
   const [resendFailed, setResendFailed] = useState(false);
+  const [changing, setChanging] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [changeError, setChangeError] = useState<string | null>(null);
+  /** The address in play - the prop until a change lands, then the new one. */
+  const [current, setCurrent] = useState(email);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const read = useCallback(() => {
@@ -91,6 +104,46 @@ export function ConfirmEmailStep({
       timer.current = null;
     }
   }, [status]);
+
+  /*
+   * The two 409s mean opposite things and must not share a sentence.
+   *
+   * `email_already_confirmed` - somebody confirmed in the other tab while this
+   * form was open. That is not a failure, it is the thing they were waiting
+   * for, so the poll is nudged rather than an error shown.
+   *
+   * `email_already_in_use` - a real collision, and the one case where the
+   * person has to choose a different address.
+   */
+  const saveEmail = () => {
+    const next = draft.trim();
+    if (!next) return;
+    setSaving(true);
+    setChangeError(null);
+    emailConfirmationApi
+      .changeEmail(next)
+      .then((s) => {
+        setCurrent(s.email ?? next);
+        setStatus(s.status);
+        setChanging(false);
+        setResent(true);
+      })
+      .catch((err: unknown) => {
+        const code = err instanceof ApiError ? apiErrorCode(err.detail) : null;
+        if (code === "email_already_confirmed") {
+          // Confirmed elsewhere. Let the poll land it rather than say "no".
+          read();
+          setChanging(false);
+          return;
+        }
+        setChangeError(
+          code === "email_already_in_use"
+            ? "That address is already set up with a Nevo account. Try another, or sign in with it instead."
+            : "We couldn’t change it just now. Nothing has moved – your original link still works.",
+        );
+      })
+      .finally(() => setSaving(false));
+  };
 
   const resend = () => {
     setResending(true);
@@ -124,7 +177,7 @@ export function ConfirmEmailStep({
         sub={`${schoolName || "Your school"} has been created. We've sent a confirmation link to:`}
       />
       <p className="m-0 text-[15.5px] font-semibold break-all text-nevo-near-black">
-        {email}
+        {current}
       </p>
       <p className="mt-2.5 text-[14.5px] leading-[1.55] text-nevo-near-black/68">
         Open it to confirm this address and carry on. It can take a minute to
@@ -153,23 +206,77 @@ export function ConfirmEmailStep({
           {resending ? <Spinner /> : "Resend the link"}
         </button>
         {/*
-          * D01 DRAWS A SECOND ACTION HERE THAT THE CONTRACT CANNOT SERVE:
-          * "That email isn't right - change it". Nothing in the deployed
-          * document writes an administrator's address - not on this flow, not
-          * in Settings, not anywhere. The same control is drawn on D01b's
-          * AC-03 and is absent there for the same reason.
+          * "THAT EMAIL ISN'T RIGHT - CHANGE IT", D01's own second action.
           *
-          * So Back is offered instead, which is honest about what it does: it
-          * returns to sign-up, where the fields are locked because the school
-          * already exists. That is not the same thing and is not pretending to
-          * be.
-          * TODO(api): a way to change the address before it is confirmed. It
-          * is the one field a proprietor is most likely to mistype, and today
-          * a typo makes the account unreachable.
+          * ~~The contract cannot serve this.~~ **It always could.**
+          * `PATCH /api/v1/admin/email` was deployed the whole time and this
+          * file said, in as many words, that nothing anywhere writes an
+          * administrator's address. We searched paths for
+          * `confirm|activate|verify` - the words in our own question - and the
+          * route matches none of them. Third time that shape has cost
+          * something here.
+          *
+          * BEARER-AUTHENTICATED, WHICH IS FINE HERE AND NOT ON AC-03. The
+          * wizard has a session; the emailed-link screen does not, and backend
+          * declined to token-authenticate a change because repointing an
+          * address from a leaked link is a tenant takeover.
+          *
+          * The response IS the new state, so the step re-renders from it
+          * rather than guessing: a successful change supersedes every
+          * outstanding link and sends a fresh one.
           */}
-        <button type="button" onClick={onBack} className={WIZARD_SECONDARY}>
-          Back
-        </button>
+        {changing ? (
+          <div className="mt-1 flex flex-col gap-2">
+            <label className="text-[13px] font-medium text-nevo-near-black/62">
+              The right address
+              <input
+                type="email"
+                autoComplete="email"
+                value={draft}
+                onChange={(e) => {
+                  setDraft(e.target.value);
+                  setChangeError(null);
+                }}
+                placeholder="you@yourschool.edu.ng"
+                className="mt-2 w-full rounded-[10px] border border-nevo-near-black/12 bg-nevo-cream-elevated px-4 py-3.5 text-[15.5px] text-nevo-near-black outline-none transition-colors focus:border-nevo-navy"
+              />
+            </label>
+            {changeError ? (
+              <p className="m-0 text-[13.5px] leading-[1.5] text-nevo-navy">
+                {changeError}
+              </p>
+            ) : null}
+            <button
+              type="button"
+              onClick={saveEmail}
+              disabled={saving || !draft.trim()}
+              className={WIZARD_PRIMARY}
+            >
+              {saving ? <Spinner /> : "Use this address"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setChanging(false);
+                setChangeError(null);
+              }}
+              className={WIZARD_SECONDARY}
+            >
+              Keep {current}
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              setChanging(true);
+              setDraft("");
+            }}
+            className={WIZARD_SECONDARY}
+          >
+            That email isn&rsquo;t right &ndash; change it
+          </button>
+        )}
       </div>
     </>
   );

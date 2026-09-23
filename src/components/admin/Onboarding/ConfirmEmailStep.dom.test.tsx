@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { ApiError } from "@/lib/api/client";
 import { visibleText } from "@/test/visibleText";
 import { ConfirmEmailStep } from "./ConfirmEmailStep";
 
@@ -15,6 +16,7 @@ import { ConfirmEmailStep } from "./ConfirmEmailStep";
 
 const read = vi.fn();
 const resend = vi.fn();
+const changeEmail = vi.fn();
 
 vi.mock("@/lib/api/emailConfirmation", async (importOriginal) => {
   const actual =
@@ -25,6 +27,7 @@ vi.mock("@/lib/api/emailConfirmation", async (importOriginal) => {
       ...actual.emailConfirmationApi,
       read: () => read(),
       resend: () => resend(),
+      changeEmail: (e: string) => changeEmail(e),
     },
   };
 });
@@ -37,14 +40,12 @@ const state = (status: string) => ({
 });
 
 const onDone = vi.fn();
-const onBack = vi.fn();
 
 const mount = () =>
   render(
     <ConfirmEmailStep
       schoolName="Brightgate Academy"
       email="f.adebayo@brightgate.edu.ng"
-      onBack={onBack}
       onDone={onDone}
     />,
   );
@@ -53,6 +54,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   read.mockResolvedValue(state("pending"));
   resend.mockResolvedValue(state("pending"));
+  changeEmail.mockResolvedValue(state("pending"));
 });
 
 describe("ConfirmEmailStep", () => {
@@ -169,14 +171,84 @@ describe("ConfirmEmailStep", () => {
     );
   });
 
-  it("does not offer to change the address, which nothing can write", async () => {
-    // D01 draws "That email isn't right - change it". No endpoint in the
-    // deployed document writes an administrator's address.
+  it("offers the change D01 draws, which was buildable all along", async () => {
+    /*
+     * THE INVERSE OF WHAT THIS TEST USED TO ASSERT. It read "does not offer to
+     * change the address, which nothing can write" - and
+     * `PATCH /api/v1/admin/email` was deployed the whole time. We searched
+     * paths for `confirm|activate|verify`, the words in our own question.
+     */
     mount();
-
     await waitFor(() => expect(read).toHaveBeenCalled());
-    expect(
-      screen.queryByRole("button", { name: /change it|isn.t right/i }),
-    ).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /isn.t right/i }));
+    fireEvent.change(screen.getByLabelText(/The right address/i), {
+      target: { value: "correct@brightgate.edu.ng" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Use this address/i }));
+
+    await waitFor(() =>
+      expect(changeEmail).toHaveBeenCalledWith("correct@brightgate.edu.ng"),
+    );
+  });
+
+  it("shows the new address once the change lands", async () => {
+    changeEmail.mockResolvedValue({
+      ...state("pending"),
+      email: "correct@brightgate.edu.ng",
+    });
+    const { container } = mount();
+    await waitFor(() => expect(read).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole("button", { name: /isn.t right/i }));
+    fireEvent.change(screen.getByLabelText(/The right address/i), {
+      target: { value: "correct@brightgate.edu.ng" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Use this address/i }));
+
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/correct@brightgate.edu.ng/),
+    );
+  });
+
+  it("names a collision as a collision, not as a broken save", async () => {
+    changeEmail.mockRejectedValue(
+      new ApiError(409, "nope", { detail: { code: "email_already_in_use" } }),
+    );
+    const { container } = mount();
+    await waitFor(() => expect(read).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole("button", { name: /isn.t right/i }));
+    fireEvent.change(screen.getByLabelText(/The right address/i), {
+      target: { value: "taken@brightgate.edu.ng" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Use this address/i }));
+
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/already set up with a Nevo account/i),
+    );
+  });
+
+  it("treats a confirmed-elsewhere 409 as the good news it is", async () => {
+    /*
+     * Somebody confirmed in the other tab while this form was open. That is
+     * what they were waiting for, not a failure - so no error, and the poll is
+     * nudged so the step can move on.
+     */
+    changeEmail.mockRejectedValue(
+      new ApiError(409, "nope", { detail: { code: "email_already_confirmed" } }),
+    );
+    const { container } = mount();
+    await waitFor(() => expect(read).toHaveBeenCalled());
+    const before = read.mock.calls.length;
+
+    fireEvent.click(screen.getByRole("button", { name: /isn.t right/i }));
+    fireEvent.change(screen.getByLabelText(/The right address/i), {
+      target: { value: "other@brightgate.edu.ng" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Use this address/i }));
+
+    await waitFor(() => expect(read.mock.calls.length).toBeGreaterThan(before));
+    expect(visibleText(container)).not.toMatch(/couldn.t change|already set up/i);
   });
 });
