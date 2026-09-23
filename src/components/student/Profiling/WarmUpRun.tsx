@@ -8,8 +8,10 @@ import { ArrowRight, Check } from "lucide-react";
 import { cn, randomId } from "@/lib/utils";
 import { baselineApi } from "@/lib/api";
 import { holdBaseline } from "@/lib/profiling/pendingBaseline";
+import { markWarmUpDone, warmUpDoneToday } from "@/lib/profiling/warmUpDone";
 import { getSession } from "@/lib/auth/session";
 import { useConsentGate } from "@/hooks/useConsentGate";
+import { useHydrated } from "@/hooks/useHydrated";
 import {
   BASELINE_DIMENSIONS,
   type BaselineDimension,
@@ -86,10 +88,43 @@ export function WarmUpRun({
   const startedAt = useRef(0);
   const submitted = useRef(false);
 
+  /*
+   * ONE WARM-UP A DAY, AND THE CHECK HAS TO HAPPEN BEFORE THE RUN STARTS.
+   *
+   * It was re-sittable any number of times, and the cost was not cosmetic:
+   * every run reduces to a feature vector and submits it, so a child who
+   * opened it four times sent four measurements of the same dimension on the
+   * same day, and the engine recalibrates on those. Design ruled the done
+   * state on 23 Sep; the screen already had one, what it lacked was a memory
+   * that it had happened.
+   *
+   * In an effect rather than in `useState`'s initialiser because the answer is
+   * in `localStorage`, which the server cannot see - a lazy initialiser would
+   * render `false` on the server and `true` on the client and tear.
+   *
+   * No `warmup_start` is recorded on a day already done. The child is not
+   * starting a warm-up; they are looking at one they finished.
+   */
   useEffect(() => {
+    if (warmUpDoneToday(getSession()?.userId)) return;
     startedAt.current = performance.now();
     capture.record("warmup_start", { dimension });
   }, [capture, dimension]);
+
+  /*
+   * Derived during render rather than set from an effect.
+   *
+   * `localStorage` is invisible to the server, so this has to wait for the
+   * client - but setting state in an effect to say so trips the
+   * `set-state-in-effect` purity rule, which this codebase has hit before.
+   * `useHydrated` is the sanctioned shape for "decide nothing that depends on
+   * the token until the client is actually running", and it means the done
+   * state is right on the FIRST client render rather than after a flash of the
+   * activity.
+   */
+  const hydrated = useHydrated();
+  const showDone =
+    done || (hydrated && warmUpDoneToday(getSession()?.userId));
 
   const finish = useCallback(() => {
     if (!submitted.current) {
@@ -175,6 +210,16 @@ export function WarmUpRun({
         // is the vector, not the raw capture.
         .finally(() => void capture.purge());
     }
+    /*
+     * Remembered even when nothing was submitted.
+     *
+     * A withdrawn guardian's run derives nothing and sends nothing, and a
+     * failed write parks the vector rather than losing it. In neither case
+     * does sitting it again help - the withdrawal still applies, and the
+     * parked vector is already on its way. What the child DID is the thing
+     * being remembered here, not what reached Nevo.
+     */
+    markWarmUpDone(getSession()?.userId);
     setDone(true);
     // `withdrawn` belongs here: without it this closes over the value from the
     // first render, which is always false, and a withdrawal that resolved
@@ -205,14 +250,14 @@ export function WarmUpRun({
             strokeWidth="3"
             strokeLinecap="round"
             strokeDasharray="94"
-            strokeDashoffset={done ? 0 : 40}
+            strokeDashoffset={showDone ? 0 : 40}
             transform="rotate(-90 17 17)"
             className="transition-[stroke-dashoffset] duration-500"
           />
         </svg>
       </div>
 
-      {done ? (
+      {showDone ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-[22px] px-9 text-center">
           <span className="flex size-20 items-center justify-center rounded-full bg-nevo-navy motion-safe:animate-nevo-pop">
             <Check className="size-9 text-nevo-cream" strokeWidth={2.4} />
