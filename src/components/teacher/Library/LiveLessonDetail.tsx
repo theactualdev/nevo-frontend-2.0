@@ -16,6 +16,7 @@ import { LessonDetailActions } from "./LessonDetailActions";
 import { KeyPointCard } from "./KeyPointCard";
 import { SplitSourceNotice } from "./SplitSourceNotice";
 import { ReviewSection } from "./ReviewSection";
+import { useSystemMessages } from "@/components/shared/SystemMessages";
 import { useLessonReview } from "@/hooks/useLessonReview";
 import { useSegmentReview } from "@/hooks/useSegmentReview";
 
@@ -243,7 +244,21 @@ export function LiveLessonDetail({
    */
   const reviewable = segments.filter((s) => s.needsReview);
   const sections = useSegmentReview(lesson.id, segments);
-  const review = useLessonReview(lesson.id);
+  const say = useSystemMessages();
+  /*
+   * LR-05: "quiet state change plus the SCRUM-152 system message". The state
+   * change on the page is deliberately undramatic - the lesson simply becomes
+   * ready - and this is the line that tells a teacher the moment happened
+   * without the page having to shout it.
+   *
+   * Past tense, names the thing, no exclamation mark, no "successfully". It
+   * leaves on its own and carries no action, per SM-01: Assign is already on
+   * the screen behind it, and a confirmation with somewhere to go is a
+   * confirmation asking for something.
+   */
+  const review = useLessonReview(lesson.id, () =>
+    say.show({ kind: "confirm", message: `${lesson.title} is ready to assign.` }),
+  );
   /*
    * A segment approval moves `readyToAssign`, and the only thing that knows
    * is the review read. Without this, a teacher settles the last section and
