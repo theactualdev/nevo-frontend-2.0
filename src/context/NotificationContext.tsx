@@ -53,6 +53,20 @@ export interface NotificationContextValue {
    * admin opening the same row on their own screen.
    */
   markRead: (id: string) => void;
+  /**
+   * This bell is showing the designed demo rather than anybody's own feed.
+   *
+   * MARKS THE BRANCH, NOT THE ROWS, and the difference is the whole point.
+   * `SAMPLE_NOTIFICATIONS` is empty today, so following the rows would mark
+   * nothing - and the failure this mark exists to catch is exactly the one
+   * that leaves no rows behind: a SIGNED-IN child falling into the signed-out
+   * branch and being told "Nothing new right now", which is a claim about
+   * their feed that nobody checked.
+   *
+   * That is not hypothetical. It is what the missing `useHydrated` guard did
+   * on every student page until 18 Sep.
+   */
+  showingSamples: boolean;
 }
 
 export const NotificationContext = createContext<
@@ -177,6 +191,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         failed: false,
         refresh,
         markRead,
+        // Not a sample: a deliberate blank while the client works out who is
+        // here. Marking it would put the attribute on every page for everyone
+        // for a frame, which makes the mark mean nothing.
+        showingSamples: false,
       };
     }
     if (!signedIn) {
@@ -186,6 +204,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         failed: false,
         refresh,
         markRead,
+        showingSamples: true,
       };
     }
     return {
@@ -194,6 +213,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       failed,
       refresh,
       markRead,
+      showingSamples: false,
     };
   }, [hydrated, signedIn, feed, unread, failed, refresh, markRead]);
 

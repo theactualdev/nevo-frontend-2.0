@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { BottomNav, Sidebar } from "@/components/shared";
-import { SampleRegion } from "@/components/shared/SampleRegion";
+import { MaybeSample } from "@/components/shared/SampleRegion";
 import { AskNevo } from "@/components/student/AskNevo/AskNevo";
 import { TEXT_ZOOM, useAccessibility } from "@/context/AccessibilityContext";
 import { useBehaviouralCapture } from "@/hooks";
@@ -52,19 +52,6 @@ import { useDisplayName } from "./useDisplayName";
  * end-to-end assertion useless. `display: contents` either way, so neither
  * branch changes a pixel.
  */
-function MaybeSample({
-  showing,
-  kind,
-  children,
-}: {
-  showing: boolean;
-  kind: string;
-  children: React.ReactNode;
-}) {
-  if (!showing) return <>{children}</>;
-  return <SampleRegion kind={kind}>{children}</SampleRegion>;
-}
-
 export function StudentShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? "";
   /*

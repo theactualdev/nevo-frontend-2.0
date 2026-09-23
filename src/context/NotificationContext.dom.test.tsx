@@ -311,3 +311,49 @@ describe("marking a notification read", () => {
     await waitFor(() => expect(markRead).not.toHaveBeenCalled());
   });
 });
+
+describe("which branch the bell is on", () => {
+  /**
+   * `showingSamples` is what makes the sample sweep able to see this surface
+   * at all. It marks the BRANCH: the failure worth catching is a signed-in
+   * child falling into the signed-out one and being told "Nothing new right
+   * now" - a claim about their feed that nobody checked - and that failure
+   * leaves no sample rows behind to notice.
+   */
+  const Probe3 = () => {
+    const ctx = useContext(NotificationContext)!;
+    return <span data-testid="samples">{String(ctx.showingSamples)}</span>;
+  };
+
+  const showing = () => {
+    render(
+      <NotificationProvider>
+        <Probe3 />
+      </NotificationProvider>,
+    );
+    return screen.getByTestId("samples").textContent;
+  };
+
+  it("is true for a visitor seeing the designed demo", () => {
+    hydrated.value = true;
+    hasSession.value = false;
+
+    expect(showing()).toBe("true");
+  });
+
+  it("is false for a child reading their own feed", () => {
+    hydrated.value = true;
+    hasSession.value = true;
+    token.value = "a-real-token";
+
+    expect(showing()).toBe("false");
+  });
+
+  it("is false before the client knows who is here", () => {
+    // A deliberate blank, not a fixture. Marking it would put the attribute on
+    // every page for everyone for a frame.
+    hydrated.value = false;
+
+    expect(showing()).toBe("false");
+  });
+});

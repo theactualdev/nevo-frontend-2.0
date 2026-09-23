@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Bell } from "lucide-react";
 import { useNotifications } from "@/hooks";
+import { MaybeSample } from "@/components/shared/SampleRegion";
 import { cn } from "@/lib/utils";
 
 /**
@@ -18,7 +19,8 @@ import { cn } from "@/lib/utils";
  * marks unread, no numbers anywhere.
  */
 export function NotificationBell({ className }: { className?: string }) {
-  const { notifications, unreadCount, failed, markRead } = useNotifications();
+  const { notifications, unreadCount, failed, markRead, showingSamples } =
+    useNotifications();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
@@ -47,7 +49,20 @@ export function NotificationBell({ className }: { className?: string }) {
         )}
       </button>
 
+      {/*
+        THE ONE SURFACE THE SAMPLE SWEEP COULD NOT SEE.
+        
+        The bell carried no mark and `StudentShell` mounts it OUTSIDE both
+        `MaybeSample` wrappers, which cover the identity block and the avatar
+        only. So when this bell invented "Ms Okafor sent you a message" the
+        end-to-end run - whose whole job is to catch a console degrading to
+        fixtures - had nothing to assert against, and the leak was found by
+        reading the file instead.
+        
+        Marked on the BRANCH rather than the rows: see `showingSamples`.
+      */}
       {open && (
+        <MaybeSample showing={showingSamples} kind="student:notifications">
         <div
           role="dialog"
           aria-label="Notifications"
@@ -144,6 +159,7 @@ export function NotificationBell({ className }: { className?: string }) {
             </div>
           )}
         </div>
+        </MaybeSample>
       )}
     </div>
   );
