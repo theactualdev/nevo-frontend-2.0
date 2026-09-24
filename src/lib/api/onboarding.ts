@@ -91,6 +91,24 @@ export interface OnboardingState {
   canConfirm: boolean;
   canPay: boolean;
   canActivate: boolean;
+  /**
+   * WHETHER THIS SCHOOL IS IN THE FUNNEL AT ALL, and the field to branch on.
+   *
+   * Backend added it on 24 Sep after finding something worse than the gap it
+   * fills: this read SHARED A HELPER WITH THE WRITE ROUTES, and that helper
+   * CREATES a record when it finds none. So the first admin page load at any
+   * school predating the funnel wrote a row saying that school was back at the
+   * uploading stage - **a read that changed the answer to itself**.
+   *
+   * Our gate then read that stage and held the school's console read-only, on
+   * the strength of its own page load. The read only looks now, and this
+   * boolean is what says whether the funnel applies.
+   *
+   * NOT `required`, with a default of false. Absent means false means "not in
+   * onboarding", which is the safe direction: a school we cannot place is left
+   * alone rather than paused.
+   */
+  inOnboarding: boolean;
 }
 
 export const onboardingApi = {

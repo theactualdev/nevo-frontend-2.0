@@ -10,23 +10,38 @@ import { api } from "./client";
  *   POST  /resend        EITHER       a session, or the token in the body
  *   PATCH /admin/email   HTTPBearer   correcting a mistyped address
  *
- * **TWO ROWS OF THAT TABLE WERE WRONG WHEN THIS FILE FIRST WROTE IT, 23 Sep.**
+ * `/resend` TAKES EITHER CREDENTIAL SINCE 24 Sep, and the reasoning is ours
+ * back at us, sharper - backend's note on `ResendRequest`: *"the new link goes
+ * to the address on the account, never to whoever presented the token. So
+ * holding an old link buys nothing except sending mail to its rightful owner,
+ * which is what the button is for."* So the expired-link screen CAN offer a
+ * resend, and does.
  *
- * `/verify` was DOCUMENTED as requiring a bearer and never did - the handler
- * takes no principal and has always been callable signed-out. It had inherited
- * the global security scheme, so the document declared the route closed to
- * exactly the people who must be able to call it. Backend corrected it to
- * `security: []` on 24 Sep. **A declared security block is a claim like any
- * other and can be wrong**; where a route's audience and its declaration
- * disagree, the audience is the fact.
+ * ============================================================================
+ * A CORRECTION TO WHAT THIS FILE SAID ABOUT DECLARED SECURITY.
  *
- * `/resend` now takes EITHER credential, and the reasoning is ours back at us,
- * sharper - backend's note on `ResendRequest`: *"the new link goes to the
- * address on the account, never to whoever presented the token. So holding an
- * old link buys nothing except sending mail to its rightful owner, which is
- * what the button is for."*
+ * It read: *"`/verify` was DOCUMENTED as requiring a bearer and never did...
+ * it inherited the global security scheme... a declared security block is a
+ * claim like any other and can be wrong."*
  *
- * So the expired-link screen CAN offer a resend, and does.
+ * **That was wrong, and so was the lesson drawn from it.** There is no global
+ * security scheme in this API. FastAPI omits the key entirely when a route has
+ * no auth dependency, and the omission already means open - so `/verify` never
+ * claimed to need a bearer. The later `security: []` was a clarification, not
+ * a correction. Backend owned this on 24 Sep after checking the document
+ * rather than their own tooling's label, and we had repeated it as fact.
+ *
+ * WHAT IS ACTUALLY TRUE, and it is a narrower and more useful rule: declared
+ * security is GENERATED from the dependency graph, so it cannot drift - except
+ * on routes that override it by hand. Backend found four in 245 operations,
+ * and two were genuinely wrong in the UNDERSTATING direction: `/connections/
+ * class-code` and `/auth/pin` both declared `[]` while taking an optional
+ * principal and behaving differently signed in. A flat `[]` told a client the
+ * one thing it must not conclude - that sending a bearer changes nothing.
+ *
+ * So: trust the declaration, and treat a HAND-WRITTEN one as the thing to
+ * check. Our original reading of resend's bearer-only was correct at the time;
+ * it was the generalisation that was not.
  */
 
 /**

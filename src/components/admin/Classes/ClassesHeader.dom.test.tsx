@@ -49,6 +49,7 @@ const klass = (
   academicSession: null,
   capacity: null,
   teacherCount: 0,
+  teachers: [],
   archivedAt,
 });
 

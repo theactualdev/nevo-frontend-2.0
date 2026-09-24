@@ -44,13 +44,17 @@ import {
  * We asked for a token-authenticated resend, backend built it, and AC-03's
  * button is now what the frame always drew.
  *
- * Kept rather than deleted because of what else came back with it: `/verify`
- * had been DOCUMENTED as requiring a bearer and never did. It inherited the
- * global security scheme, so the document declared the route closed to exactly
- * the people who must call it. **A declared security block is a claim like any
- * other.** Where a route's audience and its declaration disagree, the audience
- * is the fact - and reasoning confidently from the declaration is how this
- * screen was designed around a constraint that was not real.
+ * Kept rather than deleted because the reasoning behind the absence was sound
+ * at the time: resend really did declare bearer-only, and a button that 401s
+ * for everyone who sees it is worse than a sentence telling them where to go.
+ * The constraint was real and then it moved.
+ *
+ * A LATER NOTE HERE CLAIMED MORE THAN THAT AND WAS WRONG - that `/verify` had
+ * been documented as needing a bearer, and therefore that declared security
+ * cannot be trusted. Backend corrected it on 24 Sep: there is no global scheme
+ * to inherit, an omitted security key already means open, and the declaration
+ * is generated from the dependency graph. The full correction is in
+ * `lib/api/emailConfirmation.ts`.
  */
 
 type Phase = "verifying" | "done" | "unreachable";
@@ -310,6 +314,30 @@ export function ConfirmEmail({ token }: { token: string }) {
                     &ndash; try again in a moment.
                   </p>
                 ) : null}
+
+                {/*
+                  * AC-03's "Change the email address", served as OPTION (A) -
+                  * agreed with backend on 24 Sep.
+                  *
+                  * A sentence, not a third button. The address change needs a
+                  * session, so every route to it goes through sign-in; a
+                  * button here would just be the "Sign in" button above it
+                  * wearing a different label.
+                  *
+                  * The alternative backend offered was token + password in one
+                  * request, and it was declined for a reason worth keeping: a
+                  * password prompt on a page reached from an email link is the
+                  * shape of every phishing page a school has been trained to
+                  * distrust. It would work, and it would teach the wrong
+                  * reflex.
+                  *
+                  * Signing in works even with the wrong address on the
+                  * account - they know what they typed, and they know their
+                  * password.
+                  */}
+                <p className="m-0 max-w-[340px] text-[13.5px] leading-[1.55] text-nevo-near-black/55">
+                  Wrong address? Sign in and you can change it there.
+                </p>
               </div>
             ) : null}
           </>

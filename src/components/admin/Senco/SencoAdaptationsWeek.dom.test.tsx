@@ -94,6 +94,7 @@ const klass = (id: string, name: string): AdminClass => ({
   academicSession: null,
   capacity: null,
   teacherCount: 0,
+  teachers: [],
   archivedAt: null,
 });
 
