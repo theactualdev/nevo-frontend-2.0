@@ -245,6 +245,34 @@ export const uploadsApi = {
   status: (uploadId: string) =>
     api.get<UploadStatusResponse>(`/api/v1/uploads/${uploadId}`),
 
+  /**
+   * EVERY RECENT UPLOAD IN ONE REQUEST. Added to the contract 24 Sep, because
+   * this client was asking for up to twenty uploads one at a time.
+   *
+   * The bulk screen polls each accepted upload until its parse settles - the
+   * only way to learn a lesson's title, since a batch POST returns before the
+   * parse has read a word. Twenty files meant twenty requests per round, and
+   * backend built this route to stop exactly that.
+   *
+   * `segments` COMES BACK EMPTY HERE, deliberately: a school with twenty
+   * uploads of eleven sections each would be sending a lesson's worth of body
+   * text to render a progress list. Use `status` when segments are needed.
+   *
+   * `unsettledOnly` narrows to the ones still moving. This screen does NOT use
+   * it - a job that settles drops out of that answer, and settling is the
+   * moment its title and its outcome exist. What a poll wants and what this
+   * screen wants are different questions.
+   */
+  list: (params?: { limit?: number; unsettledOnly?: boolean }) =>
+    api.get<UploadStatusResponse[]>("/api/v1/uploads", {
+      params: {
+        ...(params?.limit !== undefined ? { limit: params.limit } : {}),
+        ...(params?.unsettledOnly !== undefined
+          ? { unsettledOnly: params.unsettledOnly }
+          : {}),
+      },
+    }),
+
   /** Save an edited structure. Returns the stored one, plus whether it can be undone. */
   updateStructure: (uploadId: string, structure: UploadStructure) =>
     api.put<{ id: string; structure: UploadStructure; canUndo: boolean | null }>(

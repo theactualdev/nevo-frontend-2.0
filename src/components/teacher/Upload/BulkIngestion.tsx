@@ -72,6 +72,26 @@ const SORT_MS = 460;
  * once and the answer it wants cannot arrive for half a minute.
  */
 const TITLE_POLL_MS = 4000;
+/**
+ * What a poll learned about one accepted upload.
+ *
+ * ACCEPTED IS NOT PARSED, and that gap is the whole reason this exists. The
+ * batch POST answers when the files are taken; the parse then runs for minutes
+ * and can die. Design, 24 Sep: *"the row has to change and own it... keeping
+ * the filename and looking like the others is the worst version, because the
+ * teacher walks away believing it worked."*
+ */
+type Outcome = {
+  /** The parse's own name for it, once there is one. */
+  title?: string;
+  /** Terminal state, so the row can stop saying "being read". */
+  status?: string;
+  /** Prose, promised - never `error`, which is a driver exception. */
+  failureReason?: string | null;
+  /** For a teacher to quote. A parse dies behind the response, so there is no
+   *  500 for a reference to ride on; it is a field on the job instead. */
+  incidentId?: string | null;
+};
 /** An upload that has stopped moving has whatever title it is ever getting. */
 const FINISHED: ReadonlySet<string> = new Set([
   "ready",
@@ -100,6 +120,29 @@ const REVIEW: { title: string; reason: string }[] = [
   },
 ];
 
+/** The parse's own name for an upload, once it has one. */
+function titleOf(
+  uploadId: string | null,
+  outcomes: Record<string, Outcome>,
+): string | undefined {
+  return uploadId ? outcomes[uploadId]?.title : undefined;
+}
+
+/**
+ * The failure, when this upload's parse died - and nothing at all otherwise.
+ *
+ * ACCEPTED IS NOT PARSED. A row with no outcome yet is still being read, which
+ * is not the same as having worked; only `status: "failed"` says it stopped.
+ */
+function diedOf(
+  uploadId: string | null,
+  outcomes: Record<string, Outcome>,
+): Outcome | null {
+  if (!uploadId) return null;
+  const o = outcomes[uploadId];
+  return o && o.status === "failed" ? o : null;
+}
+
 export function BulkIngestion() {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>("idle");
@@ -107,8 +150,14 @@ export function BulkIngestion() {
   const fileInput = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [batch, setBatch] = useState<BatchResult | null>(null);
-  /** uploadId -> the parse's own title for it. Absent until it arrives. */
-  const [titles, setTitles] = useState<Record<string, string>>({});
+  /**
+   * uploadId -> what the parse has said about it so far.
+   *
+   * WAS `titles`, a map of strings, and a title was all this screen read. The
+   * same poll has always carried the outcome too, and dropping it is how a
+   * row could go on looking like a success for a parse that had failed.
+   */
+  const [outcomes, setOutcomes] = useState<Record<string, Outcome>>({});
 
   /**
    * The accepted uploads still worth asking about: their parse has not
@@ -119,6 +168,26 @@ export function BulkIngestion() {
    * below - the same shape as the wizard's poll, for the same reason.
    */
   const [awaitingTitles, setAwaitingTitles] = useState<string[]>([]);
+  /**
+   * The files this batch was made of, kept so one of them can be sent again.
+   * A ref, read only in the resend handler - never during render, where its
+   * length would be a value React cannot see change. `submitted` is the
+   * rendered count.
+   *
+   * NOTHING IN THE CONTRACT RE-RUNS A FAILED PARSE, and that is worth writing
+   * down because design asked for a retry and the obvious routes do not do it.
+   * `retry-pages` needs page numbers and takes at least one - a parse that
+   * died wholesale reports no failed pages. `regenerate` needs a lesson id,
+   * and a staged upload that failed reports `structure.lessonId: null`.
+   *
+   * So the retry is what a teacher would do by hand: send that one file again.
+   * The browser still holds it while these results are on screen, and this
+   * screen is a takeover that loses its results on reload anyway - so the
+   * control exists exactly as long as it can work.
+   */
+  const sentFiles = useRef<File[]>([]);
+  /** The row a retry is in flight for, so it cannot be pressed twice. */
+  const [resending, setResending] = useState<number | null>(null);
   /**
    * Keep asking the accepted uploads what the parse called them.
    *
@@ -131,24 +200,77 @@ export function BulkIngestion() {
     let cancelled = false;
     const ids = awaitingTitles;
     const t = setTimeout(() => {
-      void Promise.allSettled(ids.map((id) => uploadsApi.status(id))).then(
-        (settled) => {
+      /*
+       * ONE REQUEST FOR THE WHOLE BATCH, not one per upload.
+       *
+       * This asked each accepted upload separately - up to twenty requests a
+       * round, every four seconds, for one field each. Backend added
+       * `GET /api/v1/uploads` on 24 Sep to stop precisely that.
+       *
+       * NOT `unsettledOnly`, though a poll is what that flag is for. A job
+       * that settles drops out of that answer, and settling is the moment its
+       * title and its outcome come into existence - so this asks for the
+       * recent window and matches on id. Headroom above the batch size,
+       * because another tab's upload would otherwise push the oldest of this
+       * batch out of the window.
+       */
+      void uploadsApi
+        .list({ limit: Math.min(100, ids.length + 5) })
+        .then((rows) => {
           if (cancelled) return;
-          const found: Record<string, string> = {};
+          const byId = new Map(rows.map((r) => [r.id, r]));
+          const found: Record<string, Outcome> = {};
           const again: string[] = [];
-          settled.forEach((r, i) => {
-            // A refused read is dropped, not retried. See the file's head.
-            if (r.status !== "fulfilled") return;
-            const title = r.value.lessonTitle?.trim();
-            if (title) found[ids[i]] = title;
-            if (!FINISHED.has(r.value.status)) again.push(ids[i]);
+          ids.forEach((id) => {
+            const row = byId.get(id);
+            /*
+             * AN ID THE WINDOW DID NOT COVER KEEPS ASKING. It is not evidence
+             * of anything - the upload has not settled, it simply was not in
+             * the answer - and treating absence as settled would leave a row
+             * saying "being read" for ever.
+             */
+            if (!row) {
+              again.push(id);
+              return;
+            }
+            const title = row.lessonTitle?.trim();
+            found[id] = {
+              ...(title ? { title } : {}),
+              status: row.status,
+              failureReason: row.failureReason ?? null,
+              incidentId: row.incidentId ?? null,
+            };
+            if (!FINISHED.has(row.status)) again.push(id);
           });
           if (Object.keys(found).length > 0) {
-            setTitles((prev) => ({ ...prev, ...found }));
+            setOutcomes((prev) => {
+              const next = { ...prev };
+              for (const [id, o] of Object.entries(found)) {
+                next[id] = { ...next[id], ...o };
+              }
+              return next;
+            });
           }
           setAwaitingTitles(again);
-        },
-      );
+        })
+        .catch(() => {
+          /*
+           * A REFUSED READ STOPS THE ASKING, as it did when this was twenty
+           * requests. That route answered 500 for every in-flight upload for
+           * three weeks; retrying until it answers would be an endless request
+           * loop behind a teacher's back. Rows keep what they have.
+           *
+           * A MUTATION RUN CANNOT KILL THIS LINE, and it stays anyway. Removing
+           * it looks equivalent: the effect re-arms only when `awaitingTitles`
+           * gets a new reference, so leaving the list untouched also happens to
+           * stop the loop. What it does not stop is the NEXT render - pressing
+           * a resend, or any other state change - re-running the effect with the
+           * old list still in it and resuming the poll against a route that is
+           * refusing. Clearing it is the difference between stopped and
+           * accidentally idle.
+           */
+          if (!cancelled) setAwaitingTitles([]);
+        });
     }, TITLE_POLL_MS);
     return () => {
       cancelled = true;
@@ -204,8 +326,9 @@ export function BulkIngestion() {
     // however many files they actually dropped.
     setDemo(false);
     setSubmitted(files.length);
+    sentFiles.current = files;
     setBatch(null);
-    setTitles({});
+    setOutcomes({});
     setAwaitingTitles([]);
     setBatchError("");
     // `scope: "term"` - this screen is the term flow by definition.
@@ -225,6 +348,55 @@ export function BulkIngestion() {
           "We couldn’t send those just now. Nothing has been added - try again in a moment.",
         );
         setPhase("idle");
+      });
+  };
+
+  /**
+   * Send one file again, in place, after its parse died.
+   *
+   * POSITIONAL: the batch endpoint reports one row per file sent, in order, so
+   * row `i` is file `i`. Guarded on the lengths agreeing rather than trusted,
+   * because a mismatch would re-upload the wrong document - and doing nothing
+   * is the only safe answer to not knowing which file a row is.
+   */
+  const resendOne = (i: number) => {
+    /*
+     * THE LENGTH CHECK IS IN THE RENDER, not here, and it was in both until a
+     * mutation run removed this copy and killed nothing. It could not: the
+     * control is only drawn when the lengths agree, and both conditions read
+     * the same render's values, so this one was unreachable. A guard that
+     * cannot fail reads as load-bearing to the next person and is not.
+     */
+    const file = sentFiles.current[i];
+    if (!file || resending !== null) return;
+    setResending(i);
+    setBatchError("");
+    void uploadsApi
+      .create(file, "term")
+      .then((res) => {
+        setResending(null);
+        // The row now describes a DIFFERENT upload, so its old outcome must go
+        // with its old id - otherwise the failure it just reported outlives the
+        // upload that failed.
+        setBatch((prev) =>
+          prev
+            ? {
+                ...prev,
+                uploads: prev.uploads.map((u, j) =>
+                  j === i
+                    ? { ...u, uploadId: res.uploadId, accepted: true, error: null }
+                    : u,
+                ),
+              }
+            : prev,
+        );
+        setAwaitingTitles((prev) => [...prev, res.uploadId]);
+      })
+      .catch(() => {
+        setResending(null);
+        setBatchError(
+          "We couldn’t send that one again just now. Nothing else has changed - try in a moment.",
+        );
       });
   };
 
@@ -474,12 +646,23 @@ export function BulkIngestion() {
                       <span
                         className={cn(
                           "mt-px shrink-0",
-                          u.accepted ? "text-nevo-navy" : "text-nevo-violet",
+                          u.accepted && !diedOf(u.uploadId, outcomes)
+                            ? "text-nevo-navy"
+                            : "text-nevo-violet",
                         )}
                       >
-                        {u.accepted ? (
+                        {u.accepted && !diedOf(u.uploadId, outcomes) ? (
                           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                             <path d="M20 6L9 17l-5-5" />
+                          </svg>
+                        ) : u.accepted ? (
+                          /* A READING THAT STOPPED, not a flawed page. The
+                             same mark the single-lesson failure screen uses,
+                             because it is the same event. Violet, never red -
+                             the frame is explicit about that. */
+                          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                            <path d="M4 5a2 2 0 0 1 2-2h5v16H6a2 2 0 0 0-2 2z" />
+                            <path d="M15 8v8M19 8v8" />
                           </svg>
                         ) : (
                           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -494,9 +677,9 @@ export function BulkIngestion() {
                             what they dragged in, and sees what Nevo made of
                             it. Filename alone until the title arrives. */}
                         <div className="truncate text-[14.5px] font-medium text-nevo-near-black">
-                          {(u.uploadId && titles[u.uploadId]) || u.filename}
+                          {titleOf(u.uploadId, outcomes) || u.filename}
                         </div>
-                        {u.uploadId && titles[u.uploadId] && (
+                        {titleOf(u.uploadId, outcomes) && (
                           <div className="mt-[3px] truncate text-[12.5px] text-nevo-near-black/50">
                             {u.filename}
                           </div>
@@ -504,6 +687,54 @@ export function BulkIngestion() {
                         {!u.accepted && (
                           <div className="mt-[3px] text-[13px] leading-[1.45] text-nevo-near-black/62">
                             {u.error ?? "Nevo couldn’t read this one."}
+                          </div>
+                        )}
+                        {/*
+                          ACCEPTED, THEN FAILED - the state design ruled into
+                          existence on 24 Sep. *"The row has to change and own
+                          it... keeping the filename and looking like the others
+                          is the worst version, because the teacher walks away
+                          believing it worked."*
+                          It says the file WAS taken, that the reading is what
+                          stopped, why when the server said, and offers the one
+                          action that exists.
+                        */}
+                        {u.accepted && diedOf(u.uploadId, outcomes) && (
+                          <div className="mt-[3px]">
+                            <div className="text-[13px] leading-[1.45] text-nevo-near-black/62">
+                              {/* `failureReason` is the field that promises
+                                  prose. `error` is a driver exception and is
+                                  not shown anywhere. */}
+                              {diedOf(u.uploadId, outcomes)?.failureReason ??
+                                "We took this one, and the reading stopped partway. That is ours to sort out."}
+                            </div>
+                            {diedOf(u.uploadId, outcomes)?.incidentId && (
+                              <div className="mt-[3px] text-[12px] text-nevo-near-black/50">
+                                {"If you tell us about this, quote "}
+                                <span className="font-mono text-nevo-near-black/70">
+                                  {diedOf(u.uploadId, outcomes)?.incidentId}
+                                </span>
+                                {"."}
+                              </div>
+                            )}
+                            {/* `submitted` RATHER THAN THE REF'S LENGTH, and
+                                not a style choice: reading a ref during render
+                                is a lint error here, and rightly - a render
+                                that depends on a ref does not re-run when the
+                                ref changes. The count is already state, set
+                                from the same files. */}
+                            {submitted === batch.uploads.length && (
+                              <button
+                                type="button"
+                                onClick={() => resendOne(i)}
+                                disabled={resending !== null}
+                                className="mt-2 inline-flex cursor-pointer items-center rounded-lg border-[1.5px] border-nevo-navy/30 px-[11px] py-[5px] text-[12px] font-semibold whitespace-nowrap text-nevo-navy transition-colors hover:bg-nevo-navy/6 disabled:cursor-default disabled:opacity-55"
+                              >
+                                {resending === i
+                                  ? "Sending\u2026"
+                                  : "Send this one again"}
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>
