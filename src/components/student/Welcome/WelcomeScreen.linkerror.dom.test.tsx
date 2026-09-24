@@ -5,7 +5,7 @@ import { WelcomeScreen } from "./WelcomeScreen";
 /**
  * A DEAD JOIN LINK SAID SO AT THE VERY END, OR NEVER.
  *
- * `linkError` renders "This link isn't working right now, ask your teacher for
+ * `linkError` renders the dead-link copy - design's words since 24 Sep - for
  * a new one", and **nothing ever set it** - the prop had no caller anywhere in
  * the app. So an expired or revoked invitation looked exactly like a good one:
  * the child gave their name, their school and their class, sat the whole motor
@@ -31,7 +31,17 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
 }));
 
-const DEAD = /link isn.t working right now/i;
+/**
+ * Design's words, 24 Sep: "This link is not working any more." / "Ask your
+ * teacher to send you a new one."
+ *
+ * The TENSE is the thing to hold. This used to read "isn't working right now",
+ * which says temporary - so a child waits, or tries the same dead link again.
+ * A revoked or expired invitation will never work, and the next action is to
+ * ask for a different one.
+ */
+const DEAD = /link is not working any more/i;
+const ASK = /ask your teacher to send you a new one/i;
 const WAY_IN = "I have a school code";
 
 beforeEach(() => {
@@ -54,6 +64,30 @@ describe("a child arriving on a join link", () => {
     render(<WelcomeScreen joinToken="tok-1" />);
 
     expect(await screen.findByText(DEAD)).toBeInTheDocument();
+  });
+
+  it("is told what to do about it, not only that it failed", async () => {
+    /*
+     * The second line is half the ruling. "This link is not working any more"
+     * closes the door; a child still needs to know the next action is to ask
+     * for a different link rather than to keep trying this one.
+     */
+    lookupJoin.mockResolvedValue({ status: "expired" });
+
+    render(<WelcomeScreen joinToken="tok-1" />);
+
+    expect(await screen.findByText(ASK)).toBeInTheDocument();
+  });
+
+  it("does not tell a child to wait, which the old copy did", async () => {
+    // "isn't working right now" reads as temporary. It never was.
+    lookupJoin.mockResolvedValue({ status: "revoked" });
+
+    render(<WelcomeScreen joinToken="tok-1" />);
+
+    await screen.findByText(DEAD);
+
+    expect(document.body.textContent).not.toMatch(/right now|try again|later/i);
   });
 
   it("is told when it has been revoked", async () => {

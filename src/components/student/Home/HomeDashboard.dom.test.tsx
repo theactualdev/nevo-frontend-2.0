@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { HomeDashboard } from "./HomeDashboard";
 import { SAMPLE_ATTR } from "@/lib/sampleData";
 import { clearSession, setSession } from "@/lib/auth/session";
+import { markWarmUpDone } from "@/lib/profiling/warmUpDone";
 
 /**
  * The sample mark has to be right in BOTH directions, and this screen had it
@@ -38,6 +39,10 @@ beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("no network")));
   dashboard.useStudentDashboard.mockReset();
   clearSession();
+  // The warm-up's done-flag lives in localStorage and outlives a test by
+  // design - it is a device memory. Leaving it set would have one test's child
+  // arrive already done in the next.
+  window.localStorage.clear();
 });
 
 afterEach(() => {
@@ -222,5 +227,82 @@ describe("Home does not offer work a teacher called off", () => {
     await settled(container);
 
     expect(queryByText("Todays Fractions")).not.toBeNull();
+  });
+});
+
+describe("the daily warm-up card", () => {
+  /**
+   * A dashboard with something on it.
+   *
+   * The card only renders when the child has work queued - an empty week shows
+   * the "nothing waiting right now" state instead, and there is no warm-up
+   * card on it to assert about.
+   */
+  const live = () =>
+    dashboard.useStudentDashboard.mockReturnValue({
+      data: {
+        assignments: [
+          {
+            id: "a-1",
+            status: "assigned",
+            availableFrom: null,
+            dueAt: null,
+            note: null,
+            lesson: { id: "l-1", title: "Fractions", segmentCount: 4 },
+          },
+        ],
+        recentProgress: [],
+      },
+      failed: false,
+      loading: false,
+    });
+
+  /** Past the hydration gate, which renders the skeleton first. */
+  const settled = async (container: HTMLElement) =>
+    waitFor(() =>
+      expect(container.querySelector(".animate-pulse")).toBeNull(),
+    );
+
+  it("offers the warm-up when today's has not been done", async () => {
+    signIn();
+    live();
+
+    const { container } = render(<HomeDashboard />);
+    await settled(container);
+
+    expect(screen.getByText(/A quick warm-up to begin/i)).toBeInTheDocument();
+  });
+
+  it("says it is done once this child has done today's", async () => {
+    /*
+     * THE WIRING, WHICH NOTHING COVERED. `WarmUpCard`'s own tests take `done`
+     * as a prop, so a mutation that hard-coded `done={false}` on this screen
+     * passed every one of them - the card was right and never asked.
+     *
+     * The run became once-a-day on 23 Sep and this card did not: it kept
+     * saying "Begin warm-up" and led to a screen saying the opposite.
+     */
+    signIn();
+    live();
+    markWarmUpDone("student-1");
+
+    const { container } = render(<HomeDashboard />);
+    await settled(container);
+
+    expect(screen.getByText(/Today's warm-up is done\./)).toBeInTheDocument();
+    expect(screen.queryByText(/A quick warm-up to begin/i)).toBeNull();
+  });
+
+  it("still offers it to a different child on the same tablet", async () => {
+    // The device remembers up to six. This card is one of the few things on
+    // the dashboard addressed to the child in front of it.
+    markWarmUpDone("someone-else");
+    signIn();
+    live();
+
+    const { container } = render(<HomeDashboard />);
+    await settled(container);
+
+    expect(screen.getByText(/A quick warm-up to begin/i)).toBeInTheDocument();
   });
 });

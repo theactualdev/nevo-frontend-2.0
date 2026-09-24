@@ -8,6 +8,8 @@ import type { LucideIcon } from "lucide-react";
 import { EmptyState, IllustrationWrapper } from "@/components/shared";
 import { SampleRegion } from "@/components/shared/SampleRegion";
 import { useHydrated } from "@/hooks/useHydrated";
+import { warmUpDoneToday } from "@/lib/profiling/warmUpDone";
+import { getSession } from "@/lib/auth/session";
 import { useDisplayName } from "@/components/student/Shell/useDisplayName";
 import { useHasSession } from "@/hooks/useHasSession";
 import { useStudentDashboard } from "@/hooks/useStudentDashboard";
@@ -330,7 +332,21 @@ export function HomeDashboard() {
               calibration presented as a game, never an assessment. */}
           {/* The same dimension the run will use - the card naming one task
               and the run opening another would be a small, avoidable lie. */}
-          <WarmUpCard dimension={warmUpDimension} />
+          <WarmUpCard
+            dimension={warmUpDimension}
+            /*
+             * Read during render behind `hydrated`, not from an effect: the
+             * answer lives in localStorage, which the server cannot see, and
+             * setting state to say so trips `set-state-in-effect`. Same shape
+             * the run itself uses.
+             *
+             * False until hydrated means the live card is what renders first,
+             * which is the right way round - offering a warm-up to a child who
+             * has done one is a smaller wrong than telling a child who has not
+             * that they have.
+             */
+            done={hydrated && warmUpDoneToday(getSession()?.userId)}
+          />
 
           {cont && <ContinueCard lesson={cont} />}
 
