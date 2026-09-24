@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { ProcessingStages, stageOf } from "./ProcessingStages";
+import {
+  PROCESSING_STAGES,
+  ProcessingStages,
+  stageOf,
+} from "./ProcessingStages";
 
 /**
  * SCRUM-172 LU-01, and the ruling it walks back into.
@@ -49,16 +53,19 @@ describe("which stage the server has actually reached", () => {
     expect(stageOf("u-1", "structure", "confirmed")).toBe("ready");
   });
 
-  it("holds the long stage on the last rung that is true", () => {
+  it("gives the long stage its own rung", () => {
     /*
-     * `adaptations` joined the enum on 23 Sep, between `structure` and
-     * `complete`, and it is the longest part of the wait by a wide margin -
-     * pictures, narration and the two depth rewrites. It has no rung of its
-     * own until design rules on one, so it holds on the last rung that is
-     * true. Without this line a real upload walked a teacher BACK to
-     * "Receiving the file" and left them there for all of it.
+     * THREE RULINGS TO GET HERE. Asked for on 21 Sep; struck on 23 Sep because
+     * design held that no adaptation work happens at upload; re-ruled on
+     * 24 Sep once backend shipped `adaptations` and named what it covers -
+     * pictures, narration and the two depth rewrites.
+     *
+     * In between it HELD on "Finding the sections", which was never a smaller
+     * version of the rung - it was there because the alternative, before the
+     * enum value was known here at all, walked a teacher BACK to "Receiving
+     * the file" and left them there for the longest part of the parse.
      */
-    expect(stageOf("u-1", "adaptations", "processing")).toBe("sections");
+    expect(stageOf("u-1", "adaptations", "processing")).toBe("adapting");
   });
 
   it("never walks backwards on a stage value it does not know", () => {
@@ -95,18 +102,44 @@ describe("what the ladder shows", () => {
 
   it("draws no stage the backend cannot report", () => {
     /*
-     * THE ASSERTION THIS FILE EXISTS FOR. The frame draws five; "Preparing
-     * the adaptations" has no stage value behind it and is where a teacher
-     * waits longest, because it is where the images and speech are made.
-     * Drawn from the enum it is a rung that never lights, or one that lights
-     * by guesswork - which is the defect design cut the block path's fourth
-     * rung to remove.
+     * THE ASSERTION THIS FILE EXISTS FOR, and it now passes with five rungs
+     * rather than four. The rule was never "four stages" - it was design's
+     * *"never draw a rung the backend doesn't report."* Every label on this
+     * ladder maps to a reported value, which is what makes the fifth legal
+     * now and did not before `adaptations` existed.
+     *
+     * So this pins the RULE rather than the count: every drawn label is one
+     * `stageOf` can actually return.
      */
     render(<ProcessingStages lessonName="L" current="sections" />);
 
-    expect(
-      screen.queryByText(/Preparing the adaptations/i),
-    ).not.toBeInTheDocument();
+    const reachable = new Set<string>([
+      stageOf(null, null, null),
+      stageOf("u-1", "lessons", "processing"),
+      stageOf("u-1", "structure", "processing"),
+      stageOf("u-1", "adaptations", "processing"),
+      stageOf("u-1", "complete", "ready"),
+    ]);
+
+    expect(PROCESSING_STAGES.map((s) => s.key).sort()).toEqual(
+      [...reachable].sort(),
+    );
+  });
+
+  it("names the long stage in the frame's own words", () => {
+    render(<ProcessingStages lessonName="L" current="adapting" />);
+
+    expect(screen.getByText("Preparing the adaptations")).toBeInTheDocument();
+  });
+
+  it("puts the long stage between the sections and being ready", () => {
+    // Backend reports it there - `lessons`, `structure`, `adaptations`,
+    // `complete` - and a ladder in a different order would be a ladder that
+    // walks backwards on a real upload.
+    const keys = PROCESSING_STAGES.map((s) => s.key);
+
+    expect(keys.indexOf("adapting")).toBeGreaterThan(keys.indexOf("sections"));
+    expect(keys.indexOf("adapting")).toBeLessThan(keys.indexOf("ready"));
   });
 
   it("puts no number on any of it", () => {

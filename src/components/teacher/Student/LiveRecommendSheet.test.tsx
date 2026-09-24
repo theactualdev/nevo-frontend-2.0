@@ -174,7 +174,7 @@ describe("the note", () => {
     );
   });
 
-  it("tells the teacher the child will read it", async () => {
+  it("tells the teacher the note is private to that child", async () => {
     /*
      * THIS PINNED A SMALLER SENTENCE FOR THREE DAYS, deliberately.
      *
@@ -189,8 +189,12 @@ describe("the note", () => {
      * Design ruled on 23 Sep: it reaches the child, attributed, never adapted.
      * The student lane drew it the same day. So the promise is earned.
      *
-     * NOT the frame's wording, though: "she" is about a named child in a mock,
-     * and this is about a real one whose pronouns nothing here knows.
+     * DESIGN WROTE THE SENTENCE ON 24 SEP: *"Your note goes with this lesson
+     * and only [student] sees it."* The version shipped that morning read
+     * "They'll see your note when they open it" - true, and quieter than
+     * design wanted. Theirs carries the part a teacher needs: the note is
+     * private to that one child. Neither says "she" about a real child whose
+     * pronouns nothing here knows.
      */
     show();
     pick("Fractions 3");
@@ -199,7 +203,7 @@ describe("the note", () => {
 
     const done = await screen.findByText(/That’s sent to Amara/);
     expect(done.parentElement?.textContent).toMatch(
-      /see your note when they open it/i,
+      /Your note goes with this lesson and only Amara sees it/i,
     );
   });
 
