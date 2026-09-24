@@ -34,7 +34,6 @@ type Phase = "loading" | "ready" | "failed";
 export function HandoverStep({ state }: { state: WizardState }) {
   const [phase, setPhase] = useState<Phase>("loading");
   const [school, setSchool] = useState<School | null>(null);
-  const [copied, setCopied] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [connectFailed, setConnectFailed] = useState(false);
 
@@ -175,7 +174,6 @@ export function HandoverStep({ state }: { state: WizardState }) {
   }
 
   /* ---------------------------------------------------------- Manual route */
-  const code = school?.code ?? null;
 
   return (
     <>
@@ -194,60 +192,20 @@ export function HandoverStep({ state }: { state: WizardState }) {
         sub={`${schoolName}'s workspace is ready. Share your school code so staff and students can join.`}
       />
 
-      <div className="mt-9">
-        <p className="m-0 text-[13px] font-medium text-nevo-near-black/62">
-          Your school code
-        </p>
-
-        {code ? (
-          <>
-            {/* Lines, never boxes - codes are lines, PINs are boxes. */}
-            <div className="mt-4 flex flex-wrap gap-3">
-              {code.split("").map((ch, i) => (
-                <span
-                  key={`${ch}-${i}`}
-                  className="flex w-11 justify-center border-b-2 border-nevo-navy pb-1 text-[30px] font-semibold text-nevo-navy"
-                >
-                  {ch === "-" ? <span className="opacity-40">&ndash;</span> : ch}
-                </span>
-              ))}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                navigator.clipboard
-                  ?.writeText(code)
-                  .then(() => setCopied(true))
-                  .catch(() => setCopied(false));
-              }}
-              className="mt-7 inline-flex cursor-pointer items-center gap-2 rounded-[10px] bg-nevo-navy px-5 py-3 text-sm font-semibold text-nevo-cream transition-[filter] hover:brightness-110"
-            >
-              {copied ? (
-                <>
-                  <span className="motion-safe:animate-nevo-pop">
-                    <CheckIcon size={15} />
-                  </span>
-                  Copied
-                </>
-              ) : (
-                "Copy code"
-              )}
-            </button>
-
-            <p className="mt-4 text-[13.5px] leading-[1.55] text-nevo-near-black/60">
-              Staff and students enter this once when they first sign in. Keep
-              it somewhere you can find it.
-            </p>
-          </>
-        ) : (
-          <p className="mt-3 rounded-[10px] bg-nevo-violet/[0.18] px-4 py-3.5 text-[13.5px] leading-[1.55] text-nevo-navy">
-            Your workspace is ready, but your school code hasn&rsquo;t come
-            through yet. It&rsquo;ll be waiting on your dashboard - nothing is
-            lost.
-          </p>
-        )}
-      </div>
+      {/*
+        * ~~THE SCHOOL CODE WAS HANDED OVER HERE.~~ IT MOVED, 24 Sep.
+        *
+        * D01's own caption: *"the school code now lives on the dashboard
+        * overview"*, and D24's activation screen shows it there. Design's
+        * reasoning is the part to keep: *"a code handed over once at the end of
+        * onboarding is a code the school loses the moment they close the tab."*
+        *
+        * It renders on the Overview now - see `SchoolCodeCard`, which went in
+        * BEFORE this came out. The code was on exactly two screens, and the
+        * other one is the IT home, which came off the sidebar the same day.
+        * Removing this first would have left a manual school - every school
+        * right now - with no way to find the code its staff sign in with.
+        */}
 
       <Link href="/admin/dashboard" className={cn(WIZARD_PRIMARY, "mt-9 block text-center")}>
         Go to your dashboard
