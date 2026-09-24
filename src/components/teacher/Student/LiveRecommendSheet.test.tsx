@@ -174,14 +174,33 @@ describe("the note", () => {
     );
   });
 
-  it("says the note went with the lesson, when there was one", async () => {
+  it("tells the teacher the child will read it", async () => {
+    /*
+     * THIS PINNED A SMALLER SENTENCE FOR THREE DAYS, deliberately.
+     *
+     * C08c's line is "She'll see your note when she opens it", and the
+     * confirmation would only say the note went WITH the lesson. Not because
+     * the note failed to reach the child - it rides her own dashboard - but
+     * because who the note was FOR had not been ruled, and the open question
+     * was whether it was the teacher's own record or was meant for the parent.
+     * Treating the transport as the answer was the reasoning the old test and
+     * its comment existed to refuse.
+     *
+     * Design ruled on 23 Sep: it reaches the child, attributed, never adapted.
+     * The student lane drew it the same day. So the promise is earned.
+     *
+     * NOT the frame's wording, though: "she" is about a named child in a mock,
+     * and this is about a real one whose pronouns nothing here knows.
+     */
     show();
     pick("Fractions 3");
     write("Have a go at this one.");
     sendIt();
 
     const done = await screen.findByText(/That’s sent to Amara/);
-    expect(done.parentElement?.textContent).toMatch(/with your note/i);
+    expect(done.parentElement?.textContent).toMatch(
+      /see your note when they open it/i,
+    );
   });
 
   it("does not mention a note when none was written", async () => {
@@ -193,18 +212,16 @@ describe("the note", () => {
     expect(done.parentElement?.textContent).not.toMatch(/note/i);
   });
 
-  it("never promises she will SEE it, because no student screen shows it yet", async () => {
-    // C08c's line is "She'll see your note when she opens it". The note does
-    // reach her - it rides on `students/me/dashboard` - but nothing renders it,
-    // so that sentence is a promise about a surface that does not show it.
-    // This guards the wording until the student console catches up.
+  it("promises nothing when the box held only whitespace", async () => {
+    // The request already drops a whitespace note; this is the other half -
+    // the confirmation must not promise a message that was never sent.
     show();
     pick("Fractions 3");
-    write("Have a go at this one.");
+    write("   ");
     sendIt();
 
     const done = await screen.findByText(/That’s sent to Amara/);
-    expect(done.parentElement?.textContent).not.toMatch(/see your note|when she opens/i);
+    expect(done.parentElement?.textContent).not.toMatch(/your note/i);
   });
 });
 

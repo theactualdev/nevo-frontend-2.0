@@ -29,20 +29,24 @@ import { cn } from "@/lib/utils";
  * worse than no box. Backend added `note` to both that afternoon, so the box
  * is here and what it holds is sent.
  *
- * WHAT THE CONFIRMATION DOES NOT SAY. C08c's line is "She'll see your note
- * when she opens it." The confirmation says the note went with the lesson,
- * which is exactly what happened and is all that may be claimed.
+ * WHAT THE CONFIRMATION MAY NOW SAY - RULED 23 SEP, SAID 24 SEP.
  *
- * THE REASON IS NOT THE ONE THIS COMMENT USED TO GIVE. It said the note
- * genuinely reaches the child and was merely unrendered, so C08c's wording
- * would become true as soon as the student console drew it. That treated the
- * transport as the ruling: the field rides `students/me/dashboard`, so the
- * child must be the audience.
+ * This held a deliberately smaller sentence for three days. C08c's line is
+ * "She'll see your note when she opens it", and the confirmation would only
+ * say the note went WITH the lesson, because that was all that had happened.
+ * The reason was not that the note was unrendered: it was that the audience
+ * had not been ruled, and the open question was whether the note was for the
+ * teacher's own use or was meant for the PARENT. Treating the transport as
+ * the ruling - it rides `students/me/dashboard`, so it must be for the child
+ * - was the mistake this comment existed to prevent.
  *
- * Design has not ruled who the note is for (21 Sep). The prior question is
- * whether it is for the teacher's own use or is intended to reach the PARENT,
- * and placement waits on that answer. So this wording stays until the ruling
- * lands, and it may not be C08c's wording that replaces it.
+ * Design ruled on 23 Sep: the note reaches the CHILD, attributed to the
+ * teacher, and is never adapted. The student lane drew it the same day on the
+ * lesson screen, reading the same `note` off the child's own dashboard. So
+ * the sentence is true now, and it is said.
+ *
+ * NOT C08c'S WORDING, though. The frame says "she" about a named child in a
+ * mock. This one is about a real one, whose pronouns nothing here knows.
  *
  * ONE PART OF THE FRAME IS STILL NOT BUILT, deliberately:
  *
@@ -132,7 +136,7 @@ export function LiveRecommendSheet({
         </h2>
         <p className="mt-3 text-[14.5px] leading-[1.6] text-nevo-near-black/72">
           {sentWithNote
-            ? `${"“"}${sent}${"”"} is now waiting in ${firstName}${"’"}s lessons, with your note.`
+            ? `${"“"}${sent}${"”"} is now waiting in ${firstName}${"’"}s lessons. They${"’"}ll see your note when they open it.`
             : `${"“"}${sent}${"”"} is now waiting in ${firstName}${"’"}s lessons.`}
         </p>
         <button

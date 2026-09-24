@@ -82,6 +82,20 @@ export interface AssignmentUpdated {
 export interface CreateAssignmentsResult {
   assignmentIds: string[];
   createdCount: number;
+  /**
+   * HOW MANY ALREADY HAD IT. On the wire since the route existed, and named
+   * nowhere in this client until 24 Sep - our own contract gate had been
+   * printing it as advisory output for days.
+   *
+   * It is the difference between the two ways `createdCount: 0` happens. A
+   * class with nobody in it creates nothing; a class that already has the
+   * lesson also creates nothing, and the screen was telling that teacher
+   * their class "may have no students enrolled yet".
+   *
+   * Optional, because an older deployment may not send it - and absent must
+   * not read as zero duplicates, which is a claim.
+   */
+  duplicateCount?: number;
 }
 
 export const assignmentsApi = {

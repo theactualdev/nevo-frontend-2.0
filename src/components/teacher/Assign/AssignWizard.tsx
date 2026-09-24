@@ -277,8 +277,27 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
     sample: lessonsSample,
     loading: lessonsLoading,
   } = useLessonLibrary();
+  /*
+   * ONLY LESSONS THAT EXIST. `useLessonLibrary` returns three kinds - normal,
+   * parsing and failed - and this list took all of them, so a lesson whose
+   * parse died was selectable and its id went to `POST /api/v1/assignments`.
+   *
+   * That stopped being hypothetical this week: a failed parse leaves a lesson
+   * row behind with zero segments, and there are two of them in the E2E tenant
+   * right now. A teacher could send a child an empty lesson.
+   *
+   * The Library screen has always drawn both kinds correctly - a failed lesson
+   * is a non-clickable "This lesson couldn't be processed." card - so it was
+   * only this door that was missing the guard.
+   *
+   * Still parsing is left out too. It is not assignable YET, and this list has
+   * no way to say "not yet" about one row; a disabled row is a state design has
+   * not drawn. Absent is the honest version until they do.
+   */
   const lessons = live
-    ? cards.map((c) => ({ id: c.id, title: c.title, meta: c.meta }))
+    ? cards
+        .filter((c) => c.kind === "normal")
+        .map((c) => ({ id: c.id, title: c.title, meta: c.meta }))
     : !signedIn || lessonsSample
       ? LESSONS
       : [];
@@ -427,6 +446,16 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
       (n, r) => n + (r.status === "fulfilled" ? r.value.createdCount : 0),
       0,
     );
+    /*
+     * The other reason nothing was created. Absent is not zero: an older
+     * deployment that does not send the field must not be read as "and none
+     * of them were duplicates", so this counts only what was actually said.
+     */
+    const duplicates = results.reduce(
+      (n, r) =>
+        n + (r.status === "fulfilled" ? (r.value.duplicateCount ?? 0) : 0),
+      0,
+    );
 
     /*
      * A 409 IS NOT A FAILURE TO RETRY.
@@ -490,8 +519,20 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
       return;
     }
     if (created === 0) {
+      /*
+       * TWO REASONS NOTHING WAS CREATED, and this said the wrong one.
+       *
+       * A teacher re-assigning a lesson their class already has got "those
+       * classes may have no students enrolled yet" - a sentence about their
+       * roster, over a class that is full and already holding the lesson. The
+       * server had said so all along in `duplicateCount`; nothing read it.
+       */
       setError(
-        "Nothing was assigned - those classes may have no students enrolled yet.",
+        duplicates > 0
+          ? duplicates === 1
+            ? "That student already has this lesson, so nothing was sent again."
+            : `Those ${duplicates} students already have this lesson, so nothing was sent again.`
+          : "Nothing was assigned - those classes may have no students enrolled yet.",
       );
       return;
     }
