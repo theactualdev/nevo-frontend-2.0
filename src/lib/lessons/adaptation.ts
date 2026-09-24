@@ -86,7 +86,34 @@ export function adaptSegmentsFor(segments: ContentSegment[]): AdaptSegment[] {
     availableModalities: s.availableModalities.length
       ? s.availableModalities
       : [MODALITY.TEXT],
+    /*
+     * WHAT THIS SEGMENT CAN ACTUALLY BE RESHAPED INTO.
+     *
+     * Sent so the engine never instructs a `simplify` or an `expand` the
+     * segment has no text for. We have read the segment, so `[]` is a real
+     * answer here rather than a silence - backend: "omitting the field and
+     * sending [] are different answers".
+     *
+     * The same emptiness test as `fromContent`, and for the same reason: a
+     * rewrite that is blank, or identical to the source, is a reshape that
+     * would re-render the same prose. Claiming it here would have the engine
+     * confidently instruct a change a child cannot see.
+     */
+    availableDepths: depthsOf(s),
   }));
+}
+
+/** The depth keys a segment genuinely carries. See `adaptSegmentsFor`. */
+function depthsOf(s: ContentSegment): ("simplified" | "expanded")[] {
+  const base = s.body.trim();
+  const real = (body: string | null | undefined) => {
+    const text = body?.trim();
+    return Boolean(text) && text !== base;
+  };
+  const depths: ("simplified" | "expanded")[] = [];
+  if (real(s.depthVariants?.simplified?.body)) depths.push("simplified");
+  if (real(s.depthVariants?.expanded?.body)) depths.push("expanded");
+  return depths;
 }
 
 /**

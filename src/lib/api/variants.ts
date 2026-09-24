@@ -181,12 +181,45 @@ export interface CalculationVariant {
 }
 
 /** Every variant a segment may carry. All independently nullable. */
+/** One rewrite of a segment. `body` defaults to `""` on the wire. */
+export interface DepthVariantBody {
+  body: string;
+}
+
+/**
+ * The simpler and the longer version of a segment, written at parse time.
+ *
+ * **KEYED BY THE ENGINE'S OWN ACTION NAMES, and deliberately so.** Backend's
+ * schema description says it outright: *"a client that has a plan saying
+ * `action: "simplify"` reads `depthVariants.simplified` without a lookup
+ * table."* So `simplify` on `ProactiveAction` and `simplified` here are two
+ * halves of one instruction, and the player's `Density` is where they meet.
+ *
+ * **EITHER MAY BE ABSENT** - the segment was too short to be worth rewriting,
+ * or the rewrite failed a check against the source. Absent means fall back to
+ * the segment's own body, which is what the player already does for a density
+ * it cannot deliver.
+ *
+ * NOT `textVariant`. That is a different field, still unanswered: what
+ * `textVariant.body` is relative to `segment.body`, and whether a teacher
+ * approves text no child reads. This one is unambiguous and has backend's
+ * description behind it.
+ */
+export interface DepthVariants {
+  simplified: DepthVariantBody | null;
+  expanded: DepthVariantBody | null;
+  /** Which model wrote them. Never rendered; a child is not told this. */
+  model: string | null;
+}
+
 export interface SegmentVariants {
   textVariant: TextVariant | null;
   visualVariant: VisualVariant | null;
   audioVariant: AudioVariant | null;
   interactiveVariant: InteractiveVariant | null;
   calculationVariant: CalculationVariant | null;
+  /** Landed 22 Sep and read by nothing until 23 Sep. See `DepthVariants`. */
+  depthVariants: DepthVariants | null;
 }
 
 /**

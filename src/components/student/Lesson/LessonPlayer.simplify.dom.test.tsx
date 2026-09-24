@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
 import { ADJUSTMENT_ACTIONS } from "@/lib/constants/affect";
 import type { AdaptationPlan, Lesson } from "@/lib/types";
+import { lessonFromContent } from "@/lib/lessons/fromContent";
 
 /**
  * ONE PATH, TWO CALLERS.
@@ -103,6 +104,56 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+});
+
+describe("end to end, from parsed content to the screen", () => {
+  it("reshapes a LIVE lesson when the engine says simplify", () => {
+    /*
+     * THE LOOP THIS WHOLE THING EXISTS FOR, and it only closed on 23 Sep.
+     *
+     * Every other test in this file hands the player an AUTHORED lesson with
+     * `body.simplify` already on it. A live one is parsed, and until
+     * `depthVariants` landed it had one body and no reshapes - so the engine
+     * could say `simplify` and the player would correctly do nothing, which is
+     * exactly what it did for a week while the row read "blocked on
+     * textVariant".
+     *
+     * So this builds the lesson the way a real one is built, through
+     * `lessonFromContent`, and asserts the instruction now lands.
+     */
+    const live = lessonFromContent({
+      id: "photo-3",
+      title: "Photosynthesis",
+      confirmationSummary: null,
+      segments: [
+        {
+          id: "seg-1",
+          segmentKey: "s1",
+          contentType: "explanatory_text",
+          sequenceOrder: 1,
+          title: "Inside a leaf",
+          body: FULL,
+          availableModalities: ["text"],
+          comprehensionCheckpoints: [],
+          textVariant: null,
+          visualVariant: null,
+          audioVariant: null,
+          interactiveVariant: null,
+          calculationVariant: null,
+          depthVariants: { simplified: { body: SHORT }, expanded: null },
+          needsReview: false,
+          reviewReasons: [],
+        },
+      ],
+    } as never);
+    // Null would mean the fixture built nothing openable - this one has text.
+    if (!live) throw new Error("fixture produced no openable lesson");
+
+    render(<LessonPlayer lesson={live} plan={planWith("simplify")} live />);
+
+    expect(body()).toContain(SHORT);
+    expect(body()).not.toContain(FULL);
+  });
 });
 
 describe("the engine's instruction reaching the screen", () => {
