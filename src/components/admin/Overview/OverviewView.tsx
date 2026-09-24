@@ -21,6 +21,7 @@ import {
   teachersOnRoster,
 } from "./overviewGettingStarted";
 import { SetupPausedBanner } from "../SetupPausedBanner";
+import { SchoolCodeCard } from "./SchoolCodeCard";
 import { useSetupGate } from "@/hooks/useSetupGate";
 import {
   readOnboarding,
@@ -414,6 +415,9 @@ export function OverviewView() {
         {/* D01b AC-05. Renders only while the address is unconfirmed, and
             never on a failed read - see `useSetupGate`. */}
         <SetupPausedBanner />
+
+        {/* D01: "the school code now lives on the dashboard overview". */}
+        <SchoolCodeCard />
 
         {phase === "loading" && (
           <div className={cn(CARD, "mt-6 h-[300px] animate-pulse")} />

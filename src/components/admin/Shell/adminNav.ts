@@ -48,7 +48,23 @@ export const ADMIN_NAV: AdminNavItem[] = [
   // Administering other admins is school-wide administration; no scope names it.
   { label: "Admin Team", href: "/admin/team", group: "Administration", scope: "oversight", inferred: true },
   { label: "Billing", href: "/admin/billing", group: "Administration", scope: "billing" },
-  { label: "IT & SSO", href: "/admin/sso", group: "Administration", scope: "it_sso" },
+  /*
+   * ~~{ label: "IT & SSO", href: "/admin/sso", group: "Administration",
+   * scope: "it_sso" },~~ OFF THE RAIL, 24 Sep, and NOT deleted.
+   *
+   * Provider sign-in is deferred, not dead. Every school is manual for now -
+   * school code, CSV upload, staff signing in with their own email and
+   * password - and design's instruction was exact: *"Leave the code entirely
+   * alone. Remove it from the sidebar so nobody navigates into it, and let
+   * direct URL access stand."*
+   *
+   * THE ROUTES STILL WORK, deliberately. Nothing sets a school to SSO, so the
+   * surface is unreachable in practice anyway, and ripping out working code
+   * for a deferred feature is churn paid for twice - once now and once when it
+   * comes back. Backend's SSO work is untouched for the same reason.
+   *
+   * Restoring this is one line. That is the point of removing it this way.
+   */
   // D12c is "Settings - Your Account": everyone has an account to manage.
   { label: "Settings", href: "/admin/settings", group: "Administration", scope: null, inferred: true },
 ];
