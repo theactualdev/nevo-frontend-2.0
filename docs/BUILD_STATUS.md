@@ -83,6 +83,51 @@ Do not build from either again.
 `AGENTS.md` now carries the ten rules and a read-before-you-build table, so every
 session loads them without anyone having to remember to say so.
 
+### Nine signal types were being thrown away at our own door, 24 Sep
+
+Found while answering a backend question about `module_boundary_action`, which
+is the one type in this story that genuinely does not exist yet.
+
+**`signals.ts` filtered every event against an ALLOW-LIST of the ingest enum -
+a second copy of `SignalEventType`, maintained by hand.** The enum grew from 22
+to 31 values and the copy did not. So nine types were dropped before a batch was
+posted, silently, with nothing failing: the request simply left without them.
+
+**FOUR OF THE NINE WERE THINGS WE HAD ASKED FOR.** `break_start`,
+`break_end`, `feeling_checkin` and `module_boundary_reached` were raised as
+list S-B 2, built by backend on request, emitted by this client - and discarded
+here. The row was marked "four of five delivered, buildable now" on 23 Sep. It
+was delivered and it was not reaching them. The other five are the Ask Nevo and
+adaptation-suppressed types.
+
+**THE LIST IS INVERTED NOW.** It names the seven types WE invent that the
+backend has never been asked to accept, and lets everything else through. That
+inverts the maintenance burden: a value backend adds flows without a client
+change, and only a type we write ourselves needs an entry - which we know about,
+because we are the ones writing it.
+
+Safe because `SignalEvent.type` is our own union, so nothing outside the 22
+names we define can reach the filter at all.
+
+**ONE ENTRY IS A REAL GAP AND THE REST ARE NOT.**
+`module_boundary_action` is the sibling of `module_boundary_reached`: what a
+child DID at a module boundary, `"continue"` or `"break"`, which is the only
+place a child is offered a break and answers. It stays in the deny list because
+one unknown type rejects the whole batch with a 422, so sending it would lose
+every signal beside it. The other six are client-only instrumentation and the
+baseline phases, which report through `POST /api/baseline/submit` instead.
+
+**THE CONFUSION THAT SURFACED IT IS WORTH RECORDING.** Backend read "four of
+five landed" as being about BREAK THRESHOLDS - `time_threshold`,
+`engagement_decline`, `comprehension_drop`, `repeated_errors`,
+`replay_accumulation` - and could not map our five onto them. They are
+different lists on different sides of the wire: theirs are outputs on
+`breakSuggestion.triggeredThresholds`, ours are inputs on `SignalEventType`.
+**And theirs are not in the OpenAPI document at all** - `triggeredThresholds`
+is typed `array<string>` with no enum - which is why we had never seen those
+five names and could not have been counting them.
+
+
 ### The gate, and the three findings standing on main
 
 `npm run architecture` (`scripts/architecture-check.mjs`) checks the rules a parser
