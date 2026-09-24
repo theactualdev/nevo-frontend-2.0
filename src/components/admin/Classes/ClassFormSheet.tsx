@@ -51,6 +51,17 @@ export function ClassFormSheet({
   const editing = Boolean(existing);
   const [name, setName] = useState(existing?.name ?? "");
   const [year, setYear] = useState(existing?.yearGroup ?? "");
+  /*
+   * THREE FIELDS D05 DRAWS THAT THIS SHEET DID NOT OFFER, and what kept them
+   * out was a comment that had gone stale: `classesApi.create` said the
+   * deployed schema took `{ name, yearGroup }` "and nothing else". It takes
+   * the full `ClassWrite`, and `ClassSummaryResponse` reads all three back.
+   */
+  const [section, setSection] = useState(existing?.section ?? "");
+  const [session, setSession] = useState(existing?.academicSession ?? "");
+  const [capacity, setCapacity] = useState(
+    existing?.capacity != null ? String(existing.capacity) : "",
+  );
   const [teacherId, setTeacherId] = useState("");
   const [teachers, setTeachers] = useState<TeacherSummary[]>([]);
   const [phase, setPhase] = useState<Phase>("idle");
@@ -99,7 +110,25 @@ export function ClassFormSheet({
   const submit = () => {
     if (!canSave) return;
     setPhase("saving");
-    const payload = { name: name.trim(), yearGroup: year || null };
+    /*
+     * EMPTY IS NULL, NOT "". A blank optional field is the absence of an
+     * answer; sending "" stores one, and a class whose section is the empty
+     * string renders as a class with a section you cannot see.
+     *
+     * Capacity is the one that has to survive a person typing. `Number("")`
+     * is 0 - a capacity of zero is a real and wrong answer - so it is parsed
+     * only when there is something to parse, and anything unparseable is
+     * treated as unsaid rather than as nought.
+     */
+    const typed = capacity.trim();
+    const cap = typed ? Number(typed) : null;
+    const payload = {
+      name: name.trim(),
+      yearGroup: year || null,
+      section: section.trim() || null,
+      academicSession: session.trim() || null,
+      capacity: cap !== null && Number.isFinite(cap) && cap > 0 ? cap : null,
+    };
 
     if (existing) {
       classesApi
@@ -232,6 +261,47 @@ export function ClassFormSheet({
             </option>
           ))}
         </select>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label htmlFor="class-section" className={LABEL}>
+            Section <span className="font-normal">(optional)</span>
+          </label>
+          <input
+            id="class-section"
+            value={section}
+            onChange={(e) => setSection(e.target.value)}
+            placeholder="A"
+            className={FIELD}
+          />
+        </div>
+        <div>
+          <label htmlFor="class-capacity" className={LABEL}>
+            Capacity <span className="font-normal">(optional)</span>
+          </label>
+          <input
+            id="class-capacity"
+            inputMode="numeric"
+            value={capacity}
+            onChange={(e) => setCapacity(e.target.value)}
+            placeholder="35"
+            className={FIELD}
+          />
+        </div>
+      </div>
+
+      <div>
+        <label htmlFor="class-session" className={LABEL}>
+          Academic session <span className="font-normal">(optional)</span>
+        </label>
+        <input
+          id="class-session"
+          value={session}
+          onChange={(e) => setSession(e.target.value)}
+          placeholder="2026/27"
+          className={FIELD}
+        />
       </div>
 
       {!editing ? (

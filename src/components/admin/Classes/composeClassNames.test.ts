@@ -42,10 +42,35 @@ describe("matching, per CL-03", () => {
     expect(findCollision("JSS 2B", [cls({})])).toBeNull();
   });
 
-  it("names the class it collided with, rather than saying 'taken'", () => {
-    const hit = findCollision("  jss 2a ", [cls({ name: "JSS 2A" })]);
+  it("names the class AND the year it collided in, the way D05 does", () => {
+    /*
+     * Our first version said only "JSS 2A already exists." The frame names the
+     * year group and offers a second action, and the year is the half that
+     * makes it actionable: a school running JSS 2A in two years reads the bare
+     * version as Nevo being wrong.
+     */
+    const hit = findCollision("  jss 2a ", [
+      cls({ name: "JSS 2A", yearGroup: "jss2" }),
+    ]);
     expect(hit).not.toBeNull();
-    expect(collisionNote(hit!)).toMatch(/JSS 2A already exists/);
+    const note = collisionNote(hit!);
+    expect(note).toMatch(/This matches JSS 2A/);
+    expect(note).toMatch(/already exists in JSS 2/);
+    expect(note).toMatch(/open the existing class/);
+  });
+
+  it("says where it exists, or says nothing about where", () => {
+    // `yearGroup` is nullable and a roster import can produce one. "in null"
+    // on the one sentence that is meant to make this actionable is worse than
+    // no clause at all.
+    const hit = findCollision("JSS 2A", [
+      cls({ name: "JSS 2A", yearGroup: null }),
+    ]);
+    const note = collisionNote(hit!);
+    expect(note).toContain("This matches JSS 2A, which already exists.");
+    expect(note).not.toContain("null");
+    expect(note).not.toContain("undefined");
+    expect(note).not.toContain("exists in .");
   });
 
   it("treats an ARCHIVED class as taken, and says restore rather than rename", () => {
