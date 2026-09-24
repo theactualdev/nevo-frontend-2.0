@@ -125,6 +125,15 @@ export const onboardingApi = {
     api.patch<OnboardingState>("/api/v1/onboarding/classes", { corrections }),
 
   /**
+   * Switch the school on. POST /api/v1/onboarding/activate
+   *
+   * Gated by `canActivate`, which the server owns. OB-05's caption says
+   * activation follows payment clearing, so a console deriving the offer from
+   * the stage alone would show it to every school still waiting on a transfer.
+   */
+  activate: () => api.post<OnboardingState>("/api/v1/onboarding/activate"),
+
+  /**
    * Create everything that read cleanly. POST /api/v1/onboarding/confirm
    *
    * No body. The server already holds the staged import; sending it back would
