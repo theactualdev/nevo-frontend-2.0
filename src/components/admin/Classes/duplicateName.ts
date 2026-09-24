@@ -1,4 +1,5 @@
 import type { AdminClass } from "@/lib/api/classes";
+import { yearGroupLabel } from "@/lib/constants/yearGroups";
 
 /**
  * Whether a proposed class name already exists in this school.
@@ -48,7 +49,23 @@ export function findCollision(
  * because the remedy is different: restore it rather than rename.
  */
 export function collisionNote(collided: AdminClass): string {
+  /*
+   * NAMES THE YEAR GROUP, which our first version did not. D05's own wording:
+   * *"This matches JSS 2A, which already exists in Year 8. Rename this one, or
+   * open the existing class instead."* We said only "JSS 2A already exists."
+   *
+   * The year group is the half that makes it actionable. A school running
+   * JSS 2A in two different years - which happens across a curriculum change -
+   * reads "JSS 2A already exists" as Nevo being wrong, and reads "already
+   * exists in Year 8" as information.
+   *
+   * Absent when the collided class has no year group, rather than "in null":
+   * `yearGroup` is nullable and a roster import can produce one.
+   */
+  const where = collided.yearGroup
+    ? ` in ${yearGroupLabel(collided.yearGroup) ?? collided.yearGroup}`
+    : "";
   return collided.archivedAt
-    ? `${collided.name} already exists but is archived. Restore it instead of creating a second one.`
-    : `${collided.name} already exists.`;
+    ? `${collided.name} already exists${where} but is archived. Restore it instead of creating a second one.`
+    : `This matches ${collided.name}, which already exists${where}. Rename this one, or open the existing class instead.`;
 }

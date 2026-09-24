@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { sessionLabel } from "./groupByYear";
 import {
   classesApi,
   type AdminClass,
@@ -105,6 +106,21 @@ export function BulkClassSheet({
           name: c.name,
           yearGroup: year,
           section: c.section,
+          /*
+           * THE SESSION THE SCHOOL IS ALREADY IN, and this sheet was creating
+           * classes without one.
+           *
+           * D05's own count line promises it - *"N classes will be created in
+           * the 2026/27 session"* - and the field arrived on every class and
+           * was discarded until 23 Sep, so there was nothing to promise with.
+           *
+           * TAKEN FROM THE SCHOOL'S EXISTING CLASSES, never from the clock.
+           * `sessionLabel` is null when they disagree or none of them says, and
+           * null is the right thing to send: a session guessed from today's
+           * date would be a claim the school never made, stamped on thirty
+           * classes at once.
+           */
+          academicSession: existing ? sessionLabel([...existing]) : null,
         })),
       )
       .then((res) => {

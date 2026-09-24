@@ -12,6 +12,7 @@ import {
 import { PROVIDER_LABELS, ssoApi, type SsoStatus } from "@/lib/api/sso";
 import { timeAgo } from "@/lib/relativeTime";
 import { yearGroupLabel, yearGroupOptions, yearGroupOrder } from "@/lib/constants/yearGroups";
+import { groupByYear, sessionLabel } from "./groupByYear";
 import { cn } from "@/lib/utils";
 import {
   CARD,
@@ -258,7 +259,7 @@ export function ClassesView() {
               </button>
               <button type="button" onClick={() => setCreating(true)} className={PRIMARY_BTN}>
                 <PlusIcon />
-                Create a class
+                Add a class
               </button>
             </>
           ) : null}
@@ -362,10 +363,27 @@ export function ClassesView() {
               </button>
             </div>
 
-            <div className={cn(CARD, "mt-[18px]")}>
-              <div className="grid grid-cols-[1.4fr_90px_90px_1.2fr] gap-4 border-b border-nevo-near-black/8 bg-nevo-near-black/[0.03] px-6 py-[13px] text-[11.5px] font-semibold uppercase tracking-[0.05em] text-nevo-near-black/50 max-xl:grid-cols-[1.3fr_70px_1fr] max-xl:px-[18px]">
+            {/*
+              * "2026/27 session · grouped by year group", the frame's caption.
+              * The session is read from the classes themselves and is absent
+              * when they disagree or none of them says - never computed from
+              * the clock. See `sessionLabel`.
+              */}
+            <p className="mt-[18px] mb-0 text-[12.5px] text-nevo-near-black/55">
+              {sessionLabel(visible)
+                ? `${sessionLabel(visible)} session · grouped by year group`
+                : "Grouped by year group"}
+            </p>
+
+            <div className={cn(CARD, "mt-2")}>
+              {/*
+                * NO YEAR COLUMN. The 20 Sep restructure replaced it with
+                * headings - the year is stated once per group instead of
+                * repeated on every row, which is what makes thirty classes
+                * scannable. See `groupByYear`.
+                */}
+              <div className="grid grid-cols-[1.6fr_90px_1.2fr] gap-4 border-b border-nevo-near-black/8 bg-nevo-near-black/[0.03] px-6 py-[13px] text-[11.5px] font-semibold tracking-[0.05em] text-nevo-near-black/50 uppercase max-xl:grid-cols-[1.4fr_70px_1fr] max-xl:px-[18px]">
                 <span>Class</span>
-                <span className="max-xl:hidden">Year</span>
                 <span>Students</span>
                 <span>Teachers</span>
               </div>
@@ -389,35 +407,55 @@ export function ClassesView() {
                   ) : null}
                 </div>
               ) : (
-                visible.map((c, i) => {
+                /*
+                 * GROUPED, with a heading per year. The divider logic moved
+                 * inside a section: the last row of a group butts against the
+                 * next heading, so it keeps its border, and only the very last
+                 * row in the list loses one.
+                 */
+                groupByYear(visible).map((section, si, all) =>
+                  section.classes.map((c, i) => {
                   const assigned = teachers[c.id];
+                  const lastSection = si === all.length - 1;
+                  const lastRow = i === section.classes.length - 1;
                   return (
+                    <div key={c.id}>
+                      {i === 0 ? (
+                        <h3 className="m-0 border-b border-nevo-near-black/8 bg-nevo-near-black/[0.015] px-6 py-2 text-[12px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase max-xl:px-[18px]">
+                          {section.label}
+                        </h3>
+                      ) : null}
                     <button
-                      key={c.id}
                       type="button"
                       onClick={() => router.push(`/admin/classes/${c.id}`)}
                       className={cn(
-                        "grid w-full cursor-pointer grid-cols-[1.4fr_90px_90px_1.2fr] items-center gap-4 px-6 py-4 text-left transition-colors hover:bg-nevo-navy/[0.03] max-xl:grid-cols-[1.3fr_70px_1fr] max-xl:px-[18px] max-xl:py-[13px]",
-                        i < visible.length - 1 && ROW_DIVIDER,
+                        "grid w-full cursor-pointer grid-cols-[1.6fr_90px_1.2fr] items-center gap-4 px-6 py-4 text-left transition-colors hover:bg-nevo-navy/[0.03] max-xl:grid-cols-[1.4fr_70px_1fr] max-xl:px-[18px] max-xl:py-[13px]",
+                        /* Only the very last row in the list loses its
+                            divider; a group's last row butts against the next
+                            heading and keeps one. */
+                        !(lastSection && lastRow) && ROW_DIVIDER,
                       )}
                     >
                       <span className="min-w-0">
                         <span className="block truncate text-[15.5px] font-semibold text-nevo-near-black">
                           {c.name}
                         </span>
-                        {/* The Year column drops on tablet, so the year group
-                            rides under the name there instead of vanishing. */}
-                        <span className="mt-0.5 hidden text-[12.5px] text-nevo-near-black/55 max-xl:block">
-                          {yearGroupLabel(c.yearGroup) ?? "No year group"}
-                        </span>
+                        {/*
+                          * The section, which D05 draws beside the name.
+                          * `section` arrived on every class and was discarded
+                          * until 23 Sep - the type simply did not declare it.
+                          * Absent rather than blank when a class has none.
+                          */}
+                        {c.section ? (
+                          <span className="mt-0.5 block text-[12.5px] text-nevo-near-black/55">
+                            {c.section}
+                          </span>
+                        ) : null}
                         {c.archivedAt ? (
                           <span className="mt-1 inline-flex items-center rounded-full bg-nevo-violet/24 px-[9px] py-0.5 text-[11px] font-semibold text-nevo-navy">
                             Archived
                           </span>
                         ) : null}
-                      </span>
-                      <span className="text-sm text-nevo-near-black/66 max-xl:hidden">
-                        {yearGroupLabel(c.yearGroup) ?? "—"}
                       </span>
                       <span className="text-sm text-nevo-near-black/66">{c.studentCount}</span>
                       <span className="flex min-w-0 items-center gap-2">
@@ -443,8 +481,10 @@ export function ClassesView() {
                         )}
                       </span>
                     </button>
+                    </div>
                   );
-                })
+                  }),
+                )
               )}
             </div>
           </>
@@ -517,17 +557,28 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
           priority
         />
         <h3 className="m-0 text-xl font-semibold text-nevo-near-black">No classes yet</h3>
+        {/*
+          * D05'S NEW EMPTY COPY, and the sentence that earns its place is the
+          * last one: a school setting up doubts it has done this right, and
+          * nothing else on the screen tells them an empty class is normal.
+          *
+          * The second action was "Import from SSO". Provider sign-in is
+          * deferred - every school is manual - and the route that actually
+          * builds classes now is the roster upload, which reads class names
+          * out of the file. So it points there.
+          */}
         <p className="mt-2.5 text-[15px] leading-[1.6] text-nevo-near-black/64">
-          Create your first class, then assign a teacher and enrol students. If
-          you connect SSO, your classes can come across automatically.
+          Add a class by hand, or upload your roster and Nevo builds your
+          classes from it. Either way works &ndash; a class with no students in
+          it yet is perfectly normal.
         </p>
         <div className="mt-6 flex justify-center gap-3">
           <button type="button" onClick={onCreate} className={PRIMARY_BTN}>
             <PlusIcon />
-            Create a class
+            Add a class
           </button>
-          <Link href="/admin/sso" className={GHOST_BTN}>
-            Import from SSO
+          <Link href="/admin/roster" className={GHOST_BTN}>
+            Create from a staff or student file
           </Link>
         </div>
       </div>
