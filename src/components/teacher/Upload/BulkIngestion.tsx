@@ -35,18 +35,50 @@ import { cn } from "@/lib/utils";
  * decided it was called, and a teacher sees "Simplifying Expressions" rather
  * than "wk2-final-v3.docx".
  *
- * That is still one read per upload. It is done ONCE, after the batch settles,
- * and every failure is absorbed - a title is an improvement on the filename,
- * never a precondition for showing the row. A file whose title cannot be
- * fetched keeps its filename, which is what the screen showed before.
+ * DOING IT ONCE MEANT DOING IT TOO EARLY, and the feature has been off since
+ * the day it shipped. `POST /api/v1/uploads/batch` returns as soon as the files
+ * are ACCEPTED; the parse then runs in the background, and `lessonTitle` cannot
+ * exist until it has read the file. So the single read fired against a job that
+ * had been alive for milliseconds, every title came back null, and every row
+ * fell back to its filename - which is exactly what the screen did before 3 Sep.
+ * Nothing looked broken, because the fallback is the old behaviour.
  *
- * TODO(api): Drive/OneDrive imports remain blocked on per-school credentials.
+ * Measured on a live upload on 23 Sep: the first title could not have arrived
+ * before ~30 seconds. So this now ASKS AGAIN until each accepted upload settles,
+ * and rows gain their titles as they land.
+ *
+ * Failures are still absorbed, and an upload whose status read is REFUSED is
+ * dropped from the asking rather than retried for ever. A title is an
+ * improvement on the filename, never a precondition for showing the row, and
+ * this screen spent the whole of a three-week window in which that route
+ * answered 500 - retrying would have been an endless request loop behind a
+ * teacher's back.
+ *
+ * TODO(api): Drive/OneDrive imports. `POST /api/v1/uploads/import` EXISTS and
+ * takes `{sourceType, fileId}` - so the import itself is no longer the gap. The
+ * gap is obtaining a `fileId`: that needs Google's Picker or Microsoft Graph in
+ * the browser, with per-school OAuth client ids. Until then the two buttons are
+ * not rendered - see the note where they used to be.
  */
 
 type Phase = "idle" | "parsing" | "results";
 
 const TOTAL = 13;
 const SORT_MS = 460;
+/**
+ * How often to ask an accepted upload what the parse has called it.
+ *
+ * Slower than the wizard's 2s, because this screen asks for up to twenty at
+ * once and the answer it wants cannot arrive for half a minute.
+ */
+const TITLE_POLL_MS = 4000;
+/** An upload that has stopped moving has whatever title it is ever getting. */
+const FINISHED: ReadonlySet<string> = new Set([
+  "ready",
+  "confirmed",
+  "failed",
+  "cancelled",
+]);
 
 const READY: { title: string; wk: string }[] = [
   { title: "Introduction to Algebra", wk: "Week 1" },
@@ -68,9 +100,6 @@ const REVIEW: { title: string; reason: string }[] = [
   },
 ];
 
-const importBtn =
-  "inline-flex h-[50px] flex-1 cursor-pointer items-center justify-center gap-[9px] rounded-[10px] border-[1.5px] border-nevo-near-black/14 bg-nevo-cream-elevated text-sm font-medium text-nevo-near-black transition-[filter] hover:brightness-[0.985] xl:h-[52px] xl:gap-2.5 xl:text-[14.5px]";
-
 export function BulkIngestion() {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>("idle");
@@ -82,29 +111,51 @@ export function BulkIngestion() {
   const [titles, setTitles] = useState<Record<string, string>>({});
 
   /**
-   * Ask each accepted upload what the parse called it.
+   * The accepted uploads still worth asking about: their parse has not
+   * settled, so a title may yet arrive.
    *
-   * Every read is settled independently and failures are swallowed: this is
-   * an improvement on the filename, not a precondition for showing the row,
-   * and one slow or missing title must not hold up the other twelve. Titles
-   * are merged in as a batch so the list does not repaint per response.
+   * Emptying this is what stops the asking. Each round writes a NEW list even
+   * when the same ids are still in flight, which is what re-arms the effect
+   * below - the same shape as the wizard's poll, for the same reason.
    */
-  const loadTitles = async (res: BatchResult) => {
-    const accepted = res.uploads.filter((u) => u.accepted && u.uploadId);
-    if (accepted.length === 0) return;
-    const settled = await Promise.allSettled(
-      accepted.map((u) => uploadsApi.status(u.uploadId as string)),
-    );
-    const found: Record<string, string> = {};
-    settled.forEach((r, i) => {
-      if (r.status !== "fulfilled") return;
-      const title = r.value.lessonTitle?.trim();
-      if (title) found[accepted[i].uploadId as string] = title;
-    });
-    if (Object.keys(found).length > 0) {
-      setTitles((prev) => ({ ...prev, ...found }));
-    }
-  };
+  const [awaitingTitles, setAwaitingTitles] = useState<string[]>([]);
+  /**
+   * Keep asking the accepted uploads what the parse called them.
+   *
+   * Every read is settled independently: one slow or missing title must not
+   * hold up the other nineteen, and titles are merged in a batch so the list
+   * does not repaint per response.
+   */
+  useEffect(() => {
+    if (awaitingTitles.length === 0) return;
+    let cancelled = false;
+    const ids = awaitingTitles;
+    const t = setTimeout(() => {
+      void Promise.allSettled(ids.map((id) => uploadsApi.status(id))).then(
+        (settled) => {
+          if (cancelled) return;
+          const found: Record<string, string> = {};
+          const again: string[] = [];
+          settled.forEach((r, i) => {
+            // A refused read is dropped, not retried. See the file's head.
+            if (r.status !== "fulfilled") return;
+            const title = r.value.lessonTitle?.trim();
+            if (title) found[ids[i]] = title;
+            if (!FINISHED.has(r.value.status)) again.push(ids[i]);
+          });
+          if (Object.keys(found).length > 0) {
+            setTitles((prev) => ({ ...prev, ...found }));
+          }
+          setAwaitingTitles(again);
+        },
+      );
+    }, TITLE_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [awaitingTitles]);
+
   const [batchError, setBatchError] = useState("");
   /**
    * Whether this is the signed-out designed beat. Only `runDemo` advances
@@ -155,6 +206,7 @@ export function BulkIngestion() {
     setSubmitted(files.length);
     setBatch(null);
     setTitles({});
+    setAwaitingTitles([]);
     setBatchError("");
     // `scope: "term"` - this screen is the term flow by definition.
     void uploadsApi
@@ -162,7 +214,11 @@ export function BulkIngestion() {
       .then((res) => {
         setBatch(res);
         setPhase("results");
-        void loadTitles(res);
+        setAwaitingTitles(
+          res.uploads
+            .filter((u) => u.accepted && u.uploadId)
+            .map((u) => u.uploadId as string),
+        );
       })
       .catch(() => {
         setBatchError(
@@ -310,33 +366,26 @@ export function BulkIngestion() {
                 PDF, Word, or PowerPoint &middot; several at once is fine
               </p>
             </button>
-            <div className="mt-4 flex items-center gap-3.5 xl:mt-[18px]">
-              <div className="h-px flex-1 bg-nevo-near-black/12" />
-              <span className="text-[12.5px] text-nevo-near-black/50 xl:text-[13px]">
-                or bring it from
-              </span>
-              <div className="h-px flex-1 bg-nevo-near-black/12" />
-            </div>
-            {/* TODO(api): Drive/OneDrive integrations - rendered per the
-                frame, not yet wired. */}
-            <div className="mt-3.5 flex gap-3 xl:mt-4">
-              <button type="button" className={importBtn}>
-                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#3b3f6e" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                  <path d="M6 20l6-10 6 10z" />
-                  <path d="M9 4l6 10" />
-                  <path d="M4 14h9" />
-                </svg>
-                <span className="xl:hidden">Google Drive</span>
-                <span className="hidden xl:inline">Import from Google Drive</span>
-              </button>
-              <button type="button" className={importBtn}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b3f6e" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                  <path d="M6 18a4 4 0 0 1 0-8 5 5 0 0 1 9.6-1.5A3.5 3.5 0 0 1 18 18z" />
-                </svg>
-                <span className="xl:hidden">OneDrive</span>
-                <span className="hidden xl:inline">Import from OneDrive</span>
-              </button>
-            </div>
+            {/*
+              "OR BRING IT FROM GOOGLE DRIVE / ONEDRIVE" USED TO BE DRAWN HERE,
+              as two buttons with no handler and a divider introducing them. A
+              teacher whose files live in Drive - which is most of them - clicked
+              one of those and nothing at all happened.
+
+              The precedent is in this directory: "a rung with nowhere to go
+              should not offer to take you there" (`ParseProgress`, on a control
+              that pointed at a route that served a fixture). The divider goes
+              with them, because "or bring it from" introduces nothing.
+
+              WHAT IT WOULD TAKE, since the row that tracked this said "blocked
+              on per-school credentials" and that is now only half true.
+              `POST /api/v1/uploads/import` exists and takes
+              `{sourceType: "google_drive" | "onedrive", fileId}`, so the import
+              is built. What nobody has is a `fileId`: obtaining one means
+              running Google's Picker or Microsoft Graph in this browser, which
+              needs an OAuth client id per school. That is the ask, and it is
+              not a frontend afternoon.
+            */}
           </div>
         </div>
       )}
