@@ -227,10 +227,21 @@ describe("sending to specific students", () => {
  * console has already made once at the sign-in door.
  */
 describe("a lesson that has not been approved", () => {
+  /*
+   * THE MESSAGE IS THE DOCUMENTED SHAPE NOW. This fixture said "2 segments
+   * remain", written when nothing read the field - the contract states that
+   * `detail.message` names each lesson and what is outstanding on it, so a
+   * fixture that named no lesson described a response the server does not
+   * send. The assertions below moved onto the lesson NAME, because being told
+   * which lesson is the property that was missing.
+   */
   const refuse = () =>
     create.mockRejectedValue(
       new ApiError(409, "conflict", {
-        detail: { code: "lesson_not_approved", message: "2 segments remain" },
+        detail: {
+          code: "lesson_not_approved",
+          message: "Fractions 3 has 2 sections waiting for you.",
+        },
       }),
     );
 
@@ -247,7 +258,7 @@ describe("a lesson that has not been approved", () => {
     send();
 
     expect(
-      await screen.findByText(/waiting for you/i),
+      await screen.findByText(/Fractions 3 has 2 sections/),
     ).toBeInTheDocument();
   });
 
@@ -257,7 +268,7 @@ describe("a lesson that has not been approved", () => {
     fireEvent.click(screen.getByRole("button", { name: /Amara Okafor/ }));
     send();
 
-    await screen.findByText(/waiting for you/i);
+    await screen.findByText(/Fractions 3 has 2 sections/);
     expect(screen.queryByText(/try again/i)).not.toBeInTheDocument();
   });
 
@@ -285,7 +296,7 @@ describe("a lesson that has not been approved", () => {
     fireEvent.click(screen.getByRole("button", { name: /Amara Okafor/ }));
     send();
 
-    await screen.findByText(/waiting for you/i);
+    await screen.findByText(/Fractions 3 has 2 sections/);
     expect(screen.queryByText(/My Lessons/i)).not.toBeInTheDocument();
   });
 
@@ -563,5 +574,138 @@ describe("when the students already have the lesson", () => {
     sendToClass();
 
     expect(await screen.findByText(/no students enrolled/i)).toBeInTheDocument();
+  });
+});
+
+/**
+ * THE SENTENCE THE SERVER WRITES FOR THIS REFUSAL, which we were discarding.
+ *
+ * The 409 is documented as of 24 Sep: `detail.code` is `lesson_not_approved`
+ * and `detail.message` NAMES EACH LESSON and what is outstanding on it. Our
+ * own copy could not name anything, because we had nothing to name them with -
+ * so a teacher who picked four lessons read "ONE of these lessons still has
+ * sections waiting for you" and had to open all four to find out which.
+ *
+ * Every test here drives a real refusal rather than asserting on a string in
+ * isolation, because the thing that broke before was the wiring and not the
+ * wording: the old code composed its message without ever reading the body.
+ */
+describe("a 409 that names the lessons", () => {
+  const refuse = (message?: string) =>
+    new ApiError(409, "Conflict", {
+      detail: { code: "lesson_not_approved", ...(message ? { message } : {}) },
+    });
+
+  /** One lesson, one class: the branch that also gets a link. */
+  const sendOne = () => {
+    render(<AssignWizard preselect="l-1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: /JSS 2A/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm assignment" }));
+  };
+
+  /**
+   * TWO LESSONS, which is the case with nowhere to link to.
+   *
+   * Two CLASSES is not it, and that was the first draft of these tests: the
+   * link is offered when one LESSON was chosen, however many classes it was
+   * going to, because one lesson has a page and four do not.
+   */
+  const sendTwoLessons = () => {
+    useLessonLibrary.mockReturnValue({
+      cards: [
+        { id: "l-1", title: "Fractions 3", meta: "Mathematics", kind: "normal" },
+        { id: "l-2", title: "Angles", meta: "Mathematics", kind: "normal" },
+      ],
+      live: true,
+      sample: false,
+      loading: false,
+      slow: false,
+    });
+    render(<AssignWizard />);
+    fireEvent.click(screen.getByRole("button", { name: /Fractions 3/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Angles/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: /JSS 2A/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm assignment" }));
+  };
+
+  it("still offers the link to the one lesson it is about", async () => {
+    create.mockRejectedValue(refuse("Fractions 3 has 2 sections waiting."));
+
+    sendOne();
+
+    await screen.findByText(/Fractions 3 has 2 sections waiting/);
+    expect(
+      screen.getByRole("link", { name: /Open the lesson and check them/i }),
+    ).toHaveAttribute("href", "/teacher/lessons/l-1");
+  });
+
+  it("adds no such clause when there IS one lesson to link to", async () => {
+    /*
+     * A mutation run found this unguarded: handing the single case the same
+     * clause changed nothing any test could see. It would say "Open THEM from
+     * your Library" about one lesson, directly above a link to that lesson.
+     */
+    create.mockRejectedValue(refuse("Fractions 3 has 2 sections waiting."));
+
+    sendOne();
+
+    await screen.findByText(/Fractions 3 has 2 sections waiting/);
+    expect(
+      screen.queryByText(/Open them from your Library/),
+    ).not.toBeInTheDocument();
+  });
+
+  it("adds where to go when there is no one lesson to link to", async () => {
+    // Two classes means no single lesson id to point at, so the clause that
+    // says where to go has to be in the text.
+    create.mockRejectedValue(refuse("Fractions 3 has 2 sections waiting."));
+
+    sendTwoLessons();
+
+    expect(
+      await screen.findByText(/Open them from your Library and check them/),
+    ).toBeInTheDocument();
+  });
+
+  it("does not run two sentences together when the server left no full stop", async () => {
+    create.mockRejectedValue(refuse("Fractions 3 has 2 sections waiting"));
+
+    sendTwoLessons();
+
+    expect(
+      await screen.findByText(/waiting\. Open them from your Library/),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps our own sentence when the server sent no message", async () => {
+    // An older deployment documents the code and not the prose. Falling back
+    // is the point: rendering nothing, or "undefined", would be worse than the
+    // sentence that names nothing.
+    create.mockRejectedValue(refuse());
+
+    sendOne();
+
+    expect(
+      await screen.findByText(/This lesson still has sections waiting for you/),
+    ).toBeInTheDocument();
+  });
+
+  it("says nothing of the sort for a refusal that is not this one", async () => {
+    // A 409 with another code, or none, is not this state - and must not
+    // borrow its sentence or its link.
+    create.mockRejectedValue(new ApiError(409, "Conflict", { detail: {} }));
+
+    sendOne();
+
+    expect(await screen.findByText(/try again/i)).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /Open the lesson/i }),
+    ).not.toBeInTheDocument();
   });
 });
