@@ -37,7 +37,7 @@ describe("finding the right note", () => {
     const { result } = renderHook(() => useAssignmentNote("a-2"));
 
     await waitFor(() =>
-      expect(result.current).toBe("Take your time on question 3."),
+      expect(result.current?.text).toBe("Take your time on question 3."),
     );
   });
 
@@ -56,7 +56,7 @@ describe("finding the right note", () => {
 
     const { result } = renderHook(() => useAssignmentNote("a-1"));
 
-    await waitFor(() => expect(result.current).toBe("Well done."));
+    await waitFor(() => expect(result.current?.text).toBe("Well done."));
   });
 });
 
@@ -117,5 +117,62 @@ describe("when there is nothing to show", () => {
     await settle();
 
     expect(result.current).toBeNull();
+  });
+});
+
+describe("who wrote it", () => {
+  it("carries the teacher who SET the assignment", async () => {
+    /*
+     * `assignedByName`, landed 24 Sep - and deliberately not
+     * `lesson.createdByName`, which is whoever authored the lesson and is a
+     * different person whenever somebody assigns a colleague's.
+     */
+    myDashboard.mockResolvedValue(
+      dash([{ id: "a-1", note: "Well done.", assignedByName: "Ms Adeyemi" }]),
+    );
+
+    const { result } = renderHook(() => useAssignmentNote("a-1"));
+
+    await waitFor(() => expect(result.current?.author).toBe("Ms Adeyemi"));
+  });
+
+  it("keeps the note when the name cannot be resolved", async () => {
+    /*
+     * THE ONE THAT MATTERS. Backend returns null rather than a placeholder for
+     * a deleted or unnamed account, on the principle we argued for - naming
+     * the wrong teacher is worse than naming none. A null name must therefore
+     * be an UNSIGNED note, never a withheld one: the words are still something
+     * a person typed to this child.
+     */
+    myDashboard.mockResolvedValue(
+      dash([{ id: "a-1", note: "Well done.", assignedByName: null }]),
+    );
+
+    const { result } = renderHook(() => useAssignmentNote("a-1"));
+
+    await waitFor(() => expect(result.current?.text).toBe("Well done."));
+    expect(result.current?.author).toBeNull();
+  });
+
+  it("does the same on a deployment that carries no name field at all", async () => {
+    // Neither field is in the schema's `required` list, so an older
+    // deployment sends neither. Absent and null land in the same place.
+    myDashboard.mockResolvedValue(dash([{ id: "a-1", note: "Well done." }]));
+
+    const { result } = renderHook(() => useAssignmentNote("a-1"));
+
+    await waitFor(() => expect(result.current?.text).toBe("Well done."));
+    expect(result.current?.author).toBeNull();
+  });
+
+  it("treats a whitespace-only name as no name", async () => {
+    myDashboard.mockResolvedValue(
+      dash([{ id: "a-1", note: "Well done.", assignedByName: "   " }]),
+    );
+
+    const { result } = renderHook(() => useAssignmentNote("a-1"));
+
+    await waitFor(() => expect(result.current?.text).toBe("Well done."));
+    expect(result.current?.author).toBeNull();
   });
 });

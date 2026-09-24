@@ -60,6 +60,26 @@ export interface Assignment {
    * wrong teacher is worse than naming none.
    */
   note: string | null;
+  /**
+   * WHO WROTE THE NOTE. Landed 24 Sep, and it is the teacher who SET the
+   * assignment - not `lesson.createdByName`, which is whoever authored the
+   * lesson and is a different person whenever somebody assigns a colleague's.
+   *
+   * **NULL IS NOT AN ERROR.** Backend: it is null rather than a placeholder
+   * when the name cannot be resolved - a deleted or unnamed account - on the
+   * principle we argued for, that naming the wrong teacher is worse than
+   * naming none. A null keeps the note and drops the name.
+   */
+  /**
+   * OPTIONAL, not just nullable, and the distinction is deliberate. Neither is
+   * in the schema's `required` list, so a deployment older than 24 Sep sends
+   * neither - and `undefined` there means "this deployment does not carry it",
+   * which is not the claim `null` makes ("this account has no resolvable
+   * name"). Both end at the same unsigned note, which is why neither is an
+   * error.
+   */
+  assignedByName?: string | null;
+  assignedById?: string | null;
   assignedAt: string;
 }
 

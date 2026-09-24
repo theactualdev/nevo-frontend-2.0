@@ -53,14 +53,23 @@ describe("whose voice it is", () => {
     expect(document.body.textContent).not.toMatch(/Nevo/);
   });
 
+  it("names the teacher when the wire carries one", () => {
+    // `assignedByName`, the teacher who SET the assignment.
+    render(<TeacherNote note="Well done last week." author="Ms Adeyemi" />);
+
+    expect(document.querySelector("figcaption")?.textContent).toBe(
+      "— Ms Adeyemi",
+    );
+  });
+
   it("invents no name for them", () => {
     /*
-     * THE CONSTRAINT THAT COST THE MOST TO HONOUR. Design asked for the
-     * teacher by name and the wire carries none - `AssignmentResponse` has
-     * `note` and nothing saying who wrote it. The available near-misses are
-     * `lesson.createdByName`, which is whoever authored the lesson rather than
-     * whoever set it, and the class's teacher LIST. Putting one teacher's name
-     * on another teacher's words is worse than not naming them.
+     * The wire carries a name as of 24 Sep, and it can still be null - a
+     * deleted or unnamed account. Backend returns null rather than a
+     * placeholder on the principle this component was built around: naming the
+     * wrong teacher is worse than naming none.
+     *
+     * So an unresolvable author is an UNSIGNED note, never a withheld one.
      */
     render(<TeacherNote note="Well done last week." />);
 
