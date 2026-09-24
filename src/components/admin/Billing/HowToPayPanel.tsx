@@ -108,12 +108,26 @@ export function HowToPayPanel({
    */
   billedIn: PricingCurrency | null;
   /** The backend has this transfer on file. */
-  recorded: PaymentOutcome | null;
-  onRecord: (
+  recorded?: PaymentOutcome | null;
+  /**
+   * OPTIONAL, AND THEIR ABSENCE IS A REAL CASE RATHER THAN A CONVENIENCE.
+   *
+   * D24's OB-04 shows the same account details during onboarding, where
+   * Paystack reconciles the transfer automatically off the reference -
+   * *"Use the reference so Paystack can match your payment automatically.
+   * This invoice then updates to Paid on its own."* There is nothing for a
+   * school to record there, so the control is not rendered.
+   *
+   * Without these the panel is exactly the half that is still true: here is
+   * where to send it, here is what to quote. Passing a no-op instead would
+   * have left "I've made this transfer" on a screen where pressing it does
+   * nothing.
+   */
+  onRecord?: (
     invoiceId: string,
     bankReference: string,
   ) => Promise<PaymentOutcome>;
-  onRecorded: (outcome: PaymentOutcome) => void;
+  onRecorded?: (outcome: PaymentOutcome) => void;
 }) {
   const [entering, setEntering] = useState(false);
   const [bankRef, setBankRef] = useState("");
@@ -134,7 +148,7 @@ export function HowToPayPanel({
     setSaving(true);
     setFailed(false);
     setFailedMessage(null);
-    onRecord(invoiceId, trimmed)
+    onRecord?.(invoiceId, trimmed)
       .then((outcome) => {
         /*
          * A 200 IS NOT AN ACCEPTANCE. `status` is
@@ -150,7 +164,7 @@ export function HowToPayPanel({
           setSaving(false);
           return;
         }
-        onRecorded(outcome);
+        onRecorded?.(outcome);
       })
       .catch(() => {
         // Stay open, keep their reference, and say nothing changed.
@@ -299,7 +313,7 @@ export function HowToPayPanel({
                 </button>
               </div>
             </div>
-          ) : (
+          ) : onRecord ? (
             <button
               type="button"
               onClick={() => setEntering(true)}
@@ -308,7 +322,7 @@ export function HowToPayPanel({
             >
               I&rsquo;ve made this transfer
             </button>
-          )}
+          ) : null}
         </div>
       </div>
     </>
