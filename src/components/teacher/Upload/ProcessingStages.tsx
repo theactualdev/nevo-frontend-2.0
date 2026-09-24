@@ -26,22 +26,28 @@ import { cn } from "@/lib/utils";
  * | Finding the sections      | `stage: "structure"`                  |
  * | Ready to assign           | `stage: "complete"`, `status: ready`  |
  *
- * **The fifth stage is struck, not pending.** Design ruled on 23 Sep: *"do not
- * hold it pending an enum. Adaptation in this product is generated on demand
- * at serve time and discarded, which means no adaptation work happens at
- * upload at all. There is no signal behind that stage because there is
- * nothing behind that stage. Four stages is not a degraded version of five,
- * it is the accurate one."* So the ask to backend is withdrawn and the brief
- * is wrong rather than this build.
+ * **The fifth stage was struck on 23 Sep, and the ground moved under the
+ * ruling the same day.** Design struck it because there was no work behind
+ * it: *"adaptation in this product is generated on demand at serve time and
+ * discarded, which means no adaptation work happens at upload at all... four
+ * stages is not a degraded version of five, it is the accurate one."* They
+ * attached a condition to their own ruling - *"if Teslim says otherwise and
+ * something genuinely is prepared at upload, bring it back to me with what
+ * that work is and I will re-rule."*
  *
- * WITH ONE CONTRADICTION STILL OPEN, and it is not mine to settle. Backend's
- * own figures for this same route are about 115 seconds of text work plus up
- * to 600 seconds per generated picture, AT UPLOAD - which is the measurement
- * the long-wait copy on this screen was built from on 18 Sep. If pictures are
- * made at upload then something IS prepared there, and design asked to be
- * brought back to in exactly that case. Put to both on 23 Sep. If backend is
- * right the fifth stage returns as the longest part of the wait; if design is
- * right, the long-wait copy is describing work that does not happen.
+ * BACKEND THEN SAID OTHERWISE AND NAMED THE WORK. `UploadStage` now reports
+ * `adaptations`, between `structure` and `complete`, covering pictures,
+ * narration and the two depth rewrites. It is deployed, and a live upload was
+ * watched reporting it. The condition design set has been met, so the ask is
+ * back with them with the work named.
+ *
+ * UNTIL THEY RULE, THE LADDER HOLDS - it does not grow a rung on this side.
+ * `adaptations` maps to "Finding the sections", the last rung that is true,
+ * because the alternative in place until now was a teacher walking BACKWARDS
+ * to "Receiving the file" and sitting there through the longest part of the
+ * wait. That is not a smaller version of the choice design is making. It is
+ * the bug that appeared the moment the enum gained a value this file did not
+ * know.
  *
  * ONE THING MOVES. The running stage carries the motion and nothing else does,
  * per LU-01 - five spinners is a screen that looks busier than the work is.
@@ -68,9 +74,16 @@ export const PROCESSING_STAGES: { key: StageKey; label: string }[] = [
  * `uploadId === null` is the POST still in flight: the file is being received,
  * and that is the one stage this side of the wire can see for itself.
  *
- * An unrecognised stage returns `receiving` rather than guessing forward - a
- * new enum value should hold the ladder where it is, not walk a teacher onto a
- * rung the server never mentioned.
+ * NOTHING HERE WALKS BACKWARDS, and that is the rule this function got wrong
+ * once. It is pure - it has no memory of where the ladder was - so "hold the
+ * ladder where it is" was never something it could do by answering with the
+ * first rung for a value it did not know. When `adaptations` arrived that is
+ * exactly what happened: the ladder reached "Finding the sections" and reset
+ * to "Receiving the file" for the rest of the parse.
+ *
+ * So an unrecognised stage returns `reading` rather than `receiving`. It is
+ * still a guess, but `receiving` is the one answer we KNOW to be false - the
+ * POST has plainly landed, because the server is the thing reporting a stage.
  */
 export function stageOf(
   uploadId: string | null,
@@ -81,9 +94,14 @@ export function stageOf(
   if (status === "ready" || status === "confirmed" || stage === "complete") {
     return "ready";
   }
-  if (stage === "structure") return "sections";
+  // `adaptations` comes AFTER `structure` and has no rung of its own until
+  // design re-rules, so it holds on the last rung that is true rather than
+  // this file inventing the fifth.
+  if (stage === "adaptations" || stage === "structure") return "sections";
   if (stage === "lessons") return "reading";
-  return "receiving";
+  // No stage at all is the gap between the POST resolving and the first poll
+  // answering, and there the file really has only been received.
+  return stage === null ? "receiving" : "reading";
 }
 
 const Mark = ({ state }: { state: "done" | "running" | "waiting" }) => {

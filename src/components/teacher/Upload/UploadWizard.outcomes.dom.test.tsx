@@ -95,6 +95,21 @@ const stagedState = (over: Record<string, unknown> = {}) => {
   };
 };
 
+/**
+ * A REAL ONE, captured from a live upload on 23 Sep.
+ *
+ * `error` had never been legible before that day: the status route answered
+ * 500 for every in-flight upload, so two screens rendered this field verbatim
+ * as the sentence a teacher reads, on nothing but an assumption about what it
+ * would hold. This is what it holds.
+ */
+const RAW_DB_ERROR =
+  "(sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) " +
+  "<class 'asyncpg.exceptions.UndefinedColumnError'>: column " +
+  '"depth_variants" of relation "lesson_segments" does not exist\n' +
+  "[SQL: INSERT INTO lesson_segments (lesson_id, parse_run_id, segment_key) " +
+  "VALUES ($1::UUID, $2::UUID, $3::VARCHAR)]";
+
 const startSingleUpload = () => {
   render(<UploadWizard />);
   fireEvent.click(screen.getByRole("button", { name: /one lesson/i }));
@@ -149,20 +164,25 @@ describe("a run that finished failed", () => {
     expect(screen.queryByText(/couldn’t reach Nevo/i)).not.toBeInTheDocument();
   });
 
-  it("says the server's own reason rather than guessing at one", () => {
-    // The backend knows why and we do not. This was being thrown away.
+  it("does not put the server's own error in front of a teacher", () => {
+    /*
+     * IT USED TO. The argument was that the backend knows why and we do not,
+     * which is true and is not the same as the backend having a sentence. A
+     * teacher whose lesson did not arrive would have read a driver exception
+     * with the failing INSERT and its bound UUIDs in it.
+     */
     stagedState({
       uploadId: "u-1",
       failed: true,
       failureKind: "parse",
-      error: "The document had no readable text after page 3.",
+      error: RAW_DB_ERROR,
     });
 
     startSingleUpload();
 
     expect(
-      screen.getByText("The document had no readable text after page 3."),
-    ).toBeInTheDocument();
+      screen.queryAllByText(/asyncpg|depth_variants|INSERT INTO/i),
+    ).toHaveLength(0);
   });
 
   it("does not open the lesson that was never built", () => {
@@ -211,19 +231,21 @@ describe("a parse that stopped is not a file that was bad", () => {
     ).toBeInTheDocument();
   });
 
-  it("still leads with the server's own reason where it gave one", () => {
+  it("says our own sentence even when the server sent one of its own", () => {
+    // The screen reads the same whether or not `error` is set, which is the
+    // whole point: there is no input that turns this paragraph into the
+    // server's words.
     stagedState({
       uploadId: "u-1",
       failed: true,
       failureKind: "parse",
-      error: "The document had no readable text after page 3.",
+      error: RAW_DB_ERROR,
     });
 
     startSingleUpload();
 
-    expect(
-      screen.getByText("The document had no readable text after page 3."),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/ours to sort out/i)).toBeInTheDocument();
+    expect(screen.queryAllByText(/asyncpg/i)).toHaveLength(0);
   });
 });
 
@@ -382,5 +404,23 @@ describe("the same failures on a whole unit", () => {
     startUnitUpload();
 
     expect(screen.getByText(/couldn’t finish that one/i)).toBeInTheDocument();
+  });
+
+  it("keeps the server's error off the block screen too", () => {
+    // The same field was rendered on both paths, so removing it from one
+    // would have left a teacher uploading a unit reading the exception.
+    stagedState({
+      uploadId: "u-1",
+      failed: true,
+      failureKind: "parse",
+      error: RAW_DB_ERROR,
+    });
+
+    startUnitUpload();
+
+    expect(screen.getByText(/started and stopped partway/i)).toBeInTheDocument();
+    expect(
+      screen.queryAllByText(/asyncpg|depth_variants|INSERT INTO/i),
+    ).toHaveLength(0);
   });
 });

@@ -38,7 +38,7 @@ describe("which stage the server has actually reached", () => {
     expect(stageOf(null, "complete", "ready")).toBe("receiving");
   });
 
-  it("reads the two stages the contract names", () => {
+  it("reads the stages the contract names", () => {
     expect(stageOf("u-1", "lessons", "processing")).toBe("reading");
     expect(stageOf("u-1", "structure", "processing")).toBe("sections");
   });
@@ -49,13 +49,31 @@ describe("which stage the server has actually reached", () => {
     expect(stageOf("u-1", "structure", "confirmed")).toBe("ready");
   });
 
-  it("holds where it is on a stage value it does not know", () => {
+  it("holds the long stage on the last rung that is true", () => {
     /*
-     * A new enum value should not walk a teacher onto a rung the server
-     * never mentioned. Holding is the conservative direction: it under-claims
-     * rather than announcing progress that may not have happened.
+     * `adaptations` joined the enum on 23 Sep, between `structure` and
+     * `complete`, and it is the longest part of the wait by a wide margin -
+     * pictures, narration and the two depth rewrites. It has no rung of its
+     * own until design rules on one, so it holds on the last rung that is
+     * true. Without this line a real upload walked a teacher BACK to
+     * "Receiving the file" and left them there for all of it.
      */
-    expect(stageOf("u-1", "polishing" as never, "processing")).toBe("receiving");
+    expect(stageOf("u-1", "adaptations", "processing")).toBe("sections");
+  });
+
+  it("never walks backwards on a stage value it does not know", () => {
+    /*
+     * This function is pure, so it cannot literally hold - it has no memory
+     * of the rung before. What it can do is refuse the one answer it KNOWS to
+     * be false: the file has plainly been received, because the server is the
+     * thing reporting a stage at all.
+     */
+    expect(stageOf("u-1", "polishing" as never, "processing")).toBe("reading");
+  });
+
+  it("is still receiving when no stage has been reported at all", () => {
+    // The gap between the POST resolving and the first poll answering.
+    expect(stageOf("u-1", null, "processing")).toBe("receiving");
   });
 });
 

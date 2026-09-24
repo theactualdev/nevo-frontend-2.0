@@ -75,7 +75,22 @@ export interface StagedUpload {
    * was reported as our server being unreachable.
    */
   failureKind: "file" | "parse" | "request" | null;
-  /** The server's own reason, when it gave one. */
+  /**
+   * The server's own reason, when it gave one - AND NOT SOMETHING TO SHOW A
+   * TEACHER.
+   *
+   * This field was unreadable until 23 Sep: the status route answered 500 for
+   * the whole in-flight window, so nobody had ever seen what `error` actually
+   * contains. The first real one, captured on a live upload that day, was a
+   * raw asyncpg exception - driver class, the full INSERT statement, bound
+   * UUIDs. Two screens were rendering it verbatim as the sentence a teacher
+   * reads when their upload fails.
+   *
+   * So it stays on the hook, because it is the contract's answer and it is
+   * what gets quoted in a bug report, and nothing renders it. If a
+   * teacher-safe message is wanted on that screen it needs to be a field that
+   * promises to be one; asked of backend on 23 Sep.
+   */
   error: string | null;
   /**
    * The backend's reference for a failure nobody planned for.
