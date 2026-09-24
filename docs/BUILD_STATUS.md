@@ -83,6 +83,50 @@ Do not build from either again.
 `AGENTS.md` now carries the ten rules and a read-before-you-build table, so every
 session loads them without anyone having to remember to say so.
 
+### Two copies design supplied, 24 Sep - and one of them is a behaviour
+
+**The warm-up card once today's is done.** *"Today's warm-up is done." / "Come
+back tomorrow."* - and the half that is not copy: **it stops being an action.**
+Design: *"no tap, no navigation into the done state, because a card that looks
+tappable and lands somewhere inert is worse than a card that plainly says it
+has finished."* So the control is GONE rather than disabled or greyed, the
+rotating chip goes with it (it names a task no longer on offer), and the dots
+stop animating, because nothing is waiting to be done. No praise, no score,
+nothing about how it went - the same line the run's own done state holds.
+
+This existed because the run became once-a-day on 23 Sep and the card did not:
+it kept saying "Begin warm-up" and led to a screen saying the opposite.
+
+**The dead join link.** *"This link is not working any more." / "Ask your
+teacher to send you a new one."* **The change is the tense.** It read "This
+link isn't working right now", which says TEMPORARY - so a child waits, or
+tries the same revoked link again. It will never work, and the next action is
+to ask for a different one, so the copy closes the first door before opening
+the second. Two lines because they are two things: what happened, and what to
+do.
+
+**A MUTATION SURVIVED, AGAIN ON THE WIRING RATHER THAN THE COMPONENT.**
+`WarmUpCard` takes `done` as a prop and its own tests pass it, so hard-coding
+`done={false}` on the dashboard passed every one of them - the card was right
+and was never asked. Third time this week the same shape has got through: the
+thing that RENDERS is covered and the thing that DECIDES is not.
+
+**What did NOT change, and design agrees.** The narrowing-to-secondary clause:
+*"You are right and my line overreached. Narrowing to secondary is a decision
+about which schools we sell to first. It is not an instruction to delete
+anything."* `MODALITY.AUDIO` stays - it is a channel the multi-modality system
+switches between and every segment must support at least two. All four baseline
+bands stay in the system, with JSS and SS configured for launch and the two
+primary bands unused rather than cut. The probe item set is generated per
+subject with band as a field on an item, so SCRUM-176's count is unaffected.
+
+**Still not ours and now ticketed:** `offer_hint` and `show_socratic_panel`
+are never emitted by the engine, so a frustrated child gets no hint and a
+confused one no guided questions. `FrustrationHint` and `ConfusionSupport`
+are built and correct; the gap is entirely engine-side. Design is raising it as
+its own ticket rather than leaving it in the vocabulary thread.
+
+
 ### Nine signal types were being thrown away at our own door, 24 Sep
 
 Found while answering a backend question about `module_boundary_action`, which

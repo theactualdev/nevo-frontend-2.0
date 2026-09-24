@@ -1439,15 +1439,15 @@ daily lesson path.
    IT IS REACHABLE. Design: *"I need to be able to send it."* Row closed.
 6. ~~**QR scanning**~~ **DEFERRED 23 SEP.** Closed as a question; the welcome sheet keeps
    what it has.
-7. ~~**A system voice reading to six-year-olds**~~ **OUT OF SCOPE 23 SEP** — and the
-   reason is much larger than the item. Design: *"we are narrowing to secondary for
-   launch, which takes the youngest band and everything audio-led with it."*
-   **That clause is a product scope change and it arrived as the justification for
-   closing a minor row.** It reaches the baseline's four bands (`p13`, `p46`, `jss`,
-   `ss` — secondary is the last two), the probe item set, SCRUM-176's count, and
-   `MODALITY.AUDIO`, which is a channel the multi-modality system switches between
-   rather than a feature. **Nothing has been changed on the strength of it.** See
-   `docs/RULINGS_23_SEP.md` §3.
+7. ~~**A system voice reading to six-year-olds**~~ **OUT OF SCOPE 23 SEP**, and the
+   clause that came with it was **RETRACTED BY DESIGN ON 24 SEP**: *"you are right and my
+   line overreached. Narrowing to secondary is a decision about which schools we sell to
+   first. It is not an instruction to delete anything."*
+   **So nothing is cut.** `MODALITY.AUDIO` stays — it is a channel the multi-modality
+   system switches between, and every segment must support at least two. All four baseline
+   bands stay in the system, with JSS and SS configured for launch and the two primary
+   bands unused rather than removed. The probe item set is generated per subject with band
+   as a field on an item, so SCRUM-176's count is unaffected. Raising it was right.
 8. ~~**No escape from the rotate prompt** — SEND-relevant.~~ **RULED AND SHIPPED 17 Sep
    (#435).** Design: *"Build it now."* A tablet clamped to a wheelchair tray does not turn,
    so "My tablet doesn't turn" lets the child through and is remembered per device. Verified
@@ -1464,11 +1464,12 @@ daily lesson path.
    **Still open, and it is copy rather than a decision:** the dashboard card still reads
    "Begin warm-up" once today's is done. Tapping it lands on the done state, which is
    honest but not what the card should say. Not invented — design has given no words.
-10. **The nothing-landed result copy**, and **`invalid_session`** — **HALF RULED 23 SEP.**
-    `invalid_session` **gets its own words**: design, *"nothing landed and a dead link are
-    different problems with different next actions, and giving them the same copy sends a
-    child to try something that cannot work."* **The copy itself has not been supplied**,
-    so this is blocked on words rather than on a decision.
+10. **The nothing-landed result copy**, and ~~**`invalid_session`**~~ — **THE DEAD-LINK
+    HALF IS RULED AND BUILT, 24 Sep.** Design supplied the words: *"This link is not
+    working any more." / "Ask your teacher to send you a new one."* The change is the
+    tense — the old copy said "isn't working right now", which reads as temporary, so a
+    child waits or retries a link that will never work. **The nothing-landed result copy
+    is still outstanding.**
 11. ~~**Where the teacher's note goes.**~~ **RULED AND BUILT 23 SEP.** Design: *"it
     appears on the lesson screen, attributed to the teacher by name, drawn so it is
     unmistakably a person's words rather than Nevo's. It never enters anything Nevo

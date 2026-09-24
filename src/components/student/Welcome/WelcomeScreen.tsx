@@ -69,8 +69,8 @@ export function WelcomeScreen({
   /*
    * A DEAD LINK SAID SO AT THE END OF ONBOARDING, OR NEVER.
    *
-   * `linkError` renders "This link isn't working right now, ask your teacher
-   * for a new one" and NOTHING EVER SET IT - the prop had no caller anywhere.
+   * `linkError` renders the dead-link copy and NOTHING EVER SET IT - the prop
+   * had no caller anywhere.
    * So an expired or revoked invitation looked exactly like a good one: the
    * child gave their name, their school, their class and sat the whole motor
    * baseline, and the link was only redeemed at PIN creation - where it failed
@@ -173,9 +173,22 @@ export function WelcomeScreen({
         </p>
 
         {badLink ? (
-          <p className="mt-10 w-full max-w-[480px] text-center text-sm text-nevo-near-black/70 sm:mt-11">
-            This link isn&apos;t working right now, ask your teacher for a new one.
-          </p>
+          /*
+           * DESIGN'S WORDS, 24 Sep, and the change is the tense.
+           *
+           * This read "This link isn't working right now", which says
+           * TEMPORARY - and a child who reads that waits, or tries again
+           * later, on a link that has been revoked or has expired and will
+           * never work. The next action is to ask for a different one, so the
+           * copy has to close the first door before it opens the second.
+           *
+           * Two lines rather than one because they are two different things:
+           * what happened, and what to do about it.
+           */
+          <div className="mt-10 w-full max-w-[480px] text-center text-sm text-nevo-near-black/70 sm:mt-11">
+            <p>This link is not working any more.</p>
+            <p className="mt-1">Ask your teacher to send you a new one.</p>
+          </div>
         ) : (
           <div className="mt-7 flex w-full flex-col gap-2 sm:mt-8 sm:max-w-[480px]">
             <Button
