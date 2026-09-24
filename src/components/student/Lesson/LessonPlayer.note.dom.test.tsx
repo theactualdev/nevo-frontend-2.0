@@ -64,7 +64,7 @@ const next = () => screen.getByRole("button", { name: /next/i });
 
 beforeEach(() => {
   trackEvent.mockReset();
-  note.mockReturnValue(NOTE);
+  note.mockReturnValue({ text: NOTE, author: null });
 });
 
 afterEach(() => {
@@ -125,5 +125,30 @@ describe("what must not happen to it", () => {
 
     expect(noteOnScreen()).toBeInTheDocument();
     expect(noteOnScreen()?.textContent).toBe(NOTE);
+  });
+});
+
+describe("who it is from", () => {
+  it("signs it with the teacher who set the work", () => {
+    note.mockReturnValue({ text: NOTE, author: "Ms Adeyemi" });
+
+    render(<LessonPlayer lesson={LESSON} plan={PLAN} assignmentId="a-1" />);
+
+    expect(screen.getByText("— Ms Adeyemi")).toBeInTheDocument();
+  });
+
+  it("still shows the words when the name cannot be resolved", () => {
+    /*
+     * Backend returns null rather than a placeholder for a deleted or unnamed
+     * account, on the principle this whole surface was built around. A note
+     * without a name is UNSIGNED, never withheld - a person still typed it to
+     * this child.
+     */
+    note.mockReturnValue({ text: NOTE, author: null });
+
+    render(<LessonPlayer lesson={LESSON} plan={PLAN} assignmentId="a-1" />);
+
+    expect(noteOnScreen()).toBeInTheDocument();
+    expect(screen.getByText("— Your teacher")).toBeInTheDocument();
   });
 });

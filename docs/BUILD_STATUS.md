@@ -83,6 +83,44 @@ Do not build from either again.
 `AGENTS.md` now carries the ten rules and a read-before-you-build table, so every
 session loads them without anyone having to remember to say so.
 
+### Backend answered both, same day, 24 Sep - and both are consumed
+
+**`module_boundary_action` is in the enum, and we have stopped dropping it.**
+It was the one genuine gap in `CLIENT_ONLY_EVENT_TYPES` - a signal collected
+on device and discarded at our own door because the ingest enum had no value
+for it. `SignalEventType` is 32 now. Both halves of a module boundary travel:
+that a child reached one, and what they chose there.
+
+**The confusion was worth having, and backend named it better than I did:**
+*"You said 'signals' and I heard 'thresholds' because I'd been staring at
+`monitor_break_thresholds`, which has exactly five of them - so I found a five
+that matched and asked you to reconcile it against a list you'd never been
+talking about."* Inputs we report and outputs they compute are different lists
+on different sides of the wire, and `triggeredThresholds` is typed
+`array<string>` with no enum, so their five were never visible to us at all.
+
+**`assignedByName` and `assignedById` are on `AssignmentResponse`**, resolved
+from the teacher who SET the assignment - deliberately not the lesson's author,
+which is a different person whenever somebody assigns a colleague's lesson.
+That completes design's ruling of 23 Sep, which asked for the note to be
+attributed by name and shipped unsigned because nothing on the wire said who
+wrote it.
+
+**NULL IS NOT AN ERROR, AND THE REASON IS OURS.** Backend: *"assignedByName is
+null rather than a placeholder when the name can't be resolved. Your own
+principle - naming the wrong teacher is worse than naming none - so a deleted
+or unnamed account gives you nothing and you keep 'Your teacher' for that case.
+Don't treat null as an error."* So an unresolvable author is an UNSIGNED note,
+never a withheld one: the words are still something a person typed to this
+child, and they reach them either way.
+
+**TYPED OPTIONAL RATHER THAN MERELY NULLABLE**, because neither field is in the
+schema's `required` list. A deployment older than today sends neither, and
+`undefined` there means "this deployment does not carry it" - which is not the
+claim `null` makes. Both end at the same unsigned note, which is why neither is
+an error, but they are not the same fact.
+
+
 ### Two copies design supplied, 24 Sep - and one of them is a behaviour
 
 **The warm-up card once today's is done.** *"Today's warm-up is done." / "Come

@@ -1263,7 +1263,12 @@ export function LessonPlayer({
 
             It is deliberately NOT inside the density path - see TeacherNote.
           */}
-          {index === 0 && teacherNote && <TeacherNote note={teacherNote} />}
+          {index === 0 && teacherNote && (
+            <TeacherNote
+              note={teacherNote.text}
+              author={teacherNote.author}
+            />
+          )}
           {feedback && <FeedbackStrip message={feedback} />}
           {stepUpOffered && !spentEscalations.has(segment.id) && (
               <DifficultyOfferPill

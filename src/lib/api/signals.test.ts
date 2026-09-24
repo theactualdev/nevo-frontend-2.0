@@ -68,18 +68,22 @@ describe("the four we asked for and were dropping", () => {
 });
 
 describe("what still does not leave the device", () => {
-  it("holds back the one type the enum has no value for", async () => {
+  it("sends what a child did at a module boundary, now that it can", async () => {
     /*
-     * `module_boundary_action` is the sibling of `module_boundary_reached` and
-     * the only genuine gap left. One unknown type rejects the WHOLE batch with
-     * a 422, so sending it would lose every signal beside it.
+     * `module_boundary_action` was the one genuine gap in this list - a signal
+     * we collected on device and dropped at the door, because the enum had no
+     * value for it. Backend added it on 24 Sep, so both halves of a boundary
+     * now travel: that a child reached one, and what they chose there.
      */
     await signalsApi.submitBatch(SESSION, [
       event(SIGNAL_EVENT_TYPES.MODULE_BOUNDARY_REACHED),
       event(SIGNAL_EVENT_TYPES.MODULE_BOUNDARY_ACTION),
     ]);
 
-    expect(sentTypes()).toEqual(["module_boundary_reached"]);
+    expect(sentTypes()).toEqual([
+      "module_boundary_reached",
+      "module_boundary_action",
+    ]);
   });
 
   it("holds back the interface's own instrumentation", async () => {
@@ -94,7 +98,7 @@ describe("what still does not leave the device", () => {
 
   it("makes no request at all when nothing in the batch can be sent", async () => {
     const out = await signalsApi.submitBatch(SESSION, [
-      event(SIGNAL_EVENT_TYPES.MODULE_BOUNDARY_ACTION),
+      event(SIGNAL_EVENT_TYPES.SESSION_CONTEXT),
     ]);
 
     expect(post).not.toHaveBeenCalled();

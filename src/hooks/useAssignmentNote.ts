@@ -20,9 +20,23 @@ import { studentsApi } from "@/lib/api/students";
  * Returns null whenever there is nothing to show - no assignment, no note, a
  * note that is only whitespace, or a read that did not answer. A lesson opened
  * from the library has no assignment at all, which is the truth about it.
+ *
+ * **THE NAME IS SEPARATE FROM THE NOTE, and may be absent while the note is
+ * not.** `assignedByName` is null when the account cannot be resolved, which
+ * is backend honouring the same rule we do: naming the wrong teacher is worse
+ * than naming none. So a null name is a note that stays unsigned, never a note
+ * that is withheld.
  */
-export function useAssignmentNote(assignmentId?: string): string | null {
-  const [note, setNote] = useState<string | null>(null);
+export interface TeacherNoteFromAssignment {
+  text: string;
+  /** Null when the account has no resolvable name. Not an error. */
+  author: string | null;
+}
+
+export function useAssignmentNote(
+  assignmentId?: string,
+): TeacherNoteFromAssignment | null {
+  const [note, setNote] = useState<TeacherNoteFromAssignment | null>(null);
 
   useEffect(() => {
     if (!assignmentId) return;
@@ -34,7 +48,8 @@ export function useAssignmentNote(assignmentId?: string): string | null {
         if (cancelled) return;
         const row = dash.assignments?.find((a) => a.id === assignmentId);
         const text = row?.note?.trim();
-        setNote(text ? text : null);
+        if (!text) return;
+        setNote({ text, author: row?.assignedByName?.trim() || null });
       })
       .catch(() => {
         /*

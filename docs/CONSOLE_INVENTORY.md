@@ -1392,7 +1392,7 @@ daily lesson path.
 | Blocked | The ask |
 |---|---|
 | 1. ~~Affective adaptation~~ **MOSTLY WRONG, corrected 17 Sep (#441)** | The transport exists and is `AdaptResponse.proactiveAdjustment.action`, typed at `intelligence.ts:151` and read by nothing until #441. **The zero-match search was the error, not the finding:** frontend §4 says the frontend receives an INSTRUCTION and never knows which state is active, so the absence of `affect`/`frustration`/`boredom` on the wire is the design working. Do not re-run that search and re-draw this conclusion. `modulate_density` and `increase_difficulty` are applied; `offer_break` had a richer seam already. **Two narrow asks survive, as rows 13 and 14** |
-| ~~2. Break and boundary signals~~ **FOUR OF FIVE DELIVERED — AND WE WERE STILL DROPPING ALL FOUR UNTIL 24 SEP** | `SignalEventType` went 27 → 31 and `break_start`, `break_end`, `feeling_checkin` and `module_boundary_reached` all landed. **This row said "buildable now" on 23 Sep and that was wrong in a way worth recording: they were delivered and not reaching the engine**, because `signals.ts` filtered every event against a hand-maintained ALLOW-LIST of the enum that had gone stale at 22 values. Nine types were dropped before each batch was posted, silently. The list is inverted now — it names the seven types we invent, and lets everything else through — so a value backend adds flows without a client change. **`module_boundary_action` is the one genuine gap left**: the sibling of `module_boundary_reached`, carrying what a child did at a boundary (`"continue"` or `"break"`). It stays filtered because one unknown type 422s the whole batch. Backend asked us to name it precisely; done 24 Sep |
+| ~~2. Break and boundary signals~~ **ALL FIVE DELIVERED AND ALL FIVE CONSUMED, 24 Sep** | `SignalEventType` is 32 values. `module_boundary_action` — the sibling of `module_boundary_reached`, carrying what a child chose at a boundary (`"continue"` or `"break"`) — landed the day it was named precisely, and the filter that had been dropping it is gone. **Two corrections this row carried on the way:** it said "buildable now" on 23 Sep when four of the five were delivered and still being discarded by our own stale allow-list; and the ask took three rounds because backend read "signals" as "thresholds", their five living on `breakSuggestion.triggeredThresholds`, which is typed `array<string>` with no enum and so was never visible to us |
 | 3. An assessment-attempt store | Nothing in the 188 paths reads back a child's per-question answers. `POST /api/mastery/update` is a mastery update, not an attempt record. Today "Review answers" works only in the tab the child answered in |
 | ~~4. Reading-density reshapes~~ **CLOSED 23 SEP — all three thirds** | **Slower** shipped 17 Sep. **Simplify** shipped 23 Sep (#514, #527): design ruled `simplify` IS the 17 Sep control, one path with two callers, and `depthVariants.simplified` is the text — it was never `textVariant`, which is why the freeze on that field never needed to hold this. **Expand** is unblocked by the same delivery: design deferred it for lack of content and `depthVariants.expanded` is that content. `availableDepths` now goes back on the adapt request so the engine never instructs a reshape a segment has not got. **`modulate_density` is a SEPARATE instruction** — backend: it maps to `segments[].density` (`low|medium|high`), which is how much is on screen rather than which words, and a child can get both in one response |
 | ~~**FROZEN 18 Sep — what is `textVariant.body` relative to `segment.body`?**~~ **SIMPLIFY UNFROZE AND SHIPPED 23 SEP; THE FIELD QUESTION DID NOT.** Design: *"one is asked for by the child, one is decided by the engine, and what happens on screen is identical. Build it as a single path with two callers."* Built as `densityForAction`, joining the engine's instruction to the density the child's own chip sets — **and it turned out three instructions were already arriving and doing nothing**, because `ADJUSTMENT_ACTIONS` predated `ProactiveAction` and shared two values with it. No new gate was needed: `densitySegments` already refuses a density a segment cannot deliver, so an instruction the content cannot honour renders the default and claims nothing. **The field question stays open on its own merits and is NOT closed by this:** `fromContent.ts:143` still builds the child's text from `segment.body`, nothing student-side touches `segment.textVariant`, and the teacher's `LiveVariantReview` still reads `textVariant` — so the inference that a teacher approves one text while a child reads another is unanswered. It was simply never what stood between the instruction and the screen. Also still open: whether `keyPoints` is a terser rendering of the whole segment or highlights beside it |
@@ -1470,16 +1470,16 @@ daily lesson path.
     tense — the old copy said "isn't working right now", which reads as temporary, so a
     child waits or retries a link that will never work. **The nothing-landed result copy
     is still outstanding.**
-11. ~~**Where the teacher's note goes.**~~ **RULED AND BUILT 23 SEP.** Design: *"it
-    appears on the lesson screen, attributed to the teacher by name, drawn so it is
-    unmistakably a person's words rather than Nevo's. It never enters anything Nevo
-    generates about that child, and it is never rewritten, summarised or adapted."*
-    Built as `TeacherNote`, on the first segment, deliberately outside the reading-density
-    path because "never adapted" means it is not a variant of anything.
-    **ONE PART OF THE RULING COULD NOT BE BUILT: the name.** Nothing on the wire says who
-    wrote a note — no `teacherName`, `assignedBy` or equivalent in 406 schemas — and the two
-    near-misses both misattribute: `lesson.createdByName` is the lesson's AUTHOR, and
-    `/classes/{id}/teachers` is a list. It ships signed "Your teacher". **Backend ask filed.**
+11. ~~**Where the teacher's note goes.**~~ **RULED AND BUILT 23 SEP; NAMED 24 SEP.** Design:
+    *"it appears on the lesson screen, attributed to the teacher by name, drawn so it is
+    unmistakably a person's words rather than Nevo's."* Built as `TeacherNote`, on the
+    first segment, outside the reading-density path because "never adapted" means it is
+    not a variant of anything.
+    **The name shipped a day late and that was the wire, not the design.** `assignedByName`
+    landed 24 Sep, resolved from the teacher who SET the assignment rather than the
+    lesson's author. **Null is not an error** — backend returns it rather than a
+    placeholder for a deleted or unnamed account, on the principle this surface was built
+    around, so an unresolvable author is an UNSIGNED note and never a withheld one.
 12. ~~**Four PIN boxes or six.**~~ **SETTLED 21 Sep: FOUR. The 28c redraw stands, and
     this is not to be raised again.** Closed as a design question.
     **Implementing it is a BACKEND change, not a frontend one, and that is a contract

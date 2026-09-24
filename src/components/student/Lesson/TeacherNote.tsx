@@ -40,21 +40,26 @@ import { cn } from "@/lib/utils";
  * and nothing else: not sent to the engine, not put in the Ask Nevo context,
  * not stored. It arrives on the child's own dashboard read and stops here.
  *
- * **Attributed by name - and THE NAME DOES NOT EXIST ON THE WIRE.**
- * `AssignmentResponse` carries `note` and nothing that says who wrote it; a
- * search of all 406 schemas finds no `teacherName`, `assignedBy` or
- * equivalent. `lesson.createdByName` is the lesson's AUTHOR, which is a
- * different person whenever a teacher assigns someone else's lesson, and
- * `/classes/{id}/teachers` returns a LIST rather than an author. Putting one
- * teacher's name on another teacher's words is worse than not naming them, so
- * this ships attributed-but-unnamed and the field is a backend ask. See
- * `docs/BUILD_STATUS.md`.
+ * **Attributed by name, as of 24 Sep.** `assignedByName` is the teacher who
+ * SET the assignment - deliberately not `lesson.createdByName`, which is
+ * whoever authored the lesson and is a different person whenever somebody
+ * assigns a colleague's.
+ *
+ * **AND IT STILL SIGNS "Your teacher" WHEN THE NAME IS NULL.** Backend returns
+ * null rather than a placeholder for a deleted or unnamed account, on the
+ * principle this component was built around: naming the wrong teacher is worse
+ * than naming none. So an unresolvable author is a note that stays unsigned,
+ * never a note that is withheld - the words are the thing a teacher typed to
+ * this child, and they reach them either way.
  */
 export function TeacherNote({
   note,
+  author = null,
   className,
 }: {
   note: string;
+  /** The teacher who set the assignment. Null is unsigned, never an error. */
+  author?: string | null;
   className?: string;
 }) {
   return (
@@ -71,13 +76,13 @@ export function TeacherNote({
         {note}
       </blockquote>
       {/*
-        NOT "Nevo" and NOT a guessed name. "Your teacher" is the most this can
-        truthfully say until the wire carries one - and it still does the job
-        the attribution exists for, which is to tell a child a person wrote
-        this rather than a system.
+        NOT "Nevo", and never a guessed name. A resolvable teacher is named;
+        anyone else is "Your teacher", which is the most this can truthfully
+        say and still does the job the attribution exists for - telling a child
+        that a person wrote this rather than a system.
       */}
       <figcaption className="mt-2 text-[12.5px] text-nevo-near-black/55">
-        — Your teacher
+        — {author ?? "Your teacher"}
       </figcaption>
     </figure>
   );

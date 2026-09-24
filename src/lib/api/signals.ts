@@ -53,6 +53,11 @@ export interface SignalBatchReceipt {
  * The types we emit that the ingest enum does NOT accept, so they are dropped
  * before a batch is posted.
  *
+ * **EVERY ENTRY IS NOW GENUINELY OURS.** `module_boundary_action` sat here as
+ * the one real gap - a signal we collected and discarded because the enum had
+ * no value for it - and backend added it on 24 Sep. Nothing here is waiting on
+ * anybody any more; if that changes, say so on the line.
+ *
  * **THIS USED TO BE THE OTHER WAY ROUND, AND IT COST US NINE SIGNAL TYPES.**
  * It was an allow-list naming every value the backend accepted - a second copy
  * of `SignalEventType` maintained by hand - and the enum grew from 22 to 31
@@ -71,14 +76,6 @@ export interface SignalBatchReceipt {
  * Each entry says why it is ours rather than theirs.
  */
 const CLIENT_ONLY_EVENT_TYPES = new Set<string>([
-  /**
-   * ASKED FOR AND NOT YET IN THE ENUM - the one genuine gap here.
-   * `module_boundary_reached` landed; its sibling did not, so what a child
-   * DID at a boundary ("continue" or "break") is collected and dropped every
-   * time. Raised with backend 23 Sep; delete this line when it lands.
-   */
-  "module_boundary_action",
-
   // Client-only instrumentation. These describe the interface's own state
   // rather than anything a child did, and have never been asked for.
   "system_busy",
