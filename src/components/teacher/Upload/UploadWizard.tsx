@@ -16,7 +16,7 @@ import {
 } from "./ParseFallback";
 import { LiveModuleReview } from "./LiveModuleReview";
 import { PARSE_STAGES, ParseProgress, rungFor } from "./ParseProgress";
-import { ProcessingStages, stageOf } from "./ProcessingStages";
+import { LONGEST_STAGE, ProcessingStages, stageOf } from "./ProcessingStages";
 import { SectionReview } from "./SectionReview";
 import { LiveStructureTree } from "./LiveStructureTree";
 import { StructureTree } from "./StructureTree";
@@ -243,6 +243,14 @@ export function UploadWizard() {
   );
 
   const isBlock = scope !== null && scope !== "single";
+  /**
+   * Which rung the single-lesson ladder is on.
+   *
+   * Read twice now - by the ladder and by the sentence under it - so it is
+   * derived once rather than computed in two places that could disagree about
+   * the same upload.
+   */
+  const singleStage = stageOf(staged.uploadId, staged.stage, staged.status);
   /**
    * The single lesson's parse has settled and its structure is on screen.
    *
@@ -913,10 +921,7 @@ export function UploadWizard() {
              * product has hung".
              */
             <div className="w-full rounded-[16px] bg-nevo-cream-elevated p-9 shadow-elevation-1">
-              <ProcessingStages
-                lessonName={blockName}
-                current={stageOf(staged.uploadId, staged.stage, staged.status)}
-              />
+              <ProcessingStages lessonName={blockName} current={singleStage} />
               <p className="mt-6 max-w-[440px] text-[14.5px] leading-[1.5] text-nevo-near-black/60">
                 {/* The leave-and-return promise, in the frame's own words.
                     It is TRUE and has been since the single path moved to
@@ -930,8 +935,35 @@ export function UploadWizard() {
                     statement about the work rather than an invitation to go,
                     until there is somewhere to come back from. */}
                 Carry on &mdash; we&rsquo;ll tell you when it&rsquo;s ready.
+                {/*
+                  WHAT THE WAIT IS, SAID ON THE RUNG THAT IS LONG.
+
+                  LU-01's frame carries "This usually takes under a minute",
+                  which we never shipped - and design struck it on 24 Sep for
+                  the reason it was never shipped: *"if a single picture can
+                  take ten minutes, that line is a lie and it has to go...
+                  a teacher who was promised a minute and waits twelve
+                  concludes the product is broken."*
+
+                  NO FIGURE HERE EITHER, in place of a wrong one. Backend
+                  measures this stage in minutes per picture and the server
+                  reports no estimate for any given lesson, so a number would
+                  be a promise a teacher can time and we cannot keep. What can
+                  be said is WHICH part is long and WHY, on the rung where it
+                  is happening.
+                */}
+                {singleStage === LONGEST_STAGE &&
+                  " This part is the long one — Nevo is making the pictures and the spoken version, and that runs into minutes."}
+                {/*
+                  THE SLOW LINE USED TO BLAME THE DOCUMENT'S LENGTH - "a longer
+                  document takes longer to read" - and that is the wrong
+                  explanation: the minutes go on making pictures, not on
+                  reading. The half that mattered stays, because a wait running
+                  long has to say so rather than leaving a teacher to conclude
+                  the product has hung.
+                */}
                 {staged.slow &&
-                  " This one is taking a while. It hasn’t stalled; a longer document takes longer to read."}
+                  " This one is taking a while. It hasn’t stalled."}
               </p>
             </div>
           )}

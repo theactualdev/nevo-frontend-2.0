@@ -424,3 +424,55 @@ describe("the same failures on a whole unit", () => {
     ).toHaveLength(0);
   });
 });
+
+/**
+ * WHAT THE WAIT IS, SAID ON THE RUNG THAT IS LONG.
+ *
+ * LU-01's frame carries "This usually takes under a minute". We never shipped
+ * it, and design struck it on 24 Sep for the same reason: *"if a single picture
+ * can take ten minutes, that line is a lie and it has to go... a teacher who
+ * was promised a minute and waits twelve concludes the product is broken."*
+ *
+ * What replaces it is not another figure. The server reports no estimate for a
+ * given lesson, so a number would be a promise a teacher can time and we
+ * cannot keep. What can be said is WHICH part is long, on the rung where it is
+ * happening.
+ */
+describe("the long part of the wait", () => {
+  it("says what is taking the time, on the rung where it happens", () => {
+    stagedState({ uploadId: "u-1", status: "processing", stage: "adaptations" });
+
+    startSingleUpload();
+
+    expect(screen.getByText(/making the pictures/i)).toBeInTheDocument();
+  });
+
+  it("says nothing of the sort while the document is still being read", () => {
+    // It would be a warning about a wait that is not happening yet, two rungs
+    // before the one it describes.
+    stagedState({ uploadId: "u-1", status: "processing", stage: "lessons" });
+
+    startSingleUpload();
+
+    expect(screen.queryByText(/making the pictures/i)).not.toBeInTheDocument();
+  });
+
+  it("puts no figure on it, in place of the wrong one", () => {
+    stagedState({ uploadId: "u-1", status: "processing", stage: "adaptations" });
+
+    startSingleUpload();
+
+    expect(screen.queryByText(/under a minute|d+ minutes?|d+ seconds?/i)).not.toBeInTheDocument();
+  });
+
+  it("no longer blames the document's length for the wait", () => {
+    // The minutes go on generating pictures, not on reading - so "a longer
+    // document takes longer to read" was explaining the wrong thing.
+    stagedState({ uploadId: "u-1", status: "processing", stage: "adaptations", slow: true });
+
+    startSingleUpload();
+
+    expect(screen.getByText(/taking a while/i)).toBeInTheDocument();
+    expect(screen.queryByText(/longer to read/i)).not.toBeInTheDocument();
+  });
+});

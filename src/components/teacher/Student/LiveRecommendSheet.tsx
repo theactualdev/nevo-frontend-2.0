@@ -45,8 +45,14 @@ import { cn } from "@/lib/utils";
  * lesson screen, reading the same `note` off the child's own dashboard. So
  * the sentence is true now, and it is said.
  *
- * NOT C08c'S WORDING, though. The frame says "she" about a named child in a
- * mock. This one is about a real one, whose pronouns nothing here knows.
+ * DESIGN WROTE THE SENTENCE, 24 Sep: *"Your note goes with this lesson and
+ * only [student] sees it."* That is what it says.
+ *
+ * It is not C08c's line, and not the one shipped on 24 Sep either - that read
+ * "They'll see your note when they open it", which was true and said less than
+ * design wanted said. Theirs carries the part a teacher actually needs: that
+ * the note is private to that child. Neither version says "she" about a real
+ * child whose pronouns nothing here knows.
  *
  * ONE PART OF THE FRAME IS STILL NOT BUILT, deliberately:
  *
@@ -136,7 +142,7 @@ export function LiveRecommendSheet({
         </h2>
         <p className="mt-3 text-[14.5px] leading-[1.6] text-nevo-near-black/72">
           {sentWithNote
-            ? `${"“"}${sent}${"”"} is now waiting in ${firstName}${"’"}s lessons. They${"’"}ll see your note when they open it.`
+            ? `${"“"}${sent}${"”"} is now waiting in ${firstName}${"’"}s lessons. Your note goes with this lesson and only ${firstName} sees it.`
             : `${"“"}${sent}${"”"} is now waiting in ${firstName}${"’"}s lessons.`}
         </p>
         <button
