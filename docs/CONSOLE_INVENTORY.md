@@ -1128,10 +1128,14 @@ instruction is to build nothing that depends on either field until it is answere
     not copy. Typed, rendered nowhere, raised — the `highlights` situation.
     **Never rendered:** `consecutiveCorrect`, `responseTimeImprovementStreak`,
     `reducedHintStreak` (engine parameters) and `changeReason` (reasoning, frame 38).
-    **NO ATTEMPT IS POSTED, and `problemId` is why** — it is required and nothing in a
-    lesson has one. `AssessmentQuestion` has a prompt, options with ids and a
-    `correctId`, and no id of its own. An index keys the server's history to a position
-    that moves when content is re-authored. **Backend ask, filed 23 Sep.**
+    **THE ATTEMPT IS POSTED — 24 Sep.** `problemId` turned out to exist:
+    `ComprehensionCheckpoint.id` is required on the wire and `assessmentFor` was
+    discarding it, so the field looked absent from inside this client and the ask I
+    raised with backend was withdrawn. **"Grep for the capability, not the name we
+    proposed" — broken the same week this file recorded it.** An answered question now
+    reports `{studentId, conceptId, problemId, responseCorrect}`; the response is
+    ignored, because the only surface a level appears on is the indicator and it is not
+    on screen during the assessment.
     **Open, and it is not a blocker today:** the engine is per concept and
     `LessonSegment` carries none, so only a review session has a subject for it. If a
     segment ever gains a `conceptId`, which source wins becomes a real question.

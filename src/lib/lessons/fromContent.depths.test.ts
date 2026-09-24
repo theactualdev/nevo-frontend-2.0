@@ -123,6 +123,50 @@ describe("what is not a rewrite", () => {
   });
 });
 
+describe("the identity an assessment question keeps", () => {
+  it("carries the checkpoint's id, which is what a scaffold attempt is keyed on", () => {
+    /*
+     * NOTHING TESTED THIS UNTIL A MUTATION SURVIVED. Deleting
+     * `id: checkpoint.id` from `assessmentFor` passed every test in the suite,
+     * because the player's own attempt tests hand it a hand-built question
+     * with an id already on it - so the adapter that has to PRODUCE the id was
+     * never asked to.
+     *
+     * It matters because this id is the `problemId` the engine keys a child's
+     * per-problem scaffold history on. Losing it here does not break anything
+     * visibly; it just silently stops every attempt being reported, which is
+     * the shape of defect this repo keeps finding.
+     */
+    const out = lessonFromContent({
+      id: "lesson-1",
+      title: "Fractions Lesson 3",
+      confirmationSummary: null,
+      segments: [segment(null)],
+      assessment: [
+        {
+          id: "cp-7",
+          conceptId: "c-1",
+          prompt: "Which is the numerator?",
+          // `single_choice`, not `multiple_choice` - `toQuickCheck` refuses
+          // the latter outright - and options are keyed by `value`.
+          answerType: "single_choice",
+          options: [
+            { value: "a", label: "The top number" },
+            { value: "b", label: "The bottom number" },
+          ],
+          answerKey: "a",
+          explanation: null,
+          position: "after_lesson",
+          conceptName: null,
+        },
+      ],
+    } as unknown as LessonDetailResponse);
+
+    expect(out?.assessment?.questions[0].id).toBe("cp-7");
+    expect(out?.assessment?.questions[0].conceptId).toBe("c-1");
+  });
+});
+
 describe("what the engine is told it may ask for", () => {
   it("names both depths when the segment has both", () => {
     const [sent] = adaptSegmentsFor([

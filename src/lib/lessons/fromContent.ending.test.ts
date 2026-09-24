@@ -81,6 +81,11 @@ describe("the after-lesson assessment", () => {
 
     expect(out?.assessment?.questions).toEqual([
       {
+        // The checkpoint's own id, carried since 24 Sep: it is the `problemId`
+        // a scaffold attempt is keyed on. This assertion is a whole-shape
+        // equality on purpose, so a field appearing here is a decision
+        // somebody has to make rather than something that slips in.
+        id: "cp-1",
         prompt: "Which is larger?",
         options: [
           { id: "a", label: "Two-thirds" },

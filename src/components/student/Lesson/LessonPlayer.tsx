@@ -45,6 +45,8 @@ import {
 import { AfterLessonAssessment } from "./AfterLessonAssessment";
 import { ADJUSTMENT_ACTIONS } from "@/lib/constants/affect";
 import { densityForAction } from "@/lib/lessons/densityForAction";
+import { scaffoldAttemptFor } from "@/lib/lessons/scaffoldAttempt";
+import { scaffoldsApi } from "@/lib/api/scaffolds";
 import { useAssignmentNote } from "@/hooks/useAssignmentNote";
 import { isChunkable } from "@/lib/lessons/chunk";
 import { LESSON_STATUS } from "@/lib/api/lessons";
@@ -960,6 +962,34 @@ export function LessonPlayer({
           // guarded so a re-answer cannot overwrite what they knew first time.
           if (!firstAnswers.current.has(questionIndex)) {
             firstAnswers.current.set(questionIndex, correct);
+            /*
+             * THE SCAFFOLD ATTEMPT, AND IT RIDES THE SAME FIRST-ANSWER GUARD.
+             *
+             * Inside the `if` deliberately: the engine decides how much support
+             * a child gets on a concept from how they answered, and a child who
+             * changes their mind has not attempted the problem twice. Posting
+             * on every tap would let one question move a support level as often
+             * as it was tapped.
+             *
+             * Fire and forget, and the response is deliberately ignored. The
+             * decision is the server's, the only surface a level appears on is
+             * the indicator, and the indicator is not on screen during the
+             * after-lesson assessment - so there is nothing here to apply it
+             * to. Design ruled that a change of support announces itself
+             * nowhere, so inventing a surface for `nextIntensity` would be the
+             * one thing that ruling forbids.
+             *
+             * Failure is swallowed for the same reason the scheduler write
+             * swallows its own: missing one attempt costs a slightly stale
+             * intensity, and telling a child their answer did not count would
+             * be worse and is not true.
+             */
+            const attempt = scaffoldAttemptFor({
+              question: lesson.assessment?.questions[questionIndex] ?? {},
+              correct,
+              studentId: getSession()?.userId,
+            });
+            if (attempt) void scaffoldsApi.attempt(attempt).catch(() => {});
           }
           // Record the pick (first per question) for the Review Answers screen.
           reviewAnswers.current = [

@@ -616,9 +616,18 @@ export function lessonFromContent(
  */
 function assessmentFor(res: LessonDetailResponse): Assessment | undefined {
   const questions = (res.assessment ?? [])
-    // Zipped with the checkpoint it came from: `toQuickCheck` returns the
-    // markable shape and deliberately keeps none of the checkpoint's identity,
-    // so the concept has to be read from the source rather than recovered.
+    /*
+     * Zipped with the checkpoint it came from, because `toQuickCheck` returns
+     * the markable shape and keeps none of the checkpoint's identity - so both
+     * the concept AND THE ID have to be read from the source rather than
+     * recovered.
+     *
+     * This comment used to say the identity was dropped deliberately, and that
+     * reading cost a day: it made the id look like a decision rather than an
+     * omission, so a scaffold attempt looked unpostable and the missing
+     * `problemId` was raised with backend as a gap. It was never a gap.
+     * `ComprehensionCheckpoint.id` is required on the wire and always was.
+     */
     .map((checkpoint) => ({ checkpoint, quick: toQuickCheck(checkpoint) }))
     .filter(
       (
@@ -627,6 +636,9 @@ function assessmentFor(res: LessonDetailResponse): Assessment | undefined {
         pair.quick !== null,
     )
     .map(({ checkpoint, quick }) => ({
+      // The checkpoint's own id, kept rather than discarded - it is the stable
+      // identifier a scaffold attempt is keyed on. See `AssessmentQuestion.id`.
+      id: checkpoint.id,
       prompt: quick.question,
       options: quick.options,
       correctId: quick.correctId,

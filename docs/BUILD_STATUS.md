@@ -4638,6 +4638,65 @@ weak test let a mutation through here: asserting the absence only after
 awaiting "the call was made" passes whether or not the handler went on to fill
 the gap. The settle is what makes the assertion mean anything.
 
+### The scaffold attempt is posted, 24 Sep - and the field I asked for existed
+
+`POST /api/intelligence/scaffolds/attempt` now has a caller. An answered
+assessment question reports `{studentId, conceptId, problemId, responseCorrect}`
+and nothing derived; the engine answers with the next intensity and why, none of
+which is computed here and most of which is never rendered.
+
+**THE `problemId` I RAISED WITH BACKEND YESTERDAY ALREADY EXISTED.**
+`ComprehensionCheckpoint.id` is required on the wire and always has been.
+`assessmentFor` builds each question from a checkpoint, reads the concept off
+it and discarded the rest - and its own comment said the identity was dropped
+"deliberately", which made an omission read as a decision. So from inside this
+client the question looked like it had none, and the ask went out.
+
+That is the **"grep for the capability, not the name we proposed"** rule in this
+repo's own inventory, broken the same week it was written down. The comment is
+corrected in place rather than removed, because the next person to read that
+function is the person who would raise it again.
+
+**WHAT IT REFUSES TO REPORT, and each is a way of being wrong rather than
+silent.** No checkpoint id - an authored mock - because an id derived from a
+question's POSITION would key the engine's per-problem history to an array index
+that moves whenever content is re-authored. No concept, because guessing which
+concept a lesson "is about" attributes an answer to something nobody said it was
+about. No session, because there is nobody to record an attempt for.
+
+**THE RESPONSE IS DELIBERATELY IGNORED.** The decision is the server's, the only
+surface a support level appears on is the indicator, and the indicator is not on
+screen during the after-lesson assessment - so there is nothing here to apply
+`nextIntensity` to. Design ruled that a change of support announces itself
+nowhere, so inventing a surface for it would be the one thing that ruling
+forbids.
+
+**TWO MUTATIONS SURVIVED, AND BOTH WERE TELLING.**
+
+Removing `id: checkpoint.id` from the adapter passed every test in the repo,
+because the player's own attempt tests hand it a hand-built question with an id
+already on it - so the adapter that has to PRODUCE the id was never asked to.
+A test now covers it.
+
+And removing the first-answer guard passed too, which exposed that **a test I
+had just written was a lie.** It answered wrong, answered again, and claimed to
+prove the guard. It proves nothing: a wrong answer reveals and renames the
+confirm to "Next question", whose onClick is `advance` rather than `confirm`,
+so `onAnswer` cannot fire twice for one question. The guard stays - it costs
+nothing and the scheduler write beside it shares the same map - but it is
+defensive rather than load-bearing, and the test now asserts the invariant that
+is actually true: one attempt per question across a whole assessment.
+
+**AND THE FULL-SUITE METHOD FAILED AGAIN, DIFFERENTLY.** Two `npm test` runs on
+the same tree reported `258 files / 2069 tests, 2 failed` and
+`265 files / 2246 tests, 1 failed`. The second was right; the first had dropped
+seven files under contention, the same way the JSON reporter did yesterday. The
+one real failure was an existing whole-shape equality in
+`fromContent.ending.test.ts` that my new field broke - correctly, because that
+assertion exists so a field appearing there is a decision somebody makes rather
+than something that slips in.
+
+
 ### Simplify has text behind it now, 23 Sep - and it was never `textVariant`
 
 `depthVariants` landed on 22 Sep carrying `simplified` and `expanded`, written
