@@ -49,30 +49,48 @@ export interface SignalBatchReceipt {
   acceptedEvents: number;
 }
 
-/** Event types the backend ingest enum accepts today (OpenAPI SignalEventType). */
-const BACKEND_EVENT_TYPES = new Set([
-  "time_on_segment",
-  "replay",
-  "scroll",
-  "simplify_trigger",
-  "expand_trigger",
-  "slower_trigger",
-  "comprehension_response",
-  "exit_attempt",
-  "break_suggested",
-  "break_taken",
-  "engagement_signal",
-  "modality_suggestion_shown",
-  "modality_suggestion_accepted",
-  "modality_suggestion_declined",
-  "modality_suggestion_ignored",
-  "modality_switch_outcome",
-  "modality_manual_switch",
-  "calculation_step_response",
-  "calculation_complete",
-  "narration_played",
-  "narration_replayed",
-  "manipulative_piece_placed",
+/**
+ * The types we emit that the ingest enum does NOT accept, so they are dropped
+ * before a batch is posted.
+ *
+ * **THIS USED TO BE THE OTHER WAY ROUND, AND IT COST US NINE SIGNAL TYPES.**
+ * It was an allow-list naming every value the backend accepted - a second copy
+ * of `SignalEventType` maintained by hand - and the enum grew from 22 to 31
+ * without it. So `break_start`, `break_end`, `feeling_checkin` and
+ * `module_boundary_reached` were delivered by backend on request, emitted by
+ * this client, and then thrown away at our own door. Four of them were things
+ * we had ASKED for.
+ *
+ * Inverting it inverts the maintenance burden. A value backend adds now flows
+ * without a client change; only a type WE invent needs an entry here, and we
+ * know when we do that because we are the ones writing it.
+ *
+ * Safe because `SignalEvent.type` is `SignalEventType`, our own union - so
+ * nothing outside the 22 names we define can reach this filter at all.
+ *
+ * Each entry says why it is ours rather than theirs.
+ */
+const CLIENT_ONLY_EVENT_TYPES = new Set<string>([
+  /**
+   * ASKED FOR AND NOT YET IN THE ENUM - the one genuine gap here.
+   * `module_boundary_reached` landed; its sibling did not, so what a child
+   * DID at a boundary ("continue" or "break") is collected and dropped every
+   * time. Raised with backend 23 Sep; delete this line when it lands.
+   */
+  "module_boundary_action",
+
+  // Client-only instrumentation. These describe the interface's own state
+  // rather than anything a child did, and have never been asked for.
+  "system_busy",
+  "tap_blocked",
+  "session_context",
+
+  // The baseline run reports through `POST /api/baseline/submit` as a reduced
+  // vector, not through the signal stream. These three mark its phases on
+  // device only.
+  "baseline_module_start",
+  "baseline_module_complete",
+  "baseline_submitted",
 ]);
 
 export const signalsApi = {
@@ -84,10 +102,10 @@ export const signalsApi = {
     session: SignalSessionEnvelope,
     events: SignalEvent[],
   ): Promise<SignalBatchReceipt | null> => {
-    const known = events.filter((e) => BACKEND_EVENT_TYPES.has(e.type));
+    const known = events.filter((e) => !CLIENT_ONLY_EVENT_TYPES.has(e.type));
     if (process.env.NODE_ENV === "development" && known.length < events.length) {
       const dropped = events
-        .filter((e) => !BACKEND_EVENT_TYPES.has(e.type))
+        .filter((e) => CLIENT_ONLY_EVENT_TYPES.has(e.type))
         .map((e) => e.type);
       console.debug("[signals] dropped types outside the ingest enum:", [
         ...new Set(dropped),
