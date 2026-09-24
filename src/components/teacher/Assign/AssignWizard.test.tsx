@@ -54,7 +54,15 @@ const DIRECTORY = [
   { studentId: "s-3", name: "Tunde Bakare", initials: "TB", className: "JSS 2B" },
 ];
 
-const LESSONS = [{ id: "l-1", title: "Fractions 3", meta: "Mathematics" }];
+/**
+ * `kind` WAS MISSING HERE, and it is required on `LibraryCard`. The real hook
+ * sets it on every card - both the live ones and its own fixtures - so a
+ * fixture without it described a card that cannot exist, and the wizard only
+ * stopped caring once it started filtering on it.
+ */
+const LESSONS = [
+  { id: "l-1", title: "Fractions 3", meta: "Mathematics", kind: "normal" },
+];
 
 const directory = (over: Record<string, unknown> = {}) => ({
   students: DIRECTORY,
@@ -434,5 +442,126 @@ describe("the lessons a teacher is offered", () => {
     expect(
       screen.getByText("Simplifying Algebraic Fractions"),
     ).toBeInTheDocument();
+  });
+});
+
+/**
+ * A LESSON THAT CANNOT BE ASSIGNED, and for two weeks could be.
+ *
+ * `useLessonLibrary` returns three kinds - normal, parsing and failed - and
+ * this list took all three, so the id of a lesson whose parse died went
+ * straight to `POST /api/v1/assignments`.
+ *
+ * It stopped being hypothetical on 23 Sep: a failed parse leaves a lesson row
+ * behind with zero segments, and the E2E tenant holds two of them. The Library
+ * screen has always drawn one correctly - a non-clickable "This lesson
+ * couldn't be processed." card - so this door was the only one missing it.
+ */
+describe("the lessons a teacher may actually send", () => {
+  const withKinds = (...kinds: string[]) =>
+    useLessonLibrary.mockReturnValue({
+      cards: kinds.map((kind, i) => ({
+        id: `l-${i + 1}`,
+        title: `Lesson ${i + 1}`,
+        meta: "Mathematics",
+        kind,
+      })),
+      live: true,
+      sample: false,
+      loading: false,
+      slow: false,
+    });
+
+  it("offers a lesson whose parse finished", () => {
+    withKinds("normal");
+
+    render(<AssignWizard />);
+
+    expect(screen.getByText("Lesson 1")).toBeInTheDocument();
+  });
+
+  it("offers no lesson whose parse failed, because there is nothing in it", () => {
+    withKinds("failed");
+
+    render(<AssignWizard />);
+
+    expect(screen.queryByText("Lesson 1")).not.toBeInTheDocument();
+  });
+
+  it("offers no lesson that is still being read", () => {
+    // Not assignable YET, and this list has no way to say "not yet" about one
+    // row. A disabled row is a state design has not drawn.
+    withKinds("parsing");
+
+    render(<AssignWizard />);
+
+    expect(screen.queryByText("Lesson 1")).not.toBeInTheDocument();
+  });
+
+  it("keeps the finished one when it sits beside the other two", () => {
+    withKinds("failed", "normal", "parsing");
+
+    render(<AssignWizard />);
+
+    expect(screen.queryByText("Lesson 1")).not.toBeInTheDocument();
+    expect(screen.getByText("Lesson 2")).toBeInTheDocument();
+    expect(screen.queryByText("Lesson 3")).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * WHY NOTHING WAS ASSIGNED - and the screen only knew one of the two reasons.
+ *
+ * `createdCount: 0` happens when a class has nobody in it, and when a class
+ * already has the lesson. This said the first over both, so a teacher
+ * re-assigning to a full class was told it "may have no students enrolled
+ * yet". The server had been saying which all along, in `duplicateCount`, and
+ * the field was named nowhere in the client.
+ */
+describe("when the students already have the lesson", () => {
+  const sendToClass = () => {
+    render(<AssignWizard preselect="l-1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: /JSS 2A/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm assignment" }));
+  };
+
+  it("says they already have it, not that the class may be empty", async () => {
+    create.mockResolvedValue({
+      assignmentIds: [],
+      createdCount: 0,
+      duplicateCount: 30,
+    });
+
+    sendToClass();
+
+    expect(await screen.findByText(/already have this lesson/i)).toBeInTheDocument();
+    expect(screen.queryByText(/no students enrolled/i)).not.toBeInTheDocument();
+  });
+
+  it("counts one student as one student", async () => {
+    create.mockResolvedValue({
+      assignmentIds: [],
+      createdCount: 0,
+      duplicateCount: 1,
+    });
+
+    sendToClass();
+
+    expect(
+      await screen.findByText(/That student already has this lesson/i),
+    ).toBeInTheDocument();
+  });
+
+  it("still blames enrolment when the server named no duplicates", async () => {
+    // An older deployment sends no `duplicateCount`, and absent must not read
+    // as "and none of them were duplicates" - that is a claim, not a default.
+    create.mockResolvedValue({ assignmentIds: [], createdCount: 0 });
+
+    sendToClass();
+
+    expect(await screen.findByText(/no students enrolled/i)).toBeInTheDocument();
   });
 });
