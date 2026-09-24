@@ -106,12 +106,48 @@ describe("SetupGate", () => {
   });
 
   it("pauses on a school that is not active yet", async () => {
-    getOnboarding.mockResolvedValue(onboarding("awaiting_payment"));
+    getOnboarding.mockResolvedValue({
+      ...onboarding("awaiting_payment"),
+      inOnboarding: true,
+    });
     mount();
 
     await waitFor(() => expect(at("paused")).toBe("true"));
     expect(at("pause")).toBe("not_active");
     expect(at("note")).toBe("Paused until your school is active.");
+  });
+
+  it("does NOT pause an established school whatever its stage says", async () => {
+    /*
+     * THE REGRESSION TEST FOR A LIVE DEFECT. This gate read
+     * `stage !== "activated"`, and backend then found the read route was
+     * CREATING the record it claimed to read - every established school's
+     * first admin page load wrote a row saying it was back at "uploading".
+     *
+     * So the console held every established school read-only on the strength
+     * of its own page load. The stage here is deliberately the worst case; the
+     * only thing that may decide this is `inOnboarding`.
+     */
+    getOnboarding.mockResolvedValue({
+      ...onboarding("uploading"),
+      inOnboarding: false,
+    });
+    mount();
+
+    await waitFor(() => expect(at("resolved")).toBe("true"));
+    expect(at("paused")).toBe("false");
+    expect(at("pause")).toBe("-");
+  });
+
+  it("treats an absent inOnboarding as not in onboarding", async () => {
+    // Not `required`, default false. A school we cannot place is left alone
+    // rather than paused - the safe direction for an explanation layer.
+    // Built without the key at all, the way an older deployment answers.
+    getOnboarding.mockResolvedValue(onboarding("uploading"));
+    mount();
+
+    await waitFor(() => expect(at("resolved")).toBe("true"));
+    expect(at("paused")).toBe("false");
   });
 
   it("names the email reason first when both are true", async () => {
@@ -124,14 +160,17 @@ describe("SetupGate", () => {
     expect(at("pause")).toBe("email_unconfirmed");
   });
 
-  it("reads the stage and does not infer it from empty arrays", async () => {
+  it("does not infer the answer from empty arrays", async () => {
     /*
-     * Backend's own schema note: a stage is typed "so the server decides which
-     * step a school is on, rather than a console inferring it from which
-     * arrays happen to be empty". This state has nothing in it and is
-     * activated; anything deriving from counts would call it mid-setup.
+     * Backend's own schema note: the state is typed "so the server decides
+     * which step a school is on, rather than a console inferring it from which
+     * arrays happen to be empty". This one has nothing in it at all; anything
+     * deriving from counts would call it mid-setup.
      */
-    getOnboarding.mockResolvedValue(onboarding("activated"));
+    getOnboarding.mockResolvedValue({
+      ...onboarding("activated"),
+      inOnboarding: false,
+    });
     mount();
 
     await waitFor(() => expect(at("resolved")).toBe("true"));
@@ -164,10 +203,11 @@ describe("SetupGate", () => {
     expect(at("pause")).toBe("email_unconfirmed");
   });
 
-  it("does not put a school with no onboarding record into read-only", async () => {
-    // A 404 is "no record", not "mid-setup". Every school predating the flow
-    // would otherwise lose its console.
-    getOnboarding.mockRejectedValue(new ApiError(404, "not found", {}));
+  it("does not pause when the onboarding read fails outright", async () => {
+    // The 404 case this used to test cannot happen - the route never 404s.
+    // A failed read is still not a school mid-setup.
+    getOnboarding.mockRejectedValue(new ApiError(500, "boom", {}));
+    read.mockResolvedValue(confirmation("confirmed"));
     mount();
 
     await waitFor(() => expect(at("resolved")).toBe("true"));

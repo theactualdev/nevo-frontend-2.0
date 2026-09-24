@@ -76,13 +76,21 @@ export function itHomeRows(
    * being told one thing twice, and the second telling makes the first look
    * less urgent.
    *
-   * THE COPY DOES NOT SAY WHAT LAPSING DOES. We believe a lapsed signing
-   * credential locks the school out - that belief is what got the field asked
-   * for - but nothing in the contract states it, and the neighbouring
-   * "needs_attention" copy promises the opposite ("Everyone can still sign
-   * in"). Stating a consequence we cannot source, on the row most likely to be
-   * escalated, is how a school gets told the wrong thing loudly.
-   * TODO(api): what stops working when `credentialExpiresAt` passes?
+   * ~~THE COPY DOES NOT SAY WHAT LAPSING DOES.~~ **IT DOES NOW, 24 Sep, and
+   * the answer is more specific than what we would have guessed.**
+   *
+   * Backend: *"nothing on our side changes when it passes. The date is
+   * advisory - we don't gate anything on it. What breaks is at Microsoft's
+   * end: the token exchange starts failing, so SSO sign-in stops for everyone
+   * at that school, and roster sync stops with it."*
+   *
+   * So the consequence is real and it is NOT Nevo's. That distinction is the
+   * copy: a school reading "we will lock you out" would go to the wrong people.
+   * The lockout happens at the provider, and the fix is with the provider too.
+   *
+   * It also settles why this row differs from "needs_attention", which
+   * promises *"Everyone can still sign in"* - that state is a broken roster
+   * sync with sign-in intact. This one ends sign-in.
    */
   if (status.credentialExpiringSoon && status.status !== "needs_attention") {
     const days = status.credentialExpiresInDays;
@@ -97,8 +105,8 @@ export function itHomeRows(
             : `Our sign-in credential expires in ${days} day${days === 1 ? "" : "s"}`,
       sub:
         days !== null && days <= 0
-          ? "Reconnect to renew it."
-          : "Nothing has changed yet. Reconnect to renew it.",
+          ? "Everyone signs in through your provider, and that stops until it's reconnected. Reconnect to renew it."
+          : "Nothing has changed yet. When it lapses, your provider stops letting anyone sign in - reconnect before then to renew it.",
       action: "Reconnect",
       href: IT,
     });

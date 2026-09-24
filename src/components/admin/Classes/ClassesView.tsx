@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   classesApi,
   type AdminClass,
-  type AssignedTeacher,
+  type ClassTeacher,
 } from "@/lib/api/classes";
 import { PROVIDER_LABELS, ssoApi, type SsoStatus } from "@/lib/api/sso";
 import { timeAgo } from "@/lib/relativeTime";
@@ -89,15 +89,25 @@ function SearchIcon() {
 }
 
 /** "Ms. Adeyemi +1" - the primary leads the label, the rest are a count. */
-function teacherLabel(teachers: AssignedTeacher[]): string {
+/**
+ * Who teaches this class, primary first.
+ *
+ * TAKES THE ROW'S OWN `teachers` NOW. It used to take the result of a
+ * per-class `classTeachers` request - one per row, fired after the list
+ * painted - because `GET /classes` carried only a count. Backend added the
+ * named list on 24 Sep out of the same query that produces the count, so the
+ * page costs one request again.
+ *
+ * `ClassTeacher.name` is a single string rather than the first/last/email
+ * triple the assignment route returns, so there is nothing to compose and
+ * nothing to fall back through.
+ */
+function teacherLabel(teachers: ClassTeacher[]): string {
   const named = [...teachers].sort((a, b) =>
     a.role === b.role ? 0 : a.role === "primary" ? -1 : 1,
   );
   const first = named[0];
-  const name =
-    [first.firstName, first.lastName].filter(Boolean).join(" ").trim() ||
-    first.email ||
-    "Assigned teacher";
+  const name = first.name.trim() || "Assigned teacher";
   return named.length > 1 ? `${name} +${named.length - 1}` : name;
 }
 
@@ -105,7 +115,6 @@ export function ClassesView() {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>("loading");
   const [classes, setClasses] = useState<AdminClass[]>([]);
-  const [teachers, setTeachers] = useState<Record<string, AssignedTeacher[]>>({});
   const [search, setSearch] = useState("");
   const [year, setYear] = useState("");
   const [showArchived, setShowArchived] = useState(false);
@@ -128,16 +137,15 @@ export function ClassesView() {
       .then((rows) => {
         setClasses(rows);
         setPhase("ready");
-        // The list paints first; teacher labels settle in behind it. A row
-        // that fails to resolve stays a placeholder rather than claiming the
-        // class has nobody teaching it - "No teacher yet" is a fact, and we
-        // only state it once the roster has actually answered.
-        rows.forEach((c) => {
-          classesApi
-            .classTeachers(c.id)
-            .then((list) => setTeachers((prev) => ({ ...prev, [c.id]: list })))
-            .catch(() => undefined);
-        });
+        /*
+         * ~~One `classTeachers` request per row, fired after the list
+         * painted.~~ GONE, 24 Sep. The names arrive on the list itself now,
+         * so there is no second wave and no placeholder to settle.
+         *
+         * Fine at fourteen classes and wrong at four hundred, which is what
+         * the ask to backend said. They built it from the same query that
+         * produces the count.
+         */
       })
       .catch((err: unknown) => setPhase(failureKind(err)));
   }, []);
@@ -415,7 +423,7 @@ export function ClassesView() {
                  */
                 groupByYear(visible).map((section, si, all) =>
                   section.classes.map((c, i) => {
-                  const assigned = teachers[c.id];
+                  const assigned = c.teachers;
                   const lastSection = si === all.length - 1;
                   const lastRow = i === section.classes.length - 1;
                   return (
@@ -467,12 +475,12 @@ export function ClassesView() {
                             ✓
                           </span>
                         ) : null}
-                        {assigned === undefined ? (
-                          <span
-                            aria-hidden="true"
-                            className="h-3.5 w-24 rounded bg-nevo-near-black/[0.07]"
-                          />
-                        ) : assigned.length === 0 ? (
+                        {/*
+                          * NO PLACEHOLDER STATE ANY MORE. It existed because
+                          * the names arrived after the list; now they arrive
+                          * with it, so an empty array means what it says.
+                          */}
+                        {assigned.length === 0 ? (
                           <NoTeacherYet />
                         ) : (
                           <span className="truncate text-sm text-nevo-near-black/78">

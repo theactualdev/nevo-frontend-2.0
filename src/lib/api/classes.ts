@@ -190,10 +190,18 @@ export interface AdminClass {
   academicSession: string | null;
   capacity: number | null;
   /**
-   * Teachers assigned. Kills the N+1 in `ClassesView`, which fetches
-   * `classTeachers` per row to build the teacher column.
+   * Teachers assigned, counted and NAMED - both, from one query.
+   *
+   * `teachers` landed on 24 Sep after we asked for it, and backend built it
+   * out of the same query that produces the count: *"teacherCount is now just
+   * its length, so the page still costs one query rather than one per class."*
+   * Both fields stay.
+   *
+   * This is what kills the N+1 in `ClassesView`, which used to fetch
+   * `classTeachers` once per row to turn the count into names.
    */
   teacherCount: number;
+  teachers: ClassTeacher[];
   /** Non-null means archived. Archive is reversible and never deletes. */
   archivedAt: string | null;
 }
@@ -202,6 +210,19 @@ export interface AdminClass {
  * One class in a bulk create. Only `name` is required by the contract; the
  * rest are sent when the composer has them.
  */
+/**
+ * One teacher who holds a class, named.
+ *
+ * Backend's own description says why it exists: *"The class list is built
+ * around showing who teaches each class, and the count alone meant a request
+ * per class to find out who they were."*
+ */
+export interface ClassTeacher {
+  id: string;
+  name: string;
+  role: string;
+}
+
 export interface ClassWrite {
   name: string;
   yearGroup?: string | null;

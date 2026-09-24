@@ -8,7 +8,6 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { ApiError } from "@/lib/api/client";
 import { emailConfirmationApi } from "@/lib/api/emailConfirmation";
 import { onboardingApi } from "@/lib/api/onboarding";
 
@@ -43,10 +42,22 @@ import { onboardingApi } from "@/lib/api/onboarding";
  * unreachable backend is NOT 'this admin has no scopes'."*
  *
  * ============================================================================
- * NOTHING HERE IS DERIVED. `stage` is read, never composed out of counts;
- * backend's own schema note says the stage is typed *"so the server decides
- * which step a school is on, rather than a console inferring it from which
- * arrays happen to be empty."* The confirmation status is read the same way.
+ * NOTHING HERE IS DERIVED, AND THE FIELD IT READS CHANGED ON 24 Sep.
+ *
+ * This branched on `stage !== "activated"`. Backend then found the read route
+ * shared a helper with the writes, and that helper CREATED a record when it
+ * found none - so every established school's first admin page load wrote a row
+ * saying it was back at the uploading stage, and this gate held that school's
+ * console read-only on the strength of its own page load.
+ *
+ * It reads `inOnboarding` now, which is what backend added and told us to
+ * branch on: *"not on the stage and not on a status this route cannot
+ * return."* The confirmation status is read the same way.
+ *
+ * The principle survives the correction and is worth keeping: the server
+ * decides which step a school is on, *"rather than a console inferring it from
+ * which arrays happen to be empty."* We were not inferring - we were reading
+ * the wrong field, which is the quieter version of the same mistake.
  */
 
 /** Why writes are paused. Ordered: the one a school can act on first wins. */
@@ -100,12 +111,12 @@ export function SetupGateProvider({ children }: { children: ReactNode }) {
      * every real answer either endpoint can give, so nothing downstream can
      * mistake a failure for a state.
      *
-     * A 404 from onboarding is NOT a failure: it is a school with no
-     * onboarding record, which is not a school mid-setup. Treating it as "not
-     * active" would put every school predating the flow into read-only.
-     * TODO(api): confirm what `GET /onboarding` returns for a long-active
-     * school. If it is a 200 with `stage: "activated"`, `missing` is dead
-     * weight and should go.
+     * ~~A 404 from onboarding is not a failure...~~ **THAT BRANCH IS GONE, and
+     * the TODO it carried was answered in a way worth recording.** It asked
+     * what this route returns for a long-active school. The answer: it never
+     * 404'd, and the read was CREATING the record it claimed to be reading -
+     * see `inOnboarding`. The guess was harmless only because the thing it
+     * guarded against could not happen; the real defect was one layer under it.
      */
     const confirmation = emailConfirmationApi
       .read()
@@ -114,12 +125,8 @@ export function SetupGateProvider({ children }: { children: ReactNode }) {
 
     const onboarding = onboardingApi
       .get()
-      .then((s) => ({ stage: s.stage }))
-      .catch((err: unknown) =>
-        err instanceof ApiError && err.status === 404
-          ? { stage: "activated" as const, missing: true }
-          : null,
-      );
+      .then((s) => ({ inOnboarding: s.inOnboarding === true }))
+      .catch(() => null);
 
     Promise.all([confirmation, onboarding]).then(([conf, onb]) => {
       if (!live) return;
@@ -135,7 +142,21 @@ export function SetupGateProvider({ children }: { children: ReactNode }) {
 
       const unconfirmed =
         !!conf && conf.status !== "confirmed" && conf.status !== "already_confirmed";
-      const notActive = !!onb && onb.stage !== "activated";
+      /*
+       * `inOnboarding`, NOT THE STAGE - and the difference was a live defect.
+       *
+       * This read `stage !== "activated"`. Backend then found that the read
+       * route shared a helper with the writes, and that helper CREATED a record
+       * when it found none: every established school's first admin page load
+       * wrote a row saying it was back at the uploading stage. Our gate read
+       * that and held the whole console read-only - **on the strength of its
+       * own page load**.
+       *
+       * The read only looks now, and backend's instruction with the new
+       * boolean was exact: branch on it, *"not on the stage and not on a status
+       * this route cannot return."*
+       */
+      const notActive = onb?.inOnboarding === true;
 
       /*
        * EMAIL FIRST WHEN BOTH ARE TRUE. It is the one the person in front of

@@ -209,7 +209,18 @@ describe("itHomeRows", () => {
     expect(keys(rows)).not.toContain("credential");
   });
 
-  it("does not claim what lapsing does, because the contract does not say", () => {
+  it("says what lapsing does, and whose end it happens at", () => {
+    /*
+     * THE INVERSE OF WHAT THIS TEST USED TO ASSERT. It required the copy to
+     * claim NO consequence, because the contract stated none. Backend answered
+     * on 24 Sep: *"nothing on our side changes when it passes... What breaks
+     * is at Microsoft's end: the token exchange starts failing, so SSO sign-in
+     * stops for everyone at that school."*
+     *
+     * The attribution is the point. A school told "we will lock you out" takes
+     * the problem to the wrong people; the lockout is at the provider and so
+     * is the fix.
+     */
     const rows = itHomeRows(
       status({ credentialExpiresInDays: 12, credentialExpiringSoon: true }),
       null,
@@ -217,7 +228,21 @@ describe("itHomeRows", () => {
     );
     const row = rows.find((r) => r.key === "credential")!;
     const text = `${row.title} ${row.sub}`;
-    expect(text).not.toMatch(/locked out|lose access|stop working|cannot sign in/i);
+
+    expect(text).toMatch(/your provider stops letting anyone sign in/i);
+    // Nothing has broken yet - it is a warning, not a report.
+    expect(text).toMatch(/Nothing has changed yet/i);
+  });
+
+  it("speaks in the present tense once it has actually lapsed", () => {
+    const rows = itHomeRows(
+      status({ credentialExpiresInDays: 0, credentialExpiringSoon: true }),
+      null,
+      false,
+    );
+    const row = rows.find((r) => r.key === "credential")!;
+    expect(row.sub).toMatch(/that stops until it.s reconnected/i);
+    expect(row.sub).not.toMatch(/Nothing has changed yet/i);
   });
 
   it("counts the credential as something wanting a decision", () => {

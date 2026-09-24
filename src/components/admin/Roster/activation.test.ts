@@ -20,6 +20,7 @@ const state = (over: Partial<OnboardingState> = {}): OnboardingState => ({
   canConfirm: false,
   canPay: false,
   canActivate: false,
+  inOnboarding: false,
   ...over,
 });
 

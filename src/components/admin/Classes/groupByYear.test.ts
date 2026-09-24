@@ -21,6 +21,7 @@ const cls = (over: Partial<AdminClass> & { name: string }): AdminClass => ({
   academicSession: null,
   capacity: null,
   teacherCount: 0,
+  teachers: [],
   archivedAt: null,
   ...over,
 });
