@@ -1075,8 +1075,9 @@ instruction is to build nothing that depends on either field until it is answere
     there would open an empty list that reads as a child with no conversations rather than
     a visitor with no account. A failed read says so rather than rendering as an empty
     history. **M**
-16. **The small honest ones** — **FOUR DONE 22 Sep, TWO WERE ALREADY DONE, TWO NEED THE
-    NOTE'S AUTHOR.** The bucket was written as eight one-liners and it had drifted.
+16. ~~**The small honest ones**~~ — **ALL EIGHT RESOLVED 24 Sep: four done, two already
+    done, one found-and-kept, one that was never a design question.** The bucket was written
+    as eight one-liners and it had drifted.
     - ~~the summary route applying the player's own `lesson.summary` gate~~ **DONE.** The
       player offers "See summary" only when there is one; the ROUTE had no such gate, so a
       typed or bookmarked URL rendered a page of headings with nothing under them — every
@@ -1104,12 +1105,27 @@ instruction is to build nothing that depends on either field until it is answere
       that lesson"), alongside failed and the skeleton.
     - ~~the flanker's `congruency` tag~~ **ALREADY DONE.** Both flanker picks pass
       `congruency` into `trial_pick`, with a docblock on why.
-    - **the unreachable baseline failure state** — could not locate it from this
-      shorthand. Nothing in `ProfilingFlow`, `WarmUpRun` or the modules obviously matches.
-      **Needs whoever wrote the note to say which screen.**
-    - **the avatar selector** — likewise. There is no avatar-choosing UI in
-      `student/Profile`, so this may mean "build one" (a design question, since no frame
-      shows it) rather than "fix one". **Needs the same.**
+    - ~~**the unreachable baseline failure state**~~ **FOUND AND KEPT, 24 Sep.** It is
+      `ProfilingIntro`'s `saved === false` copy — *"we couldn't save it just now"* — and it
+      cannot fire: `ProfilingFlow` is its only caller and renders `mode="complete"` without
+      the prop, because the reduction is now PARKED and delivered once an account exists a
+      screen or two later. That run cannot know whether the write landed, and a screen that
+      cannot know must not claim either answer.
+      **Kept rather than deleted, decided 24 Sep.** The parking is a property of the
+      onboarding path, not of this component; a flow that submits inline would want the copy
+      back unchanged, and deleting it makes the next person write the same apology slightly
+      differently. The unreachability is now stated at the branch, and tests pin both that
+      the default does not claim a failure and that the branch still reads correctly if
+      anything passes it.
+      **A separate question went to design:** the settled copy, *"Your learning space has
+      been personalized"*, now runs ahead of the write rather than alongside it.
+    - ~~**the avatar selector**~~ **NOT A DESIGN QUESTION — MY ERROR, corrected 24 Sep.**
+      This row said "no frame shows it". **Frame 27 draws it**: an "Avatar selector (Mobile
+      sheet)" at 375×812 — a bottom sheet, a close button, the heading "Choose your look",
+      and a four-column grid of initial-circles in different colourways with the selected one
+      outlined. I missed it searching the frame for "avatar" in lower case.
+      The data is already there: `deviceRoster` stores `shapeIndex` per child and
+      `SHAPE_COUNT` exists, which is what the 28c picker draws from. **Buildable, S.**
 17. ~~**The scaffolds subsystem**~~ **BUILT 23 SEP — and 37a changed the shape of it
     twice.** `scaffoldsApi` wraps all three paths; `levelForIntensity` maps the four
     intensities to the indicator's four circles; `useScaffoldLevel` sources it in a
