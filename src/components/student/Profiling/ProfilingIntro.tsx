@@ -17,6 +17,9 @@ import { ProfilingShell } from "./ProfilingShell";
  * learning space has been personalized" is a claim about the engine, and it is
  * false if the submit never landed. `saved === false` swaps it for the same
  * plain admission the daily warm-up uses.
+ *
+ * **THAT BRANCH IS CURRENTLY UNREACHABLE, DELIBERATELY - see `saved` below
+ * before relying on it.**
  */
 export function ProfilingIntro({
   mode,
@@ -48,6 +51,27 @@ export function ProfilingIntro({
    * Whether the baseline reached Nevo. Null while it is still resolving, which
    * reads as the settled copy - the child did their part either way and the
    * screen should not flicker a warning at them mid-flight.
+   *
+   * **NOTHING PASSES THIS TODAY, SO `false` IS UNREACHABLE HERE. Kept on
+   * purpose; decided 24 Sep.**
+   *
+   * `ProfilingFlow` is this component's only caller and renders
+   * `mode="complete"` without it, because the reduction is now PARKED
+   * (`holdBaseline`) and delivered once an account exists a screen or two
+   * later. That run cannot know whether the write landed, and a screen that
+   * cannot know must not claim either answer - so null, which reads settled.
+   *
+   * The branch stays rather than being deleted because the parking is a
+   * property of the ONBOARDING path, not of this component: the daily warm-up
+   * reaches the same admission through its own done state, and a flow that
+   * submits inline would want this copy back unchanged. Deleting it would make
+   * the next person write the sentence again, slightly differently, which is
+   * how two apologies for the same failure end up in one product.
+   *
+   * **If you are about to start passing this: the settled copy is the thing to
+   * look at first.** "Your learning space has been personalized" already runs
+   * ahead of the write; see the note in `ProfilingFlow`, raised with design
+   * 24 Sep.
    */
   saved?: boolean | null;
 }) {
