@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ApiError, apiErrorCode } from "@/lib/api/client";
+import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import { assignmentsApi } from "@/lib/api/assignments";
 import { useLessonLibrary } from "@/hooks/useLessonLibrary";
 import { useStudentDirectory } from "@/hooks/useStudentDirectory";
@@ -187,6 +187,19 @@ const fmtList = (names: string[]) =>
     : names.length === 2
       ? `${names[0]} and ${names[1]}`
       : `${names[0]} and ${names.length - 1} more`;
+
+/**
+ * The server's sentence, then ours about what to do next.
+ *
+ * It ends the server's text properly first. The contract promises the message
+ * names the lessons and what is outstanding; it does not promise a full stop,
+ * and running two sentences together would read as one.
+ */
+function withNextStep(message: string): string {
+  const said = message.trim();
+  const stopped = /[.!?]$/.test(said) ? said : `${said}.`;
+  return `${stopped} Open them from your Library and check them.`;
+}
 
 export function AssignWizard({ preselect }: { preselect?: string }) {
   const router = useRouter();
@@ -470,13 +483,41 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
      * that fixes it. So this names the action and points at the screen that
      * performs it.
      */
-    const notApproved = results.some(
+    const refusal = results.find(
       (r) =>
         r.status === "rejected" &&
         r.reason instanceof ApiError &&
         r.reason.status === 409 &&
         apiErrorCode(r.reason.detail) === "lesson_not_approved",
     );
+    const notApproved = refusal !== undefined;
+    /**
+     * THE SERVER NAMES THE LESSONS NOW, and until 24 Sep we threw that away.
+     *
+     * The 409 is documented: `detail.message names each lesson and what is
+     * outstanding on it`. Our own sentence could not, because we had nothing
+     * to name them with - so a teacher who chose four lessons was told "ONE of
+     * these lessons still has sections waiting for you" and left to find out
+     * which by opening all four.
+     *
+     * ONE REQUEST PER CLASS, so several refusals arrive for the same pick.
+     * They carry the same facts: approval is a property of the LESSON, not of
+     * the class it was going to, so the first one that speaks is read and the
+     * rest are duplicates of it.
+     *
+     * AND YES, THIS IS THE OPPOSITE OF WHAT THE UPLOAD SCREEN DID YESTERDAY,
+     * where the server's `error` stopped being rendered. The two are not the
+     * same kind of string. That one is a background task's free text, undocumented,
+     * and the first real one seen was an asyncpg exception. This one is a
+     * documented field on a documented status whose contract states what it
+     * contains, and it is written for the person who has to act on it. The
+     * house rule is already on `apiErrorMessage`: where the server has
+     * troubled to explain, show the explanation.
+     */
+    const named =
+      refusal && refusal.status === "rejected"
+        ? apiErrorMessage((refusal.reason as ApiError).detail)
+        : null;
 
     if (failed.length === targets.length) {
       /*
@@ -493,9 +534,18 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
       setErrorHref(notApproved && single ? `/teacher/lessons/${single}` : "");
       setError(
         notApproved
-          ? single
-            ? "This lesson still has sections waiting for you, so it cannot go to students yet."
-            : "One of these lessons still has sections waiting for you, so it cannot go to students yet. Open it from your Library and check them."
+          ? named
+            ? /*
+               * One lesson already gets a link to it, so the server's sentence
+               * stands alone; several have nowhere to point, so they keep the
+               * clause that says where to go.
+               */
+              single
+              ? named
+              : withNextStep(named)
+            : single
+              ? "This lesson still has sections waiting for you, so it cannot go to students yet."
+              : "One of these lessons still has sections waiting for you, so it cannot go to students yet. Open it from your Library and check them."
           : "We couldn’t assign that just now. Nothing has been sent - try again.",
       );
       return;
