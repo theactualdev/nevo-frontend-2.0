@@ -224,6 +224,26 @@ export interface LessonSegment {
 }
 
 export interface AssessmentQuestion {
+  /**
+   * The checkpoint this question was built from.
+   *
+   * **IT WAS ALWAYS THERE AND WE DROPPED IT.** `ComprehensionCheckpoint.id` is
+   * required on the wire and has been all along; `assessmentFor` zipped each
+   * question with its checkpoint, read the concept off it, and discarded the
+   * rest - so from inside this client the question looked like it had no
+   * identity, and I asked backend for a `problemId` that already existed.
+   * That is the "grep for the capability, not the name we proposed" failure
+   * this repo's own inventory warns about.
+   *
+   * It is what `ScaffoldAttemptRequest.problemId` wants: stable across
+   * re-renders and re-opens, unlike a position in an array, and not the answer,
+   * unlike `correctId`.
+   *
+   * Optional because a lesson built by the two authored mocks has no
+   * checkpoint behind it. No id means no attempt is posted, which is correct:
+   * an invented one would key the engine's per-problem history to a fixture.
+   */
+  id?: string;
   prompt: string;
   options: { id: string; label: string }[];
   correctId: string;
