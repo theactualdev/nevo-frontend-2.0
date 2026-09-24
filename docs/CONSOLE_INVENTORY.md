@@ -1520,6 +1520,21 @@ daily lesson path.
     **Still blocked until that shared set arrives.** The ruling is that `number_line`,
     `array`, `place_value` and `counters` are coming, not that they are here, so the
     current refusal stands rather than being approximated — §4: the interaction IS the
+14. **The baseline completion screen claims a write that has not happened.** Added
+    24 Sep, out of the `ProfilingIntro` dead-branch decision. BP-DONE reads *"Your
+    learning space has been personalized"*, which used to be true-ish — the submit was
+    in flight while the child read it. **It is not true now:** the measurement is PARKED
+    on the device and only sent once the child's account exists, a screen or two later,
+    so a child is told their learning space has been personalised before anything has
+    reached Nevo at all.
+    Nothing is broken — the vector does go, and it goes provably attributed to the right
+    child, which is *why* it was parked. The sentence is simply ahead of the fact, and it
+    is a past-tense claim about the ENGINE made by a screen that can no longer know.
+    **Needed: whether it should stop claiming a past-tense write.** Present or
+    near-future phrasing would be true at the moment it is read. There has been a
+    `NOTE FOR DESIGN` in `ProfilingFlow` since the parking landed; asked properly
+    24 Sep. **S — one sentence.**
+
     mechanism, and a wrong interaction is a different task.
 ## S-D. Not a gap — do not re-open
 
