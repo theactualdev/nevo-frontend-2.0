@@ -936,7 +936,7 @@ were filed as a backend blocker they never were.
 | Ask Nevo — "can't help, ask your teacher" | FIXTURE-ONLY | `AskNevoAnswer` carries no boundary or handoff field, so nothing on the wire can say "hand this to a teacher" | BACKEND | S |
 | Downloads tab | NOT BUILT | Both endpoints are deployed and unused; the missing half is the device — a Service Worker and a Cache API store. Hidden from signed-in children, honestly | FRONTEND | L |
 | Profile and settings, sign-out, feedback | LIVE | — | NONE | — |
-| Profile — avatar selector | NOT BUILT | Nothing to ask for: frame 27 draws eight swatches of the child's own initials, a local look rather than a photo upload, and `/api/settings/me` already carries `displayName` | FRONTEND | S |
+| Profile — avatar selector | **LIVE 25 Sep** | Frame 27's sheet: eight colourways of the child's own initials, tap to choose, no Save. Stored against the ACCOUNT under `avatarTone` in the `/api/settings/me` bag - the contract has no avatar field, and a device copy would hand one child's look to the next on a shared tablet. The shell's disc, the sidebar's and Profile's move together. **Asked of design:** three swatches carry cream initials below 3:1 | — | — |
 | Change PIN | **DONE 23 Sep** | Frame 27's three steps, built once `currentPin` landed and was enforced. Step 1 collects the current PIN and passes it through `storePin`, so `PinCreationScreen` needed no new prop; `PinRow` is exported rather than copied. A wrong current PIN is named as the child's and returns to step 1 — not the "that's on us" copy, which belongs to a write that failed for a reason no retype fixes | — | — |
 | Notification bell and feed | PARTIAL | Nothing marks anything read: there is no student caller for `markRead`, the row click just closes the panel, and the context exposes no method | FRONTEND | S |
 | Shell — sidebar, bottom nav, top bar | PARTIAL | The mobile top-bar avatar is an inert `<span>` where the frames make it the profile entry; the bottom nav renders six items where the frame draws five | FRONTEND | S |
@@ -1124,8 +1124,10 @@ instruction is to build nothing that depends on either field until it is answere
       sheet)" at 375×812 — a bottom sheet, a close button, the heading "Choose your look",
       and a four-column grid of initial-circles in different colourways with the selected one
       outlined. I missed it searching the frame for "avatar" in lower case.
-      The data is already there: `deviceRoster` stores `shapeIndex` per child and
-      `SHAPE_COUNT` exists, which is what the 28c picker draws from. **Buildable, S.**
+      ~~The data is already there: `deviceRoster` stores `shapeIndex` per child~~ **Wrong,
+      corrected 25 Sep:** `shapeIndex` is 28c's lock-screen SHAPE, a different thing from
+      frame 27's colourway, and it lives on the device. **BUILT 25 Sep** against the account
+      instead - see the Profile row.
 17. ~~**The scaffolds subsystem**~~ **BUILT 23 SEP — and 37a changed the shape of it
     twice.** `scaffoldsApi` wraps all three paths; `levelForIntensity` maps the four
     intensities to the indicator's four circles; `useScaffoldLevel` sources it in a

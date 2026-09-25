@@ -21,6 +21,7 @@ import { flushPendingProgress } from "@/lib/lessons/pendingProgress";
 import { flushPendingBaseline } from "@/lib/profiling/pendingBaseline";
 import { getSession } from "@/lib/auth/session";
 import { MOCK_STUDENT, STUDENT_NAV } from "./studentNav";
+import { useAvatarTone } from "./useAvatarTone";
 import { useDisplayName } from "./useDisplayName";
 
 /**
@@ -108,6 +109,8 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
   const { textSize } = useAccessibility();
   // The chrome calls the student by their own name, not the fixture's.
   const student = useDisplayName();
+  // The look the child chose on Profile; the navy disc until they choose.
+  const { tone } = useAvatarTone();
   const signedIn = useHasSession();
   // `useHasSession` is the server's answer until hydration, so gating on it
   // alone showed a real child the fixture's "Year 4" for a frame. Same reason
@@ -183,6 +186,7 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
               subtitle: showingFixtureIdentity
                 ? MOCK_STUDENT.subtitle
                 : undefined,
+              tone,
             }}
             collapsed={collapsed}
             onToggle={setCollapsed}
@@ -217,7 +221,8 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
               <Link
                 href="/student/profile"
                 aria-label="Profile"
-                className="flex size-10 cursor-pointer items-center justify-center rounded-full bg-nevo-navy text-sm font-semibold text-nevo-cream transition-[filter] hover:brightness-110"
+                style={{ background: tone.background, color: tone.text }}
+                className="flex size-10 cursor-pointer items-center justify-center rounded-full text-sm font-semibold transition-[filter] hover:brightness-110"
               >
                 {student.initials}
               </Link>

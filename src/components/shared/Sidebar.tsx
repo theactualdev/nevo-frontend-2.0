@@ -30,7 +30,13 @@ export function Sidebar({
 }: {
   items: NavItem[];
   activeHref?: string;
-  user?: { name: string; subtitle?: string; initials: string };
+  user?: {
+    name: string;
+    subtitle?: string;
+    initials: string;
+    /** The disc's colours, when the person chose them. Navy otherwise. */
+    tone?: { background: string; text: string };
+  };
   defaultCollapsed?: boolean;
   /** Controlled collapse. Omit to let the sidebar manage its own state. */
   collapsed?: boolean;
@@ -143,7 +149,14 @@ export function Sidebar({
             collapsed ? "justify-center" : "px-1",
           )}
         >
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-nevo-navy text-sm font-semibold text-nevo-cream">
+          <span
+            style={
+              user.tone
+                ? { background: user.tone.background, color: user.tone.text }
+                : undefined
+            }
+            className="flex size-10 shrink-0 items-center justify-center rounded-full bg-nevo-navy text-sm font-semibold text-nevo-cream"
+          >
             {user.initials}
           </span>
           {!collapsed && (
