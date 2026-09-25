@@ -14,6 +14,7 @@ import {
   withoutRecordedConsent,
 } from "./ConsentPill";
 import { consentRequestLine, useConsentRequests } from "./useConsentRequests";
+import { AddStudentSheet } from "./AddStudentSheet";
 import { statusLabel, studentStatus } from "./status";
 import { NoAccess, failureKind } from "../NoAccess";
 import {
@@ -88,6 +89,7 @@ export function StudentsView() {
    * families have replied - could be read row by row and never narrowed to.
    */
   const [consent, setConsent] = useState("");
+  const [adding, setAdding] = useState(false);
   /** Set by student detail when a record was erased - see its `onErased`. */
   const erased = params.get("erased");
   const [includeInactive, setIncludeInactive] = useState(false);
@@ -193,11 +195,17 @@ export function StudentsView() {
               </p>
             ) : null}
           </div>
+          {/*
+            * D07/D24b: "Enrol a student" opens the add sheet here. It used to
+            * leave for the invitation flow, which is a different mechanism -
+            * the child accepts a link - and is still reachable from its own
+            * place in the sidebar.
+            */}
           {phase === "ready" && students.length > 0 ? (
-            <Link href="/admin/invitations" className={PRIMARY_BTN}>
+            <button type="button" onClick={() => setAdding(true)} className={PRIMARY_BTN}>
               <PlusIcon />
               Enrol a student
-            </Link>
+            </button>
           ) : null}
         </div>
 
@@ -230,7 +238,17 @@ export function StudentsView() {
         ) : null}
 
         {phase === "ready" && students.length === 0 && !filtering ? (
-          <EmptyState />
+          <EmptyState onEnrol={() => setAdding(true)} />
+        ) : null}
+
+        {adding ? (
+          <AddStudentSheet
+            onClose={() => setAdding(false)}
+            onAdded={() => {
+              setAdding(false);
+              load(classId, includeInactive);
+            }}
+          />
         ) : null}
 
         {phase === "ready" && (students.length > 0 || filtering) ? (
@@ -465,7 +483,7 @@ export function StudentsView() {
   );
 }
 
-function EmptyState() {
+function EmptyState({ onEnrol }: { onEnrol: () => void }) {
   return (
     /*
      * Same definite height as the Classes and Teachers empty states: `flex-1`
@@ -486,16 +504,22 @@ function EmptyState() {
           No students yet
         </h3>
         <p className="mt-2.5 text-[15px] leading-[1.6] text-nevo-near-black/64">
-          Enrol your students and each one gets their own way in. If
-          you&rsquo;ve connected SSO, your roster can come across automatically.
+          Enrol your students one at a time, or upload your roster and Nevo
+          adds them all. Each one gets their own way in.
         </p>
         <div className="mt-6 flex justify-center gap-3">
-          <Link href="/admin/invitations" className={PRIMARY_BTN}>
+          <button type="button" onClick={onEnrol} className={PRIMARY_BTN}>
             <PlusIcon />
             Enrol a student
-          </Link>
-          <Link href="/admin/sso" className={GHOST_BTN}>
-            Import from SSO
+          </button>
+          {/*
+            * WAS "Import from SSO", pointing at the IT surface - which came
+            * off the sidebar on 24 Sep because provider sign-in is deferred.
+            * The same stale link the Classes empty state carried, fixed there
+            * in the D05 tidy-up and missed here. D07 draws "Import a roster".
+            */}
+          <Link href="/admin/roster" className={GHOST_BTN}>
+            Import a roster
           </Link>
         </div>
       </div>

@@ -342,7 +342,53 @@ export interface StudentSessionDetail {
 }
 
 
+/** `POST /api/v1/students`. Only the name and class are required. */
+export interface StudentEnroll {
+  firstName: string;
+  lastName: string;
+  classId: string;
+  email?: string | null;
+  ageBand?: string | null;
+  /** ISO date. Optional; the server refuses a date in the future. */
+  dateOfBirth?: string | null;
+}
+
+/** What enrolment returns: the new id, and the name the child signs in with. */
+export interface StudentEnrollment {
+  id: string;
+  loginIdentifier: string;
+}
+
 export const studentsApi = {
+  /**
+   * Enrol one student directly. POST /api/v1/students
+   *
+   * D24b's "Add a student". Called by nothing until 25 Sep: "Enrol a student"
+   * on the roster linked to the invitation flow instead, which is a different
+   * mechanism (the child accepts a link) from this one (the school adds them).
+   *
+   * **IT HAS NO BILLING SIDE EFFECT, AND THE SCREEN MUST NOT IMPLY ONE.** It
+   * creates the student, enrols them in the class, and commits - no invoice,
+   * no charge, no record that a chargeable addition happened. Backend added a
+   * test asserting the handler contains no billing, so that changes only
+   * deliberately. An addition reaches a school as a bigger NEXT invoice,
+   * because the invoice run prices the term off whoever is active when it
+   * runs. See `onboardingApi.quoteAddition`.
+   *
+   * `dateOfBirth` is optional and refused if it is in the future. The column
+   * existed for the two-point age check and this body simply never accepted
+   * it. Optional because a school office mid-term may not have it to hand,
+   * and refusing an enrolment over a missing date would keep a child out of
+   * lessons.
+   *
+   * NO PARENT EMAIL, deliberately - backend asked for it to be held. The
+   * parent record needs a name as well, and creating one while the consent
+   * flow is frozen would mean holding a parent's address and never sending
+   * the request it exists for.
+   */
+  enroll: (body: StudentEnroll) =>
+    api.post<StudentEnrollment>("/api/v1/students", body),
+
   /**
    * The school roster. Deactivated students are excluded by default and
    * reachable by filter, which is what `includeInactive` does. `classId`
