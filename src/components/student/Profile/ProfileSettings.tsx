@@ -6,10 +6,12 @@ import { Check, ChevronRight, LogOut, MessageCircle } from "lucide-react";
 import { NevoKeyboard, Switch } from "@/components/shared";
 import { useAuth } from "@/hooks";
 import { useDisplayName } from "@/components/student/Shell/useDisplayName";
+import { useAvatarTone } from "@/components/student/Shell/useAvatarTone";
 import { getRememberedProfile, setStoredDisplayName } from "@/lib/auth/session";
 import { settingsApi } from "@/lib/api/settings";
 import { useAccessibility } from "@/context/AccessibilityContext";
 import { cn } from "@/lib/utils";
+import { AvatarPickerSheet } from "./AvatarPickerSheet";
 import { SignOutSheet } from "./SignOutSheet";
 
 const TEXT_SIZES = [
@@ -32,6 +34,8 @@ export function ProfileSettings() {
   const router = useRouter();
   const { signOut } = useAuth();
   const [signOutOpen, setSignOutOpen] = useState(false);
+  const [lookOpen, setLookOpen] = useState(false);
+  const { tone, choose: chooseTone } = useAvatarTone();
 
   // Editable display name (product frame: tap Change → inline input; initials
   // derive from the name). TODO(api): persist via the profile endpoint.
@@ -168,9 +172,16 @@ export function ProfileSettings() {
       {/* Account */}
       <SectionHeading>Account</SectionHeading>
       <div className="flex items-center gap-3.5 py-3">
-        <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-nevo-navy text-xl font-semibold text-nevo-cream">
+        {/* The disc opens "Choose your look" (frame 27). */}
+        <button
+          type="button"
+          aria-label="Choose your look"
+          onClick={() => setLookOpen(true)}
+          style={{ background: tone.background, color: tone.text }}
+          className="flex size-14 shrink-0 cursor-pointer items-center justify-center rounded-full text-xl font-semibold transition-[filter] hover:brightness-110"
+        >
           {initials}
-        </span>
+        </button>
         {editingName ? (
           <input
             ref={nameInputRef}
@@ -273,6 +284,20 @@ export function ProfileSettings() {
           strokeWidth={2}
         />
       </button>
+
+      <AvatarPickerSheet
+        open={lookOpen}
+        onOpenChange={setLookOpen}
+        initials={initials}
+        current={tone}
+        onChoose={(next) => {
+          setLookOpen(false);
+          // "Saved" only once the account holds it. The disc changes at once
+          // either way; on a failed write it quietly goes back, which is the
+          // truth about what was kept.
+          chooseTone(next.id).then(flashSaved, () => {});
+        }}
+      />
 
       <SignOutSheet
         open={signOutOpen}
