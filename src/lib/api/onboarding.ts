@@ -4,9 +4,18 @@ import { api } from "./client";
  * D24 Getting to Active - where a school is between registering and paying.
  *
  * NONE OF THIS WAS CALLED UNTIL 23 SEP. Six endpoints were deployed and the
- * whole flow was unbuilt; this is the first of them to be read. The rest -
- * imports, class corrections, confirm, activate, additions/quote - are still
- * unbuilt and are sized in docs/BUILD_STATUS.md.
+ * whole flow was unbuilt.
+ *
+ * ~~The rest - imports, class corrections, confirm, activate, additions/quote
+ * - are still unbuilt.~~ That line went stale within a day and stayed wrong
+ * for two, which is the decay this codebase keeps finding in other people's
+ * files. As of 25 Sep all six are called EXCEPT one, and that one on purpose:
+ *
+ *  - `PATCH /onboarding/classes` (class corrections) is typed and deliberately
+ *    unused. D24 routes every correction back through the spreadsheet - the
+ *    server names what is wrong with each row and the school fixes it in
+ *    Excel and re-uploads - so an in-app rename/drop would be a second route
+ *    the frame chose not to have. Raised with design, not built.
  */
 
 /**
@@ -111,7 +120,53 @@ export interface OnboardingState {
   inOnboarding: boolean;
 }
 
+/**
+ * What adding people mid-term costs. `POST /onboarding/additions/quote`
+ *
+ * **ADVISORY. IT QUOTES AND CHARGES NOTHING, AND NEITHER DOES ANYTHING ELSE.**
+ * Enrolling a student has no billing side effect; the addition reaches the
+ * school as a bigger next invoice, because the invoice run prices the term off
+ * whoever is active when it runs. `billed` is a constant - `"next_invoice"` -
+ * added on 25 Sep precisely so a screen cannot quietly assume otherwise.
+ *
+ * **NOT PRORATED.** It is the full per-student rate for a whole term, not the
+ * remainder of this one. So a figure here is never "what this child costs for
+ * the weeks left".
+ *
+ * THE VAT SPLIT IS THE SERVER'S. `totalBeforeVat`, `vatRate`, `vatAmount` and
+ * `totalWithVat` come from the same pricing function as `PricingResponse`,
+ * already rounded. `vatRate` is a PERCENTAGE - 7.5% arrives as "7.50" - so it
+ * is rendered with a per-cent sign and never multiplied by 100. `amount` stays
+ * and equals `totalWithVat`; prefer the named fields.
+ *
+ * `appliesTo` is the term, spelt the way `academic_session()` spells it
+ * everywhere - "Term 2 · 2026/2027", year in full. **NULL when the school has
+ * not configured its term dates**, and then nothing is printed: an invented
+ * term on a price is worse than none.
+ */
+export interface AdditionQuote {
+  students: number;
+  teachers: number;
+  perStudentRate: string;
+  amount: string;
+  totalBeforeVat: string;
+  vatRate: string;
+  vatAmount: string;
+  totalWithVat: string;
+  currency: string;
+  appliesTo: string | null;
+  billed: "next_invoice";
+  message: string;
+}
+
 export const onboardingApi = {
+  /**
+   * Quote an addition. Advisory - see `AdditionQuote`. A teacher costs
+   * nothing, which the quote says rather than the screen assuming it.
+   */
+  quoteAddition: (counts: { students?: number; teachers?: number }) =>
+    api.post<AdditionQuote>("/api/v1/onboarding/additions/quote", counts),
+
   /** GET /api/v1/onboarding - the whole resumable state in one read. */
   get: () => api.get<OnboardingState>("/api/v1/onboarding"),
 

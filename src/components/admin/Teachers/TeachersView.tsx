@@ -286,17 +286,23 @@ function EmptyState() {
         />
         <h3 className="m-0 text-xl font-semibold text-nevo-near-black">No teachers yet</h3>
         <p className="mt-2.5 text-[15px] leading-[1.6] text-nevo-near-black/64">
-          Invite your teachers and each one gets their own console. If
-          you&rsquo;ve connected SSO, your staff can come across automatically -
-          nothing is sent until you invite them.
+          Invite your teachers one at a time, or upload your staff file and
+          Nevo adds them all. Each one gets their own console, and nothing is
+          sent until you invite them.
         </p>
         <div className="mt-6 flex justify-center gap-3">
           <Link href="/admin/invitations" className={PRIMARY_BTN}>
             <PlusIcon />
             Invite a teacher
           </Link>
-          <Link href="/admin/sso" className={GHOST_BTN}>
-            Import from SSO
+          {/*
+            * WAS "Import from SSO" -> the IT surface, which came off the
+            * sidebar on 24 Sep. Provider sign-in is deferred and every school
+            * is manual, so the route that brings staff in is the roster
+            * upload, which takes a teacher file alongside the student one.
+            */}
+          <Link href="/admin/roster" className={GHOST_BTN}>
+            Import a roster
           </Link>
         </div>
       </div>
