@@ -113,18 +113,35 @@ function SegmentRow({
   lessonId,
   progress,
   slowest,
+  outstanding,
 }: {
   segment: LessonSegment;
   index: number;
   lessonId: string;
   progress?: SegmentProgress;
   slowest?: boolean;
+  /**
+   * STILL WAITING FOR A TEACHER - not "was flagged".
+   *
+   * This row read `segment.needsReview`, and that flag never clears. It is the
+   * parser's verdict on the section, and approving it sets `approved` and
+   * leaves `needsReview` exactly where it was. So the first real end-to-end
+   * run, 25 Sep, ended on a lesson that had been reviewed, approved in full
+   * and sent to seven children with every section on this page still marked
+   * "Worth a look".
+   *
+   * The row does not decide this for itself, and that is the point. The review
+   * hook already holds the one correct answer - flagged AND not approved,
+   * counting what was approved in this session - and the siblings that wrote
+   * their own version of it are how this drifted.
+   */
+  outstanding: boolean;
 }) {
   return (
     <div
       className={cn(
         "flex flex-col gap-2 px-[22px] py-4 xl:flex-row xl:items-start xl:gap-4",
-        segment.needsReview && "border-l-[3px] border-nevo-violet",
+        outstanding && "border-l-[3px] border-nevo-violet",
       )}
     >
       <span className="w-6 shrink-0 text-[13px] text-nevo-near-black/40 tabular-nums">
@@ -148,7 +165,7 @@ function SegmentRow({
             {segment.body}
           </p>
         )}
-        {segment.needsReview && (
+        {outstanding && (
           /*
            * "Worth a look", and NOT the reasons.
            *
@@ -254,6 +271,13 @@ export function LiveLessonDetail({
    */
   const reviewable = segments.filter((s) => s.needsReview);
   const sections = useSegmentReview(lesson.id, segments);
+  /*
+   * The rows below mark only what is STILL waiting, from the hook's own list.
+   * `reviewable` above is deliberately different - it keeps an approved section
+   * in the review list, shown as checked - and the two must not be merged: one
+   * is "what did Nevo flag", the other is "what is left to do".
+   */
+  const waitingIds = new Set(sections.outstanding.map((s) => s.id));
   const say = useSystemMessages();
   /*
    * LR-05: "quiet state change plus the SCRUM-152 system message". The state
@@ -675,6 +699,7 @@ export function LiveLessonDetail({
                       lessonId={lesson.id}
                       progress={bySegment.get(s.id)}
                       slowest={progress?.slowestSegmentId === s.id}
+                      outstanding={waitingIds.has(s.id)}
                     />
                   ))}
                 </div>
@@ -696,6 +721,7 @@ export function LiveLessonDetail({
                 lessonId={lesson.id}
                 progress={bySegment.get(s.id)}
                 slowest={progress?.slowestSegmentId === s.id}
+                outstanding={waitingIds.has(s.id)}
               />
             ))}
           </div>
