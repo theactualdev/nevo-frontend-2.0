@@ -152,3 +152,123 @@ describe("what the card carries", () => {
     expect(__toCardForTest(lesson({ subject: null })).subject).toBeUndefined();
   });
 });
+
+/**
+ * WHY A LESSON COULD NOT BE PROCESSED, ON THE CARD THAT SAYS IT WASN'T.
+ *
+ * The card has said "This lesson couldn't be processed. Nothing you did is
+ * lost." since it was built, and could say no more: the reason lives on the
+ * parse RUN and this list carries no run id, so the alternative was a request
+ * per failed card to render one sentence. Backend denormalised
+ * `failureReason` and `incidentId` onto the lesson on 25 Sep.
+ *
+ * The mapper is tested here rather than only through the screen, because the
+ * screen mocks the hook - a field dropped in `toCard` would be invisible to
+ * every component test in this file.
+ */
+describe("what the mapper carries off a failed lesson", () => {
+  const failed = (over: Record<string, unknown> = {}) =>
+    __toCardForTest({
+      id: "l-1",
+      title: "Water Cycle",
+      sourceType: "upload",
+      status: "failed",
+      segmentCount: 0,
+      reviewSegmentCount: 0,
+      createdAt: "2026-09-25T09:00:00Z",
+      ...over,
+    } as never);
+
+  it("carries the reason and the reference", () => {
+    const c = failed({
+      failureReason: "A fault at our end, not anything about your file.",
+      incidentId: "ca8435c98d08",
+    });
+
+    expect(c.kind).toBe("failed");
+    expect(c.failureReason).toBe(
+      "A fault at our end, not anything about your file.",
+    );
+    expect(c.incidentId).toBe("ca8435c98d08");
+  });
+
+  it("carries neither where the server sent neither", () => {
+    // Absent on an older deployment, so the card keeps its own line rather
+    // than rendering an empty one.
+    const c = failed();
+
+    expect(c.failureReason).toBeUndefined();
+    expect(c.incidentId).toBeUndefined();
+  });
+
+  it("treats a whitespace-only reason as none", () => {
+    const c = failed({ failureReason: "   ", incidentId: "  " });
+
+    expect(c.failureReason).toBeUndefined();
+    expect(c.incidentId).toBeUndefined();
+  });
+
+  it("puts no post-mortem on a lesson that is still being read", () => {
+    /*
+     * `failureReason` is null unless the parse failed - but a payload that
+     * carried one on a processing lesson would otherwise reach a live card,
+     * and "why it failed" on a lesson that has not is the worst kind of wrong.
+     */
+    const c = failed({
+      status: "processing",
+      failureReason: "A fault at our end.",
+      incidentId: "ca8435c98d08",
+    });
+
+    expect(c.kind).toBe("parsing");
+    expect(c.failureReason).toBeUndefined();
+    expect(c.incidentId).toBeUndefined();
+  });
+});
+
+describe("the failed card on screen", () => {
+  const failedCard = (over: Record<string, unknown> = {}) => ({
+    id: "l-1",
+    title: "Water Cycle",
+    status: "Ready" as const,
+    kind: "failed" as const,
+    needsReview: false,
+    meta: "0 sections",
+    footer: "We couldn’t read this file",
+    ...over,
+  });
+
+  it("says why, where the server said", () => {
+    useLessonLibrary.mockReturnValue(
+      state([
+        failedCard({
+          failureReason: "A fault at our end, not anything about your file.",
+        }),
+      ] as never),
+    );
+
+    render(<LessonLibrary />);
+
+    expect(
+      screen.getByText("A fault at our end, not anything about your file."),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps our own line where it did not", () => {
+    useLessonLibrary.mockReturnValue(state([failedCard()] as never));
+
+    render(<LessonLibrary />);
+
+    expect(screen.getByText("Nothing you did is lost.")).toBeInTheDocument();
+  });
+
+  it("offers the reference to quote", () => {
+    useLessonLibrary.mockReturnValue(
+      state([failedCard({ incidentId: "ca8435c98d08" })] as never),
+    );
+
+    render(<LessonLibrary />);
+
+    expect(screen.getByText(/ca8435c98d08/)).toBeInTheDocument();
+  });
+});

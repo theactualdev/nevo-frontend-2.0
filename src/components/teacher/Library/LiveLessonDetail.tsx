@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { Assignment } from "@/lib/api/assignments";
 import { AssignmentSchedule } from "./AssignmentSchedule";
 import type {
+  LessonClass,
   LessonClassProgress,
   LessonContentType,
   LessonDetailResponse,
@@ -206,14 +207,23 @@ export function LiveLessonDetail({
   modules,
   assignments,
   progress,
-  classCount = 0,
+  /**
+   * The classes this lesson went to, named.
+   *
+   * WAS A COUNT, derived by listing every assignment the teacher can see and
+   * filtering client-side - which yielded ids and no names, so this screen
+   * could say "one of several" and never which. `lesson.classes` is one query
+   * and carries the names.
+   */
+  classes = [],
 }: {
   lesson: LessonDetailResponse;
   modules: LessonModule[];
   assignments: Assignment[];
   progress?: LessonClassProgress | null;
+  classes?: LessonClass[];
   /** How many classes hold this lesson; >1 means the rows name one of them. */
-  classCount?: number;
+
 }) {
   const bySegment = new Map(
     (progress?.segments ?? []).map((p) => [p.segmentId, p]),
@@ -582,11 +592,65 @@ export function LiveLessonDetail({
             they are looking for the class they got wrong. */}
         <AssignmentSchedule assignments={assignments} />
 
+        {/*
+          WHERE THIS LESSON WENT - all of it, per design's ruling of 24 Sep.
+          A list rather than tabs: a teacher checking a mis-assignment is
+          looking for the class, and one tab at a time hides the answer behind
+          a click.
+
+          Absent is not empty. An older deployment sends no `classes` at all,
+          and drawing "not assigned to any class" over that would be inventing
+          the one fact this section exists to report.
+        */}
+        {classes.length > 0 && (
+          <>
+            <h3 className={cn(SECTION_H, "mt-8")}>Where this lesson went</h3>
+            <ul className="mt-3 flex list-none flex-col gap-0 overflow-hidden rounded-xl bg-nevo-cream-elevated p-0 shadow-elevation-1">
+              {classes.map((c, i) => (
+                <li
+                  key={c.id}
+                  className={cn(
+                    "flex items-center gap-3 px-[18px] py-3",
+                    i < classes.length - 1 &&
+                      "border-b border-nevo-near-black/7",
+                  )}
+                >
+                  <span className="min-w-0 flex-1 truncate text-[14.5px] font-medium text-nevo-near-black">
+                    {c.name}
+                    {c.yearGroup && (
+                      <span className="ml-2 font-normal text-nevo-near-black/50">
+                        {c.yearGroup}
+                      </span>
+                    )}
+                  </span>
+                  {/* Distinct children, per the contract - not assignment
+                      rows. Absent means we were not told, and 0 children is a
+                      class the lesson reached nobody in, so neither may be
+                      rendered as the other. */}
+                  {typeof c.studentCount === "number" && (
+                    <span className="shrink-0 text-[13px] whitespace-nowrap text-nevo-near-black/55">
+                      {`${c.studentCount} ${c.studentCount === 1 ? "student" : "students"}`}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+
         <h3 className={cn(SECTION_H, "mt-8")}>
           What&rsquo;s in this lesson
-          {progress && classCount > 1 && (
+          {progress && classes.length > 1 && (
+            /*
+             * THE PROGRESS IS STILL ONE CLASS'S, and now it can say whose.
+             * `class-progress` takes a single `classId`, so the numbers below
+             * describe one class however many appear above - and "progress
+             * shown for one class" left a teacher to guess which.
+             */
             <span className="ml-2 font-normal tracking-normal text-nevo-near-black/45 normal-case">
-              {"progress shown for one class"}
+              {classes.find((c) => c.id === progress.classId)
+                ? `progress for ${classes.find((c) => c.id === progress.classId)!.name}`
+                : "progress shown for one class"}
             </span>
           )}
         </h3>

@@ -36,7 +36,6 @@ export function LessonRoute({
     modules,
     assignments,
     progress,
-    classIds,
     loading,
     missing,
     failed,
@@ -65,7 +64,7 @@ export function LessonRoute({
         modules={modules}
         assignments={assignments}
         progress={progress}
-        classCount={classIds.length}
+        classes={lesson.classes}
       />
     );
   }

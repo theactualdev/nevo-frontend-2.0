@@ -65,6 +65,16 @@ export interface LibraryCard {
   /** The quiet third line. */
   footer: string;
   /**
+   * WHY, on a card that failed - and nothing at all on one that did not.
+   *
+   * `kind === "failed"` said the parse stopped and the card could say no more
+   * than "Nothing you did is lost", because the reason lived on the parse run
+   * and this list has no run id. It is on the lesson now.
+   */
+  failureReason?: string;
+  /** The reference to quote, on a card that failed. */
+  incidentId?: string;
+  /**
    * Whatever the lesson says it is about. A string, not an enum: the contract
    * states no vocabulary and the fixture's four-value list was never the
    * product's - a school teaching Biology, Chemistry and Physics has three
@@ -172,6 +182,18 @@ function toCard(lesson: LessonSummary): LibraryCard {
       .filter(Boolean)
       .join(" · "),
     footer: footerOf(lesson),
+    // Only where the lesson says it failed. Carrying either onto a lesson that
+    // is merely still parsing would put a post-mortem on a live card.
+    ...(kind === "failed"
+      ? {
+          ...(lesson.failureReason?.trim()
+            ? { failureReason: lesson.failureReason.trim() }
+            : {}),
+          ...(lesson.incidentId?.trim()
+            ? { incidentId: lesson.incidentId.trim() }
+            : {}),
+        }
+      : {}),
     // Nullable on the summary, and absent means the lesson was uploaded
     // without one - which is a lesson the pills cannot narrow, not an error.
     subject: lesson.subject ?? undefined,
