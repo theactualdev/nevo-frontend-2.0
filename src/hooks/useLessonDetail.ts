@@ -42,7 +42,6 @@ import { useHasSession } from "./useHasSession";
 export interface LessonDetailState {
   lesson: LessonDetailResponse | null;
   /** Distinct classes this lesson was assigned to, in assignment order. */
-  classIds: string[];
   /** Null while loading, or when there is no class to ask about. */
   progress: LessonClassProgress | null;
   /** How the parser grouped the segments; empty when it grouped none. */
@@ -125,6 +124,14 @@ export function useLessonDetail(lessonId: string): LessonDetailState {
     };
   }, [lessonId, assignments]);
 
+  /*
+   * STILL DERIVED, NO LONGER RETURNED. The screen used to take this as a COUNT
+   * of the classes a lesson went to - the only answer available, since it came
+   * from listing every assignment the teacher can see and filtering by lesson.
+   * `lesson.classes` carries the classes with their names now, so the count is
+   * dead. What survives is the guard below: progress belongs to one class, and
+   * the first assignment's class is the one this hook asked about.
+   */
   const classIds = [
     ...new Set(
       assignments
@@ -137,7 +144,6 @@ export function useLessonDetail(lessonId: string): LessonDetailState {
     lesson,
     modules,
     assignments,
-    classIds,
     // Guarded so a stale class's numbers never sit under a different lesson.
     progress: progress && progress.classId === classIds[0] ? progress : null,
     loading,

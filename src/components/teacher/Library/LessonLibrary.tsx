@@ -313,9 +313,24 @@ export function LessonLibrary() {
                       <div className="text-[15.5px] leading-[1.35] font-semibold text-nevo-near-black">
                         This lesson couldn&rsquo;t be processed.
                       </div>
+                      {/* THE REASON, WHERE THE SERVER GAVE ONE. Until 25 Sep
+                          it lived on the parse run and this list has no run
+                          id, so this card could only say the failure had
+                          happened. Ours still stands where there is none - an
+                          older deployment, or a failure with no recognised
+                          cause. */}
                       <p className="mt-1 text-[13.5px] leading-[1.5] text-nevo-near-black/62">
-                        Nothing you did is lost.
+                        {lesson.failureReason ?? "Nothing you did is lost."}
                       </p>
+                      {lesson.incidentId && (
+                        <p className="mt-[5px] text-[12px] leading-[1.45] text-nevo-near-black/50">
+                          {"If you tell us about this, quote "}
+                          <span className="font-mono text-nevo-near-black/70">
+                            {lesson.incidentId}
+                          </span>
+                          {"."}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="flex-1" />

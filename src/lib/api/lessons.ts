@@ -56,7 +56,41 @@ export interface LessonSummary {
    * Present it as approximate: it is a planning figure, not a measurement.
    */
   estimatedMinutes?: number;
+  /**
+   * WHY THE PARSE FAILED, ON THE LESSON ITSELF. Added 25 Sep.
+   *
+   * The reason has always lived on the parse RUN, and the library list carries
+   * no run id - so "This lesson couldn't be processed." could not say why
+   * without a request per failed card, which is a workaround rather than a
+   * design. Backend denormalised it onto the lesson at the moment the run
+   * fails.
+   *
+   * PROSE, PROMISED - never the driver's own text, which is the distinction
+   * that cost this console a rendered asyncpg exception. Null unless `status`
+   * is `failed`.
+   */
+  failureReason?: string | null;
+  /** Twelve hex characters, for a teacher to quote. Null unless it failed. */
+  incidentId?: string | null;
   createdAt: string;
+}
+
+/**
+ * A class this lesson actually went to.
+ *
+ * WHAT THIS REPLACES. Finding the classes for one lesson meant listing EVERY
+ * assignment the teacher can see and filtering client-side - and it still only
+ * yielded ids, so the screen could count classes and not name them. Backend
+ * added this on 25 Sep: one query, only classes with somebody assigned.
+ *
+ * `studentCount` is distinct children rather than assignment rows, so a child
+ * assigned twice is one child.
+ */
+export interface LessonClass {
+  id: string;
+  name: string;
+  yearGroup?: string | null;
+  studentCount?: number;
 }
 
 /**
@@ -239,6 +273,18 @@ export interface LessonReview {
   keyPoints: KeyPoint[];
 }
 export interface LessonDetailResponse extends LessonSummary {
+  /**
+   * EVERY CLASS THIS LESSON WENT TO, and the reason the screen stopped showing
+   * one of them as though it were all of them.
+   *
+   * Design, 24 Sep: *"show all of them. A lesson assigned to three classes that
+   * displays one is telling a teacher something untrue. A list rather than
+   * tabs, because a teacher needs to see at a glance where a lesson went."*
+   *
+   * Optional, so an older deployment reads as "we were not told" rather than
+   * "it went nowhere" - which is a claim, and the wrong one.
+   */
+  classes?: LessonClass[];
   confirmationSummary: string | null;
   segments: LessonSegment[];
   /**
