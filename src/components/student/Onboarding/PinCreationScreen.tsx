@@ -306,15 +306,26 @@ export function PinRow({
   offset,
   caretAt,
   error,
+  length = STUDENT_PIN_LENGTH,
 }: {
   filled: number;
   offset: number;
   caretAt: number;
   error: boolean;
+  /**
+   * How many boxes. Defaults to the length a new PIN is created at; a row
+   * that CHECKS an existing PIN passes more, because that PIN may be longer.
+   */
+  length?: number;
 }) {
   return (
-    <div className={cn("flex gap-3", offset === 0 && "mt-10")}>
-      {Array.from({ length: STUDENT_PIN_LENGTH }, (_, i) => {
+    <div
+      className={cn(
+        "flex flex-wrap justify-center gap-3",
+        offset === 0 && "mt-10",
+      )}
+    >
+      {Array.from({ length }, (_, i) => {
         const idx = offset + i;
         const isFilled = filled > idx;
         const isActive = idx === caretAt;

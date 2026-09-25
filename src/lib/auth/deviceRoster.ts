@@ -240,6 +240,13 @@ export function rememberChild(profile: RememberedProfile): RememberedChild[] {
     // tablet shows six different shapes.
     shapeIndex: match?.shapeIndex ?? freeShapeIndex(rest),
     lastUsedAt: new Date().toISOString(),
+    // Same for the PIN's length: the name lookup after a full sign-in writes
+    // again without it, and must not drop what the sign-in itself recorded.
+    ...(profile.pinLength
+      ? { pinLength: profile.pinLength }
+      : match?.pinLength
+        ? { pinLength: match.pinLength }
+        : {}),
     // A later sign-in that could not fetch a name must not erase one we
     // already had: the picker would silently fall back to "Welcome back" for a
     // child it has greeted by name for weeks.

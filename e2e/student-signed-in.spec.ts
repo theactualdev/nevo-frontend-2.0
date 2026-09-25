@@ -34,10 +34,11 @@ import { expect, test, type Page } from "@playwright/test";
  *
  * ## The coupling this catches
  *
- * An administrator's reset issues a SIX-digit PIN. If `STUDENT_PIN_LENGTH` is
- * lowered to four without the sign-in form accepting up to eight, a child whose
- * PIN was reset by an adult could not type it in. The form test below would
- * fail on exactly that.
+ * An administrator's reset issues a SIX-digit PIN, and since 25 Sep a new PIN
+ * is FOUR (`STUDENT_PIN_LENGTH`). The sign-in form therefore takes four to
+ * eight; if it were ever capped at the creation length again, a child whose
+ * PIN was reset by an adult could not type it in. The form test below types
+ * the six-digit reset PIN, so it fails on exactly that.
  */
 
 const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL;

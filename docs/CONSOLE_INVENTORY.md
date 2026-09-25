@@ -1322,7 +1322,17 @@ working onboarding meanwhile, which is a reduction shipped knowingly.
 **`accountReady` and `ageCheckPending` are declared and read by nothing**, so
 they stop being erased without anything branching on a guess.
 
-### THE PIN LENGTH IS NOW INCONSISTENT WITHIN THE WIRE ITSELF
+### ~~THE PIN LENGTH IS NOW INCONSISTENT WITHIN THE WIRE ITSELF~~ — **RESOLVED 25 SEP, AND FOUR SHIPPED**
+
+**Every PIN field on the deployed spec is now 4-8 digits**, `PinLoginRequest` and
+`PinUpdateRequest` included. `STUDENT_PIN_LENGTH` is 4, and it now means only
+the length a child CREATES. Every door that CHECKS a PIN takes 4-8, because every
+PIN issued before today is six and an administrator's reset still issues six. The
+one-tap unlock submits when its boxes fill, so the roster remembers each child's
+PIN LENGTH (never the PIN), assumes six for a child remembered before today, stops
+trusting it after a PIN that did not match, and has a check key on the pad for a
+PIN shorter than remembered. The history below is kept for why it took a month.
+
 
 Found 23 Sep, and it lands directly in the path of the entry work above.
 
@@ -1496,7 +1506,7 @@ daily lesson path.
     lesson's author. **Null is not an error** — backend returns it rather than a
     placeholder for a deleted or unnamed account, on the principle this surface was built
     around, so an unresolvable author is an UNSIGNED note and never a withheld one.
-12. ~~**Four PIN boxes or six.**~~ **SETTLED 21 Sep: FOUR. The 28c redraw stands, and
+12. ~~**Four PIN boxes or six.**~~ **BUILT 25 SEP, once the wire allowed it - see the resolved PIN-length section.** **SETTLED 21 Sep: FOUR. The 28c redraw stands, and
     this is not to be raised again.** Closed as a design question.
     **Implementing it is a BACKEND change, not a frontend one, and that is a contract
     fact rather than a reopening.** The deployed spec constrains every PIN field with

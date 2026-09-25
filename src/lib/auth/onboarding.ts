@@ -6,6 +6,7 @@
  * what the returning-student login screen unlocks against.
  */
 
+import { STUDENT_PIN_LENGTH } from "@/lib/constants/auth";
 import { rememberProfile } from "./session";
 
 const DRAFT_KEY = "nevo.onboarding.draft";
@@ -121,6 +122,8 @@ export function rememberOnboardedStudent(
     loginIdentifier: identifier,
     displayName: name.split(/\s+/)[0],
     initials: initialsOf(name),
+    // They have just created it, at the one length a new PIN can be.
+    pinLength: STUDENT_PIN_LENGTH,
   });
   clearOnboardingDraft();
   return true;

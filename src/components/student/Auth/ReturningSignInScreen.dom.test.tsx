@@ -520,15 +520,48 @@ describe("signing in on a device with a real keyboard", () => {
     expect(filledBoxes()).toBe(0);
   });
 
-  it("stops at the PIN length, exactly as the pad does", () => {
+  it("stops at the longest PIN the server takes, exactly as the pad does", () => {
     // The pad and the keyboard now share one appender, so they cannot disagree
     // about the cap - which is the reason to share it.
     render(<ReturningSignInScreen />);
-    for (const d of ["1", "2", "3", "4", "5", "6", "7", "8"]) {
+    for (const d of "1234567890") {
       fireEvent.change(pinField(), { target: { value: d } });
     }
 
-    expect(filledBoxes()).toBe(6);
+    expect(filledBoxes()).toBe(8);
+  });
+
+  it("takes a six-digit PIN whole, and remembers it was six", async () => {
+    /*
+     * THE REASON THIS FORM IS NOT CAPPED AT FOUR. Every PIN issued before
+     * 25 Sep is six, and so is every adult's reset. A cap at the length a new
+     * PIN is created at would send "1234" for a child whose PIN is "123456" -
+     * the exact lockout the seeded demo account hit on 31 Aug.
+     *
+     * And the length is remembered, because tomorrow's one-tap unlock submits
+     * when its boxes fill and has to know how many to draw.
+     */
+    loginPin.mockResolvedValue(SESSION);
+    render(<ReturningSignInScreen />);
+    fill();
+    await signInNow();
+
+    expect(loginPin).toHaveBeenCalledWith(
+      expect.objectContaining({ pin: "123456" }),
+    );
+    expect(getRememberedProfile()?.pinLength).toBe(6);
+  });
+
+  it("will not sign in with fewer than four digits", () => {
+    render(<ReturningSignInScreen />);
+    const [schoolField, userField] = screen.getAllByRole("textbox");
+    fireEvent.change(schoolField, { target: { value: "751A1136" } });
+    fireEvent.change(userField, { target: { value: "amara.k" } });
+    for (const d of "123") {
+      fireEvent.change(pinField(), { target: { value: d } });
+    }
+
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeDisabled();
   });
 
   it("takes a whole typed PIN and enables Sign in", () => {

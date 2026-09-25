@@ -11,7 +11,11 @@ import {
 } from "@/components/student/Onboarding/PinCreationScreen";
 import { authApi } from "@/lib/api";
 import { isCurrentPinRejected } from "@/lib/auth/currentPinFailure";
-import { STUDENT_PIN_LENGTH } from "@/lib/constants";
+import {
+  STUDENT_PIN_LENGTH,
+  STUDENT_PIN_MAX,
+  STUDENT_PIN_MIN,
+} from "@/lib/constants";
 
 const PROFILE_HREF = "/student/profile";
 
@@ -44,7 +48,13 @@ export function ChangePinScreen() {
 
   const pressDigit = useCallback((d: string) => {
     setMismatch(false);
-    setCurrentPin((p) => (p + d).slice(0, STUDENT_PIN_LENGTH));
+    /*
+     * The CURRENT PIN is whatever length it already is - six for anyone who
+     * set theirs before 25 Sep or had it reset by an adult - so this step
+     * takes the whole range and Continue says when it is done. Only the NEW
+     * PIN, on the next step, is held to four.
+     */
+    setCurrentPin((p) => (p + d).slice(0, STUDENT_PIN_MAX));
   }, []);
   const backspace = useCallback(
     () => setCurrentPin((p) => p.slice(0, -1)),
@@ -112,7 +122,7 @@ export function ChangePinScreen() {
     );
   }
 
-  const ready = currentPin.length === STUDENT_PIN_LENGTH;
+  const ready = currentPin.length >= STUDENT_PIN_MIN;
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-nevo-cream text-nevo-near-black">
@@ -139,6 +149,7 @@ export function ChangePinScreen() {
           offset={0}
           caretAt={currentPin.length}
           error={mismatch}
+          length={Math.max(STUDENT_PIN_LENGTH, currentPin.length)}
         />
 
         <p role="alert" className="mt-4 min-h-5 text-sm text-nevo-violet">

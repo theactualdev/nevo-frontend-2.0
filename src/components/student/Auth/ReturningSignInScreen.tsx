@@ -19,7 +19,12 @@ import {
 import { rememberProfile } from "@/lib/auth/session";
 import { studentDestination } from "@/lib/auth/entryGate";
 import { useAuth } from "@/hooks";
-import { STUDENT_PIN_LENGTH, type UserRole } from "@/lib/constants";
+import {
+  STUDENT_PIN_LENGTH,
+  STUDENT_PIN_MAX,
+  STUDENT_PIN_MIN,
+  type UserRole,
+} from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { AccountOnPauseScreen } from "./AccountOnPauseScreen";
 
@@ -110,7 +115,16 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
       const add = raw.replace(/[^0-9]/g, "");
       if (!add) return;
       setError(null);
-      setDigits((d) => (d + add).slice(0, STUDENT_PIN_LENGTH));
+      /*
+       * UP TO EIGHT, NOT THE LENGTH A NEW PIN IS CREATED AT.
+       *
+       * A child meets this form on a device that has never seen them, so it
+       * has no idea how long their PIN is - and since 25 Sep it could be four
+       * (any new one) or six (every earlier one, and every adult's reset).
+       * Capping at four would submit two-thirds of a six-digit PIN. The Sign
+       * in button is what says "done", so the form can take the whole range.
+       */
+      setDigits((d) => (d + add).slice(0, STUDENT_PIN_MAX));
     },
     [],
   );
@@ -120,7 +134,7 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
   const ready =
     school.length >= SCHOOL_CODE_MIN &&
     identifier.length >= USERNAME_MIN &&
-    digits.length === STUDENT_PIN_LENGTH;
+    digits.length >= STUDENT_PIN_MIN;
 
   const submit = useCallback(async () => {
     if (!ready || checking) return;
@@ -151,6 +165,8 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
         // Two letters, not an identifier. Better than a blank circle, and it
         // is replaced the moment the real name lands below.
         initials: initialsFromUsername(identifier),
+        // So the one-tap unlock tomorrow draws the right number of boxes.
+        pinLength: digits.length,
       });
       signIn({
         id: session.userId,
@@ -376,11 +392,14 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
                 className="absolute inset-0 z-10 h-full w-full cursor-text rounded-[10px] bg-transparent opacity-0 outline-none"
               />
               <div
-                className="flex gap-3.5"
+                className="flex flex-wrap gap-3.5"
                 role="group"
                 aria-labelledby="returning-pin-label"
               >
-              {Array.from({ length: STUDENT_PIN_LENGTH }, (_, i) => {
+              {/* Four boxes, and one more for each digit past four. */}
+              {Array.from(
+                { length: Math.max(STUDENT_PIN_LENGTH, digits.length) },
+                (_, i) => {
                 const active = i === digits.length && !checking;
                 return (
                   <div
@@ -399,7 +418,8 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
                     )}
                   </div>
                 );
-              })}
+                },
+              )}
               </div>
             </div>
           </div>

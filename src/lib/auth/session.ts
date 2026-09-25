@@ -111,6 +111,21 @@ export interface RememberedProfile {
   displayName?: string;
   /** Avatar initials, e.g. "AK". */
   initials: string;
+  /**
+   * How many digits this child's PIN had the last time it opened this device.
+   * The LENGTH, never the PIN.
+   *
+   * The one-tap unlock submits the moment the boxes fill, so it has to know
+   * how many boxes to draw - and since 25 Sep that is no longer one number:
+   * new PINs are four, every earlier one and every administrator's reset is
+   * six. Absent on a child remembered before then, which means six; see
+   * `LEGACY_PIN_LENGTH`.
+   *
+   * It is a hint, not a rule. The unlock screen still takes anything the
+   * server would, and stops trusting this after a PIN that did not match,
+   * because the likeliest reason is an adult resetting it to another length.
+   */
+  pinLength?: number;
 }
 
 let session: StoredSession | null = null;
