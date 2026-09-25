@@ -72,6 +72,20 @@ export interface LessonSummary {
   failureReason?: string | null;
   /** Twelve hex characters, for a teacher to quote. Null unless it failed. */
   incidentId?: string | null;
+  /**
+   * SECTIONS STILL WAITING FOR A TEACHER - the number that reaches zero.
+   *
+   * `reviewSegmentCount` is what was EVER flagged and never falls, which
+   * backend confirmed on 25 Sep is by design: correct history, useless on a
+   * card. The first real end-to-end run ended on a lesson approved in full and
+   * sent to seven children that still said "Needs review" in the library.
+   * This is the same figure the assignment 409 reports.
+   *
+   * Optional: `default: 0` in the contract, but absent on an older deployment
+   * is "we were not told", and reading it as zero would drop the badge from a
+   * lesson that genuinely needs one.
+   */
+  unapprovedSegmentCount?: number;
   createdAt: string;
 }
 

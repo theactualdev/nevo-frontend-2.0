@@ -31,8 +31,21 @@ import {
 type Group = {
   key: string;
   classId: string | null;
+  /**
+   * The rows an action may touch - NEVER a finished child's.
+   *
+   * Cancel, set-again and date changes all act on these. A completed row is
+   * a child's finished work: cancelling it would overwrite the record that
+   * they did it, and moving its due date is moving a deadline on something
+   * already handed in.
+   */
   ids: string[];
+  /** Everyone the lesson was set for, finished or not. */
   students: number;
+  /** Of those, how many the actions will actually reach. */
+  reachable: number;
+  /** How many have already finished it, and so are left alone. */
+  finished: number;
   availableFrom: string | null;
   dueAt: string | null;
   cancelled: boolean;
@@ -202,7 +215,7 @@ export function AssignmentSchedule({
                   )}
                 </div>
 
-                {!g.cancelled && (
+                {!g.cancelled && g.ids.length > 0 && (
                   <div className="flex shrink-0 gap-2">
                     <button
                       type="button"
@@ -247,10 +260,19 @@ export function AssignmentSchedule({
                       something to real children's screens, and the count is the
                       fact that makes it clear which class they picked. */}
                   <p className="text-[14px] leading-[1.5] text-nevo-near-black/80">
-                    Cancel this lesson for {g.students}{" "}
-                    {g.students === 1 ? "student" : "students"} in{" "}
+                    {/* The count is who the cancel will REACH. A child who has
+                        finished is left alone, so counting them here would
+                        tell a teacher they were cancelling for someone they
+                        are not - and a teacher who reads "7" and sees 6 go is
+                        left wondering what happened to the seventh. */}
+                    Cancel this lesson for {g.reachable}{" "}
+                    {g.reachable === 1 ? "student" : "students"} in{" "}
                     {nameFor(g.classId)}? They will no longer see it. You can set
                     it again afterwards.
+                    {g.finished > 0 &&
+                      (g.finished === 1
+                        ? " The student who has already finished it keeps it."
+                        : ` The ${g.finished} students who have already finished it keep it.`)}
                   </p>
                   <div className="mt-3 flex gap-2">
                     <button
@@ -394,23 +416,31 @@ export function groupByClass(
   return [...by.entries()].map(([key, rows]) => {
     const first = rows[0];
     const override = edited[first.id];
+    const open = rows.filter((r) => r.status !== "completed");
     return {
       key,
       classId: first.classId,
-      ids: rows.map((r) => r.id),
+      ids: open.map((r) => r.id),
       students: new Set(rows.map((r) => r.studentId)).size,
+      reachable: new Set(open.map((r) => r.studentId)).size,
+      finished: new Set(
+        rows.filter((r) => r.status === "completed").map((r) => r.studentId),
+      ).size,
       availableFrom: override ? override.availableFrom : first.availableFrom,
       dueAt: override ? override.dueAt : first.dueAt,
-      // Cancelled only when EVERY row in the group is - a group with one live
+      // Cancelled only when EVERY row still open is - a group with one live
       // row is still set for that child, and saying otherwise would be a lie
-      // about who can see the lesson.
+      // about who can see the lesson. Finished rows are neither: a child who
+      // has done the work is not "cancelled", and must not stop a group being.
       // A restoration overrides both the local cancel and the wire value: it
       // is the most recent thing we know actually happened on the server.
-      cancelled: rows.every(
-        (r) =>
-          !restored.has(r.id) &&
-          (cancelled.has(r.id) || r.status === "cancelled"),
-      ),
+      cancelled:
+        open.length > 0 &&
+        open.every(
+          (r) =>
+            !restored.has(r.id) &&
+            (cancelled.has(r.id) || r.status === "cancelled"),
+        ),
     };
   });
 }

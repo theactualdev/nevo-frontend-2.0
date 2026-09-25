@@ -103,9 +103,33 @@ const SOURCE_LABEL: Record<LessonSourceType, string> = {
  * "3 sections want a look". The card contradicted itself, and the pill won
  * the glance.
  */
+/**
+ * What is still waiting, not what was ever flagged.
+ *
+ * `reviewSegmentCount` counts every section Nevo flagged and never falls, so a
+ * lesson approved in full and sent to seven children went on saying "Needs
+ * review" - found by the first real end-to-end run, 25 Sep. The outstanding
+ * count is the one that reaches zero.
+ *
+ * Where the deployment does not send it, the old count stands. That keeps
+ * today's behaviour exactly - including its flaw - rather than inventing a
+ * "nothing outstanding" the server never said.
+ *
+ * NAMED A COUNT BECAUSE IT IS ONE. The architecture gate reads a comparison
+ * against a number as a verdict about a person unless the operand says it is a
+ * duration, a size or a count of rows - and this is a count of sections.
+ * `outstandingOf` failed the gate for not saying so; the name was the defect,
+ * not the rule.
+ */
+function outstandingCountOf(lesson: LessonSummary): number {
+  return typeof lesson.unapprovedSegmentCount === "number"
+    ? lesson.unapprovedSegmentCount
+    : lesson.reviewSegmentCount;
+}
+
 function needsReviewOf(lesson: LessonSummary): boolean {
   return (
-    lesson.reviewSegmentCount > 0 &&
+    outstandingCountOf(lesson) > 0 &&
     lesson.status !== "failed" &&
     lesson.status !== "pending" &&
     lesson.status !== "processing"
@@ -115,9 +139,9 @@ function needsReviewOf(lesson: LessonSummary): boolean {
 function statusOf(lesson: LessonSummary): CardStatus {
   switch (lesson.status) {
     case "completed":
-      return lesson.reviewSegmentCount > 0 ? "Needs review" : "Ready";
+      return outstandingCountOf(lesson) > 0 ? "Needs review" : "Ready";
     case "completed_with_review":
-      return lesson.reviewSegmentCount > 0 ? "Needs review" : "Ready";
+      return outstandingCountOf(lesson) > 0 ? "Needs review" : "Ready";
     case "pending":
     case "processing":
       return "Preparing";

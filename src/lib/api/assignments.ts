@@ -16,11 +16,22 @@ import type { LessonSummary } from "./lessons";
  */
 
 /**
- * The deployed `AssignmentStatus` enum. Two values only - an assignment is
- * either set or called off; there is no "completed" here, because completion
- * is a fact about the CHILD's progress, not about the assignment.
+ * The deployed `AssignmentStatus` enum - THREE values, as of 25 Sep.
+ *
+ * This said "two values only... there is no 'completed' here, because
+ * completion is a fact about the CHILD's progress, not about the assignment".
+ * A reasonable position, and not the contract's: the progress route has
+ * written `completed` onto the assignment since it was built, and the enum
+ * simply never listed it. So the first child to finish a lesson broke
+ * `GET /api/v1/assignments` for their whole school - found by the first real
+ * end-to-end run, and fixed on backend the same day.
+ *
+ * This file had the identical gap, and it mattered more here than a type
+ * error would: a completed row read as live, so a teacher cancelling a lesson
+ * for a class would have sent `cancelled` to a child who had already finished
+ * it. See `groupByClass`.
  */
-export type AssignmentStatus = "assigned" | "cancelled";
+export type AssignmentStatus = "assigned" | "completed" | "cancelled";
 
 export interface Assignment {
   id: string;

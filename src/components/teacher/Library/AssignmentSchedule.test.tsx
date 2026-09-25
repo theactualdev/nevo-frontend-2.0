@@ -335,3 +335,127 @@ describe("describeWindow", () => {
     expect(describeWindow(null, null)).toBe("no dates set");
   });
 });
+
+/**
+ * A CHILD WHO HAS FINISHED IS LEFT ALONE.
+ *
+ * `AssignmentStatus` gained `completed` in the contract on 25 Sep - the value
+ * the progress route has always written and the enum never listed. This file
+ * never knew it either, so a finished row read as live: cancelling a class's
+ * lesson would have sent `cancelled` to a child who had already done it, and
+ * overwritten the one record that they had.
+ *
+ * Found by the first real end-to-end run: the probe child finished a section
+ * and their assignment row came back `completed`.
+ */
+describe("a child who has already finished", () => {
+  const CLASS_WITH_ONE_DONE = [
+    row({ id: "a-1", studentId: "s-1" }),
+    row({ id: "a-2", studentId: "s-2" }),
+    row({ id: "a-3", studentId: "s-3", status: "completed" }),
+  ];
+
+  it("is never among the rows an action may touch", () => {
+    const [g] = groupByClass(CLASS_WITH_ONE_DONE, new Set(), {});
+
+    expect(g.ids).toEqual(["a-1", "a-2"]);
+  });
+
+  it("still counts as someone the lesson was set for", () => {
+    const [g] = groupByClass(CLASS_WITH_ONE_DONE, new Set(), {});
+
+    expect(g.students).toBe(3);
+    expect(g.reachable).toBe(2);
+    expect(g.finished).toBe(1);
+  });
+
+  it("does not stop the rest of the class reading as cancelled", () => {
+    // A finished child is not "cancelled", and must not hold a group open
+    // that every child who could still see it has had cancelled.
+    const rows = [
+      row({ id: "a-1", studentId: "s-1", status: "cancelled" }),
+      row({ id: "a-2", studentId: "s-2", status: "completed" }),
+    ];
+
+    expect(groupByClass(rows, new Set(), {})[0].cancelled).toBe(true);
+  });
+
+  it("is not cancelled when everyone has finished", () => {
+    const rows = [
+      row({ id: "a-1", studentId: "s-1", status: "completed" }),
+      row({ id: "a-2", studentId: "s-2", status: "completed" }),
+    ];
+    const [g] = groupByClass(rows, new Set(), {});
+
+    expect(g.ids).toEqual([]);
+    expect(g.cancelled).toBe(false);
+  });
+
+  it("is left out of the cancel that goes to the server", async () => {
+    // THE ONE THAT MATTERS. Everything else here is about what the teacher
+    // reads; this is about what reaches a child's record.
+    applyToAssignments.mockResolvedValue({ ok: ["a-1", "a-2"], failed: [] });
+    render(<AssignmentSchedule assignments={CLASS_WITH_ONE_DONE} />);
+    openConfirm();
+    fireEvent.click(screen.getByRole("button", { name: /Yes, cancel it/i }));
+
+    expect(applyToAssignments).toHaveBeenCalledWith(["a-1", "a-2"], {
+      status: "cancelled",
+    });
+  });
+
+  it("is counted out of the confirmation, and told they keep it", () => {
+    render(<AssignmentSchedule assignments={CLASS_WITH_ONE_DONE} />);
+    openConfirm();
+
+    expect(
+      screen.getByText(/Cancel this lesson for 2 students in JSS 2A/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/The student who has already finished it keeps it/),
+    ).toBeInTheDocument();
+  });
+
+  it("names more than one finished child as more than one", () => {
+    render(
+      <AssignmentSchedule
+        assignments={[
+          row({ id: "a-1", studentId: "s-1" }),
+          row({ id: "a-2", studentId: "s-2", status: "completed" }),
+          row({ id: "a-3", studentId: "s-3", status: "completed" }),
+        ]}
+      />,
+    );
+    openConfirm();
+
+    expect(
+      screen.getByText(/The 2 students who have already finished it keep it/),
+    ).toBeInTheDocument();
+  });
+
+  it("says nothing about finishing when nobody has", () => {
+    render(<AssignmentSchedule assignments={CLASS_OF_THREE} />);
+    openConfirm();
+
+    expect(screen.queryByText(/already finished/)).not.toBeInTheDocument();
+  });
+
+  it("offers nothing to change when every child has finished", () => {
+    // There is no row left that a cancel or a new date could honestly reach.
+    render(
+      <AssignmentSchedule
+        assignments={[
+          row({ id: "a-1", studentId: "s-1", status: "completed" }),
+          row({ id: "a-2", studentId: "s-2", status: "completed" }),
+        ]}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /Cancel lesson/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Change dates/i }),
+    ).not.toBeInTheDocument();
+  });
+});

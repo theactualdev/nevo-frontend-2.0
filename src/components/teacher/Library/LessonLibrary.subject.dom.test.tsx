@@ -272,3 +272,55 @@ describe("the failed card on screen", () => {
     expect(screen.getByText(/ca8435c98d08/)).toBeInTheDocument();
   });
 });
+
+/**
+ * "NEEDS REVIEW" ON A LESSON THAT HAS BEEN REVIEWED.
+ *
+ * The first real end-to-end run ended on a lesson approved in full and sent to
+ * seven children that still said "Needs review" in the library. The card read
+ * `reviewSegmentCount`, which counts what was EVER flagged and never falls -
+ * by design, backend confirmed on 25 Sep. `unapprovedSegmentCount` is the
+ * number that reaches zero.
+ */
+describe("what the card calls a lesson that has been reviewed", () => {
+  const reviewed = (over: Record<string, unknown> = {}) =>
+    __toCardForTest({
+      id: "l-1",
+      title: "Water Cycle",
+      sourceType: "upload",
+      status: "completed_with_review",
+      segmentCount: 5,
+      reviewSegmentCount: 5,
+      createdAt: "2026-09-25T09:00:00Z",
+      ...over,
+    } as never);
+
+  it("calls it ready once nothing is outstanding, however much was flagged", () => {
+    const c = reviewed({ unapprovedSegmentCount: 0 });
+
+    expect(c.needsReview).toBe(false);
+    expect(c.status).toBe("Ready");
+  });
+
+  it("still asks for a look while something is waiting", () => {
+    const c = reviewed({ unapprovedSegmentCount: 2 });
+
+    expect(c.needsReview).toBe(true);
+    expect(c.status).toBe("Needs review");
+  });
+
+  it("keeps the old reading where the deployment sends no outstanding count", () => {
+    // Absent is "we were not told", not zero. Dropping the badge here would
+    // hide a lesson that genuinely needs one.
+    const c = reviewed();
+
+    expect(c.needsReview).toBe(true);
+    expect(c.status).toBe("Needs review");
+  });
+
+  it("reads the outstanding count on a lesson that came back plain completed too", () => {
+    const c = reviewed({ status: "completed", unapprovedSegmentCount: 0 });
+
+    expect(c.status).toBe("Ready");
+  });
+});
