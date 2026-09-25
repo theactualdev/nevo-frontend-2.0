@@ -22,12 +22,14 @@ import { ChildAvatar } from "@/components/student/Auth/ChildAvatar";
 import { ProfilePicker } from "@/components/student/Auth/ProfilePicker";
 import { useAuth } from "@/hooks";
 import { studentDestination } from "@/lib/auth/entryGate";
-import { STUDENT_PIN_LENGTH, type UserRole } from "@/lib/constants";
+import {
+  LEGACY_PIN_LENGTH,
+  STUDENT_PIN_LENGTH,
+  STUDENT_PIN_MAX,
+  STUDENT_PIN_MIN,
+  type UserRole,
+} from "@/lib/constants";
 import { cn } from "@/lib/utils";
-
-// The length the screens commit to - see `STUDENT_PIN_LENGTH` for why this is
-// one number and not the contract's 4-8 range.
-const PIN_LENGTH = STUDENT_PIN_LENGTH;
 /** The frame's done beat before navigating home. */
 const DONE_MS = 700;
 
@@ -109,6 +111,21 @@ export default function LoginPage() {
   const [error, setError] = useState<LoginFailure | null>(null);
   const [checking, setChecking] = useState(false);
   const [done, setDone] = useState(false);
+  /**
+   * Whether to believe the length this device remembers for the child.
+   *
+   * THE SCREEN SUBMITS WHEN THE BOXES FILL, per 28c, so it has to know how
+   * many to draw - and since 25 Sep a PIN is four (new) or six (every earlier
+   * one, and every adult's reset). The roster remembers each child's length,
+   * and a child it predates is six; see `LEGACY_PIN_LENGTH`.
+   *
+   * Dropped after a PIN that did not match, because the likeliest reason a
+   * right-length guess is wrong is an adult resetting the PIN to a different
+   * length. From then on the boxes grow as the child types and the pad's
+   * return key submits, so a remembered length can cost a child one retry
+   * and can never lock them out.
+   */
+  const [trustLength, setTrustLength] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
   const doneTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -206,7 +223,8 @@ export default function LoginPage() {
         // clock. Done on SUCCESS only: a wrong PIN is not a visit, and letting
         // it count would keep a child who has left the school on the tablet
         // indefinitely.
-        rememberChild(remembered);
+        // And record the length that worked, so tomorrow's boxes are right.
+        rememberChild({ ...remembered, pinLength: pin.length });
         setDone(true);
         /*
          * The remembered-device door resolves consent like every other one -
@@ -221,13 +239,19 @@ export default function LoginPage() {
         // we sent a shape it rejects - the PIN length is the live example -
         // and anything else is the network or the server. Only the first is
         // about the child.
-        setError(classifyLoginFailure(cause));
+        const failure = classifyLoginFailure(cause);
+        if (failure === "credentials") setTrustLength(false);
+        setError(failure);
       } finally {
         setChecking(false);
       }
     },
     [router, signIn],
   );
+
+  /** Where the boxes fill and submit themselves, or null for "grow and wait". */
+  const expected =
+    chosen && trustLength ? (chosen.pinLength ?? LEGACY_PIN_LENGTH) : null;
 
   const addDigits = useCallback(
     (raw: string) => {
@@ -236,13 +260,26 @@ export default function LoginPage() {
       if (!add) return;
       setError(null);
       setDigits((prev) => {
-        const next = (prev + add).slice(0, PIN_LENGTH);
-        if (next.length === PIN_LENGTH) void submit(next, chosen);
+        const next = (prev + add).slice(0, expected ?? STUDENT_PIN_MAX);
+        if (next.length === expected) void submit(next, chosen);
         return next;
       });
     },
-    [done, checking, chosen, submit],
+    [done, checking, chosen, submit, expected],
   );
+
+  /**
+   * "That's all of it" - the pad's return key, or Enter.
+   *
+   * The way in when the boxes will not fill by themselves: a child whose PIN
+   * is shorter than the remembered length, or any child after a PIN that did
+   * not match. Below four digits it does nothing, as the server would refuse
+   * the shape before it looked at the PIN.
+   */
+  const submitTyped = useCallback(() => {
+    if (done || checking || !chosen || digits.length < STUDENT_PIN_MIN) return;
+    void submit(digits, chosen);
+  }, [done, checking, chosen, digits, submit]);
 
   const backspace = useCallback(() => {
     setError(null);
@@ -268,6 +305,7 @@ export default function LoginPage() {
             }
             setDigits("");
             setError(null);
+            setTrustLength(true);
             setChosen(child);
           }}
           someoneElseHref="/auth/sign-in"
@@ -304,6 +342,10 @@ export default function LoginPage() {
           if (e.key === "Backspace") {
             e.preventDefault();
             backspace();
+          }
+          if (e.key === "Enter") {
+            e.preventDefault();
+            submitTyped();
           }
         }}
         inputMode="none"
@@ -359,8 +401,14 @@ export default function LoginPage() {
             <p className="mt-2.5 text-[15px] text-nevo-near-black/60">
               Enter your PIN to keep going
             </p>
-            <div className="mt-8 flex gap-3.5">
-              {Array.from({ length: PIN_LENGTH }, (_, i) => {
+            {/* The remembered length, or four growing to eight. */}
+            <div className="mt-8 flex flex-wrap justify-center gap-3.5">
+              {Array.from(
+                {
+                  length:
+                    expected ?? Math.max(STUDENT_PIN_LENGTH, digits.length),
+                },
+                (_, i) => {
                 const active = i === digits.length && !checking;
                 return (
                   <div
@@ -379,7 +427,8 @@ export default function LoginPage() {
                     )}
                   </div>
                 );
-              })}
+                },
+              )}
             </div>
             <p
               role="status"
@@ -410,6 +459,7 @@ export default function LoginPage() {
               presentation="block"
               onKey={addDigits}
               onBackspace={backspace}
+              onDone={submitTyped}
               className="mt-7"
             />
 

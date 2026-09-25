@@ -1,46 +1,33 @@
 /**
- * Student PIN length.
+ * Student PIN length - the length a child CREATES.
  *
- * THE CONTRACT IS A RANGE, NOT A NUMBER. `POST /api/v1/auth/login/pin` and
- * `POST /api/v1/auth/pin` both declare `pin` as `^\d{4,8}$` - anything from
- * four to eight digits is a valid PIN as far as the backend is concerned.
+ * FOUR, settled by design on 21 Sep (the 28c redraw) and buildable since
+ * 25 Sep, when the last two PIN fields on the wire were relaxed. Every PIN
+ * field on the deployed spec - `PinLoginRequest`, `PinUpdateRequest`,
+ * `PinChoice`, `JoinRequest`, `UnifiedLoginRequest` - is now 4-8 digits. Until
+ * then the unlock door was `^\d{6}$`, and a four-digit PIN could be created and
+ * never used; that is why this read 6 for a month after the ruling.
  *
- * The screens cannot honour a range, because they auto-submit the moment the
- * boxes fill and a range gives them no way to know when a child is done. So
- * they commit to ONE length, and this is it.
- *
- * That commitment has teeth: a student whose account was issued a PIN of a
- * different length cannot sign in at all, and - because the login screen
- * cannot tell a rejected PIN from a rejected identifier - they are told their
- * PIN is wrong rather than that we sent the wrong number of digits. That is
- * exactly what happened with the seeded demo account: the screens were fixed
- * at 4, the account was issued 6, and the first four digits were submitted on
- * the fourth keystroke with digits five and six discarded.
- *
- * Set to 6 on 31 Aug 2026 to match the accounts the backend is currently
- * issuing. Design frame 00 draws four boxes and says "try 1234", so design and
- * the backend disagree and one of them has to move - raised with Olayinka for
- * the 9pm call. Whichever way that lands, it is this constant that changes,
- * and all three PIN screens follow it.
- *
- * SETTLED ON 21 SEP: FOUR. The 28c redraw stands and the design question is
- * closed. It is not to be reopened here or anywhere else.
- *
- * THIS CONSTANT STILL READS 6, AND CHANGING IT IS A BACKEND CHANGE.
- * That is a contract fact, not a reopening of the decision. Every PIN field on
- * the deployed spec carries `pattern: ^\d{6}$` - `PinLoginRequest`,
- * `PinUpdateRequest`, `JoinRequest` and `UnifiedLoginRequest`, checked 21 Sep.
- * A four-digit PIN is refused with a 422 before the server ever judges it, and
- * `classifyLoginFailure` maps everything that is not 401/403 to "ours" - so a
- * child would be told "we couldn't check that just now" and could not sign in
- * on any door at all, on a device that remembers them or one that does not.
- *
- * So the order is: backend relaxes the pattern to four, then this becomes `4`
- * and all three PIN screens follow it, because they all read this and nothing
- * else. One line, once the wire allows it.
+ * THIS IS NOT THE LENGTH A CHILD MAY SIGN IN WITH. Every PIN issued before
+ * today is six digits, and an administrator's reset still issues six. So the
+ * doors that CHECK a PIN accept anything from `STUDENT_PIN_MIN` to
+ * `STUDENT_PIN_MAX`, and only the doors that SET one use this. Using this
+ * number at a sign-in door is how the seeded demo account was locked out on
+ * 31 Aug: the screens were fixed at 4, the account had 6, and the first four
+ * digits were submitted on the fourth keystroke with the last two discarded.
  */
-export const STUDENT_PIN_LENGTH = 6;
+export const STUDENT_PIN_LENGTH = 4;
 
-/** What the backend will actually accept, for validation before we send. */
+/** What the backend will actually accept, at every door. */
 export const STUDENT_PIN_MIN = 4;
 export const STUDENT_PIN_MAX = 8;
+
+/**
+ * The length to assume for a remembered child whose device never recorded one.
+ *
+ * Not a guess: until 25 Sep every PIN these screens created was six digits,
+ * every door refused any other length, and an administrator's reset still
+ * issues six. So a device that remembers a child but not their PIN's length
+ * remembers a six-digit PIN. See `RememberedProfile.pinLength`.
+ */
+export const LEGACY_PIN_LENGTH = 6;

@@ -286,3 +286,33 @@ describe("a name we once had", () => {
     expect(pickerEntries()[0].name).toBe("Ada");
   });
 });
+
+describe("the length of a child's PIN", () => {
+  it("is kept when a later write for the same child does not carry it", () => {
+    /*
+     * The full sign-in remembers the child WITH the length, then remembers
+     * them again once their name arrives - without it. Dropping it there would
+     * send every child back to the legacy six the morning after they signed
+     * in with four.
+     */
+    rememberChild({ ...child("ada.o"), pinLength: 4 });
+    rememberChild(child("ada.o", "Ada"));
+
+    expect(childById(pickerEntries()[0].id)?.pinLength).toBe(4);
+  });
+
+  it("is replaced when a sign-in records a different one", () => {
+    rememberChild({ ...child("ada.o"), pinLength: 4 });
+    rememberChild({ ...child("ada.o"), pinLength: 6 });
+
+    expect(childById(pickerEntries()[0].id)?.pinLength).toBe(6);
+  });
+
+  it("never reaches the picker", () => {
+    // The picker is a pre-authentication screen; a PIN's length narrows a
+    // guess, so it stays with the credential it describes.
+    rememberChild({ ...child("ada.o", "Ada"), pinLength: 4 });
+
+    expect(pickerEntries()[0]).not.toHaveProperty("pinLength");
+  });
+});

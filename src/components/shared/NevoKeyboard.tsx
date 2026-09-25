@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Delete } from "lucide-react";
+import { Check, Delete } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type KeyboardLayout = "qwerty" | "pad";
@@ -92,6 +92,7 @@ export function NevoKeyboard({
   onKey,
   onBackspace,
   onReturn,
+  onDone,
   composer,
   value,
   placeholder = "Type here",
@@ -119,6 +120,17 @@ export function NevoKeyboard({
   onBackspace: () => void;
   /** The accent "return" key (qwerty only). In `multi` it inserts a newline. */
   onReturn?: () => void;
+  /**
+   * PAD ONLY: a navy check key in the grid's empty bottom-left corner, for
+   * "that's all of it".
+   *
+   * Separate from `onReturn` on purpose. A pad has never drawn a return key,
+   * and callers already pass `onReturn` to one expecting nothing to appear -
+   * the full sign-in does, and has its own Sign in button. This key exists for
+   * the one screen that submits by itself and sometimes cannot: the one-tap
+   * unlock, when a child's PIN is not the length the device remembers.
+   */
+  onDone?: () => void;
   /**
    * Attach a composer field above the tray (Nevo Keyboard frame) — for fields
    * the docked keyboard would cover, and `multi` for notes. Displays `value`.
@@ -154,7 +166,12 @@ export function NevoKeyboard({
       )}
     >
       {layout === "pad" ? (
-        <PadLayout block={block} onKey={onKey} onBackspace={onBackspace} />
+        <PadLayout
+          block={block}
+          onKey={onKey}
+          onBackspace={onBackspace}
+          onDone={onDone}
+        />
       ) : (
         <QwertyLayout
           caps={caps}
@@ -307,11 +324,13 @@ function PadLayout({
   block,
   onKey,
   onBackspace,
+  onDone,
 }: {
   /** Content-sized keys rather than a full-width tray. See `presentation`. */
   block: boolean;
   onKey: (d: string) => void;
   onBackspace: () => void;
+  onDone?: () => void;
 }) {
   const grid = [
     ["1", "2", "3"],
@@ -339,6 +358,22 @@ function PadLayout({
       )}
     >
       {grid.flat().map((d, i) => {
+        if (d === "" && onDone) {
+          return (
+            <button
+              key={i}
+              type="button"
+              aria-label="Done"
+              onClick={onDone}
+              className={cn(
+                block ? blockKey : KEY_BASE,
+                "bg-nevo-navy text-nevo-cream",
+              )}
+            >
+              <Check className="size-5" strokeWidth={2.4} />
+            </button>
+          );
+        }
         if (d === "") return <span key={i} aria-hidden />;
         if (d === "⌫") {
           return (

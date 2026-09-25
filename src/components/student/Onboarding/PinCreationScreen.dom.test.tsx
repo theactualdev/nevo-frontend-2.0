@@ -34,10 +34,10 @@ const { setPin, storePin } = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/api", () => ({ authApi: { setPin } }));
 
-/** Tap six digits, then settle past the 1200ms commit beat. */
+/** Tap four digits, then settle past the 1200ms commit beat. */
 async function enterPinTwice() {
   for (let round = 0; round < 2; round++) {
-    for (const d of ["1", "2", "3", "4", "5", "6"]) {
+    for (const d of ["1", "2", "3", "4"]) {
       fireEvent.click(screen.getByRole("button", { name: d }));
     }
   }
@@ -77,7 +77,7 @@ describe("PinCreationScreen — onboarding, with someone else signed in", () => 
 
     await enterPinTwice();
 
-    expect(storePin).toHaveBeenCalledWith("123456");
+    expect(storePin).toHaveBeenCalledWith("1234");
     expect(setPin).not.toHaveBeenCalled();
   });
 
@@ -99,7 +99,7 @@ describe("PinCreationScreen — onboarding, with someone else signed in", () => 
     await enterPinTwice();
 
     expect(setPin).not.toHaveBeenCalled();
-    expect(storePin).toHaveBeenCalledWith("123456");
+    expect(storePin).toHaveBeenCalledWith("1234");
   });
 
   it("creates the account when nobody is signed in", async () => {
@@ -107,7 +107,7 @@ describe("PinCreationScreen — onboarding, with someone else signed in", () => 
 
     await enterPinTwice();
 
-    expect(storePin).toHaveBeenCalledWith("123456");
+    expect(storePin).toHaveBeenCalledWith("1234");
   });
 });
 
@@ -120,7 +120,7 @@ describe("PinCreationScreen — a student changing their own PIN", () => {
 
     await enterPinTwice();
 
-    expect(setPin).toHaveBeenCalledWith("123456");
+    expect(setPin).toHaveBeenCalledWith("1234");
   });
 
   it("stores nothing when the signed-in user is not a student", async () => {

@@ -101,13 +101,10 @@ export const studentEntryApi = {
   /**
    * PUBLIC. Set the PIN and become an account.
    *
-   * **THE SERVER ACCEPTS 4-8 DIGITS HERE AND 6 EXACTLY AT THE UNLOCK DOOR.**
-   * `PinChoice` is `minLength 4, maxLength 8, ^\d+$`; `PinLoginRequest.pin` is
-   * still `^\d{6}$`. So a four-digit PIN set here would be refused on every
-   * later sign-in with a 422, and `classifyLoginFailure` maps a non-401/403 to
-   * "ours" - the child is told *"we couldn't check that just now"* and never
-   * learns why. `STUDENT_PIN_LENGTH` therefore stays at 6 until the unlock door
-   * is relaxed to match. Raised to backend 23 Sep.
+   * `PinChoice` is 4-8 digits, and since 25 Sep so is every door that later
+   * checks it. Until then `PinLoginRequest.pin` was `^\d{6}$`, so a four-digit
+   * PIN set here would have been refused on every later sign-in - which is why
+   * `STUDENT_PIN_LENGTH` stayed at 6 until the unlock door was relaxed.
    */
   setPin: (token: string, pin: string) =>
     api.post<StudentEntrySession>(
