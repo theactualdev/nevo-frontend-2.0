@@ -19,13 +19,21 @@ import { expect, test, type Page, type APIRequestContext } from "@playwright/tes
  * asks "is anything on this page a fixture", which is the question that cannot
  * be satisfied by the failure mode.
  *
- * THE EMPTY TENANT IS THE POINT, not a limitation. The E2E school holds one
- * class and no students, because `POST /api/v1/students` and
- * `PATCH /students/{id}/class` both 500 (raised with backend). An empty tenant
- * is where fixture fallback is most dangerous and most tempting: a console that
- * falls back renders a populated roster of children who do not exist. A real
- * empty state and a fixture roster are trivially distinguishable here, which is
- * why these assertions are sharp rather than weakened by the lack of data.
+ * THE EMPTY TENANT WAS THE POINT, AND THE TENANT IS NO LONGER EMPTY.
+ * **Corrected 24 Sep:** this said the E2E school held one class and no
+ * students because `POST /api/v1/students` and `PATCH /students/{id}/class`
+ * both 500. Checked against the live tenant: **7 classes and 39 students**
+ * (`NV-E2E000` upward). Whether those 500s were fixed or the tenant was
+ * seeded another way, the premise is gone.
+ *
+ * The REASONING it supported still holds and is why these assertions are
+ * shaped as they are: fixture fallback is most dangerous where a console can
+ * quietly render children who do not exist, so the test asks "is anything here
+ * a fixture" rather than "is there a roster". That question does not get weaker
+ * with real data - it gets sharper, because now both answers look plausible.
+ *
+ * The classes this spec probes may still be empty; it does not assume either
+ * way, and nothing below depends on the count.
  *
  * CREDENTIALS COME FROM THE ENVIRONMENT, never the repo. Without them the suite
  * SKIPS rather than fails: a contributor without secrets should not see a red
