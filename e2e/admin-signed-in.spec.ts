@@ -50,7 +50,20 @@ async function signInAsAdmin(page: Page, request: APIRequestContext) {
   ).toBeTruthy();
 
   const body = await res.json();
-  expect(body.role, "The E2E account must be an admin").toBe("admin");
+  /*
+   * `senco_admin` or `other_admin` - there is no plain "admin", and this
+   * asserted one until 25 Sep. Mirrors `isAdminRole` in
+   * `lib/constants/permissions.ts`, whose own docblock warns that
+   * `role === "admin"` "would never match anything the API returns".
+   *
+   * So this test could never have passed. Nobody knew because it had never
+   * run: CI held no admin secrets, the suite skipped, and "skipped" read as
+   * green. Its first run failed on this line.
+   */
+  expect(
+    ["senco_admin", "other_admin"],
+    `The E2E account must be an admin (got "${body.role}")`,
+  ).toContain(body.role);
   expect(
     body.accessToken,
     "The login response carried no accessToken - has SessionResponse changed again?",
@@ -92,7 +105,13 @@ test("the Overview renders this school's own figures, not a sample", async ({
   page,
 }) => {
   await page.goto("/admin");
-  await expect(page.getByRole("heading", { level: 2 })).toBeVisible(LIVE);
+  /*
+   * `.first()` on every level-2 heading in this file. Billing has five, and
+   * strict mode refuses an ambiguous locator - so this failed there on the
+   * suite's first run (25 Sep) and was one page redesign away from failing on
+   * the other three, which only passed because each happens to have one today.
+   */
+  await expect(page.getByRole("heading", { level: 2 }).first()).toBeVisible(LIVE);
 
   // The compliance card is the point of the page and is fully live.
   await expect(page.getByText(/Diagnostic labels stored/i)).toBeVisible(LIVE);
@@ -132,20 +151,24 @@ test("the roster shows four consent states and can be narrowed by them", async (
 
 test("the adaptation log pages a real seven-day window", async ({ page }) => {
   await page.goto("/admin/adaptations");
-  await expect(page.getByRole("heading", { level: 2 })).toBeVisible(LIVE);
+  await expect(page.getByRole("heading", { level: 2 }).first()).toBeVisible(LIVE);
 
   /*
    * The seed carries enough events to page (100/100/50 at the time of
    * writing). This asserts the window RESOLVED - rows or an honest empty
    * state - never a particular count, which is Teslim's to change.
    */
-  const text = await page.locator("main").innerText();
-  expect(
-    /Nothing to show|Made a step simpler|Suggested a break|Went into more depth|Slowed the pace|format/i.test(
-      text,
-    ),
+  // Retried until the window resolves - see the IT & SSO test for why a single
+  // read after a static heading races the live one. This passed on its first
+  // run by timing alone.
+  await expect(
+    page.locator("main"),
     "The adaptation log rendered neither rows nor its empty state",
-  ).toBeTruthy();
+  ).toContainText(
+    /Nothing to show|Made a step simpler|Suggested a break|Went into more depth|Slowed the pace|format/i,
+    LIVE,
+  );
+  const text = await page.locator("main").innerText();
 
   // ZERO-TAG: no engine key ever reaches a head teacher's screen.
   expect(text).not.toMatch(/simplify_trigger|modality_|expand_trigger|slower_trigger|break_suggested/);
@@ -155,14 +178,27 @@ test("IT & SSO reports the tenant's real sync history", async ({ page }) => {
   await page.goto("/admin/sso");
   await expect(page.getByRole("heading", { name: /IT/i })).toBeVisible(LIVE);
 
-  const text = await page.locator("main").innerText();
-  // One of the status words from `ssoState.SYNC_WORD`, never a blank tile.
-  expect(
-    /Healthy|Waiting for the first sync|Synced with one thing to finish|Syncing, with failures|Paused until|sync history unavailable|Connect your school/i.test(
-      text,
-    ),
+  /*
+   * RETRIED UNTIL THE TILE RESOLVES, not read once after the heading.
+   *
+   * This read the page text the instant the heading appeared - and the
+   * heading is static, so it appears before any live read has answered. Its
+   * first run, on 25 Sep, captured the tile still on its loading skeleton and
+   * failed on "none of its known states". The teacher suite learned the same
+   * lesson: wait for something only a real read can produce.
+   *
+   * `toContainText` retries until LIVE's timeout, so a slow read passes and a
+   * read that NEVER resolves still fails - which is the distinction the old
+   * single read could not make.
+   */
+  await expect(
+    page.locator("main"),
     "The roster-sync tile resolved to none of its known states",
-  ).toBeTruthy();
+  ).toContainText(
+    /Healthy|Waiting for the first sync|Synced with one thing to finish|Syncing, with failures|Paused until|sync history unavailable|Connect your school/i,
+    LIVE,
+  );
+  const text = await page.locator("main").innerText();
 
   // The disclosure's second half is a product guarantee and must always show.
   if (/What we read from/i.test(text)) {
@@ -174,7 +210,7 @@ test("Billing renders live invoices with VAT as a percentage", async ({
   page,
 }) => {
   await page.goto("/admin/billing");
-  await expect(page.getByRole("heading", { level: 2 })).toBeVisible(LIVE);
+  await expect(page.getByRole("heading", { level: 2 }).first()).toBeVisible(LIVE);
 
   const text = await page.locator("main").innerText();
   /*
@@ -210,7 +246,7 @@ test("no signed-in admin surface renders an unmarked invented figure", async ({
 
   for (const route of routes) {
     await page.goto(route);
-    await expect(page.getByRole("heading", { level: 2 })).toBeVisible(LIVE);
+    await expect(page.getByRole("heading", { level: 2 }).first()).toBeVisible(LIVE);
     const kinds = await page
       .locator(`[${SAMPLE_ATTR}]`)
       .evaluateAll((els) => els.map((e) => e.getAttribute("data-nevo-sample")));

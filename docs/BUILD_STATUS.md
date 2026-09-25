@@ -83,6 +83,61 @@ Do not build from either again.
 `AGENTS.md` now carries the ten rules and a read-before-you-build table, so every
 session loads them without anyone having to remember to say so.
 
+### The signed-in E2E suites had never run in CI, 25 Sep
+
+**Every green end-to-end gate until today was the signed-out suite alone.** The
+job reported "15 skipped" on every run: neither `E2E_TEACHER_*` nor
+`E2E_ADMIN_*` existed as repository secrets, each signed-in suite skips when its
+credentials are absent, and a skip reads as green. Nobody had seen the admin or
+teacher suite run in CI, ever.
+
+**The student suite is new and passes: 8/8, locally and in CI.** It mints its
+own PIN through the admin account rather than keeping a child's credential in a
+secret store - a PIN is four to eight digits, reset by an adult and told out
+loud - and it asserts no fixture renders anywhere a signed-in child can reach,
+including inside the notification bell and through the real sign-in form.
+
+**IT HAS A POSITIVE CONTROL, AND NOTHING ELSE DID.** Every "no fixtures"
+assertion in all three suites passes vacuously if `data-nevo-sample` stops
+rendering at all, and nothing anywhere asserted a mark was ever PRESENT. The
+control sets the role cookie with no session - the proxy lets the child in, the
+console mounts signed-out and renders the walkthrough's invented week - and
+requires the detector to see it.
+
+**THE ADMIN SUITE HAD THREE BUGS, ALL INVISIBLE BECAUSE IT HAD NEVER RUN.** Now
+6/6:
+- It asserted `role === "admin"`. There is no plain admin - the API returns
+  `senco_admin` or `other_admin`, and `isAdminRole`'s own docblock says
+  `=== "admin"` "would never match anything the API returns". It could never
+  have passed.
+- Two tests read the page once, right after a static heading, racing the live
+  read; one failed on a loading skeleton. Now retried until the content
+  resolves, which tells a slow read apart from one that never resolves.
+- Four level-2 heading locators with no `.first()`; Billing has five h2s and
+  strict mode refused. The other three passed only because each page happens to
+  have one today.
+
+**ONE WORKER WHENEVER AN ACCOUNT IS IN PLAY.** The admin and student suites
+both sign in as the same admin, and every sign-in replaces that account's
+previous session - so two workers let one file kill the other's session
+mid-walk. `workers: 1` when credentials are set; signed-out stays parallel.
+And the CI job now queues across branches (`concurrency: e2e-tenant`), because
+the student suite resets a real PIN and two PRs at once would reset it under
+each other.
+
+**THE TEACHER SUITE IS STALE, AND IT IS THE TEACHER LANE'S.** The tenant was
+re-seeded: the E2E teacher now has JSS 1B, JSS 3B and SS 2A, and no "E2E Probe
+Class". Worse, its strategy was *"fixture classes are named JSS 2A and similar,
+so the name is the tell"* - real classes are now named the same way, so a class
+name no longer distinguishes real from fixture. Its sample-mark checks remain
+sound; its name checks do not. **Do not add `E2E_TEACHER_*` to CI until it is
+updated**, or the gate goes red on a test premise rather than a product bug.
+
+**One live write, stated rather than buried:** every student-suite run resets
+`NV-E2E000`'s PIN. That is by design, named in the workflow in the open, and
+the account is a probe child nobody reads by hand.
+
+
 ### Backend answered both, same day, 24 Sep - and both are consumed
 
 **`module_boundary_action` is in the enum, and we have stopped dropping it.**

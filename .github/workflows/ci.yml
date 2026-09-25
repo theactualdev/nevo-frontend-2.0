@@ -46,6 +46,15 @@ jobs:
   e2e:
     name: end-to-end
     runs-on: ubuntu-latest
+    # ONE AT A TIME, ACROSS EVERY BRANCH. The E2E tenant is a shared resource:
+    # the student suite resets a probe child's PIN on every run, and each
+    # signed-in suite's login REPLACES the account's previous session. Two runs
+    # at once - two open PRs, say - would reset the PIN under each other and
+    # kill each other's sessions mid-walk, which reads exactly like a product
+    # bug and is not one. Queued, not cancelled: every run still reports.
+    concurrency:
+      group: e2e-tenant
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -59,12 +68,25 @@ jobs:
       # to the secrets still gets a green, meaningful run of everything else
       # rather than a red one for a sign-in it was never going to reach.
       #
-      # The account is a teacher on the dedicated E2E school - an isolated
-      # tenant holding no real children. See docs/BUILD_STATUS.md.
+      # THAT SKIP HID THAT NONE OF THEM HAD EVER RUN HERE. Until 25 Sep this job
+      # reported "15 skipped" on every green run: neither the teacher secrets nor
+      # the admin ones existed, so every signed-in suite skipped and the gate
+      # was the signed-out suite alone. A skipped suite is not a passing one.
+      #
+      # All three accounts are on the dedicated E2E school (NEVO-E2E) - an
+      # isolated tenant holding no real children.
       - run: npm run e2e
         env:
           E2E_TEACHER_EMAIL: ${{ secrets.E2E_TEACHER_EMAIL }}
           E2E_TEACHER_PASSWORD: ${{ secrets.E2E_TEACHER_PASSWORD }}
+          E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+          E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+          # Not secrets. The student suite MINTS its own PIN through the admin
+          # above, so the only thing it needs is which probe child to use - and
+          # every run RESETS that child's PIN, which is why it is named here in
+          # the open rather than defaulted inside the spec.
+          E2E_SCHOOL_CODE: NEVO-E2E
+          E2E_STUDENT_LOGIN: NV-E2E000
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
