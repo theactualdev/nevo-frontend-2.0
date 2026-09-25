@@ -30,6 +30,21 @@ export default defineConfig({
   // The app is the shared resource here, not the CPU: these are read-only
   // navigations, so they parallelise safely.
   fullyParallel: true,
+  /*
+   * ONE WORKER WHENEVER AN ACCOUNT IS IN PLAY.
+   *
+   * Signed out, the specs are read-only navigations and parallel is safe. The
+   * signed-in suites are not, and `mode: "serial"` inside a file cannot help
+   * across files: the admin suite and the student suite both sign in as the
+   * SAME admin (the student suite does it to mint a PIN), and every sign-in
+   * replaces that account's previous session. Two workers let one file's login
+   * kill the other's session mid-walk, and the console bounces to "you signed
+   * in on another device" - which reads exactly like a product bug.
+   *
+   * `undefined` restores Playwright's default for a signed-out run.
+   */
+  workers:
+    process.env.E2E_ADMIN_EMAIL || process.env.E2E_TEACHER_EMAIL ? 1 : undefined,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? "github" : "list",
