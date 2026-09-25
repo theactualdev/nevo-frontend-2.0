@@ -233,3 +233,124 @@ describe("a lesson with key points waiting", () => {
     expect(screen.queryByText("Ready when you are")).not.toBeInTheDocument();
   });
 });
+
+/**
+ * A SECTION THAT HAS BEEN CHECKED STOPS ASKING TO BE.
+ *
+ * Found by the first real end-to-end run, 25 Sep, and by nothing else: a lesson
+ * reviewed, approved in full and sent to seven children still marked every
+ * section below "Worth a look". The rows read `needsReview`, which is the
+ * parser's verdict and never clears - approval sets `approved` and leaves the
+ * flag where it was. The review hook had the right answer all along.
+ *
+ * No existing test caught it because none drew a flagged section that had
+ * already been approved. These do, and they pin the other half too: the review
+ * list KEEPS an approved section, shown as checked, so "fix it everywhere" is
+ * the wrong repair.
+ */
+describe("the section rows once a teacher has checked them", () => {
+  const FLAGGED_A = seg({ id: "s-1", sequenceOrder: 1, title: "What a leaf does", needsReview: true });
+  const FLAGGED_B = seg({ id: "s-2", sequenceOrder: 2, title: "Inside the leaf", needsReview: true });
+
+  const showWith = (segments: LessonSegment[]) =>
+    render(
+      <LiveLessonDetail
+        lesson={{ ...LESSON, segments } as LessonDetailResponse}
+        modules={[]}
+        assignments={[]}
+      />,
+    );
+
+  const sectionReview = (outstanding: LessonSegment[], approvedIds: string[]) =>
+    useSegmentReview.mockReturnValue({
+      outstanding,
+      remaining: outstanding.length,
+      ready: outstanding.length === 0,
+      approving: null,
+      failed: null,
+      approve: vi.fn(),
+      isApproved: (x: LessonSegment) => approvedIds.includes(x.id),
+    });
+
+  it("marks a flagged section while it is still waiting", () => {
+    sectionReview([FLAGGED_A], []);
+
+    showWith([FLAGGED_A]);
+
+    expect(screen.getByText("Worth a look")).toBeInTheDocument();
+  });
+
+  it("stops marking a flagged section once it has been approved", () => {
+    // `needsReview` is still true here, exactly as the server sends it after
+    // approval. Only the hook's list says it is done.
+    sectionReview([], ["s-1"]);
+
+    showWith([FLAGGED_A]);
+
+    expect(screen.queryByText("Worth a look")).not.toBeInTheDocument();
+  });
+
+  it("marks only the section that is still waiting", () => {
+    sectionReview([FLAGGED_B], ["s-1"]);
+
+    showWith([FLAGGED_A, FLAGGED_B]);
+
+    expect(screen.getAllByText("Worth a look")).toHaveLength(1);
+  });
+
+  it("draws no review border once everything has been approved", () => {
+    /*
+     * The violet left edge is the same signal as the chip, drawn a second way,
+     * and a mutation run found nothing checked it - the chip could be fixed and
+     * the border left saying the opposite. The review list uses the same edge
+     * for a section still waiting, so with everything approved there should be
+     * none anywhere on the page.
+     */
+    sectionReview([], ["s-1", "s-2"]);
+
+    const { container } = showWith([FLAGGED_A, FLAGGED_B]);
+
+    expect(container.querySelectorAll('[class*="border-l-[3px]"]')).toHaveLength(0);
+  });
+
+  it("marks a waiting section inside a module as well as outside one", () => {
+    /*
+     * The rows are drawn from two places - grouped under a module, and the
+     * ungrouped remainder - and every test above had no modules, so the grouped
+     * call site was never rendered. A mutation run that never marked grouped
+     * sections survived.
+     */
+    sectionReview([FLAGGED_A], []);
+
+    render(
+      <LiveLessonDetail
+        lesson={{ ...LESSON, segments: [FLAGGED_A] } as LessonDetailResponse}
+        modules={[
+          {
+            id: "m-1",
+            title: "How leaves work",
+            recap: null,
+            preview: null,
+            sequenceOrder: 1,
+            segmentIds: ["s-1"],
+          },
+        ]}
+        assignments={[]}
+      />,
+    );
+
+    expect(screen.getByText("How leaves work")).toBeInTheDocument();
+    expect(screen.getByText("Worth a look")).toBeInTheDocument();
+  });
+
+  it("keeps the approved section in the review list, shown as checked", () => {
+    // The OTHER half, and the reason the review list is built differently: a
+    // teacher who accepts a section must see it settle, not vanish.
+    sectionReview([], ["s-1"]);
+
+    showWith([FLAGGED_A]);
+
+    expect(screen.getByText("Checked")).toBeInTheDocument();
+    expect(screen.queryByText("Worth a look")).not.toBeInTheDocument();
+  });
+});
