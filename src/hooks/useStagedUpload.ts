@@ -93,6 +93,18 @@ export interface StagedUpload {
    */
   error: string | null;
   /**
+   * THE SENTENCE A SCREEN MAY SHOW. Added to the contract 24 Sep, after this
+   * console asked backend for a field that PROMISES prose rather than one that
+   * happens to contain it.
+   *
+   * A small closed list of recognised causes - no readable text, timed out,
+   * rate limited - and an honest generic line for everything else, because
+   * "a guess dressed as a diagnosis is worse than saying plainly we don't
+   * know". Null unless the parse failed, and null on an older deployment, so a
+   * caller keeps its own generic line for both rather than rendering nothing.
+   */
+  failureReason: string | null;
+  /**
    * The backend's reference for a failure nobody planned for.
    *
    * A 500 is the one failure this console can say nothing useful about, and
@@ -129,6 +141,7 @@ export function useStagedUpload(): StagedUpload {
     "file" | "parse" | "request" | null
   >(null);
   const [error, setError] = useState<string | null>(null);
+  const [failureReason, setFailureReason] = useState<string | null>(null);
   const [incident, setIncident] = useState<string | null>(null);
   const [slow, setSlow] = useState(false);
   /**
@@ -154,6 +167,7 @@ export function useStagedUpload(): StagedUpload {
     setFailed(false);
     setFailureKind(null);
     setError(null);
+    setFailureReason(null);
     setIncident(null);
     setSlow(false);
     setTick(0);
@@ -241,11 +255,21 @@ export function useStagedUpload(): StagedUpload {
           setFailedPages(res.failedPages ?? []);
           setLessonTitle(res.lessonTitle ?? null);
           setError(res.error);
+          setFailureReason(res.failureReason ?? null);
           if (res.status === "failed") {
             setFailed(true);
             // Nevo answered. It read the file and could not finish, which
             // is a different sentence from a call that never landed.
             setFailureKind("parse");
+            /*
+             * THE REFERENCE FOR A FAILURE WITH NO 500 BEHIND IT.
+             *
+             * A parse dies in a background task, so nothing ever rejected and
+             * the reader in the catch below never ran - a teacher looking at a
+             * failed parse had no reference to quote, which is the one thing
+             * that screen can offer them. It is a plain field on the job now.
+             */
+            setIncident(res.incidentId ?? null);
           }
           if (startedAt.current) {
             setSlow(Date.now() - startedAt.current > SLOW_AFTER_MS);
@@ -278,6 +302,7 @@ export function useStagedUpload(): StagedUpload {
     failed,
     failureKind,
     error,
+    failureReason,
     incident,
     slow,
     start,

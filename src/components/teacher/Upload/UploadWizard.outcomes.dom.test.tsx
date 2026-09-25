@@ -86,6 +86,7 @@ const stagedState = (over: Record<string, unknown> = {}) => {
     failed: false,
     failureKind: null,
     error: null,
+    failureReason: null,
     incident: null,
     slow: false,
     start,
@@ -474,5 +475,105 @@ describe("the long part of the wait", () => {
 
     expect(screen.getByText(/taking a while/i)).toBeInTheDocument();
     expect(screen.queryByText(/longer to read/i)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * WHY THE PARSE STOPPED, FROM THE FIELD THAT PROMISES TO SAY.
+ *
+ * `error` was rendered here as the teacher's sentence and is not one - the
+ * first real one anyone saw, once the status route stopped answering 500, was
+ * an asyncpg exception with the failing INSERT in it. It was removed on 24 Sep
+ * and backend added `failureReason` the same day: a small closed list of
+ * recognised causes and an honest generic line for the rest, *"because a guess
+ * dressed as a diagnosis is worse than saying plainly we don't know"*.
+ *
+ * So these pin BOTH halves. The prose is shown; the raw text still is not, even
+ * when both arrive together - which is the case no single assertion covers and
+ * the one a future refactor would get wrong.
+ */
+describe("why the parse stopped", () => {
+  const PROSE = "Nevo couldn’t find readable text in that file.";
+
+  it("says the server's reason where it gave one", () => {
+    stagedState({
+      uploadId: "u-1",
+      failed: true,
+      failureKind: "parse",
+      failureReason: PROSE,
+    });
+
+    startSingleUpload();
+
+    expect(screen.getByText(PROSE)).toBeInTheDocument();
+  });
+
+  it("keeps our own sentence where it gave none", () => {
+    // Null on an older deployment and on every failure with no recognised
+    // cause, so the fallback is the normal case rather than the edge.
+    stagedState({ uploadId: "u-1", failed: true, failureKind: "parse" });
+
+    startSingleUpload();
+
+    expect(screen.getByText(/ours to sort out/i)).toBeInTheDocument();
+  });
+
+  it("shows the prose and NOT the raw text when both arrive", () => {
+    /*
+     * The case that matters. `error` is unchanged in meaning and still
+     * arrives; nothing may render it. A version that showed whichever was
+     * present would pass every other test in this file.
+     */
+    stagedState({
+      uploadId: "u-1",
+      failed: true,
+      failureKind: "parse",
+      failureReason: PROSE,
+      error: RAW_DB_ERROR,
+    });
+
+    startSingleUpload();
+
+    expect(screen.getByText(PROSE)).toBeInTheDocument();
+    expect(
+      screen.queryAllByText(/asyncpg|depth_variants|INSERT INTO/i),
+    ).toHaveLength(0);
+  });
+
+  it("offers the reference a failed parse now carries", () => {
+    /*
+     * A parse dies in a background task, so there is no 500 for an incident id
+     * to ride on - and a teacher looking at this screen had nothing to quote.
+     * Backend put it on the job on 24 Sep.
+     */
+    stagedState({
+      uploadId: "u-1",
+      failed: true,
+      failureKind: "parse",
+      failureReason: PROSE,
+      incident: "d868d483fe7f",
+    });
+
+    startSingleUpload();
+
+    expect(screen.getByText(/d868d483fe7f/)).toBeInTheDocument();
+  });
+
+  it("says the same thing on the block screen", () => {
+    // Both paths rendered `error`, so both had to move to the same field.
+    stagedState({
+      uploadId: "u-1",
+      failed: true,
+      failureKind: "parse",
+      failureReason: PROSE,
+      error: RAW_DB_ERROR,
+    });
+
+    startUnitUpload();
+
+    expect(screen.getByText(PROSE)).toBeInTheDocument();
+    expect(
+      screen.queryAllByText(/asyncpg|depth_variants/i),
+    ).toHaveLength(0);
   });
 });

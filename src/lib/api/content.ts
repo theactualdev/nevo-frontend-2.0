@@ -107,7 +107,14 @@ export interface ParseAccepted {
  * POLL `finished`, NOT `status`. It is true for `completed`,
  * `completed_with_review` and `failed` alike, so a caller never has to
  * enumerate the terminal statuses - and so cannot hang forever by missing one.
- * `failureReason` says why, when it did not work.
+ * `failureReason` SAYS WHY, AND ONLY SINCE 24 SEP DOES IT MEAN THAT.
+ *
+ * This route was serving `error_message` under this name - a field whose name
+ * promises prose, handing over the first line of a stack trace. It is now the
+ * same closed list of recognised causes the staged route uses, from one shared
+ * place, so a lesson failing the same way on both routes cannot say two
+ * different things. `error` is the new field that carries the raw text, because
+ * the honest name for it was already taken.
  *
  * `fallbackSegmentCount` IS THE FIELD THAT MATTERS. A segment counted there is
  * deterministic split-up source text, not generated content. Every lesson in
@@ -127,6 +134,13 @@ export interface ParseRunStatus {
   startedAt: string;
   completedAt: string | null;
   failureReason: string | null;
+  /**
+   * The raw text, for reporting rather than for reading. New field here as of
+   * 24 Sep - see the note above on why `failureReason` could not keep it.
+   */
+  error?: string | null;
+  /** Twelve hex characters, in the log beside the exception. */
+  incidentId?: string | null;
   reviewNotes: Record<string, unknown>[];
   segmentCount: number;
   /** Segments that are split source text rather than generated content. */

@@ -144,3 +144,80 @@ describe("an upload that never landed", () => {
     expect(result.current.failureKind).toBe("request");
   });
 });
+
+/**
+ * WHAT A FAILED PARSE HANDS THE SCREEN, added to the contract on 24 Sep.
+ *
+ * Until then a parse that died gave this hook nothing a teacher could use:
+ * `error` was a driver exception, and the incident reader only ran in the
+ * catch - which a background-task failure never reaches, because the poll
+ * itself answered 200.
+ */
+describe("a parse that failed behind the response", () => {
+  /** Poll once into a settled failure rather than a rejection. */
+  const pollToFailure = async (over: Record<string, unknown>) => {
+    create.mockResolvedValue({
+      uploadId: "u-1",
+      status: "processing",
+      stage: "lessons",
+    });
+    status.mockResolvedValue({
+      id: "u-1",
+      status: "failed",
+      stage: "adaptations",
+      structure: { lessonId: null, modules: [], lessons: [] },
+      error: null,
+      ...over,
+    });
+    const { result } = renderHook(() => useStagedUpload());
+    act(() => result.current.start(new File(["x"], "lesson.pdf"), "lesson"));
+    // Past one poll interval: this failure arrives in a 200, not a rejection,
+    // so it cannot appear until the first poll has actually gone out. The
+    // rejection cases above resolve immediately and need no wait at all.
+    await waitFor(() => expect(result.current.failed).toBe(true), {
+      timeout: 4000,
+    });
+    return result;
+  };
+
+  it("carries the prose the server wrote for it", async () => {
+    const result = await pollToFailure({
+      failureReason: "Nevo couldn’t find readable text in that file.",
+    });
+
+    expect(result.current.failureReason).toBe(
+      "Nevo couldn’t find readable text in that file.",
+    );
+    expect(result.current.failureKind).toBe("parse");
+  });
+
+  it("carries the reference, which no rejection was ever going to give it", async () => {
+    const result = await pollToFailure({ incidentId: "7e728d46d73e" });
+
+    expect(result.current.incident).toBe("7e728d46d73e");
+  });
+
+  it("holds nothing where an older deployment sends neither", async () => {
+    // Absent must not become "" or undefined on the way through - a screen
+    // branches on null to keep its own sentence.
+    const result = await pollToFailure({});
+
+    expect(result.current.failureReason).toBeNull();
+    expect(result.current.incident).toBeNull();
+  });
+
+  it("keeps the raw text available and separate", async () => {
+    // `error` is for a bug report, not a screen. It must still arrive.
+    const result = await pollToFailure({
+      error: "ProgrammingError: column does not exist",
+      failureReason: "A fault at our end, not anything about your file.",
+    });
+
+    expect(result.current.error).toBe(
+      "ProgrammingError: column does not exist",
+    );
+    expect(result.current.failureReason).toBe(
+      "A fault at our end, not anything about your file.",
+    );
+  });
+});

@@ -146,7 +146,41 @@ export interface UploadStatusResponse {
    */
   failedPages?: number[];
   structure: UploadStructure;
+  /**
+   * RAW, AND NOT FOR A TEACHER TO READ. Kept for reporting.
+   *
+   * This was rendered as the sentence a teacher meets when their upload fails,
+   * on the reasonable-sounding argument that the server knows why and we do
+   * not. Nobody had ever seen one: the status route answered 500 for every
+   * in-flight upload, so the field was unreadable for the whole period it
+   * existed. The first real one, 23 Sep, was an asyncpg exception carrying the
+   * failing INSERT and its bound UUIDs.
+   *
+   * Backend's own words on it, 24 Sep: *"error stays exactly as it is, raw,
+   * for reporting."*
+   */
   error: string | null;
+  /**
+   * THE SENTENCE, and the field that promises to be one. Added 24 Sep.
+   *
+   * A small closed list of recognised causes - no readable text, timed out,
+   * rate limited - and an honest generic line for everything else, because
+   * *"a guess dressed as a diagnosis is worse than saying plainly we don't
+   * know"*. Null unless the parse failed.
+   *
+   * So this is what a screen may show, and `error` is what a bug report may
+   * quote. They are different fields because they are different promises.
+   */
+  failureReason?: string | null;
+  /**
+   * The backend's reference for this failure, now on the JOB rather than only
+   * on a 500's body.
+   *
+   * A parse fails behind the response, so there is no 500 for a reference to
+   * ride on - which is why a teacher looking at a failed parse had nothing to
+   * quote. Twelve hex characters, written to the log beside the exception.
+   */
+  incidentId?: string | null;
 }
 
 /** 200 of `POST /api/v1/uploads/{id}/retry-pages`. */

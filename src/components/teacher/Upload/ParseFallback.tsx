@@ -86,6 +86,7 @@ export function IncidentLine({ id }: { id?: string | null }) {
 
 export function ParseFallback({
   kind,
+  failureReason,
   incident,
   blockName,
   onBack,
@@ -95,10 +96,19 @@ export function ParseFallback({
 }: {
   kind: FallbackKind;
   /**
-   * NO `reason`, AND THAT IS A DECISION RATHER THAN AN OMISSION - see the
-   * `parseFailed` branch below. The server's `error` is a driver exception,
-   * not a sentence.
+   * WHY THE PARSE STOPPED, in the server's words, from the field that promises
+   * to be words.
+   *
+   * THIS PROP EXISTED, WAS DELETED, AND IS BACK AS A DIFFERENT FIELD. It used
+   * to carry `error`, which is a driver exception - the first real one anyone
+   * saw was an asyncpg `UndefinedColumnError` with the failing INSERT and its
+   * bound UUIDs, and it was being rendered as the sentence a teacher reads.
+   * Removed on 24 Sep; backend added `failureReason` the same day, a small
+   * closed list of recognised causes with an honest generic line for the rest.
+   *
+   * So this is not the old prop restored. `error` is still not shown anywhere.
    */
+  failureReason?: string | null;
   /** The backend's reference, when the failure was an unhandled one. */
   incident?: string | null;
   blockName: string;
@@ -305,9 +315,16 @@ export function ParseFallback({
             <p className="mt-[9px] max-w-[440px] text-[14.5px] leading-[1.6] text-nevo-near-black/70">
               {/* "WE", not "Nevo couldn't" and not a word about the file.
                   Design, 23 Sep: a failed parse is OUR problem and the copy
-                  should say so rather than implying they gave us a bad file. */}
-              The reading started and stopped partway. That is ours to sort
-              out, not anything you did.
+                  should say so rather than implying they gave us a bad file.
+
+                  The server's reason LEADS where it gave one, and ours stands
+                  alone where it did not - which is most failures on an older
+                  deployment, and every one that has no recognised cause. The
+                  generic case is deliberately backend's sentence rather than
+                  a guess: "a guess dressed as a diagnosis is worse than saying
+                  plainly we don't know." */}
+              {failureReason ??
+                "The reading started and stopped partway. That is ours to sort out, not anything you did."}
             </p>
             <IncidentLine id={incident} />
             <div className="mt-[22px] flex flex-wrap items-center justify-center gap-3">
