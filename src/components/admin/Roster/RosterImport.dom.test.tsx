@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
+import { ApiError } from "@/lib/api/client";
 import type { OnboardingState } from "@/lib/api/onboarding";
 import { RosterImportView } from "./RosterImportView";
 
@@ -124,6 +125,63 @@ describe("OB-01 upload", () => {
     await waitFor(() => expect(visibleText(container)).toMatch(/couldn.t read that/i));
     expect(screen.getByRole("button", { name: /See what Nevo found/i })).toBeEnabled();
     expect(visibleText(container)).toMatch(/Nothing has changed/i);
+  });
+
+  it("shows the server's reason for a refusal that retrying cannot fix", async () => {
+    /*
+     * A file missing a required column is a 400 naming what is absent. "Try
+     * again in a moment" would send a school round the same loop forever.
+     */
+    stageImport.mockRejectedValue(
+      new ApiError(400, "no", {
+        detail: {
+          code: "missing_columns",
+          message: "This file is missing the columns first_name, last_name.",
+        },
+      }),
+    );
+    const { container } = render(<RosterImportView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/Add your roster/));
+
+    fireEvent.change(screen.getByLabelText(/Upload students/i), {
+      target: { files: [file()] },
+    });
+
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/missing the columns first_name, last_name/),
+    );
+    expect(visibleText(container)).not.toMatch(/try again/i);
+  });
+
+  it("keeps the retry wording when the server gave no reason", async () => {
+    stageImport.mockRejectedValue(new Error("network"));
+    const { container } = render(<RosterImportView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/Add your roster/));
+
+    fireEvent.change(screen.getByLabelText(/Upload students/i), {
+      target: { files: [file()] },
+    });
+
+    await waitFor(() => expect(visibleText(container)).toMatch(/try again/i));
+  });
+
+  it("sends an active school to Students and Teachers instead of offering an upload", async () => {
+    /*
+     * Backend, 25 Sep: confirm prices the whole file as a fresh roster, so a
+     * running school uploading here would be invoiced twice for the same
+     * children. The server refuses it; the page should not offer it.
+     */
+    get.mockResolvedValue(state({ stage: "activated" }));
+    const { container } = render(<RosterImportView />);
+
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/already set up/i),
+    );
+    expect(screen.queryByLabelText(/Upload students/i)).toBeNull();
+    expect(screen.getByRole("link", { name: /Go to Students/ })).toHaveAttribute(
+      "href",
+      "/admin/students",
+    );
   });
 
   it("does not invent the expected columns", async () => {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { ReadFailed } from "../ReadFailed";
 import { CARD } from "./primitives";
 import {
@@ -8,6 +9,7 @@ import {
   type OnboardingState,
   type RejectedRow,
 } from "@/lib/api/onboarding";
+import { ApiError, apiErrorMessage } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 import {
   foundCounts,
@@ -50,6 +52,14 @@ import {
  *   rejections. Absent rather than wrong.
  *   TODO(api): the expected columns per `kind`, and a template file.
  *
+ *   25 Sep, backend named them - and THE FRAME'S LIST IS WRONG. Students:
+ *   first_name · last_name · class · date_of_birth · parent_name ·
+ *   parent_email. Teachers: first_name · last_name · email · class. All
+ *   required. The frame's "Full name", "Class(es)" and missing Parent name
+ *   would each fail a file drawn to it. Raised with design; until the frame
+ *   is corrected the list stays absent, and a wrong file gets the server's
+ *   own 400 naming what is missing (see `uploadFailed`).
+ *
  * - **"Teachers found"**, a panel of names and initials. `OnboardingState`
  *   carries `teacherCount` and no teacher list, so the count renders and the
  *   panel does not.
@@ -78,7 +88,19 @@ export function RosterImportView() {
   const [state, setState] = useState<OnboardingState | null>(null);
   /** Which kind is in flight, so only that panel shows a busy state. */
   const [uploading, setUploading] = useState<Kind | null>(null);
-  const [uploadFailed, setUploadFailed] = useState<Kind | null>(null);
+  /**
+   * Which upload failed, and the server's reason when it gave one.
+   *
+   * THE REASON IS THE WHOLE POINT. Two refusals are not transient, and "try
+   * again" is a lie for both: a file missing a required column (400
+   * `missing_columns`, naming what is absent) and a school that is already
+   * running (409 - *"Add people from the admin console instead."*). Retrying
+   * either gets the same answer, so the server's sentence is shown instead.
+   */
+  const [uploadFailed, setUploadFailed] = useState<{
+    kind: Kind;
+    reason: string | null;
+  } | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [confirmFailed, setConfirmFailed] = useState(false);
   /** OB-02 is a step forward from OB-01, not a different screen. */
@@ -109,7 +131,12 @@ export function RosterImportView() {
        * file of the same kind on success; a failure replaced nothing, so the
        * screen must not clear what a school already staged.
        */
-      .catch(() => setUploadFailed(kind))
+      .catch((err) =>
+        setUploadFailed({
+          kind,
+          reason: err instanceof ApiError ? apiErrorMessage(err.detail) : null,
+        }),
+      )
       .finally(() => setUploading(null));
   };
 
@@ -136,6 +163,18 @@ export function RosterImportView() {
         }}
       />
     );
+  }
+
+  /*
+   * AN ACTIVE SCHOOL DOES NOT UPLOAD A ROSTER. Backend, 25 Sep: the import
+   * refuses a school past confirm, and must - confirm prices the whole file as
+   * a fresh roster, so a running school would be invoiced a second time for
+   * children it already pays for. Adding people mid-term is Students and
+   * Teachers. The empty-state links still lead here, so the page says where
+   * to go rather than offering two upload panels that can only fail.
+   */
+  if (state.stage === "activated") {
+    return <AlreadyActive />;
   }
 
   const staged = hasStaged(state);
@@ -175,7 +214,8 @@ export function RosterImportView() {
                   title={k.title}
                   sub={k.sub}
                   busy={uploading === k.kind}
-                  failed={uploadFailed === k.kind}
+                  failed={uploadFailed?.kind === k.kind}
+                  reason={uploadFailed?.kind === k.kind ? uploadFailed.reason : null}
                   onFile={(f) => upload(k.kind, f)}
                 />
               ))}
@@ -207,17 +247,50 @@ export function RosterImportView() {
   );
 }
 
+function AlreadyActive() {
+  return (
+    <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
+      <div className="mx-auto max-w-[860px]">
+        <h2 className="m-0 text-[23px] font-semibold tracking-[-0.018em] text-nevo-near-black xl:text-[28px]">
+          Your school is already set up
+        </h2>
+        <p className="mt-2 max-w-[62ch] text-[15px] leading-[1.55] text-nevo-near-black/68">
+          The roster upload is for getting a school started. To add someone
+          now, add a student from Students or invite a teacher from Teachers.
+        </p>
+        <div className="mt-5 flex flex-wrap gap-3">
+          <Link
+            href="/admin/students"
+            className="inline-flex h-[44px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-5 text-[14.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-110"
+          >
+            Go to Students
+          </Link>
+          <Link
+            href="/admin/teachers"
+            className="inline-flex h-[44px] cursor-pointer items-center rounded-[10px] border border-nevo-near-black/15 px-5 text-[14.5px] font-semibold text-nevo-near-black transition-colors hover:bg-nevo-near-black/[0.03]"
+          >
+            Go to Teachers
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DropPanel({
   title,
   sub,
   busy,
   failed,
+  reason,
   onFile,
 }: {
   title: string;
   sub: string;
   busy: boolean;
   failed: boolean;
+  /** The server's sentence, when it gave one. See `uploadFailed`. */
+  reason: string | null;
   onFile: (f: File) => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
@@ -291,8 +364,16 @@ function DropPanel({
 
       {failed ? (
         <p className="m-0 mt-3 text-[13px] leading-[1.5] text-nevo-navy">
-          We couldn&rsquo;t read that just now. Nothing has changed &ndash; try
-          again in a moment.
+          {reason ? (
+            <>
+              {reason} Nothing has changed.
+            </>
+          ) : (
+            <>
+              We couldn&rsquo;t read that just now. Nothing has changed &ndash;
+              try again in a moment.
+            </>
+          )}
         </p>
       ) : null}
     </div>
