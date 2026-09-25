@@ -32,8 +32,26 @@ import { expect, test, type Page, type APIRequestContext } from "@playwright/tes
  * a fixture" rather than "is there a roster". That question does not get weaker
  * with real data - it gets sharper, because now both answers look plausible.
  *
- * The classes this spec probes may still be empty; it does not assume either
- * way, and nothing below depends on the count.
+ * NOTHING HERE IS NAMED IN ADVANCE ANY MORE - 25 Sep.
+ *
+ * The tenant was re-seeded, and the spec broke on three assumptions at once.
+ * It looked for a class called "E2E Probe Class", which is gone. It proved a
+ * class was real by its NAME - and the fixtures draw "JSS 2A" and "JSS 2B",
+ * which are now real classes in this school. And it assumed an empty class to
+ * test the honest empty roster, when every active class now holds five to
+ * eight children.
+ *
+ * Its fixture-NAME check had the same flaw a second time: it asserted no
+ * "Amina", "Chidi", "Tunde Bakare" or "Ngozi" appeared - and the E2E teacher
+ * is Chidi Adeyemi, whose name the console shell shows, and one real child in
+ * their classes matches that pattern too. Names cannot tell real from invented
+ * once the real school uses the same names. `data-nevo-sample` can.
+ *
+ * So the spec now asks the API which classes this teacher has and how many
+ * children are in each, using the test's own session, and asserts against
+ * that. Which teacher CI signs in as is not decided yet - the secrets are not
+ * set - so the suite cannot know a class name or a roster size in advance,
+ * and does not try.
  *
  * CREDENTIALS COME FROM THE ENVIRONMENT, never the repo. Without them the suite
  * SKIPS rather than fails: a contributor without secrets should not see a red
@@ -50,9 +68,6 @@ import { expect, test, type Page, type APIRequestContext } from "@playwright/tes
 const EMAIL = process.env.E2E_TEACHER_EMAIL;
 const PASSWORD = process.env.E2E_TEACHER_PASSWORD;
 const API = process.env.E2E_API_BASE ?? "https://api.nevolearning.com";
-
-/** The class the E2E school actually holds. Overridable per tenant. */
-const CLASS_NAME = process.env.E2E_CLASS_NAME ?? "E2E Probe Class";
 
 /** Mirrors `lib/auth/session.ts`. Changing either without the other breaks this. */
 const SESSION_KEY = "nevo.auth.session";
@@ -77,7 +92,10 @@ test.skip(
  * exist before the first render, or the console mounts signed-out, decides it is
  * a guest, and renders the very fixtures this suite is checking for.
  */
-async function signInAsTeacher(page: Page, request: APIRequestContext) {
+async function signInAsTeacher(
+  page: Page,
+  request: APIRequestContext,
+): Promise<string> {
   const res = await request.post(`${API}/api/v1/auth/login/password`, {
     data: { email: EMAIL, password: PASSWORD },
   });
@@ -123,7 +141,58 @@ async function signInAsTeacher(page: Page, request: APIRequestContext) {
     ([key, value]) => window.localStorage.setItem(key, value),
     [SESSION_KEY, JSON.stringify(session)] as const,
   );
+  // Returned so a test can ask the API what it should expect to see, on the
+  // SAME session - a second sign-in would replace this one (`replacedSession`)
+  // and bounce the page to the door mid-test.
+  return session.token as string;
 }
+
+type RealClass = {
+  id: string;
+  name: string;
+  /** Names as the roster route reports them - never the page's. */
+  children: { firstName: string; displayName: string | null }[];
+};
+
+/**
+ * WHAT THIS TEACHER ACTUALLY HAS, from the API rather than from this file.
+ *
+ * The answer the page is checked against. It is read on the test's own
+ * session, and every class is read for its roster, because the roster size is
+ * the thing the empty-state test needs and no list route carries it.
+ */
+async function realClasses(
+  request: APIRequestContext,
+  token: string,
+): Promise<RealClass[]> {
+  const auth = { Authorization: `Bearer ${token}` };
+  const res = await request.get(`${API}/api/v1/teachers/me/classes`, {
+    headers: auth,
+  });
+  expect(res.ok(), `Could not list the teacher's classes (${res.status()}).`).toBeTruthy();
+  const listed: { classId: string; className: string }[] = await res.json();
+
+  return Promise.all(
+    listed.map(async (c) => {
+      const r = await request.get(`${API}/api/v1/classes/${c.classId}/students`, {
+        headers: auth,
+      });
+      const body = r.ok() ? await r.json() : [];
+      const rows = Array.isArray(body) ? body : (body.items ?? body.students ?? []);
+      return {
+        id: c.classId,
+        name: c.className,
+        children: rows.map((row: { firstName?: string; displayName?: string | null }) => ({
+          firstName: row.firstName ?? "",
+          displayName: row.displayName ?? null,
+        })),
+      };
+    }),
+  );
+}
+
+/** A class name as a literal inside a pattern - "SS 2A (2025/26)" has three specials. */
+const literal = (s: string) => s.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
 
 /**
  * How long a live read may take before we call it broken.
@@ -161,8 +230,10 @@ test.describe("a signed-in teacher", () => {
    */
   test.describe.configure({ timeout: 150_000, mode: "serial" });
 
+  let token = "";
+
   test.beforeEach(async ({ page, request }) => {
-    await signInAsTeacher(page, request);
+    token = await signInAsTeacher(page, request);
   });
 
   test("reaches the dashboard instead of the door", async ({ page }) => {
@@ -170,13 +241,43 @@ test.describe("a signed-in teacher", () => {
     await expect(page).toHaveURL(/\/teacher\/dashboard/);
   });
 
-  test("sees their OWN class, not a fixture one", async ({ page }) => {
-    // The fixture classes are named JSS 2A and similar. A real read returns the
-    // E2E school's own class, so the name is the tell.
+  test("sees their OWN class, not a fixture one", async ({ page, request }) => {
+    /*
+     * THE NAME IS NO LONGER THE TELL. This waited for "E2E Probe Class" on the
+     * grounds that fixtures are named like JSS 2A - and after the re-seed the
+     * school has a real JSS 2A. So the page is settled on any class the API
+     * says this teacher has, and the proof it is not invented is the one the
+     * failure mode cannot fake: no fixture marks anywhere on it.
+     */
+    const classes = await realClasses(request, token);
+    test.skip(classes.length === 0, "This teacher has no classes to show.");
+
     await page.goto("/teacher/classes");
-    await settled(page, CLASS_NAME);
-    // And the school line is the tenant's own, not the fixture school.
+    await settled(page, new RegExp(classes.map((c) => literal(c.name)).join("|")));
+
+    const marks = await sampleMarks(page);
+    expect(marks, `The class list rendered fixture data: ${marks.join(", ")}`).toEqual([]);
+    // A school name is still a fair tell: no real tenant is called this.
     await expect(page.getByText(/Corona Secondary School/)).toHaveCount(0);
+  });
+
+  test("shows a real class's real children", async ({ page, request }) => {
+    /*
+     * The case the old suite never had, because the tenant it was written for
+     * held no children at all. A roster is where a fallback does the most harm
+     * - it invents children, with seats and glance dots - so this settles on a
+     * child the API says is in the class and then checks nothing else is.
+     */
+    const classes = await realClasses(request, token);
+    const full = classes.find((c) => c.children.length > 0);
+    test.skip(!full, "None of this teacher's classes has anyone in it.");
+
+    const child = full!.children[0];
+    await page.goto(`/teacher/classes/${full!.id}`);
+    await settled(page, new RegExp(literal(child.firstName)));
+
+    const marks = await sampleMarks(page);
+    expect(marks, `${full!.name}'s roster rendered fixture data: ${marks.join(", ")}`).toEqual([]);
   });
 
   /**
@@ -211,17 +312,29 @@ test.describe("a signed-in teacher", () => {
     });
   }
 
-  test("renders an honest empty roster rather than inventing children", async ({ page }) => {
-    // The E2E class genuinely has no students. A console falling back to
-    // fixtures would show six, with seat numbers and glance dots.
-    await page.goto("/teacher/classes");
-    await settled(page, CLASS_NAME);
-    await page.getByText(CLASS_NAME).first().click();
-    await page.waitForTimeout(3_000);
+  test("renders an honest empty roster rather than inventing children", async ({ page, request }) => {
+    /*
+     * RUNS ONLY WHERE THERE IS AN EMPTY CLASS, and says so when there is not.
+     * The re-seed left every active class with five to eight children, so on
+     * that tenant this is a visible skip rather than a pass nobody earned.
+     *
+     * It asserts the NOTHING-STATE, not merely the absence of fixtures. The
+     * same block says "We couldn't load this class's roster" when the read
+     * fails - which also shows no children and no fixture marks - so a test
+     * that only checked for absence would pass on a 500.
+     *
+     * The fixture-NAME check that was here is gone: the E2E teacher is called
+     * Chidi, and the console shell shows it.
+     */
+    const classes = await realClasses(request, token);
+    const empty = classes.find((c) => c.children.length === 0);
+    test.skip(!empty, "No class of this teacher's is empty, so the empty roster cannot be reached live.");
 
+    await page.goto(`/teacher/classes/${empty!.id}`);
+    await settled(page, "Nobody has joined this class yet");
+
+    await expect(page.getByText(/couldn.t load this class.s roster/i)).toHaveCount(0);
     expect(await sampleMarks(page)).toEqual([]);
-    // Fixture rosters are full of these names; a real empty class has none.
-    await expect(page.getByText(/Amina|Chidi|Tunde Bakare|Ngozi/)).toHaveCount(0);
   });
 
   test("never offers school SSO as though it worked", async ({ context }) => {
