@@ -165,6 +165,36 @@ test.describe("a signed-in student", () => {
     await api.dispose();
   });
 
+  test("the detector can see fixtures at all - the failure it exists to catch", async ({
+    page,
+  }) => {
+    /*
+     * THE POSITIVE CONTROL, and without it every test below could pass
+     * vacuously. Each asserts "no sample marks"; if `data-nevo-sample` stopped
+     * rendering entirely - an attribute renamed, a wrapper deleted - they would
+     * all still pass, and so would every "no fixtures" test in the teacher and
+     * admin suites. Nothing anywhere asserted a mark was ever PRESENT.
+     *
+     * So this reproduces the exact degradation the suite is for. The proxy
+     * trusts the role cookie; the client reads the token from localStorage.
+     * Cookie without session means the proxy lets the child through and the
+     * console mounts signed-out - and renders the walkthrough's invented week.
+     * That must be visible to the same function the tests below rely on.
+     */
+    await page.context().addCookies([
+      { name: ROLE_COOKIE, value: "student", url: "http://localhost:3100" },
+    ]);
+    await page.goto("/student/dashboard");
+    await shellMounted(page);
+    await page.waitForTimeout(2_000);
+
+    const marks = await sampleMarks(page);
+    expect(
+      marks.length,
+      "A student console with no session rendered NO sample marks. Either the fixtures stopped being marked, or the detector is blind - and every 'no fixtures' assertion in this file would pass regardless.",
+    ).toBeGreaterThan(0);
+  });
+
   /*
    * The assertion this file exists for, one page per test so a failure names
    * the page rather than "somewhere in the console".
@@ -229,6 +259,14 @@ test.describe("a signed-in student", () => {
       .locator('input[aria-labelledby="returning-pin-label"]')
       .pressSequentially(pin);
     await page.getByRole("button", { name: "Sign in" }).click();
+
+    // Recorded, so a green run says WHICH door this child was sent through.
+    test.info().annotations.push({
+      type: "consent",
+      description: consentBlocked
+        ? "blocked - expected the waiting screen"
+        : "not blocked - expected the dashboard",
+    });
 
     await expect(page).toHaveURL(
       consentBlocked ? /\/student\/waiting/ : /\/student\/dashboard/,
