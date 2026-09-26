@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { ApiError } from "@/lib/api/client";
 
 const { create, useTeacherClasses, useLessonLibrary, useStudentDirectory, useHasSession, push } =
@@ -25,6 +25,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { AssignWizard } from "./AssignWizard";
+import { SystemMessagesProvider } from "@/components/shared/SystemMessages";
 
 /**
  * "Specific students", which the wizard refused to do on a reason that had
@@ -707,5 +708,158 @@ describe("a 409 that names the lessons", () => {
     expect(
       screen.queryByRole("link", { name: /Open the lesson/i }),
     ).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * WHAT A TEACHER IS TOLD AFTER ASSIGNING - nothing, until 26 Sep.
+ *
+ * QA: the SCRUM-152 bar fires on lesson review but this wizard never raised it,
+ * so a teacher assigned a lesson and got no sign anything had happened.
+ *
+ * The wording is design's, not ours. Two of SM-01's own examples in
+ * `43 System Messages` are assignments - "Adding Fractions assigned to JSS 2A."
+ * and "Simplifying Algebraic Fractions assigned to JSS 2A." - so the line is
+ * that shape, filled with the names step 4 already shows.
+ *
+ * These render inside the REAL provider, so they assert on the bar itself
+ * rather than on a call that might never reach the screen.
+ */
+describe("what a teacher is told once it is assigned", () => {
+  const inShell = (preselect = "l-1") =>
+    render(
+      <SystemMessagesProvider>
+        <AssignWizard preselect={preselect} />
+      </SystemMessagesProvider>,
+    );
+
+  /** Step 1 to confirm, for whichever classes are named. */
+  const toClasses = (...names: RegExp[]) => {
+    inShell();
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    for (const n of names) fireEvent.click(screen.getByRole("button", { name: n }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm assignment" }));
+  };
+
+  it("says design's own sentence for one lesson and one class", async () => {
+    toClasses(/JSS 2A/);
+
+    expect(
+      await screen.findByText("Fractions 3 assigned to JSS 2A."),
+    ).toBeInTheDocument();
+  });
+
+  it("names every class it went to", async () => {
+    toClasses(/JSS 2A/, /JSS 2B/);
+
+    expect(
+      await screen.findByText("Fractions 3 assigned to JSS 2A and JSS 2B."),
+    ).toBeInTheDocument();
+  });
+
+  it("names the children the way step 4 did, when they were picked one by one", async () => {
+    inShell();
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Specific students" }));
+    fireEvent.click(screen.getByRole("button", { name: /Amara Okafor/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Chidi Nwosu/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm assignment" }));
+
+    expect(
+      await screen.findByText("Fractions 3 assigned to 2 students in JSS 2A."),
+    ).toBeInTheDocument();
+  });
+
+  it("says it before handing over to the Library, where it stays on screen", async () => {
+    // The bar's provider is in the teacher layout, which outlives this route,
+    // so a line raised before the hand-over is still there when the Library
+    // arrives. What this pins is the ORDER: said, then gone.
+    toClasses(/JSS 2A/);
+
+    await screen.findByText("Fractions 3 assigned to JSS 2A.");
+    expect(push).toHaveBeenCalledWith("/teacher/lessons");
+  });
+
+  it("never says 'success', which SM-01 rules out by name", async () => {
+    toClasses(/JSS 2A/);
+
+    await screen.findByText("Fractions 3 assigned to JSS 2A.");
+    expect(screen.queryByText(/success/i)).not.toBeInTheDocument();
+  });
+
+  it("is a confirmation, not a failure wearing the same words", async () => {
+    /*
+     * A mutation run found the tests read the words and not the KIND: the same
+     * line raised as `failed` passed every one. On screen they are not alike.
+     * A failure stays until someone dismisses it and carries the control to do
+     * so; a confirmation carries none, because SM-01's rule is that it
+     * "leaves on its own".
+     */
+    toClasses(/JSS 2A/);
+
+    await screen.findByText("Fractions 3 assigned to JSS 2A.");
+    expect(screen.queryByRole("button", { name: "Dismiss" })).not.toBeInTheDocument();
+  });
+
+  it("leaves on its own, as SM-01 says a confirmation does", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      toClasses(/JSS 2A/);
+      await screen.findByText("Fractions 3 assigned to JSS 2A.");
+
+      await act(async () => {
+        vi.advanceTimersByTime(6000);
+      });
+
+      expect(screen.queryByText("Fractions 3 assigned to JSS 2A.")).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("says nothing when nothing was assigned", async () => {
+    // Every child already had it: the wizard stays open and says why instead.
+    create.mockResolvedValue({ assignmentIds: [], createdCount: 0, duplicateCount: 28 });
+    toClasses(/JSS 2A/);
+
+    expect(await screen.findByText(/already have this lesson/i)).toBeInTheDocument();
+    expect(screen.queryByText(/assigned to JSS 2A\./)).not.toBeInTheDocument();
+  });
+
+  it("says nothing when the server refused it", async () => {
+    create.mockRejectedValue(
+      new ApiError(409, "conflict", {
+        detail: { code: "lesson_not_approved", message: "Fractions 3 has 2 sections waiting for you." },
+      }),
+    );
+    toClasses(/JSS 2A/);
+
+    await screen.findByText(/Fractions 3 has 2 sections waiting for you/);
+    expect(screen.queryByText(/assigned to JSS 2A\./)).not.toBeInTheDocument();
+  });
+
+  it("does not announce an assignment that only half happened", async () => {
+    // One class landed, one did not. The wizard names the one that failed and
+    // stays open - a confirmation here would call the whole thing done.
+    create
+      .mockResolvedValueOnce({ assignmentIds: ["a-1"], createdCount: 1 })
+      .mockRejectedValueOnce(new ApiError(500, "server", undefined));
+    toClasses(/JSS 2A/, /JSS 2B/);
+
+    expect(await screen.findByText(/didn.t go through/i)).toBeInTheDocument();
+    expect(screen.queryByText(/assigned to JSS 2A/)).not.toBeInTheDocument();
+  });
+
+  it("says nothing on the signed-out walkthrough, where nothing is sent", async () => {
+    useHasSession.mockReturnValue(false);
+    toClasses(/JSS 2A/);
+
+    await vi.waitFor(() => expect(push).toHaveBeenCalled());
+    expect(create).not.toHaveBeenCalled();
+    expect(screen.queryByText(/assigned to/)).not.toBeInTheDocument();
   });
 });
