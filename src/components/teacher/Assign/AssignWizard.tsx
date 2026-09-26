@@ -8,6 +8,7 @@ import { assignmentsApi } from "@/lib/api/assignments";
 import { useLessonLibrary } from "@/hooks/useLessonLibrary";
 import { useStudentDirectory } from "@/hooks/useStudentDirectory";
 import { useHasSession } from "@/hooks/useHasSession";
+import { useSystemMessages } from "@/components/shared/SystemMessages";
 import { useTeacherClasses } from "@/hooks/useTeacherClasses";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +23,28 @@ import { cn } from "@/lib/utils";
  * rosters; Continue honest-disables while a step has no selection (the
  * sanctioned incomplete-form case); the "Available now" confirm sentence and
  * the post-confirm route (Library) are undesigned.
+ *
+ * WHAT A TEACHER IS TOLD AFTERWARDS, which was nothing until 26 Sep. QA: a
+ * teacher assigned a lesson and got no sign anything had happened - the wizard
+ * closed onto the Library and the SCRUM-152 bar never fired, though it fires
+ * for the review on the very next screen they visit.
+ *
+ * THE SENTENCE IS DESIGN'S, NOT THIS FILE'S. The assign confirmation was never
+ * written as a screen, but it WAS drawn: two of SM-01's own examples in
+ * `43 System Messages` are assignments - *"Adding Fractions assigned to JSS
+ * 2A."* and *"Simplifying Algebraic Fractions assigned to JSS 2A."* - under the
+ * rule *"one line, past tense, names the thing... no 'Success', no
+ * 'successfully'."* So the line is that shape, filled with the names this
+ * wizard already shows on step 4 - the words the teacher has just read and
+ * confirmed. For one lesson and one class it is design's example exactly.
+ *
+ * THE POST-CONFIRM ROUTE GETS IT TOO, by construction rather than a second
+ * call. The bar's provider lives in `app/teacher/layout.tsx`, which stays
+ * mounted as the wizard hands over to the Library, so a line raised here is
+ * still on screen when the Library arrives - and the Library reads its lessons
+ * fresh on mount, so the card beneath it already says the lesson is assigned.
+ * WHERE it lands is still undesigned: opened from a lesson's own page, this
+ * returns the teacher to the Library rather than to that lesson.
  *
  * Submit is live against POST /api/v1/assignments - one call per selected
  * class, since the payload takes many lessons but a single class, which the
@@ -363,6 +386,7 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
           when === "left" || (Boolean(date) && Boolean(time));
 
   const close = () => router.push("/teacher/lessons");
+  const say = useSystemMessages();
 
   /**
    * One call per class. Nothing is claimed until every call has landed: a
@@ -586,6 +610,13 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
       );
       return;
     }
+    /*
+     * Said only HERE, where every request landed and something was created.
+     * The signed-out demo closes above without it - nothing was assigned - and
+     * a partial or refused assignment stays open with its own sentence rather
+     * than being announced as done.
+     */
+    say.show({ kind: "confirm", message: confirmedLine() });
     close();
   };
 
@@ -610,6 +641,12 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
             classNames.length > 0 ? ` in ${fmtList(classNames)}` : ""
           }`;
         })();
+  /**
+   * SM-01: *"{lesson} assigned to {class}."* - design's drawn line, with this
+   * wizard's own step-4 names in it. No date: the drawn sentence has none, and
+   * "assigned" is as true of a lesson opening on Friday as of one open now.
+   */
+  const confirmedLine = () => `${lessonsText} assigned to ${whoText}.`;
   const whenText =
     when === "right" && date
       ? (() => {
