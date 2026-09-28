@@ -7,7 +7,8 @@ import type { AdminStudentRow } from "@/lib/api/students";
  * D04 draws three. All three were fixture, under a note admitting it. Two have
  * sources and are computed here; the third ("classes that haven't run a lesson")
  * has none, and the nearest proxy is one adaptation-log call per class, which is
- * a different claim. It stays in `overviewSample.ts`.
+ * a different claim. It is not drawn: an invented row, even under a note, is
+ * still a school being shown class names that are not theirs.
  *
  * EVERY COUNT HERE CAN BE ABSENT, AND ABSENT IS NOT ZERO. A read that failed, or
  * one we could not finish, returns `null` and the row does not render. The

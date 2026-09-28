@@ -224,14 +224,14 @@ test("Billing renders live invoices with VAT as a percentage", async ({
   expect(text).not.toMatch(/undefined|NaN|Invalid Date/);
 });
 
-test("no signed-in admin surface renders an unmarked invented figure", async ({
+test("no signed-in admin surface renders an invented figure", async ({
   page,
 }) => {
   /*
-   * The one fixture the Overview still ships is the "classes haven't run a
-   * lesson" roll-up row, and it is wrapped in `SampleRegion` with a note
-   * saying so. Everything else must be the school's own. This walks the
-   * console and asserts that the ONLY sample marker anywhere is that one.
+   * The admin console ships no fixtures. The last one - the Overview's
+   * "classes haven't run a lesson" row, which showed a real school two
+   * invented class names under a note - was removed on 28 Sep. So any sample
+   * marker on any admin route is now a regression, with no exceptions.
    */
   const routes = [
     "/admin",
@@ -250,11 +250,6 @@ test("no signed-in admin surface renders an unmarked invented figure", async ({
     const kinds = await page
       .locator(`[${SAMPLE_ATTR}]`)
       .evaluateAll((els) => els.map((e) => e.getAttribute("data-nevo-sample")));
-    for (const kind of kinds) {
-      expect(
-        kind,
-        `${route} rendered an unexpected fixture region (${kind})`,
-      ).toBe("admin:overview-worth-a-glance");
-    }
+    expect(kinds, `${route} rendered a fixture region`).toEqual([]);
   }
 });

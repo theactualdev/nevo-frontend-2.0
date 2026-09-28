@@ -274,3 +274,23 @@ describe("copy for board pack", () => {
     expect(visibleText(container)).not.toMatch(/Copied for board pack/);
   });
 });
+
+describe("the roll-up", () => {
+  it("shows no invented row, and no section when this school has nothing to show", async () => {
+    /*
+     * D04's third "Worth a glance" row - "2 classes haven't run a lesson yet:
+     * JSS 1B and SSS 2 Arts" - has no source, and was rendering for every live
+     * school under a note. A real school was being shown class names that
+     * were not theirs. With no roster or flag rows, there is nothing to glance
+     * at, so the section is not drawn at all.
+     */
+    const { container } = render(<OverviewView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/Students enrolled/));
+    const text = visibleText(container);
+
+    expect(text).not.toMatch(/haven.t run a lesson|JSS 1B|SSS 2 Arts/);
+    expect(text).not.toMatch(/Worth a glance/i);
+    expect(text).not.toMatch(/is a sample/i);
+    expect(container.querySelector("[data-nevo-sample]")).toBeNull();
+  });
+});
