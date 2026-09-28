@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useSetupGate } from "@/hooks";
 import { emailConfirmationApi } from "@/lib/api/emailConfirmation";
 import { cn } from "@/lib/utils";
+import { changeEmailFailure } from "./Onboarding/changeEmailOutcome";
 import { CARD } from "./Roster/primitives";
 
 /**
@@ -32,8 +33,52 @@ export function SetupPausedBanner() {
   const [resending, setResending] = useState(false);
   const [resent, setResent] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [changing, setChanging] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [changeError, setChangeError] = useState<string | null>(null);
+  /** The address a fresh link just went to, after a change. */
+  const [movedTo, setMovedTo] = useState<string | null>(null);
 
   if (pause !== "email_unconfirmed") return null;
+
+  /*
+   * AC-05's "Change email". PATCH /api/v1/admin/email authenticates by the
+   * session, which is exactly what a signed-in admin has - so a mistyped
+   * address is fixable here, where before it was not fixable anywhere once
+   * the wizard tab was closed. The expired-link page (AC-03) sends people
+   * here with "Sign in and you can change it there"; this is what makes that
+   * sentence true.
+   *
+   * A successful change supersedes every outstanding link and sends a fresh
+   * one, and the gate re-reads so the banner names the new address.
+   */
+  const saveEmail = () => {
+    const next = draft.trim();
+    if (!next) return;
+    setSaving(true);
+    setChangeError(null);
+    emailConfirmationApi
+      .changeEmail(next)
+      .then((s) => {
+        setMovedTo(s.email ?? next);
+        setChanging(false);
+        setResent(false);
+        setFailed(false);
+        refresh();
+      })
+      .catch((err: unknown) => {
+        const failure = changeEmailFailure(err);
+        if (failure.confirmedElsewhere) {
+          // Confirmed in another tab: the banner's job is done.
+          setChanging(false);
+          refresh();
+          return;
+        }
+        setChangeError(failure.message);
+      })
+      .finally(() => setSaving(false));
+  };
 
   const resend = () => {
     setResending(true);
@@ -60,6 +105,11 @@ export function SetupPausedBanner() {
         {email ? ` We sent a link to ${email}.` : " We've sent you a link."}
       </p>
 
+      {movedTo ? (
+        <p className="mt-3 text-[13.5px] font-semibold text-nevo-navy">
+          Changed. We&rsquo;ve sent a new link to {movedTo}.
+        </p>
+      ) : null}
       {resent ? (
         <p className="mt-3 text-[13.5px] font-semibold text-nevo-navy">
           Sent. It may take a minute to arrive.
@@ -72,6 +122,47 @@ export function SetupPausedBanner() {
         </p>
       ) : null}
 
+      {changing ? (
+        <div className="mt-4 flex max-w-[440px] flex-col gap-2.5">
+          <label className="text-[13px] font-medium text-nevo-near-black/62">
+            The right address
+            <input
+              type="email"
+              autoComplete="email"
+              value={draft}
+              onChange={(e) => {
+                setDraft(e.target.value);
+                setChangeError(null);
+              }}
+              placeholder="you@yourschool.edu.ng"
+              className="mt-2 w-full rounded-[10px] border border-nevo-near-black/12 bg-nevo-cream px-4 py-3 text-[15px] text-nevo-near-black outline-none transition-colors focus:border-nevo-navy"
+            />
+          </label>
+          {changeError ? (
+            <p className="m-0 text-[13.5px] leading-[1.5] text-nevo-navy">{changeError}</p>
+          ) : null}
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={saveEmail}
+              disabled={saving || !draft.trim()}
+              className="h-[44px] cursor-pointer rounded-[10px] bg-nevo-navy px-5 text-sm font-semibold text-nevo-cream transition-[filter] hover:brightness-110 disabled:cursor-default disabled:opacity-60"
+            >
+              {saving ? "Changing…" : "Use this address"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setChanging(false);
+                setChangeError(null);
+              }}
+              className="h-[44px] cursor-pointer rounded-[10px] px-4 text-sm font-semibold text-nevo-near-black/70 transition-colors hover:bg-nevo-near-black/[0.05]"
+            >
+              {email ? `Keep ${email}` : "Cancel"}
+            </button>
+          </div>
+        </div>
+      ) : (
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <button
           type="button"
@@ -81,15 +172,26 @@ export function SetupPausedBanner() {
         >
           {resending ? "Sending…" : "Resend link"}
         </button>
+        <button
+          type="button"
+          onClick={() => {
+            setChanging(true);
+            setDraft("");
+            setMovedTo(null);
+          }}
+          className="h-[44px] cursor-pointer rounded-[10px] border-[1.5px] border-nevo-near-black/18 px-5 text-sm font-semibold text-nevo-near-black transition-colors hover:bg-nevo-near-black/[0.04]"
+        >
+          Change email
+        </button>
         {/*
-          * "I'VE CONFIRMED IT" RATHER THAN THE FRAME'S "Change email".
+          * "I'VE CONFIRMED IT", beside the frame's two.
           *
-          * AC-05 draws Resend and Change email. Nothing in the deployed
-          * contract writes an administrator's address - the same absence as
-          * D01 step 2 and D01b AC-03 - so that control cannot be built and is
-          * raised rather than faked.
+          * ~~This took the place of "Change email", because nothing in the
+          * deployed contract wrote an administrator's address.~~ That was
+          * wrong: PATCH /api/v1/admin/email is session-authenticated and was
+          * there to be called. Change email is above now.
           *
-          * This takes its place because the banner has a problem the wizard
+          * The re-check stays because the banner has a problem the wizard
           * does not: somebody who confirms in another tab has no reason to
           * reload this one, and would sit looking at a card telling them to do
           * something they have already done. The wizard step polls; a console
@@ -104,6 +206,7 @@ export function SetupPausedBanner() {
           I&rsquo;ve confirmed it
         </button>
       </div>
+      )}
     </div>
   );
 }
