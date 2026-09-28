@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { AdminSidebar } from "./AdminSidebar";
+import { DpaGate } from "./DpaGate";
 
 /**
  * The chrome every admin screen sits in: the rail, then a scrolling content
@@ -25,7 +26,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-dvh min-h-0 w-full overflow-hidden bg-nevo-cream">
       <AdminSidebar />
-      <main className="min-w-0 flex-1 overflow-y-auto">{children}</main>
+      <main className="min-w-0 flex-1 overflow-y-auto">
+        <DpaGate>{children}</DpaGate>
+      </main>
     </div>
   );
 }

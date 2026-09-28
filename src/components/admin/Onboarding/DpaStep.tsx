@@ -46,7 +46,11 @@ export function DpaStep({
   onDone,
 }: {
   schoolName: string;
-  onBack: () => void;
+  /**
+   * Optional: the console's own agreement gate (`Shell/DpaGate`) has no step
+   * before this one to go back to.
+   */
+  onBack?: () => void;
   onDone: () => void;
 }) {
   const [readToEnd, setReadToEnd] = useState(false);
@@ -223,9 +227,11 @@ export function DpaStep({
             "Continue"
           )}
         </button>
-        <button type="button" onClick={onBack} className={WIZARD_SECONDARY}>
-          Back
-        </button>
+        {onBack ? (
+          <button type="button" onClick={onBack} className={WIZARD_SECONDARY}>
+            Back
+          </button>
+        ) : null}
       </div>
     </>
   );
