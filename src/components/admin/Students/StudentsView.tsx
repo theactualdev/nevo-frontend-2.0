@@ -314,10 +314,16 @@ export function StudentsView() {
             {/* The erasure confirmation, read off the navigation that brought
                 the admin back here. One plain line, above the roster: the
                 record is gone and there is nothing to undo, so this states it
-                and nothing more. */}
+                and nothing more.
+
+                IT SAYS WHAT THE ERASE MODAL SAID. This read "Nothing of it is
+                kept", one screen after the modal told the same admin "We're
+                required to keep a small amount of it for a statutory period".
+                The false one is the reassuring one, which is the direction a
+                school would repeat to a parent. */}
             {erased ? (
               <p className="m-0 mt-4 rounded-[10px] bg-nevo-violet/[0.18] px-4 py-3 text-[13.5px] leading-[1.5] text-nevo-navy">
-                {`${erased}'s record has been erased. Nothing of it is kept.`}
+                {`${erased}'s record has been erased. Only the small amount the law requires is kept, and that goes too once its statutory period ends.`}
               </p>
             ) : null}
 

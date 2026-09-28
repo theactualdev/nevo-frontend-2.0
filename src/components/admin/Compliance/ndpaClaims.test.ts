@@ -159,6 +159,8 @@ describe("the two claims that were pulled", () => {
       .join(" ");
     expect(text).not.toMatch(/nothing about how a learner performed/i);
     expect(text).not.toMatch(/then discarded/i);
+    // The retention row's sibling sentence, missed by the 14 Sep pull.
+    expect(text).not.toMatch(/ephemeral|no retention period/i);
     expect(all().map((c) => c.title)).not.toContain("Ephemeral processing");
   });
 

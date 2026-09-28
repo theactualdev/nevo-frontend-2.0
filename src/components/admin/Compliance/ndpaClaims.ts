@@ -282,13 +282,19 @@ function consentClaim(input: ConsentInput): NdpaClaim {
  * The title lost "within counsel limits": this reports the school's configured
  * position, and whether that position satisfies counsel is counsel's judgement,
  * not a thing this screen can check.
+ *
+ * AND IT LOST "Learning signals, being ephemeral, have no retention period at
+ * all." That was the sibling of the "Ephemeral processing" row pulled on 14
+ * Sep, and false for the same reason: `GET /api/admin/adaptation-log` keeps a
+ * row per adaptation with the learner's first name, trigger and timestamp,
+ * filterable by student. The pull removed the row and missed the sentence.
  */
 function retentionClaim(input: RetentionInput): NdpaClaim {
   const base = {
     title: "Records retention",
     evidence: "Retention policy, deletion jobs",
     mechanism:
-      "Account and enrolment records are kept only for the period set with counsel; nothing is retained beyond it. Learning signals, being ephemeral, have no retention period at all.",
+      "Account and enrolment records are kept only for the period set with counsel; nothing is retained beyond it.",
   };
   if (input === "unreadable") {
     return {
