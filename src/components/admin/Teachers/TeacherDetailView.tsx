@@ -16,12 +16,14 @@ import {
   Avatar,
   CARD,
   GHOST_BTN,
+  PausedNote,
   PRIMARY_BTN,
   ROW_DIVIDER,
   RolePill,
   SectionHeading,
   TEXT_ACTION,
 } from "../Roster/primitives";
+import { useSetupGate } from "@/hooks";
 import { RemoveAccessSheet } from "./RemoveAccessSheet";
 import { StatusPill, isInvited } from "./status";
 import { NoAccess, failureKind } from "../NoAccess";
@@ -72,6 +74,8 @@ export function TeacherDetailView({ teacherId }: { teacherId: string }) {
   const [held, setHeld] = useState<AssignedClass[]>([]);
   const [allClasses, setAllClasses] = useState<AdminClass[]>([]);
   const [removing, setRemoving] = useState(false);
+  /** D24 / D01b: removing access pauses while setup is unfinished. */
+  const { writesPaused } = useSetupGate();
 
   const load = useCallback(() => {
     Promise.all([
@@ -299,7 +303,13 @@ export function TeacherDetailView({ teacherId }: { teacherId: string }) {
 
       {/* Removing access is quiet, below a rule, and never a red button. */}
       <div className="mt-[26px] border-t border-nevo-near-black/10 pt-5">
-        <button type="button" onClick={() => setRemoving(true)} className={TEXT_ACTION}>
+        <PausedNote className="mb-4" />
+        <button
+          type="button"
+          onClick={() => setRemoving(true)}
+          disabled={writesPaused}
+          className={TEXT_ACTION}
+        >
           Remove admin-side access
         </button>
         <p className="mt-1.5 max-w-[520px] text-[13px] leading-[1.5] text-nevo-near-black/55">

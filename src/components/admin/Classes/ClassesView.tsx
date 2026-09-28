@@ -18,10 +18,12 @@ import {
   CARD,
   GHOST_BTN,
   NoTeacherYet,
+  PausedNote,
   PRIMARY_BTN,
   PlusIcon,
   ROW_DIVIDER,
 } from "../Roster/primitives";
+import { useSetupGate } from "@/hooks";
 import { BulkClassSheet } from "./BulkClassSheet";
 import { ClassFormSheet } from "./ClassFormSheet";
 import { NoAccess, failureKind } from "../NoAccess";
@@ -119,6 +121,8 @@ export function ClassesView() {
   const [year, setYear] = useState("");
   const [showArchived, setShowArchived] = useState(false);
   const [creating, setCreating] = useState(false);
+  /** D24 / D01b: reachable, and visibly locked while setup is unfinished. */
+  const { writesPaused } = useSetupGate();
   const [bulking, setBulking] = useState(false);
   /** The row that just arrived, so it can be marked for one shot. */
   const [justCreated, setJustCreated] = useState<string | null>(null);
@@ -261,17 +265,25 @@ export function ClassesView() {
               <button
                 type="button"
                 onClick={() => setBulking(true)}
+                disabled={writesPaused}
                 className={GHOST_BTN}
               >
                 Add several
               </button>
-              <button type="button" onClick={() => setCreating(true)} className={PRIMARY_BTN}>
+              <button
+                type="button"
+                onClick={() => setCreating(true)}
+                disabled={writesPaused}
+                className={PRIMARY_BTN}
+              >
                 <PlusIcon />
                 Add a class
               </button>
             </>
           ) : null}
         </div>
+
+        <PausedNote className="mt-3" />
 
         {phase === "loading" ? <div className={cn(CARD, "mt-[22px] h-[320px] animate-pulse")} /> : null}
 
@@ -293,7 +305,7 @@ export function ClassesView() {
         ) : null}
 
         {phase === "ready" && classes.length === 0 && !showArchived ? (
-          <EmptyState onCreate={() => setCreating(true)} />
+          <EmptyState onCreate={() => setCreating(true)} paused={writesPaused} />
         ) : null}
 
         {phase === "ready" && (classes.length > 0 || showArchived) ? (
@@ -545,7 +557,7 @@ export function ClassesView() {
  * The first-run state. Two ways forward, because a school that has connected a
  * provider should not be typing its roster in by hand.
  */
-function EmptyState({ onCreate }: { onCreate: () => void }) {
+function EmptyState({ onCreate, paused }: { onCreate: () => void; paused: boolean }) {
   return (
     /*
      * The same definite height as `Teachers/TeachersView`'s empty state, and
@@ -581,7 +593,9 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
           it yet is perfectly normal.
         </p>
         <div className="mt-6 flex justify-center gap-3">
-          <button type="button" onClick={onCreate} className={PRIMARY_BTN}>
+          {/* The roster upload stays open: it is how a school in setup gets
+              classes at all. Only building one by hand pauses. */}
+          <button type="button" onClick={onCreate} disabled={paused} className={PRIMARY_BTN}>
             <PlusIcon />
             Add a class
           </button>
