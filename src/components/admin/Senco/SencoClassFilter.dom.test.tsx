@@ -22,7 +22,7 @@ vi.mock("@/lib/api/intelligence", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/intelligence")>();
   return {
     ...actual,
-    intelligenceApi: { ...actual.intelligenceApi, getFlags: async () => [] },
+    intelligenceApi: { ...actual.intelligenceApi, getFlags: async () => [], allFlags: async () => ({ flags: [], complete: true }) },
   };
 });
 
