@@ -25,10 +25,13 @@ vi.mock("@/lib/api/school", async (importOriginal) => {
     schoolApi: {
       ...actual.schoolApi,
       dpaAcceptance: () => dpaAcceptance(),
-      get: () => Promise.resolve({ name: "Brightgate Academy" }),
+      get: () => getSchool(),
     },
   };
 });
+
+const getSchool = vi.fn();
+const SCHOOL = { name: "Brightgate Academy", profile: {} };
 
 const ACCEPTED = {
   id: "d1",
@@ -43,6 +46,7 @@ const page = <h2>Classes</h2>;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  getSchool.mockResolvedValue(SCHOOL);
   gate.mockReturnValue({ pause: null });
   perms.mockReturnValue({ resolved: true, hasScope: (s: string) => s === "oversight" });
 });
@@ -93,5 +97,37 @@ describe("DpaGate", () => {
     );
     expect(screen.queryByRole("checkbox")).toBeNull();
     expect(screen.queryByRole("heading", { name: "Classes" })).toBeNull();
+  });
+});
+
+describe("DpaGate and schools that agreed before the typed record", () => {
+  it("counts an acceptance the wizard recorded the old way", async () => {
+    /*
+     * Before `dpa-acceptance` existed the wizard wrote it into
+     * profile.onboarding. Reading the new table alone locked the end-to-end
+     * school out of its own console - and would have done the same to every
+     * school that agreed before the migration.
+     */
+    dpaAcceptance.mockResolvedValue(null);
+    getSchool.mockResolvedValue({
+      ...SCHOOL,
+      profile: { onboarding: { dpaVersion: "0.9-draft", dpaAcceptedAt: "2026-08-30T10:00:00Z" } },
+    });
+    render(<DpaGate>{page}</DpaGate>);
+
+    await waitFor(() => expect(getSchool).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: "Classes" })).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/How we handle your students' data/)).toBeNull();
+  });
+
+  it("fails open when the school cannot be read to check", async () => {
+    dpaAcceptance.mockResolvedValue(null);
+    getSchool.mockRejectedValue(new Error("500"));
+    render(<DpaGate>{page}</DpaGate>);
+
+    await waitFor(() => expect(getSchool).toHaveBeenCalled());
+    expect(screen.getByRole("heading", { name: "Classes" })).toBeInTheDocument();
   });
 });

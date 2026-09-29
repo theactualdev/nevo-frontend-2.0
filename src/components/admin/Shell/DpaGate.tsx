@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePermissions, useSetupGate } from "@/hooks";
 import { PERMISSION_SCOPES } from "@/lib/constants/permissions";
-import { schoolApi } from "@/lib/api/school";
+import { readOnboarding, schoolApi } from "@/lib/api/school";
 import { DpaStep } from "../Onboarding/DpaStep";
 
 /**
@@ -43,24 +43,33 @@ export function DpaGate({ children }: { children: React.ReactNode }) {
     let live = true;
     schoolApi
       .dpaAcceptance()
-      .then((a) => live && setDpa(a ? "accepted" : "missing"))
+      .then(async (a) => {
+        if (a) {
+          if (live) setDpa("accepted");
+          return;
+        }
+        /*
+         * NULL IS NOT YET "NEVER AGREED". Before the typed record existed, the
+         * wizard wrote the acceptance into `profile.onboarding` as
+         * `{dpaVersion, dpaAcceptedAt}`. A school that agreed then has no row
+         * in the new table unless it was migrated - and this gate, reading the
+         * new table alone, would have locked every such school out of its own
+         * console on the day it shipped. The end-to-end school caught it.
+         *
+         * So the old record counts. The school is read here anyway, for the
+         * name the agreement is accepted on behalf of; if that read fails the
+         * gate fails open, as it does everywhere else.
+         */
+        const school = await schoolApi.get();
+        if (!live) return;
+        setSchoolName(school.name?.trim() || null);
+        setDpa(readOnboarding(school).dpaAcceptedAt ? "accepted" : "missing");
+      })
       .catch(() => live && setDpa("unknown"));
     return () => {
       live = false;
     };
   }, []);
-
-  useEffect(() => {
-    if (dpa !== "missing") return;
-    let live = true;
-    schoolApi
-      .get()
-      .then((s) => live && setSchoolName(s.name?.trim() || null))
-      .catch(() => {});
-    return () => {
-      live = false;
-    };
-  }, [dpa]);
 
   if (dpa !== "missing" || pause === "email_unconfirmed") return <>{children}</>;
 
