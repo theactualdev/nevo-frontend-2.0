@@ -14,16 +14,14 @@
 import { clearSession, getSession, getToken } from "@/lib/auth/session";
 import { noteServerClock } from "./serverClock";
 import { isAdminRole } from "@/lib/constants/permissions";
+import { API_ORIGIN } from "./upstream";
 
 // Default: the same-origin catch-all proxy (`app/api/backend/[...path]`),
 // which forwards to the FastAPI backend - the backend has no CORS headers, so
 // browsers cannot call it directly. Set `NEXT_PUBLIC_API_DIRECT=1` alongside
 // `NEXT_PUBLIC_API_URL` to bypass the proxy once CORS lands.
 const BASE_URL =
-  process.env.NEXT_PUBLIC_API_DIRECT === "1"
-    ? (process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ??
-      "https://api.nevolearning.com")
-    : "/api/backend";
+  process.env.NEXT_PUBLIC_API_DIRECT === "1" ? API_ORIGIN : "/api/backend";
 
 const isDev = process.env.NODE_ENV === "development";
 
