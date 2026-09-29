@@ -160,7 +160,7 @@ describe("sending a parent the consent request", () => {
     await press();
 
     await waitFor(() =>
-      expect(visibleText(container)).toMatch(/no parent contact on Chisom/i),
+      expect(visibleText(container)).toMatch(/no parent or guardian on Chisom[^.]*record yet. Add one/i),
     );
     // An absent contact is an ordinary state, not a failure, and nothing was
     // posted on its behalf.

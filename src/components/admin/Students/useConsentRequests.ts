@@ -75,7 +75,7 @@ const IDLE: ConsentRequestState = { kind: "idle" };
 const CONTACT_METHOD = "email" as const;
 
 /** An address we can actually email. Deliberately the same test the CSV import uses. */
-function isEmail(contact: string): boolean {
+export function isEmail(contact: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.trim());
 }
 
@@ -161,7 +161,9 @@ export function consentRequestLine(
             // here would be the invite defect again.
             `Consent request queued for ${state.parentName}. It goes out shortly.`;
     case "noContact":
-      return `There’s no parent contact on ${studentName}’s record yet, so there’s nobody to send this to.`;
+      // Was a full stop after "nobody to send this to". There is an action
+      // now - adding a guardian sends the request - so the line names it.
+      return `There’s no parent or guardian on ${studentName}’s record yet. Add one on ${studentName}’s page and the request goes to them.`;
     case "needsEmail":
       // Names the guardian, so the admin knows the record is not empty - it is
       // the wrong KIND of contact. "Never a dead end": it says what to add.
