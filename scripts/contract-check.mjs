@@ -36,7 +36,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join, relative } from "node:path";
 import ts from "typescript";
 
-const BASE = process.env.NEVO_API_URL ?? "https://api.nevolearning.com";
+const BASE = process.env.NEVO_API_URL ?? "https://nevo-backend-2-0-kn3d.onrender.com";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const API_DIR = join(ROOT, "src", "lib", "api");
 const WARN_ONLY = process.argv.includes("--warn");

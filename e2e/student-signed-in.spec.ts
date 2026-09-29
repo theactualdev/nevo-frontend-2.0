@@ -45,7 +45,7 @@ const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL;
 const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD;
 const STUDENT_LOGIN = process.env.E2E_STUDENT_LOGIN;
 const SCHOOL_CODE = process.env.E2E_SCHOOL_CODE ?? "NEVO-E2E";
-const API = process.env.E2E_API_BASE ?? "https://api.nevolearning.com";
+const API = process.env.E2E_API_BASE ?? "https://nevo-backend-2-0-kn3d.onrender.com";
 
 /** Mirrors `lib/auth/session.ts`. Changing either without the other breaks this. */
 const SESSION_KEY = "nevo.auth.session";
