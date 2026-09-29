@@ -219,11 +219,13 @@ export function labelHero(
 /**
  * The parental-consent row.
  *
- * NOTE WHAT THIS DOES NOT SAY. An outstanding consent is the SCHOOL'S record to
- * complete, not a bar on the child: SCRUM-80 ruled that the school warrants
- * consent through the DSA and only a withdrawal stops processing. An earlier
- * draft of this row said those learners "cannot begin lessons until it is",
- * which is the claim the rest of the console was corrected for making.
+ * ~~An outstanding consent is the SCHOOL'S record to complete, not a bar on the
+ * child: SCRUM-80 ruled that the school warrants consent through the DSA and
+ * only a withdrawal stops processing.~~ SUPERSEDED. Consent is a gate: a
+ * learner's work begins when a parent gives permission, and nothing starts
+ * before then. This row said "Learning is not held up while it is
+ * outstanding" until 29 Sep - the same claim the parent consent email made,
+ * and corrected in both at once.
  *
  * `unknown` rows send the whole row back to `unverified`. A coverage figure
  * computed over a roster we only partly understand is worse than no figure on
@@ -266,7 +268,7 @@ function consentClaim(input: ConsentInput): NdpaClaim {
   return {
     ...base,
     state: `${input.confirmed} of ${input.roster}`,
-    mechanism: `${input.confirmed} of the ${input.roster} learners on your roster have a parental consent recorded. ${input.outstanding} ${one ? "does" : "do"} not yet \u2013 your school\u2019s record to complete, and your Students page lists which. Learning is not held up while it is outstanding.`,
+    mechanism: `${input.confirmed} of the ${input.roster} learners on your roster have a parental consent recorded. ${input.outstanding} ${one ? "does" : "do"} not yet. Their learning begins as soon as a parent gives permission \u2013 nothing starts before then. Your Students page lists which.`,
     verification: "school",
   };
 }
