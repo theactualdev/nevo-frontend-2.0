@@ -334,6 +334,11 @@ export function ConfirmEmail({ token }: { token: string }) {
                   * Signing in works even with the wrong address on the
                   * account - they know what they typed, and they know their
                   * password.
+                  *
+                  * "THERE" IS THE AC-05 BANNER'S Change email, since 28 Sep.
+                  * Before that this sentence pointed at nothing: the only
+                  * caller of the address change was the setup wizard, which a
+                  * signed-in admin never sees again.
                   */}
                 <p className="m-0 max-w-[340px] text-[13.5px] leading-[1.55] text-nevo-near-black/55">
                   Wrong address? Sign in and you can change it there.

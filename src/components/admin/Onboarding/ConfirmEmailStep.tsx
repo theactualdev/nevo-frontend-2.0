@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ApiError, apiErrorCode } from "@/lib/api/client";
+import { changeEmailFailure } from "./changeEmailOutcome";
 import {
   emailConfirmationApi,
   type EmailConfirmationStatus,
@@ -129,18 +129,14 @@ export function ConfirmEmailStep({
         setResent(true);
       })
       .catch((err: unknown) => {
-        const code = err instanceof ApiError ? apiErrorCode(err.detail) : null;
-        if (code === "email_already_confirmed") {
+        const failure = changeEmailFailure(err);
+        if (failure.confirmedElsewhere) {
           // Confirmed elsewhere. Let the poll land it rather than say "no".
           read();
           setChanging(false);
           return;
         }
-        setChangeError(
-          code === "email_already_in_use"
-            ? "That address is already set up with a Nevo account. Try another, or sign in with it instead."
-            : "We couldn’t change it just now. Nothing has moved – your original link still works.",
-        );
+        setChangeError(failure.message);
       })
       .finally(() => setSaving(false));
   };
