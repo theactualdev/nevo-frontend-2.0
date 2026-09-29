@@ -198,6 +198,17 @@ export type ConsentDeliveryStatus =
   | "sent"
   | "failed";
 
+/**
+ * What this console asks a parent for: using Nevo, and nothing else.
+ *
+ * One type because the student gate names one (`requiredType` on
+ * `GET /students/me/consent-gate`), and because the parent page will only
+ * render a request that asks one thing - a single "Yes" cannot honestly grant
+ * four. Camera, offline storage and cross-border transfer are asked separately
+ * or not at all, when counsel and design say how.
+ */
+export const REQUESTED_CONSENT_TYPES: ConsentType[] = ["data_processing"];
+
 export interface ParentConsentRequestReceipt {
   invitationId: string;
   parentLinkId: string;
@@ -238,7 +249,21 @@ export const consentsApi = {
       payload,
     ),
 
-  /** Admin surface: send a parent the consent request (SCRUM-80). */
+  /**
+   * Admin surface: send a parent the consent request (SCRUM-80).
+   *
+   * ALSO HOW A GUARDIAN GETS ONTO A RECORD. There is no endpoint that writes a
+   * guardian directly; this one takes a name and contact and answers with a
+   * `parentLinkId`, so for a student with nobody on record it creates the
+   * guardian and sends them the request in one step. `addGuardian` below is
+   * that use, named for what the school is doing.
+   *
+   * THE TYPES ARE ALWAYS STATED. They were optional here and omitted by every
+   * caller, so what a parent was asked came from a backend default the spec
+   * does not document - and the parent page refuses any request asking for
+   * more than one thing. Sending `REQUESTED_CONSENT_TYPES` means a request
+   * this console sends is always one the parent page can render.
+   */
   requestParentConsent: (
     studentId: string,
     payload: {
@@ -250,7 +275,22 @@ export const consentsApi = {
   ) =>
     api.post<ParentConsentRequestReceipt>(
       `/api/v1/students/${studentId}/parent-consent-requests`,
-      payload,
+      { consentTypes: REQUESTED_CONSENT_TYPES, ...payload },
+    ),
+
+  /**
+   * Put a guardian on a student's record, and send them the consent request.
+   * See `requestParentConsent` - it is the same call.
+   */
+  addGuardian: (studentId: string, guardian: { name: string; email: string }) =>
+    api.post<ParentConsentRequestReceipt>(
+      `/api/v1/students/${studentId}/parent-consent-requests`,
+      {
+        parentName: guardian.name,
+        parentContact: guardian.email,
+        contactMethod: "email" satisfies ParentContactMethod,
+        consentTypes: REQUESTED_CONSENT_TYPES,
+      },
     ),
 
   /**

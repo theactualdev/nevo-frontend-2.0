@@ -36,6 +36,17 @@ vi.mock("@/lib/api/students", async (importOriginal) => {
     studentsApi: { ...actual.studentsApi, enroll: (b: unknown) => enroll(b) },
   };
 });
+const addGuardian = vi.fn();
+vi.mock("@/lib/api/consents", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/consents")>();
+  return {
+    ...actual,
+    consentsApi: {
+      ...actual.consentsApi,
+      addGuardian: (id: string, g: unknown) => addGuardian(id, g),
+    },
+  };
+});
 
 const QUOTE: AdditionQuote = {
   students: 1,
@@ -153,7 +164,9 @@ describe("AddStudentSheet", () => {
     expect(visibleText(container)).toMatch(/nothing is taken today/i);
   });
 
-  it("sends no parent email, and sends the date of birth only when given", async () => {
+  it("never puts a guardian on the enrol body, and sends the date of birth only when given", async () => {
+    // A guardian goes through the consent request, which sends as it stores -
+    // never as an address on the student with nothing sent.
     mount();
     await fill();
     fireEvent.click(await screen.findByRole("button", { name: /Add Zainab/ }));
@@ -163,11 +176,65 @@ describe("AddStudentSheet", () => {
     expect(body).toMatchObject({ firstName: "Zainab", lastName: "Bello", classId: "c1" });
     expect(body.dateOfBirth).toBeNull();
     expect(Object.keys(body).join()).not.toMatch(/parent/i);
+    // No guardian given, so nobody is asked.
+    expect(addGuardian).not.toHaveBeenCalled();
+  });
+});
+
+describe("AddStudentSheet guardian", () => {
+  /*
+   * Consent is a gate: a child added here with nobody on record could never
+   * start. The guardian fields came back as name and email together, which is
+   * how design said they would.
+   */
+  const guardian = (name: string, email: string) => {
+    fireEvent.change(screen.getByLabelText("Their name"), { target: { value: name } });
+    fireEvent.change(screen.getByLabelText("Their email"), { target: { value: email } });
+  };
+
+  it("adds the student, then the guardian with the consent request", async () => {
+    addGuardian.mockResolvedValue({ deliveryStatus: "queued" });
+    mount();
+    await fill();
+    guardian("Mrs. Bello", "bello@example.com");
+    fireEvent.click(await screen.findByRole("button", { name: /Add Zainab/ }));
+
+    await waitFor(() =>
+      expect(addGuardian).toHaveBeenCalledWith("s-new", {
+        name: "Mrs. Bello",
+        email: "bello@example.com",
+      }),
+    );
+    expect(onAdded).toHaveBeenCalledWith("s-new");
   });
 
-  it("does not offer a parent email field at all", () => {
-    mount();
-    expect(screen.queryByLabelText(/parent/i)).toBeNull();
+  it("wants both or neither", async () => {
+    const { container } = mount();
+    await fill();
+    guardian("Mrs. Bello", "");
+
+    expect(screen.getByRole("button", { name: /Add Zainab/ })).toBeDisabled();
+    expect(visibleText(container)).toMatch(/both their name and a working email, or leave both empty/);
+  });
+
+  it("says the student is added when only the guardian step fails - and never enrols twice", async () => {
+    addGuardian.mockRejectedValue(new Error("500"));
+    const { container } = mount();
+    await fill();
+    guardian("Mrs. Bello", "bello@example.com");
+    fireEvent.click(await screen.findByRole("button", { name: /Add Zainab/ }));
+
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/Zainab is added, but the request to Mrs\. Bello didn.t go/),
+    );
+    expect(visibleText(container)).not.toMatch(/Nothing has been added/);
+    expect(screen.getByRole("link", { name: /Go to Zainab.s page/ })).toHaveAttribute(
+      "href",
+      "/admin/students/s-new",
+    );
+    // The only way forward is to the student's page or closed - not "Add" again.
+    expect(screen.queryByRole("button", { name: /^Add Zainab/ })).toBeNull();
+    expect(enroll).toHaveBeenCalledTimes(1);
   });
 
   it("shows the server's reason when an enrolment is refused", async () => {

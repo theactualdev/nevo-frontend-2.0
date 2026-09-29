@@ -1,13 +1,16 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { classesApi, type AdminClass } from "@/lib/api/classes";
 import { ApiError, apiErrorMessage } from "@/lib/api/client";
 import { onboardingApi, type AdditionQuote } from "@/lib/api/onboarding";
+import { consentsApi } from "@/lib/api/consents";
 import { studentsApi } from "@/lib/api/students";
 import { formatMoney, formatVatRate } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { billingCurrency } from "../Roster/activation";
+import { isEmail } from "./useConsentRequests";
 import {
   FailureLine,
   GHOST_BTN,
@@ -45,9 +48,15 @@ import {
  *   and `lastName` separately. Splitting one field would be guessing where a
  *   Nigerian name divides, and a school would find the wrong half in the
  *   surname column.
- * - **No parent email.** Backend asked for it to be held: the parent record
+ * - ~~**No parent email.** Backend asked for it to be held: the parent record
  *   needs a name as well, and creating one while consent is frozen would mean
- *   storing a parent's address and never sending the request it exists for.
+ *   storing a parent's address and never sending the request it exists for.~~
+ *   BACK, as name and email together - the way design said it would return.
+ *   Consent is a gate now, so a student added here with nobody on record
+ *   could never start. It is optional (a school may not have it to hand) and
+ *   it is NOT sent on the enrol body: it goes through the consent request,
+ *   which creates the guardian AND sends them the request, so an address is
+ *   never stored with nothing sent - the objection that held it back.
  * - **Date of birth is optional.** Refusing an enrolment over a missing date
  *   would keep a child out of lessons. The server refuses a future date; this
  *   sheet does not second-guess the clock to do that first.
@@ -57,7 +66,12 @@ const LABEL = "mb-[7px] block text-[12.5px] font-semibold text-nevo-near-black/6
 const FIELD =
   "h-[50px] w-full rounded-[10px] border-[1.5px] border-nevo-near-black/16 bg-nevo-cream px-[15px] text-[15px] text-nevo-near-black outline-none transition-colors focus:border-nevo-navy";
 
-type Phase = "idle" | "saving" | "failed";
+/**
+ * `guardian_failed`: the student WAS added, but sending to their guardian
+ * failed. Not "failed" - "Nothing has been added" would be false, and a retry
+ * of the whole sheet would enrol the child twice.
+ */
+type Phase = "idle" | "saving" | "failed" | "guardian_failed";
 
 export function AddStudentSheet({
   onClose,
@@ -75,6 +89,10 @@ export function AddStudentSheet({
   const [quoteFailed, setQuoteFailed] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
   const [failNote, setFailNote] = useState<string | null>(null);
+  const [guardianName, setGuardianName] = useState("");
+  const [guardianEmail, setGuardianEmail] = useState("");
+  /** The student created before the guardian step failed, to point at. */
+  const [addedId, setAddedId] = useState<string | null>(null);
 
   useEffect(() => {
     classesApi
@@ -100,10 +118,22 @@ export function AddStudentSheet({
     [quote, currency],
   );
 
+  /*
+   * BOTH OR NEITHER. The consent request needs a name as well as an address,
+   * and half a guardian is not something the school can finish later from
+   * here - so a lone name or a lone email holds the button and says why.
+   */
+  const gName = guardianName.trim();
+  const gEmail = guardianEmail.trim();
+  const guardianGiven = gName.length > 0 || gEmail.length > 0;
+  const guardianOk =
+    !guardianGiven || (gName.length >= 2 && isEmail(gEmail));
+
   const canSave =
     firstName.trim().length > 0 &&
     lastName.trim().length > 0 &&
     classId.length > 0 &&
+    guardianOk &&
     phase !== "saving";
 
   const submit = () => {
@@ -118,7 +148,21 @@ export function AddStudentSheet({
         // Empty is absent, not "": a blank optional field is no answer.
         dateOfBirth: dob || null,
       })
-      .then((created) => onAdded(created.id))
+      .then((created) => {
+        if (!guardianGiven) {
+          onAdded(created.id);
+          return;
+        }
+        return consentsApi
+          .addGuardian(created.id, { name: gName, email: gEmail })
+          .then(
+            () => onAdded(created.id),
+            () => {
+              setAddedId(created.id);
+              setPhase("guardian_failed");
+            },
+          );
+      })
       .catch((err: unknown) => {
         /*
          * THE SERVER'S REASON WHEN IT GAVE ONE. A future date of birth is
@@ -146,6 +190,19 @@ export function AddStudentSheet({
               Adding the student&hellip;
             </span>
           </div>
+        ) : phase === "guardian_failed" && addedId ? (
+          <>
+            <FailureLine>
+              {first} is added, but the request to {gName} didn&rsquo;t go.
+              You can add them again from {first}&rsquo;s page.
+            </FailureLine>
+            <Link href={`/admin/students/${addedId}`} className={cn(PRIMARY_BTN, "flex-1 justify-center")}>
+              Go to {first}&rsquo;s page
+            </Link>
+            <button type="button" onClick={() => onAdded(addedId)} className={GHOST_BTN}>
+              Close
+            </button>
+          </>
         ) : (
           <>
             {phase === "failed" ? (
@@ -236,6 +293,49 @@ export function AddStudentSheet({
           onChange={(e) => setDob(e.target.value)}
           className={FIELD}
         />
+      </div>
+
+      <div>
+        <p className="m-0 text-[14px] font-semibold text-nevo-near-black">
+          Parent or guardian <span className="font-normal text-nevo-near-black/55">(optional)</span>
+        </p>
+        <p className="m-0 mt-1 text-[12.5px] leading-[1.5] text-nevo-near-black/55">
+          {first || "They"} can&rsquo;t start until a parent or guardian gives
+          permission. Add one now and we&rsquo;ll send them the request, or add
+          one later from {first ? `${first}’s` : "the student’s"} page.
+        </p>
+        <div className="mt-3 grid gap-4 sm:grid-cols-2">
+          <div>
+            <label htmlFor="guardian-name" className={LABEL}>
+              Their name
+            </label>
+            <input
+              id="guardian-name"
+              value={guardianName}
+              onChange={(e) => setGuardianName(e.target.value)}
+              autoComplete="off"
+              className={FIELD}
+            />
+          </div>
+          <div>
+            <label htmlFor="guardian-email" className={LABEL}>
+              Their email
+            </label>
+            <input
+              id="guardian-email"
+              type="email"
+              value={guardianEmail}
+              onChange={(e) => setGuardianEmail(e.target.value)}
+              autoComplete="off"
+              className={FIELD}
+            />
+          </div>
+        </div>
+        {guardianGiven && !guardianOk ? (
+          <p className="m-0 mt-2 text-[12.5px] text-nevo-near-black/60">
+            Add both their name and a working email, or leave both empty.
+          </p>
+        ) : null}
       </div>
 
       <CostPanel quote={quote} failed={quoteFailed} total={total} />

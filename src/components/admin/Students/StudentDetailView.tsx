@@ -34,6 +34,7 @@ import {
   TEXT_ACTION,
 } from "../Roster/primitives";
 import { useSetupGate } from "@/hooks";
+import { AddGuardianForm } from "./AddGuardianForm";
 import { EraseRecordModal } from "./EraseRecordModal";
 import { IssuePinSheet } from "./IssuePinSheet";
 import { MoveStudentSheet } from "./MoveStudentSheet";
@@ -89,6 +90,10 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
   const [working, setWorking] = useState(false);
   /** The deactivate was refused. Hold the dialog and say so. */
   const [deactivateFailed, setDeactivateFailed] = useState(false);
+  /** The add-a-guardian form is open. */
+  const [addingGuardian, setAddingGuardian] = useState(false);
+  /** What the request just sent to a new guardian said about delivery. */
+  const [guardianAdded, setGuardianAdded] = useState<string | null>(null);
 
   const load = useCallback(() => {
     Promise.all([studentsApi.get(studentId), classesApi.list(true)])
@@ -368,6 +373,14 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
       </div>
 
       <SectionLabel>Parent / guardian accounts</SectionLabel>
+      {guardianAdded ? (
+        <p
+          role="status"
+          className="m-0 mt-2 max-w-[60ch] text-[13.5px] leading-[1.55] text-nevo-navy"
+        >
+          {guardianAdded}
+        </p>
+      ) : null}
       <div className={cn(CARD, "mt-2.5")}>
         {guardiansFailed ? (
           <ReadFailed
@@ -376,14 +389,48 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
             onRetry={load}
           />
         ) : guardians.length === 0 ? (
+          /*
+           * WAS A DEAD END: "No guardian on the record. A parent account is
+           * created automatically once a guardian confirms consent." - with
+           * nothing to press. Consent is a gate, so a child with nobody on
+           * record could never start. See `AddGuardianForm`.
+           */
           <div className="px-6 py-[22px]">
             <p className="m-0 text-[15px] font-semibold text-nevo-near-black">
               No guardian on the record
             </p>
-            <p className="m-0 mt-1.5 text-[13.5px] leading-[1.55] text-nevo-near-black/62">
-              A parent account is created automatically once a guardian
-              confirms consent.
+            <p className="m-0 mt-1.5 max-w-[56ch] text-[13.5px] leading-[1.55] text-nevo-near-black/62">
+              {firstName} can&rsquo;t start until a parent or guardian gives
+              permission. Add one and we&rsquo;ll send them the request.
             </p>
+            {addingGuardian ? (
+              <div className="mt-4">
+                <AddGuardianForm
+                  studentId={student.id}
+                  studentFirstName={firstName}
+                  onCancel={() => setAddingGuardian(false)}
+                  onAdded={(receipt, name) => {
+                    setAddingGuardian(false);
+                    setGuardianAdded(
+                      consentRequestLine(
+                        { kind: "done", parentName: name, delivery: receipt.deliveryStatus },
+                        firstName,
+                      ),
+                    );
+                    load();
+                  }}
+                />
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setAddingGuardian(true)}
+                disabled={writesPaused}
+                className={cn(TEXT_ACTION, "mt-3")}
+              >
+                Add a parent or guardian
+              </button>
+            )}
           </div>
         ) : (
           guardians.map((g, i) => (
