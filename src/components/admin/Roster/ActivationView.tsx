@@ -16,6 +16,7 @@ import { onboardingApi, type OnboardingState } from "@/lib/api/onboarding";
 import { schoolApi, type School } from "@/lib/api/school";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
+import { useSetupGate } from "@/hooks";
 import { billingCurrency, mayActivate, screenFor } from "./activation";
 
 /**
@@ -59,6 +60,15 @@ export function ActivationView() {
   const [activating, setActivating] = useState(false);
   const [activateFailed, setActivateFailed] = useState(false);
   const [rechecking, setRechecking] = useState(false);
+  /** A re-read that failed, as distinct from one that found nothing new. */
+  const [recheckFailed, setRecheckFailed] = useState(false);
+  /*
+   * The dashboard reads where the school is from the setup gate. When this
+   * screen learns the school moved - paid, or switched on - the gate has to
+   * hear it too, or "Go to your dashboard" lands on a page still saying the
+   * school is not active.
+   */
+  const { refresh: refreshGate } = useSetupGate();
 
   const load = useCallback(() => {
     /*
@@ -90,10 +100,19 @@ export function ActivationView() {
 
   const recheck = () => {
     setRechecking(true);
+    setRecheckFailed(false);
     onboardingApi
       .get()
-      .then(setState)
-      .catch(() => {})
+      .then((s) => {
+        setState(s);
+        refreshGate();
+      })
+      /*
+       * Was `.catch(() => {})`: the spinner stopped and nothing changed, which
+       * reads exactly like "we looked and your transfer isn't here". A check
+       * that could not be made has to say so.
+       */
+      .catch(() => setRecheckFailed(true))
       .finally(() => setRechecking(false));
   };
 
@@ -102,7 +121,10 @@ export function ActivationView() {
     setActivateFailed(false);
     onboardingApi
       .activate()
-      .then(setState)
+      .then((s) => {
+        setState(s);
+        refreshGate();
+      })
       .catch(() => setActivateFailed(true))
       .finally(() => setActivating(false));
   };
@@ -141,6 +163,7 @@ export function ActivationView() {
             account={account}
             invoice={invoice}
             rechecking={rechecking}
+            recheckFailed={recheckFailed}
             onRecheck={recheck}
             canActivate={mayActivate(state)}
             activating={activating}
@@ -242,6 +265,7 @@ function Waiting({
   account,
   invoice,
   rechecking,
+  recheckFailed,
   onRecheck,
   canActivate,
   activating,
@@ -252,6 +276,7 @@ function Waiting({
   account: ReceivingAccount | null;
   invoice: Invoice | null;
   rechecking: boolean;
+  recheckFailed: boolean;
   onRecheck: () => void;
   canActivate: boolean;
   activating: boolean;
@@ -320,6 +345,12 @@ function Waiting({
             Contact us
           </a>
         </div>
+        {recheckFailed ? (
+          <p className="mt-3 max-w-[56ch] text-[13.5px] leading-[1.5] text-nevo-navy">
+            We couldn&rsquo;t check just now, so we don&rsquo;t know yet
+            whether it has arrived. Try again in a moment.
+          </p>
+        ) : null}
       </div>
 
       <div className="mt-4">

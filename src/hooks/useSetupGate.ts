@@ -22,6 +22,8 @@ export function useSetupGate() {
     /** False while a read is outstanding or after one failed. */
     resolved: ctx?.resolved ?? false,
     email: ctx?.email ?? null,
+    onboarding: ctx?.onboarding ?? null,
+    loading: ctx?.loading ?? false,
     refresh: ctx?.refresh ?? (() => {}),
     /**
      * The sentence for a paused control, or null when nothing is paused.
