@@ -8,8 +8,9 @@ import { consentCoverage, ndpaClaims } from "./ndpaClaims";
  *
  * 1. Unknown is not zero. A roster that came back without consent records, or
  *    did not come back at all, produces no figure - not a coverage of nought.
- * 2. An outstanding consent is the school's paperwork, not a bar on a child.
- *    SCRUM-80: only a withdrawal stops processing.
+ * 2. Consent is a gate. A learner's work begins when a parent gives
+ *    permission, and nothing starts before then. (SCRUM-80's "only a
+ *    withdrawal stops processing" is superseded.)
  * 3. A row that cannot be measured says why, in its own words.
  */
 
@@ -77,15 +78,16 @@ describe("the parental consent row", () => {
     expect(c.state).toBe("2 of 3");
   });
 
-  it("does not tell a school a child is blocked", () => {
+  it("says learning waits for a parent's permission", () => {
     const c = claim(
       consentCoverage([row("confirmed"), row("pending")]),
       "Parental consent coverage",
     );
-    // SCRUM-80: the school warrants consent; the learner proceeds.
-    expect(c.mechanism).not.toMatch(/cannot begin/i);
-    expect(c.mechanism).not.toMatch(/can't begin/i);
-    expect(c.mechanism).toMatch(/Learning is not held up/);
+    // Consent is a gate. The old line - the same claim the parent consent
+    // email made - said the opposite.
+    expect(c.mechanism).toMatch(/learning begins as soon as a parent gives permission/i);
+    expect(c.mechanism).toMatch(/nothing starts before then/i);
+    expect(c.mechanism).not.toMatch(/not held up|keeps learning|only a withdrawal/i);
   });
 
 
@@ -159,6 +161,8 @@ describe("the two claims that were pulled", () => {
       .join(" ");
     expect(text).not.toMatch(/nothing about how a learner performed/i);
     expect(text).not.toMatch(/then discarded/i);
+    // The retention row's sibling sentence, missed by the 14 Sep pull.
+    expect(text).not.toMatch(/ephemeral|no retention period/i);
     expect(all().map((c) => c.title)).not.toContain("Ephemeral processing");
   });
 

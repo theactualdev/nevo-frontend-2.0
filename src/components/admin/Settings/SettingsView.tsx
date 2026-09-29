@@ -1,6 +1,6 @@
 "use client";
 
-import { usePermissions } from "@/hooks";
+import { usePermissions, useSetupGate } from "@/hooks";
 import { PERMISSION_SCOPES } from "@/lib/constants/permissions";
 import { cn } from "@/lib/utils";
 import { AccountSettings } from "./AccountSettings";
@@ -197,16 +197,25 @@ export function SaveRow({
    */
   failureNote?: string | null;
 }) {
+  /*
+   * D24 / D01b: the school's settings pause while setup is unfinished. Only
+   * the school half uses this row - an admin's own name and password (Your
+   * account) are theirs, not the school's, and stay editable.
+   */
+  const { writesPaused, note } = useSetupGate();
   return (
     <div className="mt-6 flex flex-wrap items-center gap-3">
       <button
         type="button"
         onClick={onSave}
-        disabled={disabled || phase === "saving"}
+        disabled={disabled || writesPaused || phase === "saving"}
         className="cursor-pointer rounded-[10px] bg-nevo-navy px-5 py-3 text-sm font-semibold text-nevo-cream transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:brightness-100"
       >
         {phase === "saving" ? "Saving…" : "Save changes"}
       </button>
+      {writesPaused && note ? (
+        <span className="text-[13px] text-nevo-near-black/55">{note}</span>
+      ) : null}
       {phase === "saved" ? (
         <span className="text-[13px] font-semibold text-nevo-navy motion-safe:animate-nevo-reveal">
           {savedLabel}

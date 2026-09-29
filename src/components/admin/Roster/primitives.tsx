@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import type { TeacherAssignmentRole } from "@/lib/api/classes";
 import { cn } from "@/lib/utils";
+import { useSetupGate } from "@/hooks";
 
 /**
  * The shared vocabulary of the roster screens - D5 Classes, D6 Teachers and
@@ -32,11 +33,33 @@ export const PRIMARY_BTN =
   "inline-flex flex-none cursor-pointer items-center gap-2 rounded-[10px] bg-nevo-navy px-[18px] py-[11px] text-[14.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:brightness-100";
 
 export const GHOST_BTN =
-  "inline-flex flex-none cursor-pointer items-center justify-center rounded-[10px] border-[1.5px] border-nevo-near-black/18 px-[18px] py-[11px] text-[14.5px] font-semibold text-nevo-near-black transition-colors hover:bg-nevo-near-black/[0.04]";
+  "inline-flex flex-none cursor-pointer items-center justify-center rounded-[10px] border-[1.5px] border-nevo-near-black/18 px-[18px] py-[11px] text-[14.5px] font-semibold text-nevo-near-black transition-colors hover:bg-nevo-near-black/[0.04] disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:bg-transparent";
 
 /** A quiet navy text action - "Assign a teacher", "Archive this class". */
 export const TEXT_ACTION =
-  "inline-flex cursor-pointer items-center gap-[7px] text-sm font-semibold text-nevo-navy transition-opacity hover:opacity-75";
+  "inline-flex cursor-pointer items-center gap-[7px] text-sm font-semibold text-nevo-navy transition-opacity hover:opacity-75 disabled:cursor-not-allowed disabled:text-nevo-near-black/45 disabled:hover:opacity-100";
+
+/**
+ * WHY A WRITE CONTROL IS GREYED, in the setup gate's words.
+ *
+ * D24: *"The rest of the console is reachable and visibly locked."* D01b
+ * AC-05 says the same for an unconfirmed address. A disabled button with no
+ * reason is the thing both frames exist to avoid - the admin is left guessing
+ * whether it is broken - so every screen that pauses a control renders this
+ * once beside it. The sentence is `pauseNote`'s, never composed per screen,
+ * so thirty controls cannot end up with thirty wordings for one reason.
+ *
+ * Renders nothing unless the gate KNOWS writes are paused; it fails open.
+ */
+export function PausedNote({ className }: { className?: string }) {
+  const { writesPaused, note } = useSetupGate();
+  if (!writesPaused || !note) return null;
+  return (
+    <p className={cn("m-0 text-[13px] leading-[1.5] text-nevo-near-black/55", className)}>
+      {note}
+    </p>
+  );
+}
 
 export function PlusIcon({ size = 17 }: { size?: number }) {
   return (

@@ -21,10 +21,12 @@ import {
   Avatar,
   CARD,
   GHOST_BTN,
+  PausedNote,
   PRIMARY_BTN,
   PlusIcon,
   ROW_DIVIDER,
 } from "../Roster/primitives";
+import { useSetupGate } from "@/hooks";
 
 /**
  * D7 Students - the school roster.
@@ -90,6 +92,8 @@ export function StudentsView() {
    */
   const [consent, setConsent] = useState("");
   const [adding, setAdding] = useState(false);
+  /** D24 / D01b: enrolling pauses while setup is unfinished. */
+  const { writesPaused } = useSetupGate();
   /** Set by student detail when a record was erased - see its `onErased`. */
   const erased = params.get("erased");
   const [includeInactive, setIncludeInactive] = useState(false);
@@ -202,12 +206,19 @@ export function StudentsView() {
             * place in the sidebar.
             */}
           {phase === "ready" && students.length > 0 ? (
-            <button type="button" onClick={() => setAdding(true)} className={PRIMARY_BTN}>
+            <button
+              type="button"
+              onClick={() => setAdding(true)}
+              disabled={writesPaused}
+              className={PRIMARY_BTN}
+            >
               <PlusIcon />
               Enrol a student
             </button>
           ) : null}
         </div>
+
+        <PausedNote className="mt-3" />
 
         {phase === "loading" ? (
           <div className={cn(CARD, "mt-[22px] h-[320px] animate-pulse")} />
@@ -238,7 +249,7 @@ export function StudentsView() {
         ) : null}
 
         {phase === "ready" && students.length === 0 && !filtering ? (
-          <EmptyState onEnrol={() => setAdding(true)} />
+          <EmptyState onEnrol={() => setAdding(true)} paused={writesPaused} />
         ) : null}
 
         {adding ? (
@@ -314,10 +325,16 @@ export function StudentsView() {
             {/* The erasure confirmation, read off the navigation that brought
                 the admin back here. One plain line, above the roster: the
                 record is gone and there is nothing to undo, so this states it
-                and nothing more. */}
+                and nothing more.
+
+                IT SAYS WHAT THE ERASE MODAL SAID. This read "Nothing of it is
+                kept", one screen after the modal told the same admin "We're
+                required to keep a small amount of it for a statutory period".
+                The false one is the reassuring one, which is the direction a
+                school would repeat to a parent. */}
             {erased ? (
               <p className="m-0 mt-4 rounded-[10px] bg-nevo-violet/[0.18] px-4 py-3 text-[13.5px] leading-[1.5] text-nevo-navy">
-                {`${erased}'s record has been erased. Nothing of it is kept.`}
+                {`${erased}'s record has been erased. Only the small amount the law requires is kept, and that goes too once its statutory period ends.`}
               </p>
             ) : null}
 
@@ -483,7 +500,7 @@ export function StudentsView() {
   );
 }
 
-function EmptyState({ onEnrol }: { onEnrol: () => void }) {
+function EmptyState({ onEnrol, paused }: { onEnrol: () => void; paused: boolean }) {
   return (
     /*
      * Same definite height as the Classes and Teachers empty states: `flex-1`
@@ -508,7 +525,7 @@ function EmptyState({ onEnrol }: { onEnrol: () => void }) {
           adds them all. Each one gets their own way in.
         </p>
         <div className="mt-6 flex justify-center gap-3">
-          <button type="button" onClick={onEnrol} className={PRIMARY_BTN}>
+          <button type="button" onClick={onEnrol} disabled={paused} className={PRIMARY_BTN}>
             <PlusIcon />
             Enrol a student
           </button>

@@ -11,6 +11,7 @@ import {
 } from "@/lib/api/onboarding";
 import { ApiError, apiErrorMessage } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
+import { useSetupGate } from "@/hooks";
 import {
   foundCounts,
   hasStaged,
@@ -105,6 +106,12 @@ export function RosterImportView() {
   const [confirmFailed, setConfirmFailed] = useState(false);
   /** OB-02 is a step forward from OB-01, not a different screen. */
   const [showFound, setShowFound] = useState(false);
+  /*
+   * Every successful write moves the school along the setup spine the
+   * dashboard draws from the gate's copy of this same read. Without a refresh
+   * the Overview would still say "Upload your staff" after the staff were in.
+   */
+  const { refresh: refreshGate } = useSetupGate();
 
   const load = useCallback(() => {
     onboardingApi
@@ -125,7 +132,10 @@ export function RosterImportView() {
     setUploadFailed(null);
     onboardingApi
       .stageImport(kind, file)
-      .then((s) => setState(s))
+      .then((s) => {
+        setState(s);
+        refreshGate();
+      })
       /*
        * A FAILED UPLOAD LEAVES THE PREVIOUS STATE ALONE. Backend replaces a
        * file of the same kind on success; a failure replaced nothing, so the
@@ -145,7 +155,10 @@ export function RosterImportView() {
     setConfirmFailed(false);
     onboardingApi
       .confirm()
-      .then((s) => setState(s))
+      .then((s) => {
+        setState(s);
+        refreshGate();
+      })
       .catch(() => setConfirmFailed(true))
       .finally(() => setConfirming(false));
   };
@@ -175,6 +188,17 @@ export function RosterImportView() {
    */
   if (state.stage === "activated") {
     return <AlreadyActive />;
+  }
+
+  /*
+   * A CONFIRMED ROSTER IS DONE HERE, AND THE NEXT STEP IS PAYING. This used to
+   * leave the school on What Nevo found with Confirm greyed out, and nothing
+   * anywhere linked to the pay-and-activate screen - a school that did
+   * everything right was stranded one step from the end. The upload panels do
+   * not come back either: the server refuses imports past confirm.
+   */
+  if (state.stage === "confirmed" || state.stage === "awaiting_payment") {
+    return <RosterConfirmed state={state} />;
   }
 
   const staged = hasStaged(state);
@@ -242,6 +266,31 @@ export function RosterImportView() {
             ) : null}
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+function RosterConfirmed({ state }: { state: OnboardingState }) {
+  const students = `${state.studentCount} ${state.studentCount === 1 ? "student" : "students"}`;
+  const classes = `${state.classes.length} ${state.classes.length === 1 ? "class" : "classes"}`;
+  return (
+    <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
+      <div className="mx-auto max-w-[860px]">
+        <p className="m-0 text-[13px] text-nevo-near-black/55">Getting to active</p>
+        <h2 className="mt-1.5 text-[23px] font-semibold tracking-[-0.018em] text-nevo-near-black xl:text-[28px]">
+          Your roster is confirmed
+        </h2>
+        <p className="mt-2 max-w-[62ch] text-[15px] leading-[1.55] text-nevo-near-black/68">
+          {students} across {classes}. One step is left: pay for the year, and
+          your school switches on for everyone.
+        </p>
+        <Link
+          href="/admin/activate"
+          className="mt-6 inline-flex h-[48px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-6 text-[15px] font-semibold text-nevo-cream transition-[filter] hover:brightness-110"
+        >
+          Pay for the year
+        </Link>
       </div>
     </div>
   );

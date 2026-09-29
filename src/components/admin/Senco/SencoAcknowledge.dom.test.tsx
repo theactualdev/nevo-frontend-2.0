@@ -16,6 +16,8 @@ import { SencoView } from "./SencoView";
 
 const acknowledgeFlag = vi.fn();
 const getFlags = vi.fn();
+/** Whether the paged read got to the end. Most tests: yes. */
+const complete = { value: true };
 
 vi.mock("@/lib/api/intelligence", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/intelligence")>();
@@ -23,7 +25,7 @@ vi.mock("@/lib/api/intelligence", async (importOriginal) => {
     ...actual,
     intelligenceApi: {
       ...actual.intelligenceApi,
-      getFlags: () => getFlags(),
+      allFlags: async () => ({ flags: await getFlags(), complete: complete.value }),
       acknowledgeFlag: (id: string) => acknowledgeFlag(id),
     },
   };
@@ -117,5 +119,46 @@ describe("SencoView mark as seen", () => {
     // acknowledgements would race each other's `setFlags`.
     fireEvent.click(screen.getByRole("button", { name: "Mark as seen" }));
     expect(acknowledgeFlag).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("SencoView reads every flag", () => {
+  const seen = (id: string): AttentionFlag => ({ ...flag(id), acknowledged: true });
+
+  it("finds open flags behind fifty seen ones", async () => {
+    /*
+     * This read the first 50 flags and dropped acknowledged ones on the
+     * client. Fifty seen flags ahead of an open one meant the open one never
+     * arrived, and the SENCo was told nothing needed attention.
+     */
+    complete.value = true;
+    getFlags.mockResolvedValue([
+      ...Array.from({ length: 60 }, (_, i) => seen(`old${i}`)),
+      flag("late"),
+    ]);
+    const { container } = render(<SencoView />);
+
+    await waitFor(() => expect(visibleText(container)).toMatch(/Something worth a look \(late\)/));
+    expect(visibleText(container)).toMatch(/\b1 to look at/);
+    expect(visibleText(container)).not.toMatch(new RegExp(EMPTY));
+  });
+
+  it("will not say nothing needs attention when it could not read every flag", async () => {
+    complete.value = false;
+    getFlags.mockResolvedValue([seen("a")]);
+    const { container } = render(<SencoView />);
+
+    await waitFor(() => expect(visibleText(container)).toMatch(/couldn.t read every flag/));
+    expect(visibleText(container)).not.toMatch(new RegExp(EMPTY));
+    complete.value = true;
+  });
+
+  it("shows a partial count as a floor, never as a total", async () => {
+    complete.value = false;
+    getFlags.mockResolvedValue([flag("x"), flag("y")]);
+    const { container } = render(<SencoView />);
+
+    await waitFor(() => expect(visibleText(container)).toMatch(/At least 2 to look at/));
+    complete.value = true;
   });
 });

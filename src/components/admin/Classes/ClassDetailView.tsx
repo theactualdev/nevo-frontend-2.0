@@ -19,6 +19,7 @@ import {
   GHOST_BTN,
   Modal,
   NoTeacherYet,
+  PausedNote,
   PRIMARY_BTN,
   PlusIcon,
   ROW_DIVIDER,
@@ -27,6 +28,7 @@ import {
   Spinner,
   TEXT_ACTION,
 } from "../Roster/primitives";
+import { useSetupGate } from "@/hooks";
 import { AssignTeacherSheet } from "./AssignTeacherSheet";
 import { ClassFormSheet } from "./ClassFormSheet";
 import { NoAccess, failureKind } from "../NoAccess";
@@ -79,6 +81,8 @@ export function ClassDetailView({ classId }: { classId: string }) {
   const [students, setStudents] = useState<ClassStudent[]>([]);
   const [assigning, setAssigning] = useState(false);
   const [editing, setEditing] = useState(false);
+  /** D24 / D01b: every change to a class pauses while setup is unfinished. */
+  const { writesPaused } = useSetupGate();
   const [confirmArchive, setConfirmArchive] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
   /*
@@ -232,7 +236,7 @@ export function ClassDetailView({ classId }: { classId: string }) {
                 .catch(() => setRestoreFailed(true))
                 .finally(() => setRestoring(false));
             }}
-            disabled={restoring}
+            disabled={restoring || writesPaused}
             className={GHOST_BTN}
           >
             {restoring ? "Restoring…" : "Restore this class"}
@@ -242,11 +246,18 @@ export function ClassDetailView({ classId }: { classId: string }) {
           ) : null}
           </div>
         ) : !ssoSourced ? (
-          <button type="button" onClick={() => setEditing(true)} className={GHOST_BTN}>
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            disabled={writesPaused}
+            className={GHOST_BTN}
+          >
             Edit class
           </button>
         ) : null}
       </div>
+
+      <PausedNote className="mt-3" />
 
       {ssoSourced ? (
         <p className="mt-4 text-[13.5px] leading-[1.55] text-nevo-near-black/62">
@@ -262,7 +273,12 @@ export function ClassDetailView({ classId }: { classId: string }) {
       <div className="mt-[30px] flex items-center justify-between gap-4">
         <SectionHeading>Teachers for this class</SectionHeading>
         {!archived && !ssoSourced ? (
-          <button type="button" onClick={() => setAssigning(true)} className={TEXT_ACTION}>
+          <button
+            type="button"
+            onClick={() => setAssigning(true)}
+            disabled={writesPaused}
+            className={TEXT_ACTION}
+          >
             <PlusIcon size={15} />
             Assign a teacher
           </button>
@@ -449,6 +465,7 @@ export function ClassDetailView({ classId }: { classId: string }) {
           <button
             type="button"
             onClick={() => setConfirmArchive(true)}
+            disabled={writesPaused}
             className={TEXT_ACTION}
           >
             Archive this class

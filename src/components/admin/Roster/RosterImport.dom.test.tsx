@@ -165,6 +165,29 @@ describe("OB-01 upload", () => {
     await waitFor(() => expect(visibleText(container)).toMatch(/try again/i));
   });
 
+  it("sends a confirmed school on to paying instead of offering an upload", async () => {
+    /*
+     * Past confirm the server refuses imports, and /admin/activate had no
+     * inbound link anywhere - a school that confirmed its roster was stranded
+     * one step from the end.
+     */
+    for (const stage of ["confirmed", "awaiting_payment"] as const) {
+      get.mockResolvedValue(state({ stage, studentCount: 336, classes: READ.classes }));
+      const { container, unmount } = render(<RosterImportView />);
+
+      await waitFor(() =>
+        expect(visibleText(container)).toMatch(/Your roster is confirmed/),
+      );
+      expect(visibleText(container)).toMatch(/336 students across 1 class/);
+      expect(screen.queryByLabelText(/Upload students/i)).toBeNull();
+      expect(screen.getByRole("link", { name: /Pay for the year/ })).toHaveAttribute(
+        "href",
+        "/admin/activate",
+      );
+      unmount();
+    }
+  });
+
   it("sends an active school to Students and Teachers instead of offering an upload", async () => {
     /*
      * Backend, 25 Sep: confirm prices the whole file as a fresh roster, so a
@@ -227,6 +250,17 @@ describe("OB-02 what Nevo found", () => {
     expect(text).toMatch(/Row 40/);
     expect(text).toMatch(/Not a real date/);
     expect(text).not.toMatch(/undefined/);
+  });
+
+  it("moves a school straight on to paying once its roster is confirmed", async () => {
+    confirm.mockResolvedValue(
+      state({ stage: "confirmed", studentCount: 336, classes: READ.classes }),
+    );
+    await reachFound();
+    fireEvent.click(screen.getByRole("button", { name: /Confirm 336 students/i }));
+
+    const pay = await screen.findByRole("link", { name: /Pay for the year/ });
+    expect(pay).toHaveAttribute("href", "/admin/activate");
   });
 
   it("lets a school confirm with rows still to fix", async () => {

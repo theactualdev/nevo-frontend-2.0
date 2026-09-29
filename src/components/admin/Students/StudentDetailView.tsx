@@ -27,11 +27,13 @@ import {
   CARD,
   GHOST_BTN,
   Modal,
+  PausedNote,
   PRIMARY_BTN,
   ROW_DIVIDER,
   Spinner,
   TEXT_ACTION,
 } from "../Roster/primitives";
+import { useSetupGate } from "@/hooks";
 import { EraseRecordModal } from "./EraseRecordModal";
 import { IssuePinSheet } from "./IssuePinSheet";
 import { MoveStudentSheet } from "./MoveStudentSheet";
@@ -79,6 +81,8 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
   const [guardiansFailed, setGuardiansFailed] = useState(false);
   const { stateFor: consentStateFor, send: sendConsent } = useConsentRequests();
   const [moving, setMoving] = useState(false);
+  /** D24 / D01b: every change to a student pauses while setup is unfinished. */
+  const { writesPaused } = useSetupGate();
   const [issuingPin, setIssuingPin] = useState(false);
   const [confirmDeactivate, setConfirmDeactivate] = useState(false);
   const [erasing, setErasing] = useState(false);
@@ -420,11 +424,12 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
       {/* THE ACTIONS FOOT. Deactivate is the only action on an active student;
           erase only appears once they are already deactivated. */}
       <div className="mt-8 border-t border-nevo-near-black/10 pt-5">
+        <PausedNote className="mb-4" />
         {deactivated ? (
           <>
             <button
               type="button"
-              disabled={working}
+              disabled={working || writesPaused}
               onClick={() => {
                 setWorking(true);
                 studentsApi
@@ -452,6 +457,7 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
                 <button
                   type="button"
                   onClick={() => setErasing(true)}
+                  disabled={writesPaused}
                   className={TEXT_ACTION}
                 >
                   Erase this record permanently
@@ -481,7 +487,12 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
         ) : (
           <div className="flex flex-wrap gap-8">
             <div>
-              <button type="button" onClick={() => setMoving(true)} className={TEXT_ACTION}>
+              <button
+                type="button"
+                onClick={() => setMoving(true)}
+                disabled={writesPaused}
+                className={TEXT_ACTION}
+              >
                 Move to another class
               </button>
               <p className="mt-1.5 max-w-[420px] text-[13px] leading-[1.5] text-nevo-near-black/55">
@@ -500,6 +511,7 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
               <button
                 type="button"
                 onClick={() => setIssuingPin(true)}
+                disabled={writesPaused}
                 className={TEXT_ACTION}
               >
                 Give {firstName} a new PIN
@@ -512,6 +524,7 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
               <button
                 type="button"
                 onClick={() => setConfirmDeactivate(true)}
+                disabled={writesPaused}
                 className={TEXT_ACTION}
               >
                 Remove {firstName} from the school

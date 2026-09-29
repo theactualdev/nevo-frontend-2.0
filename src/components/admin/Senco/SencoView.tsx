@@ -130,6 +130,11 @@ export function SencoView() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [view, setView] = useState<View>("attention");
   const [flags, setFlags] = useState<AttentionFlag[]>([]);
+  /**
+   * Whether `flags` is every flag, or only the pages we managed to read.
+   * False means neither the count nor the all-clear may be stated.
+   */
+  const [flagsComplete, setFlagsComplete] = useState(false);
   const [students, setStudents] = useState<AdminStudentRow[]>([]);
   const [classes, setClasses] = useState<AdminClass[]>([]);
   const [classOf, setClassOf] = useState<Record<string, string>>({});
@@ -191,13 +196,22 @@ export function SencoView() {
       .then((w) => setAdaptationsWeek(w.complete ? w.perLearner : null))
       .catch(() => setAdaptationsWeek(null));
 
+    /*
+     * EVERY FLAG, NOT THE FIRST FIFTY. This read `getFlags({ limit: 50 })` and
+     * dropped acknowledged rows on the client - so at a school with fifty
+     * seen flags ahead of the open ones, the open ones never arrived, and
+     * the card below said "Nothing needs your attention right now" to a
+     * SENCo with children waiting. The route has no open-only filter, so
+     * `allFlags` pages to a short page and says whether it got there.
+     */
     Promise.all([
-      intelligenceApi.getFlags({ limit: 50 }),
+      intelligenceApi.allFlags(),
       studentsApi.list(),
       classesApi.list(),
     ])
       .then(([f, s, c]) => {
-        setFlags(f);
+        setFlags(f.flags);
+        setFlagsComplete(f.complete);
         setStudents(s);
         setClasses(c);
         setNow(Date.now());
@@ -411,7 +425,22 @@ export function SencoView() {
         ) : null}
 
         {phase === "ready" && view === "attention" ? (
-          openFlags.length === 0 ? (
+          openFlags.length === 0 && !flagsComplete ? (
+            /*
+             * Nothing open among what we read, but we did not read it all.
+             * "Nothing needs your attention" would be a claim about pages we
+             * never saw.
+             */
+            <div className={cn(CARD, "mt-6 px-[26px] py-7")}>
+              <h3 className="m-0 text-[17px] font-semibold text-nevo-near-black">
+                We couldn&rsquo;t read every flag just now
+              </h3>
+              <p className="mt-2 max-w-[56ch] text-sm leading-[1.55] text-nevo-near-black/62">
+                So we can&rsquo;t tell you nothing needs a look. Try again in a
+                moment.
+              </p>
+            </div>
+          ) : openFlags.length === 0 ? (
             <div className={cn(CARD, "mt-6 px-6 py-14 text-center")}>
               {/* The frame's mark, which every sibling admin empty state has
                   and this one did not - so the calmest screen in the console
@@ -441,7 +470,10 @@ export function SencoView() {
               <div className="mt-7 flex items-center justify-between gap-4">
                 <SectionHeading>Flagged by Nevo</SectionHeading>
                 <span className="text-[13px] text-nevo-near-black/50">
-                  {openFlags.length} to look at
+                  {/* A floor is never shown as a total. */}
+                  {flagsComplete
+                    ? `${openFlags.length} to look at`
+                    : `At least ${openFlags.length} to look at`}
                 </span>
               </div>
 

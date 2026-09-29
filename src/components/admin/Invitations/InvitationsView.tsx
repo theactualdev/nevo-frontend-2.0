@@ -4,7 +4,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { classesApi, type AdminClass } from "@/lib/api/classes";
 import { invitesApi, type Invitation, type InviteRole } from "@/lib/api/invites";
 import { cn } from "@/lib/utils";
-import { CARD, GHOST_BTN, PRIMARY_BTN, PlusIcon, ROW_DIVIDER } from "../Roster/primitives";
+import {
+  CARD,
+  GHOST_BTN,
+  PausedNote,
+  PRIMARY_BTN,
+  PlusIcon,
+  ROW_DIVIDER,
+} from "../Roster/primitives";
+import { useSetupGate } from "@/hooks";
 import { BulkImportModal } from "./BulkImportModal";
 import { InviteStatusPill, normaliseStatus } from "./inviteStatus";
 import {
@@ -97,6 +105,8 @@ export function InvitationsView() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [composing, setComposing] = useState(false);
+  /** D24 / D01b: inviting, resending and revoking pause while setup is unfinished. */
+  const { writesPaused } = useSetupGate();
   const [importing, setImporting] = useState(false);
   const [toast, setToast] = useState("");
   /*
@@ -255,15 +265,27 @@ export function InvitationsView() {
             </p>
           </div>
           <div className="flex flex-none gap-3">
-            <button type="button" onClick={() => setImporting(true)} className={GHOST_BTN}>
+            <button
+              type="button"
+              onClick={() => setImporting(true)}
+              disabled={writesPaused}
+              className={GHOST_BTN}
+            >
               Bulk import
             </button>
-            <button type="button" onClick={() => setComposing(true)} className={PRIMARY_BTN}>
+            <button
+              type="button"
+              onClick={() => setComposing(true)}
+              disabled={writesPaused}
+              className={PRIMARY_BTN}
+            >
               <PlusIcon />
               New invite
             </button>
           </div>
         </div>
+
+        <PausedNote className="mt-3" />
 
         {/* TABS */}
         <div
@@ -334,6 +356,7 @@ export function InvitationsView() {
             <button
               type="button"
               onClick={() => setComposing(true)}
+              disabled={writesPaused}
               className={cn(PRIMARY_BTN, "mx-auto mt-6")}
             >
               Send first invite
@@ -501,7 +524,7 @@ export function InvitationsView() {
                               ) : null}
                               <button
                                 type="button"
-                                disabled={working}
+                                disabled={working || writesPaused}
                                 onClick={() => resend(invite)}
                                 className="cursor-pointer text-[13.5px] font-semibold text-nevo-navy transition-opacity hover:opacity-75 disabled:opacity-45"
                               >
@@ -509,7 +532,7 @@ export function InvitationsView() {
                               </button>
                               <button
                                 type="button"
-                                disabled={working}
+                                disabled={working || writesPaused}
                                 onClick={() => setConfirmRevoke(confirming ? null : invite.id)}
                                 className="cursor-pointer text-[13.5px] font-semibold text-nevo-near-black/60 transition-opacity hover:opacity-75 disabled:opacity-45"
                               >
@@ -551,7 +574,7 @@ export function InvitationsView() {
                           <div className="mt-3 flex gap-2.5">
                             <button
                               type="button"
-                              disabled={working}
+                              disabled={working || writesPaused}
                               onClick={() => revoke(invite)}
                               className="cursor-pointer rounded-lg bg-nevo-navy px-4 py-2 text-[13.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-110 disabled:opacity-60"
                             >

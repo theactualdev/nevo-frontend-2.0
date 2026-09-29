@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { emailConfirmationApi } from "@/lib/api/emailConfirmation";
-import { onboardingApi } from "@/lib/api/onboarding";
+import { onboardingApi, type OnboardingState } from "@/lib/api/onboarding";
 
 /**
  * WHY THE ADMIN CONSOLE IS READ-ONLY, when it is.
@@ -27,11 +27,14 @@ import { onboardingApi } from "@/lib/api/onboarding";
  * produced two, and they would have disagreed the first time either changed.
  *
  * ============================================================================
- * THIS IS AN EXPLANATION LAYER, NOT A SECURITY BOUNDARY.
+ * THIS IS NOT A SECURITY BOUNDARY - AND, AS OF 28 SEP, NOTHING ELSE IS EITHER.
  *
- * The server enforces. Every write this pauses would be refused anyway, and a
- * console that could be talked out of pausing cannot let anybody do anything
- * they could not already do. That matters because it decides how to fail:
+ * ~~The server enforces. Every write this pauses would be refused anyway.~~
+ * That was asserted here, never checked, and it is not true of the deployed
+ * contract: no admin write route documents a refusal for an unconfirmed
+ * address or a school that is not active. So for now this layer is the only
+ * thing keeping a school in setup read-only. Raised with backend. It still
+ * fails OPEN, because the alternative is worse:
  *
  *   **An unresolved gate pauses nothing.** If either read fails, controls keep
  *   the behaviour they have. Failing closed would turn a transient 500 into a
@@ -72,6 +75,20 @@ export interface SetupGateValue {
   resolved: boolean;
   /** The address the confirmation link went to, when the server named one. */
   email: string | null;
+  /**
+   * The onboarding read this gate already makes, whole. The not-yet-active
+   * dashboard (D24 OB-00) draws from it, and a second read of the same route
+   * on the same page load could disagree with this one about the stage.
+   * Null until it lands, and after it fails.
+   */
+  onboarding: OnboardingState | null;
+  /**
+   * True until the first pair of reads has settled, success or failure.
+   * `resolved` cannot say this: it is also false after a failure, and the
+   * dashboard must tell "not known yet" (wait) from "could not be known"
+   * (fail open to the ordinary Overview).
+   */
+  loading: boolean;
   refresh: () => void;
 }
 
@@ -95,6 +112,8 @@ export function SetupGateProvider({ children }: { children: ReactNode }) {
   const [pause, setPause] = useState<SetupPause | null>(null);
   const [resolved, setResolved] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
+  const [onboarding, setOnboarding] = useState<OnboardingState | null>(null);
+  const [loading, setLoading] = useState(true);
   const [nonce, setNonce] = useState(0);
 
   const refresh = useCallback(() => setNonce((n) => n + 1), []);
@@ -123,15 +142,17 @@ export function SetupGateProvider({ children }: { children: ReactNode }) {
       .then((s) => s)
       .catch(() => null);
 
-    const onboarding = onboardingApi
+    const onboardingRead = onboardingApi
       .get()
-      .then((s) => ({ inOnboarding: s.inOnboarding === true }))
+      .then((s) => s)
       .catch(() => null);
 
-    Promise.all([confirmation, onboarding]).then(([conf, onb]) => {
+    Promise.all([confirmation, onboardingRead]).then(([conf, onb]) => {
       if (!live) return;
 
       if (conf) setEmail(conf.email ?? null);
+      setOnboarding(onb);
+      setLoading(false);
 
       // Neither landed: say nothing rather than guess in either direction.
       if (!conf && !onb) {
@@ -179,9 +200,11 @@ export function SetupGateProvider({ children }: { children: ReactNode }) {
       pause: resolved ? pause : null,
       resolved,
       email,
+      onboarding,
+      loading,
       refresh,
     }),
-    [resolved, pause, email, refresh],
+    [resolved, pause, email, onboarding, loading, refresh],
   );
 
   return (
