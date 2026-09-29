@@ -30,8 +30,6 @@ import {
   type SchoolNarrative,
   type SchoolRosterCounts,
 } from "@/lib/api/school";
-import { SampleRegion } from "@/components/shared/SampleRegion";
-import { WORTH_A_GLANCE } from "./overviewSample";
 import { glanceRows } from "./overviewGlance";
 import { boardPackText } from "./boardPack";
 import {
@@ -96,8 +94,10 @@ import { NoAccess, failureKind } from "../NoAccess";
  * TODO(api): a roll-up of things needing a decision, and per-class or
  * per-teacher ACTIVITY. (This asked for a narrative endpoint as well, which
  * had already landed, and for "activity counts", which conflated headcounts
- * that exist with recency that does not.) The roll-up is itself now
- * two-thirds buildable client-side - see `overviewSample.ts`.
+ * that exist with recency that does not.) Two of D04's three rows are built
+ * client-side now - see `overviewGlance.ts`. The third, "classes that haven't
+ * run a lesson", is not drawn at all: it has no source, and a real school was
+ * being shown two invented class names under a note. Ruled v1.5.
  * Both cards open their drill-down: the compliance card to D22, and the
  * adaptations figure to D21.
  *
@@ -123,14 +123,6 @@ type Phase = "loading" | "ready" | "denied";
 
 /** A card that loads, and fails, on its own. */
 type CardPhase = "loading" | "ready" | "failed";
-
-function SampleNote({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="mt-2 text-[13px] leading-[1.5] text-nevo-near-black/55 italic">
-      {children}
-    </p>
-  );
-}
 
 /** D04's two board-pack glyphs, traced from the frame. */
 function CopyGlyph() {
@@ -369,6 +361,7 @@ export function OverviewView() {
    * flatly untrue of a school in its third term.
    */
   const early = adaptationTotal === 0;
+  const glance = early ? [] : glanceRows(roster, flags);
   const school = audit?.schoolName ?? "your school";
 
   const pack = boardPackText({
@@ -647,9 +640,18 @@ export function OverviewView() {
               </div>
             )}
 
-            <h3 className="mt-8 text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase">
-              {early ? "Getting started" : "Worth a glance"}
-            </h3>
+            {/*
+              * NO ROWS, NO SECTION. "Worth a glance" only ever holds rows this
+              * school's own reads produced; with none, a heading over empty
+              * space would read as a list that failed to load, and a line
+              * saying nothing needs a look would be a claim - a read that
+              * failed also yields no rows.
+              */}
+            {(early || glance.length > 0) && (
+              <h3 className="mt-8 text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase">
+                {early ? "Getting started" : "Worth a glance"}
+              </h3>
+            )}
 
             {early ? (
               <div className={cn(CARD, "mt-3 overflow-hidden")}>
@@ -750,88 +752,32 @@ export function OverviewView() {
                 })}
               </div>
             ) : (
-            (() => {
-              /*
-               * TWO OF THESE ROWS ARE THIS SCHOOL'S NOW, and the third is not.
-               * That split is the whole reason this is shaped the way it is:
-               *
-               * The live rows render OUTSIDE `SampleRegion`. Wrapping a real
-               * roll-up in the marker that means "invented" would teach the
-               * end-to-end suite to walk past a genuine one, which is worse
-               * than having no marker at all.
-               *
-               * The fixture row keeps the marker, and keeps its own note. A
-               * signed-in admin should never meet an invented count without
-               * being told, and an UNMARKED fallback is invisible to the test
-               * that checks for exactly that.
-               */
-              const live = glanceRows(roster, flags);
-              return (
-                <>
-                  {live.length > 0 && (
-                    <div className={cn(CARD, "mt-3 overflow-hidden")}>
-                      {live.map((g, i) => (
-                        <Link
-                          key={g.key}
-                          href={g.href}
-                          className={cn(
-                            "flex items-center gap-4 px-[22px] py-[18px] transition-[filter] hover:brightness-[0.985]",
-                            i < live.length - 1 &&
-                              "border-b border-nevo-near-black/7",
-                          )}
-                        >
-                          <span className="flex min-w-0 flex-1 flex-col">
-                            <span className="text-[15px] font-semibold text-nevo-near-black">
-                              {g.title}
-                            </span>
-                            <span className="mt-0.5 text-[13px] text-nevo-near-black/58">
-                              {g.sub}
-                            </span>
-                          </span>
-                          <span className="shrink-0 text-[13.5px] font-semibold text-nevo-navy">
-                            {g.action} &rarr;
-                          </span>
-                        </Link>
-                      ))}
-                    </div>
-                  )}
-
-                  <SampleRegion kind="admin:overview-worth-a-glance">
-                    <div className={cn(CARD, "mt-3 overflow-hidden")}>
-                      {WORTH_A_GLANCE.map((g) => (
-                        <Link
-                          key={g.title}
-                          href={g.href}
-                          className="flex items-center gap-4 px-[22px] py-[18px] transition-[filter] hover:brightness-[0.985]"
-                        >
-                          <span className="flex min-w-0 flex-1 flex-col">
-                            <span className="text-[15px] font-semibold text-nevo-near-black">
-                              {g.title}
-                            </span>
-                            <span className="mt-0.5 text-[13px] text-nevo-near-black/58">
-                              {g.sub}
-                            </span>
-                          </span>
-                          <span className="shrink-0 text-[13.5px] font-semibold text-nevo-navy">
-                            {g.action} &rarr;
-                          </span>
-                        </Link>
-                      ))}
-                    </div>
-                  </SampleRegion>
-                </>
-              );
-            })()
-            )}
-            {!early && (
-              /* Was "These three are a sample", which stopped being true when
-                 two of them became real. It names the row it is about rather
-                 than counting, so it cannot go stale the same way again. */
-              <SampleNote>
-                The classes row is a sample &ndash; nothing yet reports which
-                classes have taught a lesson at {school}, so that count is not
-                yours. The link goes to the real screen.
-              </SampleNote>
+            glance.length > 0 && (
+              <div className={cn(CARD, "mt-3 overflow-hidden")}>
+                {glance.map((g, i) => (
+                  <Link
+                    key={g.key}
+                    href={g.href}
+                    className={cn(
+                      "flex items-center gap-4 px-[22px] py-[18px] transition-[filter] hover:brightness-[0.985]",
+                      i < glance.length - 1 && "border-b border-nevo-near-black/7",
+                    )}
+                  >
+                    <span className="flex min-w-0 flex-1 flex-col">
+                      <span className="text-[15px] font-semibold text-nevo-near-black">
+                        {g.title}
+                      </span>
+                      <span className="mt-0.5 text-[13px] text-nevo-near-black/58">
+                        {g.sub}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-[13.5px] font-semibold text-nevo-navy">
+                      {g.action} &rarr;
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            )
             )}
           </>
         )}
