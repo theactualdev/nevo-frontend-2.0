@@ -68,14 +68,14 @@ describe("DpaGate", () => {
     dpaAcceptance.mockResolvedValue(ACCEPTED);
     render(<DpaGate>{page}</DpaGate>);
     await waitFor(() => expect(dpaAcceptance).toHaveBeenCalled());
-    expect(screen.getByRole("heading", { name: "Classes" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Classes" })).toBeInTheDocument();
   });
 
   it("fails open: a read that broke is not 'nothing was agreed'", async () => {
     dpaAcceptance.mockRejectedValue(new Error("500"));
     render(<DpaGate>{page}</DpaGate>);
     await waitFor(() => expect(dpaAcceptance).toHaveBeenCalled());
-    expect(screen.getByRole("heading", { name: "Classes" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Classes" })).toBeInTheDocument();
     expect(screen.queryByText(/How we handle your students' data/)).toBeNull();
   });
 
@@ -84,7 +84,7 @@ describe("DpaGate", () => {
     dpaAcceptance.mockResolvedValue(null);
     render(<DpaGate>{page}</DpaGate>);
     await waitFor(() => expect(dpaAcceptance).toHaveBeenCalled());
-    expect(screen.getByRole("heading", { name: "Classes" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Classes" })).toBeInTheDocument();
   });
 
   it("tells an admin without oversight who can agree, rather than handing them the box", async () => {
@@ -128,6 +128,15 @@ describe("DpaGate and schools that agreed before the typed record", () => {
     render(<DpaGate>{page}</DpaGate>);
 
     await waitFor(() => expect(getSchool).toHaveBeenCalled());
-    expect(screen.getByRole("heading", { name: "Classes" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Classes" })).toBeInTheDocument();
+  });
+});
+
+describe("DpaGate while it is still checking", () => {
+  it("shows no page until it knows, so a school without an agreement never glimpses one", () => {
+    // A read that never answers: the first paint.
+    dpaAcceptance.mockReturnValue(new Promise(() => {}));
+    render(<DpaGate>{page}</DpaGate>);
+    expect(screen.queryByRole("heading", { name: "Classes" })).toBeNull();
   });
 });

@@ -31,12 +31,20 @@ import { DpaStep } from "../Onboarding/DpaStep";
  * checkbox they have no standing to tick.
  */
 
-type Dpa = "unknown" | "accepted" | "missing";
+/**
+ * `loading` IS NOT `unknown`. Both used to render the pages, so a school with
+ * no agreement saw its console for as long as the read took, then had it
+ * taken away - a flash of everything the gate exists to hold back. (The
+ * end-to-end suite found it: a heading it waited for appeared in that window
+ * and the test passed on a page the school could not actually use.) Loading
+ * now holds a placeholder; only a read that FAILED falls open.
+ */
+type Dpa = "loading" | "unknown" | "accepted" | "missing";
 
 export function DpaGate({ children }: { children: React.ReactNode }) {
   const { pause } = useSetupGate();
   const { resolved, hasScope } = usePermissions();
-  const [dpa, setDpa] = useState<Dpa>("unknown");
+  const [dpa, setDpa] = useState<Dpa>("loading");
   const [schoolName, setSchoolName] = useState<string | null>(null);
 
   useEffect(() => {
@@ -71,6 +79,15 @@ export function DpaGate({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  // Once per console load: the shell persists across navigation, so this
+  // placeholder is the first paint only, never a page-to-page flicker.
+  if (dpa === "loading") {
+    return (
+      <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px]">
+        <div className="h-[420px] animate-pulse rounded-xl bg-nevo-cream-elevated" />
+      </div>
+    );
+  }
   if (dpa !== "missing" || pause === "email_unconfirmed") return <>{children}</>;
 
   const canAgree = resolved && hasScope(PERMISSION_SCOPES.GENERAL_OVERSIGHT);
