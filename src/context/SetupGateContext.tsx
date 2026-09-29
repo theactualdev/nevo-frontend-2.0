@@ -27,11 +27,14 @@ import { onboardingApi, type OnboardingState } from "@/lib/api/onboarding";
  * produced two, and they would have disagreed the first time either changed.
  *
  * ============================================================================
- * THIS IS AN EXPLANATION LAYER, NOT A SECURITY BOUNDARY.
+ * THIS IS NOT A SECURITY BOUNDARY - AND, AS OF 28 SEP, NOTHING ELSE IS EITHER.
  *
- * The server enforces. Every write this pauses would be refused anyway, and a
- * console that could be talked out of pausing cannot let anybody do anything
- * they could not already do. That matters because it decides how to fail:
+ * ~~The server enforces. Every write this pauses would be refused anyway.~~
+ * That was asserted here, never checked, and it is not true of the deployed
+ * contract: no admin write route documents a refusal for an unconfirmed
+ * address or a school that is not active. So for now this layer is the only
+ * thing keeping a school in setup read-only. Raised with backend. It still
+ * fails OPEN, because the alternative is worse:
  *
  *   **An unresolved gate pauses nothing.** If either read fails, controls keep
  *   the behaviour they have. Failing closed would turn a transient 500 into a

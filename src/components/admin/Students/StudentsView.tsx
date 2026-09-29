@@ -21,10 +21,12 @@ import {
   Avatar,
   CARD,
   GHOST_BTN,
+  PausedNote,
   PRIMARY_BTN,
   PlusIcon,
   ROW_DIVIDER,
 } from "../Roster/primitives";
+import { useSetupGate } from "@/hooks";
 
 /**
  * D7 Students - the school roster.
@@ -90,6 +92,8 @@ export function StudentsView() {
    */
   const [consent, setConsent] = useState("");
   const [adding, setAdding] = useState(false);
+  /** D24 / D01b: enrolling pauses while setup is unfinished. */
+  const { writesPaused } = useSetupGate();
   /** Set by student detail when a record was erased - see its `onErased`. */
   const erased = params.get("erased");
   const [includeInactive, setIncludeInactive] = useState(false);
@@ -202,12 +206,19 @@ export function StudentsView() {
             * place in the sidebar.
             */}
           {phase === "ready" && students.length > 0 ? (
-            <button type="button" onClick={() => setAdding(true)} className={PRIMARY_BTN}>
+            <button
+              type="button"
+              onClick={() => setAdding(true)}
+              disabled={writesPaused}
+              className={PRIMARY_BTN}
+            >
               <PlusIcon />
               Enrol a student
             </button>
           ) : null}
         </div>
+
+        <PausedNote className="mt-3" />
 
         {phase === "loading" ? (
           <div className={cn(CARD, "mt-[22px] h-[320px] animate-pulse")} />
@@ -238,7 +249,7 @@ export function StudentsView() {
         ) : null}
 
         {phase === "ready" && students.length === 0 && !filtering ? (
-          <EmptyState onEnrol={() => setAdding(true)} />
+          <EmptyState onEnrol={() => setAdding(true)} paused={writesPaused} />
         ) : null}
 
         {adding ? (
@@ -489,7 +500,7 @@ export function StudentsView() {
   );
 }
 
-function EmptyState({ onEnrol }: { onEnrol: () => void }) {
+function EmptyState({ onEnrol, paused }: { onEnrol: () => void; paused: boolean }) {
   return (
     /*
      * Same definite height as the Classes and Teachers empty states: `flex-1`
@@ -514,7 +525,7 @@ function EmptyState({ onEnrol }: { onEnrol: () => void }) {
           adds them all. Each one gets their own way in.
         </p>
         <div className="mt-6 flex justify-center gap-3">
-          <button type="button" onClick={onEnrol} className={PRIMARY_BTN}>
+          <button type="button" onClick={onEnrol} disabled={paused} className={PRIMARY_BTN}>
             <PlusIcon />
             Enrol a student
           </button>

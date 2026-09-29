@@ -26,10 +26,10 @@ import { leadFor, momentFor, setupSteps, type SetupStep } from "./notActive";
  * fetched again. The school name and the per-student rate decorate it and
  * cost only themselves when they fail.
  *
- * NOT YET SAID: the frame's "You can't make any changes until Brightgate is
- * active." Outside this page the console does not pause its writes for a
- * school that is not active, and the backend refuses none of them, so the
- * sentence would be false today. It comes back with the paused controls.
+ * THE FOOTER IS A PROMISE THE REST OF THE CONSOLE KEEPS. The frame's "You
+ * can't make any changes until Brightgate is active" was held back until every
+ * write control outside this page paused for a school in setup. The backend
+ * refuses none of those writes, so the paused controls are what make it true.
  */
 
 const CARD = "rounded-xl bg-nevo-cream-elevated shadow-[0_2px_8px_rgba(0,0,0,0.06)]";
@@ -93,8 +93,11 @@ export function NotActiveDashboard({ state }: { state: OnboardingState }) {
         )}
 
         <p className="mt-6 max-w-[640px] text-[13.5px] leading-[1.55] text-nevo-near-black/55">
-          You can look around the rest of your console &ndash; Classes,
-          Teachers, Reports, Billing.
+          {moment === "nothing_uploaded"
+            ? `You can look around the rest of your console – Classes, Teachers, Reports, Billing. You can't make any changes until ${name ?? "your school"} is active.`
+            : moment === "part_uploaded"
+              ? `The rest of your console stays read-only until ${name ?? "your school"} is active.`
+              : "The rest of your console stays read-only until your payment is confirmed."}
         </p>
       </div>
     </div>

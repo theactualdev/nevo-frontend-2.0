@@ -117,12 +117,23 @@ describe("AdminDashboard", () => {
     expect(text).not.toMatch(/₦51,000,000|₦54,825,000/);
   });
 
-  it("does not claim the console is locked, because it is not yet", async () => {
+  it("says the rest of the console is locked, in the frame's words for each moment", async () => {
+    // True because every write control outside this page pauses for a school
+    // in setup - see PausedNote. The backend refuses none of those writes.
     open(state());
-    const { container } = render(<AdminDashboard />);
-    await waitFor(() => expect(visibleText(container)).toMatch(/isn.t active yet/));
+    const a = render(<AdminDashboard />);
+    await waitFor(() =>
+      expect(visibleText(a.container)).toMatch(
+        /can.t make any changes until Brightgate Academy is active/,
+      ),
+    );
+    a.unmount();
 
-    expect(visibleText(container)).not.toMatch(/can.t make any changes|read-only/i);
+    open(state({ stage: "awaiting_payment", studentCount: 3 }));
+    const c = render(<AdminDashboard />);
+    await waitFor(() =>
+      expect(visibleText(c.container)).toMatch(/read-only until your payment is confirmed/),
+    );
   });
 
   it("gives a running school its ordinary Overview", () => {

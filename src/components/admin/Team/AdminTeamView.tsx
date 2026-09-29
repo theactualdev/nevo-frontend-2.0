@@ -11,7 +11,8 @@ import {
 import type { PermissionScope } from "@/lib/constants/permissions";
 import { cn } from "@/lib/utils";
 import { feedbackApi } from "@/lib/api/feedback";
-import { CheckIcon } from "../Roster/primitives";
+import { CheckIcon, PausedNote } from "../Roster/primitives";
+import { useSetupGate } from "@/hooks";
 import { readOnboarding, schoolApi } from "@/lib/api/school";
 import { NoAccess, failureKind } from "../NoAccess";
 import {
@@ -215,11 +216,15 @@ function InviteButton({
   onClick: () => void;
   label?: string;
 }) {
+  // D24 / D01b: inviting pauses while setup is unfinished. The note is drawn
+  // once under the heading rather than beside each of these.
+  const { writesPaused } = useSetupGate();
   return (
     <button
       type="button"
       onClick={onClick}
-      className="h-[46px] shrink-0 cursor-pointer rounded-[10px] bg-nevo-navy px-5 text-sm font-semibold text-nevo-cream transition-[filter] hover:brightness-110 active:brightness-93"
+      disabled={writesPaused}
+      className="h-[46px] shrink-0 cursor-pointer rounded-[10px] bg-nevo-navy px-5 text-sm font-semibold text-nevo-cream transition-[filter] hover:brightness-110 active:brightness-93 disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:brightness-100"
     >
       {label}
     </button>
@@ -317,6 +322,8 @@ function TeamList({
           */}
         <InviteButton onClick={onInvite} />
       </div>
+
+      <PausedNote className="mt-3" />
 
       <div className="mt-5 flex items-center justify-between gap-4">
         <SeatsLine used={team.length} seats={seats} />
