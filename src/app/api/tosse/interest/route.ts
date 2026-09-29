@@ -11,9 +11,10 @@
  * Mirrors `app/api/partner-inquiries`, the proxy the public landing form
  * already uses for the same reason.
  */
-const UPSTREAM =
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ??
-  "https://api.nevolearning.com";
+import { API_ORIGIN } from "@/lib/api/upstream";
+
+// See `lib/api/upstream` - the backend moved, and this used to hard-code the old host.
+const UPSTREAM = API_ORIGIN;
 
 export async function POST(request: Request) {
   let body: unknown;
