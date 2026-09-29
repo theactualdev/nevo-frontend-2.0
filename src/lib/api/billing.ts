@@ -1,4 +1,5 @@
 import { api } from "./client";
+import { isOwnApiHost } from "./upstream";
 
 /**
  * Billing reads and the one write we can honestly make.
@@ -275,9 +276,9 @@ export function invoicePdfPath(pdfUrl: string): string | null {
     return null;
   }
   // Our own API, however it is addressed. Everything else is someone else's.
-  return /(^|\.)nevolearning\.com$/.test(url.hostname)
-    ? `${url.pathname}${url.search}`
-    : null;
+  // This matched nevolearning.com only, so once the backend moved hosts every
+  // invoice PDF it served would have been treated as a stranger's link.
+  return isOwnApiHost(url.hostname) ? `${url.pathname}${url.search}` : null;
 }
 
 export const billingApi = {
