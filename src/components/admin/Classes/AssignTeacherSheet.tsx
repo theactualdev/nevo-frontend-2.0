@@ -56,7 +56,12 @@ import {
 const LABEL =
   "mb-[7px] block text-[12.5px] font-semibold text-nevo-near-black/60";
 
-type Phase = "idle" | "assigning" | "assigned" | "failed";
+/**
+ * `kept_failed`: the new teacher IS primary, but putting the old primary back
+ * as co-teacher failed. Not "failed" - half of it happened, and the sheet has
+ * to say which half rather than offer to redo the part that worked.
+ */
+type Phase = "idle" | "assigning" | "assigned" | "failed" | "kept_failed";
 
 const ROLES: {
   value: TeacherAssignmentRole;
@@ -153,17 +158,60 @@ export function AssignTeacherSheet({
   const chosen = assignable.find((t) => t.id === teacherId);
   const ready = Boolean(teacherId && role);
 
+  const done = () => {
+    setPhase("assigned");
+    // Let the confirmation be read before the sheet goes.
+    setTimeout(onAssigned, 1100);
+  };
+
+  /** Put the old primary back as co-teacher - the half the notice promises. */
+  const keepOldPrimary = (incumbent: AssignedTeacher) =>
+    classesApi.createAssignment({
+      teacherId: incumbent.teacherId,
+      classId,
+      role: "co_teacher",
+    });
+
+  /*
+   * MAKING SOMEBODY PRIMARY WHEN THE CLASS HAS ONE.
+   *
+   * The notice below promises "Making Mr. Bello primary moves Ms. Adeyemi to
+   * co-teacher; she keeps the class." This used to send one create with role
+   * primary and nothing else - so the class ended up with two primaries, and
+   * the sentence the admin read before pressing the button was not what the
+   * button did.
+   *
+   * Two documented calls, in the only order that works: hand the primary slot
+   * to the new teacher (`reassign`, the same route D06b's hand-over uses),
+   * then add the old primary back as co-teacher. The reverse order cannot
+   * work - she is already assigned, as primary.
+   */
   const submit = () => {
     if (!ready || !role) return;
     setPhase("assigning");
+
+    if (role === "primary" && currentPrimary) {
+      const incumbent = currentPrimary;
+      classesApi
+        .reassign(incumbent.assignmentId, { newTeacherId: teacherId, role: "primary" })
+        .then(
+          () =>
+            keepOldPrimary(incumbent).then(done, () => setPhase("kept_failed")),
+          () => setPhase("failed"),
+        );
+      return;
+    }
+
     classesApi
       .createAssignment({ teacherId: teacherId, classId: classId, role })
-      .then(() => {
-        setPhase("assigned");
-        // Let the confirmation be read before the sheet goes.
-        setTimeout(onAssigned, 1100);
-      })
+      .then(done)
       .catch(() => setPhase("failed"));
+  };
+
+  const retryKeep = () => {
+    if (!currentPrimary) return;
+    setPhase("assigning");
+    keepOldPrimary(currentPrimary).then(done, () => setPhase("kept_failed"));
   };
 
   return (
@@ -189,6 +237,20 @@ export function AssignTeacherSheet({
               {chosen?.name} added to {className}
             </span>
           </div>
+        ) : phase === "kept_failed" ? (
+          <>
+            <FailureLine>
+              {chosen?.name ?? "The new teacher"} is now primary for {className}.
+              We couldn&rsquo;t keep {primaryName} on as co-teacher &ndash; try
+              again, or add them back from the class page.
+            </FailureLine>
+            <button type="button" onClick={retryKeep} className={PRIMARY_BTN}>
+              Try again
+            </button>
+            <button type="button" onClick={onAssigned} className={GHOST_BTN}>
+              Close
+            </button>
+          </>
         ) : phase === "failed" ? (
           <>
             <FailureLine>
