@@ -23,7 +23,7 @@
  * Delete this script once the backend types its responses - at which point
  * `scripts/api-audit.mjs` tells you everything this does.
  */
-const BASE = process.env.NEVO_API_URL ?? "https://api.nevolearning.com";
+const BASE = process.env.NEVO_API_URL ?? "https://nevo-backend-2-0-kn3d.onrender.com";
 const EMAIL = process.env.NEVO_EMAIL;
 const PASSWORD = process.env.NEVO_PASSWORD;
 const RAW = process.argv.includes("--raw");

@@ -13,7 +13,7 @@
  * subscription carries a school name. Pass --raw only if you need actual values
  * and are not going to paste them anywhere.
  */
-const BASE = process.env.NEVO_API_URL ?? "https://api.nevolearning.com";
+const BASE = process.env.NEVO_API_URL ?? "https://nevo-backend-2-0-kn3d.onrender.com";
 const EMAIL = process.env.NEVO_EMAIL;
 const PASSWORD = process.env.NEVO_PASSWORD;
 const RAW = process.argv.includes("--raw");
