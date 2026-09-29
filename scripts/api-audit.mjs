@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const BASE =
-  process.env.NEVO_API_URL ?? "https://api.nevolearning.com";
+  process.env.NEVO_API_URL ?? "https://nevo-backend-2-0-kn3d.onrender.com";
 const SRC = join(dirname(fileURLToPath(import.meta.url)), "..", "src");
 
 const spec = await fetch(`${BASE}/openapi.json`, {
