@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useState } from "react";
-import { ApiError } from "@/lib/api/client";
+import { ApiError, apiErrorCode } from "@/lib/api/client";
 import { setSession } from "@/lib/auth/session";
 import {
   parentApi,
@@ -60,7 +60,22 @@ import {
  * as they were.
  */
 
-type Phase = "idle" | "asking" | "sending" | "done" | "skipped" | "failed" | "gone";
+/**
+ * `conflict`: the address this request went to already belongs to a Nevo
+ * account that is not a parent's - a staff or student sign-in - so the
+ * backend refuses to make it a parent account too (`parent_account_conflict`).
+ * Not "failed": trying again gets the same answer, and the fix is the school's
+ * (a different address), so the page says that rather than "try again".
+ */
+type Phase =
+  | "idle"
+  | "asking"
+  | "sending"
+  | "done"
+  | "skipped"
+  | "failed"
+  | "gone"
+  | "conflict";
 
 const CARD =
   "rounded-[14px] bg-nevo-cream-elevated px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)]";
@@ -180,7 +195,19 @@ export function ParentConsent({
     } catch (e) {
       // 404 covers unknown, revoked and expired - the same dead end, and the
       // same fix: the school issues a fresh link.
-      setPhase(e instanceof ApiError && e.status === 404 ? "gone" : "failed");
+      if (e instanceof ApiError && e.status === 404) {
+        setPhase("gone");
+      } else if (
+        e instanceof ApiError &&
+        apiErrorCode(e.detail) === "parent_account_conflict"
+      ) {
+        // Found on 29 Sep sending a test request to an address that was
+        // already an admin's: the page said "try again in a moment", which
+        // could never work.
+        setPhase("conflict");
+      } else {
+        setPhase("failed");
+      }
     }
   }
 
@@ -459,7 +486,20 @@ export function ParentConsent({
           className="mt-3.5 rounded-[10px] bg-nevo-violet/14 px-4 py-3 text-[14px] leading-[1.5] text-nevo-near-black/80"
         >
           We couldn&rsquo;t record that just now. Nothing has changed.
-          please try again in a moment.
+          Please try again in a moment.
+        </p>
+      )}
+
+      {phase === "conflict" && (
+        <p
+          role="alert"
+          className="mt-3.5 rounded-[10px] bg-nevo-violet/14 px-4 py-3 text-[14px] leading-[1.5] text-nevo-near-black/80"
+        >
+          This email address is already used for a different kind of Nevo
+          account &ndash; a staff or student sign-in &ndash; so it can&rsquo;t
+          also be a parent account. Nothing has been recorded. Please ask{" "}
+          {invitation.schoolName} to send the request to a different email
+          address.
         </p>
       )}
 

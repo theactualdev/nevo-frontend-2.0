@@ -198,6 +198,31 @@ describe("giving consent", () => {
     expect(screen.queryByText(/that’s all we needed/i)).not.toBeInTheDocument();
   });
 
+  it("says why when the address already belongs to a staff or student account", async () => {
+    /*
+     * 29 Sep: a test request sent to an address that was already an admin's.
+     * The backend answers `parent_account_conflict`, and the page said "try
+     * again in a moment" - which can never work. The fix is the school's.
+     */
+    completeConsent.mockRejectedValueOnce(
+      new ApiError(409, "conflict", {
+        detail: {
+          code: "parent_account_conflict",
+          message: "That contact belongs to an incompatible account.",
+        },
+      }),
+    );
+    render(<ParentConsent token={TOKEN} invitation={inv()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Yes, I give my consent/ }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/already used for a different kind of Nevo account/);
+    expect(alert).toHaveTextContent(/send the request to a different email address/);
+    expect(alert).not.toHaveTextContent(/try again/i);
+    expect(screen.queryByText(/that’s all we needed/i)).not.toBeInTheDocument();
+  });
+
   it("treats a dead link as the end of the road, not a retry", async () => {
     completeConsent.mockRejectedValueOnce(new ApiError(404, "gone"));
     render(<ParentConsent token={TOKEN} invitation={inv()} />);
