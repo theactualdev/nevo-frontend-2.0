@@ -133,3 +133,20 @@ describe("the footer line", () => {
     await waitFor(() => expect(visibleText(container)).toMatch(/Showing 1 of 4/));
   });
 });
+
+describe("after an erasure", () => {
+  it("says what the erase modal said about what is kept", async () => {
+    /*
+     * The notice read "Nothing of it is kept", one screen after the erase
+     * modal said a small amount is kept for a statutory period. A school
+     * repeats the reassuring one to a parent.
+     */
+    params.set("erased", "Chidi");
+    const { container } = render(<StudentsView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/Chidi.s record has been erased/));
+
+    expect(visibleText(container)).not.toMatch(/Nothing of it is kept/);
+    expect(visibleText(container)).toMatch(/statutory period/);
+    params.delete("erased");
+  });
+});
