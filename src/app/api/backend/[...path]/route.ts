@@ -8,10 +8,10 @@
  * Remove in favour of direct calls if/when the backend grows CORSMiddleware.
  */
 import type { NextRequest } from "next/server";
+import { API_ORIGIN } from "@/lib/api/upstream";
 
-const UPSTREAM =
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ??
-  "https://api.nevolearning.com";
+// See `lib/api/upstream` - the backend moved, and this used to hard-code the old host.
+const UPSTREAM = API_ORIGIN;
 
 /**
  * Upstream routes declared with a trailing slash. FastAPI answers the
