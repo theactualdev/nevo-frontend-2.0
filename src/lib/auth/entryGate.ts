@@ -70,3 +70,18 @@ export async function studentDestination(
     return destination;
   }
 }
+
+/**
+ * The last step out of onboarding: into the first lesson, through the gate.
+ *
+ * THE FIFTH DOOR. "You're In" pushed the first lesson directly, so a child who
+ * joined by link, class code or school code was the one child never checked -
+ * and a child the server holds walked straight into a lesson. Named so the
+ * sequence cannot quietly go back to pushing the lesson itself.
+ */
+export async function enterFirstLesson(
+  firstLesson: string,
+  go: (to: string) => void,
+): Promise<void> {
+  go(await studentDestination(firstLesson));
+}

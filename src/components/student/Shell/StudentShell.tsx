@@ -69,7 +69,9 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
    * consent. Only an answer that says withdrawn stops anything.
    */
   const { withdrawn } = useConsentGate();
-  useBehaviouralCapture(!withdrawn);
+  // Nor on the hold: a child waiting there is waiting BECAUSE nobody has
+  // consented yet, so there is nothing to capture under.
+  useBehaviouralCapture(!withdrawn && !isHoldRoute(pathname));
   // Renews the session before it expires. Mounted here rather than on a tab,
   // so it covers the full-screen routes below too - a child mid-lesson is the
   // case that matters, and the one the old behaviour handled worst.
@@ -293,8 +295,24 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
 const isLesson = isLessonRoute;
 
 /** Onboarding and the lesson player (`/student/lessons/<id>`) run without chrome. */
+/**
+ * The consent hold (00d) and the school-link door that can end on it.
+ *
+ * A HOLD IS NOT A TAB. These rendered inside the full app chrome, so a child
+ * the server said may not proceed was shown the navigation, the bell and Ask
+ * Nevo around the very screen telling them to wait - and could tap straight
+ * past it, and ask Ask Nevo a question, before anyone had consented. The frame
+ * draws the hold bare. So it is full-screen, and nothing is captured on it.
+ */
+function isHoldRoute(pathname: string): boolean {
+  return (
+    pathname === "/student/waiting" || pathname.startsWith("/student/entry")
+  );
+}
+
 function isFullScreen(pathname: string): boolean {
   if (pathname.startsWith("/student/onboarding")) return true;
+  if (isHoldRoute(pathname)) return true;
   if (isLesson(pathname)) return true;
   // Feedback + Change PIN are full-screen views with their own back chevron
   // (Nevo Student App: `feedback` / `changepin`).

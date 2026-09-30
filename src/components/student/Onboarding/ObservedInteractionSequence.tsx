@@ -10,6 +10,7 @@ import {
   rememberOnboardedStudent,
 } from "@/lib/auth/onboarding";
 import { setSession } from "@/lib/auth/session";
+import { enterFirstLesson } from "@/lib/auth/entryGate";
 import { useNextLessonHref } from "@/hooks/useNextLessonHref";
 import { flushPendingBaseline } from "@/lib/profiling/pendingBaseline";
 import { randomId } from "@/lib/utils";
@@ -249,7 +250,16 @@ export function ObservedInteractionSequence() {
   // always still in flight here. `useNextLessonHref` is where that is decided.
   return (
     <YoureInScreen
-      onDone={() => router.push(firstLesson)}
+      onDone={() => {
+        /*
+         * THROUGH THE CONSENT GATE, like every other door. This pushed the
+         * first lesson directly - so a child who joined by link, class code or
+         * school code was never checked, and one the server holds went
+         * straight into a lesson. `enterFirstLesson` opens the lesson, or
+         * the waiting screen for a held child; a failed read is not a hold.
+         */
+        void enterFirstLesson(firstLesson, (to) => router.push(to));
+      }}
       track={trackEvent}
       deviceRemembered={deviceRemembered}
     />
