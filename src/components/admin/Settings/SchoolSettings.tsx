@@ -704,9 +704,14 @@ export function SchoolSettings() {
             </div>
           ))}
         </div>
+        {/* Was "...and in the teacher and parent views". Neither reads these
+            labels - the promise was ahead of the build - so it names only
+            where they genuinely appear: everywhere in this console, now that
+            the shell installs them (`useYearGroupLabels`). */}
         <p className="m-0 mt-3 text-[12.5px] leading-[1.5] text-nevo-near-black/50">
-          These labels appear on classes, student records, reports, and in the
-          teacher and parent views.
+          These labels appear across your admin console &ndash; on classes,
+          student records, reports, and the names Nevo composes when you add
+          several classes at once.
         </p>
 
         <SaveRow phase={taxonomy} onSave={saveTaxonomy} />
