@@ -295,8 +295,12 @@ export function DualTrackBars({ rows }: { rows: DualTrackRow[] }) {
       ) : (
         <div className="flex flex-col gap-5">
           {rows.map((r) => {
-            const gap = r.concept - r.reading;
-            const textIsTheBarrier = gap > 0.15;
+            /*
+             * No "Reading is the barrier" label. It was drawn whenever the
+             * concept track led the reading track by more than 0.15 - a
+             * threshold this chart invented (architecture rule 3), turned
+             * into a diagnosis the data never made.
+             */
             return (
               <div
                 key={r.key}
@@ -307,11 +311,7 @@ export function DualTrackBars({ rows }: { rows: DualTrackRow[] }) {
                   <span className="text-[14px] font-semibold text-nevo-near-black">
                     {r.label}
                   </span>
-                  {textIsTheBarrier ? (
-                    <span className="flex-none text-[12.5px] font-semibold text-nevo-navy">
-                      Reading is the barrier
-                    </span>
-                  ) : hover === r.key && r.meta ? (
+                  {hover === r.key && r.meta ? (
                     <span className="flex-none text-[12.5px] text-nevo-near-black/60">
                       {r.meta}
                     </span>
