@@ -151,7 +151,9 @@ describe("filtering the adaptation log by class", () => {
       expect((params as { limit: number }).limit).toBeLessThanOrEqual(100);
     }
     expect(lastCall().offset).toBe(110);
-  });
+    // Twenty-two presses, each awaited: it sat at the 5s default and timed out
+    // under load with nothing wrong.
+  }, 20_000);
 
   it("keeps what is shown when one earlier page fails", async () => {
     logSpy.mockResolvedValueOnce({ events: [row("1")], total: 40, limit: 5, offset: 0 });
@@ -170,14 +172,22 @@ describe("filtering the adaptation log by class", () => {
     const { container } = render(<AdaptationLogView />);
     await waitFor(() => expect(logSpy).toHaveBeenCalled());
 
-    fireEvent.click(await screenButton(container, "This month"));
-    await waitFor(() => expect(logSpy.mock.calls.length).toBeGreaterThan(1));
+    // A custom range reaching back a month, where the default is a week.
+    fireEvent.click(await screenButton(container, "Custom range…"));
+    const from = container.querySelector<HTMLInputElement>('input[type="date"]')!;
+    const monthAgo = new Date(Date.now() - 30 * 864e5);
+    const ymd = `${monthAgo.getFullYear()}-${String(monthAgo.getMonth() + 1).padStart(2, "0")}-${String(monthAgo.getDate()).padStart(2, "0")}`;
+    fireEvent.change(from, { target: { value: ymd } });
+    await waitFor(() =>
+      expect((Date.now() - Date.parse(lastCall().dateFrom)) / 864e5).toBeGreaterThan(20),
+    );
 
     await selectClass(container, "c1");
     await waitFor(() => expect(lastCall().classId).toBe("c1"));
 
     const days = (Date.now() - Date.parse(lastCall().dateFrom)) / 864e5;
     expect(days).toBeGreaterThan(20);
+    expect(lastCall().dateTo).toBeTruthy();
   });
 
   it("names the class in the count, so a filtered figure is never read as the school's", async () => {
