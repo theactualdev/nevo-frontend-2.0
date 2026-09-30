@@ -28,6 +28,7 @@ import {
   type SchoolRosterCounts,
 } from "@/lib/api/school";
 import { glanceRows } from "./overviewGlance";
+import { setUpAgo, type SetUpAgo } from "./setUpAgo";
 import { boardPackText } from "./boardPack";
 import {
   SNAPSHOT_HEADING,
@@ -190,6 +191,8 @@ export function OverviewView() {
   const [band, setBand] = useState<EnrolmentBand | undefined>(undefined);
   /** The school's own name, from its record - see `school` below. */
   const [schoolName, setSchoolName] = useState<string | null>(null);
+  /** When the school finished setting up - D04's early-life "Set up 3 days ago". */
+  const [setUp, setSetUp] = useState<SetUpAgo | null>(null);
   const [narrative, setNarrative] = useState<SchoolNarrative | null>(null);
   const [narrativeFailed, setNarrativeFailed] = useState(false);
   const [counts, setCounts] = useState<SchoolRosterCounts | null>(null);
@@ -258,6 +261,7 @@ export function OverviewView() {
       .then((sc) => {
         setBand(readOnboarding(sc).band);
         setSchoolName(sc.name?.trim() || null);
+        setSetUp(setUpAgo(readOnboarding(sc).completedAt, Date.now()));
       })
       .catch(() => setBand(undefined));
 
@@ -417,6 +421,8 @@ export function OverviewView() {
         <div className="flex items-start justify-between gap-5">
           <div className="min-w-0">
             <span className="text-[13px] text-nevo-near-black/55 xl:text-[13.5px]">
+              {/* D04's early header: "Set up 3 days ago · Wednesday, 10 July". */}
+              {phase === "ready" && early && setUp ? `Set up ${setUp.short} · ` : ""}
               {todayLine()}
             </span>
             <h2 className="mt-1 text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
@@ -464,7 +470,11 @@ export function OverviewView() {
                     Your board summary begins once lessons do
                   </p>
                   <p className="mt-4 max-w-[68ch] text-[15px] leading-[1.7] text-nevo-near-black/78">
-                    There&rsquo;s nothing to report on learning just yet
+                    {/* D04: "Brightgate Academy joined Nevo three days ago, so
+                        there's nothing to report..." - the when, if we have it. */}
+                    {setUp
+                      ? `${school} joined Nevo ${setUp.prose}, so there’s nothing to report on learning just yet`
+                      : "There’s nothing to report on learning just yet"}{" "}
                     &ndash; exactly as expected this early. As your teachers
                     begin running lessons, this space fills with a
                     plain-language account of how your students are getting on,
