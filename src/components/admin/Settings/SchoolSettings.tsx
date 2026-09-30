@@ -97,6 +97,8 @@ export function SchoolSettings() {
   const [location, setLocation] = useState("");
   const [retention, setRetention] = useState<RetentionPolicy>("contract");
   const [general, setGeneral] = useState<Phase>("idle");
+  /** Which half of the General save failed, when the first half landed. */
+  const [generalNote, setGeneralNote] = useState<string | null>(null);
 
   const [academic, setAcademic] = useState<AcademicConfig>({});
   const [calendar, setCalendar] = useState<Phase>("idle");
@@ -106,10 +108,19 @@ export function SchoolSettings() {
   const [labels, setLabels] = useState<Record<string, string>>({});
   const [taxonomy, setTaxonomy] = useState<Phase>("idle");
 
-  const hydrate = useCallback((s: School) => {
+  /*
+   * ONE HYDRATOR PER SECTION, AND A SAVE REFRESHES ONLY ITS OWN.
+   *
+   * Every save used to call one `hydrate()` that reset EVERY field on the page
+   * from the server's answer - so a proprietor who edited the school's name,
+   * then set the term dates and saved those first, watched the name snap back
+   * and lost it without a word. Each section is a form of its own (SCRUM-99:
+   * "Each section saves independently"), so each save now only re-reads the
+   * fields it wrote. The server side was never at risk: `saveAcademic` and
+   * `saveContact` merge into what is stored.
+   */
+  const hydrateGeneral = useCallback((s: School) => {
     const contact = readContact(s);
-    const acad = readAcademic(s);
-    setSchool(s);
     setName(s.name);
     setContactEmail(contact.contactEmail ?? "");
     setContactPhone(contact.contactPhone ?? "");
@@ -119,11 +130,29 @@ export function SchoolSettings() {
         ? (s.retentionPolicy as RetentionPolicy)
         : "contract",
     );
-    setAcademic(acad);
+  }, []);
+
+  const hydrateCalendar = useCallback((s: School) => {
+    setAcademic(readAcademic(s));
+  }, []);
+
+  const hydrateTaxonomy = useCallback((s: School) => {
+    const acad = readAcademic(s);
     setLabels(acad.yearGroupLabels ?? {});
     setYearGroupLabels(acad.yearGroupLabels);
-    setLoad("ready");
   }, []);
+
+  /** First load only: every section from the one read. */
+  const hydrate = useCallback(
+    (s: School) => {
+      setSchool(s);
+      hydrateGeneral(s);
+      hydrateCalendar(s);
+      hydrateTaxonomy(s);
+      setLoad("ready");
+    },
+    [hydrateGeneral, hydrateCalendar, hydrateTaxonomy],
+  );
 
   useEffect(() => {
     schoolApi.get().then(hydrate).catch(() => setLoad("failed"));
@@ -148,21 +177,37 @@ export function SchoolSettings() {
 
   const saveGeneral = () => {
     setGeneral("saving");
+    setGeneralNote(null);
+    /*
+     * TWO WRITES, AND A FAILURE HAS TO SAY WHICH. The name and retention go
+     * first; if the contact details then fail, the first half is already
+     * saved - so "That didn't save. Nothing changed" would be false.
+     */
+    let firstSaved = false;
     schoolApi
       .update({ name: name.trim(), retentionPolicy: retention })
-      .then(() =>
-        schoolApi.saveContact({
+      .then(() => {
+        firstSaved = true;
+        return schoolApi.saveContact({
           contactEmail: contactEmail.trim(),
           contactPhone: contactPhone.trim(),
           location: location.trim(),
-        }),
-      )
+        });
+      })
       .then((s) => {
-        hydrate(s);
+        setSchool(s);
+        hydrateGeneral(s);
         setGeneral("saved");
         setTimeout(() => setGeneral("idle"), 2200);
       })
-      .catch(() => setGeneral("failed"));
+      .catch(() => {
+        setGeneralNote(
+          firstSaved
+            ? "The school's name and retention were saved, but the contact details weren't. Try saving again."
+            : null,
+        );
+        setGeneral("failed");
+      });
   };
 
   const saveCalendar = () => {
@@ -190,7 +235,8 @@ export function SchoolSettings() {
         termStartDates: termStartDatesFrom(academic.terms ?? []),
       })
       .then((s) => {
-        hydrate(s);
+        setSchool(s);
+        hydrateCalendar(s);
         setCalendar("saved");
         setTimeout(() => setCalendar("idle"), 2200);
       })
@@ -218,7 +264,8 @@ export function SchoolSettings() {
       // disagree with what is on screen.
       .saveAcademic({ yearGroupLabels: labels, taxonomyPreset: preset })
       .then((s) => {
-        hydrate(s);
+        setSchool(s);
+        hydrateTaxonomy(s);
         setTaxonomy("saved");
         setTimeout(() => setTaxonomy("idle"), 2200);
       })
@@ -343,7 +390,7 @@ export function SchoolSettings() {
           </p>
         ) : null}
 
-        <SaveRow phase={general} onSave={saveGeneral} />
+        <SaveRow phase={general} onSave={saveGeneral} failureNote={generalNote} />
       </SettingsSection>
 
       {/* --------------------------------------------------- ACADEMIC YEAR */}
