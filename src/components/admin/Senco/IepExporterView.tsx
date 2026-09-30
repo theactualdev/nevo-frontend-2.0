@@ -159,10 +159,15 @@ function iso(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-export function IepExporterView() {
+export function IepExporterView({
+  initialStudentId = "",
+}: {
+  /** The child to open on, from `?student=` - kept only if they are on the roster. */
+  initialStudentId?: string;
+} = {}) {
   const [phase, setPhase] = useState<Phase>("picking");
   const [students, setStudents] = useState<AdminStudentRow[]>([]);
-  const [studentId, setStudentId] = useState("");
+  const [studentId, setStudentId] = useState(initialStudentId);
   /** Distinct from "no students": one is a school, the other is a GET. */
   const [studentsFailed, setStudentsFailed] = useState(false);
   /** So a retry that fails again still visibly did something. */
@@ -220,6 +225,9 @@ export function IepExporterView() {
       .then((rows) => {
         setStudents(rows);
         setStudentsFailed(false);
+        // An id from the address that is not on this school's roster is not
+        // a child to preselect - the picker starts empty instead.
+        setStudentId((cur) => (rows.some((r) => r.id === cur) ? cur : ""));
       })
       .catch(() => {
         setStudents([]);
