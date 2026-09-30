@@ -335,7 +335,12 @@ export function TeacherDetailView({ teacherId }: { teacherId: string }) {
         <RemoveAccessSheet
           teacher={teacher}
           held={held}
-          onClose={() => setRemoving(false)}
+          onClose={(changed) => {
+            setRemoving(false);
+            // A partial hand-over moved some classes: re-read, so reopening
+            // plans from what is actually left.
+            if (changed) load();
+          }}
           onRemoved={() => router.push("/admin/teachers")}
         />
       ) : null}

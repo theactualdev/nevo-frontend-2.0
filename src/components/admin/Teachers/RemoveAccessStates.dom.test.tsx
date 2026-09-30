@@ -180,3 +180,54 @@ describe("a completed removal", () => {
     await waitFor(() => expect(onRemoved).toHaveBeenCalled(), { timeout: 3000 });
   });
 });
+
+describe("RemoveAccessSheet with nobody else to hand to", () => {
+  it("offers to remove them from a class they are Primary in, as the note says it can", async () => {
+    /*
+     * The note reads "You can still remove Folake from each class below".
+     * Primary rows had no remove option, so the commit stayed disabled behind
+     * that instruction with no way through.
+     */
+    list.mockResolvedValue([]);
+    const { container } = render(
+      <RemoveAccessSheet teacher={teacher} held={held} onClose={() => {}} onRemoved={() => {}} />,
+    );
+    await waitFor(() => expect(visibleText(container)).toMatch(/no one else active/i));
+
+    const select = container.querySelector("select") as HTMLSelectElement;
+    const options = Array.from(select.options).map((o) => o.textContent);
+    expect(options.join("|")).toMatch(/Just remove Adeyemi from this class/);
+  });
+});
+
+describe("RemoveAccessSheet after a partial hand-over", () => {
+  it("tells the page something moved, so reopening plans from what is left", async () => {
+    const two: AssignedClass[] = [
+      held[0],
+      { ...held[0], assignmentId: "a2", classId: "c2", className: "JSS 2B" } as AssignedClass,
+    ];
+    list.mockResolvedValue([other()]);
+    // The first class moves; the second fails.
+    reassign.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("500"));
+    const onClose = vi.fn();
+    const { container } = render(
+      <RemoveAccessSheet teacher={teacher} held={two} onClose={onClose} onRemoved={() => {}} />,
+    );
+    await waitFor(() => expect(container.querySelectorAll("select").length).toBe(2));
+    for (const s of Array.from(container.querySelectorAll("select"))) {
+      await waitFor(() => expect((s as HTMLSelectElement).options.length).toBeGreaterThan(1));
+      fireEvent.change(s, { target: { value: "t2" } });
+    }
+    const commit = Array.from(container.querySelectorAll("button")).find((b) =>
+      /Reassign and remove access/.test(b.textContent ?? ""),
+    )!;
+    fireEvent.click(commit);
+
+    await waitFor(() => expect(visibleText(container)).toMatch(/1 of 2 classes were handed over/));
+    const close = Array.from(container.querySelectorAll("button")).find(
+      (b) => (b.textContent ?? "").trim() === "Close",
+    )!;
+    fireEvent.click(close);
+    expect(onClose).toHaveBeenCalledWith(true);
+  });
+});

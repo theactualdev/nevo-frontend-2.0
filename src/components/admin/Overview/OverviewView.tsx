@@ -296,6 +296,22 @@ export function OverviewView() {
   }, [load]);
 
   /*
+   * The board summary's own retry. Only the compliance card had one, so a
+   * failed summary said "we couldn't load it" and offered nothing but a
+   * page reload - which re-runs every read on the page for one card.
+   */
+  const retryNarrative = () => {
+    setNarrativeFailed(false);
+    schoolApi
+      .narrative()
+      .then((n) => {
+        setNarrative(n);
+        setNarrativeFailed(false);
+      })
+      .catch(() => setNarrativeFailed(true));
+  };
+
+  /*
    * "Copy for board pack". Three states, because the browser gets a vote:
    * `navigator.clipboard` is absent on an insecure origin and rejects when the
    * page is not focused or the permission is refused, and the frame's handler
@@ -471,11 +487,20 @@ export function OverviewView() {
                       ) : null}
                     </>
                   ) : narrativeFailed ? (
-                    <p className="mt-4 max-w-[68ch] text-[15px] leading-[1.7] text-nevo-near-black/62">
-                      We couldn&rsquo;t load your summary just now. Nothing has
-                      changed for {school} &ndash; the figures below are still
-                      live.
-                    </p>
+                    <>
+                      <p className="mt-4 max-w-[68ch] text-[15px] leading-[1.7] text-nevo-near-black/62">
+                        We couldn&rsquo;t load your summary just now. Nothing has
+                        changed for {school} &ndash; the figures below are still
+                        live.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={retryNarrative}
+                        className="mt-2 cursor-pointer text-[13.5px] font-semibold text-nevo-navy hover:underline"
+                      >
+                        Try again
+                      </button>
+                    </>
                   ) : (
                     <div
                       aria-hidden

@@ -131,6 +131,14 @@ export function ReportsView() {
   const [outcomes, setOutcomes] = useState<OutcomePeriod[]>([]);
   const [mastery, setMastery] = useState<SchoolConceptMastery[]>([]);
   const [transformation, setTransformation] = useState<TransformationMetrics | null>(null);
+  /*
+   * Their own failures, like the outcomes read. Both were `.catch(() =>
+   * undefined)`, so a failed read looked exactly like an empty one and the
+   * section silently disappeared - an admin could not tell "nothing yet" from
+   * "we could not ask".
+   */
+  const [masteryFailed, setMasteryFailed] = useState(false);
+  const [transformationFailed, setTransformationFailed] = useState(false);
 
   const load = useCallback(() => {
     // School health answers first because it carries the schoolId the other
@@ -150,12 +158,18 @@ export function ReportsView() {
           .catch(() => setOutcomesFailed(true));
         analyticsApi
           .getSchoolMastery(h.schoolId)
-          .then(setMastery)
-          .catch(() => undefined);
+          .then((m) => {
+            setMastery(m);
+            setMasteryFailed(false);
+          })
+          .catch(() => setMasteryFailed(true));
         analyticsApi
           .getTransformationMetrics()
-          .then(setTransformation)
-          .catch(() => undefined);
+          .then((t) => {
+            setTransformation(t);
+            setTransformationFailed(false);
+          })
+          .catch(() => setTransformationFailed(true));
       })
       .catch((err: unknown) => setPhase(failureKind(err)));
   }, []);
@@ -333,6 +347,17 @@ export function ReportsView() {
                 )}
               </div>
             )}
+
+            {masteryFailed ? (
+              <div className={cn(CARD, "mt-5 px-6 py-[22px]")}>
+                <ReadFailed what="understanding and reading by concept" onRetry={load} />
+              </div>
+            ) : null}
+            {transformationFailed ? (
+              <div className={cn(CARD, "mt-5 px-6 py-[22px]")}>
+                <ReadFailed what="how much Nevo adapted" onRetry={load} />
+              </div>
+            ) : null}
 
             {masteryRows.length > 0 ? (
               <div className={cn(CARD, "mt-5 px-6 py-[26px]")}>
