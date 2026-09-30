@@ -6,6 +6,13 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { authApi, teamApi } from "@/lib/api";
 import { invitesApi } from "@/lib/api/invites";
+import {
+  DOOR_HREF,
+  DOOR_LABEL,
+  doorForRole,
+  knownRole,
+} from "@/lib/auth/consoleDoor";
+import { clearSession } from "@/lib/auth/session";
 
 /**
  * Set Password (`Nevo Set Password`) - one component behind two flows:
@@ -33,6 +40,24 @@ import { invitesApi } from "@/lib/api/invites";
  */
 
 const SUCCESS_HOLD_MS = 1600;
+
+/** The staff consoles this form can finish in. */
+type StaffDoor = "teacher" | "admin";
+
+/**
+ * Where each console starts - the same homes `proxy.ts` sends a signed-in
+ * teacher or admin to. `/admin` picks the persona home from the caller's
+ * scopes itself.
+ */
+const CONSOLE_HOME: Record<StaffDoor, string> = {
+  teacher: "/teacher/dashboard",
+  admin: "/admin",
+};
+
+const RESET_HREF: Record<StaffDoor, string> = {
+  teacher: "/auth/teacher/reset",
+  admin: "/auth/admin/reset",
+};
 
 const REQUIREMENTS = [
   { label: "At least 8 characters", test: (p: string) => p.length >= 8 },
@@ -120,12 +145,30 @@ export function SetPasswordForm({
   mode,
   email,
   school,
+  door = "teacher",
+  signInHref,
+  resetHref,
 }: {
   mode: "activation" | "reset";
   /** Activation only: the invite names the account. A reset link does not,
    *  and nothing resolves an opaque reset token to an address. */
   email?: string;
   school?: string;
+  /**
+   * WHOSE FORM THIS IS - it was the teacher's whatever route rendered it.
+   *
+   * Every destination and one sentence were hardcoded to the teacher console,
+   * so an invited admin was told "Your teacher account is active" and sent to
+   * the teacher door, and an admin's reset finished there too. The admin
+   * routes say so now. It decides where a failed sign-in hop and a reset
+   * finish; a successful sign-in goes by the role the server returned, which
+   * is the better answer when there is one.
+   */
+  door?: StaffDoor;
+  /** Where "sign in" means on this route. Defaults to the door's own. */
+  signInHref?: string;
+  /** Where an expired reset link recovers. Defaults to the door's own. */
+  resetHref?: string;
 }) {
   const router = useRouter();
   const [password, setPassword] = useState("");
@@ -134,6 +177,10 @@ export function SetPasswordForm({
   const [phase, setPhase] = useState<"form" | "saving" | "done">("form");
   const [error, setError] = useState("");
   const [landing, setLanding] = useState<"console" | "signin">("console");
+  /** The console they turned out to belong to - what the success line names. */
+  const [arrivedAs, setArrivedAs] = useState<StaffDoor>(door);
+  const signInAt = signInHref ?? DOOR_HREF[door];
+  const resetAt = resetHref ?? RESET_HREF[door];
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
@@ -157,13 +204,13 @@ export function SetPasswordForm({
   const s = strength(password);
 
   /** Where the success screen is heading - the console needs a live session. */
-  const finish = (next: "console" | "signin") => {
+  const finish = (next: "console" | "signin", as: StaffDoor = door) => {
     setLanding(next);
+    setArrivedAs(as);
     setPhase("done");
     timers.current.push(
       setTimeout(
-        () =>
-          router.push(next === "console" ? "/teacher/dashboard" : "/auth/teacher"),
+        () => router.push(next === "console" ? CONSOLE_HOME[as] : signInAt),
         SUCCESS_HOLD_MS,
       ),
     );
@@ -187,9 +234,12 @@ export function SetPasswordForm({
       } catch {
         // A rejected reset token is almost always an expired one, and that
         // screen already offers a way forward.
-        router.push("/auth/teacher/reset?expired=1");
+        router.push(`${resetAt}?expired=1`);
         return;
       }
+      // Whoever was signed in here is not who the door should greet: the
+      // sign-in screen bounces a live staff session straight into its console.
+      clearSession();
       finish("signin");
       return;
     }
@@ -236,6 +286,18 @@ export function SetPasswordForm({
       return;
     }
 
+    /*
+     * END WHATEVER SESSION THIS DEVICE WAS HOLDING.
+     *
+     * It belongs to somebody else - the account that just activated has never
+     * had one. Left in place, every route below that ends at the sign-in door
+     * was bounced by `proxy.ts` into the PREVIOUS teacher's console, because
+     * a signed-in teacher has no use for their own door. On a shared staffroom
+     * machine that is a new colleague landing in someone else's classes. The
+     * student hand-over ends the session the same way, and for the same reason.
+     */
+    clearSession();
+
     // The account is active from here on. Accepting returns no session
     // (AcceptInvitationResponse is role/schoolId/userId), so sign in to
     // reach the console; if that hop fails it is not an activation failure
@@ -249,8 +311,17 @@ export function SetPasswordForm({
       return;
     }
     try {
-      await authApi.loginPassword({ email: inviteEmail, password });
-      finish("console");
+      const login = await authApi.loginPassword({ email: inviteEmail, password });
+      // The role the server returned decides the console, not the route: an
+      // admin invite from before the admin route existed still lands here.
+      const as = doorForRole(knownRole(login.role));
+      if (as === "teacher" || as === "admin") {
+        finish("console", as);
+        return;
+      }
+      // No staff console serves this role; do not carry its session anywhere.
+      clearSession();
+      finish("signin");
     } catch {
       finish("signin");
     }
@@ -271,8 +342,8 @@ export function SetPasswordForm({
           {!activation
             ? "You can now sign in with your new password."
             : landing === "console"
-              ? "Your teacher account is active."
-              : "Your teacher account is active. Sign in to get started."}
+              ? `Your ${DOOR_LABEL[arrivedAs]} account is active.`
+              : `Your ${DOOR_LABEL[arrivedAs]} account is active. Sign in to get started.`}
         </p>
         <span className="mt-[26px] flex items-center gap-2.5 text-[13.5px] text-nevo-near-black/55">
           <span

@@ -87,7 +87,14 @@ export function TeacherPasswordReset({
   if (token && !expired) {
     // No email, no school: the reset token is opaque and nothing resolves it
     // to an account, so naming one would mean naming a stranger's.
-    return <SetPasswordForm mode="reset" />;
+    // The links go through, or an admin's reset finished on the teacher door.
+    return (
+      <SetPasswordForm
+        mode="reset"
+        signInHref={signInHref}
+        resetHref={resetHref}
+      />
+    );
   }
 
   // Failure - the link aged out. Always a way forward.

@@ -613,17 +613,22 @@ export interface ClassInsightsNarrative {
 
 export const classInsightsApi = {
   /**
-   * Shared misconceptions. `minimumStudents` filters out one-offs.
+   * Shared misconceptions - the ones enough children share to be worth naming.
    *
-   * THREE IS THE FLOOR, and it is the server's, not a preference: the spec
-   * constrains this parameter to `minimum: 3` (default 3, max 50). We sent 2,
-   * so every single request 422'd and C09's "a shared sticking point" section
-   * has never rendered for any class since it was written. Do not lower it.
+   * `minimumStudents` IS NOT SENT, and that is the fix rather than an omission.
+   * It is the small-cell privacy floor: how many children must share a
+   * misconception before a teacher is told about it. Rule 3 - the engine owns
+   * the cutoffs - makes that the server's number, and the spec gives it a
+   * default for exactly this reason (min 3, default 3, max 50).
+   *
+   * This sent 2 first, which 422'd on every request, so the section never
+   * rendered. Then it pinned 3, which works today and would silently override
+   * the day backend raises the default to protect smaller classes - the one
+   * change here that has to reach every screen without a client release.
+   * Omitted, the server's default is the only number in play.
    */
-  misconceptions: (classId: string, minimumStudents = 3) =>
-    api.get<ClassMisconception[]>(`/api/misconceptions/class/${classId}`, {
-      params: { minimumStudents },
-    }),
+  misconceptions: (classId: string) =>
+    api.get<ClassMisconception[]>(`/api/misconceptions/class/${classId}`),
 
   mastery: (classId: string) =>
     api.get<ClassMasteryRow[]>(`/api/mastery/class/${classId}`),

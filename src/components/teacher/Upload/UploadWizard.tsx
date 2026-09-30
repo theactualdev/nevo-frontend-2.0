@@ -408,6 +408,26 @@ export function UploadWizard() {
     timer.current = setTimeout(tick, BLOCK_STAGE_MS);
   };
 
+  /**
+   * "Try again" after the CONNECTION failed - never a new upload when one exists.
+   *
+   * Both of these used to start over: the fallback resent the file, staging a
+   * second copy of a parse that had very likely finished server-side, and the
+   * unit card reopened the picker. With an upload id the right move is to ask
+   * about THAT upload again. Only when the create itself never landed is there
+   * nothing to ask about, and then the same file goes again - the teacher is
+   * not sent to find it a second time for a failure that was ours.
+   */
+  const tryAgain = () => {
+    if (staged.uploadId && staged.failureKind === "request") {
+      staged.resume();
+      return;
+    }
+    const f = lastFile.current;
+    if (f) startFile(f);
+    else setPhase("file");
+  };
+
   const reset = () => {
     stopTimer();
     staged.reset();
@@ -542,12 +562,7 @@ export function UploadWizard() {
           onBack={() => setPhase("file")}
           onTryAnother={() => setPhase("file")}
           onContinueAnyway={() => setPhase("blockParsed")}
-          onRetrySameFile={() => {
-            // Read at click time, never during render.
-            const f = lastFile.current;
-            if (f) startFile(f);
-            else setPhase("file");
-          }}
+          onRetrySameFile={tryAgain}
         />
       )}
 
@@ -774,10 +789,16 @@ export function UploadWizard() {
           )}
 
           {/* A REAL staged upload takes over the block path. `ParseProgress`
-              keeps driving the signed-out demo, which still walks its beats. */}
-          {phase === "processing" && isBlock && staged.uploadId && (
+              keeps driving the signed-out demo, which still walks its beats.
+
+              A FAILED ONE TAKES IT OVER TOO, upload id or not. A unit whose
+              file never landed has no id, so it fell through to the demo
+              ladder below - stuck on its first rung for ever, over a failure
+              nobody was told about. */}
+          {phase === "processing" && isBlock && (staged.uploadId || staged.failed) && (
             <div className="w-full">
-              {staged.structure &&
+              {staged.uploadId &&
+              staged.structure &&
               (staged.status === "ready" || staged.status === "confirmed") ? (
                 <>
                   {/*
@@ -867,6 +888,10 @@ export function UploadWizard() {
                   <button
                     type="button"
                     onClick={() => {
+                      if (staged.failureKind === "request") {
+                        tryAgain();
+                        return;
+                      }
                       staged.reset();
                       setPhase("file");
                     }}
@@ -912,7 +937,7 @@ export function UploadWizard() {
             </div>
           )}
 
-          {phase === "processing" && isBlock && !staged.uploadId && (
+          {phase === "processing" && isBlock && !staged.uploadId && !staged.failed && (
             <ParseProgress stage={parseStage} />
           )}
 

@@ -369,8 +369,10 @@ export function ParseFallback({
             <div className="mt-[22px] flex flex-wrap items-center justify-center gap-3">
               <button
                 type="button"
-                /* "Try again" resends the same file. It used to reopen the
-                   picker, which contradicted the sentence above it. */
+                /* "Try again" asks about the same upload again, or resends
+                   the same file when it never landed - the wizard decides.
+                   It used to reopen the picker, which contradicted the
+                   sentence above it. */
                 onClick={onRetrySameFile}
                 className="inline-flex cursor-pointer items-center gap-2 rounded-[10px] bg-nevo-navy px-[18px] py-[11px] text-sm font-semibold text-nevo-cream transition-[filter] hover:brightness-93"
               >

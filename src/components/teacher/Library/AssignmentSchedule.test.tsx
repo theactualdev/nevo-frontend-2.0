@@ -459,3 +459,72 @@ describe("a child who has already finished", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+/**
+ * "TRY THE REST" REPEATS WHAT FAILED, NOT A CANCEL.
+ *
+ * The audit's most severe finding. The retry was hardwired to cancel, so a
+ * partial DATE change or a partial RESTORE, retried, cancelled the lesson for
+ * the children whose write had failed. Only the cancel retry was tested -
+ * which is exactly the one case the hardwiring got right.
+ */
+describe("finishing a write that only partly landed", () => {
+  it("retries a partial date change as a date change", async () => {
+    applyToAssignments.mockResolvedValue({ ok: ["a-1", "a-2"], failed: ["a-3"] });
+    render(<AssignmentSchedule assignments={CLASS_OF_THREE} />);
+    fireEvent.click(screen.getByRole("button", { name: /Change dates/i }));
+    fireEvent.change(screen.getByLabelText(/Due/i), { target: { value: "2026-11-01" } });
+    fireEvent.click(screen.getByRole("button", { name: /Save dates/i }));
+
+    applyToAssignments.mockClear();
+    fireEvent.click(await screen.findByRole("button", { name: /Try the rest/i }));
+
+    expect(applyToAssignments).toHaveBeenCalledTimes(1);
+    expect(applyToAssignments).toHaveBeenCalledWith(
+      ["a-3"],
+      expect.objectContaining({ dueAt: "2026-11-01T00:00:00.000Z" }),
+    );
+    expect(applyToAssignments).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ status: "cancelled" }),
+    );
+  });
+
+  it("retries a partial restore as a restore", async () => {
+    const CANCELLED = CLASS_OF_THREE.map((a) => ({ ...a, status: "cancelled" }));
+    applyToAssignments.mockResolvedValue({ ok: ["a-1"], failed: ["a-2", "a-3"] });
+    render(<AssignmentSchedule assignments={CANCELLED} />);
+    fireEvent.click(screen.getByRole("button", { name: /Set it again/i }));
+
+    applyToAssignments.mockClear();
+    fireEvent.click(await screen.findByRole("button", { name: /Try the rest/i }));
+
+    expect(applyToAssignments).toHaveBeenCalledWith(["a-2", "a-3"], { status: "assigned" });
+  });
+
+  it("still retries a partial cancel as a cancel", async () => {
+    applyToAssignments.mockResolvedValue({ ok: ["a-1", "a-2"], failed: ["a-3"] });
+    render(<AssignmentSchedule assignments={CLASS_OF_THREE} />);
+    openConfirm();
+    fireEvent.click(screen.getByRole("button", { name: /Yes, cancel it/i }));
+
+    applyToAssignments.mockClear();
+    fireEvent.click(await screen.findByRole("button", { name: /Try the rest/i }));
+
+    expect(applyToAssignments).toHaveBeenCalledWith(["a-3"], { status: "cancelled" });
+  });
+
+  it("reports the retried date change honestly when it lands", async () => {
+    applyToAssignments
+      .mockResolvedValueOnce({ ok: ["a-1", "a-2"], failed: ["a-3"] })
+      .mockResolvedValueOnce({ ok: ["a-3"], failed: [] });
+    render(<AssignmentSchedule assignments={CLASS_OF_THREE} />);
+    fireEvent.click(screen.getByRole("button", { name: /Change dates/i }));
+    fireEvent.change(screen.getByLabelText(/Due/i), { target: { value: "2026-11-01" } });
+    fireEvent.click(screen.getByRole("button", { name: /Save dates/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /Try the rest/i }));
+
+    expect(await screen.findByText(/Dates updated/)).toBeInTheDocument();
+    expect(screen.queryByText(/Cancelled/)).not.toBeInTheDocument();
+  });
+});

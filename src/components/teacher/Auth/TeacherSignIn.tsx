@@ -1,11 +1,18 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { authApi } from "@/lib/api";
+import {
+  DOOR_HREF,
+  DOOR_LABEL,
+  doorForRole,
+  knownRole,
+  type ConsoleDoor,
+} from "@/lib/auth/consoleDoor";
 import { classifyLoginFailure } from "@/lib/auth/loginFailure";
 import { useAuth } from "@/hooks";
-import type { UserRole } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 /**
@@ -62,6 +69,12 @@ const SSO_UNAVAILABLE_MSG =
   "School sign-in isn't set up for Nevo yet. Use your email and password for now - your school admin can tell you when that changes.";
 const UNREACHABLE_MSG =
   "We couldn't reach your school's sign-in right now. Nothing on your end - try again in a moment.";
+/**
+ * For a role no door serves. The admin door's sentence, word for word - the
+ * two doors refuse the same way.
+ */
+const WRONG_DOOR_MSG =
+  "Those details are right, but this account can’t be used to sign in here. Check with whoever set up your Nevo account.";
 
 type Phase = "idle" | "signing" | "error" | "success";
 
@@ -113,6 +126,12 @@ export function TeacherSignIn() {
   const [showPw, setShowPw] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
   const [errMsg, setErrMsg] = useState("");
+  /**
+   * Where they belong instead, when the details were right for a different
+   * console. Null for every other failure, and for a role no door serves -
+   * `WRONG_DOOR_MSG` covers that one.
+   */
+  const [wrongDoor, setWrongDoor] = useState<ConsoleDoor | null>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
@@ -132,6 +151,7 @@ export function TeacherSignIn() {
   const submit = () => {
     if (!canSubmit || phase === "signing" || phase === "success") return;
     setPhase("signing");
+    setWrongDoor(null);
     const live = authApi.loginPassword({ email: email.trim(), password: pw });
     const cap = new Promise<never>((_, reject) =>
       timers.current.push(
@@ -140,9 +160,30 @@ export function TeacherSignIn() {
     );
     Promise.race([live, cap])
       .then((session) => {
+        /*
+         * REFUSE AT THE DOOR, NOT AFTER IT - what the admin door has done
+         * since 23 Sep, and this one never did.
+         *
+         * Any role was let in: an admin's details were stored as a session,
+         * shown "You're in", and pushed at `/teacher/dashboard` - where
+         * `proxy.ts` bounced them back here with the session still live, and
+         * round again. `doorForRole` is built on the guard's own rule, so the door
+         * and the guard cannot disagree about who belongs.
+         */
+        const role = knownRole(session.role);
+        const belongs = doorForRole(role);
+        if (belongs !== "teacher" || !role) {
+          setWrongDoor(belongs);
+          setErrMsg(WRONG_DOOR_MSG);
+          setPhase("error");
+          // The login SUCCEEDED, so a session exists. Someone told "not here"
+          // must not leave carrying one; `logout` clears locally regardless.
+          void authApi.logout().catch(() => {});
+          return;
+        }
         signIn({
           id: session.userId,
-          role: session.role as UserRole,
+          role,
           schoolId: "",
           method: "manual",
         });
@@ -324,7 +365,21 @@ export function TeacherSignIn() {
                   </svg>
                 </span>
                 <span className="text-[14px] leading-[1.5] text-nevo-near-black">
-                  {errMsg}
+                  {wrongDoor ? (
+                    <>
+                      Those details are right, but this is the teacher sign-in.
+                      Your account is a {DOOR_LABEL[wrongDoor]} account &ndash;{" "}
+                      <Link
+                        href={DOOR_HREF[wrongDoor]}
+                        className="cursor-pointer font-semibold text-nevo-navy underline underline-offset-2"
+                      >
+                        sign in as a {DOOR_LABEL[wrongDoor]}
+                      </Link>
+                      .
+                    </>
+                  ) : (
+                    errMsg
+                  )}
                 </span>
               </div>
             )}

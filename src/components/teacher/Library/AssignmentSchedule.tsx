@@ -53,9 +53,27 @@ type Group = {
 
 type Busy = { key: string; kind: "dates" | "cancel" } | null;
 
+/**
+ * WHAT A RETRY REPEATS - the action that produced the partial result.
+ *
+ * "Try the rest" used to call `cancelGroup` whatever it was retrying. So a
+ * teacher who changed a class's dates, saw "Updated for 5 of 7 students" and
+ * pressed Try the rest CANCELLED the lesson for the other two children - the
+ * opposite of what they asked for, on the one control whose whole job is to
+ * finish what they asked for. Restore had the same flaw.
+ *
+ * REQUIRED on every partial outcome, so a new action cannot produce one
+ * without saying how to finish it. That is the whole fix: the button no longer
+ * decides what to do; the outcome tells it.
+ */
+type Again =
+  | { action: "cancel" }
+  | { action: "restore" }
+  | { action: "dates"; availableFrom: string | null; dueAt: string | null };
+
 type Outcome =
   | { key: string; kind: "done"; text: string }
-  | { key: string; kind: "partial"; text: string; retry: string[] }
+  | { key: string; kind: "partial"; text: string; retry: string[]; again: Again }
   | { key: string; kind: "failed"; text: string }
   | null;
 
@@ -111,6 +129,7 @@ export function AssignmentSchedule({
         kind: "partial",
         text: `Cancelled for ${ok.length} of ${g.ids.length} students. The rest still have it.`,
         retry: failed,
+        again: { action: "cancel" },
       });
     }
   }
@@ -136,6 +155,7 @@ export function AssignmentSchedule({
               kind: "partial",
               text: `Set again for ${ok.length} of ${g.ids.length} students.`,
               retry: failed,
+              again: { action: "restore" },
             },
     );
   }
@@ -163,8 +183,17 @@ export function AssignmentSchedule({
         kind: "partial",
         text: `Updated for ${ok.length} of ${g.ids.length} students. The rest keep the old dates.`,
         retry: failed,
+        again: { action: "dates", availableFrom, dueAt },
       });
     }
+  }
+
+  /** Finish a partial write: the same action, on only the rows that failed. */
+  function tryTheRest(g: Group, retry: string[], again: Again) {
+    const rest = { ...g, ids: retry, students: retry.length };
+    if (again.action === "cancel") return cancelGroup(rest);
+    if (again.action === "restore") return restoreGroup(rest);
+    return saveDates(rest, again.availableFrom, again.dueAt);
   }
 
   return (
@@ -304,9 +333,7 @@ export function AssignmentSchedule({
                   {said.kind === "partial" && (
                     <button
                       type="button"
-                      onClick={() =>
-                        void cancelGroup({ ...g, ids: said.retry, students: said.retry.length })
-                      }
+                      onClick={() => void tryTheRest(g, said.retry, said.again)}
                       className="ml-2 cursor-pointer font-semibold text-nevo-navy underline underline-offset-2"
                     >
                       Try the rest

@@ -2,9 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { ApiError } from "@/lib/api/client";
 
-const { push, loginPassword, signIn } = vi.hoisted(() => ({
+const { push, loginPassword, logout, signIn } = vi.hoisted(() => ({
   push: vi.fn(),
   loginPassword: vi.fn(),
+  logout: vi.fn(),
   signIn: vi.fn(),
 }));
 
@@ -12,7 +13,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, replace: push, prefetch: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
 }));
-vi.mock("@/lib/api/auth", () => ({ authApi: { loginPassword } }));
+vi.mock("@/lib/api/auth", () => ({ authApi: { loginPassword, logout } }));
 // The screen reads `signIn` off the auth context. Mocking the hook is lighter
 // than wrapping every render in a provider, and nothing here exercises it.
 vi.mock("@/hooks", () => ({ useAuth: () => ({ signIn, status: "guest", user: null, signOut: vi.fn() }) }));
@@ -37,6 +38,7 @@ import { TeacherSignIn } from "./TeacherSignIn";
 beforeEach(() => {
   push.mockReset();
   loginPassword.mockReset();
+  logout.mockReset().mockResolvedValue(undefined);
   signIn.mockReset();
 });
 
@@ -217,5 +219,93 @@ describe("the school eyebrow", () => {
     expect(
       screen.getByText(/Sign in to your teacher console/i),
     ).toBeInTheDocument();
+  });
+});
+
+/**
+ * THE TEACHER DOOR LET ANY ROLE IN.
+ *
+ * An admin signing in here got "You're in", a stored session, and a push to
+ * `/teacher/dashboard` - where `proxy.ts` bounced them straight back here
+ * with that session still live. The admin door has refused at the door since
+ * 23 Sep; this one never did.
+ */
+describe("somebody whose account belongs at another door", () => {
+  const signInWith = (role: string) => {
+    loginPassword.mockResolvedValueOnce({
+      accessToken: "tok",
+      expiresAt: "",
+      userId: "u-1",
+      role,
+    });
+    render(<TeacherSignIn />);
+    fireEvent.change(screen.getByLabelText("Email"), {
+      target: { value: "deputy@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText("Password"), {
+      target: { value: "a-password" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^Sign in$/i }));
+  };
+
+  it("is told where they belong, with the way there", async () => {
+    signInWith("senco_admin");
+
+    expect(
+      await screen.findByText(/Your account is a school admin account/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /sign in as a school admin/i }),
+    ).toHaveAttribute("href", "/auth/admin");
+  });
+
+  it("is never signed in here or sent on, even after the success beat", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      signInWith("other_admin");
+      await screen.findByText(/this is the teacher sign-in/);
+      vi.advanceTimersByTime(5000);
+
+      expect(signIn).not.toHaveBeenCalled();
+      expect(push).not.toHaveBeenCalled();
+      expect(screen.queryByText(/You.re in/i)).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not leave carrying the session the login made", async () => {
+    signInWith("senco_admin");
+    await screen.findByText(/this is the teacher sign-in/);
+
+    expect(logout).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends a student to the student door", async () => {
+    signInWith("student");
+
+    expect(
+      await screen.findByRole("link", { name: /sign in as a student/i }),
+    ).toHaveAttribute("href", "/auth/sign-in");
+  });
+
+  it("names no door for a role none serves", async () => {
+    signInWith("parent_guardian");
+
+    expect(
+      await screen.findByText(/this account can.t be used to sign in here/),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /sign in as/i })).not.toBeInTheDocument();
+    expect(logout).toHaveBeenCalledTimes(1);
+  });
+
+  it("still lets a teacher through", async () => {
+    signInWith("teacher");
+
+    await vi.waitFor(() => expect(push).toHaveBeenCalledWith("/teacher/dashboard"), {
+      timeout: 3000,
+    });
+    expect(signIn).toHaveBeenCalledWith(expect.objectContaining({ role: "teacher" }));
+    expect(logout).not.toHaveBeenCalled();
   });
 });
