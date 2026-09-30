@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { classesApi, type AssignedClass } from "@/lib/api/classes";
+import { classesApi, type AdminClass, type AssignedClass } from "@/lib/api/classes";
+import { yearGroupLabel } from "@/lib/constants/yearGroups";
 import { teachersApi, type TeacherDetail, type TeacherSummary } from "@/lib/api/teachers";
 import { cn } from "@/lib/utils";
 import { isActive } from "./status";
@@ -70,11 +71,19 @@ type StaffRead = "loading" | "ready" | "failed";
 export function RemoveAccessSheet({
   teacher,
   held,
+  classes = [],
   onClose,
   onRemoved,
 }: {
   teacher: TeacherDetail;
   held: AssignedClass[];
+  /**
+   * The school's classes, for D06b's row meta - "Year 8 · 34 students" - which
+   * tells an admin which class they are handing over before they choose who
+   * takes it. The teacher page already holds them; a class it could not see
+   * simply shows no meta.
+   */
+  classes?: AdminClass[];
   /**
    * `changed` is true when any assignment moved before the sheet closed - a
    * partial hand-over. The parent must reload, or reopening the sheet builds
@@ -200,6 +209,11 @@ export function RemoveAccessSheet({
               <button type="button" onClick={apply} className={PRIMARY_BTN}>
                 Try again
               </button>
+              {/* SCRUM-40: "Primary 'Try again', secondary 'Close'." A failure with
+                  one way out holds the sheet open until it succeeds. */}
+              <button type="button" onClick={close} className={GHOST_BTN}>
+                Close
+              </button>
             </>
           ) : (
             <>
@@ -270,6 +284,11 @@ export function RemoveAccessSheet({
             </FailureLine>
             <button type="button" onClick={apply} className={PRIMARY_BTN}>
               Try again
+            </button>
+            {/* SCRUM-40: "Primary 'Try again', secondary 'Close'." A failure with
+                one way out holds the sheet open until it succeeds. */}
+            <button type="button" onClick={close} className={GHOST_BTN}>
+              Close
             </button>
           </>
         ) : ready ? (
@@ -351,8 +370,24 @@ export function RemoveAccessSheet({
               className="rounded-xl border-[1.5px] border-nevo-near-black/14 bg-nevo-cream-elevated px-4 py-3.5"
             >
               <div className="flex items-center gap-3">
-                <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-nevo-near-black">
-                  {h.className}
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate text-[15px] font-semibold text-nevo-near-black">
+                    {h.className}
+                  </span>
+                  {(() => {
+                    const info = classes.find((c) => c.id === h.classId);
+                    const meta = info
+                      ? [
+                          yearGroupLabel(info.yearGroup),
+                          `${info.studentCount} ${info.studentCount === 1 ? "student" : "students"}`,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")
+                      : null;
+                    return meta ? (
+                      <span className="truncate text-[13px] text-nevo-near-black/58">{meta}</span>
+                    ) : null;
+                  })()}
                 </span>
                 <RolePill role={h.role} />
               </div>
