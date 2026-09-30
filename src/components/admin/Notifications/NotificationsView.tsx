@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePermissions } from "@/hooks";
 import { notificationsApi, type Notification } from "@/lib/api/notifications";
+import { announceReadStateChanged } from "./readState";
 import { cn } from "@/lib/utils";
 import { CARD, PRIMARY_BTN, ROW_DIVIDER } from "../Roster/primitives";
 import { NotificationPreferences } from "./NotificationPreferences";
@@ -205,7 +206,7 @@ export function NotificationsView() {
     setAllRead(true);
     setWriteFailed("");
     setRows((prev) => prev.map((n) => ({ ...n, read: true })));
-    notificationsApi.markAllRead().catch(() => {
+    notificationsApi.markAllRead().then(announceReadStateChanged, () => {
       setAllRead(false);
       setRows((prev) =>
         prev.map((n) =>
@@ -218,23 +219,34 @@ export function NotificationsView() {
     });
   };
 
+  /*
+   * Its failure was swallowed, leaving the row painted read while the server
+   * still held it unread. Now it is put back and said, as mark-all does.
+   */
   const onRead = (id: string) => {
+    const wasUnread = rows.some((n) => n.notificationId === id && !n.read);
     setRows((prev) =>
       prev.map((n) => (n.notificationId === id ? { ...n, read: true } : n)),
     );
-    notificationsApi.markRead(id).catch(() => undefined);
+    notificationsApi.markRead(id).then(announceReadStateChanged, () => {
+      if (!wasUnread) return;
+      setRows((prev) =>
+        prev.map((n) => (n.notificationId === id ? { ...n, read: false } : n)),
+      );
+      setWriteFailed("mark that as read");
+    });
   };
 
   // Archive and Put back both remove the row from the view it is in, because
   // that view is defined by the flag they just changed.
   const onArchive = (id: string) => {
     setRows((prev) => prev.filter((n) => n.notificationId !== id));
-    notificationsApi.archive(id).catch(() => load(archived));
+    notificationsApi.archive(id).then(announceReadStateChanged, () => load(archived));
   };
 
   const onRestore = (id: string) => {
     setRows((prev) => prev.filter((n) => n.notificationId !== id));
-    notificationsApi.restore(id).catch(() => load(archived));
+    notificationsApi.restore(id).then(announceReadStateChanged, () => load(archived));
   };
 
   const filtering = Boolean(search.trim() || unreadOnly);
