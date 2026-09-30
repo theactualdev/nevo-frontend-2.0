@@ -11,7 +11,7 @@ import {
 import type { PermissionScope } from "@/lib/constants/permissions";
 import { cn } from "@/lib/utils";
 import { feedbackApi } from "@/lib/api/feedback";
-import { CheckIcon, PausedNote } from "../Roster/primitives";
+import { CheckIcon, CloseIcon, PausedNote } from "../Roster/primitives";
 import { useSetupGate } from "@/hooks";
 import { readOnboarding, schoolApi } from "@/lib/api/school";
 import { NoAccess, failureKind } from "../NoAccess";
@@ -42,12 +42,12 @@ import {
  *   pill (with the note about a school never locking itself out) cannot render
  * - no last-active timestamp, so the frame's "Active today" / "2 days ago"
  *   column has nothing behind it
- * - no school name, so the count line says "this school"
- * - no seat allowance, so the five is a constant we assert
- * All four are raised with backend rather than invented here.
+ * Both are raised with backend rather than invented here.
  *
- * TODO(api): PUT /admin/team/{id}/scopes is deployed and typed, but D03 draws
- * no affordance for changing an existing admin's access. Needs design.
+ * (Two more used to be listed. The SCHOOL NAME was never missing - the school
+ * record this screen already reads for the band carries it - and the seat
+ * allowance now follows that band. Editing an admin's access shipped on 30
+ * Sep - see `EditAccess`.)
  */
 
 const CARD = "rounded-xl bg-nevo-cream-elevated shadow-[0_2px_8px_rgba(0,0,0,0.06)]";
@@ -92,11 +92,16 @@ export function AdminTeamView() {
    * could not read it, and then nothing is asserted and nothing is blocked.
    */
   const [seats, setSeats] = useState<number | null>(null);
+  /** D03 names the school - "can administer Brightgate Academy". */
+  const [school, setSchool] = useState<string | null>(null);
 
   useEffect(() => {
     schoolApi
       .get()
-      .then((sc) => setSeats(adminSeatAllowance(readOnboarding(sc).band)))
+      .then((sc) => {
+        setSeats(adminSeatAllowance(readOnboarding(sc).band));
+        setSchool(sc.name?.trim() || null);
+      })
       .catch(() => setSeats(null));
   }, []);
 
@@ -156,13 +161,14 @@ export function AdminTeamView() {
         )}
 
         {phase === "ready" && team.length <= 1 && (
-          <JustYou member={team[0]} onInvite={() => setInviting(true)} />
+          <JustYou member={team[0]} school={school} onInvite={() => setInviting(true)} />
         )}
 
         {phase === "ready" && team.length > 1 && (
           <TeamList
             team={team}
             seats={seats}
+            school={school}
             onInvite={() => setInviting(true)}
             onEdit={setEditing}
           />
@@ -204,7 +210,7 @@ export function AdminTeamView() {
   );
 }
 
-function Heading({ count }: { count: number | null }) {
+function Heading({ count, school = null }: { count: number | null; school?: string | null }) {
   return (
     <>
       <h2 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
@@ -212,8 +218,7 @@ function Heading({ count }: { count: number | null }) {
       </h2>
       {count !== null && (
         <p className="mt-1.5 text-[15.5px] leading-[1.55] text-nevo-near-black/60">
-          {/* The team response carries no school name - see the docblock. */}
-          {`${count} ${count === 1 ? "person" : "people"} can administer this school`}
+          {`${count} ${count === 1 ? "person" : "people"} can administer ${school ?? "this school"}`}
         </p>
       )}
     </>
@@ -255,10 +260,13 @@ function InviteButton({
 function MemberRow({
   m,
   last,
+  you = false,
   onEdit,
 }: {
   m: TeamMember;
   last: boolean;
+  /** The signed-in admin's own row - D03's grey "You" beside the name. */
+  you?: boolean;
   /** Absent where this admin's access cannot be edited from here. */
   onEdit?: () => void;
 }) {
@@ -289,6 +297,11 @@ function MemberRow({
           <span className="truncate text-[15px] font-semibold text-nevo-near-black">
             {name}
           </span>
+          {you ? (
+            <span className="shrink-0 rounded-full bg-nevo-near-black/7 px-2 py-0.5 text-[10.5px] font-semibold text-nevo-near-black/50">
+              You
+            </span>
+          ) : null}
         </span>
         {m.email && (
           <span className="truncate text-[13px] text-nevo-near-black/55">
@@ -333,10 +346,13 @@ function MemberRow({
 function TeamList({
   team,
   seats,
+  school,
   onInvite,
   onEdit,
 }: {
   team: TeamMember[];
+  /** The school's name, or null when its record could not be read. */
+  school: string | null;
   /** The school's allowance, or null when it could not be read. */
   seats: number | null;
   onInvite: () => void;
@@ -374,7 +390,7 @@ function TeamList({
     <>
       <div className="flex items-start justify-between gap-6">
         <div className="min-w-0">
-          <Heading count={live.length} />
+          <Heading count={live.length} school={school} />
         </div>
         {/*
           * THE ACTION STAYS, ALWAYS. At the seat allowance this button was
@@ -399,7 +415,7 @@ function TeamList({
             {`All ${seats} admin accounts are in use`}
           </h3>
           <p className="mt-2 max-w-[60ch] text-sm leading-[1.6] text-nevo-near-black/66">
-            {`This school includes ${seats} admin accounts as standard.`}{" "}
+            {`${school ?? "This school"} includes ${seats} admin accounts as standard.`}{" "}
             Need another?
             We&rsquo;ll add it at no charge - just ask. Keeping the standing
             number small is a data-governance and security measure, not a
@@ -459,6 +475,7 @@ function TeamList({
             key={m.userId}
             m={m}
             last={i === team.length - 1}
+            you={m.userId === me}
             // Not your own row: taking your own Oversight away would lose the
             // page you are standing on, and the founder's lock needs a
             // founding flag the team response does not carry.
@@ -472,24 +489,27 @@ function TeamList({
 
 function JustYou({
   member,
+  school,
   onInvite,
 }: {
   member: TeamMember | undefined;
+  school: string | null;
   onInvite: () => void;
 }) {
+  const [me] = useState(() => getSession()?.userId ?? null);
   return (
     <>
       <h2 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
         Admin Team
       </h2>
       <p className="mt-1.5 max-w-[60ch] text-[15.5px] leading-[1.55] text-nevo-near-black/60">
-        It&rsquo;s just you for now &ndash; you have full oversight of this
-        school.
+        It&rsquo;s just you for now &ndash; you have full oversight of{" "}
+        {school ?? "this school"}.
       </p>
 
       {member && (
         <div className={cn(CARD, "mt-5 overflow-hidden")}>
-          <MemberRow m={member} last />
+          <MemberRow m={member} last you={member.userId === me} />
         </div>
       )}
 
@@ -529,6 +549,31 @@ function InvitePanel({
   const count = on.size;
   const valid = /.+@.+\..+/.test(email.trim()) && count > 0;
 
+  /*
+   * ONE WAY OUT, THREE DOORS: the close button, the backdrop and Escape, as
+   * every other sheet in the console has them. There was no close button at
+   * all, and the backdrop closed the panel even mid-send.
+   *
+   * Never while the invitation is being created - the write is in flight and
+   * its answer carries the only copy of the activation link. And once it
+   * exists, leaving is "Done": the list refreshes to show the new admin.
+   */
+  const close = () => {
+    if (phase === "sending") return;
+    if (phase === "sent") onSent();
+    else onCancel();
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || phase === "sending") return;
+      if (phase === "sent") onSent();
+      else onCancel();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [phase, onSent, onCancel]);
+
   const send = () => {
     if (!valid || phase !== "idle") return;
     setError("");
@@ -565,18 +610,30 @@ function InvitePanel({
   return (
     <div
       className="fixed inset-0 z-50 flex justify-end bg-nevo-near-black/28 backdrop-blur-[0.4px] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
-      onClick={onCancel}
+      onClick={close}
     >
       <div
         role="dialog"
         aria-modal="true"
+        aria-busy={phase === "sending"}
         aria-label="Invite a new admin"
         onClick={(e) => e.stopPropagation()}
         className="h-full w-full max-w-[560px] overflow-y-auto bg-nevo-cream px-[38px] py-[34px] shadow-[0_0_48px_rgba(0,0,0,0.22)] motion-safe:animate-in motion-safe:slide-in-from-right motion-safe:duration-200"
       >
-        <h2 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
-          Invite a new admin
-        </h2>
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
+            Invite a new admin
+          </h2>
+          <button
+            type="button"
+            onClick={close}
+            disabled={phase === "sending"}
+            aria-label="Close"
+            className="flex size-[34px] flex-none cursor-pointer items-center justify-center rounded-lg text-nevo-near-black transition-colors hover:bg-nevo-near-black/[0.06] disabled:cursor-default disabled:opacity-40"
+          >
+            <CloseIcon />
+          </button>
+        </div>
         <p className="mt-1.5 text-[15.5px] leading-[1.55] text-nevo-near-black/60">
           {/*
             * WAS: "They'll get an email to set a password and join."

@@ -1,4 +1,5 @@
 import type { PermissionScope } from "@/lib/constants/permissions";
+import { scopeName } from "../Team/adminScopes";
 
 /**
  * School Admin navigation model (`Nevo Admin Sidebar`).
@@ -103,22 +104,18 @@ export function activeNavLabel(pathname: string): string | null {
  * role and no name, so the job title half of the frame's "Proprietor · General
  * oversight" is not ours to write - but the scope half is real, and comes
  * straight from `permissions/me`.
+ *
+ * THE NAMES ARE D03'S CATALOGUE, NOT A COPY OF IT. This kept its own table -
+ * "General oversight", "Learning support", "IT & SSO" - while the invite sheet
+ * said "General Oversight", "SENCo / Learning Support", "IT / SSO". SCRUM-39's
+ * done-when: "Scope names are byte-identical between this screen, the sidebar
+ * and the invite sheet." One source makes that true by construction.
  */
-const SCOPE_LABELS: Record<PermissionScope, string> = {
-  oversight: "General oversight",
-  roster: "Roster",
-  curriculum: "Curriculum",
-  senco: "Learning support",
-  it_sso: "IT & SSO",
-  billing: "Billing",
-  teacher: "Teacher",
-};
-
 export function scopeSummary(scopes: PermissionScope[]): string {
   if (scopes.length === 0) return "No access yet";
-  if (scopes.length === 1) return SCOPE_LABELS[scopes[0]];
-  if (scopes.includes("oversight")) return "General oversight";
-  return `${SCOPE_LABELS[scopes[0]]} +${scopes.length - 1}`;
+  if (scopes.length === 1) return scopeName(scopes[0]);
+  if (scopes.includes("oversight")) return scopeName("oversight");
+  return `${scopeName(scopes[0])} +${scopes.length - 1}`;
 }
 
 /**
