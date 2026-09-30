@@ -25,9 +25,12 @@ import { billingApi, invoicePdfPath, type Invoice } from "@/lib/api/billing";
 export function InvoicePdfLink({
   invoice,
   className,
+  label = "PDF",
 }: {
   invoice: Invoice;
   className?: string;
+  /** "PDF" in a list row; the detail page's button says "Download PDF". */
+  label?: string;
 }) {
   const [state, setState] = useState<"" | "loading" | "failed">("");
   const path = invoicePdfPath(invoice.pdfUrl);
@@ -40,7 +43,7 @@ export function InvoicePdfLink({
         rel="noopener noreferrer"
         className={className}
       >
-        PDF
+        {label}
       </a>
     );
   }
@@ -68,7 +71,7 @@ export function InvoicePdfLink({
   return (
     <span className="flex shrink-0 flex-col items-end">
       <button type="button" onClick={fetchIt} className={className}>
-        {state === "loading" ? "Fetching…" : state === "failed" ? "Try again" : "PDF"}
+        {state === "loading" ? "Fetching…" : state === "failed" ? "Try again" : label}
       </button>
       {state === "failed" && (
         <span className="mt-0.5 text-[12px] text-nevo-near-black/55">

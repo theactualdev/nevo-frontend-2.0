@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
-import type { UpcomingCharge } from "@/lib/api/billing";
+import type { Invoice, UpcomingCharge } from "@/lib/api/billing";
 import { BillingView } from "./BillingView";
 
 /**
@@ -12,6 +12,7 @@ import { BillingView } from "./BillingView";
  */
 
 const upcoming = vi.fn();
+let rows: Invoice[] = [];
 
 vi.mock("@/lib/api/billing", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/billing")>();
@@ -43,7 +44,7 @@ vi.mock("@/lib/api/billing", async (importOriginal) => {
           currency: "NGN",
         },
       }),
-      invoices: async () => [],
+      invoices: async () => rows,
       receivingAccount: async () => ({
         bankName: "Kuda Bank",
         accountNumber: "1234567890",
@@ -66,7 +67,10 @@ const charge = (over: Partial<UpcomingCharge>): UpcomingCharge => ({
   ...over,
 });
 
-beforeEach(() => upcoming.mockReset());
+beforeEach(() => {
+  upcoming.mockReset();
+  rows = [];
+});
 
 describe("Billing's How to pay", () => {
   it("shows when an invoice is owed", async () => {
@@ -98,5 +102,32 @@ describe("Billing's How to pay", () => {
     const { container } = render(<BillingView />);
     await waitFor(() => expect(visibleText(container)).toMatch(/Plan options/));
     expect(visibleText(container)).not.toMatch(/\bD\d{2}[a-z]?\b/);
+  });
+});
+
+describe("Billing's invoice list", () => {
+  it("opens each invoice on its own page", async () => {
+    upcoming.mockResolvedValue(charge({ invoiceId: null, invoiceNumber: null, status: null }));
+    rows = [
+      {
+        id: "inv2",
+        invoiceNumber: "NEV-002",
+        issuedAt: "2026-09-01T00:00:00Z",
+        amount: "54825000.00",
+        status: "paid",
+        dueAt: "2026-10-01T00:00:00Z",
+        paidAt: "2026-09-12T00:00:00Z",
+        pdfUrl: "/api/v1/billing/invoices/sch1/NEV-002.pdf",
+        currency: "NGN",
+        periodLabel: null,
+        studentCount: null,
+        perStudentRate: null,
+        totalBeforeVat: null,
+        vatAmount: null,
+      },
+    ];
+    render(<BillingView />);
+    const link = await screen.findByRole("link", { name: "NEV-002" });
+    expect(link.getAttribute("href")).toBe("/admin/billing/invoices/inv2");
   });
 });
