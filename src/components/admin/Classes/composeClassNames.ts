@@ -28,7 +28,9 @@ import { collisionNote, findCollision } from "./duplicateName";
  */
 
 export interface ComposedClass {
-  /** The section as ticked — "A", "B". */
+  /** The year group it belongs to - a batch can span several. */
+  yearGroup: string;
+  /** The section or stream as ticked — "A", "Sciences". */
   section: string;
   /** What the class will be called. */
   name: string;
@@ -39,14 +41,35 @@ export interface ComposedClass {
 /** A, B, C … the sections a Nigerian secondary school actually uses. */
 export const SECTION_CHOICES = "ABCDEFGH".split("");
 
+/**
+ * D05's streams, for senior secondary: "SS 1 Sciences", "SS 1 Arts",
+ * "SS 1 Commercial". A stream is written after the year WITH a space, where a
+ * section letter sits flush - both exactly as the frame names them.
+ */
+export const STREAM_CHOICES = ["Sciences", "Arts", "Commercial"];
+
+/** How a year group divides: lettered sections, or named streams. */
+export type Division = "sections" | "streams";
+
+/**
+ * The frame's default per year: streams for SS 1-3, sections everywhere else.
+ * A default, not a rule - some schools letter their SS classes, some stream
+ * earlier - so the sheet lets a row switch.
+ */
+export function defaultDivision(yearGroup: string): Division {
+  return /^ss\d$/.test(yearGroup) ? "streams" : "sections";
+}
+
 export function composeClassNames({
   yearGroup,
   sections,
   existing,
+  division = "sections",
 }: {
   yearGroup: string;
   sections: readonly string[];
   existing: readonly AdminClass[];
+  division?: Division;
 }): ComposedClass[] {
   /*
    * THE YEAR GROUP MUST BE ONE THE SCHOOL ACTUALLY HAS, and `yearGroupLabel`
@@ -64,9 +87,10 @@ export function composeClassNames({
   if (!label) return [];
 
   return sections.map((section) => {
-    const name = `${label}${section}`;
+    const name = division === "streams" ? `${label} ${section}` : `${label}${section}`;
     const collided = findCollision(name, existing);
     return {
+      yearGroup,
       section,
       name,
       collision: collided ? collisionNote(collided) : null,
@@ -77,4 +101,32 @@ export function composeClassNames({
 /** What will actually be sent: everything that does not already exist. */
 export function sendable(composed: readonly ComposedClass[]): ComposedClass[] {
   return composed.filter((c) => !c.collision);
+}
+
+/**
+ * CL-04 across the whole school at once - D05's grid of year groups, each
+ * with its own sections or streams, composed into ONE preview and one send.
+ *
+ * A name composed twice in the same batch - two year groups a school has
+ * labelled alike - is marked on its second appearance, so the batch never
+ * asks the server to make one class twice.
+ */
+export function composeAcrossYears(
+  rows: readonly { yearGroup: string; division: Division; picked: readonly string[] }[],
+  existing: readonly AdminClass[],
+): ComposedClass[] {
+  const seen = new Set<string>();
+  return rows.flatMap((row) =>
+    composeClassNames({
+      yearGroup: row.yearGroup,
+      sections: row.picked,
+      existing,
+      division: row.division,
+    }).map((c) => {
+      const key = c.name.trim().toLowerCase().replace(/\s+/g, " ");
+      const twice = !c.collision && seen.has(key);
+      seen.add(key);
+      return twice ? { ...c, collision: "Listed twice in this batch." } : c;
+    }),
+  );
 }

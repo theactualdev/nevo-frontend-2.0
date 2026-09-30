@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { AdminClass } from "@/lib/api/classes";
-import { composeClassNames, sendable } from "./composeClassNames";
+import {
+  composeAcrossYears,
+  composeClassNames,
+  defaultDivision,
+  sendable,
+} from "./composeClassNames";
 import { collisionNote, findCollision, normaliseClassName } from "./duplicateName";
 
 /**
@@ -122,5 +127,52 @@ describe("composing, per CL-04", () => {
 
   it("composes nothing when no section is ticked", () => {
     expect(compose([])).toEqual([]);
+  });
+});
+
+describe("composing across year groups, per D05's grid", () => {
+  it("names a stream after the year with a space, as the frame does", () => {
+    const out = composeClassNames({
+      yearGroup: "ss1",
+      sections: ["Sciences", "Arts"],
+      existing: [],
+      division: "streams",
+    });
+    expect(out.map((c) => c.name)).toEqual(["SS 1 Sciences", "SS 1 Arts"]);
+  });
+
+  it("streams senior secondary by default and letters everything else", () => {
+    expect(defaultDivision("ss2")).toBe("streams");
+    expect(defaultDivision("jss1")).toBe("sections");
+    expect(defaultDivision("p4")).toBe("sections");
+  });
+
+  it("composes every year group into one batch, each class carrying its own year", () => {
+    const out = composeAcrossYears(
+      [
+        { yearGroup: "jss1", division: "sections", picked: ["A", "B"] },
+        { yearGroup: "ss1", division: "streams", picked: ["Commercial"] },
+      ],
+      [cls({ name: "JSS 1B", yearGroup: "jss1" })],
+    );
+    expect(out.map((c) => [c.name, c.yearGroup])).toEqual([
+      ["JSS 1A", "jss1"],
+      ["JSS 1B", "jss1"],
+      ["SS 1 Commercial", "ss1"],
+    ]);
+    expect(sendable(out).map((c) => c.name)).toEqual(["JSS 1A", "SS 1 Commercial"]);
+  });
+
+  it("never sends one name twice in the same batch", () => {
+    // Two year groups a school has labelled alike compose the same name.
+    const out = composeAcrossYears(
+      [
+        { yearGroup: "jss1", division: "sections", picked: ["A"] },
+        { yearGroup: "jss1", division: "sections", picked: ["A"] },
+      ],
+      [],
+    );
+    expect(out[1].collision).toMatch(/Listed twice/);
+    expect(sendable(out)).toHaveLength(1);
   });
 });
