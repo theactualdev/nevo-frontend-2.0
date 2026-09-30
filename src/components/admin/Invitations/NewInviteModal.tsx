@@ -327,6 +327,29 @@ export function NewInviteModal({
           ) : null}
         </div>
 
+        {!isStudent ? (
+          /*
+           * D24b's "Cost" for a teacher, which an admin asks about before
+           * sending: "No charge". The contract says the same thing in its own
+           * words - the additions quote documents that "the answer for a
+           * teacher is nothing at all" - so this is a statement of the pricing,
+           * not a figure computed or fetched here.
+           */
+          <div>
+            <span className={LABEL}>Cost</span>
+            <div className="rounded-[10px] bg-nevo-navy/[0.06] px-4 py-3">
+              <span className="flex items-center gap-2 text-[14.5px] font-semibold text-nevo-navy">
+                <CheckIcon />
+                No charge
+              </span>
+              <p className="m-0 mt-1 text-[13px] leading-[1.5] text-nevo-near-black/62">
+                Teacher accounts are always free. Only students count towards
+                your bill.
+              </p>
+            </div>
+          </div>
+        ) : null}
+
         {isStudent ? (
           <div>
             <label htmlFor="invite-parent" className={LABEL}>

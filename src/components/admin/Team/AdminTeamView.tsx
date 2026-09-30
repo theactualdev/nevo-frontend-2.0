@@ -17,6 +17,7 @@ import { readOnboarding, schoolApi } from "@/lib/api/school";
 import { NoAccess, failureKind } from "../NoAccess";
 import { getSession } from "@/lib/auth/session";
 import { EditAccessPanel, ScopeChecklist } from "./EditAccess";
+import { useSupportEmail } from "../SupportEmail";
 import {
   adminSeatAllowance,
   SCOPE_CATALOGUE,
@@ -367,6 +368,7 @@ function TeamList({
   const live = team.filter((m) => m.status.toLowerCase() !== "deactivated");
   /** The signed-in admin, whose own row is not editable here. */
   const [me] = useState(() => getSession()?.userId ?? null);
+  const supportEmail = useSupportEmail();
   const atAllowance = seats !== null && live.length >= seats;
   const [requested, setRequested] = useState<
     "idle" | "sending" | "sent" | "failed"
@@ -460,7 +462,7 @@ function TeamList({
                 </button>
                 <span className="text-[13px] text-nevo-near-black/55">
                   {requested === "failed"
-                    ? "That didn’t send. Nothing has changed — try again, or email support@nevolearning.com."
+                    ? `That didn’t send. Nothing has changed — try again, or email ${supportEmail}.`
                     : "Added at no charge, usually the same day. Admin accounts are always free."}
                 </span>
               </>

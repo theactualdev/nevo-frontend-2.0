@@ -56,10 +56,13 @@
  *
  * TODO(api): erasure requests in progress, and a subprocessor count - the two
  * states this screen genuinely cannot verify.
- * `POST /api/v1/parent/{token}/rights` mints a request id but nothing reads one
- * back, and its `ParentRightType` enum is
- * `request_data | object | withdraw_consent` - with no erasure value at all.
- * "Subprocessor" does not appear in the contract.
+ * The requests ARE read back now - `GET /api/v1/consents/rights-log`, "what
+ * parents have asked of this school, newest first" - but the `ParentRightType`
+ * they carry is `request_data | object | withdraw_consent`, with no erasure
+ * value at all, so the log cannot count erasure requests either. (This said
+ * nothing read one back, after the log had shipped. Wiring the log to a screen
+ * waits on counsel with the rest of the consent surface.) "Subprocessor" does
+ * not appear in the contract.
  *
  * TWO MORE WERE ON THIS LIST AND SHOULD NOT HAVE BEEN. Consent coverage is
  * derivable from `studentsApi.list()` with `blockedByConsent` - the same pair

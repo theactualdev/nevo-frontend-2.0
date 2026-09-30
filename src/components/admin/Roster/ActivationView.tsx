@@ -6,6 +6,7 @@ import { CostSheet } from "../Billing/CostSheet";
 import { HowToPayPanel } from "../Billing/HowToPayPanel";
 import { InvoiceBreakdown } from "../Billing/InvoiceBreakdown";
 import { ReadFailed } from "../ReadFailed";
+import { SupportEmailLink } from "../SupportEmail";
 import { CARD, CheckIcon } from "./primitives";
 import {
   billingApi,
@@ -367,12 +368,9 @@ function Waiting({
           >
             {rechecking ? "Checking…" : "Check again"}
           </button>
-          <a
-            href="mailto:support@nevolearning.com"
-            className="h-[44px] cursor-pointer rounded-[10px] px-4 text-sm font-semibold leading-[44px] text-nevo-near-black/70 transition-colors hover:bg-nevo-near-black/[0.05]"
-          >
+          <SupportEmailLink className="h-[44px] cursor-pointer rounded-[10px] px-4 text-sm font-semibold leading-[44px] text-nevo-near-black/70 transition-colors hover:bg-nevo-near-black/[0.05]">
             Contact us
-          </a>
+          </SupportEmailLink>
         </div>
         {recheckFailed ? (
           <p className="mt-3 max-w-[56ch] text-[13.5px] leading-[1.5] text-nevo-navy">
