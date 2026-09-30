@@ -92,6 +92,40 @@ export function needsManualDelivery(
 }
 
 /**
+ * After a resend the backend did NOT confirm emailing: the short message, and
+ * the lead of the link handout that sits in the row below it.
+ *
+ * Shared by the Invitations list and the Teachers list, which both offer
+ * Resend, so the same answer from the same endpoint reads the same on both.
+ * `name` is who the invite is for; `hasLink` whether the resend carried a
+ * token to hand over.
+ */
+export function unconfirmedResendToast(
+  status: InvitationDeliveryStatus | null | undefined,
+  hasLink: boolean,
+): string {
+  return needsManualDelivery(status)
+    ? hasLink
+      ? "No email went out - their link is in the row below"
+      : "No email went out, and no link came back"
+    : hasLink
+      ? "We couldn't confirm an email - their link is in the row below"
+      : "We couldn't confirm an email went out";
+}
+
+export function unconfirmedResendLead(
+  status: InvitationDeliveryStatus | null | undefined,
+  hasLink: boolean,
+  name: string,
+): string {
+  return needsManualDelivery(status)
+    ? hasLink
+      ? `No email was sent to ${name} - this school has no mail set up in Nevo, so this link is the only way in.`
+      : `No email was sent to ${name}, and this resend carried no link.`
+    : `We couldn't confirm an email reached ${name}.`;
+}
+
+/**
  * Where the parent's consent has actually got to, in a few words.
  *
  * Short by design: it sits under a name in a list, beside the expiry date. The
