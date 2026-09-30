@@ -78,7 +78,22 @@ interface Message {
   interactionId?: string;
   /** A canned stand-in shown because the live assistant didn't answer. */
   sample?: boolean;
+  /** A signed-in child's question the live assistant could not answer. */
+  failed?: boolean;
 }
+
+/**
+ * What a SIGNED-IN child is told when the live assistant does not answer.
+ *
+ * They used to be given a canned tutoring reply - fractions and pizza - marked
+ * as a sample in small italics. A child cannot weigh "sample" against an answer
+ * that sounds exactly like help, and the teacher branch of that engine promised
+ * to "let them know" when nothing would. So: no answer, said plainly, with the
+ * blame where it belongs. The sample engine stays for the signed-out
+ * walkthrough, which is a demonstration of the drawer rather than a child.
+ */
+const COULD_NOT_ANSWER =
+  "I couldn't answer that just now - that's on us, not you. Try asking again in a moment.";
 
 /**
  * Mock reply engine - calm, canned, and honest about its limits. Now the
@@ -223,9 +238,11 @@ export function AskNevo() {
         ...m,
         res
           ? { who: "nevo", text: res.answer, interactionId: res.interactionId }
-          : // Say so. A student cannot tell a canned reply from real tutoring,
-            // and they are the last person who should have to.
-            { ...replyFor(text), sample: true },
+          : signedIn
+            ? { who: "nevo", text: COULD_NOT_ANSWER, failed: true }
+            : // Say so. A visitor on the walkthrough cannot tell a canned
+              // reply from real tutoring either, and should not have to.
+              { ...replyFor(text), sample: true },
       ]);
       setThinking(false);
     });
@@ -324,7 +341,12 @@ export function AskNevo() {
           className="flex h-[88%] flex-col gap-0 rounded-t-[20px] border-0! bg-nevo-cream p-0 text-nevo-near-black shadow-[0_-8px_32px_rgba(0,0,0,0.16)] sm:inset-x-auto! sm:top-0! sm:right-0! sm:left-auto! sm:h-full! sm:w-[412px] sm:rounded-none! sm:shadow-[-8px_0_32px_rgba(0,0,0,0.16)] lg:w-[460px]"
         >
           {/* Header */}
-          <div className="flex h-14 shrink-0 items-center gap-2 border-b border-nevo-near-black/8 px-5">
+          {/*
+            pr-16 CLEARS THE SHEET'S CLOSE BUTTON, which sits absolutely in the
+            top-right corner. The history button was pushed to the right edge
+            underneath it, so tapping "Past conversations" closed the drawer.
+          */}
+          <div className="flex h-14 shrink-0 items-center gap-2 border-b border-nevo-near-black/8 pr-16 pl-5">
             {history.transcript || view === "history" ? (
               <button
                 type="button"
