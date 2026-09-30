@@ -15,6 +15,8 @@ import { CheckIcon, PausedNote } from "../Roster/primitives";
 import { useSetupGate } from "@/hooks";
 import { readOnboarding, schoolApi } from "@/lib/api/school";
 import { NoAccess, failureKind } from "../NoAccess";
+import { getSession } from "@/lib/auth/session";
+import { EditAccessPanel, ScopeChecklist } from "./EditAccess";
 import {
   adminSeatAllowance,
   SCOPE_CATALOGUE,
@@ -81,6 +83,8 @@ export function AdminTeamView() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [inviting, setInviting] = useState(false);
+  /** The admin whose access is being edited, if any. */
+  const [editing, setEditing] = useState<TeamMember | null>(null);
   /*
    * The seat allowance follows the school's BAND, which onboarding recorded
    * and quoted to them ("Mid-Market comes with 10 admin seats"). It was a
@@ -156,7 +160,12 @@ export function AdminTeamView() {
         )}
 
         {phase === "ready" && team.length > 1 && (
-          <TeamList team={team} seats={seats} onInvite={() => setInviting(true)} />
+          <TeamList
+            team={team}
+            seats={seats}
+            onInvite={() => setInviting(true)}
+            onEdit={setEditing}
+          />
         )}
       </div>
 
@@ -175,6 +184,18 @@ export function AdminTeamView() {
           onCancel={() => setInviting(false)}
           onSent={() => {
             setInviting(false);
+            retry();
+          }}
+        />
+      )}
+
+      {editing && (
+        <EditAccessPanel
+          member={editing}
+          name={displayName(editing)}
+          onCancel={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
             retry();
           }}
         />
@@ -231,8 +252,18 @@ function InviteButton({
   );
 }
 
-function MemberRow({ m, last }: { m: TeamMember; last: boolean }) {
+function MemberRow({
+  m,
+  last,
+  onEdit,
+}: {
+  m: TeamMember;
+  last: boolean;
+  /** Absent where this admin's access cannot be edited from here. */
+  onEdit?: () => void;
+}) {
   const name = displayName(m);
+  const { writesPaused } = useSetupGate();
   /*
    * THE SPEC'S THREE STATES, NOT "ACTIVE OR NOT". This read anything other
    * than `active` as still-pending, so a DEACTIVATED admin wore the violet
@@ -285,6 +316,16 @@ function MemberRow({ m, last }: { m: TeamMember; last: boolean }) {
           Deactivated
         </span>
       )}
+      {onEdit && !deactivated ? (
+        <button
+          type="button"
+          onClick={onEdit}
+          disabled={writesPaused}
+          className="shrink-0 cursor-pointer text-[13.5px] font-semibold text-nevo-navy hover:underline disabled:cursor-not-allowed disabled:text-nevo-near-black/45 disabled:no-underline"
+        >
+          Edit access
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -293,11 +334,13 @@ function TeamList({
   team,
   seats,
   onInvite,
+  onEdit,
 }: {
   team: TeamMember[];
   /** The school's allowance, or null when it could not be read. */
   seats: number | null;
   onInvite: () => void;
+  onEdit: (m: TeamMember) => void;
 }) {
   /*
    * WHO CAN ADMINISTER, AND WHO USES A SEAT: everyone not deactivated. A
@@ -306,6 +349,8 @@ function TeamList({
    * no longer have access.
    */
   const live = team.filter((m) => m.status.toLowerCase() !== "deactivated");
+  /** The signed-in admin, whose own row is not editable here. */
+  const [me] = useState(() => getSession()?.userId ?? null);
   const atAllowance = seats !== null && live.length >= seats;
   const [requested, setRequested] = useState<
     "idle" | "sending" | "sent" | "failed"
@@ -410,7 +455,15 @@ function TeamList({
 
       <div className={cn(CARD, "mt-3 overflow-hidden")}>
         {team.map((m, i) => (
-          <MemberRow key={m.userId} m={m} last={i === team.length - 1} />
+          <MemberRow
+            key={m.userId}
+            m={m}
+            last={i === team.length - 1}
+            // Not your own row: taking your own Oversight away would lose the
+            // page you are standing on, and the founder's lock needs a
+            // founding flag the team response does not carry.
+            onEdit={m.userId === me ? undefined : () => onEdit(m)}
+          />
         ))}
       </div>
     </>
@@ -557,55 +610,7 @@ function InvitePanel({
         <span className="mt-7 block text-[13px] font-semibold text-nevo-near-black/70">
           What can they access?
         </span>
-        <div className="mt-2.5 flex flex-col gap-2">
-          {SCOPE_CATALOGUE.map((s) => {
-            const checked = on.has(s.scope);
-            return (
-              <label
-                key={s.scope}
-                className="flex cursor-pointer items-center gap-[13px] rounded-[10px] bg-nevo-cream-elevated px-[15px] py-[13px]"
-              >
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  disabled={phase !== "idle"}
-                  onChange={() =>
-                    setOn((prev) => {
-                      const next = new Set(prev);
-                      if (next.has(s.scope)) next.delete(s.scope);
-                      else next.add(s.scope);
-                      return next;
-                    })
-                  }
-                  className="sr-only"
-                />
-                <span
-                  aria-hidden
-                  className={cn(
-                    "flex size-[22px] shrink-0 items-center justify-center rounded-[6px]",
-                    checked
-                      ? "bg-nevo-navy text-nevo-cream"
-                      : "border-2 border-nevo-near-black/24",
-                  )}
-                >
-                  {checked && (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                      <path d="M5 12.5l4.5 4.5L19 7.5" />
-                    </svg>
-                  )}
-                </span>
-                <span className="flex min-w-0 flex-col">
-                  <span className="text-[14.5px] font-semibold text-nevo-near-black">
-                    {s.name}
-                  </span>
-                  <span className="mt-px text-[13px] text-nevo-near-black/58">
-                    {s.desc}
-                  </span>
-                </span>
-              </label>
-            );
-          })}
-        </div>
+        <ScopeChecklist on={on} setOn={setOn} disabled={phase !== "idle"} />
 
         {error && (
           <p className="mt-4 rounded-[10px] bg-nevo-violet/16 px-4 py-3 text-[13.5px] leading-[1.5] text-nevo-near-black/78">
