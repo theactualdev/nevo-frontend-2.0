@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/api/client";
 import { lessonsApi } from "@/lib/api/lessons";
-import { getToken } from "@/lib/auth/session";
+import { getSession, getToken } from "@/lib/auth/session";
+import { refreshSavedLesson, savedLesson } from "@/lib/offline/savedLessons";
 import type { AdaptSegment } from "@/lib/api/intelligence";
 import { adaptSegmentsFor } from "@/lib/lessons/adaptation";
 import { lessonFromContent } from "@/lib/lessons/fromContent";
@@ -205,6 +206,10 @@ export function useStudentLesson(
       .detail(lessonId)
       .then((res) => {
         if (cancelled) return;
+        // A lesson the child saved for offline is kept as fresh as their last
+        // online open. Only ever one they chose to save.
+        const owner = getSession()?.userId;
+        if (owner) refreshSavedLesson(owner, res);
         const built = lessonFromContent(res, res.modules ?? []);
         setResolved(
           built
@@ -228,6 +233,25 @@ export function useStudentLesson(
         // them.
         if (err instanceof ApiError && err.status === 404) {
           setResolved({ id: lessonId, missing: true });
+          return;
+        }
+        /*
+         * NO CONNECTION, BUT THE CHILD SAVED IT. The same read, kept from when
+         * they saved it, through the same builder - so it opens exactly as it
+         * would online. Only this child's shelf, and never for a 404: a lesson
+         * the school removed stays removed.
+         */
+        const owner = getSession()?.userId;
+        const kept = owner ? savedLesson(owner, lessonId) : null;
+        const fromShelf = kept
+          ? lessonFromContent(kept.detail, kept.detail.modules ?? [])
+          : null;
+        if (kept && fromShelf) {
+          setResolved({
+            id: lessonId,
+            lesson: fromShelf,
+            adaptSegments: adaptSegmentsFor(kept.detail.segments),
+          });
         } else {
           setResolved({ id: lessonId, failed: true });
         }

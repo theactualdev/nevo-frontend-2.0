@@ -1,12 +1,13 @@
 "use client";
 
-import { notFound, useRouter } from "next/navigation";
+import { notFound } from "next/navigation";
 import { SampleRegion } from "@/components/shared/SampleRegion";
 import { useHydrated } from "@/hooks/useHydrated";
 import { useStudentLesson } from "@/hooks/useStudentLesson";
 import { LessonLoadingSkeleton } from "./LessonLoadingSkeleton";
 import { LessonMessage } from "./LessonMessage";
 import { LessonPlayer } from "./LessonPlayer";
+import { useLessonExit } from "./LessonExit";
 
 const LESSONS_HREF = "/student/lessons";
 
@@ -59,7 +60,8 @@ export function LessonRoute({
   /** Which concept this review is for, from the due-review chip. */
   reviewConceptId?: string;
 }) {
-  const router = useRouter();
+  // Leaving goes wherever this lesson was opened from - see `useLessonExit`.
+  const exitTo = useLessonExit();
   const {
     lesson,
     live,
@@ -103,7 +105,7 @@ export function LessonRoute({
         title="This one isn’t on your list any more"
         body="Your teacher took it off. Anything you already did on it is still saved."
         actionLabel="Back to my lessons"
-        onAction={() => router.push(LESSONS_HREF)}
+        onAction={() => exitTo(LESSONS_HREF)}
       />
     );
   }
@@ -113,7 +115,7 @@ export function LessonRoute({
         title="This one isn’t open yet"
         body={opensLine(opensAt)}
         actionLabel="Back to my lessons"
-        onAction={() => router.push(LESSONS_HREF)}
+        onAction={() => exitTo(LESSONS_HREF)}
       />
     );
   }
@@ -151,7 +153,7 @@ export function LessonRoute({
         body="It hasn’t gone anywhere. Give it a moment and try again."
         actionLabel="Try again"
         onAction={() => window.location.reload()}
-        onBack={() => router.push(LESSONS_HREF)}
+        onBack={() => exitTo(LESSONS_HREF)}
       />
     );
   }
@@ -162,7 +164,7 @@ export function LessonRoute({
         title="This lesson isn’t ready yet"
         body="Nevo is still getting it set up. Your teacher will know when it’s ready."
         actionLabel="Back to my lessons"
-        onAction={() => router.push(LESSONS_HREF)}
+        onAction={() => exitTo(LESSONS_HREF)}
       />
     );
   }
