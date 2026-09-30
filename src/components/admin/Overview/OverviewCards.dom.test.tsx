@@ -294,3 +294,15 @@ describe("the roll-up", () => {
     expect(container.querySelector("[data-nevo-sample]")).toBeNull();
   });
 });
+
+describe("the school's name", () => {
+  it("comes from the school record, so a failed compliance read is not 'your school'", async () => {
+    // The title - and the board pack copied for governors - fell back to
+    // "your school" whenever the compliance audit failed.
+    audit.mockRejectedValue(new Error("500"));
+    const { container } = render(<OverviewView />);
+
+    await waitFor(() => expect(visibleText(container)).toMatch(/Brightgate Academy/));
+    expect(visibleText(container)).not.toMatch(/\byour school\b/i);
+  });
+});

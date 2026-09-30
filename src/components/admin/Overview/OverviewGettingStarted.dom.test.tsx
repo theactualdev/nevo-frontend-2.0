@@ -98,7 +98,7 @@ describe("Overview getting-started - the teachers row", () => {
     // Control: a row that can settle, and one that cannot.
     expect(visibleText(stepRow(container, "Workspace created"))).toMatch(/\(done\)/);
     expect(
-      visibleText(stepRow(container, "Choose how everyone signs in")),
+      visibleText(stepRow(container, "Share your school code")),
     ).not.toMatch(/\(done\)/);
   });
 

@@ -105,3 +105,27 @@ describe("the invite sheet", () => {
     expect(container.querySelector('[role="dialog"]')).toBeTruthy();
   });
 });
+
+describe("a deactivated admin", () => {
+  it("is shown as deactivated, and uses no seat", async () => {
+    /*
+     * Anything other than `active` used to read as "Invited", so a removed
+     * admin looked like someone on their way in - and was counted against the
+     * allowance, telling a school its seats were full.
+     */
+    team.mockResolvedValue([
+      member(1),
+      member(2),
+      member(3),
+      member(4),
+      { ...member(5), status: "deactivated" },
+    ]);
+    const { container } = render(<AdminTeamView />);
+
+    await waitFor(() => expect(visibleText(container)).toMatch(/Deactivated/));
+    const text = visibleText(container);
+    expect(text).not.toMatch(/Invited/);
+    expect(text).toMatch(/4 of 5 admin accounts/);
+    expect(text).not.toMatch(/All 5 admin accounts are in use/);
+  });
+});
