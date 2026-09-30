@@ -77,7 +77,8 @@ async function submit(
 describe("HowToPayPanel", () => {
   it("never shows an account when none was supplied", () => {
     const t = visibleText(panel({ account: null }).container);
-    expect(t).toMatch(/aren't available here yet/);
+    expect(t).toMatch(/couldn.t load Nevo.s bank details just now/);
+    expect(t).not.toMatch(/available here yet/);
     expect(t).not.toMatch(/Kuda|3004167012|Nevo Learning Limited/);
     // The reference IS known - it is on the invoice - so it still helps.
     expect(t).toMatch(/NEV-2026-0001/);
