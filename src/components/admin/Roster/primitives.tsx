@@ -29,15 +29,27 @@ export const CARD =
 export const ROW_DIVIDER = "border-b border-nevo-near-black/[0.07]";
 
 /** Navy primary. `cursor-pointer` is house rule, not decoration. */
+/*
+ * D14 INTERACTION STATES. Hover, PRESSED and disabled are D14's per kind:
+ *   primary - hover brightens to 1.12; pressed dims to 0.9 and drops 1px
+ *   ghost   - hover fills #ede8dc; pressed fills #e5dfd3 and drops 1px
+ *   both    - disabled at 40%, not-allowed, and a disabled control never
+ *             moves or changes when pressed
+ * Neither had a pressed state. The FOCUS ring is the same on every control in
+ * the console, so it lives once in `app/admin/admin.css` rather than here.
+ */
 export const PRIMARY_BTN =
-  "inline-flex flex-none cursor-pointer items-center gap-2 rounded-[10px] bg-nevo-navy px-[18px] py-[11px] text-[14.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:brightness-100";
+  "inline-flex flex-none cursor-pointer items-center gap-2 rounded-[10px] bg-nevo-navy px-[18px] py-[11px] text-[14.5px] font-semibold text-nevo-cream transition-[filter,transform] duration-[140ms] hover:brightness-[1.12] active:translate-y-px active:brightness-90 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:brightness-100 disabled:active:translate-y-0 disabled:active:brightness-100";
 
 export const GHOST_BTN =
-  "inline-flex flex-none cursor-pointer items-center justify-center rounded-[10px] border-[1.5px] border-nevo-near-black/18 px-[18px] py-[11px] text-[14.5px] font-semibold text-nevo-near-black transition-colors hover:bg-nevo-near-black/[0.04] disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:bg-transparent";
+  "inline-flex flex-none cursor-pointer items-center justify-center rounded-[10px] border-[1.5px] border-nevo-near-black/18 px-[18px] py-[11px] text-[14.5px] font-semibold text-nevo-near-black transition-[background-color,transform] duration-[140ms] hover:bg-nevo-cream-elevated active:translate-y-px active:bg-[#e5dfd3] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:active:translate-y-0 disabled:active:bg-transparent";
 
-/** A quiet navy text action - "Assign a teacher", "Archive this class". */
+/**
+ * A quiet navy text action - "Assign a teacher", "Archive this class".
+ * `rounded-sm` so the console's focus ring sits around it rather than square.
+ */
 export const TEXT_ACTION =
-  "inline-flex cursor-pointer items-center gap-[7px] text-sm font-semibold text-nevo-navy transition-opacity hover:opacity-75 disabled:cursor-not-allowed disabled:text-nevo-near-black/45 disabled:hover:opacity-100";
+  "inline-flex cursor-pointer items-center gap-[7px] rounded-sm text-sm font-semibold text-nevo-navy transition-opacity hover:opacity-75 active:opacity-60 disabled:cursor-not-allowed disabled:text-nevo-near-black/45 disabled:hover:opacity-100 disabled:active:opacity-100";
 
 /**
  * WHY A WRITE CONTROL IS GREYED, in the setup gate's words.

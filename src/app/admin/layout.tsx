@@ -12,6 +12,8 @@ import type { Metadata } from "next";
 import { AdminShell } from "@/components/admin/Shell/AdminShell";
 import { PermissionProvider } from "@/context/PermissionContext";
 import { SetupGateProvider } from "@/context/SetupGateContext";
+// D14 interaction states for this console only - see the file.
+import "./admin.css";
 
 // Signed-in product surface - never indexed.
 export const metadata: Metadata = {
@@ -27,7 +29,10 @@ export default function AdminLayout({
   return (
     <PermissionProvider>
       <SetupGateProvider>
-      <AdminShell>{children}</AdminShell>
+        {/* `contents`, so the scope adds no box of its own to the layout. */}
+        <div data-console="admin" className="contents">
+          <AdminShell>{children}</AdminShell>
+        </div>
       </SetupGateProvider>
     </PermissionProvider>
   );
