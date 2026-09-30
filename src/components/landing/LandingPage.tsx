@@ -28,14 +28,14 @@ const CSS = `
 .nv-landing select { -webkit-appearance: none; -moz-appearance: none; appearance: none; }
 .nv-dark:hover { color: #2b2b2f !important; }
 .nv-raise:hover { filter: brightness(1.12) !important; transform: translateY(-1px) !important; }
-.nv-demo:hover { background: rgba(59,63,110,0.08) !important; }
+.nv-signup:hover { background: rgba(59,63,110,0.08) !important; }
 .nv-bright:hover { filter: brightness(1.12) !important; }
 .nv-field:focus { border-color: #3b3f6e !important; background: #f7f1e6 !important; }
 /* Mobile adaptations, in the frame's fluid spirit (the frame stops at hiding
    the nav links <720px; these carry the same intent down to phones). */
 @supports (height: 100svh) { .nv-landing #nv-open { height: 100svh !important; } }
 @media (pointer: coarse) { .nv-landing .nv-field { font-size: 16px !important; } }
-@media (max-width: 479px) { #nv-nav .nv-demo { display: none !important; } }
+@media (max-width: 479px) { #nv-nav .nv-talk { display: none !important; } }
 @media (max-width: 519px) { .nv-landing .nv-rail-note { display: none !important; } }
 @media (max-width: 339px) { #nv-nav img { display: none !important; } }
 @media (prefers-reduced-motion: reduce) {
@@ -467,16 +467,22 @@ export function LandingPage() {
             <a href="/auth/admin" className="nv-dark" style={navLink}>
               Sign in
             </a>
-            {/* Reference (20 Aug sync): BOTH nav CTAs, grouped - the outlined
-                "Watch demo" (-> adapt scrub) beside the navy "Start the
-                conversation" (-> form). The 10 Aug port dropped the navy one
-                off a truncated diff; restored. */}
+            {/* Both nav CTAs, grouped: the outlined "Sign up" beside the navy
+                "Start the conversation" (-> form). Sign up replaced the old
+                "Watch demo" scrub on 30 Sep (QA) - it sends a school straight
+                to setup, which is the self-serve route. A phone has room for
+                the logo and ONE button, and product chose Sign up: under
+                480px "Start the conversation" hides instead (`.nv-talk`), and
+                the form it scrolls to is still one scroll down the page. */}
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <button
-                data-scroll="nv-adapt-track"
-                className="nv-demo"
+              <a
+                href="/admin/onboarding"
+                className="nv-signup"
                 style={{
                   boxSizing: "border-box",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  textDecoration: "none",
                   border: "1px solid #3b3f6e",
                   background: "transparent",
                   color: "#3b3f6e",
@@ -492,11 +498,11 @@ export function LandingPage() {
                   transition: "background 150ms ease",
                 }}
               >
-                Watch demo
-              </button>
+                Sign up
+              </a>
               <button
                 data-scroll="nv-form-sec"
-                className="nv-raise"
+                className="nv-raise nv-talk"
                 style={{
                   border: "none",
                   background: "#3b3f6e",
