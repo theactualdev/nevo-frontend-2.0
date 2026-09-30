@@ -233,9 +233,16 @@ function InviteButton({
 
 function MemberRow({ m, last }: { m: TeamMember; last: boolean }) {
   const name = displayName(m);
-  // Anything other than an active account reads as still-pending; the API
-  // types `status` as a bare string, so this stays a loose check.
-  const pending = m.status.toLowerCase() !== "active";
+  /*
+   * THE SPEC'S THREE STATES, NOT "ACTIVE OR NOT". This read anything other
+   * than `active` as still-pending, so a DEACTIVATED admin wore the violet
+   * "Invited" pill - telling the proprietor someone they had removed was on
+   * their way in. The spec's enum is active | invited | deactivated; a status
+   * outside it carries no pill rather than a guessed one.
+   */
+  const status = m.status.toLowerCase();
+  const pending = status === "invited";
+  const deactivated = status === "deactivated";
   return (
     <div
       className={cn(
@@ -273,6 +280,11 @@ function MemberRow({ m, last }: { m: TeamMember; last: boolean }) {
           Invited
         </span>
       )}
+      {deactivated && (
+        <span className="shrink-0 rounded-full bg-nevo-near-black/8 px-[11px] py-1 text-[12px] font-semibold text-nevo-near-black/60">
+          Deactivated
+        </span>
+      )}
     </div>
   );
 }
@@ -287,7 +299,14 @@ function TeamList({
   seats: number | null;
   onInvite: () => void;
 }) {
-  const atAllowance = seats !== null && team.length >= seats;
+  /*
+   * WHO CAN ADMINISTER, AND WHO USES A SEAT: everyone not deactivated. A
+   * removed admin was counted in "N people can administer" and against the
+   * allowance, so a school could be told its seats were full by people who
+   * no longer have access.
+   */
+  const live = team.filter((m) => m.status.toLowerCase() !== "deactivated");
+  const atAllowance = seats !== null && live.length >= seats;
   const [requested, setRequested] = useState<
     "idle" | "sending" | "sent" | "failed"
   >("idle");
@@ -298,7 +317,7 @@ function TeamList({
     feedbackApi
       .submit({
         type: "account_request",
-        note: `Requesting an additional admin account. All ${seats ?? team.length} admin accounts are in use.`,
+        note: `Requesting an additional admin account. All ${seats ?? live.length} admin accounts are in use.`,
         // Ops' first question about any request is which screen it came from.
         context: "/admin/team",
       })
@@ -310,7 +329,7 @@ function TeamList({
     <>
       <div className="flex items-start justify-between gap-6">
         <div className="min-w-0">
-          <Heading count={team.length} />
+          <Heading count={live.length} />
         </div>
         {/*
           * THE ACTION STAYS, ALWAYS. At the seat allowance this button was
@@ -326,7 +345,7 @@ function TeamList({
       <PausedNote className="mt-3" />
 
       <div className="mt-5 flex items-center justify-between gap-4">
-        <SeatsLine used={team.length} seats={seats} />
+        <SeatsLine used={live.length} seats={seats} />
       </div>
 
       {atAllowance && (

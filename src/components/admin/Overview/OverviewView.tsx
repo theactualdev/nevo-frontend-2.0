@@ -8,16 +8,13 @@ import {
 } from "@/lib/api/schoolIntelligence";
 import { cn } from "@/lib/utils";
 import { labelHero } from "../Compliance/ndpaClaims";
-import { ssoApi, type SsoStatus } from "@/lib/api/sso";
 import {
   STEP_CONSENT,
-  STEP_SIGNIN,
   STEP_STUDENTS,
   STEP_TEACHERS,
   STEP_WORKSPACE,
   consentRequestsSent,
   gettingStartedSteps,
-  signInChosen,
   teachersOnRoster,
 } from "./overviewGettingStarted";
 import { SetupPausedBanner } from "../SetupPausedBanner";
@@ -189,6 +186,8 @@ export function OverviewView() {
   const [adaptationTotal, setAdaptationTotal] = useState<number | null>(null);
   /** The commercial band, for the one denominator that has a source. */
   const [band, setBand] = useState<EnrolmentBand | undefined>(undefined);
+  /** The school's own name, from its record - see `school` below. */
+  const [schoolName, setSchoolName] = useState<string | null>(null);
   const [narrative, setNarrative] = useState<SchoolNarrative | null>(null);
   const [narrativeFailed, setNarrativeFailed] = useState(false);
   const [counts, setCounts] = useState<SchoolRosterCounts | null>(null);
@@ -200,7 +199,6 @@ export function OverviewView() {
    */
   const [roster, setRoster] = useState<AdminStudentRow[] | null>(null);
   /** Read for the getting-started sign-in row only. Null means unread. */
-  const [sso, setSso] = useState<SsoStatus | null>(null);
   const [flags, setFlags] = useState<AttentionFlag[] | null>(null);
 
   const load = useCallback(() => {
@@ -224,15 +222,10 @@ export function OverviewView() {
       // their own failures - neither should take the page down.
       schoolApi.narrative().catch(() => null),
       schoolApi.overview().catch(() => null),
-      /*
-       * FOR THE GETTING-STARTED CHECKLIST'S SIGN-IN ROW, and nothing else on
-       * this screen. Settled like its two neighbours above: a school with no
-       * SSO at all is a 404 here as readily as a 500 is, and neither is worth
-       * a blank dashboard. `signInChosen` treats null as unknown, so the row
-       * simply stays open.
-       */
-      ssoApi.status().catch(() => null),
-    ]).then(([res, log, n, ov, sso]) => {
+      // The SSO status read that sat here fed only the checklist's sign-in
+      // tick, which went when the row became "Share your school code"
+      // (manual-only launch). One request fewer on every Overview load.
+    ]).then(([res, log, n, ov]) => {
       if (!res.ok && failureKind(res.err) === "denied") {
         setPhase("denied");
         return;
@@ -243,7 +236,6 @@ export function OverviewView() {
       setNarrative(n);
       setNarrativeFailed(n === null);
       setCounts(ov ? ov.counts : null);
-      setSso(sso);
       /*
        * NULL WHEN WE DID NOT READ IT, and it used to be `?? 0`. That mattered
        * only once the audit stopped gating the page: a zero here is the signal
@@ -259,7 +251,10 @@ export function OverviewView() {
     // and feeds one denominator. Its own call, so it can never hold the page.
     schoolApi
       .get()
-      .then((sc) => setBand(readOnboarding(sc).band))
+      .then((sc) => {
+        setBand(readOnboarding(sc).band);
+        setSchoolName(sc.name?.trim() || null);
+      })
       .catch(() => setBand(undefined));
 
     /*
@@ -362,7 +357,13 @@ export function OverviewView() {
    */
   const early = adaptationTotal === 0;
   const glance = early ? [] : glanceRows(roster, flags);
-  const school = audit?.schoolName ?? "your school";
+  /*
+   * THE SCHOOL RECORD'S NAME FIRST. This took the name from the compliance
+   * audit alone, so when that one read failed the title - and the board pack
+   * a proprietor copies for governors - said "your school", although the
+   * school record, already read on this page, carries the name.
+   */
+  const school = schoolName ?? audit?.schoolName ?? "your school";
 
   const pack = boardPackText({
     school,
@@ -660,11 +661,13 @@ export function OverviewView() {
                   // from a signal we hold. The rest carry no mark at all rather
                   // than an unticked box, which would assert the school has not
                   // done something we cannot see.
+                  // STEP_SIGNIN ("Share your school code") never ticks: it
+                  // ticked on an SSO connection, which is not what the row
+                  // asks any more, and nothing reports a code being shared.
                   const done =
                     i === STEP_WORKSPACE ||
                     (i === STEP_STUDENTS && (audit?.studentsProfiled ?? 0) > 0) ||
                     (i === STEP_TEACHERS && teachersOnRoster(counts)) ||
-                    (i === STEP_SIGNIN && signInChosen(sso)) ||
                     (i === STEP_CONSENT && consentRequestsSent(roster));
                   const row = (
                     <>
