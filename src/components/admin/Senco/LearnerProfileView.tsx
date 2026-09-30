@@ -559,7 +559,10 @@ export function LearnerProfileView({ studentId }: { studentId: string }) {
       </div>
 
       <div className="mt-8 border-t border-nevo-near-black/10 pt-5">
-        <Link href="/admin/senco/export" className={PRIMARY_BTN}>
+        <Link
+          href={`/admin/senco/export?student=${encodeURIComponent(studentId)}`}
+          className={PRIMARY_BTN}
+        >
           Create a progress report
         </Link>
         <p className="mt-2 max-w-[52ch] text-[13px] leading-[1.5] text-nevo-near-black/55">
