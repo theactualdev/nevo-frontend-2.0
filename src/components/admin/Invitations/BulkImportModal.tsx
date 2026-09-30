@@ -260,15 +260,13 @@ export function BulkImportModal({
           />
         ) : null}
 
-        {result.rejected.length > 0 ? (
-          <ul className="mt-4 list-none space-y-1.5 rounded-[10px] bg-nevo-violet/[0.18] p-4 text-[13px] leading-[1.5] text-nevo-navy">
-            {result.rejected.map((r) => (
-              <li key={r.row}>
-                Row {r.row + 2}: {r.reason}
-              </li>
-            ))}
-          </ul>
-        ) : null}
+        {/*
+          * A SECOND LIST OF THE SAME ROWS USED TO SIT HERE, as
+          * `Row {r.row + 2}` - the very guess `RejectedRows` above refuses to
+          * make, since the contract documents no base for `row`. So every
+          * server-rejected row appeared twice, two numbers apart, and at least
+          * one of the two pointed the admin at the wrong line.
+          */}
       </Modal>
     );
   }

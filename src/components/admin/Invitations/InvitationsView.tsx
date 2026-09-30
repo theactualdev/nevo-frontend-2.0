@@ -504,7 +504,14 @@ export function InvitationsView() {
                           <InviteStatusPill status={s} />
                         </span>
                         <span className="flex items-center gap-3">
-                          {joined ? (
+                          {/*
+                            * EACH ACTION ONLY WHERE IT MEANS SOMETHING, as the
+                            * frame draws them. All three used to show on every
+                            * row that had not joined - so an expired invite
+                            * offered Revoke, and a revoked one offered a dead
+                            * link to copy and hand to a child.
+                            */}
+                          {joined || s === "revoked" ? (
                             <span className="text-[13px] text-nevo-near-black/45">
                               Nothing to do
                             </span>
@@ -512,8 +519,9 @@ export function InvitationsView() {
                             <>
                               {/* Only when the read actually carried a
                                   token - `token` is nullable in the contract
-                                  and only promised on create. */}
-                              {joinLink(invite.token) ? (
+                                  and only promised on create - and only while
+                                  the invite is live: an expired link is dead. */}
+                              {s === "pending" && joinLink(invite.token) ? (
                                 <button
                                   type="button"
                                   onClick={() => copyLink(invite)}
@@ -530,14 +538,18 @@ export function InvitationsView() {
                               >
                                 Resend
                               </button>
-                              <button
-                                type="button"
-                                disabled={working || writesPaused}
-                                onClick={() => setConfirmRevoke(confirming ? null : invite.id)}
-                                className="cursor-pointer text-[13.5px] font-semibold text-nevo-near-black/60 transition-opacity hover:opacity-75 disabled:opacity-45"
-                              >
-                                Revoke
-                              </button>
+                              {/* Revoke is for a live invite. An expired one
+                                  already cannot be used. */}
+                              {s === "pending" ? (
+                                <button
+                                  type="button"
+                                  disabled={working || writesPaused}
+                                  onClick={() => setConfirmRevoke(confirming ? null : invite.id)}
+                                  className="cursor-pointer text-[13.5px] font-semibold text-nevo-near-black/60 transition-opacity hover:opacity-75 disabled:opacity-45"
+                                >
+                                  Revoke
+                                </button>
+                              ) : null}
                             </>
                           )}
                         </span>

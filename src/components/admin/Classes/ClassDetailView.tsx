@@ -431,8 +431,15 @@ export function ClassDetailView({ classId }: { classId: string }) {
             <p className="m-0 text-sm text-nevo-near-black/62">
               Nobody is enrolled in this class yet.
             </p>
+            {/* Was /admin/invitations, which opens on the TEACHERS tab and is
+                a different mechanism - the child accepts a link. Enrolling a
+                student now lives on Students ("Enrol a student", D24b), so
+                this goes there, already narrowed to this class. */}
             {!ssoSourced ? (
-              <Link href="/admin/invitations" className={cn(TEXT_ACTION, "mt-2.5")}>
+              <Link
+                href={`/admin/students?class=${klass.id}`}
+                className={cn(TEXT_ACTION, "mt-2.5")}
+              >
                 Enrol students
               </Link>
             ) : null}

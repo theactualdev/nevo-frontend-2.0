@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { ApiError } from "@/lib/api/client";
 import { invitesApi, type JoinLookup } from "@/lib/api/invites";
 import { cn } from "@/lib/utils";
 import { PRIMARY_BTN, Spinner } from "../Roster/primitives";
@@ -40,7 +41,14 @@ import { PRIMARY_BTN, Spinner } from "../Roster/primitives";
  * with `invitesApi.acceptJoin`. Both halves of the handoff are finished.
  */
 
-type Phase = "loading" | "ready" | "failed";
+/**
+ * `failed` is the lookup ANSWERING that the link is dead (404 / 410).
+ * `unreachable` is the lookup not answering at all - a network blip or a 5xx.
+ * They used to be one state, so a brief outage told a teacher or a child that
+ * their invite was "no longer valid" - on the one public page they reach from
+ * a message, with no way to try again.
+ */
+type Phase = "loading" | "ready" | "failed" | "unreachable";
 
 /** Which panel to show. Decided once, when the lookup lands. */
 type Outcome = "valid" | "expired" | "invalid";
@@ -49,6 +57,8 @@ export function JoinLanding({ token }: { token: string }) {
   const [phase, setPhase] = useState<Phase>("loading");
   const [lookup, setLookup] = useState<JoinLookup | null>(null);
   const [outcome, setOutcome] = useState<Outcome>("invalid");
+
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     invitesApi
@@ -70,9 +80,16 @@ export function JoinLanding({ token }: { token: string }) {
         setPhase("ready");
       })
       // A 404 or 410 is not an error state here - it IS the answer, and the
-      // "no longer valid" panel below is what it means.
-      .catch(() => setPhase("failed"));
-  }, [token]);
+      // "no longer valid" panel below is what it means. Anything else is the
+      // lookup failing to answer, which says nothing about the invite.
+      .catch((err: unknown) => {
+        setPhase(
+          err instanceof ApiError && (err.status === 404 || err.status === 410)
+            ? "failed"
+            : "unreachable",
+        );
+      });
+  }, [token, attempt]);
 
   const valid = phase === "ready" && outcome === "valid";
   const expired = phase === "ready" && outcome === "expired";
@@ -160,6 +177,28 @@ export function JoinLanding({ token }: { token: string }) {
             <p className="m-0 mt-3 text-[15px] leading-[1.6] text-nevo-near-black/62">
               Contact your school administrator for help.
             </p>
+          </>
+        ) : null}
+
+        {phase === "unreachable" ? (
+          <>
+            <h1 className="m-0 text-[26px] font-semibold tracking-[-0.018em] text-nevo-near-black">
+              We couldn&rsquo;t check your invite just now
+            </h1>
+            <p className="m-0 mt-3 text-[15px] leading-[1.6] text-nevo-near-black/62">
+              Your link may be fine &ndash; we just couldn&rsquo;t reach Nevo.
+              Try again in a moment.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setPhase("loading");
+                setAttempt((n) => n + 1);
+              }}
+              className={cn(PRIMARY_BTN, "mx-auto mt-6")}
+            >
+              Try again
+            </button>
           </>
         ) : null}
       </div>

@@ -194,3 +194,29 @@ describe("BulkImportModal delivery", () => {
     expect(visibleText(container)).toMatch(/couldn't confirm one for 1 more/i);
   });
 });
+
+describe("BulkImportModal server-rejected rows", () => {
+  it("lists each rejected row once, with the server's own row number", async () => {
+    /*
+     * Every server-rejected row used to appear twice: once as "Row N" in the
+     * rejected list and again as "Row N+2" in a second violet list below - the
+     * base-guess `RejectedRows` refuses to make. One of the two was always the
+     * wrong line in the admin's spreadsheet.
+     */
+    bulk.mockResolvedValue({
+      created: [created(1, "sent")],
+      rejected: [{ row: 5, reason: "That email is already invited." }],
+    });
+
+    const { container } = open();
+    await importFile(container);
+
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/That email is already invited\./),
+    );
+    const text = visibleText(container);
+    expect(text.split("That email is already invited.").length - 1).toBe(1);
+    expect(text).toMatch(/Row 5\b/);
+    expect(text).not.toMatch(/Row 7\b/);
+  });
+});
