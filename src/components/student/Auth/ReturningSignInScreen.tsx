@@ -93,6 +93,19 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
   const [done, setDone] = useState(false);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<LoginFailure | null>(null);
+  /**
+   * The first name to greet them by, once `users/me` answers. Null until then,
+   * and the greeting is a bare "Welcome back" - never the username, which is
+   * half a credential on a screen anyone in the room can read.
+   */
+  const [greetName, setGreetName] = useState<string | null>(null);
+  const alive = useRef(true);
+  useEffect(
+    () => () => {
+      alive.current = false;
+    },
+    [],
+  );
   const doneTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** The field the PIN boxes are a picture of. See the row itself. */
   const pinRef = useRef<HTMLInputElement>(null);
@@ -167,6 +180,8 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
         initials: initialsFromUsername(identifier),
         // So the one-tap unlock tomorrow draws the right number of boxes.
         pinLength: digits.length,
+        // So a signed-in screen can find THIS child's entry on a shared tablet.
+        userId: session.userId,
       });
       signIn({
         id: session.userId,
@@ -204,7 +219,10 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
             loginIdentifier: identifier,
             displayName: first,
             initials: first.slice(0, 2).toUpperCase(),
+            userId: session.userId,
           });
+          // And the greeting, if they are still looking at it.
+          if (alive.current) setGreetName(first);
         })
         .catch(() => {
           // Not knowing their name is not a reason to undo a sign-in they have
@@ -244,7 +262,13 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
           <Check className="size-[34px] text-nevo-cream" strokeWidth={2.6} />
         </span>
         <h2 className="mt-5 text-[23px] leading-[1.3] font-medium tracking-[-0.01em] sm:text-[26px]">
-          Welcome back, {identifier}
+          {/*
+            NEVER THE USERNAME. This read "Welcome back, amara.k" - the login
+            identifier, on a shared tablet, beside a school code the whole
+            building knows. The first name arrives inside this 1.2s hold in the
+            ordinary case; until it does, "Welcome back" is warm and true.
+          */}
+          {greetName ? `Welcome back, ${greetName}` : "Welcome back"}
         </h2>
         <p className="mt-2.5 text-[15px] text-nevo-near-black/60">
           Taking you to your lessons…

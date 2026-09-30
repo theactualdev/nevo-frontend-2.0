@@ -460,6 +460,48 @@ describe("what the device remembers a child as", () => {
       expect.objectContaining({ name: "amara.k" }),
     );
   });
+
+  it("never greets the child by their username", async () => {
+    /*
+     * The same leak on the very next screen. The success moment read
+     * "Welcome back, amara.k" - the login identifier, on a shared tablet -
+     * even though the device store had stopped keeping it.
+     */
+    loginPin.mockResolvedValue(SESSION);
+    me.mockReturnValue(new Promise(() => {}));
+    render(<ReturningSignInScreen />);
+    fill();
+
+    await signInNow();
+
+    expect(screen.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+    expect(document.body.textContent).not.toMatch(/amara\.k/);
+  });
+
+  it("greets them by first name once the account answers", async () => {
+    loginPin.mockResolvedValue(SESSION);
+    me.mockResolvedValue(ME);
+    render(<ReturningSignInScreen />);
+    fill();
+
+    await signInNow();
+    await nameToLand();
+
+    expect(
+      screen.getByRole("heading", { name: "Welcome back, Amara" }),
+    ).toBeVisible();
+  });
+
+  it("records which account this entry is, so a signed-in screen can find it", async () => {
+    loginPin.mockResolvedValue(SESSION);
+    me.mockReturnValue(new Promise(() => {}));
+    render(<ReturningSignInScreen />);
+    fill();
+
+    await signInNow();
+
+    expect(getRememberedProfile()?.userId).toBe("student-1");
+  });
 });
 
 describe("signing in on a device with a real keyboard", () => {

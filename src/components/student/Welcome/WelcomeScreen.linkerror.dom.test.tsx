@@ -20,7 +20,8 @@ import { WelcomeScreen } from "./WelcomeScreen";
 const lookupJoin = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/api/invites", () => ({ invitesApi: { lookupJoin } }));
 
-vi.mock("@/lib/auth/onboarding", () => ({ mergeOnboardingDraft: vi.fn() }));
+vi.mock("@/lib/auth/onboarding", () => ({ startOnboardingDraft: vi.fn() }));
+vi.mock("@/hooks", () => ({ useAuth: () => ({ signOut: vi.fn() }) }));
 vi.mock("@/lib/auth/session", () => ({
   clearSession: vi.fn(),
   getStoredDisplayName: () => null,

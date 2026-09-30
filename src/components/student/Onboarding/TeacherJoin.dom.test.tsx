@@ -11,7 +11,9 @@ import { nextStepAfterName } from "./NameAndAgeStep";
 import {
   clearOnboardingDraft,
   getOnboardingDraft,
+  mergeOnboardingDraft,
 } from "@/lib/auth/onboarding";
+import { clearSession, getToken, setSession } from "@/lib/auth/session";
 import { ApiError } from "@/lib/api/client";
 
 /**
@@ -41,6 +43,9 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => params,
 }));
 vi.mock("@/lib/api/auth", () => ({ authApi: { connectClassCode } }));
+
+const signOut = vi.hoisted(() => vi.fn());
+vi.mock("@/hooks", () => ({ useAuth: () => ({ signOut }) }));
 
 const connection = {
   classId: "class-uuid-1",
@@ -168,6 +173,83 @@ describe("TeacherJoin", () => {
 
     await waitFor(() => expect(connectClassCode).toHaveBeenCalledTimes(1));
     expect(connectClassCode).toHaveBeenCalledWith({ classCode: "MAP4KZ" });
+  });
+});
+
+describe("a class QR scanned on a tablet someone is signed into", () => {
+  /*
+   * The scanned code posted itself with the signed-in child's token - joining
+   * the WRONG child to the class - and onboarding then ran under their
+   * session. Nothing may be sent until the tablet has been handed over.
+   */
+  const signedInAs = (userId: string) =>
+    setSession({
+      token: `tok-${userId}`,
+      expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+      userId,
+      role: "student",
+    });
+
+  afterEach(() => clearSession());
+
+  it("asks to hand the tablet over, and sends nothing first", async () => {
+    signedInAs("ada");
+    connectClassCode.mockResolvedValue(connection);
+    params.set("code", "MAP4KZ");
+
+    render(<TeacherJoin />);
+
+    expect(await screen.findByText("Someone new is joining")).toBeVisible();
+    expect(connectClassCode).not.toHaveBeenCalled();
+  });
+
+  it("signs the other child out before the code is checked", async () => {
+    signedInAs("ada");
+    connectClassCode.mockImplementation(async () => {
+      // The request must not carry Ada's session.
+      expect(getToken()).toBeUndefined();
+      return connection;
+    });
+    params.set("code", "MAP4KZ");
+
+    render(<TeacherJoin />);
+    fireEvent.click(await screen.findByRole("button", { name: "Carry on" }));
+
+    await waitFor(() => expect(connectClassCode).toHaveBeenCalledTimes(1));
+    expect(signOut).toHaveBeenCalled();
+  });
+});
+
+describe("a scanned code is a new child at the door", () => {
+  it("starts from an empty draft, not the last child's", async () => {
+    // A child who walked away mid-onboarding left all of this behind.
+    mergeOnboardingDraft({
+      name: "Ada Obi",
+      age: 9,
+      joinToken: "someone-elses-invite",
+    });
+    connectClassCode.mockResolvedValue(connection);
+    params.set("code", "MAP4KZ");
+
+    render(<TeacherJoin />);
+
+    await waitFor(() => expect(getOnboardingDraft().classId).toBe("class-uuid-1"));
+    const draft = getOnboardingDraft();
+    expect(draft.name).toBeUndefined();
+    expect(draft.joinToken).toBeUndefined();
+  });
+
+  it("keeps a draft this child has already started, reached from the class step", async () => {
+    // Name first, then no class found, then the code: that draft is theirs.
+    mergeOnboardingDraft({ name: "Bayo Kalu", age: 10 });
+    connectClassCode.mockResolvedValue(connection);
+
+    render(<TeacherJoin />);
+    type("MAP4KZ");
+    fireEvent.click(screen.getByRole("button", { name: /join/i }));
+
+    await waitFor(() => expect(getOnboardingDraft().classId).toBe("class-uuid-1"));
+    expect(getOnboardingDraft().name).toBe("Bayo Kalu");
   });
 });
 

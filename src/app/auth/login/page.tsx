@@ -224,7 +224,12 @@ export default function LoginPage() {
         // it count would keep a child who has left the school on the tablet
         // indefinitely.
         // And record the length that worked, so tomorrow's boxes are right.
-        rememberChild({ ...remembered, pinLength: pin.length });
+        rememberChild({
+          ...remembered,
+          pinLength: pin.length,
+          // Which account this entry is, so a signed-in screen can find it.
+          userId: session.userId,
+        });
         setDone(true);
         /*
          * The remembered-device door resolves consent like every other one -

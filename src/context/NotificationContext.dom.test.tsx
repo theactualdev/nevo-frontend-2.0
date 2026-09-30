@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -55,8 +56,25 @@ vi.mock("@/lib/api/notifications", () => ({
   },
 }));
 
-const token = vi.hoisted(() => ({ value: undefined as string | undefined }));
-vi.mock("@/lib/auth/session", () => ({ getToken: () => token.value }));
+const token = vi.hoisted(() => ({
+  value: undefined as string | undefined,
+  /** Whose token it is - a different child on the same tablet has another. */
+  userId: "student-1",
+  listeners: new Set<() => void>(),
+}));
+vi.mock("@/lib/auth/session", () => ({
+  getToken: () => token.value,
+  getSession: () => (token.value ? { userId: token.userId } : null),
+  onSessionChange: (listener: () => void) => {
+    token.listeners.add(listener);
+    return () => token.listeners.delete(listener);
+  },
+}));
+
+/** What `setSession` / `clearSession` announce. */
+const sessionChanged = () => {
+  for (const l of token.listeners) l();
+};
 
 /** One unread row, as the feed returns them. */
 const feedOf = (read: boolean) => ({
@@ -126,6 +144,8 @@ beforeEach(() => {
   hasSession.value = false;
   hydrated.value = true;
   token.value = undefined;
+  token.userId = "student-1";
+  token.listeners.clear();
 });
 
 afterEach(() => {
@@ -220,6 +240,67 @@ describe("the live path, which was already right", () => {
 
     expect(shown().count).toBe("0");
     expect(shown().failed).toBe("false");
+  });
+});
+
+describe("a tablet that more than one child signs into", () => {
+  /*
+   * THE PROVIDER IS MOUNTED ONCE, AT THE ROOT. It read the feed when the app
+   * loaded and never again - so a child who signed in afterwards had no bell,
+   * and the next child on the tablet could open the one before them's.
+   */
+  it("loads the feed when a child signs in after the app opened", async () => {
+    hasSession.value = true;
+    listResult.value = Promise.resolve(feedOf(false));
+    mount();
+    expect(shown().count).toBe("0");
+
+    // Signed in with the app already open, as the PIN screen does.
+    token.value = "tok-1";
+    await act(async () => sessionChanged());
+
+    await waitFor(() => expect(shown().count).toBe("1"));
+    expect(shown().unread).toBe("1");
+  });
+
+  it("drops the last child's feed the moment another child signs in", async () => {
+    hasSession.value = true;
+    token.value = "tok-1";
+    listResult.value = Promise.resolve(feedOf(false));
+    mount();
+    await waitFor(() => expect(shown().count).toBe("1"));
+
+    // The next child's feed has not answered yet - and the last child's must
+    // not be what they see while it is on its way.
+    listResult.value = new Promise(() => {});
+    token.value = "tok-2";
+    token.userId = "student-2";
+    await act(async () => sessionChanged());
+
+    expect(shown().count).toBe("0");
+    expect(shown().unread).toBe("0");
+  });
+
+  it("does not reload for a token refresh, which is the same child", async () => {
+    hasSession.value = true;
+    token.value = "tok-1";
+    let calls = 0;
+    const feed = feedOf(false);
+    listResult.value = {
+      then: (ok: (v: unknown) => unknown) => {
+        calls += 1;
+        return Promise.resolve(feed).then(ok);
+      },
+    } as unknown as Promise<unknown>;
+    mount();
+    await waitFor(() => expect(shown().count).toBe("1"));
+    const before = calls;
+
+    token.value = "tok-1-refreshed";
+    await act(async () => sessionChanged());
+
+    expect(calls).toBe(before);
+    expect(shown().count).toBe("1");
   });
 });
 

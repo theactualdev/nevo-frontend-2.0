@@ -5,11 +5,12 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import { notificationsApi, type Notification } from "@/lib/api/notifications";
-import { getToken } from "@/lib/auth/session";
+import { getSession, getToken, onSessionChange } from "@/lib/auth/session";
 import { useHasSession } from "@/hooks/useHasSession";
 import { useHydrated } from "@/hooks/useHydrated";
 import { SAMPLE_NOTIFICATIONS } from "@/lib/mocks/sampleNotifications";
@@ -107,9 +108,34 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const [failed, setFailed] = useState(false);
   /** Bumped by `refresh` to re-run the fetch. */
   const [nonce, setNonce] = useState(0);
+  /**
+   * Whose feed this is. The provider is mounted once at the root, so it used
+   * to read the feed when the app loaded and never again: a child who signed
+   * in afterwards got no bell at all, and the next child on the tablet could
+   * open the last child's. Tracked here, the feed empties and reloads the
+   * moment the account changes.
+   */
+  const [owner, setOwner] = useState<string | null>(null);
+  /** `undefined` until the first read, so the first read always lands. */
+  const ownerRef = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    const read = () => {
+      const next = getSession()?.userId ?? null;
+      if (ownerRef.current === next) return; // a token refresh: same child
+      ownerRef.current = next;
+      // A different child, or nobody: nothing of the last one survives.
+      setFeed(null);
+      setUnread(0);
+      setFailed(false);
+      setOwner(next);
+    };
+    // Post-mount read of an external store.
+    read();
+    return onSessionChange(read);
+  }, []);
 
   useEffect(() => {
-    if (!getToken()) return;
+    if (!owner || !getToken()) return;
     let cancelled = false;
     void notificationsApi
       .list()
@@ -131,7 +157,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [nonce]);
+  }, [nonce, owner]);
 
   const refresh = useCallback(() => setNonce((n) => n + 1), []);
 

@@ -3,9 +3,11 @@ import {
   clearSession,
   getRememberedProfile,
   getSession,
+  getStoredDisplayName,
   getToken,
   rememberProfile,
   setSession,
+  setStoredDisplayName,
 } from "./session";
 
 /**
@@ -95,5 +97,65 @@ describe("session store", () => {
     window.localStorage.setItem("nevo.auth.session", "{not json");
     expect(() => getSession()).not.toThrow();
     expect(getSession()).toBeNull();
+  });
+});
+
+describe("the name a child is called on a shared tablet", () => {
+  /*
+   * The name used to come from the ONE legacy remembered profile - whichever
+   * child the device remembered last. A child unlocking through the picker was
+   * called by another child's name everywhere, and renaming themselves
+   * overwrote that other child.
+   */
+  const as = (userId: string) =>
+    setSession({ ...session(future()), userId, role: "student" });
+
+  const remember = (loginIdentifier: string, displayName: string, userId?: string) =>
+    rememberProfile({
+      schoolCode: "NEVO-1",
+      loginIdentifier,
+      displayName,
+      initials: displayName.slice(0, 2).toUpperCase(),
+      ...(userId ? { userId } : {}),
+    });
+
+  it("is never the last child the device remembered", () => {
+    window.localStorage.clear();
+    remember("ada.o", "Ada", "ada");
+    remember("bayo.k", "Bayo", "bayo");
+    as("ada");
+
+    expect(getStoredDisplayName()).toBe("Ada");
+  });
+
+  it("says nothing rather than guessing, for an entry that predates account ids", () => {
+    window.localStorage.clear();
+    remember("bayo.k", "Bayo");
+    as("ada");
+
+    expect(getStoredDisplayName()).toBeNull();
+  });
+
+  it("renames only the child who is signed in", () => {
+    window.localStorage.clear();
+    remember("ada.o", "Ada", "ada");
+    remember("bayo.k", "Bayo", "bayo");
+    as("ada");
+
+    setStoredDisplayName("Adaeze", "AD");
+
+    expect(getStoredDisplayName()).toBe("Adaeze");
+    as("bayo");
+    expect(getStoredDisplayName()).toBe("Bayo");
+    // And the legacy single profile - Bayo's, the last remembered - untouched.
+    expect(getRememberedProfile()?.displayName).toBe("Bayo");
+  });
+
+  it("is nobody's when nobody is signed in", () => {
+    window.localStorage.clear();
+    clearSession();
+    remember("ada.o", "Ada", "ada");
+
+    expect(getStoredDisplayName()).toBeNull();
   });
 });

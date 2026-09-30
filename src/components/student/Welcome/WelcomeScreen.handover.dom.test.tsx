@@ -42,8 +42,12 @@ vi.mock("@/lib/auth/session", () => ({
 
 const draft = vi.hoisted(() => ({ merged: [] as unknown[] }));
 vi.mock("@/lib/auth/onboarding", () => ({
-  mergeOnboardingDraft: (patch: unknown) => draft.merged.push(patch),
+  // The draft each arrival starts with - a fresh one, never a merge.
+  startOnboardingDraft: (seed: unknown) => draft.merged.push(seed),
 }));
+
+const signOut = vi.hoisted(() => vi.fn());
+vi.mock("@/hooks", () => ({ useAuth: () => ({ signOut }) }));
 
 const replace = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({
@@ -198,5 +202,24 @@ describe("before the client can see the session", () => {
     const { container } = render(<WelcomeScreen />);
 
     expect(container).not.toBeEmptyDOMElement();
+  });
+});
+
+describe("each arrival starts its own draft", () => {
+  /*
+   * The draft was merged into and only cleared when a child finished, so a
+   * child who walked away left their name and invitation for the next child
+   * on the tablet. Every arrival now replaces it with only what it brought.
+   */
+  it("starts an empty draft for a child with no invitation", () => {
+    render(<WelcomeScreen />);
+
+    expect(draft.merged).toEqual([{}]);
+  });
+
+  it("starts a draft holding only this child's invitation", () => {
+    render(<WelcomeScreen joinToken="tok-2" />);
+
+    expect(draft.merged).toEqual([{ joinToken: "tok-2" }]);
   });
 });

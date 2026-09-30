@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { getToken } from "@/lib/auth/session";
+import { getToken, onSessionChange } from "@/lib/auth/session";
 
 /**
  * Whether a real signed-in session exists on this device.
@@ -23,9 +23,14 @@ import { getToken } from "@/lib/auth/session";
  * client settle on the truth without a hydration mismatch - and the `storage`
  * subscription means signing out in another tab updates this one.
  */
+/*
+ * THIS TAB AS WELL AS OTHERS. It listened to `storage` alone, which only fires
+ * for writes made in ANOTHER tab - so a child who signed in here left every
+ * root-mounted reader on its signed-out answer until something else happened
+ * to re-render it. `onSessionChange` covers both.
+ */
 function subscribe(onChange: () => void): () => void {
-  window.addEventListener("storage", onChange);
-  return () => window.removeEventListener("storage", onChange);
+  return onSessionChange(onChange);
 }
 
 const clientSnapshot = () => Boolean(getToken());
