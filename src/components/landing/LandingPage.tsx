@@ -35,6 +35,7 @@ const CSS = `
    the nav links <720px; these carry the same intent down to phones). */
 @supports (height: 100svh) { .nv-landing #nv-open { height: 100svh !important; } }
 @media (pointer: coarse) { .nv-landing .nv-field { font-size: 16px !important; } }
+@media (max-width: 479px) { #nv-nav .nv-talk { display: none !important; } }
 @media (max-width: 519px) { .nv-landing .nv-rail-note { display: none !important; } }
 @media (max-width: 339px) { #nv-nav img { display: none !important; } }
 @media (prefers-reduced-motion: reduce) {
@@ -469,8 +470,10 @@ export function LandingPage() {
             {/* Both nav CTAs, grouped: the outlined "Sign up" beside the navy
                 "Start the conversation" (-> form). Sign up replaced the old
                 "Watch demo" scrub on 30 Sep (QA) - it sends a school straight
-                to setup, which is the self-serve route. Unlike Watch demo it
-                stays on phones: it is the one CTA a school on a phone needs. */}
+                to setup, which is the self-serve route. A phone has room for
+                the logo and ONE button, and product chose Sign up: under
+                480px "Start the conversation" hides instead (`.nv-talk`), and
+                the form it scrolls to is still one scroll down the page. */}
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <a
                 href="/admin/onboarding"
@@ -499,7 +502,7 @@ export function LandingPage() {
               </a>
               <button
                 data-scroll="nv-form-sec"
-                className="nv-raise"
+                className="nv-raise nv-talk"
                 style={{
                   border: "none",
                   background: "#3b3f6e",
