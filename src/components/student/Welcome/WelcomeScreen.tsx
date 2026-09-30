@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { mergeOnboardingDraft } from "@/lib/auth/onboarding";
+import { startOnboardingDraft } from "@/lib/auth/onboarding";
+import { useAuth } from "@/hooks";
 import { invitesApi } from "@/lib/api/invites";
 import { clearSession, getStoredDisplayName } from "@/lib/auth/session";
 import { useHasSession } from "@/hooks/useHasSession";
@@ -47,6 +48,7 @@ export function WelcomeScreen({
   joinToken?: string;
 }) {
   const router = useRouter();
+  const { signOut } = useAuth();
   const hydrated = useHydrated();
   const signedIn = useHasSession();
   const [handedOver, setHandedOver] = useState(false);
@@ -108,9 +110,17 @@ export function WelcomeScreen({
   useEffect(() => {
     // Only once the invitation is actually this child's. Writing it while a
     // hand-over is still on screen would attach the invite to the draft even
-    // if the signed-in child chose to stay.
-    if (joinToken && !needsHandover) mergeOnboardingDraft({ joinToken });
-  }, [joinToken, needsHandover]);
+    // if the signed-in child chose to stay - and before hydration the screen
+    // cannot yet know whether a hand-over is needed.
+    if (!hydrated || needsHandover) return;
+    /*
+     * A NEW CHILD STARTS HERE, SO THE DRAFT STARTS EMPTY. It used to be merged
+     * into, and cleared only when a child finished - so a child who walked
+     * away left their name, class code and invitation for the next child on
+     * the tablet. Only this arrival's own invitation goes in.
+     */
+    startOnboardingDraft(joinToken ? { joinToken } : {});
+  }, [hydrated, joinToken, needsHandover]);
 
   /*
    * A token cannot be judged until the client can see the session, so neither
@@ -130,7 +140,9 @@ export function WelcomeScreen({
         onCarryOn={() => {
           // The session goes FIRST. Everything downstream of this - the
           // baseline especially - must not be able to attribute itself to the
-          // child who was here.
+          // child who was here. Revoked on the server and the on-device signal
+          // store purged, not just forgotten locally.
+          signOut();
           clearSession();
           setHandedOver(true);
         }}

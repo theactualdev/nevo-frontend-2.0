@@ -6,7 +6,15 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { authApi } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
-import { mergeOnboardingDraft } from "@/lib/auth/onboarding";
+import {
+  mergeOnboardingDraft,
+  startOnboardingDraft,
+} from "@/lib/auth/onboarding";
+import { clearSession, getStoredDisplayName } from "@/lib/auth/session";
+import { useAuth } from "@/hooks";
+import { useHasSession } from "@/hooks/useHasSession";
+import { useHydrated } from "@/hooks/useHydrated";
+import { JoinHandover } from "./JoinHandover";
 import { cn } from "@/lib/utils";
 import {
   CLASS_CODE_MAX,
@@ -53,6 +61,50 @@ export function TeacherJoin() {
   const initialMode =
     params.get("mode") === "code" || scannedCode ? "code" : "scan";
   const [mode, setMode] = useState<Mode>(initialMode);
+
+  /*
+   * A CLASS QR SCANNED ON A TABLET SOMEONE IS SIGNED INTO.
+   *
+   * The route guard lets onboarding through by prefix, because onboarding is
+   * how a session gets made. So a new child scanning their class QR on a
+   * tablet where another child was still signed in posted the code with THAT
+   * child's token - connecting the wrong child to the class - and then ran
+   * the whole baseline under their session, until PIN creation failed with no
+   * onboarding token. The invitation-link door already hands the tablet over
+   * explicitly; the QR door now does the same, before anything is sent.
+   */
+  const hydrated = useHydrated();
+  const signedIn = useHasSession();
+  const { signOut } = useAuth();
+  const [handedOver, setHandedOver] = useState(false);
+  const needsHandover = hydrated && signedIn && !handedOver;
+
+  // A scanned code is a new child arriving at the door, not a step in a flow
+  // already under way - so nothing from an earlier child's draft comes with
+  // them. Reached from the class step instead, the draft is this child's own.
+  useEffect(() => {
+    if (!hydrated || needsHandover || !scannedCode) return;
+    startOnboardingDraft();
+  }, [hydrated, needsHandover, scannedCode]);
+
+  // Nothing is posted until the client knows whether someone is signed in:
+  // the scanned code submits itself on mount.
+  if (!hydrated) return null;
+
+  if (needsHandover) {
+    return (
+      <JoinHandover
+        signedInName={getStoredDisplayName()}
+        onCarryOn={() => {
+          // Revoke and purge the signed-in child's session FIRST, so nothing
+          // below can be attributed to them.
+          signOut();
+          clearSession();
+          setHandedOver(true);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-nevo-cream text-nevo-near-black">

@@ -12,11 +12,11 @@
  */
 
 import { deviceClockSkewMs } from "@/lib/api/serverClock";
-import { rememberChild } from "./deviceRoster";
+import { rememberChild, rememberedChildren } from "./deviceRoster";
 
 const SESSION_KEY = "nevo.auth.session";
 const PROFILE_KEY = "nevo.auth.profile";
-/** Set when the student renames themselves and no remembered profile exists. */
+/** Prefix for the name a child chose, stored per account (`.<userId>`). */
 const DISPLAY_NAME_KEY = "nevo.auth.displayName";
 
 /**
@@ -112,6 +112,14 @@ export interface RememberedProfile {
   /** Avatar initials, e.g. "AK". */
   initials: string;
   /**
+   * The account this entry signs in as, recorded the first time a sign-in
+   * succeeds from it. Never shown - it is how a signed-in screen finds ITS
+   * child's entry on a shared tablet, rather than whichever child the device
+   * happened to remember last. Absent on entries from before 30 Sep; the next
+   * sign-in fills it.
+   */
+  userId?: string;
+  /**
    * How many digits this child's PIN had the last time it opened this device.
    * The LENGTH, never the PIN.
    *
@@ -161,6 +169,7 @@ export function setSession(next: StoredSession): void {
   } catch {
     // Private mode etc. - the in-memory session still works for this tab.
   }
+  announceSessionChange();
 }
 
 export function clearSession(): void {
@@ -172,6 +181,47 @@ export function clearSession(): void {
   } catch {
     // ignore
   }
+  announceSessionChange();
+}
+
+const SESSION_EVENT = "nevo:session-change";
+
+/**
+ * Deferred a microtask, not dispatched inline: `getSession()` clears an expired
+ * session while it is being READ, which can be during a render, and a listener
+ * setting state from inside another component's render is an error.
+ */
+function announceSessionChange(): void {
+  if (typeof window === "undefined") return;
+  queueMicrotask(() => {
+    try {
+      window.dispatchEvent(new Event(SESSION_EVENT));
+    } catch {
+      // An environment without events has nothing listening either.
+    }
+  });
+}
+
+/**
+ * Be told when the signed-in account may have changed - in this tab (sign-in,
+ * sign-out, a hand-over) or another one (`storage`).
+ *
+ * THE TABLET IS SHARED, AND NOTHING USED TO NOTICE WHO WAS HOLDING IT. Anything
+ * mounted once at the root - the notification feed, the accessibility
+ * preferences - read the session when the app loaded and never again, so the
+ * next child to sign in inherited the last child's feed and text size. Each
+ * listener re-reads `getSession()` and compares the user id itself: a token
+ * refresh fires this too, and is the same child.
+ */
+export function onSessionChange(listener: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+  const handler = () => listener();
+  window.addEventListener(SESSION_EVENT, handler);
+  window.addEventListener("storage", handler);
+  return () => {
+    window.removeEventListener(SESSION_EVENT, handler);
+    window.removeEventListener("storage", handler);
+  };
 }
 
 export function getRememberedProfile(): RememberedProfile | null {
@@ -208,38 +258,59 @@ export function rememberProfile(profile: RememberedProfile): void {
 }
 
 /**
- * The name the student is shown as. The student app does not yet read the
- * profile endpoint, so the edit on the profile screen persists to the device: it updates the
- * remembered profile when the device has one, and falls back to its own key
- * otherwise. Without this the screen flashed "Saved" and forgot the name on
- * the next load.
+ * The name the SIGNED-IN child chose for themselves, as this device holds it.
  *
- * TODO(api): `GET /api/v1/users/me` exists and returns the real name - the
- * teacher console reads it through `useCurrentUser`. The student app has not
- * been moved onto it yet.
+ * KEYED BY ACCOUNT, because the tablet is shared. This used to read the one
+ * legacy remembered profile - which is whichever child the device remembered
+ * LAST, not the child holding it. So a child who unlocked through the picker
+ * was called by another child's name on Home, the sidebar and Profile, and a
+ * rename wrote itself into that other child's entry. Now: the name saved under
+ * this account's id, else this account's own roster entry, else nothing - and
+ * the caller falls back to the account itself (`users/me`, settings).
  */
 export function getStoredDisplayName(): string | null {
   if (typeof window === "undefined") return null;
-  const remembered = getRememberedProfile();
-  if (remembered?.displayName) return remembered.displayName;
+  const userId = getSession()?.userId;
+  if (!userId) return null;
   try {
-    return window.localStorage.getItem(DISPLAY_NAME_KEY);
+    const chosen = window.localStorage.getItem(`${DISPLAY_NAME_KEY}.${userId}`);
+    if (chosen?.trim()) return chosen.trim();
   } catch {
-    return null;
+    // Unreadable storage is no stored name; the account still has one.
   }
+  const own = rememberedChildren().find((c) => c.userId === userId);
+  return own?.displayName?.trim() || null;
 }
 
+/**
+ * Save the name the signed-in child chose, for THIS child only.
+ *
+ * Written under the account's id, and into the roster entry that belongs to
+ * this account so the picker learns it too. An entry is only ever matched by
+ * account id - never by "the one the device remembers", which is the bug this
+ * replaces. The legacy single-profile key is updated only when it is provably
+ * the same child.
+ */
 export function setStoredDisplayName(name: string, initials: string): void {
   const trimmed = name.trim();
-  if (!trimmed) return;
-  const remembered = getRememberedProfile();
-  if (remembered) {
-    rememberProfile({ ...remembered, displayName: trimmed, initials });
-    return;
-  }
+  const userId = getSession()?.userId;
+  if (!trimmed || !userId) return;
   try {
-    window.localStorage.setItem(DISPLAY_NAME_KEY, trimmed);
+    window.localStorage.setItem(`${DISPLAY_NAME_KEY}.${userId}`, trimmed);
   } catch {
     // Private mode - the name simply will not survive this session.
+  }
+  const own = rememberedChildren().find((c) => c.userId === userId);
+  if (own) rememberChild({ ...own, displayName: trimmed, initials });
+  const legacy = getRememberedProfile();
+  if (legacy?.userId === userId) {
+    try {
+      window.localStorage.setItem(
+        PROFILE_KEY,
+        JSON.stringify({ ...legacy, displayName: trimmed, initials }),
+      );
+    } catch {
+      // ignore
+    }
   }
 }

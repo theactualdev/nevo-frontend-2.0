@@ -7,7 +7,7 @@
  */
 
 import { STUDENT_PIN_LENGTH } from "@/lib/constants/auth";
-import { rememberProfile } from "./session";
+import { getSession, rememberProfile } from "./session";
 
 const DRAFT_KEY = "nevo.onboarding.draft";
 
@@ -58,6 +58,25 @@ export function mergeOnboardingDraft(patch: OnboardingDraft): void {
     );
   } catch {
     // Private mode etc. - the flow still works, the device just won't remember.
+  }
+}
+
+/**
+ * Begin a NEW child's draft, with only what this arrival brought.
+ *
+ * THE DRAFT OUTLIVED ITS CHILD. It is cleared when onboarding remembers a
+ * child - and nowhere else. A child who walked away mid-onboarding left their
+ * name, age, school and invitation in the tab, so the next child on the same
+ * tablet was greeted as them, routed by their class code, and could redeem
+ * their invitation at PIN creation. Called where a new child starts (the
+ * welcome screen, and a class code arriving directly), so no earlier child's
+ * answers are carried in.
+ */
+export function startOnboardingDraft(seed: OnboardingDraft = {}): void {
+  try {
+    window.sessionStorage.setItem(DRAFT_KEY, JSON.stringify(seed));
+  } catch {
+    // Private mode etc. - there is no earlier draft to leak either.
   }
 }
 
@@ -117,6 +136,7 @@ export function rememberOnboardedStudent(
     clearOnboardingDraft();
     return false;
   }
+  const userId = getSession()?.userId;
   rememberProfile({
     schoolCode,
     loginIdentifier: identifier,
@@ -124,6 +144,8 @@ export function rememberOnboardedStudent(
     initials: initialsOf(name),
     // They have just created it, at the one length a new PIN can be.
     pinLength: STUDENT_PIN_LENGTH,
+    // Account creation has just stored the session this child now owns.
+    ...(userId ? { userId } : {}),
   });
   clearOnboardingDraft();
   return true;

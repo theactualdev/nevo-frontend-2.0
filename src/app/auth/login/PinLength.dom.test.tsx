@@ -202,3 +202,20 @@ describe("the one-tap unlock, now that a PIN may be four or six", () => {
     );
   });
 });
+
+describe("which account a remembered child is", () => {
+  it("is recorded on the first unlock, so a signed-in screen can find this child", async () => {
+    // Without it, every signed-in screen fell back to whichever child the
+    // device remembered last - and called this child by that child's name.
+    loginPin.mockResolvedValue(SESSION);
+    await chooseAda();
+
+    await tap("123456");
+
+    await waitFor(() =>
+      expect(roster.rememberChild).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: "student-1" }),
+      ),
+    );
+  });
+});

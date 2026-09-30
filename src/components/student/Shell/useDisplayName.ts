@@ -5,7 +5,12 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useHasSession } from "@/hooks/useHasSession";
 import { useHydrated } from "@/hooks/useHydrated";
 import { settingsApi } from "@/lib/api/settings";
-import { getStoredDisplayName, getToken } from "@/lib/auth/session";
+import {
+  getSession,
+  getStoredDisplayName,
+  getToken,
+  onSessionChange,
+} from "@/lib/auth/session";
 import { MOCK_STUDENT } from "./studentNav";
 
 function initialsOf(name: string): string {
@@ -44,19 +49,29 @@ export function useDisplayName(): { name: string; initials: string } {
   const [stored, setStored] = useState<string | null>(null);
   const [account, setAccount] = useState<string | null>(null);
 
+  /*
+   * RE-READ WHEN THE CHILD CHANGES. The stored name is now keyed by account
+   * (`getStoredDisplayName`), so a different child signing in on the same
+   * tablet has a different one - and must not see the last child's until
+   * something happens to remount this.
+   */
+  const [owner, setOwner] = useState<string | null>(null);
   useEffect(() => {
-    const s = getStoredDisplayName();
-    if (s) {
-      // Post-mount hydration read of an external store, same pattern as
+    const read = () => {
+      // Post-mount read of an external store, same pattern as
       // AccessibilityContext - it cannot run during render without a mismatch.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setStored(s);
-    }
+      setStored(getStoredDisplayName());
+      setOwner(getSession()?.userId ?? null);
+    };
+    read();
+    return onSessionChange(read);
   }, []);
 
   // The account-stored choice, for a device that has never seen this child.
   useEffect(() => {
-    if (!getToken()) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAccount(null);
+    if (!owner || !getToken()) return;
     let cancelled = false;
     void settingsApi
       .get()
@@ -70,7 +85,7 @@ export function useDisplayName(): { name: string; initials: string } {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [owner]);
 
   const serverFirst = identity?.name?.split(/\s+/)[0] ?? null;
   const chosen = stored ?? account;

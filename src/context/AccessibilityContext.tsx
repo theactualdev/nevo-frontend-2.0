@@ -9,6 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { getSession, onSessionChange } from "@/lib/auth/session";
 
 export type TextSize = "s" | "m" | "l" | "xl";
 
@@ -35,6 +36,24 @@ const DEFAULTS: AccessibilityPrefs = {
 };
 
 const STORAGE_KEY = "nevo:a11y";
+
+/** Whose preferences to read: the signed-in child's, or the device's. */
+function prefsKey(): string {
+  const userId = getSession()?.userId;
+  return userId ? `${STORAGE_KEY}:${userId}` : STORAGE_KEY;
+}
+
+function readPrefs(key: string): AccessibilityPrefs {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw
+      ? { ...DEFAULTS, ...(JSON.parse(raw) as Partial<AccessibilityPrefs>) }
+      : DEFAULTS;
+  } catch {
+    // Malformed or unavailable storage is no preference at all.
+    return DEFAULTS;
+  }
+}
 
 /**
  * Text-size → content zoom factor (works with the app's fixed-px type). Applied
@@ -64,49 +83,75 @@ const AccessibilityContext = createContext<AccessibilityValue | undefined>(
  * prefs are read and applied on mount.
  */
 export function AccessibilityProvider({ children }: { children: ReactNode }) {
-  const [prefs, setPrefs] = useState<AccessibilityPrefs>(DEFAULTS);
+  /**
+   * The preferences AND whose they are. Kept together so a switch of child
+   * can never write the last child's text size under the new child's key:
+   * the persist effect only ever writes a pair that was read as a pair.
+   * `key` is null until the client has looked, so nothing is written before.
+   */
+  const [state, setState] = useState<{
+    key: string | null;
+    prefs: AccessibilityPrefs;
+  }>({ key: null, prefs: DEFAULTS });
+  const { prefs } = state;
 
-  // Load persisted prefs after mount (client-only → no SSR mismatch).
+  /*
+   * ONE CHILD'S SETTINGS, NOT THE TABLET'S.
+   *
+   * These lived under a single device key, so on a shared classroom tablet
+   * the next child inherited the last child's text size and contrast - and,
+   * worse, their break preference, which is a learning-support setting and
+   * not a screen setting at all. Keyed by the signed-in account now, and
+   * re-read whenever the account changes. Signed out (the walkthrough) keeps
+   * the device key, which is about the screen and belongs to nobody.
+   *
+   * No migration from the old shared key: it cannot say which child set it,
+   * and handing it to whichever child signs in first is the bug again.
+   */
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as Partial<AccessibilityPrefs>;
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setPrefs((p) => ({ ...p, ...parsed }));
-      }
-    } catch {
-      // ignore malformed / unavailable storage
-    }
+    const load = () => {
+      const key = prefsKey();
+      setState((s) => (s.key === key ? s : { key, prefs: readPrefs(key) }));
+    };
+    // Post-mount read of an external store - it cannot run during render
+    // without a hydration mismatch.
+    load();
+    return onSessionChange(load);
   }, []);
 
   // Apply to the document root + persist on any change.
   useEffect(() => {
     const root = document.documentElement;
-    root.dataset.reducedMotion = String(prefs.reducedMotion);
-    root.dataset.contrast = prefs.highContrast ? "high" : "normal";
+    root.dataset.reducedMotion = String(state.prefs.reducedMotion);
+    root.dataset.contrast = state.prefs.highContrast ? "high" : "normal";
+    if (!state.key) return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+      localStorage.setItem(state.key, JSON.stringify(state.prefs));
     } catch {
       // ignore
     }
-  }, [prefs]);
+  }, [state]);
 
-  const setReducedMotion = useCallback(
-    (v: boolean) => setPrefs((p) => ({ ...p, reducedMotion: v })),
+  const update = useCallback(
+    (patch: Partial<AccessibilityPrefs>) =>
+      setState((s) => ({ ...s, prefs: { ...s.prefs, ...patch } })),
     [],
+  );
+  const setReducedMotion = useCallback(
+    (v: boolean) => update({ reducedMotion: v }),
+    [update],
   );
   const setHighContrast = useCallback(
-    (v: boolean) => setPrefs((p) => ({ ...p, highContrast: v })),
-    [],
+    (v: boolean) => update({ highContrast: v }),
+    [update],
   );
   const setTextSize = useCallback(
-    (v: TextSize) => setPrefs((p) => ({ ...p, textSize: v })),
-    [],
+    (v: TextSize) => update({ textSize: v }),
+    [update],
   );
   const setSuggestBreaks = useCallback(
-    (v: boolean) => setPrefs((p) => ({ ...p, suggestBreaks: v })),
-    [],
+    (v: boolean) => update({ suggestBreaks: v }),
+    [update],
   );
 
   const value = useMemo<AccessibilityValue>(
