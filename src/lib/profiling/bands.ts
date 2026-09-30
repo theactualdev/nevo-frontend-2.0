@@ -55,7 +55,11 @@ export interface GridSpanConfig {
   /** Adaptive span start / ceiling (shared across bands; capped by grid). */
   spanStart: number;
   spanMax: number;
-  /** SS runs the dual task: a true/false check between watch and recall. */
+  /**
+   * SS runs the dual task: a true/false check between watch and recall.
+   * Not drawn in the Grid Span frame or the prototype - design approved it as
+   * built on 30 Sep. Not a deviation; see `GridSpanModule`'s `DUAL_CHECKS`.
+   */
   dual: boolean;
   /** First-round instruction (later rounds use the short forms). */
   instruction: string;

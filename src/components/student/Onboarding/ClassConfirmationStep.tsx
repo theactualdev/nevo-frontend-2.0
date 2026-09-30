@@ -167,7 +167,7 @@ export function ClassConfirmationStep() {
    */
   if (mode === "unknown-school") {
     return (
-      <OnboardingShell step={3} backHref="/student/onboarding/school" fill>
+      <OnboardingShell step={3} backHref="/student/onboarding/school">
         <div className="flex shrink-0 justify-center">
           <IllustrationWrapper
             src="/illustrations/onboarding-class.png"
@@ -204,7 +204,7 @@ export function ClassConfirmationStep() {
   // from their teacher joins them directly, without needing the school roster.
   if (mode === "none") {
     return (
-      <OnboardingShell step={3} backHref="/student/onboarding/school" fill>
+      <OnboardingShell step={3} backHref="/student/onboarding/school">
         <div className="flex shrink-0 justify-center">
           <IllustrationWrapper
             src="/illustrations/onboarding-class.png"

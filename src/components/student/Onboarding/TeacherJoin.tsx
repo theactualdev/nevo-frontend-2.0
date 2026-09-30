@@ -127,16 +127,23 @@ export function TeacherJoin() {
         />
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-6 pt-4 pb-7 sm:justify-center sm:pt-0 sm:pb-11">
-        {mode === "scan" ? (
-          <ScanMode onSwitch={() => setMode("code")} />
-        ) : (
-          <CodeMode
-            initial={scannedCode}
-            onSwitch={() => setMode("scan")}
-            onJoined={() => router.push(NEXT_STEP)}
-          />
-        )}
+      {/*
+        Centred on every screen, phones included (QA, 30 Sep) - it used to
+        centre only from `sm` up. `my-auto` so a screen too short for the
+        content scrolls from its top rather than clipping it.
+      */}
+      <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-6 pt-4 pb-7 sm:pt-0 sm:pb-11">
+        <div className="my-auto flex w-full flex-col items-center">
+          {mode === "scan" ? (
+            <ScanMode onSwitch={() => setMode("code")} />
+          ) : (
+            <CodeMode
+              initial={scannedCode}
+              onSwitch={() => setMode("scan")}
+              onJoined={() => router.push(NEXT_STEP)}
+            />
+          )}
+        </div>
       </div>
     </div>
   );
