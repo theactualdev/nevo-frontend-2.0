@@ -9,6 +9,7 @@ import { getOnboardingDraft } from "@/lib/auth/onboarding";
 import {
   BaselineCapture,
   reduceGridSpan,
+  reduceRunContext,
   reduceTrialModule,
 } from "@/lib/profiling/capture";
 import { randomId } from "@/lib/utils";
@@ -137,6 +138,8 @@ export function ProfilingFlow({
         return;
       }
       const features = [
+        // Which band's items and which subject produced the numbers below.
+        reduceRunContext(capture),
         reduceGridSpan(capture),
         reduceTrialModule(capture, "pattern_flanker"),
         reduceTrialModule(capture, "sentence_dot"),

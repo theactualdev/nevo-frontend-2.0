@@ -164,3 +164,53 @@ describe("SentenceDotModule — P1-3 is actually asked something", () => {
     expect(screen.getByText("Watch the dots")).toBeVisible();
   });
 });
+
+describe("SentenceDotModule — the dots have no fixed answer", () => {
+  /*
+   * Every pair drew its larger count on the left, in every band, so the first
+   * button was always right and a child who tapped it every time scored full
+   * marks on a number-sense measure. The side is now drawn per run.
+   */
+  const toTheDots = () => {
+    // No voice, so the P1-3 run goes straight to the dots.
+    const capture = new BaselineCapture("dots");
+    render(
+      <SentenceDotModule band="p13" capture={capture} onComplete={() => {}} />,
+    );
+    act(() => void vi.advanceTimersByTime(1000)); // past the reveal, masked
+    return capture;
+  };
+  const first = () => screen.getByRole("button", { name: /Top|Left/ });
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it("marks the first button wrong when the larger array is on the right", () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.1);
+    const capture = toTheDots();
+
+    fireEvent.click(first());
+
+    const [p] = picks(capture, "dots");
+    expect(p).toMatchObject({ correct: false });
+    expect(Number(p.a)).toBeLessThan(Number(p.b));
+  });
+
+  it("marks it right when the larger array is on the left", () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.9);
+    const capture = toTheDots();
+
+    fireEvent.click(first());
+
+    expect(picks(capture, "dots")[0]).toMatchObject({ correct: true });
+  });
+
+  it("records how close the two counts were", () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.9);
+    const capture = toTheDots();
+
+    fireEvent.click(first());
+
+    // P1-3's first pair is 8 against 4.
+    expect(picks(capture, "dots")[0]).toMatchObject({ ratio: 2 });
+  });
+});

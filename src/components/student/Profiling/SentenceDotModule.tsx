@@ -222,9 +222,28 @@ export function SentenceDotModule({
     };
   }, [act, trial]);
 
+  /*
+   * WHICH SIDE HOLDS MORE, drawn once per run.
+   *
+   * Every pair listed its larger count first and the arrays were drawn in
+   * that order, in every band - so the answer was ALWAYS the first button,
+   * and a child who tapped Left every time scored full marks on a measure of
+   * number sense. The flanker already varies its target; this was missed.
+   * Drawn in the initializer so a re-render never moves a shown array.
+   */
+  const [largerOnRight] = useState(() =>
+    dotPairs.map(() => Math.random() < 0.5),
+  );
+
   const sentence = sentences[Math.min(trial, sentences.length - 1)];
   const heard = AUDIO_TRIALS[Math.min(trial, AUDIO_TRIALS.length - 1)];
   const pair = dotPairs[Math.min(trial, dotPairs.length - 1)];
+  const flipped = largerOnRight[Math.min(trial, largerOnRight.length - 1)];
+  const [left, right] = flipped ? [pair.b, pair.a] : [pair.a, pair.b];
+  /** How hard the comparison is - the engine's reason for the band's pairs. */
+  const ratio =
+    Math.round((Math.max(pair.a, pair.b) / Math.min(pair.a, pair.b)) * 100) /
+    100;
 
   // Say it on arrival - a six-year-old should not have to find the button to be
   // given the question. The button is there to hear it again.
@@ -367,7 +386,7 @@ export function SentenceDotModule({
         ) : (
           <>
             <div className="flex flex-col items-center gap-4 sm:flex-row sm:gap-6">
-              {[pair.a, pair.b].map((count, side) => (
+              {[left, right].map((count, side) => (
                 <div
                   key={`${trial}-${side}`}
                   className="relative size-[200px] overflow-hidden rounded-[12px] border-2 border-nevo-navy bg-nevo-cream"
@@ -388,10 +407,10 @@ export function SentenceDotModule({
             <div className="flex w-full max-w-[300px] flex-col gap-4 sm:w-auto sm:max-w-none sm:flex-row">
               <DotButton
                 label="Top"
-                wide={pair.a}
+                wide={left}
                 onClick={() =>
                   masked &&
-                  pick(0, { a: pair.a, b: pair.b, correct: pair.a > pair.b })
+                  pick(0, { a: left, b: right, ratio, correct: left > right })
                 }
                 pressed={picked === 0}
                 armed={masked}
@@ -399,10 +418,10 @@ export function SentenceDotModule({
               />
               <DotButton
                 label="Bottom"
-                wide={pair.b}
+                wide={right}
                 onClick={() =>
                   masked &&
-                  pick(1, { a: pair.a, b: pair.b, correct: pair.b > pair.a })
+                  pick(1, { a: left, b: right, ratio, correct: right > left })
                 }
                 pressed={picked === 1}
                 armed={masked}
