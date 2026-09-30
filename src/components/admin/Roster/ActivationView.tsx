@@ -6,7 +6,7 @@ import { CostSheet } from "../Billing/CostSheet";
 import { HowToPayPanel } from "../Billing/HowToPayPanel";
 import { InvoiceBreakdown } from "../Billing/InvoiceBreakdown";
 import { ReadFailed } from "../ReadFailed";
-import { CARD } from "./primitives";
+import { CARD, CheckIcon } from "./primitives";
 import {
   billingApi,
   type Invoice,
@@ -60,6 +60,11 @@ export function ActivationView() {
   const [school, setSchool] = useState<School | null>(null);
   const [activating, setActivating] = useState(false);
   const [activateFailed, setActivateFailed] = useState(false);
+  /**
+   * What `activate` answered, when it answered in this visit. OB-05's list is
+   * "What just happened", and on a later visit nothing just did.
+   */
+  const [activated, setActivated] = useState<OnboardingState | null>(null);
   const [rechecking, setRechecking] = useState(false);
   /** A re-read that failed, as distinct from one that found nothing new. */
   const [recheckFailed, setRecheckFailed] = useState(false);
@@ -124,6 +129,7 @@ export function ActivationView() {
       .activate()
       .then((s) => {
         setState(s);
+        setActivated(s);
         refreshGate();
       })
       .catch(() => setActivateFailed(true))
@@ -182,7 +188,7 @@ export function ActivationView() {
             onActivate={activate}
           />
         ) : (
-          <Active school={school} />
+          <Active school={school} activated={activated} />
         )}
       </div>
     </div>
@@ -417,8 +423,57 @@ function Waiting({
   );
 }
 
+/**
+ * OB-05's "What just happened", as far as the contract can say it.
+ *
+ * `POST /onboarding/activate` is documented as "Create the accounts, once the
+ * invoice is paid and not before", and answers with the school's
+ * `OnboardingState`. So the accounts it created - students across their
+ * classes, and teachers - are established by the call that just returned, and
+ * the counts are the ones it returned. Nothing is counted here.
+ *
+ * THREE OF THE FRAME'S FOUR ROWS ARE LEFT OUT OR REDUCED, because nothing
+ * backs them:
+ * - "18 teacher invitations sent · Each teacher gets a link to set their
+ *   password". Activate says it creates accounts; it says nothing about
+ *   emailing anyone, and an invitation carries `deliveryStatus` precisely
+ *   because a send can fail to happen. The row says ACCOUNTS CREATED, which
+ *   the contract does establish, and not that anything was sent.
+ * - "Parent consent requests sent" - the response carries no consent field,
+ *   and consent wording is with counsel.
+ * - "Student sign-in details ready · Download or print them" - no endpoint
+ *   produces them.
+ * TODO(api): counts and delivery state for anything activate sends, on the
+ * activate response.
+ */
+function happenedRows(s: OnboardingState): { label: string; sub: string | null }[] {
+  const rows: { label: string; sub: string | null }[] = [];
+  const classes = s.classes.length;
+  if (s.studentCount > 0) {
+    rows.push({
+      label: `${s.studentCount} student ${s.studentCount === 1 ? "account" : "accounts"} created`,
+      sub: classes > 0 ? `Across your ${classes} ${classes === 1 ? "class" : "classes"}` : null,
+    });
+  }
+  if (s.teacherCount > 0) {
+    rows.push({
+      label: `${s.teacherCount} teacher ${s.teacherCount === 1 ? "account" : "accounts"} created`,
+      sub: null,
+    });
+  }
+  return rows;
+}
+
 /** OB-05. */
-function Active({ school }: { school: School | null }) {
+function Active({
+  school,
+  activated,
+}: {
+  school: School | null;
+  /** What activate returned in this visit, or null on any later one. */
+  activated: OnboardingState | null;
+}) {
+  const happened = activated ? happenedRows(activated) : [];
   return (
     <>
       <h2 className="mt-1.5 text-[23px] font-semibold tracking-[-0.018em] text-nevo-near-black xl:text-[28px]">
@@ -426,7 +481,44 @@ function Active({ school }: { school: School | null }) {
       </h2>
       <p className="mt-2 max-w-[64ch] text-[15px] leading-[1.55] text-nevo-near-black/68">
         Your payment is confirmed and your school is switched on.
+        {happened.length > 0 ? " Here’s what just happened." : ""}
       </p>
+
+      {happened.length > 0 ? (
+        <>
+          <h3 className="m-0 mt-7 mb-3 text-[13px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase">
+            What just happened
+          </h3>
+          <ul className={cn(CARD, "m-0 list-none overflow-hidden p-0")}>
+            {happened.map((row, i) => (
+              <li
+                key={row.label}
+                className={cn(
+                  "flex items-center gap-3.5 px-[18px] py-4",
+                  i < happened.length - 1 && "border-b border-nevo-near-black/7",
+                )}
+              >
+                <span
+                  aria-hidden="true"
+                  className="flex size-7 flex-none items-center justify-center rounded-full bg-nevo-navy text-nevo-cream"
+                >
+                  <CheckIcon />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px] font-semibold text-nevo-near-black">
+                    {row.label}
+                  </span>
+                  {row.sub ? (
+                    <span className="mt-0.5 block text-[12.5px] text-nevo-near-black/55">
+                      {row.sub}
+                    </span>
+                  ) : null}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
 
       {/*
         * THE SCHOOL CODE, when there is one. `School.code` is null for SSO
