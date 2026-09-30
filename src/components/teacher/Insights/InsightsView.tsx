@@ -6,7 +6,7 @@ import { IllustrationWrapper } from "@/components/shared/IllustrationWrapper";
 import { MasteryDualTrack } from "@/components/teacher/Student/MasteryDualTrack";
 import { useTeacherClasses } from "@/hooks/useTeacherClasses";
 import { getClassInsights, hasGap } from "@/lib/mocks/teacherInsights";
-import { SampleRegion } from "@/components/shared/SampleRegion";
+import { MaybeSample, SampleRegion } from "@/components/shared/SampleRegion";
 import { LiveClassInsights } from "./LiveClassInsights";
 import { cn } from "@/lib/utils";
 
@@ -67,6 +67,9 @@ export function InsightsView() {
 
   const pills = (
     <div className="flex gap-2">
+      {/* The fixture three are marked where they are offered, not only once
+          one is picked: the landing is where the wrong choice gets made. */}
+      <MaybeSample showing={!live} kind="teacher:insights-classes">
       {selectable.map((c) => {
         const on = c.id === classId;
         return (
@@ -86,6 +89,7 @@ export function InsightsView() {
           </button>
         );
       })}
+      </MaybeSample>
     </div>
   );
 

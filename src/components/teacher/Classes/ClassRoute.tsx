@@ -55,7 +55,8 @@ export function ClassRoute({
   if (!live && !loading && fixture)
     return (
       <SampleRegion kind="teacher:class-detail">
-        <ClassDetail klass={fixture} />
+        {/* Signed in, this is a failed read standing in - never a code. */}
+        <ClassDetail klass={fixture} withCode={!getToken()} />
       </SampleRegion>
     );
 
