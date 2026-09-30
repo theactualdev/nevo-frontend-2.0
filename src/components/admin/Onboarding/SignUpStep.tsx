@@ -111,13 +111,34 @@ export function SignUpStep({
     passwordValid &&
     confirmValid;
 
+  /*
+   * D01'S LOCATION, WRITTEN ONCE THERE IS A SESSION TO WRITE WITH. Register
+   * takes no location, and `PATCH /api/v1/school` needs a bearer, so it goes
+   * to the school's contact - where Settings reads and edits it - straight
+   * after sign-in.
+   *
+   * Never a reason to hold the proprietor on this step: the school and their
+   * account exist, and a location is one field in Settings. The step moves on
+   * whatever happens, and the handover says so if it did not land.
+   */
+  const saveLocation = () => {
+    const place = state.location.trim();
+    if (!place) return Promise.resolve();
+    return schoolApi.saveContact({ location: place }).then(
+      () => undefined,
+      () => undefined,
+    );
+  };
+
   /** The second round trip, on its own, so its failure describes itself. */
   const signIn = () => {
     setPhase("signingIn");
     authApi
       .loginPassword({ email: state.email.trim(), password })
-      .then(() => onDone())
-      .catch(() => setPhase("signInFailed"));
+      .then(
+        () => saveLocation().then(onDone),
+        () => setPhase("signInFailed"),
+      );
   };
 
   const submit = () => {
@@ -177,6 +198,31 @@ export function SignUpStep({
             onBlur={() => blur("school")}
             placeholder="Brightgate Academy"
             autoComplete="organization"
+            className={FIELD}
+          />
+        </div>
+
+        {/*
+          * D01 draws "School type" beside this. It is not built: nothing in
+          * the contract takes it and nothing in the product reads it, and a
+          * question whose answer goes nowhere is worse than no question.
+          * Location has a home - the school's contact, which Settings edits.
+          *
+          * Not locked once the school is registered, unlike the fields above:
+          * it is not part of registration, and is only written after sign-in.
+          */}
+        <div>
+          <label htmlFor="ob-location" className={FIELD_LABEL}>
+            Location{" "}
+            <span className="font-normal text-nevo-near-black/45">optional</span>
+          </label>
+          <input
+            id="ob-location"
+            value={state.location}
+            readOnly={submitting}
+            onChange={(e) => onChange({ location: e.target.value })}
+            placeholder="Lagos, Nigeria"
+            autoComplete="address-level2"
             className={FIELD}
           />
         </div>
