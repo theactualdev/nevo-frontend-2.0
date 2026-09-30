@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
+import type { Invitation } from "@/lib/api/invites";
 import type { SchoolRosterCounts } from "@/lib/api/school";
 import {
   SNAPSHOT_HEADING,
+  pendingTeacherInvites,
   snapshotColumns,
   snapshotTiles,
   studentCeiling,
@@ -175,5 +177,56 @@ describe("snapshotTiles", () => {
         expect(snapshotColumns(n).startsWith("xl:")).toBe(true);
       }
     });
+  });
+});
+
+describe("the teachers tile's open invitations (D04)", () => {
+  const withTeachers = { ...base, counts: { teachers: 18 } as SchoolRosterCounts };
+
+  it("says how many teacher invitations are still open, in the frame's words", () => {
+    expect(tile(snapshotTiles({ ...withTeachers, pendingTeacherInvites: 2 }), "teachers").desc).toBe(
+      "2 invitations pending",
+    );
+    expect(tile(snapshotTiles({ ...withTeachers, pendingTeacherInvites: 1 }), "teachers").desc).toBe(
+      "1 invitation pending",
+    );
+  });
+
+  it("keeps the headcount's own words when none are open, or they could not be read", () => {
+    for (const pendingTeacherInvites of [0, null, undefined]) {
+      expect(tile(snapshotTiles({ ...withTeachers, pendingTeacherInvites }), "teachers").desc).toBe(
+        "with a Nevo account",
+      );
+    }
+  });
+
+  it("counts only live teacher invitations", () => {
+    const now = Date.parse("2026-09-30T12:00:00Z");
+    const inv = (over: Partial<Invitation>): Invitation =>
+      ({
+        id: "i",
+        token: null,
+        role: "teacher",
+        email: "t@school.edu.ng",
+        name: null,
+        status: "pending",
+        expiresAt: "2026-10-30T00:00:00Z",
+        deliveryStatus: null,
+        ...over,
+      }) as Invitation;
+    expect(
+      pendingTeacherInvites(
+        [
+          inv({}),
+          inv({ role: "Teacher" }),
+          inv({ role: "student" }),
+          inv({ status: "accepted" }),
+          inv({ status: "revoked" }),
+          // Pending on the row, but past its date: expired in fact.
+          inv({ expiresAt: "2026-09-01T00:00:00Z" }),
+        ],
+        now,
+      ),
+    ).toBe(2);
   });
 });

@@ -32,10 +32,12 @@ import { boardPackText } from "./boardPack";
 import {
   SNAPSHOT_HEADING,
   SNAPSHOT_HEADING_EARLY,
+  pendingTeacherInvites,
   snapshotColumns,
   snapshotTiles,
 } from "./snapshotTiles";
 import { intelligenceApi, type AttentionFlag } from "@/lib/api/intelligence";
+import { invitesApi } from "@/lib/api/invites";
 import { studentsApi, type AdminStudentRow } from "@/lib/api/students";
 import { NoAccess, failureKind } from "../NoAccess";
 
@@ -191,6 +193,8 @@ export function OverviewView() {
   const [narrative, setNarrative] = useState<SchoolNarrative | null>(null);
   const [narrativeFailed, setNarrativeFailed] = useState(false);
   const [counts, setCounts] = useState<SchoolRosterCounts | null>(null);
+  /** Open teacher invitations, for the teachers tile. Null when unread. */
+  const [pendingTeachers, setPendingTeachers] = useState<number | null>(null);
   /*
    * The two roll-up rows that are this school's own. Both stay NULL until a
    * read completes, and a read that fails leaves them null - the row is then
@@ -256,6 +260,14 @@ export function OverviewView() {
         setSchoolName(sc.name?.trim() || null);
       })
       .catch(() => setBand(undefined));
+
+    // D04's "N invitations pending" on the teachers tile. Its own read and its
+    // own failure: an admin without the invitations surface still gets the
+    // tile, with the headcount's own words.
+    invitesApi
+      .list()
+      .then((rows) => setPendingTeachers(pendingTeacherInvites(rows, Date.now())))
+      .catch(() => setPendingTeachers(null));
 
     /*
      * THE ROLL-UP READS DO NOT GATE THE PAGE, and they used to.
@@ -396,6 +408,7 @@ export function OverviewView() {
     counts,
     band,
     early,
+    pendingTeacherInvites: pendingTeachers,
   });
 
   return (

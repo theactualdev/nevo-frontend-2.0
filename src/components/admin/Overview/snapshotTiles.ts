@@ -1,4 +1,6 @@
+import type { Invitation } from "@/lib/api/invites";
 import type { EnrolmentBand, SchoolRosterCounts } from "@/lib/api/school";
+import { normaliseStatus } from "../Invitations/inviteStatus";
 
 /**
  * D04's activity snapshot, derived rather than asserted.
@@ -88,6 +90,28 @@ export interface SnapshotInput {
   band: EnrolmentBand | undefined;
   /** The early-life variant, decided by the caller from the adaptation log. */
   early: boolean;
+  /**
+   * Teacher invitations still open - see `pendingTeacherInvites`. Null or
+   * absent when the invitations could not be read; then the tile says nothing
+   * about invitations rather than implying there are none.
+   */
+  pendingTeacherInvites?: number | null;
+}
+
+/**
+ * D04's "2 invitations pending" under the teachers figure.
+ *
+ * `SchoolRosterCounts` carries `invitedStudents` and nothing for teachers, so
+ * this is read from the invitations themselves: teacher invitations that are
+ * still live, judged the way D19 judges them - a pending invitation past its
+ * date is expired, whatever the row says.
+ */
+export function pendingTeacherInvites(invites: readonly Invitation[], now: number): number {
+  return invites.filter(
+    (i) =>
+      (i.role ?? "").toLowerCase() === "teacher" &&
+      normaliseStatus(i.status, i.expiresAt, now) === "pending",
+  ).length;
 }
 
 export function snapshotTiles({
@@ -96,6 +120,7 @@ export function snapshotTiles({
   counts,
   band,
   early,
+  pendingTeacherInvites: pendingTeachers = null,
 }: SnapshotInput): SnapshotTile[] {
   const tiles: SnapshotTile[] = [];
   const mute = (n: number) => early && n === 0;
@@ -144,7 +169,16 @@ export function snapshotTiles({
       value: counts.teachers,
       of: null,
       label: "Teachers",
-      desc: "with a Nevo account",
+      /*
+       * "N invitations pending", the frame's words - NOT "N more invited".
+       * An invited teacher may already be a user in the headcount above, so
+       * "more" could count one person twice. This says only that invitations
+       * are open, which the invitations themselves establish.
+       */
+      desc:
+        typeof pendingTeachers === "number" && pendingTeachers > 0
+          ? `${pendingTeachers} ${pendingTeachers === 1 ? "invitation" : "invitations"} pending`
+          : "with a Nevo account",
       muted: mute(counts.teachers),
     });
   }
