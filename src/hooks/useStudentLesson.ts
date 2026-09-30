@@ -9,7 +9,7 @@ import { adaptSegmentsFor } from "@/lib/lessons/adaptation";
 import { lessonFromContent } from "@/lib/lessons/fromContent";
 import { getMockAdaptation, getMockLesson } from "@/lib/mocks";
 import type { AdaptationPlan, Lesson } from "@/lib/types";
-import { useAccommodations } from "./useAccommodations";
+import { useAccommodationsState } from "./useAccommodations";
 import {
   unavailableReason,
   type Unavailable,
@@ -18,6 +18,12 @@ import { useAdaptation } from "./useAdaptation";
 import { useHasSession } from "./useHasSession";
 import { useHydrated } from "./useHydrated";
 import { useStudentDashboard } from "./useStudentDashboard";
+
+/**
+ * How long the first frame waits for the engine's opening plan and the child's
+ * accommodations before it opens without them. See `openingPending`.
+ */
+const OPENING_WAIT_MS = 4000;
 
 /**
  * The lesson a student is about to play, live-first.
@@ -250,7 +256,35 @@ export function useStudentLesson(
   // Cross-session and slow-moving, so it does not belong on the per-lesson
   // adapt call - and could not ride on it anyway, since that route carries no
   // accommodation field.
-  const accommodations = useAccommodations();
+  const { active: accommodations, settled: accommodationsSettled } =
+    useAccommodationsState();
+
+  /*
+   * THE FIRST FRAME WAITS FOR WHAT SHAPES IT.
+   *
+   * Loading waited for the lesson and the dashboard only. The engine's
+   * opening plan and the child's accommodations arrived after the first
+   * segment was already showing, so a reading or attention accommodation
+   * reshaped a visible screen (rules 6 and 7) - and the first segment's
+   * starting modality, read once when the player mounts, was lost for good.
+   *
+   * CAPPED, because the client has no request timeout and a lesson that never
+   * opens is worse than one that adapts a moment late. Whatever has not
+   * answered by then is applied when it does.
+   */
+  const adaptWanted = Boolean(live) && options?.adapt !== false;
+  const planSettled =
+    !adaptWanted || adaptation.plan !== null || adaptation.error !== null;
+  const [waitedOutFor, setWaitedOutFor] = useState<string | null>(null);
+  useEffect(() => {
+    if (!live) return;
+    const t = setTimeout(() => setWaitedOutFor(lessonId), OPENING_WAIT_MS);
+    return () => clearTimeout(t);
+  }, [live, lessonId]);
+  const openingPending =
+    Boolean(live) &&
+    !(planSettled && accommodationsSettled) &&
+    waitedOutFor !== lessonId;
 
   // `segmentPosition` is the 0-based index we wrote ourselves, so it round
   // trips - but it is clamped anyway, because a position past the end would
@@ -314,8 +348,15 @@ export function useStudentLesson(
     // the authored flags it was written with - the walkthrough is a designed
     // demonstration, not a claim about anybody.
     plan: live
-      ? adaptation.plan && accommodations
-        ? { ...adaptation.plan, accommodations }
+      ? accommodations
+        ? /*
+           * NOT DROPPED WHEN THE ADAPT CALL FAILS. They merged only onto a
+           * non-null plan, so an engine that did not answer took a delivered
+           * accommodation away for the whole lesson - while the teacher's
+           * screen showed it active. They come from a different route; the
+           * plan they ride on can be empty.
+           */
+          { ...(adaptation.plan ?? { lessonId, segments: [] }), accommodations }
         : adaptation.plan
       : mock
         ? (getMockAdaptation(lessonId) ?? null)
@@ -333,7 +374,8 @@ export function useStudentLesson(
     loading:
       signedIn &&
       ((!lesson && !missing && !failed && !empty) ||
-        (Boolean(live) && dashboardLoading)),
+        (Boolean(live) && dashboardLoading) ||
+        openingPending),
     // `!mock` still stands, but it can now only be true for a signed-out
     // visitor - who makes no read at all, so none of these are ever set for
     // them anyway. For a signed-in child these are simply the truth.

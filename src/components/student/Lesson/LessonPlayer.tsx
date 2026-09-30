@@ -443,7 +443,22 @@ export function LessonPlayer({
       availableModalities: segment.modalities,
       midpointReached: index >= Math.floor(lesson.segments.length / 2),
     },
+    lesson,
   );
+
+  /*
+   * THE ENGINE'S NEWEST WORD ON A SEGMENT, over what it said at load.
+   *
+   * Merged rather than replaced: an in-lesson row carries the segment's
+   * modality, scaffold and suggestion, and nothing about breaks - so the
+   * load-time plan's planned and offered breaks survive the engine
+   * reconsidering the rest.
+   */
+  const livePlanFor = (segmentId: string) => {
+    const base = planFor(segmentId);
+    const fresh = runtime.plan?.segments.find((s) => s.segmentId === segmentId);
+    return fresh ? { ...base, ...fresh } : base;
+  };
 
   // ── Signal helpers ──────────────────────────────────────────────────────
   // Max scroll depth + which milestones have fired, reset per segment.
@@ -625,7 +640,7 @@ export function LessonPlayer({
   }, [trackEvent]);
 
   // ── The engine's instruction (§4) ───────────────────────────────────────
-  const segPlan = planFor(segment.id);
+  const segPlan = livePlanFor(segment.id);
   /*
    * ONE INSTRUCTION, AND NEVER A STATE.
    *
@@ -645,7 +660,13 @@ export function LessonPlayer({
    * that no field carries, so they render the nothing-state rather than an
    * empty card - rule 5, and an empty hint is worse than no hint.
    */
-  const action = plan?.adjustment ?? segPlan?.adjustment ?? null;
+  /*
+   * The engine's NEWEST answer wins, and its silence counts: once it has
+   * answered mid-lesson, an absent instruction means none now (rule 5), not
+   * "keep whatever it said at load".
+   */
+  const engine = runtime.plan ?? plan;
+  const action = engine?.adjustment ?? segPlan?.adjustment ?? null;
   /*
    * WHAT THE INSTRUCTION SHOWS, engine first and authored second - the same
    * order the instruction itself resolves in.
@@ -659,10 +680,10 @@ export function LessonPlayer({
    * An empty hint card is worse than no hint, and the translator has already
    * dropped a hint that arrived under the wrong action.
    */
-  const hintText = plan?.hint ?? segPlan?.hint ?? null;
+  const hintText = engine?.hint ?? segPlan?.hint ?? null;
   const guidedQuestions =
-    plan?.guidedQuestions?.length
-      ? plan.guidedQuestions
+    engine?.guidedQuestions?.length
+      ? engine.guidedQuestions
       : (segPlan?.socraticPrompts ?? []);
   // §4: "Secondary UI to 40% opacity, transitions slow, gentler copy variants."
   const softened = action === ADJUSTMENT_ACTIONS.MODULATE_DENSITY;
@@ -713,7 +734,7 @@ export function LessonPlayer({
     // suggested — the next segment must stay quiet (never consecutive).
     if (showSuggestion) setLastSuggestedIndex(index);
     const nextSegment = lesson.segments[next];
-    const nextPlan = planFor(nextSegment.id);
+    const nextPlan = livePlanFor(nextSegment.id);
     setIndex(next);
     /*
      * THE CHILD'S PACE CHOICE HOLDS FOR THE REST OF THE LESSON.
@@ -776,7 +797,7 @@ export function LessonPlayer({
    * intercepts once on the way out; finishing it resumes this same advance.
    */
   const advancePastSegment = () => {
-    const plannedBreak = planFor(segment.id)?.breakAfter ?? null;
+    const plannedBreak = livePlanFor(segment.id)?.breakAfter ?? null;
     if (plannedBreak && !breaksTaken.current.has(segment.id)) {
       breaksTaken.current.add(segment.id);
       breakOrigin.current = "advance";

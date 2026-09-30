@@ -7,6 +7,8 @@ import type {
   RuntimeSignals,
 } from "@/lib/api/intelligence";
 import { BREAK_TYPES, type BreakType } from "@/lib/constants";
+import { toAdaptationPlan } from "@/lib/lessons/adaptation";
+import type { AdaptationPlan, Lesson } from "@/lib/types";
 
 /**
  * The engine's mid-lesson read, from `POST /api/intelligence/adapt` in
@@ -59,6 +61,18 @@ export interface RuntimeAdaptation {
   offeredBreak: BreakType | null;
   /** Why, in the engine's words - for logging, never for a child to read. */
   reason: string | null;
+  /**
+   * EVERYTHING ELSE THE ENGINE SAID MID-LESSON, which used to be discarded.
+   *
+   * The `in_lesson` response carries the same instruction, hint, guided
+   * questions, scaffolding and modality suggestion as the load-time one - and
+   * only `breakSuggestion` was kept. So a simplify, a slower, a hint or a
+   * Socratic prompt decided while the child was working never reached them.
+   * Translated through `toAdaptationPlan`, so it gets exactly the load-time
+   * clamps: nothing a segment cannot render, no hint under the wrong action,
+   * never the engine's reasoning. Null until the engine has answered.
+   */
+  plan: AdaptationPlan | null;
 }
 
 const BREAK_VALUES: readonly string[] = Object.values(BREAK_TYPES);
@@ -73,11 +87,20 @@ export function useRuntimeAdaptation(
   /** Live lessons only - a mock's ids mean nothing to the engine. */
   enabled: boolean,
   runtime: RuntimeState,
+  /** The built lesson, so the engine's rows are clamped to what it renders. */
+  lesson: Lesson | null = null,
 ): RuntimeAdaptation {
   const [result, setResult] = useState<RuntimeAdaptation>({
     offeredBreak: null,
     reason: null,
+    plan: null,
   });
+  // Read at response time through a ref, like the runtime state, so a new
+  // lesson object does not re-fire the request.
+  const lessonRef = useRef(lesson);
+  useEffect(() => {
+    lessonRef.current = lesson;
+  }, [lesson]);
 
   // The player re-renders constantly (timers, scroll, density). Reading the
   // runtime through a ref keeps it out of the effect's dependencies, so the
@@ -146,15 +169,20 @@ export function useRuntimeAdaptation(
       .getAdaptation(lessonId, segments, { mode: "in_lesson", signals })
       .then((res) => {
         if (!active) return;
+        const built = lessonRef.current;
         setResult({
           offeredBreak: asBreakType(res.breakSuggestion?.breakType),
           reason: res.breakSuggestion?.reason ?? null,
+          plan: built ? toAdaptationPlan(res, built) : null,
         });
       })
       .catch(() => {
         // A failed read is not "no break needed", but it is not grounds to
         // interrupt a child either. The client timer still primes the offer.
-        if (active) setResult({ offeredBreak: null, reason: null });
+        // Nor is it an instruction: the plan falls back to the load-time one
+        // rather than to "the engine now says nothing".
+        if (active)
+          setResult((prev) => ({ offeredBreak: null, reason: null, plan: prev.plan }));
       });
 
     return () => {

@@ -46,8 +46,27 @@ export interface ActiveAccommodations {
  * failing closed is the whole design.
  */
 export function useAccommodations(): ActiveAccommodations | null {
+  return useAccommodationsState().active;
+}
+
+/**
+ * The same read, plus whether it has SETTLED - answered or failed.
+ *
+ * The lesson waits on this before its first frame. Accommodations are applied
+ * before the first screen, never after (rule 6): a reading or attention
+ * accommodation that arrives once the segment is showing reshapes it in front
+ * of the child, which is also the visible transition rule 7 forbids. A failed
+ * read settles too - waiting on it for ever would trade a late accommodation
+ * for a lesson that never opens.
+ */
+export function useAccommodationsState(): {
+  active: ActiveAccommodations | null;
+  settled: boolean;
+} {
   const signedIn = useHasSession();
   const [active, setActive] = useState<ActiveAccommodations | null>(null);
+  /** Whose read settled, so a different child's answer never counts. */
+  const [settledFor, setSettledFor] = useState<string | null>(null);
 
   useEffect(() => {
     /*
@@ -74,14 +93,21 @@ export function useAccommodations(): ActiveAccommodations | null {
           attention: on.has("attention"),
           numerical: on.has("numerical"),
         });
+        setSettledFor(studentId);
       })
       .catch(() => {
         // Deliberately silent and deliberately not an accommodation. See above.
+        if (!cancelled) setSettledFor(studentId);
       });
     return () => {
       cancelled = true;
     };
   }, [signedIn]);
 
-  return active;
+  const studentId = signedIn ? (getSession()?.userId ?? null) : null;
+  return {
+    active,
+    // Nobody signed in has nothing to wait for.
+    settled: !studentId || settledFor === studentId,
+  };
 }

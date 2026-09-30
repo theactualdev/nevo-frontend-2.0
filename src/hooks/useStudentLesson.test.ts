@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { useStudentLesson } from "./useStudentLesson";
 import { clearSession, setSession } from "@/lib/auth/session";
 import { FIRST_LESSON_ID } from "@/lib/mocks";
@@ -22,12 +22,15 @@ import { ApiError } from "@/lib/api/client";
  * least of all when something has gone wrong.
  */
 
-const { detail, modules, dashboard, adaptation } = vi.hoisted(() => ({
-  detail: vi.fn(),
-  modules: vi.fn(),
-  dashboard: vi.fn(),
-  adaptation: vi.fn(),
-}));
+const { detail, modules, dashboard, adaptation, accommodations } = vi.hoisted(
+  () => ({
+    detail: vi.fn(),
+    modules: vi.fn(),
+    dashboard: vi.fn(),
+    adaptation: vi.fn(),
+    accommodations: vi.fn(),
+  }),
+);
 
 vi.mock("@/lib/api/lessons", async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
@@ -35,6 +38,9 @@ vi.mock("@/lib/api/lessons", async (orig) => ({
 }));
 vi.mock("./useStudentDashboard", () => ({ useStudentDashboard: dashboard }));
 vi.mock("./useAdaptation", () => ({ useAdaptation: adaptation }));
+vi.mock("./useAccommodations", () => ({
+  useAccommodationsState: accommodations,
+}));
 
 /** The shape the live-read test already proves `lessonFromContent` accepts. */
 const LIVE_LESSON = {
@@ -74,7 +80,12 @@ beforeEach(() => {
   clearSession();
   modules.mockResolvedValue([]);
   dashboard.mockReturnValue({ data: null, loading: false, failed: false });
-  adaptation.mockReturnValue({ plan: null });
+  // The engine has answered, with nothing to change - a settled read.
+  adaptation.mockReturnValue({
+    plan: { lessonId: FIRST_LESSON_ID, segments: [] },
+    error: null,
+  });
+  accommodations.mockReturnValue({ active: null, settled: true });
 });
 
 afterEach(() => {
@@ -394,5 +405,93 @@ describe("a lesson the child is not meant to be doing", () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.unavailable).toBeNull();
     expect(result.current.lesson).not.toBeNull();
+  });
+});
+
+describe("what the first frame waits for", () => {
+  /*
+   * Loading waited for the lesson and the dashboard only, so the engine's
+   * opening plan and the child's accommodations reshaped a segment that was
+   * already showing (rules 6 and 7). Now the first frame waits for both - but
+   * not for ever, since the client has no request timeout.
+   */
+  const ready = () => {
+    signIn();
+    detail.mockResolvedValue(LIVE_LESSON);
+    dashboard.mockReturnValue({
+      data: { assignments: [], recentProgress: [] },
+      loading: false,
+      failed: false,
+    });
+  };
+
+  afterEach(() => vi.useRealTimers());
+
+  it("waits for the child's accommodations", async () => {
+    ready();
+    accommodations.mockReturnValue({ active: null, settled: false });
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.lesson).not.toBeNull());
+    expect(result.current.loading).toBe(true);
+  });
+
+  it("waits for the engine's opening plan", async () => {
+    ready();
+    adaptation.mockReturnValue({ plan: null, error: null });
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.lesson).not.toBeNull());
+    expect(result.current.loading).toBe(true);
+  });
+
+  it("does not wait on an engine that failed", async () => {
+    ready();
+    adaptation.mockReturnValue({ plan: null, error: "unreachable" });
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+  });
+
+  it("opens anyway once it has waited long enough", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    ready();
+    adaptation.mockReturnValue({ plan: null, error: null });
+    accommodations.mockReturnValue({ active: null, settled: false });
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+    await vi.waitFor(() => expect(result.current.lesson).not.toBeNull());
+    expect(result.current.loading).toBe(true);
+
+    await act(async () => {
+      vi.advanceTimersByTime(4000);
+    });
+
+    expect(result.current.loading).toBe(false);
+  });
+});
+
+describe("an accommodation when the engine does not answer", () => {
+  it("is still applied, not dropped with the plan it would have ridden on", async () => {
+    /*
+     * They merged only onto a non-null plan, so a failed adapt call took a
+     * delivered accommodation away for the whole lesson - while the teacher's
+     * screen showed it active.
+     */
+    signIn();
+    detail.mockResolvedValue(LIVE_LESSON);
+    adaptation.mockReturnValue({ plan: null, error: "unreachable" });
+    accommodations.mockReturnValue({
+      active: { reading: true, attention: false, numerical: false },
+      settled: true,
+    });
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.lesson).not.toBeNull());
+    expect(result.current.plan?.accommodations?.reading).toBe(true);
   });
 });
