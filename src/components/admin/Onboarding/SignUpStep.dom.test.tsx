@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
 import { ApiError } from "@/lib/api/client";
@@ -20,12 +20,17 @@ import { SignUpStep } from "./SignUpStep";
 
 const register = vi.fn();
 const loginPassword = vi.fn();
+const saveContact = vi.fn();
 
 vi.mock("@/lib/api/school", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/school")>();
   return {
     ...actual,
-    schoolApi: { ...actual.schoolApi, register: (p: unknown) => register(p) },
+    schoolApi: {
+      ...actual.schoolApi,
+      register: (p: unknown) => register(p),
+      saveContact: (p: unknown) => saveContact(p),
+    },
   };
 });
 
@@ -48,6 +53,7 @@ const CREATED = {
 
 const INITIAL: WizardState = {
   schoolName: "Brightgate Academy",
+  location: "",
   adminName: "Folake Adebayo",
   email: "f.adebayo@brightgate.edu.ng",
   authMethod: null,
@@ -260,5 +266,51 @@ describe("SignUpStep", () => {
     expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
     expect(container.querySelector("#ob-school")).toHaveAttribute("readonly");
     expect(register).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("D01's Location", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const typeLocation = (container: HTMLElement, value: string) =>
+    fireEvent.change(container.querySelector("#ob-location")!, { target: { value } });
+
+  it("is written to the school's contact once signed in - never sent to register", async () => {
+    register.mockResolvedValue(CREATED);
+    loginPassword.mockResolvedValue(undefined);
+    saveContact.mockResolvedValue(undefined);
+    const { container, onDone } = step();
+    typeLocation(container, "  Lagos, Nigeria ");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled());
+    submit();
+
+    await waitFor(() => expect(onDone).toHaveBeenCalled());
+    expect(saveContact).toHaveBeenCalledWith({ location: "Lagos, Nigeria" });
+    expect(register.mock.calls[0][0]).not.toHaveProperty("location");
+    // Written with the session sign-in gave, so after it.
+    expect(loginPassword.mock.invocationCallOrder[0]).toBeLessThan(
+      saveContact.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("writes nothing when none was given", async () => {
+    register.mockResolvedValue(CREATED);
+    loginPassword.mockResolvedValue(undefined);
+    const { onDone } = step();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled());
+    submit();
+    await waitFor(() => expect(onDone).toHaveBeenCalled());
+    expect(saveContact).not.toHaveBeenCalled();
+  });
+
+  it("never holds the proprietor on this step when the write fails", async () => {
+    register.mockResolvedValue(CREATED);
+    loginPassword.mockResolvedValue(undefined);
+    saveContact.mockRejectedValue(new Error("500"));
+    const { container, onDone } = step();
+    typeLocation(container, "Abuja");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled());
+    submit();
+    await waitFor(() => expect(onDone).toHaveBeenCalled());
   });
 });

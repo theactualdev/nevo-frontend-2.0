@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { schoolApi, type School } from "@/lib/api/school";
+import { readContact, schoolApi, type School } from "@/lib/api/school";
 import { cn } from "@/lib/utils";
 import { CheckIcon, Spinner } from "../Roster/primitives";
 import {
@@ -57,6 +57,9 @@ export function HandoverStep({ state }: { state: WizardState }) {
   }, [load]);
 
   const schoolName = school?.name || state.schoolName.trim() || "Your school";
+  /** Typed at sign-up, and not on the school's record. */
+  const locationMissing =
+    Boolean(state.location.trim()) && school !== null && !readContact(school).location;
   const isSso = state.authMethod === "microsoft" || state.authMethod === "google";
   const providerName =
     state.authMethod === "google" ? "Google Workspace" : "Microsoft 365";
@@ -206,6 +209,21 @@ export function HandoverStep({ state }: { state: WizardState }) {
         * Removing this first would have left a manual school - every school
         * right now - with no way to find the code its staff sign in with.
         */}
+
+      {/* The location typed at sign-up is written after sign-in and never
+          holds the flow up - so if it is not on the school's record, this is
+          where that is said, rather than the field quietly coming up empty in
+          Settings later. */}
+      {locationMissing ? (
+        <p className="mt-6 rounded-[10px] bg-nevo-violet/[0.18] px-4 py-3.5 text-[13.5px] leading-[1.55] text-nevo-navy">
+          We couldn&rsquo;t save your school&rsquo;s location. You can add it
+          in{" "}
+          <Link href="/admin/settings#settings-school" className="font-semibold underline">
+            Settings
+          </Link>
+          .
+        </p>
+      ) : null}
 
       <Link href="/admin/dashboard" className={cn(WIZARD_PRIMARY, "mt-9 block text-center")}>
         Go to your dashboard

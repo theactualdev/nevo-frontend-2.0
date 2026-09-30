@@ -36,6 +36,12 @@ export type Step = 0 | 1 | 2 | 3;
 
 export interface WizardState {
   schoolName: string;
+  /**
+   * D01's "Location". Not a registration field - `SchoolRegistrationRequest`
+   * is `{schoolName, adminName, email, password}` - so it is held here and
+   * written to the school's contact once the new admin is signed in.
+   */
+  location: string;
   adminName: string;
   email: string;
   authMethod: SchoolAuthMethod | null;
@@ -72,6 +78,7 @@ export function OnboardingWizard() {
   const [step, setStep] = useState<Step>(0);
   const [state, setState] = useState<WizardState>({
     schoolName: "",
+    location: "",
     adminName: "",
     email: "",
     authMethod: null,
