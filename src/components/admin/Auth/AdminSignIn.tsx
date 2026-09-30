@@ -15,6 +15,7 @@ import {
 } from "@/lib/auth/consoleDoor";
 import { classifyLoginFailure, type LoginFailure } from "@/lib/auth/loginFailure";
 import { cn } from "@/lib/utils";
+import { SupportEmailLink } from "../SupportEmail";
 
 /**
  * D02 Admin Sign-In - one door for every admin. Password sign-in is LIVE
@@ -99,12 +100,7 @@ const PAUSED_MSG = (
   <>
     This account isn&rsquo;t open at the moment. Another administrator at your
     school can reopen it. If there isn&rsquo;t one, email{" "}
-    <a
-      href="mailto:support@nevolearning.com"
-      className="font-semibold text-nevo-navy hover:underline"
-    >
-      support@nevolearning.com
-    </a>
+    <SupportEmailLink className="font-semibold text-nevo-navy hover:underline" />
     .
   </>
 );

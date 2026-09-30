@@ -16,6 +16,7 @@ import { timeAgo } from "@/lib/relativeTime";
 import { hasTechnicalDetail, latestRun, runIssues } from "@/lib/rosterSync";
 import { NoAccess, failureKind } from "../NoAccess";
 import { WriteFailed } from "../WriteFailed";
+import { SupportEmailLink } from "../SupportEmail";
 import { usePermissions } from "@/hooks";
 import {
   dataFlowHeading,
@@ -447,12 +448,9 @@ export function SsoView() {
                         <p className="m-0 max-w-[62ch] text-[13.5px] leading-[1.5] text-nevo-near-black/76">
                           {`Your school is set up with a school code. Switching to ${PROVIDER_LABELS[p]} needs our help; it isn’t something you can do here.`}
                         </p>
-                        <a
-                          href="mailto:support@nevolearning.com"
-                          className="mt-2 inline-block text-[13.5px] font-semibold text-nevo-navy hover:underline"
-                        >
+                        <SupportEmailLink className="mt-2 inline-block text-[13.5px] font-semibold text-nevo-navy hover:underline">
                           Contact us
-                        </a>
+                        </SupportEmailLink>
                       </div>
                     )}
                   </div>
