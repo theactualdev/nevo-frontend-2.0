@@ -81,6 +81,16 @@ export function AccountSettings() {
   const [ended, setEnded] = useState(0);
   /** Which session's sign-out is being confirmed. "" for none. */
   const [asking, setAsking] = useState("");
+  /*
+   * Both session writes ended `.catch(() => undefined)`: a refused sign-out
+   * closed its confirm and changed nothing, which reads exactly like success -
+   * on the one control an admin reaches for when a device may be in the wrong
+   * hands. The session in flight, the one that failed, and the phase of
+   * "everywhere else" are held so each can say what happened.
+   */
+  const [ending, setEnding] = useState("");
+  const [endFailed, setEndFailed] = useState("");
+  const [othersPhase, setOthersPhase] = useState<"idle" | "working" | "done" | "failed">("idle");
 
   const loadSessions = useCallback(() => {
     authApi
@@ -448,25 +458,43 @@ export function AccountSettings() {
                     <div className="mt-3 flex gap-2.5">
                       <button
                         type="button"
+                        disabled={ending === s.id}
                         onClick={() => {
-                          setAsking("");
+                          setEnding(s.id);
+                          setEndFailed("");
                           authApi
                             .endSession(s.id)
-                            .then(loadSessions)
-                            .catch(() => undefined);
+                            .then(() => {
+                              setAsking("");
+                              loadSessions();
+                            })
+                            // The confirm stays open and says so: closing it
+                            // is what success looks like.
+                            .catch(() => setEndFailed(s.id))
+                            .finally(() => setEnding(""));
                         }}
-                        className="cursor-pointer rounded-[8px] bg-nevo-navy px-3.5 py-2 text-[13px] font-semibold text-nevo-cream transition-[filter] hover:brightness-110"
+                        className="cursor-pointer rounded-[8px] bg-nevo-navy px-3.5 py-2 text-[13px] font-semibold text-nevo-cream transition-[filter] hover:brightness-110 disabled:cursor-default disabled:opacity-60"
                       >
-                        Sign it out
+                        {ending === s.id ? "Signing out…" : "Sign it out"}
                       </button>
                       <button
                         type="button"
-                        onClick={() => setAsking("")}
-                        className="cursor-pointer px-2 text-[13px] font-semibold text-nevo-navy hover:opacity-75"
+                        disabled={ending === s.id}
+                        onClick={() => {
+                          setAsking("");
+                          setEndFailed("");
+                        }}
+                        className="cursor-pointer px-2 text-[13px] font-semibold text-nevo-navy hover:opacity-75 disabled:cursor-default disabled:opacity-50"
                       >
                         Keep it
                       </button>
                     </div>
+                    {endFailed === s.id ? (
+                      <p className="m-0 mt-2.5 text-[13px] leading-[1.5] text-nevo-navy">
+                        That didn&rsquo;t sign it out, and nothing has changed.
+                        Try again in a moment.
+                      </p>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
@@ -477,16 +505,39 @@ export function AccountSettings() {
         {others.length > 0 ? (
           <button
             type="button"
-            onClick={() =>
+            disabled={othersPhase === "working"}
+            onClick={() => {
+              setOthersPhase("working");
               authApi
                 .endOtherSessions()
-                .then(loadSessions)
-                .catch(() => undefined)
-            }
-            className="mt-4 cursor-pointer text-sm font-semibold text-nevo-navy hover:opacity-75"
+                .then(() => {
+                  setOthersPhase("done");
+                  loadSessions();
+                })
+                .catch(() => setOthersPhase("failed"));
+            }}
+            className="mt-4 cursor-pointer text-sm font-semibold text-nevo-navy hover:opacity-75 disabled:cursor-default disabled:opacity-50"
           >
-            Sign out everywhere else
+            {othersPhase === "working" ? "Signing out…" : "Sign out everywhere else"}
           </button>
+        ) : null}
+        {/*
+          * NO COUNT, deliberately. D12c says "N devices signed out", and the
+          * endpoint returns no body: the only number to hand is the list this
+          * screen read, and a session opened after that read was ended too. So
+          * it states the fact, and the part an admin needs to hear - this
+          * device is not one of them.
+          */}
+        {othersPhase === "done" ? (
+          <p role="status" className="m-0 mt-3 text-[13px] leading-[1.5] text-nevo-navy">
+            Every other session is signed out. You&rsquo;re still signed in
+            here, and nothing else has changed.
+          </p>
+        ) : othersPhase === "failed" ? (
+          <p role="status" className="m-0 mt-3 text-[13px] leading-[1.5] text-nevo-navy">
+            That didn&rsquo;t sign anything out, and nothing has changed. Try
+            again in a moment.
+          </p>
         ) : null}
 
         {/* The contract has no device name, so every other row reads the same.
