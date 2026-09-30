@@ -234,10 +234,15 @@ export function HowToPayPanel({
           </>
         ) : (
           /* No account, and no invented one. Say so, and give them the one
-             thing that IS known - the reference is on the invoice already. */
+             thing that IS known - the reference is on the invoice already.
+
+             WAS "Transfer details aren't available here yet." That was true
+             before `GET /api/billing/bank-transfer-details` existed; it is
+             live now, so an absent account means the read failed, and "not
+             available yet" told the school the feature was unbuilt. */
           <>
             <p className="m-0 text-[14.5px] leading-[1.55] text-nevo-near-black/78">
-              Transfer details aren&rsquo;t available here yet.
+              We couldn&rsquo;t load Nevo&rsquo;s bank details just now.
             </p>
             <p className="m-0 mt-1.5 text-[13.5px] leading-[1.55] text-nevo-near-black/62">
               Your invoice carries the amount

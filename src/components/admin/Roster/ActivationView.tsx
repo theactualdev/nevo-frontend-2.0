@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { CostSheet } from "../Billing/CostSheet";
 import { HowToPayPanel } from "../Billing/HowToPayPanel";
+import { InvoicePdfLink } from "../Billing/InvoicePdfLink";
 import { ReadFailed } from "../ReadFailed";
 import { CARD } from "./primitives";
 import {
@@ -14,7 +15,7 @@ import {
 } from "@/lib/api/billing";
 import { onboardingApi, type OnboardingState } from "@/lib/api/onboarding";
 import { schoolApi, type School } from "@/lib/api/school";
-import { formatMoney } from "@/lib/money";
+import { formatMoney, formatVatRate } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { useSetupGate } from "@/hooks";
 import { billingCurrency, mayActivate, screenFor } from "./activation";
@@ -55,7 +56,7 @@ export function ActivationView() {
   const [state, setState] = useState<OnboardingState | null>(null);
   const [sub, setSub] = useState<Subscription | null>(null);
   const [account, setAccount] = useState<ReceivingAccount | null>(null);
-  const [invoice, setInvoice] = useState<Invoice | null>(null);
+  const [invoices, setInvoices] = useState<Invoice[] | null>(null);
   const [school, setSchool] = useState<School | null>(null);
   const [activating, setActivating] = useState(false);
   const [activateFailed, setActivateFailed] = useState(false);
@@ -90,8 +91,8 @@ export function ActivationView() {
     schoolApi.get().then(setSchool).catch(() => setSchool(null));
     billingApi
       .invoices()
-      .then((rows) => setInvoice(rows[0] ?? null))
-      .catch(() => setInvoice(null));
+      .then((rows) => setInvoices(rows))
+      .catch(() => setInvoices(null));
   }, []);
 
   useEffect(() => {
@@ -145,6 +146,16 @@ export function ActivationView() {
   }
 
   const screen = screenFor(state.stage);
+  /*
+   * THE INVOICE THIS SCHOOL IS PAYING, BY ID. This took the first row of the
+   * invoice list, so a school with more than one invoice could be shown
+   * another invoice's reference and amount to transfer against. The
+   * onboarding state names the invoice raised at confirm; nothing else is
+   * guessed - no id, no invoice card.
+   */
+  const invoice = state.invoiceId
+    ? invoices?.find((i) => i.id === state.invoiceId) ?? null
+    : null;
 
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
@@ -156,7 +167,7 @@ export function ActivationView() {
         {screen === "roster" ? (
           <NothingConfirmedYet />
         ) : screen === "cost" ? (
-          <Cost state={state} sub={sub} />
+          <Cost state={state} sub={sub} invoice={invoice} />
         ) : screen === "waiting" ? (
           <Waiting
             state={state}
@@ -203,9 +214,11 @@ function NothingConfirmedYet() {
 function Cost({
   state,
   sub,
+  invoice,
 }: {
   state: OnboardingState;
   sub: Subscription | null;
+  invoice: Invoice | null;
 }) {
   return (
     <>
@@ -238,7 +251,17 @@ function Cost({
         * draws, and a bare figure under the heading "Your headcount and cost"
         * would be the one number a school checks against its own arithmetic.
         */}
-      {sub?.pricing ? (
+      {/*
+        * THE INVOICE RAISED AT CONFIRM, WHEN THERE IS ONE. The subscription
+        * cost sheet prices "N active students", and before activation the
+        * roster is held, not active - so it could describe a different
+        * headcount from the one this school is about to pay for. The invoice
+        * carries its own students, rate, VAT and period; the cost sheet is
+        * the fallback for a confirm that raised none.
+        */}
+      {invoice ? (
+        <InvoiceBreakdown invoice={invoice} />
+      ) : sub?.pricing ? (
         <div className="mt-4">
           <CostSheet pricing={sub.pricing} />
         </div>
@@ -353,6 +376,10 @@ function Waiting({
         ) : null}
       </div>
 
+      {/* OB-04's invoice card and "Download invoice" - the invoice this school
+          is transferring against, with its PDF. */}
+      {invoice ? <InvoiceBreakdown invoice={invoice} /> : null}
+
       <div className="mt-4">
         <HowToPayPanel
           account={account}
@@ -442,6 +469,56 @@ function Active({ school }: { school: School | null }) {
         Go to your dashboard
       </Link>
     </>
+  );
+}
+
+/**
+ * The invoice being paid, line by line - every figure the server's. Nothing
+ * here multiplies or adds: the students, rate, subtotal, VAT and total all
+ * arrive on the invoice. A line whose field is null is left out rather than
+ * computed from the others.
+ */
+function InvoiceBreakdown({ invoice }: { invoice: Invoice }) {
+  const money = (v: string | null) => (v ? formatMoney(v, invoice.currency) : null);
+  const vat = formatVatRate(invoice.vatRate);
+  const lines: [string, string | null][] = [
+    [
+      invoice.studentCount != null && invoice.perStudentRate
+        ? `${invoice.studentCount} ${invoice.studentCount === 1 ? "student" : "students"} × ${money(invoice.perStudentRate)}`
+        : "Before VAT",
+      money(invoice.totalBeforeVat),
+    ],
+    [vat ? `VAT at ${vat}` : "VAT", money(invoice.vatAmount)],
+  ];
+  return (
+    <div className={cn(CARD, "mt-4 px-[26px] py-[22px]")}>
+      <div className="flex items-baseline justify-between gap-4">
+        <h3 className="m-0 text-[15.5px] font-semibold text-nevo-near-black">
+          Invoice {invoice.invoiceNumber}
+        </h3>
+        <InvoicePdfLink
+          invoice={invoice}
+          className="shrink-0 cursor-pointer text-[13.5px] font-semibold text-nevo-navy hover:underline"
+        />
+      </div>
+      {invoice.periodLabel ? (
+        <p className="m-0 mt-1 text-[13px] text-nevo-near-black/55">{invoice.periodLabel}</p>
+      ) : null}
+      <dl className="m-0 mt-4 flex flex-col gap-2 text-[14px]">
+        {lines
+          .filter(([, v]) => v)
+          .map(([label, v]) => (
+            <div key={label} className="flex justify-between gap-4">
+              <dt className="text-nevo-near-black/62">{label}</dt>
+              <dd className="m-0 text-nevo-near-black">{v}</dd>
+            </div>
+          ))}
+        <div className="mt-1 flex justify-between gap-4 border-t border-nevo-near-black/10 pt-2.5 font-semibold">
+          <dt className="text-nevo-near-black">Total</dt>
+          <dd className="m-0 text-nevo-near-black">{money(invoice.amount)}</dd>
+        </div>
+      </dl>
+    </div>
   );
 }
 

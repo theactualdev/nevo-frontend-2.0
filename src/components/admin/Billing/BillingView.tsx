@@ -442,6 +442,13 @@ export function BillingView() {
             )}
           </div>
 
+          {/*
+            * ONLY WHEN SOMETHING IS OWED. This rendered whatever the upcoming
+            * charge said - a paid invoice, or none at all - so a school with
+            * nothing to pay met bank details and a disabled "I've made this
+            * transfer" with no reference to quote.
+            */}
+          {upcoming?.invoiceId && upcoming.status !== "paid" ? (
           <HowToPayPanel
             account={account}
             reference={upcoming?.invoiceNumber ?? null}
@@ -466,11 +473,14 @@ export function BillingView() {
               if (outcome.invoicePaid) load();
             }}
           />
+          ) : null}
 
-          {/* Name the hole, rather than letting it read as unfinished. */}
+          {/* Name the hole, rather than letting it read as unfinished. It
+              used to end "(D11d)" - an internal design-frame code, shown to
+              a school. */}
           <p className="mt-8 text-[13px] leading-[1.6] text-nevo-near-black/55 italic">
-            Plan options and switching aren&rsquo;t here yet (D11d). Your cost
-            above is the model your school is billed on.
+            Plan options and switching aren&rsquo;t here yet. Your cost above
+            is the model your school is billed on.
           </p>
         </>
       )}
