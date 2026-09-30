@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
   billingApi,
@@ -81,7 +82,7 @@ function longDate(iso: string | null): string {
 }
 
 /** No red: overdue is violet, paid is navy, pending is quiet. */
-function StatusPill({ status }: { status: InvoiceStatus }) {
+export function StatusPill({ status }: { status: InvoiceStatus }) {
   return (
     <span
       className={cn(
@@ -360,7 +361,16 @@ export function BillingView() {
                       {formatMoney(inv.amount, inv.currency)}
                     </span>
                     <span className="mt-0.5 text-[13px] text-nevo-near-black/58">
-                      {inv.invoiceNumber} &middot; issued{" "}
+                      {/* D11b: an invoice opens to its own page. The number is
+                          the link rather than the whole row, because the row
+                          also holds the PDF button. */}
+                      <Link
+                        href={`/admin/billing/invoices/${inv.id}`}
+                        className="font-semibold text-nevo-navy hover:underline"
+                      >
+                        {inv.invoiceNumber}
+                      </Link>{" "}
+                      &middot; issued{" "}
                       {longDate(inv.issuedAt)} &middot;{" "}
                       {inv.status === "paid"
                         ? `paid ${longDate(inv.paidAt)}`
