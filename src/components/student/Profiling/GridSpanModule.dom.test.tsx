@@ -13,6 +13,11 @@ import { BaselineCapture } from "@/lib/profiling/capture";
  * the sequence is held; a child who taps True at every check is pressing a
  * button, not carrying load, and unmarked they looked identical to one who did
  * both.
+ *
+ * THE DUAL TASK ITSELF IS A DESIGN RULING (30 Sep 2026): it is drawn in neither
+ * the Grid Span frame nor the prototype, and design approved it as built after
+ * QA reported it as broken. These tests failing because it was removed means
+ * the ruling was missed, not that the frames won.
  */
 
 const checks = (capture: BaselineCapture) =>

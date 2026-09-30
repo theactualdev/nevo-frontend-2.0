@@ -9,7 +9,8 @@ import { ProgressBar } from "@/components/shared";
 
 /**
  * Shared shell for onboarding Steps 1–3 (UI/UX spec B.2): a thin progress line,
- * a back-chevron + wordmark header, and a centered single-column content area.
+ * a back-chevron + wordmark header, and a single-column content area centred
+ * both ways.
  * Full-viewport, no chrome, solid cream.
  *
  * `fill` makes the content area a fixed-height flex column (no page scroll) so a
@@ -59,7 +60,13 @@ export function OnboardingShell({
         />
       </header>
 
-      {/* Content — single-column, packed to the top of the remaining space */}
+      {/*
+        Content - single column, centred both ways in the space under the
+        header (QA, 30 Sep). `my-auto`, not `justify-center`: auto margins
+        drop to zero when the content is taller than the space, so a long step
+        on a short screen scrolls from its top instead of losing it above the
+        fold. A `fill` step owns the whole height, so there is nothing to centre.
+      */}
       <div
         className={cn(
           "flex flex-1 flex-col items-center px-6 pb-6 sm:pb-10",
@@ -69,7 +76,7 @@ export function OnboardingShell({
         <div
           className={cn(
             "flex w-full max-w-full flex-col sm:max-w-[440px]",
-            fill && "min-h-0 flex-1",
+            fill ? "min-h-0 flex-1" : "my-auto",
           )}
         >
           {children}

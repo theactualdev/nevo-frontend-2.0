@@ -1550,6 +1550,12 @@ daily lesson path.
     mechanism, and a wrong interaction is a different task.
 ## S-D. Not a gap — do not re-open
 
+- **The SS band's dual task in Grid Span stays as built.** The true/false sum over the
+  dimmed grid is drawn in neither the Grid Span frame nor the playable prototype, so a
+  check against the frames will flag it. QA reported it as broken on 30 Sep; design and QA
+  then confirmed it is intended, and **design approved it on 30 Sep**. Do not remove it to
+  match the frames. (`GridSpanModule` `DUAL_CHECKS`, `bands.ts` `dual`.)
+
 - **A child cannot start a conversation with a teacher.** `MessageRecipientType` has no
   `teacher` value and the reply path is deliberately shaped so access IS the thread.
 - **Forgot PIN calls nothing.** The frame is informational; `auth/pin/reset` is

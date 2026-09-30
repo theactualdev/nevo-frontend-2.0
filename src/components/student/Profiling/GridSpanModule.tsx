@@ -25,6 +25,13 @@ const MAX_RETRIES = 3;
 /**
  * SS dual-task checks, answered between watch and recall.
  *
+ * DESIGN RULING, 30 SEP 2026 - KEEP AS BUILT. NOT A DEVIATION.
+ * The true/false sum over the dimmed grid is drawn in neither the Grid Span
+ * frame nor the playable prototype, and QA reported it as broken. Design and QA
+ * then confirmed it is intended, and design approved it on 30 Sep. A check
+ * against the frames will not find it there; that is expected. Do not remove
+ * it to match the frames. (Recorded in CONSOLE_INVENTORY, "S-D. Not a gap".)
+ *
  * The note here said "never marked", and the code agreed: `answerCheck`
  * recorded which button was pressed and nothing about whether it was right,
  * and `reduceGridSpan` never read the event at all. So the SS band's one
@@ -48,12 +55,31 @@ const DUAL_CHECKS: { text: string; isTrue: boolean }[] = [
 
 type Step = "watching" | "check" | "input" | "wrong" | "between" | "settling";
 
-/** Per-band tile sizing (mobile / sm+), from the frame's tileSize map. */
+/**
+ * Per-band tile sizing. From `sm` up these are the frame's tileSize map, exact.
+ *
+ * BELOW `sm` THE TILES FILL THEIR COLUMN INSTEAD OF A FIXED SIZE (QA, 30 Sep).
+ * The frame's phone sizes were fixed pixels, so on a phone held upright the
+ * grid sat small in the middle of a tall screen - and on a 320px phone the
+ * 5x5 band's 62px tiles were forced into 56px columns and overlapped. Now the
+ * grid takes the width it has (see `PHONE_GRID`) and each tile is a square of
+ * its column, so the grid is as large as the screen allows and never overlaps.
+ */
 const TILE: Record<number, { m: string; g: string }> = {
-  3: { m: "size-[92px] sm:size-[104px]", g: "gap-1.5 sm:gap-2.5" },
-  4: { m: "size-[78px] sm:size-[84px]", g: "gap-1.5 sm:gap-2.5" },
-  5: { m: "size-[62px] sm:size-[66px]", g: "gap-1.5 sm:gap-[9px]" },
+  3: { m: "aspect-square w-full sm:size-[104px]", g: "gap-1.5 sm:gap-2.5" },
+  4: { m: "aspect-square w-full sm:size-[84px]", g: "gap-1.5 sm:gap-2.5" },
+  5: { m: "aspect-square w-full sm:size-[66px]", g: "gap-1.5 sm:gap-[9px]" },
 };
+
+/**
+ * How wide the grid is on a phone: the screen's width less the shell's
+ * padding, but never so tall that the bubble, the grid and the SS dual task's
+ * buttons stop fitting on one screen (the 380px is what sits above and below
+ * the grid), and never wider than 420px. From `sm` up the frame's fixed tile
+ * sizes decide it again.
+ */
+const PHONE_GRID =
+  "w-[min(calc(100vw-40px),calc(100dvh-380px),420px)] sm:w-auto";
 
 /**
  * Module 1 - Spatial Grid Span (BP-M1, working memory). Tiles light in
@@ -255,7 +281,7 @@ export function GridSpanModule({
         ) : (
           <div className="relative">
             <div
-              className={cn("grid", tile.g)}
+              className={cn("grid", PHONE_GRID, tile.g)}
               style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}
             >
               {Array.from({ length: cells }, (_, i) => {
