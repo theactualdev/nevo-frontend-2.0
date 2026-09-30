@@ -32,6 +32,7 @@ export function LessonDetailActions({
   variantsHref,
   compact = false,
   ready = true,
+  checking = false,
   outstandingKeyPoints = 0,
   outstandingSections = 0,
 }: {
@@ -46,13 +47,19 @@ export function LessonDetailActions({
    * a default of false would silently disable Assign across the console.
    */
   ready?: boolean;
+  /**
+   * The verdict has not arrived. Assign waits, and says nothing - there is no
+   * refusal to explain yet, and "Still being checked." is a sentence about
+   * the lesson, not about our read of it.
+   */
+  checking?: boolean;
   /** Key points Nevo could not ground, still waiting. */
   outstandingKeyPoints?: number;
   /** Flagged sections nobody has approved. */
   outstandingSections?: number;
 }) {
   const h = compact ? "h-[42px] text-sm" : "h-11 text-[14.5px]";
-  const blocked = !ready;
+  const blocked = !ready || checking;
   const plural = (n: number, one: string, many: string) =>
     `${n} ${n === 1 ? one : many}`;
   const left = [
@@ -91,7 +98,7 @@ export function LessonDetailActions({
           </Link>
         )}
       </div>
-      {blocked && (
+      {blocked && !checking && (
         <span className="text-right text-[13px] font-medium text-nevo-navy">
           {/* The server says it is not ready and we do not always know why -
               a refusal we cannot itemise still has to say something true. */}

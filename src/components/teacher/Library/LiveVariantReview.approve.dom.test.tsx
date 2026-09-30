@@ -2,8 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { LessonSegment } from "@/lib/api/lessons";
 
-const { approveSegment } = vi.hoisted(() => ({ approveSegment: vi.fn() }));
-vi.mock("@/lib/api/lessons", () => ({ lessonsApi: { approveSegment } }));
+const { approveSegment, review } = vi.hoisted(() => ({
+  approveSegment: vi.fn(),
+  review: vi.fn(),
+}));
+vi.mock("@/lib/api/lessons", () => ({ lessonsApi: { approveSegment, review } }));
 vi.mock("@/components/shared/IllustrationWrapper", () => ({
   IllustrationWrapper: ({ alt }: { alt: string }) => <div role="img" aria-label={alt} />,
 }));
@@ -122,7 +125,8 @@ describe("approving a section", () => {
 
   it("says the lesson can be assigned once the last section lands", async () => {
     // The teacher's actual question at this point is whether they can now
-    // assign it, which is the thing the gate refuses.
+    // assign it, which is the thing the gate refuses. The SERVER answers it.
+    review.mockResolvedValue({ readyToAssign: true, outstandingCount: 0 });
     approveSegment.mockResolvedValue({
       lessonId: "l-1",
       segmentId: "seg-1",
@@ -194,5 +198,94 @@ describe("the progress line", () => {
 
     expect(screen.getByText(/reviewing section 2$/i)).toBeInTheDocument();
     expect(screen.queryByText(/of 5/i)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * "CAN BE ASSIGNED" IS THE SERVER'S TO SAY.
+ *
+ * It was said on the section count alone. Sections are half of what holds a
+ * lesson: a key point Nevo could not ground holds it too, and that half is
+ * only in the review read. A teacher told "This lesson can be assigned" went
+ * back to a greyed-out Assign.
+ */
+describe("the last section, while key points are still outstanding", () => {
+  const lastOne = () =>
+    approveSegment.mockResolvedValue({
+      lessonId: "l-1",
+      segmentId: "seg-1",
+      approvedAt: "2026-09-17T10:00:00Z",
+      approvedBy: "teacher-1",
+      approvedSegmentCount: 5,
+      segmentCount: 5,
+      lessonApproved: true,
+    });
+
+  // Braces matter: a hook that RETURNS a function has it run as cleanup, and
+  // `mockReset()` returns the mock - so vitest would call `review()` itself.
+  beforeEach(() => {
+    review.mockReset();
+  });
+
+  it("does not say the lesson can be assigned", async () => {
+    review.mockResolvedValue({ readyToAssign: false, outstandingCount: 2 });
+    lastOne();
+    show();
+    fireEvent.click(screen.getByRole("button", { name: /approve this section/i }));
+
+    expect(
+      await screen.findByText("Every section approved. 2 key points waiting for you."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/can be assigned/i)).not.toBeInTheDocument();
+  });
+
+  it("asks the server about THIS lesson", async () => {
+    review.mockResolvedValue({ readyToAssign: true, outstandingCount: 0 });
+    lastOne();
+    show();
+    fireEvent.click(screen.getByRole("button", { name: /approve this section/i }));
+
+    await screen.findByText(/can be assigned/i);
+    expect(review).toHaveBeenCalledWith("l-1");
+  });
+
+  it("says only what it knows when the review cannot be read", async () => {
+    review.mockRejectedValue(new Error("network"));
+    lastOne();
+    show();
+    fireEvent.click(screen.getByRole("button", { name: /approve this section/i }));
+
+    expect(await screen.findByText("Every section approved.")).toBeInTheDocument();
+    expect(screen.queryByText(/can be assigned/i)).not.toBeInTheDocument();
+  });
+
+  it("goes by the verdict, not the key-point count", async () => {
+    // Nothing outstanding in THIS payload, and still not ready: a flagged
+    // segment elsewhere holds the lesson, and only `readyToAssign` knows.
+    review.mockResolvedValue({ readyToAssign: false, outstandingCount: 0 });
+    lastOne();
+    show();
+    fireEvent.click(screen.getByRole("button", { name: /approve this section/i }));
+
+    await waitFor(() => expect(review).toHaveBeenCalled());
+    expect(await screen.findByText("Every section approved.")).toBeInTheDocument();
+    expect(screen.queryByText(/can be assigned/i)).not.toBeInTheDocument();
+  });
+
+  it("does not ask before the last section", async () => {
+    approveSegment.mockResolvedValue({
+      lessonId: "l-1",
+      segmentId: "seg-1",
+      approvedAt: "2026-09-17T10:00:00Z",
+      approvedBy: "teacher-1",
+      approvedSegmentCount: 3,
+      segmentCount: 5,
+      lessonApproved: false,
+    });
+    show();
+    fireEvent.click(screen.getByRole("button", { name: /approve this section/i }));
+
+    await screen.findByText("3 of 5 sections approved.");
+    expect(review).not.toHaveBeenCalled();
   });
 });

@@ -48,6 +48,15 @@ export interface LessonDetailState {
   modules: LessonModule[];
   /** Assignments for this lesson; empty when none or when the call failed. */
   assignments: Assignment[];
+  /**
+   * The assignments read failed - so `[]` above means "we could not find
+   * out", not "never assigned".
+   *
+   * Without this the two were one value, and a lesson assigned to a whole
+   * class read as never assigned: no schedule to cancel or re-date, and
+   * "Ready when you are... Assign it to a class" over it. Rule 5.
+   */
+  assignmentsFailed: boolean;
   loading: boolean;
   /** The lesson does not exist. */
   missing: boolean;
@@ -58,6 +67,7 @@ export interface LessonDetailState {
 export function useLessonDetail(lessonId: string): LessonDetailState {
   const [lesson, setLesson] = useState<LessonDetailResponse | null>(null);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [assignmentsFailed, setAssignmentsFailed] = useState(false);
   const [modules, setModules] = useState<LessonModule[]>([]);
   const [progress, setProgress] = useState<LessonClassProgress | null>(null);
   const [missing, setMissing] = useState(false);
@@ -76,8 +86,18 @@ export function useLessonDetail(lessonId: string): LessonDetailState {
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        if (err instanceof ApiError && err.status === 404) setMissing(true);
-        else setFailed(true);
+        /*
+         * A 422 IS NOT-FOUND TOO. The id is a uuid, and the spec answers a
+         * malformed one with 422 - which read as "we couldn't load this
+         * lesson, try again", a retry that can never succeed. Only a lesson
+         * that could exist is worth another go.
+         */
+        if (
+          err instanceof ApiError &&
+          (err.status === 404 || err.status === 422)
+        ) {
+          setMissing(true);
+        } else setFailed(true);
       });
 
     // Best-effort: a lesson reads fine ungrouped.
@@ -98,7 +118,9 @@ export function useLessonDetail(lessonId: string): LessonDetailState {
           setAssignments(all.filter((a) => a.lesson?.id === lessonId));
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) setAssignmentsFailed(true);
+      });
 
     return () => {
       cancelled = true;
@@ -144,6 +166,7 @@ export function useLessonDetail(lessonId: string): LessonDetailState {
     lesson,
     modules,
     assignments,
+    assignmentsFailed,
     // Guarded so a stale class's numbers never sit under a different lesson.
     progress: progress && progress.classId === classIds[0] ? progress : null,
     loading,

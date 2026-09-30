@@ -9,6 +9,8 @@ const { create, useLessonLibrary } = vi.hoisted(() => ({
 vi.mock("@/lib/api/assignments", () => ({ assignmentsApi: { create } }));
 vi.mock("@/hooks/useLessonLibrary", () => ({ useLessonLibrary }));
 
+import { ApiError } from "@/lib/api/client";
+
 import { LiveRecommendSheet } from "./LiveRecommendSheet";
 
 /**
@@ -27,9 +29,12 @@ import { LiveRecommendSheet } from "./LiveRecommendSheet";
  */
 
 const LESSONS = [
-  { id: "l-1", title: "Fractions 3", meta: "Mathematics · 20 min" },
-  { id: "l-2", title: "Photosynthesis", meta: "Science · 25 min" },
+  { id: "l-1", title: "Fractions 3", meta: "Mathematics · 20 min", kind: "normal" },
+  { id: "l-2", title: "Photosynthesis", meta: "Science · 25 min", kind: "normal" },
 ];
+
+/** What `POST /api/v1/assignments` actually answers - not `{created: 1}`. */
+const CREATED = { assignmentIds: ["a-1"], createdCount: 1, duplicateCount: 0 };
 
 const show = (props: Record<string, unknown> = {}) =>
   render(
@@ -51,7 +56,7 @@ beforeEach(() => {
   create.mockReset();
   useLessonLibrary.mockReset();
   useLessonLibrary.mockReturnValue({ cards: LESSONS, live: true, sample: false, loading: false });
-  create.mockResolvedValue({ created: 1 });
+  create.mockResolvedValue(CREATED);
 });
 
 describe("sending", () => {
@@ -78,7 +83,7 @@ describe("sending", () => {
     // Mid-flight: nothing is confirmed yet. The fixture sheet confirmed here.
     expect(screen.queryByText(/That’s sent to Amara/)).not.toBeInTheDocument();
 
-    resolve({ created: 1 });
+    resolve(CREATED);
     expect(await screen.findByText(/That’s sent to Amara/)).toBeInTheDocument();
   });
 
@@ -315,5 +320,140 @@ describe("an empty or unreachable library", () => {
     // Not the failure copy either: nothing has failed yet.
     expect(screen.queryByText(/couldn’t reach your library/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/library is empty/i)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * THE SIBLINGS OF THE ASSIGN WIZARD'S FIXES, on the other door to the same
+ * endpoint. Each of these was fixed in the wizard between 22 and 24 Sep and
+ * missed here.
+ */
+describe("only a lesson that can be sent", () => {
+  const MIXED = [
+    ...LESSONS,
+    { id: "l-3", title: "Water Cycle", meta: "", kind: "failed" },
+    { id: "l-4", title: "Rivers", meta: "", kind: "parsing" },
+  ];
+
+  it("is offered - not one whose parse failed, nor one still being read", () => {
+    // A failed parse leaves a lesson with no sections; sending it sent a
+    // child an empty lesson.
+    useLessonLibrary.mockReturnValue({ cards: MIXED, live: true, sample: false, loading: false });
+    show();
+
+    expect(screen.getByRole("button", { name: /Fractions 3/ })).toBeInTheDocument();
+    expect(screen.queryByText("Water Cycle")).not.toBeInTheDocument();
+    expect(screen.queryByText("Rivers")).not.toBeInTheDocument();
+  });
+});
+
+describe("a lesson that is not approved yet", () => {
+  const refuse = (message?: string) =>
+    create.mockRejectedValueOnce(
+      new ApiError(409, "conflict", {
+        detail: { code: "lesson_not_approved", ...(message ? { message } : {}) },
+      }),
+    );
+
+  it("says what the server said is outstanding, not 'try again'", async () => {
+    refuse("Fractions 3 has 2 sections waiting for you.");
+    show();
+    pick("Fractions 3");
+    sendIt();
+
+    const said = await screen.findByRole("alert");
+    expect(said).toHaveTextContent("Fractions 3 has 2 sections waiting for you.");
+    expect(said).not.toHaveTextContent(/try again/i);
+  });
+
+  it("points at the lesson that settles it", async () => {
+    refuse("Fractions 3 has 2 sections waiting for you.");
+    show();
+    pick("Fractions 3");
+    sendIt();
+
+    expect(
+      await screen.findByRole("link", { name: "Open the lesson and check them" }),
+    ).toHaveAttribute("href", "/teacher/lessons/l-1");
+  });
+
+  it("keeps the wizard's sentence where the server gave none", async () => {
+    refuse();
+    show();
+    pick("Fractions 3");
+    sendIt();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "This lesson still has sections waiting for you, so it cannot go to students yet.",
+    );
+  });
+
+  it("offers no lesson link for an ordinary failure", async () => {
+    create.mockRejectedValueOnce(new ApiError(500, "server"));
+    show();
+    pick("Fractions 3");
+    sendIt();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/try again/i);
+    expect(screen.queryByRole("link", { name: /Open the lesson/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("a send that created nothing", () => {
+  it("says the child already has it, rather than 'That's sent'", async () => {
+    create.mockResolvedValueOnce({ assignmentIds: [], createdCount: 0, duplicateCount: 1 });
+    show();
+    pick("Fractions 3");
+    sendIt();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Amara already has this lesson, so nothing was sent again.",
+    );
+    expect(screen.queryByText(/That’s sent/)).not.toBeInTheDocument();
+  });
+
+  it("promises no note that nothing is holding", async () => {
+    create.mockResolvedValueOnce({ assignmentIds: [], createdCount: 0, duplicateCount: 1 });
+    show();
+    pick("Fractions 3");
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Have a go." } });
+    sendIt();
+
+    await screen.findByRole("alert");
+    expect(screen.queryByText(/Your note goes with this lesson/)).not.toBeInTheDocument();
+  });
+
+  it("does not claim a duplicate the server did not report", async () => {
+    // Absent is not a duplicate: an older deployment may not send the field.
+    create.mockResolvedValueOnce({ assignmentIds: [], createdCount: 0 });
+    show();
+    pick("Fractions 3");
+    sendIt();
+
+    const said = await screen.findByRole("alert");
+    expect(said).not.toHaveTextContent(/already has/);
+    expect(screen.queryByText(/That’s sent/)).not.toBeInTheDocument();
+  });
+});
+
+describe("the note box, when there is no lesson under it", () => {
+  it("is not there while the library is loading", () => {
+    useLessonLibrary.mockReturnValue({ cards: LESSONS, live: false, sample: false, loading: true });
+    show();
+
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+  });
+
+  it("is not there when the library could not be reached", () => {
+    useLessonLibrary.mockReturnValue({ cards: LESSONS, live: false, sample: true, loading: false });
+    show();
+
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+  });
+
+  it("is there once there are lessons to send", () => {
+    show();
+
+    expect(screen.getByRole("textbox")).toBeInTheDocument();
   });
 });

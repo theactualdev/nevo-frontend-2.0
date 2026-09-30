@@ -72,6 +72,7 @@ const kp = (id: string, outstanding: boolean) => ({
 const LESSON = {
   id: "l-9",
   title: "Photosynthesis in Leaves",
+  status: "completed",
   segmentCount: 5,
   segments: [seg(), seg({ id: "s-2", sequenceOrder: 2, title: "Inside the leaf" })],
   confirmationSummary: null,
@@ -352,5 +353,128 @@ describe("the section rows once a teacher has checked them", () => {
 
     expect(screen.getByText("Checked")).toBeInTheDocument();
     expect(screen.queryByText("Worth a look")).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * WHAT THE PAGE CLAIMS WHEN IT DOES NOT KNOW - or when there is nothing to send.
+ *
+ * Three ways this page said "Ready when you are... Assign it to a class" over
+ * something that was not ready: a failed assignments read, a lesson whose
+ * parse failed or is still running, and the window before the review read
+ * lands. Rule 5 - absence is an instruction, not a gap to fill.
+ */
+describe("when who has this lesson could not be read", () => {
+  const showFailed = () =>
+    render(
+      <LiveLessonDetail
+        lesson={LESSON}
+        modules={[]}
+        assignments={[]}
+        assignmentsFailed
+      />,
+    );
+
+  it("does not say the lesson was never assigned", () => {
+    showFailed();
+
+    expect(screen.queryByText("Ready when you are")).not.toBeInTheDocument();
+  });
+
+  it("says it could not find out, where the schedule would be", () => {
+    showFailed();
+
+    expect(
+      screen.getByText(/couldn’t load who has this lesson just now/),
+    ).toBeInTheDocument();
+  });
+
+  it("says nothing of the kind when the read landed", () => {
+    show();
+
+    expect(screen.queryByText(/couldn’t load who has this lesson/)).not.toBeInTheDocument();
+  });
+});
+
+describe("a lesson with nothing to send", () => {
+  const showAs = (over: Record<string, unknown>) =>
+    render(
+      <LiveLessonDetail
+        lesson={{ ...LESSON, ...over } as LessonDetailResponse}
+        modules={[]}
+        assignments={[]}
+      />,
+    );
+
+  it("is not called ready when its parse failed", () => {
+    showAs({ status: "failed", segments: [], segmentCount: 0 });
+
+    expect(screen.queryByText("Ready when you are")).not.toBeInTheDocument();
+    expect(screen.queryByText(/prepared this lesson into 0 sections/)).not.toBeInTheDocument();
+  });
+
+  it("offers no Assign when its parse failed", () => {
+    showAs({ status: "failed", segments: [], segmentCount: 0 });
+
+    expect(screen.queryByText("Assign to a class")).not.toBeInTheDocument();
+  });
+
+  it("offers no Assign while it is still being read", () => {
+    showAs({ status: "processing" });
+
+    expect(screen.queryByText("Ready when you are")).not.toBeInTheDocument();
+    expect(screen.queryByText("Assign to a class")).not.toBeInTheDocument();
+  });
+
+  it("offers no Assign while it is waiting to be read", () => {
+    showAs({ status: "pending" });
+
+    expect(screen.queryByText("Assign to a class")).not.toBeInTheDocument();
+  });
+
+  it("offers no Assign for a finished lesson with no sections in it", () => {
+    showAs({ segments: [], segmentCount: 0 });
+
+    expect(screen.queryByText("Ready when you are")).not.toBeInTheDocument();
+    expect(screen.queryByText("Assign to a class")).not.toBeInTheDocument();
+  });
+
+  it("is ready when the parse finished with things to review", () => {
+    showAs({ status: "completed_with_review" });
+
+    expect(screen.getByText("Ready when you are")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Assign to a class" })).toBeInTheDocument();
+  });
+});
+
+describe("while the review is still being read", () => {
+  it("is not the ready state yet", () => {
+    reviewState({ loading: true });
+    show();
+
+    expect(screen.queryByText("Ready when you are")).not.toBeInTheDocument();
+  });
+
+  it("holds Assign, so it cannot be pressed into a 409", () => {
+    reviewState({ loading: true });
+    show();
+
+    expect(screen.queryByRole("link", { name: "Assign to a class" })).not.toBeInTheDocument();
+    expect(screen.getByText("Assign to a class")).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("does not explain a refusal nobody has made", () => {
+    reviewState({ loading: true });
+    show();
+
+    expect(screen.queryByText("Still being checked.")).not.toBeInTheDocument();
+    expect(screen.queryByText(/still to check/)).not.toBeInTheDocument();
+  });
+
+  it("lets Assign go the moment the answer is ready", () => {
+    reviewState({ loading: false, ready: true });
+    show();
+
+    expect(screen.getByRole("link", { name: "Assign to a class" })).toBeInTheDocument();
   });
 });
