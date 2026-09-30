@@ -1,7 +1,9 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { Fragment } from "react";
 import { AdminSidebar } from "./AdminSidebar";
+import { useYearGroupLabels } from "./useYearGroupLabels";
 
 /**
  * The chrome every admin screen sits in: the rail, then a scrolling content
@@ -20,12 +22,17 @@ const BARE_ROUTES = ["/admin/onboarding"];
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  if (BARE_ROUTES.some((p) => pathname.startsWith(p))) return <>{children}</>;
+  const bare = BARE_ROUTES.some((p) => pathname.startsWith(p));
+  // The school's own year-group labels, for every screen - see the hook.
+  const labelsKey = useYearGroupLabels(!bare);
+  if (bare) return <>{children}</>;
 
   return (
     <div className="flex h-dvh min-h-0 w-full overflow-hidden bg-nevo-cream">
       <AdminSidebar />
-      <main className="min-w-0 flex-1 overflow-y-auto">{children}</main>
+      <main className="min-w-0 flex-1 overflow-y-auto">
+        <Fragment key={labelsKey}>{children}</Fragment>
+      </main>
     </div>
   );
 }
