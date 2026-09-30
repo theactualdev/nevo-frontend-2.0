@@ -126,7 +126,14 @@ const REWARD =
 // Scoped to the surfaces where a threshold becomes a CLAIM about a person.
 // `lib/` is exempt: a pure helper handed a threshold by the engine is fine, and
 // the decision is made where it is rendered.
-const DECIDES = /[\/](hooks|components[\/](student|teacher|parent))[\/]/;
+//
+// ADMIN WAS MISSING until 30 Sep, and it makes claims about children too -
+// learner profiles, support flags, cohort analytics. Reports shipped a
+// three-period "enough for a trend" count and a 0.15 "reading is the barrier"
+// line through the gap. (Neither would have matched the patterns below as
+// written - a named constant, a gap - which is why they were fixed by hand;
+// the scope is widened so the next one that does match is caught.)
+const DECIDES = /[\/](hooks|components[\/](student|teacher|parent|admin))[\/]/;
 
 /**
  * A SUFFICIENCY VERDICT, computed here.
@@ -343,6 +350,16 @@ const CLASSIFIER_ALLOWED = new Map([
   [
     "src/hooks/useTeacherHome.ts:band",
     "Accepted for launch (design, 17 Sep) pending backend serving the cutoffs. The labels are generated FROM the thresholds - \"Above 75%\", not \"Strong\" - so they cannot state an opinion the number does not support. Remove this entry when the engine sends the bands.",
+  ],
+  // The two below arrived when admin came into scope (30 Sep). Neither is a
+  // label about a person, and neither has a cutoff the engine could own.
+  [
+    "src/components/admin/Overview/notActive.ts:studentsSub",
+    "`classes > 0` chooses between \"340 students across 12 classes\" and \"340 students added\" - whether a count exists to mention (rule 5, absence), about a school's uploaded file, not a verdict about any child. Permanent: there is no engine threshold to wait for.",
+  ],
+  [
+    "src/components/admin/Settings/academicCalendar.ts:unresolvedLine",
+    "`rows === 1` is English grammar - \"1 term needs\" vs \"2 terms need\" - about the school's own calendar settings. Permanent: pluralisation is not a cutoff.",
   ],
 ]);
 const allowlistHits = new Set();
