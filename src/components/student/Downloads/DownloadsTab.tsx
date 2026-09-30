@@ -5,6 +5,7 @@ import { Check, CloudDownload } from "lucide-react";
 import { useHasSession } from "@/hooks/useHasSession";
 import { useHydrated } from "@/hooks/useHydrated";
 import { cn } from "@/lib/utils";
+import { SavedLessons } from "./SavedLessons";
 
 type DownloadStatus = "available" | "downloading" | "downloaded";
 
@@ -27,22 +28,19 @@ const DOWNLOAD_MS = 800;
 
 /**
  * Downloads Tab (screen 24) — a lightweight offline manager: keep today's
- * lessons on the device for patchy connectivity. Tap a lesson to download it (or
- * remove it), or grab everything at once.
+ * lessons on the device for patchy connectivity.
  *
- * v1 is a UI shell — it simulates the download states; wiring real on-device
- * caching (Service Worker / Cache API) is a follow-up. TODO(offline-cache).
+ * TWO AUDIENCES, TWO SCREENS.
  *
- * SO A SIGNED-IN CHILD IS NOT SHOWN IT. The simulation flips a row to "Saved
- * offline" after 800ms having fetched and cached precisely nothing, over a
- * list of four lessons that are not theirs. Told to a real child, that is a
- * promise of offline access to exactly the schools most likely to need it -
- * and there is nothing behind it. `POST /lessons/{id}/download` and the
- * offline-package endpoint both exist, but the device half is a Service Worker
- * project, not a wiring job, so the honest state is "not yet" rather than a
- * convincing mime of the real thing.
+ * A signed-in child gets `SavedLessons`, which really keeps a lesson on this
+ * device and opens it without a connection - the smaller version of offline.
+ * The real version (the backend's offline package, with sizes and media) waits
+ * on backend: `GET /lessons/{id}/offline-package` answers an untyped `{}`.
  *
- * The simulation stays for the signed-out walkthrough of the designed screen.
+ * The signed-out walkthrough keeps the SIMULATION below: it flips a row to
+ * "Saved offline" after 800ms having cached nothing, over four lessons that
+ * are nobody's. That is fine for a demonstration of the designed screen and
+ * would be a false promise to a real child, which is why they never see it.
  */
 export function DownloadsTab() {
   const signedIn = useHasSession();
@@ -93,7 +91,8 @@ export function DownloadsTab() {
   // Nothing renders until we know who is looking - SSR cannot read the token,
   // and a frame of "Saved offline" is the claim this gate exists to prevent.
   if (!hydrated) return <DownloadsShell />;
-  if (signedIn) return <NotYet />;
+  // A signed-in child gets the real shelf: see `SavedLessons`.
+  if (signedIn) return <SavedLessons />;
 
   return (
     <div className="mx-auto w-full max-w-[640px] px-5 py-2 pb-6 sm:px-8 sm:py-6">
@@ -141,35 +140,6 @@ function DownloadsShell() {
         Downloads
       </h1>
       <div className="mt-5 h-[52px] animate-pulse rounded-[12px] bg-nevo-cream-elevated" />
-    </div>
-  );
-}
-
-/**
- * What a signed-in child sees until offline actually works.
- *
- * Says plainly that it is coming rather than pretending it is here. A child
- * who trusts "Saved offline" and then travels somewhere without signal is
- * worse served than one who was told the truth up front.
- */
-function NotYet() {
-  return (
-    <div className="mx-auto w-full max-w-[640px] px-5 py-2 pb-6 sm:px-8 sm:py-6">
-      <h1 className="text-2xl font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[30px] lg:text-[32px]">
-        Downloads
-      </h1>
-      <div className="mt-8 flex flex-col items-center px-6 text-center">
-        <span className="flex size-16 items-center justify-center rounded-[14px] bg-nevo-cream-elevated text-nevo-navy/50">
-          <CloudDownload className="size-8" strokeWidth={1.8} />
-        </span>
-        <h2 className="mt-5 text-lg font-medium text-nevo-near-black">
-          Saving lessons for offline isn&rsquo;t ready yet
-        </h2>
-        <p className="mt-1.5 max-w-[340px] text-sm leading-[1.55] text-nevo-near-black/60">
-          It&rsquo;s coming. For now you&rsquo;ll need a connection to open your
-          lessons.
-        </p>
-      </div>
     </div>
   );
 }

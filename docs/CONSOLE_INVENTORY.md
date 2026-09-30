@@ -934,7 +934,7 @@ were filed as a backend blocker they never were.
 | Ask Nevo — drawer, answer, voice input | PARTIAL | `lessonId` is structurally always null, so a child stuck inside a lesson cannot have an answer scoped to it; `currentPage` is the only context sent | FRONTEND | S |
 | Ask Nevo — conversation history | NOT BUILT | Nothing is missing from backend: all three thread endpoints are deployed and consumed elsewhere, and `ThreadSummary` / `ThreadTranscript` are already typed with the windowing the frame describes | FRONTEND | M |
 | Ask Nevo — "can't help, ask your teacher" | FIXTURE-ONLY | `AskNevoAnswer` carries no boundary or handoff field, so nothing on the wire can say "hand this to a teacher" | BACKEND | S |
-| Downloads tab | NOT BUILT | Both endpoints are deployed and unused; the missing half is the device — a Service Worker and a Cache API store. Hidden from signed-in children, honestly | FRONTEND | L |
+| Downloads tab | **PARTIAL — the smaller version, 30 Sep** | A signed-in child saves a lesson while connected (the same `GET /lessons/{id}` read the player makes, kept per child on the device) and opens it from Downloads without a connection - in place, because with no service worker another page cannot load offline. No sizes, no pictures or audio, nothing registered server-side. **The real version waits on BACKEND:** `GET /lessons/{id}/offline-package` answers an untyped `{}` and the download manifest carries no size. A service worker (offline reload) is the remaining frontend half | BACKEND (package, size); FRONTEND (service worker) | L |
 | Profile and settings, sign-out, feedback | LIVE | — | NONE | — |
 | Profile — avatar selector | **LIVE 25 Sep** | Frame 27's sheet: eight colourways of the child's own initials, tap to choose, no Save. Stored against the ACCOUNT under `avatarTone` in the `/api/settings/me` bag - the contract has no avatar field, and a device copy would hand one child's look to the next on a shared tablet. The shell's disc, the sidebar's and Profile's move together. **Asked of design:** three swatches carry cream initials below 3:1 | — | — |
 | Change PIN | **DONE 23 Sep** | Frame 27's three steps, built once `currentPin` landed and was enforced. Step 1 collects the current PIN and passes it through `storePin`, so `PinCreationScreen` needed no new prop; `PinRow` is exported rather than copied. A wrong current PIN is named as the child's and returns to step 1 — not the "that's on us" copy, which belongs to a write that failed for a reason no retype fixes | — | — |
@@ -1559,8 +1559,10 @@ daily lesson path.
 - **Only observed facts are sent to the adaptation engine.** Inventing `engagementScore`
   or `comprehensionScore` escalates a live break from `mild` to `high`. Measured, not
   assumed.
-- **Downloads are hidden from signed-in children.** The endpoints exist; the device half
-  is a Service Worker project and pretending otherwise would be a lie about offline.
+- ~~**Downloads are hidden from signed-in children.**~~ **The smaller version shipped 30 Sep** -
+  saved lessons really open without a connection, from Downloads. The real version (the
+  offline package, sizes, media, a service worker for offline reloads) is still to come, and
+  its first half waits on backend typing the package. See the Downloads row.
 - **`/student/onboarding/*` stays unguarded.** It is the flow that creates the session.
   Only the root needs a bounce.
 - **Signing out is not forgetting the device** — deliberate and tested; design confirmed

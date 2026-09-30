@@ -4,6 +4,7 @@ import { useStudentLesson } from "./useStudentLesson";
 import { clearSession, setSession } from "@/lib/auth/session";
 import { FIRST_LESSON_ID } from "@/lib/mocks";
 import { ApiError } from "@/lib/api/client";
+import { saveLesson, savedLesson } from "@/lib/offline/savedLessons";
 
 /**
  * The worst thing this hook could do, and did.
@@ -493,5 +494,60 @@ describe("an accommodation when the engine does not answer", () => {
 
     await waitFor(() => expect(result.current.lesson).not.toBeNull());
     expect(result.current.plan?.accommodations?.reading).toBe(true);
+  });
+});
+
+describe("a lesson the child saved for offline", () => {
+  /*
+   * With no connection the lesson read fails, and a child who saved the lesson
+   * gets the copy they kept - built exactly as it would be online. Never for a
+   * 404 (a lesson the school removed stays removed), and never another child's.
+   */
+  beforeEach(() => window.localStorage.clear());
+
+  it("opens from the saved copy when the read cannot be made", async () => {
+    signIn();
+    saveLesson("student-1", LIVE_LESSON as never);
+    detail.mockRejectedValue(new ApiError(0, "Network"));
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.lesson).not.toBeNull());
+    expect(result.current.failed).toBe(false);
+    expect(result.current.lesson?.title).toBe("Fractions Lesson 3");
+  });
+
+  it("does not bring back a lesson the school removed", async () => {
+    signIn();
+    saveLesson("student-1", LIVE_LESSON as never);
+    detail.mockRejectedValue(new ApiError(404, "Not Found"));
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.missing).toBe(true));
+    expect(result.current.lesson).toBeNull();
+  });
+
+  it("does not open another child's saved copy", async () => {
+    signIn();
+    saveLesson("someone-else", LIVE_LESSON as never);
+    detail.mockRejectedValue(new ApiError(0, "Network"));
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.failed).toBe(true));
+  });
+
+  it("keeps a saved copy as fresh as the last online open", async () => {
+    signIn();
+    saveLesson("student-1", { ...LIVE_LESSON, title: "Old title" } as never);
+    detail.mockResolvedValue(LIVE_LESSON);
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.lesson).not.toBeNull());
+    expect(savedLesson("student-1", FIRST_LESSON_ID)?.title).toBe(
+      "Fractions Lesson 3",
+    );
   });
 });

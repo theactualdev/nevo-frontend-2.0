@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import {
   AdaptiveToggleBar,
@@ -26,6 +25,7 @@ import {
 import { useAccessibility } from "@/context/AccessibilityContext";
 import { useBreakMonitor, useLesson, useSignals } from "@/hooks";
 import { useRuntimeAdaptation } from "@/hooks/useRuntimeAdaptation";
+import { useLessonExit } from "./LessonExit";
 import { useScaffoldLevel } from "@/hooks/useScaffoldLevel";
 import type { AdaptSegment } from "@/lib/api/intelligence";
 import type { AdaptationPlan, Lesson, LessonSegment } from "@/lib/types";
@@ -186,7 +186,8 @@ export function LessonPlayer({
   /** The concept a review session is for; absent on an ordinary lesson. */
   reviewConceptId?: string;
 }) {
-  const router = useRouter();
+  // Every exit from the lesson - see `useLessonExit`.
+  const exitTo = useLessonExit();
   const total = lesson.segments.length;
 
   const planFor = (segmentId: string) =>
@@ -1031,7 +1032,7 @@ export function LessonPlayer({
           // The lesson IS finished at this point - reviewing is a way of
           // leaving it, not of abandoning it.
           markComplete();
-          router.push(`${LESSONS_HREF}/${lesson.id}/review`);
+          exitTo(`${LESSONS_HREF}/${lesson.id}/review`);
         }}
       />
     );
@@ -1051,7 +1052,7 @@ export function LessonPlayer({
     if (review) {
       return (
         <LessonComplete
-          onDone={() => router.push(HOME_HREF)}
+          onDone={() => exitTo(HOME_HREF)}
           heading="You strengthened this concept"
           note={
             savedNote ??
@@ -1063,11 +1064,11 @@ export function LessonPlayer({
     }
     return (
       <LessonComplete
-        onDone={() => router.push(HOME_HREF)}
+        onDone={() => exitTo(HOME_HREF)}
         note={savedNote}
         onSeeSummary={
           lesson.summary
-            ? () => router.push(`${LESSONS_HREF}/${lesson.id}/summary`)
+            ? () => exitTo(`${LESSONS_HREF}/${lesson.id}/summary`)
             : undefined
         }
       />
@@ -1422,7 +1423,7 @@ export function LessonPlayer({
           if (!review) {
             reportProgress(LESSON_STATUS.EXITED, { segment: index });
           }
-          router.push(LESSONS_HREF);
+          exitTo(LESSONS_HREF);
         }}
       />
 
