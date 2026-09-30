@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import {
   CARD,
   GHOST_BTN,
+  CheckIcon,
   PausedNote,
   PRIMARY_BTN,
   PlusIcon,
@@ -120,6 +121,13 @@ export function InvitationsView() {
    * to hand someone a link they are responsible for sending.
    */
   const [handout, setHandout] = useState<Invitation | null>(null);
+  /**
+   * Rows whose resend the backend confirmed emailing, with the line D19 draws
+   * under them - "Invite resent to n.obi@…". In the row and kept, where this
+   * was a three-second toast at the foot of the screen: an admin working down
+   * a list of pending invites needs to see which ones they have already done.
+   */
+  const [resent, setResent] = useState<Record<string, string>>({});
   const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   /** The instant every row's expiry is judged against - see `normaliseStatus`. */
@@ -207,6 +215,11 @@ export function InvitationsView() {
   const resend = (invite: Invitation) => {
     setBusy(invite.id);
     setHandout(null);
+    setResent((prev) => {
+      const next = { ...prev };
+      delete next[invite.id];
+      return next;
+    });
     invitesApi
       .resend(invite.id)
       .then((updated) => {
@@ -234,7 +247,10 @@ export function InvitationsView() {
           );
           return;
         }
-        say(`Invite resent to ${updated.email ?? updated.name ?? "them"}`);
+        setResent((prev) => ({
+          ...prev,
+          [updated.id]: `Invite resent to ${updated.email ?? inviteeName(updated)}`,
+        }));
       })
       .catch(() => say("That didn't resend. We're on it - try again in a moment."))
       .finally(() => setBusy(null));
@@ -555,6 +571,16 @@ export function InvitationsView() {
                           )}
                         </span>
                       </div>
+
+                      {resent[invite.id] ? (
+                        <p
+                          role="status"
+                          className="m-0 mt-3 flex items-center gap-[7px] rounded-lg bg-[#e5dfd3] px-3.5 py-2.5 text-[13px] text-nevo-navy motion-safe:animate-nevo-rise"
+                        >
+                          <CheckIcon size={13} />
+                          {resent[invite.id]}
+                        </p>
+                      ) : null}
 
                       {handout?.id === invite.id ? (
                         <LinkHandout
