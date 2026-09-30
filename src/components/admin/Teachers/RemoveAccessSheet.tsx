@@ -388,9 +388,12 @@ export function RemoveAccessSheet({
 
       {ready ? (
         <p className="m-0 rounded-[10px] bg-nevo-violet/24 px-4 py-3 text-[13.5px] leading-[1.55] text-nevo-navy">
+          {/* "...and you can restore access later" was cut: the contract has
+              `POST /teachers/{id}/revoke` and nothing that undoes it, so the
+              sentence promised a button that does not exist. */}
           {firstName}&rsquo;s classes will be handed over first, then their
           console access ends. Their notes stay with the school, attributed to
-          them, and you can restore access later.
+          them.
         </p>
       ) : null}
     </Sheet>
