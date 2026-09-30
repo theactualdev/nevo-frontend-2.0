@@ -506,7 +506,9 @@ export function LessonPlayer({
   // change) or on unmount. Keyed on `index` so within-segment modality/density
   // changes don't split the timing.
   useEffect(() => {
-    const enteredAt = Date.now();
+    // Monotonic (rule 4): this duration goes to the engine, and a wall clock
+    // that jumps - a tablet correcting itself mid-lesson - sends a negative.
+    const enteredAt = performance.now();
     const segId = lesson.segments[index].id;
     scrollDepth.current = 0;
     scrollMarks.current = new Set();
@@ -526,7 +528,7 @@ export function LessonPlayer({
         chunkRead.current?.segmentId === segId ? chunkRead.current.pct : null;
       trackEvent(SIGNAL_EVENT_TYPES.TIME_ON_SEGMENT, {
         segmentId: segId,
-        durationMs: Date.now() - enteredAt,
+        durationMs: Math.max(0, Math.round(performance.now() - enteredAt)),
         scrollDepthPct: chunked ?? Math.round(scrollDepth.current),
       });
     };
@@ -928,13 +930,16 @@ export function LessonPlayer({
     isCalculation(segment) &&
     !solvedCalcs.has(segment.id);
 
-  // Once the last segment is behind us there is nowhere further to chevron to
-  // (the assessment brings its own forward path).
-  const nextDisabled =
-    calcBlocking ||
-    (index === total - 1 &&
-      !hasAssessment &&
-      !(segment.quickCheck && !passedChecks.has(segment.id)));
+  /*
+   * ONLY AN UNSOLVED CALCULATION HOLDS THE FORWARD CHEVRON.
+   *
+   * It was also disabled on the last segment of a lesson with no
+   * end-of-lesson questions - and forward is the only thing that reaches the
+   * completion screen, so that lesson could not be finished at all. On the
+   * last segment forward goes to the assessment when there is one and to
+   * completion when there is not; `continueAdvance` already knew both.
+   */
+  const nextDisabled = calcBlocking;
 
   // The entry, assessment and completion screens each take over the full
   // screen — their own layout, no player chrome.
