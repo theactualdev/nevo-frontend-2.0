@@ -254,3 +254,24 @@ describe("ClassDetailView restore reload window", () => {
     expect(restore).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("removing a teacher from the class, while it happens", () => {
+  it("says it is working and cannot be pressed twice", async () => {
+    current = klass();
+    classTeachers.mockResolvedValue([teacher]);
+    removeAssignment.mockReset();
+    removeAssignment.mockReturnValue(new Promise(() => {}));
+
+    render(<ClassDetailView classId="c1" />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Remove Folake Adeyemi from this class/i }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Remove from this class" }));
+
+    const working = await screen.findByRole("button", { name: "Removing…" });
+    expect(working).toBeDisabled();
+    fireEvent.click(working);
+    expect(removeAssignment).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Keep them" })).toBeDisabled();
+  });
+});

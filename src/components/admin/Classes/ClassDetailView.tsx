@@ -92,6 +92,8 @@ export function ClassDetailView({ classId }: { classId: string }) {
    */
   const [archiveFailed, setArchiveFailed] = useState(false);
   const [removeFailed, setRemoveFailed] = useState(false);
+  /** The removal in flight - it showed nothing while working, and fired twice. */
+  const [removeBusy, setRemoveBusy] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [restoreFailed, setRestoreFailed] = useState(false);
 
@@ -334,8 +336,11 @@ export function ClassDetailView({ classId }: { classId: string }) {
                         setRemoveFailed(false);
                         setRemoving(confirming ? null : t.assignmentId);
                       }}
+                      // Pauses with every other change to a class, and holds
+                      // still while a removal is in flight.
+                      disabled={writesPaused || removeBusy}
                       aria-label={`Remove ${name} from this class`}
-                      className="flex size-[30px] flex-none cursor-pointer items-center justify-center rounded-lg text-nevo-near-black/40 transition-colors hover:bg-nevo-near-black/[0.06] hover:text-nevo-near-black/70"
+                      className="flex size-[30px] flex-none cursor-pointer items-center justify-center rounded-lg text-nevo-near-black/40 transition-colors hover:bg-nevo-near-black/[0.06] hover:text-nevo-near-black/70 disabled:cursor-default disabled:opacity-40"
                     >
                       <CloseIcon size={17} />
                     </button>
@@ -365,7 +370,11 @@ export function ClassDetailView({ classId }: { classId: string }) {
                     <div className="mt-3 flex gap-2.5">
                       <button
                         type="button"
-                        onClick={() =>
+                        disabled={removeBusy}
+                        onClick={() => {
+                          if (removeBusy) return;
+                          setRemoveBusy(true);
+                          setRemoveFailed(false);
                           classesApi
                             .removeAssignment(t.assignmentId)
                             .then(() => {
@@ -376,18 +385,20 @@ export function ClassDetailView({ classId }: { classId: string }) {
                             // a teacher who still holds the class still holds
                             // its children's work.
                             .catch(() => setRemoveFailed(true))
-                        }
-                        className="cursor-pointer rounded-lg bg-nevo-navy px-4 py-2 text-[13.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-110"
+                            .finally(() => setRemoveBusy(false));
+                        }}
+                        className="cursor-pointer rounded-lg bg-nevo-navy px-4 py-2 text-[13.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-110 disabled:cursor-default disabled:opacity-60"
                       >
-                        Remove from this class
+                        {removeBusy ? "Removing…" : "Remove from this class"}
                       </button>
                       <button
                         type="button"
+                        disabled={removeBusy}
                         onClick={() => {
                           setRemoving(null);
                           setRemoveFailed(false);
                         }}
-                        className="cursor-pointer rounded-lg px-4 py-2 text-[13.5px] font-semibold text-nevo-near-black/70 transition-colors hover:bg-nevo-near-black/[0.06]"
+                        className="cursor-pointer rounded-lg px-4 py-2 text-[13.5px] font-semibold text-nevo-near-black/70 transition-colors hover:bg-nevo-near-black/[0.06] disabled:cursor-default disabled:opacity-50"
                       >
                         Keep them
                       </button>

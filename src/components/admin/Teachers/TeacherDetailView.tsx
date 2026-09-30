@@ -365,6 +365,7 @@ export function TeacherDetailView({ teacherId }: { teacherId: string }) {
         <RemoveAccessSheet
           teacher={teacher}
           held={held}
+          classes={allClasses}
           onClose={(changed) => {
             setRemoving(false);
             // A partial hand-over moved some classes: re-read, so reopening

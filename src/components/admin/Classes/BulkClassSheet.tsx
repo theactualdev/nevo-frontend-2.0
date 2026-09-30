@@ -301,6 +301,11 @@ export function BulkClassSheet({
             <button type="button" onClick={submit} className={PRIMARY_BTN}>
               Try again
             </button>
+            {/* SCRUM-40: "Primary 'Try again', secondary 'Close'." A failure with
+                one way out holds the sheet open until it succeeds. */}
+            <button type="button" onClick={onClose} className={GHOST_BTN}>
+              Close
+            </button>
           </>
         ) : (
           <>
