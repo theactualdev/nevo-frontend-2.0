@@ -24,7 +24,12 @@ import {
 } from "./inviteFilters";
 import { NewInviteModal } from "./NewInviteModal";
 import { LinkHandout } from "./LinkHandout";
-import { confirmedSent, consentNote, needsManualDelivery } from "./deliveryCopy";
+import {
+  confirmedSent,
+  consentNote,
+  unconfirmedResendLead,
+  unconfirmedResendToast,
+} from "./deliveryCopy";
 import { inviteeName, joinLink } from "./joinLink";
 import { NoAccess, failureKind } from "../NoAccess";
 
@@ -221,15 +226,11 @@ export function InvitationsView() {
          */
         if (!confirmedSent(updated.deliveryStatus)) {
           setHandout(updated);
-          const hasLink = Boolean(joinLink(updated.token));
           say(
-            needsManualDelivery(updated.deliveryStatus)
-              ? hasLink
-                ? "No email went out - their link is in the row below"
-                : "No email went out, and no link came back"
-              : hasLink
-                ? "We couldn't confirm an email - their link is in the row below"
-                : "We couldn't confirm an email went out",
+            unconfirmedResendToast(
+              updated.deliveryStatus,
+              Boolean(joinLink(updated.token)),
+            ),
           );
           return;
         }
@@ -559,13 +560,11 @@ export function InvitationsView() {
                         <LinkHandout
                           className="mt-3"
                           invites={[handout]}
-                          lead={
-                            needsManualDelivery(handout.deliveryStatus)
-                              ? joinLink(handout.token)
-                                ? `No email was sent to ${inviteeName(handout)} - this school has no mail set up in Nevo, so this link is the only way in.`
-                                : `No email was sent to ${inviteeName(handout)}, and this resend carried no link.`
-                              : `We couldn't confirm an email reached ${inviteeName(handout)}.`
-                          }
+                          lead={unconfirmedResendLead(
+                            handout.deliveryStatus,
+                            Boolean(joinLink(handout.token)),
+                            inviteeName(handout),
+                          )}
                           /* NOT "resend from the invitations list" - this IS
                              the invitations list, and that is the button they
                              just pressed. */
