@@ -7,6 +7,7 @@ import { usersApi, type CurrentUser } from "@/lib/api/users";
 import type { PermissionScope } from "@/lib/constants/permissions";
 import { cn } from "@/lib/utils";
 import { Avatar, CARD } from "../Roster/primitives";
+import { scopeName } from "../Team/adminScopes";
 import {
   NotBuiltNote,
   S_FIELD,
@@ -49,15 +50,6 @@ import {
 type Load = "loading" | "ready" | "failed";
 type PwPhase = "idle" | "saving" | "done" | "mismatch" | "failed";
 
-const SCOPE_LABELS: Record<PermissionScope, string> = {
-  oversight: "General oversight",
-  roster: "Classes, teachers and students",
-  curriculum: "The lesson library and uploads",
-  senco: "Learning support",
-  it_sso: "Sign-in provider and roster sync",
-  billing: "Subscription and invoices",
-  teacher: "A teacher's own console",
-};
 
 function when(iso: string): string {
   const d = new Date(iso);
@@ -269,7 +261,11 @@ export function AccountSettings() {
                   aria-hidden="true"
                   className="mt-[7px] size-[6px] flex-none rounded-full bg-nevo-violet"
                 />
-                {SCOPE_LABELS[s] ?? s}
+                {/* D12c lists each area by its NAME ("Billing"), the same
+                    words the invite sheet and sidebar use - SCRUM-39's
+                    byte-identical rule. This had its own table, mixing
+                    names and descriptions. */}
+                {scopeName(s)}
               </li>
             ))}
           </ul>
