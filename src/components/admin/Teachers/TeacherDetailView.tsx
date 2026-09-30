@@ -17,6 +17,7 @@ import {
   CARD,
   GHOST_BTN,
   PausedNote,
+  PlusIcon,
   PRIMARY_BTN,
   ROW_DIVIDER,
   RolePill,
@@ -24,6 +25,7 @@ import {
   TEXT_ACTION,
 } from "../Roster/primitives";
 import { useSetupGate } from "@/hooks";
+import { AssignClassSheet } from "./AssignClassSheet";
 import { RemoveAccessSheet } from "./RemoveAccessSheet";
 import { StatusPill, isInvited } from "./status";
 import { NoAccess, failureKind } from "../NoAccess";
@@ -74,7 +76,8 @@ export function TeacherDetailView({ teacherId }: { teacherId: string }) {
   const [held, setHeld] = useState<AssignedClass[]>([]);
   const [allClasses, setAllClasses] = useState<AdminClass[]>([]);
   const [removing, setRemoving] = useState(false);
-  /** D24 / D01b: removing access pauses while setup is unfinished. */
+  const [assigning, setAssigning] = useState(false);
+  /** D24 / D01b: assigning and removing access pause while setup is unfinished. */
   const { writesPaused } = useSetupGate();
 
   const load = useCallback(() => {
@@ -173,6 +176,8 @@ export function TeacherDetailView({ teacherId }: { teacherId: string }) {
   );
   const firstName = teacher.name.split(" ").filter(Boolean).slice(-1)[0] ?? teacher.name;
   const invited = isInvited(teacher.status);
+  /** A deactivated teacher cannot open a console to teach anything in. */
+  const canAssign = teacher.status !== "deactivated";
 
   return (
     <Wrapper>
@@ -239,7 +244,21 @@ export function TeacherDetailView({ teacherId }: { teacherId: string }) {
 
       <div className="mt-[30px] flex items-center justify-between gap-4">
         <SectionHeading>Classes</SectionHeading>
+        {/* SCRUM-40's second door onto D5c. This was a link back to Classes,
+            leaving the admin to find the class and start again from there. */}
+        {canAssign ? (
+          <button
+            type="button"
+            onClick={() => setAssigning(true)}
+            disabled={writesPaused}
+            className={TEXT_ACTION}
+          >
+            <PlusIcon size={15} />
+            Assign to a class
+          </button>
+        ) : null}
       </div>
+      {canAssign ? <PausedNote className="mt-2" /> : null}
 
       <div className={cn(CARD, "mt-3.5")}>
         {held.length === 0 ? (
@@ -247,9 +266,6 @@ export function TeacherDetailView({ teacherId }: { teacherId: string }) {
             <p className="m-0 text-sm text-nevo-near-black/62">
               {teacher.name} doesn&rsquo;t hold any classes yet.
             </p>
-            <Link href="/admin/classes" className={cn(TEXT_ACTION, "mt-2.5")}>
-              Assign one from a class
-            </Link>
           </div>
         ) : (
           held.map((h, i) => {
@@ -312,7 +328,8 @@ export function TeacherDetailView({ teacherId }: { teacherId: string }) {
           </p>
         ) : (
           <>
-            <PausedNote className="mb-4" />
+            {/* The paused note sits once, under Classes, as class detail's
+                sits once under its header. */}
             <button
               type="button"
               onClick={() => setRemoving(true)}
@@ -330,6 +347,19 @@ export function TeacherDetailView({ teacherId }: { teacherId: string }) {
           </>
         )}
       </div>
+
+      {assigning ? (
+        <AssignClassSheet
+          teacher={teacher}
+          classes={allClasses}
+          held={held}
+          onClose={() => setAssigning(false)}
+          onAssigned={() => {
+            setAssigning(false);
+            load();
+          }}
+        />
+      ) : null}
 
       {removing ? (
         <RemoveAccessSheet
