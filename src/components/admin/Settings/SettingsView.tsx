@@ -1,5 +1,9 @@
 "use client";
 
+import { useState } from "react";
+// The shared feedback panel (SCRUM-68 `Nevo Feedback`). It lives in the teacher
+// shell because that console mounted it first; nothing in it is teacher-only.
+import { FeedbackPanel } from "@/components/teacher/Shell/FeedbackPanel";
 import { usePermissions, useSetupGate } from "@/hooks";
 import { PERMISSION_SCOPES } from "@/lib/constants/permissions";
 import { cn } from "@/lib/utils";
@@ -71,6 +75,7 @@ export function SettingsView() {
    */
   const scopesFailed = status === "failed";
   const showSchool = resolved && hasScope(PERMISSION_SCOPES.GENERAL_OVERSIGHT);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
@@ -122,7 +127,26 @@ export function SettingsView() {
 
         <SuperHeading id="settings-you">You</SuperHeading>
         <AccountSettings />
+
+        {/*
+          * D23: the feedback trigger sits at the foot of Settings. It used to
+          * be a Link to /admin/dashboard inside the SCHOOL half - so it went
+          * to a page with no feedback on it, and an admin without oversight
+          * never saw it at all. It is every admin's now, and it opens the
+          * shared feedback panel against the live `POST /api/v1/feedback`.
+          */}
+        <p className="mt-8 text-[13px] text-nevo-near-black/55">
+          Something not working, or missing?{" "}
+          <button
+            type="button"
+            onClick={() => setFeedbackOpen(true)}
+            className="cursor-pointer font-semibold text-nevo-navy hover:opacity-75"
+          >
+            Share feedback
+          </button>
+        </p>
       </div>
+      {feedbackOpen ? <FeedbackPanel onClose={() => setFeedbackOpen(false)} /> : null}
     </div>
   );
 }
