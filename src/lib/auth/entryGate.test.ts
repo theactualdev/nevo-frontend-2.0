@@ -3,7 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { myConsentGate } = vi.hoisted(() => ({ myConsentGate: vi.fn() }));
 vi.mock("@/lib/api/consents", () => ({ consentsApi: { myConsentGate } }));
 
-import { studentDestination, WAITING_ROUTE } from "./entryGate";
+import {
+  enterFirstLesson,
+  studentDestination,
+  WAITING_ROUTE,
+} from "./entryGate";
 
 /**
  * One rule, four doors. Design, 23 Sep: *"the gate is on the child's consent
@@ -101,5 +105,37 @@ describe("doors that are not a child's", () => {
     );
     expect(await studentDestination("/admin/overview")).toBe("/admin/overview");
     expect(myConsentGate).not.toHaveBeenCalled();
+  });
+});
+
+describe("the hand-off out of onboarding", () => {
+  const FIRST = "/student/lessons/frac-1";
+
+  it("holds a child the server says may not proceed, instead of opening the lesson", async () => {
+    myConsentGate.mockResolvedValue(gate({ blocked: true, granted: false }));
+    const go = vi.fn();
+
+    await enterFirstLesson(FIRST, go);
+
+    expect(go).toHaveBeenCalledWith(WAITING_ROUTE);
+    expect(go).not.toHaveBeenCalledWith(FIRST);
+  });
+
+  it("opens the first lesson for a child who may proceed", async () => {
+    myConsentGate.mockResolvedValue(gate());
+    const go = vi.fn();
+
+    await enterFirstLesson(FIRST, go);
+
+    expect(go).toHaveBeenCalledWith(FIRST);
+  });
+
+  it("does not turn a failed read into a hold", async () => {
+    myConsentGate.mockRejectedValue(new Error("offline"));
+    const go = vi.fn();
+
+    await enterFirstLesson(FIRST, go);
+
+    expect(go).toHaveBeenCalledWith(FIRST);
   });
 });
