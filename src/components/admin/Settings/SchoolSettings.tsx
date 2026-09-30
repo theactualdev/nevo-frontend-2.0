@@ -64,22 +64,23 @@ import {
 type Phase = "idle" | "saving" | "saved" | "failed";
 type Load = "loading" | "ready" | "failed";
 
+/** SCRUM-99 D12.5's OPTIONS, verbatim - they were paraphrased. */
 const RETENTION: { value: RetentionPolicy; label: string; plain: string }[] = [
   {
     value: "contract",
-    label: "For the length of our contract",
+    label: "Keep for the length of our contract",
     plain:
       "their profile and learning history stay available until your contract with Nevo ends",
   },
   {
     value: "contract_plus_3_years",
-    label: "Our contract, then three more years",
+    label: "Keep for 3 years after our contract ends",
     plain:
       "their profile and learning history stay available until three years after your contract ends",
   },
   {
     value: "contract_plus_7_years",
-    label: "Our contract, then seven more years",
+    label: "Keep for 7 years after our contract ends",
     plain:
       "their profile and learning history stay available until seven years after your contract ends",
   },
@@ -95,6 +96,8 @@ export function SchoolSettings() {
   const [contactPhone, setContactPhone] = useState("");
   const [location, setLocation] = useState("");
   const [retention, setRetention] = useState<RetentionPolicy>("contract");
+  /** Retention is its own section with its own save - SCRUM-99's per-section rule. */
+  const [retentionPhase, setRetentionPhase] = useState<Phase>("idle");
   const [general, setGeneral] = useState<Phase>("idle");
   /** Which half of the General save failed, when the first half landed. */
   const [generalNote, setGeneralNote] = useState<string | null>(null);
@@ -124,6 +127,9 @@ export function SchoolSettings() {
     setContactEmail(contact.contactEmail ?? "");
     setContactPhone(contact.contactPhone ?? "");
     setLocation(contact.location ?? "");
+  }, []);
+
+  const hydrateRetention = useCallback((s: School) => {
     setRetention(
       RETENTION.some((r) => r.value === s.retentionPolicy)
         ? (s.retentionPolicy as RetentionPolicy)
@@ -146,11 +152,12 @@ export function SchoolSettings() {
     (s: School) => {
       setSchool(s);
       hydrateGeneral(s);
+      hydrateRetention(s);
       hydrateCalendar(s);
       hydrateTaxonomy(s);
       setLoad("ready");
     },
-    [hydrateGeneral, hydrateCalendar, hydrateTaxonomy],
+    [hydrateGeneral, hydrateRetention, hydrateCalendar, hydrateTaxonomy],
   );
 
   useEffect(() => {
@@ -178,13 +185,14 @@ export function SchoolSettings() {
     setGeneral("saving");
     setGeneralNote(null);
     /*
-     * TWO WRITES, AND A FAILURE HAS TO SAY WHICH. The name and retention go
-     * first; if the contact details then fail, the first half is already
-     * saved - so "That didn't save. Nothing changed" would be false.
+     * TWO WRITES, AND A FAILURE HAS TO SAY WHICH. The name goes first; if
+     * the contact details then fail, the first half is already saved - so
+     * "That didn't save. Nothing changed" would be false. (Retention rode
+     * along with the name until it became its own section.)
      */
     let firstSaved = false;
     schoolApi
-      .update({ name: name.trim(), retentionPolicy: retention })
+      .update({ name: name.trim() })
       .then(() => {
         firstSaved = true;
         return schoolApi.saveContact({
@@ -202,11 +210,25 @@ export function SchoolSettings() {
       .catch(() => {
         setGeneralNote(
           firstSaved
-            ? "The school's name and retention were saved, but the contact details weren't. Try saving again."
+            ? "The school's name was saved, but the contact details weren't. Try saving again."
             : null,
         );
         setGeneral("failed");
       });
+  };
+
+  /** Retention alone: one write, and it refreshes only its own field. */
+  const saveRetention = () => {
+    setRetentionPhase("saving");
+    schoolApi
+      .update({ retentionPolicy: retention })
+      .then((s) => {
+        setSchool(s);
+        hydrateRetention(s);
+        setRetentionPhase("saved");
+        setTimeout(() => setRetentionPhase("idle"), 2200);
+      })
+      .catch(() => setRetentionPhase("failed"));
   };
 
   const saveCalendar = () => {
@@ -342,6 +364,11 @@ export function SchoolSettings() {
             />
           </div>
         </div>
+
+        {/* General's own save. It sat under Data retention and saved both,
+            so changing the name looked like it needed the retention section,
+            and vice versa. */}
+        <SaveRow phase={general} onSave={saveGeneral} failureNote={generalNote} />
       </SettingsSection>
 
       {/* ---------------------------------------------------------- RETENTION */}
@@ -388,8 +415,13 @@ export function SchoolSettings() {
             Currently {school.retentionDays.toLocaleString()} days.
           </p>
         ) : null}
+        {/* SCRUM-99: "Names the dependents" - what else follows this setting. */}
+        <p className="m-0 mt-2 max-w-[62ch] text-[12.5px] leading-[1.5] text-nevo-near-black/50">
+          It applies to the students under &ldquo;Show deactivated&rdquo; on
+          your roster, and to leaving students when you promote a year.
+        </p>
 
-        <SaveRow phase={general} onSave={saveGeneral} failureNote={generalNote} />
+        <SaveRow phase={retentionPhase} onSave={saveRetention} />
       </SettingsSection>
 
       {/* --------------------------------------------------- ACADEMIC YEAR */}
