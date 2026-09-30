@@ -306,3 +306,20 @@ describe("the school's name", () => {
     expect(visibleText(container)).not.toMatch(/\byour school\b/i);
   });
 });
+
+describe("the board summary", () => {
+  it("can be tried again on its own when it fails", async () => {
+    narrative.mockRejectedValueOnce(new Error("500")).mockResolvedValueOnce(NARRATIVE);
+    const { container } = render(<OverviewView />);
+
+    await waitFor(() => expect(visibleText(container)).toMatch(/couldn.t load your summary/));
+    const retry = Array.from(container.querySelectorAll("button")).find(
+      (b) => (b.textContent ?? "").trim() === "Try again",
+    )!;
+    fireEvent.click(retry);
+
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/Two hundred and forty students have been learning/),
+    );
+  });
+});

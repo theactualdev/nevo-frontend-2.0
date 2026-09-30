@@ -75,7 +75,13 @@ export function RemoveAccessSheet({
 }: {
   teacher: TeacherDetail;
   held: AssignedClass[];
-  onClose: () => void;
+  /**
+   * `changed` is true when any assignment moved before the sheet closed - a
+   * partial hand-over. The parent must reload, or reopening the sheet builds
+   * its plan from `held` as it was, and the retry reassigns classes that
+   * have already moved, and fails.
+   */
+  onClose: (changed: boolean) => void;
   onRemoved: () => void;
 }) {
   const [staff, setStaff] = useState<TeacherSummary[]>([]);
@@ -84,6 +90,8 @@ export function RemoveAccessSheet({
   );
   const [phase, setPhase] = useState<Phase>("idle");
   const [applied, setApplied] = useState(0);
+  /** Every way out of the sheet says whether anything moved on the way. */
+  const close = () => onClose(applied > 0);
   const [read, setRead] = useState<StaffRead>("loading");
 
   const loadStaff = useCallback(() => {
@@ -167,7 +175,7 @@ export function RemoveAccessSheet({
       busy={phase === "working"}
         title="Remove access?"
         subtitle={teacher.name}
-        onClose={onClose}
+        onClose={close}
         footer={
           phase === "working" ? (
             <div className="flex flex-1 items-center justify-center gap-2.5 py-3">
@@ -202,7 +210,7 @@ export function RemoveAccessSheet({
               >
                 Remove access
               </button>
-              <button type="button" onClick={onClose} className={GHOST_BTN}>
+              <button type="button" onClick={close} className={GHOST_BTN}>
                 Cancel
               </button>
             </>
@@ -223,7 +231,7 @@ export function RemoveAccessSheet({
       busy={phase === "working"}
       title="Remove admin-side access"
       subtitle={teacher.name}
-      onClose={onClose}
+      onClose={close}
       widthClass="max-w-[472px]"
       footer={
         phase === "working" ? (
@@ -250,7 +258,7 @@ export function RemoveAccessSheet({
               stopped. {firstName} still has access - nothing was revoked. You
               can pick up where it left off.
             </FailureLine>
-            <button type="button" onClick={onClose} className={PRIMARY_BTN}>
+            <button type="button" onClick={close} className={PRIMARY_BTN}>
               Close
             </button>
           </>
@@ -273,7 +281,7 @@ export function RemoveAccessSheet({
             >
               Reassign and remove access
             </button>
-            <button type="button" onClick={onClose} className={GHOST_BTN}>
+            <button type="button" onClick={close} className={GHOST_BTN}>
               Cancel
             </button>
           </>
@@ -373,8 +381,15 @@ export function RemoveAccessSheet({
                       {h.role === "primary" ? `${t.name} — as Primary` : t.name}
                     </option>
                   ))}
-                  {/* Only offered where the class keeps its primary regardless. */}
-                  {h.role === "co_teacher" ? (
+                  {/*
+                    * Offered where the class keeps its primary regardless -
+                    * AND on a Primary row when there is nobody else to hand
+                    * it to. The note above tells the admin "you can still
+                    * remove them from each class below", and a Primary row
+                    * with no remove option left the commit disabled behind
+                    * that instruction, with no way through.
+                    */}
+                  {h.role === "co_teacher" || (read === "ready" && staff.length === 0) ? (
                     <option value="__remove">
                       Just remove {firstName} from this class
                     </option>

@@ -151,3 +151,19 @@ describe("ClassesView header", () => {
     expect(screen.queryByRole("button", { name: /Create a class/ })).toBeNull();
   });
 });
+
+describe("a school whose classes are all archived", () => {
+  it("can still reach them from the empty state", async () => {
+    // The list is fetched without archived classes, so this school landed on
+    // "No classes yet" - and the Show archived toggle lives only in the list.
+    list.mockImplementation((includeArchived?: boolean) =>
+      Promise.resolve(includeArchived ? [klass("old", 30, "2026-07-31T00:00:00Z")] : []),
+    );
+    const { container } = render(<ClassesView />);
+
+    await waitFor(() => expect(visibleText(container)).toMatch(/No classes yet/));
+    fireEvent.click(screen.getByRole("button", { name: "Show archived classes" }));
+
+    await waitFor(() => expect(visibleText(container)).toMatch(/Class old/));
+  });
+});

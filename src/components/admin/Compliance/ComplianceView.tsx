@@ -345,12 +345,20 @@ export function ComplianceView() {
               })}
             </div>
 
+            {/*
+              * The export sentence follows the export button. It promised "the
+              * exported report" to a school whose export button is switched
+              * off until counsel clears the PDF - a control the page does not
+              * offer.
+              */}
             <p className="mt-4 max-w-[68ch] text-[13px] leading-[1.6] text-nevo-near-black/55">
-              The exported report carries the same claims and evidence in a form
-              you can print or hand to a parent. Wording in this version is
-              placeholder, in the same structure as the DPA; final language is
-              owned by counsel. Consent is summarised as coverage only &ndash;
-              never per-child detail, which stays out of admin scope.
+              {EXPORT_CLEARED_BY_COUNSEL
+                ? "The exported report carries the same claims and evidence in a form you can print or hand to a parent. "
+                : null}
+              Wording in this version is placeholder, in the same structure as
+              the DPA; final language is owned by counsel. Consent is summarised
+              as coverage only &ndash; never per-child detail, which stays out
+              of admin scope.
             </p>
           </>
         )}

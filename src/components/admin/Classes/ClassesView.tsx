@@ -305,7 +305,11 @@ export function ClassesView() {
         ) : null}
 
         {phase === "ready" && classes.length === 0 && !showArchived ? (
-          <EmptyState onCreate={() => setCreating(true)} paused={writesPaused} />
+          <EmptyState
+            onCreate={() => setCreating(true)}
+            paused={writesPaused}
+            onShowArchived={() => setShowArchived(true)}
+          />
         ) : null}
 
         {phase === "ready" && (classes.length > 0 || showArchived) ? (
@@ -557,7 +561,15 @@ export function ClassesView() {
  * The first-run state. Two ways forward, because a school that has connected a
  * provider should not be typing its roster in by hand.
  */
-function EmptyState({ onCreate, paused }: { onCreate: () => void; paused: boolean }) {
+function EmptyState({
+  onCreate,
+  paused,
+  onShowArchived,
+}: {
+  onCreate: () => void;
+  paused: boolean;
+  onShowArchived: () => void;
+}) {
   return (
     /*
      * The same definite height as `Teachers/TeachersView`'s empty state, and
@@ -603,6 +615,21 @@ function EmptyState({ onCreate, paused }: { onCreate: () => void; paused: boolea
             Create from a staff or student file
           </Link>
         </div>
+        {/*
+          * A SCHOOL WHOSE CLASSES ARE ALL ARCHIVED lands here too - the list
+          * is fetched without archived classes - and the "Show archived"
+          * toggle only exists in the list view. So last year's classes were
+          * unreachable, while the duplicate-name note told the admin to
+          * restore one. Offered every time: if there are none, the archived
+          * view says so.
+          */}
+        <button
+          type="button"
+          onClick={onShowArchived}
+          className="mt-5 cursor-pointer text-[13.5px] font-semibold text-nevo-navy hover:underline"
+        >
+          Show archived classes
+        </button>
       </div>
     </div>
   );

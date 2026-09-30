@@ -124,3 +124,17 @@ describe("ReportsView concepts", () => {
     await waitFor(() => expect(visibleText(container)).toMatch(/Concept 11\b/));
   });
 });
+
+describe("ReportsView section failures", () => {
+  it("says a concept read failed instead of letting the section vanish", async () => {
+    // It was `.catch(() => undefined)`: a failed read looked exactly like an
+    // empty one.
+    outcomes.mockResolvedValue({ schoolId: "sch1", outcomes: [period(1, 0.4)] });
+    mastery.mockRejectedValue(new Error("500"));
+
+    const { container } = render(<ReportsView />);
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/couldn.t read understanding and reading by concept/i),
+    );
+  });
+});
