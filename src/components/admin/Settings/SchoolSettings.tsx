@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
   readAcademic,
@@ -723,13 +722,7 @@ export function SchoolSettings() {
           when it lands.
         </NotBuiltNote>
       </SettingsSection>
-
-      <p className="mt-6 text-[13px] text-nevo-near-black/55">
-        Something not working, or missing?{" "}
-        <Link href="/admin/dashboard" className="font-semibold text-nevo-navy hover:opacity-75">
-          Share feedback
-        </Link>
-      </p>
+      {/* "Share feedback" moved to the foot of SettingsView - see there. */}
     </>
   );
 }
