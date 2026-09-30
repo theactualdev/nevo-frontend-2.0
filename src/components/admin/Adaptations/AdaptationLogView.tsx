@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { classesApi, type AdminClass } from "@/lib/api/classes";
 import {
   EVENT_TYPE_OPTIONS,
@@ -122,7 +122,7 @@ export function AdaptationLogView() {
   const [rows, setRows] = useState<AdaptationEventRow[]>([]);
   const [total, setTotal] = useState(0);
   const [rangeIdx, setRangeIdx] = useState(0);
-  const [shown, setShown] = useState(PAGE);
+
   const [expanded, setExpanded] = useState<string | null>(null);
   const [classId, setClassId] = useState("");
   /*
@@ -172,35 +172,93 @@ export function AdaptationLogView() {
 
   const range = RANGES[rangeIdx];
 
-  const load = useCallback(
-    (
-      days: number,
-      limit: number,
-      cls: string,
-      kinds: AdaptationEventType[],
-    ) => {
-      const from = new Date(Date.now() - days * 864e5).toISOString();
+  /*
+   * PAGED BY OFFSET, NOT BY A GROWING LIMIT.
+   *
+   * "Load earlier" used to raise `limit` by five and refetch everything. The
+   * contract caps `limit` at 100, so the twentieth press sent `limit=105`, got
+   * a 422, and the whole log was replaced by a failure card that "Try again"
+   * could never clear. Now the first page is five rows and each press fetches
+   * the next five at `offset = rows shown`, appended - the limit never grows.
+   *
+   * The window's start is fixed at the first load (`windowRef`), so later pages
+   * count from the same instant and a new adaptation arriving meanwhile does
+   * not shift every offset by one.
+   */
+  const windowRef = useRef<{
+    from: string;
+    cls: string;
+    kinds: AdaptationEventType[];
+    generation: number;
+  } | null>(null);
+  const generation = useRef(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreFailed, setMoreFailed] = useState(false);
+
+  const query = (
+    w: { from: string; cls: string; kinds: AdaptationEventType[] },
+    offset: number,
+  ) =>
+    schoolIntelligenceApi.adaptationLog({
+      dateFrom: w.from,
+      limit: PAGE,
+      offset,
       // OMITTED, not empty: `classId` is a uuid on the contract and "" is a 422.
-      schoolIntelligenceApi
-        .adaptationLog({
-          dateFrom: from,
-          limit,
-          ...(cls ? { classId: cls } : {}),
-          ...(kinds.length ? { eventType: kinds } : {}),
-        })
+      ...(w.cls ? { classId: w.cls } : {}),
+      ...(w.kinds.length ? { eventType: w.kinds } : {}),
+    });
+
+  const load = useCallback(
+    (days: number, cls: string, kinds: AdaptationEventType[]) => {
+      generation.current += 1;
+      const w = {
+        from: new Date(Date.now() - days * 864e5).toISOString(),
+        cls,
+        kinds,
+        generation: generation.current,
+      };
+      windowRef.current = w;
+      query(w, 0)
         .then((log) => {
+          if (w.generation !== generation.current) return;
+          // Reset here, not before the request: an earlier page's failure
+          // belongs to the list this one replaces.
+          setMoreFailed(false);
           setRows(log.events);
           setTotal(log.total);
           setPhase("ready");
         })
-        .catch((err: unknown) => setPhase(failureKind(err)));
+        .catch((err: unknown) => {
+          if (w.generation !== generation.current) return;
+          setPhase(failureKind(err));
+        });
     },
     [],
   );
 
+  const loadMore = () => {
+    const w = windowRef.current;
+    if (!w || loadingMore) return;
+    setLoadingMore(true);
+    setMoreFailed(false);
+    query(w, rows.length)
+      .then((log) => {
+        // A filter changed while this was in flight: it belongs to a list
+        // that is no longer on screen.
+        if (w.generation !== generation.current) return;
+        setRows((prev) => [...prev, ...log.events]);
+        setTotal(log.total);
+      })
+      // A failed page costs only itself - the rows already shown stay.
+      .catch(() => {
+        if (w.generation === generation.current) setMoreFailed(true);
+      })
+      .finally(() => setLoadingMore(false));
+  };
+
   useEffect(() => {
-    load(range.days, shown, classId, types);
-  }, [load, range.days, shown, classId, types]);
+    load(range.days, classId, types);
+  }, [load, range.days, classId, types]);
 
   // Order of first appearance decides the letters, so they read A, B, C down
   // the page rather than jumping about.
@@ -217,14 +275,12 @@ export function AdaptationLogView() {
 
   const pickClass = (next: string) => {
     setClassId(next);
-    setShown(PAGE);
     setExpanded(null);
   };
 
   /** Clearing the kind filter, from the row of chips or from the empty state. */
   const clearTypes = () => {
     setTypes([]);
-    setShown(PAGE);
     setExpanded(null);
   };
 
@@ -237,7 +293,6 @@ export function AdaptationLogView() {
     setTypes((prev) =>
       prev.includes(kind) ? prev.filter((k) => k !== kind) : [...prev, kind],
     );
-    setShown(PAGE);
     setExpanded(null);
   };
 
@@ -269,7 +324,6 @@ export function AdaptationLogView() {
               type="button"
               onClick={() => {
                 setRangeIdx(i);
-                setShown(PAGE);
                 setExpanded(null);
               }}
               aria-pressed={i === rangeIdx}
@@ -380,7 +434,7 @@ export function AdaptationLogView() {
               type="button"
               onClick={() => {
                 setPhase("loading");
-                load(range.days, shown, classId, types);
+                load(range.days, classId, types);
               }}
               className="mt-5 h-[46px] cursor-pointer rounded-[10px] bg-nevo-navy px-5 text-sm font-semibold text-nevo-cream transition-[filter] hover:brightness-110 active:brightness-93"
             >
@@ -529,13 +583,20 @@ export function AdaptationLogView() {
               {rows.length < total && (
                 <button
                   type="button"
-                  onClick={() => setShown((s) => s + PAGE)}
-                  className="h-[42px] cursor-pointer rounded-[10px] border-[1.5px] border-nevo-navy/30 px-4 text-[13.5px] font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/6"
+                  onClick={loadMore}
+                  disabled={loadingMore}
+                  className="h-[42px] cursor-pointer rounded-[10px] border-[1.5px] border-nevo-navy/30 px-4 text-[13.5px] font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/6 disabled:cursor-wait disabled:opacity-60"
                 >
-                  Load earlier adaptations
+                  {loadingMore ? "Loading…" : "Load earlier adaptations"}
                 </button>
               )}
             </div>
+            {moreFailed ? (
+              <p className="m-0 mt-2 text-right text-[13px] text-nevo-navy">
+                We couldn&rsquo;t load the earlier ones just now. What&rsquo;s
+                above is unchanged &ndash; try again in a moment.
+              </p>
+            ) : null}
           </>
         )}
       </div>

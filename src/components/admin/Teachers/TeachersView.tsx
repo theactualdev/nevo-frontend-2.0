@@ -74,6 +74,8 @@ export function TeachersView() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [teachers, setTeachers] = useState<TeacherSummary[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
+  /** Teachers whose class read failed - their cell is unknown, not pending. */
+  const [countFailed, setCountFailed] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
 
   // Search is server-side: a school past one page still finds people, which a
@@ -84,11 +86,16 @@ export function TeachersView() {
       .then((rows) => {
         setTeachers(rows);
         setPhase("ready");
+        setCountFailed(new Set());
         rows.forEach((t) => {
           classesApi
             .teacherClasses(t.id)
             .then((list) => setCounts((prev) => ({ ...prev, [t.id]: list.length })))
-            .catch(() => undefined);
+            // Was `.catch(() => undefined)`, which left that row's Classes
+            // cell as a loading bar for as long as the page was open.
+            .catch(() =>
+              setCountFailed((prev) => new Set(prev).add(t.id)),
+            );
         });
       })
       .catch((err: unknown) => setPhase(failureKind(err)));
@@ -238,7 +245,15 @@ export function TeachersView() {
                         </span>
                       </span>
                       <span className="text-sm text-nevo-near-black/66 max-xl:hidden">
-                        {held === undefined ? (
+                        {held === undefined && countFailed.has(t.id) ? (
+                          // The read failed: unknown, not loading forever.
+                          <span
+                            className="text-nevo-near-black/40"
+                            title="We couldn't read this teacher's classes just now"
+                          >
+                            &mdash;
+                          </span>
+                        ) : held === undefined ? (
                           <span
                             aria-hidden="true"
                             className="block h-3.5 w-14 rounded bg-nevo-near-black/[0.07]"

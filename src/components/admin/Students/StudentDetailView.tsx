@@ -90,6 +90,8 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
   const [working, setWorking] = useState(false);
   /** The deactivate was refused. Hold the dialog and say so. */
   const [deactivateFailed, setDeactivateFailed] = useState(false);
+  /** A restore was refused - said, not swallowed. */
+  const [restoreFailed, setRestoreFailed] = useState(false);
   /** The add-a-guardian form is open. */
   const [addingGuardian, setAddingGuardian] = useState(false);
   /** What the request just sent to a new guardian said about delivery. */
@@ -479,16 +481,23 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
               disabled={working || writesPaused}
               onClick={() => {
                 setWorking(true);
+                setRestoreFailed(false);
                 studentsApi
                   .restore(student.id)
                   .then(load)
-                  .catch(() => undefined)
+                  // Was `.catch(() => undefined)`: a refused restore left the
+                  // page byte-identical, so it read as a dead button. The
+                  // class page's restore was fixed the same way.
+                  .catch(() => setRestoreFailed(true))
                   .finally(() => setWorking(false));
               }}
               className={TEXT_ACTION}
             >
               Restore this student
             </button>
+            {restoreFailed ? (
+              <WriteFailed className="mt-2" what={`restore ${firstName}`} />
+            ) : null}
             <p className="mt-1.5 max-w-[520px] text-[13px] leading-[1.5] text-nevo-near-black/55">
               They pick up exactly where they left off, in the same class unless
               you move them.

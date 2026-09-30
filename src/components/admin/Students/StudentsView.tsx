@@ -82,6 +82,14 @@ export function StudentsView() {
   const [students, setStudents] = useState<AdminStudentRow[]>([]);
   const [classes, setClasses] = useState<AdminClass[]>([]);
   const [classOf, setClassOf] = useState<Record<string, string>>({});
+  /**
+   * Whether the per-class reads that fill the Class column have all SETTLED.
+   * The column used to show a loading bar until a student's class arrived -
+   * so a child in no active class, or in a class whose read failed, showed
+   * one forever. `partial` means at least one read failed, so an empty cell
+   * is unknown rather than "no class".
+   */
+  const [classReads, setClassReads] = useState<"pending" | "done" | "partial">("pending");
   const [search, setSearch] = useState("");
   const [classId, setClassId] = useState(params.get("class") ?? "");
   /*
@@ -114,22 +122,29 @@ export function StudentsView() {
         // when the view is already narrowed to a single class.
         if (cid) {
           setClassOf(Object.fromEntries(rows.map((r) => [r.id, cid])));
+          setClassReads("done");
           return;
         }
-        cls.forEach((c) => {
-          studentsApi
-            .list({ classId: c.id, includeInactive: inactive })
-            .then((inClass) =>
-              setClassOf((prev) => {
-                const next = { ...prev };
-                inClass.forEach((s) => {
-                  next[s.id] = c.id;
-                });
-                return next;
-              }),
-            )
-            .catch(() => undefined);
-        });
+        setClassReads("pending");
+        Promise.allSettled(
+          cls.map((c) =>
+            studentsApi
+              .list({ classId: c.id, includeInactive: inactive })
+              .then((inClass) =>
+                setClassOf((prev) => {
+                  const next = { ...prev };
+                  inClass.forEach((s) => {
+                    next[s.id] = c.id;
+                  });
+                  return next;
+                }),
+              ),
+          ),
+        ).then((results) =>
+          setClassReads(
+            results.some((r) => r.status === "rejected") ? "partial" : "done",
+          ),
+        );
       })
       .catch((err: unknown) => setPhase(failureKind(err)));
   }, []);
@@ -137,6 +152,12 @@ export function StudentsView() {
   useEffect(() => {
     load(classId, includeInactive);
   }, [load, classId, includeInactive]);
+
+  /** Everyone on the roster who is not deactivated - what the header counts. */
+  const enrolled = useMemo(
+    () => students.filter((s) => studentStatus(s.status) !== "deactivated"),
+    [students],
+  );
 
   const classById = useMemo(
     () => new Map(classes.map((c) => [c.id, c])),
@@ -182,16 +203,20 @@ export function StudentsView() {
             </h2>
             {phase === "ready" ? (
               <p className="mt-1.5 text-[14.5px] text-nevo-near-black/60">
-                {students.length} enrolled
+                {/* THE SCHOOL'S FIGURES DO NOT MOVE when "Show deactivated"
+                    is pressed to LOOK at leavers - the same defect the Classes
+                    header had with archived classes. Both counts are over
+                    enrolled students only. */}
+                {enrolled.length} enrolled
                 {/* Was "N can't begin lessons yet", which is not true of
                     `not_sent` or `pending` - see `withoutRecordedConsent`.
                     This says what the school's own records show, which is the
                     thing an admin can actually act on. */}
-                {withoutRecordedConsent(students) > 0 ? (
+                {withoutRecordedConsent(enrolled) > 0 ? (
                   <>
                     {" · "}
                     <span className="text-nevo-navy">
-                      {withoutRecordedConsent(students)}
+                      {withoutRecordedConsent(enrolled)}
                       {" without recorded consent"}
                     </span>
                   </>
@@ -425,11 +450,24 @@ export function StudentsView() {
                                 </span>
                               ) : null}
                             </>
-                          ) : (
+                          ) : classReads === "pending" ? (
                             <span
                               aria-hidden="true"
                               className="block h-3.5 w-20 rounded bg-nevo-near-black/[0.07]"
                             />
+                          ) : classReads === "partial" ? (
+                            // A read failed: this cell is unknown, not empty.
+                            <span
+                              className="text-nevo-near-black/40"
+                              title="We couldn't read every class just now"
+                            >
+                              &mdash;
+                            </span>
+                          ) : (
+                            // Every read answered and none has this child:
+                            // not in any active class (archived classes are
+                            // not listed).
+                            <span className="text-nevo-near-black/45">No active class</span>
                           )}
                         </span>
                         <span className="flex">

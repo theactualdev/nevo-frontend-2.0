@@ -116,11 +116,54 @@ describe("filtering the adaptation log by class", () => {
 
     await waitFor(() => expect(logSpy).toHaveBeenCalled());
     fireEvent.click(await screenButton(container, "Load earlier adaptations"));
-    await waitFor(() => expect(lastCall().limit).toBe(10));
+    // The next page by OFFSET, at the same page size - the limit never grows.
+    await waitFor(() => expect(lastCall()).toMatchObject({ limit: 5, offset: 1 }));
 
     await selectClass(container, "c1");
-    // Without the reset this asks for 10 rows of a class that may hold 3.
-    await waitFor(() => expect(lastCall()).toMatchObject({ classId: "c1", limit: 5 }));
+    // A new filter starts again from the first page.
+    await waitFor(() =>
+      expect(lastCall()).toMatchObject({ classId: "c1", limit: 5, offset: 0 }),
+    );
+  });
+
+  it("never asks for more than the contract's 100-row cap, however far back it goes", async () => {
+    /*
+     * "Load earlier" used to raise `limit` by five and refetch. The twentieth
+     * press sent limit=105, the contract's cap is 100, the 422 replaced the
+     * whole log with a failure card. Paging by offset keeps every request at
+     * one page.
+     */
+    logSpy.mockResolvedValue({
+      events: Array.from({ length: 5 }, (_, i) => row(`r${i}`)),
+      total: 400,
+      limit: 5,
+      offset: 0,
+    });
+    const { container } = render(<AdaptationLogView />);
+    await waitFor(() => expect(logSpy).toHaveBeenCalled());
+
+    for (let i = 0; i < 22; i += 1) {
+      const before = logSpy.mock.calls.length;
+      fireEvent.click(await screenButton(container, "Load earlier adaptations"));
+      await waitFor(() => expect(logSpy.mock.calls.length).toBe(before + 1));
+    }
+    for (const [params] of logSpy.mock.calls) {
+      expect((params as { limit: number }).limit).toBeLessThanOrEqual(100);
+    }
+    expect(lastCall().offset).toBe(110);
+  });
+
+  it("keeps what is shown when one earlier page fails", async () => {
+    logSpy.mockResolvedValueOnce({ events: [row("1")], total: 40, limit: 5, offset: 0 });
+    logSpy.mockRejectedValueOnce(new Error("500"));
+    const { container } = render(<AdaptationLogView />);
+    await waitFor(() => expect(logSpy).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(await screenButton(container, "Load earlier adaptations"));
+    await waitFor(() =>
+      expect(container.textContent).toMatch(/couldn.t load the earlier ones/),
+    );
+    expect(container.textContent).toMatch(/Showing 1 of 40/);
   });
 
   it("keeps the date range when the class changes", async () => {

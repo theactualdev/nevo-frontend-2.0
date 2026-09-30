@@ -303,20 +303,32 @@ export function TeacherDetailView({ teacherId }: { teacherId: string }) {
 
       {/* Removing access is quiet, below a rule, and never a red button. */}
       <div className="mt-[26px] border-t border-nevo-near-black/10 pt-5">
-        <PausedNote className="mb-4" />
-        <button
-          type="button"
-          onClick={() => setRemoving(true)}
-          disabled={writesPaused}
-          className={TEXT_ACTION}
-        >
-          Remove admin-side access
-        </button>
-        <p className="mt-1.5 max-w-[520px] text-[13px] leading-[1.5] text-nevo-near-black/55">
-          {firstName} will no longer be able to open their Nevo console. Their
-          classes and notes stay with the school, and you can restore access
-          later.
-        </p>
+        {teacher.status === "deactivated" ? (
+          /* A deactivated teacher's page used to offer "Remove admin-side
+             access" again - an action that had already happened. */
+          <p className="m-0 max-w-[520px] text-[13.5px] leading-[1.55] text-nevo-near-black/62">
+            {firstName}&rsquo;s console access has been removed. Their classes
+            and notes stay with the school.
+          </p>
+        ) : (
+          <>
+            <PausedNote className="mb-4" />
+            <button
+              type="button"
+              onClick={() => setRemoving(true)}
+              disabled={writesPaused}
+              className={TEXT_ACTION}
+            >
+              Remove admin-side access
+            </button>
+            {/* "...and you can restore access later" was cut: nothing in the
+                contract undoes `POST /teachers/{id}/revoke`. */}
+            <p className="mt-1.5 max-w-[520px] text-[13px] leading-[1.5] text-nevo-near-black/55">
+              {firstName} will no longer be able to open their Nevo console.
+              Their classes and notes stay with the school.
+            </p>
+          </>
+        )}
       </div>
 
       {removing ? (
