@@ -58,6 +58,12 @@ vi.mock("@/lib/api/school", async (importOriginal) => {
   };
 });
 
+const invites = vi.fn();
+vi.mock("@/lib/api/invites", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/invites")>();
+  return { ...actual, invitesApi: { ...actual.invitesApi, list: () => invites() } };
+});
+
 vi.mock("@/lib/api/students", () => ({
   studentsApi: { list: () => Promise.resolve([]) },
 }));
@@ -89,6 +95,8 @@ beforeEach(() => {
   adaptationLog.mockReset();
   narrative.mockReset();
   overview.mockReset();
+  invites.mockReset();
+  invites.mockResolvedValue([]);
   audit.mockResolvedValue(AUDIT);
   adaptationLog.mockResolvedValue({
     events: [],
@@ -321,5 +329,31 @@ describe("the board summary", () => {
     await waitFor(() =>
       expect(visibleText(container)).toMatch(/Two hundred and forty students have been learning/),
     );
+  });
+});
+
+describe("the teachers tile", () => {
+  const invite = (id: string, role: string) => ({
+    id,
+    token: null,
+    role,
+    email: `${id}@school.edu.ng`,
+    name: null,
+    status: "pending",
+    expiresAt: "2099-01-01T00:00:00Z",
+    deliveryStatus: null,
+  });
+
+  it("says how many teacher invitations are open, as D04 does", async () => {
+    invites.mockResolvedValue([invite("a", "teacher"), invite("b", "teacher"), invite("c", "student")]);
+    const { container } = render(<OverviewView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/2 invitations pending/));
+  });
+
+  it("keeps its own words when the invitations cannot be read", async () => {
+    invites.mockRejectedValue(new Error("403"));
+    const { container } = render(<OverviewView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/with a Nevo account/));
+    expect(visibleText(container)).not.toMatch(/invitations? pending/);
   });
 });
