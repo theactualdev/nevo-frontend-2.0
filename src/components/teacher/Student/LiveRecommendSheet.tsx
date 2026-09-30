@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { assignmentsApi } from "@/lib/api/assignments";
+import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import { useLessonLibrary } from "@/hooks/useLessonLibrary";
 import { cn } from "@/lib/utils";
 
@@ -96,7 +98,21 @@ export function LiveRecommendSheet({
    * fixture's slug id where the contract wants a uuid, so the send 422s. A
    * lesson you cannot send is not worth offering behind a caveat.
    */
-  const { cards, live, loading } = useLessonLibrary();
+  const { cards: libraryCards, live, loading } = useLessonLibrary();
+  /*
+   * ONLY LESSONS THAT CAN BE SENT - the guard the assign wizard gained on
+   * 24 Sep, and the one this door, which posts to the same endpoint, missed.
+   *
+   * The library hands back three kinds. A FAILED parse leaves a lesson row
+   * with no sections, so choosing one sent a child an empty lesson; one still
+   * PARSING is not sendable yet, and this list has no drawn way to say "not
+   * yet" about one row. Absent is the honest version, as it is in the wizard.
+   *
+   * Filtered only when live: the fixtures are never offered here at all.
+   */
+  const cards = live
+    ? libraryCards.filter((c) => c.kind === "normal")
+    : libraryCards;
   const [choice, setChoice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
@@ -104,6 +120,8 @@ export function LiveRecommendSheet({
   /** Whether the lesson that was sent carried a note, for the confirmation. */
   const [sentWithNote, setSentWithNote] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** The lesson a refusal is about, when there is one to open. */
+  const [errorHref, setErrorHref] = useState("");
 
   const chosen = cards.find((c) => c.id === choice) ?? null;
 
@@ -111,19 +129,59 @@ export function LiveRecommendSheet({
     if (!chosen || busy) return;
     setBusy(true);
     setError(null);
+    setErrorHref("");
     try {
       // Optional, so an untouched box sends nothing rather than "". Whitespace
       // is not a note: a teacher who tabbed through the field did not write to
       // this child, and an empty bubble on her dashboard would say they had.
       const written = note.trim();
-      await assignmentsApi.create({
+      const res = await assignmentsApi.create({
         lessonIds: [chosen.id],
         studentIds: [studentId],
         ...(written ? { note: written } : {}),
       });
+      /*
+       * A 201 IS NOT A SEND. `createdCount: 0` means nothing was created -
+       * most often because this child already has the lesson, which the
+       * server says in `duplicateCount`. The sheet read neither and said
+       * "That's sent", and "your note goes with this lesson" over a note that
+       * went nowhere, because no new assignment exists to hold it.
+       *
+       * The wizard's sentence, with the child named as this sheet names them
+       * everywhere else. Absent `duplicateCount` is not a duplicate: an
+       * older deployment that does not send it gets the plain "not sent".
+       */
+      if (res.createdCount === 0) {
+        setError(
+          (res.duplicateCount ?? 0) > 0
+            ? `${firstName} already has this lesson, so nothing was sent again.`
+            : `We couldn${"’"}t send that just now. Nothing has changed, so you can try again.`,
+        );
+        return;
+      }
       setSentWithNote(written.length > 0);
       setSent(chosen.title);
-    } catch {
+    } catch (err: unknown) {
+      /*
+       * A 409 IS NOT A FAILURE TO RETRY - the wizard's rule, missed here.
+       *
+       * `lesson_not_approved` means the lesson still has something a teacher
+       * must settle, and "try again" is the one instruction that cannot help.
+       * The server names what is outstanding in `detail.message`, so that is
+       * what is said, with the way to the lesson that settles it.
+       */
+      if (
+        err instanceof ApiError &&
+        err.status === 409 &&
+        apiErrorCode(err.detail) === "lesson_not_approved"
+      ) {
+        setError(
+          apiErrorMessage(err.detail) ??
+            "This lesson still has sections waiting for you, so it cannot go to students yet.",
+        );
+        setErrorHref(`/teacher/lessons/${chosen.id}`);
+        return;
+      }
       // Nothing is confirmed until something is stored. The old sheet said
       // "That's sent" unconditionally, which is the failure this guards.
       setError(
@@ -227,8 +285,15 @@ export function LiveRecommendSheet({
 
       {/* C08c's "Add a note for Amara (optional)". Hidden when there is
           nothing to send, because a box for a message attached to no lesson
-          would collect words that go nowhere. */}
-      {cards.length > 0 && (
+          would collect words that go nowhere.
+
+          THAT INCLUDES WHILE THE LIST IS LOADING OR HAS FAILED. `cards` is
+          never empty then - the hook serves its fixtures - so the box sat
+          under the skeleton and under "we couldn't reach your library",
+          attached to nothing, exactly as the line above forbids. `live` is
+          false for the whole in-flight window as well as after a failure, so
+          it is the one condition both cases need. */}
+      {live && cards.length > 0 && (
         <label className="mt-5 block text-[13px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase">
           {`Add a note for ${firstName} (optional)`}
           <textarea
@@ -261,6 +326,18 @@ export function LiveRecommendSheet({
       {error && (
         <p role="alert" className="mt-3 text-[13.5px] leading-[1.5] text-nevo-navy">
           {error}
+          {errorHref && (
+            <>
+              {" "}
+              {/* The wizard's link, word for word. */}
+              <Link
+                href={errorHref}
+                className="cursor-pointer font-semibold text-nevo-navy underline-offset-2 hover:underline"
+              >
+                Open the lesson and check them
+              </Link>
+            </>
+          )}
         </p>
       )}
     </Shell>

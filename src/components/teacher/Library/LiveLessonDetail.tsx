@@ -223,6 +223,7 @@ export function LiveLessonDetail({
   lesson,
   modules,
   assignments,
+  assignmentsFailed = false,
   progress,
   /**
    * The classes this lesson went to, named.
@@ -237,6 +238,8 @@ export function LiveLessonDetail({
   lesson: LessonDetailResponse;
   modules: LessonModule[];
   assignments: Assignment[];
+  /** The assignments could not be read, so an empty list is not "none". */
+  assignmentsFailed?: boolean;
   progress?: LessonClassProgress | null;
   classes?: LessonClass[];
   /** How many classes hold this lesson; >1 means the rows name one of them. */
@@ -304,6 +307,32 @@ export function LiveLessonDetail({
   /** Anything at all still waiting, from either half. */
   const waiting = outstandingPoints + outstandingSections;
   const hadReview = review.hadReview || reviewable.length > 0;
+  /*
+   * WHETHER THERE IS A LESSON HERE TO SEND AT ALL.
+   *
+   * A failed parse, or one still running, reached the ready state below -
+   * "Ready when you are. Nevo has prepared this lesson into 0 sections.
+   * Assign it" - directly above "Nevo couldn't read this file", with a
+   * pressable Assign, because nothing here asked the lesson's own status.
+   * The library has never let either be opened as a normal lesson and the
+   * assign wizard leaves both out; this page is reachable by URL, so it
+   * asks too. The library's own test, word for word: `completed` or
+   * `completed_with_review`, and something to send.
+   */
+  const assignable =
+    (lesson.status === "completed" ||
+      lesson.status === "completed_with_review") &&
+    segments.length > 0;
+  /*
+   * "READY" IS AN ANSWER, AND IT HAS NOT ARRIVED YET.
+   *
+   * The review hook reports ready while its read is in flight - unknown does
+   * not block, which is right for a FAILED read and wrong for one still on
+   * its way. So for that window the page said "Ready when you are" and then
+   * swapped it for "2 key points waiting", with Assign pressable in between
+   * and a 409 behind it.
+   */
+  const settled = !review.loading;
   /**
    * C06b's reason line names the SECTION, not the parser's reason codes.
    * `reviewReasons` has no vocabulary in the contract - we would be printing
@@ -456,6 +485,7 @@ export function LiveLessonDetail({
                 ` · Due ${new Date(nextDue).toLocaleDateString("en-GB", { day: "numeric", month: "long" })}`}
             </span>
           </div>
+          {assignable && (
           <LessonDetailActions
             lessonId={lesson.id}
             /* THE GATE IS `readyToAssign`, and the count is only what the
@@ -479,9 +509,11 @@ export function LiveLessonDetail({
              * to click.
              */
             ready={review.ready}
+            checking={!settled}
             outstandingKeyPoints={outstandingPoints}
             outstandingSections={outstandingSections}
           />
+          )}
         </div>
 
         {/*
@@ -522,7 +554,11 @@ export function LiveLessonDetail({
             </p>
           </div>
         ) : (
-          assignments.length === 0 && (
+          assignable &&
+          settled &&
+          assignments.length === 0 &&
+          // Not "never assigned" - we could not find out. Said below.
+          !assignmentsFailed && (
             /*
              * LR-05, and C06b draws it as a STATE rather than a sentence.
              *
@@ -614,7 +650,17 @@ export function LiveLessonDetail({
         {/* Sits ABOVE the lesson's contents, because a teacher who has come
             here to undo a mis-assignment is not looking for the segment list -
             they are looking for the class they got wrong. */}
-        <AssignmentSchedule assignments={assignments} />
+        {assignmentsFailed ? (
+          /* The key points' own failure line, for the other read. The schedule
+             is where a teacher cancels or re-dates, so its absence is said
+             rather than left to look like a lesson nobody has. */
+          <p className="mt-6 max-w-[660px] text-[14.5px] leading-[1.55] text-nevo-near-black/68">
+            We couldn&rsquo;t load who has this lesson just now. Nothing is
+            wrong with the lesson - try again in a moment.
+          </p>
+        ) : (
+          <AssignmentSchedule assignments={assignments} />
+        )}
 
         {/*
           WHERE THIS LESSON WENT - all of it, per design's ruling of 24 Sep.

@@ -336,6 +336,19 @@ export function LiveVariantReview({
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * WHETHER THE LESSON CAN NOW GO TO A CLASS - the server's `readyToAssign`,
+   * read once the last section is approved. Null until it has been read.
+   *
+   * "Every section approved. This lesson can be assigned." was said on the
+   * section count alone. Sections are half of it: a key point Nevo could not
+   * ground holds a lesson back too, and that half is only in the review read.
+   * A teacher told "can be assigned" went back to a greyed-out Assign.
+   */
+  const [assignable, setAssignable] = useState<{
+    ready: boolean;
+    keyPoints: number;
+  } | null>(null);
 
   async function approve() {
     if (approved || busy) return;
@@ -345,6 +358,16 @@ export function LiveVariantReview({
       const res = await lessonsApi.approveSegment(lessonId, segment.id);
       setApproved(true);
       setCounts({ done: res.approvedSegmentCount, total: res.segmentCount });
+      if (res.approvedSegmentCount === res.segmentCount) {
+        // Best-effort: unknown says less, never more. A failed read leaves
+        // "Every section approved." standing alone, which is still true.
+        void lessonsApi
+          .review(lessonId)
+          .then((r) =>
+            setAssignable({ ready: r.readyToAssign, keyPoints: r.outstandingCount }),
+          )
+          .catch(() => {});
+      }
     } catch {
       // Nothing is approved until the server says so. Claiming otherwise is
       // the shape of bug this console has shipped before.
@@ -478,7 +501,12 @@ export function LiveVariantReview({
         {counts && (
           <p className="mt-2.5 text-right text-[13px] text-nevo-near-black/60">
             {counts.done === counts.total
-              ? "Every section approved. This lesson can be assigned."
+              ? assignable?.ready
+                ? "Every section approved. This lesson can be assigned."
+                : assignable && assignable.keyPoints > 0
+                  ? /* The lesson page's own count, in its own words. */
+                    `Every section approved. ${assignable.keyPoints} ${assignable.keyPoints === 1 ? "key point" : "key points"} waiting for you.`
+                  : "Every section approved."
               : `${counts.done} of ${counts.total} sections approved.`}
           </p>
         )}
