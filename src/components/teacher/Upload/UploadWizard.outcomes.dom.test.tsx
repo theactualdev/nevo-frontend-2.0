@@ -577,3 +577,106 @@ describe("why the parse stopped", () => {
     ).toHaveLength(0);
   });
 });
+
+/**
+ * "TRY AGAIN" AFTER THE CONNECTION FAILED - the same upload, never a new one.
+ *
+ * The fallback resent the file, staging a second copy of a parse that had very
+ * likely carried on and finished server-side; the unit card reopened the
+ * picker under a sentence saying nothing was wrong with the file. With an
+ * upload id there is an upload to ask about again. Only when the file itself
+ * never landed does it go a second time - and then the same one, not a trip
+ * back to the picker for a failure that was ours.
+ */
+describe("trying again after the connection failed", () => {
+  const resume = vi.fn();
+  const reset = vi.fn();
+  beforeEach(() => {
+    resume.mockReset();
+    reset.mockReset();
+  });
+
+  it("picks the same single-lesson upload back up", () => {
+    stagedState({ uploadId: "u-1", failed: true, failureKind: "request", resume, reset });
+    startSingleUpload();
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(resume).toHaveBeenCalledTimes(1);
+    expect(start).toHaveBeenCalledTimes(1); // the drop, and nothing since
+  });
+
+  it("sends the same file when the single lesson never landed", () => {
+    stagedState({ uploadId: null, failed: true, failureKind: "request", resume, reset });
+    startSingleUpload();
+    const sent = start.mock.calls[0][0] as File;
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(resume).not.toHaveBeenCalled();
+    expect(start).toHaveBeenCalledTimes(2);
+    expect(start.mock.calls[1][0]).toBe(sent);
+  });
+
+  it("picks the same unit upload back up", () => {
+    stagedState({ uploadId: "u-1", failed: true, failureKind: "request", resume, reset });
+    startUnitUpload();
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(resume).toHaveBeenCalledTimes(1);
+    expect(reset).not.toHaveBeenCalled();
+    expect(start).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends the same unit file rather than reopening the picker", () => {
+    stagedState({ uploadId: null, failed: true, failureKind: "request", resume, reset });
+    startUnitUpload();
+    const sent = start.mock.calls[0][0] as File;
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(start).toHaveBeenCalledTimes(2);
+    expect(start.mock.calls[1][0]).toBe(sent);
+    expect(screen.queryByText("Choose a file")).not.toBeInTheDocument();
+  });
+
+  it("still sends a refused unit back to the picker", () => {
+    // A refused file is an answer: a different file IS the remedy there.
+    stagedState({ uploadId: "u-1", failed: true, failureKind: "file", resume, reset });
+    startUnitUpload();
+
+    fireEvent.click(screen.getByRole("button", { name: "Try another file" }));
+
+    expect(resume).not.toHaveBeenCalled();
+    expect(reset).toHaveBeenCalledTimes(1);
+    expect(start).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends a failed single-lesson parse again as a fresh upload", () => {
+    // The parse gave an answer; asking about that upload again changes nothing.
+    stagedState({ uploadId: "u-1", failed: true, failureKind: "parse", resume, reset });
+    startSingleUpload();
+
+    fireEvent.click(screen.getByRole("button", { name: /Try this file again/ }));
+
+    expect(resume).not.toHaveBeenCalled();
+    expect(start).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("a unit whose file never landed", () => {
+  it("says so, instead of the demo ladder stuck on its first rung", () => {
+    /*
+     * No upload id, so the block path fell through to the signed-out demo's
+     * ladder - which only the demo ever advances. A teacher watched it sit on
+     * "Reading the document" for ever over a failure nobody told them about.
+     */
+    stagedState({ uploadId: null, failed: true, failureKind: "request" });
+
+    startUnitUpload();
+
+    expect(screen.getByText(/couldn’t reach Nevo/i)).toBeInTheDocument();
+    expect(screen.queryByText("Reading the document")).not.toBeInTheDocument();
+  });
+});

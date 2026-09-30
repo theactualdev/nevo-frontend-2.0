@@ -2821,7 +2821,7 @@ never checks it:
 | Door | File | Owner |
 |---|---|---|
 | Admin | `admin/Auth/AdminSignIn.tsx` | **FIXED, #499** |
-| Teacher | `teacher/Auth/TeacherSignIn.tsx:145` | teacher lane |
+| Teacher | `teacher/Auth/TeacherSignIn.tsx` | **FIXED, 30 Sep** (teacher close-out batch 1) — all three below |
 | Student | `student/Auth/ReturningSignInScreen.tsx:157` | student lane |
 
 This is the *one defect in N places* shape again. The admin one is fixed and the

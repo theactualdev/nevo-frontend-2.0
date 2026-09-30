@@ -29,6 +29,16 @@ import { getToken } from "@/lib/auth/session";
 const POLL_MS = 2000;
 /** Long enough to say "this is taking a while", never to give up. */
 const SLOW_AFTER_MS = 30_000;
+/**
+ * One blip is not an answer - the rule `awaitParseRun` in content.ts already
+ * keeps, and this poll did not.
+ *
+ * A single rejected status request used to end the wait: the screen said we
+ * could not reach Nevo while the parse carried on server-side and finished
+ * without anyone watching. Three consecutive failures is a real outage; one
+ * is traffic. A success in between starts the count again.
+ */
+const POLL_FAILURES_ALLOWED = 3;
 
 export interface StagedUpload {
   uploadId: string | null;
@@ -124,6 +134,16 @@ export interface StagedUpload {
    * rather than sit on the structure it already has.
    */
   retryFailedPages: () => void;
+  /**
+   * Pick the SAME upload back up after the connection failed while watching it.
+   *
+   * Only for `request` with an upload id: the file was staged and the parse
+   * may well have carried on, so asking about it again is right and sending the
+   * file a second time would stage a duplicate. Does nothing otherwise - a
+   * refused file or a failed parse is an answer, and asking again changes
+   * nothing.
+   */
+  resume: () => void;
   reset: () => void;
 }
 
@@ -154,6 +174,8 @@ export function useStagedUpload(): StagedUpload {
    */
   const [tick, setTick] = useState(0);
   const startedAt = useRef<number | null>(null);
+  /** Status requests that have failed in a row. Only a success clears it. */
+  const pollFailures = useRef(0);
 
   const reset = useCallback(() => {
     setUploadId(null);
@@ -172,6 +194,7 @@ export function useStagedUpload(): StagedUpload {
     setSlow(false);
     setTick(0);
     startedAt.current = null;
+    pollFailures.current = 0;
   }, []);
 
   const start = useCallback(
@@ -232,6 +255,17 @@ export function useStagedUpload(): StagedUpload {
       });
   }, [uploadId, failedPages, retrying]);
 
+  const resume = useCallback(() => {
+    if (!uploadId || failureKind !== "request") return;
+    pollFailures.current = 0;
+    setFailed(false);
+    setFailureKind(null);
+    setIncident(null);
+    // Status is still whatever the last good poll said - in flight - so a new
+    // tick is all the effect below needs to ask again.
+    setTick((n) => n + 1);
+  }, [uploadId, failureKind]);
+
   // Poll while the parse is still running. Settles on ready/confirmed, and
   // stops on failed or cancelled with the server's reason kept.
   useEffect(() => {
@@ -244,6 +278,7 @@ export function useStagedUpload(): StagedUpload {
         .status(uploadId)
         .then((res) => {
           if (cancelled) return;
+          pollFailures.current = 0;
           setStatus(res.status);
           setStage(res.stage);
           setStructure(res.structure ?? null);
@@ -278,6 +313,12 @@ export function useStagedUpload(): StagedUpload {
         })
         .catch((err: unknown) => {
           if (cancelled) return;
+          pollFailures.current += 1;
+          if (pollFailures.current < POLL_FAILURES_ALLOWED) {
+            // Ask again on the next interval, as if it had answered.
+            setTick((n) => n + 1);
+            return;
+          }
           setFailed(true);
           setFailureKind("request");
           setIncident(incidentId(err instanceof ApiError ? err.detail : null));
@@ -307,6 +348,7 @@ export function useStagedUpload(): StagedUpload {
     slow,
     start,
     retryFailedPages,
+    resume,
     reset,
   };
 }
