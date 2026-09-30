@@ -137,44 +137,100 @@ export class BaselineCapture {
  * shrugged at the rest arrive as 100%. The engine needs the denominator to
  * tell that from three out of three, so it is sent rather than inferred.
  */
+interface TrialStats {
+  trials: number;
+  /** Trials that carried an answer key - the accuracy denominator. */
+  scored: number;
+  /** Declined rather than answered; never counted wrong. */
+  notSure: number;
+  meanRtMs: number | null;
+  accuracy: number | null;
+}
+
+function statsOf(picks: CaptureEvent[]): TrialStats {
+  const rts = picks
+    .map((p) => Number(p.payload?.rtMs))
+    .filter((n) => Number.isFinite(n) && n > 0 && n < 60_000);
+  const scored = picks.filter((p) => typeof p.payload?.correct === "boolean");
+  return {
+    trials: picks.length,
+    scored: scored.length,
+    notSure: picks.filter((p) => p.payload?.notSure === true).length,
+    meanRtMs: rts.length
+      ? Math.round(rts.reduce((a, b) => a + b, 0) / rts.length)
+      : null,
+    // Null means the activity carries no answer key, not zero right.
+    accuracy: scored.length
+      ? scored.filter((p) => p.payload?.correct === true).length /
+        scored.length
+      : null,
+  };
+}
+
+/**
+ * The condition a trial was run under, where the activity has one.
+ *
+ * THESE WERE RECORDED AND THEN THROWN AWAY. The flanker notes whether a trial
+ * was congruent, the reading act whether it was read or heard, the pattern act
+ * whether the pair matched, the dot act how close the two counts were, the
+ * probe which subject it asked about - and the reducer averaged all of it
+ * together per act. An interference measure without its congruent/incongruent
+ * split is not an interference measure. Kept as a breakdown; the act totals
+ * are unchanged.
+ */
+function conditionOf(p: CaptureEvent): string | null {
+  const x = p.payload ?? {};
+  if (typeof x.congruency === "string") return x.congruency;
+  if (typeof x.pair === "string") return x.pair;
+  if (typeof x.ratio === "number") return `ratio_${x.ratio}`;
+  if (typeof x.mode === "string") return x.mode;
+  if (typeof x.subject === "string") return x.subject;
+  return null;
+}
+
 export function reduceTrialModule(capture: BaselineCapture, module: string) {
   const picks = capture
     .ofKind("trial_pick")
     .filter((e) => e.payload?.module === module);
   const byAct: Record<
     string,
-    {
-      trials: number;
-      /** Trials that carried an answer key - the accuracy denominator. */
-      scored: number;
-      /** Declined rather than answered; never counted wrong. */
-      notSure: number;
-      meanRtMs: number | null;
-      accuracy: number | null;
-    }
+    TrialStats & { conditions?: Record<string, TrialStats> }
   > = {};
   for (const act of new Set(picks.map((p) => String(p.payload?.act)))) {
-    const rts = picks
-      .filter((p) => p.payload?.act === act)
-      .map((p) => Number(p.payload?.rtMs))
-      .filter((n) => Number.isFinite(n) && n > 0 && n < 60_000);
     const inAct = picks.filter((p) => p.payload?.act === act);
-    const scored = inAct.filter((p) => typeof p.payload?.correct === "boolean");
+    const conditions: Record<string, TrialStats> = {};
+    for (const key of new Set(inAct.map(conditionOf))) {
+      if (key === null) continue;
+      conditions[key] = statsOf(inAct.filter((p) => conditionOf(p) === key));
+    }
     byAct[act] = {
-      trials: inAct.length,
-      scored: scored.length,
-      notSure: inAct.filter((p) => p.payload?.notSure === true).length,
-      meanRtMs: rts.length
-        ? Math.round(rts.reduce((a, b) => a + b, 0) / rts.length)
-        : null,
-      // Null means the activity carries no answer key, not zero right.
-      accuracy: scored.length
-        ? scored.filter((p) => p.payload?.correct === true).length /
-          scored.length
-        : null,
+      ...statsOf(inAct),
+      ...(Object.keys(conditions).length ? { conditions } : {}),
     };
   }
   return { module, acts: byAct };
+}
+
+/**
+ * What the run was calibrated to, which the engine could not otherwise know.
+ *
+ * The age band travelled only on `baseline_module_start` - a client-only event
+ * the signal filter drops - and the subject the child chose for the probe
+ * travelled nowhere. So the engine received a child's timings and accuracies
+ * with no idea which band's items produced them. Sent as its own feature, and
+ * as the band and subject only: nothing about the child that the run did not
+ * already use.
+ */
+export function reduceRunContext(capture: BaselineCapture) {
+  const start = capture.ofKind("run_start").at(-1);
+  const probe = capture.ofKind("probe_subject").at(-1);
+  const band = start?.payload?.band;
+  const subject = probe?.payload?.subject;
+  return {
+    module: "run",
+    band: typeof band === "string" ? band : null,
+    probeSubject: typeof subject === "string" ? subject : null,
+  };
 }
 
 export function reduceGridSpan(capture: BaselineCapture) {

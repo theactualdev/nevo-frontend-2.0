@@ -630,6 +630,14 @@ function WarmUpDots({
 }) {
   const [masked, setMasked] = useState(false);
   const [picked, setPicked] = useState(-1);
+  /*
+   * Which side has more, drawn once. The larger array was always on the left,
+   * so "Left" was always right - the same flaw as the onboarding baseline's
+   * dot task, repeated every day in the warm-up.
+   */
+  const [counts] = useState<[number, number]>(() =>
+    Math.random() < 0.5 ? [9, 6] : [6, 9],
+  );
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const onDoneRef = useRef(onDone);
   useEffect(() => {
@@ -655,8 +663,7 @@ function WarmUpDots({
 
   const choose = (i: number, label: string) => {
     if (!masked || picked !== -1) return;
-    // The first array holds 9 dots and the second 6.
-    onPick(label, { correct: i === 0 });
+    onPick(label, { correct: counts[i] > counts[1 - i] });
     setPicked(i);
     timers.current.push(setTimeout(() => onDoneRef.current(), PICK_BEAT_MS));
   };
@@ -667,7 +674,7 @@ function WarmUpDots({
         {masked ? "Which side had more dots?" : "Watch the dots"}
       </p>
       <div className="flex flex-col gap-4 sm:flex-row sm:gap-6">
-        {[9, 6].map((count, side) => (
+        {counts.map((count, side) => (
           <div
             key={side}
             className="relative size-[150px] overflow-hidden rounded-[12px] border-2 border-nevo-navy bg-nevo-cream sm:size-[200px]"

@@ -208,3 +208,37 @@ describe("WarmUpRun — the dot arrays are not always side by side", () => {
     expect(holdBaseline).not.toHaveBeenCalled();
   });
 });
+
+describe("WarmUpRun — the dot task has no fixed answer", () => {
+  /*
+   * The nine-dot array was always on the left, so "Left" was always right -
+   * every day, for every child. The side is now drawn per run.
+   */
+  const pickLeftAfterTheMask = async () => {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+    fireEvent.click(screen.getByText("Left"));
+    await settle();
+  };
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it("marks Left wrong when the larger array is on the right", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.9);
+    render(<WarmUpRun dimension="ans" />);
+
+    await pickLeftAfterTheMask();
+
+    expect(submitted().acts.ans.accuracy).toBe(0);
+  });
+
+  it("marks Left right when the larger array is on the left", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.1);
+    render(<WarmUpRun dimension="ans" />);
+
+    await pickLeftAfterTheMask();
+
+    expect(submitted().acts.ans.accuracy).toBe(1);
+  });
+});

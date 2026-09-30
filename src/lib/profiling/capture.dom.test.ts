@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { BaselineCapture, reduceGridSpan, reduceTrialModule } from "./capture";
+import {
+  BaselineCapture,
+  reduceGridSpan,
+  reduceRunContext,
+  reduceTrialModule,
+} from "./capture";
 
 /**
  * The feature vector is the only thing that leaves the device, so it is the
@@ -177,5 +182,64 @@ describe("reduceGridSpan", () => {
     tapAt(c, 0);
 
     expect(reduceGridSpan(c).dualAccuracy).toBeNull();
+  });
+});
+
+describe("what the vector keeps that it used to average away", () => {
+  const flank = (c: BaselineCapture, payload: Record<string, unknown>) =>
+    c.record("trial_pick", {
+      module: "pattern_flanker",
+      act: "flanker",
+      ...payload,
+    });
+
+  it("splits the flanker by congruency, which is the measure", () => {
+    const c = new BaselineCapture("f1");
+    flank(c, { congruency: "congruent", rtMs: 500, correct: true });
+    flank(c, { congruency: "incongruent", rtMs: 900, correct: false });
+
+    const flanker = reduceTrialModule(c, "pattern_flanker").acts.flanker;
+
+    expect(flanker.conditions?.congruent).toMatchObject({
+      trials: 1,
+      accuracy: 1,
+      meanRtMs: 500,
+    });
+    expect(flanker.conditions?.incongruent).toMatchObject({
+      trials: 1,
+      accuracy: 0,
+      meanRtMs: 900,
+    });
+    // The act totals are unchanged by the breakdown.
+    expect(flanker).toMatchObject({ trials: 2, accuracy: 0.5 });
+  });
+
+  it("adds no breakdown to an act that has no condition", () => {
+    const c = new BaselineCapture("f2");
+    pick(c, "reading", { rtMs: 3000, correct: true });
+
+    expect(readingOf(c)).not.toHaveProperty("conditions");
+  });
+});
+
+describe("reduceRunContext", () => {
+  it("tells the engine which band and subject produced the numbers", () => {
+    const c = new BaselineCapture("r1");
+    c.record("run_start", { band: "jss" });
+    c.record("probe_subject", { subject: "mathematics" });
+
+    expect(reduceRunContext(c)).toEqual({
+      module: "run",
+      band: "jss",
+      probeSubject: "mathematics",
+    });
+  });
+
+  it("says null rather than guessing when the run never recorded one", () => {
+    expect(reduceRunContext(new BaselineCapture("r2"))).toEqual({
+      module: "run",
+      band: null,
+      probeSubject: null,
+    });
   });
 });
