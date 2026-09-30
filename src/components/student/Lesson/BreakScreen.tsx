@@ -68,12 +68,13 @@ export function BreakScreen({
   useEffect(() => {
     if (started.current) return; // StrictMode double-invoke guard
     started.current = true;
-    startedAt.current = Date.now();
+    // Monotonic (rule 4): the break's length is sent to the engine.
+    startedAt.current = performance.now();
     onStartRef.current?.();
   }, []);
 
   const finish = () => {
-    onEnd?.(Date.now() - startedAt.current);
+    onEnd?.(Math.max(0, Math.round(performance.now() - startedAt.current)));
     onDone();
   };
 
@@ -82,7 +83,7 @@ export function BreakScreen({
   useEffect(() => {
     if (type !== BREAK_TYPES.MICRO) return;
     const t = setTimeout(() => {
-      onEnd?.(Date.now() - startedAt.current);
+      onEnd?.(Math.max(0, Math.round(performance.now() - startedAt.current)));
       onDoneRef.current();
     }, MICRO_HOLD_MS);
     return () => clearTimeout(t);

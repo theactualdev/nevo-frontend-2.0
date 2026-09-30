@@ -251,7 +251,16 @@ export function useSignals(
     const id = setInterval(flush, SIGNAL_BATCH.FLUSH_INTERVAL_MS);
     return () => {
       clearInterval(id);
-      flush();
+      /*
+       * A MICROTASK LATER, NOT NOW. On unmount React runs this hook's cleanup
+       * before the cleanups of effects its caller declared after it - and the
+       * player's time-on-segment event is exactly such a cleanup. Flushing
+       * synchronously sent the queue and THEN the last segment's timing was
+       * pushed into a queue nothing would ever flush again: lost on every
+       * exit and every completion. `flush` reads only refs, so running it a
+       * tick after the component has gone is safe.
+       */
+      queueMicrotask(flush);
     };
   }, [flush]);
 

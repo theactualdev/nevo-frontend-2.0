@@ -98,13 +98,13 @@ export function useRuntimeAdaptation(
   const lastModality = useRef<string | null>(null);
 
   useEffect(() => {
-    if (openedAt.current === 0) openedAt.current = Date.now();
+    if (openedAt.current === 0) openedAt.current = performance.now();
   }, []);
 
   // A new segment restarts the segment clock. Runs before the request effect
   // below on the same change, so the request sees the fresh start.
   useEffect(() => {
-    segmentStartedAt.current = Date.now();
+    segmentStartedAt.current = performance.now();
   }, [segmentId]);
 
   // Count only actual changes, and never the first render's initial value.
@@ -118,7 +118,9 @@ export function useRuntimeAdaptation(
   useEffect(() => {
     if (!enabled || !lessonId || !segments?.length || !segmentId) return;
     let active = true;
-    const now = Date.now();
+    // Monotonic (rule 4): every duration below is sent to the engine, and a
+    // wall clock that jumps would send negatives or fail validation.
+    const now = performance.now();
     const since = askedAt.current;
     askedAt.current = now;
 
@@ -137,7 +139,7 @@ export function useRuntimeAdaptation(
       midpointReached: state.midpointReached,
       sessionModalityShiftCount: modalityShifts.current,
       secondsSinceLastAdaptation:
-        since === null ? null : Math.round((now - since) / 1000),
+        since === null ? null : Math.max(0, Math.round((now - since) / 1000)),
     };
 
     void intelligenceApi

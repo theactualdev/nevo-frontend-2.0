@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
+import { useEffect } from "react";
 
 /** Typed so `submitBatch.mock.calls` carries a real tuple and needs no casts. */
 interface Envelope {
@@ -217,3 +218,32 @@ describe("the clock the engine measures latency from", () => {
     );
   });
 });
+
+describe("the last event before a component goes", () => {
+  /*
+   * React runs this hook's cleanup before the cleanups of effects its caller
+   * declared after it. The player's time-on-segment event is exactly such a
+   * cleanup, so the hook flushed and THEN the last segment's timing landed in
+   * a queue nothing would flush again - lost on every exit and completion.
+   */
+  it("is sent even when the caller queues it in its own unmount cleanup", async () => {
+    signIn();
+    const { unmount } = renderHook(() => {
+      const { trackEvent } = useSignals(UUID, LESSON, "lesson");
+      // Declared AFTER the hook, as the player's timing effect is.
+      useEffectOnUnmount(() =>
+        trackEvent("time_on_segment" as never, { segmentId: "last" }),
+      );
+    });
+
+    unmount();
+    await act(async () => {});
+
+    const sent = submitBatch.mock.calls.flatMap(([, events]) => events);
+    expect(sent.map((e) => e.payload?.segmentId)).toContain("last");
+  });
+});
+
+function useEffectOnUnmount(fn: () => void) {
+  useEffect(() => fn, [fn]);
+}
