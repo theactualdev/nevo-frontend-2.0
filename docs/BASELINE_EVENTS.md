@@ -42,20 +42,35 @@ transmission question rather than a local one — flagged, not assumed.
 | `kind` | Payload | Emitted by |
 |---|---|---|
 | `run_start` | `{ band }` | `ProfilingFlow.tsx:187` |
-| `warmup_start` | `{ dimension }` | `WarmUpRun.tsx:91` |
+| `warmup_start` | `{ dimension, itemId? }` - `itemId` only when the engine's served question is the one shown | `WarmUpRun.tsx` |
 | `trial_shown` | `{ module, act, trial }` | `useTrialRunner.ts:51` |
-| `trial_pick` | `{ module, act, trial, choice, rtMs, ...detail }` | `useTrialRunner.ts:57` |
+| `response_open` | `{ module, act, trial, openAfterMs }` - the dot mask landed, or the heard sentence ended | `useTrialRunner.ts` |
+| `trial_pick` | `{ module, act, trial, choice, rtMs, openAfterMs?, beforeOpen?, x?, y?, ...detail }` | `useTrialRunner.ts` |
 | `trial_pick` (warm-up) | `{ module: "warmup", act, choice, rtMs, ...detail }` | `WarmUpRun.tsx:279` |
 | `module_end` | `{ module }` | `useTrialRunner.ts:69`, `GridSpanModule.tsx:124` |
 | `playback_start` | `{ length, litMs, gapMs }` | `GridSpanModule.tsx:141` |
 | `input_start` | `{ length }` | `GridSpanModule.tsx:162`, `:186` |
-| `tap` | `{ cell, correct, posInSeq, length }` | `GridSpanModule.tsx:193` |
+| `tap` | `{ cell, correct, posInSeq, length, x?, y? }` | `GridSpanModule.tsx` |
 | `tap` (warm-up) | `{ module: "warmup", act: "wmc", cell, correct, posInSeq, length }` | `WarmUpRun.tsx:514` |
 | `round_complete` | `{ length }` | `GridSpanModule.tsx:207`, `WarmUpRun.tsx:535` |
 | `check_shown` | `{ check }` | `GridSpanModule.tsx:159` |
-| `check_answer` | `{ check, answer, correct }` | `GridSpanModule.tsx:180` |
+| `check_answer` | `{ check, answer, correct, x?, y? }` | `GridSpanModule.tsx` |
 | `replay` | `{ module: "sentence_dot", trial }` | `SentenceDotModule.tsx:263` |
-| `probe_subject` | `{ subject }` | `DomainProbeModule.tsx:257` |
+| `probe_subject` | `{ subject, x?, y? }` | `DomainProbeModule.tsx` |
+
+### Timing and position, added 1 Oct
+
+- **`rtMs` starts when the child can answer.** For the dots that is the mask,
+  for the heard P1-3 sentence the end of speech; `openAfterMs` on the pick is
+  the offset from presentation. An answer given before the sentence ended
+  carries `rtMs: null` and `beforeOpen: true` - there is no honest number for
+  it - and the reducer leaves a missing time out of the mean.
+- **`x`, `y`** are viewport coordinates of the tap, unrounded (frontend §2,
+  §3). A keyboard press records neither rather than a false 0,0. No reducer
+  reads them yet; they are in the stream for when the stream travels.
+- **The warm-up's served question** goes up on the feature as
+  `item: { itemId, chosenOption }`, unmarked - the device holds the answer key
+  and does not use it.
 
 ### Vocabularies
 
@@ -77,6 +92,7 @@ needs, so they are worth reading as part of the contract rather than as extras:
   counted wrong.
 - `pair: "same" | "different"` — pattern-match trials
 - `congruency: "congruent" | "incongruent" | "neutral"` — flanker trials.
+  Absent for P1-3, whose flanker task draws the centre arrow alone.
   Without it the vector said how *fast* a child answered an interference trial
   and never whether the flankers had captured them.
 
