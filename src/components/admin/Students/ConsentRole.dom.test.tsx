@@ -1,20 +1,41 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
-import { clearSession, setSession } from "@/lib/auth/session";
+import { ApiError } from "@/lib/api/client";
 import { StudentDetailView } from "./StudentDetailView";
 
 /**
- * Backend, 1 Oct: the consent request is SENCO-ADMIN ONLY ("Check the role
- * before you draw the button"), and a guardian recorded at enrolment carries
- * an email and NO NAME - while the request requires one. Both were drawn as
- * though neither were true.
+ * Backend, 1 Oct, on the consent request:
+ * - it takes ROSTER OR SENCO access. The founding admin has roster and not
+ *   senco, on purpose, and must be able to send;
+ * - the guardian's name is OPTIONAL. One recorded at enrolment has none, and
+ *   is asked as they are;
+ * - a parent who already said no is refused with 409 `parent_already_refused`,
+ *   and the message is safe to show as it stands.
  */
 
 const parentLinks = vi.fn();
 const addGuardian = vi.fn();
 const requestParentConsent = vi.fn();
+let scopes: string[] = ["roster"];
 
+vi.mock("@/context/PermissionContext", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/context/PermissionContext")>();
+  const { createContext } = await import("react");
+  // The context's DEFAULT, read when no provider is mounted - with a getter,
+  // so each test's `scopes` is the one seen.
+  return {
+    ...actual,
+    PermissionContext: createContext({
+      get scopes() {
+        return scopes;
+      },
+      resolved: true,
+      status: "ready",
+      refresh: () => {},
+    } as never),
+  };
+});
 vi.mock("@/lib/api/students", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/students")>();
   return {
@@ -53,14 +74,6 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
 
-const signIn = (role: string) =>
-  setSession({
-    token: "tok",
-    expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
-    userId: "a1",
-    role,
-  });
-
 /** A guardian recorded at enrolment: the address, and no name yet. */
 const UNNAMED = {
   id: "pl1",
@@ -73,37 +86,44 @@ const UNNAMED = {
   accountCreated: false,
 };
 
+const REFUSED =
+  "This parent was already asked about this learner and did not consent. Nevo does not contact them again. Speak to them directly if something has changed.";
+
 beforeEach(() => {
   vi.clearAllMocks();
+  scopes = ["roster"];
   parentLinks.mockResolvedValue([]);
-  addGuardian.mockResolvedValue({
+  requestParentConsent.mockResolvedValue({
     invitationId: "i1",
     parentLinkId: "pl1",
     studentId: "s1",
     consentTypes: ["data_processing"],
     deliveryStatus: "queued",
-    expiresAt: "2026-10-30T00:00:00Z",
+    expiresAt: "2099-01-01T00:00:00Z",
   });
 });
-afterEach(() => clearSession());
 
-describe("an admin without SENCo access", () => {
-  beforeEach(() => signIn("other_admin"));
+describe("who may send", () => {
+  it("offers the founding admin the request - roster access, no SENCo", async () => {
+    scopes = ["oversight", "roster", "billing"];
+    parentLinks.mockResolvedValue([UNNAMED]);
+    render(<StudentDetailView studentId="s1" />);
+    expect(await screen.findByRole("button", { name: "Send the consent request" })).toBeInTheDocument();
+  });
 
-  it("is not offered a request it would be refused, and is told who sends it", async () => {
+  it("tells an admin with neither roster nor SENCo access who sends it, and offers nothing", async () => {
+    scopes = ["billing"];
     const { container } = render(<StudentDetailView studentId="s1" />);
     await waitFor(() => expect(visibleText(container)).toMatch(/No guardian on the record/));
     expect(screen.queryByRole("button", { name: /Send the consent request/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Add a parent or guardian/ })).toBeNull();
     expect(visibleText(container)).toMatch(
-      /Consent requests are sent by an admin with SENCo \/ Learning Support access/,
+      /Consent requests are sent by an admin with roster or SENCo \/ Learning Support access/,
     );
   });
 });
 
 describe("a guardian recorded at enrolment, with no name", () => {
-  beforeEach(() => signIn("senco_admin"));
-
   it("shows the address rather than a blank row", async () => {
     parentLinks.mockResolvedValue([UNNAMED]);
     const { container } = render(<StudentDetailView studentId="s1" />);
@@ -111,23 +131,32 @@ describe("a guardian recorded at enrolment, with no name", () => {
     expect(visibleText(container)).toMatch(/They.ll give their own name when they answer the request/);
   });
 
-  it("asks for the name the request needs, then sends to the same address", async () => {
+  it("is asked as they are - no name needed", async () => {
     parentLinks.mockResolvedValue([UNNAMED]);
     const { container } = render(<StudentDetailView studentId="s1" />);
     fireEvent.click(await screen.findByRole("button", { name: "Send the consent request" }));
-
-    // Never "nobody on record" - there is somebody, with no name yet.
-    await waitFor(() => expect(visibleText(container)).toMatch(/The request needs their name too/));
-    expect(visibleText(container)).not.toMatch(/no parent or guardian/i);
-    expect(requestParentConsent).not.toHaveBeenCalled();
-
-    fireEvent.change(screen.getByLabelText(/Parent or guardian.s name/), {
-      target: { value: "Mrs. Eze" },
-    });
-    fireEvent.click(screen.getAllByRole("button", { name: "Send the consent request" }).at(-1)!);
     await waitFor(() =>
-      expect(addGuardian).toHaveBeenCalledWith("s1", { name: "Mrs. Eze", email: "eze@example.com" }),
+      expect(requestParentConsent).toHaveBeenCalledWith("s1", {
+        parentName: "",
+        parentContact: "eze@example.com",
+        contactMethod: "email",
+      }),
     );
-    await waitFor(() => expect(visibleText(container)).not.toMatch(/The request needs their name too/));
+    await waitFor(() => expect(visibleText(container)).toMatch(/queued for eze@example\.com/));
+  });
+});
+
+describe("a parent who already said no", () => {
+  it("is not asked again, and the school reads backend's own words", async () => {
+    parentLinks.mockResolvedValue([UNNAMED]);
+    requestParentConsent.mockRejectedValue(
+      new ApiError(409, "conflict", {
+        detail: { code: "parent_already_refused", message: REFUSED },
+      }),
+    );
+    const { container } = render(<StudentDetailView studentId="s1" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Send the consent request" }));
+    await waitFor(() => expect(visibleText(container)).toMatch(/did not consent\. Nevo does not contact them again/));
+    expect(visibleText(container)).not.toMatch(/That didn.t go through/i);
   });
 });

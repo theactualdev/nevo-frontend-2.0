@@ -1,25 +1,36 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
 import { ApiError } from "@/lib/api/client";
 import type { AdditionQuote } from "@/lib/api/onboarding";
 import { AddStudentSheet } from "./AddStudentSheet";
-import { clearSession, setSession } from "@/lib/auth/session";
 
 /*
- * Signed in as a SENCo admin: the consent request is SENCo-admin only
- * (`SencoDependency`), and these tests pin what that admin can do. What other
- * admins see is pinned in `ConsentRole.dom.test.tsx`.
+ * An admin with ROSTER access - the founding admin's, and enough to send the
+ * consent request (backend, 1 Oct: roster OR senco). What an admin with
+ * neither sees is pinned in `ConsentRole.dom.test.tsx`.
  */
-beforeEach(() =>
-  setSession({
-    token: "tok",
-    expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
-    userId: "a1",
-    role: "senco_admin",
-  }),
-);
-afterEach(() => clearSession());
+let scopes: string[] = ["roster"];
+beforeEach(() => {
+  scopes = ["roster"];
+});
+vi.mock("@/context/PermissionContext", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/context/PermissionContext")>();
+  const { createContext } = await import("react");
+  // The context's DEFAULT, read when no provider is mounted - with a getter,
+  // so each test's `scopes` is the one seen.
+  return {
+    ...actual,
+    PermissionContext: createContext({
+      get scopes() {
+        return scopes;
+      },
+      resolved: true,
+      status: "ready",
+      refresh: () => {},
+    } as never),
+  };
+});
 
 /**
  * D24b "Add a student", and the sentence the frame draws that is not true.
@@ -204,7 +215,7 @@ describe("AddStudentSheet guardian", () => {
    * how design said they would.
    */
   const guardian = (name: string, email: string) => {
-    fireEvent.change(screen.getByLabelText("Their name"), { target: { value: name } });
+    fireEvent.change(screen.getByLabelText(/^Their name/), { target: { value: name } });
     fireEvent.change(screen.getByLabelText("Their email"), { target: { value: email } });
   };
 
@@ -224,13 +235,37 @@ describe("AddStudentSheet guardian", () => {
     expect(onAdded).toHaveBeenCalledWith("s-new");
   });
 
-  it("wants both or neither", async () => {
+  it("needs an email, and not a name", async () => {
+    // The name became optional on the request (backend, 1 Oct): the parent
+    // gives their own at consent.
     const { container } = mount();
     await fill();
     guardian("Mrs. Bello", "");
-
     expect(screen.getByRole("button", { name: /Add Zainab/ })).toBeDisabled();
-    expect(visibleText(container)).toMatch(/both their name and a working email, or leave both empty/);
+    expect(visibleText(container)).toMatch(/Add a working email for them, or leave this empty/);
+
+    guardian("", "bello@example.com");
+    expect(screen.getByRole("button", { name: /Add Zainab/ })).toBeEnabled();
+  });
+
+  it("says the parent already said no, in backend's words, and does not offer to resend", async () => {
+    addGuardian.mockRejectedValue(
+      new ApiError(409, "conflict", {
+        detail: {
+          code: "parent_already_refused",
+          message:
+            "This parent was already asked about this learner and did not consent. Nevo does not contact them again. Speak to them directly if something has changed.",
+        },
+      }),
+    );
+    const { container } = mount();
+    await fill();
+    guardian("", "bello@example.com");
+    fireEvent.click(await screen.findByRole("button", { name: /Add Zainab/ }));
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/did not consent. Nevo does not contact them again/),
+    );
+    expect(visibleText(container)).not.toMatch(/You can send it from/);
   });
 
   it("records the guardian's email on the child itself, so a failed request still leaves them on record", async () => {
@@ -298,23 +333,18 @@ describe("AddStudentSheet guardian", () => {
   });
 });
 
-describe("AddStudentSheet for an admin without SENCo access", () => {
-  // Nested, so it runs after the file's SENCo sign-in and replaces it.
-  beforeEach(() =>
-    setSession({
-      token: "tok",
-      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
-      userId: "a2",
-      role: "other_admin",
-    }),
-  );
+describe("AddStudentSheet for an admin with neither roster nor SENCo access", () => {
+  // Nested, so it runs after the file's roster default and replaces it.
+  beforeEach(() => {
+    scopes = ["billing"];
+  });
 
   it("records the guardian's email with the child and sends nothing it would be refused", async () => {
     const { container } = mount();
     await fill();
     // Enrolment cannot keep a name, so none is asked for.
-    expect(screen.queryByLabelText("Their name")).toBeNull();
-    expect(visibleText(container)).toMatch(/sent by an admin with SENCo \/ Learning Support access/);
+    expect(screen.queryByLabelText(/^Their name/)).toBeNull();
+    expect(visibleText(container)).toMatch(/sent by an admin with roster or SENCo \/ Learning Support access/);
 
     fireEvent.change(screen.getByLabelText("Their email"), { target: { value: "bello@example.com" } });
     fireEvent.click(await screen.findByRole("button", { name: /Add Zainab/ }));

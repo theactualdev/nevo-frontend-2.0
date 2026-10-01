@@ -35,7 +35,7 @@ import {
 } from "../Roster/primitives";
 import { useSetupGate } from "@/hooks";
 import { AddGuardianForm } from "./AddGuardianForm";
-import { SENCO_SENDS_LINE, useMaySendConsent } from "./consentRole";
+import { CANNOT_SEND_LINE, useMaySendConsent } from "./consentRole";
 import { EraseRecordModal } from "./EraseRecordModal";
 import { IssuePinSheet } from "./IssuePinSheet";
 import { MoveStudentSheet } from "./MoveStudentSheet";
@@ -81,12 +81,8 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
   const [classes, setClasses] = useState<AdminClass[]>([]);
   const [guardians, setGuardians] = useState<ParentLink[]>([]);
   const [guardiansFailed, setGuardiansFailed] = useState(false);
-  const {
-    stateFor: consentStateFor,
-    send: sendConsent,
-    clear: clearConsent,
-  } = useConsentRequests();
-  /** Requests, and so adding a guardian, are SENCo-admin only - see `consentRole`. */
+  const { stateFor: consentStateFor, send: sendConsent } = useConsentRequests();
+  /** Requests, and so adding a guardian, need roster or SENCo access - see `consentRole`. */
   const maySend = useMaySendConsent();
   const [moving, setMoving] = useState(false);
   /** D24 / D01b: every change to a student pauses while setup is unfinished. */
@@ -357,7 +353,7 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
           */}
         {mayRequestConsent(student.consent) && !maySend ? (
           <p className="m-0 mt-4 max-w-[54ch] border-t border-nevo-near-black/8 pt-4 text-[13.5px] leading-[1.55] text-nevo-near-black/62">
-            {SENCO_SENDS_LINE}
+            {CANNOT_SEND_LINE}
           </p>
         ) : null}
         {mayRequestConsent(student.consent) && maySend ? (
@@ -374,38 +370,13 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
                   ? "Send a gentle reminder"
                   : "Send the consent request"}
             </button>
-            {consentLine && consentState.kind !== "needsName" ? (
+            {consentLine ? (
               <p
                 role="status"
                 className="m-0 mt-2 max-w-[54ch] text-[13.5px] leading-[1.55] text-nevo-near-black/62"
               >
                 {consentLine}
               </p>
-            ) : null}
-            {/* The guardian recorded at enrolment, by email alone: ask for the
-                name the request needs, here, rather than send the school off. */}
-            {consentState.kind === "needsName" ? (
-              <div className="mt-3">
-                <p className="m-0 mb-3 max-w-[54ch] text-[13.5px] leading-[1.55] text-nevo-near-black/62">
-                  We have {consentState.parentContact} for {firstName}. The
-                  request needs their name too.
-                </p>
-                <AddGuardianForm
-                  studentId={student.id}
-                  studentFirstName={firstName}
-                  knownEmail={consentState.parentContact}
-                  onAdded={(receipt, name) => {
-                    clearConsent(student.id);
-                    setGuardianAdded(
-                      consentRequestLine(
-                        { kind: "done", parentName: name, delivery: receipt.deliveryStatus },
-                        firstName,
-                      ),
-                    );
-                    load();
-                  }}
-                />
-              </div>
             ) : null}
           </div>
         ) : null}
@@ -441,7 +412,7 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
             <p className="m-0 mt-1.5 max-w-[56ch] text-[13.5px] leading-[1.55] text-nevo-near-black/62">
               {firstName} can&rsquo;t start until a parent or guardian gives
               permission.{" "}
-              {maySend ? "Add one and we’ll send them the request." : SENCO_SENDS_LINE}
+              {maySend ? "Add one and we’ll send them the request." : CANNOT_SEND_LINE}
             </p>
             {/* No other route writes a guardian onto an existing student: the
                 request is the write. So the form follows the request's role. */}

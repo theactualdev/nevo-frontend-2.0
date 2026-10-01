@@ -32,28 +32,27 @@ export function AddGuardianForm({
   studentFirstName,
   onAdded,
   onCancel,
-  knownEmail,
 }: {
   studentId: string;
   studentFirstName: string;
-  /**
-   * A guardian already on the record by email - recorded at enrolment, with no
-   * name. Only the name is asked for; posting the same address finds that same
-   * guardian, fills in the name and sends the request.
-   */
-  knownEmail?: string;
   onAdded: (receipt: ParentConsentRequestReceipt, guardianName: string) => void;
   onCancel?: () => void;
 }) {
   const { writesPaused, note } = useSetupGate();
   const [name, setName] = useState("");
-  const [email, setEmail] = useState(knownEmail ?? "");
+  const [email, setEmail] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const nameOk = name.trim().length >= 2;
+  /*
+   * THE NAME IS OPTIONAL (backend, 1 Oct). It was required at two
+   * characters, while the roster import never insists on a guardian's name -
+   * so every guardian who arrived nameless was unaskable. The parent gives
+   * their own at consent; a blank one reads "Parent or guardian" on their
+   * screen, so nothing is put in its place here.
+   */
   const emailOk = isEmail(email);
-  const ready = nameOk && emailOk && !sending && !writesPaused;
+  const ready = emailOk && !sending && !writesPaused;
 
   const submit = () => {
     if (!ready) return;
@@ -62,7 +61,7 @@ export function AddGuardianForm({
     const guardian = { name: name.trim(), email: email.trim() };
     consentsApi
       .addGuardian(studentId, guardian)
-      .then((receipt) => onAdded(receipt, guardian.name))
+      .then((receipt) => onAdded(receipt, guardian.name || guardian.email))
       .catch((err: unknown) =>
         setError(
           (err instanceof ApiError ? apiErrorMessage(err.detail) : null) ??
@@ -78,7 +77,8 @@ export function AddGuardianForm({
   return (
     <div className="flex max-w-[440px] flex-col gap-3">
       <label className="text-[13px] font-medium text-nevo-near-black/62">
-        Parent or guardian&rsquo;s name
+        Parent or guardian&rsquo;s name{" "}
+        <span className="font-normal text-nevo-near-black/45">(optional)</span>
         <input
           value={name}
           onChange={(e) => {
@@ -89,11 +89,6 @@ export function AddGuardianForm({
           className={input}
         />
       </label>
-      {knownEmail ? (
-        <p className="m-0 text-[13px] text-nevo-near-black/62">
-          The request goes to {knownEmail}.
-        </p>
-      ) : (
       <label className="text-[13px] font-medium text-nevo-near-black/62">
         Their email
         <input
@@ -108,7 +103,6 @@ export function AddGuardianForm({
           className={input}
         />
       </label>
-      )}
       {email.trim() && !emailOk ? (
         <p className="m-0 text-[13px] text-nevo-near-black/60">
           That doesn&rsquo;t look like an email address yet.
@@ -124,11 +118,7 @@ export function AddGuardianForm({
       ) : null}
       <div className="flex flex-wrap items-center gap-3">
         <button type="button" onClick={submit} disabled={!ready} className={cn(PRIMARY_BTN)}>
-          {sending
-            ? "Sending…"
-            : knownEmail
-              ? "Send the consent request"
-              : "Add and send the consent request"}
+          {sending ? "Sending…" : "Add and send the consent request"}
         </button>
         {onCancel ? (
           <button

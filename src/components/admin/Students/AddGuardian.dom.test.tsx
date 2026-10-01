@@ -1,25 +1,36 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
 import { withGate } from "@/test/setupGate";
 import { ApiError } from "@/lib/api/client";
 import { StudentDetailView } from "./StudentDetailView";
-import { clearSession, setSession } from "@/lib/auth/session";
 
 /*
- * Signed in as a SENCo admin: the consent request is SENCo-admin only
- * (`SencoDependency`), and these tests pin what that admin can do. What other
- * admins see is pinned in `ConsentRole.dom.test.tsx`.
+ * An admin with ROSTER access - the founding admin's, and enough to send the
+ * consent request (backend, 1 Oct: roster OR senco). What an admin with
+ * neither sees is pinned in `ConsentRole.dom.test.tsx`.
  */
-beforeEach(() =>
-  setSession({
-    token: "tok",
-    expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
-    userId: "a1",
-    role: "senco_admin",
-  }),
-);
-afterEach(() => clearSession());
+let scopes: string[] = ["roster"];
+beforeEach(() => {
+  scopes = ["roster"];
+});
+vi.mock("@/context/PermissionContext", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/context/PermissionContext")>();
+  const { createContext } = await import("react");
+  // The context's DEFAULT, read when no provider is mounted - with a getter,
+  // so each test's `scopes` is the one seen.
+  return {
+    ...actual,
+    PermissionContext: createContext({
+      get scopes() {
+        return scopes;
+      },
+      resolved: true,
+      status: "ready",
+      refresh: () => {},
+    } as never),
+  };
+});
 
 /**
  * Consent is a gate, so a child with no guardian on record could never start
