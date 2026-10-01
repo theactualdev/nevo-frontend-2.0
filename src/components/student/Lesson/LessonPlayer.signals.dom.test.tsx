@@ -333,18 +333,26 @@ describe("how the session ended", () => {
   });
 });
 
-describe("the step up", () => {
-  it("narrates nothing after the tap", () => {
+describe("the step up, retired (D28)", () => {
+  it("offers nothing and sends nothing, whatever arrives", () => {
+    /*
+     * Design, 1 Oct: "a control nothing can trigger is not a feature." A
+     * stray `increase_difficulty` - which the contract never sends - now
+     * resolves to no instruction at all, and no `step_up_*` type leaves.
+     */
     runtime.value = {
       ...runtime.value,
-      plan: { lessonId: "l-1", segments: [], adjustment: "increase_difficulty" },
+      plan: {
+        lessonId: "l-1",
+        segments: [],
+        adjustment: "increase_difficulty",
+      } as unknown as AdaptationPlan,
     };
     render(<LessonPlayer lesson={THREE} plan={null} live />);
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Ready for something harder?" }),
-    );
-
-    expect(screen.queryByText(/step things up/i)).toBeNull();
+    expect(screen.queryByText(/something harder/i)).toBeNull();
+    expect(
+      trackEvent.mock.calls.filter(([t]) => String(t).startsWith("step_up")),
+    ).toEqual([]);
   });
 });

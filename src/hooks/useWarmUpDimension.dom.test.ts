@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
-import { toPrompt, useWarmUpDimension, useWarmUpPrompt } from "./useWarmUpDimension";
+import { toPrompt, useWarmUpPrompt } from "./useWarmUpDimension";
 import { clearSession, setSession } from "@/lib/auth/session";
 
 /**
@@ -33,7 +33,6 @@ const served = {
     { value: "a", label: "Two-thirds" },
     { value: "b", label: "Three-fifths" },
   ],
-  answer: "a",
 };
 
 beforeEach(() => {
@@ -94,20 +93,47 @@ describe("useWarmUpPrompt", () => {
     expect(recalibratePrompt).not.toHaveBeenCalled();
   });
 
-  it("gives the dashboard card no task to name until the engine has", () => {
+  it("carries the account's done-today answer through (B10)", async () => {
     signIn();
-    recalibratePrompt.mockReturnValue(new Promise(() => {}));
+    recalibratePrompt.mockResolvedValue({ ...served, doneToday: true });
 
-    const { result } = renderHook(() => useWarmUpDimension("wmc"));
+    const { result } = renderHook(() => useWarmUpPrompt("wmc"));
 
-    expect(result.current).toBeNull();
+    await waitFor(() =>
+      expect(result.current).toMatchObject({ state: "ready", doneToday: true }),
+    );
+  });
+});
+
+describe("toPrompt — done today (B10)", () => {
+  it("keeps the account's answer either way", () => {
+    expect(toPrompt({ ...served, doneToday: true })).toMatchObject({
+      doneToday: true,
+    });
+    expect(toPrompt({ ...served, doneToday: false })).toMatchObject({
+      doneToday: false,
+    });
+  });
+
+  it("keeps it even when there is no task this screen can run", () => {
+    // Done is a fact about the child's day, not about the task.
+    expect(toPrompt({ ...served, dimension: "mood", doneToday: true })).toEqual(
+      { state: "none", doneToday: true },
+    );
+  });
+
+  it("leaves it unsaid when the deployment does not say, rather than false", () => {
+    // Absent and false are different claims; absent lets the device's memory
+    // stand in, false would overrule it.
+    expect(toPrompt(served)).not.toHaveProperty("doneToday");
   });
 });
 
 describe("toPrompt", () => {
-  it("never keeps the answer key", () => {
-    // The device marks nothing, so it has no use for the key.
-    const prompt = toPrompt(served);
+  it("never keeps an answer key, should the wire carry one again", () => {
+    // The device marks nothing, so it has no use for the key. Backend took it
+    // off the prompt on 1 Oct; this holds if it ever comes back.
+    const prompt = toPrompt({ ...served, answer: "a" } as typeof served);
 
     expect(JSON.stringify(prompt)).not.toMatch(/"answer"/);
   });

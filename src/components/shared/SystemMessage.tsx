@@ -68,27 +68,33 @@ export interface AdultMessage {
  * caller on a student screen has nothing to reach for.
  *
  * `state` is the whole vocabulary. Adding to it is a design decision, not a
- * convenience - which is the point of it being three words rather than a
+ * convenience - which is the point of it being a closed set rather than a
  * string.
+ *
+ * NO "OFFLINE" AND NO "ONLINE" (design, D55). The child's bar carries only
+ * what Nevo itself says about the service, and never repeats the offline
+ * banner, which already owns the connection on every tab and in the player.
+ * Both states were here and were raised by nothing; they are gone so that
+ * nothing can. And in v1 nothing raises this bar for a child at all - the
+ * student shell mounts no `SystemMessagesProvider` - so on a child's screen it
+ * renders nothing, which is the ruling's own answer for that case.
  */
 export interface ChildMessage {
   audience: "child";
-  state: "saved" | "offline" | "online";
+  state: "saved";
 }
 
 export type SystemMessageInput = AdultMessage | ChildMessage;
 
 /**
- * The only three things a child's screen may say, and none of them is praise.
+ * The only thing a child's screen may say here, and it is not praise.
  *
- * Factual system states, in the frame's own register: what happened to their
- * work, and whether the product can reach anything. No tick, no count, no
- * "well done", nothing a child could read as a score.
+ * A factual system state, in the frame's own register: what happened to their
+ * work. No tick, no count, no "well done", nothing a child could read as a
+ * score - and nothing about the connection, which is the banner's (D55).
  */
 const CHILD_COPY: Record<ChildMessage["state"], string> = {
   saved: "Your work is saved.",
-  offline: "You're offline. Nevo will keep what you do.",
-  online: "You're back online.",
 };
 
 export function isChild(m: SystemMessageInput): m is ChildMessage {

@@ -261,11 +261,26 @@ describe("SM-07, a child's screen", () => {
   });
 
   it("says nothing that reads as praise or a score", () => {
-    show({ audience: "child", state: "online" });
+    show({ audience: "child", state: "saved" });
 
     const bar = screen.getByRole("status");
     expect(bar.textContent).not.toMatch(
       /well done|great|nice|complete|streak|\d/i,
     );
+  });
+
+  it("cannot say anything about the connection, which is the banner's (D55)", () => {
+    /*
+     * "It never duplicates the offline banner." `offline` and `online` were
+     * in the vocabulary and raised by nothing; the type now refuses them, so
+     * `tsc` fails here if either comes back.
+     */
+    // @ts-expect-error - not a child state since D55
+    const offline: SystemMessageInput = { audience: "child", state: "offline" };
+    // @ts-expect-error - not a child state since D55
+    const online: SystemMessageInput = { audience: "child", state: "online" };
+    show(offline, online);
+
+    expect(document.body.textContent).not.toMatch(/offline|online/i);
   });
 });

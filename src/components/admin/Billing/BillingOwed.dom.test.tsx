@@ -13,6 +13,7 @@ import { BillingView } from "./BillingView";
 
 const upcoming = vi.fn();
 let rows: Invoice[] = [];
+let rateType = "standard";
 
 vi.mock("@/lib/api/billing", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/billing")>();
@@ -35,7 +36,7 @@ vi.mock("@/lib/api/billing", async (importOriginal) => {
           accessWindow: "school_session",
           studentCount: 340,
           perStudentRate: "150000.00",
-          rateType: "standard",
+          rateType,
           rateLockedUntil: null,
           totalBeforeVat: "51000000.00",
           vatRate: "7.50",
@@ -70,6 +71,7 @@ const charge = (over: Partial<UpcomingCharge>): UpcomingCharge => ({
 beforeEach(() => {
   upcoming.mockReset();
   rows = [];
+  rateType = "standard";
 });
 
 describe("Billing's How to pay", () => {
@@ -129,5 +131,36 @@ describe("Billing's invoice list", () => {
     render(<BillingView />);
     const link = await screen.findByRole("link", { name: "NEV-002" });
     expect(link.getAttribute("href")).toBe("/admin/billing/invoices/inv2");
+  });
+});
+
+describe("D11's subscription card", () => {
+  it("says payment is due while the upcoming invoice is unpaid", async () => {
+    upcoming.mockResolvedValue(charge({ status: "pending" }));
+    const { container } = render(<BillingView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/Payment due/));
+    expect(visibleText(container)).not.toMatch(/\bActive\b/);
+  });
+
+  it("says active once it is paid", async () => {
+    upcoming.mockResolvedValue(charge({ status: "paid" }));
+    const { container } = render(<BillingView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/\bActive\b/));
+    expect(visibleText(container)).not.toMatch(/Payment due/);
+  });
+
+  it("claims neither when there is no invoice to judge by", async () => {
+    upcoming.mockResolvedValue(charge({ invoiceId: null, invoiceNumber: null, status: null }));
+    const { container } = render(<BillingView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/Plan options|cost/i));
+    await waitFor(() => expect(upcoming).toHaveBeenCalled());
+    expect(visibleText(container)).not.toMatch(/Payment due|\bActive\b/);
+  });
+
+  it("carries the Founding Partner pill for a school on that rate", async () => {
+    rateType = "founding_partner";
+    upcoming.mockResolvedValue(charge({}));
+    const { container } = render(<BillingView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/Founding Partner/i));
   });
 });

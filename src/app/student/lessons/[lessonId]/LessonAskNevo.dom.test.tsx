@@ -45,7 +45,10 @@ vi.mock("@/lib/api", async (importOriginal) => {
   };
 });
 
-vi.mock("@/hooks", () => ({ useAuth: () => ({ user: { id: "stu-1" } }) }));
+vi.mock("@/hooks", () => ({
+  useAuth: () => ({ user: { id: "stu-1" } }),
+  useSignals: () => ({ trackEvent: vi.fn(), flush: vi.fn() }),
+}));
 
 /**
  * Stands in for the player, which is what publishes the active lesson.

@@ -17,7 +17,13 @@ const GAP_STRUGGLE_MS = 120;
 const PLAYBACK_LEAD_MS = 560;
 /** The wrong-tap nudge: grid locks, soft-violet ring, then the pattern replays. */
 const NUDGE_MS = 1500;
-/** Beats between rounds and into the settle. */
+/**
+ * Beats between rounds and into the settle.
+ *
+ * NOTHING LOADS IN THIS BEAT, so it carries no "Loading next round": the next
+ * sequence is drawn on the device (`genSeq`). Module 1's frame (09) draws that
+ * state anyway, and design dropped it on 1 Oct (D14).
+ */
 const NEXT_ROUND_MS = 750;
 const END_AT_MAX_MS = 650;
 const SETTLE_MS = 1700;
@@ -66,8 +72,11 @@ type Step = "watching" | "check" | "input" | "wrong" | "between" | "settling";
  * 5x5 band's 62px tiles were forced into 56px columns and overlapped. Now the
  * grid takes the width it has (see `PHONE_GRID`) and each tile is a square of
  * its column, so the grid is as large as the screen allows and never overlaps.
+ *
+ * Shared with the daily warm-up's tile task, which runs this module's grid
+ * per band (D17).
  */
-const TILE: Record<number, { m: string; g: string }> = {
+export const TILE: Record<number, { m: string; g: string }> = {
   3: { m: "aspect-square w-full sm:size-[104px]", g: "gap-1.5 sm:gap-2.5" },
   4: { m: "aspect-square w-full sm:size-[84px]", g: "gap-1.5 sm:gap-2.5" },
   5: { m: "aspect-square w-full sm:size-[66px]", g: "gap-1.5 sm:gap-[9px]" },

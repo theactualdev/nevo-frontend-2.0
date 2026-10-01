@@ -33,6 +33,8 @@ const withScaffolding = (scaffolding: string): AdaptResponse =>
 
 describe("the support level the engine sends", () => {
   it.each([
+    // B17, 1 Oct: the engine saying it gives none is a level, not a silence.
+    ["none", SCAFFOLD_LEVELS.NONE],
     ["light", SCAFFOLD_LEVELS.LIGHT],
     ["standard", SCAFFOLD_LEVELS.MODERATE],
     ["strong", SCAFFOLD_LEVELS.FULL],

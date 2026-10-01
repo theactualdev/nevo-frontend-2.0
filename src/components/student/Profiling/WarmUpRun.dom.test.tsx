@@ -28,9 +28,6 @@ vi.mock("@/lib/profiling/pendingBaseline", () => ({ holdBaseline }));
 vi.mock("@/hooks/useWarmUpDimension", () => ({
   useWarmUpPrompt: () => ({ state: "waiting" }),
 }));
-vi.mock("@/hooks/useNextLessonHref", () => ({
-  useNextLessonHref: () => "/student/lessons/x",
-}));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
@@ -119,6 +116,18 @@ describe("WarmUpRun — what actually reaches Nevo", () => {
       dimension: "reading",
     });
     expect(submitted().durationMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it("says the reading was a sentence read, as the reading activity does", async () => {
+    // With no band, the frame's one sentence; SS reads a passage instead
+    // (WarmUpRun.band), so which one ran has to travel.
+    render(<WarmUpRun dimension="reading" />);
+
+    fireEvent.click(screen.getByText("True"));
+    await settle();
+
+    expect(submitted().acts.reading.conditions).toHaveProperty("sentence");
+    expect(submitted().acts.reading.accuracy).toBe(1);
   });
 
   it("never marks 'Not sure' wrong", async () => {

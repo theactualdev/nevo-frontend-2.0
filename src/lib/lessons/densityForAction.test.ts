@@ -58,8 +58,10 @@ describe("the instructions that are not densities", () => {
 
 describe("the values the contract does not send", () => {
   it.each([
-    [ADJUSTMENT_ACTIONS.INCREASE_DIFFICULTY],
     [ADJUSTMENT_ACTIONS.OFFER_BREAK],
+    // Retired by design on 1 Oct (D28), and a bare string for the same
+    // reason `modulate_density` is below.
+    ["increase_difficulty" as AdjustmentAction],
     /*
      * `modulate_density` stays in this list as a bare string after design
      * removed it on 1 Oct (SCRUM-180). The NAME says density, which made it

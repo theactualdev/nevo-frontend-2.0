@@ -24,7 +24,7 @@ describe("AccountOnPauseScreen", () => {
     expect(screen.getByText(/talk to your teacher/)).toBeVisible();
   });
 
-  it("offers nothing to press", () => {
+  it("offers the paused child nothing to press", () => {
     // From the frame, and it matters: there is nothing here a child can do, and
     // an action that cannot work is worse than no action. The way back is a
     // teacher.
@@ -32,6 +32,20 @@ describe("AccountOnPauseScreen", () => {
 
     expect(screen.queryAllByRole("button")).toHaveLength(0);
     expect(screen.queryAllByRole("link")).toHaveLength(0);
+  });
+
+  it("offers the next child one way back to the picker, and only that (D52)", () => {
+    // A shared tablet left on a screen with no controls locks every other
+    // child out of it. The control is not a retry and must not read as one.
+    render(<AccountOnPauseScreen back={{ href: "/auth/login" }} />);
+
+    expect(screen.getByRole("link", { name: "Back to sign in" })).toHaveAttribute(
+      "href",
+      "/auth/login",
+    );
+    expect(screen.getAllByRole("link")).toHaveLength(1);
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
+    expect(document.body.textContent?.toLowerCase()).not.toContain("try again");
   });
 
   it("names no reason", () => {

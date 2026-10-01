@@ -43,6 +43,12 @@ import { AccountOnPauseView } from "./AccountOnPauseScreen";
  * The `Account On Pause` frame puts the Nevo mark in the same violet circle, so
  * that is what fills it. Flagged to design.
  */
+/**
+ * The picker, by a full page load (D52): the pause is sticky for this page, and
+ * the next child to pick up the tablet must start on a fresh one.
+ */
+const SIGN_IN_DOOR = "/auth/login";
+
 export function AccountPauseHost() {
   useEffect(() => registerPauseHost(), []);
   const paused = useSyncExternalStore(
@@ -67,7 +73,7 @@ export function AccountPauseHost() {
             <DialogPrimitive.Title className="sr-only">
               Your Nevo account is on pause.
             </DialogPrimitive.Title>
-            <AccountOnPauseView />
+            <AccountOnPauseView back={{ href: SIGN_IN_DOOR }} />
           </DialogPrimitive.Content>
         ) : (
           <>

@@ -4,7 +4,7 @@ const { post } = vi.hoisted(() => ({ post: vi.fn() }));
 vi.mock("./client", () => ({ api: { post, get: vi.fn(), patch: vi.fn() } }));
 
 import { signalsApi } from "./signals";
-import { SIGNAL_EVENT_TYPES } from "@/lib/constants";
+import { ONBOARDING_SIGNAL_TYPES, SIGNAL_EVENT_TYPES } from "@/lib/constants";
 
 /**
  * Which signals actually leave the device.
@@ -67,7 +67,7 @@ describe("the four we asked for and were dropping", () => {
   });
 });
 
-describe("what still does not leave the device", () => {
+describe("what used to stay on the device", () => {
   it("sends what a child did at a module boundary, now that it can", async () => {
     /*
      * `module_boundary_action` was the one genuine gap in this list - a signal
@@ -86,23 +86,95 @@ describe("what still does not leave the device", () => {
     ]);
   });
 
-  it("holds back the interface's own instrumentation", async () => {
-    // These describe the console's state rather than anything a child did.
-    await signalsApi.submitBatch(SESSION, [
-      event(SIGNAL_EVENT_TYPES.SYSTEM_BUSY),
-      event(SIGNAL_EVENT_TYPES.TAP_BLOCKED),
-    ]);
-
-    expect(post).not.toHaveBeenCalled();
-  });
-
-  it("makes no request at all when nothing in the batch can be sent", async () => {
-    const out = await signalsApi.submitBatch(SESSION, [
-      event(SIGNAL_EVENT_TYPES.SESSION_CONTEXT),
-    ]);
+  it("makes no request for a batch with nothing in it", async () => {
+    // `events` is `minItems: 1`; an empty post would be a 422.
+    const out = await signalsApi.submitBatch(SESSION, []);
 
     expect(post).not.toHaveBeenCalled();
     expect(out).toBeNull();
+  });
+});
+
+/*
+ * THE SIX THAT WERE OURS ALONE ARE THE CONTRACT'S NOW (backend B13, 1 Oct).
+ * They were dropped at our door, so the engine never learned when the system
+ * owned a wait, read every one as the child hesitating, and had no form factor
+ * or motion mode to read a session's timings under.
+ */
+describe("what leaves the device since 1 Oct", () => {
+  it.each([
+    [SIGNAL_EVENT_TYPES.SYSTEM_BUSY],
+    [SIGNAL_EVENT_TYPES.TAP_BLOCKED],
+    [SIGNAL_EVENT_TYPES.SESSION_CONTEXT],
+    [ONBOARDING_SIGNAL_TYPES.BASELINE_MODULE_START],
+    [ONBOARDING_SIGNAL_TYPES.BASELINE_MODULE_COMPLETE],
+    [ONBOARDING_SIGNAL_TYPES.BASELINE_SUBMITTED],
+  ])("sends %s", async (type) => {
+    await signalsApi.submitBatch(SESSION, [event(type)]);
+
+    expect(sentTypes()).toEqual([type]);
+  });
+
+  it("sends the session context with exactly the contract's two keys", async () => {
+    await signalsApi.submitBatch(SESSION, [
+      {
+        ...event(SIGNAL_EVENT_TYPES.SESSION_CONTEXT),
+        payload: { formFactor: "tablet", reducedMotion: true },
+      },
+    ]);
+
+    const [sent] = (
+      post.mock.calls[0][1] as { events: { eventData: unknown }[] }
+    ).events;
+    expect(sent.eventData).toEqual({ formFactor: "tablet", reducedMotion: true });
+  });
+
+  it("labels an Ask Nevo stream as one", async () => {
+    await signalsApi.submitBatch(
+      { ...SESSION, lessonId: null, sessionType: "ask_nevo" },
+      [event(SIGNAL_EVENT_TYPES.ASK_NEVO_QUESTION_STUDENT)],
+    );
+
+    const { session } = post.mock.calls[0][1] as {
+      session: Record<string, unknown>;
+    };
+    expect(session.sessionType).toBe("ask_nevo");
+    expect(session.lessonId).toBeNull();
+  });
+});
+
+/*
+ * NOTHING IS FILTERED NOW, SO A TYPE THE ENUM DOES NOT HOLD 422s THE WHOLE
+ * BATCH - every event in it, not just its own. This pins every type the client
+ * can emit against `SignalEventType` as deployed on 1 Oct, so a type added here
+ * that backend has not got fails a test rather than a child's lesson.
+ */
+const DEPLOYED_1_OCT = new Set([
+  "time_on_segment", "replay", "scroll", "simplify_trigger", "expand_trigger",
+  "slower_trigger", "comprehension_response", "exit_attempt", "break_suggested",
+  "break_taken", "break_start", "break_end", "feeling_checkin",
+  "module_boundary_reached", "module_boundary_action", "engagement_signal",
+  "modality_suggestion_shown", "modality_suggestion_accepted",
+  "modality_suggestion_declined", "modality_suggestion_ignored",
+  "modality_switch_outcome", "modality_manual_switch",
+  "calculation_step_response", "calculation_complete", "narration_played",
+  "narration_replayed", "manipulative_piece_placed",
+  "ask_nevo_question_student", "ask_nevo_question_teacher",
+  "ask_nevo_cannot_help", "ask_nevo_redirect_used", "adaptation_suppressed",
+  "media_load_failed", "system_busy", "tap_blocked", "session_context",
+  "baseline_module_start", "baseline_module_complete", "baseline_submitted",
+  "hint_offered", "hint_used", "step_up_offered", "step_up_accepted",
+  "step_up_declined", "guided_question_shown", "guided_question_answered",
+]);
+
+describe("every type the client can emit", () => {
+  it("is one the deployed ingest enum accepts", () => {
+    const ours = [
+      ...Object.values(SIGNAL_EVENT_TYPES),
+      ...Object.values(ONBOARDING_SIGNAL_TYPES),
+    ];
+
+    expect(ours.filter((t) => !DEPLOYED_1_OCT.has(t))).toEqual([]);
   });
 });
 

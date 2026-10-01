@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, useSignals, type TrackEvent } from "@/hooks";
 import { authApi } from "@/lib/api";
@@ -13,7 +13,11 @@ import {
 import { setSession } from "@/lib/auth/session";
 import { enterFirstLesson } from "@/lib/auth/entryGate";
 import { useNextLessonHref } from "@/hooks/useNextLessonHref";
-import { flushPendingBaseline } from "@/lib/profiling/pendingBaseline";
+import {
+  flushPendingBaseline,
+  readPendingBaseline,
+} from "@/lib/profiling/pendingBaseline";
+import { ONBOARDING_SIGNAL_TYPES } from "@/lib/constants";
 import { randomId } from "@/lib/utils";
 import { ProfilingFlow } from "@/components/student/Profiling/ProfilingFlow";
 import { TransitionScreen } from "./TransitionScreen";
@@ -25,7 +29,14 @@ import { YoureInScreen } from "./YoureInScreen";
  * Onboarding Phase C — one continuous experience: a calm transition, the
  * Baseline Cognitive Profiling flow (SCRUM-104 — design retired the Observed
  * Interaction Sequence's four activities and this flow took their slot), the
- * Consent Gate, PIN Creation, and the "You're In" hand-off into the app.
+ * learning notice, PIN Creation, and the "You're In" hand-off into the app.
+ *
+ * THE NOTICE COMES AFTER THE BASELINE, and design settled that on 1 Oct (D10).
+ * The parent consents and the child is informed - two mechanisms, and the
+ * notice is not a consent step. Before the activities, "Nevo will get to know
+ * how you learn" is an abstraction a child has nothing to attach to; after,
+ * it says what they just did was for. It was named a Consent Gate here, and
+ * that framing is what once pulled it in front of the baseline.
  * Manual students arrive from Steps 1–3, SSO students from the callback; only
  * the transition copy and the PIN step differ, driven by the session
  * (`user.method`), never a URL param.
@@ -77,6 +88,39 @@ export function ObservedInteractionSequence() {
    * doing it any more.
    */
   const parkedRunRef = useRef<string | null>(null);
+  /** False once this sequence, and the signal stream it owns, has gone. */
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+
+  /*
+   * Deliver this run's parked baseline, and only THEN say so.
+   *
+   * `baseline_submitted` reaches the engine since 1 Oct, and `ProfilingFlow`
+   * fired it when the vector was parked - a claim that was false whenever the
+   * submit later failed or never came. It is tracked here instead: only when
+   * `POST /api/baseline/submit` succeeded, only for the vector THIS run parked
+   * (an older one in the slot is not this baseline), and only while this
+   * stream still exists. A vector delivered later by `StudentShell`'s flush,
+   * after this sequence has gone, sends no event at all rather than one on
+   * some other stream.
+   */
+  const deliverBaseline = async (owner: string, run: string | null) => {
+    const parked = readPendingBaseline();
+    const ours = run !== null && parked?.sessionId === run ? parked : null;
+    const ok = await flushPendingBaseline(owner, run);
+    if (ok && ours && alive.current) {
+      trackEvent(ONBOARDING_SIGNAL_TYPES.BASELINE_SUBMITTED, {
+        modules: ours.features
+          .map((f) => f.module)
+          .filter((m) => typeof m === "string"),
+      });
+    }
+  };
 
   if (phase === "transition") {
     return (
@@ -107,7 +151,7 @@ export function ObservedInteractionSequence() {
         ownerUserId={ssoOwner}
         onDone={(runSessionId) => {
           parkedRunRef.current = runSessionId;
-          if (ssoOwner) void flushPendingBaseline(ssoOwner, runSessionId);
+          if (ssoOwner) void deliverBaseline(ssoOwner, runSessionId);
           advance();
         }}
       />
@@ -176,7 +220,7 @@ export function ObservedInteractionSequence() {
              * behind when their warm-up submit failed. So the flush is told
              * which run parked it, and sends only that one.
              */
-            await flushPendingBaseline(res.userId, parkedRunRef.current);
+            await deliverBaseline(res.userId, parkedRunRef.current);
             return;
           }
 
@@ -188,7 +232,7 @@ export function ObservedInteractionSequence() {
            *
            * The connection token is fetched HERE rather than when the class
            * was chosen: it lives 20 minutes, and the profiling probes and
-           * consent gate sit in between. Asking for it at the moment it is
+           * learning notice sit in between. Asking for it at the moment it is
            * spent means it cannot go stale in a child's hands.
            */
           /*
@@ -227,7 +271,7 @@ export function ObservedInteractionSequence() {
           // left behind by the previous child on a shared tablet cannot satisfy
           // it, which is what stops one child's assessment landing on another's
           // record.
-          await flushPendingBaseline(res.userId, parkedRunRef.current);
+          await deliverBaseline(res.userId, parkedRunRef.current);
 
           flush();
         }}

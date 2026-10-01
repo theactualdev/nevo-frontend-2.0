@@ -516,11 +516,11 @@ export const lessonsApi = {
   /**
    * Store one answer. POST /api/v1/lessons/{id}/attempts (201)
    *
-   * NOT YET CALLED. The player would write each assessment answer here so
-   * Review answers can read the child's own, per account, instead of from
-   * the device - but its options carry a stringified id, not the value the
-   * server marks against, and writing the wrong type marks a right answer
-   * wrong. That mapping, the write and the read are one follow-up.
+   * The player writes every answer to a quick check and to the after-lesson
+   * check here, so a child who leaves a check part way keeps the answers they
+   * gave (D36). The body is built by `attemptFor`, which sends the option's
+   * own value rather than its stringified id. Review answers still reads the
+   * device copy - swapping it for `attempts` below is the follow-up.
    */
   saveAttempt: (lessonId: string, body: LessonQuestionAttemptWrite) =>
     api.post<LessonQuestionAttempt>(

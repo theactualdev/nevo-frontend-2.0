@@ -86,6 +86,21 @@ describe("what a live lesson row says", () => {
 
     expect(body()).toMatch(/About 12 min/);
   });
+
+  it("marks a lesson in progress as a state, not a fixed 55%", () => {
+    /*
+     * Design D21. Every in-progress card drew the same conic fill at 55%,
+     * which a child reads as how far they are. The real fraction is not on
+     * the wire, so the mark carries no portion at all.
+     */
+    lessons.value = [lesson({ status: "in_progress" })];
+
+    const { container } = render(<LessonsTab />);
+
+    const mark = screen.getByRole("img", { name: "In progress" });
+    expect(mark).toBeInTheDocument();
+    expect(container.innerHTML).not.toMatch(/conic-gradient|55%/);
+  });
 });
 
 describe("the empty state names what is actually narrowing the list", () => {

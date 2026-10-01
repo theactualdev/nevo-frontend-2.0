@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/shared";
 import { withNext } from "@/lib/auth/nextPath";
+import { LetMyTeacherKnow } from "./LetMyTeacherKnow";
 
 /**
  * Forgot PIN (screen 00a) — informational, and deliberately so.
@@ -11,13 +12,15 @@ import { withNext } from "@/lib/auth/nextPath";
  * new one through `POST /api/v1/students/{id}/pin/reset`, whose response is
  * flagged `mustShareSecurely`, and hands it over in person.
  *
- * WHY `POST /api/v1/auth/pin/reset` IS NOT CALLED HERE, given it exists and
- * takes exactly the `{ schoolCode, loginIdentifier }` this device already
- * holds. It is a REQUEST, not a reset - it returns no content and presumably
- * notifies staff - so wiring it would not contradict "no self-service reset".
- * But it would put an action on a screen design drew as informational, and
- * that is a product decision rather than a wiring one. Raised with design;
- * until they rule, the screen says what the frame says.
+ * "LET MY TEACHER KNOW" CALLS `POST /api/v1/auth/pin/reset` NOW. Design ruled
+ * on 1 Oct (D3): nobody but the child ever sets a PIN; the adult linked to
+ * them clears it, and the child sets a new one. The request was deliberately
+ * left unused until that was decided - see `LetMyTeacherKnow`.
+ *
+ * THE BODY COPY IS STILL THE FRAME'S, ON PURPOSE. Design says 00a's words
+ * change, because they promise teacher help and describe none, but gave no
+ * new ones. Until they do, the frame's line stays and the button is the only
+ * addition.
  *
  * BOTH WAYS OUT GO TO THE SIGN-IN DOOR, always. They used to read the legacy
  * one-child profile key and send a device it did not name to
@@ -30,7 +33,14 @@ import { withNext } from "@/lib/auth/nextPath";
  * "Placeholder - built per the UI/UX spec", and then a key glyph standing in
  * for the art.
  */
-export function ForgotPinScreen({ next }: { next?: string }) {
+export function ForgotPinScreen({
+  next,
+  childId,
+}: {
+  next?: string;
+  /** The remembered child who forgot, as the roster's opaque id. */
+  childId?: string;
+}) {
   const back = withNext("/auth/login", next);
 
   return (
@@ -75,6 +85,7 @@ export function ForgotPinScreen({ next }: { next?: string }) {
         <Button asChild className="mt-8 w-full text-base sm:mt-9 sm:max-w-[360px]">
           <Link href={back}>Back to sign in</Link>
         </Button>
+        <LetMyTeacherKnow childId={childId} />
       </div>
     </main>
   );

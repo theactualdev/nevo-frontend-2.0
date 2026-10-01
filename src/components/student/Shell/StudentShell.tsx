@@ -10,7 +10,8 @@ import { AskNevo } from "@/components/student/AskNevo/AskNevo";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "./NotificationBell";
 import { isLessonRoute } from "./lessonRoutes";
-import { TabOfflineBanner, useOnline } from "./TabOfflineBanner";
+import { useOnline } from "./TabOfflineBanner";
+import { OfflineNotice } from "./OfflineScreen";
 import { useHasSession } from "@/hooks/useHasSession";
 import { useHydrated } from "@/hooks/useHydrated";
 import { useSessionLapse } from "@/hooks/useSessionLapse";
@@ -207,8 +208,9 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <div className="relative flex min-w-0 flex-1 flex-col">
-        {/* Board 28: across the top of the tab, never in place of it. */}
-        {!online && <TabOfflineBanner />}
+        {/* Board 28: across the top of the tab, never in place of it - or,
+            for a child with nothing to continue, the full screen over it (D50). */}
+        <OfflineNotice online={online} />
 
         {/* Top bar — mobile only (logo + avatar) */}
         <header className="flex h-[60px] shrink-0 items-center justify-between px-5 md:hidden">

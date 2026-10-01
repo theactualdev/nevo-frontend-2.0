@@ -18,9 +18,15 @@ import { cn } from "@/lib/utils";
  * to a child on a login screen. The frame agrees - two sentences, and the second
  * points at a person rather than a process.
  *
- * NO BUTTON, also from the frame. There is nothing here a child can do, and
- * offering an action that cannot work would be worse than offering none. The
- * way back is a teacher.
+ * NOTHING FOR THE PAUSED CHILD TO PRESS, also from the frame. There is nothing
+ * here they can do about the pause, and offering an action that cannot work
+ * would be worse than offering none. The way back is a teacher.
+ *
+ * BUT ONE WAY BACK TO THE PICKER (design, D52). The frame drew no controls at
+ * all, and on a shared classroom tablet a screen with no controls locks every
+ * other child out of the device. So it carries "Back to sign in" - 00a's own
+ * words for the same door - which takes the NEXT child to the picker. It is
+ * not a retry and does not present itself as one.
  *
  * THE BRAND MARK, NOT A PAUSE GLYPH. The frame puts the Nevo icon in a soft
  * violet circle and the wordmark at the top centre; a pause symbol reads as a
@@ -30,7 +36,26 @@ import { cn } from "@/lib/utils";
  * `AccountPauseHost` - and settles into this same screen after "Okay", so a
  * paused child meets one screen whichever way they arrive.
  */
-export function AccountOnPauseView({ className }: { className?: string }) {
+/**
+ * Where "Back to sign in" goes.
+ *
+ * `href` is a FULL page load, deliberately a plain anchor: a pause that landed
+ * mid-session is sticky for the life of the page (`accountPause.ts`), and the
+ * next child must not inherit it. `onBack` is for the sign-in screens, which
+ * hold no pause and only need to put their picker back.
+ */
+export type PauseWayBack = { href: string } | { onBack: () => void };
+
+const WAY_BACK =
+  "mt-9 inline-flex h-[46px] cursor-pointer items-center rounded-[10px] px-[18px] text-base font-medium text-nevo-navy transition-[background] hover:bg-nevo-navy/8 sm:mt-10";
+
+export function AccountOnPauseView({
+  className,
+  back,
+}: {
+  className?: string;
+  back?: PauseWayBack;
+}) {
   return (
     <div
       className={cn(
@@ -62,14 +87,25 @@ export function AccountOnPauseView({ className }: { className?: string }) {
       <p className="mt-4 max-w-[280px] text-[17px] leading-[1.6] text-pretty text-nevo-near-black/68 sm:mt-[18px] sm:max-w-[360px] sm:text-lg lg:max-w-[420px] lg:text-[19px]">
         If you have questions, talk to your teacher.
       </p>
+
+      {back &&
+        ("href" in back ? (
+          <a href={back.href} className={WAY_BACK}>
+            Back to sign in
+          </a>
+        ) : (
+          <button type="button" onClick={back.onBack} className={WAY_BACK}>
+            Back to sign in
+          </button>
+        ))}
     </div>
   );
 }
 
-export function AccountOnPauseScreen() {
+export function AccountOnPauseScreen({ back }: { back?: PauseWayBack }) {
   return (
     <main className="w-full">
-      <AccountOnPauseView />
+      <AccountOnPauseView back={back} />
     </main>
   );
 }
