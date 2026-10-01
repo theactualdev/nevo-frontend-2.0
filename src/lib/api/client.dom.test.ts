@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { sessionExpiredDoor } from "./client";
 
 const clearSession = vi.fn();
@@ -221,5 +221,111 @@ describe("the auth latch", () => {
     await expect(api.get("/api/v1/classes")).rejects.toThrow();
 
     expect(clearSession).not.toHaveBeenCalled();
+  });
+});
+
+describe("where a child's session-end door sends them back to", () => {
+  it("carries the lesson they were in, so signing back in returns them to it", () => {
+    // IA 31: "Log back in -> Student Login Screen (lesson position preserved)".
+    // The door carried only `?reason=`, so a lapse mid-lesson landed on Home.
+    expect(
+      sessionExpiredDoor("student", "session_expired", "/student/lessons/frac-3"),
+    ).toBe(
+      "/auth/session-expired?reason=session_expired&next=%2Fstudent%2Flessons%2Ffrac-3",
+    );
+    expect(sessionExpiredDoor("student", null, "/student/progress")).toBe(
+      "/auth/session-expired?next=%2Fstudent%2Fprogress",
+    );
+  });
+
+  it("carries nothing that is not a student route", () => {
+    expect(sessionExpiredDoor("student", null, "/")).toBe(
+      "/auth/session-expired",
+    );
+    expect(sessionExpiredDoor("student", null, "/auth/login")).toBe(
+      "/auth/session-expired",
+    );
+  });
+
+  it("does not hand a destination to the staff doors, which do not read one", () => {
+    expect(
+      sessionExpiredDoor("teacher", "session_expired", "/student/lessons/x"),
+    ).toBe("/auth/teacher/session-expired?reason=session_expired");
+  });
+});
+
+/**
+ * 28b: a pause that lands mid-lesson is shown OVER the lesson, not by leaving
+ * it. What can be observed here is the half that decides: a paused child with
+ * a host mounted keeps their session (the card clears it on Okay) and the card
+ * is raised; without a host, or for anyone else, the old door still happens.
+ */
+describe("a child paused mid-lesson", () => {
+  const paused = () =>
+    vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({ detail: { code: "account_paused", message: "x" } }),
+          { status: 401, headers: { "Content-Type": "application/json" } },
+        ),
+    );
+  const asStudent = () =>
+    getSession.mockReturnValue({
+      token: "tok-live",
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+      userId: "student-1",
+      role: "student",
+    });
+
+  // `mockReturnValue` outlives the test; put the file's teacher back.
+  afterEach(() => {
+    getSession.mockReturnValue({
+      token: "tok-live",
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+      userId: "user-1",
+      role: "teacher",
+    });
+  });
+
+  it("stays on the page and raises the card", async () => {
+    asStudent();
+    vi.stubGlobal("fetch", paused());
+    const { api } = await freshClient();
+    const pause = await import("@/lib/auth/accountPause");
+    const unregister = pause.registerPauseHost();
+
+    await expect(api.get("/api/v1/lessons/x")).rejects.toThrow();
+
+    expect(pause.isAccountPaused()).toBe(true);
+    // Leaving would have cleared it here; the card does it on Okay instead.
+    expect(clearSession).not.toHaveBeenCalled();
+    unregister();
+  });
+
+  it("still goes to the door when nothing is mounted to draw the card", async () => {
+    // An event nobody hears would leave the child with nothing at all.
+    asStudent();
+    vi.stubGlobal("fetch", paused());
+    const { api } = await freshClient();
+    const pause = await import("@/lib/auth/accountPause");
+
+    await expect(api.get("/api/v1/lessons/x")).rejects.toThrow();
+
+    expect(pause.isAccountPaused()).toBe(false);
+    expect(clearSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves a paused teacher on their own door", async () => {
+    // Staff have a frame of their own for this; 28b is the child's.
+    vi.stubGlobal("fetch", paused());
+    const { api } = await freshClient();
+    const pause = await import("@/lib/auth/accountPause");
+    const unregister = pause.registerPauseHost();
+
+    await expect(api.get("/api/v1/classes")).rejects.toThrow();
+
+    expect(pause.isAccountPaused()).toBe(false);
+    expect(clearSession).toHaveBeenCalledTimes(1);
+    unregister();
   });
 });

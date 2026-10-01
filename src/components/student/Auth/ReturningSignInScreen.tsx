@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check } from "lucide-react";
-import { NevoKeyboard } from "@/components/shared";
+import { NevoKeyboard, useNevoKeyboardDock } from "@/components/shared";
+import { Wordmark } from "@/components/shared/BrandMarks";
 import {
   CodeInput,
   SCHOOL_CODE_MAX,
@@ -16,6 +17,11 @@ import {
   classifyLoginFailure,
   type LoginFailure,
 } from "@/lib/auth/loginFailure";
+import {
+  doorForRole,
+  knownRole,
+  type ConsoleDoor,
+} from "@/lib/auth/consoleDoor";
 import { rememberProfile } from "@/lib/auth/session";
 import { studentDestination } from "@/lib/auth/entryGate";
 import { useAuth } from "@/hooks";
@@ -23,10 +29,10 @@ import {
   STUDENT_PIN_LENGTH,
   STUDENT_PIN_MAX,
   STUDENT_PIN_MIN,
-  type UserRole,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { AccountOnPauseScreen } from "./AccountOnPauseScreen";
+import { WrongDoorNote } from "./WrongDoorNote";
 
 /**
  * Returning Student Sign-In, unrecognised device (frame 00c).
@@ -46,8 +52,8 @@ import { AccountOnPauseScreen } from "./AccountOnPauseScreen";
  * WHERE A CHILD GETS THEIR USERNAME is the part design did not answer. It is
  * server-issued at account creation and no student screen has ever shown one;
  * teachers see it on their class detail and admins on the student record. So
- * the line under the heading points at the person who can read it out, which is
- * the best this screen can do until someone rules otherwise.
+ * 00c's help row points at the person who can read it out, which is the best
+ * this screen can do until someone rules otherwise.
  *
  * "DIDN'T MATCH" KEEPS THE FIELDS FILLED, per the frame - only the PIN clears.
  * Making a child retype a school code and a username they have just been read
@@ -93,6 +99,19 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
   const [done, setDone] = useState(false);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<LoginFailure | null>(null);
+  /** Whose door a non-student account belongs at; see `WrongDoorNote`. */
+  const [wrongDoor, setWrongDoor] = useState<ConsoleDoor | null>(null);
+  /**
+   * The number pad is DOCKED AND FOCUS-DRIVEN here - design's ruling D on
+   * 00c, PIN creation and 00: "a focus-driven pad is transient, and a docked
+   * tray reads as transient". The block pad is 28c's exception, for a screen
+   * whose pad is the whole point.
+   *
+   * It was a permanent block pad, and the school code field opens its own
+   * qwerty tray on focus - so this form showed TWO keyboards at once. Now each
+   * field brings its own and only the focused one is up.
+   */
+  const pad = useNevoKeyboardDock();
   /**
    * The first name to greet them by, once `users/me` answers. Null until then,
    * and the greeting is a bare "Welcome back" - never the username, which is
@@ -160,6 +179,21 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
         pin: digits,
       });
       /*
+       * REFUSE AT THE DOOR, before anything is remembered or stored against
+       * this device - the same check the admin and teacher doors make, from
+       * the guard's own rule. The login did succeed, so the session it made
+       * is ended rather than left behind.
+       */
+      const role = knownRole(session.role);
+      const door = doorForRole(role);
+      if (door !== "student" || !role) {
+        setDigits("");
+        setWrongDoor(door);
+        setError("wrong_door");
+        void authApi.logout().catch(() => {});
+        return;
+      }
+      /*
        * Remember the device NOW, so the next visit is the one-tap PIN unlock
        * rather than this form again. That is the whole point of the screen: a
        * child signs in the hard way once, and never again on this device.
@@ -186,7 +220,7 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
       signIn({
         id: session.userId,
         // `name` is optional on AuthUser, and absent beats the username.
-        role: session.role as UserRole,
+        role,
         schoolId: school,
         method: "manual",
       });
@@ -277,19 +311,36 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
     );
   }
 
+  /*
+   * The button reads "Try again" after a failure the child can retry, as
+   * 00c's error state draws it. Not after a wrong-door refusal or a rate
+   * limit: pressing again is the one thing that cannot help there.
+   */
+  const retry = error === "credentials" || error === "ours";
+
   return (
-    <main className="flex min-h-[100dvh] flex-col items-center bg-nevo-cream px-8 pt-14 pb-8 text-nevo-near-black">
-      <div className="flex w-full max-w-[420px] flex-1 flex-col">
-        <h1 className="text-[22px] leading-[1.3] font-semibold tracking-[-0.01em] text-balance sm:text-2xl">
-          Sign back in
+    <main className="flex min-h-[100dvh] w-full flex-col bg-nevo-cream text-nevo-near-black">
+      <div
+        className={cn(
+          "flex min-h-0 flex-1 flex-col items-center px-7 pt-[52px] text-center sm:px-12 sm:pt-14",
+          // The frame lifts the form to the top while the pad is up, so the
+          // field being typed into and the button stay above it.
+          pad.open ? "justify-start pb-5" : "justify-center pb-6 sm:pb-8",
+        )}
+      >
+        <Wordmark size="form" />
+
+        {/* 00c's words. It read "Sign back in", with the help folded into a
+            line under the heading. */}
+        <h1 className="mt-[26px] text-2xl leading-[1.25] font-medium tracking-[-0.01em] sm:text-[28px]">
+          Welcome back
         </h1>
-        <p className="mt-2.5 text-[15px] leading-[1.55] text-nevo-near-black/70">
-          This device doesn&apos;t know you yet. Your teacher can tell you your
-          school code and username.
+        <p className="mt-2.5 text-[15px] leading-[1.4] text-nevo-near-black/60 sm:text-base">
+          Let&apos;s get you back into your lessons.
         </p>
 
-        <div className="mt-7 flex flex-col gap-5">
-          <div>
+        <div className="mt-7 flex w-full max-w-[336px] flex-col gap-[18px] text-left sm:gap-5">
+          <div className="flex flex-col gap-2">
             {/*
               A VISIBLE label, not just `CodeInput`'s `label` prop - that one is
               an `aria-label` and shows a sighted child nothing. Elsewhere in
@@ -298,23 +349,21 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
               being read a code and a username by their teacher has to know
               which box takes which.
             */}
-            <p className="text-[13px] font-medium tracking-[0.02em] text-nevo-near-black/60 uppercase">
-              School code
+            <p className="text-[13px] font-semibold text-nevo-near-black/70 sm:text-[13.5px]">
+              Your school code
             </p>
-            <div className="mt-3">
-              <CodeInput
-                value={schoolCode}
-                onChange={(v) =>
-                  setSchoolCode(normaliseCode(v, SCHOOL_CODE_MAX))
-                }
-                onSubmit={() => void submit()}
-                status={error === "credentials" ? "error" : "idle"}
-                label="School code"
-                placeholder="Your school code"
-                min={SCHOOL_CODE_MIN}
-                max={SCHOOL_CODE_MAX}
-              />
-            </div>
+            <CodeInput
+              value={schoolCode}
+              onChange={(v) =>
+                setSchoolCode(normaliseCode(v, SCHOOL_CODE_MAX))
+              }
+              onSubmit={() => void submit()}
+              status={error === "credentials" ? "error" : "idle"}
+              label="School code"
+              placeholder="Your school code"
+              min={SCHOOL_CODE_MIN}
+              max={SCHOOL_CODE_MAX}
+            />
           </div>
           {/*
             NOT `CodeInput`, deliberately. That component normalises everything
@@ -325,18 +374,21 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
             identifier is issued by the server and has to be sent back exactly
             as it was given.
 
-            Same underline-line treatment as the field above, per the frame.
+            "USERNAME", NOT THE FRAME'S "STUDENT ID". 00c labels this field
+            "Your student ID"; what it takes is the server-issued login
+            identifier, and which word a child is told is design's to rule on.
+            Raised - the rest of the frame's copy is built.
           */}
-          <div>
+          <div className="flex flex-col gap-2">
             <label
               htmlFor="returning-username"
-              className="text-[13px] font-medium tracking-[0.02em] text-nevo-near-black/60 uppercase"
+              className="text-[13px] font-semibold text-nevo-near-black/70 sm:text-[13.5px]"
             >
-              Username
+              Your username
             </label>
             <div
               className={cn(
-                "relative mt-3 flex h-15 w-full items-center rounded-[10px] border-[1.5px] bg-nevo-cream px-4 shadow-elevation-1 transition-colors sm:h-17",
+                "relative flex h-15 w-full items-center rounded-[10px] border-[1.5px] bg-nevo-cream px-4 shadow-elevation-1 transition-colors sm:h-17",
                 error === "credentials"
                   ? "border-nevo-violet"
                   : "border-nevo-near-black/[0.16]",
@@ -365,16 +417,16 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
             </div>
           </div>
 
-          <div>
+          <div className="flex flex-col gap-2">
             <p
               id="returning-pin-label"
-              className="text-[13px] font-medium tracking-[0.02em] text-nevo-near-black/60 uppercase"
+              className="text-[13px] font-semibold text-nevo-near-black/70 sm:text-[13.5px]"
             >
-              PIN
+              Your PIN
             </p>
             {/*
               THE PIN ROW HAD NO INPUT OF ANY KIND.
-              
+
               The boxes are drawn from `digits`; the school code and username
               above are real fields, so a keyboard carried a child that far and
               then met six boxes with nothing behind them. The Nevo pad was the
@@ -382,17 +434,18 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
               real keyboard - so this screen could not be completed on a laptop
               at all. It is the screen a child reaches on an UNKNOWN device,
               which is exactly where a borrowed laptop shows up.
-              
+
               A real input, laid over the boxes rather than parked off-screen:
               it takes its turn in the tab order straight after the username,
               and clicking the boxes focuses it because it covers them. The
               boxes stay the presentation, which is why it is transparent rather
               than hidden - a `display:none` field is not focusable.
-              
+
               `inputMode="none"` keeps the OS keyboard away on touch, where the
-              Nevo pad is the designed way in and is visible.
+              Nevo pad is the designed way in - and focusing this field is
+              what brings it up.
             */}
-            <div className="relative mt-3">
+            <div className="relative">
               <input
                 ref={pinRef}
                 value=""
@@ -410,70 +463,106 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
                     void submit();
                   }
                 }}
+                onFocus={pad.onFocus}
+                onBlur={pad.onBlur}
                 inputMode="none"
                 autoComplete="off"
                 aria-labelledby="returning-pin-label"
                 className="absolute inset-0 z-10 h-full w-full cursor-text rounded-[10px] bg-transparent opacity-0 outline-none"
               />
               <div
-                className="flex flex-wrap gap-3.5"
+                className="flex flex-wrap justify-center gap-3.5"
                 role="group"
                 aria-labelledby="returning-pin-label"
               >
-              {/* Four boxes, and one more for each digit past four. */}
-              {Array.from(
-                { length: Math.max(STUDENT_PIN_LENGTH, digits.length) },
-                (_, i) => {
-                const active = i === digits.length && !checking;
-                return (
-                  <div
-                    key={i}
-                    className={cn(
-                      "flex size-12 items-center justify-center rounded-[10px] border-[1.5px] bg-nevo-cream shadow-[0_2px_8px_rgba(0,0,0,0.05)]",
-                      active
-                        ? "border-nevo-navy"
-                        : error
-                          ? "border-nevo-violet"
-                          : "border-nevo-near-black/20",
-                    )}
-                  >
-                    {digits.length > i && (
-                      <span className="block size-3 rounded-full bg-nevo-near-black" />
-                    )}
-                  </div>
-                );
-                },
-              )}
+                {/* Four boxes, and one more for each digit past four. */}
+                {Array.from(
+                  { length: Math.max(STUDENT_PIN_LENGTH, digits.length) },
+                  (_, i) => {
+                    const active = i === digits.length && !checking;
+                    return (
+                      <div
+                        key={i}
+                        className={cn(
+                          "flex size-[58px] items-center justify-center rounded-[10px] bg-nevo-cream shadow-[0_2px_8px_rgba(0,0,0,0.05)] sm:size-[66px]",
+                          active
+                            ? "border-2 border-nevo-navy"
+                            : error
+                              ? "border-[1.5px] border-nevo-violet"
+                              : "border-[1.5px] border-nevo-near-black/20",
+                        )}
+                      >
+                        {digits.length > i && (
+                          <span className="block size-[13px] rounded-full bg-nevo-near-black sm:size-3.5" />
+                        )}
+                      </div>
+                    );
+                  },
+                )}
               </div>
             </div>
           </div>
-        </div>
 
-        <p
-          role="status"
-          className="mt-4 min-h-10 text-sm leading-[1.4] text-nevo-violet"
-        >
-          {error === "credentials" &&
-            "That didn't match. Check the code and username with your teacher, then try your PIN again."}
-          {error === "throttled" &&
-            "That's a lot of tries in a row. Wait a moment, then try again."}
-          {error === "ours" &&
-            "We couldn't check that just now - that's on us, not you. Try again in a moment."}
-        </p>
-
-        <button
-          type="button"
-          disabled={!ready || checking}
-          onClick={() => void submit()}
-          className={cn(
-            "h-[52px] w-full rounded-[10px] bg-nevo-navy text-base font-semibold text-nevo-cream",
-            ready && !checking
-              ? "cursor-pointer transition-[filter,transform] hover:brightness-109 active:scale-[0.985]"
-              : "cursor-not-allowed opacity-40",
+          {/*
+            00c's error: a soft violet box with an info mark, the fields kept
+            filled. It was a plain violet line with nothing to anchor it.
+          */}
+          {error && (
+            <div
+              role="status"
+              className="flex items-start gap-2.5 rounded-[10px] bg-nevo-violet/18 px-[15px] py-[13px]"
+            >
+              <span className="mt-px flex shrink-0 text-nevo-navy">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M12 8h.01M11 12h1v4h1" />
+                </svg>
+              </span>
+              <span className="text-sm leading-[1.5] text-nevo-near-black">
+                {error === "credentials" &&
+                  "Hmm, that didn't match. Check your school code and username with your teacher and try again."}
+                {error === "throttled" &&
+                  "That's a lot of tries in a row. Wait a moment, then try again."}
+                {error === "ours" &&
+                  "We couldn't check that just now - that's on us, not you. Try again in a moment."}
+                {error === "wrong_door" && <WrongDoorNote door={wrongDoor} />}
+              </span>
+            </div>
           )}
-        >
-          Sign in
-        </button>
+
+          <button
+            type="button"
+            disabled={!ready || checking}
+            onClick={() => void submit()}
+            className={cn(
+              "mt-1 h-14 w-full rounded-[10px] bg-nevo-navy text-base font-semibold tracking-[-0.005em] text-nevo-cream",
+              ready && !checking
+                ? "cursor-pointer transition-[filter,transform] hover:brightness-108 active:scale-[0.985]"
+                : "cursor-not-allowed opacity-40",
+            )}
+          >
+            {retry ? "Try again" : "That's me"}
+          </button>
+
+          {/* 00c's own row for the help, not folded into the heading's line.
+              Text, not a link: there is nothing on this device to open. */}
+          <p className="mt-0.5 text-center text-[14.5px]">
+            <span className="text-nevo-near-black/60">
+              Don&apos;t know your username?{" "}
+            </span>
+            <span className="font-medium text-nevo-navy">Ask your teacher.</span>
+          </p>
+        </div>
 
         {/*
           NOT IN THE FRAME, and here because removing it would break something
@@ -485,23 +574,25 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
         <button
           type="button"
           onClick={() => router.push("/student/onboarding")}
-          className="mt-3 h-11 cursor-pointer text-[15px] font-medium text-nevo-navy"
+          className="mt-3 h-11 cursor-pointer px-4 text-[15px] font-medium text-nevo-navy"
         >
           I&apos;m new to Nevo
         </button>
+      </div>
 
+      {pad.open && (
         <NevoKeyboard
           layout="pad"
-          presentation="block"
-          className="mt-6"
           onKey={(char) => {
             if (checking) return;
             addDigits(char);
           }}
           onBackspace={() => setDigits((d) => d.slice(0, -1))}
-          onReturn={() => void submit()}
+          // Docked, and in the flow rather than fixed over it: the page grows
+          // by the tray's height, so nothing it docks over is out of reach.
+          className="sticky bottom-0 z-40"
         />
-      </div>
+      )}
     </main>
   );
 }

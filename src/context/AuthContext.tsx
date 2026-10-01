@@ -139,6 +139,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(() => {
     // Server-side revoke is best-effort; the local session always clears.
     void authApi.logout().catch(() => {});
+    /*
+     * AND IT CLEARS NOW, not when the revoke answers. `logout` cleared the
+     * token and the role cookie in its `finally`, after the round trip - but
+     * every caller navigates straight away, and a hard navigation sends the
+     * cookie that is still there. The route guard read a student, bounced
+     * the sign-in door back to the dashboard, and the page unload could kill
+     * the request before its `finally` ran: sign out did not sign out. The
+     * request above has already read the token it needs, so clearing here
+     * costs the revoke nothing.
+     */
+    clearSession();
     setUser(null);
     setStatus("unauthenticated");
     // NDPA ephemerality (SCRUM-76): sign-out purges the on-device

@@ -260,7 +260,8 @@ export function getRememberedProfile(): RememberedProfile | null {
  * would empty out school by school as those aged out.
  *
  * The legacy key is still written because `getRememberedProfile` still backs
- * `ForgotPinScreen` and `ProfileSettings`' sign-out destination.
+ * `setStoredDisplayName`. It no longer picks a door: sign-out and Forgot PIN
+ * both go to `/auth/login`, which handles a device that remembers nobody.
  */
 export function rememberProfile(profile: RememberedProfile): void {
   try {
