@@ -354,6 +354,21 @@ export interface Lesson {
 
 // ── Adaptation plan (personalization overlay — §4) ──────────────────────────
 
+/** The engine's `DensityLevel`, exactly. */
+export type DensityLevel = "low" | "medium" | "high";
+
+/**
+ * One guided prompt the socratic panel shows (`GuidedPrompt`, 1 Oct). Unlike
+ * a guided question it has an id, so the child's reply can be sent - the
+ * option they picked, or how much they wrote, never the words.
+ */
+export interface GuidedPrompt {
+  id: string;
+  prompt: string;
+  /** Absent when the prompt is answered in the child's own words. */
+  options?: string[];
+}
+
 export interface SegmentAdaptation {
   segmentId: string;
   /** Modality the player opens this segment in. */
@@ -375,6 +390,13 @@ export interface SegmentAdaptation {
    * longer defaults to "light".
    */
   scaffold?: ScaffoldLevel;
+  /**
+   * The engine's `DensityLevel` for this segment. NOT `density` above, which
+   * is which authored reshape of the text the child reads. Rendered only as
+   * spacing - how many elements sit in view at once - and never as a label or
+   * a chip (design, D25). Absent renders the segment as it always has.
+   */
+  densityLevel?: DensityLevel;
   /**
    * The engine's instruction for this segment, in §4's own vocabulary.
    *
@@ -432,6 +454,12 @@ export interface AdaptationPlan {
   hint?: string | null;
   /** Likewise, the questions `show_socratic_panel` opens. */
   guidedQuestions?: string[];
+  /**
+   * The same panel's answerable prompts, beside `guidedQuestions` on the wire.
+   * Where both arrive the prompts are shown, because only they can be replied
+   * to - see `SocraticPanel`.
+   */
+  guidedPrompts?: GuidedPrompt[];
   /**
    * Active UDL accommodations (37c / SCRUM-71, backend-owned). Cross-session
    * delivery themes, never a label.

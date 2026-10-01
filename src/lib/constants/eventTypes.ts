@@ -87,6 +87,24 @@ export const SIGNAL_EVENT_TYPES = {
    * suggestion as shown and ignored.
    */
   ADAPTATION_SUPPRESSED: "adaptation_suppressed",
+  /**
+   * A lesson picture or recording that would not load, after its one fresh
+   * link (B12) - payload { segmentId, channel: "image" | "audio", reason }.
+   * The rest of the segment stays usable; this is so the engine does not read
+   * a child who never saw the picture as one who looked at it.
+   */
+  MEDIA_LOAD_FAILED: "media_load_failed",
+  /**
+   * The engine's unrequested hint (`offer_hint`) went on screen (B20) -
+   * payload { segmentId }. Once per hint per segment.
+   */
+  HINT_OFFERED: "hint_offered",
+  /**
+   * A guided prompt was on screen in the opened socratic panel (B20) -
+   * payload { segmentId, promptId }. The reply is not a client event: the
+   * answer route puts `guided_question_answered` on the stream itself.
+   */
+  GUIDED_QUESTION_SHOWN: "guided_question_shown",
 } as const;
 
 /** `system_busy` reasons — the closed set from the Touch Signal Contract. */

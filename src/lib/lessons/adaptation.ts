@@ -10,7 +10,13 @@ import {
   asAdjustmentAction,
 } from "@/lib/constants/affect";
 import { SCAFFOLD_LEVELS, type ScaffoldLevel } from "@/lib/constants/scaffold";
-import type { AdaptationPlan, Lesson, SegmentAdaptation } from "@/lib/types";
+import type {
+  AdaptationPlan,
+  DensityLevel,
+  GuidedPrompt,
+  Lesson,
+  SegmentAdaptation,
+} from "@/lib/types";
 
 /**
  * Between the adaptation engine and the player.
@@ -52,10 +58,11 @@ const SEGMENT_TYPE: Record<string, AdaptSegmentType> = {
 };
 
 /**
- * Engine `ScaffoldingLevel` (3 values) -> the indicator's `ScaffoldLevel` (5).
+ * Engine `ScaffoldingLevel` (4 values) -> the indicator's `ScaffoldLevel`.
  *
- * The indicator draws 4 dots; the engine speaks in three levels, so it uses
- * three of the five.
+ * The indicator draws 4 dots; the engine speaks in four levels, three of them
+ * support and `none` (1 Oct) the engine saying it is giving none - drawn as
+ * the indicator with no dot filled, which is not the same as no indicator.
  *
  * A value not in this map is NO LEVEL, not `light`. It used to fall back to
  * light - which the player also drew with no plan at all - so a word we did
@@ -63,6 +70,7 @@ const SEGMENT_TYPE: Record<string, AdaptSegmentType> = {
  * carries no scaffold and the indicator shows nothing.
  */
 const SCAFFOLD: Record<string, ScaffoldLevel> = {
+  none: SCAFFOLD_LEVELS.NONE,
   light: SCAFFOLD_LEVELS.LIGHT,
   standard: SCAFFOLD_LEVELS.MODERATE,
   strong: SCAFFOLD_LEVELS.FULL,
@@ -72,6 +80,13 @@ const MODALITIES: readonly string[] = Object.values(MODALITY);
 
 function asModality(value: string | null | undefined): Modality | null {
   return value && MODALITIES.includes(value) ? (value as Modality) : null;
+}
+
+/** `DensityLevel`, exactly. A value we do not know is no instruction. */
+const DENSITY_LEVELS: readonly string[] = ["low", "medium", "high"];
+
+function asDensityLevel(value: string | null | undefined): DensityLevel | null {
+  return value && DENSITY_LEVELS.includes(value) ? (value as DensityLevel) : null;
 }
 
 /**
@@ -130,21 +145,24 @@ function depthsOf(s: ContentSegment): ("simplified" | "expanded")[] {
 /**
  * The engine's answer, in the player's own terms.
  *
+ * `density` IS CARRIED, AS `densityLevel` AND NEVER AS `density`. The
+ * engine's `DensityLevel` (low/medium/high) is how dense the segment should
+ * sit on screen; the player's `Density` (simplify/expand/slower) is which
+ * authored RESHAPE of the text to show. Translating one into the other would
+ * ask the player to render a variant that may not exist, and would light the
+ * child's own control for something they never asked for. Design's ruling
+ * (D25): density renders as spacing and how many elements sit in view at
+ * once, never as a label or chip - see `densitySpacing`.
+ *
  * WHAT IS DELIBERATELY NOT CARRIED:
  *
- * - `density`. The engine's `DensityLevel` (low/medium/high) is how dense the
- *   CONTENT should be; the player's `Density` (simplify/expand/slower) is which
- *   authored RESHAPE of the text to show. Parsed content has one body and no
- *   reshapes, so translating one into the other would ask the player to render
- *   a variant that does not exist - and the player already refuses to offer a
- *   density a segment cannot actually reshape into.
  * - `breakAfter`. `breakSuggestion` is one suggestion for the whole lesson,
  *   not per segment, and on `lesson_load` with no runtime signals it is always
  *   `severity: "none"` with a null type. It belongs to the `in_lesson` pass.
  * - the per-segment `adjustment`, `hint` and `socraticPrompts`. The engine's
  *   instruction arrives once for the whole lesson on `proactiveAdjustment`,
- *   which IS carried across (below); there is no per-segment one to read, and
- *   no field anywhere carries hint text or guided questions.
+ *   which IS carried across (below) with its hint, questions and prompts;
+ *   there is no per-segment one to read.
  */
 export function toAdaptationPlan(
   res: AdaptResponse,
@@ -185,6 +203,24 @@ export function toAdaptationPlan(
           (q) => q.trim() !== "",
         )
       : [];
+  /*
+   * GUIDED PROMPTS, BESIDE THE QUESTIONS (1 Oct, B19). `guidedQuestions` is a
+   * list of strings with no id, so the panel could show one and never send an
+   * answer - the dialogue stopped at the first question every time. A prompt
+   * has an id, its words and optional options, and is answered at
+   * `POST /api/intelligence/guided-questions/answer`. Read the same way and
+   * under the same action. A prompt with no id or no words is dropped, and so
+   * is an option with no words, because a blank target is not a question.
+   */
+  const guidedPrompts: GuidedPrompt[] =
+    adjustment === ADJUSTMENT_ACTIONS.SHOW_SOCRATIC_PANEL
+      ? (res.proactiveAdjustment?.guidedPrompts ?? []).flatMap((p) => {
+          const prompt = p.prompt?.trim();
+          if (!p.id || !prompt) return [];
+          const options = (p.options ?? []).filter((o) => o.trim() !== "");
+          return [{ id: p.id, prompt, ...(options.length ? { options } : {}) }];
+        })
+      : [];
 
   const segments: SegmentAdaptation[] = res.segments.flatMap((row) => {
     const modalities = offered.get(row.segmentId);
@@ -200,6 +236,7 @@ export function toAdaptationPlan(
     // blank frame.
     const engineChoice = asModality(row.modality);
     const scaffold = SCAFFOLD[row.scaffolding];
+    const densityLevel = asDensityLevel(row.density);
     const startModality =
       engineChoice && modalities.includes(engineChoice)
         ? engineChoice
@@ -210,6 +247,7 @@ export function toAdaptationPlan(
         segmentId: row.segmentId,
         startModality,
         ...(scaffold ? { scaffold } : {}),
+        ...(densityLevel ? { densityLevel } : {}),
       },
     ];
   });
@@ -231,5 +269,6 @@ export function toAdaptationPlan(
     ...(adjustment ? { adjustment } : {}),
     ...(hint ? { hint } : {}),
     ...(guidedQuestions.length > 0 ? { guidedQuestions } : {}),
+    ...(guidedPrompts.length > 0 ? { guidedPrompts } : {}),
   };
 }
