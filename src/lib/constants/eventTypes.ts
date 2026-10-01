@@ -95,18 +95,23 @@ export const SIGNAL_EVENT_TYPES = {
    */
   ADAPTATION_SUPPRESSED: "adaptation_suppressed",
   /**
-   * The lesson player's own events, in the ingest enum as of 1 Oct and named
-   * here so the player can emit them. `media_load_failed` is
-   * { segmentId, channel: "image" | "audio", reason }.
+   * A lesson picture or recording that would not load, after its one fresh
+   * link (B12) - payload { segmentId, channel: "image" | "audio", reason }.
+   * The rest of the segment stays usable; this is so the engine does not read
+   * a child who never saw the picture as one who looked at it.
    */
   MEDIA_LOAD_FAILED: "media_load_failed",
+  /**
+   * The engine's unrequested hint (`offer_hint`) went on screen (B20) -
+   * payload { segmentId }. Once per hint per segment.
+   */
   HINT_OFFERED: "hint_offered",
-  HINT_USED: "hint_used",
-  STEP_UP_OFFERED: "step_up_offered",
-  STEP_UP_ACCEPTED: "step_up_accepted",
-  STEP_UP_DECLINED: "step_up_declined",
+  /**
+   * A guided prompt was on screen in the opened socratic panel (B20) -
+   * payload { segmentId, promptId }. The reply is not a client event: the
+   * answer route puts `guided_question_answered` on the stream itself.
+   */
   GUIDED_QUESTION_SHOWN: "guided_question_shown",
-  GUIDED_QUESTION_ANSWERED: "guided_question_answered",
   /**
    * Ask Nevo, on its own `ask_nevo` session (design D29: a child's use of Ask
    * Nevo is signal in its own right). A question asked, an answer that could
