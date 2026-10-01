@@ -4,16 +4,27 @@ import { useEffect, useRef, useState } from "react";
 import { Check, ClipboardCheck } from "lucide-react";
 import { Button } from "@/components/shared";
 import type { Assessment } from "@/lib/types";
+import { cn } from "@/lib/utils";
 import {
   AnswerDot,
   AnswerOption,
   AnswerRadio,
   type AnswerTone,
 } from "./AnswerOption";
+import { LeaveButton } from "./LeaveButton";
+import { READING_BODY, READING_HEADING, READING_INK } from "./readingSupport";
+import { SpokenPrompt } from "./SpokenPrompt";
 
-/** House recovery copy for questions that don't bring their own. */
+/**
+ * House recovery copy for questions that don't bring their own.
+ *
+ * WITHOUT "WE'LL BRING IT BACK LATER" (D40, 1 Oct). The frame's line promised
+ * a return, and design ruled that line renders only where the backend returns
+ * a next-review signal. Nothing here asks the scheduler anything, so nothing
+ * stands behind the promise. The rest of the frame's sentence stays.
+ */
 const DEFAULT_RECOVERY =
-  "That one didn't land - and that's okay. We'll bring it back later. Nothing to fix right now.";
+  "That one didn't land - and that's okay. Nothing to fix right now.";
 
 /**
  * After-lesson assessment (Lesson Check frame) — a short check-in framed as
@@ -21,15 +32,31 @@ const DEFAULT_RECOVERY =
  * one at a time under a calm violet progress line (select, then confirm with
  * Next), a miss is acknowledged gently in violet and never stops the flow, and
  * the result is phrased as growth — concepts, never numbers.
+ *
+ * A WAY OUT, BEFORE AND DURING THE QUESTIONS (D36). `onLeave` puts the
+ * player's exit control on the intro and on every question, and it leaves at
+ * once - no warning, nothing that frames going as giving up. What leaving
+ * records is the player's business: not completed, never failed, with the
+ * answers already given kept. The result screen needs none; Continue is its
+ * way on.
  */
 export function AfterLessonAssessment({
   assessment,
   onFinish,
   onAnswer,
   onReviewAnswers,
+  onLeave,
+  reading = false,
+  onAudioBusy,
 }: {
   assessment: Assessment;
   onFinish: () => void;
+  /** Leave the check part way (D36). Absent, no exit is drawn. */
+  onLeave?: () => void;
+  /** The reading accommodation is on - see `readingSupport` (D30). */
+  reading?: boolean;
+  /** `system_busy` bracket while a spoken question plays (B16). */
+  onAudioBusy?: (phase: "start" | "end") => void;
   /** Reports each confirmed answer (comprehension_response signal + review). */
   onAnswer?: (result: {
     questionIndex: number;
@@ -67,6 +94,8 @@ export function AfterLessonAssessment({
       <Intro
         count={assessment.questions.length}
         onStart={() => setStage("questions")}
+        onLeave={onLeave}
+        reading={reading}
       />
     );
   }
@@ -77,6 +106,7 @@ export function AfterLessonAssessment({
         assessment={assessment}
         onFinish={onFinish}
         onReviewAnswers={onReviewAnswers}
+        reading={reading}
       />
     );
   }
@@ -116,8 +146,19 @@ export function AfterLessonAssessment({
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-nevo-cream text-nevo-near-black">
+      {/* D36: the player's exit, where the player draws it. */}
+      {onLeave && (
+        <div className="flex shrink-0 px-3.5 pt-2.5">
+          <LeaveButton onLeave={onLeave} />
+        </div>
+      )}
       {/* Calm progress — position, never a score */}
-      <div className="shrink-0 px-6 pt-5 sm:px-8 lg:px-10">
+      <div
+        className={cn(
+          "shrink-0 px-6 pt-5 sm:px-8 lg:px-10",
+          onLeave && "pt-1",
+        )}
+      >
         <div className="mx-auto w-full max-w-[600px] lg:max-w-[640px]">
           <div className="mb-3 flex items-center justify-between">
             <span className="text-[13px] font-medium text-nevo-near-black/60">
@@ -145,7 +186,22 @@ export function AfterLessonAssessment({
 
       <div className="flex-1 overflow-y-auto px-6 py-7 sm:px-8 lg:px-10">
         <div className="mx-auto w-full max-w-[600px] lg:max-w-[640px]">
-          <h2 className="text-[23px] font-semibold leading-[1.3] tracking-[-0.01em] text-nevo-near-black sm:text-[26px]">
+          {/* B16: a spoken question, keyed so each one is said on arrival. */}
+          {question.promptAudio && (
+            <div className="mb-4">
+              <SpokenPrompt
+                key={qIndex}
+                src={question.promptAudio}
+                onBusy={onAudioBusy}
+              />
+            </div>
+          )}
+          <h2
+            className={cn(
+              "text-[23px] font-semibold leading-[1.3] tracking-[-0.01em] text-nevo-near-black sm:text-[26px]",
+              reading && READING_HEADING,
+            )}
+          >
             {question.prompt}
           </h2>
 
@@ -154,6 +210,7 @@ export function AfterLessonAssessment({
               <AnswerOption
                 key={option.id}
                 label={option.label}
+                reading={reading}
                 tone={tone(option.id)}
                 className="py-4"
                 trailing={
@@ -177,7 +234,12 @@ export function AfterLessonAssessment({
               className="mt-[18px] flex items-start gap-2.5 rounded-[12px] bg-nevo-violet/14 px-4 py-3.5"
             >
               <span className="mt-1.5 size-2 shrink-0 rounded-full bg-nevo-violet" />
-              <p className="text-sm leading-[1.5] text-nevo-near-black">
+              <p
+                className={cn(
+                  "text-sm leading-[1.5] text-nevo-near-black",
+                  reading && [READING_BODY, READING_INK],
+                )}
+              >
                 {question.recoveryNote ?? DEFAULT_RECOVERY}
               </p>
             </div>
@@ -207,17 +269,42 @@ export function AfterLessonAssessment({
  * the minutes were `round(questions / 2)` presented as fact: no field carries
  * how long a check-in takes. The count is real, so it stays.
  */
-function Intro({ count, onStart }: { count: number; onStart: () => void }) {
+function Intro({
+  count,
+  onStart,
+  onLeave,
+  reading,
+}: {
+  count: number;
+  onStart: () => void;
+  onLeave?: () => void;
+  reading: boolean;
+}) {
   return (
-    <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-nevo-cream px-6 text-center text-nevo-near-black">
+    <div className="relative flex min-h-[100dvh] flex-col items-center justify-center bg-nevo-cream px-6 text-center text-nevo-near-black">
+      {onLeave && (
+        <div className="absolute inset-x-0 top-0 flex px-3.5 pt-2.5">
+          <LeaveButton onLeave={onLeave} />
+        </div>
+      )}
       <div className="flex w-full max-w-[300px] flex-col items-center sm:max-w-[430px]">
         <span className="flex size-[88px] items-center justify-center rounded-full bg-nevo-violet/20">
           <ClipboardCheck className="size-10 text-nevo-navy" strokeWidth={2} />
         </span>
-        <h2 className="mt-7 text-[23px] font-semibold tracking-[-0.01em] sm:text-[26px]">
+        <h2
+          className={cn(
+            "mt-7 text-[23px] font-semibold tracking-[-0.01em] sm:text-[26px]",
+            reading && READING_HEADING,
+          )}
+        >
           A few quick questions
         </h2>
-        <p className="mt-3 text-base leading-[1.6] text-nevo-near-black/72 sm:text-[17px]">
+        <p
+          className={cn(
+            "mt-3 text-base leading-[1.6] text-nevo-near-black/72 sm:text-[17px]",
+            reading && [READING_BODY, READING_INK],
+          )}
+        >
           This helps Nevo see what landed. There&apos;s no timer, and it
           isn&apos;t graded - take your time.
         </p>
@@ -255,19 +342,34 @@ function Intro({ count, onStart }: { count: number; onStart: () => void }) {
  * TODO(api): questions carry no concept id, so nothing maps an answer to the
  * concept it evidences. Until they do, "which concept landed" cannot be
  * answered and this can only tell all from none.
+ *
+ * The nothing-landed note no longer says "Nevo will bring it back when you're
+ * ready for it". It is D40's promise in other words - a return the scheduler
+ * was never asked for - and design ruled that kind of line renders only with
+ * a next-review signal behind it.
  */
 function GrowthResult({
   landed,
   assessment,
   onFinish,
   onReviewAnswers,
+  reading,
 }: {
   /** How many questions landed first time. */
   landed: number;
   assessment: Assessment;
   onFinish: () => void;
   onReviewAnswers?: () => void;
+  reading: boolean;
 }) {
+  const note = cn(
+    "mt-3 text-center text-base leading-[1.6] text-nevo-near-black/72 sm:text-[17px]",
+    reading && [READING_BODY, READING_INK],
+  );
+  const conceptLabel = cn(
+    "text-[15px] font-medium",
+    reading && [READING_BODY, READING_INK],
+  );
   const nothingLanded = landed === 0 && assessment.questions.length > 0;
   const mastered = nothingLanded ? [] : (assessment.masteredConcepts ?? []);
   const revisit = nothingLanded
@@ -291,7 +393,12 @@ function GrowthResult({
             <Check className="size-[38px] text-nevo-cream" strokeWidth={2.6} />
           </span>
         )}
-        <h2 className="mt-[26px] text-center text-[23px] font-semibold tracking-[-0.01em] sm:text-[26px]">
+        <h2
+          className={cn(
+            "mt-[26px] text-center text-[23px] font-semibold tracking-[-0.01em] sm:text-[26px]",
+            reading && READING_HEADING,
+          )}
+        >
           {nothingLanded
             ? "We’ll come back to this together"
             : "You’re getting the hang of this"}
@@ -299,15 +406,12 @@ function GrowthResult({
         {/* The authored note says what the child SHOWED, so it is held back
             when they showed none of it. */}
         {nothingLanded && (
-          <p className="mt-3 text-center text-base leading-[1.6] text-nevo-near-black/72 sm:text-[17px]">
+          <p className={note}>
             This one didn&rsquo;t land yet, and that&rsquo;s completely fine.
-            Nevo will bring it back when you&rsquo;re ready for it.
           </p>
         )}
         {!nothingLanded && assessment.resultNote && (
-          <p className="mt-3 text-center text-base leading-[1.6] text-nevo-near-black/72 sm:text-[17px]">
-            {assessment.resultNote}
-          </p>
+          <p className={note}>{assessment.resultNote}</p>
         )}
 
         <div className="mt-6 flex flex-col gap-2.5">
@@ -319,7 +423,7 @@ function GrowthResult({
               <span className="flex size-[22px] shrink-0 items-center justify-center rounded-full bg-nevo-navy">
                 <Check className="size-3 text-nevo-cream" strokeWidth={2.8} />
               </span>
-              <span className="text-[15px] font-medium">{item}</span>
+              <span className={conceptLabel}>{item}</span>
             </div>
           ))}
           {revisit.map((item) => (
@@ -330,7 +434,7 @@ function GrowthResult({
               <span className="flex size-[22px] shrink-0 items-center justify-center rounded-full bg-nevo-violet/35">
                 <span className="size-2 rounded-full bg-nevo-violet" />
               </span>
-              <span className="text-[15px] font-medium">
+              <span className={conceptLabel}>
                 {item}{" "}
                 <span className="font-normal text-nevo-near-black/60">
                   · revisit soon

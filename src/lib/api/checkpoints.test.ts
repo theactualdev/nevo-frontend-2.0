@@ -181,3 +181,73 @@ describe("toQuickCheck refuses anything it cannot honestly draw", () => {
     expect(q!.recoveryNote).toBe("Not quite. Let's look again.");
   });
 });
+
+describe("toQuickCheck carries what the answer write needs", () => {
+  it("keeps each option's own value beside its string id", () => {
+    // `POST /attempts` is marked against the key, so the value must survive
+    // the mapping in its own type: a right 2 sent as "2" is marked wrong.
+    const q = toQuickCheck(
+      checkpoint({
+        answerType: "numeric",
+        answerKey: 2,
+        options: [
+          { value: 2, label: "Two" },
+          { value: 3, label: "Three" },
+        ],
+      }),
+    );
+    expect(q!.options).toEqual([
+      { id: "2", label: "Two", value: 2 },
+      { id: "3", label: "Three", value: 3 },
+    ]);
+  });
+});
+
+describe("toQuickCheck and a spoken check (B16)", () => {
+  const options = [
+    { value: "a", label: "Carbon dioxide" },
+    { value: "b", label: "Oxygen" },
+  ];
+  const markable = { answerKey: "a", options } as const;
+
+  it("carries the recording when the server made the check spoken", () => {
+    const q = toQuickCheck(
+      checkpoint({
+        ...markable,
+        format: "spoken",
+        promptAudioUrl: "https://cdn.example/q1.mp3",
+      }),
+    );
+    expect(q!.promptAudio).toBe("https://cdn.example/q1.mp3");
+    // The printed question is kept: the recording is a layer, not a
+    // replacement.
+    expect(q!.question).toBe(base.prompt);
+  });
+
+  it("carries none for a text check, whatever URL rides along", () => {
+    // The format is the instruction. A URL alone is not one, and the client
+    // deciding to speak a question is the modality choice rule 1 forbids.
+    const q = toQuickCheck(
+      checkpoint({
+        ...markable,
+        format: "text",
+        promptAudioUrl: "https://cdn.example/q1.mp3",
+      }),
+    );
+    expect(q).not.toHaveProperty("promptAudio");
+  });
+
+  it("carries none for a spoken check with nothing to play", () => {
+    const q = toQuickCheck(
+      checkpoint({ ...markable, format: "spoken", promptAudioUrl: null }),
+    );
+    expect(q).not.toBeNull();
+    expect(q).not.toHaveProperty("promptAudio");
+  });
+
+  it("carries none for content stored before the field existed", () => {
+    expect(toQuickCheck(checkpoint(markable))).not.toHaveProperty(
+      "promptAudio",
+    );
+  });
+});

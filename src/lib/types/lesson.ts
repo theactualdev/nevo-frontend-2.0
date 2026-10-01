@@ -97,6 +97,18 @@ export interface InteractiveContent {
 
 // ── Comprehension check (inline Quick Check) ────────────────────────────────
 
+/** One answer a check offers. */
+export interface AnswerChoice {
+  id: string;
+  label: string;
+  /**
+   * The checkpoint option's own value, which is what `POST /attempts` sends:
+   * the server marks it against the key, and `id` is a string of it. Absent on
+   * the authored demo checks, which have no checkpoint behind them.
+   */
+  value?: string | number | boolean;
+}
+
 export interface QuickCheck {
   /**
    * The checkpoint it was built from, so an answer can say which one it
@@ -104,12 +116,18 @@ export interface QuickCheck {
    */
   id?: string;
   question: string;
-  options: { id: string; label: string }[];
+  options: AnswerChoice[];
   correctId: string;
   /** Navy note on a correct answer. */
   correctNote: string;
   /** Soft-violet (never red) note on a miss — always reassures continuity. */
   recoveryNote: string;
+  /**
+   * The recording a SPOKEN check plays (B16). Present only when the server
+   * set the checkpoint's format to spoken and sent one; the printed question
+   * stays on screen either way.
+   */
+  promptAudio?: string;
   /**
    * The concept the check is about, from its checkpoint. A review session
    * skips the after-lesson questions - its inline checks ARE the recall - so
@@ -270,10 +288,12 @@ export interface AssessmentQuestion {
    */
   id?: string;
   prompt: string;
-  options: { id: string; label: string }[];
+  options: AnswerChoice[];
   correctId: string;
   /** Soft-violet recovery note (never a score). */
   recoveryNote?: string;
+  /** A spoken question's recording - see `QuickCheck.promptAudio`. */
+  promptAudio?: string;
   /**
    * The concept this question is about, straight from the checkpoint.
    *

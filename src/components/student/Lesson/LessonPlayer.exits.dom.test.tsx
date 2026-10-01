@@ -272,7 +272,7 @@ describe("a review session's outcome", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: /begin|start|ready/i }));
 
-    // Wrong first, then right - recall is judged on the FIRST answer.
+    // Wrong first, then right - what happened is reported, not a final pass.
     next();
     fireEvent.click(
       await screen.findByRole("button", { name: /The denominator/ }),
@@ -282,11 +282,12 @@ describe("a review session's outcome", () => {
     fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
     next();
 
+    // B28: the outcome, and no `recallSuccessful` - the server derives that.
     await waitFor(() =>
       expect(recordReview).toHaveBeenCalledWith({
         studentId: "stu-1",
         conceptId: "concept-1",
-        recallSuccessful: false,
+        outcome: "second_attempt",
       }),
     );
   });

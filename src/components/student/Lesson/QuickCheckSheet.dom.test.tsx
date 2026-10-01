@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { QuickCheckSheet } from "./QuickCheckSheet";
 import type { QuickCheck } from "@/lib/types";
@@ -26,7 +26,13 @@ vi.mock("@/components/ui/sheet", () => ({
     content.props = props;
     return <div role="dialog">{props.children}</div>;
   },
-  SheetTitle: ({ children }: { children: ReactNode }) => <h2>{children}</h2>,
+  SheetTitle: ({
+    children,
+    className,
+  }: {
+    children: ReactNode;
+    className?: string;
+  }) => <h2 className={className}>{children}</h2>,
 }));
 
 const CHECK: QuickCheck = {
@@ -73,5 +79,82 @@ describe("the quick check refuses a manual dismiss", () => {
     content.props?.onEscapeKeyDown?.(e);
 
     expect(e.preventDefault).toHaveBeenCalled();
+  });
+});
+
+describe("a spoken check (B16)", () => {
+  it("offers its recording and keeps the printed question", () => {
+    render(
+      <QuickCheckSheet
+        check={{ ...CHECK, promptAudio: "https://cdn.example/q.mp3" }}
+        open
+        onOpenChange={() => {}}
+        onAnswered={() => {}}
+        onContinue={() => {}}
+      />,
+    );
+
+    expect(document.querySelector("audio")?.getAttribute("src")).toBe(
+      "https://cdn.example/q.mp3",
+    );
+    expect(screen.getByRole("button", { name: "Play" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: CHECK.question })).toBeTruthy();
+  });
+
+  it("is a printed question only when the server sent no recording", () => {
+    mount();
+
+    expect(document.querySelector("audio")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Play" })).toBeNull();
+  });
+});
+
+describe("the reading accommodation on a quick check (D30)", () => {
+  const mountReading = (reading: boolean) =>
+    render(
+      <QuickCheckSheet
+        check={CHECK}
+        open
+        reading={reading}
+        onOpenChange={() => {}}
+        onAnswered={() => {}}
+        onContinue={() => {}}
+      />,
+    );
+
+  it("sets the answers in 37c's reading type", () => {
+    mountReading(true);
+
+    const label = screen.getByText("Carbon dioxide");
+    expect(label.className).toContain("text-[18px]");
+    expect(label.className).toContain("leading-[2]");
+    expect(label.className).toContain("tracking-[0.02em]");
+  });
+
+  it("opens the question's letter-spacing", () => {
+    mountReading(true);
+
+    expect(
+      screen.getByRole("heading", { name: CHECK.question }).className,
+    ).toContain("tracking-[0.01em]");
+  });
+
+  it("sets the note after an answer in it too", () => {
+    mountReading(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Oxygen" }));
+
+    expect(screen.getByRole("status").className).toContain("text-[18px]");
+  });
+
+  it("leaves a check alone when it is off", () => {
+    mountReading(false);
+
+    expect(screen.getByText("Carbon dioxide").className).not.toContain(
+      "text-[18px]",
+    );
+    expect(
+      screen.getByRole("heading", { name: CHECK.question }).className,
+    ).not.toContain("tracking-[0.01em]");
   });
 });

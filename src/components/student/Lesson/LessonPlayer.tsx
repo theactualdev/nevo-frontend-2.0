@@ -55,8 +55,20 @@ import { scaffoldAttemptFor } from "@/lib/lessons/scaffoldAttempt";
 import { scaffoldsApi } from "@/lib/api/scaffolds";
 import { useAssignmentNote } from "@/hooks/useAssignmentNote";
 import { isChunkable } from "@/lib/lessons/chunk";
-import { LESSON_STATUS } from "@/lib/api/lessons";
+import {
+  LESSON_STATUS,
+  lessonsApi,
+  type LessonQuestionAttemptWrite,
+} from "@/lib/api/lessons";
 import { schedulerApi } from "@/lib/api/scheduler";
+import { attemptFor } from "@/lib/lessons/attempts";
+import {
+  REVIEW_COPY,
+  reviewCompletionCopy,
+  reviewOutcome,
+  type RecallEvidence,
+  type ReviewRecord,
+} from "@/lib/lessons/reviewOutcome";
 import { getSession } from "@/lib/auth/session";
 import { useLessonProgress } from "@/hooks/useLessonProgress";
 import { AudioSegment } from "./AudioSegment";
@@ -195,9 +207,9 @@ export function LessonPlayer({
   lastWorkedAt?: string | null;
   /**
    * Review session (37d): the same player as a spaced-retrieval variant. Adds
-   * only an entry screen, the REVIEW pill during, and the "You strengthened
-   * this concept" completion; the after-lesson assessment is skipped (the
-   * quick checks are the recall).
+   * only an entry screen, the REVIEW pill during, and its own completion
+   * message (D40); the after-lesson assessment is skipped (the quick checks
+   * are the recall).
    */
   review?: boolean;
   /** The concept a review session is for; absent on an ordinary lesson. */
@@ -297,9 +309,16 @@ export function LessonPlayer({
    * perfect recall for a child who got it wrong twice.
    */
   const firstAnswers = useRef<Map<number, boolean>>(new Map());
-  // The same, for the inline checks, by segment. A review skips the
-  // after-lesson questions, so these are the only answers it ever has.
-  const firstCheckAnswers = useRef<Map<string, boolean>>(new Map());
+  /*
+   * The inline checks, by segment: how many picks it took and whether a hint
+   * was showing first - what B28's `outcome` reports. A review skips the
+   * after-lesson questions, so these are the only answers it ever has.
+   */
+  const checkRecall = useRef<Map<string, RecallEvidence & { picks: number }>>(
+    new Map(),
+  );
+  // Segments whose hint was on screen, for `after_hint`.
+  const hintedSegments = useRef<Set<string>>(new Set());
   const [passedChecks, setPassedChecks] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -387,12 +406,16 @@ export function LessonPlayer({
    * spaced retrieval on ONE concept; crediting it with a right answer about a
    * different one is inventing a signal in a smaller shape. If none of the
    * questions was tagged with it - or the child was never asked - nothing is
-   * sent at all, because there is no evidence either way and a cheerful `true`
-   * for reaching the end is exactly what Zero-Tag exists to stop.
+   * sent at all, because there is no evidence either way and a cheerful
+   * outcome for reaching the end is exactly what Zero-Tag exists to stop.
    *
-   * Failure is swallowed. The scheduler missing one outcome costs a slightly
-   * wrong interval; telling a child their review did not count would be worse
-   * and is not true - they did the work.
+   * What is sent is B28's `outcome` - what happened, not a mark - and the
+   * server decides whether it counts as recall.
+   *
+   * A failure is not announced. The scheduler missing one outcome costs a
+   * slightly wrong interval; telling a child their review did not count would
+   * be worse and is not true - they did the work. The completion screen simply
+   * claims nothing the scheduler did not confirm.
    */
   /*
    * 37a's indicator, sourced from the scaffolds engine where a concept exists.
@@ -406,9 +429,17 @@ export function LessonPlayer({
    */
   const teacherNote = useAssignmentNote(assignmentId);
 
+  /*
+   * SENT FROM THE MOVE THAT FINISHES THE REVIEW, not from an effect on the
+   * phase, because the completion screen now waits on the answer (D40): what
+   * it may claim is what the scheduler said back. See `reviewCompletionCopy`.
+   */
   const reviewRecorded = useRef(false);
-  useEffect(() => {
-    if (phase !== "complete" || !review || !reviewConceptId) return;
+  const [reviewRecord, setReviewRecord] = useState<ReviewRecord>({
+    state: "unsent",
+  });
+  const recordReview = () => {
+    if (!review || !reviewConceptId) return;
     if (reviewRecorded.current) return;
     const studentId = getSession()?.userId;
     if (!studentId) return;
@@ -419,29 +450,38 @@ export function LessonPlayer({
      * This read only the after-lesson questions - which a review skips by
      * design - so `onThisConcept` was always empty and the outcome was never
      * sent, however the child did.
+     *
+     * An after-lesson question has no second try - a miss moves on - so its
+     * first answer is the whole of the evidence.
      */
-    const onThisConcept = [
-      ...questions.map((q, i) => ({
-        conceptId: q.conceptId,
-        answered: firstAnswers.current.get(i),
-      })),
+    const onThisConcept: RecallEvidence[] = [
+      ...questions.map((q, i) => {
+        const first = firstAnswers.current.get(i);
+        return {
+          conceptId: q.conceptId,
+          evidence:
+            first === undefined
+              ? undefined
+              : { rightOnPick: first ? 1 : null, hinted: false },
+        };
+      }),
       ...lesson.segments.map((s) => ({
         conceptId: s.quickCheck?.conceptId,
-        answered: firstCheckAnswers.current.get(s.id),
+        evidence: checkRecall.current.get(s.id),
       })),
-    ].filter((q) => q.conceptId === reviewConceptId && q.answered !== undefined);
-    if (onThisConcept.length === 0) return;
+    ].flatMap((q) =>
+      q.conceptId === reviewConceptId && q.evidence ? [q.evidence] : [],
+    );
+    const outcome = reviewOutcome(onThisConcept);
+    if (!outcome) return;
 
     reviewRecorded.current = true;
-    void schedulerApi
-      .recordReview({
-        studentId,
-        conceptId: reviewConceptId,
-        // Every question about this concept, right first time.
-        recallSuccessful: onThisConcept.every((q) => q.answered === true),
-      })
-      .catch(() => {});
-  }, [phase, review, reviewConceptId, lesson]);
+    setReviewRecord({ state: "pending" });
+    schedulerApi
+      .recordReview({ studentId, conceptId: reviewConceptId, outcome })
+      .then((response) => setReviewRecord({ state: "recorded", response }))
+      .catch(() => setReviewRecord({ state: "failed" }));
+  };
   // SCRUM-101: the segment index the player is about to enter across a module
   // boundary. Non-null takes over the screen with the boundary landing; the
   // student's continue (or break + "I'm ready") completes the move.
@@ -920,6 +960,12 @@ export function LessonPlayer({
   // UDL accommodations (37c) - cross-session delivery themes from the plan.
   const readingOn = Boolean(plan?.accommodations?.reading);
   const attentionOn = Boolean(plan?.accommodations?.attention);
+  // A hint seen before the check is answered makes a right answer `after_hint`
+  // rather than `first_time` (B28) - only the first lengthens the interval.
+  useEffect(() => {
+    if (segmentShowing && hintHere && hintText)
+      hintedSegments.current.add(segment.id);
+  }, [segmentShowing, hintHere, hintText, segment.id]);
 
   // Break OFFERS (B.7): the plan names a break type to OFFER on this segment,
   // or the engine suggests one mid-lesson. One ask on screen at a time - an
@@ -1071,11 +1117,12 @@ export function LessonPlayer({
       go(index + 1);
       return;
     }
-    // Review sessions end on the strengthened completion - the quick checks
-    // were the retrieval, so no second assessment (37d).
+    // Review sessions end on their own completion - the quick checks were the
+    // retrieval, so no second assessment (37d).
     const assess = hasAssessment && !review;
     setPhase(assess ? "assessment" : "complete");
     if (!assess) setEnding(COMPLETED);
+    if (!assess) recordReview();
   };
 
   /**
@@ -1259,6 +1306,18 @@ export function LessonPlayer({
    */
   const hasAssessment = (lesson.assessment?.questions.length ?? 0) > 0;
 
+  /*
+   * D36: EVERY ANSWER TO A CHECK IS STORED ON THE ACCOUNT AS IT IS GIVEN, so a
+   * check left part way keeps the answers already given. Marked server-side.
+   * Fire and forget: a failed write costs the record of one answer, never the
+   * child's place in the check. Not for the authored mocks, whose question ids
+   * are not real.
+   */
+  const saveAttempt = (body: LessonQuestionAttemptWrite | null) => {
+    if (!live || !body) return;
+    void lessonsApi.saveAttempt(lesson.id, body).catch(() => {});
+  };
+
   const requestExit = () => {
     trackEvent(SIGNAL_EVENT_TYPES.EXIT_ATTEMPT, {
       segmentId: segment.id,
@@ -1305,6 +1364,13 @@ export function LessonPlayer({
         lessonTitle={lesson.title}
         lastWorkedAt={lastWorkedAt}
         onBegin={() => setPhase("segments")}
+        onLeave={() => {
+          // D36. Not started is not completed: nothing goes to the scheduler,
+          // so the concept stays due, and the lesson's own progress is left
+          // alone as every review leaves it.
+          setEnding({ completionStatus: "exited", exitPosition: first.id });
+          exitTo(HOME_HREF);
+        }}
       />
     );
   }
@@ -1313,10 +1379,45 @@ export function LessonPlayer({
     return (
       <AfterLessonAssessment
         assessment={lesson.assessment!}
+        reading={readingOn}
+        onAudioBusy={(phase) => trackBusy(BUSY_REASON.MEDIA_PLAYING, phase)}
+        onLeave={() => {
+          /*
+           * D36: LEAVING THE CHECK IS NOT FINISHING IT, AND NOT FAILING IT.
+           *
+           * `exited` at the last segment, the same record the leave dialog
+           * makes - so the lesson stays unfinished and comes back on Home to
+           * pick up. No `resultState`: its `not_attempted` and
+           * `nothing_landed` send the child down a depth, which is a verdict,
+           * and an unfinished check has none to give. The answers already
+           * given were stored one by one as they were confirmed.
+           */
+          const last = total - 1;
+          const pos = modulePositionFor(lesson, last);
+          reportProgress(LESSON_STATUS.EXITED, {
+            segment: last,
+            ...(pos ? { module: pos.moduleIndex } : {}),
+          });
+          setEnding({
+            completionStatus: "exited",
+            exitPosition: lesson.segments[last].id,
+          });
+          exitTo(HOME_HREF);
+        }}
         onAnswer={({ questionIndex, selectedId, correct, responseTimeMs }) => {
           // What was picked, which checkpoint it answered and how long it took
           // - the response data frontend §2 says every event carries.
           const checkpointId = lesson.assessment?.questions[questionIndex]?.id;
+          saveAttempt(
+            attemptFor({
+              sessionId: progress.sessionId,
+              questionId: checkpointId,
+              source: "assessment",
+              choice: lesson.assessment?.questions[questionIndex]?.options.find(
+                (o) => o.id === selectedId,
+              ),
+            }),
+          );
           trackEvent(SIGNAL_EVENT_TYPES.COMPREHENSION_RESPONSE, {
             kind: "assessment",
             questionIndex,
@@ -1395,16 +1496,22 @@ export function LessonPlayer({
         ? "Your progress is saved."
         : undefined;
 
-    // Review sessions close on the strengthened-concept variant (37d) - the
-    // standard completion screen with only the message swapped.
+    // Review sessions close on their own variant (37d) - the standard
+    // completion screen with only the message swapped, and the message is
+    // only what the scheduler confirmed (D40). The frame's "is settling in"
+    // and "once more before it fully sticks" go with it: the first claims the
+    // movement the heading now waits for, the second a count nothing carries.
     if (review) {
+      const copy = reviewCompletionCopy(reviewRecord);
       return (
         <LessonComplete
           onDone={() => exitTo(HOME_HREF)}
-          heading="You strengthened this concept"
+          heading={copy.heading}
+          headingHeld={copy.held}
           note={
-            savedNote ??
-            `${lesson.title} is settling in. We'll bring it back once more before it fully sticks.`
+            copy.bringBack && !progress.completionFailed
+              ? REVIEW_COPY.later
+              : savedNote
           }
           doneLabel="Done"
         />
@@ -1801,6 +1908,8 @@ export function LessonPlayer({
           check={segment.quickCheck}
           open={checkOpen}
           onOpenChange={setCheckOpen}
+          reading={readingOn}
+          onAudioBusy={(phase) => trackBusy(BUSY_REASON.MEDIA_PLAYING, phase)}
           onAnswered={(correct, answered) => {
             const checkpointId = segment.quickCheck?.id;
             trackEvent(SIGNAL_EVENT_TYPES.COMPREHENSION_RESPONSE, {
@@ -1810,11 +1919,27 @@ export function LessonPlayer({
               correct,
               ...answered,
             });
+            saveAttempt(
+              attemptFor({
+                sessionId: progress.sessionId,
+                questionId: checkpointId,
+                segmentId: segment.id,
+                source: "checkpoint",
+                choice: segment.quickCheck?.options.find(
+                  (o) => o.id === answered.selectedId,
+                ),
+              }),
+            );
             noteAnswer(correct);
-            // First answer only, for the scheduler - a miss re-opens the
+            // Which pick first got it, for the scheduler - a miss re-opens the
             // check until it is passed, so "passed" is true of everyone.
-            if (!firstCheckAnswers.current.has(segment.id))
-              firstCheckAnswers.current.set(segment.id, correct);
+            const seen = checkRecall.current.get(segment.id);
+            const picks = (seen?.picks ?? 0) + 1;
+            checkRecall.current.set(segment.id, {
+              picks,
+              rightOnPick: seen?.rightOnPick ?? (correct ? picks : null),
+              hinted: seen?.hinted ?? hintedSegments.current.has(segment.id),
+            });
             if (correct)
               setPassedChecks((prev) => new Set(prev).add(segment.id));
           }}
