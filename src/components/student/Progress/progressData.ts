@@ -2,7 +2,7 @@
 // These are the SIGNED-OUT walkthrough's sentences. A signed-in child never
 // sees them: the growth summary and the per-subject prose come from the
 // backend's own `reflection` (3 Sep), read by `useStudentProgress` and
-// `useSubjectProgress`. TODO(api): the timeline and the session list still
+// `useSubjectProgress`. TODO(api): the session markers and the session list still
 // have no field and remain fixture-only. All framing is plain-language and
 // qualitative — never a percentile, score, or peer comparison.
 
@@ -38,8 +38,6 @@ export interface SubjectDetail {
   name: string;
   /** Plain-language reflection on how the subject has been going. */
   prose: string;
-  /** Growth-line markers as [x, y] on a 0–320 × 0–80 canvas (direction, not data). */
-  timeline: [number, number][];
   lessons: SessionRow[];
 }
 
@@ -48,13 +46,6 @@ export const SUBJECT_DETAIL: Record<string, SubjectDetail> = {
     name: "Mathematics",
     prose:
       "You've been getting quicker at problems that used to take a while. Fractions clicked this week. When something's hard, you're staying with it longer before asking for help.",
-    timeline: [
-      [10, 60],
-      [90, 42],
-      [150, 30],
-      [230, 33],
-      [310, 20],
-    ],
     lessons: [
       {
         title: "Adding Fractions",
@@ -82,13 +73,6 @@ export const SUBJECT_DETAIL: Record<string, SubjectDetail> = {
     name: "English",
     prose:
       "Your reading has been stretching to longer stories, and you're noticing describing words on your own. You're taking your time with the tricky sentences instead of skipping them.",
-    timeline: [
-      [10, 58],
-      [90, 46],
-      [150, 34],
-      [230, 28],
-      [310, 18],
-    ],
     lessons: [
       {
         title: "The Lighthouse",
@@ -116,13 +100,6 @@ export const SUBJECT_DETAIL: Record<string, SubjectDetail> = {
     name: "Science",
     prose:
       "You've started asking more of your own questions, and following them up. When an experiment surprised you, you wanted to know why rather than moving on.",
-    timeline: [
-      [10, 62],
-      [90, 50],
-      [150, 38],
-      [230, 30],
-      [310, 22],
-    ],
     lessons: [
       {
         title: "What is Photosynthesis?",

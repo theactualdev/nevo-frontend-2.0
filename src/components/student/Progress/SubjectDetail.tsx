@@ -17,30 +17,18 @@ import type {
   SessionRow,
   SubjectDetail as SubjectDetailData,
 } from "./progressData";
+import { SubjectTexture } from "./ProgressTab";
 import { SessionDetailSheet } from "./SessionDetailSheet";
 
 /** One "ready for another look" chip, openable or not. */
 const DUE_CHIP =
   "rounded-full bg-nevo-navy/10 px-3 py-1.5 text-[13px] text-nevo-navy ring-1 ring-nevo-navy/20 ring-inset";
 
-/** Smooth path through the timeline points (0–320 × 0–80 space). */
-function smoothPath(points: [number, number][]): string {
-  if (points.length < 2) return "";
-  let d = `M ${points[0][0]} ${points[0][1]}`;
-  for (let i = 0; i < points.length - 1; i++) {
-    const [, y0] = points[i];
-    const [x1, y1] = points[i + 1];
-    const cx = (points[i][0] + x1) / 2;
-    d += ` C ${cx} ${y0}, ${cx} ${y1}, ${x1} ${y1}`;
-  }
-  return d;
-}
-
 /**
  * Subject Detail (screen 23) — a deeper, still-calm look at one subject, reached
- * from the Progress tab. A plain-language reflection, a gentle growth line with
- * session markers (direction, not data), and the lessons behind it. No numbers,
- * no score, no comparison.
+ * from the Progress tab. A plain-language reflection, the sessions behind it as
+ * markers on the subject's texture, and the lessons. No numbers, no score, no
+ * comparison.
  *
  * SIGNED IN, THIS READS LIVE. `GET /api/students/{id}/progress/{subject}`
  * carries the concepts worked on and the lesson history with timestamps - the
@@ -48,10 +36,12 @@ function smoothPath(points: [number, number][]): string {
  * ("Fractions clicked this week") has no field behind it and is simply not
  * shown rather than generated from a score.
  *
- * The growth line stays DECORATIVE and `aria-hidden`, as designed. The
- * contract gives a current understanding value per concept and no series over
- * time, so drawing a trend from it would be inventing a shape the data does
- * not have. Direction of travel, not data - the frame's own words.
+ * NO RISING LINE (design D41, 1 Oct). The markers sat on a smooth upward curve
+ * - the treatment SCRUM-144 took off the Progress cards on 15 Sep, surviving
+ * here alone. The contract has no series over time, so any line through them
+ * is a shape the data does not have, and an upward one tells every child the
+ * subject is going up. They now sit level on the subject card's own texture,
+ * which is chosen from the subject's name and carries no direction.
  */
 /**
  * "design-technology" -> "Design technology". Sentence case, because the app
@@ -84,7 +74,7 @@ export function SubjectDetail({
   // sit under one subject's heading. Both requests fire on the same tick, so
   // waiting for this one costs max(a, b), not a + b.
   const own = useSubjectProgress(liveSubject?.name ?? null);
-  // Session Detail sheet (Subject Detail frame): tapping a growth-line marker
+  // Session Detail sheet (Subject Detail frame): tapping a session marker
   // opens the session behind it.
   const [session, setSession] = useState<SessionRow | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -138,13 +128,9 @@ export function SubjectDetail({
   // Signed out with no fixture for this slug: nothing designed to show.
   if (!subject) notFound();
 
-  // Markers run oldest → newest left-to-right; the lessons list is newest-first.
-  // Map from the newest end so the most recent markers carry sessions; any
-  // extra leading markers stay decorative.
+  // One marker per session, oldest → newest left-to-right; the lessons list is
+  // newest-first. Order is the only thing their position says.
   const chronological = [...subject.lessons].reverse();
-  const offset = subject.timeline.length - chronological.length;
-  const sessionForDot = (i: number): SessionRow | null =>
-    i - offset >= 0 ? (chronological[i - offset] ?? null) : null;
 
   const openSession = (s: SessionRow) => {
     setSession(s);
@@ -194,63 +180,29 @@ export function SubjectDetail({
             {subject.prose}
           </p>
 
-          {/* Growth timeline — decorative direction, not a chart of numbers */}
-          <div className="mt-7 rounded-[12px] bg-nevo-cream-elevated px-[18px] py-6 shadow-elevation-1">
-            <div className="relative h-20 w-full sm:h-[100px] lg:h-[110px]">
-              <svg
-                viewBox="0 0 320 80"
-                width="100%"
-                height="100%"
-                preserveAspectRatio="none"
-                className="absolute inset-0 overflow-visible"
-                aria-hidden
-              >
-                <path
-                  d={smoothPath(subject.timeline)}
-                  fill="none"
-                  stroke="#9a9ccb"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  vectorEffect="non-scaling-stroke"
-                />
-              </svg>
-              {subject.timeline.map(([x, y], i) => {
-                const dot = (
+          {/* Session markers, level on the subject's own texture (33a) -
+              order, not direction, and no line through them. */}
+          <div
+            className="relative mt-7 overflow-hidden rounded-[12px] bg-nevo-cream-elevated shadow-elevation-1"
+            data-session-markers
+          >
+            <SubjectTexture subject={subject.name} />
+            <div className="absolute inset-0 flex items-center justify-evenly px-[18px]">
+              {chronological.map((s) => (
+                // 44×44 hit area around the 13px marker (touch-first).
+                <button
+                  key={`${s.title}-${s.date}`}
+                  type="button"
+                  aria-label={`View session: ${s.title}, ${s.date}`}
+                  onClick={() => openSession(s)}
+                  className="flex size-11 cursor-pointer items-center justify-center rounded-full transition-transform active:scale-95"
+                >
                   <span
                     aria-hidden
                     className="size-[13px] rounded-full bg-nevo-navy shadow-[0_0_0_4px_rgba(237,232,220,0.9)]"
                   />
-                );
-                const s = sessionForDot(i);
-                return s ? (
-                  // 44×44 hit area around the 13px marker (touch-first).
-                  <button
-                    key={i}
-                    type="button"
-                    aria-label={`View session: ${s.title}, ${s.date}`}
-                    onClick={() => openSession(s)}
-                    className="absolute flex size-11 -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full transition-transform active:scale-95"
-                    style={{
-                      left: `${(x / 320) * 100}%`,
-                      top: `${(y / 80) * 100}%`,
-                    }}
-                  >
-                    {dot}
-                  </button>
-                ) : (
-                  <span
-                    key={i}
-                    className="absolute flex size-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center"
-                    style={{
-                      left: `${(x / 320) * 100}%`,
-                      top: `${(y / 80) * 100}%`,
-                    }}
-                  >
-                    {dot}
-                  </span>
-                );
-              })}
+                </button>
+              ))}
             </div>
           </div>
 

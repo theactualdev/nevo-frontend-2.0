@@ -50,3 +50,58 @@ describe("starting a lesson from its preview", () => {
     expect(push).toHaveBeenCalledWith("/student/lessons/l-1");
   });
 });
+
+describe("what the preview says about where a child is", () => {
+  const sheet = () => screen.getByRole("dialog");
+
+  it("says a lesson is partway without drawing how far", () => {
+    /*
+     * Design D21. The bar's width was `segmentPosition / segmentCount`, which
+     * the wire does not carry; a bar is read as an amount just as a ring is.
+     */
+    render(
+      <LessonPreviewSheet
+        lesson={{ ...LESSON, status: "in_progress" }}
+        open
+        onOpenChange={() => {}}
+      />,
+    );
+
+    expect(
+      screen.getByText("You're partway through this one"),
+    ).toBeInTheDocument();
+    expect(sheet().innerHTML).not.toMatch(/width:\s*\d+%/);
+    expect(screen.getByRole("button", { name: "Continue" })).toBeInTheDocument();
+  });
+
+  it("draws a finished lesson as finished, not as new or partway", () => {
+    /*
+     * Design D22. It read exactly like a lesson never started. Frame 21 draws
+     * no completed state, so this is the minimum: the card's completed mark
+     * and the filter's word, with no partway line and no Continue.
+     */
+    render(
+      <LessonPreviewSheet
+        lesson={{ ...LESSON, status: "completed", assignmentId: "asg-7" }}
+        open
+        onOpenChange={() => {}}
+      />,
+    );
+
+    expect(screen.getByText("Completed")).toBeInTheDocument();
+    expect(screen.queryByText(/partway/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
+
+    // It opens the same lesson, from the top; the player does not write it
+    // back as unfinished (see `LessonPlayer.finished`).
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    expect(push).toHaveBeenCalledWith("/student/lessons/l-1?assignment=asg-7");
+  });
+
+  it("does not call a lesson never started completed", () => {
+    render(<LessonPreviewSheet lesson={LESSON} open onOpenChange={() => {}} />);
+
+    expect(screen.queryByText("Completed")).toBeNull();
+    expect(screen.queryByText(/partway/)).toBeNull();
+  });
+});

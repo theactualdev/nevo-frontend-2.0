@@ -113,13 +113,9 @@ export function useStudentLessons(): StudentLessons {
         // or not at all - blank is not a subject.
         const subject = a.lesson.subject?.trim();
         const description = a.lesson.description?.trim();
-        // Coarse on purpose, like Home: whether segmentPosition is 0- or
-        // 1-based is unstated, so this may be off by a segment. It drives a
-        // bar, never a number shown to a child.
-        const progress =
-          status === "in_progress" && row && count > 0
-            ? Math.max(0, Math.min(1, row.segmentPosition / count))
-            : undefined;
+        // No fraction from `segmentPosition / segmentCount`: it is not on the
+        // wire, so neither a ring nor a bar may draw it (design D21) - see
+        // `PickUp` on Home.
 
         return {
           id: a.lesson.id,
@@ -132,7 +128,6 @@ export function useStudentLessons(): StudentLessons {
           ...(subject ? { subject } : {}),
           ...(description ? { description } : {}),
           status,
-          ...(progress !== undefined ? { progress } : {}),
         };
       });
   }, [data]);

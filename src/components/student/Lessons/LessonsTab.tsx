@@ -354,7 +354,16 @@ function LessonCard({
   );
 }
 
-/** Calm status dot — completed (navy check), in-progress (violet ring), or not started. */
+/**
+ * Calm status dot — completed (navy check), in-progress (violet ring with a
+ * navy centre), or not started.
+ *
+ * IN PROGRESS IS A STATE, NOT AN AMOUNT (design D21, 1 Oct). It drew a conic
+ * fill fixed at 55% on every in-progress card, which a child reads as how far
+ * they are - the same for everyone, so it was the rising curve again. The real
+ * fraction is not on the wire (see `PickUp` on Home), so the mark is a plain
+ * one: a centre dot, which no reading turns into a portion.
+ */
 function StatusMark({ status }: { status: LessonStatus }) {
   if (status === "completed") {
     return (
@@ -372,11 +381,10 @@ function StatusMark({ status }: { status: LessonStatus }) {
       <span
         role="img"
         aria-label="In progress"
-        className="absolute top-3 right-3 size-5 rounded-full border-2 border-nevo-violet"
-        style={{
-          background: "conic-gradient(#3b3f6e 55%, transparent 0)",
-        }}
-      />
+        className="absolute top-3 right-3 flex size-5 items-center justify-center rounded-full border-2 border-nevo-violet"
+      >
+        <span className="size-2 rounded-full bg-nevo-navy" aria-hidden />
+      </span>
     );
   }
   return (

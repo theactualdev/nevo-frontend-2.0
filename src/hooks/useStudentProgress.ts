@@ -22,8 +22,8 @@ import { useLiveQuery } from "./useLiveQuery";
  * never summarised, reworded or composed from a number here. The whole-student
  * read's `reflection` is about all of a child's learning and belongs on the
  * tab; the subject screen reads its own from the narrowed route, see
- * `useSubjectProgress`. The per-card note ("Getting faster at solving
- * problems") still has no field.
+ * `useSubjectProgress`. So does the per-card `note` (1 Oct), for the same
+ * reason - see `useSubjectProgress`.
  *
  * AND NO NUMBERS REACH THE SCREEN. Screen 22 is explicit - no percentile, no
  * score, no comparison, only direction of travel - so `understanding` and

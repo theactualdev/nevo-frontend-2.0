@@ -167,6 +167,7 @@ export function LessonPlayer({
   review = false,
   reviewConceptId,
   live = false,
+  finished = false,
   assignmentId,
   startAt = 0,
   placeUnknown = false,
@@ -193,6 +194,13 @@ export function LessonPlayer({
    * their invented ids would 404 and blame the network for our own fixture.
    */
   live?: boolean;
+  /**
+   * The child already finished this lesson, and is opening it again to look
+   * back over it (design D22, 1 Oct). Writes no `in_progress` or `exited`, for
+   * the same reason a review writes neither: a finished lesson reopened is
+   * never marked unfinished. Finishing it again still reports completion.
+   */
+  finished?: boolean;
   /**
    * Segment to open on, from saved progress. Clamped by the caller; a review
    * session always opens at the top regardless.
@@ -357,7 +365,8 @@ export function LessonPlayer({
   // written once the child moves, never over the place they really reached.
   const unplacedAt = useRef<number | null>(placeUnknown ? opening : null);
   useEffect(() => {
-    if (review) return;
+    // A finished lesson reopened is the same case - see `finished`.
+    if (review || finished) return;
     if (unplacedAt.current === index) return;
     unplacedAt.current = null;
     const pos = modulePositionFor(lesson, index);
@@ -365,7 +374,7 @@ export function LessonPlayer({
       segment: index,
       ...(pos ? { module: pos.moduleIndex } : {}),
     });
-  }, [lesson, index, review, reportProgress]);
+  }, [lesson, index, review, finished, reportProgress]);
 
   // Completion. Reported once, however the child leaves the finished lesson.
   //
@@ -495,13 +504,13 @@ export function LessonPlayer({
    * boundary again. The place written is the one the boundary opens onto.
    */
   useEffect(() => {
-    if (review || boundaryTo === null) return;
+    if (review || finished || boundaryTo === null) return;
     const pos = modulePositionFor(lesson, boundaryTo);
     reportProgress(LESSON_STATUS.IN_PROGRESS, {
       segment: boundaryTo,
       ...(pos ? { module: pos.moduleIndex } : {}),
     });
-  }, [lesson, boundaryTo, review, reportProgress]);
+  }, [lesson, boundaryTo, review, finished, reportProgress]);
   // Break module (frame 18): a plan-delivered break takes over the screen on
   // the way out of its segment; finishing it resumes the interrupted advance.
   // One break per segment - taken breaks never re-trigger on a back-and-forth.
@@ -1963,7 +1972,7 @@ export function LessonPlayer({
           // Same reason as the position write above: leaving a REVIEW part way
           // says nothing about the lesson, which was finished before the review
           // began. Writing `exited` here would demote it on the way out.
-          if (!review) {
+          if (!review && !finished) {
             reportProgress(LESSON_STATUS.EXITED, { segment: index });
           }
           setEnding({ completionStatus: "exited", exitPosition: segment.id });

@@ -23,6 +23,25 @@ vi.mock("@/hooks/useStudentProgress", async (orig) => ({
 vi.mock("@/hooks/useHasSession", () => ({ useHasSession: () => true }));
 vi.mock("@/hooks/useHydrated", () => ({ useHydrated: () => true }));
 
+/** Each card's own narrowed read, keyed by the subject it was asked for. */
+const narrowed = vi.hoisted(() => ({
+  bySubject: {} as Record<string, { note: string | null; loading?: boolean; failed?: boolean }>,
+  asked: [] as (string | null)[],
+}));
+vi.mock("@/hooks/useSubjectProgress", () => ({
+  useSubjectProgress: (subject: string | null) => {
+    narrowed.asked.push(subject);
+    const own = (subject && narrowed.bySubject[subject]) || { note: null };
+    return {
+      reflection: null,
+      lessons: [],
+      note: own.note,
+      loading: own.loading ?? false,
+      failed: own.failed ?? false,
+    };
+  },
+}));
+
 const subject = (name: string, concepts = ["Fractions"]) => ({
   slug: subjectSlug(name),
   name,
@@ -56,7 +75,11 @@ const LESSON = {
   updatedAt: new Date().toISOString(),
 };
 
-beforeEach(() => state({}));
+beforeEach(() => {
+  state({});
+  narrowed.bySubject = {};
+  narrowed.asked = [];
+});
 
 describe("who is told there is nothing to show", () => {
   it("a child who has done nothing yet, in the frame's words", () => {
@@ -121,6 +144,64 @@ describe("the subject card's band", () => {
     expect(a).toBe(b);
     const t = textureFor("Mathematics");
     expect(a).toBe(`${t.motif}-${t.family}`);
+  });
+});
+
+/**
+ * Backend B29 and design D42, 1 Oct. The frame draws a short note per subject
+ * card and the contract had only a paragraph, so the cards carried concept
+ * names. `note` now arrives, written short; a card shows its own subject's,
+ * and the names where the backend wrote none.
+ */
+describe("the line under each subject", () => {
+  it("is the backend's note for that subject, as written", () => {
+    state({
+      subjects: [subject("Mathematics", ["Fractions"]), subject("English", ["Verbs"])],
+    });
+    narrowed.bySubject = {
+      Mathematics: { note: "Getting quicker with fractions" },
+      English: { note: "Reading longer stories" },
+    };
+
+    render(<ProgressTab />);
+
+    expect(screen.getByText("Getting quicker with fractions")).toBeInTheDocument();
+    expect(screen.getByText("Reading longer stories")).toBeInTheDocument();
+    // Read per subject, from the narrowed route - the whole-student note is
+    // about everything, not about one card.
+    expect(narrowed.asked).toEqual(
+      expect.arrayContaining(["Mathematics", "English"]),
+    );
+    expect(screen.queryByText("Fractions")).toBeNull();
+  });
+
+  it("falls back to concept names when there is no note", () => {
+    state({ subjects: [subject("Mathematics", ["Fractions", "Decimals"])] });
+    narrowed.bySubject = { Mathematics: { note: null } };
+
+    render(<ProgressTab />);
+
+    expect(screen.getByText("Fractions · Decimals")).toBeInTheDocument();
+  });
+
+  it("falls back to concept names when the subject's read fails", () => {
+    // The names are already here and true; a failed read is not "no note".
+    state({ subjects: [subject("Mathematics", ["Fractions"])] });
+    narrowed.bySubject = { Mathematics: { note: null, failed: true } };
+
+    render(<ProgressTab />);
+
+    expect(screen.getByText("Fractions")).toBeInTheDocument();
+  });
+
+  it("holds the line rather than showing names that a note will replace", () => {
+    state({ subjects: [subject("Mathematics", ["Fractions"])] });
+    narrowed.bySubject = { Mathematics: { note: null, loading: true } };
+
+    render(<ProgressTab />);
+
+    expect(screen.getByText("Mathematics")).toBeInTheDocument();
+    expect(screen.queryByText("Fractions")).toBeNull();
   });
 });
 
