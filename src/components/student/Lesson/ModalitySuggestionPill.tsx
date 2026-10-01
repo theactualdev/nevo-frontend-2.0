@@ -36,6 +36,7 @@ export function ModalitySuggestionPill({
   onAccept,
   onAcceptStart,
   onDismiss,
+  onShown,
 }: {
   modality: Modality;
   /** Student took the offer - switch to `modality` (fires after the beat). */
@@ -47,14 +48,26 @@ export function ModalitySuggestionPill({
   onAcceptStart?: () => void;
   /** Declined. The offer is spent. */
   onDismiss: () => void;
+  /**
+   * The card has actually appeared - after its beat, not when it mounted. A
+   * child who moves on inside the beat never saw an offer.
+   */
+  onShown?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [accepting, setAccepting] = useState(false);
 
   const acceptTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onShownRef = useRef(onShown);
+  useEffect(() => {
+    onShownRef.current = onShown;
+  }, [onShown]);
 
   useEffect(() => {
-    const show = setTimeout(() => setOpen(true), OPEN_DELAY_MS);
+    const show = setTimeout(() => {
+      setOpen(true);
+      onShownRef.current?.();
+    }, OPEN_DELAY_MS);
     return () => {
       clearTimeout(show);
       if (acceptTimer.current) clearTimeout(acceptTimer.current);

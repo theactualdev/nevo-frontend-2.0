@@ -8,7 +8,6 @@ import {
   type ToggleSegment,
 } from "@/components/shared";
 import {
-  BREAK_TYPES,
   BUSY_PHASE,
   BUSY_REASON,
   DENSITY,
@@ -22,8 +21,8 @@ import {
   type Modality,
   type SignalEventType,
 } from "@/lib/constants";
-import { useAccessibility } from "@/context/AccessibilityContext";
-import { useBreakMonitor, useLesson, useSignals } from "@/hooks";
+import { useLesson, useSignals } from "@/hooks";
+import type { SessionOutcome } from "@/hooks/useSignals";
 import { useRuntimeAdaptation } from "@/hooks/useRuntimeAdaptation";
 import { useLessonExit } from "./LessonExit";
 import { useScaffoldLevel } from "@/hooks/useScaffoldLevel";
@@ -94,6 +93,9 @@ const SCROLL_MILESTONES = [25, 50, 75, 100];
 
 /** How long the transient post-answer feedback note lingers before fading. */
 const FEEDBACK_MS = 3500;
+
+/** One object, so the signal session is not told the same ending twice. */
+const COMPLETED: SessionOutcome = { completionStatus: "completed" };
 
 /** A calculation segment whose Interactive modality routes to the solver (§8). */
 function isCalculation(segment: LessonSegment): boolean {
@@ -210,7 +212,14 @@ export function LessonPlayer({
 
   // Signals ride the BACKEND's session id, not the local one above - see
   // `useSignals`. Null until `POST /session` answers, which the hook holds for.
-  const { trackEvent } = useSignals(progress.sessionId, lesson.id);
+  // How the session ended travels on its envelope; set where it ends.
+  const [ending, setEnding] = useState<SessionOutcome | null>(null);
+  const { trackEvent } = useSignals(
+    progress.sessionId,
+    lesson.id,
+    "lesson",
+    ending,
+  );
   const { setActiveLesson } = useLesson();
 
   // Assessment picks, captured for the Review Answers screen (a separate route).
@@ -395,21 +404,47 @@ export function LessonPlayer({
   // "offer" returns to the same segment. Trigger travels into `break_start`.
   const breakOrigin = useRef<"advance" | "offer">("advance");
   const breakTrigger = useRef<string>("adaptation_plan");
-  // Break OFFERS (B.7/§4): spent per segment for offered breaks, once per
-  // session for the 20-minute monitor. Declining spends; never re-asks.
+  // Break OFFERS (B.7/§4): spent per segment, whoever made them. Declining
+  // spends; the same segment never re-asks.
+  /*
+   * THERE IS NO CLIENT TIMER ANY MORE. A 20-minute clock here offered breaks
+   * the engine had not decided - when it said no, when the read failed, and
+   * in reviews - and frontend §5b is plain that the timing is never ours. It
+   * was also spent once per lesson, so after one offer every break the ENGINE
+   * suggested was dropped for the rest of it. Absent an engine offer, nothing
+   * is offered (rule 5).
+   */
   const [spentBreakOffers, setSpentBreakOffers] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-  const [timeOfferSpent, setTimeOfferSpent] = useState(false);
   // Step-up offers, spent per segment by acting on them.
   const [spentEscalations, setSpentEscalations] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-  // The student's own preference gates the prompt - turning it off used to
-  // change nothing at all.
-  const { suggestBreaks } = useAccessibility();
-  const { approachingThreshold } = useBreakMonitor(
-    phase === "segments" && suggestBreaks,
+  /*
+   * WHAT THE ENGINE IS TOLD THE CHILD DID, as counts - see `RuntimeState`.
+   * State rather than refs because the request is built from what renders.
+   */
+  const [observed, setObserved] = useState({
+    replays: 0,
+    consecutiveErrors: 0,
+    declined: [] as Modality[],
+    declines: 0,
+    shownHere: false,
+    sinceShown: null as number | null,
+    breaksTaken: 0,
+  });
+  const noteAnswer = (correct: boolean) =>
+    setObserved((o) => ({
+      ...o,
+      consecutiveErrors: correct ? 0 : o.consecutiveErrors + 1,
+    }));
+  // The engine answer whose modality offer has been spent - see `suggested`.
+  const [spentSuggestionOf, setSpentSuggestionOf] =
+    useState<AdaptationPlan | null>(null);
+  // The offer on screen right now, for `ignored` when the child moves on.
+  const shownSuggestion = useRef<{ segmentId: string; suggested: Modality } | null>(
+    null,
   );
   // Transient post-answer note that greets the next segment, then fades.
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -422,13 +457,11 @@ export function LessonPlayer({
   const segment = lesson.segments[index];
 
   /**
-   * The engine's mid-lesson read, asked at each segment boundary.
+   * The engine's mid-lesson read, asked at each segment boundary and when the
+   * child does something it reports.
    *
-   * This is what `useBreakMonitor`'s "the actual break decision is confirmed by
-   * the backend" has always pointed at. The client timer still primes the
-   * offer; the engine decides whether one is warranted and WHICH - the time
-   * path used to hard-code a micro break, and the engine asks for a movement
-   * break on the same trigger.
+   * The engine decides whether a break is warranted and WHICH; nothing on
+   * this side primes or times one.
    *
    * Only observed facts are sent. Engagement and comprehension scores would
    * unlock more of the engine and would have to be invented, so they are not
@@ -443,6 +476,13 @@ export function LessonPlayer({
       currentModality: modality,
       availableModalities: segment.modalities,
       midpointReached: index >= Math.floor(lesson.segments.length / 2),
+      replayCountOnSegment: observed.replays,
+      consecutiveErrors: observed.consecutiveErrors,
+      declinedModalities: observed.declined,
+      sessionDeclineCount: observed.declines,
+      sameSegmentSuggestionShown: observed.shownHere,
+      segmentsSinceLastSuggestion: observed.sinceShown,
+      breaksTaken: observed.breaksTaken,
     },
     lesson,
   );
@@ -519,16 +559,46 @@ export function LessonPlayer({
   }, [segment.id, modality]);
 
   // time_on_segment: one event per segment, emitted when it's left (index
-  // change) or on unmount. Keyed on `index` so within-segment modality/density
-  // changes don't split the timing.
+  // change, or the segments phase ending) or on unmount. Keyed on `index` so
+  // within-segment modality/density changes don't split the timing.
+  /*
+   * ONLY THE TIME THE SEGMENT WAS ON SCREEN. This was keyed on the index
+   * alone, so the review entry screen, a break, a module boundary rest and
+   * the whole after-lesson check all counted as time on the segment beneath
+   * them - a child resting or answering reported as dwelling, which is the
+   * reading the engine takes as struggle. The clock now runs only while the
+   * segment is showing and pauses under anything that covers it.
+   */
+  const inSegments = phase === "segments";
+  const segmentShowing =
+    inSegments && breakActive === null && boundaryTo === null;
+  const segmentClock = useRef<{ shownMs: number; since: number | null } | null>(
+    null,
+  );
   useEffect(() => {
-    // Monotonic (rule 4): this duration goes to the engine, and a wall clock
-    // that jumps - a tablet correcting itself mid-lesson - sends a negative.
-    const enteredAt = performance.now();
+    if (!inSegments) return;
+    const clock = { shownMs: 0, since: null as number | null };
+    segmentClock.current = clock;
     const segId = lesson.segments[index].id;
     scrollDepth.current = 0;
     scrollMarks.current = new Set();
     return () => {
+      // Monotonic (rule 4): this duration goes to the engine, and a wall
+      // clock that jumps - a tablet correcting itself mid-lesson - sends a
+      // negative.
+      const shownMs =
+        clock.shownMs +
+        (clock.since === null ? 0 : performance.now() - clock.since);
+      // An offer still on screen as the child moves on was neither taken nor
+      // turned down.
+      const offer = shownSuggestion.current;
+      if (offer?.segmentId === segId) {
+        shownSuggestion.current = null;
+        trackEvent(SIGNAL_EVENT_TYPES.MODALITY_SUGGESTION_IGNORED, {
+          segmentId: segId,
+          suggested: offer.suggested,
+        });
+      }
       /*
        * A chunked body's own count outranks the layout measurement, and only
        * ever for the segment it was reported against.
@@ -544,11 +614,23 @@ export function LessonPlayer({
         chunkRead.current?.segmentId === segId ? chunkRead.current.pct : null;
       trackEvent(SIGNAL_EVENT_TYPES.TIME_ON_SEGMENT, {
         segmentId: segId,
-        durationMs: Math.max(0, Math.round(performance.now() - enteredAt)),
+        durationMs: Math.max(0, Math.round(shownMs)),
         scrollDepthPct: chunked ?? Math.round(scrollDepth.current),
       });
     };
-  }, [index, lesson.segments, trackEvent]);
+  }, [index, inSegments, lesson.segments, trackEvent]);
+
+  // Runs the clock above while the segment is on screen. Declared AFTER it,
+  // so on a segment change this starts the new clock rather than the old one.
+  useEffect(() => {
+    const clock = segmentClock.current;
+    if (!segmentShowing || !clock) return;
+    clock.since = performance.now();
+    return () => {
+      if (clock.since !== null) clock.shownMs += performance.now() - clock.since;
+      clock.since = null;
+    };
+  }, [segmentShowing, index]);
 
   /*
    * A SEGMENT THAT FITS ON ONE SCREEN WAS REPORTED AS UNREAD.
@@ -695,9 +777,9 @@ export function LessonPlayer({
   const readingOn = Boolean(plan?.accommodations?.reading);
   const attentionOn = Boolean(plan?.accommodations?.attention);
 
-  // Break OFFERS (B.7): the plan names a break type to OFFER on this segment;
-  // the 20-minute monitor primes a micro one. One ask on screen at a time -
-  // an offered break outranks (and suppresses) the modality suggestion.
+  // Break OFFERS (B.7): the plan names a break type to OFFER on this segment,
+  // or the engine suggests one mid-lesson. One ask on screen at a time - an
+  // offered break outranks (and suppresses) the modality suggestion.
   //
   // `offerBreak` BEING PRESENT IS THE INSTRUCTION now. It used to be gated on
   // the frustration state as well, so the plan could name a break and be
@@ -705,35 +787,88 @@ export function LessonPlayer({
   const offeredBreakType = segPlan?.offerBreak ?? null;
   const showOfferedBreak =
     offeredBreakType !== null && !spentBreakOffers.has(segment.id);
-  // The engine's own call, or the client's 20-minute prime as the fallback it
-  // was always meant to be. Either can raise the offer; the engine chooses the
-  // TYPE when it is the one asking.
-  const showTimeBreakOffer =
-    !showOfferedBreak &&
-    (runtime.offeredBreak !== null || approachingThreshold) &&
-    !timeOfferSpent;
-  const showBreakOffer = showOfferedBreak || showTimeBreakOffer;
+  // The engine's own call, for the segment it was asked about - its answer
+  // about the segment just left is not an offer for this one.
+  const engineBreak =
+    runtime.segmentId === segment.id ? (runtime.offeredBreak ?? null) : null;
+  const breakOffered = showOfferedBreak
+    ? offeredBreakType
+    : engineBreak !== null && !spentBreakOffers.has(segment.id)
+      ? engineBreak
+      : null;
+  const showBreakOffer = breakOffered !== null;
+
+  /*
+   * THE ENGINE'S SUGGESTION IS ONE OFFER PER ANSWER. It is lesson-level (see
+   * `toAdaptationPlan`), so a mid-lesson answer is offered on the segment it
+   * was asked about, and the load-time one wherever it can first be drawn -
+   * once, and spent by being taken, turned down or left on screen. The
+   * per-segment `suggestModality` is the authored seam and keeps its own
+   * per-segment rule.
+   */
+  const engineSuggests = runtime.plan
+    ? runtime.segmentId === segment.id
+      ? (runtime.plan.suggestModality ?? null)
+      : null
+    : (plan?.suggestModality ?? null);
+  const authoredSuggests = segPlan?.suggestModality ?? null;
+  const suggestionFromEngine =
+    authoredSuggests === null && engineSuggests !== null && engine !== spentSuggestionOf;
 
   // Offer the plan's suggestion only while it's renderable and not already
   // showing. Rate-limits: never on consecutive segments, never on the first
   // segment after a module boundary (SCRUM-101 - the student just made a
   // transition decision; don't stack an adaptation offer on top of it), and
   // never alongside a break offer.
-  const suggested = segPlan?.suggestModality ?? null;
-  const showSuggestion =
+  const suggested = authoredSuggests ?? (suggestionFromEngine ? engineSuggests : null);
+  const offerable =
     !suggestionSpent &&
-    !showBreakOffer &&
     suggested !== null &&
     suggested !== modality &&
-    hasContent(segment, suggested) &&
-    lastSuggestedIndex !== index - 1 &&
-    !opensLaterModule(lesson, index);
+    hasContent(segment, suggested);
+  const consecutive = lastSuggestedIndex === index - 1;
+  const afterBoundary = opensLaterModule(lesson, index);
+  const showSuggestion =
+    offerable && !showBreakOffer && !consecutive && !afterBoundary;
+
+  /*
+   * AN ENGINE OFFER THE PLAYER'S OWN RULES HOLD BACK IS SAID TO BE HELD BACK.
+   * Otherwise the engine cannot tell an offer the child never saw from one
+   * they looked at and passed over. A break showing is not here: that only
+   * defers the offer, which then shows.
+   */
+  const heldBack =
+    suggestionFromEngine && offerable
+      ? consecutive
+        ? "consecutive_segment"
+        : afterBoundary
+          ? "after_module_boundary"
+          : null
+      : null;
+  useEffect(() => {
+    if (!heldBack || !suggested) return;
+    trackEvent(SIGNAL_EVENT_TYPES.ADAPTATION_SUPPRESSED, {
+      segmentId: segment.id,
+      adaptation: "modality_suggestion",
+      suggested,
+      reason: heldBack,
+    });
+  }, [heldBack, suggested, segment.id, trackEvent]);
 
   const go = (next: number) => {
     if (next < 0 || next >= total) return;
     // Leaving a segment that had a live offer counts as that segment having
     // suggested — the next segment must stay quiet (never consecutive).
     if (showSuggestion) setLastSuggestedIndex(index);
+    // An engine offer left on screen is spent with the segment it was on.
+    if (suggestionFromEngine && shownSuggestion.current?.segmentId === segment.id)
+      setSpentSuggestionOf(engine);
+    setObserved((o) => ({
+      ...o,
+      replays: 0,
+      shownHere: false,
+      sinceShown: o.sinceShown === null ? null : o.sinceShown + 1,
+    }));
     const nextSegment = lesson.segments[next];
     const nextPlan = livePlanFor(nextSegment.id);
     setIndex(next);
@@ -790,7 +925,9 @@ export function LessonPlayer({
     }
     // Review sessions end on the strengthened completion - the quick checks
     // were the retrieval, so no second assessment (37d).
-    setPhase(hasAssessment && !review ? "assessment" : "complete");
+    const assess = hasAssessment && !review;
+    setPhase(assess ? "assessment" : "complete");
+    if (!assess) setEnding(COMPLETED);
   };
 
   /**
@@ -811,30 +948,24 @@ export function LessonPlayer({
 
   /** Accept/decline the offered break; either way the offer is spent. */
   const acceptBreakOffer = () => {
-    if (showOfferedBreak) {
-      setSpentBreakOffers((prev) => new Set(prev).add(segment.id));
-      // NOT RENAMED, deliberately. This string is sent to the engine as the
-      // `trigger` on a BREAK_START signal, so it is wire vocabulary and not
-      // ours to tidy. Raised with backend instead - see BUILD_STATUS.
-      breakTrigger.current = "affect_offer";
-      breakOrigin.current = "offer";
-      setBreakActive(offeredBreakType);
-      return;
-    }
-    setTimeOfferSpent(true);
-    breakTrigger.current = runtime.offeredBreak ? "engine_offer" : "time_offer";
+    if (!breakOffered) return;
+    setSpentBreakOffers((prev) => new Set(prev).add(segment.id));
+    trackEvent(SIGNAL_EVENT_TYPES.BREAK_TAKEN, {
+      segmentId: segment.id,
+      breakType: breakOffered,
+    });
+    // NOT RENAMED, deliberately. This string is sent to the engine as the
+    // `trigger` on a BREAK_START signal, so it is wire vocabulary and not
+    // ours to tidy. Raised with backend instead - see BUILD_STATUS.
+    breakTrigger.current = showOfferedBreak ? "affect_offer" : "engine_offer";
     breakOrigin.current = "offer";
-    // The engine's type when it asked; the micro break only when this is the
-    // client timer talking, which is all it could ever offer.
-    setBreakActive(runtime.offeredBreak ?? BREAK_TYPES.MICRO);
+    // The type is whoever asked's: nothing here picks one.
+    setBreakActive(breakOffered);
   };
 
+  // No event: the contract has no type for a declined break. Asked for.
   const dismissBreakOffer = () => {
-    if (showOfferedBreak) {
-      setSpentBreakOffers((prev) => new Set(prev).add(segment.id));
-      return;
-    }
-    setTimeOfferSpent(true);
+    setSpentBreakOffers((prev) => new Set(prev).add(segment.id));
   };
 
   /** Next chevron — an unpassed Quick Check intercepts the advance. */
@@ -908,18 +1039,48 @@ export function LessonPlayer({
       density === id ? "manual" : systemDensity === id ? "system" : "default",
   }));
 
+  /** What became of the offer: said to the engine, and the offer spent. */
+  const settleSuggestion = useCallback(
+    (outcome: SignalEventType) => {
+      shownSuggestion.current = null;
+      if (suggestionFromEngine) setSpentSuggestionOf(engine);
+      trackEvent(outcome, { segmentId: segment.id, suggested });
+    },
+    [suggestionFromEngine, engine, trackEvent, segment.id, suggested],
+  );
+
   const acceptSuggestion = useCallback(() => {
     if (suggested) setModality(suggested);
     setLastSuggestedIndex(index);
     setSuggestionSpent(true);
+    settleSuggestion(SIGNAL_EVENT_TYPES.MODALITY_SUGGESTION_ACCEPTED);
     // The accept beat is over and the new modality is on screen.
     trackBusy(BUSY_REASON.MODALITY_SWITCH, BUSY_PHASE.END);
-  }, [suggested, index, trackBusy]);
+  }, [suggested, index, trackBusy, settleSuggestion]);
 
   const dismissSuggestion = useCallback(() => {
     setLastSuggestedIndex(index);
     setSuggestionSpent(true);
-  }, [index]);
+    settleSuggestion(SIGNAL_EVENT_TYPES.MODALITY_SUGGESTION_DECLINED);
+    if (suggested)
+      setObserved((o) => ({
+        ...o,
+        declines: o.declines + 1,
+        declined: o.declined.includes(suggested)
+          ? o.declined
+          : [...o.declined, suggested],
+      }));
+  }, [index, settleSuggestion, suggested]);
+
+  const suggestionShown = useCallback(() => {
+    if (!suggested) return;
+    shownSuggestion.current = { segmentId: segment.id, suggested };
+    setObserved((o) => ({ ...o, shownHere: true, sinceShown: 0 }));
+    trackEvent(SIGNAL_EVENT_TYPES.MODALITY_SUGGESTION_SHOWN, {
+      segmentId: segment.id,
+      suggested,
+    });
+  }, [segment.id, suggested, trackEvent]);
 
   /*
    * AN ASSESSMENT WITH NO QUESTIONS IS NOT AN ASSESSMENT.
@@ -979,11 +1140,17 @@ export function LessonPlayer({
     return (
       <AfterLessonAssessment
         assessment={lesson.assessment!}
-        onAnswer={({ questionIndex, selectedId, correct }) => {
+        onAnswer={({ questionIndex, selectedId, correct, responseTimeMs }) => {
+          // What was picked, which checkpoint it answered and how long it took
+          // - the response data frontend §2 says every event carries.
+          const checkpointId = lesson.assessment?.questions[questionIndex]?.id;
           trackEvent(SIGNAL_EVENT_TYPES.COMPREHENSION_RESPONSE, {
             kind: "assessment",
             questionIndex,
+            ...(checkpointId ? { checkpointId } : {}),
+            selectedId,
             correct,
+            responseTimeMs,
           });
           // The first answer to each question, for the scheduler. `Map.set` is
           // guarded so a re-answer cannot overwrite what they knew first time.
@@ -1015,6 +1182,7 @@ export function LessonPlayer({
               question: lesson.assessment?.questions[questionIndex] ?? {},
               correct,
               studentId: getSession()?.userId,
+              responseTimeMs,
             });
             if (attempt) void scaffoldsApi.attempt(attempt).catch(() => {});
           }
@@ -1027,11 +1195,15 @@ export function LessonPlayer({
           ];
           saveReviewAnswers(lesson.id, reviewAnswers.current);
         }}
-        onFinish={() => setPhase("complete")}
+        onFinish={() => {
+          setPhase("complete");
+          setEnding(COMPLETED);
+        }}
         onReviewAnswers={() => {
           // The lesson IS finished at this point - reviewing is a way of
           // leaving it, not of abandoning it.
           markComplete();
+          setEnding(COMPLETED);
           exitTo(`${LESSONS_HREF}/${lesson.id}/review`);
         }}
       />
@@ -1100,6 +1272,7 @@ export function LessonPlayer({
         }
         onDone={() => {
           setBreakActive(null);
+          setObserved((o) => ({ ...o, breaksTaken: o.breaksTaken + 1 }));
           // An offered break returns to the segment it interrupted; a
           // plan-delivered one resumes the advance it intercepted.
           if (breakOrigin.current === "advance") continueAdvance();
@@ -1233,7 +1406,12 @@ export function LessonPlayer({
         {showBreakOffer ? (
           <BreakOfferPill
             key={`break-offer-${segment.id}`}
-            trigger={showOfferedBreak ? "instruction" : "time"}
+            onShown={() =>
+              trackEvent(SIGNAL_EVENT_TYPES.BREAK_SUGGESTED, {
+                segmentId: segment.id,
+                breakType: breakOffered,
+              })
+            }
             onAccept={acceptBreakOffer}
             onDismiss={dismissBreakOffer}
           />
@@ -1246,6 +1424,7 @@ export function LessonPlayer({
               onAcceptStart={() =>
                 trackBusy(BUSY_REASON.MODALITY_SWITCH, BUSY_PHASE.START)
               }
+              onShown={suggestionShown}
               onDismiss={dismissSuggestion}
             />
           )
@@ -1300,10 +1479,12 @@ export function LessonPlayer({
           {stepUpOffered && !spentEscalations.has(segment.id) && (
               <DifficultyOfferPill
                 key={`stepup-${segment.id}`}
-                onSpent={() => {
-                  setSpentEscalations((prev) => new Set(prev).add(segment.id));
-                  setFeedback("Noted - we'll step things up.");
-                }}
+                // No note after the tap. "Noted - we'll step things up" was ours,
+                // narrated a decision the engine had not made, and promised a
+                // step up nothing here asks for.
+                onSpent={() =>
+                  setSpentEscalations((prev) => new Set(prev).add(segment.id))
+                }
               />
             )}
           {action === ADJUSTMENT_ACTIONS.SHOW_SOCRATIC_PANEL &&
@@ -1345,8 +1526,14 @@ export function LessonPlayer({
               reading={readingOn}
               attention={attentionOn}
               onReadProgress={noteReadProgress}
-              onReplay={() =>
-                trackEvent(SIGNAL_EVENT_TYPES.REPLAY, { segmentId: segment.id })
+              onReplay={() => {
+                trackEvent(SIGNAL_EVENT_TYPES.REPLAY, { segmentId: segment.id });
+                setObserved((o) => ({ ...o, replays: o.replays + 1 }));
+              }}
+              onNarrationPlayed={() =>
+                trackEvent(SIGNAL_EVENT_TYPES.NARRATION_PLAYED, {
+                  segmentId: segment.id,
+                })
               }
               onAudioBusy={(phase) =>
                 trackBusy(BUSY_REASON.MEDIA_PLAYING, phase)
@@ -1359,17 +1546,20 @@ export function LessonPlayer({
                   segmentId: segment.id,
                 });
               }}
-              onCalcStep={(correct) =>
+              onCalcStep={(correct) => {
                 // The ingest enum has a type for this. It was riding
                 // `comprehension_response` under a `kind` of our own invention,
                 // which obliges the engine to know our convention - and no
                 // batch had ever actually landed under it, so switching now
                 // costs no history.
+                // The step and the child's answer are not added: the solver is
+                // frozen pending its backend payload (SCRUM-181/177).
                 trackEvent(SIGNAL_EVENT_TYPES.CALCULATION_STEP_RESPONSE, {
                   segmentId: segment.id,
                   correct,
-                })
-              }
+                });
+                noteAnswer(correct);
+              }}
               onPiecePlaced={(placed, needed) =>
                 trackEvent(SIGNAL_EVENT_TYPES.MANIPULATIVE_PIECE_PLACED, {
                   segmentId: segment.id,
@@ -1392,12 +1582,16 @@ export function LessonPlayer({
           check={segment.quickCheck}
           open={checkOpen}
           onOpenChange={setCheckOpen}
-          onAnswered={(correct) => {
+          onAnswered={(correct, answered) => {
+            const checkpointId = segment.quickCheck?.id;
             trackEvent(SIGNAL_EVENT_TYPES.COMPREHENSION_RESPONSE, {
               kind: "quick_check",
               segmentId: segment.id,
+              ...(checkpointId ? { checkpointId } : {}),
               correct,
+              ...answered,
             });
+            noteAnswer(correct);
             if (correct)
               setPassedChecks((prev) => new Set(prev).add(segment.id));
           }}
@@ -1423,6 +1617,7 @@ export function LessonPlayer({
           if (!review) {
             reportProgress(LESSON_STATUS.EXITED, { segment: index });
           }
+          setEnding({ completionStatus: "exited", exitPosition: segment.id });
           exitTo(LESSONS_HREF);
         }}
       />
@@ -1464,6 +1659,7 @@ function SegmentBody({
   attention,
   onReadProgress,
   onReplay,
+  onNarrationPlayed,
   onAudioBusy,
   onCalcSolved,
   onCalcStep,
@@ -1476,6 +1672,7 @@ function SegmentBody({
   attention: boolean;
   onReadProgress: (pct: number) => void;
   onReplay: () => void;
+  onNarrationPlayed: () => void;
   onAudioBusy: (phase: BusyPhase) => void;
   onCalcSolved: () => void;
   onCalcStep: (correct: boolean) => void;
@@ -1498,6 +1695,7 @@ function SegmentBody({
       <AudioSegment
         content={segment.audio}
         onReplay={onReplay}
+        onPlayed={onNarrationPlayed}
         onBusy={onAudioBusy}
       />
     );

@@ -87,6 +87,11 @@ export interface InteractiveContent {
 // ── Comprehension check (inline Quick Check) ────────────────────────────────
 
 export interface QuickCheck {
+  /**
+   * The checkpoint it was built from, so an answer can say which one it
+   * answered. Absent on the authored demo checks, which have none.
+   */
+  id?: string;
   question: string;
   options: { id: string; label: string }[];
   correctId: string;
@@ -390,6 +395,12 @@ export interface AdaptationPlan {
    * engine fills.
    */
   adjustment?: AdjustmentAction | null;
+  /**
+   * The engine's one modality suggestion for this answer, lesson-level like
+   * the wire's `modalitySuggestion`. The per-segment `suggestModality` is the
+   * authored seam; this is offered once, where it can render.
+   */
+  suggestModality?: Modality | null;
   /**
    * The hint `offer_hint` shows, when the engine sent one.
    *

@@ -45,11 +45,18 @@ function clock(sec: number): string {
 export function AudioSegment({
   content,
   onReplay,
+  onPlayed,
   onBusy,
 }: {
   content: AudioContent;
   /** Fired when the student restarts a finished clip (a "replay" signal). */
   onReplay?: () => void;
+  /**
+   * The real clip has started playing for the first time on this visit - the
+   * element said so, not the button. Never for the demo's simulated clip,
+   * where nothing played.
+   */
+  onPlayed?: () => void;
   /**
    * `system_busy` bracket for playback (Touch Signal Contract: media_playing is
    * its own reason — the student is attending, not idle). Start on play, end on
@@ -70,6 +77,8 @@ export function AudioSegment({
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const onBusyRef = useRef(onBusy);
   const playingRef = useRef(false);
+  const onPlayedRef = useRef(onPlayed);
+  const startedOnce = useRef(false);
 
   const duration = simulated
     ? (content.durationSec ?? 40)
@@ -77,7 +86,8 @@ export function AudioSegment({
 
   useEffect(() => {
     onBusyRef.current = onBusy;
-  }, [onBusy]);
+    onPlayedRef.current = onPlayed;
+  }, [onBusy, onPlayed]);
 
   useEffect(
     () => () => {
@@ -93,6 +103,10 @@ export function AudioSegment({
     playingRef.current = on;
     setPlaying(on);
     onBusyRef.current?.(on ? "start" : "end");
+    if (on && !simulated && !startedOnce.current) {
+      startedOnce.current = true;
+      onPlayedRef.current?.();
+    }
   };
 
   const stop = () => {

@@ -36,10 +36,13 @@ export function scaffoldAttemptFor({
   question,
   correct,
   studentId,
+  responseTimeMs,
 }: {
   question: Pick<AssessmentQuestion, "id" | "conceptId">;
   correct: boolean;
   studentId: string | null | undefined;
+  /** Measured, never estimated - absent when nothing timed the answer. */
+  responseTimeMs?: number;
 }): ScaffoldAttempt | null {
   if (!studentId || !question.id || !question.conceptId) return null;
   return {
@@ -47,5 +50,9 @@ export function scaffoldAttemptFor({
     conceptId: question.conceptId,
     problemId: question.id,
     responseCorrect: correct,
+    // `minimum: 0`, integer. A missing time is omitted, never a made-up 0.
+    ...(typeof responseTimeMs === "number" && Number.isFinite(responseTimeMs)
+      ? { responseTimeMs: Math.max(0, Math.round(responseTimeMs)) }
+      : {}),
   };
 }

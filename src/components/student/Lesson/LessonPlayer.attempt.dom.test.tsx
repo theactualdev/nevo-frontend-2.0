@@ -123,6 +123,9 @@ describe("answering a question", () => {
       conceptId: "c-1",
       problemId: "cp-7",
       responseCorrect: true,
+      // How long the question was in front of the child, measured. The attempt
+      // never carried one, so the engine read every answer as untimed.
+      responseTimeMs: expect.any(Number),
     });
   });
 
@@ -223,6 +226,28 @@ describe("what a failed report costs", () => {
 
     expect(document.body.textContent).not.toMatch(
       /couldn't|error|failed|try again/i,
+    );
+  });
+});
+
+describe("what an answer tells the engine", () => {
+  it("names the checkpoint, the pick and how long it took", () => {
+    render(<LessonPlayer lesson={lessonWith(QUESTION)} plan={PLAN} live />);
+    reachAssessment();
+
+    answer("Roots");
+
+    // It sent `{ questionIndex, correct }`: no checkpoint to join on, no pick
+    // to tell a near miss from a misconception, and no time at all.
+    expect(trackEvent).toHaveBeenCalledWith(
+      "comprehension_response",
+      expect.objectContaining({
+        kind: "assessment",
+        checkpointId: "cp-7",
+        selectedId: "b",
+        correct: false,
+        responseTimeMs: expect.any(Number),
+      }),
     );
   });
 });

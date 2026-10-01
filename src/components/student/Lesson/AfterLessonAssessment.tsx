@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, ClipboardCheck } from "lucide-react";
 import { Button } from "@/components/shared";
 import type { Assessment } from "@/lib/types";
@@ -35,6 +35,8 @@ export function AfterLessonAssessment({
     questionIndex: number;
     selectedId: string;
     correct: boolean;
+    /** From the question appearing to the confirm, monotonic (rule 4). */
+    responseTimeMs?: number;
   }) => void;
   /** "Review answers" on the result → the Review Answers screen (A5). */
   onReviewAnswers?: () => void;
@@ -54,6 +56,11 @@ export function AfterLessonAssessment({
    * mastered.
    */
   const [gotRight, setGotRight] = useState(0);
+  // When the current question was put in front of the child.
+  const shownAt = useRef<number | null>(null);
+  useEffect(() => {
+    if (stage === "questions") shownAt.current = performance.now();
+  }, [stage, qIndex]);
 
   if (stage === "intro") {
     return (
@@ -88,7 +95,15 @@ export function AfterLessonAssessment({
   const confirm = () => {
     if (!selected) return;
     const correct = selected === question.correctId;
-    onAnswer?.({ questionIndex: qIndex, selectedId: selected, correct });
+    const asked = shownAt.current;
+    onAnswer?.({
+      questionIndex: qIndex,
+      selectedId: selected,
+      correct,
+      ...(asked === null
+        ? {}
+        : { responseTimeMs: Math.max(0, Math.round(performance.now() - asked)) }),
+    });
     if (correct) setGotRight((n) => n + 1);
     if (correct) advance();
     else setRevealed(true);
