@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { ReturningSignInScreen } from "./ReturningSignInScreen";
 import { ApiError } from "@/lib/api/client";
+import * as authApiModule from "@/lib/api";
 import { clearSession, getRememberedProfile } from "@/lib/auth/session";
 
 /**
@@ -81,17 +82,25 @@ const SESSION = {
 const refusal = (code: string) =>
   new ApiError(401, "Unauthorized", { detail: { code, message: "no" } });
 
+/** The field the PIN boxes are a picture of; focusing it docks the pad. */
+const pinInput = () =>
+  document.querySelector(
+    'input[aria-labelledby="returning-pin-label"]',
+  ) as HTMLInputElement;
+
 function fill({ school = "751A1136", user = "amara.k" } = {}) {
   const [schoolField, userField] = screen.getAllByRole("textbox");
   fireEvent.change(schoolField, { target: { value: school } });
   fireEvent.change(userField, { target: { value: user } });
+  // The pad is focus-driven now (ruling D): tap the boxes, then the keys.
+  act(() => pinInput().focus());
   for (const d of ["1", "2", "3", "4", "5", "6"]) {
     fireEvent.click(screen.getByRole("button", { name: d }));
   }
 }
 
 const signInNow = async () => {
-  fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+  fireEvent.click(screen.getByRole("button", { name: "That's me" }));
   await act(async () => {
     await vi.advanceTimersByTimeAsync(50);
   });
@@ -163,7 +172,10 @@ describe("ReturningSignInScreen — signing back in", () => {
 
     await signInNow();
 
-    expect(screen.getByText(/Welcome back/)).toBeVisible();
+    // The form is headed "Welcome back" too, so the done state is told apart
+    // by its own line.
+    expect(screen.getByText(/Taking you to your lessons/)).toBeVisible();
+    expect(screen.queryByRole("button", { name: "That's me" })).toBeNull();
   });
 
   it("goes where the child was headed, not always to the dashboard", async () => {
@@ -235,7 +247,7 @@ describe("ReturningSignInScreen — signing back in", () => {
     const [schoolField] = screen.getAllByRole("textbox");
     fireEvent.change(schoolField, { target: { value: "751A1136" } });
 
-    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    fireEvent.click(screen.getByRole("button", { name: "That's me" }));
 
     expect(loginPin).not.toHaveBeenCalled();
   });
@@ -603,10 +615,10 @@ describe("signing in on a device with a real keyboard", () => {
       fireEvent.change(pinField(), { target: { value: d } });
     }
 
-    expect(screen.getByRole("button", { name: "Sign in" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "That's me" })).toBeDisabled();
   });
 
-  it("takes a whole typed PIN and enables Sign in", () => {
+  it("takes a whole typed PIN and enables the button", () => {
     render(<ReturningSignInScreen />);
     const [schoolField, userField] = screen.getAllByRole("textbox");
     fireEvent.change(schoolField, { target: { value: "751A1136" } });
@@ -617,7 +629,7 @@ describe("signing in on a device with a real keyboard", () => {
     }
 
     expect(
-      screen.getByRole("button", { name: "Sign in" }),
+      screen.getByRole("button", { name: "That's me" }),
     ).not.toBeDisabled();
   });
 
@@ -628,5 +640,100 @@ describe("signing in on a device with a real keyboard", () => {
     const fields = [...document.querySelectorAll("input")];
 
     expect(fields[2]).toBe(pinField());
+  });
+});
+
+describe("the form as 00c draws it", () => {
+  it("is headed Welcome back, with the frame's line under it", () => {
+    render(<ReturningSignInScreen />);
+
+    expect(
+      screen.getByRole("heading", { name: "Welcome back" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Let's get you back into your lessons."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Sign back in")).toBeNull();
+  });
+
+  it("keeps the help on its own row, pointing at the teacher", () => {
+    render(<ReturningSignInScreen />);
+
+    expect(screen.getByText(/Don't know your username\?/)).toBeInTheDocument();
+    expect(screen.getByText("Ask your teacher.")).toBeInTheDocument();
+  });
+
+  it("asks them to try again after a PIN that did not match, in the tinted box", async () => {
+    loginPin.mockRejectedValue(refusal("authentication_failed"));
+    render(<ReturningSignInScreen />);
+    fill();
+
+    await signInNow();
+
+    expect(
+      screen.getByText(
+        "Hmm, that didn't match. Check your school code and username with your teacher and try again.",
+      ),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+  });
+
+  it("does not offer Try again to a child who has been rate limited", async () => {
+    // Pressing again is the instruction that extends a lockout.
+    loginPin.mockRejectedValue(refusal("too_many_attempts"));
+    render(<ReturningSignInScreen />);
+    fill();
+
+    await signInNow();
+
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+});
+
+describe("one keyboard at a time (ruling D)", () => {
+  const padKey = () => screen.queryByRole("button", { name: "5" });
+
+  it("keeps the number pad down until the PIN is what is being typed", () => {
+    // It was a permanent block pad, so with the school code's own tray up the
+    // form showed two keyboards at once.
+    render(<ReturningSignInScreen />);
+
+    expect(padKey()).toBeNull();
+
+    act(() => pinInput().focus());
+
+    expect(padKey()).not.toBeNull();
+  });
+
+  it("puts the pad away when the child moves to another field", async () => {
+    render(<ReturningSignInScreen />);
+    act(() => pinInput().focus());
+
+    act(() => (document.getElementById("returning-username") as HTMLInputElement).focus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+
+    expect(padKey()).toBeNull();
+  });
+});
+
+describe("an account that is not a student's", () => {
+  beforeEach(() => {
+    vi.spyOn(authApiModule.authApi, "logout").mockResolvedValue(undefined);
+  });
+
+  it("is refused before the device remembers anything", async () => {
+    loginPin.mockResolvedValue({ ...SESSION, role: "teacher" });
+    render(<ReturningSignInScreen />);
+    fill();
+
+    await signInNow();
+
+    expect(screen.getByText(/this is the student sign-in/)).toBeVisible();
+    expect(getRememberedProfile()).toBeNull();
+    expect(signIn).not.toHaveBeenCalled();
+    expect(authApiModule.authApi.logout).toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
   });
 });
