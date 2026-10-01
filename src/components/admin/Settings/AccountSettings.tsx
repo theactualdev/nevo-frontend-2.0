@@ -185,7 +185,7 @@ export function AccountSettings() {
   return (
     <>
       {/* ------------------------------------------------------------ PROFILE */}
-      <SettingsSection title="Your profile">
+      <SettingsSection id="settings-profile" title="Your profile">
         <div className="flex items-center gap-4">
           <Avatar name={me.displayName} email={me.email} size={56} />
           <div className="min-w-0">
@@ -247,6 +247,11 @@ export function AccountSettings() {
                 Saved just now
               </span>
             ) : null}
+            {nameChanged && !savingName && !nameSaved ? (
+              <span role="status" className="text-[13px] text-nevo-near-black/62">
+                You&rsquo;ve changed something here that isn&rsquo;t saved yet.
+              </span>
+            ) : null}
             {nameFailed ? (
               <span role="status" className="text-[13px] text-nevo-navy">
                 That didn&rsquo;t save, so nothing has changed.
@@ -284,6 +289,7 @@ export function AccountSettings() {
 
       {/* ------------------------------------------------------------ ACCESS */}
       <SettingsSection
+        id="settings-access"
         title="Your access"
         note="Your access areas are set by your school's founding admin."
       >
@@ -309,7 +315,7 @@ export function AccountSettings() {
       </SettingsSection>
 
       {/* ---------------------------------------------------------- PASSWORD */}
-      <SettingsSection title="Password">
+      <SettingsSection id="settings-password" title="Password">
         <div className="flex flex-col gap-4">
           <div>
             <div className="flex items-baseline justify-between gap-3">
@@ -440,7 +446,7 @@ export function AccountSettings() {
       </SettingsSection>
 
       {/* ----------------------------------------------------------- TWO-STEP */}
-      <SettingsSection title="Two-step sign-in">
+      <SettingsSection id="settings-two-step" title="Two-step sign-in">
         <NotBuiltNote>
           Two-step sign-in isn&rsquo;t available yet. When it is, you&rsquo;ll
           enter a six-digit code from your phone as well as your password.
@@ -450,6 +456,7 @@ export function AccountSettings() {
 
       {/* ----------------------------------------------------------- SESSIONS */}
       <SettingsSection
+        id="settings-sessions"
         title="Where you're signed in"
         note="Sign out anywhere that isn't you."
       >
