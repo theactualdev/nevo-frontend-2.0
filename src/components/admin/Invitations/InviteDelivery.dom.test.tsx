@@ -38,7 +38,7 @@ const invite = (over: Partial<Invitation> = {}): Invitation => ({
   email: "adeyemi.f@school.edu.ng",
   name: "Folake Adeyemi",
   status: "pending",
-  expiresAt: "2026-10-01T00:00:00Z",
+  expiresAt: "2099-01-01T00:00:00Z", // far off: InvitationsView judges expiry against today
   consentStatus: null,
   deliveryStatus: "sent",
   ...over,
