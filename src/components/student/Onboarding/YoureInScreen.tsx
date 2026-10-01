@@ -25,8 +25,9 @@ import type { TrackEvent } from "@/hooks";
  *
  * So when the device could not be remembered, the screen says so, and says the
  * one thing that is actually true and actionable: a teacher can get them back
- * in. It is still not a good outcome — that needs backend to return a session
- * from `join/{token}/accept` — but it is an honest one.
+ * in. Since 1 Oct that is rarer: the join now returns a session, so the
+ * account's own school code is read from `users/me` and the child IS
+ * remembered. This line is for when that read fails or the school has no code.
  *
  * NOTE FOR DESIGN: the second line is ours, not from a frame. If you would
  * rather it read differently, or sit somewhere other than under the celebration,
