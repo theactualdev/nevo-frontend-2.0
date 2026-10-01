@@ -4,6 +4,23 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { contentApi } from "@/lib/api/content";
 
 /**
+ * Why a picture or recording ended up not loading, as `media_load_failed`
+ * carries it. Each is a fact the device saw, not a guess:
+ * - `offline`: the device said it had no connection when the load failed.
+ * - `refresh_failed`: the link had to be re-issued and the request for a
+ *   fresh one did not answer.
+ * - `load_error`: the element could not load it, fresh link or not.
+ */
+export type MediaFailReason = "offline" | "refresh_failed" | "load_error";
+
+/** Offline outranks the rest: it is the cause, the other two are symptoms. */
+function because(reason: MediaFailReason): MediaFailReason {
+  return typeof navigator !== "undefined" && navigator.onLine === false
+    ? "offline"
+    : reason;
+}
+
+/**
  * A lesson picture's or recording's URL, kept playable.
  *
  * Generated media lives behind SIGNED links that age out (`urlExpiresInSeconds`
@@ -21,22 +38,39 @@ import { contentApi } from "@/lib/api/content";
  * AND AGAIN WHEN THE CONNECTION RETURNS. Offline, every segment the child had
  * not opened yet failed its media, and the failure stuck after the signal came
  * back. A failure is retried once on `online`, from the top.
+ *
+ * `onFailed` IS TOLD ONCE PER FAILURE (B12), so the engine learns the child
+ * did not see or hear it. A retry that fails again is a second failure and is
+ * told again; a retry that works says nothing.
  */
 export function useMediaSource(
   src: string | undefined,
   storagePath: string | undefined,
+  onFailed?: (reason: MediaFailReason) => void,
 ) {
   const [current, setCurrent] = useState(src);
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<MediaFailReason | null>(null);
+  const failed = failure !== null;
   /** Bumped to remount the element, which otherwise holds the failed load. */
   const [attempt, setAttempt] = useState(0);
   const refreshed = useRef(false);
   const refreshing = useRef(false);
+  const onFailedRef = useRef(onFailed);
+
+  useEffect(() => {
+    onFailedRef.current = onFailed;
+  }, [onFailed]);
+
+  // From the state rather than from `onError`, so an element that reports
+  // the same error twice before it unmounts is still one failure.
+  useEffect(() => {
+    if (failure) onFailedRef.current?.(failure);
+  }, [failure]);
 
   const onError = useCallback(async () => {
     if (refreshing.current) return;
     if (refreshed.current || !storagePath) {
-      setFailed(true);
+      setFailure(because("load_error"));
       return;
     }
     refreshed.current = true;
@@ -46,7 +80,7 @@ export function useMediaSource(
       setCurrent(fresh.url);
       setAttempt((a) => a + 1);
     } catch {
-      setFailed(true);
+      setFailure(because("refresh_failed"));
     } finally {
       refreshing.current = false;
     }
@@ -56,7 +90,7 @@ export function useMediaSource(
     if (!failed) return;
     const retry = () => {
       refreshed.current = false;
-      setFailed(false);
+      setFailure(null);
       setAttempt((a) => a + 1);
     };
     window.addEventListener("online", retry);

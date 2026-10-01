@@ -45,6 +45,16 @@ export interface ComprehensionCheckpoint {
    * the handoff PDF's example showed. Where the checkpoint sits, not an index.
    */
   position: string;
+  /**
+   * How the question is put to the child, decided SERVER-SIDE (B16, 1 Oct).
+   * Defaults to "text". The client never picks this: a preferred modality
+   * held against a child is the thing rule 1 forbids, so it is read and
+   * obeyed, never derived. Optional here because content stored before it
+   * existed does not carry it.
+   */
+  format?: "text" | "spoken";
+  /** The spoken prompt's recording. Only meaningful when `format` is spoken. */
+  promptAudioUrl?: string | null;
 }
 
 /**
@@ -136,6 +146,15 @@ export function isMarkable(checkpoint: ComprehensionCheckpoint): boolean {
  * nothing here knows whether a progress write landed, so both of those stay
  * out rather than being written for it. It said "We'll come back to it",
  * which is the after-lesson check's line and a promise nothing here keeps.
+ *
+ * EACH OPTION KEEPS ITS OWN VALUE beside the stringified id. The id is what
+ * the sheet compares taps by; the value is what `POST /attempts` must send,
+ * because the server marks the answer against the key and a `"2"` where the
+ * key is `2` is a right answer marked wrong.
+ *
+ * A SPOKEN CHECK CARRIES ITS RECORDING (B16). Only when the server said
+ * spoken AND sent a recording: spoken with no URL has nothing to play, and the
+ * printed question - which every check keeps - is then the whole of it.
  */
 export function toQuickCheck(
   checkpoint: ComprehensionCheckpoint,
@@ -149,17 +168,22 @@ export function toQuickCheck(
   const correct = checkpoint.options.find((o) => sameScalar(o.value, key));
   if (!correct) return null;
 
+  const promptAudio =
+    checkpoint.format === "spoken" ? checkpoint.promptAudioUrl?.trim() : null;
+
   return {
     id: checkpoint.id,
     question: checkpoint.prompt,
     options: checkpoint.options.map((o) => ({
       id: String(o.value),
       label: o.label,
+      value: o.value,
     })),
     correctId: String(correct.value),
     correctNote:
       checkpoint.explanation?.trim() ||
       "That's it - you've got this one.",
     recoveryNote: "Not quite. Let's look again.",
+    ...(promptAudio ? { promptAudio } : {}),
   };
 }

@@ -79,11 +79,17 @@ export const ADJUSTMENT_ACTIONS = {
    * The attention accommodation's own 30% dim (37c) is a different thing and
    * stays.
    */
-  /**
-   * Not in the contract's enum. Held on design's instruction of 23 Sep, which
-   * has not been ruled on for this one.
+  /*
+   * `increase_difficulty` WAS HERE, and design retired it on 1 Oct (D28).
+   *
+   * It was held from 23 Sep on the same "do not declare it dead yet" as
+   * `modulate_density`, and drove the "Ready for something harder?" pill. It
+   * was never in `ProactiveAction`, so only the signed-out demo could reach
+   * it. Design's ruling: "a control nothing can trigger is not a feature".
+   * The pill, its per-segment spend and the demo row went with it, and the
+   * contract's `step_up_*` signal types are deliberately not emitted - there
+   * is no step-up for them to describe.
    */
-  INCREASE_DIFFICULTY: "increase_difficulty",
   /**
    * NOT IN THE ENUM, AND CORRECTLY SO - this one is not a gap.
    *

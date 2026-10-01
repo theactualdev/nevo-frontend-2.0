@@ -81,6 +81,8 @@ const feedOf = (read: boolean) => ({
   notifications: [
     {
       notificationId: "n-1",
+      // A type addressed to a child - the bell shows no other.
+      type: "lesson_assigned",
       title: "A new lesson is ready",
       description: null,
       createdAt: new Date().toISOString(),
@@ -436,5 +438,121 @@ describe("which branch the bell is on", () => {
     hydrated.value = false;
 
     expect(showing()).toBe("false");
+  });
+});
+
+/**
+ * Backend B34, 1 Oct: four notification types are addressed to a child, and a
+ * child's bell had always been empty because none existed. The feed is scoped
+ * to the recipient; these hold what reaches a child's screen to the four even
+ * if something else arrives.
+ */
+describe("what a child's bell carries", () => {
+  const row = (
+    id: string,
+    type: string,
+    over: Record<string, unknown> = {},
+  ) => ({
+    notificationId: id,
+    type,
+    category: null,
+    title: `Title ${id}`,
+    description: "",
+    createdAt: new Date().toISOString(),
+    read: false,
+    navigatesTo: null,
+    ...over,
+  });
+
+  const Probe4 = () => {
+    const ctx = useContext(NotificationContext)!;
+    return (
+      <div>
+        <span data-testid="unread">{ctx.unreadCount}</span>
+        <ul>
+          {ctx.notifications.map((n) => (
+            <li key={n.id} data-testid={n.id} data-kind={n.kind}>
+              {n.href ?? "no-link"}
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  };
+
+  const mount4 = async (rows: unknown[], unreadCount: number) => {
+    listResult.value = Promise.resolve({ notifications: rows, unreadCount });
+    render(
+      <NotificationProvider>
+        <Probe4 />
+      </NotificationProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("unread").textContent).not.toBe(""),
+    );
+  };
+
+  beforeEach(() => {
+    hydrated.value = true;
+    hasSession.value = true;
+    token.value = "a-real-token";
+  });
+
+  it("shows the four types addressed to a child, each with its mark", async () => {
+    await mount4(
+      [
+        row("a", "lesson_assigned"),
+        row("b", "review_due"),
+        row("c", "teacher_replied"),
+        row("d", "sign_in_changed"),
+      ],
+      4,
+    );
+
+    await waitFor(() => expect(screen.queryByTestId("d")).not.toBeNull());
+    // The frame draws a book and a speech bubble; the other two are undrawn.
+    expect(screen.getByTestId("a").getAttribute("data-kind")).toBe("lesson");
+    expect(screen.getByTestId("b").getAttribute("data-kind")).toBe("other");
+    expect(screen.getByTestId("c").getAttribute("data-kind")).toBe("message");
+    expect(screen.getByTestId("d").getAttribute("data-kind")).toBe("other");
+  });
+
+  it("shows nothing written for teachers, and does not light the dot for it", async () => {
+    // `modality_shift` and `attention_summary` are about a child, for an
+    // adult - the last things a child should read about themselves.
+    await mount4(
+      [
+        row("mine", "lesson_assigned"),
+        row("t1", "modality_shift"),
+        row("t2", "attention_summary"),
+      ],
+      3,
+    );
+
+    await waitFor(() => expect(screen.queryByTestId("mine")).not.toBeNull());
+    expect(screen.queryByTestId("t1")).toBeNull();
+    expect(screen.queryByTestId("t2")).toBeNull();
+    expect(screen.getByTestId("unread").textContent).toBe("1");
+  });
+
+  it("links only into the student console", async () => {
+    await mount4(
+      [
+        row("in", "lesson_assigned", {
+          navigatesTo: "/student/lessons/l-1?assignment=a-1",
+        }),
+        row("out", "teacher_replied", { navigatesTo: "/teacher/connect" }),
+        row("none", "sign_in_changed"),
+      ],
+      3,
+    );
+
+    await waitFor(() => expect(screen.queryByTestId("none")).not.toBeNull());
+    expect(screen.getByTestId("in").textContent).toBe(
+      "/student/lessons/l-1?assignment=a-1",
+    );
+    // A row with nowhere a child may go is not a link - not a link elsewhere.
+    expect(screen.getByTestId("out").textContent).toBe("no-link");
+    expect(screen.getByTestId("none").textContent).toBe("no-link");
   });
 });

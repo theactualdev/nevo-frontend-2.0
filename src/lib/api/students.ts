@@ -160,6 +160,14 @@ export interface StudentProgress {
    */
   reflection: string;
   highlights: string[];
+  /**
+   * A short note, written short rather than cut down (backend B29, 1 Oct) -
+   * the line the Progress card draws under a subject. A plain string in the
+   * contract, not nullable but not required, defaulting to "": empty or
+   * absent means there is no note. Scoped like `reflection`, so a card reads
+   * its subject's own from the narrowed route.
+   */
+  note?: string;
 }
 
 /** One row of the student's own recent lesson activity. */

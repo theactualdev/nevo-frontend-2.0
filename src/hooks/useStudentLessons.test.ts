@@ -176,6 +176,36 @@ describe("what the live row carries onto the card", () => {
 
     expect(first().timeEstimate).toBe("1 section");
   });
+
+  it("carries no fraction for a lesson part-way through", () => {
+    /*
+     * Design D21. `segmentPosition / segmentCount` drove the preview's bar,
+     * and that fraction is not on the wire: no base is stated on the row and
+     * nothing ties `segmentCount` to the segments the player indexes. The
+     * card says in progress and nothing about how far.
+     */
+    dashboard.mockReturnValue({
+      data: {
+        assignments: [assignment("mid")],
+        recentProgress: [
+          {
+            lessonId: "mid",
+            status: "in_progress",
+            segmentPosition: 2,
+            updatedAt: new Date().toISOString(),
+          },
+        ],
+      },
+      loading: false,
+      failed: false,
+    });
+
+    const card = renderHook(() => useStudentLessons()).result.current
+      .lessons[0] as unknown as Record<string, unknown>;
+
+    expect(card.status).toBe("in_progress");
+    expect(card).not.toHaveProperty("progress");
+  });
 });
 
 describe("a lesson the child has finished", () => {

@@ -130,6 +130,24 @@ describe("a lesson whose saved place could not be read", () => {
   });
 });
 
+describe("a lesson the child already finished", () => {
+  // Design D22: it opens for review, and the player is told so, because the
+  // player is what would otherwise write it back as unfinished.
+  it("tells the player it is finished", () => {
+    state({ lesson: LESSON, finished: true });
+    render(<LessonRoute lessonId="les-1" />);
+
+    expect(playerProps.value).toMatchObject({ finished: true });
+  });
+
+  it("does not tell it so for a lesson still to do", () => {
+    state({ lesson: LESSON, finished: false });
+    render(<LessonRoute lessonId="les-1" />);
+
+    expect(playerProps.value).toMatchObject({ finished: false });
+  });
+});
+
 describe("the loading skeleton", () => {
   it("keeps a real Exit, because a stalled load has no other way off it", () => {
     render(<LessonLoadingSkeleton />);
