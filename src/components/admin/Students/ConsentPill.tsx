@@ -164,3 +164,20 @@ export function consentDetailLine(consent: StudentConsent): string | null {
   }
   return null;
 }
+
+/**
+ * D07's line under the pill - "Responded 8 Sep", "Invited 14 Sep" - from the
+ * `timestamp` every row already carries and nothing rendered. Only the two
+ * states the frame dates; a missing or unreadable date says nothing.
+ */
+export function consentDateLine(
+  consent: { status: string; timestamp: string | null } | null | undefined,
+): string | null {
+  if (!consent?.timestamp) return null;
+  const d = new Date(consent.timestamp);
+  if (Number.isNaN(d.getTime())) return null;
+  const day = d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  if (consent.status === "confirmed") return `Responded ${day}`;
+  if (consent.status === "pending") return `Invited ${day}`;
+  return null;
+}
