@@ -6,7 +6,7 @@ import type {
   LessonStatus,
   LessonSummary,
 } from "@/components/student/Lessons/lessonCatalog";
-import { isOpenToStudent } from "@/lib/lessons/availability";
+import { unavailableReason } from "@/lib/lessons/availability";
 import { useStudentDashboard } from "./useStudentDashboard";
 
 /**
@@ -27,9 +27,9 @@ import { useStudentDashboard } from "./useStudentDashboard";
  * than against this comment. They are read now, so a signed-in child's list
  * groups by subject like the designed one and says how long a lesson is.
  *
- * What the contract still cannot answer is the "what you'll do" description -
- * nothing writes one for a child, and a generated stand-in would be us
- * describing a lesson we have not read. The preview still omits it.
+ * The "what you'll do" line followed on 1 Oct: the nested summary carries a
+ * nullable `description`, read as given. Null still means the preview has no
+ * line, never one we composed about a lesson we have not read.
  *
  * STATUS is real, though, and that matters: it comes from the student's own
  * progress rows, so the filter chips filter on something true instead of on a
@@ -79,12 +79,19 @@ export function useStudentLessons(): StudentLessons {
      * is gated on this array, so a child whose only assignment was cancelled
      * was never told their list was empty - they were shown the cancelled
      * lesson instead.
+     *
+     * A FINISHED ONE STAYS, under Completed. Not `isOpenToStudent`, which
+     * means "still to do" and so drops it - this is the child's whole list.
      */
     return data.assignments
-      .filter((a) => isOpenToStudent(a))
+      .filter((a) => unavailableReason(a) === null)
       .map<LessonSummary>((a) => {
         const row = latest.get(a.lesson.id);
-        const status = statusFrom(row?.status);
+        // The assignment's own `completed` wins. The progress feed is recent
+        // activity, not a full history, so a lesson finished a while ago may
+        // have no row left in it - and read "Not started".
+        const status =
+          a.status === "completed" ? "completed" : statusFrom(row?.status);
         const count = a.lesson.segmentCount;
         /*
          * ZERO AND ABSENT BOTH MEAN "NO ESTIMATE", and neither may be drawn as
@@ -105,6 +112,7 @@ export function useStudentLessons(): StudentLessons {
         // Free text from the staged upload routes, so it is shown as written
         // or not at all - blank is not a subject.
         const subject = a.lesson.subject?.trim();
+        const description = a.lesson.description?.trim();
         // Coarse on purpose, like Home: whether segmentPosition is 0- or
         // 1-based is unstated, so this may be off by a segment. It drives a
         // bar, never a number shown to a child.
@@ -119,6 +127,7 @@ export function useStudentLessons(): StudentLessons {
           title: a.lesson.title,
           timeEstimate,
           ...(subject ? { subject } : {}),
+          ...(description ? { description } : {}),
           status,
           ...(progress !== undefined ? { progress } : {}),
         };

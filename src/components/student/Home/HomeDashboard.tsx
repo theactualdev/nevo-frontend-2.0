@@ -2,84 +2,114 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { isOpenToStudent } from "@/lib/lessons/availability";
-import { BookOpen, Clock, Play, Shapes } from "lucide-react";
+import { isOpenToStudent, unavailableReason } from "@/lib/lessons/availability";
+import { lessonHref } from "@/lib/lessons/lessonHref";
+import { BookOpen, ChevronRight, Clock, Play, Shapes } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { EmptyState, IllustrationWrapper } from "@/components/shared";
+import { IllustrationWrapper } from "@/components/shared";
 import { SampleRegion } from "@/components/shared/SampleRegion";
 import { useHydrated } from "@/hooks/useHydrated";
 import { warmUpDoneToday } from "@/lib/profiling/warmUpDone";
 import { getSession } from "@/lib/auth/session";
+import type { DashboardProgressRow } from "@/lib/api/students";
 import { useDisplayName } from "@/components/student/Shell/useDisplayName";
 import { useHasSession } from "@/hooks/useHasSession";
 import { useStudentDashboard } from "@/hooks/useStudentDashboard";
 import { useWarmUpDimension } from "@/hooks/useWarmUpDimension";
 import { WarmUpCard } from "@/components/student/Profiling/WarmUpCard";
 import { dimensionForToday } from "@/components/student/Profiling/WarmUpRun";
+import { LessonPreviewSheet } from "@/components/student/Lessons/LessonPreviewSheet";
+import type { LessonSummary } from "@/components/student/Lessons/lessonCatalog";
 
-// ── Signed-out fixtures ─────────────────────────────────────────────────────
-// The designed screen's own content, and ONLY for a visitor with no session.
-// A signed-in child's continue card, today's lessons and encouragement line all
-// come from `useStudentDashboard` below - the contracts landed and are read.
-interface InProgress {
-  lessonId: string;
+/** One unfinished lesson on "Pick up where you left off" (SCRUM-146). */
+interface PickUp {
+  /** React key - the assignment it came from, or the fixture's own id. */
+  key: string;
   title: string;
-  /** 0–1 through the lesson. */
+  /** Omitted when the lesson carries none - never a guessed subject. */
+  subject?: string;
+  /** 0–1 through the lesson. Drives the ring; never shown as a number. */
   progress: number;
   note: string;
-  /** Null renders the card without a destination - see the live mapping. */
-  href: string | null;
-  /**
-   * Present when the student is mid-module in a modular lesson (SCRUM-101.4):
-   * the card's middle line names the module instead of the segment hint.
-   * `index` is 0-based; `title` falls back to the bare position when absent.
-   */
-  module?: { index: number; count: number; title?: string };
+  href: string;
 }
+
+/** One of Today's lessons. A tap opens the preview, as on the Lessons tab. */
 interface TodayLesson {
-  lessonId: string;
-  title: string;
-  time: string;
+  key: string;
   icon: LucideIcon;
-  href: string | null;
+  lesson: LessonSummary;
 }
 
-const CONTINUE: InProgress | null = {
-  lessonId: "photosynthesis",
-  title: "Photosynthesis",
-  progress: 0.55,
-  note: "A little over halfway",
-  href: "/student/lessons/photosynthesis",
-  module: { index: 1, count: 2, title: "Practice" },
-};
+// ── Signed-out fixtures ─────────────────────────────────────────────────────
+// The designed screen's own content (Nevo Home Frame, SCRUM-146), and ONLY for
+// a visitor with no session. A signed-in child's lessons come from
+// `useStudentDashboard` below.
+const MOCK_LESSON_ID = "photosynthesis";
+const MOCK_HREF = `/student/lessons/${MOCK_LESSON_ID}`;
 
-const MOCK_HREF = "/student/lessons/photosynthesis";
+const fixtureToday = (
+  id: string,
+  title: string,
+  timeEstimate: string,
+  icon: LucideIcon,
+): TodayLesson => ({
+  key: id,
+  icon,
+  lesson: {
+    id,
+    lessonId: MOCK_LESSON_ID,
+    title,
+    timeEstimate,
+    status: "not_started",
+  },
+});
+
 const TODAY: TodayLesson[] = [
+  fixtureToday("telling-the-time", "Telling the Time", "About 10 min", Clock),
+  fixtureToday("the-lighthouse", "The Lighthouse", "About 15 min", BookOpen),
+  fixtureToday("shapes-around-us", "Shapes Around Us", "About 8 min", Shapes),
+];
+
+const PICKUP: PickUp[] = [
   {
-    lessonId: "photosynthesis",
-    title: "Telling the Time",
-    time: "About 10 min",
-    icon: Clock,
+    key: "adding-fractions",
+    title: "Adding Fractions",
+    subject: "Mathematics",
+    progress: 0.55,
+    note: "A little over halfway",
     href: MOCK_HREF,
   },
   {
-    lessonId: "photosynthesis",
-    title: "The Lighthouse",
-    time: "About 15 min",
-    icon: BookOpen,
+    key: "the-water-cycle",
+    title: "The Water Cycle",
+    subject: "Science",
+    progress: 0.18,
+    note: "Just getting started",
     href: MOCK_HREF,
   },
   {
-    lessonId: "photosynthesis",
-    title: "Shapes Around Us",
-    time: "About 8 min",
-    icon: Shapes,
+    key: "punctuation-marks",
+    title: "Punctuation Marks",
+    subject: "English",
+    progress: 0.85,
+    note: "Almost there",
     href: MOCK_HREF,
   },
 ];
 
+/** The frame's note while there is unfinished work - a fictional child's week. */
 const ENCOURAGEMENT =
   "You've been showing up this week. Keep going at your own pace.";
+
+/**
+ * The frame's note when nothing is outstanding. True whenever it shows: it is
+ * gated on the very thing it states, that no lesson is left part-way.
+ */
+const CAUGHT_UP = "You're all caught up. Nice and steady - come back any time.";
+
+/** At most five on "Pick up where you left off", by design (SCRUM-146). */
+const PICKUP_MAX = 5;
 
 /**
  * The dated eyebrow depends on the viewer's local clock, which only the client
@@ -104,25 +134,41 @@ function useLocalDate() {
 }
 
 /**
- * Home Dashboard (screen 19). The student's calm landing surface: pick back up
- * where they left off (primary), today's lessons (secondary), and a warm,
- * pace-affirming note (tertiary — never a score or a streak count). Reduced-motion
- * aware; a settled empty state when there's nothing queued.
- */
-/**
- * A lesson link that remembers which assignment it came from.
+ * "Just getting started" and the rest - a bucket, never a number.
  *
- * Read back by the player and sent on every progress write. Omitted when there
- * is no assignment, rather than sent empty: a library lesson is not set work,
- * and saying otherwise files a child's own reading under a teacher's name.
+ * Coarse on purpose: whether `segmentPosition` is 0- or 1-based is unstated, so
+ * the fraction may be off by one segment and the note only ever claims a
+ * bucket. "Just getting started" and "Almost there" are the frame's words.
  */
-function assignmentHref(lessonId: string, assignmentId?: string): string {
-  const base = `/student/lessons/${lessonId}`;
-  return assignmentId
-    ? `${base}?assignment=${encodeURIComponent(assignmentId)}`
-    : base;
+function noteFor(fraction: number): string {
+  if (fraction < 1 / 3) return "Just getting started";
+  if (fraction < 2 / 3) return "About halfway in";
+  return "Almost there";
 }
 
+/**
+ * ZERO AND ABSENT BOTH MEAN "NO ESTIMATE" - the same rule `useStudentLessons`
+ * applies to the Lessons tab's cards, so one lesson reads the same on both.
+ * Today's cards used to say "Due 3 Oct" here instead; the frame draws the time
+ * and SCRUM-146 keeps dates off Home altogether.
+ */
+function timeEstimate(lesson: {
+  estimatedMinutes?: number;
+  segmentCount: number;
+}): string {
+  const minutes = lesson.estimatedMinutes;
+  if (minutes && minutes > 0) return `About ${minutes} min`;
+  const count = lesson.segmentCount;
+  return `${count} ${count === 1 ? "section" : "sections"}`;
+}
+
+/**
+ * Home Dashboard (screen 19, SCRUM-146). Today's lessons first, then up to five
+ * unfinished lessons under "Pick up where you left off" - each with its subject
+ * and how far in, never a date - and a quiet note. When nothing is outstanding
+ * that section is absent entirely. Reduced-motion aware; a settled empty state
+ * when nothing has been set yet.
+ */
 export function HomeDashboard() {
   const { name: displayName } = useDisplayName();
   const date = useLocalDate();
@@ -130,113 +176,137 @@ export function HomeDashboard() {
   const hydrated = useHydrated();
   const { data: live, failed, loading } = useStudentDashboard();
   const warmUpDimension = useWarmUpDimension(dimensionForToday());
+  const [preview, setPreview] = useState<LessonSummary | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
-  // Live rows are mapped into the frame's own shapes so the designed cards
-  // render either source. These used to carry `href: null` - the player
-  // resolved mock ids only, so a real assignment had nowhere to go and the
-  // card stated it rather than leading a child into "this page doesn't
-  // exist". The player reads live content now, so they link.
-  let cont: InProgress | null = CONTINUE;
   let today: TodayLesson[] = TODAY;
-  let encouragement = ENCOURAGEMENT;
+  let pickup: PickUp[] = PICKUP;
+  let note: string | null = ENCOURAGEMENT;
+  /** Something has been set for this child, even if it is all done now. */
+  let everSet = true;
+
   if (signedIn) {
     if (live) {
+      // Newest row per lesson wins; the feed is not guaranteed to be ordered.
+      const latest = new Map<string, DashboardProgressRow>();
+      for (const row of live.recentProgress) {
+        const held = latest.get(row.lessonId);
+        if (!held || Date.parse(row.updatedAt) > Date.parse(held.updatedAt)) {
+          latest.set(row.lessonId, row);
+        }
+      }
+
       /*
        * FILTERED ONCE, HERE, BECAUSE THIS SCREEN BUILDS TWO LISTS FROM IT.
        *
-       * Today's lessons is the obvious one. The other is the Pick Back Up card,
-       * which crosses recentProgress against this map - and it was the worse
-       * leak of the two: Today's list excludes whatever is on the continue card
-       * BY ID, so a cancelled lesson a child had already started did not merely
-       * survive, it was promoted out of the small grid into the single biggest
-       * card on the screen.
-       *
-       * Filtering the array both lists come from closes both, and cannot be
-       * half-applied later.
-       *
-       * The old filter below read `a.status !== "completed"`, which is a
-       * comparison that can never be false: `AssignmentStatus` is
-       * "assigned" | "cancelled" and has no "completed" member. `Assignment`
-       * types the field as a plain `string`, so nothing stopped it being
-       * written and typecheck will not stop it coming back - only the tests
-       * will.
+       * Cancelled, not open yet, and finished all leave here. A cancelled
+       * lesson a child had already started used to be promoted onto the
+       * biggest card on the screen, because only one of the two lists was
+       * filtered. And `completed` - real in the enum since 25 Sep - was
+       * treated as open, so a finished lesson stayed in Today's list and was
+       * counted in its "N ready".
        */
       const open = live.assignments.filter((a) => isOpenToStudent(a));
-      const byLesson = new Map(open.map((a) => [a.lesson.id, a]));
-      const ip = [...live.recentProgress]
-        // `exited` counts. A child who deliberately left a lesson is still
-        // partway through it - the status records HOW they left, not whether
-        // they are done. Filtering it out meant tapping "Leave for now" removed
-        // the lesson from Pick Back Up altogether, and sent it back to Today's
-        // lessons as though it had never been opened.
-        //
-        // The regression arrived with the exited write in #199: before that,
-        // leaving wrote nothing, so the row stayed `in_progress` and the card
-        // survived. `useStudentLessons` already folds the two statuses
-        // together for its calm indicator; this filter did not.
-        .filter((r) => r.status === "in_progress" || r.status === "exited")
-        .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
-        .find((r) => byLesson.get(r.lessonId));
-      const ipLesson = ip ? byLesson.get(ip.lessonId)!.lesson : null;
-      // Coarse on purpose: whether segmentPosition is 0- or 1-based is
-      // unstated, so the fraction may be off by one segment and the note
-      // only ever claims a bucket, never a number.
-      const frac =
-        ip && ipLesson && ipLesson.segmentCount > 0
-          ? Math.max(0, Math.min(1, ip.segmentPosition / ipLesson.segmentCount))
-          : 0;
-      cont =
-        ip && ipLesson
-          ? {
-              lessonId: ip.lessonId,
-              title: ipLesson.title,
-              progress: frac,
-              note:
-                frac < 1 / 3
-                  ? "Just getting started"
-                  : frac < 2 / 3
-                    ? "About halfway in"
-                    : "Nearly there",
-              /*
-               * THE ASSIGNMENT RIDES THE LINK.
-               *
-               * `ProgressWrite.assignmentId` has been typed and unsent since
-               * the contract shipped, so every progress write said a child had
-               * moved through a lesson and never which set work that was. The
-               * player's route is `/student/lessons/{id}` and knows nothing
-               * about assignments, but this card does - it was built from one.
-               *
-               * Only on cards that genuinely came from an assignment. A lesson
-               * opened from the library carries none, which is the truth.
-               */
-              href: assignmentHref(ip.lessonId, byLesson.get(ip.lessonId)?.id),
-            }
-          : null;
-      const contId = cont ? cont.lessonId : null;
+
+      // `exited` counts as part-way. A child who deliberately left a lesson is
+      // still partway through it - the status records HOW they left, not
+      // whether they are done. `useStudentLessons` folds the two the same way.
+      const partWay = (lessonId: string) => {
+        const status = latest.get(lessonId)?.status;
+        return status === "in_progress" || status === "exited";
+      };
+
+      pickup = open
+        .filter((a) => partWay(a.lesson.id))
+        .sort(
+          (a, b) =>
+            Date.parse(latest.get(b.lesson.id)!.updatedAt) -
+            Date.parse(latest.get(a.lesson.id)!.updatedAt),
+        )
+        .slice(0, PICKUP_MAX)
+        .map((a) => {
+          const row = latest.get(a.lesson.id)!;
+          const count = a.lesson.segmentCount;
+          const progress =
+            count > 0
+              ? Math.max(0, Math.min(1, row.segmentPosition / count))
+              : 0;
+          const subject = a.lesson.subject?.trim();
+          return {
+            key: a.id,
+            title: a.lesson.title,
+            ...(subject ? { subject } : {}),
+            progress,
+            note: noteFor(progress),
+            // Straight back in, with the assignment riding the link - a
+            // lesson the child is already in needs no preview.
+            href: lessonHref(a.lesson.id, a.id),
+          };
+        });
+
+      /*
+       * TODAY'S LESSONS CARRIES ONLY WORK NOT YET STARTED (SCRUM-146).
+       *
+       * Any progress row at all takes a lesson out: part-way ones moved to the
+       * list below, and a completed row is finished even when the assignment's
+       * own status has not caught up.
+       */
       today = open
-        .filter((a) => a.lesson.id !== contId)
-        .map((a) => ({
-          lessonId: a.lesson.id,
-          title: a.lesson.title,
-          time: a.dueAt
-            ? `Due ${new Date(a.dueAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`
-            : `${a.lesson.segmentCount} ${a.lesson.segmentCount === 1 ? "section" : "sections"}`,
-          icon: BookOpen,
-          href: assignmentHref(a.lesson.id, a.id),
-        }));
-      // The designed line claims "You've been showing up this week" - a
-      // claim about the child that nothing verifies. Live students get a
-      // line that asserts nothing. Flagged to design.
-      encouragement = "Go at your own pace \u2014 Nevo keeps up with you.";
+        .filter((a) => !latest.has(a.lesson.id))
+        .map((a) => {
+          const subject = a.lesson.subject?.trim();
+          const description = a.lesson.description?.trim();
+          return {
+            key: a.id,
+            icon: BookOpen,
+            lesson: {
+              id: a.id,
+              lessonId: a.lesson.id,
+              assignmentId: a.id,
+              title: a.lesson.title,
+              timeEstimate: timeEstimate(a.lesson),
+              status: "not_started" as const,
+              ...(subject ? { subject } : {}),
+              ...(description ? { description } : {}),
+            },
+          };
+        });
+
+      /*
+       * THE NOTE IS THE FRAME'S CAUGHT-UP LINE, OR NOTHING.
+       *
+       * Every child used to read "Go at your own pace - Nevo keeps up with
+       * you", which no frame draws. The frame's line for a child with work
+       * outstanding ("You've been showing up this week") is a claim about the
+       * child that nothing here verifies, so it waits on design. The
+       * caught-up line states only what this screen can see.
+       */
+      note = pickup.length === 0 ? CAUGHT_UP : null;
+
+      // Finished work is still work that was set: a child who has done
+      // everything is caught up, not waiting on a first lesson.
+      everSet =
+        today.length > 0 ||
+        pickup.length > 0 ||
+        live.assignments.some(
+          (a) =>
+            unavailableReason(a) === null &&
+            (a.status === "completed" ||
+              latest.get(a.lesson.id)?.status === "completed"),
+        );
     } else {
-      cont = null;
       today = [];
-      encouragement = "";
+      pickup = [];
+      note = null;
+      everSet = false;
     }
   }
-  const nothingQueued = signedIn
-    ? Boolean(live) && !cont && today.length === 0
-    : !cont && today.length === 0;
+  const nothingSet = signedIn && Boolean(live) && !everSet;
+
+  const openPreview = (lesson: LessonSummary) => {
+    setPreview(lesson);
+    setPreviewOpen(true);
+  };
 
   // NOT HYDRATED IS NOT SIGNED OUT. `useHasSession()` is false on the server,
   // so without this the SSR pass and the first client render take the fixture
@@ -250,8 +320,7 @@ export function HomeDashboard() {
     return (
       <div className="mx-auto w-full max-w-[720px] px-5 py-2 pb-8 sm:px-8 sm:py-6 lg:max-w-[860px]">
         <div className="mt-2 h-9 w-64 animate-pulse rounded bg-nevo-cream-elevated" />
-        <div className="mt-6 h-[132px] animate-pulse rounded-[16px] bg-nevo-cream-elevated" />
-        <div className="mt-8 grid grid-cols-2 gap-3.5 sm:grid-cols-3 sm:gap-4">
+        <div className="mt-7 grid grid-cols-2 gap-3.5 sm:grid-cols-3 sm:gap-4">
           {[0, 1, 2].map((i) => (
             <div
               key={i}
@@ -288,16 +357,16 @@ export function HomeDashboard() {
     );
   }
 
-  // ONE BODY, TWO MEANINGS. Everything above fills `cont` and `today` from the
-  // live read when there is a session, and from the fixtures when there is not,
-  // so this markup is the child's own dashboard OR the designed walkthrough
-  // depending only on who is looking. The mark has to go on the second, and
-  // this used to wrap both: a signed-in child whose read SUCCEEDED fell through
-  // to here and had their real data stamped `student:home`. That is the sample
-  // mark lying in the more dangerous direction - the end-to-end assertion it
-  // exists for ("no sample marks once signed in") would have failed on a
-  // perfectly healthy Home, and the obvious way to make that test pass is to
-  // delete the mark.
+  // ONE BODY, TWO MEANINGS. Everything above fills `today` and `pickup` from
+  // the live read when there is a session, and from the fixtures when there is
+  // not, so this markup is the child's own dashboard OR the designed
+  // walkthrough depending only on who is looking. The mark has to go on the
+  // second, and this used to wrap both: a signed-in child whose read SUCCEEDED
+  // fell through to here and had their real data stamped `student:home`. That
+  // is the sample mark lying in the more dangerous direction - the end-to-end
+  // assertion it exists for ("no sample marks once signed in") would have
+  // failed on a perfectly healthy Home, and the obvious way to make that test
+  // pass is to delete the mark.
   const body = (
     <div className="mx-auto w-full max-w-[720px] px-5 py-2 pb-8 sm:px-8 sm:py-6 lg:max-w-[860px]">
       {/* Greeting */}
@@ -310,21 +379,21 @@ export function HomeDashboard() {
         </h1>
       </div>
 
-      {nothingQueued ? (
-        <div className="mt-10">
-          <EmptyState
-            illustration={
-              <IllustrationWrapper
-                src="/illustrations/welcome-settling.png"
-                alt=""
-                width={697}
-                height={598}
-                className="w-[180px]"
-              />
-            }
-            title="Nothing waiting right now"
-            description="When your teacher assigns a lesson, it'll show up here. Nice work staying on top of things."
+      {nothingSet ? (
+        // 29 Empty States, "Home (No lessons)": the illustration and one line.
+        // It used to praise the child ("Nice work staying on top of things")
+        // for having nothing, which is not something they did.
+        <div className="flex flex-col items-center px-6 pt-12 pb-6 text-center">
+          <IllustrationWrapper
+            src="/illustrations/welcome-settling.png"
+            alt=""
+            width={697}
+            height={598}
+            className="w-[180px]"
           />
+          <h2 className="mt-7 max-w-[280px] text-[19px] font-medium leading-[1.35] text-nevo-near-black">
+            Your teacher is setting up your first lesson
+          </h2>
         </div>
       ) : (
         <>
@@ -348,39 +417,74 @@ export function HomeDashboard() {
             done={hydrated && warmUpDoneToday(getSession()?.userId)}
           />
 
-          {cont && <ContinueCard lesson={cont} />}
+          {/* Absent rather than an empty heading when nothing new is set -
+              the frame never draws Today's lessons with nothing under it. */}
+          {today.length > 0 && (
+            <section aria-labelledby="home-today">
+              <div className="mt-7 flex items-baseline justify-between motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-500 motion-safe:[animation-delay:140ms]">
+                <h2
+                  id="home-today"
+                  className="text-[17px] font-semibold tracking-[-0.01em] text-nevo-near-black"
+                >
+                  Today&apos;s lessons
+                </h2>
+                <span className="text-[13px] text-nevo-near-black/60">
+                  {today.length} ready
+                </span>
+              </div>
 
-          <div className="mt-8 flex items-baseline justify-between motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-500 motion-safe:[animation-delay:200ms]">
-            <h2 className="text-[17px] font-semibold tracking-[-0.01em] text-nevo-near-black">
-              Today&apos;s lessons
-            </h2>
-            {today.length > 0 && (
-              <span className="text-[13px] text-nevo-near-black/60">
-                {today.length} ready
-              </span>
-            )}
-          </div>
+              {/* 2-up grid on mobile, 3-up from tablet. Never a horizontal
+                  rail - a nested scroller inside the vertical page is off the
+                  gesture set (SCRUM-94 G5), and scroll-snap overrides the
+                  student's own deceleration curve. */}
+              <div className="mt-3.5 grid grid-cols-2 gap-3.5 sm:grid-cols-3 sm:gap-4">
+                {today.map((item, i) => (
+                  <TodayCard
+                    key={item.key}
+                    item={item}
+                    index={i}
+                    onOpen={() => openPreview(item.lesson)}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
 
-          {/* 2-up grid on mobile, 3-up from tablet. Never a horizontal rail - a
-              nested scroller inside the vertical page is off the gesture set
-              (SCRUM-94 G5), and scroll-snap overrides the student's own
-              deceleration curve. */}
-          <div className="mt-3.5 grid grid-cols-2 gap-3.5 sm:grid-cols-3 sm:gap-4">
-            {today.map((lesson, i) => (
-              <LessonCard key={i} lesson={lesson} index={i} />
-            ))}
-          </div>
+          {pickup.length > 0 && (
+            <section
+              aria-labelledby="home-pickup"
+              className="mt-[34px] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-500 motion-safe:[animation-delay:260ms]"
+            >
+              <h2
+                id="home-pickup"
+                className="text-[17px] font-semibold tracking-[-0.01em] text-nevo-near-black"
+              >
+                Pick up where you left off
+              </h2>
+              <div className="mt-3.5 flex flex-col gap-3">
+                {pickup.map((item) => (
+                  <PickUpCard key={item.key} item={item} />
+                ))}
+              </div>
+            </section>
+          )}
 
-          {encouragement && (
-            <div className="mt-8 flex items-center gap-3.5 rounded-[12px] bg-nevo-violet/14 px-5 py-[18px] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-500 motion-safe:[animation-delay:320ms]">
+          {note && (
+            <div className="mt-8 flex items-center gap-3.5 rounded-[12px] bg-nevo-violet/14 px-5 py-[18px] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-500 motion-safe:[animation-delay:340ms]">
               <span className="size-2.5 shrink-0 rounded-full bg-nevo-violet" />
               <p className="text-[15px] leading-[1.45] text-nevo-near-black">
-                {encouragement}
+                {note}
               </p>
             </div>
           )}
         </>
       )}
+
+      <LessonPreviewSheet
+        lesson={preview}
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+      />
     </div>
   );
 
@@ -393,108 +497,103 @@ export function HomeDashboard() {
   return <SampleRegion kind="student:home">{body}</SampleRegion>;
 }
 
-/** Primary "pick back up" card — the one at Design System Level 3 elevation. */
-function ContinueCard({ lesson }: { lesson: InProgress }) {
-  // No destination -> no Link, no Continue button, no play glyph. A card that
-  // states the fact of the lesson beats one whose Play lands on a 404.
-  const Wrap = lesson.href ? Link : "div";
+/** One unfinished lesson - straight back in, no preview in the way. */
+function PickUpCard({ item }: { item: PickUp }) {
   return (
-    <Wrap
-      href={lesson.href ?? "#"}
-      className={`mt-6 block rounded-[16px] bg-nevo-cream-elevated p-[22px] shadow-elevation-3 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-500 motion-safe:[animation-delay:120ms]${lesson.href ? " transition-transform active:scale-[0.99]" : ""}`}
+    <Link
+      href={item.href}
+      className="flex cursor-pointer items-center gap-4 rounded-[12px] bg-nevo-cream-elevated px-[18px] py-4 shadow-elevation-1 transition-transform active:scale-[0.98]"
     >
-      <span className="font-mono text-[11px] tracking-[0.08em] text-nevo-near-black/60 uppercase">
-        Pick back up
-      </span>
-      <div className="mt-4 sm:flex sm:items-center sm:gap-7">
-        <div className="flex flex-1 items-center gap-[18px]">
-          <ProgressRing value={lesson.progress} glyph={Boolean(lesson.href)} />
-          <div className="min-w-0 flex-1">
-            <p className="text-[19px] font-semibold tracking-[-0.01em] text-nevo-near-black">
-              {lesson.title}
-            </p>
-            {/* Mid-module, the line names the module (SCRUM-101.4); one line,
-                truncated, so a long title never reflows the card. */}
-            <p className="mt-1.5 truncate text-sm text-nevo-near-black/68">
-              {lesson.module
-                ? `Module ${lesson.module.index + 1} of ${lesson.module.count}${lesson.module.title ? `: ${lesson.module.title}` : ""}`
-                : lesson.note}
-            </p>
-          </div>
-        </div>
-        {lesson.href && (
-          <span className="mt-5 flex h-[52px] w-full shrink-0 items-center justify-center rounded-[12px] bg-nevo-navy px-8 text-base font-medium text-nevo-cream sm:mt-0 sm:w-auto">
-            Continue
+      <ProgressRing value={item.progress} />
+      <span className="min-w-0 flex-1">
+        <span className="block text-base font-semibold tracking-[-0.005em] text-nevo-near-black">
+          {item.title}
+        </span>
+        {item.subject && (
+          <span className="mt-1 block text-[13px] text-nevo-near-black/55">
+            {item.subject}
           </span>
         )}
-      </div>
-    </Wrap>
+        <span className="mt-[5px] block text-sm text-nevo-near-black/68">
+          {item.note}
+        </span>
+      </span>
+      <ChevronRight
+        className="size-5 shrink-0 text-nevo-navy"
+        strokeWidth={2.2}
+        aria-hidden
+      />
+    </Link>
   );
 }
 
 /** A quiet violet arc on a navy-tinted track, with a play glyph — never a %. */
-function ProgressRing({
-  value,
-  glyph = true,
-}: {
-  value: number;
-  glyph?: boolean;
-}) {
-  const r = 32;
+function ProgressRing({ value }: { value: number }) {
+  const r = 24;
   const circumference = 2 * Math.PI * r;
   const offset = circumference * (1 - Math.max(0, Math.min(1, value)));
   return (
-    <span className="relative size-[68px] shrink-0">
+    <span className="relative size-[54px] shrink-0" aria-hidden>
       <svg
-        width="68"
-        height="68"
-        viewBox="0 0 68 68"
+        width="54"
+        height="54"
+        viewBox="0 0 54 54"
         className="absolute inset-0 -rotate-90"
       >
         <circle
-          cx="34"
-          cy="34"
+          cx="27"
+          cy="27"
           r={r}
           fill="none"
           stroke="rgba(59,63,110,0.14)"
-          strokeWidth="5"
+          strokeWidth="4"
         />
         <circle
-          cx="34"
-          cy="34"
+          cx="27"
+          cy="27"
           r={r}
           fill="none"
           stroke="#9a9ccb"
-          strokeWidth="5"
+          strokeWidth="4"
           strokeLinecap="round"
           strokeDasharray={circumference}
           strokeDashoffset={offset}
         />
       </svg>
-      {glyph && (
-        <span className="absolute inset-0 flex items-center justify-center text-nevo-navy">
-          <Play className="size-6" fill="currentColor" strokeWidth={0} />
-        </span>
-      )}
+      <span className="absolute inset-0 flex items-center justify-center text-nevo-navy">
+        <Play className="size-[17px]" fill="currentColor" strokeWidth={0} />
+      </span>
     </span>
   );
 }
 
-/** Secondary lesson card — icon header + title + adaptive time estimate. */
-function LessonCard({ lesson, index }: { lesson: TodayLesson; index: number }) {
-  const Icon = lesson.icon;
+/**
+ * One of Today's lessons — icon header, title, time estimate. Opens the lesson
+ * preview, as the flow reference and IA draw it: a lesson not yet started gets
+ * the calm look before committing, the same as from the Lessons tab.
+ */
+function TodayCard({
+  item,
+  index,
+  onOpen,
+}: {
+  item: TodayLesson;
+  index: number;
+  onOpen: () => void;
+}) {
+  const Icon = item.icon;
   // Alternating violet tints, matching the frame's rhythm.
   const tints = [
     "bg-nevo-violet/18",
     "bg-nevo-violet/12",
     "bg-nevo-violet/[0.22]",
   ];
-  const Wrap = lesson.href ? Link : "div";
   return (
-    <Wrap
-      href={lesson.href ?? "#"}
-      className={`overflow-hidden rounded-[12px] bg-nevo-cream-elevated shadow-elevation-1 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-500${lesson.href ? " transition-transform active:scale-[0.98]" : ""}`}
-      style={{ animationDelay: `${240 + index * 70}ms` }}
+    <button
+      type="button"
+      onClick={onOpen}
+      className="cursor-pointer overflow-hidden rounded-[12px] bg-nevo-cream-elevated text-left shadow-elevation-1 transition-transform active:scale-[0.98] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-500"
+      style={{ animationDelay: `${180 + index * 60}ms` }}
     >
       <div
         className={`flex h-[88px] items-center justify-center text-nevo-navy ${tints[index % tints.length]}`}
@@ -503,12 +602,12 @@ function LessonCard({ lesson, index }: { lesson: TodayLesson; index: number }) {
       </div>
       <div className="p-3.5">
         <p className="text-[15px] font-semibold leading-[1.3] text-nevo-near-black">
-          {lesson.title}
+          {item.lesson.title}
         </p>
         <p className="mt-1.5 text-[13px] text-nevo-near-black/60">
-          {lesson.time}
+          {item.lesson.timeEstimate}
         </p>
       </div>
-    </Wrap>
+    </button>
   );
 }

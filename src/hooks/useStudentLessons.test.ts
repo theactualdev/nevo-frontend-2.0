@@ -177,3 +177,58 @@ describe("what the live row carries onto the card", () => {
     expect(first().timeEstimate).toBe("1 section");
   });
 });
+
+describe("a lesson the child has finished", () => {
+  /*
+   * `completed` is real in the deployed `AssignmentStatus` (25 Sep). The card's
+   * status used to come from the progress feed alone, which is recent activity
+   * rather than a full history - so a lesson finished a while ago had no row
+   * left in it and read "Not started".
+   */
+  it("stays on the list", () => {
+    // `isOpenToStudent` now drops it from Home, where it means "still to do".
+    // This list is the child's whole list, and Completed is one of its chips.
+    read([assignment("done", { status: "completed" })]);
+
+    const { result } = renderHook(() => useStudentLessons());
+
+    expect(titles(result)).toEqual(["done"]);
+  });
+
+  it("reads Completed even with no progress row left for it", () => {
+    read([assignment("done", { status: "completed" })]);
+
+    const { result } = renderHook(() => useStudentLessons());
+
+    expect(result.current.lessons[0].status).toBe("completed");
+  });
+});
+
+describe("the preview's what-you'll-do line", () => {
+  // `description` on the nested summary, shipped 1 Oct and nullable.
+  const withDescription = (description: unknown) =>
+    read([
+      {
+        ...assignment("l"),
+        lesson: { ...lesson("l"), description },
+      },
+    ]);
+
+  it("is the lesson's own, as written", () => {
+    withDescription("Add fractions using pizza.");
+
+    const { result } = renderHook(() => useStudentLessons());
+
+    expect(result.current.lessons[0].description).toBe(
+      "Add fractions using pizza.",
+    );
+  });
+
+  it("is absent when the lesson has none, never filled in", () => {
+    withDescription(null);
+
+    const { result } = renderHook(() => useStudentLessons());
+
+    expect(result.current.lessons[0].description).toBeUndefined();
+  });
+});

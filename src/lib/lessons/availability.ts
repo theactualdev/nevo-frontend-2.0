@@ -9,12 +9,16 @@ import { deviceClockSkewMs } from "@/lib/api/serverClock";
  *
  * 1. CANCELLED ASSIGNMENTS WERE NEVER FILTERED. A teacher calls a lesson off
  *    and the child still sees it on Home, still opens it, still works through
- *    it, and their progress is still written against it. Two surfaces looked
- *    like they filtered - `a.status !== "completed"` - but `AssignmentStatus`
- *    is `"assigned" | "cancelled"` and has no "completed" member, so that
- *    comparison can never be false. `api/assignments.ts` says so in as many
- *    words directly above the type, which is how a filter comes to be written
- *    against a value that cannot occur.
+ *    it, and their progress is still written against it.
+ *
+ * 1b. COMPLETED IS REAL, and finished work is not "to do". This used to say
+ *    `AssignmentStatus` had no "completed" member, so a filter against it could
+ *    never fire. The deployed enum has carried `completed` since 25 Sep - the
+ *    progress route writes it when a child finishes - and treating it as open
+ *    kept finished lessons on Home's list and counted in its "N ready". A
+ *    completed assignment is still the child's lesson, and can still be opened
+ *    and read again, so it is `unavailableReason`'s null; it is just not open
+ *    work. The Lessons tab lists it under Completed.
  *
  * 2. `availableFrom` WAS NEVER READ. It is the moment an assignment OPENS - a
  *    different field from `dueAt`, and required on the read since 31 Aug. A
@@ -25,14 +29,15 @@ import { deviceClockSkewMs } from "@/lib/api/serverClock";
  * never assigned. A child can still open any lesson id their school's library
  * holds, exactly as before. Refusing those would be a much larger product
  * decision about whether the library is browsable, and it is not this fix's to
- * make. This acts only on what a teacher explicitly said - called it off, or
- * said when it opens.
+ * make. This acts only on what the assignment row says - called off, not open
+ * yet, or already finished.
  */
 export function isOpenToStudent(
   assignment: Pick<Assignment, "status" | "availableFrom">,
   now: number = correctedNow(),
 ): boolean {
   if (assignment.status === "cancelled") return false;
+  if (assignment.status === "completed") return false;
   return !opensLater(assignment.availableFrom, now);
 }
 
@@ -40,7 +45,8 @@ export function isOpenToStudent(
 export type Unavailable = "cancelled" | "not_yet";
 
 /**
- * The reason, or null when it IS open.
+ * The reason, or null when the child may open it - which includes a completed
+ * one: finished is not the same as taken away.
  *
  * A screen cannot say the same thing about both: "your teacher took this off
  * your list" and "this opens on Friday" are different facts and a child can act

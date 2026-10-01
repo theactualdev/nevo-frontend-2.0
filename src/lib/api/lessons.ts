@@ -49,6 +49,13 @@ export interface LessonSummary {
   /** Shipped 31 Aug. Free text; only the staged upload routes can set one. */
   subject?: string | null;
   /**
+   * The lesson's "what you'll do" line. Shipped 1 Oct (backend 70b14a4), with
+   * existing lessons backfilled. Nullable and not required, so null and absent
+   * both mean there is none, and the preview renders no line rather than one
+   * we wrote.
+   */
+  description?: string | null;
+  /**
    * Shipped 1 Sep, pre-summed so a list view need not load segments.
    * Estimated from word count at a school reading pace and floored per content
    * type, so a real lesson is never 0 - which makes 0 (its schema default) and
