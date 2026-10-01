@@ -255,7 +255,7 @@ export function useStudentLesson(
           return;
         }
         /*
-         * NO CONNECTION, BUT THE CHILD SAVED IT. The same read, kept from when
+         * NO CONNECTION, BUT THE CHILD SAVED IT. The lesson they kept when
          * they saved it, through the same builder - so it opens exactly as it
          * would online. Only this child's shelf, and never for a 404: a lesson
          * the school removed stays removed.

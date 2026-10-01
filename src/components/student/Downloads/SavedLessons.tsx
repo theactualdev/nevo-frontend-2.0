@@ -4,8 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Check, CloudDownload } from "lucide-react";
 import { LessonProvider } from "@/context/LessonContext";
 import { useStudentLessons } from "@/hooks/useStudentLessons";
-import { lessonsApi } from "@/lib/api/lessons";
 import { getSession } from "@/lib/auth/session";
+import { downloadLesson, formatSize } from "@/lib/offline/lessonPackage";
 import {
   MAX_SAVED_LESSONS,
   removeSavedLesson,
@@ -13,26 +13,35 @@ import {
   savedLessons,
   type SavedLesson,
 } from "@/lib/offline/savedLessons";
+import { ZipUnsupported } from "@/lib/offline/zip";
 import { LessonExitProvider } from "@/components/student/Lesson/LessonExit";
 import { LessonRoute } from "@/components/student/Lesson/LessonRoute";
 
 /**
- * Downloads for a signed-in child - THE SMALLER VERSION of offline.
+ * Downloads for a signed-in child.
  *
- * A child saves a lesson while they have a connection; the lesson read the
- * player already makes is kept on this device (`savedLessons`), and a saved
- * lesson opens from here without one. What it is not - no sizes, no pictures
- * or audio, no backend offline package - is recorded in `savedLessons.ts`:
- * the real version waits on backend typing that package.
+ * A child saves a lesson while they have a connection: the backend's offline
+ * package is fetched and unpacked (`lessonPackage`), the lesson inside it is
+ * kept on this device (`savedLessons`) - or the detail read, when it is not a
+ * lesson the player can open - and a saved lesson opens from here without one.
+ *
+ * THE SIZE is the package's, as the server measured it (`sizeBytes`), and is
+ * shown only once a lesson is saved: the manifest that carries it is what a
+ * save asks for, and asking for one per row just to draw the column would
+ * register downloads the child never made. A row with no size shows none.
+ *
+ * TEXT ONLY, SAID UP FRONT. The manifest says `includesMedia: false`, so the
+ * line that pictures and sound are not saved stands on that, not on our guess,
+ * and shows once a saved lesson carries it.
  *
  * OPENED IN PLACE, NOT NAVIGATED TO. There is no service worker, so loading
  * another page with no connection fails outright. The lesson opens over this
  * page instead, and every way out of it closes it again (`LessonExitProvider`).
  * This page itself is exempt from the shell's offline takeover.
  *
- * NOT DRAWN: the frame shows the demo list with sizes and no way to open a
- * lesson from here. The Open control and the copy are ours and are flagged to
- * design; sizes are absent because the contract carries none.
+ * NOT DRAWN: the frame sizes every row and has no way to open a lesson from
+ * here. Sizes show on saved rows only, for the reason above; the Open control
+ * and the copy are ours (D43 signed them off).
  */
 
 type RowState = "saving" | "idle";
@@ -54,7 +63,9 @@ export function SavedLessons() {
     reload();
   }, [reload]);
 
-  const saved = new Set(shelf.map((s) => s.lessonId));
+  const kept = new Map(shelf.map((s) => [s.lessonId, s]));
+  // On the manifest's word, never assumed: see the docblock.
+  const textOnly = shelf.some((s) => s.includesMedia === false);
 
   /*
    * THE CHILD'S LESSONS, THEN WHAT THEY SAVED THAT THE LIST CANNOT SHOW. With
@@ -73,8 +84,11 @@ export function SavedLessons() {
     setNotice(null);
     setBusy((b) => ({ ...b, [id]: "saving" }));
     try {
-      const detail = await lessonsApi.detail(id);
-      const result = saveLesson(owner, detail);
+      const pkg = await downloadLesson(id);
+      const result = saveLesson(owner, pkg.detail, {
+        sizeBytes: pkg.sizeBytes,
+        includesMedia: pkg.includesMedia,
+      });
       if (result === "full") {
         setNotice(
           `This device keeps ${MAX_SAVED_LESSONS} lessons. Remove one to save another.`,
@@ -84,8 +98,14 @@ export function SavedLessons() {
           "This device wouldn't keep that lesson. Try removing one you've saved.",
         );
       }
-    } catch {
-      setNotice("That lesson couldn't be saved just now. Try again when you're connected.");
+    } catch (err) {
+      // A device that cannot unpack the package will not manage it on a
+      // retry either, so it is not told to try again.
+      setNotice(
+        err instanceof ZipUnsupported
+          ? "That lesson couldn't be saved."
+          : "That lesson couldn't be saved just now. Try again when you're connected.",
+      );
     } finally {
       setBusy((b) => ({ ...b, [id]: "idle" }));
       reload();
@@ -99,7 +119,7 @@ export function SavedLessons() {
   };
 
   const saveAll = async () => {
-    for (const row of rows) if (!saved.has(row.id)) await save(row.id);
+    for (const row of rows) if (!kept.has(row.id)) await save(row.id);
   };
 
   if (openId) {
@@ -119,7 +139,7 @@ export function SavedLessons() {
     );
   }
 
-  const unsaved = rows.filter((r) => !saved.has(r.id));
+  const unsaved = rows.filter((r) => !kept.has(r.id));
 
   return (
     <div className="mx-auto w-full max-w-[640px] px-5 py-2 pb-6 sm:px-8 sm:py-6">
@@ -128,7 +148,8 @@ export function SavedLessons() {
       </h1>
       <p className="mt-2 text-sm leading-[1.55] text-nevo-near-black/65">
         Save a lesson while you&rsquo;re connected, and you can open it here
-        even without a connection. Pictures and sound aren&rsquo;t saved yet.
+        even without a connection.
+        {textOnly && <> Pictures and sound aren&rsquo;t saved.</>}
       </p>
 
       {unsaved.length > 0 && !failed && (
@@ -156,8 +177,9 @@ export function SavedLessons() {
       ) : (
         <ul className="mt-3">
           {rows.map((row) => {
-            const isSaved = saved.has(row.id);
+            const isSaved = kept.has(row.id);
             const isSaving = busy[row.id] === "saving";
+            const size = formatSize(kept.get(row.id)?.sizeBytes);
             return (
               <li
                 key={row.id}
@@ -166,6 +188,11 @@ export function SavedLessons() {
                 <span className="min-w-0 flex-1 truncate text-[15px] text-nevo-near-black">
                   {row.title}
                 </span>
+                {size && (
+                  <span className="shrink-0 text-[13px] text-nevo-near-black/55">
+                    {size}
+                  </span>
+                )}
                 {isSaved ? (
                   <>
                     <button
