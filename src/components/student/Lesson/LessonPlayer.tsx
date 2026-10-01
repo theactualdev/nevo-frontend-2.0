@@ -72,8 +72,9 @@ import { TeacherNote } from "./TeacherNote";
 import { TextSegment } from "./TextSegment";
 import { VisualSegment } from "./VisualSegment";
 
+// Finishing a lesson goes back to the lessons (frame: "Back to lessons");
+// leaving one part way goes Home (IA: "Leave for now" -> Home Dashboard).
 const LESSONS_HREF = "/student/lessons";
-// Finishing a lesson returns to Home (the daily landing), not the lesson list.
 const HOME_HREF = "/student/dashboard";
 
 const DENSITIES: { id: Density; label: string }[] = [
@@ -146,6 +147,7 @@ export function LessonPlayer({
   live = false,
   assignmentId,
   startAt = 0,
+  placeUnknown = false,
   lastWorkedAt = null,
   adaptSegments,
 }: {
@@ -174,6 +176,11 @@ export function LessonPlayer({
    * session always opens at the top regardless.
    */
   startAt?: number;
+  /**
+   * Where the child got to could not be read, so `startAt` is a default and
+   * not their place. The opening segment is then not written until they move.
+   */
+  placeUnknown?: boolean;
   /** Passed to the review entry screen so its recency line is a fact. */
   lastWorkedAt?: string | null;
   /**
@@ -258,6 +265,9 @@ export function LessonPlayer({
    * perfect recall for a child who got it wrong twice.
    */
   const firstAnswers = useRef<Map<number, boolean>>(new Map());
+  // The same, for the inline checks, by segment. A review skips the
+  // after-lesson questions, so these are the only answers it ever has.
+  const firstCheckAnswers = useRef<Map<string, boolean>>(new Map());
   const [passedChecks, setPassedChecks] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -292,8 +302,13 @@ export function LessonPlayer({
    * does, the honest behaviour is to leave the lesson's progress alone rather
    * than overwrite it with something false.
    */
+  // An unknown place opens at the top, and the top is not a position: it is
+  // written once the child moves, never over the place they really reached.
+  const unplacedAt = useRef<number | null>(placeUnknown ? opening : null);
   useEffect(() => {
     if (review) return;
+    if (unplacedAt.current === index) return;
+    unplacedAt.current = null;
     const pos = modulePositionFor(lesson, index);
     reportProgress(LESSON_STATUS.IN_PROGRESS, {
       segment: index,
@@ -367,9 +382,22 @@ export function LessonPlayer({
     if (!studentId) return;
 
     const questions = lesson.assessment?.questions ?? [];
-    const onThisConcept = questions
-      .map((q, i) => ({ conceptId: q.conceptId, answered: firstAnswers.current.get(i) }))
-      .filter((q) => q.conceptId === reviewConceptId && q.answered !== undefined);
+    /*
+     * THE INLINE CHECKS COUNT TOO, and in a review they are all there is.
+     * This read only the after-lesson questions - which a review skips by
+     * design - so `onThisConcept` was always empty and the outcome was never
+     * sent, however the child did.
+     */
+    const onThisConcept = [
+      ...questions.map((q, i) => ({
+        conceptId: q.conceptId,
+        answered: firstAnswers.current.get(i),
+      })),
+      ...lesson.segments.map((s) => ({
+        conceptId: s.quickCheck?.conceptId,
+        answered: firstCheckAnswers.current.get(s.id),
+      })),
+    ].filter((q) => q.conceptId === reviewConceptId && q.answered !== undefined);
     if (onThisConcept.length === 0) return;
 
     reviewRecorded.current = true;
@@ -386,14 +414,31 @@ export function LessonPlayer({
   // boundary. Non-null takes over the screen with the boundary landing; the
   // student's continue (or break + "I'm ready") completes the move.
   const [boundaryTo, setBoundaryTo] = useState<number | null>(null);
+  /*
+   * ARRIVING AT A BOUNDARY IS ARRIVING IN THE NEXT MODULE.
+   *
+   * The position effect above watches `index`, which does not move until the
+   * child leaves this screen - so a child who closed the app here resumed on
+   * the last segment of the module they had just finished, and met the same
+   * boundary again. The place written is the one the boundary opens onto.
+   */
+  useEffect(() => {
+    if (review || boundaryTo === null) return;
+    const pos = modulePositionFor(lesson, boundaryTo);
+    reportProgress(LESSON_STATUS.IN_PROGRESS, {
+      segment: boundaryTo,
+      ...(pos ? { module: pos.moduleIndex } : {}),
+    });
+  }, [lesson, boundaryTo, review, reportProgress]);
   // Break module (frame 18): a plan-delivered break takes over the screen on
   // the way out of its segment; finishing it resumes the interrupted advance.
   // One break per segment - taken breaks never re-trigger on a back-and-forth.
   const [breakActive, setBreakActive] = useState<BreakType | null>(null);
   const breaksTaken = useRef<Set<string>>(new Set());
   // Where the active break came from: "advance" resumes the interrupted move,
-  // "offer" returns to the same segment. Trigger travels into `break_start`.
-  const breakOrigin = useRef<"advance" | "offer">("advance");
+  // "offer" returns to the same segment, "boundary" enters the next module.
+  // Trigger travels into `break_start`.
+  const breakOrigin = useRef<"advance" | "offer" | "boundary">("advance");
   const breakTrigger = useRef<string>("adaptation_plan");
   // Break OFFERS (B.7/§4): spent per segment for offered breaks, once per
   // session for the 20-minute monitor. Declining spends; never re-asks.
@@ -1071,13 +1116,16 @@ export function LessonPlayer({
   }
 
   if (phase === "complete") {
-    // "Your progress is saved" is the screen's default note, and until the
-    // progress write existed it was simply untrue. Now it is a report: when
-    // the write did not reach Nevo the child is told, in the same words the
-    // daily warm-up uses - the fault is ours and it says so.
+    // "Your progress is saved" is a REPORT, so it appears once the completion
+    // write has landed and not before - not while it is in flight, not while
+    // it waits on a session, and never for a lesson nothing writes. It was the
+    // screen's default and showed in all of those. When the write did not
+    // reach Nevo the child is told, in the same words the daily warm-up uses.
     const savedNote = progress.completionFailed
-      ? "We couldn’t save that just now — that’s on us, not you. Your work is still yours."
-      : undefined;
+      ? "We couldn’t save that just now - that’s on us, not you. Your work is still yours."
+      : progress.completionSaved
+        ? "Your progress is saved."
+        : undefined;
 
     // Review sessions close on the strengthened-concept variant (37d) - the
     // standard completion screen with only the message swapped.
@@ -1096,7 +1144,7 @@ export function LessonPlayer({
     }
     return (
       <LessonComplete
-        onDone={() => exitTo(HOME_HREF)}
+        onDone={() => exitTo(LESSONS_HREF)}
         note={savedNote}
         onSeeSummary={
           lesson.summary
@@ -1133,8 +1181,13 @@ export function LessonPlayer({
         onDone={() => {
           setBreakActive(null);
           // An offered break returns to the segment it interrupted; a
-          // plan-delivered one resumes the advance it intercepted.
+          // plan-delivered one resumes the advance it intercepted; one taken
+          // at a module boundary lands on the next module's first segment.
           if (breakOrigin.current === "advance") continueAdvance();
+          if (breakOrigin.current === "boundary" && boundaryTo !== null) {
+            setBoundaryTo(null);
+            go(boundaryTo);
+          }
         }}
       />
     );
@@ -1169,6 +1222,19 @@ export function LessonPlayer({
           onEnterNext={() => {
             setBoundaryTo(null);
             go(boundaryTo);
+          }}
+          onTakeBreak={() => {
+            /*
+             * SCRUM-101, answered: "Take a break first" routes to the break
+             * module and returns to the next module's first segment. It
+             * rested in place instead, which emitted no break at all.
+             *
+             * The full break, because it is the one the child ends: they
+             * chose to stop, so nothing times them back in.
+             */
+            breakOrigin.current = "boundary";
+            breakTrigger.current = "module_boundary";
+            setBreakActive(BREAK_TYPES.FULL);
           }}
         />
       );
@@ -1436,6 +1502,10 @@ export function LessonPlayer({
               segmentId: segment.id,
               correct,
             });
+            // First answer only, for the scheduler - a miss re-opens the
+            // check until it is passed, so "passed" is true of everyone.
+            if (!firstCheckAnswers.current.has(segment.id))
+              firstCheckAnswers.current.set(segment.id, correct);
             if (correct)
               setPassedChecks((prev) => new Set(prev).add(segment.id));
           }}
@@ -1450,6 +1520,7 @@ export function LessonPlayer({
       <LeaveLessonDialog
         open={leaveOpen}
         onOpenChange={setLeaveOpen}
+        saved={progress.positionSaved}
         onLeave={() => {
           // `exited` is a status the contract defines and nothing ever sent.
           // Leaving deliberately is not the same fact as drifting off mid
@@ -1461,7 +1532,7 @@ export function LessonPlayer({
           if (!review) {
             reportProgress(LESSON_STATUS.EXITED, { segment: index });
           }
-          exitTo(LESSONS_HREF);
+          exitTo(HOME_HREF);
         }}
       />
 

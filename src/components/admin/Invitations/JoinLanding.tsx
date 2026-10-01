@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ApiError } from "@/lib/api/client";
 import { invitesApi, type JoinLookup } from "@/lib/api/invites";
+import { linkIsDead } from "@/lib/auth/linkAnswer";
 import { cn } from "@/lib/utils";
 import { PRIMARY_BTN, Spinner } from "../Roster/primitives";
 
@@ -15,16 +15,24 @@ import { PRIMARY_BTN, Spinner } from "../Roster/primitives";
  * message and gets opened on a phone. The desktop variant is the same page
  * with room around it, not a different design.
  *
- * It is also PUBLIC. `proxy.ts` guards only `/teacher`, `/admin` and the two
- * sign-in doors, so `/join/:token` needs no exemption - but that is worth
- * knowing rather than rediscovering: this page must never assume a session,
- * and `lookupJoin` is deliberately the only call it makes before someone
- * chooses to continue.
+ * It is also PUBLIC. `proxy.ts` guards `/teacher`, `/admin`, `/student` and
+ * the sign-in doors, and its matcher never sees `/join`, so `/join/:token`
+ * needs no exemption - but that is worth knowing rather than rediscovering:
+ * this page must never assume a session, and `lookupJoin` is deliberately the
+ * only call it makes before someone chooses to continue.
  *
- * Three states, and two of them are dead ends by design. An expired or revoked
- * link says so plainly and points at the school; it offers no retry, because
- * there is nothing the person holding it can do from here. Neither is styled
- * as an error - a link that ran out of time is not the reader's mistake.
+ * A dead link is a dead end by design. It says so plainly and points at the
+ * school; it offers no retry, because there is nothing the person holding it
+ * can do from here. It is not styled as an error - a link that ran out of time
+ * is not the reader's mistake.
+ *
+ * D19 DRAWS "EXPIRED" AND "INVALID / REVOKED" APART, AND THE CONTRACT CANNOT.
+ * `JoinInspectionResponse.status` is the constant "valid", so a 200 is a good
+ * link, and every dead one is the same 404 - *"Join link is invalid or
+ * expired"*, live, 1 Oct. The expired panel used to be reached by comparing
+ * `expiresAt` with this device's clock, which the server had already done: on
+ * a tablet whose clock ran fast it turned a good invite away. Shipped reduced
+ * to the one dead panel, whose words fit both, until the wire tells them apart.
  *
  * TODO(api): `GET /api/v1/join/{token}` returns
  * `{status, role, schoolName, expiresAt}` and no NAME, so D19's "Welcome,
@@ -42,7 +50,7 @@ import { PRIMARY_BTN, Spinner } from "../Roster/primitives";
  */
 
 /**
- * `failed` is the lookup ANSWERING that the link is dead (404 / 410).
+ * `failed` is the lookup ANSWERING that the link is dead - see `linkIsDead`.
  * `unreachable` is the lookup not answering at all - a network blip or a 5xx.
  * They used to be one state, so a brief outage told a teacher or a child that
  * their invite was "no longer valid" - on the one public page they reach from
@@ -50,13 +58,9 @@ import { PRIMARY_BTN, Spinner } from "../Roster/primitives";
  */
 type Phase = "loading" | "ready" | "failed" | "unreachable";
 
-/** Which panel to show. Decided once, when the lookup lands. */
-type Outcome = "valid" | "expired" | "invalid";
-
 export function JoinLanding({ token }: { token: string }) {
   const [phase, setPhase] = useState<Phase>("loading");
   const [lookup, setLookup] = useState<JoinLookup | null>(null);
-  const [outcome, setOutcome] = useState<Outcome>("invalid");
 
   const [attempt, setAttempt] = useState(0);
 
@@ -64,36 +68,22 @@ export function JoinLanding({ token }: { token: string }) {
     invitesApi
       .lookupJoin(token)
       .then((res) => {
+        // A 200 IS the server saying the link is good: the status is a
+        // constant on the wire, and expiry was judged where the clock is
+        // right. See the docblock above.
         setLookup(res);
-        // The clock is read HERE, in an effect, not during render - and a
-        // link that says "valid" but is past its date is treated as expired,
-        // because the date is the fact and the label is a summary of it.
-        const status = (res.status ?? "").toLowerCase();
-        const past = Date.parse(res.expiresAt) < Date.now();
-        setOutcome(
-          status === "valid" && !past
-            ? "valid"
-            : status === "expired" || (status === "valid" && past)
-              ? "expired"
-              : "invalid",
-        );
         setPhase("ready");
       })
-      // A 404 or 410 is not an error state here - it IS the answer, and the
+      // A dead link is not an error state here - it IS the answer, and the
       // "no longer valid" panel below is what it means. Anything else is the
       // lookup failing to answer, which says nothing about the invite.
       .catch((err: unknown) => {
-        setPhase(
-          err instanceof ApiError && (err.status === 404 || err.status === 410)
-            ? "failed"
-            : "unreachable",
-        );
+        setPhase(linkIsDead(err) ? "failed" : "unreachable");
       });
   }, [token, attempt]);
 
-  const valid = phase === "ready" && outcome === "valid";
-  const expired = phase === "ready" && outcome === "expired";
-  const invalid = phase === "failed" || (phase === "ready" && outcome === "invalid");
+  const valid = phase === "ready";
+  const invalid = phase === "failed";
 
   const isTeacher = (lookup?.role ?? "").toLowerCase() === "teacher";
   /*
@@ -155,17 +145,6 @@ export function JoinLanding({ token }: { token: string }) {
             <Link href={onward} className={cn(PRIMARY_BTN, "mt-8 w-full justify-center")}>
               Get started
             </Link>
-          </>
-        ) : null}
-
-        {expired ? (
-          <>
-            <h1 className="m-0 text-[26px] font-semibold tracking-[-0.018em] text-nevo-near-black">
-              This invite has expired
-            </h1>
-            <p className="m-0 mt-3 text-[15px] leading-[1.6] text-nevo-near-black/62">
-              Contact your school administrator to request a new invite.
-            </p>
           </>
         ) : null}
 

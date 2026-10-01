@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
-import { StudentShell } from "./StudentShell";
+import { StudentShell, scalesWithTextSize } from "./StudentShell";
 import { clearSession, setSession } from "@/lib/auth/session";
 import { AccessibilityProvider } from "@/context/AccessibilityContext";
 
@@ -192,5 +192,24 @@ describe("the consent hold", () => {
     at("/student/dashboard");
 
     expect(vi.mocked(useBehaviouralCapture)).toHaveBeenCalledWith(true);
+  });
+});
+
+describe("scalesWithTextSize — Text Size on the full-screen routes", () => {
+  /*
+   * The baseline was always exempt: its tasks are sized and timed to measure.
+   * The daily warm-up runs the same tasks under the child's zoom, so a reading
+   * preference changed tile and dot sizes in a calibration.
+   */
+  it("leaves the daily warm-up unscaled", () => {
+    expect(scalesWithTextSize("/student/warm-up")).toBe(false);
+  });
+
+  it("leaves onboarding unscaled, as before", () => {
+    expect(scalesWithTextSize("/student/onboarding/sequence")).toBe(false);
+  });
+
+  it("still scales the lesson player, where the reading happens", () => {
+    expect(scalesWithTextSize("/student/lessons/abc-123")).toBe(true);
   });
 });

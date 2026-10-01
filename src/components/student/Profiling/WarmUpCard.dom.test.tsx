@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
-import { WarmUpCard } from "./WarmUpCard";
+import { WARM_UP_CHIPS, WarmUpCard } from "./WarmUpCard";
 
 /**
  * The card once today's warm-up is behind them. Design's words, 24 Sep.
@@ -71,5 +71,20 @@ describe("once it is done", () => {
     expect(document.body.textContent).not.toMatch(
       /well done|great|nice|score|correct|streak|you got|%/i,
     );
+  });
+});
+
+describe("before the engine has named a task", () => {
+  it("names none", () => {
+    // The chip named the weekday rotation's task, which the run no longer
+    // falls back to for a signed-in child.
+    render(<WarmUpCard dimension={null} />);
+
+    for (const chip of Object.values(WARM_UP_CHIPS)) {
+      expect(screen.queryByText(chip)).toBeNull();
+    }
+    expect(
+      screen.getByRole("link", { name: /Begin warm-up/i }),
+    ).toBeInTheDocument();
   });
 });

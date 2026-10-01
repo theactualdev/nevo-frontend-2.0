@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { studentEntryApi } from "@/lib/api/studentEntry";
+import { linkIsDead } from "@/lib/auth/linkAnswer";
+import { WelcomeScreen } from "@/components/student/Welcome/WelcomeScreen";
 import { WaitingOnConsent } from "./WaitingOnConsent";
 
 /**
@@ -30,6 +32,7 @@ import { WaitingOnConsent } from "./WaitingOnConsent";
 export function StudentEntry({ token }: { token: string }) {
   const router = useRouter();
   const [held, setHeld] = useState<boolean | null>(null);
+  const [dead, setDead] = useState(false);
 
   /**
    * ONE RESOLVE PER TOKEN, and the guard is a ref rather than the effect's own
@@ -74,7 +77,19 @@ export function StudentEntry({ token }: { token: string }) {
         setHeld(false);
         onward();
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        if (!live.current) return;
+        /*
+         * A DEAD LINK IS TOLD SO HERE, by the link's own endpoint. An unknown,
+         * expired or revoked token is a 404 `entry_link_invalid`, and handing
+         * that onward left it to a different endpoint to notice. The words are
+         * the Welcome's dead-link lines, design's since 24 Sep, and they agree
+         * with the server's own: "Ask your teacher for a new link."
+         */
+        if (linkIsDead(err)) {
+          setDead(true);
+          return;
+        }
         /*
          * A FAILED READ IS NOT A MISSING CONSENT, and this is the same ruling
          * `useConsentGate` already made for withdrawal: a dropped network, a
@@ -88,7 +103,6 @@ export function StudentEntry({ token }: { token: string }) {
          * words. So a child whose read failed meets the ordinary flow, and a
          * child whose LINK is bad still meets the truth about it.
          */
-        if (!live.current) return;
         setHeld(false);
         onward();
       });
@@ -113,6 +127,7 @@ export function StudentEntry({ token }: { token: string }) {
    * shut" the frame refuses, and a child who IS consented would see it flash
    * on their way past for no reason.
    */
+  if (dead) return <WelcomeScreen linkError />;
   if (held !== true) return null;
 
   return <WaitingOnConsent />;

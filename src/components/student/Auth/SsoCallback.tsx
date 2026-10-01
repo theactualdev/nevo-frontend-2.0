@@ -98,6 +98,8 @@ export function SsoCallback() {
           expiresAt: res.expiresAt,
           userId: res.userId,
           role,
+          // Kept with the session, so a reload mid-onboarding is still SSO.
+          method: "sso",
         });
         // The callback carries no school, and `AuthUser.schoolId` is not
         // optional - so it is left to `users/me`, which returns the real one

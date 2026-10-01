@@ -4,6 +4,7 @@ import {
   reduceGridSpan,
   reduceRunContext,
   reduceTrialModule,
+  tapPoint,
 } from "./capture";
 
 /**
@@ -241,5 +242,59 @@ describe("reduceRunContext", () => {
       band: null,
       probeSubject: null,
     });
+  });
+});
+
+describe("BaselineCapture.stop — a withdrawn guardian", () => {
+  /*
+   * The flows purged once when the withdrawal arrived and carried on: every
+   * module after it recorded again and wrote its stream back to IndexedDB at
+   * its end. A purge empties; a stop has to keep it empty.
+   */
+  it("empties what was recorded before it", async () => {
+    const c = new BaselineCapture("w1");
+    c.record("tap", { cell: 3 });
+
+    await c.stop();
+
+    expect(c.stream).toHaveLength(0);
+  });
+
+  it("records nothing the child does afterwards", async () => {
+    const c = new BaselineCapture("w2");
+    await c.stop();
+
+    c.record("trial_pick", { module: "pattern_flanker", rtMs: 400 });
+    c.record("module_end", { module: "pattern_flanker" });
+
+    expect(c.stream).toHaveLength(0);
+  });
+
+  it("is not what a plain purge does, which keeps recording", async () => {
+    // The distinction this exists for: purge alone is the old behaviour.
+    const c = new BaselineCapture("w3");
+    await c.purge();
+
+    c.record("tap", { cell: 1 });
+
+    expect(c.stream).toHaveLength(1);
+  });
+});
+
+describe("tapPoint — where the finger landed", () => {
+  it("keeps the coordinates exactly, unrounded", () => {
+    // Rounded coordinates are noise the engine cannot undo (frontend §2).
+    expect(tapPoint({ clientX: 120.5, clientY: 44.25, detail: 1 })).toEqual({
+      x: 120.5,
+      y: 44.25,
+    });
+  });
+
+  it("records no point for a keyboard press, rather than a false 0,0", () => {
+    expect(tapPoint({ clientX: 0, clientY: 0, detail: 0 })).toEqual({});
+  });
+
+  it("records nothing when there was no event", () => {
+    expect(tapPoint(undefined)).toEqual({});
   });
 });
