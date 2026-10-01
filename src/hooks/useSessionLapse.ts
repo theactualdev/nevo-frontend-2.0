@@ -82,7 +82,14 @@ export function useSessionLapse(): void {
       if (Date.now() < Date.parse(had.expiresAt)) return;
 
       seen.current = null;
-      router.replace(sessionExpiredDoor(had.role));
+      // With where they were, so "Log back in" returns them to it.
+      router.replace(
+        sessionExpiredDoor(
+          had.role,
+          null,
+          `${window.location.pathname}${window.location.search}`,
+        ),
+      );
     };
 
     // A backgrounded tab's timers are throttled and a sleeping machine's do not

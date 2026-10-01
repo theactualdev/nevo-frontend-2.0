@@ -18,17 +18,22 @@ import { cn } from "@/lib/utils";
  * learn the wrong model of the system from the names alone.
  */
 
+/**
+ * The two pills below are drawn 36px tall and touched at 44: the button is the
+ * hit area, the inner span is the pill, and `-my-1` keeps the layout the frame
+ * draws.
+ */
+const PILL_HIT = "group -my-1 inline-flex h-11 cursor-pointer items-center";
+
 /** `increase_difficulty`: the step-up offer above the content. TODO(api):
  *  acceptance asks the backend for a step up; until then the tap spends it. */
 export function DifficultyOfferPill({ onSpent }: { onSpent: () => void }) {
   return (
     <div className="mb-4 flex justify-center">
-      <button
-        type="button"
-        onClick={onSpent}
-        className="inline-flex h-9 cursor-pointer items-center rounded-[20px] border-[1.5px] border-nevo-violet/50 bg-nevo-cream-elevated px-[18px] text-[13px] font-medium text-nevo-navy transition-transform active:scale-[0.98]"
-      >
-        Ready for something harder?
+      <button type="button" onClick={onSpent} className={PILL_HIT}>
+        <span className="inline-flex h-9 items-center rounded-[20px] border-[1.5px] border-nevo-violet/50 bg-nevo-cream-elevated px-[18px] text-[13px] font-medium text-nevo-navy transition-transform group-active:scale-[0.98]">
+          Ready for something harder?
+        </span>
       </button>
     </div>
   );
@@ -49,9 +54,11 @@ export function SocraticPanel({ prompts }: { prompts: string[] }) {
           type="button"
           aria-expanded={open}
           onClick={() => setOpen(true)}
-          className="inline-flex h-9 cursor-pointer items-center rounded-[20px] bg-nevo-cream-elevated px-[18px] text-[13px] text-nevo-near-black transition-transform active:scale-[0.98]"
+          className={PILL_HIT}
         >
-          Which part is unclear?
+          <span className="inline-flex h-9 items-center rounded-[20px] bg-nevo-cream-elevated px-[18px] text-[13px] text-nevo-near-black transition-transform group-active:scale-[0.98]">
+            Which part is unclear?
+          </span>
         </button>
       </div>
       {open && (
@@ -104,13 +111,15 @@ export function HintOverlay({ hint }: { hint: string }) {
 }
 
 /**
- * Secondary-chrome dim: `modulate_density` softens to 40% (§4); the attention
- * accommodation simplifies further to 30% (37c). Softening wins when both
- * hold.
+ * Secondary-chrome dim: the attention accommodation simplifies the interface
+ * to 30% (37c).
+ *
+ * It took a second flag until 1 Oct: `modulate_density` dimmed the same chrome
+ * to 40%. Design removed that state (SCRUM-180) - it was not in the contract's
+ * enum and could never fire, and screen comfort belongs in device settings
+ * rather than in an instruction Nevo issues. This dim is an accommodation, not
+ * an instruction, and is unchanged.
  */
-export function secondaryDim(softened: boolean, attention = false): string {
-  return cn(
-    "transition-opacity duration-[400ms]",
-    softened ? "opacity-40" : attention && "opacity-30",
-  );
+export function secondaryDim(attention: boolean): string {
+  return cn("transition-opacity duration-[400ms]", attention && "opacity-30");
 }

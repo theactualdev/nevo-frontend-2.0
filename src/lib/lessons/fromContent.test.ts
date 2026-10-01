@@ -75,6 +75,37 @@ describe("lessonFromContent — the visual channel", () => {
     expect(out?.segments[0].modalities).toContain("visual");
   });
 
+  it("keeps where the image is stored, so an expired link can be re-issued", () => {
+    // The signed `imageUrl` ages out; `storagePath` is what
+    // `POST /api/content/media/url` takes to mint a fresh one.
+    const out = lessonFromContent(
+      lesson([segment({ visualVariant: visualVariant() })]),
+    );
+
+    expect(out?.segments[0].visual?.illustration?.storagePath).toBe(
+      "lessons/seg-1.png",
+    );
+  });
+
+  it("keeps the image's own shape when it is measured, and only then", () => {
+    const sized = lessonFromContent(
+      lesson([
+        segment({ visualVariant: visualVariant({ width: 800, height: 400 }) }),
+      ]),
+    );
+    const unsized = lessonFromContent(
+      lesson([segment({ visualVariant: visualVariant({ width: 0 }) })]),
+    );
+
+    expect(sized?.segments[0].visual?.illustration).toMatchObject({
+      width: 800,
+      height: 400,
+    });
+    expect(unsized?.segments[0].visual?.illustration).not.toHaveProperty(
+      "width",
+    );
+  });
+
   it("refuses an image that failed its own review", () => {
     // These are generated pictures with a review pass behind them. One that did
     // not pass is one we have been told not to trust, and a wrong picture of a
@@ -153,6 +184,8 @@ describe("lessonFromContent - the audio channel", () => {
     );
 
     expect(out?.segments[0].audio?.src).toBe("https://cdn.example/a.mp3");
+    // Kept so an aged-out link can be re-issued rather than left silent.
+    expect(out?.segments[0].audio?.storagePath).toBe("lessons/seg-1.mp3");
     expect(out?.segments[0].audio?.transcript).toBe(
       "The number on top is the numerator.",
     );

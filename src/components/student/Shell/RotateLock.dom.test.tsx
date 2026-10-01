@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { createPortal } from "react-dom";
 import { RotateLock } from "./RotateLock";
 
 /**
@@ -199,5 +200,68 @@ describe("a tablet that does not turn", () => {
     expect(
       screen.getByRole("button", { name: /my tablet doesn.t turn/i }),
     ).toBeInTheDocument();
+  });
+});
+
+/*
+ * A SHEET IS NOT INSIDE THE APP. Radix portals a sheet or a dialog into
+ * `document.body`, outside the subtree `RotateLock` made inert - so an open
+ * one stayed live behind the prompt: its buttons tabbable and pressable, its
+ * text read out over "Turn your tablet upright".
+ */
+describe("what is portalled out of the app", () => {
+  function LessonWithSheet() {
+    return (
+      <RotateLock>
+        <button type="button">Next</button>
+        {createPortal(
+          <div data-testid="sheet">
+            <button type="button">Close sheet</button>
+          </div>,
+          document.body,
+        )}
+      </RotateLock>
+    );
+  }
+  const sheet = () => screen.getByTestId("sheet");
+
+  it("is held still with the app while the tablet is turned", () => {
+    render(<LessonWithSheet />);
+
+    turn("sideways");
+
+    expect(sheet().closest("[inert]")).not.toBeNull();
+  });
+
+  it("is given back when the tablet comes upright", () => {
+    render(<LessonWithSheet />);
+    turn("sideways");
+
+    turn("upright");
+
+    expect(sheet().closest("[inert]")).toBeNull();
+  });
+
+  it("is held even when it opens while the prompt is up", async () => {
+    // The pause card can arrive at any moment, sideways or not.
+    render(<Lesson />);
+    turn("sideways");
+
+    const late = document.createElement("div");
+    document.body.appendChild(late);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(late.hasAttribute("inert")).toBe(true);
+    late.remove();
+  });
+
+  it("never stills the prompt itself", () => {
+    render(<LessonWithSheet />);
+
+    turn("sideways");
+
+    expect(screen.getByRole("status").closest("[inert]")).toBeNull();
   });
 });

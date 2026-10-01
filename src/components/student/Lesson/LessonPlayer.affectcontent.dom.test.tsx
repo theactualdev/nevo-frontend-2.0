@@ -102,7 +102,7 @@ describe("the hint the engine sends", () => {
       <LessonPlayer
         lesson={LESSON}
         plan={plan({
-          adjustment: ADJUSTMENT_ACTIONS.MODULATE_DENSITY,
+          adjustment: ADJUSTMENT_ACTIONS.SIMPLIFY,
           hint: HINT,
         })}
       />,

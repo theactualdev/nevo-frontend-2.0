@@ -1,18 +1,39 @@
+"use client";
+
+import { X } from "lucide-react";
 import { ProgressBar } from "@/components/shared";
+import { useLessonExit } from "./LessonExit";
+
+const HOME_HREF = "/student/dashboard";
 
 /**
  * Lesson loading skeleton (Lesson Player frame) — the instant fallback while a
  * lesson streams in. A quiet skeleton of the reading column, not a blocking
  * spinner: the shell (top bar + progress) is echoed so the swap to real content
  * is calm. Wired as the route's `loading.tsx`.
+ *
+ * THE EXIT IS REAL. The frame keeps the player's Exit in every state, loading
+ * included; this drew an inert grey square in its place. Nothing on the way in
+ * has a timeout - a read that never answers is waited on rather than raced and
+ * thrown away - so a stalled load left a child on a spinner with no way off it.
+ * Nothing has been done yet, so there is nothing to confirm leaving: it goes
+ * where "Leave for now" goes.
  */
 export function LessonLoadingSkeleton() {
+  const exitTo = useLessonExit();
   return (
     <div className="flex min-h-[100dvh] flex-col bg-nevo-cream text-nevo-near-black">
-      {/* Top-bar echo — exit slot + title placeholder */}
-      <header className="flex shrink-0 flex-col gap-2.5 px-4 pt-2.5 pb-3 sm:px-6 lg:px-8">
+      {/* Top bar echo — exit + title placeholder */}
+      <header className="flex shrink-0 flex-col gap-2.5 px-3.5 pt-2.5 pb-3">
         <div className="flex items-center gap-2.5">
-          <div className="size-10 shrink-0 rounded-[10px] bg-nevo-near-black/[0.06]" />
+          <button
+            type="button"
+            aria-label="Exit lesson"
+            onClick={() => exitTo(HOME_HREF)}
+            className="flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-[10px] transition-colors hover:bg-nevo-near-black/[0.06] active:bg-nevo-near-black/[0.12]"
+          >
+            <X className="size-5" strokeWidth={2} />
+          </button>
           <div className="h-4 w-40 rounded-md bg-nevo-near-black/[0.08]" />
         </div>
       </header>

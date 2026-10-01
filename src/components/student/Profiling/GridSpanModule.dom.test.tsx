@@ -96,3 +96,69 @@ describe("GridSpanModule — the SS dual task", () => {
     expect(screen.getByText("Now tap them in reverse")).toBeVisible();
   });
 });
+
+describe("GridSpanModule — each band's own span and pace", () => {
+  /*
+   * Every band ran the Primary 4-6 prototype's numbers: span from 3, a 660ms
+   * highlight. The Module 1 frame gives P1-3 "2 → 5 · 800ms" and JSS
+   * "4 → 9 · 600ms", and a six-year-old and a fourteen-year-old should not be
+   * handed the same first round.
+   */
+  const firstPlayback = (band: "p13" | "p46" | "jss" | "ss") => {
+    const capture = new BaselineCapture(`span-${band}`);
+    render(
+      <GridSpanModule
+        config={gridSpanConfig(band)}
+        capture={capture}
+        onComplete={() => {}}
+      />,
+    );
+    act(() => void vi.advanceTimersByTime(1));
+    return capture.stream.find((e) => e.kind === "playback_start")?.payload;
+  };
+
+  it("starts P1-3 at two tiles, lit for 800ms", () => {
+    expect(firstPlayback("p13")).toMatchObject({ length: 2, litMs: 800 });
+  });
+
+  it("starts JSS at four tiles, lit for 600ms", () => {
+    expect(firstPlayback("jss")).toMatchObject({ length: 4, litMs: 600 });
+  });
+
+  it("starts SS at four tiles", () => {
+    expect(firstPlayback("ss")).toMatchObject({ length: 4 });
+  });
+
+  it("leaves P4-6 as built while its two frames disagree", () => {
+    expect(firstPlayback("p46")).toMatchObject({ length: 3, litMs: 660 });
+  });
+
+  it("takes the ceilings from the frame too", () => {
+    expect(gridSpanConfig("p13").spanMax).toBe(5);
+    expect(gridSpanConfig("jss").spanMax).toBe(9);
+    expect(gridSpanConfig("ss").spanMax).toBe(9);
+  });
+});
+
+describe("GridSpanModule — where a tap landed", () => {
+  it("records the coordinates of a tile tap", () => {
+    const capture = new BaselineCapture("coords");
+    render(
+      <GridSpanModule
+        config={gridSpanConfig("p46")}
+        capture={capture}
+        onComplete={() => {}}
+      />,
+    );
+    watchItPlay();
+
+    fireEvent.click(screen.getAllByRole("button", { hidden: true })[0], {
+      detail: 1,
+      clientX: 101.5,
+      clientY: 202.25,
+    });
+
+    const tap = capture.stream.find((e) => e.kind === "tap")?.payload;
+    expect(tap).toMatchObject({ x: 101.5, y: 202.25 });
+  });
+});

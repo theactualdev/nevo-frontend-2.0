@@ -200,9 +200,14 @@ export function AfterLessonAssessment({
   );
 }
 
-/** Low-stakes framing before the first question - no timer, not graded. */
+/**
+ * Low-stakes framing before the first question - no timer, not graded.
+ *
+ * NO "ABOUT N MINUTES". The frame draws "4 questions · about 2 minutes", and
+ * the minutes were `round(questions / 2)` presented as fact: no field carries
+ * how long a check-in takes. The count is real, so it stays.
+ */
 function Intro({ count, onStart }: { count: number; onStart: () => void }) {
-  const minutes = Math.max(1, Math.round(count / 2));
   return (
     <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-nevo-cream px-6 text-center text-nevo-near-black">
       <div className="flex w-full max-w-[300px] flex-col items-center sm:max-w-[430px]">
@@ -220,8 +225,7 @@ function Intro({ count, onStart }: { count: number; onStart: () => void }) {
           Start
         </Button>
         <span className="mt-4 text-[13px] text-nevo-near-black/55">
-          {count} question{count === 1 ? "" : "s"} · about {minutes} minute
-          {minutes === 1 ? "" : "s"}
+          {count} question{count === 1 ? "" : "s"}
         </span>
       </div>
     </div>

@@ -78,6 +78,18 @@ describe("what the engine says mid-lesson", () => {
     expect(result.current.plan?.hint).toBe("Look at the bottom number first.");
   });
 
+  it("says which segment it was asked for, so its hint stays there", async () => {
+    // The instruction is lesson-level on the wire; the request is not.
+    getAdaptation.mockResolvedValue(
+      answer({ proactiveAdjustment: { action: "offer_hint", hint: "Look down." } }),
+    );
+
+    const { result } = run();
+
+    await waitFor(() => expect(result.current.plan).not.toBeNull());
+    expect(result.current.forSegmentId).toBe("seg-1");
+  });
+
   it("gets the load-time clamps - no reasoning crosses", async () => {
     getAdaptation.mockResolvedValue(
       answer({
@@ -222,6 +234,6 @@ describe("the mid-lesson request", () => {
     const { result } = run();
 
     await waitFor(() => expect(result.current.offeredBreak).toBe("movement"));
-    expect(result.current.segmentId).toBe("seg-1");
+    expect(result.current.forSegmentId).toBe("seg-1");
   });
 });

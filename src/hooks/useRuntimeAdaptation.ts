@@ -76,12 +76,6 @@ export interface RuntimeAdaptation {
   /** Why, in the engine's words - for logging, never for a child to read. */
   reason: string | null;
   /**
-   * The segment this answer was asked about. Between the child moving on and
-   * the next answer landing, the last one is still here - and it was about
-   * the segment they left, so it is not an offer for the one they are on.
-   */
-  segmentId: string | null;
-  /**
    * EVERYTHING ELSE THE ENGINE SAID MID-LESSON, which used to be discarded.
    *
    * The `in_lesson` response carries the same instruction, hint, guided
@@ -93,6 +87,18 @@ export interface RuntimeAdaptation {
    * never the engine's reasoning. Null until the engine has answered.
    */
   plan: AdaptationPlan | null;
+  /**
+   * The segment this answer was asked for - `currentSegmentId` on the
+   * request. Between the child moving on and the next answer landing, the
+   * last one is still here - and it was about the segment they left, so its
+   * break, offer or hint is not for the one they are on.
+   *
+   * The instruction is lesson-level on the wire, but a hint or a guided
+   * question is about the content in front of the child when it was asked
+   * for. Kept with the plan so the player can show it there and not under
+   * every segment after, including through a failed read that keeps the plan.
+   */
+  forSegmentId: string | null;
 }
 
 const BREAK_VALUES: readonly string[] = Object.values(BREAK_TYPES);
@@ -113,8 +119,8 @@ export function useRuntimeAdaptation(
   const [result, setResult] = useState<RuntimeAdaptation>({
     offeredBreak: null,
     reason: null,
-    segmentId: null,
     plan: null,
+    forSegmentId: null,
   });
   // Read at response time through a ref, like the runtime state, so a new
   // lesson object does not re-fire the request.
@@ -226,8 +232,8 @@ export function useRuntimeAdaptation(
         setResult({
           offeredBreak: asBreakType(res.breakSuggestion?.breakType),
           reason: res.breakSuggestion?.reason ?? null,
-          segmentId: askedFor,
           plan: built ? toAdaptationPlan(res, built) : null,
+          forSegmentId: askedFor,
         });
       })
       .catch(() => {
@@ -236,12 +242,7 @@ export function useRuntimeAdaptation(
         // instruction: the plan falls back to the load-time one rather than
         // to "the engine now says nothing".
         if (active)
-          setResult((prev) => ({
-            offeredBreak: null,
-            reason: null,
-            segmentId: prev.segmentId,
-            plan: prev.plan,
-          }));
+          setResult((prev) => ({ ...prev, offeredBreak: null, reason: null }));
       });
 
     return () => {

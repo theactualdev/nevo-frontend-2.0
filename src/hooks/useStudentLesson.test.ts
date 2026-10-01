@@ -551,3 +551,55 @@ describe("a lesson the child saved for offline", () => {
     );
   });
 });
+
+/**
+ * "No saved place" and "could not read the saved place" are different answers.
+ *
+ * A failed dashboard read left `resumeAt` null exactly as a lesson never
+ * started does, so the player opened at segment 0 and wrote that over where
+ * the child had really got to - and the cancelled check, which reads the same
+ * response, silently passed.
+ */
+describe("a saved place that could not be read", () => {
+  beforeEach(() => window.localStorage.clear());
+
+  it("is reported as unknown, not as none", async () => {
+    signIn();
+    detail.mockResolvedValue(LIVE_LESSON);
+    dashboard.mockReturnValue({ data: null, loading: false, failed: true });
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.lesson).not.toBeNull());
+    expect(result.current.placeUnknown).toBe(true);
+    expect(result.current.fromShelf).toBe(false);
+  });
+
+  it("is known once the dashboard answers, even with no row for this lesson", async () => {
+    signIn();
+    detail.mockResolvedValue(LIVE_LESSON);
+    dashboard.mockReturnValue({
+      data: { assignments: [], recentProgress: [] },
+      loading: false,
+      failed: false,
+    });
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.lesson).not.toBeNull());
+    expect(result.current.placeUnknown).toBe(false);
+  });
+
+  it("says when the lesson came from the offline shelf", async () => {
+    signIn();
+    saveLesson("student-1", LIVE_LESSON as never);
+    detail.mockRejectedValue(new ApiError(0, "Network"));
+    dashboard.mockReturnValue({ data: null, loading: false, failed: true });
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.lesson).not.toBeNull());
+    expect(result.current.fromShelf).toBe(true);
+    expect(result.current.placeUnknown).toBe(true);
+  });
+});

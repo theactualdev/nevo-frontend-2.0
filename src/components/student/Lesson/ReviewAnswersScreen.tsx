@@ -46,9 +46,12 @@ export function ReviewAnswersScreen({ lesson }: { lesson: Lesson }) {
           <h1 className="mt-2.5 text-2xl font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[30px] lg:text-[32px]">
             A look back at the check-in
           </h1>
+          {/* The frame adds "Your progress is saved." This screen is its own
+              route and cannot know that: the completion write leaves the
+              player on the same tap that opens it. So the sentence it could
+              not stand behind is dropped, not reworded. */}
           <p className="mt-2.5 text-base leading-[1.6] text-nevo-near-black/72 sm:text-[17px]">
-            Nothing to fix here - this is just to look back over. Your progress
-            is saved.
+            Nothing to fix here - this is just to look back over.
           </p>
 
           <div className="mt-6 flex flex-col gap-3">
@@ -113,13 +116,19 @@ export function ReviewAnswersScreen({ lesson }: { lesson: Lesson }) {
           >
             Done
           </Button>
-          <Button
-            variant="ghost"
-            className="w-full sm:w-auto sm:px-7"
-            onClick={() => router.push(`${LESSONS_HREF}/${lesson.id}/summary`)}
-          >
-            Back to summary
-          </Button>
+          {/* Only where there is a summary to go back to. Without one the
+              summary route says "isn't ready yet", which is no way back. */}
+          {lesson.summary && (
+            <Button
+              variant="ghost"
+              className="w-full sm:w-auto sm:px-7"
+              onClick={() =>
+                router.push(`${LESSONS_HREF}/${lesson.id}/summary`)
+              }
+            >
+              Back to summary
+            </Button>
+          )}
         </div>
       </div>
     </div>

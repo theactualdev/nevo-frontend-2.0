@@ -20,12 +20,12 @@ const { trackEvent, signalArgs, runtimeArgs, runtime } = vi.hoisted(() => ({
     value: {
       offeredBreak: null,
       reason: null,
-      segmentId: null,
+      forSegmentId: null,
       plan: null,
     } as {
       offeredBreak: string | null;
       reason: null;
-      segmentId: string | null;
+      forSegmentId: string | null;
       plan: AdaptationPlan | null;
     },
   },
@@ -93,7 +93,7 @@ beforeEach(() => {
   trackEvent.mockReset();
   signalArgs.length = 0;
   runtimeArgs.length = 0;
-  runtime.value = { offeredBreak: null, reason: null, segmentId: null, plan: null };
+  runtime.value = { offeredBreak: null, reason: null, forSegmentId: null, plan: null };
 });
 
 afterEach(() => {
@@ -147,7 +147,7 @@ describe("breaks are the engine's to offer", () => {
   });
 
   it("offers the engine's break in the drawn words, and says it was shown and taken", () => {
-    runtime.value = { ...runtime.value, offeredBreak: "movement", segmentId: "seg-1" };
+    runtime.value = { ...runtime.value, offeredBreak: "movement", forSegmentId: "seg-1" };
     render(<LessonPlayer lesson={THREE} plan={null} live />);
     beat();
 
@@ -163,13 +163,13 @@ describe("breaks are the engine's to offer", () => {
   });
 
   it("still offers the engine's next break after one was turned down", () => {
-    runtime.value = { ...runtime.value, offeredBreak: "movement", segmentId: "seg-1" };
+    runtime.value = { ...runtime.value, offeredBreak: "movement", forSegmentId: "seg-1" };
     const { rerender } = render(<LessonPlayer lesson={THREE} plan={null} live />);
     beat();
     fireEvent.click(screen.getByRole("button", { name: "Not now" }));
 
     next();
-    runtime.value = { ...runtime.value, offeredBreak: "micro", segmentId: "seg-2" };
+    runtime.value = { ...runtime.value, offeredBreak: "micro", forSegmentId: "seg-2" };
     rerender(<LessonPlayer lesson={THREE} plan={null} live />);
     beat();
 
@@ -178,7 +178,7 @@ describe("breaks are the engine's to offer", () => {
   });
 
   it("does not carry an answer about the last segment onto this one", () => {
-    runtime.value = { ...runtime.value, offeredBreak: "movement", segmentId: "seg-0" };
+    runtime.value = { ...runtime.value, offeredBreak: "movement", forSegmentId: "seg-0" };
     render(<LessonPlayer lesson={THREE} plan={null} live />);
     beat();
 
@@ -190,7 +190,7 @@ describe("what became of a modality offer", () => {
   const engineSuggests = (segmentId: string): typeof runtime.value => ({
     offeredBreak: null,
     reason: null,
-    segmentId,
+    forSegmentId: segmentId,
     plan: { lessonId: "l-1", segments: [], suggestModality: "audio" },
   });
 

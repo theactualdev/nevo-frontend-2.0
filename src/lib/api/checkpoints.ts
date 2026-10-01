@@ -129,6 +129,13 @@ export function isMarkable(checkpoint: ComprehensionCheckpoint): boolean {
  * The notes are OURS. The contract carries an `explanation`, which is used for
  * the correct note when present; the recovery note stays the product's own
  * always-continuous wording rather than a parse's phrasing.
+ *
+ * THE RECOVERY NOTE IS THE LESSON CHECK FRAME'S, as far as a field carries it.
+ * The frame reads "Not quite - oxygen is what plants give out. Let's look
+ * again. Your progress is saved." No field explains a wrong option, and
+ * nothing here knows whether a progress write landed, so both of those stay
+ * out rather than being written for it. It said "We'll come back to it",
+ * which is the after-lesson check's line and a promise nothing here keeps.
  */
 export function toQuickCheck(
   checkpoint: ComprehensionCheckpoint,
@@ -153,7 +160,6 @@ export function toQuickCheck(
     correctNote:
       checkpoint.explanation?.trim() ||
       "That's it - you've got this one.",
-    recoveryNote:
-      "That one didn't land - and that's okay. We'll come back to it.",
+    recoveryNote: "Not quite. Let's look again.",
   };
 }

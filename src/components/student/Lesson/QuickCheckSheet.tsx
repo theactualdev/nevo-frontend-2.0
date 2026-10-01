@@ -22,6 +22,13 @@ function msSince(start: number | null): number | null {
  * spent by a correct answer.
  *
  * Mount keyed on the segment id so the chosen answer resets per segment.
+ *
+ * NO MANUAL DISMISS (IA 31). A tap on the scrim or Esc closed it, which let a
+ * child step round the check the player gates on - and the player recorded
+ * every one of those scrim taps as `tap_blocked` while they were doing the
+ * opposite. Outside taps and Esc are refused now, so the record is true. The
+ * ways out are the ones the frame draws: Keep going, Try again, See it
+ * explained.
  */
 export function QuickCheckSheet({
   check,
@@ -77,6 +84,8 @@ export function QuickCheckSheet({
         side="bottom"
         showCloseButton={false}
         aria-describedby={undefined}
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
         // The `!` marks out-shout the stock data-[side=bottom] variants (class +
         // attribute selectors), which otherwise beat these breakpoint overrides
         // and leave the panel pinned to the bottom-left while the centering
@@ -143,7 +152,13 @@ export function QuickCheckSheet({
               <Button
                 variant="ghost"
                 className="mt-2 h-[46px] w-full text-[15px]"
-                onClick={() => onOpenChange(false)}
+                onClick={() => {
+                  // Cleared on the way out, so the check comes back as a
+                  // question rather than on the answer they just missed -
+                  // which made Try again the only thing they could press.
+                  setChosenId(null);
+                  onOpenChange(false);
+                }}
               >
                 See it explained
               </Button>
