@@ -51,8 +51,9 @@ type CodeStatus = "idle" | "pending" | "success" | "error";
 /**
  * Teacher Join (screen 03 / `Nevo Teacher Join Frame`) - reached from the
  * Welcome screen's teacher-invite sheet. Two ways in, freely switchable:
- * scan the class QR code, or type the six-character code the teacher reads
- * out. Success connects the class and resumes onboarding; a miss is quiet
+ * scan the class QR code, or type the class code the teacher reads out (4 to
+ * 20 characters - see `CodeMode`). Success connects the class and resumes
+ * onboarding; a miss is quiet
  * violet, never red, and always points back to the teacher.
  */
 export function TeacherJoin() {
@@ -162,7 +163,6 @@ export function TeacherJoin() {
   );
 }
 
-/** The QR viewfinder - simulated phases until real capture lands (TODO(api)). */
 /**
  * The QR half - which is NOT a scanner, and no longer pretends to be one.
  *

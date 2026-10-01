@@ -203,9 +203,11 @@ describe("where Ask Nevo belongs", () => {
     await waitFor(() => expect(launchers().length).toBeGreaterThan(0));
   });
 
-  it("is absent on the summary, which sits under the same layout", () => {
+  it("leaves the summary to the shell's own launcher", () => {
     // `/summary` and `/review` share this route segment and are not the
-    // player - they have their own chrome, and Ask Nevo does not belong there.
+    // player. They keep the shell's chrome, and the shell's own Ask Nevo
+    // launcher with it - IA 31 puts Ask Nevo on the summary - so this one,
+    // the layout's, stays off rather than drawing a second.
     pathname.value = "/student/lessons/les-1/summary";
     mountInsideProvider();
 

@@ -193,11 +193,14 @@ export function PinCreationScreen({
          *   attributing one child's data to another.
          *
          * The two arrivals were always distinguishable without asking about
-         * tokens. `storePin` is passed by `ObservedInteractionSequence` and
-         * only by it; it redeems a join link or spends an onboarding token and
-         * carries its own identity. `ChangePinScreen` passes none, and there
-         * the signed-in student IS the subject - the only case `setPin` is
-         * right for, so that is now what it asks.
+         * tokens. `storePin` is passed by `ObservedInteractionSequence`, the
+         * only screen that renders this one; it redeems a join link or spends
+         * an onboarding token and carries its own identity. Change PIN does
+         * not render this screen: it draws its own steps around `pinReducer`
+         * and calls `setPin` itself, with the current PIN. So the `setPin`
+         * branch below is reached only by a caller that passes no `storePin`,
+         * and only for a signed-in student - the one case `setPin` is right
+         * for.
          */
         const session = getSession();
         const store = storePinRef.current

@@ -212,9 +212,3 @@ export function LessonRoute({
     />
   );
 }
-
-/**
- * A calm, full-screen message in the player's own bare frame — the player runs
- * without the shell, so these states carry their own way back rather than
- * relying on a nav that is not on screen.
- */

@@ -33,24 +33,26 @@ const SPARKLE = (className: string) => (
   </svg>
 );
 
-/** The minimum "Nevo is thinking" beat - real answers never land jarringly
- *  fast, and the mock fallback keeps its original calm pacing. */
 /**
- * How long the live answer gets before the mock engine takes over.
+ * How long the live answer gets before the drawer stops waiting for it. Then
+ * a signed-in child is told plainly that it could not answer
+ * (`COULD_NOT_ANSWER`), and a signed-out visitor gets the sample engine.
  *
  * Raised from 15s. The backend's own documented range for an unauthenticated
  * 401 is 1.0-5.6s and a Render cold start is far slower than that, so 15s sat
  * inside ordinary latency rather than beyond it.
  *
  * The cap now ABORTS the request rather than racing it. A race left the request
- * in flight and discarded an answer that had already arrived; aborting means the
- * mock engine only ever stands in for a request that genuinely ended.
+ * in flight and discarded an answer that had already arrived; aborting means
+ * either fallback only ever stands in for a request that genuinely ended.
  *
  * A cap still belongs here, unlike in `useLiveQuery`: a child watching thinking
- * dots forever is worse than a labelled sample answer. It just has to sit past
- * a cold start, not inside one.
+ * dots forever is worse than being told it did not work. It just has to sit
+ * past a cold start, not inside one.
  */
 const LIVE_TIMEOUT_MS = 30000;
+/** The minimum "Nevo is thinking" beat - real answers never land jarringly
+ *  fast, and the mock fallback keeps its original calm pacing. */
 const THINKING_MS = 1600;
 /** Mic toast lifetime. */
 const TOAST_MS = 3200;
@@ -111,11 +113,12 @@ const COULD_NOT_ANSWER =
   "I couldn't answer that just now - that's on us, not you. Try asking again in a moment.";
 
 /**
- * Mock reply engine - calm, canned, and honest about its limits. Now the
- * FALLBACK: the live assistant answers first (`askNevoApi.ask`); without a
- * session (or on any failure) the drawer answers from here so it never goes
- * silent. The cannot-help boundary stays: anything for the teacher is handed
- * to the teacher, never absorbed.
+ * Mock reply engine - calm, canned, and honest about its limits. The
+ * SIGNED-OUT walkthrough's fallback only: the live assistant is asked first
+ * (`askNevoApi.ask`), and a question it does not answer for a visitor is
+ * answered from here, marked as a sample. A signed-in child is never given
+ * one - see `COULD_NOT_ANSWER`. The cannot-help boundary stays: anything for
+ * the teacher is handed to the teacher, never absorbed.
  */
 function replyFor(text: string): Message {
   const t = text.toLowerCase();
@@ -158,10 +161,10 @@ export function AskNevo() {
   const router = useRouter();
   const pathname = usePathname();
   const { user } = useAuth();
-  // Tolerant read: the drawer lives in the tab shell, OUTSIDE the lesson
-  // route's LessonProvider - the strict useLesson() would throw there. When a
-  // provider is present (future in-player drawer), the active lesson scopes
-  // the question.
+  // Tolerant read: the shell mounts this drawer OUTSIDE any lesson's
+  // LessonProvider, where the strict useLesson() would throw. Inside one -
+  // the lesson layout's `LessonAskNevo` - the active lesson scopes the
+  // question.
   const lessonId = useContext(LessonContext)?.lessonId ?? null;
   /*
    * THE SERVER'S thread id, the same fix the teacher drawer had.
@@ -238,14 +241,15 @@ export function AskNevo() {
     setMessages((m) => [...m, { who: "user", text }]);
     setThinking(true);
 
-    // Live assistant first; the mock engine answers when the backend can't
-    // (no session yet, offline). The answer lands no earlier than the
-    // thinking beat, so a fast response never arrives jarringly.
+    // Live assistant first. When the backend can't answer, a signed-in child
+    // is told so and a signed-out visitor gets the mock engine. The answer
+    // lands no earlier than the thinking beat, so a fast response never
+    // arrives jarringly.
     const beat = new Promise<void>((resolve) => later(resolve, THINKING_MS));
     // Capped by ABORTING the request, not by racing it. A race leaves the
     // request in flight and throws away an answer that did arrive - so a
     // merely slow reply got replaced by a canned one. Aborting means the only
-    // thing the mock engine ever stands in for is a genuine failure.
+    // thing either fallback ever stands in for is a genuine failure.
     const controller = new AbortController();
     later(() => controller.abort(), LIVE_TIMEOUT_MS);
     const answer = askNevoApi
@@ -510,11 +514,12 @@ export function AskNevo() {
                 );
                 return (
                   <div key={i} className="flex justify-start">
-                    {/* The canned reply is the one fixture in this lane that
-                        reaches a SIGNED-IN child: `askNevoApi.ask` is called
-                        for everyone, and any failure or the 6s abort answers
-                        from `replyFor()` instead. The italic line above already
-                        says so to the child, which is the half that matters -
+                    {/* The canned reply reaches a SIGNED-OUT visitor only:
+                        `askNevoApi.ask` is called for everyone, a visitor's
+                        failure or `LIVE_TIMEOUT_MS` abort is answered from
+                        `replyFor()`, and a signed-in child's gets
+                        `COULD_NOT_ANSWER` instead. The italic line above
+                        says so to the visitor, which is the half that matters -
                         but only a person can read it, and the end-to-end run
                         meant to catch a console falling back to invented
                         content reads the mark. Marked ONLY when it really is a
