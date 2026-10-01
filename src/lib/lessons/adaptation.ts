@@ -55,10 +55,12 @@ const SEGMENT_TYPE: Record<string, AdaptSegmentType> = {
  * Engine `ScaffoldingLevel` (3 values) -> the indicator's `ScaffoldLevel` (5).
  *
  * The indicator draws 4 dots; the engine speaks in three levels, so it uses
- * three of the five. `light` maps to `light` - which is also the hardcoded
- * fallback the player uses today with no data behind it, so a lesson the
- * engine calls light looks exactly as it does now, and only a lesson it calls
- * harder changes.
+ * three of the five.
+ *
+ * A value not in this map is NO LEVEL, not `light`. It used to fall back to
+ * light - which the player also drew with no plan at all - so a word we did
+ * not recognise became two filled circles about a child. Rule 5: the row
+ * carries no scaffold and the indicator shows nothing.
  */
 const SCAFFOLD: Record<string, ScaffoldLevel> = {
   light: SCAFFOLD_LEVELS.LIGHT,
@@ -188,6 +190,7 @@ export function toAdaptationPlan(
     // - so opening a child in the engine's choice unchecked is how you get a
     // blank frame.
     const engineChoice = asModality(row.modality);
+    const scaffold = SCAFFOLD[row.scaffolding];
     const startModality =
       engineChoice && modalities.includes(engineChoice)
         ? engineChoice
@@ -197,7 +200,7 @@ export function toAdaptationPlan(
       {
         segmentId: row.segmentId,
         startModality,
-        scaffold: SCAFFOLD[row.scaffolding] ?? SCAFFOLD_LEVELS.LIGHT,
+        ...(scaffold ? { scaffold } : {}),
         // Same clamp: a suggestion the segment cannot render is not offered.
         suggestModality:
           suggested && suggested !== startModality && modalities.includes(suggested)

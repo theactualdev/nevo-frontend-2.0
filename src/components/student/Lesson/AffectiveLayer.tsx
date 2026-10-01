@@ -18,17 +18,22 @@ import { cn } from "@/lib/utils";
  * learn the wrong model of the system from the names alone.
  */
 
+/**
+ * The two pills below are drawn 36px tall and touched at 44: the button is the
+ * hit area, the inner span is the pill, and `-my-1` keeps the layout the frame
+ * draws.
+ */
+const PILL_HIT = "group -my-1 inline-flex h-11 cursor-pointer items-center";
+
 /** `increase_difficulty`: the step-up offer above the content. TODO(api):
  *  acceptance asks the backend for a step up; until then the tap spends it. */
 export function DifficultyOfferPill({ onSpent }: { onSpent: () => void }) {
   return (
     <div className="mb-4 flex justify-center">
-      <button
-        type="button"
-        onClick={onSpent}
-        className="inline-flex h-9 cursor-pointer items-center rounded-[20px] border-[1.5px] border-nevo-violet/50 bg-nevo-cream-elevated px-[18px] text-[13px] font-medium text-nevo-navy transition-transform active:scale-[0.98]"
-      >
-        Ready for something harder?
+      <button type="button" onClick={onSpent} className={PILL_HIT}>
+        <span className="inline-flex h-9 items-center rounded-[20px] border-[1.5px] border-nevo-violet/50 bg-nevo-cream-elevated px-[18px] text-[13px] font-medium text-nevo-navy transition-transform group-active:scale-[0.98]">
+          Ready for something harder?
+        </span>
       </button>
     </div>
   );
@@ -49,9 +54,11 @@ export function SocraticPanel({ prompts }: { prompts: string[] }) {
           type="button"
           aria-expanded={open}
           onClick={() => setOpen(true)}
-          className="inline-flex h-9 cursor-pointer items-center rounded-[20px] bg-nevo-cream-elevated px-[18px] text-[13px] text-nevo-near-black transition-transform active:scale-[0.98]"
+          className={PILL_HIT}
         >
-          Which part is unclear?
+          <span className="inline-flex h-9 items-center rounded-[20px] bg-nevo-cream-elevated px-[18px] text-[13px] text-nevo-near-black transition-transform group-active:scale-[0.98]">
+            Which part is unclear?
+          </span>
         </button>
       </div>
       {open && (
