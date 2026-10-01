@@ -21,8 +21,10 @@ const { submit } = vi.hoisted(() => ({ submit: vi.fn() }));
 vi.mock("@/lib/api", () => ({ baselineApi: { submitWithRetry: submit } }));
 const { holdBaseline } = vi.hoisted(() => ({ holdBaseline: vi.fn() }));
 vi.mock("@/lib/profiling/pendingBaseline", () => ({ holdBaseline }));
+// These pin the task with the `dimension` prop; the engine's prompt is
+// covered in WarmUpRun.engine.dom.test.tsx.
 vi.mock("@/hooks/useWarmUpDimension", () => ({
-  useWarmUpDimension: (fallback: string) => fallback,
+  useWarmUpPrompt: () => ({ state: "waiting" }),
 }));
 vi.mock("@/hooks/useNextLessonHref", () => ({
   useNextLessonHref: () => "/student/lessons/x",
