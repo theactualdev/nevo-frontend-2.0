@@ -52,13 +52,6 @@ export const AVATAR_TONES: readonly AvatarTone[] = [
  */
 export const DEFAULT_AVATAR_TONE: AvatarTone = AVATAR_TONES[0];
 
-/**
- * The key in the account's settings bag. The contract has no avatar field;
- * `PUT /api/settings/me` merges free-form keys, and the child's chosen name
- * already travels the same way.
- */
-export const AVATAR_TONE_SETTING = "avatarTone";
-
 /** A stored value back to a look. Anything unrecognised is no choice at all. */
 export function avatarTone(id: unknown): AvatarTone {
   return AVATAR_TONES.find((t) => t.id === id) ?? DEFAULT_AVATAR_TONE;
