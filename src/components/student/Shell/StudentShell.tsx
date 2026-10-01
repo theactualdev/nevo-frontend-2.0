@@ -108,6 +108,18 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
      */
     void flushPendingBaseline(getSession()?.userId);
   }, []);
+  /*
+   * AND WHEN THE CONNECTION COMES BACK, not only on mount. The shell is a
+   * layout and stays mounted across every tab, so "mount" meant once per
+   * sign-in: a child who finished a lesson offline and was back on Home when
+   * the signal returned had their completion sit on the device, and reopening
+   * the lesson resumed from the stale place the server still had.
+   */
+  useEffect(() => {
+    const flush = () => void flushPendingProgress();
+    window.addEventListener("online", flush);
+    return () => window.removeEventListener("online", flush);
+  }, []);
   const { textSize } = useAccessibility();
   // The chrome calls the student by their own name, not the fixture's.
   const student = useDisplayName();
@@ -150,10 +162,9 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
 
   if (isFullScreen(pathname)) {
     // Text Size is a reading preference, and the player is where the reading
-    // happens - it applies there too, not just in the shell. Onboarding is
-    // deliberately excluded: the baseline activities are spatially
-    // calibrated, and scaling them would distort what they measure.
-    if (pathname.startsWith("/student/onboarding")) return <>{children}</>;
+    // happens - it applies there too, not just in the shell. The calibrated
+    // activities are deliberately excluded - see `scalesWithTextSize`.
+    if (!scalesWithTextSize(pathname)) return <>{children}</>;
     return (
       <div style={{ zoom: TEXT_ZOOM[textSize] }}>
         {/*
@@ -172,7 +183,7 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
   )?.href;
 
   return (
-    <div className="flex h-[100dvh] bg-nevo-cream text-nevo-near-black">
+    <div className="group/shell flex h-[100dvh] bg-nevo-cream text-nevo-near-black">
       {/* Sidebar — tablet & desktop */}
       <div className="hidden shrink-0 md:block">
         <MaybeSample showing={showingFixtureIdentity} kind="student:identity">
@@ -274,17 +285,24 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
           {offlineTakeover && <OfflineTakeover />}
         </main>
 
-        {/* Bottom nav — mobile only */}
-        <div className="shrink-0 px-3 pb-3 md:hidden">
+        {/* Bottom nav — mobile only. Down while a tab's on-screen keyboard is
+            docked (`data-nevo-hide-nav`, e.g. a Connect conversation), as the
+            frames draw it; that keyboard only shows without a fine pointer. */}
+        <div className="shrink-0 px-3 pb-3 md:hidden not-pointer-fine:group-has-[[data-nevo-hide-nav]]/shell:hidden">
           <BottomNav items={STUDENT_NAV} activeHref={activeHref} />
         </div>
       </div>
 
       {/* Ask Nevo (26) — always reachable from the tabs, never interruptive. */}
-      <AskNevo />
+      {/* Except Profile: the app shell frame mounts the launcher on every tab
+          `&& v !== "profile"`, a deliberate exclusion rather than an omission. */}
+      {pathname !== PROFILE_HREF && <AskNevo />}
     </div>
   );
 }
+
+/** The one tab the app shell frame draws without the Ask Nevo launcher. */
+const PROFILE_HREF = "/student/profile";
 
 /**
  * The immersive player, and the review session that reuses it wholesale (37d).
@@ -308,6 +326,21 @@ function isHoldRoute(pathname: string): boolean {
   return (
     pathname === "/student/waiting" || pathname.startsWith("/student/entry")
   );
+}
+
+/**
+ * Whether the child's Text Size zoom applies to a full-screen route.
+ *
+ * NOT ON THE CALIBRATED ACTIVITIES. The baseline in onboarding was always
+ * exempt, because its tasks are sized and timed to measure and scaling them
+ * distorts what they measure. The daily warm-up runs the same tasks and was
+ * not exempt - so tile and dot sizes changed with a reading preference, and a
+ * child's warm-up measured differently from their own baseline.
+ */
+export function scalesWithTextSize(pathname: string): boolean {
+  if (pathname.startsWith("/student/onboarding")) return false;
+  if (pathname === "/student/warm-up") return false;
+  return true;
 }
 
 function isFullScreen(pathname: string): boolean {

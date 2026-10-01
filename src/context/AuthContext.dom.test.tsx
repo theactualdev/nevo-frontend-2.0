@@ -198,3 +198,50 @@ describe("AuthProvider — signing out", () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe("AuthProvider — after a reload", () => {
+  /*
+   * `method` decides whether onboarding asks for a name, a school, a class
+   * and a PIN. It was rebuilt without it, so an SSO child who reloaded was
+   * put on the manual path with an empty draft.
+   */
+  function MethodProbe() {
+    const { user } = useAuth();
+    return <p>method:{user?.method ?? "none"}</p>;
+  }
+
+  const storeSsoSession = () =>
+    setSession({
+      token: "tok",
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      userId: "student-1",
+      role: "student",
+      method: "sso",
+    });
+
+  it("still knows an SSO child came in through SSO", async () => {
+    storeSsoSession();
+    session.mockResolvedValue({ userId: "student-1", role: "student" });
+
+    render(
+      <AuthProvider>
+        <MethodProbe />
+      </AuthProvider>,
+    );
+
+    expect(await screen.findByText("method:sso")).toBeInTheDocument();
+  });
+
+  it("still knows it when the session check could not be made", async () => {
+    storeSsoSession();
+    session.mockRejectedValue(new ApiError(0, "Network"));
+
+    render(
+      <AuthProvider>
+        <MethodProbe />
+      </AuthProvider>,
+    );
+
+    expect(await screen.findByText("method:sso")).toBeInTheDocument();
+  });
+});

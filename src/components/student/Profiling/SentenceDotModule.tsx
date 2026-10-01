@@ -10,17 +10,34 @@ import { SettleBadge } from "./GridSpanModule";
 import { TrialButton } from "./PatternFlankerModule";
 import { useTrialRunner } from "./useTrialRunner";
 
-/** 3B: the dot arrays show briefly, then mask; only then do the buttons arm. */
-const DOT_REVEAL_MS = 850;
+/**
+ * 3B per band: how long the arrays show before the mask, and how big the dots
+ * and their box are. Every band used to see 16px dots in a 200px box for
+ * 850ms.
+ *
+ *  - Dot and box size: `Nevo Dot Comparison Frame` `cfg()` - dots 22 / 16 /
+ *    13 / 10px, box 220 for P1-3 and 200 for the rest. On a phone every box
+ *    is 200 (`boxPx = L.mobile ? 200 : C.box`).
+ *  - Display time: `09c Module 3` per-band notes - P1-3 "800ms display", JSS
+ *    "500ms". ASK for the other two: for P4-6 09c says 600ms and the playable
+ *    prototype (11:240) shows 850; for SS 09c states none. Both keep the
+ *    850ms already shipped until design says which.
+ */
+const DOTS: Record<AgeBand, { revealMs: number; dot: string; box: string }> = {
+  p13: { revealMs: 800, dot: "size-[22px]", box: "size-[200px] sm:size-[220px]" },
+  p46: { revealMs: 850, dot: "size-4", box: "size-[200px]" },
+  jss: { revealMs: 500, dot: "size-[13px]", box: "size-[200px]" },
+  ss: { revealMs: 850, dot: "size-2.5", box: "size-[200px]" },
+};
 
 /**
  * Module 3 - Reading + Dot Comparison (BP-M3: reading and numerical fluency).
  * 3A adapts by band: P1-3 hears a sentence and taps the matching picture (no
  * reading required); P4-6/JSS mark localized sentences True/False with a
  * lighter "Not sure" always available; SS reads a passage and answers a
- * comprehension question. 3B flashes two dot arrays (~850ms), masks them, and
- * asks which side had more. Content is real and West-African localized. No
- * timers, no scores, never "wrong".
+ * comprehension question. 3B flashes two dot arrays for the band's display
+ * time, masks them, and asks which had more. Content is real and West-African
+ * localized. No timers, no scores, never "wrong".
  */
 
 /**
@@ -101,17 +118,33 @@ const AUDIO_TRIALS: { sentence: string; answer: string }[] = [
   { sentence: "Mummy is going to the market.", answer: "market" },
 ];
 
+/** The utterance a child is meant to be hearing; any other one is stale. */
+let speaking: SpeechSynthesisUtterance | null = null;
+
 /**
- * Say a sentence aloud, cancelling anything still speaking.
+ * Say a sentence aloud, cancelling anything still speaking, and report when it
+ * has been said in full.
  *
  * A shade under the default rate: the default is pitched at an adult skimming
  * a notification, not a six-year-old being asked to hold a sentence in mind.
+ *
+ * `onEnd` is what lets the response time start at the end of the sentence
+ * rather than the start of the trial (see `useTrialRunner`). Some browsers
+ * fire the CANCELLED utterance's `end` too, so the new one claims the slot
+ * first and a stale `end` is ignored rather than opening the wrong trial.
+ *
+ * NOTE: no voice is chosen, so what the child hears is whichever voice the
+ * device has. Which voice (or a recorded asset per sentence) is with design.
  */
-function speak(sentence: string): void {
+function speak(sentence: string, onEnd?: () => void): void {
   if (!hasSpeech()) return;
-  window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(sentence);
   utterance.rate = 0.85;
+  utterance.onend = () => {
+    if (speaking === utterance) onEnd?.();
+  };
+  speaking = utterance;
+  window.speechSynthesis.cancel();
   window.speechSynthesis.speak(utterance);
 }
 
@@ -122,14 +155,29 @@ function speak(sentence: string): void {
  */
 function stopSpeaking(): void {
   if (!hasSpeech()) return;
+  speaking = null;
   window.speechSynthesis.cancel();
 }
+
+/** The frame's shrug mark for "I don't know" (`Nevo Sentence Verify Frame`). */
+const SHRUG =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 4 1.8c0 1.6-2 2-2 3.1"/><circle cx="11.5" cy="16.8" r="0.6" fill="currentColor"/></svg>';
 
 function hasSpeech(): boolean {
   return typeof window !== "undefined" && "speechSynthesis" in window;
 }
 
-/** Dot pairs per trial (left/right counts converge by band difficulty). */
+/**
+ * Dot pairs per trial (left/right counts converge by band difficulty).
+ *
+ * ASK, NOT SETTLED BY ANY FRAME. Design states one exemplar pair per band
+ * (`Nevo Dot Comparison Frame` `cfg()`: 8:4, 9:5, 12:8, 13:12 - each band's
+ * first pair below) and one ratio per band (`09c`: 2:1, 1.8:1, 1.5:1,
+ * 1.1:1). Trials two and three are not drawn anywhere except for P4-6, whose
+ * prototype pairs (11:178) are 8:6 and 10:7 - harder than its own frame's
+ * 1.8:1, as are JSS's 11:9 and 13:10 against 1.5:1. They are left as shipped
+ * rather than replaced with pairs nobody has designed either.
+ */
 const DOT_PAIRS: Record<AgeBand, { a: number; b: number }[]> = {
   p13: [
     { a: 8, b: 4 },
@@ -196,8 +244,9 @@ export function SentenceDotModule({
           : 0
         : 1;
   const dotPairs = DOT_PAIRS[band] ?? DOT_PAIRS.p46;
+  const dots = DOTS[band] ?? DOTS.p46;
 
-  const { act, trial, picked, settling, pick } = useTrialRunner({
+  const { act, trial, picked, settling, pick, open } = useTrialRunner({
     module: "sentence_dot",
     counts: (
       [
@@ -207,20 +256,26 @@ export function SentenceDotModule({
     ).filter(([, n]) => n > 0),
     capture,
     onComplete,
+    // The dots can be answered once masked; the heard sentence once said.
+    opensLate: mode === "audio" ? ["reading", "dots"] : ["dots"],
   });
 
   // 3B reveal/mask cycle, restarted per dot trial (both edges on cancellable
-  // timers - no synchronous setState in the effect body).
+  // timers - no synchronous setState in the effect body). The mask is also the
+  // moment the buttons arm, so it is when the response time starts.
   const [masked, setMasked] = useState(false);
   useEffect(() => {
     if (act !== "dots") return;
     const t0 = setTimeout(() => setMasked(false), 0);
-    const t1 = setTimeout(() => setMasked(true), DOT_REVEAL_MS);
+    const t1 = setTimeout(() => {
+      setMasked(true);
+      open();
+    }, dots.revealMs);
     return () => {
       clearTimeout(t0);
       clearTimeout(t1);
     };
-  }, [act, trial]);
+  }, [act, trial, dots.revealMs, open]);
 
   /*
    * WHICH SIDE HOLDS MORE, drawn once per run.
@@ -249,25 +304,35 @@ export function SentenceDotModule({
   // given the question. The button is there to hear it again.
   useEffect(() => {
     if (act !== "reading" || mode !== "audio" || !canHear) return;
-    speak(heard.sentence);
+    speak(heard.sentence, open);
     return stopSpeaking;
-  }, [act, mode, canHear, heard.sentence]);
+  }, [act, mode, canHear, heard.sentence, open]);
 
+  /*
+   * THE ARRAYS STACK ON A PHONE, so the question names top and bottom there,
+   * as the buttons already did. It asked which SIDE had more above buttons
+   * reading Top and Bottom. Words from `Nevo Dot Comparison Frame`'s `prompt`,
+   * with its em dash as a colon (the design system allows none).
+   */
   const bubble = settling
     ? ""
     : act === "dots"
       ? masked
-        ? "Which side had more dots?"
+        ? "Which had more dots?"
         : "Watch the dots"
       : mode === "audio"
         ? "Listen, then tap the matching picture"
         : mode === "passage"
           ? "Read it, then answer"
           : "Is this true or false?";
+  const phoneBubble =
+    act === "dots" && masked ? "Which had more dots: top or bottom?" : undefined;
 
   return (
     <ProfilingShell filled={settling ? 3 : 2} active={settling ? -1 : 2}>
-      {!settling && bubble && <AvatarBubble text={bubble} />}
+      {!settling && bubble && (
+        <AvatarBubble text={bubble} phoneText={phoneBubble} />
+      )}
 
       <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-center gap-7">
         {settling ? (
@@ -280,7 +345,7 @@ export function SentenceDotModule({
                 aria-label="Play the sentence again"
                 onClick={() => {
                   capture?.record("replay", { module: "sentence_dot", trial });
-                  speak(heard.sentence);
+                  speak(heard.sentence, open);
                 }}
                 className="flex size-[64px] cursor-pointer items-center justify-center rounded-full bg-nevo-navy text-nevo-cream transition-transform active:scale-[0.96]"
               >
@@ -296,8 +361,8 @@ export function SentenceDotModule({
                     key={p.key}
                     type="button"
                     aria-label={p.label}
-                    onClick={() =>
-                      pick(i, { mode, correct: p.key === heard.answer })
+                    onClick={(e) =>
+                      pick(i, { mode, correct: p.key === heard.answer }, e)
                     }
                     className={cn(
                       "flex h-[120px] w-full cursor-pointer items-center justify-center rounded-[12px] bg-nevo-cream transition-transform active:scale-[0.97] sm:size-[160px]",
@@ -313,6 +378,34 @@ export function SentenceDotModule({
                   </button>
                 ))}
               </div>
+              {/*
+                The listening task's honest non-answer, which it did not have:
+                a child who missed the sentence had to guess between pictures,
+                and the guess was filed as their reading measure. The sentence
+                and passage tasks always offered "Not sure"; this is the
+                frame's own control for the audio form, words and mark
+                (`Nevo Sentence Verify Frame` :45, `idkStyle`). Recorded the
+                same way - declined, never wrong.
+              */}
+              <button
+                type="button"
+                onClick={(e) =>
+                  pick(AUDIO_PICS.length, { mode, notSure: true }, e)
+                }
+                className={cn(
+                  "flex h-14 w-full cursor-pointer items-center justify-center gap-2 rounded-[10px] border-2 border-nevo-violet text-sm font-medium transition-[background-color,transform] active:scale-[0.97] sm:w-[220px]",
+                  picked === AUDIO_PICS.length
+                    ? "bg-nevo-violet text-nevo-near-black"
+                    : "bg-nevo-cream text-nevo-violet",
+                )}
+              >
+                <span
+                  aria-hidden
+                  className="size-[22px] shrink-0"
+                  dangerouslySetInnerHTML={{ __html: SHRUG }}
+                />
+                I don&apos;t know
+              </button>
             </div>
           ) : mode === "passage" ? (
             <div className="flex w-full max-w-[600px] flex-col gap-4">
@@ -327,8 +420,8 @@ export function SentenceDotModule({
                   <button
                     key={o}
                     type="button"
-                    onClick={() =>
-                      pick(i, { mode, correct: i === PASSAGE_ANSWER })
+                    onClick={(e) =>
+                      pick(i, { mode, correct: i === PASSAGE_ANSWER }, e)
                     }
                     className={cn(
                       "flex min-h-12 w-full cursor-pointer items-center rounded-[10px] border-2 px-4 py-3.5 text-left text-[15px] leading-[1.4]",
@@ -342,8 +435,8 @@ export function SentenceDotModule({
                 ))}
                 <button
                   type="button"
-                  onClick={() =>
-                    pick(PASSAGE_OPTIONS.length, { mode, notSure: true })
+                  onClick={(e) =>
+                    pick(PASSAGE_OPTIONS.length, { mode, notSure: true }, e)
                   }
                   className="flex min-h-12 w-full cursor-pointer items-center rounded-[10px] border-2 border-nevo-violet bg-nevo-cream px-4 py-3.5 text-left text-sm font-medium text-nevo-violet"
                 >
@@ -363,22 +456,22 @@ export function SentenceDotModule({
                 <TrialButton
                   label="True"
                   pressed={picked === 0}
-                  onClick={() =>
-                    pick(0, { mode, correct: sentence.isTrue === true })
+                  onClick={(e) =>
+                    pick(0, { mode, correct: sentence.isTrue === true }, e)
                   }
                 />
                 <TrialButton
                   label="False"
                   pressed={picked === 1}
-                  onClick={() =>
-                    pick(1, { mode, correct: sentence.isTrue === false })
+                  onClick={(e) =>
+                    pick(1, { mode, correct: sentence.isTrue === false }, e)
                   }
                 />
                 <TrialButton
                   label="Not sure"
                   soft
                   pressed={picked === 2}
-                  onClick={() => pick(2, { mode, notSure: true })}
+                  onClick={(e) => pick(2, { mode, notSure: true }, e)}
                 />
               </div>
             </div>
@@ -389,12 +482,18 @@ export function SentenceDotModule({
               {[left, right].map((count, side) => (
                 <div
                   key={`${trial}-${side}`}
-                  className="relative size-[200px] overflow-hidden rounded-[12px] border-2 border-nevo-navy bg-nevo-cream"
+                  className={cn(
+                    "relative overflow-hidden rounded-[12px] border-2 border-nevo-navy bg-nevo-cream",
+                    dots.box,
+                  )}
                 >
                   {scatter(count, 11 + trial * 3 + side * 29).map((d, i) => (
                     <span
                       key={i}
-                      className="absolute size-4 rounded-full bg-nevo-violet"
+                      className={cn(
+                        "absolute rounded-full bg-nevo-violet",
+                        dots.dot,
+                      )}
                       style={{ left: `${d.x}%`, top: `${d.y}%` }}
                     />
                   ))}
@@ -408,9 +507,13 @@ export function SentenceDotModule({
               <DotButton
                 label="Top"
                 wide={left}
-                onClick={() =>
+                onClick={(e) =>
                   masked &&
-                  pick(0, { a: left, b: right, ratio, correct: left > right })
+                  pick(
+                    0,
+                    { a: left, b: right, ratio, correct: left > right },
+                    e,
+                  )
                 }
                 pressed={picked === 0}
                 armed={masked}
@@ -419,9 +522,13 @@ export function SentenceDotModule({
               <DotButton
                 label="Bottom"
                 wide={right}
-                onClick={() =>
+                onClick={(e) =>
                   masked &&
-                  pick(1, { a: left, b: right, ratio, correct: right > left })
+                  pick(
+                    1,
+                    { a: left, b: right, ratio, correct: right > left },
+                    e,
+                  )
                 }
                 pressed={picked === 1}
                 armed={masked}
@@ -446,7 +553,7 @@ function DotButton({
   label: string;
   sideLabel: string;
   wide: number;
-  onClick: () => void;
+  onClick: (e: React.MouseEvent) => void;
   pressed: boolean;
   armed: boolean;
 }) {

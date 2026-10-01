@@ -220,9 +220,20 @@ function visualFor(
       // better than narrating a generator's prompt at a child.
       alt: caption ?? "",
       ...(caption ? { caption } : {}),
+      // Kept so a link that has aged out can be re-issued rather than shown
+      // broken - `imageUrl` is signed and expires, `storagePath` does not.
+      ...(variant.storagePath ? { storagePath: variant.storagePath } : {}),
+      // The picture's own shape, when measured. Absent falls back to the
+      // frame's 4:3, which is what every picture was squeezed into before.
+      ...(isPositive(variant.width) && isPositive(variant.height)
+        ? { width: variant.width, height: variant.height }
+        : {}),
     },
   };
 }
+
+const isPositive = (n: number | undefined): n is number =>
+  typeof n === "number" && Number.isFinite(n) && n > 0;
 
 /**
  * The segment's narration, when there is a clip AND words to fall back on.
@@ -256,6 +267,7 @@ function audioFor(
     heading,
     title: `Narrated: ${heading}`,
     src: variant.audioUrl,
+    ...(variant.storagePath ? { storagePath: variant.storagePath } : {}),
     transcript,
     ...(typeof variant.durationMs === "number" && variant.durationMs > 0
       ? { durationSec: Math.round(variant.durationMs / 1000) }
@@ -275,7 +287,13 @@ function audioFor(
 function quickCheckFor(segment: ContentSegment): QuickCheck | undefined {
   for (const checkpoint of segment.comprehensionCheckpoints) {
     const check = toQuickCheck(checkpoint);
-    if (check) return check;
+    // The concept rides along for a review's scheduler write - see
+    // `QuickCheck.conceptId`. Omitted rather than null, like the assessment.
+    if (check) {
+      return checkpoint.conceptId
+        ? { ...check, conceptId: checkpoint.conceptId }
+        : check;
+    }
   }
   return undefined;
 }

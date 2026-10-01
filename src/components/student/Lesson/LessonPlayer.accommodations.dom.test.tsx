@@ -219,16 +219,100 @@ describe("what a chunked segment reports having been read", () => {
      * because React runs child effects before parent ones — a reset here would
      * wipe the incoming segment's fresh report instead of the outgoing one's.
      * This is the test that a stale report cannot be read as the new segment's.
+     *
+     * Read to the end first, because Next is only there on the last part now
+     * (37c) - which makes the outgoing report 100 and a carry easier to see.
      */
-    const { unmount } = render(
+    vi.useFakeTimers();
+    try {
+      const { unmount } = render(
+        <LessonPlayer lesson={LESSON} plan={planWith({ attention: true })} />,
+      );
+
+      nextPart();
+      nextPart();
+      fireEvent.click(screen.getByRole("button", { name: "Next" }));
+      unmount();
+
+      expect(depthFor("seg-1")).toBe(100);
+      expect(depthFor("seg-2")).toBe(33);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("the way on under the attention accommodation (37c)", () => {
+  /*
+   * The frame draws no chevron row while parts are left: "Tap to continue" is
+   * the only way on. The row was only dimmed, so Next skipped Parts 2 and 3.
+   */
+  it("offers no Next while parts are left", () => {
+    vi.useFakeTimers();
+    try {
+      render(
+        <LessonPlayer lesson={LESSON} plan={planWith({ attention: true })} />,
+      );
+      expect(screen.queryByRole("button", { name: "Next" })).toBeNull();
+
+      nextPart();
+      expect(screen.queryByRole("button", { name: "Next" })).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("brings Next back on the last part, which has no continue of its own", () => {
+    vi.useFakeTimers();
+    try {
+      render(
+        <LessonPlayer lesson={LESSON} plan={planWith({ attention: true })} />,
+      );
+
+      nextPart();
+      nextPart();
+
+      expect(screen.getByRole("button", { name: "Next" })).toBeEnabled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("leaves Next alone when attention is off", () => {
+    render(
+      <LessonPlayer lesson={LESSON} plan={planWith({ attention: false })} />,
+    );
+
+    expect(screen.getByRole("button", { name: "Next" })).toBeEnabled();
+  });
+});
+
+describe("the chrome dim", () => {
+  const header = () =>
+    screen.getByRole("button", { name: "Exit lesson" }).closest("header")!;
+
+  it("is the attention accommodation's 30%", () => {
+    render(
       <LessonPlayer lesson={LESSON} plan={planWith({ attention: true })} />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    unmount();
+    expect(header()).toHaveClass("opacity-30");
+  });
 
-    expect(depthFor("seg-1")).toBe(33);
-    expect(depthFor("seg-2")).toBe(33);
+  it("is applied by no instruction now that modulate_density is gone (SCRUM-180)", () => {
+    render(
+      <LessonPlayer
+        lesson={LESSON}
+        plan={
+          {
+            ...planWith(undefined),
+            adjustment: "modulate_density",
+          } as unknown as AdaptationPlan
+        }
+      />,
+    );
+
+    expect(header().className).not.toMatch(/opacity-\d/);
   });
 });
 

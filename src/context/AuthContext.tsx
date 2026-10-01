@@ -70,7 +70,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .then((s) => {
           if (cancelled) return;
           // TODO(api): session carries no school id yet - flagged to backend.
-          setUser({ id: s.userId, role: s.role as UserRole, schoolId: "" });
+          // `method` is the device's record of the door, which the server's
+          // session does not carry: without it a reload put an SSO child on
+          // the manual onboarding path.
+          setUser({
+            id: s.userId,
+            role: s.role as UserRole,
+            schoolId: "",
+            method: stored.method,
+          });
           setStatus("authenticated");
           setEphemeralStudent(s.userId);
         })
@@ -110,6 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             id: stillStored.userId,
             role: stillStored.role as UserRole,
             schoolId: "",
+            method: stillStored.method,
           });
           setStatus("authenticated");
           setEphemeralStudent(stillStored.userId);

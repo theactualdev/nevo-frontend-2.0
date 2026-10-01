@@ -1,10 +1,14 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearOnboardingDraft,
   mergeOnboardingDraft,
   rememberOnboardedStudent,
+  schoolCodeFromAccount,
 } from "./onboarding";
-import { clearSession, getRememberedProfile } from "./session";
+import { clearSession, getRememberedProfile, setSession } from "./session";
+
+const me = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/api/users", () => ({ usersApi: { me } }));
 
 /**
  * A remembered profile the server cannot authenticate is worse than none.
@@ -29,6 +33,7 @@ import { clearSession, getRememberedProfile } from "./session";
 const SERVER_IDENTIFIER = "amara.k";
 
 beforeEach(() => {
+  me.mockReset();
   clearSession();
   window.localStorage.clear();
   window.sessionStorage.clear();
@@ -119,5 +124,73 @@ describe("rememberOnboardedStudent", () => {
     expect(rememberOnboardedStudent(SERVER_IDENTIFIER)).toBe(true);
 
     expect(window.sessionStorage.getItem("nevo.onboarding.draft")).toBeNull();
+  });
+});
+
+/**
+ * A join-link or class-code child never typed a school code, so the tablet
+ * never remembered them. The account's own code is on `users/me` once the
+ * account exists.
+ */
+describe("a child who never typed a school code", () => {
+  const signedIn = () =>
+    setSession({
+      token: "tok",
+      expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+      userId: "student-9",
+      role: "student",
+    });
+
+  it("is remembered with the account's school code", () => {
+    mergeOnboardingDraft({ name: "Amara Kalu" });
+
+    expect(rememberOnboardedStudent(SERVER_IDENTIFIER, "751A1136")).toBe(true);
+    expect(getRememberedProfile()).toMatchObject({ schoolCode: "751A1136" });
+  });
+
+  it("keeps the code a child typed over anything else", () => {
+    mergeOnboardingDraft({ name: "Amara Kalu", schoolCode: "TYPED-1" });
+
+    expect(rememberOnboardedStudent(SERVER_IDENTIFIER, "OTHER-2")).toBe(true);
+    expect(getRememberedProfile()).toMatchObject({ schoolCode: "TYPED-1" });
+  });
+
+  it("asks the account for its code once there is a session", async () => {
+    mergeOnboardingDraft({ name: "Amara Kalu" });
+    signedIn();
+    me.mockResolvedValue({ school: { code: " 751A1136 " } });
+
+    expect(await schoolCodeFromAccount()).toBe("751A1136");
+  });
+
+  it("asks nothing when there is no session to ask with", async () => {
+    mergeOnboardingDraft({ name: "Amara Kalu" });
+
+    expect(await schoolCodeFromAccount()).toBeNull();
+    expect(me).not.toHaveBeenCalled();
+  });
+
+  it("asks nothing when the child already typed one", async () => {
+    mergeOnboardingDraft({ name: "Amara Kalu", schoolCode: "TYPED-1" });
+    signedIn();
+
+    expect(await schoolCodeFromAccount()).toBeNull();
+    expect(me).not.toHaveBeenCalled();
+  });
+
+  it("has no code when the read fails, so the device is not remembered", async () => {
+    mergeOnboardingDraft({ name: "Amara Kalu" });
+    signedIn();
+    me.mockRejectedValue(new Error("offline"));
+
+    expect(await schoolCodeFromAccount()).toBeNull();
+  });
+
+  it("has no code when the school has none", async () => {
+    mergeOnboardingDraft({ name: "Amara Kalu" });
+    signedIn();
+    me.mockResolvedValue({ school: { code: null } });
+
+    expect(await schoolCodeFromAccount()).toBeNull();
   });
 });

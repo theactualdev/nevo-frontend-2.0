@@ -54,6 +54,14 @@ export interface StoredSession {
   expiresAt: string;
   userId: string;
   role: string;
+  /**
+   * How this account signed in, when the door that stored it knows. Only the
+   * SSO callback says, and onboarding branches on it: an SSO child skips the
+   * name, school and class steps and the PIN. It lived only in React state, so
+   * a reload mid-onboarding put an SSO child on the manual path with an empty
+   * draft. A refresh of the same account keeps it - see `setSession`.
+   */
+  method?: "sso" | "manual";
 }
 
 /**
@@ -160,7 +168,13 @@ export function getToken(): string | undefined {
   return getSession()?.token;
 }
 
-export function setSession(next: StoredSession): void {
+export function setSession(incoming: StoredSession): void {
+  hydrate();
+  // A token refresh is the same account and does not say how it signed in.
+  const method =
+    incoming.method ??
+    (session?.userId === incoming.userId ? session.method : undefined);
+  const next = method ? { ...incoming, method } : incoming;
   hydrated = true;
   session = next;
   writeRoleCookie(next.role, next.expiresAt);

@@ -209,3 +209,27 @@ describe("StudentShell — going offline", () => {
     expect(screen.queryByText("offline takeover")).toBeNull();
   });
 });
+
+/**
+ * On a phone, a tab's docked on-screen keyboard and the bottom nav stacked
+ * into two trays, leaving a Connect conversation a sliver. The frame takes the
+ * nav down while the keyboard is up. The tab says so with
+ * `data-nevo-hide-nav`; the shell's CSS acts on it (jsdom applies no CSS, so
+ * this pins the wiring rather than the pixels).
+ */
+describe("StudentShell — the bottom nav under a docked keyboard", () => {
+  it("is set to step aside while a tab's keyboard is docked", async () => {
+    signIn();
+    renderShell();
+
+    await screen.findByText("content");
+    const navs = screen.getAllByRole("navigation", { name: "Primary" });
+    const wrapper = navs
+      .map((n) => n.parentElement!)
+      .find((el) => el.className.includes("md:hidden"))!;
+    expect(wrapper.className).toContain(
+      "not-pointer-fine:group-has-[[data-nevo-hide-nav]]/shell:hidden",
+    );
+    expect(wrapper.closest(".group\\/shell")).not.toBeNull();
+  });
+});
