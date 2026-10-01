@@ -81,3 +81,23 @@ describe("feedback that could not be sent", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 });
+
+describe("what the screen promises about where feedback goes", () => {
+  /*
+   * Design D49, 1 Oct. It said "their teacher sees the themes", and feedback
+   * only ever reaches Nevo's own inbox - no teacher view exists. The screen
+   * says it reaches Nevo and promises no teacher view until there is one.
+   */
+  it("says the note reaches Nevo", () => {
+    render(<StudentFeedbackScreen />);
+
+    expect(screen.getByText(/their note reaches Nevo./)).toBeInTheDocument();
+  });
+
+  it("promises no teacher anything", () => {
+    render(<StudentFeedbackScreen />);
+
+    expect(document.body.textContent).not.toMatch(/teacher/i);
+    expect(document.body.textContent).not.toMatch(/themes/i);
+  });
+});

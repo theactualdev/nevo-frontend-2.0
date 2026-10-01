@@ -30,7 +30,10 @@ vi.mock("next/navigation", () => ({
 const { flushPendingBaseline } = vi.hoisted(() => ({
   flushPendingBaseline: vi.fn(async () => true),
 }));
-vi.mock("@/lib/profiling/pendingBaseline", () => ({ flushPendingBaseline }));
+vi.mock("@/lib/profiling/pendingBaseline", () => ({
+  flushPendingBaseline,
+  readPendingBaseline: () => null,
+}));
 
 const profiling = vi.hoisted(() => ({ owner: undefined as unknown }));
 vi.mock("@/components/student/Profiling/ProfilingFlow", () => ({

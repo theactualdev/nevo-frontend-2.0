@@ -55,7 +55,10 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/student/dashboard",
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
 }));
-vi.mock("@/hooks", () => ({ useAuth: () => ({ user: { id: "stu-1" } }) }));
+vi.mock("@/hooks", () => ({
+  useAuth: () => ({ user: { id: "stu-1" } }),
+  useSignals: () => ({ trackEvent: vi.fn(), flush: vi.fn() }),
+}));
 
 const now = Date.now();
 const summary = (over: Record<string, unknown> = {}) => ({

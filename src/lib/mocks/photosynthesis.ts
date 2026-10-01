@@ -233,7 +233,7 @@ export const PHOTOSYNTHESIS: Lesson = {
         ],
         correctId: "swc",
         recoveryNote:
-          "That one didn't land - and that's okay. We'll bring it back later. Nothing to fix right now.",
+          "That one didn't land - and that's okay. Nothing to fix right now.",
       },
       {
         prompt: "Where in a plant does photosynthesis mostly happen?",
@@ -245,7 +245,7 @@ export const PHOTOSYNTHESIS: Lesson = {
         ],
         correctId: "leaves",
         recoveryNote:
-          "That one didn't land - and that's okay. We'll bring it back later. Nothing to fix right now.",
+          "That one didn't land - and that's okay. Nothing to fix right now.",
       },
       {
         prompt: "What gas do plants take in to make their food?",
@@ -256,7 +256,7 @@ export const PHOTOSYNTHESIS: Lesson = {
         ],
         correctId: "co2",
         recoveryNote:
-          "That one didn't land - and that's okay. We'll bring it back later. Nothing to fix right now.",
+          "That one didn't land - and that's okay. Nothing to fix right now.",
       },
       {
         prompt: "Which one shows the word equation for photosynthesis?",
@@ -266,7 +266,7 @@ export const PHOTOSYNTHESIS: Lesson = {
         ],
         correctId: "right",
         recoveryNote:
-          "That one didn't land - and that's okay. We'll bring it back later. Nothing to fix right now.",
+          "That one didn't land - and that's okay. Nothing to fix right now.",
       },
     ],
     masteredConcepts: ["What photosynthesis is & needs"],

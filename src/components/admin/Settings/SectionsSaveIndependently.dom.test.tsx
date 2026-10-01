@@ -117,3 +117,57 @@ describe("Settings sections", () => {
     expect(visibleText(container)).toMatch(/Show deactivated.+on your roster, and to leaving students when you promote a year/);
   });
 });
+
+describe("D12.1's section index", () => {
+  it("names every section, and each name lands on one", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { SETTINGS_INDEX } = await import("./SettingsView");
+    const source = ["SchoolSettings.tsx", "AccountSettings.tsx"]
+      .map((f) => readFileSync(`src/components/admin/Settings/${f}`, "utf8"))
+      .join("\n");
+    expect(SETTINGS_INDEX.length).toBeGreaterThan(2);
+    for (const { href } of SETTINGS_INDEX) {
+      expect(source).toContain(`id="${href.slice(1)}"`);
+    }
+  });
+});
+
+describe("unsaved changes, by each section's Save", () => {
+  it("says so once something differs, and clears when it is saved", async () => {
+    update.mockResolvedValue({ ...SCHOOL, name: "Brightgate College" });
+    saveContact.mockResolvedValue({ ...SCHOOL, name: "Brightgate College" });
+    const { container } = render(<SchoolSettings />);
+    const name = await screen.findByLabelText("School name");
+    expect(visibleText(container)).not.toMatch(/isn.t saved yet/);
+
+    fireEvent.change(name, { target: { value: "Brightgate College" } });
+    expect(screen.getAllByText(/You.ve changed something here that isn.t saved yet/)).toHaveLength(1);
+
+    fireEvent.click(saveButtons()[0]);
+    await waitFor(() => expect(visibleText(container)).not.toMatch(/isn.t saved yet/));
+  });
+});
+
+describe("resetting custom year-group labels to a preset", () => {
+  it("asks first, names how many of the school's own names go, and keeps them on 'Keep mine'", async () => {
+    get.mockResolvedValue({
+      ...SCHOOL,
+      academicConfig: { ...SCHOOL.academicConfig, yearGroupLabels: { jss1: "Form 1", jss2: "Form 2" } },
+    });
+    const { container } = render(<SchoolSettings />);
+    await screen.findByDisplayValue("Form 1");
+
+    fireEvent.click(screen.getByRole("button", { name: /^British/ }));
+    await waitFor(() => expect(visibleText(container)).toMatch(/Switching to British replaces/));
+    // Nothing has changed yet.
+    expect(screen.getByDisplayValue("Form 1")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Keep mine" }));
+    expect(visibleText(container)).not.toMatch(/Switching to British/);
+    expect(screen.getByDisplayValue("Form 1")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^British/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Replace them" }));
+    await waitFor(() => expect(screen.queryByDisplayValue("Form 1")).toBeNull());
+  });
+});

@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/shared";
+import { LeaveButton } from "./LeaveButton";
 
 /**
  * Review session entry (37d, Intelligence Layer). Spaced retrieval, timed to
@@ -32,18 +33,30 @@ export function ReviewEntryScreen({
   lessonTitle,
   lastWorkedAt = null,
   onBegin,
+  onLeave,
 }: {
   lessonTitle: string;
   /** When they last worked on it. Null means we do not know, and say so. */
   lastWorkedAt?: string | null;
   onBegin: () => void;
+  /**
+   * D36: the review entry had no way out but in. Leaving here is not
+   * starting, so nothing is recorded against the concept - the review stays
+   * due rather than counting as missed.
+   */
+  onLeave?: () => void;
 }) {
   const ago = lastWorkedAt ? agoPhrase(lastWorkedAt) : null;
   const note = ago
     ? `You worked on this ${ago}. Let's see what's stuck.`
     : "This one's come back around. Let's see what's stuck.";
   return (
-    <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-nevo-cream px-10 text-center text-nevo-near-black motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300">
+    <div className="relative flex min-h-[100dvh] flex-col items-center justify-center bg-nevo-cream px-10 text-center text-nevo-near-black motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300">
+      {onLeave && (
+        <div className="absolute inset-x-0 top-0 flex px-3.5 pt-2.5">
+          <LeaveButton onLeave={onLeave} />
+        </div>
+      )}
       <span className="flex h-7 items-center rounded-[20px] bg-nevo-violet px-3 text-[11px] font-bold tracking-[0.16em] text-nevo-cream">
         REVIEW SESSION
       </span>

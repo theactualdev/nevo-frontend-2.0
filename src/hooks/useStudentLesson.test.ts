@@ -409,6 +409,99 @@ describe("a lesson the child is not meant to be doing", () => {
   });
 });
 
+/**
+ * Design D22, 1 Oct: reopening a finished lesson never marks it unfinished.
+ * The player withholds its `in_progress` and `exited` writes on this flag, so
+ * it has to be true for every finished lesson and for nothing else.
+ */
+describe("a lesson the child has already finished", () => {
+  const read = (
+    assignments: Record<string, unknown>[],
+    recentProgress: Record<string, unknown>[],
+  ) => {
+    detail.mockResolvedValue(LIVE_LESSON);
+    dashboard.mockReturnValue({
+      data: { assignments, recentProgress },
+      loading: false,
+      failed: false,
+    });
+  };
+  const row = (status: string, updatedAt: string) => ({
+    lessonId: FIRST_LESSON_ID,
+    status,
+    segmentPosition: 0,
+    updatedAt,
+  });
+
+  it("is finished when the newest progress row says completed", async () => {
+    signIn();
+    read([], [row("completed", "2026-09-30T10:00:00Z")]);
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.finished).toBe(true);
+    // Opened from the top, for review.
+    expect(result.current.resumeAt).toBeNull();
+  });
+
+  it("is finished when the assignment says so and no row is left", async () => {
+    // The feed is recent activity, so an old completion may have no row.
+    signIn();
+    read(
+      [
+        {
+          id: "a-1",
+          status: "completed",
+          availableFrom: null,
+          lesson: { id: FIRST_LESSON_ID },
+        },
+      ],
+      [],
+    );
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.finished).toBe(true);
+  });
+
+  it("is not finished while the child is part-way", async () => {
+    // Without this, a flag that was always true would pass both above - and
+    // silence every position write a real lesson makes.
+    signIn();
+    read(
+      [
+        {
+          id: "a-1",
+          status: "assigned",
+          availableFrom: null,
+          lesson: { id: FIRST_LESSON_ID },
+        },
+      ],
+      [
+        row("completed", "2026-09-29T10:00:00Z"),
+        row("in_progress", "2026-09-30T10:00:00Z"),
+      ],
+    );
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.finished).toBe(false);
+  });
+
+  it("is not finished when nothing has been started", async () => {
+    signIn();
+    read([], []);
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.finished).toBe(false);
+  });
+});
+
 describe("what the first frame waits for", () => {
   /*
    * Loading waited for the lesson and the dashboard only, so the engine's

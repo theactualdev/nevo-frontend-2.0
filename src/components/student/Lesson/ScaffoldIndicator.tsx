@@ -1,6 +1,3 @@
-"use client";
-
-import { useState } from "react";
 import {
   SCAFFOLD_FILLED,
   SCAFFOLD_LEVELS,
@@ -13,87 +10,48 @@ import { cn } from "@/lib/utils";
  * lesson player, opposite the exit: four small circles showing how much
  * support the system is quietly giving. It is a signal the system generates,
  * not a difficulty the student picks - no numbers, no percentages, no learner
- * "type". Level changes cross-fade in 400ms; the circles just update, the
- * label never animates.
+ * "type".
  *
- * Tapping it opens a small reassurance popover (player frame copy) - the one
- * interaction it has, and it changes nothing.
+ * THE DOTS AND NOTHING ELSE, since design's 1 Oct ruling (D27): "The
+ * architecture wins. No label, no pulse, no tooltip, no tap popover." It used
+ * to carry the word "Support", a tap popover explaining what the dots mean,
+ * and a glow when the step-up arrived - copied from the frames, which change
+ * too. Frontend §4: "No animation on change. No sound. No tooltip. No label",
+ * and "there is no interaction on this component", so it is not a button
+ * either. Nothing anywhere points the child back to it; the dots change
+ * quietly and that is all they do.
  *
- * ZERO-TAG APPLIES TO THE ACCESSIBLE NAME TOO. This carried
- * `aria-label={`Support level: ${level}`}`, where `level` is the raw value off
- * the adaptation plan - so a screen reader announced "Support level: full"
- * while the visual deliberately says nothing but the word "Support". That is
- * an engine parameter rendered as a label about a child, to exactly the users
- * the SEND framing exists to protect, and a Zero-Tag review that reads only
- * rendered text walks straight past it. The button's name is now its visible
- * text, and the dots are `aria-hidden` because the dots ARE the level.
+ * HIDDEN FROM ASSISTIVE TECH, for the same reason and the older Zero-Tag one.
+ * It carried `aria-label={`Support level: ${level}`}` once, which announced an
+ * engine parameter as a label about a child; after that its name was the word
+ * "Support". A screen reader reading out the dots, in any words, is copy
+ * pointing the child back to them, so there is no name to read. Raised with
+ * design against WCAG 1.1.1, since a sighted child can see what a screen
+ * reader user is not told.
  *
- * NULL IS THE NOTHING-STATE (rule 5). The player passed "light" when the
- * engine had sent no level, so a child was shown two filled circles and told
- * "Nevo sets it for you" about support nothing had set. With no level there is
- * no indicator; it appears when the engine says something.
+ * NULL IS THE NOTHING-STATE (rule 5). With no level there is no indicator; it
+ * appears when the engine says something. The engine's own `none` is not
+ * null: it is a level, drawn with no circle filled.
  */
-export function ScaffoldIndicator({
-  level,
-  pulse = false,
-}: {
-  level: ScaffoldLevel | null;
-  /** One glow cycle on mount (37b: boredom pulses the indicator once). */
-  pulse?: boolean;
-}) {
-  const [infoOpen, setInfoOpen] = useState(false);
-
+export function ScaffoldIndicator({ level }: { level: ScaffoldLevel | null }) {
   if (level === null || level === SCAFFOLD_LEVELS.OFF) return null;
   const filled = SCAFFOLD_FILLED[level];
 
   return (
-    <div className="relative shrink-0">
-      {/* 44px to touch around the frame's 26px pill: the button is the hit
-          area, the inner span is what is drawn. */}
-      <button
-        type="button"
-        aria-expanded={infoOpen}
-        onClick={() => setInfoOpen((o) => !o)}
-        className="group flex h-11 cursor-pointer items-center"
-      >
+    <span
+      aria-hidden="true"
+      data-scaffold-indicator=""
+      className="flex h-[26px] shrink-0 items-center gap-[5px] rounded-2xl bg-nevo-near-black/6 px-[11px]"
+    >
+      {Array.from({ length: 4 }, (_, i) => (
         <span
+          key={i}
           className={cn(
-            "flex h-[26px] items-center gap-2 rounded-2xl bg-nevo-near-black/6 px-[11px] transition-transform group-active:scale-[0.98]",
-            pulse && "motion-safe:animate-nevo-glow",
+            "size-[7px] rounded-full",
+            i < filled ? "bg-nevo-navy" : "border-[1.5px] border-nevo-navy/30",
           )}
-        >
-          {/* Decorative: the dots ARE the level, and the level is an engine
-              parameter. Hidden from assistive tech so the accessible name is the
-              visible word "Support" and nothing more. */}
-          <span aria-hidden="true" className="flex gap-[5px]">
-            {Array.from({ length: 4 }, (_, i) => (
-              <span
-                key={i}
-                className={cn(
-                  "size-[7px] rounded-full transition-colors duration-[400ms]",
-                  i < filled
-                    ? "bg-nevo-navy"
-                    : "border-[1.5px] border-nevo-navy/30",
-                )}
-              />
-            ))}
-          </span>
-          <span className="text-[11px] whitespace-nowrap text-nevo-near-black/55">
-            Support
-          </span>
-        </span>
-      </button>
-      {infoOpen && (
-        <div
-          role="note"
-          // The frame's 10px under the pill: 9px of hit area above it, 26px
-          // of pill, then the gap.
-          className="absolute top-[45px] right-0 z-20 w-[232px] rounded-[10px] bg-nevo-cream-elevated px-3.5 py-3 text-left text-[12.5px] leading-[1.5] text-nevo-near-black shadow-[0_8px_32px_rgba(0,0,0,0.16)] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-150"
-        >
-          Support shows how much help this lesson is giving you right now. Nevo
-          sets it for you - it&apos;s nothing you need to change.
-        </div>
-      )}
-    </div>
+        />
+      ))}
+    </span>
   );
 }
