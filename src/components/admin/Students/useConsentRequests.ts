@@ -47,6 +47,13 @@ export type ConsentRequestState =
    * rather than find a guardian.
    */
   | { kind: "needsEmail"; parentName: string }
+  /**
+   * A guardian recorded at ENROLMENT: an email and no name, on purpose - the
+   * parent gives their own at consent. But the request itself requires a name
+   * (`parentName`, at least two characters), so the school supplies one and
+   * the request re-posts the same address, which fills it in and sends.
+   */
+  | { kind: "needsName"; parentContact: string }
   | { kind: "failed" };
 
 const IDLE: ConsentRequestState = { kind: "idle" };
@@ -99,9 +106,18 @@ export function useConsentRequests() {
       studentsApi
         .parentLinks(studentId)
         .then((links) => {
-          const link = links.find((l) => l.parentContact && l.parentName);
+          // A named guardian first; failing that, one recorded at enrolment
+          // with an email and no name yet. This took named links only, and
+          // told a school with a guardian on record that there was nobody.
+          const link =
+            links.find((l) => l.parentContact && l.parentName.trim()) ??
+            links.find((l) => l.parentContact);
           if (!link) {
             set(studentId, { kind: "noContact" });
+            return;
+          }
+          if (!link.parentName.trim()) {
+            set(studentId, { kind: "needsName", parentContact: link.parentContact });
             return;
           }
           /*
@@ -141,7 +157,10 @@ export function useConsentRequests() {
     [set],
   );
 
-  return { stateFor, send };
+  /** Back to rest - once a request has gone another way (the name form). */
+  const clear = useCallback((studentId: string) => set(studentId, IDLE), [set]);
+
+  return { stateFor, send, clear };
 }
 
 /** What to tell the admin, in the frame's own voice. Never red, never alarm. */
@@ -164,6 +183,8 @@ export function consentRequestLine(
       // Was a full stop after "nobody to send this to". There is an action
       // now - adding a guardian sends the request - so the line names it.
       return `There’s no parent or guardian on ${studentName}’s record yet. Add one on ${studentName}’s page and the request goes to them.`;
+    case "needsName":
+      return `We have ${state.parentContact} for ${studentName}, but a request needs their name too. Add it on ${studentName}’s page and the request goes to them.`;
     case "needsEmail":
       // Names the guardian, so the admin knows the record is not empty - it is
       // the wrong KIND of contact. "Never a dead end": it says what to add.

@@ -32,15 +32,22 @@ export function AddGuardianForm({
   studentFirstName,
   onAdded,
   onCancel,
+  knownEmail,
 }: {
   studentId: string;
   studentFirstName: string;
+  /**
+   * A guardian already on the record by email - recorded at enrolment, with no
+   * name. Only the name is asked for; posting the same address finds that same
+   * guardian, fills in the name and sends the request.
+   */
+  knownEmail?: string;
   onAdded: (receipt: ParentConsentRequestReceipt, guardianName: string) => void;
   onCancel?: () => void;
 }) {
   const { writesPaused, note } = useSetupGate();
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(knownEmail ?? "");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -82,6 +89,11 @@ export function AddGuardianForm({
           className={input}
         />
       </label>
+      {knownEmail ? (
+        <p className="m-0 text-[13px] text-nevo-near-black/62">
+          The request goes to {knownEmail}.
+        </p>
+      ) : (
       <label className="text-[13px] font-medium text-nevo-near-black/62">
         Their email
         <input
@@ -96,6 +108,7 @@ export function AddGuardianForm({
           className={input}
         />
       </label>
+      )}
       {email.trim() && !emailOk ? (
         <p className="m-0 text-[13px] text-nevo-near-black/60">
           That doesn&rsquo;t look like an email address yet.
@@ -111,7 +124,11 @@ export function AddGuardianForm({
       ) : null}
       <div className="flex flex-wrap items-center gap-3">
         <button type="button" onClick={submit} disabled={!ready} className={cn(PRIMARY_BTN)}>
-          {sending ? "Sending…" : "Add and send the consent request"}
+          {sending
+            ? "Sending…"
+            : knownEmail
+              ? "Send the consent request"
+              : "Add and send the consent request"}
         </button>
         {onCancel ? (
           <button

@@ -11,6 +11,7 @@ import { formatMoney, formatVatRate } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { billingCurrency } from "../Roster/activation";
 import { isEmail } from "./useConsentRequests";
+import { useMaySendConsent } from "./consentRole";
 import {
   FailureLine,
   GHOST_BTN,
@@ -93,6 +94,8 @@ export function AddStudentSheet({
   const [guardianEmail, setGuardianEmail] = useState("");
   /** The student created before the guardian step failed, to point at. */
   const [addedId, setAddedId] = useState<string | null>(null);
+  /** Only a SENCo admin can send the request - see `consentRole`. */
+  const maySend = useMaySendConsent();
 
   useEffect(() => {
     classesApi
@@ -119,15 +122,17 @@ export function AddStudentSheet({
   );
 
   /*
-   * BOTH OR NEITHER. The consent request needs a name as well as an address,
-   * and half a guardian is not something the school can finish later from
-   * here - so a lone name or a lone email holds the button and says why.
+   * BOTH OR NEITHER, for the admin who sends the request: it needs a name as
+   * well as an address, so a lone name or a lone email holds the button and
+   * says why. An admin who cannot send is asked for the email alone - it is
+   * what enrolment records, and enrolment has nowhere to keep a name (the
+   * parent gives their own at consent).
    */
-  const gName = guardianName.trim();
+  const gName = maySend ? guardianName.trim() : "";
   const gEmail = guardianEmail.trim();
   const guardianGiven = gName.length > 0 || gEmail.length > 0;
   const guardianOk =
-    !guardianGiven || (gName.length >= 2 && isEmail(gEmail));
+    !guardianGiven || ((!maySend || gName.length >= 2) && isEmail(gEmail));
 
   const canSave =
     firstName.trim().length > 0 &&
@@ -147,9 +152,16 @@ export function AddStudentSheet({
         classId,
         // Empty is absent, not "": a blank optional field is no answer.
         dateOfBirth: dob || null,
+        /*
+         * THE GUARDIAN GOES ON THE RECORD WITH THE CHILD, not only on the
+         * request after it. Two calls, so a dropped second one used to leave
+         * a child with nobody on record; now it leaves a guardian on record
+         * and a "Not sent" pill on the roster, which a school can see and fix.
+         */
+        parentEmail: guardianGiven ? gEmail : null,
       })
       .then((created) => {
-        if (!guardianGiven) {
+        if (!guardianGiven || !maySend) {
           onAdded(created.id);
           return;
         }
@@ -193,8 +205,9 @@ export function AddStudentSheet({
         ) : phase === "guardian_failed" && addedId ? (
           <>
             <FailureLine>
-              {first} is added, but the request to {gName} didn&rsquo;t go.
-              You can add them again from {first}&rsquo;s page.
+              {first} is added and {gEmail} is on their record, but the
+              request to {gName} didn&rsquo;t go. You can send it from{" "}
+              {first}&rsquo;s page.
             </FailureLine>
             <Link href={`/admin/students/${addedId}`} className={cn(PRIMARY_BTN, "flex-1 justify-center")}>
               Go to {first}&rsquo;s page
@@ -301,22 +314,26 @@ export function AddStudentSheet({
         </p>
         <p className="m-0 mt-1 text-[12.5px] leading-[1.5] text-nevo-near-black/55">
           {first || "They"} can&rsquo;t start until a parent or guardian gives
-          permission. Add one now and we&rsquo;ll send them the request, or add
-          one later from {first ? `${first}’s` : "the student’s"} page.
+          permission.{" "}
+          {maySend
+            ? `Add one now and we’ll send them the request, or add one later from ${first ? `${first}’s` : "the student’s"} page.`
+            : "Add their email and it stays on the record. Consent requests are sent by an admin with SENCo / Learning Support access."}
         </p>
-        <div className="mt-3 grid gap-4 sm:grid-cols-2">
-          <div>
-            <label htmlFor="guardian-name" className={LABEL}>
-              Their name
-            </label>
-            <input
-              id="guardian-name"
-              value={guardianName}
-              onChange={(e) => setGuardianName(e.target.value)}
-              autoComplete="off"
-              className={FIELD}
-            />
-          </div>
+        <div className={cn("mt-3 grid gap-4", maySend && "sm:grid-cols-2")}>
+          {maySend ? (
+            <div>
+              <label htmlFor="guardian-name" className={LABEL}>
+                Their name
+              </label>
+              <input
+                id="guardian-name"
+                value={guardianName}
+                onChange={(e) => setGuardianName(e.target.value)}
+                autoComplete="off"
+                className={FIELD}
+              />
+            </div>
+          ) : null}
           <div>
             <label htmlFor="guardian-email" className={LABEL}>
               Their email
@@ -333,7 +350,9 @@ export function AddStudentSheet({
         </div>
         {guardianGiven && !guardianOk ? (
           <p className="m-0 mt-2 text-[12.5px] text-nevo-near-black/60">
-            Add both their name and a working email, or leave both empty.
+            {maySend
+              ? "Add both their name and a working email, or leave both empty."
+              : "Add a working email, or leave it empty."}
           </p>
         ) : null}
       </div>

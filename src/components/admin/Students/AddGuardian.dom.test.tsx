@@ -1,9 +1,25 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
 import { withGate } from "@/test/setupGate";
 import { ApiError } from "@/lib/api/client";
 import { StudentDetailView } from "./StudentDetailView";
+import { clearSession, setSession } from "@/lib/auth/session";
+
+/*
+ * Signed in as a SENCo admin: the consent request is SENCo-admin only
+ * (`SencoDependency`), and these tests pin what that admin can do. What other
+ * admins see is pinned in `ConsentRole.dom.test.tsx`.
+ */
+beforeEach(() =>
+  setSession({
+    token: "tok",
+    expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+    userId: "a1",
+    role: "senco_admin",
+  }),
+);
+afterEach(() => clearSession());
 
 /**
  * Consent is a gate, so a child with no guardian on record could never start
