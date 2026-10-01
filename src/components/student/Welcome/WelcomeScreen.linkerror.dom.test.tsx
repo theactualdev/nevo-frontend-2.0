@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { ApiError } from "@/lib/api/client";
 import { WelcomeScreen } from "./WelcomeScreen";
 
 /**
@@ -12,9 +13,10 @@ import { WelcomeScreen } from "./WelcomeScreen";
  * baseline, and the link was only redeemed at PIN creation - where it failed
  * and they were told their PIN did not save.
  *
- * `GET /api/v1/join/{token}` is public and answers `status` as valid, expired
- * or revoked. It is the same call the admin console's join landing already
- * makes, so the screen can ask at the door.
+ * `GET /api/v1/join/{token}` is public. It is the same call the admin console's
+ * join landing already makes, so the screen can ask at the door - and the
+ * answer is the STATUS CODE. `status` on a 200 is the constant "valid"; a dead
+ * token is a 404, live, which this screen used to swallow.
  */
 
 const lookupJoin = vi.hoisted(() => vi.fn());
@@ -59,8 +61,9 @@ afterEach(() => {
 });
 
 describe("a child arriving on a join link", () => {
-  it("is told at the door when the link has expired", async () => {
-    lookupJoin.mockResolvedValue({ status: "expired" });
+  it("is told at the door when the server says the link is dead", async () => {
+    // "Join link is invalid or expired", live, for any token it does not know.
+    lookupJoin.mockRejectedValue(new ApiError(404, "not found"));
 
     render(<WelcomeScreen joinToken="tok-1" />);
 
@@ -73,7 +76,7 @@ describe("a child arriving on a join link", () => {
      * closes the door; a child still needs to know the next action is to ask
      * for a different link rather than to keep trying this one.
      */
-    lookupJoin.mockResolvedValue({ status: "expired" });
+    lookupJoin.mockRejectedValue(new ApiError(404, "not found"));
 
     render(<WelcomeScreen joinToken="tok-1" />);
 
@@ -82,7 +85,7 @@ describe("a child arriving on a join link", () => {
 
   it("does not tell a child to wait, which the old copy did", async () => {
     // "isn't working right now" reads as temporary. It never was.
-    lookupJoin.mockResolvedValue({ status: "revoked" });
+    lookupJoin.mockRejectedValue(new ApiError(404, "not found"));
 
     render(<WelcomeScreen joinToken="tok-1" />);
 
@@ -91,8 +94,9 @@ describe("a child arriving on a join link", () => {
     expect(document.body.textContent).not.toMatch(/right now|try again|later/i);
   });
 
-  it("is told when it has been revoked", async () => {
-    lookupJoin.mockResolvedValue({ status: "revoked" });
+  it("is told when the contract refuses the token outright", async () => {
+    // 422 is the only error the contract declares for this read.
+    lookupJoin.mockRejectedValue(new ApiError(422, "unreadable"));
 
     render(<WelcomeScreen joinToken="tok-1" />);
 
@@ -118,6 +122,18 @@ describe("a child arriving on a join link", () => {
     render(<WelcomeScreen joinToken="tok-1" />);
 
     await waitFor(() => expect(lookupJoin).toHaveBeenCalled());
+    expect(screen.getByRole("button", { name: WAY_IN })).toBeInTheDocument();
+    expect(screen.queryByText(DEAD)).toBeNull();
+  });
+
+  it("is not sent away by a server having a bad minute", async () => {
+    lookupJoin.mockRejectedValue(new ApiError(503, "cold start"));
+
+    render(<WelcomeScreen joinToken="tok-1" />);
+
+    await waitFor(() => expect(lookupJoin).toHaveBeenCalled());
+    // Let the rejection settle before asserting that nothing changed.
+    await new Promise((r) => setTimeout(r, 0));
     expect(screen.getByRole("button", { name: WAY_IN })).toBeInTheDocument();
     expect(screen.queryByText(DEAD)).toBeNull();
   });

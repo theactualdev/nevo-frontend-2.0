@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { startOnboardingDraft } from "@/lib/auth/onboarding";
 import { useAuth } from "@/hooks";
 import { invitesApi } from "@/lib/api/invites";
+import { linkIsDead } from "@/lib/auth/linkAnswer";
 import { clearSession, getStoredDisplayName } from "@/lib/auth/session";
 import { useHasSession } from "@/hooks/useHasSession";
 import { useHydrated } from "@/hooks/useHydrated";
@@ -34,8 +35,9 @@ export function WelcomeScreen({
   joinToken,
 }: {
   /**
-   * Force the dead-link message. Kept for callers that already know the link
-   * is bad; the screen now finds that out for itself too - see `badLink`.
+   * Force the dead-link message, for a caller that already knows the link is
+   * bad - the entry link, whose own endpoint says so. A join token's screen
+   * finds that out for itself - see `badLink`.
    */
   linkError?: boolean;
   /**
@@ -72,40 +74,38 @@ export function WelcomeScreen({
    * A DEAD LINK SAID SO AT THE END OF ONBOARDING, OR NEVER.
    *
    * `linkError` renders the dead-link copy and NOTHING EVER SET IT - the prop
-   * had no caller anywhere.
+   * had no caller anywhere at the time.
    * So an expired or revoked invitation looked exactly like a good one: the
    * child gave their name, their school, their class and sat the whole motor
    * baseline, and the link was only redeemed at PIN creation - where it failed
    * and they were told their PIN did not save.
    *
-   * `GET /api/v1/join/{token}` is public and answers `status` as
-   * "valid" | "expired" | "revoked", and it is the same call the admin console's
-   * join landing already makes. So the screen can ask at the door.
+   * `GET /api/v1/join/{token}` is public, and it is the same call the admin
+   * console's join landing already makes. So the screen can ask at the door.
+   *
+   * THE ANSWER IS THE STATUS CODE, NOT THE BODY. This waited for a 200 whose
+   * `status` was not "valid", which the contract cannot send - the field is a
+   * constant - and swallowed the 404 a dead token actually gets. So the dead
+   * link still went unnoticed until PIN creation.
    *
    * A FAILED LOOKUP IS NOT A DEAD LINK. A network that dropped says nothing
    * about the invitation, and turning that into "ask your teacher for a new
    * one" would send a child away from a link that works. Only an answer that
-   * names the link as bad closes the door.
+   * names the link as bad closes the door - see `linkIsDead`.
    */
-  const [tokenStatus, setTokenStatus] = useState<string | null>(null);
+  const [deadLink, setDeadLink] = useState(false);
   useEffect(() => {
     if (!joinToken) return;
     let cancelled = false;
-    void invitesApi
-      .lookupJoin(joinToken)
-      .then((res) => {
-        if (!cancelled) setTokenStatus(res.status);
-      })
-      .catch(() => {
-        // Deliberately not `linkError`: see above.
-      });
+    void invitesApi.lookupJoin(joinToken).catch((err: unknown) => {
+      if (!cancelled && linkIsDead(err)) setDeadLink(true);
+    });
     return () => {
       cancelled = true;
     };
   }, [joinToken]);
 
-  const badLink =
-    linkError || (tokenStatus !== null && tokenStatus !== "valid");
+  const badLink = linkError || deadLink;
 
   useEffect(() => {
     // Only once the invitation is actually this child's. Writing it while a

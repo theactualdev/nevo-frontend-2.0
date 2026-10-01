@@ -2,12 +2,13 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth, useSignals } from "@/hooks";
+import { useAuth, useSignals, type TrackEvent } from "@/hooks";
 import { authApi } from "@/lib/api";
 import { invitesApi } from "@/lib/api/invites";
 import {
   getOnboardingDraft,
   rememberOnboardedStudent,
+  schoolCodeFromAccount,
 } from "@/lib/auth/onboarding";
 import { setSession } from "@/lib/auth/session";
 import { enterFirstLesson } from "@/lib/auth/entryGate";
@@ -42,9 +43,6 @@ export function ObservedInteractionSequence() {
    */
   const joinToken = getOnboardingDraft().joinToken;
   const identifierRef = useRef<string | null>(null);
-  // Where "You're In" hands off to. Read here rather than at the tap so the
-  // answer is ready by the time a child gets to the last screen.
-  const firstLesson = useNextLessonHref();
   /*
    * One profile-seeding session spans the whole sequence.
    *
@@ -63,9 +61,9 @@ export function ObservedInteractionSequence() {
   const { trackEvent, flush } = useSignals(sessionId, undefined, "onboarding");
   const [phase, setPhase] = useState<"transition" | "activities">("transition");
   /*
-   * Whether this device can sign the child back in on its own. False for an
-   * invite-link child, who has a real account and no school code to pair with
-   * their username — see `rememberOnboardedStudent`. Starts true so the
+   * Whether this device can sign the child back in on its own. False when no
+   * school code could be found to pair with their username, not even the
+   * account's own — see `rememberOnboardedStudent`. Starts true so the
    * celebration does not flash a warning before there is anything to warn about.
    */
   const [deviceRemembered, setDeviceRemembered] = useState(true);
@@ -105,7 +103,7 @@ export function ObservedInteractionSequence() {
   }
 
   if (index === 1) {
-    return <LearningNotice onContinue={advance} track={trackEvent} />;
+    return <LearningNotice onContinue={advance} />;
   }
 
   if (index === 2) {
@@ -233,21 +231,59 @@ export function ObservedInteractionSequence() {
            * code — so this returns false for them, correctly, and used to do it
            * in silence. They were then told "You're all set" and would find the
            * next morning that the tablet had never heard of them.
+           *
+           * THE SERVER HAS THE CODE BY NOW. The account exists, so for a child
+           * whose draft has no school code the account's own is asked for -
+           * see `schoolCodeFromAccount`.
            */
-          setDeviceRemembered(
-            isSso ? true : rememberOnboardedStudent(identifierRef.current),
-          );
-          advance();
+          if (isSso) {
+            setDeviceRemembered(true);
+            advance();
+            return;
+          }
+          void schoolCodeFromAccount().then((accountSchoolCode) => {
+            setDeviceRemembered(
+              rememberOnboardedStudent(identifierRef.current, accountSchoolCode),
+            );
+            advance();
+          });
         }}
       />
     );
   }
 
-  // "You're In" — the hand-off out of onboarding straight into the first lesson
-  // (Product Arch B.2: land in a lesson, never an empty dashboard). B.2 asks us
-  // to land them in a lesson; it does not ask us to invent one, and this screen
-  // fires the instant an account is created - so the dashboard read is almost
-  // always still in flight here. `useNextLessonHref` is where that is decided.
+  return (
+    <YoureInStep
+      go={(to) => router.push(to)}
+      track={trackEvent}
+      deviceRemembered={deviceRemembered}
+    />
+  );
+}
+
+/**
+ * "You're In" — the hand-off out of onboarding straight into the first lesson
+ * (Product Arch B.2: land in a lesson, never an empty dashboard). B.2 asks us
+ * to land them in a lesson; it does not ask us to invent one, and
+ * `useNextLessonHref` is where that is decided.
+ *
+ * ITS OWN COMPONENT SO THE LESSON IS READ WITH A SESSION. The read sat at the
+ * top of the sequence, which mounts before the account exists: with no token
+ * `useLiveQuery` returns early, and nothing re-ran it when PIN creation stored
+ * one. So every child went to the Lessons tab, never their first lesson.
+ * Mounted here, after the account is made, the dashboard read goes out at the
+ * start of the celebration and has its whole hold to land.
+ */
+function YoureInStep({
+  go,
+  track,
+  deviceRemembered,
+}: {
+  go: (to: string) => void;
+  track: TrackEvent;
+  deviceRemembered: boolean;
+}) {
+  const firstLesson = useNextLessonHref();
   return (
     <YoureInScreen
       onDone={() => {
@@ -258,9 +294,9 @@ export function ObservedInteractionSequence() {
          * straight into a lesson. `enterFirstLesson` opens the lesson, or
          * the waiting screen for a held child; a failed read is not a hold.
          */
-        void enterFirstLesson(firstLesson, (to) => router.push(to));
+        void enterFirstLesson(firstLesson, go);
       }}
-      track={trackEvent}
+      track={track}
       deviceRemembered={deviceRemembered}
     />
   );

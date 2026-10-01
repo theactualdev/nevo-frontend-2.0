@@ -15,7 +15,7 @@ import {
   type OnboardingDraft,
 } from "@/lib/auth/onboarding";
 import { OnboardingShell } from "./OnboardingShell";
-import { AgeStepper, isAgeInRange } from "./AgeStepper";
+import { AgeStepper, ageDigits, isAgeInRange } from "./AgeStepper";
 
 const SCHOOL_STEP = "/student/onboarding/school";
 const SEQUENCE_STEP = "/student/onboarding/sequence";
@@ -68,9 +68,27 @@ export function NameAndAgeStep() {
     const age = getOnboardingDraft().age;
     return age == null ? "" : String(age);
   });
-  // A.12: the Nevo Keyboard opens while the name field is focused (touch); a
+  // A.12: the Nevo Keyboard opens while either field is focused (touch); a
   // hardware keyboard still types on desktop, where the on-screen one is hidden.
   const kb = useNevoKeyboardDock();
+  /*
+   * ONE DOCK, TWO FIELDS, as the frame draws it: the keyboard stays up when a
+   * child moves from their name to their age, and its keys go to whichever
+   * field they last touched.
+   */
+  const [field, setField] = useState<"name" | "age">("name");
+  const focus = (next: "name" | "age") => () => {
+    setField(next);
+    kb.onFocus();
+  };
+  const typeKey = (c: string) =>
+    field === "age"
+      ? setAgeText((t) => ageDigits(t + c))
+      : setName((n) => n + c);
+  const deleteKey = () =>
+    field === "age"
+      ? setAgeText((t) => t.slice(0, -1))
+      : setName((n) => n.slice(0, -1));
 
   const valid = name.trim().length > 0 && isAgeInRange(ageText);
 
@@ -107,7 +125,7 @@ export function NameAndAgeStep() {
         <Input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          onFocus={kb.onFocus}
+          onFocus={focus("name")}
           onBlur={kb.onBlur}
           inputMode="none"
           placeholder="Your name"
@@ -121,7 +139,12 @@ export function NameAndAgeStep() {
         </p>
 
         <div className="mt-4">
-          <AgeStepper value={ageText} onChange={setAgeText} />
+          <AgeStepper
+            value={ageText}
+            onChange={setAgeText}
+            onFocus={focus("age")}
+            onBlur={kb.onBlur}
+          />
         </div>
 
         <Button type="submit" disabled={!valid} className="mt-8 w-full">
@@ -132,8 +155,8 @@ export function NameAndAgeStep() {
       {kb.open && (
         <NevoKeyboard
           layout="qwerty"
-          onKey={(c) => setName((n) => n + c)}
-          onBackspace={() => setName((n) => n.slice(0, -1))}
+          onKey={typeKey}
+          onBackspace={deleteKey}
           onReturn={submit}
           className="fixed inset-x-0 bottom-0 z-40"
         />
