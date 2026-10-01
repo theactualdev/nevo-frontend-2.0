@@ -109,13 +109,17 @@ export function LessonSummaryScreen({ lesson }: { lesson: Lesson }) {
           >
             Back to lessons
           </Button>
-          <Button
-            variant="ghost"
-            className="w-full sm:w-auto sm:px-7"
-            onClick={() => router.push(`${LESSONS_HREF}/${lesson.id}/review`)}
-          >
-            Review answers
-          </Button>
+          {/* Only where there is a check-in to look back at. A lesson with
+              no questions opened a review screen with nothing on it. */}
+          {(lesson.assessment?.questions.length ?? 0) > 0 && (
+            <Button
+              variant="ghost"
+              className="w-full sm:w-auto sm:px-7"
+              onClick={() => router.push(`${LESSONS_HREF}/${lesson.id}/review`)}
+            >
+              Review answers
+            </Button>
+          )}
         </div>
       </div>
     </div>
