@@ -145,3 +145,56 @@ describe("AuthProvider — the ordinary path", () => {
     expect(session).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * "Sign out" did not reliably sign the child out.
+ *
+ * The token and the route guard's role cookie were cleared in `logout`'s
+ * `finally` - after the server answered. Every caller navigates at once, and a
+ * hard navigation carries the cookie that is still there: the guard saw a
+ * student, bounced the sign-in door back to the dashboard, and the unload could
+ * cancel the request before its `finally` ever ran.
+ */
+describe("AuthProvider — signing out", () => {
+  function SignOutProbe() {
+    const { signOut } = useAuth();
+    return (
+      <button type="button" onClick={signOut}>
+        out
+      </button>
+    );
+  }
+
+  it("clears the session before anything can navigate, and still revokes it", async () => {
+    storeSession();
+    session.mockResolvedValue({ userId: "student-1", role: "student" });
+    // A revoke that never answers - the slow-network case.
+    const fetchSpy = vi.fn(() => new Promise<Response>(() => {}));
+    vi.stubGlobal("fetch", fetchSpy);
+
+    render(
+      <AuthProvider>
+        <SignOutProbe />
+      </AuthProvider>,
+    );
+    screen.getByRole("button", { name: "out" }).click();
+
+    // Synchronously gone - the very next line is where a caller navigates.
+    expect(getSession()).toBeNull();
+    expect(document.cookie).not.toMatch(/nevo\.role=student/);
+
+    // And the revoke went with the token it was for - read before the clear,
+    // sent a microtask later - and survives an unload.
+    const logoutCall = () =>
+      (fetchSpy.mock.calls as unknown as [string, RequestInit][]).find(([url]) =>
+        String(url).includes("/auth/logout"),
+      );
+    await waitFor(() => expect(logoutCall()).toBeDefined());
+    const call = logoutCall();
+    expect((call![1].headers as Record<string, string>).Authorization).toBe(
+      "Bearer tok",
+    );
+    expect(call![1].keepalive).toBe(true);
+    vi.unstubAllGlobals();
+  });
+});

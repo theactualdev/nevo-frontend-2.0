@@ -7,7 +7,7 @@ import { NevoKeyboard, Switch } from "@/components/shared";
 import { useAuth } from "@/hooks";
 import { useDisplayName } from "@/components/student/Shell/useDisplayName";
 import { useAvatarTone } from "@/components/student/Shell/useAvatarTone";
-import { getRememberedProfile, setStoredDisplayName } from "@/lib/auth/session";
+import { setStoredDisplayName } from "@/lib/auth/session";
 import { settingsApi } from "@/lib/api/settings";
 import { useAccessibility } from "@/context/AccessibilityContext";
 import { cn } from "@/lib/utils";
@@ -305,12 +305,13 @@ export function ProfileSettings() {
         onSignOut={() => {
           setSignOutOpen(false);
           signOut();
-          // The sheet promises "you can come back anytime with your PIN" -
-          // onboarding has no route to the PIN unlock, so a remembered
-          // device would have stranded them in the full setup flow.
-          const door = getRememberedProfile()
-            ? "/auth/login"
-            : "/student/onboarding";
+          // The sheet promises "you can come back anytime with your PIN", and
+          // the PIN door is where every child goes - ALWAYS. This read the
+          // legacy one-child profile key and sent a device it did not name to
+          // onboarding, which cannot sign anyone in: on a shared tablet that
+          // is the second-account trap. `/auth/login` handles a device that
+          // remembers nobody itself (28c-2).
+          const door = "/auth/login";
           // A HARD navigation, not router.push - the same race the teacher
           // console hit in #176. The route guard reads the `nevo.role` cookie
           // and a client-side push runs before the clear settles, so the guard
