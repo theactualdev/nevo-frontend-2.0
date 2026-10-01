@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { WarmUpRun, dimensionForToday } from "./WarmUpRun";
 import type { WarmUpPrompt } from "@/hooks/useWarmUpDimension";
+import { clearSession, setSession } from "@/lib/auth/session";
+import { markWarmUpDone } from "@/lib/profiling/warmUpDone";
 
 /**
  * THE WARM-UP RUNS WHAT THE ENGINE ASKED FOR, OR NOTHING.
@@ -16,8 +18,13 @@ import type { WarmUpPrompt } from "@/hooks/useWarmUpDimension";
  * screen where the child was stuck.
  */
 
-const { submit } = vi.hoisted(() => ({ submit: vi.fn() }));
-vi.mock("@/lib/api", () => ({ baselineApi: { submitWithRetry: submit } }));
+const { submit, answerPrompt } = vi.hoisted(() => ({
+  submit: vi.fn(),
+  answerPrompt: vi.fn(),
+}));
+vi.mock("@/lib/api", () => ({
+  baselineApi: { submitWithRetry: submit, answerPrompt },
+}));
 const { holdBaseline } = vi.hoisted(() => ({ holdBaseline: vi.fn() }));
 vi.mock("@/lib/profiling/pendingBaseline", () => ({ holdBaseline }));
 
@@ -28,14 +35,16 @@ vi.mock("@/hooks/useWarmUpDimension", () => ({
   useWarmUpPrompt: () => engine.prompt,
 }));
 
+// Banding is WarmUpRun.band's subject; here the roster gives none.
+vi.mock("@/hooks/useRosterBand", () => ({
+  useRosterBand: () => ({ band: null, settled: true }),
+}));
+
 const consent = vi.hoisted(() => ({ withdrawn: false }));
 vi.mock("@/hooks/useConsentGate", () => ({
   useConsentGate: () => ({ withdrawn: consent.withdrawn, known: true }),
 }));
 
-vi.mock("@/hooks/useNextLessonHref", () => ({
-  useNextLessonHref: () => "/student/lessons/x",
-}));
 const { push } = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, replace: vi.fn() }),
@@ -47,23 +56,34 @@ const settle = async (ms = 1000) => {
     await vi.advanceTimersByTimeAsync(ms);
   });
 };
-const lessonButton = () =>
-  screen.getByRole("button", { name: /Start today's lesson/i });
+const homeButton = () => screen.getByRole("button", { name: "Home" });
+
+const signIn = () =>
+  setSession({
+    token: "tok",
+    expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    userId: "child-1",
+    role: "student",
+  });
 
 beforeEach(() => {
   vi.useFakeTimers();
   submit.mockReset();
   submit.mockResolvedValue(true);
+  answerPrompt.mockReset();
+  answerPrompt.mockResolvedValue(true);
   holdBaseline.mockReset();
   push.mockReset();
   consent.withdrawn = false;
   engine.prompt = { state: "waiting" };
   window.localStorage.clear();
+  clearSession();
 });
 
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  clearSession();
 });
 
 describe("WarmUpRun — without the engine's answer", () => {
@@ -86,14 +106,16 @@ describe("WarmUpRun — without the engine's answer", () => {
     expect(holdBaseline).not.toHaveBeenCalled();
   });
 
-  it("still leaves the child a way into their day", () => {
-    // Full-screen, no nav: without this the screen would be a dead end.
+  it("still leaves the child a way Home", () => {
+    // Full-screen, no nav: without this the screen would be a dead end. It
+    // went into the day's lesson, which a child with none queued did not have
+    // (D18): Home, whatever is queued.
     engine.prompt = { state: "none" };
     render(<WarmUpRun />);
 
-    fireEvent.click(lessonButton());
+    fireEvent.click(homeButton());
 
-    expect(push).toHaveBeenCalledWith("/student/lessons/x");
+    expect(push).toHaveBeenCalledWith("/student/dashboard");
   });
 });
 
@@ -129,23 +151,124 @@ describe("WarmUpRun — the question the engine served", () => {
     expect(screen.queryByText(/today's lesson\./i)).toBeNull();
   });
 
-  it("sends which option was picked, and marks nothing", async () => {
+  it("sends which option was picked to the prompt's own endpoint (B8)", async () => {
+    signIn();
     engine.prompt = served;
     render(<WarmUpRun />);
 
     fireEvent.click(screen.getByText("56"));
     await settle();
 
-    expect(submitted().item).toEqual({
+    // The option's value, never its label, and nothing about whether it was
+    // right: the server marks it.
+    expect(answerPrompt).toHaveBeenCalledWith("child-1", {
       itemId: "item-7",
-      chosenOption: "opt-b",
+      value: "opt-b",
     });
+  });
+
+  it("no longer sends it inside the submit, and marks nothing", async () => {
+    signIn();
+    engine.prompt = served;
+    render(<WarmUpRun />);
+
+    fireEvent.click(screen.getByText("56"));
+    await settle();
+
+    expect(submitted()).not.toHaveProperty("item");
     // No answer key is used on the device, so nothing was scored.
     expect(submitted().acts.domain).toMatchObject({
       trials: 1,
       scored: 0,
       accuracy: null,
     });
+  });
+
+  it("does not say it was saved when the pick never landed", async () => {
+    // The submit can land while the pick does not. "Your progress is saved"
+    // over a pick nobody received would be the fabricated success again.
+    signIn();
+    answerPrompt.mockResolvedValue(false);
+    engine.prompt = served;
+    render(<WarmUpRun />);
+
+    fireEvent.click(screen.getByText("56"));
+    await settle();
+
+    expect(screen.queryByText(/Your progress is saved/)).toBeNull();
+    expect(screen.getByText(/couldn't save it just now/)).toBeInTheDocument();
+  });
+
+  it("sends no pick on a day the engine asked for a device task", async () => {
+    signIn();
+    engine.prompt = {
+      state: "ready",
+      dimension: "attention",
+      live: true,
+      item: served.state === "ready" ? served.item : null,
+    };
+    render(<WarmUpRun />);
+
+    fireEvent.click(screen.getByText("Right"));
+    await settle();
+
+    expect(answerPrompt).not.toHaveBeenCalled();
+    expect(submit).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("WarmUpRun — done today, on the account (B10)", () => {
+  const attention = (doneToday?: boolean): WarmUpPrompt => ({
+    state: "ready",
+    dimension: "attention",
+    item: null,
+    live: true,
+    ...(doneToday === undefined ? {} : { doneToday }),
+  });
+
+  it("opens on the done state when the account says another tablet did it", async () => {
+    // This device has no memory of it at all - which is the second tablet.
+    signIn();
+    engine.prompt = attention(true);
+    render(<WarmUpRun />);
+    await settle();
+
+    expect(screen.getByText(/That's it for today/)).toBeInTheDocument();
+    expect(screen.queryByText("Right")).toBeNull();
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it("does not let this device's memory overrule the account", async () => {
+    signIn();
+    markWarmUpDone("child-1");
+    engine.prompt = attention(false);
+    render(<WarmUpRun />);
+    await settle();
+
+    expect(screen.getByText("Right")).toBeInTheDocument();
+    expect(screen.queryByText(/That's it for today/)).toBeNull();
+  });
+
+  it("falls back on this device's memory when the prompt does not say", async () => {
+    // A deployment from before 1 Oct carries no `doneToday`.
+    signIn();
+    markWarmUpDone("child-1");
+    engine.prompt = attention();
+    render(<WarmUpRun />);
+    await settle();
+
+    expect(screen.getByText(/That's it for today/)).toBeInTheDocument();
+  });
+
+  it("claims nothing while the prompt is still on its way", () => {
+    // The memory could say done and the account then say otherwise; "That's
+    // it for today" followed by a task is worse than the nothing-state.
+    signIn();
+    markWarmUpDone("child-1");
+    render(<WarmUpRun />);
+
+    expect(screen.queryByText(/That's it for today/)).toBeNull();
+    expect(homeButton()).toBeInTheDocument();
   });
 });
 
@@ -158,7 +281,7 @@ describe("WarmUpRun — a withdrawn guardian", () => {
     await settle();
 
     expect(screen.getByText(/That's it for today/)).toBeInTheDocument();
-    expect(lessonButton()).toBeInTheDocument();
+    expect(homeButton()).toBeInTheDocument();
   });
 
   it("neither sends anything nor says it was saved", async () => {

@@ -1,6 +1,16 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
-import { WARM_UP_CHIPS, WarmUpCard } from "./WarmUpCard";
+import { TodaysWarmUpCard, WARM_UP_CHIPS, WarmUpCard } from "./WarmUpCard";
+import type { WarmUpPrompt } from "@/hooks/useWarmUpDimension";
+import { clearSession, setSession } from "@/lib/auth/session";
+import { markWarmUpDone } from "@/lib/profiling/warmUpDone";
+
+const engine = vi.hoisted(() => ({
+  prompt: { state: "waiting" } as WarmUpPrompt,
+}));
+vi.mock("@/hooks/useWarmUpDimension", () => ({
+  useWarmUpPrompt: () => engine.prompt,
+}));
 
 /**
  * The card once today's warm-up is behind them. Design's words, 24 Sep.
@@ -13,8 +23,15 @@ import { WARM_UP_CHIPS, WarmUpCard } from "./WarmUpCard";
  * saying "Begin warm-up" and led to a screen that said the opposite.
  */
 
+beforeEach(() => {
+  engine.prompt = { state: "waiting" };
+  window.localStorage.clear();
+  clearSession();
+});
+
 afterEach(() => {
   cleanup();
+  clearSession();
 });
 
 describe("before today's warm-up", () => {
@@ -86,5 +103,76 @@ describe("before the engine has named a task", () => {
     expect(
       screen.getByRole("link", { name: /Begin warm-up/i }),
     ).toBeInTheDocument();
+  });
+});
+
+describe("the words on the card (D13, 1 Oct)", () => {
+  it("drops the word the architecture keeps from a child", () => {
+    // "No score, it just keeps Nevo tuned..." - design ruled it reworded and
+    // gave no words, so the claim goes and nothing is added.
+    render(<WarmUpCard dimension="wmc" />);
+
+    expect(document.body.textContent).not.toMatch(/score|test|ability/i);
+    expect(
+      screen.getByText(/About 45 seconds\. It just keeps Nevo tuned/),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("the card as Home places it - whose answer is done (B10)", () => {
+  const signIn = () =>
+    setSession({
+      token: "tok",
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      userId: "child-1",
+      role: "student",
+    });
+  const ready = (doneToday?: boolean): WarmUpPrompt => ({
+    state: "ready",
+    dimension: "wmc",
+    item: null,
+    live: true,
+    ...(doneToday === undefined ? {} : { doneToday }),
+  });
+
+  it("is done on a second tablet when the account says so", () => {
+    // Nothing remembered on this device - which was the whole of B10.
+    signIn();
+    engine.prompt = ready(true);
+    render(<TodaysWarmUpCard />);
+
+    expect(screen.getByText(/Today's warm-up is done\./)).toBeInTheDocument();
+    expect(screen.queryAllByRole("link")).toHaveLength(0);
+  });
+
+  it("is offered when the account says not, whatever this device remembers", () => {
+    signIn();
+    markWarmUpDone("child-1");
+    engine.prompt = ready(false);
+    render(<TodaysWarmUpCard />);
+
+    expect(
+      screen.getByRole("link", { name: /Begin warm-up/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("leans on this device while the prompt is on its way, so it does not flash", () => {
+    signIn();
+    markWarmUpDone("child-1");
+    render(<TodaysWarmUpCard />);
+
+    expect(screen.getByText(/Today's warm-up is done\./)).toBeInTheDocument();
+  });
+
+  it("names the engine's task, and none before it has named one", () => {
+    signIn();
+    engine.prompt = ready(false);
+    const { unmount } = render(<TodaysWarmUpCard />);
+    expect(screen.getByText(WARM_UP_CHIPS.wmc)).toBeInTheDocument();
+    unmount();
+
+    engine.prompt = { state: "waiting" };
+    render(<TodaysWarmUpCard />);
+    expect(screen.queryByText(WARM_UP_CHIPS.wmc)).toBeNull();
   });
 });

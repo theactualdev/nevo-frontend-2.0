@@ -11,12 +11,15 @@ const STORAGE_KEY = "nevo.warmup.done";
  * performance. It closes and moves the child into the day's lesson"* - and the
  * screen already had one; what it did not have was a memory that it happened.
  *
- * ## Why this is a device memory rather than a read
+ * ## The account decides now; this only covers the wait
  *
- * **Nothing on the wire says whether today's warm-up is done.**
- * `BaselinePromptResponse` is `{dimension}` and nothing else - re-checked
- * 23 Sep, still the open ask on list S-B 5 - so there is no server answer to
- * this question yet. When there is one, it replaces this and this is deleted.
+ * **The wire says it as of 1 Oct (B10).** `BaselinePromptResponse` carries
+ * `doneToday`, held against the account, so a second tablet sees a warm-up
+ * done on the first - which this memory, being one device's, never could.
+ * Whenever the prompt answers with it, it decides, in both directions; see
+ * `warmUpDoneFor`. This memory answers only while nobody has said: the prompt
+ * still on its way (so Home's card does not offer a warm-up for a moment and
+ * then take it back), a read that failed, or a deployment without the field.
  *
  * ## Why it is keyed per CHILD
  *
@@ -61,6 +64,21 @@ function read(): DoneMap {
 export function warmUpDoneToday(userId: string | null | undefined): boolean {
   if (!userId || typeof window === "undefined") return false;
   return read()[userId] === today();
+}
+
+/**
+ * Whether today's warm-up is behind this child: the account's `doneToday`
+ * when the prompt carried one, and this device's memory only when it did not.
+ *
+ * NEVER BOTH. The device memory does not get to overrule the account in either
+ * direction - not "done" on a tablet the account says has not seen today's,
+ * and not "not done" on the second tablet, which was the whole of B10.
+ */
+export function warmUpDoneFor(
+  doneToday: boolean | undefined,
+  userId: string | null | undefined,
+): boolean {
+  return typeof doneToday === "boolean" ? doneToday : warmUpDoneToday(userId);
 }
 
 /**

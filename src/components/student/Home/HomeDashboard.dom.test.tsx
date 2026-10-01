@@ -244,11 +244,8 @@ describe("Home does not offer work a teacher called off", () => {
 
 describe("the daily warm-up card", () => {
   /**
-   * A dashboard with something on it.
-   *
-   * The card only renders when the child has work queued - an empty week shows
-   * the "nothing waiting right now" state instead, and there is no warm-up
-   * card on it to assert about.
+   * A dashboard with something on it. The card shows without one too, since
+   * 1 Oct (D18) - see HomeDashboard.warmup.
    */
   const live = () =>
     dashboard.useStudentDashboard.mockReturnValue({

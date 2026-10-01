@@ -26,15 +26,20 @@ export interface WarmUpItem {
  *    run - the read failed, or the dimension is not one of our six, or the
  *    day's task is the question and no question came with it.
  *  - `ready`: run this. `live` is false only for the signed-out walkthrough.
+ *
+ * `doneToday` is the account's answer to "has this child done today's?" (B10,
+ * 1 Oct), whenever the read answered with one. Absent means nobody said: the
+ * read failed, or the deployment predates the field. See `warmUpDoneFor`.
  */
 export type WarmUpPrompt =
   | { state: "waiting" }
-  | { state: "none" }
+  | { state: "none"; doneToday?: boolean }
   | {
       state: "ready";
       dimension: BaselineDimension;
       item: WarmUpItem | null;
       live: boolean;
+      doneToday?: boolean;
     };
 
 /**
@@ -49,8 +54,6 @@ export type WarmUpPrompt =
  *
  * The rotation now serves the signed-out walkthrough only, where there is no
  * engine to ask and nothing is measured.
- *
- * `answer` is read off the wire by nobody - see `RecalibratePrompt`.
  */
 export function useWarmUpPrompt(visitor: BaselineDimension): WarmUpPrompt {
   const hydrated = useHydrated();
@@ -88,11 +91,14 @@ export function useWarmUpPrompt(visitor: BaselineDimension): WarmUpPrompt {
 /** The served prompt as something the run can render, or `none`. */
 export function toPrompt(res: Partial<RecalibratePrompt>): WarmUpPrompt {
   const dimension = res.dimension;
+  // Only a boolean is an answer. Absent is a deployment that does not say.
+  const done =
+    typeof res.doneToday === "boolean" ? { doneToday: res.doneToday } : {};
   if (
     typeof dimension !== "string" ||
     !(BASELINE_DIMENSIONS as readonly string[]).includes(dimension)
   ) {
-    return { state: "none" };
+    return { state: "none", ...done };
   }
   const options = Array.isArray(res.options)
     ? res.options.filter(
@@ -116,24 +122,12 @@ export function toPrompt(res: Partial<RecalibratePrompt>): WarmUpPrompt {
       : null;
   // The subject-knowledge task IS the served question. Without one there is
   // nothing to ask, and the frame's fixture is not this child's question.
-  if (dimension === "domain" && !item) return { state: "none" };
+  if (dimension === "domain" && !item) return { state: "none", ...done };
   return {
     state: "ready",
     dimension: dimension as BaselineDimension,
     item,
     live: true,
+    ...done,
   };
-}
-
-/**
- * Which dimension today's warm-up runs, for the dashboard's card: the engine's
- * for a signed-in child, `null` while it has not named one (or will not), and
- * `fallback` for the signed-out walkthrough. The card says nothing about a
- * task nobody has named.
- */
-export function useWarmUpDimension(
-  fallback: BaselineDimension,
-): BaselineDimension | null {
-  const prompt = useWarmUpPrompt(fallback);
-  return prompt.state === "ready" ? prompt.dimension : null;
 }

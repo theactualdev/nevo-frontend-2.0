@@ -7,17 +7,19 @@ import {
   type WarmUpItem,
   type WarmUpPrompt,
 } from "@/hooks/useWarmUpDimension";
-import { useNextLessonHref } from "@/hooks/useNextLessonHref";
 import { ArrowRight, Check } from "lucide-react";
 import { cn, randomId } from "@/lib/utils";
 import { baselineApi } from "@/lib/api";
 import { holdBaseline } from "@/lib/profiling/pendingBaseline";
-import { markWarmUpDone, warmUpDoneToday } from "@/lib/profiling/warmUpDone";
+import { markWarmUpDone, warmUpDoneFor } from "@/lib/profiling/warmUpDone";
 import { getSession } from "@/lib/auth/session";
 import { useConsentGate } from "@/hooks/useConsentGate";
 import { useHydrated } from "@/hooks/useHydrated";
+import { useRosterBand } from "@/hooks/useRosterBand";
 import {
   BASELINE_DIMENSIONS,
+  gridSpanConfig,
+  type AgeBand,
   type BaselineDimension,
 } from "@/lib/profiling/bands";
 import {
@@ -26,10 +28,20 @@ import {
   reduceTrialModule,
   tapPoint,
 } from "@/lib/profiling/capture";
+import { TILE } from "./GridSpanModule";
+import { warmUpReading } from "./SentenceDotModule";
 
-/** One round only; the whole run should feel like ~45 seconds, never a test. */
-const GRID_SEQ_LEN = 3;
-const LIT_MS = 660;
+/** Where every way out of the warm-up goes (D18). */
+const HOME = "/student/dashboard";
+
+/**
+ * The tile task with no band known: the frame's one version, a 4x4 grid and
+ * three tiles at 660ms. One round only; the whole run should feel like ~45
+ * seconds, never a test.
+ */
+const FRAME_GRID = { n: 4, length: 3, litMs: 660 };
+/** The frame's one sentence, for a band with no read sentence of its own. */
+const FRAME_SENTENCE = { text: "Garri is made from cassava.", isTrue: true };
 const GAP_MS = 280;
 const DOT_REVEAL_MS = 850;
 const PICK_BEAT_MS = 440;
@@ -85,8 +97,18 @@ export function dimensionForToday(now = new Date()): BaselineDimension {
  * in flight - and then SUBMIT that run as a measurement the engine never asked
  * for, and swap the task if the answer came late. Now the task waits for the
  * engine, and without an answer the screen shows the nothing-state: the
- * header, no task, and the way into the day's lesson (see `WarmUpNothing`).
+ * header, no task, and the way back to Home (see `WarmUpNothing`).
  * The rotation is for the signed-out walkthrough only.
+ *
+ * NOT CONDITIONAL ON LESSONS (D18, 1 Oct). Both of the screen's buttons went
+ * into the day's lesson, so a child with none queued was handed nowhere to
+ * go. Design: "its done button goes to the child's home rather than to a
+ * lesson. A warm-up is not conditional on there being work waiting." Both go
+ * Home now, whatever is queued.
+ *
+ * SIZED TO THE CHILD'S BAND (D17, 1 Oct) when the roster carries one: the
+ * tile task runs tile memory's own grid, sequence length and light time for
+ * that band, and the reading task the band's own item. See `WarmUpTask`.
  */
 export function WarmUpRun({
   dimension: dimensionProp,
@@ -101,6 +123,17 @@ export function WarmUpRun({
     : served;
   const dimension = prompt.state === "ready" ? prompt.dimension : null;
   const item = prompt.state === "ready" ? prompt.item : null;
+  /** The account's answer, once the prompt has given one. */
+  const doneToday = prompt.state === "waiting" ? undefined : prompt.doneToday;
+  const hydrated = useHydrated();
+  /*
+   * The band, from the roster, for the child whose session this is. Read on
+   * the client only: the session is invisible to the server. The task waits
+   * for this to settle so it never starts at one size and changes to another.
+   */
+  const { band, settled: bandSettled } = useRosterBand(
+    hydrated ? (getSession()?.userId ?? null) : null,
+  );
   const [done, setDone] = useState(false);
   // null until the write settles; false means it never reached Nevo.
   const [saved, setSaved] = useState<boolean | null>(null);
@@ -111,15 +144,8 @@ export function WarmUpRun({
    * not happen.
    */
   const [withheld, setWithheld] = useState(false);
-  /** The served question's pick, sent with the vector for whoever marks it. */
-  const servedPick = useRef<{ itemId: string; chosenOption: string } | null>(
-    null,
-  );
-  // "Start today's lesson" sent every child to the mock photosynthesis lesson,
-  // whatever their teacher had actually set. The fix for that then read the
-  // dashboard's `data` to tell a signed-in child from a visitor, which put the
-  // mock back for the whole time the read was in flight - see the hook.
-  const todaysLesson = useNextLessonHref();
+  /** The served question's pick, sent to the prompt's own endpoint (B8). */
+  const servedPick = useRef<{ itemId: string; value: string } | null>(null);
   const [capture] = useState(() => new BaselineCapture(`warmup-${randomId()}`));
   /*
    * Withdrawal, read once per mount. A child here is always signed in, so the
@@ -159,17 +185,23 @@ export function WarmUpRun({
    * Nor before the engine has named the task, and only ONCE. It ran on mount
    * with the rotation's dimension and again when the engine's answer swapped
    * it, so one run carried two starts for two different tasks.
+   *
+   * "Done" is the ACCOUNT's answer when the prompt carried one (B10), so a
+   * warm-up done on another tablet is done here too; this device's memory
+   * answers only when it did not (`warmUpDoneFor`). Nor before the band has
+   * settled, which decides the task's size and goes on the event.
    */
   useEffect(() => {
-    if (!dimension || started.current) return;
-    if (warmUpDoneToday(getSession()?.userId)) return;
+    if (!dimension || !bandSettled || started.current) return;
+    if (warmUpDoneFor(doneToday, getSession()?.userId)) return;
     started.current = true;
     startedAt.current = performance.now();
     capture.record("warmup_start", {
       dimension,
+      ...(band ? { band } : {}),
       ...(item ? { itemId: item.itemId } : {}),
     });
-  }, [capture, dimension, item]);
+  }, [capture, dimension, item, doneToday, band, bandSettled]);
 
   /*
    * Derived during render rather than set from an effect.
@@ -181,10 +213,17 @@ export function WarmUpRun({
    * the token until the client is actually running", and it means the done
    * state is right on the FIRST client render rather than after a flash of the
    * activity.
+   *
+   * NOT WHILE THE PROMPT IS ON ITS WAY. The device memory could say "done"
+   * here and the account then say otherwise, and "That's it for today"
+   * followed by a task is worse than the nothing-state, which already covers
+   * the wait. Home's card, which has no such state, does use it there.
    */
-  const hydrated = useHydrated();
   const showDone =
-    done || (hydrated && warmUpDoneToday(getSession()?.userId));
+    done ||
+    (hydrated &&
+      prompt.state !== "waiting" &&
+      warmUpDoneFor(doneToday, getSession()?.userId));
 
   const finish = useCallback(() => {
     if (!submitted.current) {
@@ -223,6 +262,9 @@ export function WarmUpRun({
      * does sitting it again help - the withdrawal still applies, and the
      * parked vector is already on its way. What the child DID is the thing
      * being remembered here, not what reached Nevo.
+     *
+     * Only ever the fallback now: the account's `doneToday` decides whenever
+     * the prompt carries it.
      */
     markWarmUpDone(getSession()?.userId);
     setDone(true);
@@ -249,10 +291,14 @@ export function WarmUpRun({
           ? reduceGridSpan(capture)
           : reduceTrialModule(capture, "warmup");
       /*
-       * THE SERVED QUESTION'S ANSWER, UNMARKED. The engine sent the item with
-       * its answer key; the client compares nothing against it (rule 3). What
-       * was picked goes up in the probe contract's own words - `itemId` and
-       * `chosenOption` - for whoever marks it. Where that is, is an open ask.
+       * THE BAND THE TASK WAS SIZED FOR, when it was sized for one (D17). A
+       * span of four on a 5x5 grid and a span of two on a 3x3 are not the
+       * same measurement, and nothing else on the vector says which this was.
+       * Absent, never guessed, when the frame's one version ran.
+       *
+       * The served question's pick is NOT here any more. It rode along as
+       * `item: {itemId, chosenOption}` for whoever marked it; it now goes to
+       * the prompt's own endpoint and is marked there (B8, below).
        */
       const features = [
         {
@@ -260,7 +306,7 @@ export function WarmUpRun({
           module: "warmup",
           dimension,
           durationMs,
-          ...(servedPick.current ? { item: servedPick.current } : {}),
+          ...(band ? { band } : {}),
         },
       ];
       /*
@@ -288,25 +334,41 @@ export function WarmUpRun({
        * when the invite path began storing one.
        */
       const owner = getSession()?.userId ?? null;
-      void baselineApi
+      /*
+       * THE PICK GOES TO ITS OWN ENDPOINT, UNMARKED (B8, 1 Oct).
+       * `POST .../recalibrate-prompt/{id}/response` takes `{itemId, value}`
+       * and marks it server-side; the key never reaches the device. It is not
+       * parked when it fails - the parking is the submit's - so a pick that
+       * never landed makes the done state say it could not be saved, rather
+       * than "Your progress is saved" over a pick nobody received.
+       */
+      const pick = servedPick.current;
+      const answered =
+        pick && owner
+          ? baselineApi.answerPrompt(owner, pick).catch(() => false)
+          : Promise.resolve(true);
+      const submittedOk = baselineApi
         .submitWithRetry(capture.sessionId, features)
         .then((ok) => {
-          setSaved(ok);
           if (!ok) holdBaseline(capture.sessionId, features, owner);
+          return ok;
         })
         .catch(() => {
-          setSaved(false);
           holdBaseline(capture.sessionId, features, owner);
+          return false;
         })
         // The RAW stream is purged either way - only the reduced vector ever
         // travels, and it must not linger on the device. What is parked above
         // is the vector, not the raw capture.
         .finally(() => void capture.purge());
+      void Promise.all([submittedOk, answered]).then(([sent, heard]) =>
+        setSaved(sent && heard),
+      );
     }
     // `withdrawn` belongs here: without it this closes over the value from the
     // first render, which is always false, and a withdrawal that resolved
     // mid-run would be read as consent.
-  }, [capture, dimension, withdrawn]);
+  }, [capture, dimension, withdrawn, band]);
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-nevo-cream text-nevo-near-black">
@@ -362,15 +424,16 @@ export function WarmUpRun({
               </p>
             )}
           </div>
-          <LessonButton onClick={() => router.push(todaysLesson)} />
+          <HomeButton onClick={() => router.push(HOME)} />
         </div>
-      ) : !dimension ? (
-        <WarmUpNothing onLesson={() => router.push(todaysLesson)} />
+      ) : !dimension || !bandSettled ? (
+        <WarmUpNothing onHome={() => router.push(HOME)} />
       ) : (
         <div className="flex min-h-0 flex-1 items-center justify-center px-7 pb-10">
           <div className="flex w-full max-w-[480px] flex-col items-center gap-[26px]">
             <WarmUpTask
               dimension={dimension}
+              band={band}
               item={item}
               capture={capture}
               onServedPick={(pick) => {
@@ -385,15 +448,24 @@ export function WarmUpRun({
   );
 }
 
-/** The frame's one way out of the warm-up, into the day's lesson. */
-function LessonButton({ onClick }: { onClick: () => void }) {
+/**
+ * The warm-up's one way out, to the child's Home (D18).
+ *
+ * DESIGN ASK, THE LABEL. The frame's button reads "Start today's lesson",
+ * which stopped being true when design sent it Home on 1 Oct - and a child
+ * with no lesson queued would be promised one. No frame draws "Back to home".
+ * "Home" is the frames' own label for a button that goes there (32 Prototype,
+ * the lesson summary's second button; 30 Flow Reference, "Back to lessons" /
+ * "Home"), so it is used until design names this one.
+ */
+function HomeButton({ onClick }: { onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
       className="h-12 cursor-pointer rounded-[10px] bg-nevo-navy px-6 text-base font-semibold text-nevo-cream transition-[filter,transform] hover:brightness-109 active:scale-[0.985]"
     >
-      Start today&apos;s lesson
+      Home
     </button>
   );
 }
@@ -405,32 +477,51 @@ function LessonButton({ onClick }: { onClick: () => void }) {
  * and the gap used to be filled with the weekday rotation's task - run, and
  * then submitted as a measurement. So: no task, no words of explanation (none
  * is designed, and none is true for every cause), and the done state's own
- * button into the lesson, because this route is full-screen and a child must
- * never be left on it with nothing to press. Shown while the prompt is in
+ * button Home, because this route is full-screen and a child must never be
+ * left on it with nothing to press. Shown while the prompt (or the band) is in
  * flight too: the client has no timeout, so a read that never answers would
  * otherwise be a blank screen for good. When the task arrives it replaces this.
  */
-function WarmUpNothing({ onLesson }: { onLesson: () => void }) {
+function WarmUpNothing({ onHome }: { onHome: () => void }) {
   return (
     <div className="flex min-h-0 flex-1 items-center justify-center px-7 pb-10">
-      <LessonButton onClick={onLesson} />
+      <HomeButton onClick={onHome} />
     </div>
   );
 }
 
-/** One round of the day's task - the frame's simplified single-trial forms. */
+/**
+ * One round of the day's task - the frame's simplified single-trial forms.
+ *
+ * BY BAND, WHERE THE BASELINE ALREADY VARIES BY BAND (D17, 1 Oct). The frame
+ * draws one version - a 4x4 grid, three tiles, "Garri is made from cassava." -
+ * and that was every child's, "tuned for neither" a Primary 2 nor an SS2
+ * child. With a band known:
+ *
+ *  - the tile task runs tile memory's grid for it, its starting sequence
+ *    length and its light time (`gridSpanConfig`), not its dual task;
+ *  - the reading task reads the band's own first item from the reading
+ *    activity (`warmUpReading`): JSS's sentence, SS's passage and its
+ *    question. P4-6's first sentence is the frame's.
+ *
+ * With none, and for P1-3's reading, which that activity runs by ear, the
+ * frame's one version runs. Nothing here is a new value.
+ */
 function WarmUpTask({
   dimension,
+  band,
   item,
   capture,
   onServedPick,
   onDone,
 }: {
   dimension: BaselineDimension;
+  /** The roster's band, or null when it gave none. */
+  band: AgeBand | null;
   /** The question the engine served, if it served one. */
   item: WarmUpItem | null;
   capture: BaselineCapture;
-  onServedPick: (pick: { itemId: string; chosenOption: string }) => void;
+  onServedPick: (pick: { itemId: string; value: string }) => void;
   onDone: () => void;
 }) {
   const shownAt = useRef(0);
@@ -459,8 +550,18 @@ function WarmUpTask({
   };
 
   switch (dimension) {
-    case "wmc":
-      return <WarmUpGrid capture={capture} onDone={onDone} />;
+    case "wmc": {
+      const config = band ? gridSpanConfig(band) : null;
+      return (
+        <WarmUpGrid
+          n={config?.n ?? FRAME_GRID.n}
+          length={config?.spanStart ?? FRAME_GRID.length}
+          litMs={config?.litMs ?? FRAME_GRID.litMs}
+          capture={capture}
+          onDone={onDone}
+        />
+      );
+    }
     case "ps":
       return (
         <SingleChoice
@@ -489,23 +590,54 @@ function WarmUpTask({
           }
         />
       );
-    case "reading":
+    case "reading": {
+      const reading = band ? warmUpReading(band) : null;
+      // Each pick carries `mode` as the reading activity records it, so the
+      // engine can tell a passage read from a sentence read.
+      if (reading?.mode === "passage") {
+        return (
+          <SingleChoice
+            onDone={onDone}
+            onPick={(choice, detail) =>
+              pick(choice, { ...detail, mode: "passage" })
+            }
+            stacked
+            options={[...reading.options, "Not sure"]}
+            answer={reading.answer}
+            softLast
+            stimulus={
+              <div className="flex w-full flex-col gap-4">
+                <div className="rounded-[12px] border-2 border-nevo-navy/50 bg-nevo-cream px-[18px] py-4 text-[15px] leading-[1.6] text-pretty text-nevo-near-black">
+                  {reading.passage}
+                </div>
+                <p className="text-[15px] font-medium text-nevo-navy">
+                  {reading.question}
+                </p>
+              </div>
+            }
+          />
+        );
+      }
+      const sentence = reading ?? FRAME_SENTENCE;
       return (
         <SingleChoice
           prompt="True or false?"
           onDone={onDone}
-          onPick={pick}
+          onPick={(choice, detail) =>
+            pick(choice, { ...detail, mode: "sentence" })
+          }
           stacked
           options={["True", "False", "Not sure"]}
-          answer="True"
+          answer={sentence.isTrue ? "True" : "False"}
           softLast
           stimulus={
             <div className="w-full rounded-[12px] border-2 border-nevo-navy/50 bg-nevo-cream p-[18px] text-center text-[17px] leading-[1.5] text-nevo-near-black">
-              Garri is made from cassava.
+              {sentence.text}
             </div>
           }
         />
       );
+    }
     case "ans":
       return <WarmUpDots onDone={onDone} onPick={pick} />;
     case "attention":
@@ -555,7 +687,7 @@ function WarmUpTask({
             onDone={onDone}
             onPick={(label, detail, i) => {
               const option = item.options[i];
-              onServedPick({ itemId: item.itemId, chosenOption: option.value });
+              onServedPick({ itemId: item.itemId, value: option.value });
               pick(label, {
                 ...detail,
                 itemId: item.itemId,
@@ -702,7 +834,8 @@ function SingleChoice({
 }
 
 /**
- * wmc: one 3-tile sequence on a 4x4 grid, tapped back in reverse.
+ * wmc: one sequence on an n x n grid, tapped back in reverse - three tiles on
+ * a 4x4 grid in the frame, or tile memory's first round for the child's band.
  *
  * A WRONG TAP NOW DOES WHAT IT DOES IN TILE MEMORY, which this reuses. It rang
  * violet for 900ms and left the child to keep guessing at a pattern they had
@@ -713,9 +846,18 @@ function SingleChoice({
  * wrong, and the vector records the misses and no completed round.
  */
 function WarmUpGrid({
+  n,
+  length,
+  litMs,
   capture,
   onDone,
 }: {
+  /** The grid is n x n. */
+  n: number;
+  /** How many tiles light. */
+  length: number;
+  /** How long each stays lit. */
+  litMs: number;
   capture: BaselineCapture;
   onDone: () => void;
 }) {
@@ -755,22 +897,22 @@ function WarmUpGrid({
       let t = 560;
       s.forEach((cell) => {
         at(t, () => setLit(cell));
-        at(t + LIT_MS, () => setLit(-1));
-        t += LIT_MS + GAP_MS;
+        at(t + litMs, () => setLit(-1));
+        t += litMs + GAP_MS;
       });
       at(t + 150, () => setPhase("input"));
     },
-    [clearTimers],
+    [clearTimers, litMs],
   );
 
   useEffect(() => {
-    const pool = [...Array(16).keys()];
+    const pool = [...Array(n * n).keys()];
     const s: number[] = [];
-    for (let i = 0; i < GRID_SEQ_LEN; i++)
+    for (let i = 0; i < length; i++)
       s.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
     play(s);
     return clearTimers;
-  }, [play, clearTimers]);
+  }, [play, clearTimers, n, length]);
 
   const tap = (cell: number, e: React.MouseEvent) => {
     if (phase !== "input") return;
@@ -813,6 +955,13 @@ function WarmUpGrid({
   };
 
   const inputOn = phase === "input";
+  /*
+   * Tile memory's sizing for this n: a square of its column on a phone, so a
+   * 5x5 grid fits a 320px screen, and the frame's fixed sizes from `sm` up.
+   * The phone grid takes the content column's width, capped as tile memory
+   * caps its own.
+   */
+  const tile = TILE[n] ?? TILE[4];
   return (
     <>
       <p className="text-center text-[17px] leading-[1.5] font-medium text-nevo-near-black">
@@ -820,15 +969,19 @@ function WarmUpGrid({
           ? "Watch the tiles"
           : "Tap the tiles you saw, in reverse order."}
       </p>
-      <div className="grid grid-cols-4 gap-2 sm:gap-2.5">
-        {Array.from({ length: 16 }, (_, i) => (
+      <div
+        className={cn("grid w-full max-w-[420px] sm:w-auto", tile.g)}
+        style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}
+      >
+        {Array.from({ length: n * n }, (_, i) => (
           <button
             key={i}
             type="button"
             tabIndex={inputOn ? 0 : -1}
             onClick={(e) => tap(i, e)}
             className={cn(
-              "flex size-[62px] items-center justify-center rounded-[12px] transition-[transform,box-shadow] duration-150 sm:size-[84px]",
+              "flex items-center justify-center rounded-[12px] transition-[transform,box-shadow] duration-150",
+              tile.m,
               i === lit &&
                 "scale-105 bg-nevo-violet shadow-[0_6px_18px_rgba(154,156,203,0.5)]",
               tapped.has(i) && "bg-nevo-navy",
@@ -842,7 +995,10 @@ function WarmUpGrid({
             )}
           >
             {tapped.has(i) && (
-              <Check className="size-5 text-nevo-cream" strokeWidth={2.6} />
+              <Check
+                className="size-[34%] min-h-5 min-w-5 text-nevo-cream"
+                strokeWidth={2.6}
+              />
             )}
           </button>
         ))}

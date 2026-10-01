@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { markWarmUpDone, warmUpDoneToday } from "./warmUpDone";
+import { markWarmUpDone, warmUpDoneFor, warmUpDoneToday } from "./warmUpDone";
 
 /**
  * A note that an activity happened, on a device up to six children share.
@@ -135,5 +135,25 @@ describe("when the device will not remember", () => {
     expect(() => markWarmUpDone("child-1")).not.toThrow();
 
     setItem.mockRestore();
+  });
+});
+
+describe("the account decides; this memory only covers the wait (B10)", () => {
+  it("is done when the account says so, on a tablet that has never seen it", () => {
+    // The second tablet: nothing remembered here, and that is the bug.
+    expect(warmUpDoneFor(true, "child-1")).toBe(true);
+  });
+
+  it("is not done when the account says not, whatever this device remembers", () => {
+    markWarmUpDone("child-1");
+
+    expect(warmUpDoneFor(false, "child-1")).toBe(false);
+  });
+
+  it("falls back on this device only when the account has not said", () => {
+    markWarmUpDone("child-1");
+
+    expect(warmUpDoneFor(undefined, "child-1")).toBe(true);
+    expect(warmUpDoneFor(undefined, "child-2")).toBe(false);
   });
 });
