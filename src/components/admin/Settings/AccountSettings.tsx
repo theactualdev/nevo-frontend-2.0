@@ -76,7 +76,11 @@ export function AccountSettings() {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [reveal, setReveal] = useState(false);
+  /** D12.7: "A single 'Show' text action per field" - one toggle revealed all three. */
+  const [reveal, setReveal] = useState({ current: false, next: false, confirm: false });
+  /** The mismatch line is D12.7's "On blur" - not only after pressing Change. */
+  const [confirmBlurred, setConfirmBlurred] = useState(false);
+  const [languageNote, setLanguageNote] = useState(false);
   const [pw, setPw] = useState<PwPhase>("idle");
   const [ended, setEnded] = useState(0);
   /** Which session's sign-out is being confirmed. "" for none. */
@@ -253,6 +257,28 @@ export function AccountSettings() {
             Your email is changed by asking us. It&rsquo;s how you sign in, so
             it needs verifying rather than editing here.
           </NotBuiltNote>
+
+          {/*
+            * D12.6's Language. "Only one language available: render the select
+            * as a read-only field naming English rather than a one-option
+            * menu." Pressing it explains why there is nothing to choose.
+            */}
+          <div>
+            <span className={S_LABEL}>Language</span>
+            <button
+              type="button"
+              onClick={() => setLanguageNote((v) => !v)}
+              aria-expanded={languageNote}
+              className={cn(S_FIELD, "cursor-pointer text-left")}
+            >
+              English
+            </button>
+            <p className="m-0 mt-2 text-[12.5px] leading-[1.5] text-nevo-near-black/55">
+              {languageNote
+                ? "English is the only language available today. When we add more, they'll appear here, and it will change Nevo for you only."
+                : "This changes Nevo for you only. Your teachers and students keep their own setting."}
+            </p>
+          </div>
         </div>
       </SettingsSection>
 
@@ -286,12 +312,22 @@ export function AccountSettings() {
       <SettingsSection title="Password">
         <div className="flex flex-col gap-4">
           <div>
-            <label htmlFor="pw-current" className={S_LABEL}>
-              Current password
-            </label>
+            <div className="flex items-baseline justify-between gap-3">
+              <label htmlFor="pw-current" className={S_LABEL}>
+                Current password
+              </label>
+              <button
+                type="button"
+                onClick={() => setReveal((r) => ({ ...r, current: !r.current }))}
+                aria-label={`${reveal.current ? "Hide" : "Show"} current password`}
+                className="cursor-pointer text-[12.5px] font-semibold text-nevo-navy hover:opacity-75"
+              >
+                {reveal.current ? "Hide" : "Show"}
+              </button>
+            </div>
             <input
               id="pw-current"
-              type={reveal ? "text" : "password"}
+              type={reveal.current ? "text" : "password"}
               value={current}
               onChange={(e) => setCurrent(e.target.value)}
               autoComplete="current-password"
@@ -299,12 +335,22 @@ export function AccountSettings() {
             />
           </div>
           <div>
-            <label htmlFor="pw-new" className={S_LABEL}>
-              New password
-            </label>
+            <div className="flex items-baseline justify-between gap-3">
+              <label htmlFor="pw-new" className={S_LABEL}>
+                New password
+              </label>
+              <button
+                type="button"
+                onClick={() => setReveal((r) => ({ ...r, next: !r.next }))}
+                aria-label={`${reveal.next ? "Hide" : "Show"} new password`}
+                className="cursor-pointer text-[12.5px] font-semibold text-nevo-navy hover:opacity-75"
+              >
+                {reveal.next ? "Hide" : "Show"}
+              </button>
+            </div>
             <input
               id="pw-new"
-              type={reveal ? "text" : "password"}
+              type={reveal.next ? "text" : "password"}
               value={next}
               onChange={(e) => {
                 setNext(e.target.value);
@@ -313,39 +359,49 @@ export function AccountSettings() {
               autoComplete="new-password"
               className={S_FIELD}
             />
+            {/* D12.7's requirement, before typing rather than as a failure
+                after; then the frame's own running count. No meter, no colour. */}
             <p className="mt-2 text-[12.5px] text-nevo-near-black/50">
-              At least 10 characters.
+              {next.length === 0
+                ? "At least 10 characters. A phrase you'll remember is stronger than a short jumble."
+                : next.length >= 10
+                  ? "That's long enough."
+                  : `A few more characters: ${10 - next.length} to go.`}
             </p>
           </div>
           <div>
-            <label htmlFor="pw-confirm" className={S_LABEL}>
-              Confirm new password
-            </label>
+            <div className="flex items-baseline justify-between gap-3">
+              <label htmlFor="pw-confirm" className={S_LABEL}>
+                Confirm new password
+              </label>
+              <button
+                type="button"
+                onClick={() => setReveal((r) => ({ ...r, confirm: !r.confirm }))}
+                aria-label={`${reveal.confirm ? "Hide" : "Show"} confirm new password`}
+                className="cursor-pointer text-[12.5px] font-semibold text-nevo-navy hover:opacity-75"
+              >
+                {reveal.confirm ? "Hide" : "Show"}
+              </button>
+            </div>
             <input
               id="pw-confirm"
-              type={reveal ? "text" : "password"}
+              type={reveal.confirm ? "text" : "password"}
               value={confirm}
               onChange={(e) => {
                 setConfirm(e.target.value);
                 if (pw === "mismatch") setPw("idle");
               }}
+              onBlur={() => setConfirmBlurred(true)}
               autoComplete="new-password"
               className={S_FIELD}
             />
-            {pw === "mismatch" ? (
+            {pw === "mismatch" || (confirmBlurred && confirm.length > 0 && confirm !== next) ? (
               <p className="mt-2 text-[12.5px] text-nevo-navy">
                 These two don&rsquo;t match yet.
               </p>
             ) : null}
           </div>
 
-          <button
-            type="button"
-            onClick={() => setReveal((v) => !v)}
-            className="self-start cursor-pointer text-[13px] font-semibold text-nevo-navy hover:opacity-75"
-          >
-            {reveal ? "Hide" : "Show"}
-          </button>
         </div>
 
         <p className="m-0 mt-4 text-[13px] leading-[1.55] text-nevo-near-black/60">
@@ -357,8 +413,10 @@ export function AccountSettings() {
           <button
             type="button"
             onClick={changePassword}
+            // D12.7 Idle: disabled "until all three fields are complete and
+            // the two new ones match".
             disabled={
-              !current || next.length < 10 || !confirm || pw === "saving"
+              !current || next.length < 10 || confirm !== next || pw === "saving"
             }
             className="cursor-pointer rounded-[10px] bg-nevo-navy px-5 py-3 text-sm font-semibold text-nevo-cream transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:brightness-100"
           >
