@@ -41,10 +41,19 @@ vi.mock("@/lib/api", () => ({ authApi: { loginPin, logout } }));
 const studentDestination = vi.hoisted(() =>
   vi.fn(async (preferred?: string | null) => preferred || "/student/dashboard"),
 );
-vi.mock("@/lib/auth/entryGate", () => ({ studentDestination }));
+vi.mock("@/lib/auth/entryGate", () => ({
+  studentDestination,
+  WAITING_ROUTE: "/student/waiting",
+}));
+
+/** A shared tablet: two children, so the door is 28c's picker. */
+const TWO = [
+  { id: "a", name: "Ada", shapeIndex: 0 },
+  { id: "k", name: "Kofi", shapeIndex: 1 },
+];
 
 const roster = vi.hoisted(() => ({
-  entries: [{ id: "a", name: "Ada", shapeIndex: 0 }] as {
+  entries: [] as {
     id: string;
     name?: string;
     shapeIndex: number;
@@ -103,7 +112,7 @@ beforeEach(() => {
   router.replace.mockReset();
   studentDestination.mockClear();
   roster.rememberChild.mockReset();
-  roster.entries = [{ id: "a", name: "Ada", shapeIndex: 0 }];
+  roster.entries = TWO;
   roster.displayName = "Ada";
   window.history.pushState({}, "", "/auth/login");
 });
@@ -141,9 +150,12 @@ describe("where the child was going", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Forgot PIN?" }));
 
+    // And which remembered child forgot, as the roster's opaque id - so 00a
+    // can ask for them - never their identifier or their school code.
     expect(router.push).toHaveBeenCalledWith(
-      "/auth/forgot-pin?next=%2Fstudent%2Fprogress",
+      "/auth/forgot-pin?next=%2Fstudent%2Fprogress&child=a",
     );
+    expect(String(router.push.mock.calls[0][0])).not.toMatch(/ada\.o|NEVO-1/);
   });
 
   it("is never somewhere off the site", async () => {
@@ -181,7 +193,7 @@ describe("the PIN step, as 28c-3 and 28c-5 draw it", () => {
 
   it("says Welcome back when the device never learned the name", async () => {
     roster.displayName = undefined;
-    roster.entries = [{ id: "a", shapeIndex: 0 }];
+    roster.entries = [{ id: "a", shapeIndex: 0 }, TWO[1]];
     render(<LoginPage />);
     fireEvent.click(
       await screen.findByRole("button", { name: "Choose this account" }),
@@ -260,5 +272,152 @@ describe("an account that is not a student's", () => {
       ),
     );
     expect(logout).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * D1, 1 Oct: "Both frames are right, on different screens." 00 is the own
+ * device - one remembered child, straight to their PIN, with "Using a
+ * different device?" out to 00c. 28c is the shared tablet, with "Not you? Go
+ * back" to its picker. The picker used to show for one child too, so 00's way
+ * out existed nowhere.
+ */
+describe("a device that remembers one child (00)", () => {
+  beforeEach(() => {
+    roster.entries = [TWO[0]];
+  });
+
+  it("opens straight on that child's PIN, greeting them as 00 draws it", async () => {
+    render(<LoginPage />);
+
+    expect(
+      await screen.findByRole("heading", { name: "Welcome back, Ada" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Enter your PIN to keep going")).toBeInTheDocument();
+    // No picker in front of it.
+    expect(screen.queryByText("Who's learning?")).toBeNull();
+  });
+
+  it("offers Using a different device? out to the full sign-in, and no Not you?", async () => {
+    window.history.pushState({}, "", "/auth/login?next=/student/lessons/frac-3");
+    render(<LoginPage />);
+
+    expect(
+      await screen.findByRole("link", { name: "Using a different device?" }),
+    ).toHaveAttribute("href", "/auth/sign-in?next=%2Fstudent%2Flessons%2Ffrac-3");
+    expect(screen.queryByRole("button", { name: /Not you/ })).toBeNull();
+  });
+
+  it("says 00's words for a PIN that did not match", async () => {
+    loginPin.mockRejectedValue(
+      new ApiError(401, "Unauthorized", {
+        detail: { code: "authentication_failed", message: "no" },
+      }),
+    );
+    render(<LoginPage />);
+    await screen.findByText("Enter your PIN to keep going");
+
+    await tap("1234");
+
+    expect(
+      await screen.findByText(
+        "That PIN didn't match. Try again, or ask your teacher.",
+      ),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("a shared tablet's PIN step (28c-3)", () => {
+  it("has Not you? Go back and no Using a different device?", async () => {
+    await chooseAda();
+
+    expect(screen.getByRole("button", { name: "Not you? Go back" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /different device/ })).toBeNull();
+  });
+});
+
+/**
+ * D2, 1 Oct: two sign-in moments. A held child never sees "Taking you to your
+ * lessons", because it is not true. And a sign-in that ended the same
+ * account's session elsewhere says so, without saying where or why.
+ */
+describe("the moment after the PIN", () => {
+  it("takes a held child straight to the waiting screen, with no Taking you to your lessons", async () => {
+    loginPin.mockResolvedValue({ ...SESSION, replacedSession: false });
+    studentDestination.mockResolvedValueOnce("/student/waiting");
+    await chooseAda();
+
+    await tap("1234");
+
+    await waitFor(() =>
+      expect(router.push).toHaveBeenCalledWith("/student/waiting"),
+    );
+    expect(screen.queryByText(/Taking you to your lessons/)).toBeNull();
+    expect(screen.queryByRole("heading", { name: /Welcome back/ })).toBeNull();
+  });
+
+  it("still says Taking you to your lessons to a child who is on their way in", async () => {
+    loginPin.mockResolvedValue({ ...SESSION, replacedSession: false });
+    await chooseAda();
+
+    await tap("1234");
+
+    expect(
+      await screen.findByText(/Taking you to your lessons/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Your other session has ended.")).toBeNull();
+  });
+
+  it("says the other session has ended when this sign-in ended one, and not where", async () => {
+    loginPin.mockResolvedValue({ ...SESSION, replacedSession: true });
+    await chooseAda();
+
+    await tap("1234");
+
+    expect(
+      await screen.findByText("Your other session has ended."),
+    ).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/another device|tablet|because/i);
+  });
+});
+
+/**
+ * D52: the paused screen gets a way back to the picker. With no controls, a
+ * shared tablet showing it locks every other child out.
+ */
+describe("a paused account at the door", () => {
+  const paused = () =>
+    new ApiError(401, "Unauthorized", {
+      detail: { code: "account_paused", message: "paused" },
+    });
+
+  it("goes back to the picker, for whoever is next", async () => {
+    loginPin.mockRejectedValue(paused());
+    await chooseAda();
+
+    await tap("1234");
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Back to sign in" }),
+    );
+
+    expect(await screen.findByText("Who's learning?")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Kofi" })).toBeInTheDocument();
+  });
+
+  it("goes back to 00 on an own device, where the way past is Using a different device?", async () => {
+    roster.entries = [TWO[0]];
+    loginPin.mockRejectedValue(paused());
+    render(<LoginPage />);
+    await screen.findByText("Enter your PIN to keep going");
+
+    await tap("1234");
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Back to sign in" }),
+    );
+
+    expect(
+      await screen.findByRole("link", { name: "Using a different device?" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/on pause/)).toBeNull();
   });
 });

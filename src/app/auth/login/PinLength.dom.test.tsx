@@ -43,12 +43,18 @@ const { loginPin } = vi.hoisted(() => ({ loginPin: vi.fn() }));
 vi.mock("@/lib/api", () => ({ authApi: { loginPin } }));
 vi.mock("@/lib/auth/entryGate", () => ({
   studentDestination: async () => "/student/dashboard",
+  WAITING_ROUTE: "/student/waiting",
 }));
 
+// Two children, so the door is the shared tablet's picker (28c); one would
+// open straight on 00's PIN.
 const roster = vi.hoisted(() => ({
   pinLength: undefined as number | undefined,
   rememberChild: vi.fn(),
-  entries: [{ id: "a", name: "Ada", shapeIndex: 0 }],
+  entries: [
+    { id: "a", name: "Ada", shapeIndex: 0 },
+    { id: "k", name: "Kofi", shapeIndex: 1 },
+  ],
 }));
 vi.mock("@/lib/auth/deviceRoster", () => ({
   SHAPE_COUNT: 6,

@@ -27,6 +27,7 @@ vi.mock("@/hooks/useSessionRefresh", () => ({ useSessionRefresh: vi.fn() }));
 vi.mock("@/hooks/useSessionLapse", () => ({ useSessionLapse: vi.fn() }));
 vi.mock("@/lib/lessons/pendingProgress", () => ({
   flushPendingProgress: vi.fn().mockResolvedValue(undefined),
+  holdsProgress: vi.fn(() => false),
 }));
 vi.mock("./NotificationBell", () => ({ NotificationBell: () => null }));
 
@@ -182,6 +183,18 @@ describe("StudentShell — going offline", () => {
 
     expect(screen.getByText("content")).toBeVisible();
     expect(screen.queryByText("offline banner")).toBeNull();
+  });
+
+  it("puts the full screen over the tab only for a child with nothing to continue (D50)", async () => {
+    // Signed in, nothing downloaded, nothing held: the one child the full
+    // screen is for. The tab stays mounted underneath it.
+    signIn();
+    useOnline.mockReturnValue(false);
+    renderShell();
+
+    expect(await screen.findByRole("dialog")).toHaveTextContent("You're offline");
+    expect(screen.queryByText("offline banner")).toBeNull();
+    expect(screen.getByText("content")).toBeInTheDocument();
   });
 });
 
