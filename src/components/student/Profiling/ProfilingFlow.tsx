@@ -35,8 +35,26 @@ import { StretchInterstitial } from "./StretchInterstitial";
 export function ProfilingFlow({
   track,
   onDone,
+  ownerUserId = null,
 }: {
   track?: TrackEvent;
+  /**
+   * The child sitting this run, when that is already known - which is only
+   * true for a child who arrived by SSO and so is signed in throughout.
+   *
+   * AN SSO CHILD'S BASELINE WAS NEVER DELIVERED. It was parked with no owner,
+   * which only the run's own PIN step can claim (`storePin` flushes it with
+   * this run's id) - and an SSO child skips that step. Nothing else may send
+   * an ownerless vector, so it sat until it expired after seven days. Parked
+   * under their id, it goes out the way a warm-up's does: the sequence flushes
+   * it at the end of this run, and `StudentShell`'s flush on the next app
+   * load does if that fails.
+   *
+   * Only the SSO path passes this. Any other "current session" here could be
+   * the previous child's on a shared tablet, which is the exact mistake the
+   * parking exists to prevent.
+   */
+  ownerUserId?: string | null;
   /**
    * The whole flow is complete - carry on to the Consent Gate.
    *
@@ -104,6 +122,12 @@ export function ProfilingFlow({
    * and parks nothing. Blocking the whole run behind a consent read would
    * delay every child for a state almost none of them are in.
    *
+   * STOPPED, NOT JUST EMPTIED. This purged once and the capture carried on:
+   * every module after the withdrawal recorded again and wrote its stream
+   * back to IndexedDB at its end, where it sat on a shared tablet until some
+   * later run's sweep. `stop()` purges and then refuses every later record
+   * and write for the rest of the run.
+   *
    * THE SCREENS ARE UNCHANGED, deliberately. What a withdrawn child should
    * actually SEE is an open design question, and inventing an answer here
    * would put unreviewed copy in front of the child this protects. Stopping
@@ -111,7 +135,7 @@ export function ProfilingFlow({
    */
   const { withdrawn } = useConsentGate();
   useEffect(() => {
-    if (withdrawn) void capture.purge();
+    if (withdrawn) void capture.stop();
   }, [withdrawn, capture]);
   /*
    * The completion screen's `saved` is left null - "still resolving" - because
@@ -119,11 +143,10 @@ export function ProfilingFlow({
    * the account exists, a screen or two later. This run cannot know the answer
    * any more, and should not pretend to.
    *
-   * NOTE FOR DESIGN: the settled copy reads "Your learning space has been
-   * personalized", which now runs slightly ahead of the write rather than
-   * alongside it. It was already shown while a submit was in flight; the
-   * in-flight window is just longer. Worth a neutral phrasing if you would
-   * rather it did not claim a past-tense write at all.
+   * DESIGN RULED ON THE SETTLED COPY, 1 OCT (SCRUM-180). It read "Your
+   * learning space has been personalized", a past-tense claim about a write
+   * this run cannot see. It now reads "Nevo has everything it needs to set up
+   * your learning space.", which is true the moment it is read.
    */
 
   const finishRun = () => {
@@ -133,7 +156,7 @@ export function ProfilingFlow({
         // Nothing is derived from the stream and nothing is parked. The raw
         // capture goes the same way it always does, and no signal is tracked
         // either - "baseline submitted" would not be true.
-        void capture.purge();
+        void capture.stop();
         setPhase("complete");
         return;
       }
@@ -163,7 +186,7 @@ export function ProfilingFlow({
        * to be this child's. The raw capture still never leaves the device and
        * is still purged the moment it has been reduced.
        */
-      holdBaseline(c.sessionId, features);
+      holdBaseline(c.sessionId, features, ownerUserId);
       // Remembered so the account this run goes on to create can prove the
       // vector is its own. Nothing else may send it.
       parkedRunRef.current = c.sessionId;

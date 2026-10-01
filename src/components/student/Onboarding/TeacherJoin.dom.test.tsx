@@ -32,14 +32,16 @@ import { ApiError } from "@/lib/api/client";
  * exactly the state Teacher Join left them in, since it wrote nothing.
  */
 
-const { connectClassCode, push, params } = vi.hoisted(() => ({
+const { connectClassCode, push, replace, back, params } = vi.hoisted(() => ({
   connectClassCode: vi.fn(),
   push: vi.fn(),
+  replace: vi.fn(),
+  back: vi.fn(),
   params: new URLSearchParams("mode=code"),
 }));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push, back: vi.fn() }),
+  useRouter: () => ({ push, replace, back }),
   useSearchParams: () => params,
 }));
 vi.mock("@/lib/api/auth", () => ({ authApi: { connectClassCode } }));
@@ -173,6 +175,57 @@ describe("TeacherJoin", () => {
 
     await waitFor(() => expect(connectClassCode).toHaveBeenCalledTimes(1));
     expect(connectClassCode).toHaveBeenCalledWith({ classCode: "MAP4KZ" });
+  });
+});
+
+describe("TeacherJoin - after the class says yes", () => {
+  it("shows the drawn success state instead of leaving in the same tick", async () => {
+    // It set "success" and navigated at once, so the frame's "That's it -
+    // connecting you to your class…" over an enabled Continue was never seen.
+    connectClassCode.mockResolvedValue(connection);
+    render(<TeacherJoin />);
+
+    type("MAP4KZ");
+    fireEvent.click(screen.getByRole("button", { name: /join my class/i }));
+
+    expect(await screen.findByText(/connecting you to your class/i)).toBeVisible();
+    expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("goes on when the child taps Continue, the frame's only way on", async () => {
+    connectClassCode.mockResolvedValue(connection);
+    render(<TeacherJoin />);
+
+    type("MAP4KZ");
+    fireEvent.click(screen.getByRole("button", { name: /join my class/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Continue" }));
+
+    expect(push).toHaveBeenCalledWith("/student/onboarding/name");
+  });
+});
+
+describe("TeacherJoin - Back", () => {
+  it("takes a child who scanned a QR to the Welcome, not into an empty history", async () => {
+    // The camera app opens the code's URL in a fresh tab: there is no history,
+    // so `router.back()` did nothing at all.
+    connectClassCode.mockResolvedValue(connection);
+    params.set("code", "MAP4KZ");
+    render(<TeacherJoin />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+
+    expect(replace).toHaveBeenCalledWith("/student/onboarding");
+    expect(back).not.toHaveBeenCalled();
+  });
+
+  it("goes back the way they came when they came from inside the app", () => {
+    render(<TeacherJoin />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+
+    expect(back).toHaveBeenCalledTimes(1);
+    expect(replace).not.toHaveBeenCalled();
   });
 });
 

@@ -143,36 +143,65 @@ export function useStudentThreads(): StudentThreads {
       .catch(() => {});
   }, []);
 
+  /** Where one thread's history read stands - see `Thread.history`. */
+  const setHistory = useCallback(
+    (threadId: string, history: Thread["history"]) =>
+      setLive(
+        (cur) =>
+          cur?.map((t) => (t.id === threadId ? { ...t, history } : t)) ?? cur,
+      ),
+    [],
+  );
+
   const openThread = useCallback(
     (threadId: string) => {
       if (!getToken() || requested.current.has(threadId)) return;
       requested.current.add(threadId);
+      setHistory(threadId, "loading");
       void messagesApi
         .thread(threadId)
         .then((body) => {
+          const fetched = body.messages.map<Message>((m) => ({
+            id: m.messageId,
+            who: selfId && m.senderId === selfId ? "me" : "them",
+            text: m.content,
+            status: "none",
+          }));
+          const known = new Set(fetched.map((m) => m.id));
           setLive(
             (cur) =>
               cur?.map((t) =>
                 t.id === threadId
                   ? {
                       ...t,
-                      messages: body.messages.map<Message>((m) => ({
-                        id: m.messageId,
-                        who: selfId && m.senderId === selfId ? "me" : "them",
-                        text: m.content,
-                        status: "none",
-                      })),
+                      history: "loaded" as const,
+                      /*
+                       * MERGED, NOT REPLACED. A child can send before the
+                       * history lands, and this used to overwrite the thread
+                       * wholesale - erasing the "Sending…" bubble, so a send
+                       * that then failed had nothing left to mark and simply
+                       * vanished. Our own messages still in flight or
+                       * failed stay, after the history; one the server
+                       * already holds is not drawn twice.
+                       */
+                      messages: [
+                        ...fetched,
+                        ...t.messages.filter(
+                          (m) => m.status !== "none" && !known.has(m.id),
+                        ),
+                      ],
                     }
                   : t,
               ) ?? cur,
           );
         })
         .catch(() => {
-          // Leave it unloaded so reopening retries.
+          // Leave it unrequested so reopening - or Try again - retries.
           requested.current.delete(threadId);
+          setHistory(threadId, "failed");
         });
     },
-    [selfId],
+    [selfId, setHistory],
   );
 
   /** Mark one of our own messages, by id, within one thread. */

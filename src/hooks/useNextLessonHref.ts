@@ -2,6 +2,7 @@
 
 import { useHasSession } from "./useHasSession";
 import { isOpenToStudent } from "@/lib/lessons/availability";
+import { lessonHref } from "@/lib/lessons/lessonHref";
 import { useStudentDashboard } from "./useStudentDashboard";
 import { FIRST_LESSON_ID } from "@/lib/mocks";
 
@@ -40,15 +41,16 @@ export function useNextLessonHref(): string {
   if (!signedIn) return `/student/lessons/${FIRST_LESSON_ID}`;
 
   /*
-   * This read `a.status !== "completed"`, which can never be false -
-   * `AssignmentStatus` is "assigned" | "cancelled". So the button took the
-   * FIRST assignment whatever its state, and could hand a child straight into
-   * a lesson their teacher had called off, or one that opens on Friday. It is
+   * This read `a.status !== "completed"`, which kept out finished work and
+   * nothing else. So the button took the first unfinished assignment whatever
+   * else was true of it, and could hand a child straight into a lesson their
+   * teacher had called off, or one that opens on Friday. It is
    * the button at the end of onboarding and after the warm-up, so it is the
    * first lesson many children ever open.
    */
   const assigned = data?.assignments.find((a) => isOpenToStudent(a));
+  // With the assignment it came from - see `lessonHref`.
   return assigned
-    ? `/student/lessons/${assigned.lesson.id}`
+    ? lessonHref(assigned.lesson.id, assigned.id)
     : "/student/lessons";
 }

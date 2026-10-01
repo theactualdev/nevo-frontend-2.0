@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { AppProviders } from "@/context/providers";
+import { A11Y_BOOT_SCRIPT } from "@/context/accessibilityBoot";
 import { SITE_URL } from "@/lib/site";
 
 // Inter — the app-wide UI/body font (Design System v2 §2), wired to `--font-sans`
@@ -37,7 +38,14 @@ export default function RootLayout({
     <html
       lang="en"
       className={cn("h-full", "antialiased", inter.variable, "font-sans")}
+      // The boot script below sets the accessibility attributes before React
+      // hydrates, so the DOM is meant to differ from the payload here.
+      suppressHydrationWarning
     >
+      <head>
+        {/* Rule 6: accommodations before the first paint, not after it. */}
+        <script dangerouslySetInnerHTML={{ __html: A11Y_BOOT_SCRIPT }} />
+      </head>
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <AppProviders>{children}</AppProviders>
       </body>

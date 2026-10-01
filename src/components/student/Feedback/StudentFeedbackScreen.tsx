@@ -116,6 +116,28 @@ export function StudentFeedbackScreen() {
               </button>
             </div>
 
+            {/*
+              Frame "Nevo Feedback", state=failed: a tinted banner ABOVE the
+              note, in the frame's words. It was a violet sentence under the
+              textarea that the frame does not draw, with an em dash in it.
+            */}
+            {failed && (
+              <div
+                role="alert"
+                className="mt-4 flex items-start gap-2.5 rounded-[10px] bg-nevo-violet/20 px-[15px] py-[13px]"
+              >
+                <RetryGlyph className="mt-px size-4 shrink-0 text-nevo-navy" />
+                <div className="min-w-0">
+                  <div className="text-[13px] font-semibold text-nevo-navy">
+                    Your feedback couldn&apos;t be sent.
+                  </div>
+                  <p className="mt-1 text-[12.5px] leading-[1.5] text-nevo-near-black/70">
+                    Your note is still here. Give it another try in a moment.
+                  </p>
+                </div>
+              </div>
+            )}
+
             <textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
@@ -127,23 +149,22 @@ export function StudentFeedbackScreen() {
               className="mt-4 min-h-[80px] w-full resize-none rounded-[10px] border border-nevo-near-black/12 bg-nevo-cream-elevated p-3.5 text-sm leading-[1.5] text-nevo-near-black outline-none transition-colors placeholder:text-nevo-near-black/30 focus:border-nevo-navy"
             />
 
-            {failed && (
-              <p
-                role="alert"
-                className="mt-3 text-[13px] leading-[1.5] text-nevo-violet"
-              >
-                That didn&apos;t send just now &mdash; that&apos;s on us, not
-                you. Your words are still here; try again in a moment.
-              </p>
-            )}
-
             <button
               type="button"
               onClick={submit}
               disabled={!ready || sending}
-              className="mt-4 flex h-11 w-full items-center justify-center rounded-[10px] bg-nevo-navy text-[13px] font-semibold text-nevo-cream transition-[filter,transform] not-disabled:cursor-pointer hover:not-disabled:brightness-106 active:not-disabled:scale-[0.98] disabled:opacity-45"
+              className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-[10px] bg-nevo-navy text-[13px] font-semibold text-nevo-cream transition-[filter,transform] not-disabled:cursor-pointer hover:not-disabled:brightness-106 active:not-disabled:scale-[0.98] disabled:opacity-45"
             >
-              {sending ? "Sending…" : failed ? "Try again" : "Send Feedback"}
+              {sending ? (
+                "Sending…"
+              ) : failed ? (
+                <>
+                  <RetryGlyph className="size-[15px]" strokeWidth={2} />
+                  Try again
+                </>
+              ) : (
+                "Send Feedback"
+              )}
             </button>
 
             <p className="mx-0.5 mt-3.5 text-xs leading-[1.5] text-nevo-near-black/50">
@@ -169,5 +190,30 @@ export function StudentFeedbackScreen() {
         />
       )}
     </div>
+  );
+}
+
+/** The frame's retry arrow, drawn as it draws it. */
+function RetryGlyph({
+  className,
+  strokeWidth = 1.9,
+}: {
+  className?: string;
+  strokeWidth?: number;
+}) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      className={className}
+    >
+      <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+      <path d="M21 3v6h-6" />
+    </svg>
   );
 }

@@ -59,12 +59,9 @@ export interface ScaffoldAttempt {
   studentId: string;
   conceptId: string;
   /**
-   * **NOTHING IN A LESSON CARRIES ONE, which is why no attempt is posted yet.**
-   * `AssessmentQuestion` has a prompt, options with ids and a `correctId`, and
-   * no id of its own. Deriving one from the question's position would key the
-   * server's per-problem history to an array index that moves the moment
-   * content is re-authored, and deriving one from `correctId` would key it to
-   * the answer. Raised 23 Sep; see the module note on `attempt`.
+   * The checkpoint id - `AssessmentQuestion.id`, which the question carried
+   * all along (see its note). Never a position in an array, which moves when
+   * content is re-authored, and never `correctId`, which is the answer.
    */
   problemId: string;
   responseCorrect: boolean;

@@ -85,7 +85,6 @@ jobs:
           # above, so the only thing it needs is which probe child to use - and
           # every run RESETS that child's PIN, which is why it is named here in
           # the open rather than defaulted inside the spec.
-          E2E_SCHOOL_CODE: NEVO-E2E
           E2E_STUDENT_LOGIN: NV-E2E000
       - uses: actions/upload-artifact@v4
         if: failure()

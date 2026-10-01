@@ -30,8 +30,18 @@ const router = vi.hoisted(() => ({ push: () => {}, replace: () => {} }));
 vi.mock("@/hooks", () => ({ useAuth: () => ({ signOut: () => {} }) }));
 vi.mock("@/hooks/useCurrentUser", () => ({ useCurrentUser: () => null }));
 
+/*
+ * The LOOK lives on `users/me`'s own `avatarTone` field. The settings bag is
+ * still mocked because the chosen NAME travels there, and a test that let the
+ * look fall back into it would pass while writing to the wrong place.
+ */
 const { get, update } = vi.hoisted(() => ({ get: vi.fn(), update: vi.fn() }));
 vi.mock("@/lib/api/settings", () => ({ settingsApi: { get, update } }));
+const { me, updateMe } = vi.hoisted(() => ({
+  me: vi.fn(),
+  updateMe: vi.fn(),
+}));
+vi.mock("@/lib/api/users", () => ({ usersApi: { me, updateMe } }));
 
 /**
  * The store is keyed by session, so each test signs in as somebody new - which
@@ -72,8 +82,12 @@ beforeEach(() => {
   signInFresh();
   get.mockReset();
   update.mockReset();
+  me.mockReset();
+  updateMe.mockReset();
   get.mockResolvedValue({ settings: {} });
   update.mockResolvedValue({ settings: {} });
+  me.mockResolvedValue({ userId: "u", avatarTone: null });
+  updateMe.mockResolvedValue({ userId: "u", avatarTone: null });
 });
 
 afterEach(() => {
@@ -117,7 +131,9 @@ describe("Choose your look", () => {
       fireEvent.click(swatch("Lavender"));
     });
 
-    expect(update).toHaveBeenCalledWith({ avatarTone: "lavender" });
+    expect(updateMe).toHaveBeenCalledWith({ avatarTone: "lavender" });
+    // Not the deprecated bag: the profile has a field for this now.
+    expect(update).not.toHaveBeenCalled();
     expect(await screen.findByText("Saved")).toBeInTheDocument();
     await waitFor(() =>
       expect(screen.getByRole("status")).toHaveClass("opacity-100"),
@@ -139,7 +155,7 @@ describe("Choose your look", () => {
   });
 
   it("puts the old look back, and claims nothing, when the account refused it", async () => {
-    update.mockRejectedValue(new Error("offline"));
+    updateMe.mockRejectedValue(new Error("offline"));
     renderProfile();
     openPicker();
     await act(async () => {
@@ -169,7 +185,7 @@ describe("Choose your look", () => {
 
 describe("a look chosen earlier", () => {
   it("comes back from the account on a device that has never seen the child", async () => {
-    get.mockResolvedValue({ settings: { avatarTone: "soft-ink" } });
+    me.mockResolvedValue({ userId: "u", avatarTone: "soft-ink" });
     renderProfile();
 
     await waitFor(() =>
@@ -181,7 +197,7 @@ describe("a look chosen earlier", () => {
   });
 
   it("is not shown to the next child on a shared tablet", async () => {
-    get.mockResolvedValue({ settings: { avatarTone: "stone" } });
+    me.mockResolvedValue({ userId: "u", avatarTone: "stone" });
     const first = renderProfile();
     await waitFor(() =>
       expect(screen.getByTestId("other-disc")).toHaveAttribute(
@@ -192,8 +208,8 @@ describe("a look chosen earlier", () => {
     first.unmount();
 
     // A different child signs in; their account has chosen nothing.
-    get.mockReset();
-    get.mockReturnValue(new Promise(() => {}));
+    me.mockReset();
+    me.mockReturnValue(new Promise(() => {}));
     signInFresh();
     renderProfile();
 
@@ -204,7 +220,7 @@ describe("a look chosen earlier", () => {
   });
 
   it("falls back to navy when the stored value is not one of the eight", async () => {
-    get.mockResolvedValue({ settings: { avatarTone: 42 } });
+    me.mockResolvedValue({ userId: "u", avatarTone: 42 });
     renderProfile();
     await act(async () => {});
 

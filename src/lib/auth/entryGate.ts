@@ -1,4 +1,5 @@
 import { consentsApi } from "@/lib/api/consents";
+import { doorForRole } from "./consoleDoor";
 
 /**
  * Where a child goes the moment they get through a door.
@@ -84,4 +85,45 @@ export async function enterFirstLesson(
   go: (to: string) => void,
 ): Promise<void> {
   go(await studentDestination(firstLesson));
+}
+
+/** The Observed Interaction Sequence - where an SSO child's first use starts. */
+const SSO_FIRST_USE_ROUTE = "/student/onboarding/sequence";
+
+/**
+ * Where the SSO callback lands someone, before consent is resolved on top.
+ *
+ * `SsoCallbackResponse.destination` IS NOT A ROUTE. It is an enum -
+ * `observed_interaction` for a child's first use, `home_dashboard` otherwise -
+ * and the callback handed it straight to `studentDestination`, which passes
+ * anything not under `/student` through untouched. So a successful SSO
+ * sign-in would have `router.replace`d to "home_dashboard", a relative path
+ * that 404s, and the consent check was never asked. Latent only because
+ * nothing can start an SSO flow yet.
+ *
+ * The enum is about a CHILD's first use, so it decides only a child's route.
+ * A teacher or an administrator who comes back through this callback goes to
+ * their own console's home, the same doors `consoleDoor` names. A role no door
+ * serves gets null, and the callback says it could not sign them in rather
+ * than storing a session nothing can use.
+ *
+ * An unrecognised value lands a child on Home: the dashboard is true of every
+ * returning child, whereas guessing "first use" would run the baseline again.
+ */
+export function ssoLanding(
+  role: string | null | undefined,
+  destination: string | null | undefined,
+): string | null {
+  switch (doorForRole(role)) {
+    case "student":
+      return destination === "observed_interaction"
+        ? SSO_FIRST_USE_ROUTE
+        : DEFAULT_DESTINATION;
+    case "teacher":
+      return "/teacher/dashboard";
+    case "admin":
+      return "/admin";
+    default:
+      return null;
+  }
 }
