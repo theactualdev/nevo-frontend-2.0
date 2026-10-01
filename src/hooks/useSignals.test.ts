@@ -477,4 +477,68 @@ describe("the session's interpretation context", () => {
       delete document.documentElement.dataset.reducedMotion;
     }
   });
+
+  it("carries the contract's two keys and nothing else", async () => {
+    const payload = await contextOf(() => {});
+    expect(Object.keys(payload ?? {}).sort()).toEqual([
+      "formFactor",
+      "reducedMotion",
+    ]);
+  });
+
+  /*
+   * FIRST IN THE STREAM, EVEN FOR A LESSON. A lesson's session id lands after
+   * its first events, and the context was keyed on the id: "no id" matched "no
+   * id", nothing was queued, and the context went in after the id arrived -
+   * behind the events it was meant to frame.
+   */
+  it("comes first when events were tracked before the session id landed", async () => {
+    signIn();
+    const { result, rerender } = renderHook(
+      ({ id }: { id: string | null }) => useSignals(id, LESSON, "lesson"),
+      { initialProps: { id: null as string | null } },
+    );
+    act(() => result.current.trackEvent("time_on_segment", { n: 1 }));
+    rerender({ id: UUID });
+    act(() => result.current.trackEvent("time_on_segment", { n: 2 }));
+    await act(async () => {
+      result.current.flush();
+    });
+
+    const types = submitBatch.mock.calls[0]![1].map((e) => e.type);
+    expect(types).toEqual([
+      "session_context",
+      "time_on_segment",
+      "time_on_segment",
+    ]);
+  });
+
+  it("is sent once per session, and again for a new one", async () => {
+    const OTHER = "0b8f3a52-5c1e-4d6a-9f00-112233445566";
+    signIn();
+    const { result, rerender } = renderHook(
+      ({ id }: { id: string }) => useSignals(id, LESSON, "lesson"),
+      { initialProps: { id: UUID } },
+    );
+    act(() => {
+      result.current.trackEvent("time_on_segment", {});
+      result.current.trackEvent("time_on_segment", {});
+    });
+    await act(async () => {
+      result.current.flush();
+    });
+    rerender({ id: OTHER });
+    act(() => result.current.trackEvent("time_on_segment", {}));
+    await act(async () => {
+      result.current.flush();
+    });
+
+    const contexts = (call: number) =>
+      submitBatch.mock.calls[call]![1].filter(
+        (e) => e.type === "session_context",
+      ).length;
+    expect(contexts(0)).toBe(1);
+    expect(contexts(1)).toBe(1);
+    expect(submitBatch.mock.calls[1]![0].sessionId).toBe(OTHER);
+  });
 });
