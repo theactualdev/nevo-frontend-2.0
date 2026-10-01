@@ -183,7 +183,7 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
   )?.href;
 
   return (
-    <div className="flex h-[100dvh] bg-nevo-cream text-nevo-near-black">
+    <div className="group/shell flex h-[100dvh] bg-nevo-cream text-nevo-near-black">
       {/* Sidebar — tablet & desktop */}
       <div className="hidden shrink-0 md:block">
         <MaybeSample showing={showingFixtureIdentity} kind="student:identity">
@@ -285,8 +285,10 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
           {offlineTakeover && <OfflineTakeover />}
         </main>
 
-        {/* Bottom nav — mobile only */}
-        <div className="shrink-0 px-3 pb-3 md:hidden">
+        {/* Bottom nav — mobile only. Down while a tab's on-screen keyboard is
+            docked (`data-nevo-hide-nav`, e.g. a Connect conversation), as the
+            frames draw it; that keyboard only shows without a fine pointer. */}
+        <div className="shrink-0 px-3 pb-3 md:hidden not-pointer-fine:group-has-[[data-nevo-hide-nav]]/shell:hidden">
           <BottomNav items={STUDENT_NAV} activeHref={activeHref} />
         </div>
       </div>

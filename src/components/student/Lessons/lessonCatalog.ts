@@ -16,9 +16,9 @@ export interface LessonSummary {
   timeEstimate: string;
   status: LessonStatus;
   /**
-   * Plain-language "what you'll do", shown in the preview. Absent on live
-   * lessons - nothing in the contract writes one for a child, and a generated
-   * stand-in would be us describing a lesson we have not read.
+   * Plain-language "what you'll do", shown in the preview. On a live lesson it
+   * is the summary's own `description` (1 Oct), and absent when that is null -
+   * a generated stand-in would be us describing a lesson we have not read.
    */
   description?: string;
   /** 0–1 through the lesson, when `in_progress`. */
@@ -29,8 +29,9 @@ export interface LessonSummary {
    */
   lessonId: string;
   /**
-   * The assignment this card was built from. Absent on the fixtures, which
-   * no teacher set.
+   * The assignment this card was built from. The preview's Start carries it
+   * as `?assignment=`. Absent on the fixtures, which no teacher set, and on
+   * a lesson that was never assigned.
    */
   assignmentId?: string;
 }
