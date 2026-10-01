@@ -39,8 +39,19 @@ export function ProfilingShell({
   );
 }
 
-/** The Nevo face + speech-bubble instruction row used inside the modules. */
-export function AvatarBubble({ text }: { text: string }) {
+/**
+ * The Nevo face + speech-bubble instruction row used inside the modules.
+ *
+ * `phoneText` is for the few instructions a frame words differently on a
+ * phone, where the layout stacks and "side" stops describing what is on screen.
+ */
+export function AvatarBubble({
+  text,
+  phoneText,
+}: {
+  text: string;
+  phoneText?: string;
+}) {
   return (
     <div className="flex max-w-[420px] items-center gap-3">
       <svg viewBox="0 0 44 44" className="size-10 shrink-0 sm:size-11" aria-hidden>
@@ -59,7 +70,14 @@ export function AvatarBubble({ text }: { text: string }) {
         role="status"
         className="rounded-[12px] border border-nevo-navy/15 bg-nevo-cream-elevated px-[15px] py-[11px] text-[15px] leading-[1.4] font-medium text-pretty text-nevo-near-black sm:text-base"
       >
-        {text}
+        {phoneText ? (
+          <>
+            <span className="sm:hidden">{phoneText}</span>
+            <span className="hidden sm:inline">{text}</span>
+          </>
+        ) : (
+          text
+        )}
       </div>
     </div>
   );

@@ -4,11 +4,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { GridSpanConfig } from "@/lib/profiling/bands";
-import type { BaselineCapture } from "@/lib/profiling/capture";
+import { tapPoint, type BaselineCapture } from "@/lib/profiling/capture";
 import { AvatarBubble, ProfilingShell } from "./ProfilingShell";
 
-/** Playback pacing (BP-M1 playable): slows as struggle accumulates. */
-const LIT_BASE_MS = 660;
+/**
+ * Playback pacing (BP-M1 playable, 11:202): slows as struggle accumulates.
+ * The base highlight is per band now - `GridSpanConfig.litMs`.
+ */
 const LIT_STRUGGLE_MS = 300;
 const GAP_BASE_MS = 280;
 const GAP_STRUGGLE_MS = 120;
@@ -84,7 +86,8 @@ const PHONE_GRID =
 /**
  * Module 1 - Spatial Grid Span (BP-M1, working memory). Tiles light in
  * sequence; the student taps them back in reverse. Adaptive: the span starts at
- * 3 and grows by one per clean recall to the band ceiling; playback slows while
+ * the band's start and grows by one per clean recall to the band ceiling, each
+ * from the Module 1 frame (see `gridSpanConfig`); playback slows while
  * the student struggles and recovers as they do. A wrong tap gives a gentle
  * soft-violet nudge (the tile never fills, nothing shakes, nothing is "wrong"),
  * locks the grid for a beat, and replays the same pattern; three misses at a
@@ -103,7 +106,7 @@ export function GridSpanModule({
   capture?: BaselineCapture;
   onComplete: () => void;
 }) {
-  const { n, spanStart, spanMax, dual, instruction } = config;
+  const { n, spanStart, spanMax, litMs, dual, instruction } = config;
   const cells = n * n;
 
   const [step, setStep] = useState<Step>("watching");
@@ -156,7 +159,7 @@ export function GridSpanModule({
     (seq: number[]) => {
       clearTimers();
       const s = Math.min(3, struggle.current);
-      const lit = LIT_BASE_MS + s * LIT_STRUGGLE_MS;
+      const lit = litMs + s * LIT_STRUGGLE_MS;
       const gap = GAP_BASE_MS + s * GAP_STRUGGLE_MS;
       setStep("watching");
       setSequence(seq);
@@ -189,7 +192,7 @@ export function GridSpanModule({
         }
       });
     },
-    [after, capture, clearTimers, dual],
+    [after, capture, clearTimers, dual, litMs],
   );
 
   // Kick off round 1 on a zero-delay timer: the cleanup cancels it, so
@@ -201,18 +204,19 @@ export function GridSpanModule({
     return () => clearTimeout(t);
   }, [genSeq, spanStart, startRound]);
 
-  const answerCheck = (answer: boolean) => {
+  const answerCheck = (answer: boolean, e: React.MouseEvent) => {
     if (step !== "check") return;
     capture?.record("check_answer", {
       check: check.text,
       answer,
       correct: answer === check.isTrue,
+      ...tapPoint(e),
     });
     setStep("input");
     capture?.record("input_start", { length: sequence.length });
   };
 
-  const tapTile = (cell: number) => {
+  const tapTile = (cell: number, e: React.MouseEvent) => {
     if (step !== "input") return;
     const expected = [...sequence].reverse();
     const correct = cell === expected[inputPos];
@@ -221,6 +225,7 @@ export function GridSpanModule({
       correct,
       posInSeq: inputPos,
       length: sequence.length,
+      ...tapPoint(e),
     });
     if (correct) {
       const nextTapped = new Set(tapped).add(cell);
@@ -294,7 +299,7 @@ export function GridSpanModule({
                     type="button"
                     tabIndex={interactive ? 0 : -1}
                     aria-hidden={!interactive}
-                    onClick={() => tapTile(i)}
+                    onClick={(e) => tapTile(i, e)}
                     className={cn(
                       "flex items-center justify-center rounded-[12px] transition-[transform,box-shadow] duration-150",
                       tile.m,
@@ -346,8 +351,8 @@ export function GridSpanModule({
 
         {step === "check" && (
           <div className="flex gap-3">
-            <CheckButton label="True" onClick={() => answerCheck(true)} />
-            <CheckButton label="False" onClick={() => answerCheck(false)} />
+            <CheckButton label="True" onClick={(e) => answerCheck(true, e)} />
+            <CheckButton label="False" onClick={(e) => answerCheck(false, e)} />
           </div>
         )}
       </div>
@@ -360,7 +365,7 @@ function CheckButton({
   onClick,
 }: {
   label: string;
-  onClick: () => void;
+  onClick: (e: React.MouseEvent) => void;
 }) {
   return (
     <button

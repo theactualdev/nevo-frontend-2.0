@@ -26,8 +26,11 @@ const picks = (capture: BaselineCapture, act?: string) =>
 
 /** jsdom has no speech at all, so the P1-3 activity needs one supplied. */
 const spoken: string[] = [];
+/** What was handed to speech, so a test can say when it finished. */
+const utterances: { text: string; onend?: () => void }[] = [];
 function giveJsdomAVoice() {
   spoken.length = 0;
+  utterances.length = 0;
   // Adding what jsdom LACKS, which is safe; replacing what it has is the trap
   // that hangs the worker.
   (
@@ -38,7 +41,10 @@ function giveJsdomAVoice() {
   };
   (window as unknown as { speechSynthesis: unknown }).speechSynthesis = {
     cancel: () => {},
-    speak: (u: { text: string }) => spoken.push(u.text),
+    speak: (u: { text: string; onend?: () => void }) => {
+      spoken.push(u.text);
+      utterances.push(u);
+    },
   };
 }
 
@@ -212,5 +218,159 @@ describe("SentenceDotModule — the dots have no fixed answer", () => {
 
     // P1-3's first pair is 8 against 4.
     expect(picks(capture, "dots")[0]).toMatchObject({ ratio: 2 });
+  });
+});
+
+describe("SentenceDotModule — each band's dots", () => {
+  /*
+   * 16px dots in a 200px box for 850ms, for every band. The Dot Comparison
+   * frame gives 22 / 16 / 13 / 10px dots and a 220px box for P1-3, and 09c
+   * gives P1-3 800ms and JSS 500ms.
+   */
+  const dotsOf = () => document.querySelectorAll<HTMLElement>("span.absolute.bg-nevo-violet");
+  const box = () => dotsOf()[0].parentElement!;
+
+  it("draws P1-3 large dots in the larger box", () => {
+    // No voice in jsdom, so P1-3 opens on the dots.
+    render(<SentenceDotModule band="p13" onComplete={() => {}} />);
+
+    expect(dotsOf()[0].className).toContain("size-[22px]");
+    expect(box().className).toContain("sm:size-[220px]");
+  });
+
+  it("draws SS near-threshold dots small", () => {
+    render(<SentenceDotModule band="ss" onComplete={() => {}} />);
+    // Past the passage, which "Not sure" answers.
+    fireEvent.click(screen.getByText("Not sure"));
+    act(() => void vi.advanceTimersByTime(500));
+
+    expect(dotsOf()[0].className).toContain("size-2.5");
+  });
+
+  it("masks JSS's arrays after 500ms, not 850", () => {
+    render(<SentenceDotModule band="jss" onComplete={() => {}} />);
+    for (let i = 0; i < 3; i++) {
+      fireEvent.click(screen.getByText("Not sure"));
+      act(() => void vi.advanceTimersByTime(500));
+    }
+    act(() => void vi.advanceTimersByTime(10));
+    expect(screen.getByText("Watch the dots")).toBeVisible();
+
+    act(() => void vi.advanceTimersByTime(520));
+
+    expect(screen.queryByText("Watch the dots")).toBeNull();
+  });
+
+  it("masks P1-3's after 800ms", () => {
+    render(<SentenceDotModule band="p13" onComplete={() => {}} />);
+    act(() => void vi.advanceTimersByTime(790));
+    expect(screen.getByText("Watch the dots")).toBeVisible();
+
+    act(() => void vi.advanceTimersByTime(20));
+
+    expect(screen.queryByText("Watch the dots")).toBeNull();
+  });
+});
+
+describe("SentenceDotModule — the question matches the buttons", () => {
+  it("asks top or bottom on a phone, and which had more from tablet up", () => {
+    // It asked which SIDE had more above buttons reading Top and Bottom.
+    render(<SentenceDotModule band="p13" onComplete={() => {}} />);
+    act(() => void vi.advanceTimersByTime(1000));
+
+    const phone = screen.getByText("Which had more dots: top or bottom?");
+    const wide = screen.getByText("Which had more dots?");
+    expect(phone.className).toContain("sm:hidden");
+    expect(wide.className).toContain("hidden sm:inline");
+    expect(document.body.textContent).not.toMatch(/which side/i);
+  });
+});
+
+describe("SentenceDotModule — the listening task has an honest non-answer", () => {
+  it("offers 'I don't know' and records it as declined, never wrong", () => {
+    giveJsdomAVoice();
+    const capture = new BaselineCapture("idk");
+    render(
+      <SentenceDotModule band="p13" capture={capture} onComplete={() => {}} />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /I don.t know/ }));
+
+    const pick = picks(capture, "reading")[0];
+    expect(pick.notSure).toBe(true);
+    expect(pick.correct).toBeUndefined();
+  });
+});
+
+describe("SentenceDotModule — response time starts when the child can answer", () => {
+  /*
+   * rtMs ran from presentation, so it carried the dot reveal (now different
+   * per band) and the device's speech, and the offset went nowhere.
+   */
+  it("times a dot answer from the mask, and says how long the reveal was", () => {
+    const capture = new BaselineCapture("rt-dots");
+    render(
+      <SentenceDotModule band="p13" capture={capture} onComplete={() => {}} />,
+    );
+    act(() => void vi.advanceTimersByTime(800)); // the mask lands
+    act(() => void vi.advanceTimersByTime(300)); // the child thinks
+
+    fireEvent.click(screen.getByRole("button", { name: /Top|Left/ }));
+
+    expect(picks(capture, "dots")[0]).toMatchObject({
+      rtMs: 300,
+      openAfterMs: 800,
+    });
+  });
+
+  it("times a heard answer from the end of the sentence", () => {
+    giveJsdomAVoice();
+    const capture = new BaselineCapture("rt-audio");
+    render(
+      <SentenceDotModule band="p13" capture={capture} onComplete={() => {}} />,
+    );
+    act(() => void vi.advanceTimersByTime(2000)); // the sentence is spoken
+    act(() => utterances[0].onend?.());
+    act(() => void vi.advanceTimersByTime(700));
+
+    fireEvent.click(screen.getByLabelText("A bus"));
+
+    expect(picks(capture, "reading")[0]).toMatchObject({
+      rtMs: 700,
+      openAfterMs: 2000,
+    });
+  });
+
+  it("gives no time at all to an answer made while it was still speaking", () => {
+    // Timing it from presentation would put the device's speech back in.
+    giveJsdomAVoice();
+    const capture = new BaselineCapture("rt-early");
+    render(
+      <SentenceDotModule band="p13" capture={capture} onComplete={() => {}} />,
+    );
+    act(() => void vi.advanceTimersByTime(600));
+
+    fireEvent.click(screen.getByLabelText("A bus"));
+
+    expect(picks(capture, "reading")[0]).toMatchObject({
+      rtMs: null,
+      beforeOpen: true,
+      correct: true,
+    });
+  });
+
+  it("ignores the end of a sentence that was cut off by a replay", () => {
+    giveJsdomAVoice();
+    const capture = new BaselineCapture("rt-replay");
+    render(
+      <SentenceDotModule band="p13" capture={capture} onComplete={() => {}} />,
+    );
+    fireEvent.click(screen.getByLabelText("Play the sentence again"));
+    // The first, cancelled utterance reports its end late.
+    act(() => utterances[0].onend?.());
+
+    fireEvent.click(screen.getByLabelText("A bus"));
+
+    expect(picks(capture, "reading")[0]).toMatchObject({ beforeOpen: true });
   });
 });
