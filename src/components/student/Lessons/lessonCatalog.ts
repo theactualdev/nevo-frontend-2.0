@@ -28,6 +28,11 @@ export interface LessonSummary {
    * real lesson; for now they all open the one built lesson.
    */
   lessonId: string;
+  /**
+   * The assignment this card was built from. Absent on the fixtures, which
+   * no teacher set.
+   */
+  assignmentId?: string;
 }
 
 /** Subject → icon for the card/preview. */

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/shared";
+import { lessonHref } from "@/lib/lessons/lessonHref";
 import type { LessonSummary } from "./lessonCatalog";
 
 /**
@@ -74,7 +75,9 @@ export function LessonPreviewSheet({
 
         <Button
           className="mt-7 w-full"
-          onClick={() => router.push(`/student/lessons/${lesson.lessonId}`)}
+          onClick={() =>
+            router.push(lessonHref(lesson.lessonId, lesson.assignmentId))
+          }
         >
           {inProgress ? "Continue" : "Start"}
         </Button>
