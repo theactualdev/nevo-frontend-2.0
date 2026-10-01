@@ -8,17 +8,13 @@ import { api } from "./client";
  * render a lesson as a review variant, but nothing ever told a child a concept
  * was ready.
  *
- * WHAT THIS CANNOT DO, and why the surface is informational rather than a
- * session: `due-reviews` returns concept IDs, and a concept
- * (`GET /api/concepts/{id}`) is only `{ id, name, subject }`. Nothing links a
- * concept to a lesson in either direction - `ConceptProgressResponse` carries no
- * lesson, `LessonProgressItemResponse` carries no concepts - and no question
- * bank is keyed to a concept. So a due concept can be NAMED but not opened, and
- * guessing a lesson from the shared subject would be inventing the link.
+ * A DUE CONCEPT OPENS ONLY WHERE THE SCHEDULE NAMES A LESSON. Each row carries
+ * a nullable `lessonId` (below); where it is null the concept is due but has
+ * nothing to open, and guessing a lesson from the shared subject would be
+ * inventing the link. `useDueReviews` keeps the two apart.
  *
- * `POST /api/scheduler/record-review` is the write side and is deliberately not
- * wired: it needs `recallSuccessful`, and with no question to ask there is
- * nothing to report. It lands when the question-to-concept link does.
+ * `POST /api/scheduler/record-review` is the write side, and the review
+ * session calls it once at the end - see `recordReview` for what it may say.
  */
 
 export interface ConceptSchedule {

@@ -1,8 +1,10 @@
 /**
  * Age-band resolution for the Baseline Cognitive Profiling module (SCRUM-104).
  * Four tiers drive content, grid sizes and tap-target sizes; the component
- * shells are shared. Band comes from the student's year/date of birth -
- * TODO(api): resolve from the roster profile once the contract lands.
+ * shells are shared. Band comes from the age the child gives - onboarding
+ * Step 1, or the intro screen when that is missing (see `ProfilingFlow`).
+ * Nothing a signed-in child can read carries an age or a year group, so it is
+ * asked for rather than derived.
  */
 
 export const AGE_BANDS = {
@@ -18,7 +20,6 @@ export const AGE_BANDS = {
 
 export type AgeBand = (typeof AGE_BANDS)[keyof typeof AGE_BANDS];
 
-/** Resolve a band from the mock roster's "Year N" / "JSS N" / "SS N" subtitle. */
 /**
  * The band for a stated age, which is what onboarding actually collects.
  *
@@ -37,15 +38,6 @@ export function bandForAge(age: number): AgeBand {
   if (age <= 11) return AGE_BANDS.P46;
   if (age <= 14) return AGE_BANDS.JSS;
   return AGE_BANDS.SS;
-}
-
-export function bandForYearLabel(label: string): AgeBand {
-  const jss = /jss/i.test(label);
-  const ss = /\bss\b/i.test(label) && !jss;
-  if (jss) return AGE_BANDS.JSS;
-  if (ss) return AGE_BANDS.SS;
-  const year = Number(/\d+/.exec(label)?.[0] ?? 4);
-  return year <= 3 ? AGE_BANDS.P13 : AGE_BANDS.P46;
 }
 
 /**

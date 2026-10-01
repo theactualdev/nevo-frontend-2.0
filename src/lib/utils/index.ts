@@ -7,13 +7,6 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
- * Wall-clock read for event-time measurements (signal timing). Wrapped so it is
- * only ever called from event handlers/effects — never during render — which
- * also keeps React's purity lint satisfied.
- */
-export const now = () => Date.now();
-
-/**
  * A UUID-shaped random id that also works in non-secure contexts.
  * `crypto.randomUUID()` is only defined over HTTPS or on `localhost`, so on a
  * plain-HTTP LAN address (e.g. a phone hitting the dev server by IP) it is
