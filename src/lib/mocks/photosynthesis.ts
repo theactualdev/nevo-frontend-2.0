@@ -323,9 +323,9 @@ export const PHOTOSYNTHESIS_PLAN: AdaptationPlan = {
         "Start with where the light lands: the leaf. What do you think it does with it?",
       offerBreak: BREAK_TYPES.CONSOLIDATION,
     },
-    // `modulate_density`: softened - density already reduced by the plan,
-    // secondary chrome dims. No offer stacked on a softened segment.
-    { segmentId: "recap", startModality: MODALITY.TEXT, density: DENSITY.SLOWER, suggestModality: null, scaffold: SCAFFOLD_LEVELS.MODERATE, adjustment: ADJUSTMENT_ACTIONS.MODULATE_DENSITY },
+    // Slower, standing - the plan's own density. It carried `modulate_density`
+    // and its chrome dim until design removed that state on 1 Oct (SCRUM-180).
+    { segmentId: "recap", startModality: MODALITY.TEXT, density: DENSITY.SLOWER, suggestModality: null, scaffold: SCAFFOLD_LEVELS.MODERATE },
   ],
 };
 

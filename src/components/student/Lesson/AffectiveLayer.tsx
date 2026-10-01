@@ -104,13 +104,15 @@ export function HintOverlay({ hint }: { hint: string }) {
 }
 
 /**
- * Secondary-chrome dim: `modulate_density` softens to 40% (§4); the attention
- * accommodation simplifies further to 30% (37c). Softening wins when both
- * hold.
+ * Secondary-chrome dim: the attention accommodation simplifies the interface
+ * to 30% (37c).
+ *
+ * It took a second flag until 1 Oct: `modulate_density` dimmed the same chrome
+ * to 40%. Design removed that state (SCRUM-180) - it was not in the contract's
+ * enum and could never fire, and screen comfort belongs in device settings
+ * rather than in an instruction Nevo issues. This dim is an accommodation, not
+ * an instruction, and is unchanged.
  */
-export function secondaryDim(softened: boolean, attention = false): string {
-  return cn(
-    "transition-opacity duration-[400ms]",
-    softened ? "opacity-40" : attention && "opacity-30",
-  );
+export function secondaryDim(attention: boolean): string {
+  return cn("transition-opacity duration-[400ms]", attention && "opacity-30");
 }

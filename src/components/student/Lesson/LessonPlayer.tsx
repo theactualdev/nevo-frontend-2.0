@@ -686,8 +686,6 @@ export function LessonPlayer({
     engine?.guidedQuestions?.length
       ? engine.guidedQuestions
       : (segPlan?.socraticPrompts ?? []);
-  // §4: "Secondary UI to 40% opacity, transitions slow, gentler copy variants."
-  const softened = action === ADJUSTMENT_ACTIONS.MODULATE_DENSITY;
   // §4: "'Ready for something harder?' pill, scaffold withdraws." The pill
   // already carries that exact sentence.
   const stepUpOffered = action === ADJUSTMENT_ACTIONS.INCREASE_DIFFICULTY;
@@ -1150,7 +1148,7 @@ export function LessonPlayer({
       <header
         className={cn(
           "flex shrink-0 flex-col gap-2.5 px-3.5 pt-2.5 pb-3",
-          secondaryDim(softened, attentionOn),
+          secondaryDim(attentionOn),
         )}
       >
         <div className="flex items-center gap-2.5">
@@ -1208,7 +1206,7 @@ export function LessonPlayer({
       <div
         className={cn(
           "shrink-0 px-4 pb-[7px]",
-          secondaryDim(softened, attentionOn),
+          secondaryDim(attentionOn),
         )}
       >
         <span className="block min-w-0 truncate font-mono text-[11px] tracking-[0.02em] text-nevo-near-black/50">
@@ -1220,7 +1218,7 @@ export function LessonPlayer({
           module boundaries; the text above carries the module breakdown. */}
       <ProgressBar
         value={(index + 1) / total}
-        className={cn("shrink-0", secondaryDim(softened, attentionOn))}
+        className={cn("shrink-0", secondaryDim(attentionOn))}
         aria-label={positionLine(lesson, index)}
       />
 
@@ -1432,7 +1430,7 @@ export function LessonPlayer({
       <nav
         className={cn(
           "flex shrink-0 items-center justify-center gap-8 px-3.5 pt-2 pb-6",
-          secondaryDim(softened, attentionOn),
+          secondaryDim(attentionOn),
         )}
       >
         <ChevronButton

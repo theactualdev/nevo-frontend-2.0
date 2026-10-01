@@ -158,8 +158,8 @@ export function toAdaptationPlan(
    * `hint` and `guidedQuestions` landed on 21 Sep and answer the two asks that
    * left three of the four affective responses unreachable. They are carried
    * only under the action they belong to: the action is the instruction, and a
-   * hint arriving beside `modulate_density` is not a hint anybody asked to
-   * show. Stopping it here beats trusting every future consumer to check.
+   * hint arriving beside `simplify` is not a hint anybody asked to show.
+   * Stopping it here beats trusting every future consumer to check.
    *
    * An instruction can still arrive with nothing to render - neither field is
    * required by the schema - and that is rule 5, not a fault.
