@@ -38,7 +38,17 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/student/dashboard",
   useRouter: () => ({ push, replace: vi.fn(), back: vi.fn() }),
 }));
-vi.mock("@/hooks", () => ({ useAuth: () => ({ user: { id: "stu-1" } }) }));
+const { trackEvent, useSignals } = vi.hoisted(() => {
+  const trackEvent = vi.fn();
+  return {
+    trackEvent,
+    useSignals: vi.fn(() => ({ trackEvent, flush: vi.fn() })),
+  };
+});
+vi.mock("@/hooks", () => ({
+  useAuth: () => ({ user: { id: "stu-1" } }),
+  useSignals,
+}));
 
 const SERVER_THREAD = "0f1e2d3c-4b5a-4968-8778-695a4b3c2d1e";
 
@@ -80,6 +90,8 @@ beforeAll(() => {
 beforeEach(() => {
   vi.useFakeTimers();
   push.mockReset();
+  trackEvent.mockReset();
+  useSignals.mockClear();
   ask.mockReset().mockResolvedValue(answer());
 });
 
@@ -171,6 +183,68 @@ describe("Message my teacher", () => {
 
     expect(push).toHaveBeenCalledWith("/student/connect");
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+});
+
+/*
+ * ASK NEVO IS SIGNAL IN ITS OWN RIGHT (design D29), on its own `ask_nevo`
+ * session (1 Oct). The drawer sent nothing: a child reaching for help, being
+ * told Nevo could not, and taking the way to the teacher left no trace.
+ */
+describe("what the drawer tells the engine", () => {
+  const types = () => trackEvent.mock.calls.map(([type]) => type);
+
+  it("opens its own ask_nevo session, not a lesson's", () => {
+    open();
+
+    const [id, lessonId, type] = useSignals.mock.calls[0] as unknown as [
+      string,
+      string | undefined,
+      string,
+    ];
+    expect(type).toBe("ask_nevo");
+    expect(lessonId).toBeUndefined();
+    // The ingest contract takes nothing but a UUID.
+    expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-/i);
+  });
+
+  it("says a question was asked, and never what it was", async () => {
+    open();
+    await send("Why do leaves need light?");
+
+    expect(types()).toEqual(["ask_nevo_question_student"]);
+    expect(JSON.stringify(trackEvent.mock.calls)).not.toMatch(/leaves/);
+  });
+
+  it("says when the server could not help, with the server's own id", async () => {
+    ask.mockResolvedValue(answer({ canHelp: false }));
+    open();
+    await send("Can you tell my teacher?");
+
+    expect(trackEvent).toHaveBeenCalledWith("ask_nevo_cannot_help", {
+      interactionId: "11111111-1111-4111-8111-111111111111",
+    });
+    // Once: not again from a state update React may run twice.
+    expect(types().filter((t) => t === "ask_nevo_cannot_help")).toHaveLength(1);
+  });
+
+  it("says nothing of the kind when the server could help", async () => {
+    open();
+    await send("Why do leaves need light?");
+
+    expect(types()).not.toContain("ask_nevo_cannot_help");
+  });
+
+  it("says when the child took the way to their teacher", async () => {
+    ask.mockResolvedValue(answer({ canHelp: false }));
+    open();
+    await send("Can you tell my teacher?");
+
+    fireEvent.click(screen.getByRole("button", { name: "Message my teacher" }));
+
+    expect(trackEvent).toHaveBeenLastCalledWith("ask_nevo_redirect_used", {
+      interactionId: "11111111-1111-4111-8111-111111111111",
+    });
   });
 });
 
