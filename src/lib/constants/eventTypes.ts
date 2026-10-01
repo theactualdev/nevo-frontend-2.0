@@ -62,6 +62,31 @@ export const SIGNAL_EVENT_TYPES = {
    * Qualitative, multi-select, never scored; skipping is a legitimate answer.
    */
   FEELING_CHECKIN: "feeling_checkin",
+  /**
+   * What happened to an offer the engine made. All six are in the ingest
+   * enum and none was ever sent, so a "Not now" left no trace and the engine
+   * could not tell an offer a child turned down from one it never saw.
+   * Payload { segmentId, suggested } / { segmentId, breakType }.
+   *
+   * `ignored` is the pill still on screen when the child left the segment -
+   * neither taken nor turned down. A declined BREAK has no type of its own;
+   * that is an ask, not something to spell with another type.
+   */
+  MODALITY_SUGGESTION_SHOWN: "modality_suggestion_shown",
+  MODALITY_SUGGESTION_ACCEPTED: "modality_suggestion_accepted",
+  MODALITY_SUGGESTION_DECLINED: "modality_suggestion_declined",
+  MODALITY_SUGGESTION_IGNORED: "modality_suggestion_ignored",
+  BREAK_SUGGESTED: "break_suggested",
+  BREAK_TAKEN: "break_taken",
+  /** A real narration clip started for the first time on this visit. */
+  NARRATION_PLAYED: "narration_played",
+  /**
+   * An offer the engine made that the player did not put on screen, because
+   * one of the player's own rendering rules held it back - payload
+   * { segmentId, adaptation, reason }. Without it the engine reads its own
+   * suggestion as shown and ignored.
+   */
+  ADAPTATION_SUPPRESSED: "adaptation_suppressed",
 } as const;
 
 /** `system_busy` reasons — the closed set from the Touch Signal Contract. */
@@ -123,6 +148,12 @@ export const SIGNAL_BATCH = {
   FLUSH_INTERVAL_MS: 5_000,
   /** Flush immediately once a batch reaches this many events. */
   MAX_BATCH_SIZE: 20,
+  /**
+   * The most one request may carry: `SignalBatchRequest.events` is
+   * `maxItems: 100`. A held or re-queued backlog is larger than that, and sent
+   * whole it was refused 422 and dropped, every event in it.
+   */
+  MAX_EVENTS_PER_REQUEST: 100,
   /**
    * Most events a HELD queue keeps while it waits for the session id the
    * ingest contract requires. A stream that can never send - a mock lesson,

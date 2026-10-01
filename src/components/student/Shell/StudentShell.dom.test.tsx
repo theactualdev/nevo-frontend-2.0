@@ -28,7 +28,6 @@ vi.mock("@/components/student/AskNevo/AskNevo", () => ({
   AskNevo: () => <div data-testid="ask-nevo" />,
 }));
 vi.mock("@/hooks", () => ({
-  useBehaviouralCapture: vi.fn(),
   // The in-shell tabs render the notification bell; it reads the network and
   // decides nothing about where Ask Nevo goes.
   useNotifications: () => ({
@@ -155,8 +154,7 @@ describe("the consent hold", () => {
   /*
    * A HOLD IS NOT A TAB. The waiting screen rendered inside the full app, so
    * a child the server said may not proceed could tap the nav straight past
-   * it and ask Ask Nevo a question before anyone had consented - and every
-   * tap was captured while they waited.
+   * it and ask Ask Nevo a question before anyone had consented.
    */
   it("shows no navigation, bell or Ask Nevo around the waiting screen", () => {
     at("/student/waiting");
@@ -171,27 +169,6 @@ describe("the consent hold", () => {
     at("/student/entry/tok-1");
 
     expect(screen.queryByRole("navigation")).toBeNull();
-  });
-
-  it("captures nothing while the child waits", async () => {
-    const { useBehaviouralCapture } = await import("@/hooks");
-    vi.mocked(useBehaviouralCapture).mockClear();
-
-    at("/student/waiting");
-
-    expect(vi.mocked(useBehaviouralCapture)).toHaveBeenCalled();
-    expect(
-      vi.mocked(useBehaviouralCapture).mock.calls.every(([on]) => on === false),
-    ).toBe(true);
-  });
-
-  it("still captures on an ordinary tab", async () => {
-    const { useBehaviouralCapture } = await import("@/hooks");
-    vi.mocked(useBehaviouralCapture).mockClear();
-
-    at("/student/dashboard");
-
-    expect(vi.mocked(useBehaviouralCapture)).toHaveBeenCalledWith(true);
   });
 });
 

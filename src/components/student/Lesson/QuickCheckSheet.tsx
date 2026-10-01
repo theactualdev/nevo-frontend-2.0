@@ -1,10 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/shared";
 import type { QuickCheck } from "@/lib/types";
 import { AnswerCheck, AnswerDot, AnswerOption } from "./AnswerOption";
+
+/** Whole milliseconds since a monotonic reading, or null without one. */
+function msSince(start: number | null): number | null {
+  return start === null
+    ? null
+    : Math.max(0, Math.round(performance.now() - start));
+}
 
 /**
  * Inline comprehension check (Lesson Check frame) — a bottom sheet on mobile,
@@ -33,8 +40,14 @@ export function QuickCheckSheet({
   check: QuickCheck;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Fired per attempt, the moment an option is picked (Slice 5 hooks signals here). */
-  onAnswered: (correct: boolean) => void;
+  /**
+   * Fired per attempt, the moment an option is picked - with what was picked
+   * and how long the question had been in front of the child (rule 4).
+   */
+  onAnswered: (
+    correct: boolean,
+    answered: { selectedId: string; responseTimeMs?: number },
+  ) => void;
   /** "Keep going" after a correct answer — close the sheet and advance. */
   onContinue: () => void;
 }) {
@@ -42,10 +55,21 @@ export function QuickCheckSheet({
   const resolved = chosenId !== null;
   const correct = chosenId === check.correctId;
 
+  // When the question was last put in front of the child: on opening, and
+  // again on "Try again".
+  const askedAt = useRef<number | null>(null);
+  useEffect(() => {
+    if (open && chosenId === null) askedAt.current = performance.now();
+  }, [open, chosenId]);
+
   const choose = (id: string) => {
     if (resolved) return;
     setChosenId(id);
-    onAnswered(id === check.correctId);
+    const responseTimeMs = msSince(askedAt.current);
+    onAnswered(id === check.correctId, {
+      selectedId: id,
+      ...(responseTimeMs === null ? {} : { responseTimeMs }),
+    });
   };
 
   const tone = (id: string) => {

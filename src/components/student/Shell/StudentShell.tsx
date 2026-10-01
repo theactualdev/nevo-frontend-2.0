@@ -8,8 +8,6 @@ import { BottomNav, Sidebar } from "@/components/shared";
 import { MaybeSample } from "@/components/shared/SampleRegion";
 import { AskNevo } from "@/components/student/AskNevo/AskNevo";
 import { TEXT_ZOOM, useAccessibility } from "@/context/AccessibilityContext";
-import { useBehaviouralCapture } from "@/hooks";
-import { useConsentGate } from "@/hooks/useConsentGate";
 import { NotificationBell } from "./NotificationBell";
 import { isLessonRoute } from "./lessonRoutes";
 import { OfflineTakeover, useOnline } from "./OfflineTakeover";
@@ -56,22 +54,12 @@ import { useDisplayName } from "./useDisplayName";
 export function StudentShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? "";
   /*
-   * SCRUM-76: on-device behavioural timing capture for the affective engine -
-   * ephemeral IndexedDB only, purged at session end, never transmitted.
-   *
-   * GATED ON CONSENT, which it was not. `GET /students/me/consent-gate` has
-   * been deployed for some time and `myConsentGate` had zero callers, so a
-   * child whose guardian had WITHDRAWN consent kept being profiled - every tap
-   * and keystroke still written - and nothing in the student app ever asked.
-   *
-   * `withdrawn` is false until the read answers and false if it fails, so a
-   * flaky network never silently stops measuring a child whose guardian did
-   * consent. Only an answer that says withdrawn stops anything.
+   * NO TAP OR KEYSTROKE IS LOGGED ON THE DEVICE ANY MORE. Every pointerdown
+   * and keydown on every screen went to IndexedDB for a local affective
+   * reader that does not exist and may not: the frontend infers no state
+   * (frontend §6). Whatever an earlier build left is purged at sign-in and
+   * sign-out - see `ephemeralStore`.
    */
-  const { withdrawn } = useConsentGate();
-  // Nor on the hold: a child waiting there is waiting BECAUSE nobody has
-  // consented yet, so there is nothing to capture under.
-  useBehaviouralCapture(!withdrawn && !isHoldRoute(pathname));
   // Renews the session before it expires. Mounted here rather than on a tab,
   // so it covers the full-screen routes below too - a child mid-lesson is the
   // case that matters, and the one the old behaviour handled worst.
@@ -320,7 +308,7 @@ const isLesson = isLessonRoute;
  * the server said may not proceed was shown the navigation, the bell and Ask
  * Nevo around the very screen telling them to wait - and could tap straight
  * past it, and ask Ask Nevo a question, before anyone had consented. The frame
- * draws the hold bare. So it is full-screen, and nothing is captured on it.
+ * draws the hold bare. So it is full-screen.
  */
 function isHoldRoute(pathname: string): boolean {
   return (

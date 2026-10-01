@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { StudentShell } from "./StudentShell";
 import { AccessibilityProvider } from "@/context/AccessibilityContext";
 import { clearSession, setSession } from "@/lib/auth/session";
@@ -20,13 +20,6 @@ import { SAMPLE_ATTR } from "@/lib/sampleData";
  */
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/student/dashboard" }));
-const { useBehaviouralCapture } = vi.hoisted(() => ({
-  useBehaviouralCapture: vi.fn(),
-}));
-vi.mock("@/hooks", () => ({ useBehaviouralCapture }));
-
-const { useConsentGate } = vi.hoisted(() => ({ useConsentGate: vi.fn() }));
-vi.mock("@/hooks/useConsentGate", () => ({ useConsentGate }));
 vi.mock("@/hooks/useSessionRefresh", () => ({ useSessionRefresh: vi.fn() }));
 vi.mock("@/hooks/useSessionLapse", () => ({ useSessionLapse: vi.fn() }));
 vi.mock("@/lib/lessons/pendingProgress", () => ({
@@ -70,9 +63,7 @@ const signIn = () =>
   });
 
 beforeEach(() => {
-  useBehaviouralCapture.mockClear();
   useOnline.mockReturnValue(true);
-  useConsentGate.mockReturnValue({ withdrawn: false, known: true });
   clearSession();
   window.localStorage.clear();
 });
@@ -121,36 +112,26 @@ describe("StudentShell — the sample mark", () => {
 });
 
 /**
- * The gate is only worth anything if the shell acts on it. The hook's own tests
- * prove it reads the answer; these prove the capture stops.
+ * Every tap and keystroke on every screen was written to IndexedDB for a
+ * local affective reader that never existed - and may not: the frontend
+ * infers no state. Nothing is written now, consent or not.
  */
-describe("StudentShell — behavioural capture and consent", () => {
-  it("captures for a child whose guardian has consented", async () => {
-    useConsentGate.mockReturnValue({ withdrawn: false, known: true });
-    renderShell();
+describe("StudentShell — no device log of a child's taps", () => {
+  it("writes nothing to the device when a child taps and types", async () => {
+    const open = vi.fn();
+    vi.stubGlobal("indexedDB", { open, deleteDatabase: vi.fn(() => ({})) });
+    try {
+      signIn();
+      renderShell();
+      await screen.findByText("content");
 
-    await screen.findByText("content");
-    expect(useBehaviouralCapture).toHaveBeenCalledWith(true);
-  });
+      fireEvent.pointerDown(window);
+      fireEvent.keyDown(window, { key: "a" });
 
-  it("stops capturing when consent has been withdrawn", async () => {
-    // The compliance failure: every tap and keystroke kept being written for a
-    // child whose guardian had said no.
-    useConsentGate.mockReturnValue({ withdrawn: true, known: true });
-    renderShell();
-
-    await screen.findByText("content");
-    expect(useBehaviouralCapture).toHaveBeenCalledWith(false);
-  });
-
-  it("keeps capturing while the answer is still unknown", async () => {
-    // A read in flight is not a refusal. Stopping here would silently stop
-    // measuring consented children on every slow network.
-    useConsentGate.mockReturnValue({ withdrawn: false, known: false });
-    renderShell();
-
-    await screen.findByText("content");
-    expect(useBehaviouralCapture).toHaveBeenCalledWith(true);
+      expect(open).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 

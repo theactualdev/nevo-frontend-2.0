@@ -102,6 +102,15 @@ export function adaptSegmentsFor(segments: ContentSegment[]): AdaptSegment[] {
      * confidently instruct a change a child cannot see.
      */
     availableDepths: depthsOf(s),
+    /*
+     * How long the segment is meant to take - the lesson's own figure, which
+     * was typed here and never sent. Only a positive one: the wire's
+     * `estimatedMinutes` defaults to 0 for "no estimate", the request is
+     * `exclusiveMinimum: 0`, and a 0 sent through would 422 the whole call.
+     */
+    ...(typeof s.estimatedMinutes === "number" && s.estimatedMinutes > 0
+      ? { estimatedMinutes: s.estimatedMinutes }
+      : {}),
   }));
 }
 
@@ -201,11 +210,6 @@ export function toAdaptationPlan(
         segmentId: row.segmentId,
         startModality,
         ...(scaffold ? { scaffold } : {}),
-        // Same clamp: a suggestion the segment cannot render is not offered.
-        suggestModality:
-          suggested && suggested !== startModality && modalities.includes(suggested)
-            ? suggested
-            : null,
       },
     ];
   });
@@ -215,6 +219,15 @@ export function toAdaptationPlan(
   return {
     lessonId: res.lessonId,
     segments,
+    /*
+     * ONE SUGGESTION, NOT ONE PER SEGMENT. `modalitySuggestion` has no
+     * `segmentId`: the engine makes it once, for the lesson as it stands. It
+     * was copied onto every row here, and the player - which offers at most
+     * one per segment and never two in a row - turned it into an offer on
+     * every other segment for the rest of the lesson. The player decides where
+     * the one offer can be drawn; see `LessonPlayer`.
+     */
+    ...(suggested ? { suggestModality: suggested } : {}),
     ...(adjustment ? { adjustment } : {}),
     ...(hint ? { hint } : {}),
     ...(guidedQuestions.length > 0 ? { guidedQuestions } : {}),

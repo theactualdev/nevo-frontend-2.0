@@ -150,6 +150,7 @@ export function toQuickCheck(
   if (!correct) return null;
 
   return {
+    id: checkpoint.id,
     question: checkpoint.prompt,
     options: checkpoint.options.map((o) => ({
       id: String(o.value),
