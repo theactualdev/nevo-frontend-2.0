@@ -18,7 +18,9 @@ import {
   deliverHeldSignals,
   holdSignals,
   installSignalDelivery,
+  withholdSignals,
 } from "@/lib/signals/outbox";
+import { useConsentGate } from "./useConsentGate";
 
 /**
  * Form-factor tag for session context (Touch Signal Contract G6).
@@ -96,6 +98,14 @@ export type TrackEvent = (
  * can finally be addressed, so the note that used to sit here (holding
  * forever, not this hook's to fix) is resolved.
  *
+ * A WITHDRAWN CONSENT ENDS THE STREAM. SCRUM-80: only a withdrawal stops
+ * processing, and only the baseline and the warm-up used to ask - so a lesson
+ * went on sending for a child whose guardian had withdrawn. The hook reads the
+ * same gate now; on a withdrawal it sends nothing more, queues nothing more,
+ * and deletes what it and the outbox hold for that child. Consent not yet
+ * recorded is not a withdrawal (SCRUM-121) and stops nothing, and a read that
+ * fails stops nothing either - see `useConsentGate`.
+ *
  * TWO WAYS A BATCH CAN BE LOST, and both are guarded:
  *
  * Ingest is Bearer-only, and a 4xx batch is DROPPED rather than retried -
@@ -141,6 +151,17 @@ export function useSignals(
   const owner = useRef<string | null>(null);
   /** False once unmounted: a re-queue after that lands in a dead ref. */
   const alive = useRef(true);
+  /** True once the consent gate has reported a withdrawal. Never cleared. */
+  const stopped = useRef(false);
+  const { withdrawn } = useConsentGate();
+  useEffect(() => {
+    if (!withdrawn) return;
+    stopped.current = true;
+    queue.current = [];
+    // The gate answered for whoever is signed in now; that is whose it was.
+    const who = getSession()?.userId ?? owner.current;
+    if (who) withholdSignals(who);
+  }, [withdrawn]);
   /*
    * THE SESSION'S CLOCK ANCHOR: one wall-clock reading and one monotonic
    * reading, taken at the same instant and reset together per session id.
@@ -268,6 +289,7 @@ export function useSignals(
 
   const send = useCallback(
     (keepalive: boolean) => {
+      if (stopped.current) queue.current = [];
       if (queue.current.length === 0) return;
 
       // Ingest is Bearer-only. Without a token this would 401, and a 4xx batch
@@ -303,6 +325,8 @@ export function useSignals(
           // drop those batches instead of hammering.
           const status = cause instanceof ApiError ? cause.status : 0;
           if (status >= 400 && status < 500 && status !== 401) return;
+          // Withdrawn while it was in flight: not to be tried again.
+          if (stopped.current) return;
           if (alive.current && status !== 401) {
             queue.current = [...chunk, ...queue.current];
             capHeld(queue);
@@ -333,6 +357,8 @@ export function useSignals(
    */
   const trackEvent = useCallback(
     (type: SignalEventType, payload?: Record<string, unknown>) => {
+      // A withdrawn consent: nothing more is captured, let alone sent.
+      if (stopped.current) return;
       if (!contextQueued.current) {
         contextQueued.current = true;
         queue.current.push({
