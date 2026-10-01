@@ -40,6 +40,11 @@ export interface CurrentUser {
    * render a photo because nothing could see one.
    */
   profileImageUrl?: string | null;
+  /**
+   * The look a student chose on Profile ("Choose your look"), or null. A free
+   * string up to 40 characters; the ids are ours (`lib/profile/avatarTone`).
+   */
+  avatarTone?: string | null;
 }
 
 /** 201 of `POST /api/v1/users/me/profile-photo`. */
@@ -80,6 +85,7 @@ export const usersApi = {
     firstName?: string | null;
     lastName?: string | null;
     subjects?: string[] | null;
+    avatarTone?: string | null;
   }) => api.patch<CurrentUser>("/api/v1/users/me", payload),
 
   /**

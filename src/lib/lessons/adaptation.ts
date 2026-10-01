@@ -55,10 +55,12 @@ const SEGMENT_TYPE: Record<string, AdaptSegmentType> = {
  * Engine `ScaffoldingLevel` (3 values) -> the indicator's `ScaffoldLevel` (5).
  *
  * The indicator draws 4 dots; the engine speaks in three levels, so it uses
- * three of the five. `light` maps to `light` - which is also the hardcoded
- * fallback the player uses today with no data behind it, so a lesson the
- * engine calls light looks exactly as it does now, and only a lesson it calls
- * harder changes.
+ * three of the five.
+ *
+ * A value not in this map is NO LEVEL, not `light`. It used to fall back to
+ * light - which the player also drew with no plan at all - so a word we did
+ * not recognise became two filled circles about a child. Rule 5: the row
+ * carries no scaffold and the indicator shows nothing.
  */
 const SCAFFOLD: Record<string, ScaffoldLevel> = {
   light: SCAFFOLD_LEVELS.LIGHT,
@@ -100,6 +102,15 @@ export function adaptSegmentsFor(segments: ContentSegment[]): AdaptSegment[] {
      * confidently instruct a change a child cannot see.
      */
     availableDepths: depthsOf(s),
+    /*
+     * How long the segment is meant to take - the lesson's own figure, which
+     * was typed here and never sent. Only a positive one: the wire's
+     * `estimatedMinutes` defaults to 0 for "no estimate", the request is
+     * `exclusiveMinimum: 0`, and a 0 sent through would 422 the whole call.
+     */
+    ...(typeof s.estimatedMinutes === "number" && s.estimatedMinutes > 0
+      ? { estimatedMinutes: s.estimatedMinutes }
+      : {}),
   }));
 }
 
@@ -158,8 +169,8 @@ export function toAdaptationPlan(
    * `hint` and `guidedQuestions` landed on 21 Sep and answer the two asks that
    * left three of the four affective responses unreachable. They are carried
    * only under the action they belong to: the action is the instruction, and a
-   * hint arriving beside `modulate_density` is not a hint anybody asked to
-   * show. Stopping it here beats trusting every future consumer to check.
+   * hint arriving beside `simplify` is not a hint anybody asked to show.
+   * Stopping it here beats trusting every future consumer to check.
    *
    * An instruction can still arrive with nothing to render - neither field is
    * required by the schema - and that is rule 5, not a fault.
@@ -188,6 +199,7 @@ export function toAdaptationPlan(
     // - so opening a child in the engine's choice unchecked is how you get a
     // blank frame.
     const engineChoice = asModality(row.modality);
+    const scaffold = SCAFFOLD[row.scaffolding];
     const startModality =
       engineChoice && modalities.includes(engineChoice)
         ? engineChoice
@@ -197,12 +209,7 @@ export function toAdaptationPlan(
       {
         segmentId: row.segmentId,
         startModality,
-        scaffold: SCAFFOLD[row.scaffolding] ?? SCAFFOLD_LEVELS.LIGHT,
-        // Same clamp: a suggestion the segment cannot render is not offered.
-        suggestModality:
-          suggested && suggested !== startModality && modalities.includes(suggested)
-            ? suggested
-            : null,
+        ...(scaffold ? { scaffold } : {}),
       },
     ];
   });
@@ -212,6 +219,15 @@ export function toAdaptationPlan(
   return {
     lessonId: res.lessonId,
     segments,
+    /*
+     * ONE SUGGESTION, NOT ONE PER SEGMENT. `modalitySuggestion` has no
+     * `segmentId`: the engine makes it once, for the lesson as it stands. It
+     * was copied onto every row here, and the player - which offers at most
+     * one per segment and never two in a row - turned it into an offer on
+     * every other segment for the rest of the lesson. The player decides where
+     * the one offer can be drawn; see `LessonPlayer`.
+     */
+    ...(suggested ? { suggestModality: suggested } : {}),
     ...(adjustment ? { adjustment } : {}),
     ...(hint ? { hint } : {}),
     ...(guidedQuestions.length > 0 ? { guidedQuestions } : {}),

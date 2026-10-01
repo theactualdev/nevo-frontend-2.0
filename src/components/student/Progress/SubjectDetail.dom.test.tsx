@@ -25,7 +25,9 @@ const hooks = vi.hoisted(() => ({
   useSubjectProgress: vi.fn(),
   useDueReviews: vi.fn(),
 }));
-vi.mock("@/hooks/useStudentProgress", () => ({
+vi.mock("@/hooks/useStudentProgress", async (orig) => ({
+  // The real slug helpers: the page resolves a link by them.
+  ...(await orig<typeof import("@/hooks/useStudentProgress")>()),
   useStudentProgress: hooks.useStudentProgress,
 }));
 vi.mock("@/hooks/useSubjectProgress", () => ({
@@ -69,7 +71,7 @@ beforeEach(() => {
   });
   hooks.useStudentProgress.mockReturnValue({
     subjects: [
-      { slug: "mathematics", name: "Mathematics", concepts: CONCEPTS },
+      { slug: "Mathematics", name: "Mathematics", concepts: CONCEPTS },
     ],
     lessons: [],
     reflection: null,
@@ -95,7 +97,7 @@ describe("SubjectDetail", () => {
       failed: false,
     });
 
-    render(<SubjectDetail subject={null} slug="mathematics" />);
+    render(<SubjectDetail subject={null} slug="Mathematics" />);
 
     const link = await screen.findByRole("link", {
       name: /take another look at Fractions/i,
@@ -118,7 +120,7 @@ describe("SubjectDetail", () => {
       failed: false,
     });
 
-    render(<SubjectDetail subject={null} slug="mathematics" />);
+    render(<SubjectDetail subject={null} slug="Mathematics" />);
 
     await waitFor(() => expect(screen.getByText("Fractions")).toBeTruthy());
     // Present and named, but not a link to nowhere.
@@ -171,7 +173,7 @@ describe("whose lessons are under this subject's heading", () => {
     signIn();
     hooks.useStudentProgress.mockReturnValue({
       subjects: [
-        { slug: "mathematics", name: "Mathematics", concepts: CONCEPTS },
+        { slug: "Mathematics", name: "Mathematics", concepts: CONCEPTS },
       ],
       // What the child has done across EVERY subject.
       lessons: [
@@ -191,7 +193,7 @@ describe("whose lessons are under this subject's heading", () => {
       failed: false,
     });
 
-    render(<SubjectDetail subject={null} slug="mathematics" />);
+    render(<SubjectDetail subject={null} slug="Mathematics" />);
 
     await waitFor(() =>
       expect(screen.getByText("Adding Fractions")).toBeTruthy(),
@@ -205,7 +207,7 @@ describe("whose lessons are under this subject's heading", () => {
     signIn();
     hooks.useStudentProgress.mockReturnValue({
       subjects: [
-        { slug: "mathematics", name: "Mathematics", concepts: CONCEPTS },
+        { slug: "Mathematics", name: "Mathematics", concepts: CONCEPTS },
       ],
       lessons: [{ lessonId: "l-eng", title: "The Lighthouse", updatedAt: NOW }],
       reflection: null,
@@ -221,9 +223,147 @@ describe("whose lessons are under this subject's heading", () => {
       failed: true,
     });
 
-    render(<SubjectDetail subject={null} slug="mathematics" />);
+    render(<SubjectDetail subject={null} slug="Mathematics" />);
 
     await waitFor(() => expect(screen.getByText("Mathematics")).toBeTruthy());
     expect(screen.queryByText("The Lighthouse")).toBeNull();
+  });
+});
+
+describe("which subject a link opens", () => {
+  /*
+   * The slug used to be the name lowercased with everything outside a-z0-9
+   * dashed out, so "Mathematics" and "mathematics" - two subjects, grouped
+   * apart - shared one link, and "Yorùbá" became "yor-b-". The link carries
+   * the name now, and the page matches on it.
+   */
+  const two = () =>
+    hooks.useStudentProgress.mockReturnValue({
+      subjects: [
+        {
+          slug: "Mathematics",
+          name: "Mathematics",
+          concepts: [{ conceptId: "c-upper", name: "Upper concept" }],
+        },
+        {
+          slug: "mathematics",
+          name: "mathematics",
+          concepts: [{ conceptId: "c-lower", name: "Lower concept" }],
+        },
+        {
+          slug: encodeURIComponent("Yorùbá"),
+          name: "Yorùbá",
+          concepts: [{ conceptId: "c-yo", name: "Greetings" }],
+        },
+      ],
+      lessons: [],
+      reflection: null,
+      highlights: [],
+      loading: false,
+      failed: false,
+      live: true,
+    });
+
+  it("opens the subject whose case it carries, not its namesake", async () => {
+    signIn();
+    two();
+
+    render(<SubjectDetail subject={null} slug="mathematics" />);
+
+    await waitFor(() =>
+      expect(screen.getByText("Lower concept")).toBeTruthy(),
+    );
+    expect(screen.queryByText("Upper concept")).toBeNull();
+  });
+
+  it("finds a name with accents, decoded or not", async () => {
+    signIn();
+    two();
+
+    const { unmount } = render(
+      <SubjectDetail subject={null} slug={encodeURIComponent("Yorùbá")} />,
+    );
+    await waitFor(() => expect(screen.getByText("Greetings")).toBeTruthy());
+    unmount();
+
+    render(<SubjectDetail subject={null} slug="Yorùbá" />);
+    await waitFor(() => expect(screen.getByText("Greetings")).toBeTruthy());
+  });
+});
+
+describe("the subject's lesson list", () => {
+  it("is headed with the frame's words, which claim nothing is done", async () => {
+    signIn();
+    hooks.useSubjectProgress.mockReturnValue({
+      reflection: null,
+      lessons: [{ lessonId: "l-1", title: "Adding Fractions", updatedAt: NOW }],
+      loading: false,
+      failed: false,
+    });
+
+    render(<SubjectDetail subject={null} slug="Mathematics" />);
+
+    await waitFor(() =>
+      expect(screen.getByText("What you've been learning")).toBeTruthy(),
+    );
+    expect(screen.queryByText(/Lessons you've done/)).toBeNull();
+  });
+
+  it("says it could not be loaded, rather than that there is nothing", async () => {
+    /*
+     * A failed narrowed read used to leave no section at all - and with no
+     * concepts either, the screen said "Nothing here yet". The lessons exist;
+     * we could not fetch them.
+     */
+    signIn();
+    hooks.useStudentProgress.mockReturnValue({
+      subjects: [{ slug: "Mathematics", name: "Mathematics", concepts: [] }],
+      lessons: [],
+      reflection: null,
+      highlights: [],
+      loading: false,
+      failed: false,
+      live: true,
+    });
+    hooks.useSubjectProgress.mockReturnValue({
+      reflection: null,
+      lessons: [],
+      loading: false,
+      failed: true,
+    });
+
+    render(<SubjectDetail subject={null} slug="Mathematics" />);
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(/We couldn.t load your lessons just now/),
+      ).toBeTruthy(),
+    );
+    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+    expect(screen.queryByText(/just getting started/)).toBeNull();
+    expect(screen.queryByText(/Nothing here yet/)).toBeNull();
+  });
+
+  it("uses the frame's early line when there genuinely is nothing", async () => {
+    signIn();
+    hooks.useStudentProgress.mockReturnValue({
+      subjects: [{ slug: "Mathematics", name: "Mathematics", concepts: [] }],
+      lessons: [],
+      reflection: null,
+      highlights: [],
+      loading: false,
+      failed: false,
+      live: true,
+    });
+
+    render(<SubjectDetail subject={null} slug="Mathematics" />);
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          /You're just getting started in Mathematics\. Check back after a few/,
+        ),
+      ).toBeTruthy(),
+    );
   });
 });

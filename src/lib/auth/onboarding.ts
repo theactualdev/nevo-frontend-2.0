@@ -6,6 +6,7 @@
  * what the returning-student login screen unlocks against.
  */
 
+import { usersApi } from "@/lib/api/users";
 import { STUDENT_PIN_LENGTH } from "@/lib/constants/auth";
 import { getSession, rememberProfile } from "./session";
 
@@ -88,6 +89,32 @@ export function clearOnboardingDraft(): void {
   }
 }
 
+/**
+ * The school code the server holds for the account that was just created, for
+ * a child who never typed one.
+ *
+ * A JOIN-LINK OR CLASS-CODE CHILD WAS NEVER REMEMBERED. The join endpoints
+ * return a `schoolName` and no code, and `ConnectionResponse.schoolCode` is
+ * nullable - so `rememberOnboardedStudent` had no school code for them,
+ * refused, and the tablet's picker never showed them. Once the account exists
+ * `GET /users/me` carries `school.code`, and that is the code the next sign-in
+ * is checked against.
+ *
+ * Null when there is no session to ask with, or the read fails, or the school
+ * has no code: then the device is not remembered, which is the truth about it.
+ * Only asked when the draft has no code of its own.
+ */
+export async function schoolCodeFromAccount(): Promise<string | null> {
+  if (getOnboardingDraft().schoolCode?.trim()) return null;
+  if (!getSession()) return null;
+  try {
+    const me = await usersApi.me();
+    return me.school?.code?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 /** "Amara Kalu" -> "AK"; single names fall back to the first two letters. */
 function initialsOf(name: string): string {
   const words = name.trim().split(/\s+/).filter(Boolean);
@@ -114,14 +141,19 @@ function initialsOf(name: string): string {
  * Returns whether the device was remembered. Without a name or without a
  * server-issued identifier it remembers nothing, and the login screen keeps
  * routing to onboarding - which is the truth about that device.
+ *
+ * `accountSchoolCode` is the school code the server holds for the new account,
+ * for a child whose draft has none - see `schoolCodeFromAccount`. The draft's
+ * own code, which the child typed and the server verified, comes first.
  */
 export function rememberOnboardedStudent(
   loginIdentifier: string | null | undefined,
+  accountSchoolCode?: string | null,
 ): boolean {
   const draft = getOnboardingDraft();
   const name = draft.name?.trim();
   const identifier = loginIdentifier?.trim();
-  const schoolCode = draft.schoolCode?.trim();
+  const schoolCode = draft.schoolCode?.trim() || accountSchoolCode?.trim();
   /*
    * THE SCHOOL CODE IS PART OF THE CREDENTIAL, not decoration.
    * `POST /auth/login/pin` takes `schoolCode + loginIdentifier + pin`, and

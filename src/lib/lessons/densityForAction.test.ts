@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { densityForAction } from "./densityForAction";
 import { DENSITY } from "@/lib/constants";
-import { ADJUSTMENT_ACTIONS } from "@/lib/constants/affect";
+import {
+  ADJUSTMENT_ACTIONS,
+  type AdjustmentAction,
+} from "@/lib/constants/affect";
 
 /**
  * The join design ruled on 23 Sep: the engine's instruction and the child's
@@ -55,17 +58,16 @@ describe("the instructions that are not densities", () => {
 
 describe("the values the contract does not send", () => {
   it.each([
-    [ADJUSTMENT_ACTIONS.MODULATE_DENSITY],
     [ADJUSTMENT_ACTIONS.INCREASE_DIFFICULTY],
     [ADJUSTMENT_ACTIONS.OFFER_BREAK],
-  ])("%s does not become a density by the back door", (action) => {
     /*
-     * `modulate_density` is the one to watch: the NAME says density and it is
-     * held on design's instruction rather than deleted, so the tempting thing
-     * is to fold it in here. It is a dim of secondary chrome, not a reshape of
-     * the text, and `AffectiveLayer` is where it lives. Mapping it here would
-     * quietly turn one adaptation into a different one.
+     * `modulate_density` stays in this list as a bare string after design
+     * removed it on 1 Oct (SCRUM-180). The NAME says density, which made it
+     * the tempting one to fold in here; it was a dim of chrome, never a
+     * reshape of the text, and now it is nothing at all.
      */
+    ["modulate_density" as AdjustmentAction],
+  ])("%s does not become a density by the back door", (action) => {
     expect(densityForAction(action)).toBeNull();
   });
 });

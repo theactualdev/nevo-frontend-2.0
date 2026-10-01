@@ -1,16 +1,24 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check } from "lucide-react";
 import { NevoKeyboard } from "@/components/shared";
+import { Wordmark } from "@/components/shared/BrandMarks";
 import { authApi } from "@/lib/api";
 import {
   classifyLoginFailure,
   type LoginFailure,
 } from "@/lib/auth/loginFailure";
-import { safeNextPath } from "@/lib/auth/nextPath";
+import {
+  doorForRole,
+  knownRole,
+  type ConsoleDoor,
+} from "@/lib/auth/consoleDoor";
+import { safeNextPath, withNext } from "@/lib/auth/nextPath";
 import { AccountOnPauseScreen } from "@/components/student/Auth/AccountOnPauseScreen";
+import { WrongDoorNote } from "@/components/student/Auth/WrongDoorNote";
 import {
   childById,
   pickerEntries,
@@ -27,7 +35,6 @@ import {
   STUDENT_PIN_LENGTH,
   STUDENT_PIN_MAX,
   STUDENT_PIN_MIN,
-  type UserRole,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 /** The frame's done beat before navigating home. */
@@ -51,6 +58,15 @@ function greeting(displayName?: string): string {
 }
 
 /**
+ * The PIN step's heading: the child's first name and nothing else (28c-3 draws
+ * "Ada"), or 28c's own nameless state, "Welcome back", when the device never
+ * learned it.
+ */
+function pinHeading(displayName?: string): string {
+  return displayName?.trim() || "Welcome back";
+}
+
+/**
  * The student door, in two beats: WHO, then the PIN (frames 00 and 28c).
  *
  * THIS USED TO REMEMBER EXACTLY ONE CHILD, which on a classroom tablet is the
@@ -65,15 +81,23 @@ function greeting(displayName?: string): string {
  * unauthenticated screen", and going straight to a named PIN screen for one
  * child IS that screen. Flagged to design rather than optimised away.
  *
- * A device that remembers NOBODY still routes straight to the full sign-in -
- * the frame's own caption for 28c-2 is "no one remembered - straight to
- * sign-in", so the drawn neutral screen is the state, not an extra tap.
+ * A device that remembers NOBODY shows 28c-2: the wordmark and one "Sign in",
+ * which goes to the full sign-in (00c). This used to redirect there instead,
+ * reading the caption "no one remembered - straight to sign-in" as the whole
+ * instruction; the frame draws the neutral screen the caption labels, and a
+ * shared tablet with nobody on it should not open on a form.
  *
- * The PIN beat itself is unchanged: one box per digit, the Nevo pad on touch, a
- * calm violet error line - never red - and a pop-check "Welcome back" before
- * the dashboard. A full PIN submits to POST /auth/login/pin; a rejected one
- * clears the boxes. A failure that is NOT about the child's PIN says so
- * instead - see `error`.
+ * WHERE THE CHILD WAS GOING TRAVELS WITH THEM. The proxy puts it in `?next=`,
+ * and this screen used to read it only on the empty-device redirect: the PIN
+ * unlock landed on Home, and "Someone else" and "Forgot PIN?" dropped it.
+ *
+ * The PIN beat (28c-3): the child's shape and first name, one box per digit,
+ * the block pad beside the boxes in landscape and under them in portrait -
+ * "every screen is drawn in portrait and landscape, because tray-mounted
+ * tablets cannot be rotated" - and a pop-check "Welcome back" before the
+ * dashboard. A full PIN submits to POST /auth/login/pin; a rejected one clears
+ * the boxes and says so in 28c-5's tinted line. A failure that is NOT about
+ * the child's PIN says so instead - see `error`.
  */
 export default function LoginPage() {
   const router = useRouter();
@@ -126,48 +150,36 @@ export default function LoginPage() {
    * and can never lock them out.
    */
   const [trustLength, setTrustLength] = useState(true);
+  /** Whose door a non-student account belongs at; see `WrongDoorNote`. */
+  const [wrongDoor, setWrongDoor] = useState<ConsoleDoor | null>(null);
+  /**
+   * Where the child was going, from the proxy's `?next=` - for every way out of
+   * this screen, not only the empty-device one it used to be read for.
+   */
+  const [next, setNext] = useState<string | undefined>(undefined);
   const inputRef = useRef<HTMLInputElement>(null);
   const doneTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    // Sync from the device's roster (localStorage, client-only).
+    // Sync from the device's roster and the address (both client-only). Read
+    // from `location` rather than `useSearchParams` - this is already a
+    // client-only effect, and the hook would demand a Suspense boundary for a
+    // value read once.
     const hydrate = () => {
-      const remembered = pickerEntries();
-      if (remembered.length === 0) {
-        /*
-         * Nothing to unlock on this device - so ask who they are, rather than
-         * assuming they are new.
-         *
-         * This used to `replace("/student/onboarding")`, which made a RETURNING
-         * child create a second account: new identifier, no history, and a class
-         * they might not be able to rejoin. It happened on a cleared browser, a
-         * new tablet, a reimaged school laptop, and on any shared tablet where
-         * another child onboarded after them - the device remembers exactly one.
-         * Nothing told them or their teacher.
-         *
-         * Frame 00c is the door. It carries "I'm new to Nevo" for the children
-         * who really are, which is why removing this redirect loses nothing.
-         */
-        // The proxy sets `?next=` when it bounces a signed-out child off a
-        // student route. This screen has never read it; carrying it across
-        // means the sign-in lands them where they were going. Read from
-        // `location` rather than `useSearchParams` - this is already a
-        // client-only effect, and the hook would demand a Suspense boundary
-        // for a value we only need here.
-        const wanted = safeNextPath(
-          new URLSearchParams(window.location.search).get("next"),
-        );
-        router.replace(
-          wanted
-            ? `/auth/sign-in?next=${encodeURIComponent(wanted)}`
-            : "/auth/sign-in",
-        );
-        return;
-      }
-      setEntries(remembered);
+      setNext(
+        safeNextPath(new URLSearchParams(window.location.search).get("next")),
+      );
+      /*
+       * An EMPTY roster is a state, not a redirect: 28c-2 draws it. It is
+       * still never onboarding - that used to make a RETURNING child create a
+       * second account: new identifier, no history, and a class they might not
+       * be able to rejoin. Its "Sign in" goes to 00c, which carries "I'm new
+       * to Nevo" for the children who really are.
+       */
+      setEntries(pickerEntries());
     };
     hydrate();
-  }, [router]);
+  }, []);
 
   useEffect(
     () => () => {
@@ -212,9 +224,26 @@ export default function LoginPage() {
           loginIdentifier: remembered.loginIdentifier,
           pin,
         });
+        /*
+         * REFUSE AT THE DOOR, NOT AFTER IT - what the admin and teacher doors
+         * have done since 23 Sep. This cast `session.role` into the session,
+         * so a non-student account was stored, greeted and pushed at the
+         * student app for the proxy to bounce. `knownRole`/`doorForRole` are
+         * the guard's own rule, so the two cannot disagree. The login did
+         * succeed, so the session it made is ended rather than left behind.
+         */
+        const role = knownRole(session.role);
+        const door = doorForRole(role);
+        if (door !== "student" || !role) {
+          setDigits("");
+          setWrongDoor(door);
+          setError("wrong_door");
+          void authApi.logout().catch(() => {});
+          return;
+        }
         signIn({
           id: session.userId,
-          role: session.role as UserRole,
+          role,
           schoolId: remembered.schoolCode,
           name: remembered.displayName,
           method: "manual",
@@ -235,8 +264,9 @@ export default function LoginPage() {
          * The remembered-device door resolves consent like every other one -
          * design, 23 Sep: a child in the same state meets the same screen
          * whichever door they use. Inside the existing hold, so it is free.
+         * And to where they were going, which this door used to drop.
          */
-        const destination = await studentDestination(null);
+        const destination = await studentDestination(next);
         doneTimer.current = setTimeout(() => router.push(destination), DONE_MS);
       } catch (cause) {
         setDigits("");
@@ -251,7 +281,7 @@ export default function LoginPage() {
         setChecking(false);
       }
     },
-    [router, signIn],
+    [router, signIn, next],
   );
 
   /** Where the boxes fill and submit themselves, or null for "grow and wait". */
@@ -295,9 +325,27 @@ export default function LoginPage() {
   // so drawing anything here would flash it at whoever is holding the tablet.
   if (!entries) return null;
 
+  if (entries.length === 0) {
+    /*
+     * 28c-2, "No one remembered": the wordmark and one way on. Nothing about
+     * who has used this tablet, because nobody has that the device knows of.
+     */
+    return (
+      <main className="flex min-h-dvh w-full flex-col items-center justify-center bg-nevo-cream px-14 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-400">
+        <Wordmark size="door" />
+        <Link
+          href={withNext("/auth/sign-in", next)}
+          className="mt-12 inline-flex h-[58px] w-full max-w-[340px] cursor-pointer items-center justify-center rounded-[10px] bg-nevo-navy text-[17px] font-semibold text-nevo-cream transition-[filter] hover:brightness-108 active:scale-[0.97] motion-reduce:transform-none landscape:mt-11 landscape:h-14 landscape:max-w-[320px]"
+        >
+          Sign in
+        </Link>
+      </main>
+    );
+  }
+
   if (!chosen) {
     return (
-      <main className="min-h-dvh bg-nevo-cream">
+      <main className="min-h-dvh w-full bg-nevo-cream">
         <ProfilePicker
           entries={entries}
           onChoose={(id) => {
@@ -313,7 +361,7 @@ export default function LoginPage() {
             setTrustLength(true);
             setChosen(child);
           }}
-          someoneElseHref="/auth/sign-in"
+          someoneElseHref={withNext("/auth/sign-in", next)}
         />
       </main>
     );
@@ -330,10 +378,52 @@ export default function LoginPage() {
 
   const focusInput = () => inputRef.current?.focus();
 
+  if (done) {
+    return (
+      <main className="flex min-h-[100dvh] w-full flex-col items-center justify-center bg-nevo-cream px-10 text-center">
+        <span className="flex size-16 items-center justify-center rounded-full bg-nevo-navy motion-safe:animate-nevo-pop">
+          <Check className="size-[34px] text-nevo-cream" strokeWidth={2.6} />
+        </span>
+        <h2 className="mt-5 text-[23px] leading-[1.3] font-medium tracking-[-0.01em] text-nevo-near-black sm:text-[26px]">
+          {greeting(chosen.displayName)}
+        </h2>
+        <p className="mt-2.5 text-[15px] text-nevo-near-black/60">
+          Taking you to your lessons…
+        </p>
+      </main>
+    );
+  }
+
+  /*
+   * "Not you? Go back" - 28c-3 puts it under the pad in portrait and under the
+   * name in landscape. One element, placed by the grid below, so there is only
+   * ever one of it for a keyboard or a screen reader to find.
+   *
+   * It goes BACK TO THE PICKER rather than out to the full sign-in, which is
+   * what this button used to do as "Using a different device?". A child who
+   * tapped the wrong face wants the other five faces, not a school code and a
+   * username they may not know by heart. The route out to a full sign-in still
+   * exists, one step further on, as the picker's "Someone else".
+   */
+  const notYou = (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        setChosen(null);
+        setDigits("");
+        setError(null);
+      }}
+      className="mt-7 inline-flex h-[46px] cursor-pointer items-center rounded-[10px] px-[18px] text-base font-medium text-nevo-navy transition-[background] hover:bg-nevo-navy/8 lg:landscape:col-start-1 lg:landscape:row-start-3 lg:landscape:justify-self-center"
+    >
+      Not you? Go back
+    </button>
+  );
+
   return (
     <main
       onClick={focusInput}
-      className="flex min-h-[100dvh] cursor-text flex-col bg-nevo-cream"
+      className="flex min-h-[100dvh] w-full cursor-text flex-col bg-nevo-cream"
     >
       {/* Hidden input - hardware keyboards type here; the pad drives touch. */}
       <input
@@ -358,68 +448,77 @@ export default function LoginPage() {
         className="pointer-events-none absolute -left-[9999px] opacity-0"
       />
 
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-10 text-center">
-        {/* Combined purple wordmark, cropped from the padded 1080-square file
-            (frame: box 336x108 at the file's x392 y523). */}
-        <span className="relative block h-[18px] w-[56px] overflow-hidden sm:h-5 sm:w-[62px]">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/brand/logo-wordmark-purple.png"
-            alt="Nevo"
-            className="absolute block h-[180px] w-[180px] max-w-none -translate-x-[65px] -translate-y-[87px] sm:h-[200px] sm:w-[200px] sm:-translate-x-[73px] sm:-translate-y-[97px]"
-          />
-        </span>
+      {/*
+        ONE COLUMN IN PORTRAIT, TWO IN LANDSCAPE (28c-3). It was one column
+        everywhere, so on a 1024x768 tray-mounted tablet - which cannot be
+        turned - the pad and "Not you?" fell below the fold. Landscape puts
+        the child on the left and the PIN on the right; the 1fr rows above and
+        below keep the left column centred against the taller right one.
 
-        {!done && (
-          /*
-           * The child's shape, never their initials. 28c: avatars are "soft
-           * geometric shapes, never a face", and initials on a screen anyone
-           * in the room can see name a child to a stranger just as well as a
-           * face does.
-           */
+        No wordmark: 28c-3 draws none on this step. The picker before it
+        carries the mark.
+      */}
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-10 pt-10 pb-6 text-center sm:px-14 lg:landscape:grid lg:landscape:grid-cols-[auto_auto] lg:landscape:grid-rows-[1fr_auto_auto_1fr] lg:landscape:content-center lg:landscape:gap-x-20 lg:landscape:px-[72px] lg:landscape:pt-9 lg:landscape:pb-[18px]">
+        <div className="flex flex-col items-center lg:landscape:col-start-1 lg:landscape:row-start-2">
+          {/*
+            The child's shape, never their initials. 28c: avatars are "soft
+            geometric shapes, never a face", and initials on a screen anyone
+            in the room can see name a child to a stranger just as well as a
+            face does.
+          */}
           <ChildAvatar
             shapeIndex={chosen.shapeIndex}
-            className="mt-9 size-[104px] sm:size-[120px]"
+            className="size-[104px] sm:size-[120px] lg:landscape:size-[132px]"
           />
-        )}
+          <h2 className="mt-6 text-[24px] font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[28px] lg:landscape:mt-[22px] lg:landscape:text-[30px]">
+            {pinHeading(chosen.displayName)}
+          </h2>
+        </div>
 
-        {done ? (
-          <>
-            <span className="mt-6 flex size-16 items-center justify-center rounded-full bg-nevo-navy motion-safe:animate-nevo-pop">
-              <Check
-                className="size-[34px] text-nevo-cream"
-                strokeWidth={2.6}
-              />
-            </span>
-            <h2 className="mt-5 text-[23px] leading-[1.3] font-medium tracking-[-0.01em] text-nevo-near-black sm:text-[26px]">
-              {greeting(chosen.displayName)}
-            </h2>
-            <p className="mt-2.5 text-[15px] text-nevo-near-black/60">
-              Taking you to your lessons…
-            </p>
-          </>
-        ) : (
-          <>
-            <h2 className="mt-5 text-[23px] leading-[1.3] font-medium tracking-[-0.01em] text-nevo-near-black sm:text-[26px]">
-              {greeting(chosen.displayName)}
-            </h2>
-            <p className="mt-2.5 text-[15px] text-nevo-near-black/60">
+        <div className="flex flex-col items-center lg:landscape:col-start-2 lg:landscape:row-span-4 lg:landscape:row-start-1 lg:landscape:self-center">
+          {/*
+            28c-5 puts "That PIN didn't match" WHERE "Enter your PIN" was, in a
+            soft violet box - calm, never red, and not an extra line pushing
+            the pad down.
+          */}
+          {error ? (
+            <div
+              role="status"
+              className="mt-[22px] max-w-[360px] rounded-[10px] bg-nevo-violet/18 px-4 py-[13px] text-[15.5px] leading-[1.5] text-nevo-near-black lg:landscape:mt-0 lg:landscape:max-w-[340px] lg:landscape:px-[15px] lg:landscape:py-3 lg:landscape:text-[15px]"
+            >
+              {error === "credentials" &&
+                "That PIN didn't match. Have another go."}
+              {error === "ours" &&
+                "We couldn't check that just now - that's on us, not you. Try again in a moment."}
+              {/* No frame covers this one; the copy is ours and deliberately
+                  plain. What it must not do is what it used to: tell a child
+                  who typed the right PIN too quickly that it was wrong. */}
+              {error === "throttled" &&
+                "That's a lot of tries in a row. Wait a moment, then try again."}
+              {error === "wrong_door" && <WrongDoorNote door={wrongDoor} />}
+            </div>
+          ) : (
+            <p
+              role="status"
+              className="mt-2.5 text-[15px] text-nevo-near-black/60 sm:text-[17px] lg:landscape:mt-0"
+            >
               Enter your PIN to keep going
             </p>
-            {/* The remembered length, or four growing to eight. */}
-            <div className="mt-8 flex flex-wrap justify-center gap-3.5">
-              {Array.from(
-                {
-                  length:
-                    expected ?? Math.max(STUDENT_PIN_LENGTH, digits.length),
-                },
-                (_, i) => {
+          )}
+          {/* The remembered length, or four growing to eight. */}
+          <div className="mt-8 flex flex-wrap justify-center gap-3.5 sm:mt-[34px] sm:gap-4 lg:landscape:mt-[26px]">
+            {Array.from(
+              {
+                length:
+                  expected ?? Math.max(STUDENT_PIN_LENGTH, digits.length),
+              },
+              (_, i) => {
                 const active = i === digits.length && !checking;
                 return (
                   <div
                     key={i}
                     className={cn(
-                      "flex size-12 items-center justify-center rounded-[10px] border-[1.5px] bg-nevo-cream shadow-[0_2px_8px_rgba(0,0,0,0.05)]",
+                      "flex size-12 items-center justify-center rounded-[10px] border-[1.5px] bg-nevo-cream shadow-[0_2px_8px_rgba(0,0,0,0.05)] sm:size-[58px]",
                       active
                         ? "border-nevo-navy"
                         : error
@@ -428,83 +527,46 @@ export default function LoginPage() {
                     )}
                   >
                     {digits.length > i && (
-                      <span className="block size-3 rounded-full bg-nevo-near-black" />
+                      <span className="block size-3 rounded-full bg-nevo-near-black sm:size-[13px]" />
                     )}
                   </div>
                 );
-                },
-              )}
-            </div>
-            <p
-              role="status"
-              className="mt-[18px] min-h-5 max-w-[280px] text-sm leading-[1.4] text-nevo-violet"
-            >
-              {error === "credentials" &&
-                "That PIN didn't match. Try again, or ask your teacher."}
-              {error === "ours" &&
-                "We couldn't check that just now - that's on us, not you. Try again in a moment."}
-              {/* No frame covers this one; the copy is ours and deliberately
-                  plain. What it must not do is what it used to: tell a child
-                  who typed the right PIN too quickly that it was wrong. */}
-              {error === "throttled" &&
-                "That's a lot of tries in a row. Wait a moment, then try again."}
-            </p>
-            {/*
-              THE PAD SITS IN THE SCREEN, under the boxes it fills, exactly
-              where 28c-3 draws it.
+              },
+            )}
+          </div>
+          {/*
+            THE PAD SITS IN THE SCREEN, under the boxes it fills in portrait and
+            beside the child in landscape, exactly where 28c-3 draws it.
 
-              It used to be a docked tray summoned by focusing a hidden input,
-              which is the right shape for a field a keyboard would cover and
-              the wrong one for four boxes with nothing beneath them. A child
-              had to tap the screen before they could see how to answer it.
-              Nothing summons this one, so there is nothing to miss.
-            */}
-            <NevoKeyboard
-              layout="pad"
-              presentation="block"
-              onKey={addDigits}
-              onBackspace={backspace}
-              onDone={submitTyped}
-              className="mt-7"
-            />
+            It used to be a docked tray summoned by focusing a hidden input,
+            which is the right shape for a field a keyboard would cover and
+            the wrong one for four boxes with nothing beneath them. A child
+            had to tap the screen before they could see how to answer it.
+            Nothing summons this one, so there is nothing to miss.
+          */}
+          <NevoKeyboard
+            layout="pad"
+            presentation="block"
+            onKey={addDigits}
+            onBackspace={backspace}
+            onDone={submitTyped}
+            className="mt-[30px] lg:landscape:mt-6"
+          />
 
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                router.push("/auth/forgot-pin");
-              }}
-              className="mt-2 h-11 cursor-pointer px-4 text-[15px] font-medium text-nevo-navy"
-            >
-              Forgot PIN?
-            </button>
-            {/*
-              28c-3's "Not you? Go back" - and it now goes BACK TO THE PICKER
-              rather than out to the full sign-in, which is what this button
-              used to do as "Using a different device?".
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push(withNext("/auth/forgot-pin", next));
+            }}
+            className="mt-2 h-11 cursor-pointer px-4 text-[15px] font-medium text-nevo-navy"
+          >
+            Forgot PIN?
+          </button>
+        </div>
 
-              The difference matters on the screen this replaces. A child who
-              tapped the wrong face wants the other five faces, not a school
-              code and a username they may not know by heart. The route out to
-              a full sign-in still exists, one step further on, as the picker's
-              "Someone else".
-            */}
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setChosen(null);
-                setDigits("");
-                setError(null);
-              }}
-              className="h-11 cursor-pointer px-4 text-[15px] font-medium text-nevo-near-black/70"
-            >
-              Not you? Go back
-            </button>
-          </>
-        )}
+        {notYou}
       </div>
-
     </main>
   );
 }

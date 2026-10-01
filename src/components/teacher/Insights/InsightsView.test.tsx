@@ -148,3 +148,33 @@ describe("a real class", () => {
     expect(container.querySelector("[data-nevo-sample]")).toBeNull();
   });
 });
+
+/**
+ * MARKED WHERE THE WRONG CHOICE IS MADE. The fixture three were marked only
+ * after one was picked; the landing - where a teacher chooses - carried no
+ * `data-nevo-sample` at all.
+ */
+describe("the class pills on the landing", () => {
+  const regions = () =>
+    Array.from(document.querySelectorAll("[data-nevo-sample]")).map((e) =>
+      e.getAttribute("data-nevo-sample"),
+    );
+
+  it("are marked when they are the fixture three", () => {
+    useTeacherClasses.mockReturnValue(state({ sample: true }));
+    render(<InsightsView />);
+
+    expect(screen.getByRole("button", { name: FIXTURE_CLASS })).toBeInTheDocument();
+    expect(regions()).toEqual(["teacher:insights-classes"]);
+  });
+
+  it("carry no mark when they are the teacher's own", () => {
+    useTeacherClasses.mockReturnValue(
+      state({ live: true, options: [{ id: "c-1", name: "Year 7 Blue", joinCode: null }] as never }),
+    );
+    render(<InsightsView />);
+
+    expect(screen.getByRole("button", { name: "Year 7 Blue" })).toBeInTheDocument();
+    expect(regions()).toEqual([]);
+  });
+});

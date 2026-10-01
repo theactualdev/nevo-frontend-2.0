@@ -5,6 +5,7 @@ vi.mock("@/lib/api/consents", () => ({ consentsApi: { myConsentGate } }));
 
 import {
   enterFirstLesson,
+  ssoLanding,
   studentDestination,
   WAITING_ROUTE,
 } from "./entryGate";
@@ -137,5 +138,44 @@ describe("the hand-off out of onboarding", () => {
     await enterFirstLesson(FIRST, go);
 
     expect(go).toHaveBeenCalledWith(FIRST);
+  });
+});
+
+/**
+ * `SsoCallbackResponse.destination` is an ENUM, and the callback routed to it
+ * as a path - "home_dashboard" is a relative URL that 404s, and passing it
+ * through `studentDestination` skipped consent because it is not under
+ * `/student`.
+ */
+describe("ssoLanding", () => {
+  it("sends a child's first use into the Observed Interaction Sequence", () => {
+    expect(ssoLanding("student", "observed_interaction")).toBe(
+      "/student/onboarding/sequence",
+    );
+  });
+
+  it("sends a returning child Home", () => {
+    expect(ssoLanding("student", "home_dashboard")).toBe("/student/dashboard");
+  });
+
+  it("lands every child on a route consent is resolved for", () => {
+    for (const d of ["observed_interaction", "home_dashboard", "new_value", null]) {
+      expect(ssoLanding("student", d)?.startsWith("/student/")).toBe(true);
+    }
+  });
+
+  it("does not guess first use from a value it does not know", () => {
+    // Guessing first use would run the baseline again on a returning child.
+    expect(ssoLanding("student", "new_value")).toBe("/student/dashboard");
+  });
+
+  it("sends staff to their own console, not the enum", () => {
+    expect(ssoLanding("teacher", "home_dashboard")).toBe("/teacher/dashboard");
+    expect(ssoLanding("senco_admin", "home_dashboard")).toBe("/admin");
+  });
+
+  it("has nowhere for a role no console serves", () => {
+    expect(ssoLanding("parent_guardian", "home_dashboard")).toBeNull();
+    expect(ssoLanding(undefined, "home_dashboard")).toBeNull();
   });
 });

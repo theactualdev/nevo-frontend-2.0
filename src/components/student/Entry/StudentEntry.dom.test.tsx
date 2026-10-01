@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { ApiError } from "@/lib/api/client";
 import { StudentEntry } from "./StudentEntry";
 
 /**
@@ -22,8 +23,16 @@ vi.mock("@/lib/api/studentEntry", () => ({
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace, push: vi.fn(), back: vi.fn() }),
 }));
+// The Welcome brings the auth context and its own link check with it. What
+// matters here is only which of its states the entry link asks for.
+vi.mock("@/components/student/Welcome/WelcomeScreen", () => ({
+  WelcomeScreen: ({ linkError }: { linkError?: boolean }) => (
+    <p>{linkError ? "welcome: dead link" : "welcome"}</p>
+  ),
+}));
 
 const held = () => screen.queryByText(/isn't quite ready for you yet/i);
+const toldDead = () => screen.queryByText("welcome: dead link");
 
 beforeEach(() => {
   resolve.mockReset();
@@ -98,6 +107,40 @@ describe("when the read fails", () => {
     render(<StudentEntry token="t-1" />);
 
     await waitFor(() => expect(replace).toHaveBeenCalled());
+    expect(held()).toBeNull();
+  });
+
+  it("does not call the link dead when the server is the one failing", async () => {
+    resolve.mockRejectedValue(new ApiError(503, "cold start"));
+
+    render(<StudentEntry token="t-1" />);
+
+    await waitFor(() => expect(replace).toHaveBeenCalled());
+    expect(toldDead()).toBeNull();
+  });
+});
+
+describe("when the server says the link is dead", () => {
+  it("tells the child here, in the Welcome's dead-link words", async () => {
+    // `entry_link_invalid`, live, for an unknown, expired or revoked token.
+    resolve.mockRejectedValue(
+      new ApiError(404, "not found", {
+        detail: { code: "entry_link_invalid", message: "Ask your teacher for a new link." },
+      }),
+    );
+
+    render(<StudentEntry token="t-1" />);
+
+    await waitFor(() => expect(toldDead()).toBeTruthy());
+  });
+
+  it("does not hand a dead link onward into onboarding", async () => {
+    resolve.mockRejectedValue(new ApiError(404, "not found"));
+
+    render(<StudentEntry token="t-1" />);
+
+    await waitFor(() => expect(toldDead()).toBeTruthy());
+    expect(replace).not.toHaveBeenCalled();
     expect(held()).toBeNull();
   });
 });

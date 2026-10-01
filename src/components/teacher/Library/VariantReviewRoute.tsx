@@ -10,6 +10,7 @@ import type {
 } from "@/lib/mocks/teacherLibrary";
 import { VariantReview } from "./VariantReview";
 import { LiveVariantReview } from "./LiveVariantReview";
+import { SampleRegion } from "@/components/shared/SampleRegion";
 
 /**
  * C16d was never actually blocked, and the paragraph that used to sit here
@@ -50,11 +51,14 @@ export function VariantReviewRoute({
 
   if (!getToken() && fixture) {
     const max = fixture.detail.sections.length;
+    // Marked like its siblings - ClassRoute, LessonRoute, StudentRoute.
     return (
-      <VariantReview
-        lesson={fixture}
-        sectionIndex={Math.min(sectionIndex, max)}
-      />
+      <SampleRegion kind="teacher:variant-review">
+        <VariantReview
+          lesson={fixture}
+          sectionIndex={Math.min(sectionIndex, max)}
+        />
+      </SampleRegion>
     );
   }
 

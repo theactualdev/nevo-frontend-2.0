@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Pause, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AudioContent } from "@/lib/types";
+import { useMediaSource } from "./useMediaSource";
 
 /** The frame's waveform silhouette — 24 bars, explicit px heights. */
 const BAR_HEIGHTS = [
@@ -45,11 +46,18 @@ function clock(sec: number): string {
 export function AudioSegment({
   content,
   onReplay,
+  onPlayed,
   onBusy,
 }: {
   content: AudioContent;
   /** Fired when the student restarts a finished clip (a "replay" signal). */
   onReplay?: () => void;
+  /**
+   * The real clip has started playing for the first time on this visit - the
+   * element said so, not the button. Never for the demo's simulated clip,
+   * where nothing played.
+   */
+  onPlayed?: () => void;
   /**
    * `system_busy` bracket for playback (Touch Signal Contract: media_playing is
    * its own reason — the student is attending, not idle). Start on play, end on
@@ -62,14 +70,27 @@ export function AudioSegment({
   const simulated = !content.src;
   const [playing, setPlaying] = useState(false);
   const [pct, setPct] = useState(0);
-  const [failed, setFailed] = useState(false);
+  // An expired link is re-issued once, and a failure is retried when the
+  // connection returns - see `useMediaSource`.
+  const media = useMediaSource(content.src, content.storagePath);
+  const failed = media.failed;
   /** What the element says the clip is; null until metadata lands. */
   const [assetDuration, setAssetDuration] = useState<number | null>(null);
-  const [transcriptOpen, setTranscriptOpen] = useState(false);
+  /*
+   * The child's own open/close, or null for "not chosen". A clip that fails
+   * opens the transcript for them: the card says "read the same words below",
+   * and those words sat behind a closed disclosure.
+   */
+  const [transcriptChoice, setTranscriptChoice] = useState<boolean | null>(
+    null,
+  );
+  const transcriptOpen = transcriptChoice ?? failed;
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const onBusyRef = useRef(onBusy);
   const playingRef = useRef(false);
+  const onPlayedRef = useRef(onPlayed);
+  const startedOnce = useRef(false);
 
   const duration = simulated
     ? (content.durationSec ?? 40)
@@ -77,7 +98,8 @@ export function AudioSegment({
 
   useEffect(() => {
     onBusyRef.current = onBusy;
-  }, [onBusy]);
+    onPlayedRef.current = onPlayed;
+  }, [onBusy, onPlayed]);
 
   useEffect(
     () => () => {
@@ -93,6 +115,10 @@ export function AudioSegment({
     playingRef.current = on;
     setPlaying(on);
     onBusyRef.current?.(on ? "start" : "end");
+    if (on && !simulated && !startedOnce.current) {
+      startedOnce.current = true;
+      onPlayedRef.current?.();
+    }
   };
 
   const stop = () => {
@@ -122,12 +148,21 @@ export function AudioSegment({
       const el = audioRef.current;
       if (!el) return;
       if (pct >= 100) el.currentTime = 0;
-      // `play()` rejects when the browser refuses it (a codec it cannot
-      // decode, a dead URL, an autoplay policy). Reporting that is the whole
-      // point: the old code could not fail, because it never played anything.
-      void el.play().catch(() => {
-        setFailed(true);
+      /*
+       * NOT EVERY REFUSAL IS A BROKEN CLIP. Any rejection used to mark the
+       * clip failed for good - including `AbortError`, which is what a child
+       * pausing while it buffers produces, and `NotAllowedError`, which is the
+       * browser asking for a tap. Both left Play disabled until they left the
+       * segment, over a recording that was fine.
+       *
+       * Only a source the browser cannot play is a failure, and it goes the
+       * same way as the element's own error: one fresh link, then the words.
+       */
+      void el.play().catch((err: unknown) => {
         setPlayState(false);
+        if ((err as { name?: string } | null)?.name === "NotSupportedError") {
+          void media.onError();
+        }
       });
       return;
     }
@@ -167,10 +202,13 @@ export function AudioSegment({
           first play. Playing state is driven by the ELEMENT's own play/pause
           events rather than set optimistically, so a pause from the OS, a
           headphone unplug or the lock screen keeps the card truthful. */}
-      {content.src && (
+      {content.src && !failed && (
         <audio
+          // Keyed so a re-issued link actually reloads; the element otherwise
+          // keeps the source that failed.
+          key={media.key}
           ref={audioRef}
-          src={content.src}
+          src={media.src}
           preload="metadata"
           onLoadedMetadata={(e) => {
             const d = e.currentTarget.duration;
@@ -188,8 +226,8 @@ export function AudioSegment({
             setPlayState(false);
           }}
           onError={() => {
-            setFailed(true);
             setPlayState(false);
+            void media.onError();
           }}
         />
       )}
@@ -273,7 +311,7 @@ export function AudioSegment({
       <button
         type="button"
         aria-expanded={transcriptOpen}
-        onClick={() => setTranscriptOpen((o) => !o)}
+        onClick={() => setTranscriptChoice(!transcriptOpen)}
         className="mt-3.5 flex cursor-pointer items-center gap-2 text-sm font-medium text-nevo-navy"
       >
         <ChevronDown

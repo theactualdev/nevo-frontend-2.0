@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ClassConfirmationStep } from "./ClassConfirmationStep";
 
 /**
@@ -140,6 +140,32 @@ describe("a verified school still behaves as it did", () => {
     render(<ClassConfirmationStep />);
 
     expect(body()).toMatch(/Kano Primary is connected/i);
+  });
+});
+
+describe("two classes with the same name", () => {
+  it("lights only the one the child tapped", () => {
+    /*
+     * Two year groups can both have a "Gold". The highlight was keyed on the
+     * name, so tapping one lit both - while the join posted the right id, so
+     * the screen and the record disagreed about which class this was.
+     */
+    draft.value = {
+      schoolCode: "NEVO-E2E",
+      schoolName: "Kano Primary",
+      classes: [
+        { id: "c4", name: "Gold" },
+        { id: "c5", name: "Gold" },
+      ],
+    };
+    render(<ClassConfirmationStep />);
+
+    const [first, second] = screen.getAllByRole("button", { name: "Gold" });
+    fireEvent.click(second);
+
+    expect(second.className).toContain("border-nevo-navy");
+    expect(first.className).not.toContain("border-nevo-navy");
+    expect(merged.calls).toContainEqual({ className: "Gold", classId: "c5" });
   });
 });
 

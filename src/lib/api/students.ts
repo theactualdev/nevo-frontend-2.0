@@ -351,6 +351,14 @@ export interface StudentEnroll {
   ageBand?: string | null;
   /** ISO date. Optional; the server refuses a date in the future. */
   dateOfBirth?: string | null;
+  /**
+   * The guardian's email, restored to enrolment in SCRUM-189. It RECORDS the
+   * guardian - a parent link with an empty name, the parent giving their own
+   * at consent - and SENDS NOTHING. The request is a second call,
+   * `consentsApi.addGuardian`, which finds this same link (both paths fold
+   * the address the same way) and fills in the name.
+   */
+  parentEmail?: string | null;
 }
 
 /** What enrolment returns: the new id, and the name the child signs in with. */

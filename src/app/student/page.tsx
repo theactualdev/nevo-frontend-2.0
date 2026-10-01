@@ -9,11 +9,9 @@ import { redirect } from "next/navigation";
 // The same defect was fixed for `/teacher` on 5 Sep; this is that fix.
 //
 // Home is `/student/dashboard` per `STUDENT_NAV`, so the root sends there.
-// Deliberately unconditional: unlike `/teacher`, student routes are not
-// guarded by `proxy.ts` - onboarding is a long pre-auth flow - and the
-// dashboard already draws the signed-out walkthrough for a visitor with no
-// session. Sending a signed-out child to a sign-in page here would be the
-// behaviour change, not the redirect.
+// Unconditional, because `proxy.ts` guards `/student` now: a signed-out
+// visitor never reaches this and is sent to the PIN door with `?next=`. It is
+// also the installed app's `start_url`, for that reason.
 export default function StudentRootPage() {
   redirect("/student/dashboard");
 }

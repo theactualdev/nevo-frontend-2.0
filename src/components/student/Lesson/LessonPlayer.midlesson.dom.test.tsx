@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
 import type { AdaptationPlan, Lesson } from "@/lib/types";
 
@@ -12,15 +12,15 @@ import type { AdaptationPlan, Lesson } from "@/lib/types";
  */
 
 const runtime = vi.hoisted(() => ({
-  value: { offeredBreak: null, reason: null, plan: null } as {
+  value: { offeredBreak: null, reason: null, plan: null, forSegmentId: null } as {
     offeredBreak: null;
     reason: null;
     plan: AdaptationPlan | null;
+    forSegmentId: string | null;
   },
 }));
 
 vi.mock("@/hooks", () => ({
-  useBreakMonitor: () => ({ due: false, dismiss: vi.fn() }),
   useLesson: () => ({ setActiveLesson: vi.fn() }),
   useSignals: () => ({ trackEvent: vi.fn() }),
 }));
@@ -47,14 +47,32 @@ const LESSON = {
       modalities: ["text"],
       text: { heading: "Numerators", body: { default: "The top number." } },
     },
+    {
+      id: "seg-2",
+      modalities: ["text"],
+      text: { heading: "Denominators", body: { default: "The bottom number." } },
+    },
   ],
 } as unknown as Lesson;
+
+const hintPlan = {
+  lessonId: "frac-3",
+  segments: [],
+  adjustment: "offer_hint",
+  hint: "Look at the bottom number first.",
+} as AdaptationPlan;
+
+const next = () => fireEvent.click(screen.getByRole("button", { name: "Next" }));
+const glowing = () =>
+  screen
+    .getByRole("button", { name: "Next" })
+    .className.includes("animate-nevo-glow-guide");
 
 const HINT = "Look at the bottom number first.";
 
 afterEach(() => {
   cleanup();
-  runtime.value = { offeredBreak: null, reason: null, plan: null };
+  runtime.value = { offeredBreak: null, reason: null, plan: null, forSegmentId: null };
 });
 
 describe("the engine's mid-lesson instruction", () => {
@@ -62,12 +80,8 @@ describe("the engine's mid-lesson instruction", () => {
     runtime.value = {
       offeredBreak: null,
       reason: null,
-      plan: {
-        lessonId: "frac-3",
-        segments: [],
-        adjustment: "offer_hint",
-        hint: HINT,
-      } as AdaptationPlan,
+      plan: hintPlan,
+      forSegmentId: "seg-1",
     };
 
     render(<LessonPlayer lesson={LESSON} plan={null} />);
@@ -79,5 +93,41 @@ describe("the engine's mid-lesson instruction", () => {
     render(<LessonPlayer lesson={LESSON} plan={null} />);
 
     expect(screen.queryByText(HINT)).toBeNull();
+  });
+});
+
+describe("the segment a hint belongs to", () => {
+  /*
+   * The instruction is lesson-level on the wire, and a hint is about the
+   * content in front of the child when it was asked for. Keyed on the plan
+   * alone, the same hint - and the glow guiding to it - sat under every
+   * segment after, and a failed read kept it there.
+   */
+  it("shows a mid-lesson hint only on the segment it was asked for", () => {
+    runtime.value = { offeredBreak: null, reason: null, plan: hintPlan, forSegmentId: "seg-1" };
+
+    render(<LessonPlayer lesson={LESSON} plan={null} />);
+    expect(screen.getByText(HINT)).toBeInTheDocument();
+    expect(glowing()).toBe(true);
+
+    next();
+
+    expect(screen.queryByText(HINT)).toBeNull();
+    expect(glowing()).toBe(false);
+  });
+
+  it("shows a load-time hint on the segment the lesson opened on, and not after", () => {
+    render(<LessonPlayer lesson={LESSON} plan={hintPlan} />);
+    expect(screen.getByText(HINT)).toBeInTheDocument();
+
+    next();
+
+    expect(screen.queryByText(HINT)).toBeNull();
+  });
+
+  it("follows a resumed lesson to the segment it opened on", () => {
+    render(<LessonPlayer lesson={LESSON} plan={hintPlan} startAt={1} />);
+
+    expect(screen.getByText(HINT)).toBeInTheDocument();
   });
 });

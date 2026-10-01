@@ -63,7 +63,20 @@ function studentHref(name: string): string {
   return `/teacher/students/${name.toLowerCase().replace(/\s+/g, "-")}`;
 }
 
-export function ClassDetail({ klass }: { klass: TeacherClass }) {
+export function ClassDetail({
+  klass,
+  withCode = true,
+}: {
+  klass: TeacherClass;
+  /**
+   * Whether the Class code control is offered. Off for a signed-in teacher
+   * looking at a SAMPLE class: a projected join code is the one thing on this
+   * console a room of children physically acts on, and `ClassCodeRoute`
+   * already refuses a fixture code for exactly that reason. A sample mark
+   * does not stop anyone scanning it.
+   */
+  withCode?: boolean;
+}) {
   const [tab, setTab] = useState<Tab>("Roster");
   // C12: the dialog is the entry point; projection is the same code, room-sized.
   const [qr, setQr] = useState<"none" | "dialog" | "screen">("none");
@@ -97,6 +110,7 @@ export function ClassDetail({ klass }: { klass: TeacherClass }) {
               {`${klass.subjects} · ${klass.count} students`}
             </span>
           </div>
+          {withCode && (
           <button
             type="button"
             onClick={() => setQr("dialog")}
@@ -110,6 +124,7 @@ export function ClassDetail({ klass }: { klass: TeacherClass }) {
             </svg>
             Class code
           </button>
+          )}
           {(glanceCount > 0 || flagCount > 0) && (
             <div className="flex gap-4">
               {glanceCount > 0 && (
@@ -264,7 +279,7 @@ export function ClassDetail({ klass }: { klass: TeacherClass }) {
 
       </div>
 
-      {qr === "dialog" && (
+      {withCode && qr === "dialog" && (
         <ClassQrDialog
           className={klass.name}
           code={joinCode}
@@ -272,7 +287,7 @@ export function ClassDetail({ klass }: { klass: TeacherClass }) {
           onProject={() => setQr("screen")}
         />
       )}
-      {qr === "screen" && (
+      {withCode && qr === "screen" && (
         <ClassQrScreen
           className={klass.name}
           code={joinCode}

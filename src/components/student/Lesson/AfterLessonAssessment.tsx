@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, ClipboardCheck } from "lucide-react";
 import { Button } from "@/components/shared";
 import type { Assessment } from "@/lib/types";
@@ -35,6 +35,8 @@ export function AfterLessonAssessment({
     questionIndex: number;
     selectedId: string;
     correct: boolean;
+    /** From the question appearing to the confirm, monotonic (rule 4). */
+    responseTimeMs?: number;
   }) => void;
   /** "Review answers" on the result → the Review Answers screen (A5). */
   onReviewAnswers?: () => void;
@@ -54,6 +56,11 @@ export function AfterLessonAssessment({
    * mastered.
    */
   const [gotRight, setGotRight] = useState(0);
+  // When the current question was put in front of the child.
+  const shownAt = useRef<number | null>(null);
+  useEffect(() => {
+    if (stage === "questions") shownAt.current = performance.now();
+  }, [stage, qIndex]);
 
   if (stage === "intro") {
     return (
@@ -88,7 +95,15 @@ export function AfterLessonAssessment({
   const confirm = () => {
     if (!selected) return;
     const correct = selected === question.correctId;
-    onAnswer?.({ questionIndex: qIndex, selectedId: selected, correct });
+    const asked = shownAt.current;
+    onAnswer?.({
+      questionIndex: qIndex,
+      selectedId: selected,
+      correct,
+      ...(asked === null
+        ? {}
+        : { responseTimeMs: Math.max(0, Math.round(performance.now() - asked)) }),
+    });
     if (correct) setGotRight((n) => n + 1);
     if (correct) advance();
     else setRevealed(true);
@@ -185,9 +200,14 @@ export function AfterLessonAssessment({
   );
 }
 
-/** Low-stakes framing before the first question - no timer, not graded. */
+/**
+ * Low-stakes framing before the first question - no timer, not graded.
+ *
+ * NO "ABOUT N MINUTES". The frame draws "4 questions · about 2 minutes", and
+ * the minutes were `round(questions / 2)` presented as fact: no field carries
+ * how long a check-in takes. The count is real, so it stays.
+ */
 function Intro({ count, onStart }: { count: number; onStart: () => void }) {
-  const minutes = Math.max(1, Math.round(count / 2));
   return (
     <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-nevo-cream px-6 text-center text-nevo-near-black">
       <div className="flex w-full max-w-[300px] flex-col items-center sm:max-w-[430px]">
@@ -205,8 +225,7 @@ function Intro({ count, onStart }: { count: number; onStart: () => void }) {
           Start
         </Button>
         <span className="mt-4 text-[13px] text-nevo-near-black/55">
-          {count} question{count === 1 ? "" : "s"} · about {minutes} minute
-          {minutes === 1 ? "" : "s"}
+          {count} question{count === 1 ? "" : "s"}
         </span>
       </div>
     </div>
