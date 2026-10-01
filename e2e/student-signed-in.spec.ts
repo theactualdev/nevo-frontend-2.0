@@ -195,13 +195,24 @@ test.describe("a signed-in student", () => {
      *
      * So this reproduces the exact degradation the suite is for. The proxy
      * trusts the role cookie; the client reads the token from localStorage.
-     * Cookie without session means the proxy lets the child through and the
-     * console mounts signed-out - and renders the walkthrough's invented week.
-     * That must be visible to the same function the tests below rely on.
+     * A page the proxy let through that the client then finds signed out
+     * mounts the walkthrough's invented week. That must be visible to the same
+     * function the tests below rely on.
+     *
+     * THE COOKIE IS SENT, THEN TAKEN BACK. Since 1 Oct (#624) a page that loads
+     * on a role cookie with no session behind it clears the cookie and sends
+     * the child to the PIN door - the fix for the very state this used to
+     * reach by planting the cookie alone. So the cookie goes with the document
+     * request, which is all the proxy reads, and an init script deletes it
+     * before the app's first line runs. The client then sees no cookie and no
+     * session, which is an ordinary signed-out visit, and renders the samples.
      */
     await page.context().addCookies([
       { name: ROLE_COOKIE, value: "student", url: "http://localhost:3100" },
     ]);
+    await page.addInitScript((name) => {
+      document.cookie = `${name}=; Max-Age=0; path=/`;
+    }, ROLE_COOKIE);
     await page.goto("/student/dashboard");
     await shellMounted(page);
     await page.waitForTimeout(2_000);
