@@ -420,6 +420,35 @@ export interface LessonSessionResponse {
   resumed: boolean;
 }
 
+/**
+ * `OfflineManifestResponse` - what one offline download holds.
+ *
+ * `sizeBytes`, `files` and `includesMedia` shipped 1 Oct (B31). None is in the
+ * schema's `required` list: `sizeBytes` defaults to 0, which no real archive
+ * can be, so 0 and absent both mean "not told" and no size is shown.
+ */
+export interface OfflineManifest {
+  lessonId: string;
+  version: number;
+  segmentCount: number;
+  generatedAt: string;
+  packageUrl: string;
+  /** Measured from the real archive, by the server. */
+  sizeBytes?: number;
+  files?: string[];
+  /**
+   * False today for every lesson: media is referenced by URL, not bundled, so
+   * a saved lesson is text only without a connection.
+   */
+  includesMedia?: boolean;
+}
+
+/** `OfflineDownloadResponse`, from `POST /api/v1/lessons/{id}/download`. */
+export interface OfflineDownload {
+  id: string;
+  manifest: OfflineManifest;
+}
+
 /** `LessonCompletionStatus` - the values progress rows come back with. */
 export const LESSON_STATUS = {
   IN_PROGRESS: "in_progress",
@@ -526,6 +555,21 @@ export const lessonsApi = {
    */
   detail: (lessonId: string) =>
     api.get<LessonDetailResponse>(`/api/content/lessons/${lessonId}`),
+
+  /**
+   * Ask for a lesson's offline package. POST /api/v1/lessons/{id}/download
+   * Takes no body; the manifest carries the archive's size. See
+   * `lib/offline/lessonPackage`.
+   */
+  download: (lessonId: string) =>
+    api.post<OfflineDownload>(`/api/v1/lessons/${lessonId}/download`),
+
+  /**
+   * The package itself, as bytes: an `application/zip` holding `lesson.json`
+   * and `manifest.json`. GET /api/v1/lessons/{id}/offline-package
+   */
+  offlinePackage: (lessonId: string) =>
+    api.blob(`/api/v1/lessons/${lessonId}/offline-package`),
 
   /**
    * Approve one segment for students. Per SEGMENT, matching how the screen

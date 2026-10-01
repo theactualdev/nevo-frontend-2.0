@@ -1,21 +1,22 @@
 import type { LessonDetailResponse } from "@/lib/api/lessons";
 
 /**
- * Lessons a child saved to open without a connection - THE SMALLER VERSION.
+ * Lessons a child saved to open without a connection.
  *
- * WHAT THIS IS: the same lesson read the player already makes
- * (`GET /api/v1/lessons/{id}`), kept on the device when a child taps "Save for
- * offline", and used when that read cannot be made. It rebuilds through the
+ * WHAT IS KEPT: the lesson out of the backend's offline package, which
+ * `lessonPackage.ts` fetches and unpacks, with the manifest's size and its
+ * word on media. Either way a `LessonDetailResponse`, the shape the player
+ * already reads: when the package's `lesson.json` is not one, the detail read
+ * is kept instead (see `lessonPackage.ts`). It is used when the live read
+ * cannot be made, and it rebuilds through the
  * same `lessonFromContent` as a live open, so a saved lesson is the lesson,
  * not a copy of it.
  *
- * WHAT IT IS NOT, and why. The real offline feature is the backend's offline
- * package: `POST /api/v1/lessons/{id}/download` returns a typed manifest, but
- * `GET /api/v1/lessons/{id}/offline-package` answers an UNTYPED `{}` and the
- * manifest carries no size. Caching a package whose shape the contract does
- * not state would be us guessing it. So: no package, no sizes, no media (media
- * generation is down anyway), and nothing registered server-side. Swap this
- * for the package once backend types it.
+ * TEXT ONLY. Media is referenced by URL, not bundled (`includesMedia: false`),
+ * so pictures and sound need a connection; the screen says so up front.
+ *
+ * WHAT IT IS NOT: a service worker. The app itself still cannot be reloaded
+ * with no connection, which is why a saved lesson opens in place on Downloads.
  *
  * ONE CHILD'S SHELF. Keyed by account, because the tablet is shared: a child
  * sees what they saved, never the last child's. It holds school content, not
@@ -28,6 +29,20 @@ export interface SavedLesson {
   /** When it was saved, for ordering only. Never shown as a time. */
   savedAt: string;
   detail: LessonDetailResponse;
+  /**
+   * The package's size as the server measured it. Absent when the manifest
+   * gave none, and for anything saved before the package was read - so absent
+   * shows no size, never a guess.
+   */
+  sizeBytes?: number;
+  /** The manifest's `includesMedia`. Absent when no manifest said. */
+  includesMedia?: boolean;
+}
+
+/** What the manifest said about the copy being kept. */
+export interface SavedPackage {
+  sizeBytes?: number | null;
+  includesMedia?: boolean;
 }
 
 /** A shelf, not an archive - device storage is small and shared. */
@@ -85,6 +100,7 @@ export type SaveResult = "saved" | "full" | "refused";
 export function saveLesson(
   userId: string,
   detail: LessonDetailResponse,
+  pkg?: SavedPackage,
 ): SaveResult {
   const shelf = read(userId);
   if (!shelf[detail.id] && Object.keys(shelf).length >= MAX_SAVED_LESSONS) {
@@ -95,6 +111,10 @@ export function saveLesson(
     title: detail.title,
     savedAt: new Date().toISOString(),
     detail,
+    ...(pkg?.sizeBytes ? { sizeBytes: pkg.sizeBytes } : {}),
+    ...(typeof pkg?.includesMedia === "boolean"
+      ? { includesMedia: pkg.includesMedia }
+      : {}),
   };
   return write(userId, shelf) ? "saved" : "refused";
 }
@@ -102,7 +122,8 @@ export function saveLesson(
 /**
  * Refresh a lesson that is ALREADY saved with a newer read, so the copy a
  * child opens offline is the latest one they had online. Never saves a lesson
- * they did not choose to keep.
+ * they did not choose to keep. The size and the word on media stay as the
+ * manifest gave them: they describe the download, which this does not redo.
  */
 export function refreshSavedLesson(
   userId: string,
