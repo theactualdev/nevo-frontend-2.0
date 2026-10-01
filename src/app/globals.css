@@ -523,9 +523,20 @@ html[data-reduced-motion="true"] *::after {
   scroll-behavior: auto !important;
 }
 
-/* Text Size — the content zoom that scales the app's fixed-px type is applied as
- * a numeric `zoom` on the shell's content region (StudentShell), since
- * `zoom: var(...)` doesn't resolve. No global rule is needed here. */
+/* Text Size — the content zoom that scales the app's fixed-px type. Keyed off
+ * the root attribute rather than set inline from React state, so the boot
+ * script in <head> can apply it before the first paint (rule 6). The numbers
+ * are `TEXT_ZOOM`'s (AccessibilityContext), and a test holds them together.
+ * `m` is the unzoomed default and needs no rule. */
+html[data-text-size="s"] .nevo-text-zoom {
+  zoom: 0.9;
+}
+html[data-text-size="l"] .nevo-text-zoom {
+  zoom: 1.1;
+}
+html[data-text-size="xl"] .nevo-text-zoom {
+  zoom: 1.2;
+}
 
 /* High Contrast — a first pass: darken muted text and strengthen the faint
  * borders/dividers so the hierarchy reads at low vision. A full high-contrast
@@ -533,11 +544,19 @@ html[data-reduced-motion="true"] *::after {
 html[data-contrast="high"] {
   --tw-text-opacity: 1;
 }
+/* /42, /48, /62 and /66 were missing, and they carry real sentences: the
+ * sign-out sheet's reassurance, the module boundary's lines, the session-ended
+ * screen. /40 stays out - the flanker activities draw their side arrows in it,
+ * and contrast must not change a calibrated stimulus. */
+html[data-contrast="high"] .text-nevo-near-black\/42,
 html[data-contrast="high"] .text-nevo-near-black\/45,
+html[data-contrast="high"] .text-nevo-near-black\/48,
 html[data-contrast="high"] .text-nevo-near-black\/50,
 html[data-contrast="high"] .text-nevo-near-black\/55,
 html[data-contrast="high"] .text-nevo-near-black\/60,
+html[data-contrast="high"] .text-nevo-near-black\/62,
 html[data-contrast="high"] .text-nevo-near-black\/65,
+html[data-contrast="high"] .text-nevo-near-black\/66,
 html[data-contrast="high"] .text-nevo-near-black\/68,
 html[data-contrast="high"] .text-nevo-near-black\/70,
 html[data-contrast="high"] .text-nevo-near-black\/72 {

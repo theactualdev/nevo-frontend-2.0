@@ -7,7 +7,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { BottomNav, Sidebar } from "@/components/shared";
 import { MaybeSample } from "@/components/shared/SampleRegion";
 import { AskNevo } from "@/components/student/AskNevo/AskNevo";
-import { TEXT_ZOOM, useAccessibility } from "@/context/AccessibilityContext";
 import { useBehaviouralCapture } from "@/hooks";
 import { cn } from "@/lib/utils";
 import { useConsentGate } from "@/hooks/useConsentGate";
@@ -124,7 +123,6 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
      */
     void flushPendingBaseline(getSession()?.userId);
   }, []);
-  const { textSize } = useAccessibility();
   // The chrome calls the student by their own name, not the fixture's.
   const student = useDisplayName();
   // The look the child chose on Profile; the navy disc until they choose.
@@ -168,7 +166,7 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
     // calibrated, and scaling them would distort what they measure.
     if (pathname.startsWith("/student/onboarding")) return <>{children}</>;
     return (
-      <div style={{ zoom: TEXT_ZOOM[textSize] }}>
+      <div className="nevo-text-zoom">
         {/*
           Ask Nevo is rendered by the LESSON LAYOUT now, not here. As a sibling
           of `children` it sat outside that route's `LessonProvider`, so the
@@ -265,8 +263,8 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Only the content region scrolls; the sidebar/nav stay fixed.
-            The Text Size preference is applied here as a numeric `zoom`
-            (`zoom: var(...)` isn't supported, so it's read from context). */}
+            The Text Size preference zooms it through `.nevo-text-zoom`, which
+            the root attribute drives from before the first paint. */}
         <main
           // The bottom padding clears the Ask Nevo trigger, which is `fixed`
           // and so lands ON this scrolling region rather than below it. #313
@@ -280,8 +278,7 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
           // viewport - intruding 61px into this region. Desktop has no nav, so
           // this region reaches the viewport floor and the 44px pill at
           // `bottom-6` intrudes 68px. A few px of margin on each.
-          className="min-h-0 flex-1 overflow-y-auto pb-[68px] md:pb-[76px]"
-          style={{ zoom: TEXT_ZOOM[textSize] }}
+          className="nevo-text-zoom min-h-0 flex-1 overflow-y-auto pb-[68px] md:pb-[76px]"
         >
           {/*
             THE TAB STAYS IN FRONT OF THE CHILD OFFLINE. It was first
