@@ -4,7 +4,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, ChevronRight, LogOut, MessageCircle } from "lucide-react";
 import { NevoKeyboard, Switch } from "@/components/shared";
+import { MaybeSample } from "@/components/shared/SampleRegion";
 import { useAuth } from "@/hooks";
+import { useHasSession } from "@/hooks/useHasSession";
+import { useHydrated } from "@/hooks/useHydrated";
 import { useDisplayName } from "@/components/student/Shell/useDisplayName";
 import { useAvatarTone } from "@/components/student/Shell/useAvatarTone";
 import { getRememberedProfile, setStoredDisplayName } from "@/lib/auth/session";
@@ -40,6 +43,11 @@ export function ProfileSettings() {
   // Editable display name (product frame: tap Change → inline input; initials
   // derive from the name). TODO(api): persist via the profile endpoint.
   const stored = useDisplayName();
+  // Signed out, the name and initials are the fixture child's ("Ada"), so the
+  // row is marked - the same gate the shell's identity uses.
+  const signedIn = useHasSession();
+  const hydrated = useHydrated();
+  const showingFixtureIdentity = hydrated && !signedIn;
   const [name, setName] = useState(stored.name);
   const [editingName, setEditingName] = useState(false);
   const [nameKbOpen, setNameKbOpen] = useState(false);
@@ -171,6 +179,7 @@ export function ProfileSettings() {
 
       {/* Account */}
       <SectionHeading>Account</SectionHeading>
+      <MaybeSample showing={showingFixtureIdentity} kind="student:identity">
       <div className="flex items-center gap-3.5 py-3">
         {/* The disc opens "Choose your look" (frame 27). */}
         <button
@@ -240,6 +249,7 @@ export function ProfileSettings() {
           </>
         )}
       </div>
+      </MaybeSample>
       <button
         type="button"
         onClick={() => router.push("/student/profile/feedback")}
@@ -285,6 +295,7 @@ export function ProfileSettings() {
         />
       </button>
 
+      <MaybeSample showing={showingFixtureIdentity} kind="student:identity">
       <AvatarPickerSheet
         open={lookOpen}
         onOpenChange={setLookOpen}
@@ -298,6 +309,7 @@ export function ProfileSettings() {
           chooseTone(next.id).then(flashSaved, () => {});
         }}
       />
+      </MaybeSample>
 
       <SignOutSheet
         open={signOutOpen}
