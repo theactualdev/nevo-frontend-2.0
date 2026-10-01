@@ -245,3 +245,21 @@ describe("WarmUpRun — the dot task has no fixed answer", () => {
     expect(submitted().acts.ans.accuracy).toBe(1);
   });
 });
+
+describe("WarmUpRun — the done state claims a save only once one landed", () => {
+  it("says nothing about saving while the write is still in flight", async () => {
+    submit.mockReturnValue(new Promise(() => {}));
+    await sitTheTileTask();
+    await settle();
+
+    expect(screen.getByText("That's it for today")).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/saved|couldn't save/i);
+  });
+
+  it("says it was saved once the write lands", async () => {
+    await sitTheTileTask();
+    await settle();
+
+    expect(screen.getByText(/Your progress is saved/)).toBeTruthy();
+  });
+});

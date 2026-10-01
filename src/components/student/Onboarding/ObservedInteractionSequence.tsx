@@ -95,9 +95,10 @@ export function ObservedInteractionSequence() {
   /*
    * An SSO child is signed in for the whole sequence and never reaches the PIN
    * step that delivers everyone else's baseline, so theirs is parked under
-   * their own id and sent from here. `method: "sso"` is set only by the SSO
-   * callback in this page's lifetime, never restored from storage, so this is
-   * never a session the previous child left behind.
+   * their own id and sent from here. `method: "sso"` is written only by the
+   * SSO callback, and survives a reload for that same account and no other
+   * (`setSession` carries it across a refresh only when the user id matches),
+   * so the owner is always the account that signed in through SSO.
    */
   const ssoOwner = isSso ? (user?.id ?? null) : null;
 

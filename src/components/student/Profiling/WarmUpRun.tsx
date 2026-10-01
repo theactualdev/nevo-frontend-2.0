@@ -348,11 +348,17 @@ export function WarmUpRun({
             <h3 className="text-[22px] font-semibold tracking-[-0.01em] text-nevo-navy">
               That&apos;s it for today
             </h3>
-            {!withheld && (
+            {/*
+              Nothing until the write settles. `saved` is null while the
+              submit is in flight, and the done state used to read that as
+              "Your progress is saved" - a claim made before any save had
+              happened, and false whenever the write then failed.
+            */}
+            {!withheld && saved !== null && (
               <p className="mt-2.5 max-w-[320px] text-[15.5px] leading-[1.55] text-nevo-near-black">
-                {saved === false
-                  ? "Thanks for doing that. We couldn't save it just now - that's on us, not you."
-                  : "Nevo is tuned to how you're doing today. Your progress is saved."}
+                {saved
+                  ? "Nevo is tuned to how you're doing today. Your progress is saved."
+                  : "Thanks for doing that. We couldn't save it just now - that's on us, not you."}
               </p>
             )}
           </div>
