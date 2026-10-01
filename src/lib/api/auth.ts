@@ -211,13 +211,30 @@ export const authApi = {
       .post<LoginResponse>("/api/v1/auth/login/password", payload)
       .then(store),
 
-  /** Student sign-in - school code + identifier from the remembered device
-   *  profile, plus the PIN they just entered (frame 00). */
-  loginPin: (payload: {
+  /**
+   * Student sign-in - school code + identifier from the remembered device
+   * profile, plus the PIN they just entered (frame 00).
+   *
+   * `admissionNumber` ON THE WIRE, since 1 Oct. `PinLoginRequest` renamed the
+   * field; the old `loginIdentifier` is still accepted only for now. It is the
+   * same server-issued value every other response still calls
+   * `loginIdentifier`, and the device remembers it under that name, so the
+   * rename stops here rather than running through the roster.
+   */
+  loginPin: ({
+    loginIdentifier,
+    ...rest
+  }: {
     schoolCode: string;
     loginIdentifier: string;
     pin: string;
-  }) => api.post<LoginResponse>("/api/v1/auth/login/pin", payload).then(store),
+  }) =>
+    api
+      .post<LoginResponse>("/api/v1/auth/login/pin", {
+        ...rest,
+        admissionNumber: loginIdentifier,
+      })
+      .then(store),
 
   /** Resolve the current session (requires a stored token). */
   session: () => api.get<SessionInfo>("/api/v1/auth/session"),
