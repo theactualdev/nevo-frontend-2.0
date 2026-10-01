@@ -28,9 +28,19 @@ interface PickUp {
   title: string;
   /** Omitted when the lesson carries none - never a guessed subject. */
   subject?: string;
-  /** 0–1 through the lesson. Drives the ring; never shown as a number. */
-  progress: number;
-  note: string;
+  /*
+   * NO "HOW FAR IN", in words or as a ring (design D19 and D21, 1 Oct).
+   *
+   * This carried a 0-1 fraction and a phrase cut from it at one third and two
+   * thirds ("Just getting started", "About halfway in", "Almost there") - a
+   * threshold we chose, which rule 3 forbids. And the fraction itself is not
+   * on the wire: `RecentProgressResponse.segmentPosition` is the segment the
+   * child was on, with no base stated on that schema, and nothing says
+   * `segmentCount` counts the segments the player indexes (the summary also
+   * carries `reviewSegmentCount` and `unapprovedSegmentCount`). A ring drawn
+   * from the two is an amount we composed. The phrase returns when the
+   * backend sends one.
+   */
   href: string;
 }
 
@@ -71,29 +81,25 @@ const TODAY: TodayLesson[] = [
   fixtureToday("shapes-around-us", "Shapes Around Us", "About 8 min", Shapes),
 ];
 
+// No fraction and no phrase on these either: the walkthrough is what a real
+// child's card looks like, and it must not model the pattern D19 retired.
 const PICKUP: PickUp[] = [
   {
     key: "adding-fractions",
     title: "Adding Fractions",
     subject: "Mathematics",
-    progress: 0.55,
-    note: "A little over halfway",
     href: MOCK_HREF,
   },
   {
     key: "the-water-cycle",
     title: "The Water Cycle",
     subject: "Science",
-    progress: 0.18,
-    note: "Just getting started",
     href: MOCK_HREF,
   },
   {
     key: "punctuation-marks",
     title: "Punctuation Marks",
     subject: "English",
-    progress: 0.85,
-    note: "Almost there",
     href: MOCK_HREF,
   },
 ];
@@ -134,19 +140,6 @@ function useLocalDate() {
 }
 
 /**
- * "Just getting started" and the rest - a bucket, never a number.
- *
- * Coarse on purpose: whether `segmentPosition` is 0- or 1-based is unstated, so
- * the fraction may be off by one segment and the note only ever claims a
- * bucket. "Just getting started" and "Almost there" are the frame's words.
- */
-function noteFor(fraction: number): string {
-  if (fraction < 1 / 3) return "Just getting started";
-  if (fraction < 2 / 3) return "About halfway in";
-  return "Almost there";
-}
-
-/**
  * ZERO AND ABSENT BOTH MEAN "NO ESTIMATE" - the same rule `useStudentLessons`
  * applies to the Lessons tab's cards, so one lesson reads the same on both.
  * Today's cards used to say "Due 3 Oct" here instead; the frame draws the time
@@ -164,8 +157,8 @@ function timeEstimate(lesson: {
 
 /**
  * Home Dashboard (screen 19, SCRUM-146). Today's lessons first, then up to five
- * unfinished lessons under "Pick up where you left off" - each with its subject
- * and how far in, never a date - and a quiet note. When nothing is outstanding
+ * unfinished lessons under "Pick up where you left off" - each with its subject,
+ * never a date - and a quiet note. When nothing is outstanding
  * that section is absent entirely. Reduced-motion aware; a settled empty state
  * when nothing has been set yet.
  */
@@ -225,19 +218,11 @@ export function HomeDashboard() {
         )
         .slice(0, PICKUP_MAX)
         .map((a) => {
-          const row = latest.get(a.lesson.id)!;
-          const count = a.lesson.segmentCount;
-          const progress =
-            count > 0
-              ? Math.max(0, Math.min(1, row.segmentPosition / count))
-              : 0;
           const subject = a.lesson.subject?.trim();
           return {
             key: a.id,
             title: a.lesson.title,
             ...(subject ? { subject } : {}),
-            progress,
-            note: noteFor(progress),
             // Straight back in, with the assignment riding the link - a
             // lesson the child is already in needs no preview.
             href: lessonHref(a.lesson.id, a.id),
@@ -383,18 +368,7 @@ export function HomeDashboard() {
         // 29 Empty States, "Home (No lessons)": the illustration and one line.
         // It used to praise the child ("Nice work staying on top of things")
         // for having nothing, which is not something they did.
-        <div className="flex flex-col items-center px-6 pt-12 pb-6 text-center">
-          <IllustrationWrapper
-            src="/illustrations/welcome-settling.png"
-            alt=""
-            width={697}
-            height={598}
-            className="w-[180px]"
-          />
-          <h2 className="mt-7 max-w-[280px] text-[19px] font-medium leading-[1.35] text-nevo-near-black">
-            Your teacher is setting up your first lesson
-          </h2>
-        </div>
+        <EmptyState line="Your teacher is setting up your first lesson" />
       ) : (
         <>
           {/* The daily warm-up opens the session (SCRUM-104) - a quick
@@ -417,8 +391,24 @@ export function HomeDashboard() {
             done={hydrated && warmUpDoneToday(getSession()?.userId)}
           />
 
-          {/* Absent rather than an empty heading when nothing new is set -
-              the frame never draws Today's lessons with nothing under it. */}
+          {/*
+            NOTHING NEW TODAY, AND THE ONLY LESSON IS PART-WAY (design D20,
+            1 Oct). "Today" means open from today - `isOpenToStudent` reads
+            `availableFrom`, never `dueAt` - and a heading over an empty grid
+            gives way to 29's empty state. Its Home line says "your first
+            lesson", which is false for a child with one underway, so this
+            takes the line 29 draws for an empty Lessons list. Flagged to
+            design.
+
+            With nothing part-way either, the slot stays empty: the caught-up
+            note below already says so.
+          */}
+          {today.length === 0 && pickup.length > 0 && (
+            <EmptyState
+              line="Your lessons will show up here soon"
+              className="pt-9 pb-2"
+            />
+          )}
           {today.length > 0 && (
             <section aria-labelledby="home-today">
               <div className="mt-7 flex items-baseline justify-between motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-500 motion-safe:[animation-delay:140ms]">
@@ -504,7 +494,7 @@ function PickUpCard({ item }: { item: PickUp }) {
       href={item.href}
       className="flex cursor-pointer items-center gap-4 rounded-[12px] bg-nevo-cream-elevated px-[18px] py-4 shadow-elevation-1 transition-transform active:scale-[0.98]"
     >
-      <ProgressRing value={item.progress} />
+      <PickUpMark />
       <span className="min-w-0 flex-1">
         <span className="block text-base font-semibold tracking-[-0.005em] text-nevo-near-black">
           {item.title}
@@ -514,9 +504,6 @@ function PickUpCard({ item }: { item: PickUp }) {
             {item.subject}
           </span>
         )}
-        <span className="mt-[5px] block text-sm text-nevo-near-black/68">
-          {item.note}
-        </span>
       </span>
       <ChevronRight
         className="size-5 shrink-0 text-nevo-navy"
@@ -527,43 +514,50 @@ function PickUpCard({ item }: { item: PickUp }) {
   );
 }
 
-/** A quiet violet arc on a navy-tinted track, with a play glyph — never a %. */
-function ProgressRing({ value }: { value: number }) {
-  const r = 24;
-  const circumference = 2 * Math.PI * r;
-  const offset = circumference * (1 - Math.max(0, Math.min(1, value)));
+/**
+ * The frame's ring without the ring: a status mark, not an amount.
+ *
+ * The arc was the fraction (see `PickUp`), and any ring left in its place still
+ * reads as one - a full circle as finished, a bare track as not begun. So the
+ * mark is the frame's play glyph on a plain tinted disc, the same for every
+ * lesson a child is part-way through. It says what tapping does and nothing
+ * about how far.
+ */
+function PickUpMark() {
   return (
-    <span className="relative size-[54px] shrink-0" aria-hidden>
-      <svg
-        width="54"
-        height="54"
-        viewBox="0 0 54 54"
-        className="absolute inset-0 -rotate-90"
-      >
-        <circle
-          cx="27"
-          cy="27"
-          r={r}
-          fill="none"
-          stroke="rgba(59,63,110,0.14)"
-          strokeWidth="4"
-        />
-        <circle
-          cx="27"
-          cy="27"
-          r={r}
-          fill="none"
-          stroke="#9a9ccb"
-          strokeWidth="4"
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-        />
-      </svg>
-      <span className="absolute inset-0 flex items-center justify-center text-nevo-navy">
-        <Play className="size-[17px]" fill="currentColor" strokeWidth={0} />
-      </span>
+    <span
+      className="flex size-[54px] shrink-0 items-center justify-center rounded-full bg-nevo-violet/18 text-nevo-navy"
+      aria-hidden
+      data-pickup-mark
+    >
+      <Play className="size-[17px]" fill="currentColor" strokeWidth={0} />
     </span>
+  );
+}
+
+/** 29 Empty States: the Home illustration and one line, nothing more. */
+function EmptyState({
+  line,
+  className = "pt-12 pb-6",
+}: {
+  line: string;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`flex flex-col items-center px-6 text-center ${className}`}
+    >
+      <IllustrationWrapper
+        src="/illustrations/welcome-settling.png"
+        alt=""
+        width={697}
+        height={598}
+        className="w-[180px]"
+      />
+      <h2 className="mt-7 max-w-[280px] text-[19px] font-medium leading-[1.35] text-nevo-near-black">
+        {line}
+      </h2>
+    </div>
   );
 }
 

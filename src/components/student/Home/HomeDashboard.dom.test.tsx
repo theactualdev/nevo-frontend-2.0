@@ -83,6 +83,28 @@ describe("HomeDashboard sample marking", () => {
     expect(container.querySelector(`[${SAMPLE_ATTR}]`)).toBeNull();
   });
 
+  it("does not model the retired how-far-in pattern in the walkthrough either", async () => {
+    // Design D19 covers the fixtures: they show what a real card looks like.
+    dashboard.useStudentDashboard.mockReturnValue({
+      data: null,
+      failed: false,
+      loading: false,
+    });
+
+    const { container } = render(<HomeDashboard />);
+
+    await waitFor(() =>
+      expect(container.querySelector(`[${SAMPLE_ATTR}]`)).not.toBeNull(),
+    );
+    const pickup = screen.getByRole("region", {
+      name: /Pick up where you left off/,
+    });
+    expect(pickup.textContent).not.toMatch(
+      /almost there|halfway|getting started|nearly/i,
+    );
+    expect(pickup.innerHTML).not.toMatch(/stroke-dashoffset/);
+  });
+
   it("marks the signed-out walkthrough, which is a fictional child's week", async () => {
     dashboard.useStudentDashboard.mockReturnValue({
       data: null,
@@ -466,10 +488,16 @@ describe("Home's two lists", () => {
     ).toBe("/student/lessons/mid?assignment=as-mid");
   });
 
-  it("says how far in as words, never a number or a date", async () => {
+  it("says nothing about how far in - no phrase, no number, no date", async () => {
+    /*
+     * Design D19, 1 Oct. The card cut the fraction at one third and two thirds
+     * into "Just getting started", "About halfway in" and "Almost there" - a
+     * threshold we chose. The backend sends no phrase, so the card shows none.
+     * At 3 of 4 this read "Almost there".
+     */
     signIn();
     live(
-      [assignment("mid", "Halfway Fractions", { dueAt: at(-60 * 24 * 3) })],
+      [assignment("mid", "Adding Fractions", { dueAt: at(-60 * 24 * 3) })],
       [row("mid", "in_progress", 5, 3)],
     );
 
@@ -477,8 +505,93 @@ describe("Home's two lists", () => {
     await settled(container);
 
     const text = section(/Pick up where you left off/).textContent ?? "";
-    expect(text).toMatch(/Almost there/);
+    expect(text).toMatch(/Adding Fractions/);
+    expect(text).not.toMatch(/almost there|halfway|getting started|nearly/i);
     expect(text).not.toMatch(/\d/);
+  });
+
+  it("marks a part-way lesson with the same plain mark however far in", async () => {
+    /*
+     * Design D21. The ring's arc was `segmentPosition / segmentCount`, and
+     * that fraction is not on the wire. Two lessons at different places must
+     * draw identical marks, and none of them an arc.
+     */
+    signIn();
+    live(
+      [assignment("early", "Early Fractions"), assignment("late", "Late Fractions")],
+      [row("early", "in_progress", 5, 0), row("late", "in_progress", 6, 3)],
+    );
+
+    const { container } = render(<HomeDashboard />);
+    await settled(container);
+
+    const pickup = section(/Pick up where you left off/);
+    const marks = [...pickup.querySelectorAll("[data-pickup-mark]")];
+    expect(marks).toHaveLength(2);
+    expect(marks[0].outerHTML).toBe(marks[1].outerHTML);
+    expect(pickup.innerHTML).not.toMatch(/stroke-dashoffset|conic-gradient/);
+  });
+
+  it("gives Today's slot to 29's empty state when the only lesson is part-way", async () => {
+    /*
+     * Design D20, 1 Oct. Nothing new is open today and the one lesson sits on
+     * "Pick up where you left off", so there is no heading and no empty grid -
+     * the empty state stands in their place. Not Home's own 29 line ("your
+     * first lesson"), which would be false for a child with one underway.
+     */
+    signIn();
+    live([assignment("mid", "Halfway Fractions")], [row("mid", "in_progress")]);
+
+    const { container } = render(<HomeDashboard />);
+    await settled(container);
+
+    expect(screen.queryByText(/Today's lessons/)).toBeNull();
+    expect(
+      screen.getByText("Your lessons will show up here soon"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/your first lesson/)).toBeNull();
+    expect(
+      within(section(/Pick up where you left off/)).getByText(
+        "Halfway Fractions",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps Today's lessons when something new is open, with no empty state", async () => {
+    signIn();
+    live(
+      [assignment("mid", "Halfway Fractions"), assignment("new", "New Decimals")],
+      [row("mid", "in_progress")],
+    );
+
+    const { container } = render(<HomeDashboard />);
+    await settled(container);
+
+    expect(section(/Today's lessons/)).toBeInTheDocument();
+    expect(screen.queryByText("Your lessons will show up here soon")).toBeNull();
+  });
+
+  it("counts a lesson opening later today as not today's yet", async () => {
+    // "Today" is open from today (`availableFrom`), never "due today".
+    signIn();
+    live(
+      [
+        assignment("mid", "Halfway Fractions"),
+        assignment("later", "Later Decimals", {
+          availableFrom: new Date(NOW + 60 * 60_000).toISOString(),
+          dueAt: new Date(NOW + 2 * 60 * 60_000).toISOString(),
+        }),
+      ],
+      [row("mid", "in_progress")],
+    );
+
+    const { container } = render(<HomeDashboard />);
+    await settled(container);
+
+    expect(screen.queryByText("Later Decimals")).toBeNull();
+    expect(
+      screen.getByText("Your lessons will show up here soon"),
+    ).toBeInTheDocument();
   });
 
   it("is absent entirely when nothing is part-way", async () => {

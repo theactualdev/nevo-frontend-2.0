@@ -131,6 +131,19 @@ export interface StudentLessonState {
   placeUnknown: boolean;
   /** Opened from the child's offline shelf, not from a live read. */
   fromShelf: boolean;
+  /**
+   * The child has already finished this lesson: their newest progress row
+   * says `completed`, or the assignment does (the feed is recent activity, so
+   * an old completion may have no row left). The same two facts the Lessons
+   * tab reads to file it under Completed.
+   *
+   * Reopening it played it as new work, and the first frame wrote
+   * `in_progress, 0` over the completion - so a child who looked back at a
+   * finished lesson found it on Home as unfinished. Design D22, 1 Oct: it
+   * opens for review and is never marked unfinished. False for a mock, and
+   * whenever the dashboard has not answered.
+   */
+  finished: boolean;
 }
 
 export function useStudentLesson(
@@ -370,8 +383,12 @@ export function useStudentLesson(
       dashboard?.assignments?.find((a) => a.lesson.id === lessonId)
     : undefined;
   const unavailable = assignment ? unavailableReason(assignment) : null;
+  const finished =
+    Boolean(live) &&
+    (saved?.status === "completed" || assignment?.status === "completed");
 
   return {
+    finished,
     lesson,
     live: Boolean(live),
     resumeAt,

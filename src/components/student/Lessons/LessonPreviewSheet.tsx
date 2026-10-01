@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { Check } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/shared";
 import { lessonHref } from "@/lib/lessons/lessonHref";
@@ -10,8 +11,19 @@ import type { LessonSummary } from "./lessonCatalog";
  * Lesson Preview (screen 21) — a calm look before committing. A bottom sheet on
  * mobile, a centred modal on tablet/desktop, over the dimmed list. Shows the
  * subject, adaptive estimate, a plain-language "what you'll do", and — if the
- * student is partway — a quiet progress bar. The single action starts (or
- * continues) the lesson.
+ * student is partway — says so. The single action starts (or continues) the
+ * lesson.
+ *
+ * THE PARTWAY BAR IS GONE WITH THE RING (design D21, 1 Oct). Its width was
+ * `segmentPosition / segmentCount`, a fraction the wire does not carry (see
+ * `PickUp` on Home), and a bar is read as an amount exactly as a ring is. The
+ * frame's line stays: being partway is a fact the progress row states.
+ *
+ * A FINISHED LESSON (design D22). 21 draws never-started and partway only, so
+ * the completed state is the minimum: the Lessons card's own completed mark and
+ * the filter's word for it, and "Start", which is what the button does - it
+ * opens the lesson from the top, for review, and the player no longer writes
+ * that open back as unfinished. Its label and any line are asked of design.
  */
 export function LessonPreviewSheet({
   lesson,
@@ -26,6 +38,7 @@ export function LessonPreviewSheet({
   if (!lesson) return null;
 
   const inProgress = lesson.status === "in_progress";
+  const completed = lesson.status === "completed";
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -60,17 +73,21 @@ export function LessonPreviewSheet({
         )}
 
         {inProgress && (
-          <>
-            <p className="mt-5 text-sm font-medium text-nevo-near-black">
-              You&apos;re partway through this one
-            </p>
-            <div className="mt-2.5 h-[5px] overflow-hidden rounded-full bg-nevo-navy/14">
-              <div
-                className="h-full rounded-full bg-nevo-violet"
-                style={{ width: `${Math.round((lesson.progress ?? 0) * 100)}%` }}
-              />
-            </div>
-          </>
+          <p className="mt-5 text-sm font-medium text-nevo-near-black">
+            You&apos;re partway through this one
+          </p>
+        )}
+
+        {completed && (
+          <p className="mt-5 flex items-center gap-2 text-sm font-medium text-nevo-near-black">
+            <span
+              aria-hidden
+              className="flex size-5 items-center justify-center rounded-full bg-nevo-navy"
+            >
+              <Check className="size-3 text-nevo-cream" strokeWidth={3} />
+            </span>
+            Completed
+          </p>
         )}
 
         <Button
