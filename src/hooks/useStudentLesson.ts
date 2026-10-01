@@ -187,9 +187,10 @@ export function useStudentLesson(
    * the fixture for one frame on every hard load.
    */
   const mock = hydrated && !signedIn ? getMockLesson(lessonId) : undefined;
-  // Where they got to last time. Home already promises "About halfway in" off
-  // this same row, so the player has to honour it - a Continue button that
-  // restarts from the beginning is worse than no Continue button.
+  // Where they got to last time. Home already offers this lesson to "Pick up
+  // where you left off" off this same row, so the player has to honour it - a
+  // Continue button that restarts from the beginning is worse than no Continue
+  // button.
   /*
    * `loading` TOO, NOT JUST `data`.
    *
