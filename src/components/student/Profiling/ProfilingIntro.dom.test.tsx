@@ -70,6 +70,35 @@ describe("the branch that is kept but unreachable", () => {
   });
 });
 
+describe("the intro's words (D13, 1 Oct)", () => {
+  it("never says test or score to the child about to be measured", () => {
+    // It read "No tests, no scores." - the two words the architecture keeps
+    // from a child, in a claim about a run that is measured. Design ruled it
+    // reworded and gave no words, so the claim goes and nothing is added.
+    render(<ProfilingIntro mode="intro" onContinue={() => {}} />);
+
+    expect(document.body.textContent).not.toMatch(/test|score|ability/i);
+    expect(
+      screen.getByText(
+        "You'll do four quick activities. This just helps Nevo work better for you.",
+      ),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("while the roster is still being read", () => {
+  it("neither asks the age nor lets the run start", () => {
+    // Not known yet whether there is anything to ask, and a run begun now
+    // would be sized by a guess.
+    render(
+      <ProfilingIntro mode="intro" onContinue={() => {}} askAge waiting />,
+    );
+
+    expect(screen.queryByText(/how old are you/i)).toBeNull();
+    expect(screen.getByRole("button", { name: /let's go/i })).toBeDisabled();
+  });
+});
+
 describe("the completion line (SCRUM-180, 1 Oct)", () => {
   it("says what is true when it is read, and claims no save", () => {
     // It said "Your learning space has been personalized" - a past-tense

@@ -27,11 +27,38 @@ export interface RecalibratePrompt {
   itemId: string;
   question: string;
   options: { value: string; label: string }[];
-  /*
-   * NO `answer`. The prompt carried its answer key until 1 Oct, when backend
-   * took it off the wire (B8) and began marking the pick server-side. The
-   * frontend never read it - it marks nothing (rule 3).
+  /**
+   * Whether today's warm-up is behind this child, held against the ACCOUNT
+   * (B10, 1 Oct), so a second tablet sees it too. Optional because a
+   * deployment older than 1 Oct sends neither field, and absent is "not
+   * told", which is not the claim `false` makes.
+   *
+   * `answer`, the answer key, is gone from the wire and from here: the pick
+   * now goes to `answerPrompt` and is marked server-side (B8).
    */
+  doneToday?: boolean;
+  answeredAt?: string | null;
+}
+
+/**
+ * POST, and keep trying for a short while. A 4xx is not retried - the request
+ * is malformed or unauthorised and the next attempt fails identically.
+ */
+async function postWithRetry(path: string, body: unknown): Promise<boolean> {
+  for (let attempt = 0; attempt < BASELINE_SUBMIT_ATTEMPTS; attempt++) {
+    try {
+      await api.post(path, body);
+      return true;
+    } catch (cause) {
+      const status = cause instanceof ApiError ? cause.status : 0;
+      if (status >= 400 && status < 500) return false;
+      if (attempt === BASELINE_SUBMIT_ATTEMPTS - 1) return false;
+      await new Promise((r) =>
+        setTimeout(r, BASELINE_SUBMIT_BACKOFF_MS[attempt]),
+      );
+    }
+  }
+  return false;
 }
 
 export const baselineApi = {
@@ -39,6 +66,30 @@ export const baselineApi = {
   recalibratePrompt: (studentId: string) =>
     api.get<RecalibratePrompt>(
       `/api/baseline/recalibrate-prompt/${studentId}`,
+    ),
+
+  /**
+   * The child's pick on the served question, UNMARKED (B8, 1 Oct).
+   *
+   * `POST /api/baseline/recalibrate-prompt/{student_id}/response`, body
+   * `BaselinePromptAnswer` `{itemId, value}` - the option's `value`, never its
+   * label. The server marks it; the key never reaches the device. It used to
+   * ride inside the submit's features as `item: {itemId, chosenOption}`, where
+   * nobody marked it.
+   *
+   * Retried like the submit. A retry after a write that did land is harmless:
+   * "answering twice on the same day is accepted and does not overwrite the
+   * first answer".
+   *
+   * Resolves to whether it landed, and nothing else. The reply
+   * (`BaselinePromptResult`) carries `correct`, the server's verdict on the
+   * pick, and it is deliberately never read: nothing on the device has a use
+   * for a verdict on a child (rule 9).
+   */
+  answerPrompt: (studentId: string, pick: { itemId: string; value: string }) =>
+    postWithRetry(
+      `/api/baseline/recalibrate-prompt/${studentId}/response`,
+      pick,
     ),
 
   /** Submit the reduced feature vector at the end of the profiling run. */
@@ -61,23 +112,9 @@ export const baselineApi = {
    * A 4xx is not retried - the batch is malformed or unauthorised and the next
    * attempt fails identically.
    */
-  submitWithRetry: async (
+  submitWithRetry: (
     sessionId: string,
     features: Record<string, unknown>[],
-  ): Promise<boolean> => {
-    for (let attempt = 0; attempt < BASELINE_SUBMIT_ATTEMPTS; attempt++) {
-      try {
-        await api.post("/api/baseline/submit", { sessionId, features });
-        return true;
-      } catch (cause) {
-        const status = cause instanceof ApiError ? cause.status : 0;
-        if (status >= 400 && status < 500) return false;
-        if (attempt === BASELINE_SUBMIT_ATTEMPTS - 1) return false;
-        await new Promise((r) =>
-          setTimeout(r, BASELINE_SUBMIT_BACKOFF_MS[attempt]),
-        );
-      }
-    }
-    return false;
-  },
+  ): Promise<boolean> =>
+    postWithRetry("/api/baseline/submit", { sessionId, features }),
 };

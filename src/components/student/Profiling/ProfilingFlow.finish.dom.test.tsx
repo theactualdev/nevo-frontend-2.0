@@ -109,6 +109,38 @@ describe("ProfilingFlow — whose baseline it is", () => {
   });
 });
 
+describe("ProfilingFlow — what it tells the signal stream", () => {
+  it("does not say the baseline was submitted when it has only been parked", () => {
+    /*
+     * It tracked `baseline_submitted` right here, on parking, and since 1 Oct
+     * that event reaches the engine - true only if the later submit landed.
+     * The deliverer tracks it now, once the submit has succeeded.
+     */
+    const track = vi.fn();
+    render(<ProfilingFlow onDone={vi.fn()} track={track} />);
+
+    sitTheWholeRun();
+
+    expect(holdBaseline).toHaveBeenCalledTimes(1);
+    expect(track.mock.calls.map(([type]) => type)).not.toContain(
+      "baseline_submitted",
+    );
+  });
+
+  it("still marks each module's start and end", () => {
+    const track = vi.fn();
+    render(<ProfilingFlow onDone={vi.fn()} track={track} />);
+
+    sitTheWholeRun();
+
+    const types = track.mock.calls.map(([type]) => type);
+    expect(types.filter((t) => t === "baseline_module_start")).toHaveLength(4);
+    expect(types.filter((t) => t === "baseline_module_complete")).toHaveLength(
+      4,
+    );
+  });
+});
+
 describe("ProfilingFlow — a withdrawn guardian", () => {
   it("stops the capture rather than only emptying it", () => {
     consent.withdrawn = true;

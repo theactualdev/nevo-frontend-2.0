@@ -9,15 +9,11 @@ import type { LucideIcon } from "lucide-react";
 import { IllustrationWrapper } from "@/components/shared";
 import { SampleRegion } from "@/components/shared/SampleRegion";
 import { useHydrated } from "@/hooks/useHydrated";
-import { warmUpDoneToday } from "@/lib/profiling/warmUpDone";
-import { getSession } from "@/lib/auth/session";
 import type { DashboardProgressRow } from "@/lib/api/students";
 import { useDisplayName } from "@/components/student/Shell/useDisplayName";
 import { useHasSession } from "@/hooks/useHasSession";
 import { useStudentDashboard } from "@/hooks/useStudentDashboard";
-import { useWarmUpDimension } from "@/hooks/useWarmUpDimension";
-import { WarmUpCard } from "@/components/student/Profiling/WarmUpCard";
-import { dimensionForToday } from "@/components/student/Profiling/WarmUpRun";
+import { TodaysWarmUpCard } from "@/components/student/Profiling/WarmUpCard";
 import { LessonPreviewSheet } from "@/components/student/Lessons/LessonPreviewSheet";
 import type { LessonSummary } from "@/components/student/Lessons/lessonCatalog";
 
@@ -168,7 +164,6 @@ export function HomeDashboard() {
   const signedIn = useHasSession();
   const hydrated = useHydrated();
   const { data: live, failed, loading } = useStudentDashboard();
-  const warmUpDimension = useWarmUpDimension(dimensionForToday());
   const [preview, setPreview] = useState<LessonSummary | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
 
@@ -323,6 +318,8 @@ export function HomeDashboard() {
         <h1 className="mt-2 text-[28px] font-semibold leading-[1.12] tracking-[-0.02em] text-nevo-near-black sm:text-[34px]">
           Welcome back{displayName ? `, ${displayName}` : ""}
         </h1>
+        {/* The warm-up does not wait on the lessons read (D18). */}
+        <TodaysWarmUpCard />
         <div className="mt-8 rounded-[16px] bg-nevo-cream-elevated p-[22px] shadow-elevation-1">
           <p className="text-[17px] font-semibold text-nevo-near-black">
             We couldn&rsquo;t load your lessons just now
@@ -364,6 +361,12 @@ export function HomeDashboard() {
         </h1>
       </div>
 
+      {/* The daily warm-up opens the session (SCRUM-104) - a quick
+          calibration presented as a game, never an assessment. Above the
+          lessons rather than among them: it shows whether or not any are
+          queued (D18, 1 Oct). */}
+      <TodaysWarmUpCard />
+
       {nothingSet ? (
         // 29 Empty States, "Home (No lessons)": the illustration and one line.
         // It used to praise the child ("Nice work staying on top of things")
@@ -371,26 +374,6 @@ export function HomeDashboard() {
         <EmptyState line="Your teacher is setting up your first lesson" />
       ) : (
         <>
-          {/* The daily warm-up opens the session (SCRUM-104) - a quick
-              calibration presented as a game, never an assessment. */}
-          {/* The same dimension the run will use - the card naming one task
-              and the run opening another would be a small, avoidable lie. */}
-          <WarmUpCard
-            dimension={warmUpDimension}
-            /*
-             * Read during render behind `hydrated`, not from an effect: the
-             * answer lives in localStorage, which the server cannot see, and
-             * setting state to say so trips `set-state-in-effect`. Same shape
-             * the run itself uses.
-             *
-             * False until hydrated means the live card is what renders first,
-             * which is the right way round - offering a warm-up to a child who
-             * has done one is a smaller wrong than telling a child who has not
-             * that they have.
-             */
-            done={hydrated && warmUpDoneToday(getSession()?.userId)}
-          />
-
           {/*
             NOTHING NEW TODAY, AND THE ONLY LESSON IS PART-WAY (design D20,
             1 Oct). "Today" means open from today - `isOpenToStudent` reads
@@ -409,6 +392,9 @@ export function HomeDashboard() {
               className="pt-9 pb-2"
             />
           )}
+
+          {/* Absent rather than an empty heading when nothing new is set -
+              the frame never draws Today's lessons with nothing under it. */}
           {today.length > 0 && (
             <section aria-labelledby="home-today">
               <div className="mt-7 flex items-baseline justify-between motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-500 motion-safe:[animation-delay:140ms]">
