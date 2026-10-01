@@ -1,19 +1,20 @@
 "use client";
 
-import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Check, Info } from "lucide-react";
 import { Button } from "@/components/shared";
+import { IconMark } from "@/components/shared/BrandMarks";
 import { useAuth, useSignals } from "@/hooks";
+import { ApiError } from "@/lib/api/client";
 import { authApi } from "@/lib/api/auth";
 import { setSession } from "@/lib/auth/session";
-import { studentDestination } from "@/lib/auth/entryGate";
+import { knownRole } from "@/lib/auth/consoleDoor";
+import { ssoLanding, studentDestination } from "@/lib/auth/entryGate";
 import {
   BUSY_PHASE,
   BUSY_REASON,
   SIGNAL_EVENT_TYPES,
-  type UserRole,
 } from "@/lib/constants";
 import { randomId } from "@/lib/utils";
 
@@ -52,12 +53,30 @@ const SUCCESS_HOLD_MS = 900;
  * Starting the flow is separately blocked on the `schoolSlug` chicken-and-egg
  * (see `lib/api/sso.ts`), so in practice that is what a visitor here sees
  * today - which is the truth.
+ *
+ * "TRY AGAIN" ONLY WHERE TRYING AGAIN CAN WORK. The IA says it "re-initiates
+ * SSO flow from Login Screen", and nothing can start that flow yet. What it
+ * did instead was nothing at all with no handshake on the URL, and re-post a
+ * SINGLE-USE code with one - which the server has already spent. The one
+ * failure a second post can fix is a request that never reached the server,
+ * so that is the only one that offers it; the others keep the frame's first
+ * sentence and drop "Let's try once more", which they could not honour.
+ *
+ * "CONTACT YOUR SCHOOL" IS AN INSTRUCTION, NOT A BUTTON. The IA: "no
+ * navigation, informational only". It pushed `/auth/login` - the PIN door,
+ * which a child who signs in through their school's identity provider has no
+ * PIN for. What it should show is design's to say.
  */
 export function SsoCallback() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { signIn } = useAuth();
   const [phase, setPhase] = useState<Phase>("signing-in");
+  /**
+   * True only when the handshake never reached the server - the one failure
+   * a second post of the same single-use code can fix.
+   */
+  const [unreached, setUnreached] = useState(false);
   // Read at render time: what the URL carries is a render-time fact, and
   // deriving it in an effect would be the setState-in-effect the codebase
   // rules out. All three are REQUIRED by the contract.
@@ -92,7 +111,14 @@ export function SsoCallback() {
     void authApi
       .ssoCallback({ provider, code, state })
       .then((res) => {
-        const role = res.role as UserRole;
+        const role = knownRole(res.role);
+        const landing = ssoLanding(role, res.destination);
+        // A role no console serves, or one this build has never heard of:
+        // nothing here could use the session, so none is stored.
+        if (!role || !landing) {
+          setPhase("error");
+          return;
+        }
         setSession({
           token: res.accessToken,
           expiresAt: res.expiresAt,
@@ -105,18 +131,21 @@ export function SsoCallback() {
         // invented school into the signed-in child.
         signIn({ id: res.userId, role, schoolId: "", method: "sso" });
         setPhase("success");
-        // Where a first-ever sign-in goes is the SERVER's answer now. It used
-        // to be a mock's `isFirstUse` flag, which nothing real set. Consent is
-        // resolved on top of that answer, because SSO is an entry path like any
-        // other - and `studentDestination` leaves a teacher's or an admin's
-        // destination alone, since `consent-gate` is `students/me`.
-        void studentDestination(res.destination).then((destination) => {
+        // Where a first-ever sign-in goes is the SERVER's answer now - read
+        // as the enum it is, by `ssoLanding`. Consent is resolved on top of
+        // that answer, because SSO is an entry path like any other - and
+        // `studentDestination` leaves a teacher's or an admin's home alone,
+        // since `consent-gate` is `students/me`.
+        void studentDestination(landing).then((destination) => {
           redirectTimer.current = setTimeout(() => {
             router.replace(destination);
           }, SUCCESS_HOLD_MS);
         });
       })
-      .catch(() => setPhase("error"));
+      .catch((cause: unknown) => {
+        setUnreached(cause instanceof ApiError && cause.status === 0);
+        setPhase("error");
+      });
   }, [router, signIn, provider, code, state, incomplete]);
 
   useEffect(() => {
@@ -126,20 +155,21 @@ export function SsoCallback() {
     };
   }, [resolve]);
 
+  const canRetry = !incomplete && unreached;
   const retry = () => {
+    setUnreached(false);
     setPhase("signing-in");
     resolve();
   };
 
   return (
-    <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-nevo-cream px-9 text-center text-nevo-near-black">
-      <Image
-        src="/brand/nevo-wordmark.png"
-        alt="Nevo"
-        width={344}
-        height={116}
-        priority
-        className="mb-9 h-5 w-auto"
+    <div className="flex min-h-[100dvh] w-full flex-col items-center justify-center bg-nevo-cream px-9 text-center text-nevo-near-black">
+      {/* 00b and the logo reference: the icon mark, not the wordmark, on
+          every SSO state. */}
+      <IconMark
+        className={
+          shown === "signing-in" ? "mb-7" : shown === "success" ? "mb-9" : ""
+        }
       />
 
       {shown === "signing-in" && (
@@ -168,25 +198,29 @@ export function SsoCallback() {
 
       {shown === "error" && (
         <>
-          <span className="flex size-16 items-center justify-center rounded-full bg-nevo-violet/20">
+          <span className="mt-7 flex size-16 items-center justify-center rounded-full bg-nevo-violet/20">
             <Info className="size-[30px] text-nevo-navy" strokeWidth={2} />
           </span>
           <h1 className="mt-6 text-[21px] font-semibold tracking-[-0.01em] sm:text-[22px]">
             We couldn&apos;t sign you in
           </h1>
           <p className="mt-2.5 max-w-[290px] text-[15px] leading-[1.55] text-nevo-near-black/65 sm:max-w-[360px] sm:text-base">
-            Something went wrong on our side. Let&apos;s try once more.
+            Something went wrong on our side.
+            {canRetry && <> Let&apos;s try once more.</>}
           </p>
-          <Button className="mt-7 w-full max-w-[360px]" onClick={retry}>
-            Try again
-          </Button>
-          <Button
-            variant="ghost"
-            className="mt-2 h-12 w-full max-w-[360px] text-[15px]"
-            onClick={() => router.push("/auth/login")}
+          {canRetry && (
+            <Button className="mt-7 w-full max-w-[360px]" onClick={retry}>
+              Try again
+            </Button>
+          )}
+          <p
+            className={
+              (canRetry ? "mt-2" : "mt-7") +
+              " flex h-12 items-center text-[15px] font-medium text-nevo-navy"
+            }
           >
             Contact your school
-          </Button>
+          </p>
         </>
       )}
     </div>
