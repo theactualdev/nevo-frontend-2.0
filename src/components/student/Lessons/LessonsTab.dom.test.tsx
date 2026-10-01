@@ -31,8 +31,9 @@ vi.mock("@/hooks/useStudentLessons", () => ({
 }));
 vi.mock("@/hooks/useHasSession", () => ({ useHasSession: () => true }));
 vi.mock("@/hooks/useHydrated", () => ({ useHydrated: () => true }));
+const router = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
+  useRouter: () => ({ push: router.push, replace: vi.fn(), back: vi.fn() }),
 }));
 
 const lesson = (over: Record<string, unknown> = {}) => ({
@@ -49,6 +50,7 @@ const body = () => document.body.textContent ?? "";
 
 beforeEach(() => {
   lessons.value = [lesson()];
+  router.push.mockReset();
 });
 
 afterEach(() => {
@@ -87,6 +89,10 @@ describe("what a live lesson row says", () => {
 });
 
 describe("the empty state names what is actually narrowing the list", () => {
+  /*
+   * In the frames' words now (Nevo Lessons Frame for a search, 29 Empty States
+   * for a chip), and each control clears exactly what it names.
+   */
   it("blames the search when there is a search", () => {
     render(<LessonsTab />);
 
@@ -95,6 +101,9 @@ describe("the empty state names what is actually narrowing the list", () => {
     });
 
     expect(body()).toMatch(/No lessons match your search/i);
+    expect(body()).toMatch(
+      /Try a different word, or clear the search to see everything./,
+    );
   });
 
   it("does not blame a search the child never made", () => {
@@ -107,31 +116,99 @@ describe("the empty state names what is actually narrowing the list", () => {
     fireEvent.click(screen.getByRole("button", { name: "Completed" }));
 
     expect(body()).not.toMatch(/your search/i);
-    expect(body()).toMatch(/Nothing in that group yet/i);
+    expect(body()).toMatch(/No completed lessons yet/);
   });
 
-  it("restores the list from a chip, not just from a query", () => {
+  it("restores the list from a chip with the control the frame draws", () => {
     // The half that made the old button look broken: it cleared the query and
     // left the chip, so tapping it changed nothing a child could see.
     render(<LessonsTab />);
     fireEvent.click(screen.getByRole("button", { name: "Completed" }));
     expect(screen.queryByText("Adding Fractions")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Show all lessons" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear filter" }));
 
     expect(screen.getByText("Adding Fractions")).toBeInTheDocument();
   });
 
-  it("restores the list when both a search and a chip are narrowing it", () => {
+  it("clears a search without touching a chip the child chose", () => {
+    lessons.value = [lesson({ status: "completed" })];
     render(<LessonsTab />);
     fireEvent.click(screen.getByRole("button", { name: "Completed" }));
     fireEvent.change(screen.getByPlaceholderText("Search lessons"), {
       target: { value: "zzzzz" },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Show all lessons" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
 
-    expect(screen.getByText("Adding Fractions")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Search lessons")).toHaveValue("");
+    expect(screen.getByText("Adding Fractions")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Completed" }),
+    ).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("never leaves a tap that changes nothing when both are narrowing", () => {
+    // Clear search lands on the chip's own empty state, which names the chip
+    // and offers to clear it - the screen moves on every tap.
+    render(<LessonsTab />);
+    fireEvent.click(screen.getByRole("button", { name: "Completed" }));
+    fireEvent.change(screen.getByPlaceholderText("Search lessons"), {
+      target: { value: "zzzzz" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
+    expect(body()).toMatch(/No completed lessons yet/);
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear filter" }));
+    expect(screen.getByText("Adding Fractions")).toBeInTheDocument();
+  });
+});
+
+describe("a child with nothing assigned yet", () => {
+  it("is told in the frame's words, without a promise about what happens next", () => {
+    lessons.value = [];
+
+    render(<LessonsTab />);
+
+    expect(body()).toMatch(/Your lessons will show up here soon/);
+    expect(body()).not.toMatch(/When your teacher sets one/);
+  });
+});
+
+describe("starting a lesson from its preview", () => {
+  it("carries the assignment the card came from", () => {
+    // The player reads `?assignment=` and sends it on every progress write.
+    lessons.value = [lesson({ assignmentId: "as-9" })];
+    render(<LessonsTab />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Adding Fractions/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+
+    expect(router.push).toHaveBeenCalledWith(
+      "/student/lessons/l-1?assignment=as-9",
+    );
+  });
+
+  it("sends a library lesson in bare, which is the truth about it", () => {
+    render(<LessonsTab />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Adding Fractions/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+
+    expect(router.push).toHaveBeenCalledWith("/student/lessons/l-1");
+  });
+
+  it("shows the lesson's own what-you'll-do line, and none when it has none", () => {
+    lessons.value = [lesson({ description: "Add fractions with pizza." })];
+    const { unmount } = render(<LessonsTab />);
+    fireEvent.click(screen.getByRole("button", { name: /Adding Fractions/ }));
+    expect(screen.getByText("Add fractions with pizza.")).toBeInTheDocument();
+    unmount();
+
+    lessons.value = [lesson()];
+    render(<LessonsTab />);
+    fireEvent.click(screen.getByRole("button", { name: /Adding Fractions/ }));
+    expect(screen.getByRole("dialog").textContent).not.toMatch(/pizza/);
   });
 });

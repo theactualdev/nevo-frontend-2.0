@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 import { useEffect } from "react";
+import type { SessionOutcome } from "./useSignals";
 
 /** Typed so `submitBatch.mock.calls` carries a real tuple and needs no casts. */
 interface Envelope {
@@ -8,6 +9,10 @@ interface Envelope {
   lessonId: string | null;
   sessionType: string;
   startedAt: string;
+  endedAt?: string;
+  completionStatus?: string;
+  exitPosition?: string;
+  breakCount?: number;
 }
 interface Event {
   type: string;
@@ -28,6 +33,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
 });
 
 const { useSignals } = await import("./useSignals");
+const { ApiError } = await import("@/lib/api");
 const { clearSession, setSession } = await import("@/lib/auth/session");
 
 /**
@@ -247,3 +253,228 @@ describe("the last event before a component goes", () => {
 function useEffectOnUnmount(fn: () => void) {
   useEffect(() => fn, [fn]);
 }
+
+/*
+ * A BACKLOG IS SENT IN PIECES THE CONTRACT TAKES. `SignalBatchRequest.events`
+ * is `maxItems: 100`; a held queue holds 200, and the whole queue went as one
+ * batch - so a 422 dropped every event in it.
+ */
+describe("a backlog larger than one request", () => {
+  it("goes in requests of at most 100, and all of it goes", async () => {
+    const { result } = renderHook(() => useSignals(UUID, LESSON, "lesson"));
+
+    // Signed out, so it is held - up to the held cap.
+    act(() => {
+      for (let i = 0; i < 180; i++)
+        result.current.trackEvent("time_on_segment", { i });
+    });
+    signIn();
+    await act(async () => {
+      result.current.flush();
+    });
+
+    const sizes = submitBatch.mock.calls.map(([, events]) => events.length);
+    expect(sizes.length).toBeGreaterThan(1);
+    expect(Math.max(...sizes)).toBeLessThanOrEqual(100);
+    const sent = submitBatch.mock.calls.flatMap(([, events]) => events);
+    expect(sent.filter((e) => e.type === "time_on_segment")).toHaveLength(180);
+  });
+});
+
+/*
+ * WHAT A PAGE THAT IS GOING AWAY STILL OWES. The queue is a ref: backgrounding
+ * and closing unmount nothing, an offline exit re-queued into a ref nothing
+ * would flush again, and a 401 cleared the token and left the page.
+ */
+describe("signals that outlive their screen", () => {
+  const OUTBOX = "nevo.signals.outbox";
+  const held = () =>
+    JSON.parse(window.localStorage.getItem(OUTBOX) ?? "[]") as {
+      userId: string;
+      events: Event[];
+    }[];
+
+  it("sends as the tab is hidden, on a request that can outlive it", async () => {
+    signIn();
+    const { result } = renderHook(() => useSignals(UUID, LESSON, "lesson"));
+    act(() => result.current.trackEvent("time_on_segment", { step: 1 }));
+
+    Object.defineProperty(document, "visibilityState", {
+      value: "hidden",
+      configurable: true,
+    });
+    try {
+      await act(async () => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+    } finally {
+      delete (document as unknown as Record<string, unknown>).visibilityState;
+    }
+
+    expect(submitBatch).toHaveBeenCalledTimes(1);
+    expect(submitBatch.mock.calls[0]).toContainEqual({ keepalive: true });
+  });
+
+  it("keeps a batch that failed offline after the lesson has gone", async () => {
+    signIn();
+    submitBatch.mockRejectedValueOnce(new ApiError(0, "offline"));
+    const { result, unmount } = renderHook(() =>
+      useSignals(UUID, LESSON, "lesson"),
+    );
+    act(() => result.current.trackEvent("time_on_segment", { last: true }));
+
+    unmount();
+    await act(async () => {});
+
+    const [entry] = held();
+    expect(entry?.userId).toBe("user-1");
+    expect(entry?.events.some((e) => e.payload?.last === true)).toBe(true);
+  });
+
+  it("keeps what a dying session could not send, for the same child", async () => {
+    signIn();
+    const { result } = renderHook(() => useSignals(UUID, LESSON, "lesson"));
+    act(() => result.current.trackEvent("time_on_segment", { first: true }));
+    await act(async () => {
+      result.current.flush();
+    });
+
+    // A 401 elsewhere: the token is cleared and the page is leaving.
+    act(() => result.current.trackEvent("time_on_segment", { stranded: true }));
+    clearSession();
+    act(() => {
+      window.dispatchEvent(new Event("pagehide"));
+    });
+
+    const [entry] = held();
+    expect(entry?.userId).toBe("user-1");
+    expect(entry?.events.some((e) => e.payload?.stranded === true)).toBe(true);
+  });
+
+  it("holds a batch the server refused with 401, rather than dropping it", async () => {
+    signIn();
+    submitBatch.mockRejectedValueOnce(new ApiError(401, "expired"));
+    const { result } = renderHook(() => useSignals(UUID, LESSON, "lesson"));
+    act(() => result.current.trackEvent("time_on_segment", { late: true }));
+
+    await act(async () => {
+      result.current.flush();
+    });
+
+    expect(held()[0]?.events.some((e) => e.payload?.late === true)).toBe(true);
+  });
+
+  it("still drops a batch the contract refused", async () => {
+    signIn();
+    submitBatch.mockRejectedValueOnce(new ApiError(422, "invalid"));
+    const { result, unmount } = renderHook(() =>
+      useSignals(UUID, LESSON, "lesson"),
+    );
+    act(() => result.current.trackEvent("time_on_segment", {}));
+    await act(async () => {
+      result.current.flush();
+    });
+    unmount();
+    await act(async () => {});
+
+    expect(held()).toEqual([]);
+  });
+});
+
+/*
+ * THE ENVELOPE SAYS HOW THE SESSION ENDED. It carried four fields, so every
+ * batch - the last one included - went with the contract's defaults:
+ * `in_progress` and no breaks, for a lesson finished after two of them.
+ */
+describe("the session envelope", () => {
+  it("reports a completed session, when it ended and its breaks", async () => {
+    signIn();
+    const { result, rerender } = renderHook(
+      ({ outcome }: { outcome: SessionOutcome | null }) =>
+        useSignals(UUID, LESSON, "lesson", outcome),
+      { initialProps: { outcome: null as SessionOutcome | null } },
+    );
+    act(() => {
+      result.current.trackEvent("break_start", {});
+      result.current.trackEvent("break_end", {});
+    });
+    rerender({ outcome: { completionStatus: "completed" } });
+    await act(async () => {
+      result.current.flush();
+    });
+
+    const [envelope] = submitBatch.mock.calls[0]!;
+    expect(envelope.completionStatus).toBe("completed");
+    expect(envelope.endedAt).toEqual(expect.any(String));
+    expect(envelope.breakCount).toBe(1);
+  });
+
+  it("says where a child who left was", async () => {
+    signIn();
+    const { result, rerender } = renderHook(
+      ({ outcome }: { outcome: SessionOutcome | null }) =>
+        useSignals(UUID, LESSON, "lesson", outcome),
+      { initialProps: { outcome: null as SessionOutcome | null } },
+    );
+    act(() => result.current.trackEvent("exit_attempt", {}));
+    rerender({
+      outcome: { completionStatus: "exited", exitPosition: "seg-3" },
+    });
+    await act(async () => {
+      result.current.flush();
+    });
+
+    const [envelope] = submitBatch.mock.calls[0]!;
+    expect(envelope.completionStatus).toBe("exited");
+    expect(envelope.exitPosition).toBe("seg-3");
+  });
+
+  it("claims no ending while the session is still going", async () => {
+    signIn();
+    const { result } = renderHook(() => useSignals(UUID, LESSON, "lesson"));
+    act(() => result.current.trackEvent("time_on_segment", {}));
+    await act(async () => {
+      result.current.flush();
+    });
+
+    const [envelope] = submitBatch.mock.calls[0]!;
+    expect(envelope.completionStatus).toBeUndefined();
+    expect(envelope.endedAt).toBeUndefined();
+  });
+});
+
+describe("the session's interpretation context", () => {
+  const contextOf = async (setup: () => void) => {
+    signIn();
+    setup();
+    const { result } = renderHook(() => useSignals(UUID, LESSON, "lesson"));
+    act(() => result.current.trackEvent("time_on_segment", {}));
+    await act(async () => {
+      result.current.flush();
+    });
+    return submitBatch.mock.calls[0]![1].find(
+      (e) => e.type === "session_context",
+    )?.payload;
+  };
+
+  it("tags a 1024px touch tablet as a tablet", async () => {
+    const payload = await contextOf(() => {
+      vi.spyOn(window, "matchMedia").mockImplementation(
+        (q: string) =>
+          ({ matches: q === "(pointer: coarse)", media: q }) as MediaQueryList,
+      );
+      vi.spyOn(window, "innerWidth", "get").mockReturnValue(1024);
+    });
+    expect(payload?.formFactor).toBe("tablet");
+  });
+
+  it("counts the child's own reduced-motion switch, not only the OS's", async () => {
+    document.documentElement.dataset.reducedMotion = "true";
+    try {
+      const payload = await contextOf(() => {});
+      expect(payload?.reducedMotion).toBe(true);
+    } finally {
+      delete document.documentElement.dataset.reducedMotion;
+    }
+  });
+});

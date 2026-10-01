@@ -62,4 +62,14 @@ describe("AccountOnPauseScreen", () => {
       expect(body).not.toContain(blame);
     }
   });
+
+  it("shows the Nevo mark, not a pause glyph", () => {
+    // The frame draws the brand mark in the violet circle and the wordmark
+    // above it. A pause symbol reads as a media control - something a child
+    // could press to un-pause - and this screen offers nothing to press.
+    render(<AccountOnPauseScreen />);
+
+    expect(screen.getByAltText("Nevo")).toBeInTheDocument();
+    expect(document.querySelector("svg")).toBeNull();
+  });
 });

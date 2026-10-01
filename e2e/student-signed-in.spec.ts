@@ -34,17 +34,25 @@ import { expect, test, type Page } from "@playwright/test";
  *
  * ## The coupling this catches
  *
- * An administrator's reset issues a SIX-digit PIN, and since 25 Sep a new PIN
- * is FOUR (`STUDENT_PIN_LENGTH`). The sign-in form therefore takes four to
- * eight; if it were ever capped at the creation length again, a child whose
- * PIN was reset by an adult could not type it in. The form test below types
- * the six-digit reset PIN, so it fails on exactly that.
+ * An administrator's reset issued a SIX-digit PIN until 1 Oct, and now issues
+ * four (`pinLength: 4`); six-digit PINs are still accepted for legacy
+ * accounts. The sign-in form therefore takes four to eight. The form test
+ * below types whatever the reset returned, so a form capped below a PIN the
+ * server still accepts fails here.
+ *
+ * ## The school code is read, never written down
+ *
+ * Migration 0086 (SCRUM-201, 30 Sep) regenerated every school code into a
+ * four-character alphabet with no 0, O, 1 or I, so a fixture holding the old
+ * code signed nobody in. A missing school and a wrong PIN both answer 401
+ * `authentication_failed` by design, so that failure read as a bad PIN. The
+ * code now comes from the E2E admin's own school record. A rate limit is a
+ * 429 `too_many_attempts`, never a 401, so a 401 here is always credentials.
  */
 
 const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL;
 const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD;
 const STUDENT_LOGIN = process.env.E2E_STUDENT_LOGIN;
-const SCHOOL_CODE = process.env.E2E_SCHOOL_CODE ?? "NEVO-E2E";
 const API = process.env.E2E_API_BASE ?? "https://nevo-backend-2-0-kn3d.onrender.com";
 
 /** Mirrors `lib/auth/session.ts`. Changing either without the other breaks this. */
@@ -69,6 +77,8 @@ interface StudentSession {
 
 /** Set once in `beforeAll`. */
 let pin = "";
+/** Read from the admin's school in `beforeAll` - see the docblock above. */
+let schoolCode = "";
 let session: StudentSession;
 /**
  * Whether the server says this child may proceed. Read once so the sign-in
@@ -117,6 +127,11 @@ test.describe("a signed-in student", () => {
     const adminBody = await admin.json();
     const auth = { Authorization: `Bearer ${adminBody.accessToken}` };
 
+    const me = await api.get(`${API}/api/v1/users/me`, { headers: auth });
+    expect(me.ok(), `Could not read the E2E admin's school (${me.status()}).`).toBeTruthy();
+    schoolCode = String((await me.json()).school?.code ?? "");
+    expect(schoolCode, "The E2E admin's school record carries no code.").not.toBe("");
+
     const listed = await api.get(`${API}/api/v1/students`, { headers: auth });
     expect(listed.ok(), `Could not list the tenant's students (${listed.status()}).`).toBeTruthy();
     const raw = await listed.json();
@@ -138,11 +153,13 @@ test.describe("a signed-in student", () => {
     expect(pin, "The reset returned no PIN.").toMatch(/^\d+$/);
 
     const login = await api.post(`${API}/api/v1/auth/login/pin`, {
-      data: { schoolCode: SCHOOL_CODE, loginIdentifier: STUDENT_LOGIN, pin },
+      data: { schoolCode, loginIdentifier: STUDENT_LOGIN, pin },
     });
     expect(
       login.ok(),
-      `The minted PIN did not sign the student in (${login.status()}).`,
+      login.status() === 429
+        ? "The PIN sign-in was rate limited (429 too_many_attempts)."
+        : `The minted PIN did not sign the student in (${login.status()}): the PIN, the login or the school code is wrong.`,
     ).toBeTruthy();
     const body = await login.json();
     expect(body.role, "The E2E probe account must be a student").toBe("student");
@@ -178,13 +195,24 @@ test.describe("a signed-in student", () => {
      *
      * So this reproduces the exact degradation the suite is for. The proxy
      * trusts the role cookie; the client reads the token from localStorage.
-     * Cookie without session means the proxy lets the child through and the
-     * console mounts signed-out - and renders the walkthrough's invented week.
-     * That must be visible to the same function the tests below rely on.
+     * A page the proxy let through that the client then finds signed out
+     * mounts the walkthrough's invented week. That must be visible to the same
+     * function the tests below rely on.
+     *
+     * THE COOKIE IS SENT, THEN TAKEN BACK. Since 1 Oct (#624) a page that loads
+     * on a role cookie with no session behind it clears the cookie and sends
+     * the child to the PIN door - the fix for the very state this used to
+     * reach by planting the cookie alone. So the cookie goes with the document
+     * request, which is all the proxy reads, and an init script deletes it
+     * before the app's first line runs. The client then sees no cookie and no
+     * session, which is an ordinary signed-out visit, and renders the samples.
      */
     await page.context().addCookies([
       { name: ROLE_COOKIE, value: "student", url: "http://localhost:3100" },
     ]);
+    await page.addInitScript((name) => {
+      document.cookie = `${name}=; Max-Age=0; path=/`;
+    }, ROLE_COOKIE);
     await page.goto("/student/dashboard");
     await shellMounted(page);
     await page.waitForTimeout(2_000);
@@ -254,12 +282,13 @@ test.describe("a signed-in student", () => {
      */
     await page.goto("/auth/sign-in");
 
-    await page.getByRole("textbox", { name: "School code" }).fill(SCHOOL_CODE);
+    await page.getByRole("textbox", { name: "School code" }).fill(schoolCode);
     await page.locator("#returning-username").fill(STUDENT_LOGIN!);
     await page
       .locator('input[aria-labelledby="returning-pin-label"]')
       .pressSequentially(pin);
-    await page.getByRole("button", { name: "Sign in" }).click();
+    // 00c's label for the button (it read "Sign in" until 1 Oct).
+    await page.getByRole("button", { name: "That's me" }).click();
 
     // Recorded, so a green run says WHICH door this child was sent through.
     test.info().annotations.push({

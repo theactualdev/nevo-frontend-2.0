@@ -24,8 +24,8 @@ export const SIGNAL_EVENT_TYPES = {
    * centrepiece, and the one component that teaches across every modality -
    * produced no evidence of its own. Steps rode `comprehension_response`
    * under a `kind` of our invention; solving emitted nothing at all; and a
-   * kinesthetic learner placing tiles, which is precisely how that learner
-   * shows their thinking, emitted nothing either.
+   * child placing tiles on the kinesthetic layer, where the placement is
+   * their working, emitted nothing either.
    */
   CALCULATION_STEP_RESPONSE: "calculation_step_response",
   CALCULATION_COMPLETE: "calculation_complete",
@@ -62,6 +62,31 @@ export const SIGNAL_EVENT_TYPES = {
    * Qualitative, multi-select, never scored; skipping is a legitimate answer.
    */
   FEELING_CHECKIN: "feeling_checkin",
+  /**
+   * What happened to an offer the engine made. All six are in the ingest
+   * enum and none was ever sent, so a "Not now" left no trace and the engine
+   * could not tell an offer a child turned down from one it never saw.
+   * Payload { segmentId, suggested } / { segmentId, breakType }.
+   *
+   * `ignored` is the pill still on screen when the child left the segment -
+   * neither taken nor turned down. A declined BREAK has no type of its own;
+   * that is an ask, not something to spell with another type.
+   */
+  MODALITY_SUGGESTION_SHOWN: "modality_suggestion_shown",
+  MODALITY_SUGGESTION_ACCEPTED: "modality_suggestion_accepted",
+  MODALITY_SUGGESTION_DECLINED: "modality_suggestion_declined",
+  MODALITY_SUGGESTION_IGNORED: "modality_suggestion_ignored",
+  BREAK_SUGGESTED: "break_suggested",
+  BREAK_TAKEN: "break_taken",
+  /** A real narration clip started for the first time on this visit. */
+  NARRATION_PLAYED: "narration_played",
+  /**
+   * An offer the engine made that the player did not put on screen, because
+   * one of the player's own rendering rules held it back - payload
+   * { segmentId, adaptation, reason }. Without it the engine reads its own
+   * suggestion as shown and ignored.
+   */
+  ADAPTATION_SUPPRESSED: "adaptation_suppressed",
 } as const;
 
 /** `system_busy` reasons — the closed set from the Touch Signal Contract. */
@@ -86,12 +111,10 @@ export const BUSY_PHASE = {
 export type BusyPhase = (typeof BUSY_PHASE)[keyof typeof BUSY_PHASE];
 
 /**
- * Observed Interaction Sequence signals (Product Arch B.2) — the first-run
- * onboarding activities seed the learner profile across cognitive dimensions.
- * Each event carries timing/sequence/hesitation in its payload.
- *
- * TODO(intelligence): reconcile exact names + payload schema with the backend
- * Intelligence Framework once the onboarding-signal contract lands.
+ * The baseline run's own markers, tracked by `ProfilingFlow`. None of them
+ * reaches the backend: the baseline reports through `POST /api/baseline/submit`
+ * as a reduced vector, so `signalsApi` drops all three before a batch is
+ * posted - see `CLIENT_ONLY_EVENT_TYPES`.
  */
 export const ONBOARDING_SIGNAL_TYPES = {
   // The OIS activity events (sort_placement, audio_response, pattern_tap,
@@ -123,6 +146,12 @@ export const SIGNAL_BATCH = {
   FLUSH_INTERVAL_MS: 5_000,
   /** Flush immediately once a batch reaches this many events. */
   MAX_BATCH_SIZE: 20,
+  /**
+   * The most one request may carry: `SignalBatchRequest.events` is
+   * `maxItems: 100`. A held or re-queued backlog is larger than that, and sent
+   * whole it was refused 422 and dropped, every event in it.
+   */
+  MAX_EVENTS_PER_REQUEST: 100,
   /**
    * Most events a HELD queue keeps while it waits for the session id the
    * ingest contract requires. A stream that can never send - a mock lesson,

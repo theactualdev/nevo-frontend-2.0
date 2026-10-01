@@ -10,6 +10,7 @@ import {
 } from "@/lib/mocks/teacherConnect";
 import { cn } from "@/lib/utils";
 import { ComposeModal } from "./ComposeModal";
+import { MaybeSample } from "@/components/shared/SampleRegion";
 
 /**
  * C10 Connect - individual threads between a teacher and their students, and
@@ -90,6 +91,7 @@ function Bubble({ m, isNew }: { m: Message; isNew?: boolean }) {
 export function ConnectView() {
   const {
     threads,
+    live,
     sample,
     loading,
     openThread,
@@ -306,6 +308,10 @@ export function ConnectView() {
           </div>
         </div>
       ) : (
+        /* Invented children and their messages, when the read failed - said
+           in prose above, and now marked, so the signed-in end-to-end check
+           can see it too. */
+        <MaybeSample showing={!live} kind="teacher:connect">
         <div className="flex min-h-0 flex-1 border-t border-nevo-near-black/8">
           {/* Thread list */}
           <div className="w-[260px] shrink-0 overflow-y-auto border-r border-nevo-near-black/8 p-3 xl:w-[330px]">
@@ -443,6 +449,7 @@ export function ConnectView() {
             </div>
           )}
         </div>
+        </MaybeSample>
       )}
 
       {composeOpen && (

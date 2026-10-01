@@ -1,9 +1,9 @@
 "use client";
 
-import { notFound } from "next/navigation";
 import { SampleRegion } from "@/components/shared/SampleRegion";
 import { useHydrated } from "@/hooks/useHydrated";
 import { useStudentLesson } from "@/hooks/useStudentLesson";
+import { LessonError } from "./LessonError";
 import { LessonLoadingSkeleton } from "./LessonLoadingSkeleton";
 import { LessonMessage } from "./LessonMessage";
 import { LessonPlayer } from "./LessonPlayer";
@@ -74,6 +74,8 @@ export function LessonRoute({
     adaptSegments,
     unavailable,
     opensAt,
+    placeUnknown,
+    fromShelf,
   } = useStudentLesson(lessonId);
   const hydrated = useHydrated();
 
@@ -120,6 +122,29 @@ export function LessonRoute({
     );
   }
 
+  /*
+   * THE LESSON LOADED AND THE CHILD'S PLACE IN IT DID NOT.
+   *
+   * Both are what the first frame is made of - the lesson is what it shows,
+   * the dashboard is where it opens and whether it may - so with one of them
+   * missing this is a load that failed, and it says so in the same words.
+   * Opening anyway put `in_progress, 0` over the child's real place on the
+   * first frame, and played a lesson their teacher may have called off.
+   *
+   * Not for a review, which writes no position and is not gated. Not for a
+   * lesson opened from the offline shelf either: offline, the dashboard was
+   * never going to answer, and the child saved it so it would open. That one
+   * opens without writing where it opened - see `placeUnknown` on the player.
+   */
+  if (lesson && placeUnknown && !fromShelf && !review) {
+    return (
+      <LessonError
+        onRetry={() => window.location.reload()}
+        onGoBack={() => exitTo(LESSONS_HREF)}
+      />
+    );
+  }
+
   if (lesson) {
     const player = (
       <LessonPlayer
@@ -130,6 +155,7 @@ export function LessonRoute({
         review={review}
         reviewConceptId={reviewConceptId}
         startAt={resumeAt ?? 0}
+        placeUnknown={placeUnknown}
         lastWorkedAt={lastWorkedAt}
         adaptSegments={adaptSegments}
       />
@@ -146,14 +172,13 @@ export function LessonRoute({
     );
   }
 
+  // The player frame's own error state, in its own words: the system owns
+  // the failure and the child is told plainly it was nothing they did.
   if (failed) {
     return (
-      <LessonMessage
-        title="We couldn’t open this lesson"
-        body="It hasn’t gone anywhere. Give it a moment and try again."
-        actionLabel="Try again"
-        onAction={() => window.location.reload()}
-        onBack={() => exitTo(LESSONS_HREF)}
+      <LessonError
+        onRetry={() => window.location.reload()}
+        onGoBack={() => exitTo(LESSONS_HREF)}
       />
     );
   }
@@ -169,15 +194,21 @@ export function LessonRoute({
     );
   }
 
-  // Nothing resolved it. Either the live read said 404, or there was no read
-  // to make - a signed-out visitor on an id the mock registry does not hold.
-  // Both are genuinely "no such lesson", and falling through to `null` here
-  // would render a blank screen instead of saying so.
-  notFound();
+  /*
+   * Nothing resolved it. Either the live read said 404, or there was no read
+   * to make - a signed-out visitor on an id the mock registry does not hold.
+   *
+   * Said here, in the summary route's words, rather than by `notFound()`. That
+   * dropped the child onto the app's "This page doesn't exist", which is
+   * written for a developer and whose only button is `router.back()` - off the
+   * site entirely on a reload or a QR arrival.
+   */
+  return (
+    <LessonMessage
+      title="We couldn’t find that lesson"
+      body="It may have been put away. Your other lessons are all still here."
+      actionLabel="Back to my lessons"
+      onAction={() => exitTo(LESSONS_HREF)}
+    />
+  );
 }
-
-/**
- * A calm, full-screen message in the player's own bare frame — the player runs
- * without the shell, so these states carry their own way back rather than
- * relying on a nav that is not on screen.
- */

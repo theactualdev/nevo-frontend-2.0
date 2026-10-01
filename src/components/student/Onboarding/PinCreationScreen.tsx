@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { Check } from "lucide-react";
-import { NevoKeyboard } from "@/components/shared";
+import { NevoKeyboard, useNevoKeyboardDock } from "@/components/shared";
 import { authApi } from "@/lib/api";
 import { STUDENT_PIN_LENGTH } from "@/lib/constants";
 import { USER_ROLES } from "@/lib/constants/permissions";
@@ -26,13 +26,13 @@ import { cn } from "@/lib/utils";
  * A path with neither is the one that cannot honestly promise anything, and
  * it no longer pretends: see `onboarding.ts`.
  */
-type PinState = { digits: string; error: boolean; done: boolean };
+export type PinState = { digits: string; error: boolean; done: boolean };
 type PinAction =
   | { type: "digit"; value: string }
   | { type: "backspace" }
   | { type: "saveFailed" };
 
-function pinReducer(state: PinState, action: PinAction): PinState {
+export function pinReducer(state: PinState, action: PinAction): PinState {
   // The server rejected the save: keep their first PIN, re-open the confirm
   // row, and let the alert line explain.
   if (action.type === "saveFailed") {
@@ -63,6 +63,15 @@ function pinReducer(state: PinState, action: PinAction): PinState {
     done: false,
   };
 }
+
+/**
+ * The two things that can go wrong once a PIN is typed twice, in the words
+ * both PIN-setting doors use. Change PIN draws its own steps around the same
+ * reducer and rows, and a second copy of these is how the two would drift.
+ */
+export const PIN_MISMATCH_COPY = "Those didn't match - let's try once more";
+export const PIN_NOT_SAVED_COPY =
+  "We couldn't save that just now - that's on us, not you. Your teacher can help.";
 
 /**
  * PIN Creation (UI/UX spec) — the last onboarding step before "You're In".
@@ -97,6 +106,20 @@ export function PinCreationScreen({
     done: false,
   });
   const [saveFailed, setSaveFailed] = useState(false);
+  /*
+   * THE PAD IS DOCKED AND FOCUS-DRIVEN, per design's ruling D on the PIN
+   * frame (15): "a focus-driven pad is transient, and a docked tray reads as
+   * transient". It was a permanent block pad, which is 28c's exception for a
+   * screen whose pad is the whole point.
+   *
+   * The boxes are a picture, not an input, so they get a field to focus - the
+   * same transparent overlay the sign-back-in form uses. Digits still arrive
+   * through the window listener below, which is why the field is read-only.
+   * It is focused on arrival, so the pad is up from the start and a child
+   * never has to discover that the boxes are tappable.
+   */
+  const pad = useNevoKeyboardDock();
+  const entryRef = useRef<HTMLInputElement>(null);
 
   const onCompleteRef = useRef(onComplete);
   useEffect(() => {
@@ -128,6 +151,11 @@ export function PinCreationScreen({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [sso, pressDigit, backspace]);
+
+  useEffect(() => {
+    if (sso || done) return;
+    entryRef.current?.focus({ preventScroll: true });
+  }, [sso, done]);
 
   // Auto-advance once the PIN is set (manual) or the SSO confirmation lands.
   // With a session, "set" means stored server-side: the write happens inside
@@ -165,11 +193,14 @@ export function PinCreationScreen({
          *   attributing one child's data to another.
          *
          * The two arrivals were always distinguishable without asking about
-         * tokens. `storePin` is passed by `ObservedInteractionSequence` and
-         * only by it; it redeems a join link or spends an onboarding token and
-         * carries its own identity. `ChangePinScreen` passes none, and there
-         * the signed-in student IS the subject - the only case `setPin` is
-         * right for, so that is now what it asks.
+         * tokens. `storePin` is passed by `ObservedInteractionSequence`, the
+         * only screen that renders this one; it redeems a join link or spends
+         * an onboarding token and carries its own identity. Change PIN does
+         * not render this screen: it draws its own steps around `pinReducer`
+         * and calls `setPin` itself, with the current PIN. So the `setPin`
+         * branch below is reached only by a caller that passes no `storePin`,
+         * and only for a signed-in student - the one case `setPin` is right
+         * for.
          */
         const session = getSession();
         const store = storePinRef.current
@@ -238,21 +269,34 @@ export function PinCreationScreen({
 
         {showEntry && (
           <>
-            <PinRow
-              filled={digits.length}
-              offset={0}
-              caretAt={digits.length}
-              error={false}
-            />
-            <p className="mt-7 mb-3 text-sm font-medium">
-              Type it again to confirm
-            </p>
-            <PinRow
-              filled={digits.length}
-              offset={STUDENT_PIN_LENGTH}
-              caretAt={digits.length}
-              error={error}
-            />
+            <div className="relative">
+              <input
+                ref={entryRef}
+                value=""
+                readOnly
+                inputMode="none"
+                autoComplete="off"
+                aria-label="Your PIN"
+                onFocus={pad.onFocus}
+                onBlur={pad.onBlur}
+                className="absolute inset-0 z-10 h-full w-full cursor-text opacity-0 outline-none"
+              />
+              <PinRow
+                filled={digits.length}
+                offset={0}
+                caretAt={digits.length}
+                error={false}
+              />
+              <p className="mt-7 mb-3 text-sm font-medium">
+                Type it again to confirm
+              </p>
+              <PinRow
+                filled={digits.length}
+                offset={STUDENT_PIN_LENGTH}
+                caretAt={digits.length}
+                error={error}
+              />
+            </div>
             <p role="alert" className="mt-4 min-h-5 text-sm text-nevo-violet">
               {/*
                 NAMES THE FAILURE THAT ACTUALLY HAPPENED.
@@ -271,22 +315,21 @@ export function PinCreationScreen({
                 didn't match" and "that's on us, not you".
               */}
               {error
-                ? "Those didn't match - let's try once more"
+                ? PIN_MISMATCH_COPY
                 : saveFailed
-                  ? "We couldn't save that just now - that's on us, not you. Your teacher can help."
+                  ? PIN_NOT_SAVED_COPY
                   : ""}
             </p>
           </>
         )}
       </div>
 
-      {showEntry && (
+      {showEntry && pad.open && (
         <NevoKeyboard
           layout="pad"
-          presentation="block"
           onKey={pressDigit}
           onBackspace={backspace}
-          className="mb-8 shrink-0"
+          className="sticky bottom-0 z-40 shrink-0"
         />
       )}
     </div>

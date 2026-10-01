@@ -1,10 +1,7 @@
-"use client";
-
 import Image from "next/image";
-import { useRouter } from "next/navigation";
-import { KeyRound } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/shared";
-import { getRememberedProfile } from "@/lib/auth/session";
+import { withNext } from "@/lib/auth/nextPath";
 
 /**
  * Forgot PIN (screen 00a) — informational, and deliberately so.
@@ -22,42 +19,63 @@ import { getRememberedProfile } from "@/lib/auth/session";
  * that is a product decision rather than a wiring one. Raised with design;
  * until they rule, the screen says what the frame says.
  *
- * This replaced a literal placeholder reading "Placeholder - built per the
- * UI/UX spec", which was the one thing it was not.
+ * BOTH WAYS OUT GO TO THE SIGN-IN DOOR, always. They used to read the legacy
+ * one-child profile key and send a device it did not name to
+ * `/student/onboarding` - the new-account Welcome - which on a shared tablet
+ * is how a returning child makes a second account. `/auth/login` already
+ * knows what to do with a device that remembers nobody (28c-2).
+ *
+ * Laid out as 00a draws it: a 44px Back at the top left, the drawn
+ * illustration, no wordmark. This replaced a literal placeholder reading
+ * "Placeholder - built per the UI/UX spec", and then a key glyph standing in
+ * for the art.
  */
-export function ForgotPinScreen() {
-  const router = useRouter();
-  // Where "Back to sign in" belongs: a device that remembers a child returns to
-  // the PIN unlock; one that does not has nothing to unlock and starts over.
-  const back = () =>
-    router.push(getRememberedProfile() ? "/auth/login" : "/student/onboarding");
+export function ForgotPinScreen({ next }: { next?: string }) {
+  const back = withNext("/auth/login", next);
 
   return (
-    <main className="flex min-h-[100dvh] flex-col items-center justify-center bg-nevo-cream px-9 text-center text-nevo-near-black">
-      <Image
-        src="/brand/nevo-wordmark.png"
-        alt="Nevo"
-        width={344}
-        height={116}
-        priority
-        className="mb-9 h-5 w-auto"
-      />
+    <main className="flex min-h-[100dvh] w-full flex-col bg-nevo-cream text-nevo-near-black">
+      <div className="flex h-14 shrink-0 items-center px-3 sm:h-16 sm:px-4">
+        <Link
+          href={back}
+          aria-label="Back"
+          className="flex size-11 cursor-pointer items-center justify-center rounded-[10px] transition-transform active:scale-[0.98]"
+        >
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden>
+            <path
+              d="M15 5l-7 7 7 7"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </Link>
+      </div>
 
-      <span className="flex size-16 items-center justify-center rounded-full bg-nevo-violet/22 text-nevo-navy">
-        <KeyRound className="size-7" strokeWidth={1.9} />
-      </span>
+      <div className="flex flex-1 flex-col items-center justify-center px-9 pb-12 text-center sm:px-10 sm:pb-16">
+        <Image
+          src="/illustrations/error.png"
+          alt="A calm figure with an open, questioning hand"
+          width={1254}
+          height={1254}
+          sizes="248px"
+          priority
+          className="size-[184px] object-contain sm:size-[248px]"
+        />
 
-      <h1 className="mt-6 text-[22px] font-semibold tracking-[-0.01em] sm:text-2xl">
-        Forgot your PIN?
-      </h1>
-      <p className="mt-2.5 max-w-[320px] text-[15px] leading-[1.55] text-nevo-near-black/70 sm:text-base">
-        That&rsquo;s okay &mdash; it happens. Ask your teacher and they&rsquo;ll
-        help you sign back in.
-      </p>
+        <h1 className="mt-8 text-[23px] font-semibold tracking-[-0.01em] sm:mt-9 sm:text-[28px]">
+          Forgot your PIN?
+        </h1>
+        <p className="mt-3.5 max-w-[300px] text-base leading-[1.55] text-nevo-near-black/70 sm:mt-4 sm:max-w-[400px] sm:text-lg">
+          That&rsquo;s okay - it happens. Ask your teacher and they&rsquo;ll help
+          you sign back in.
+        </p>
 
-      <Button className="mt-8 w-full max-w-[300px]" onClick={back}>
-        Back to sign in
-      </Button>
+        <Button asChild className="mt-8 w-full text-base sm:mt-9 sm:max-w-[360px]">
+          <Link href={back}>Back to sign in</Link>
+        </Button>
+      </div>
     </main>
   );
 }

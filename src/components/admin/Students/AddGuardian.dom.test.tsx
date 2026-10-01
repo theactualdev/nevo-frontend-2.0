@@ -5,6 +5,33 @@ import { withGate } from "@/test/setupGate";
 import { ApiError } from "@/lib/api/client";
 import { StudentDetailView } from "./StudentDetailView";
 
+/*
+ * An admin with ROSTER access - the founding admin's, and enough to send the
+ * consent request (backend, 1 Oct: roster OR senco). What an admin with
+ * neither sees is pinned in `ConsentRole.dom.test.tsx`.
+ */
+let scopes: string[] = ["roster"];
+beforeEach(() => {
+  scopes = ["roster"];
+});
+vi.mock("@/context/PermissionContext", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/context/PermissionContext")>();
+  const { createContext } = await import("react");
+  // The context's DEFAULT, read when no provider is mounted - with a getter,
+  // so each test's `scopes` is the one seen.
+  return {
+    ...actual,
+    PermissionContext: createContext({
+      get scopes() {
+        return scopes;
+      },
+      resolved: true,
+      status: "ready",
+      refresh: () => {},
+    } as never),
+  };
+});
+
 /**
  * Consent is a gate, so a child with no guardian on record could never start
  * - and the student page said "No guardian on the record" with nothing to

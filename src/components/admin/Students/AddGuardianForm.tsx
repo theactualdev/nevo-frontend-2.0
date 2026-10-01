@@ -44,9 +44,15 @@ export function AddGuardianForm({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const nameOk = name.trim().length >= 2;
+  /*
+   * THE NAME IS OPTIONAL (backend, 1 Oct). It was required at two
+   * characters, while the roster import never insists on a guardian's name -
+   * so every guardian who arrived nameless was unaskable. The parent gives
+   * their own at consent; a blank one reads "Parent or guardian" on their
+   * screen, so nothing is put in its place here.
+   */
   const emailOk = isEmail(email);
-  const ready = nameOk && emailOk && !sending && !writesPaused;
+  const ready = emailOk && !sending && !writesPaused;
 
   const submit = () => {
     if (!ready) return;
@@ -55,7 +61,7 @@ export function AddGuardianForm({
     const guardian = { name: name.trim(), email: email.trim() };
     consentsApi
       .addGuardian(studentId, guardian)
-      .then((receipt) => onAdded(receipt, guardian.name))
+      .then((receipt) => onAdded(receipt, guardian.name || guardian.email))
       .catch((err: unknown) =>
         setError(
           (err instanceof ApiError ? apiErrorMessage(err.detail) : null) ??
@@ -71,7 +77,8 @@ export function AddGuardianForm({
   return (
     <div className="flex max-w-[440px] flex-col gap-3">
       <label className="text-[13px] font-medium text-nevo-near-black/62">
-        Parent or guardian&rsquo;s name
+        Parent or guardian&rsquo;s name{" "}
+        <span className="font-normal text-nevo-near-black/45">(optional)</span>
         <input
           value={name}
           onChange={(e) => {

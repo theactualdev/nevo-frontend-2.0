@@ -11,6 +11,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { useContext, useEffect } from "react";
 import { LessonAskNevo } from "./LessonAskNevo";
 import { LessonContext, LessonProvider } from "@/context/LessonContext";
+import { LessonComplete } from "@/components/student/Lesson/LessonComplete";
 import LessonLayout from "./layout";
 
 /**
@@ -68,10 +69,21 @@ function PlayerStub({ lessonId }: { lessonId: string }) {
 
 const LESSON_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 
-const mountInsideProvider = () =>
+/**
+ * The player, either teaching or on its completion screen. The completion
+ * screen is the real one: it is what tells the layout Ask Nevo may show.
+ */
+const Player = ({ complete }: { complete: boolean }) => (
+  <>
+    <PlayerStub lessonId={LESSON_ID} />
+    {complete && <LessonComplete onDone={() => {}} />}
+  </>
+);
+
+const mountInsideProvider = ({ complete = true } = {}) =>
   render(
     <LessonProvider>
-      <PlayerStub lessonId={LESSON_ID} />
+      <Player complete={complete} />
       <LessonAskNevo />
     </LessonProvider>,
   );
@@ -81,7 +93,7 @@ const mountOutsideProvider = () =>
   render(
     <>
       <LessonProvider>
-        <PlayerStub lessonId={LESSON_ID} />
+        <Player complete />
       </LessonProvider>
       <LessonAskNevo />
     </>,
@@ -135,38 +147,67 @@ describe("a question asked from inside a lesson", () => {
     expect(sent.contextIds.lessonId).toBe(LESSON_ID);
   });
 
-  it("carried nothing when it rendered outside the provider", async () => {
+  it("cannot appear at all outside the provider", () => {
     /*
-     * The shipped behaviour, kept as a test so the move cannot be undone
-     * silently. Rendering as a sibling of the provider is indistinguishable
-     * from having no lesson open.
+     * This used to pin the shipped behaviour - outside the provider it rendered
+     * and sent a null lesson. It no longer renders there at all: whether it may
+     * show is itself read from the provider, so a sibling placement has no
+     * completion screen to allow it and shows nothing.
      */
     mountOutsideProvider();
 
-    const sent = await askSomething();
-
-    expect(sent.contextIds.lessonId).toBeNull();
+    expect(launchers()).toEqual([]);
   });
 });
 
 describe("where Ask Nevo belongs", () => {
-  it("is present on the player", () => {
+  /*
+   * IA 31: "Ask Nevo is never available during active Lesson Player content.
+   * It is available on every other student-facing screen, including the
+   * Lesson Completion and Lesson Summary screens." It was on the player
+   * throughout - over every segment, break and after-lesson question.
+   */
+  it("is absent while the player is teaching", () => {
+    pathname.value = "/student/lessons/les-1";
+    mountInsideProvider({ complete: false });
+
+    expect(launchers()).toEqual([]);
+  });
+
+  it("is present on the completion screen", async () => {
     pathname.value = "/student/lessons/les-1";
     mountInsideProvider();
 
-    expect(launchers().length).toBeGreaterThan(0);
+    await waitFor(() => expect(launchers().length).toBeGreaterThan(0));
   });
 
-  it("is present on the review session, which reuses the player", () => {
+  it("goes again when the completion screen does", async () => {
+    pathname.value = "/student/lessons/les-1";
+    const { rerender } = mountInsideProvider();
+    await waitFor(() => expect(launchers().length).toBeGreaterThan(0));
+
+    rerender(
+      <LessonProvider>
+        <Player complete={false} />
+        <LessonAskNevo />
+      </LessonProvider>,
+    );
+
+    expect(launchers()).toEqual([]);
+  });
+
+  it("is present on the review session's completion, which reuses the player", async () => {
     pathname.value = "/student/lessons/les-1/review-session";
     mountInsideProvider();
 
-    expect(launchers().length).toBeGreaterThan(0);
+    await waitFor(() => expect(launchers().length).toBeGreaterThan(0));
   });
 
-  it("is absent on the summary, which sits under the same layout", () => {
+  it("leaves the summary to the shell's own launcher", () => {
     // `/summary` and `/review` share this route segment and are not the
-    // player - they have their own chrome, and Ask Nevo does not belong there.
+    // player. They keep the shell's chrome, and the shell's own Ask Nevo
+    // launcher with it - IA 31 puts Ask Nevo on the summary - so this one,
+    // the layout's, stays off rather than drawing a second.
     pathname.value = "/student/lessons/les-1/summary";
     mountInsideProvider();
 
@@ -189,10 +230,16 @@ describe("the layout is what puts it in the right place", () => {
    * exact regression the whole change exists to prevent.
    */
   it("renders Ask Nevo inside the lesson's provider", async () => {
-    render(<LessonLayout>{<PlayerStub lessonId={LESSON_ID} />}</LessonLayout>);
+    render(<LessonLayout>{<Player complete />}</LessonLayout>);
 
     const sent = await askSomething();
 
     expect(sent.contextIds.lessonId).toBe(LESSON_ID);
+  });
+
+  it("and keeps it off the player while it is teaching", () => {
+    render(<LessonLayout>{<Player complete={false} />}</LessonLayout>);
+
+    expect(launchers()).toEqual([]);
   });
 });

@@ -12,6 +12,11 @@
  */
 
 import { clearSession, getSession, getToken } from "@/lib/auth/session";
+import {
+  announceAccountPause,
+  pauseHostsMounted,
+  pausesInPlace,
+} from "@/lib/auth/accountPause";
 import { noteServerClock } from "./serverClock";
 import { isAdminRole } from "@/lib/constants/permissions";
 import { API_ORIGIN } from "./upstream";
@@ -182,6 +187,14 @@ export function sessionExpiredDoor(
    * query string can only ever under-claim.
    */
   code?: string | null,
+  /**
+   * Where the person was when it ended, carried as `?next=` so signing back in
+   * returns them there - IA 31: "Log back in -> Student Login Screen (lesson
+   * position preserved)". The learner door only, and only a student route: the
+   * staff doors' sign-in links do not read it, and anything else is not a
+   * place the child's door should send them.
+   */
+  from?: string | null,
 ): string {
   const base =
     role === "teacher"
@@ -189,7 +202,13 @@ export function sessionExpiredDoor(
       : isAdminRole(role)
         ? "/auth/admin/session-expired"
         : "/auth/session-expired";
-  return code ? `${base}?reason=${encodeURIComponent(code)}` : base;
+  const query = [
+    code ? `reason=${encodeURIComponent(code)}` : null,
+    base === "/auth/session-expired" && from?.startsWith("/student")
+      ? `next=${encodeURIComponent(from)}`
+      : null,
+  ].filter(Boolean);
+  return query.length ? `${base}?${query.join("&")}` : base;
 }
 
 /**
@@ -216,6 +235,15 @@ function handleAuthFailure(
   // looked signed in.
   if (path.includes("/auth/login") || path.includes("/auth/logout")) return;
   const role = getSession()?.role;
+  const code = apiErrorCode(detail);
+  // A child's pause is shown where they are (28b), over the lesson, rather
+  // than by leaving it. The session stays until they tap Okay - see
+  // `accountPause.ts` for why, and for the case with nothing to draw it.
+  if (pausesInPlace(role, code, pauseHostsMounted())) {
+    redirecting = true;
+    announceAccountPause();
+    return;
+  }
   clearSession();
   // Every console now lands on a screen that SAYS the session ended, rather
   // than reappearing as a sign-in form with no explanation - design shipped
@@ -224,7 +252,13 @@ function handleAuthFailure(
   // picks the door the screen offers. The backend's admin roles are
   // `senco_admin` and `other_admin`, never a plain "admin".
   redirecting = true;
-  window.location.assign(sessionExpiredDoor(role, apiErrorCode(detail)));
+  window.location.assign(
+    sessionExpiredDoor(
+      role,
+      code,
+      `${window.location.pathname}${window.location.search}`,
+    ),
+  );
 }
 
 /** An array repeats the key - see `buildUrl`. */

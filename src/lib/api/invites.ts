@@ -94,7 +94,7 @@ export interface BulkInviteResult {
 
 /** What the join link resolves to, before anyone has an account. */
 export interface JoinLookup {
-  /** "valid" | "expired" | "revoked" - drives which of D19's three states shows. */
+  /** Always "valid": a dead link is a 404, never a 200 with another status. */
   status: string;
   role: string;
   schoolName: string | null;

@@ -21,6 +21,7 @@ import { SectionReview } from "./SectionReview";
 import { LiveStructureTree } from "./LiveStructureTree";
 import { StructureTree } from "./StructureTree";
 import { UploadResult } from "./UploadResult";
+import { MaybeSample, SampleRegion } from "@/components/shared/SampleRegion";
 
 /**
  * Lesson Upload wizard (SCRUM-102.6 reconciled flow, C07g): one flow, two
@@ -498,10 +499,12 @@ export function UploadWizard() {
       {/* The designed walkthrough, on fixture content, for a visitor with no
           token. A signed-in teacher reaches the live review above. */}
       {phase === "review" && sample && (
-        <SectionReview
-          onBack={() => setPhase("file")}
-          onDone={() => setPhase("done")}
-        />
+        <SampleRegion kind="teacher:upload-demo-review">
+          <SectionReview
+            onBack={() => setPhase("file")}
+            onDone={() => setPhase("done")}
+          />
+        </SampleRegion>
       )}
 
       {/* THE SINGLE LESSON'S OWN REVIEW - C07g step 3, live. */}
@@ -554,6 +557,7 @@ export function UploadWizard() {
       )}
 
       {fallback && (
+        <MaybeSample showing={sample} kind="teacher:upload-demo-fallback">
         <ParseFallback
           kind={fallback.kind}
           failureReason={staged.failureReason}
@@ -564,6 +568,7 @@ export function UploadWizard() {
           onContinueAnyway={() => setPhase("blockParsed")}
           onRetrySameFile={tryAgain}
         />
+        </MaybeSample>
       )}
 
       {/*
@@ -783,9 +788,11 @@ export function UploadWizard() {
               live at. Signed-out only by construction: `blockParsed` is
               reached from the mocked beats. */}
           {phase === "demoStructure" && (
-            <div className="w-full">
-              <StructureTree />
-            </div>
+            <SampleRegion kind="teacher:upload-demo-structure">
+              <div className="w-full">
+                <StructureTree />
+              </div>
+            </SampleRegion>
           )}
 
           {/* A REAL staged upload takes over the block path. `ParseProgress`
@@ -998,6 +1005,7 @@ export function UploadWizard() {
           )}
 
           {phase === "done" && (
+            <MaybeSample showing={sample} kind="teacher:upload-demo-done">
             <div className="w-full rounded-[16px] bg-nevo-cream-elevated p-8 shadow-elevation-1">
               <div className="flex items-center gap-4">
                 <span className="flex size-[52px] shrink-0 items-center justify-center rounded-full bg-nevo-navy motion-safe:animate-nevo-pop">
@@ -1041,9 +1049,11 @@ export function UploadWizard() {
                 </button>
               </div>
             </div>
+            </MaybeSample>
           )}
 
           {phase === "blockParsed" && (
+            <MaybeSample showing={sample} kind="teacher:upload-demo-parsed">
             <div className="w-full rounded-[16px] bg-nevo-cream-elevated p-8 shadow-elevation-1">
               <div className="flex items-center gap-4">
                 <span className="flex size-[52px] shrink-0 items-center justify-center rounded-full bg-nevo-navy motion-safe:animate-nevo-pop">
@@ -1089,6 +1099,7 @@ export function UploadWizard() {
                 </button>
               </div>
             </div>
+            </MaybeSample>
           )}
           </div>
         </div>

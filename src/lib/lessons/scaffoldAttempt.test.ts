@@ -114,3 +114,22 @@ describe("when there is nothing to report", () => {
     expect(out).toBeNull();
   });
 });
+
+describe("how long the answer took", () => {
+  it("travels when it was measured, as the whole milliseconds the contract takes", () => {
+    const out = scaffoldAttemptFor({
+      question,
+      correct: true,
+      studentId: "s-1",
+      responseTimeMs: 4210.6,
+    });
+
+    expect(out?.responseTimeMs).toBe(4211);
+  });
+
+  it("is left out, not zeroed, when nothing timed it", () => {
+    const out = scaffoldAttemptFor({ question, correct: true, studentId: "s-1" });
+
+    expect(out).not.toHaveProperty("responseTimeMs");
+  });
+});

@@ -48,12 +48,29 @@ function deleteRoleCookie(): void {
   document.cookie = `${ROLE_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax`;
 }
 
+function hasRoleCookie(): boolean {
+  if (typeof document === "undefined") return false;
+  const prefix = `${ROLE_COOKIE}=`;
+  return document.cookie
+    .split(";")
+    .map((c) => c.trim())
+    .some((c) => c.startsWith(prefix) && c.length > prefix.length);
+}
+
 export interface StoredSession {
   token: string;
   /** ISO timestamp from the backend's `expiresAt`. */
   expiresAt: string;
   userId: string;
   role: string;
+  /**
+   * How this account signed in, when the door that stored it knows. Only the
+   * SSO callback says, and onboarding branches on it: an SSO child skips the
+   * name, school and class steps and the PIN. It lived only in React state, so
+   * a reload mid-onboarding put an SSO child on the manual path with an empty
+   * draft. A refresh of the same account keeps it - see `setSession`.
+   */
+  method?: "sso" | "manual";
 }
 
 /**
@@ -138,6 +155,7 @@ export interface RememberedProfile {
 
 let session: StoredSession | null = null;
 let hydrated = false;
+let orphanedRoleCookie = false;
 
 function hydrate(): void {
   if (hydrated || typeof window === "undefined") return;
@@ -148,6 +166,38 @@ function hydrate(): void {
   } catch {
     session = null;
   }
+  /*
+   * A ROLE WITH NO SESSION BEHIND IT.
+   *
+   * `setSession` writes the cookie, then the token, and a token write that
+   * fails is swallowed - private browsing, a full disk, site data cleared
+   * without its cookies. The tab carries on in memory; the next reload does
+   * not. The guard then let the child through to the tabs on the cookie,
+   * every screen found no token and drew the signed-out walkthrough, and the
+   * PIN door bounced them straight back to it because the cookie still said
+   * "student". Signed in as far as the server could tell, signed out as far
+   * as the app could, and no way to the one screen that would fix it.
+   *
+   * The cookie only ever mirrors this session, so with no session here it
+   * describes nothing. Dropping it opens the doors again, and the shell sends
+   * the child to one.
+   */
+  if (!session && hasRoleCookie()) {
+    orphanedRoleCookie = true;
+    deleteRoleCookie();
+  }
+}
+
+/**
+ * Did this page load arrive on a role cookie whose session was gone?
+ *
+ * True at most for the load that found it - the cookie is deleted in the same
+ * breath - and only ever about THIS device's storage. A session that expired
+ * clears its own cookie and is not this.
+ */
+export function arrivedWithoutSession(): boolean {
+  hydrate();
+  return orphanedRoleCookie;
 }
 
 export function getSession(): StoredSession | null {
@@ -160,7 +210,13 @@ export function getToken(): string | undefined {
   return getSession()?.token;
 }
 
-export function setSession(next: StoredSession): void {
+export function setSession(incoming: StoredSession): void {
+  hydrate();
+  // A token refresh is the same account and does not say how it signed in.
+  const method =
+    incoming.method ??
+    (session?.userId === incoming.userId ? session.method : undefined);
+  const next = method ? { ...incoming, method } : incoming;
   hydrated = true;
   session = next;
   writeRoleCookie(next.role, next.expiresAt);
@@ -246,7 +302,8 @@ export function getRememberedProfile(): RememberedProfile | null {
  * would empty out school by school as those aged out.
  *
  * The legacy key is still written because `getRememberedProfile` still backs
- * `ForgotPinScreen` and `ProfileSettings`' sign-out destination.
+ * `setStoredDisplayName`. It no longer picks a door: sign-out and Forgot PIN
+ * both go to `/auth/login`, which handles a device that remembers nobody.
  */
 export function rememberProfile(profile: RememberedProfile): void {
   try {

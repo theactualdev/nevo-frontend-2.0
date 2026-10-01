@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Check, CloudDownload } from "lucide-react";
 import { useHasSession } from "@/hooks/useHasSession";
 import { useHydrated } from "@/hooks/useHydrated";
+import { SampleRegion } from "@/components/shared/SampleRegion";
 import { cn } from "@/lib/utils";
 import { SavedLessons } from "./SavedLessons";
 
@@ -94,7 +95,11 @@ export function DownloadsTab() {
   // A signed-in child gets the real shelf: see `SavedLessons`.
   if (signedIn) return <SavedLessons />;
 
+  // Signed out: four lessons that are nobody's and a simulated save, so the
+  // region is marked. The gates above hold today; the mark is what lets an
+  // end-to-end run SEE it if one ever stops holding.
   return (
+    <SampleRegion kind="student:downloads">
     <div className="mx-auto w-full max-w-[640px] px-5 py-2 pb-6 sm:px-8 sm:py-6">
       <h1 className="text-2xl font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[30px] lg:text-[32px]">
         Downloads
@@ -115,7 +120,7 @@ export function DownloadsTab() {
             <button
               type="button"
               onClick={() => toggle(item.id)}
-              className="flex w-full items-center gap-3 border-b border-nevo-near-black/8 py-4 text-left"
+              className="flex w-full cursor-pointer items-center gap-3 border-b border-nevo-near-black/8 py-4 text-left"
             >
               <span className="min-w-0 flex-1 truncate text-[15px] text-nevo-near-black">
                 {item.title}
@@ -129,6 +134,7 @@ export function DownloadsTab() {
         ))}
       </ul>
     </div>
+    </SampleRegion>
   );
 }
 

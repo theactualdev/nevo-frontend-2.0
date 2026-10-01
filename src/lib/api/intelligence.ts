@@ -52,6 +52,7 @@ export interface AdaptSegment {
   /** At least one - the contract sets minItems: 1. */
   availableModalities: string[];
   conceptId?: string | null;
+  /** `exclusiveMinimum: 0` - a 0 is a 422, so "no estimate" is omitted. */
   estimatedMinutes?: number | null;
   /**
    * Which rewrites this segment actually has, so the engine does not instruct
@@ -99,13 +100,17 @@ export type AdaptationMode = "lesson_load" | "in_lesson";
  *
  * ONLY OBSERVED FACTS ARE TYPED HERE. The contract also accepts
  * `engagementScore`, `engagementBaseline`, `comprehensionScore`,
- * `sessionAverageComprehension`, `consecutiveErrors`, `accuracyBelowBaseline`
- * and `responseTimeBelowBaseline`. Every one of those is a MEASUREMENT of a
- * child that this app cannot make: nothing defines engagement client-side,
- * there is no baseline to compare against, and comprehension needs marked
- * checkpoints, which no lesson currently carries. Sending a number we invented
- * would be worse than sending nothing - the engine would act on it, and a
- * child would be adapted against a figure we made up.
+ * `sessionAverageComprehension`, `accuracyBelowBaseline` and
+ * `responseTimeBelowBaseline`. Every one of those is a MEASUREMENT of a child
+ * that this app cannot make: nothing defines engagement client-side, there is
+ * no baseline to compare against, and a comprehension score is a score - the
+ * checks are marked, but turning marks into a number is the engine's job.
+ * Sending a number we invented would be worse than sending nothing - the
+ * engine would act on it, and a child would be adapted against a figure we
+ * made up.
+ *
+ * `consecutiveErrors` used to be listed with them and is not one: it is a
+ * count of wrong answers in a row, as observed as a replay count.
  *
  * What is here is time, position and what the child actually did. Checked
  * against the deployed engine: those alone earn a real break -
@@ -122,7 +127,9 @@ export interface RuntimeSignals {
   currentSegmentElapsedSeconds?: number | null;
   midpointReached?: boolean;
   replayCountOnSegment?: number;
+  consecutiveErrors?: number;
   sessionModalityShiftCount?: number | null;
+  /** Typed, deliberately unsent - see `useRuntimeAdaptation`. */
   secondsSinceLastAdaptation?: number | null;
   /** Modalities the child was offered and turned down. */
   declinedModalities?: string[];

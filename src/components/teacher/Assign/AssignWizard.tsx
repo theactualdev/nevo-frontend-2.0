@@ -11,6 +11,7 @@ import { useHasSession } from "@/hooks/useHasSession";
 import { useSystemMessages } from "@/components/shared/SystemMessages";
 import { useTeacherClasses } from "@/hooks/useTeacherClasses";
 import { cn } from "@/lib/utils";
+import { MaybeSample } from "@/components/shared/SampleRegion";
 
 /**
  * C07i Lesson Assignment: four steps, each a direct question - conversational
@@ -330,11 +331,18 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
    * no way to say "not yet" about one row; a disabled row is a state design has
    * not drawn. Absent is the honest version until they do.
    */
+  /*
+   * AND NOT THE FIXTURES, ONCE SIGNED IN. A failed library read put the
+   * frame's four invented lessons in front of a signed-in teacher - pickable,
+   * unmarked, and refused only at step 4 after classes and a time had been
+   * chosen for them. The walkthrough keeps them; a real teacher is told the
+   * read failed, in the sentence step 4 already used for it.
+   */
   const lessons = live
     ? cards
         .filter((c) => c.kind === "normal")
         .map((c) => ({ id: c.id, title: c.title, meta: c.meta }))
-    : !signedIn || lessonsSample
+    : !signedIn
       ? LESSONS
       : [];
 
@@ -785,6 +793,14 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
                       className="h-[74px] animate-pulse rounded-[12px] bg-nevo-cream-elevated"
                     />
                   ))}
+                {signedIn && lessonsSample && (
+                  <p className="text-[14px] leading-[1.55] text-nevo-near-black/68">
+                    We couldn&rsquo;t load your lessons, so we can&rsquo;t
+                    assign them. Nothing has been sent - reopen this from your
+                    library and try again.
+                  </p>
+                )}
+                <MaybeSample showing={!live} kind="teacher:assign-lessons">
                 {lessons.map((l) => (
                   <CheckCard
                     key={l.id}
@@ -794,6 +810,7 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
                     sub={l.meta}
                   />
                 ))}
+                </MaybeSample>
               </div>
             )}
 
@@ -830,7 +847,15 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
                             className="h-[74px] animate-pulse rounded-[12px] bg-nevo-cream-elevated"
                           />
                         ))
-                      : myClasses.map((c) => (
+                      : (
+                        /* The sample classes carry the notice above AND the
+                           mark, so the signed-in end-to-end check can see
+                           them - it could not before. */
+                        <MaybeSample
+                          showing={classesSample || !signedIn}
+                          kind="teacher:assign-classes"
+                        >
+                        {myClasses.map((c) => (
                           <CheckCard
                             key={c.id}
                             on={classes.has(c.id)}
@@ -843,6 +868,8 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
                             }
                           />
                         ))}
+                        </MaybeSample>
+                      )}
                   </div>
                 ) : (
                   <div className="mt-4 flex flex-col gap-4 xl:mt-[18px]">

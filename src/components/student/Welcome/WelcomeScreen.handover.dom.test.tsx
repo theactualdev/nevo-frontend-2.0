@@ -63,6 +63,7 @@ beforeEach(() => {
   auth.name = null;
   draft.merged = [];
   replace.mockReset();
+  signOut.mockReset();
 });
 
 afterEach(() => {
@@ -116,6 +117,21 @@ describe("a join link on a tablet somebody is signed into", () => {
 
     expect(auth.cleared).toBe(1);
     expect(body()).not.toMatch(/Someone new is joining/i);
+  });
+
+  it("signs the previous child out, not only forgets their token", () => {
+    /*
+     * Clearing the stored token alone left the server session live, the auth
+     * context still holding the previous child, and the on-device signal store
+     * still tagged with them - so the new account was born under an old
+     * child's context. `signOut` is the one call that ends all three.
+     */
+    hasSession.value = true;
+    render(<WelcomeScreen joinToken="tok-1" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Carry on" }));
+
+    expect(signOut).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the invitation, so the child does not arrive as nobody", () => {

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  claimSlot,
   clearProgress,
   flushPendingProgress,
   holdProgress,
@@ -50,7 +51,11 @@ afterEach(() => {
 const held = { sessionId: "sess-1", status: "exited" as never, segment: 3 };
 
 /** `holdProgress` attributes to whoever is signed in, so sign in to hold. */
-const holdAs = (userId: string, lessonId: string, entry = held) => {
+const holdAs = (
+  userId: string,
+  lessonId: string,
+  entry: Parameters<typeof holdProgress>[1] = held,
+) => {
   signInAs(userId);
   holdProgress(lessonId, entry);
 };
@@ -82,7 +87,7 @@ describe("progress that could not be saved", () => {
 
   it("is sent for a lesson the child never opens again", async () => {
     // A child who gave up offline may never return to that lesson, but their
-    // position still belongs on Home's "Pick back up" card.
+    // position still belongs in Home's "Pick up where you left off" list.
     const save = vi
       .spyOn(lessonsApi, "saveProgress")
       .mockResolvedValue({} as never);
@@ -137,6 +142,7 @@ describe("progress that could not be saved", () => {
     await flushPendingProgress();
 
     expect(save).not.toHaveBeenCalled();
+    signInAs("student-1");
     expect(pendingProgressFor("lesson-1")).not.toBeNull();
   });
 
@@ -153,14 +159,10 @@ describe("progress that could not be saved", () => {
       .spyOn(lessonsApi, "saveProgress")
       .mockResolvedValue({} as never);
     holdProgress("lesson-1", held);
-    const raw = JSON.parse(
-      window.localStorage.getItem("nevo.lesson.pendingProgress") ?? "{}",
-    );
-    raw["lesson-1"].heldAt = Date.now() - 8 * 24 * 60 * 60 * 1000;
-    window.localStorage.setItem(
-      "nevo.lesson.pendingProgress",
-      JSON.stringify(raw),
-    );
+    const shelf = "nevo.lesson.pendingProgress.student-1";
+    const raw = JSON.parse(window.localStorage.getItem(shelf) ?? "{}");
+    raw["lesson-1:sess-1"].heldAt = Date.now() - 8 * 24 * 60 * 60 * 1000;
+    window.localStorage.setItem(shelf, JSON.stringify(raw));
 
     await flushPendingProgress();
 
@@ -180,7 +182,9 @@ describe("progress that could not be saved", () => {
     await flushPendingProgress();
 
     expect(save).not.toHaveBeenCalled();
-    // Still child A's, and still waiting for them.
+    // Not B's to see, and still child A's, waiting for them.
+    expect(pendingProgressFor("lesson-1")).toBeNull();
+    signInAs("child-a");
     expect(pendingProgressFor("lesson-1")?.segment).toBe(3);
   });
 
@@ -209,5 +213,176 @@ describe("progress that could not be saved", () => {
     holdAs("student-1", "lesson-1");
     clearProgress("lesson-1");
     expect(pendingProgressFor("lesson-1")).toBeNull();
+  });
+});
+
+/**
+ * A SHARED TABLET, AND ONE LESSON BOTH CHILDREN HAVE.
+ *
+ * The store was keyed by lesson alone. The owner check on the way out stopped
+ * A's place being SENT as B's, but B's own writes still reached it: B's landed
+ * write cleared the lesson's entry, which was A's, and B's failed one
+ * overwrote it.
+ */
+describe("held progress on a shared tablet", () => {
+  it("is not cleared by the next child's landed write", () => {
+    holdAs("child-a", "lesson-1");
+
+    signInAs("child-b");
+    clearProgress("lesson-1");
+
+    signInAs("child-a");
+    expect(pendingProgressFor("lesson-1")?.segment).toBe(3);
+  });
+
+  it("is not overwritten by the next child's failed one", () => {
+    holdAs("child-a", "lesson-1");
+    holdAs("child-b", "lesson-1", { ...held, sessionId: "sess-b", segment: 9 });
+
+    signInAs("child-a");
+    expect(pendingProgressFor("lesson-1")?.segment).toBe(3);
+    signInAs("child-b");
+    expect(pendingProgressFor("lesson-1")?.segment).toBe(9);
+  });
+
+  it("stays the child's it was made for when the session is gone by the time it fails", () => {
+    // A 401 clears the session before the failure is handled. The owner is
+    // taken when the write is made and handed in, not looked up after.
+    clearSession();
+    holdProgress("lesson-1", held, "child-a");
+
+    signInAs("child-a");
+    expect(pendingProgressFor("lesson-1")?.segment).toBe(3);
+  });
+
+  it("moves a store from before this change onto its owner's shelf", () => {
+    window.localStorage.setItem(
+      "nevo.lesson.pendingProgress",
+      JSON.stringify({
+        "lesson-1": {
+          userId: "child-a",
+          sessionId: "sess-1",
+          status: "exited",
+          segment: 4,
+          heldAt: Date.now(),
+        },
+      }),
+    );
+
+    signInAs("child-b");
+    expect(pendingProgressFor("lesson-1")).toBeNull();
+    signInAs("child-a");
+    expect(pendingProgressFor("lesson-1")?.segment).toBe(4);
+  });
+});
+
+describe("held progress, replayed", () => {
+  it("is filed under the assignment it was made for", async () => {
+    const save = vi
+      .spyOn(lessonsApi, "saveProgress")
+      .mockResolvedValue({} as never);
+    holdAs("student-1", "lesson-1", { ...held, assignmentId: "asg-7" });
+
+    await flushPendingProgress();
+
+    expect(save).toHaveBeenCalledWith(
+      "lesson-1",
+      expect.objectContaining({ assignmentId: "asg-7" }),
+    );
+  });
+
+  it("keeps a completion from an earlier visit when a later one lands", async () => {
+    // Today's first segment landing says nothing about yesterday's finish.
+    holdAs("student-1", "lesson-1", {
+      ...held,
+      status: "completed" as never,
+      segment: 7,
+    });
+    clearProgress("lesson-1", "sess-today");
+
+    const save = vi
+      .spyOn(lessonsApi, "saveProgress")
+      .mockResolvedValue({} as never);
+    await flushPendingProgress();
+
+    expect(save).toHaveBeenCalledWith(
+      "lesson-1",
+      expect.objectContaining({ status: "completed", sessionId: "sess-1" }),
+    );
+  });
+
+  it("sends an earlier visit's completion before a later visit's position", async () => {
+    const save = vi
+      .spyOn(lessonsApi, "saveProgress")
+      .mockResolvedValue({} as never);
+    holdAs("student-1", "lesson-1", { ...held, status: "completed" as never });
+    holdAs("student-1", "lesson-1", {
+      ...held,
+      sessionId: "sess-2",
+      status: "in_progress" as never,
+      segment: 1,
+    });
+
+    await flushPendingProgress();
+
+    expect(save.mock.calls.map((c) => c[1].status)).toEqual([
+      "completed",
+      "in_progress",
+    ]);
+  });
+
+  it("opens a session for a position that never had one", async () => {
+    // A lesson opened offline - from Downloads, say - never got a session,
+    // and `PUT /progress` cannot be made without one.
+    vi.spyOn(lessonsApi, "startSession").mockResolvedValue({
+      sessionId: "sess-new",
+    } as never);
+    const save = vi
+      .spyOn(lessonsApi, "saveProgress")
+      .mockResolvedValue({} as never);
+    signInAs("student-1");
+    holdProgress("lesson-1", {
+      sessionId: null,
+      localId: "local-1",
+      status: "in_progress" as never,
+      segment: 4,
+    });
+
+    await flushPendingProgress();
+
+    expect(save).toHaveBeenCalledWith(
+      "lesson-1",
+      expect.objectContaining({ sessionId: "sess-new", segmentPosition: 4 }),
+    );
+    expect(pendingProgressFor("lesson-1")).toBeNull();
+  });
+
+  it("leaves a sessionless position to the player that is still open", async () => {
+    const start = vi.spyOn(lessonsApi, "startSession");
+    signInAs("student-1");
+    holdProgress("lesson-1", {
+      sessionId: null,
+      localId: "local-1",
+      status: "in_progress" as never,
+      segment: 4,
+    });
+    const release = claimSlot("lesson-1", "local-1");
+
+    await flushPendingProgress();
+    release();
+
+    expect(start).not.toHaveBeenCalled();
+    expect(pendingProgressFor("lesson-1")).not.toBeNull();
+  });
+
+  it("sends once when two screens ask at the same moment", async () => {
+    const save = vi
+      .spyOn(lessonsApi, "saveProgress")
+      .mockResolvedValue({} as never);
+    holdAs("student-1", "lesson-1");
+
+    await Promise.all([flushPendingProgress(), flushPendingProgress()]);
+
+    expect(save).toHaveBeenCalledTimes(1);
   });
 });

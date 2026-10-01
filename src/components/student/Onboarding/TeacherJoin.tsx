@@ -42,6 +42,8 @@ import {
 
 /** After a successful join the manual flow resumes at the name step. */
 const NEXT_STEP = "/student/onboarding/name";
+/** The Welcome, where the teacher-invite sheet that leads here lives. */
+const WELCOME = "/student/onboarding";
 
 type Mode = "scan" | "code";
 type CodeStatus = "idle" | "pending" | "success" | "error";
@@ -49,8 +51,9 @@ type CodeStatus = "idle" | "pending" | "success" | "error";
 /**
  * Teacher Join (screen 03 / `Nevo Teacher Join Frame`) - reached from the
  * Welcome screen's teacher-invite sheet. Two ways in, freely switchable:
- * scan the class QR code, or type the six-character code the teacher reads
- * out. Success connects the class and resumes onboarding; a miss is quiet
+ * scan the class QR code, or type the class code the teacher reads out (4 to
+ * 20 characters - see `CodeMode`). Success connects the class and resumes
+ * onboarding; a miss is quiet
  * violet, never red, and always points back to the teacher.
  */
 export function TeacherJoin() {
@@ -112,7 +115,18 @@ export function TeacherJoin() {
         <button
           type="button"
           aria-label="Back"
-          onClick={() => router.back()}
+          /*
+           * A SCANNED QR HAS NOTHING TO GO BACK TO. The camera app opens the
+           * code's URL in a fresh tab, so `router.back()` had no history and
+           * the button did nothing. A `?code=` arrival is a child at the very
+           * start of onboarding, so Back takes them to the start - replacing
+           * this entry, because going forward again would re-post the code.
+           * From the Welcome's sheet or the class step there is history, and
+           * it is theirs.
+           */
+          onClick={() =>
+            scannedCode ? router.replace(WELCOME) : router.back()
+          }
           className="flex size-11 cursor-pointer items-center justify-center rounded-[10px] transition-colors hover:bg-nevo-near-black/6"
         >
           <ChevronLeft className="size-6" strokeWidth={2} />
@@ -149,7 +163,6 @@ export function TeacherJoin() {
   );
 }
 
-/** The QR viewfinder - simulated phases until real capture lands (TODO(api)). */
 /**
  * The QR half - which is NOT a scanner, and no longer pretends to be one.
  *
@@ -288,7 +301,12 @@ function CodeMode({
               ? { schoolCode: connection.schoolCode }
               : {}),
           });
-          onJoined();
+          /*
+           * NOT `onJoined()`. The frame draws a success state - "That's it -
+           * connecting you to your class…" over an enabled Continue - and
+           * navigating in the same tick meant no child ever saw it. Continue
+           * is the frame's only way on, so it is the only way on here.
+           */
         },
         (err: unknown) => {
           // 4xx is the roster's answer about this code; anything else is ours.
@@ -299,7 +317,7 @@ function CodeMode({
         },
       );
     },
-    [onJoined],
+    [],
   );
 
   /** What a child pressing the button or Return does. */

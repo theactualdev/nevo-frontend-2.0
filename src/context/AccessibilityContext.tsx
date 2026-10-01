@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { getSession, onSessionChange } from "@/lib/auth/session";
+import { A11Y_STORAGE_KEY } from "./accessibilityBoot";
 
 export type TextSize = "s" | "m" | "l" | "xl";
 
@@ -35,7 +36,7 @@ const DEFAULTS: AccessibilityPrefs = {
   suggestBreaks: true,
 };
 
-const STORAGE_KEY = "nevo:a11y";
+const STORAGE_KEY = A11Y_STORAGE_KEY;
 
 /** Whose preferences to read: the signed-in child's, or the device's. */
 function prefsKey(): string {
@@ -56,9 +57,12 @@ function readPrefs(key: string): AccessibilityPrefs {
 }
 
 /**
- * Text-size → content zoom factor (works with the app's fixed-px type). Applied
- * as a numeric `zoom` on content regions — `zoom: var(...)` isn't supported, so
- * consumers read this map directly rather than a CSS variable.
+ * Text-size → content zoom factor (works with the app's fixed-px type).
+ *
+ * The student app applies it through CSS - `.nevo-text-zoom` under
+ * `html[data-text-size]` in globals.css, which must carry these same numbers -
+ * so it is right before React runs. The teacher shell still reads this map
+ * for a numeric inline `zoom`.
  */
 export const TEXT_ZOOM: Record<TextSize, number> = {
   s: 0.9,
@@ -77,10 +81,12 @@ const AccessibilityContext = createContext<AccessibilityValue | undefined>(
  * them to the document root so they take effect app-wide:
  *   - `data-reduced-motion` → globals.css disables animation/transition
  *   - `data-contrast="high"` → globals.css strengthens muted text + borders
- *   - `textSize` → content regions apply `TEXT_ZOOM` as a numeric `zoom`
+ *   - `data-text-size` → globals.css zooms `.nevo-text-zoom` content regions
  *
  * Defaults match the server render, so hydration stays in agreement; the stored
- * prefs are read and applied on mount.
+ * prefs are read on mount. The PAINT does not wait for that: the same three
+ * attributes are set before first paint by `A11Y_BOOT_SCRIPT`, and this only
+ * ever writes the values that script already wrote.
  */
 export function AccessibilityProvider({ children }: { children: ReactNode }) {
   /**
@@ -121,10 +127,18 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
 
   // Apply to the document root + persist on any change.
   useEffect(() => {
+    /*
+     * NOTHING UNTIL THE CLIENT HAS LOOKED. This wrote the DEFAULTS to `<html>`
+     * on the first pass, before the stored prefs were read - harmless while
+     * the root started bare, but the boot script now sets the child's real
+     * values before paint, and writing defaults over them is the very snap it
+     * exists to prevent.
+     */
+    if (!state.key) return;
     const root = document.documentElement;
     root.dataset.reducedMotion = String(state.prefs.reducedMotion);
     root.dataset.contrast = state.prefs.highContrast ? "high" : "normal";
-    if (!state.key) return;
+    root.dataset.textSize = state.prefs.textSize;
     try {
       localStorage.setItem(state.key, JSON.stringify(state.prefs));
     } catch {

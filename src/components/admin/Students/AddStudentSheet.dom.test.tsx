@@ -5,6 +5,33 @@ import { ApiError } from "@/lib/api/client";
 import type { AdditionQuote } from "@/lib/api/onboarding";
 import { AddStudentSheet } from "./AddStudentSheet";
 
+/*
+ * An admin with ROSTER access - the founding admin's, and enough to send the
+ * consent request (backend, 1 Oct: roster OR senco). What an admin with
+ * neither sees is pinned in `ConsentRole.dom.test.tsx`.
+ */
+let scopes: string[] = ["roster"];
+beforeEach(() => {
+  scopes = ["roster"];
+});
+vi.mock("@/context/PermissionContext", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/context/PermissionContext")>();
+  const { createContext } = await import("react");
+  // The context's DEFAULT, read when no provider is mounted - with a getter,
+  // so each test's `scopes` is the one seen.
+  return {
+    ...actual,
+    PermissionContext: createContext({
+      get scopes() {
+        return scopes;
+      },
+      resolved: true,
+      status: "ready",
+      refresh: () => {},
+    } as never),
+  };
+});
+
 /**
  * D24b "Add a student", and the sentence the frame draws that is not true.
  *
@@ -164,9 +191,9 @@ describe("AddStudentSheet", () => {
     expect(visibleText(container)).toMatch(/nothing is taken today/i);
   });
 
-  it("never puts a guardian on the enrol body, and sends the date of birth only when given", async () => {
-    // A guardian goes through the consent request, which sends as it stores -
-    // never as an address on the student with nothing sent.
+  it("carries no guardian address when none is given, and the date of birth only when given", async () => {
+    // Was "never puts a guardian on the enrol body". SCRUM-189 restored
+    // `parentEmail` to enrolment - see the guardian tests below.
     mount();
     await fill();
     fireEvent.click(await screen.findByRole("button", { name: /Add Zainab/ }));
@@ -175,7 +202,7 @@ describe("AddStudentSheet", () => {
     const body = enroll.mock.calls[0][0] as Record<string, unknown>;
     expect(body).toMatchObject({ firstName: "Zainab", lastName: "Bello", classId: "c1" });
     expect(body.dateOfBirth).toBeNull();
-    expect(Object.keys(body).join()).not.toMatch(/parent/i);
+    expect(body.parentEmail ?? null).toBeNull();
     // No guardian given, so nobody is asked.
     expect(addGuardian).not.toHaveBeenCalled();
   });
@@ -188,7 +215,7 @@ describe("AddStudentSheet guardian", () => {
    * how design said they would.
    */
   const guardian = (name: string, email: string) => {
-    fireEvent.change(screen.getByLabelText("Their name"), { target: { value: name } });
+    fireEvent.change(screen.getByLabelText(/^Their name/), { target: { value: name } });
     fireEvent.change(screen.getByLabelText("Their email"), { target: { value: email } });
   };
 
@@ -208,13 +235,53 @@ describe("AddStudentSheet guardian", () => {
     expect(onAdded).toHaveBeenCalledWith("s-new");
   });
 
-  it("wants both or neither", async () => {
+  it("needs an email, and not a name", async () => {
+    // The name became optional on the request (backend, 1 Oct): the parent
+    // gives their own at consent.
     const { container } = mount();
     await fill();
     guardian("Mrs. Bello", "");
-
     expect(screen.getByRole("button", { name: /Add Zainab/ })).toBeDisabled();
-    expect(visibleText(container)).toMatch(/both their name and a working email, or leave both empty/);
+    expect(visibleText(container)).toMatch(/Add a working email for them, or leave this empty/);
+
+    guardian("", "bello@example.com");
+    expect(screen.getByRole("button", { name: /Add Zainab/ })).toBeEnabled();
+  });
+
+  it("says the parent already said no, in backend's words, and does not offer to resend", async () => {
+    addGuardian.mockRejectedValue(
+      new ApiError(409, "conflict", {
+        detail: {
+          code: "parent_already_refused",
+          message:
+            "This parent was already asked about this learner and did not consent. Nevo does not contact them again. Speak to them directly if something has changed.",
+        },
+      }),
+    );
+    const { container } = mount();
+    await fill();
+    guardian("", "bello@example.com");
+    fireEvent.click(await screen.findByRole("button", { name: /Add Zainab/ }));
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/did not consent. Nevo does not contact them again/),
+    );
+    expect(visibleText(container)).not.toMatch(/You can send it from/);
+  });
+
+  it("records the guardian's email on the child itself, so a failed request still leaves them on record", async () => {
+    // Two calls, and the second can drop. The address rides on the FIRST,
+    // which records the guardian and sends nothing; the request follows.
+    addGuardian.mockResolvedValue({ deliveryStatus: "queued" });
+    mount();
+    await fill();
+    guardian("Mrs. Bello", "bello@example.com");
+    fireEvent.click(await screen.findByRole("button", { name: /Add Zainab/ }));
+
+    await waitFor(() => expect(addGuardian).toHaveBeenCalled());
+    const body = enroll.mock.calls[0][0] as Record<string, unknown>;
+    expect(body.parentEmail).toBe("bello@example.com");
+    // Enrolment has nowhere to keep a name; the request carries it.
+    expect(Object.keys(body).join()).not.toMatch(/parentName/);
   });
 
   it("says the student is added when only the guardian step fails - and never enrols twice", async () => {
@@ -225,7 +292,9 @@ describe("AddStudentSheet guardian", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Add Zainab/ }));
 
     await waitFor(() =>
-      expect(visibleText(container)).toMatch(/Zainab is added, but the request to Mrs\. Bello didn.t go/),
+      expect(visibleText(container)).toMatch(
+        /Zainab is added and bello@example\.com is on their record, but the request to Mrs\. Bello didn.t go/,
+      ),
     );
     expect(visibleText(container)).not.toMatch(/Nothing has been added/);
     expect(screen.getByRole("link", { name: /Go to Zainab.s page/ })).toHaveAttribute(
@@ -261,5 +330,27 @@ describe("AddStudentSheet guardian", () => {
     mount();
     fireEvent.change(screen.getByLabelText("First name"), { target: { value: "Zainab" } });
     expect(screen.getByRole("button", { name: /^Add Zainab/ })).toBeDisabled();
+  });
+});
+
+describe("AddStudentSheet for an admin with neither roster nor SENCo access", () => {
+  // Nested, so it runs after the file's roster default and replaces it.
+  beforeEach(() => {
+    scopes = ["billing"];
+  });
+
+  it("records the guardian's email with the child and sends nothing it would be refused", async () => {
+    const { container } = mount();
+    await fill();
+    // Enrolment cannot keep a name, so none is asked for.
+    expect(screen.queryByLabelText(/^Their name/)).toBeNull();
+    expect(visibleText(container)).toMatch(/sent by an admin with roster or SENCo \/ Learning Support access/);
+
+    fireEvent.change(screen.getByLabelText("Their email"), { target: { value: "bello@example.com" } });
+    fireEvent.click(await screen.findByRole("button", { name: /Add Zainab/ }));
+
+    await waitFor(() => expect(onAdded).toHaveBeenCalledWith("s-new"));
+    expect((enroll.mock.calls[0][0] as Record<string, unknown>).parentEmail).toBe("bello@example.com");
+    expect(addGuardian).not.toHaveBeenCalled();
   });
 });

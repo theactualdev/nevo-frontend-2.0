@@ -65,6 +65,12 @@ export interface TextVariant {
 export interface VisualVariant {
   type: string;
   imageUrl: string;
+  /** Untyped beyond nullable in the spec, so nothing reads it. */
+  previewUrl?: string | null;
+  /** The image's own size, in pixels - its aspect ratio, for the frame. */
+  width?: number;
+  height?: number;
+  byteSize?: number;
   storagePath: string;
   prompt: string;
   provider: string;

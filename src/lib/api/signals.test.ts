@@ -120,3 +120,48 @@ describe("the property the inversion buys", () => {
     expect(sentTypes()).toEqual(["a_type_invented_after_this_test_was_written"]);
   });
 });
+
+describe("how the session ended", () => {
+  it("travels on the envelope once there is something to say", async () => {
+    await signalsApi.submitBatch(
+      {
+        ...SESSION,
+        completionStatus: "exited",
+        endedAt: "2026-09-24T09:10:00.000Z",
+        exitPosition: "s".repeat(200),
+        breakCount: 2,
+      },
+      [event(SIGNAL_EVENT_TYPES.TIME_ON_SEGMENT)],
+    );
+
+    const { session } = post.mock.calls[0][1] as {
+      session: Record<string, unknown>;
+    };
+    expect(session.completionStatus).toBe("exited");
+    expect(session.breakCount).toBe(2);
+    // `maxLength: 120` - a longer one would 422 the whole batch.
+    expect(String(session.exitPosition)).toHaveLength(120);
+  });
+
+  it("is left to the contract's defaults while the session is going", async () => {
+    await signalsApi.submitBatch(SESSION, [
+      event(SIGNAL_EVENT_TYPES.TIME_ON_SEGMENT),
+    ]);
+
+    const { session } = post.mock.calls[0][1] as {
+      session: Record<string, unknown>;
+    };
+    expect(session).not.toHaveProperty("completionStatus");
+    expect(session).not.toHaveProperty("endedAt");
+  });
+
+  it("asks for a request that outlives the page when told to", async () => {
+    await signalsApi.submitBatch(
+      SESSION,
+      [event(SIGNAL_EVENT_TYPES.TIME_ON_SEGMENT)],
+      { keepalive: true },
+    );
+
+    expect(post.mock.calls[0][2]).toEqual({ keepalive: true });
+  });
+});

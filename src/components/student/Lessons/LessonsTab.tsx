@@ -30,6 +30,18 @@ const FILTERS: { id: Filter; label: string }[] = [
 ];
 
 /**
+ * What a chip's empty list says. "No completed lessons yet" is the frame's
+ * (29 Empty States); the other two chips are undrawn and keep the line that
+ * shipped, flagged to design rather than written here.
+ */
+const FILTERED_EMPTY: Record<Filter, string> = {
+  all: "Nothing in that group yet",
+  in_progress: "Nothing in that group yet",
+  not_started: "Nothing in that group yet",
+  completed: "No completed lessons yet",
+};
+
+/**
  * Lessons Tab (screen 20). The student's lessons, with a calm status on each
  * card. Search + status filters narrow it; tapping a lesson opens its preview.
  * Warm empty state when a search finds nothing.
@@ -40,9 +52,10 @@ const FILTERS: { id: Filter; label: string }[] = [
  * one of them claiming they were 55% through it. Signed out, the fixtures back
  * the designed screen as before.
  *
- * Live lessons carry no subject, so they render as one ungrouped grid; the
- * fixtures keep their subject headings. Grouping by an invented subject would
- * be the same mistake in a different place.
+ * GROUPED BY SUBJECT where a lesson has one. A live lesson carries the subject
+ * its upload recorded (see `useStudentLessons`), and the fixtures carry their
+ * own. A lesson with none goes into one unheaded group rather than under an
+ * invented subject.
  */
 export function LessonsTab() {
   const signedIn = useHasSession();
@@ -67,8 +80,8 @@ export function LessonsTab() {
         (filter === "all" || l.status === filter) &&
         (q === "" || l.title.toLowerCase().includes(q)),
     );
-    // Grouped by subject where one exists; live lessons have none and fall
-    // into a single unlabelled group.
+    // Grouped by subject where one exists; lessons without one fall into a
+    // single unlabelled group.
     const bySubject = new Map<string, LessonSummary[]>();
     for (const lesson of matched) {
       const key = lesson.subject ?? "";
@@ -92,7 +105,10 @@ export function LessonsTab() {
    * one control offered did not restore anything, which reads as the button
    * being broken rather than as the chip still being on.
    *
-   * So the copy names whichever is narrowing, and the control clears both.
+   * So the copy names whichever is narrowing, in the frames' words, and the
+   * control clears exactly what it names. With both on, "Clear search" lands
+   * on the chip's own empty state, which says so and offers "Clear filter" -
+   * every tap changes what the child sees.
    */
   const searching = query.trim().length > 0;
   /** Nothing has been assigned yet - different from a search finding nothing. */
@@ -160,12 +176,10 @@ export function LessonsTab() {
           height={512}
           className="w-[170px]"
         />
-        <h2 className="mt-5 text-lg font-medium text-nevo-near-black">
-          No lessons yet
+        {/* 29 Empty States, "Lessons (No lessons)": one line, no more. */}
+        <h2 className="mt-5 max-w-[280px] text-lg font-medium leading-[1.35] text-nevo-near-black">
+          Your lessons will show up here soon
         </h2>
-        <p className="mt-1.5 max-w-[280px] text-sm leading-[1.5] text-nevo-near-black/60">
-          When your teacher sets one, it will appear here.
-        </p>
       </div>,
     );
   }
@@ -245,22 +259,21 @@ export function LessonsTab() {
           <h2 className="mt-5 text-lg font-medium text-nevo-near-black">
             {searching
               ? "No lessons match your search"
-              : "Nothing in that group yet"}
+              : FILTERED_EMPTY[filter]}
           </h2>
-          <p className="mt-1.5 max-w-[280px] text-sm leading-[1.5] text-nevo-near-black/60">
-            {searching
-              ? "Try a different word, or see everything."
-              : "Try another group, or see everything."}
-          </p>
+          {/* Nevo Lessons Frame draws this line for a search only; the
+              chip's empty state (29 Empty States) is the heading alone. */}
+          {searching && (
+            <p className="mt-1.5 max-w-[280px] text-sm leading-[1.5] text-nevo-near-black/60">
+              Try a different word, or clear the search to see everything.
+            </p>
+          )}
           <button
             type="button"
-            onClick={() => {
-              setQuery("");
-              setFilter("all");
-            }}
+            onClick={() => (searching ? setQuery("") : setFilter("all"))}
             className="mt-5 h-11 cursor-pointer rounded-[10px] px-[22px] text-[15px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
           >
-            Show all lessons
+            {searching ? "Clear search" : "Clear filter"}
           </button>
         </div>
       ) : (
@@ -268,9 +281,9 @@ export function LessonsTab() {
           {groups.map(([subject, lessons]) => (
             <section key={subject} className="mb-7">
               {/* Not sticky: a pinned header overlays cards (taps land on it)
-                  and perturbs the scroll signal (SCRUM-94). Live lessons have
-                  no subject, so they render headingless rather than under an
-                  invented one. */}
+                  and perturbs the scroll signal (SCRUM-94). Lessons with no
+                  subject render headingless rather than under an invented
+                  one. */}
               {subject && (
                 <h2 className="mb-3 py-1.5 text-lg font-semibold text-nevo-near-black">
                   {subject}
@@ -312,7 +325,8 @@ function LessonCard({
   lesson: LessonSummary;
   onOpen: () => void;
 }) {
-  // No subject on live lessons - the neutral book mark stands in.
+  // A live subject is free text, so one outside the three marks, or no
+  // subject at all, gets the neutral book mark.
   const Icon =
     (lesson.subject ? SUBJECT_ICON[lesson.subject] : undefined) ??
     SUBJECT_ICON.English;
@@ -320,7 +334,7 @@ function LessonCard({
     <button
       type="button"
       onClick={onOpen}
-      className="relative overflow-hidden rounded-[12px] bg-nevo-cream-elevated text-left shadow-elevation-1 transition-transform active:scale-[0.98]"
+      className="relative cursor-pointer overflow-hidden rounded-[12px] bg-nevo-cream-elevated text-left shadow-elevation-1 transition-transform active:scale-[0.98]"
     >
       {/* Accent bar (subject) */}
       <div className="h-[5px] bg-nevo-violet/70" />

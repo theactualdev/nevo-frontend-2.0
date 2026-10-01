@@ -64,6 +64,8 @@ interface Resolution {
   missing?: boolean;
   failed?: boolean;
   empty?: boolean;
+  /** Built from the child's offline shelf because the read could not be made. */
+  fromShelf?: boolean;
 }
 
 export interface StudentLessonState {
@@ -116,6 +118,19 @@ export interface StudentLessonState {
   unavailable: Unavailable | null;
   /** When a `not_yet` lesson opens, for a screen that has to say so. */
   opensAt: string | null;
+  /**
+   * The dashboard read FAILED, so where this child got to - and whether their
+   * teacher has called the lesson off - is not known. Not the same as "no
+   * saved place": that is an answer, this is the absence of one.
+   *
+   * It used to read as the first. The player opened at segment 0 and its very
+   * first position write put `in_progress, 0` over the place the child had
+   * actually reached, and a cancelled lesson played because nothing said it
+   * was cancelled. Only ever true for a live lesson.
+   */
+  placeUnknown: boolean;
+  /** Opened from the child's offline shelf, not from a live read. */
+  fromShelf: boolean;
 }
 
 export function useStudentLesson(
@@ -177,7 +192,11 @@ export function useStudentLesson(
    * ignoring it. A child who stopped at segment seven yesterday could open the
    * lesson today, see segment one, and have their real place gone.
    */
-  const { data: dashboard, loading: dashboardLoading } = useStudentDashboard();
+  const {
+    data: dashboard,
+    loading: dashboardLoading,
+    failed: dashboardFailed,
+  } = useStudentDashboard();
 
   // One piece of state, STAMPED WITH THE ID IT DESCRIBES. Resetting four
   // separate flags at the top of the effect would clear them a render late -
@@ -251,6 +270,7 @@ export function useStudentLesson(
             id: lessonId,
             lesson: fromShelf,
             adaptSegments: adaptSegmentsFor(kept.detail.segments),
+            fromShelf: true,
           });
         } else {
           setResolved({ id: lessonId, failed: true });
@@ -359,6 +379,8 @@ export function useStudentLesson(
     adaptSegments: live ? state.adaptSegments : undefined,
     unavailable,
     opensAt: assignment?.availableFrom ?? null,
+    placeUnknown: Boolean(live) && !dashboard && dashboardFailed,
+    fromShelf: Boolean(live) && state.fromShelf === true,
     // A live lesson gets the engine's plan; a mock keeps its authored one.
     // Never crossed: a mock must not borrow a live plan, and a live lesson
     // must not borrow another lesson's authored one.

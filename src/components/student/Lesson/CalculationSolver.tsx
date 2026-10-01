@@ -41,8 +41,8 @@ export function CalculationSolver({
   /**
    * A kinesthetic tile placed onto the scaffold. The ingest contract has a
    * `manipulative_piece_placed` type for exactly this and nothing was ever
-   * emitting it - the placement is how a kinesthetic learner shows their
-   * thinking, and it was the one modality producing no evidence at all.
+   * emitting it - on this layer the placement IS the child's working, and it
+   * was the one layer producing no evidence at all.
    */
   onPiecePlaced?: (placed: number, needed: number) => void;
 }) {

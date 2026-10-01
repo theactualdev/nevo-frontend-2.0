@@ -14,6 +14,7 @@ import {
   withoutRecordedConsent,
 } from "./ConsentPill";
 import { consentRequestLine, useConsentRequests } from "./useConsentRequests";
+import { useMaySendConsent } from "./consentRole";
 import { AddStudentSheet } from "./AddStudentSheet";
 import { statusLabel, studentStatus } from "./status";
 import { NoAccess, failureKind } from "../NoAccess";
@@ -77,6 +78,8 @@ function SearchIcon() {
 export function StudentsView() {
   const router = useRouter();
   const { stateFor: consentStateFor, send: sendConsent } = useConsentRequests();
+  /** SENCo admins only - for everyone else the row's "Not sent" pill says it. */
+  const maySend = useMaySendConsent();
   const params = useSearchParams();
   const [phase, setPhase] = useState<Phase>("loading");
   const [students, setStudents] = useState<AdminStudentRow[]>([]);
@@ -489,7 +492,7 @@ export function StudentsView() {
                         </span>
                       </button>
                       <span className="flex justify-end pr-6">
-                        {mayRequestConsent(s.consent) ? (
+                        {maySend && mayRequestConsent(s.consent) ? (
                           <button
                             type="button"
                             onClick={() => sendConsent(s.id)}
@@ -499,7 +502,9 @@ export function StudentsView() {
                             {consentStateFor(s.id).kind === "sending"
                               ? "Sending…"
                               : consentStateFor(s.id).kind === "done"
-                                ? "Sent"
+                                ? /* 202 is "queued", not "delivered" - the
+                                     line below says which it was. */
+                                  "Requested"
                                 : "Send request"}
                           </button>
                         ) : null}
