@@ -439,8 +439,14 @@ describe("the lessons a teacher is offered", () => {
     ).toBeInTheDocument();
   });
 
-  it("falls back to them when the read genuinely failed", () => {
-    // `sample` is the honest signal: true only once the read has failed.
+  /*
+   * THIS TEST PINNED THE LEAK. It asserted that a signed-in teacher whose
+   * library read failed was offered "Simplifying Algebraic Fractions" - one of
+   * the frame's four invented lessons, pickable, unmarked, and refused only at
+   * step 4 after classes and a time had been chosen for it. Inverted: the
+   * teacher is told the read failed, in the sentence step 4 already used.
+   */
+  it("offers none of the invented four when the read failed", () => {
     useLessonLibrary.mockReturnValue({
       cards: [],
       live: false,
@@ -452,8 +458,26 @@ describe("the lessons a teacher is offered", () => {
     render(<AssignWizard />);
 
     expect(
-      screen.getByText("Simplifying Algebraic Fractions"),
+      screen.queryByText("Simplifying Algebraic Fractions"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/We couldn.t load your lessons, so we can.t assign them/),
     ).toBeInTheDocument();
+  });
+
+  it("says nothing of the kind to a visitor with no session", () => {
+    useLessonLibrary.mockReturnValue({
+      cards: [],
+      live: false,
+      sample: false,
+      loading: false,
+      slow: false,
+    });
+    useHasSession.mockReturnValue(false);
+
+    render(<AssignWizard />);
+
+    expect(screen.queryByText(/couldn.t load your lessons/)).not.toBeInTheDocument();
   });
 });
 
@@ -861,5 +885,55 @@ describe("what a teacher is told once it is assigned", () => {
     await vi.waitFor(() => expect(push).toHaveBeenCalled());
     expect(create).not.toHaveBeenCalled();
     expect(screen.queryByText(/assigned to/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * THE SAMPLE LESSONS AND CLASSES CARRY THE MARK NOW.
+ *
+ * Neither did, so the signed-in end-to-end check - which counts
+ * `data-nevo-sample` - could not see either, and does not visit this route.
+ */
+describe("what is marked as a sample", () => {
+  const regions = () =>
+    Array.from(document.querySelectorAll("[data-nevo-sample]")).map((e) =>
+      e.getAttribute("data-nevo-sample"),
+    );
+
+  it("marks the walkthrough's lessons", () => {
+    useLessonLibrary.mockReturnValue({
+      cards: [],
+      live: false,
+      sample: false,
+      loading: false,
+      slow: false,
+    });
+    useHasSession.mockReturnValue(false);
+
+    render(<AssignWizard />);
+
+    expect(regions()).toContain("teacher:assign-lessons");
+  });
+
+  it("marks the sample classes a failed class read stands in with", () => {
+    useTeacherClasses.mockReturnValue({
+      options: CLASSES,
+      classes: [],
+      liveClasses: [],
+      live: false,
+      loading: false,
+      sample: true,
+    });
+    render(<AssignWizard preselect="l-1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(regions()).toContain("teacher:assign-classes");
+  });
+
+  it("marks nothing when the lessons and classes are the teacher's own", () => {
+    render(<AssignWizard preselect="l-1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(regions()).toEqual([]);
   });
 });

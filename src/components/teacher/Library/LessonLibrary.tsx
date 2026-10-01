@@ -7,6 +7,7 @@ import {
   type CardStatus,
 } from "@/hooks/useLessonLibrary";
 import { cn } from "@/lib/utils";
+import { MaybeSample } from "@/components/shared/SampleRegion";
 
 /**
  * Lesson Library (C06 / `Nevo Teacher Library` frame). Upload sits level with
@@ -96,7 +97,7 @@ export function LessonLibrary() {
   const [filter, setFilter] = useState("All");
   // `live` is no longer read here: the pills used to be gated on it, and now
   // they are gated on having subjects to show, which is the honest condition.
-  const { cards: lessons, sample, loading, slow } = useLessonLibrary();
+  const { cards: lessons, live, sample, loading, slow } = useLessonLibrary();
 
   /**
    * "All", then every subject on the shelf, first-seen order.
@@ -264,6 +265,15 @@ export function LessonLibrary() {
 
       {shown.length > 0 ? (
         <div className="mt-[18px] grid max-w-[1000px] grid-cols-2 gap-3.5 xl:grid-cols-3 xl:gap-4">
+          {/*
+            MARKED WHEN THEY ARE NOT THIS TEACHER'S. Every other teacher
+            fallback carries `data-nevo-sample`; this grid did not, so a
+            failed library read put eight invented lessons in front of a
+            signed-in teacher and the signed-in end-to-end check on
+            /teacher/lessons passed anyway - the one assertion written to
+            catch exactly this could not see it.
+          */}
+          <MaybeSample showing={!live} kind="teacher:library">
           {shown.map((lesson) => {
             /* C06's three card states. Parsing and failed are NOT links: the
                frame marks both `cursor:default`, and there is nothing on the
@@ -382,6 +392,7 @@ export function LessonLibrary() {
               </Link>
             );
           })}
+          </MaybeSample>
         </div>
       ) : (
         // No lessons match the search/filter

@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils";
 import { roleLabel } from "@/lib/constants/permissions";
 import { MOCK_TEACHER, TEACHER_NAV, type TeacherNavItem } from "./teacherNav";
 import { useHasSession } from "@/hooks/useHasSession";
+import { useHydrated } from "@/hooks/useHydrated";
+import { MaybeSample } from "@/components/shared/SampleRegion";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useTeacherNotifications } from "@/hooks/useTeacherNotifications";
 import { AvatarDisc } from "@/components/shared/AvatarDisc";
@@ -178,7 +180,16 @@ export function TeacherSidebar() {
     lastArchived,
   } = useTeacherNotifications();
   const [notifOpen, setNotifOpen] = useState(false);
-  const hasNotifications = unreadCount > 0;
+  /*
+   * UNTIL HYDRATION, NOBODY. `useHasSession`'s server snapshot is false, so
+   * the server markup and the first client frame of a signed-in teacher drew
+   * the fixture persona, "Ms. Adeyemi" and "MA", and lit the unread dot off
+   * the fixture notifications. The admin rail fixed the same thing on 16 Sep;
+   * this is its sibling. Before the client can answer, the rail claims
+   * nothing: a neutral disc, no name, no dot.
+   */
+  const hydrated = useHydrated();
+  const hasNotifications = hydrated && unreadCount > 0;
   // Desktop opens expanded, tablet collapsed (frame: tablet variants are
   // `collapsed`); the breakpoint re-asserts the default, the chevron is free.
   const [menuOpen, setMenuOpen] = useState(false);
@@ -187,6 +198,8 @@ export function TeacherSidebar() {
   // Signed in, so the fixture persona is not who this is.
   const signedIn = useHasSession();
   const identity = useCurrentUser();
+  /** The designed walkthrough's persona - only once we know nobody is here. */
+  const showingFixtureIdentity = hydrated && !signedIn;
   const [expanded, setExpanded] = useState(true);
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 1280px)");
@@ -362,13 +375,17 @@ export function TeacherSidebar() {
             menuOpen && "bg-nevo-navy/5",
           )}
         >
+          <MaybeSample
+            showing={showingFixtureIdentity}
+            kind="teacher:sidebar-identity"
+          >
           <AvatarDisc
             photoUrl={signedIn ? identity?.photoUrl : null}
             className="size-9 text-[13px] font-semibold tracking-[0.02em]"
           >
             {signedIn && identity?.initials ? (
               identity.initials
-            ) : signedIn ? (
+            ) : !showingFixtureIdentity ? (
               // No name means no initials; a neutral glyph beats a blank disc.
               <svg
                 width="17"
@@ -390,7 +407,7 @@ export function TeacherSidebar() {
           </AvatarDisc>
           {expanded && (
             <span className="flex min-w-0 flex-col text-left">
-              {(!signedIn || identity?.name) && (
+              {(showingFixtureIdentity || (signedIn && identity?.name)) && (
                 <span className="truncate text-sm font-semibold text-nevo-near-black">
                   {signedIn ? identity?.name : MOCK_TEACHER.name}
                 </span>
@@ -409,7 +426,9 @@ export function TeacherSidebar() {
                 `roleLabel` returns null for a role it does not recognise, so an
                 unfamiliar value shows nothing rather than a guess.
               */}
-              {(signedIn ? roleLabel(identity?.role) : MOCK_TEACHER.role) && (
+              {(signedIn
+                ? roleLabel(identity?.role)
+                : showingFixtureIdentity && MOCK_TEACHER.role) && (
                 <span
                   className={
                     signedIn && !identity?.name
@@ -422,6 +441,7 @@ export function TeacherSidebar() {
               )}
             </span>
           )}
+          </MaybeSample>
         </button>
 
         {menuOpen && (
