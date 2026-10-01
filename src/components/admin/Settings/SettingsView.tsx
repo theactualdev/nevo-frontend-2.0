@@ -48,10 +48,23 @@ import { SchoolSettings } from "./SchoolSettings";
  * between year groups and silently does nothing would be genuinely dangerous.
  */
 
-/** The section index, D12.1: text links in a row, desktop only, never tabs. */
-const INDEX: { href: string; label: string; school: boolean }[] = [
-  { href: "#settings-school", label: "Your school", school: true },
-  { href: "#settings-you", label: "You", school: false },
+/**
+ * The section index, D12.1: "the section names as text links ... a table of
+ * contents for a long page", sticky, desktop only, never tabs. It named only
+ * the two super-headings, which is a contents page listing "Part one" and
+ * "Part two" on a page of eleven sections.
+ */
+export const SETTINGS_INDEX: { href: string; label: string; school: boolean }[] = [
+  { href: "#settings-general", label: "General", school: true },
+  { href: "#settings-retention", label: "Data retention", school: true },
+  { href: "#settings-academic-year", label: "Academic year", school: true },
+  { href: "#settings-year-groups", label: "Year groups", school: true },
+  { href: "#settings-promotion", label: "Moving up a year", school: true },
+  { href: "#settings-profile", label: "Your profile", school: false },
+  { href: "#settings-access", label: "Your access", school: false },
+  { href: "#settings-password", label: "Password", school: false },
+  { href: "#settings-two-step", label: "Two-step sign-in", school: false },
+  { href: "#settings-sessions", label: "Where you're signed in", school: false },
 ];
 
 function SuperHeading({ id, children }: { id: string; children: string }) {
@@ -87,9 +100,9 @@ export function SettingsView() {
         {/* Desktop only, per D12.1: "not a sidebar, not tabs". */}
         <nav
           aria-label="Settings sections"
-          className="mt-4 hidden flex-wrap gap-[18px] xl:flex"
+          className="sticky top-0 z-10 -mx-1 mt-3 hidden flex-wrap gap-x-[18px] gap-y-1.5 bg-nevo-cream px-1 py-3 xl:flex"
         >
-          {INDEX.filter((i) => !i.school || showSchool).map((i) => (
+          {SETTINGS_INDEX.filter((i) => !i.school || showSchool).map((i) => (
             <a
               key={i.href}
               href={i.href}
@@ -162,16 +175,20 @@ export const S_FIELD =
   "w-full rounded-[10px] border border-nevo-near-black/12 bg-nevo-cream px-4 py-3 text-[15px] text-nevo-near-black outline-none transition-colors focus:border-nevo-navy disabled:cursor-not-allowed disabled:opacity-60";
 
 export function SettingsSection({
+  id,
   title,
   note,
   children,
 }: {
+  /** The section index's anchor. */
+  id?: string;
   title: string;
   note?: string;
   children: React.ReactNode;
 }) {
   return (
-    <section className={cn(SETTINGS_CARD, "mt-5")}>
+    // scroll-mt clears the sticky index, so a jump lands on the title.
+    <section id={id} className={cn(SETTINGS_CARD, "mt-5 scroll-mt-16")}>
       <h3 className="m-0 text-[17px] font-semibold text-nevo-near-black">{title}</h3>
       {note ? (
         <p className="m-0 mt-1 max-w-[58ch] text-[13px] leading-[1.55] text-nevo-near-black/58">
@@ -205,11 +222,17 @@ export function SaveRow({
   disabled,
   savedLabel = "Saved",
   failureNote,
+  dirty = false,
 }: {
   phase: "idle" | "saving" | "saved" | "failed";
   onSave: () => void;
   disabled?: boolean;
   savedLabel?: string;
+  /**
+   * Something in this section differs from what is saved. D12.1: "A quiet
+   * inline line by the section's Save, not a browser dialog."
+   */
+  dirty?: boolean;
   /**
    * The server's own reason, when it gave one.
    *
@@ -239,6 +262,11 @@ export function SaveRow({
       </button>
       {writesPaused && note ? (
         <span className="text-[13px] text-nevo-near-black/55">{note}</span>
+      ) : null}
+      {dirty && phase !== "saving" && phase !== "saved" ? (
+        <span role="status" className="text-[13px] text-nevo-near-black/62">
+          You&rsquo;ve changed something here that isn&rsquo;t saved yet.
+        </span>
       ) : null}
       {phase === "saved" ? (
         <span className="text-[13px] font-semibold text-nevo-navy motion-safe:animate-nevo-reveal">
