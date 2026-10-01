@@ -363,8 +363,9 @@ export interface SegmentAdaptation {
   breakAfter?: BreakType | null;
   /**
    * Scaffold indicator level for this segment (37a) - the support the system
-   * is quietly giving, generated from behaviour server-side. Defaults to
-   * "light" when absent.
+   * is quietly giving, generated from behaviour server-side. Absent means the
+   * engine said nothing, and the indicator shows nothing (rule 5) - it no
+   * longer defaults to "light".
    */
   scaffold?: ScaffoldLevel;
   /**

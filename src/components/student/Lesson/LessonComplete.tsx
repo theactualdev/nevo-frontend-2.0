@@ -1,6 +1,8 @@
 "use client";
 
+import { useContext, useEffect } from "react";
 import { Button, SettlingCharacter } from "@/components/shared";
+import { LessonContext } from "@/context/LessonContext";
 
 /**
  * Lesson Complete (Lesson Check frame) — the calm close of a lesson. A settling
@@ -34,6 +36,22 @@ export function LessonComplete({
   note?: string;
   doneLabel?: string;
 }) {
+  /*
+   * THE FIRST SCREEN OF A LESSON ASK NEVO MAY SIT OVER. IA 31 keeps it off
+   * active lesson content - the segments, a break, a module boundary, the
+   * after-lesson check - and puts it on this one. Completion is a phase of the
+   * player rather than a route, so this screen says it is up.
+   *
+   * A tolerant read, like Ask Nevo's own: the player's own tests render this
+   * with no provider at all, and there is then no drawer to allow.
+   */
+  const allowAskNevo = useContext(LessonContext)?.setAskNevoAllowed;
+  useEffect(() => {
+    if (!allowAskNevo) return;
+    allowAskNevo(true);
+    return () => allowAskNevo(false);
+  }, [allowAskNevo]);
+
   return (
     <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-nevo-cream px-6 text-center text-nevo-near-black">
       <div className="flex w-full max-w-[300px] flex-col items-center sm:max-w-[430px]">

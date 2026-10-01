@@ -528,9 +528,16 @@ export function LessonPlayer({
    * segment being asked about or it does not.
    */
   const chunkRead = useRef<{ segmentId: string; pct: number } | null>(null);
+  /*
+   * The segment whose chunked body still has parts to show, for the chevrons
+   * (37c, below). State rather than the ref above because the screen changes
+   * with it; stamped with the id for the same reason the ref is.
+   */
+  const [partsLeftOn, setPartsLeftOn] = useState<string | null>(null);
   const noteReadProgress = useCallback(
     (pct: number) => {
       chunkRead.current = { segmentId: lesson.segments[index].id, pct };
+      setPartsLeftOn(pct < 100 ? lesson.segments[index].id : null);
     },
     [lesson.segments, index],
   );
@@ -678,12 +685,16 @@ export function LessonPlayer({
 
   // Scrim taps (the shared sheet overlay broadcasts them): recorded as blocked,
   // never as latency or an aborted gesture — a design signal, not a student one.
+  // ONLY WHILE THE QUICK CHECK IS UP, the one sheet whose scrim really blocks.
+  // Every sheet broadcasts, so this recorded `tap_blocked` for scrim taps that
+  // dismissed something, which is the opposite of blocked.
   useEffect(() => {
+    if (!checkOpen) return;
     const onScrimTap = () =>
       trackEvent(SIGNAL_EVENT_TYPES.TAP_BLOCKED, { target: "scrim" });
     window.addEventListener("nevo-scrim-tap", onScrimTap);
     return () => window.removeEventListener("nevo-scrim-tap", onScrimTap);
-  }, [trackEvent]);
+  }, [checkOpen, trackEvent]);
 
   // ── The engine's instruction (§4) ───────────────────────────────────────
   const segPlan = livePlanFor(segment.id);
@@ -725,14 +736,23 @@ export function LessonPlayer({
    * Still nothing-state when the engine sends an instruction with no content.
    * An empty hint card is worse than no hint, and the translator has already
    * dropped a hint that arrived under the wrong action.
+   *
+   * AND ONLY ON THE SEGMENT IT WAS GIVEN FOR. The engine's instruction is
+   * lesson-level on the wire, but a hint or a guided question is about the
+   * content in front of the child when it was asked for: the segment a
+   * mid-lesson read was made on, or the one the lesson opened on for the
+   * load-time plan. Without this the same hint sat under every later segment,
+   * and a failed read kept it there indefinitely. The authored per-segment
+   * seam is already per segment.
    */
+  const engineOn = runtime.plan ? runtime.forSegmentId : first.id;
+  const contentHere = !engine?.adjustment || engineOn === segment.id;
   const hintText = engine?.hint ?? segPlan?.hint ?? null;
   const guidedQuestions =
     engine?.guidedQuestions?.length
       ? engine.guidedQuestions
       : (segPlan?.socraticPrompts ?? []);
-  // §4: "Secondary UI to 40% opacity, transitions slow, gentler copy variants."
-  const softened = action === ADJUSTMENT_ACTIONS.MODULATE_DENSITY;
+  const hintHere = contentHere && action === ADJUSTMENT_ACTIONS.OFFER_HINT;
   // §4: "'Ready for something harder?' pill, scaffold withdraws." The pill
   // already carries that exact sentence.
   const stepUpOffered = action === ADJUSTMENT_ACTIONS.INCREASE_DIFFICULTY;
@@ -1008,6 +1028,18 @@ export function LessonPlayer({
    */
   const nextDisabled = calcBlocking;
 
+  /*
+   * 37c: UNDER THE ATTENTION ACCOMMODATION, "TAP TO CONTINUE" IS THE WAY ON.
+   * The frame draws no chevron row while a chunked body has parts left, and
+   * the row here was only dimmed - so Next skipped Parts 2 and 3 unread. It
+   * is held out of sight (and out of reach) rather than removed, so nothing
+   * jumps when the last part brings it back; the last part has no continue of
+   * its own. The child's own Slower chunks too, and keeps its chevrons: that
+   * pace is theirs to leave.
+   */
+  const partsLeft =
+    attentionOn && modality === MODALITY.TEXT && partsLeftOn === segment.id;
+
   // The entry, assessment and completion screens each take over the full
   // screen — their own layout, no player chrome.
   if (phase === "review-entry") {
@@ -1216,7 +1248,7 @@ export function LessonPlayer({
       <header
         className={cn(
           "flex shrink-0 flex-col gap-2.5 px-3.5 pt-2.5 pb-3",
-          secondaryDim(softened, attentionOn),
+          secondaryDim(attentionOn),
         )}
       >
         <div className="flex items-center gap-2.5">
@@ -1249,10 +1281,15 @@ export function LessonPlayer({
             It is also the only way the fourth circle is ever reachable - the
             plan's `ScaffoldingLevel` has three values and the frame draws
             four. See `lib/lessons/scaffoldLevel.ts`.
+
+            NO LEVEL IS THE NOTHING-STATE, NOT "LIGHT" (rule 5). With no plan,
+            or a value we do not know, this drew two circles and "Nevo sets it
+            for you" about support nobody had set, then changed when a plan
+            landed.
           */}
           <ScaffoldIndicator
             key={`scaf-${segment.id}`}
-            level={conceptScaffold ?? segPlan?.scaffold ?? "light"}
+            level={conceptScaffold ?? segPlan?.scaffold ?? null}
             pulse={stepUpOffered}
           />
         </div>
@@ -1274,7 +1311,7 @@ export function LessonPlayer({
       <div
         className={cn(
           "shrink-0 px-4 pb-[7px]",
-          secondaryDim(softened, attentionOn),
+          secondaryDim(attentionOn),
         )}
       >
         <span className="block min-w-0 truncate font-mono text-[11px] tracking-[0.02em] text-nevo-near-black/50">
@@ -1286,7 +1323,7 @@ export function LessonPlayer({
           module boundaries; the text above carries the module breakdown. */}
       <ProgressBar
         value={(index + 1) / total}
-        className={cn("shrink-0", secondaryDim(softened, attentionOn))}
+        className={cn("shrink-0", secondaryDim(attentionOn))}
         aria-label={positionLine(lesson, index)}
       />
 
@@ -1372,7 +1409,8 @@ export function LessonPlayer({
                 }}
               />
             )}
-          {action === ADJUSTMENT_ACTIONS.SHOW_SOCRATIC_PANEL &&
+          {contentHere &&
+            action === ADJUSTMENT_ACTIONS.SHOW_SOCRATIC_PANEL &&
             guidedQuestions.length > 0 && (
               <SocraticPanel
                 key={`socratic-${segment.id}`}
@@ -1446,7 +1484,7 @@ export function LessonPlayer({
             />
           </div>
           {/* §4 `offer_hint`: the unrequested hint under the content. */}
-          {action === ADJUSTMENT_ACTIONS.OFFER_HINT && hintText && (
+          {hintHere && hintText && (
             <HintOverlay hint={hintText} />
           )}
         </div>
@@ -1498,12 +1536,16 @@ export function LessonPlayer({
         }}
       />
 
-      {/* Chevron nav — dims under anxiety; frustration guides the forward
-          control with three quiet glow cycles (never displaces it). */}
+      {/* Chevron nav — dims under the attention accommodation; `offer_hint`
+          guides the forward control with three quiet glow cycles (never
+          displaces it). */}
       <nav
+        aria-hidden={partsLeft || undefined}
+        inert={partsLeft}
         className={cn(
           "flex shrink-0 items-center justify-center gap-8 px-3.5 pt-2 pb-6",
-          secondaryDim(softened, attentionOn),
+          secondaryDim(attentionOn),
+          partsLeft && "invisible",
         )}
       >
         <ChevronButton
@@ -1516,7 +1558,7 @@ export function LessonPlayer({
           disabled={nextDisabled}
           onClick={handleNext}
           className={cn(
-            action === ADJUSTMENT_ACTIONS.OFFER_HINT &&
+            hintHere &&
               !nextDisabled &&
               "motion-safe:animate-nevo-glow-guide",
           )}
