@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { SubjectDetail } from "./SubjectDetail";
+import { SUBJECT_DETAIL } from "./progressData";
+import { textureFor } from "./ProgressTab";
 import { clearSession, setSession } from "@/lib/auth/session";
 
 /**
@@ -365,5 +373,62 @@ describe("the subject's lesson list", () => {
         ),
       ).toBeTruthy(),
     );
+  });
+});
+
+/**
+ * Design D41, 1 Oct. The session markers sat on a smooth rising line - the
+ * treatment SCRUM-144 took off the Progress cards on 15 Sep, surviving here
+ * alone. No series over time supports any line, and an upward one tells every
+ * child the subject is going up. The markers now sit level on the subject
+ * card's own texture, chosen from the name.
+ */
+describe("the session markers", () => {
+  const MATHS = SUBJECT_DETAIL.mathematics;
+
+  it("draw no line through them", async () => {
+    const { container } = render(
+      <SubjectDetail subject={MATHS} slug="mathematics" />,
+    );
+
+    await waitFor(() =>
+      expect(container.querySelector("[data-session-markers]")).not.toBeNull(),
+    );
+    const band = container.querySelector("[data-session-markers]")!;
+    // The old curve was one `<path>` of cubic segments through the markers.
+    expect(band.querySelector("path[d^='M ']")).toBeNull();
+    expect(container.innerHTML).not.toMatch(/ C \d+ \d+, /);
+  });
+
+  it("sit on the subject card's own texture", async () => {
+    const { container } = render(
+      <SubjectDetail subject={MATHS} slug="mathematics" />,
+    );
+
+    await waitFor(() =>
+      expect(container.querySelector("[data-session-markers]")).not.toBeNull(),
+    );
+    const t = textureFor(MATHS.name);
+    expect(
+      container
+        .querySelector("[data-session-markers] [data-texture]")
+        ?.getAttribute("data-texture"),
+    ).toBe(`${t.motif}-${t.family}`);
+  });
+
+  it("are one per session, all level, and each opens its session", async () => {
+    render(<SubjectDetail subject={MATHS} slug="mathematics" />);
+
+    const markers = await screen.findAllByRole("button", {
+      name: /^View session:/,
+    });
+    expect(markers).toHaveLength(MATHS.lessons.length);
+    // Nothing places a marker higher or lower than another.
+    for (const m of markers) expect(m.getAttribute("style") ?? "").not.toMatch(/top/);
+
+    fireEvent.click(markers[markers.length - 1]);
+    expect(
+      await screen.findByRole("dialog", { name: MATHS.lessons[0].title }),
+    ).toBeTruthy();
   });
 });
