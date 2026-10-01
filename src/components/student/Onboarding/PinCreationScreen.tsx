@@ -26,13 +26,13 @@ import { cn } from "@/lib/utils";
  * A path with neither is the one that cannot honestly promise anything, and
  * it no longer pretends: see `onboarding.ts`.
  */
-type PinState = { digits: string; error: boolean; done: boolean };
+export type PinState = { digits: string; error: boolean; done: boolean };
 type PinAction =
   | { type: "digit"; value: string }
   | { type: "backspace" }
   | { type: "saveFailed" };
 
-function pinReducer(state: PinState, action: PinAction): PinState {
+export function pinReducer(state: PinState, action: PinAction): PinState {
   // The server rejected the save: keep their first PIN, re-open the confirm
   // row, and let the alert line explain.
   if (action.type === "saveFailed") {
@@ -63,6 +63,15 @@ function pinReducer(state: PinState, action: PinAction): PinState {
     done: false,
   };
 }
+
+/**
+ * The two things that can go wrong once a PIN is typed twice, in the words
+ * both PIN-setting doors use. Change PIN draws its own steps around the same
+ * reducer and rows, and a second copy of these is how the two would drift.
+ */
+export const PIN_MISMATCH_COPY = "Those didn't match - let's try once more";
+export const PIN_NOT_SAVED_COPY =
+  "We couldn't save that just now - that's on us, not you. Your teacher can help.";
 
 /**
  * PIN Creation (UI/UX spec) — the last onboarding step before "You're In".
@@ -271,9 +280,9 @@ export function PinCreationScreen({
                 didn't match" and "that's on us, not you".
               */}
               {error
-                ? "Those didn't match - let's try once more"
+                ? PIN_MISMATCH_COPY
                 : saveFailed
-                  ? "We couldn't save that just now - that's on us, not you. Your teacher can help."
+                  ? PIN_NOT_SAVED_COPY
                   : ""}
             </p>
           </>
