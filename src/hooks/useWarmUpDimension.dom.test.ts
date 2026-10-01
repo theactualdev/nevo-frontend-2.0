@@ -33,7 +33,6 @@ const served = {
     { value: "a", label: "Two-thirds" },
     { value: "b", label: "Three-fifths" },
   ],
-  answer: "a",
 };
 
 beforeEach(() => {
@@ -105,9 +104,10 @@ describe("useWarmUpPrompt", () => {
 });
 
 describe("toPrompt", () => {
-  it("never keeps the answer key", () => {
-    // The device marks nothing, so it has no use for the key.
-    const prompt = toPrompt(served);
+  it("never keeps an answer key, should the wire carry one again", () => {
+    // The device marks nothing, so it has no use for the key. Backend took it
+    // off the prompt on 1 Oct; this holds if it ever comes back.
+    const prompt = toPrompt({ ...served, answer: "a" } as typeof served);
 
     expect(JSON.stringify(prompt)).not.toMatch(/"answer"/);
   });
