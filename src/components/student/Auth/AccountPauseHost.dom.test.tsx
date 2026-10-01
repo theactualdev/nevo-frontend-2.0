@@ -93,7 +93,7 @@ describe("a pause that lands while a child is reading", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
-  it("settles into the full paused screen on Okay, with nothing further to do", async () => {
+  it("settles into the full paused screen on Okay, with nothing for the paused child to retry", async () => {
     const { pause, AccountPauseHost } = await fresh();
     render(<AccountPauseHost />);
     act(() => pause.announceAccountPause());
@@ -105,7 +105,22 @@ describe("a pause that lands while a child is reading", () => {
       "Your Nevo account is on pause.",
     );
     expect(screen.queryAllByRole("button")).toHaveLength(0);
-    expect(screen.queryAllByRole("link")).toHaveLength(0);
+    // The one control is the way back to the picker (D52), not a retry.
+    expect(screen.getAllByRole("link")).toHaveLength(1);
+  });
+
+  it("leaves a way back to the picker, by a full page load (D52)", async () => {
+    // A shared tablet showing a screen with no controls locks every other
+    // child out of it. A FULL load, not a client push: the pause is sticky
+    // for this page, and the next child must not inherit it.
+    const { pause, AccountPauseHost } = await fresh();
+    render(<AccountPauseHost />);
+    act(() => pause.announceAccountPause());
+    fireEvent.click(screen.getByRole("button", { name: "Okay" }));
+
+    const back = screen.getByRole("link", { name: "Back to sign in" });
+    expect(back).toHaveAttribute("href", "/auth/login");
+    expect(screen.queryByText(/try again|log back in/i)).toBeNull();
   });
 
   it("still shows a pause that landed before it mounted", async () => {

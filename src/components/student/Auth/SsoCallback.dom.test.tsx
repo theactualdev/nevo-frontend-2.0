@@ -238,3 +238,40 @@ describe("the error screen offers only what works", () => {
     ).toBe("/brand/logo-icon-purple.png");
   });
 });
+
+/**
+ * D2, 1 Oct, at the school door too: a child about to be held is not told
+ * they are in. Every entry path resolves consent the same way, so every one
+ * of them skips the beat for a held child.
+ */
+describe("a held child arriving through their school", () => {
+  const handshake = () => {
+    setUrl("provider=microsoft&code=real-code&state=real-state");
+    ssoCallback.mockResolvedValue({
+      accessToken: "server-token",
+      tokenType: "bearer",
+      expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+      userId: "student-77",
+      role: "student",
+      destination: "home_dashboard",
+    });
+  };
+
+  it("goes straight to the waiting screen, never You're in", async () => {
+    handshake();
+    myConsentGate.mockResolvedValue({ blocked: true });
+
+    render(<SsoCallback />);
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/student/waiting"));
+    expect(screen.queryByText(/You.re in/)).toBeNull();
+  });
+
+  it("still says You're in to a child who is on their way in", async () => {
+    handshake();
+
+    render(<SsoCallback />);
+
+    expect(await screen.findByText(/You.re in/)).toBeInTheDocument();
+  });
+});
