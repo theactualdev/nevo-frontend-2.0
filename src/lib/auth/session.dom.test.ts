@@ -100,6 +100,36 @@ describe("session store", () => {
   });
 });
 
+describe("how a session signed in", () => {
+  /*
+   * Onboarding branches on it - an SSO child skips three steps and the PIN -
+   * and it lived only in React state, so a reload put an SSO child on the
+   * manual path. It is kept with the session now.
+   */
+  it("is kept with the session, so a reload still knows it", () => {
+    setSession({ ...session(future()), method: "sso" });
+
+    expect(
+      JSON.parse(window.localStorage.getItem("nevo.auth.session") ?? "{}"),
+    ).toMatchObject({ method: "sso" });
+  });
+
+  it("survives a token refresh, which does not say how anyone signed in", () => {
+    setSession({ ...session(future()), method: "sso" });
+    // `authApi.refresh` stores the login shape, which has no method.
+    setSession({ ...session(future()), token: "tok-refreshed" });
+
+    expect(getSession()).toMatchObject({ token: "tok-refreshed", method: "sso" });
+  });
+
+  it("is never handed to a different account", () => {
+    setSession({ ...session(future()), method: "sso" });
+    setSession({ ...session(future()), userId: "user-2" });
+
+    expect(getSession()?.method).toBeUndefined();
+  });
+});
+
 describe("the name a child is called on a shared tablet", () => {
   /*
    * The name used to come from the ONE legacy remembered profile - whichever

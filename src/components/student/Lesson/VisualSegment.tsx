@@ -1,16 +1,28 @@
+"use client";
+
 import { ArrowRight, Leaf } from "lucide-react";
 import { IllustrationWrapper } from "@/components/shared";
 import type { VisualContent } from "@/lib/types";
+import { useMediaSource } from "./useMediaSource";
 
 /**
  * Visual modality (Lesson Player frame 17) — the segment as a picture: finished
  * inline art (or a produced illustration asset) plus the on-brand input→output
  * diagram card. Where no art exists at all, a quiet cream-elevated tile — never
  * a dashed wireframe box on a finished screen (frontend handoff §07).
+ *
+ * A PICTURE THAT WILL NOT LOAD IS NO PICTURE. It drew the browser's broken
+ * image. Now an expired link is re-issued once (`useMediaSource`), and a
+ * picture that still fails takes the same quiet tile as a segment with no art -
+ * the caption under it carries the description either way.
  */
 export function VisualSegment({ content }: { content: VisualContent }) {
   const inlineArt = content.art ? INLINE_ART[content.art.id] : undefined;
   const caption = content.art?.caption ?? content.illustration?.caption;
+  const media = useMediaSource(
+    content.illustration?.src,
+    content.illustration?.storagePath,
+  );
 
   return (
     <article>
@@ -32,18 +44,21 @@ export function VisualSegment({ content }: { content: VisualContent }) {
           >
             {inlineArt}
           </div>
-        ) : content.illustration ? (
+        ) : content.illustration && media.src && !media.failed ? (
           <div className="flex justify-center">
             <IllustrationWrapper
-              src={content.illustration.src}
+              key={media.key}
+              src={media.src}
               alt={content.illustration.alt}
-              width={640}
-              height={480}
+              width={content.illustration.width ?? 640}
+              height={content.illustration.height ?? 480}
+              onError={media.onError}
               className="w-full max-w-[420px]"
             />
           </div>
         ) : (
-          // No art at all — a quiet cream-elevated tile (calm, finished-looking).
+          // No art at all, or art that would not load — a quiet
+          // cream-elevated tile (calm, finished-looking).
           <div className="flex h-[180px] items-center justify-center rounded-[12px] bg-nevo-cream-elevated shadow-elevation-1 sm:h-[220px]">
             <Leaf className="size-[46px] text-nevo-violet" strokeWidth={1.6} />
           </div>

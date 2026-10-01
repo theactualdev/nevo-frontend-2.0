@@ -31,8 +31,8 @@ const PAUSE_REVEAL_MS = 4_000;
  *
  * TWO THINGS THIS IS NOT. It is not the `attention` accommodation: that is
  * engine-owned, applied before the first screen, and never written from here.
- * And it is not the engine's `modulate_density` instruction. This is the child
- * asking, which is the whole point of the control - the one place a learner
+ * And it is not the engine's own `slower`, which arrives as the system's
+ * density. This is the child asking, which is the whole point of the control - the one place a learner
  * has any agency in a system that deliberately tells them nothing about what
  * it is doing, and asking is not a disclosure about themselves.
  */

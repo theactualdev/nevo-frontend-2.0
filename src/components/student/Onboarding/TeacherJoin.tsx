@@ -42,6 +42,8 @@ import {
 
 /** After a successful join the manual flow resumes at the name step. */
 const NEXT_STEP = "/student/onboarding/name";
+/** The Welcome, where the teacher-invite sheet that leads here lives. */
+const WELCOME = "/student/onboarding";
 
 type Mode = "scan" | "code";
 type CodeStatus = "idle" | "pending" | "success" | "error";
@@ -112,7 +114,18 @@ export function TeacherJoin() {
         <button
           type="button"
           aria-label="Back"
-          onClick={() => router.back()}
+          /*
+           * A SCANNED QR HAS NOTHING TO GO BACK TO. The camera app opens the
+           * code's URL in a fresh tab, so `router.back()` had no history and
+           * the button did nothing. A `?code=` arrival is a child at the very
+           * start of onboarding, so Back takes them to the start - replacing
+           * this entry, because going forward again would re-post the code.
+           * From the Welcome's sheet or the class step there is history, and
+           * it is theirs.
+           */
+          onClick={() =>
+            scannedCode ? router.replace(WELCOME) : router.back()
+          }
           className="flex size-11 cursor-pointer items-center justify-center rounded-[10px] transition-colors hover:bg-nevo-near-black/6"
         >
           <ChevronLeft className="size-6" strokeWidth={2} />
@@ -288,7 +301,12 @@ function CodeMode({
               ? { schoolCode: connection.schoolCode }
               : {}),
           });
-          onJoined();
+          /*
+           * NOT `onJoined()`. The frame draws a success state - "That's it -
+           * connecting you to your class…" over an enabled Continue - and
+           * navigating in the same tick meant no child ever saw it. Continue
+           * is the frame's only way on, so it is the only way on here.
+           */
         },
         (err: unknown) => {
           // 4xx is the roster's answer about this code; anything else is ours.
@@ -299,7 +317,7 @@ function CodeMode({
         },
       );
     },
-    [onJoined],
+    [],
   );
 
   /** What a child pressing the button or Return does. */

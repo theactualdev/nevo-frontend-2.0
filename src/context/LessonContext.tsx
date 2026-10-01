@@ -23,6 +23,17 @@ export interface LessonContextValue {
   adaptationPlan: AdaptationPlan | null;
   /** Called by the player on mount; cleared on unmount. */
   setActiveLesson: (active: ActiveLesson | null) => void;
+  /**
+   * Whether the screen on show is one Ask Nevo may sit over.
+   *
+   * IA 31: *"Ask Nevo is never available during active Lesson Player content.
+   * It is available on every other student-facing screen, including the
+   * Lesson Completion and Lesson Summary screens."* Completion is a phase of
+   * the player rather than a route of its own, so the route alone cannot say
+   * which one is up - the screen says it, by switching this on while mounted.
+   */
+  askNevoAllowed: boolean;
+  setAskNevoAllowed: (allowed: boolean) => void;
 }
 
 export const LessonContext = createContext<LessonContextValue | undefined>(
@@ -31,6 +42,7 @@ export const LessonContext = createContext<LessonContextValue | undefined>(
 
 export function LessonProvider({ children }: { children: ReactNode }) {
   const [active, setActive] = useState<ActiveLesson | null>(null);
+  const [askNevoAllowed, setAskNevoAllowed] = useState(false);
   const setActiveLesson = useCallback(
     (next: ActiveLesson | null) => setActive(next),
     [],
@@ -41,8 +53,10 @@ export function LessonProvider({ children }: { children: ReactNode }) {
       sessionId: active?.sessionId ?? null,
       adaptationPlan: active?.adaptationPlan ?? null,
       setActiveLesson,
+      askNevoAllowed,
+      setAskNevoAllowed,
     }),
-    [active, setActiveLesson],
+    [active, setActiveLesson, askNevoAllowed],
   );
   return (
     <LessonContext.Provider value={value}>{children}</LessonContext.Provider>

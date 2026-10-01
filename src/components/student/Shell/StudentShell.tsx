@@ -7,9 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { BottomNav, Sidebar } from "@/components/shared";
 import { MaybeSample } from "@/components/shared/SampleRegion";
 import { AskNevo } from "@/components/student/AskNevo/AskNevo";
-import { useBehaviouralCapture } from "@/hooks";
 import { cn } from "@/lib/utils";
-import { useConsentGate } from "@/hooks/useConsentGate";
 import { NotificationBell } from "./NotificationBell";
 import { isLessonRoute } from "./lessonRoutes";
 import { TabOfflineBanner, useOnline } from "./TabOfflineBanner";
@@ -57,22 +55,12 @@ import { useDisplayName } from "./useDisplayName";
 export function StudentShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? "";
   /*
-   * SCRUM-76: on-device behavioural timing capture for the affective engine -
-   * ephemeral IndexedDB only, purged at session end, never transmitted.
-   *
-   * GATED ON CONSENT, which it was not. `GET /students/me/consent-gate` has
-   * been deployed for some time and `myConsentGate` had zero callers, so a
-   * child whose guardian had WITHDRAWN consent kept being profiled - every tap
-   * and keystroke still written - and nothing in the student app ever asked.
-   *
-   * `withdrawn` is false until the read answers and false if it fails, so a
-   * flaky network never silently stops measuring a child whose guardian did
-   * consent. Only an answer that says withdrawn stops anything.
+   * NO TAP OR KEYSTROKE IS LOGGED ON THE DEVICE ANY MORE. Every pointerdown
+   * and keydown on every screen went to IndexedDB for a local affective
+   * reader that does not exist and may not: the frontend infers no state
+   * (frontend §6). Whatever an earlier build left is purged at sign-in and
+   * sign-out - see `ephemeralStore`.
    */
-  const { withdrawn } = useConsentGate();
-  // Nor on the hold: a child waiting there is waiting BECAUSE nobody has
-  // consented yet, so there is nothing to capture under.
-  useBehaviouralCapture(!withdrawn && !isHoldRoute(pathname));
   // Renews the session before it expires. Mounted here rather than on a tab,
   // so it covers the full-screen routes below too - a child mid-lesson is the
   // case that matters, and the one the old behaviour handled worst.
@@ -123,6 +111,18 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
      */
     void flushPendingBaseline(getSession()?.userId);
   }, []);
+  /*
+   * AND WHEN THE CONNECTION COMES BACK, not only on mount. The shell is a
+   * layout and stays mounted across every tab, so "mount" meant once per
+   * sign-in: a child who finished a lesson offline and was back on Home when
+   * the signal returned had their completion sit on the device, and reopening
+   * the lesson resumed from the stale place the server still had.
+   */
+  useEffect(() => {
+    const flush = () => void flushPendingProgress();
+    window.addEventListener("online", flush);
+    return () => window.removeEventListener("online", flush);
+  }, []);
   // The chrome calls the student by their own name, not the fixture's.
   const student = useDisplayName();
   // The look the child chose on Profile; the navy disc until they choose.
@@ -161,10 +161,9 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
 
   if (isFullScreen(pathname)) {
     // Text Size is a reading preference, and the player is where the reading
-    // happens - it applies there too, not just in the shell. Onboarding is
-    // deliberately excluded: the baseline activities are spatially
-    // calibrated, and scaling them would distort what they measure.
-    if (pathname.startsWith("/student/onboarding")) return <>{children}</>;
+    // happens - it applies there too, not just in the shell. The calibrated
+    // activities are deliberately excluded - see `scalesWithTextSize`.
+    if (!scalesWithTextSize(pathname)) return <>{children}</>;
     return (
       <div className="nevo-text-zoom">
         {/*
@@ -187,7 +186,7 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
     : STUDENT_NAV.find((item) => within(item.href))?.href;
 
   return (
-    <div className="flex h-[100dvh] bg-nevo-cream text-nevo-near-black">
+    <div className="group/shell flex h-[100dvh] bg-nevo-cream text-nevo-near-black">
       {/* Sidebar — tablet & desktop */}
       <div className="hidden shrink-0 md:block">
         <MaybeSample showing={showingFixtureIdentity} kind="student:identity">
@@ -289,17 +288,24 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
           <div>{children}</div>
         </main>
 
-        {/* Bottom nav — mobile only */}
-        <div className="shrink-0 px-3 pb-3 md:hidden">
+        {/* Bottom nav — mobile only. Down while a tab's on-screen keyboard is
+            docked (`data-nevo-hide-nav`, e.g. a Connect conversation), as the
+            frames draw it; that keyboard only shows without a fine pointer. */}
+        <div className="shrink-0 px-3 pb-3 md:hidden not-pointer-fine:group-has-[[data-nevo-hide-nav]]/shell:hidden">
           <BottomNav items={STUDENT_NAV} activeHref={activeHref} />
         </div>
       </div>
 
       {/* Ask Nevo (26) — always reachable from the tabs, never interruptive. */}
-      <AskNevo />
+      {/* Except Profile: the app shell frame mounts the launcher on every tab
+          `&& v !== "profile"`, a deliberate exclusion rather than an omission. */}
+      {pathname !== PROFILE_HREF && <AskNevo />}
     </div>
   );
 }
+
+/** The one tab the app shell frame draws without the Ask Nevo launcher. */
+const PROFILE_HREF = "/student/profile";
 
 /**
  * The immersive player, and the review session that reuses it wholesale (37d).
@@ -317,12 +323,27 @@ const isLesson = isLessonRoute;
  * the server said may not proceed was shown the navigation, the bell and Ask
  * Nevo around the very screen telling them to wait - and could tap straight
  * past it, and ask Ask Nevo a question, before anyone had consented. The frame
- * draws the hold bare. So it is full-screen, and nothing is captured on it.
+ * draws the hold bare. So it is full-screen.
  */
 function isHoldRoute(pathname: string): boolean {
   return (
     pathname === "/student/waiting" || pathname.startsWith("/student/entry")
   );
+}
+
+/**
+ * Whether the child's Text Size zoom applies to a full-screen route.
+ *
+ * NOT ON THE CALIBRATED ACTIVITIES. The baseline in onboarding was always
+ * exempt, because its tasks are sized and timed to measure and scaling them
+ * distorts what they measure. The daily warm-up runs the same tasks and was
+ * not exempt - so tile and dot sizes changed with a reading preference, and a
+ * child's warm-up measured differently from their own baseline.
+ */
+export function scalesWithTextSize(pathname: string): boolean {
+  if (pathname.startsWith("/student/onboarding")) return false;
+  if (pathname === "/student/warm-up") return false;
+  return true;
 }
 
 function isFullScreen(pathname: string): boolean {

@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { Check } from "lucide-react";
-import { NevoKeyboard } from "@/components/shared";
+import { NevoKeyboard, useNevoKeyboardDock } from "@/components/shared";
 import { authApi } from "@/lib/api";
 import { STUDENT_PIN_LENGTH } from "@/lib/constants";
 import { USER_ROLES } from "@/lib/constants/permissions";
@@ -106,6 +106,20 @@ export function PinCreationScreen({
     done: false,
   });
   const [saveFailed, setSaveFailed] = useState(false);
+  /*
+   * THE PAD IS DOCKED AND FOCUS-DRIVEN, per design's ruling D on the PIN
+   * frame (15): "a focus-driven pad is transient, and a docked tray reads as
+   * transient". It was a permanent block pad, which is 28c's exception for a
+   * screen whose pad is the whole point.
+   *
+   * The boxes are a picture, not an input, so they get a field to focus - the
+   * same transparent overlay the sign-back-in form uses. Digits still arrive
+   * through the window listener below, which is why the field is read-only.
+   * It is focused on arrival, so the pad is up from the start and a child
+   * never has to discover that the boxes are tappable.
+   */
+  const pad = useNevoKeyboardDock();
+  const entryRef = useRef<HTMLInputElement>(null);
 
   const onCompleteRef = useRef(onComplete);
   useEffect(() => {
@@ -137,6 +151,11 @@ export function PinCreationScreen({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [sso, pressDigit, backspace]);
+
+  useEffect(() => {
+    if (sso || done) return;
+    entryRef.current?.focus({ preventScroll: true });
+  }, [sso, done]);
 
   // Auto-advance once the PIN is set (manual) or the SSO confirmation lands.
   // With a session, "set" means stored server-side: the write happens inside
@@ -247,21 +266,34 @@ export function PinCreationScreen({
 
         {showEntry && (
           <>
-            <PinRow
-              filled={digits.length}
-              offset={0}
-              caretAt={digits.length}
-              error={false}
-            />
-            <p className="mt-7 mb-3 text-sm font-medium">
-              Type it again to confirm
-            </p>
-            <PinRow
-              filled={digits.length}
-              offset={STUDENT_PIN_LENGTH}
-              caretAt={digits.length}
-              error={error}
-            />
+            <div className="relative">
+              <input
+                ref={entryRef}
+                value=""
+                readOnly
+                inputMode="none"
+                autoComplete="off"
+                aria-label="Your PIN"
+                onFocus={pad.onFocus}
+                onBlur={pad.onBlur}
+                className="absolute inset-0 z-10 h-full w-full cursor-text opacity-0 outline-none"
+              />
+              <PinRow
+                filled={digits.length}
+                offset={0}
+                caretAt={digits.length}
+                error={false}
+              />
+              <p className="mt-7 mb-3 text-sm font-medium">
+                Type it again to confirm
+              </p>
+              <PinRow
+                filled={digits.length}
+                offset={STUDENT_PIN_LENGTH}
+                caretAt={digits.length}
+                error={error}
+              />
+            </div>
             <p role="alert" className="mt-4 min-h-5 text-sm text-nevo-violet">
               {/*
                 NAMES THE FAILURE THAT ACTUALLY HAPPENED.
@@ -289,13 +321,12 @@ export function PinCreationScreen({
         )}
       </div>
 
-      {showEntry && (
+      {showEntry && pad.open && (
         <NevoKeyboard
           layout="pad"
-          presentation="block"
           onKey={pressDigit}
           onBackspace={backspace}
-          className="mb-8 shrink-0"
+          className="sticky bottom-0 z-40 shrink-0"
         />
       )}
     </div>

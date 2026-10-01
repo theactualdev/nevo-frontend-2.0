@@ -72,6 +72,19 @@ describe("what the guard already promised, now held down", () => {
     expect(destination("/student/onboarding/name")).toBeNull();
   });
 
+  it("lets a child with no session open their school's entry link", () => {
+    // The link is the credential: the child has no account yet. Guarding it
+    // sent them to the PIN screen, where "I'm new" dropped the token and the
+    // consent hold behind the link could never be reached.
+    expect(destination("/student/entry/tok-abc123")).toBeNull();
+  });
+
+  it("opens nothing else that merely starts with the same letters", () => {
+    // Only the token route is the door. A prefix without the slash would have
+    // opened any route that happens to start with the same letters.
+    expect(destination("/student/entryway")).toBe("/auth/login");
+  });
+
   it("sends a signed-out visitor to the child's door, not a password form", () => {
     expect(destination("/student/dashboard")).toBe("/auth/login");
   });

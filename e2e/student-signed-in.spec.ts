@@ -259,7 +259,8 @@ test.describe("a signed-in student", () => {
     await page
       .locator('input[aria-labelledby="returning-pin-label"]')
       .pressSequentially(pin);
-    await page.getByRole("button", { name: "Sign in" }).click();
+    // 00c's label for the button (it read "Sign in" until 1 Oct).
+    await page.getByRole("button", { name: "That's me" }).click();
 
     // Recorded, so a green run says WHICH door this child was sent through.
     test.info().annotations.push({

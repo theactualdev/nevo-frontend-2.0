@@ -50,7 +50,16 @@ export interface VisualContent {
    * answer to missing produced assets: real art, never a wireframe box.
    */
   art?: { id: string; alt: string; caption?: string };
-  illustration?: { src: string; alt: string; caption?: string };
+  illustration?: {
+    src: string;
+    alt: string;
+    caption?: string;
+    /** Identifies the stored object, so an expired `src` can be re-issued. */
+    storagePath?: string;
+    /** The asset's own pixel size, when the wire carries it. */
+    width?: number;
+    height?: number;
+  };
   /** e.g. Photosynthesis "TAKES IN → GIVES OUT". */
   diagram?: {
     inLabel: string;
@@ -69,6 +78,8 @@ export interface AudioContent {
   title?: string;
   /** Backend-produced asset ref; absent in the mock (UI animates a placeholder). */
   src?: string;
+  /** Identifies the stored clip, so an expired `src` can be re-issued. */
+  storagePath?: string;
   durationSec?: number;
   transcript: string;
 }
@@ -87,6 +98,11 @@ export interface InteractiveContent {
 // ── Comprehension check (inline Quick Check) ────────────────────────────────
 
 export interface QuickCheck {
+  /**
+   * The checkpoint it was built from, so an answer can say which one it
+   * answered. Absent on the authored demo checks, which have none.
+   */
+  id?: string;
   question: string;
   options: { id: string; label: string }[];
   correctId: string;
@@ -94,6 +110,13 @@ export interface QuickCheck {
   correctNote: string;
   /** Soft-violet (never red) note on a miss — always reassures continuity. */
   recoveryNote: string;
+  /**
+   * The concept the check is about, from its checkpoint. A review session
+   * skips the after-lesson questions - its inline checks ARE the recall - so
+   * this is the only place a review learns which answers were about the
+   * concept it was opened for. Never rendered.
+   */
+  conceptId?: string;
 }
 
 // ── Calculation subsystem (17b §9 — co-construction) ────────────────────────
@@ -345,8 +368,9 @@ export interface SegmentAdaptation {
   breakAfter?: BreakType | null;
   /**
    * Scaffold indicator level for this segment (37a) - the support the system
-   * is quietly giving, generated from behaviour server-side. Defaults to
-   * "light" when absent.
+   * is quietly giving, generated from behaviour server-side. Absent means the
+   * engine said nothing, and the indicator shows nothing (rule 5) - it no
+   * longer defaults to "light".
    */
   scaffold?: ScaffoldLevel;
   /**
@@ -390,6 +414,12 @@ export interface AdaptationPlan {
    * engine fills.
    */
   adjustment?: AdjustmentAction | null;
+  /**
+   * The engine's one modality suggestion for this answer, lesson-level like
+   * the wire's `modalitySuggestion`. The per-segment `suggestModality` is the
+   * authored seam; this is offered once, where it can render.
+   */
+  suggestModality?: Modality | null;
   /**
    * The hint `offer_hint` shows, when the engine sent one.
    *

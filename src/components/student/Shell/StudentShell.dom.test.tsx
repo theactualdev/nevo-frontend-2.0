@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
-import { StudentShell } from "./StudentShell";
+import { StudentShell, scalesWithTextSize } from "./StudentShell";
 import { clearSession, setSession } from "@/lib/auth/session";
 import { AccessibilityProvider } from "@/context/AccessibilityContext";
 
@@ -39,7 +39,6 @@ vi.mock("@/components/student/AskNevo/AskNevo", () => ({
   AskNevo: () => <div data-testid="ask-nevo" />,
 }));
 vi.mock("@/hooks", () => ({
-  useBehaviouralCapture: vi.fn(),
   // The in-shell tabs render the notification bell; it reads the network and
   // decides nothing about where Ask Nevo goes.
   useNotifications: () => ({
@@ -110,6 +109,18 @@ describe("StudentShell — where Ask Nevo is reachable", () => {
 
   it("is reachable from the ordinary tabs", () => {
     at("/student/dashboard");
+    expect(screen.getByTestId("ask-nevo")).toBeTruthy();
+  });
+
+  it("stays off Profile, the one tab the app shell frame draws without it", () => {
+    // `Nevo Student App`: `showAskFab: TABS.includes(v) && v !== "profile"`.
+    at("/student/profile");
+    expect(screen.queryByTestId("ask-nevo")).toBeNull();
+  });
+
+  it("is still on the other tabs beside Profile", () => {
+    // The exclusion is the tab, not everything that starts with its name.
+    at("/student/connect");
     expect(screen.getByTestId("ask-nevo")).toBeTruthy();
   });
 
@@ -216,8 +227,7 @@ describe("the consent hold", () => {
   /*
    * A HOLD IS NOT A TAB. The waiting screen rendered inside the full app, so
    * a child the server said may not proceed could tap the nav straight past
-   * it and ask Ask Nevo a question before anyone had consented - and every
-   * tap was captured while they waited.
+   * it and ask Ask Nevo a question before anyone had consented.
    */
   it("shows no navigation, bell or Ask Nevo around the waiting screen", () => {
     at("/student/waiting");
@@ -233,25 +243,23 @@ describe("the consent hold", () => {
 
     expect(screen.queryByRole("navigation")).toBeNull();
   });
+});
 
-  it("captures nothing while the child waits", async () => {
-    const { useBehaviouralCapture } = await import("@/hooks");
-    vi.mocked(useBehaviouralCapture).mockClear();
-
-    at("/student/waiting");
-
-    expect(vi.mocked(useBehaviouralCapture)).toHaveBeenCalled();
-    expect(
-      vi.mocked(useBehaviouralCapture).mock.calls.every(([on]) => on === false),
-    ).toBe(true);
+describe("scalesWithTextSize — Text Size on the full-screen routes", () => {
+  /*
+   * The baseline was always exempt: its tasks are sized and timed to measure.
+   * The daily warm-up runs the same tasks under the child's zoom, so a reading
+   * preference changed tile and dot sizes in a calibration.
+   */
+  it("leaves the daily warm-up unscaled", () => {
+    expect(scalesWithTextSize("/student/warm-up")).toBe(false);
   });
 
-  it("still captures on an ordinary tab", async () => {
-    const { useBehaviouralCapture } = await import("@/hooks");
-    vi.mocked(useBehaviouralCapture).mockClear();
+  it("leaves onboarding unscaled, as before", () => {
+    expect(scalesWithTextSize("/student/onboarding/sequence")).toBe(false);
+  });
 
-    at("/student/dashboard");
-
-    expect(vi.mocked(useBehaviouralCapture)).toHaveBeenCalledWith(true);
+  it("still scales the lesson player, where the reading happens", () => {
+    expect(scalesWithTextSize("/student/lessons/abc-123")).toBe(true);
   });
 });

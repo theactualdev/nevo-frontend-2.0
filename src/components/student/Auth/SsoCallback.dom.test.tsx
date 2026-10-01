@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { SsoCallback } from "./SsoCallback";
+import { ApiError } from "@/lib/api/client";
 import { clearSession, getSession } from "@/lib/auth/session";
 
 /**
@@ -33,6 +34,8 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => params,
 }));
 vi.mock("@/lib/api/auth", () => ({ authApi: { ssoCallback } }));
+const { myConsentGate } = vi.hoisted(() => ({ myConsentGate: vi.fn() }));
+vi.mock("@/lib/api/consents", () => ({ consentsApi: { myConsentGate } }));
 vi.mock("@/hooks", () => ({
   useAuth: () => ({ signIn }),
   useSignals: () => ({ trackEvent: vi.fn() }),
@@ -45,6 +48,7 @@ const setUrl = (q: string) => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  myConsentGate.mockResolvedValue({ blocked: false });
   clearSession();
   setUrl("");
 });
@@ -63,7 +67,7 @@ describe("student SsoCallback", () => {
       expiresAt: new Date(Date.now() + 3600_000).toISOString(),
       userId: "student-77",
       role: "student",
-      destination: "/student/onboarding/sequence",
+      destination: "observed_interaction",
     });
 
     render(<SsoCallback />);
@@ -124,5 +128,113 @@ describe("student SsoCallback", () => {
     );
     expect(ssoCallback).not.toHaveBeenCalled();
     expect(getSession()).toBeNull();
+  });
+});
+
+const SESSION = {
+  accessToken: "server-token",
+  tokenType: "bearer",
+  expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+  userId: "student-77",
+  role: "student",
+  replacedSession: false,
+};
+
+/** Let the success hold run out, as the child waits on "You're in". */
+const holdPasses = async () => {
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 1000));
+  });
+};
+
+/**
+ * `destination` is the contract's ENUM. Routed to as a path, a successful
+ * sign-in would have gone to "home_dashboard" - a 404 - with consent unread.
+ */
+describe("where a successful SSO sign-in lands", () => {
+  it("takes a child's first use into the sequence", async () => {
+    setUrl("provider=microsoft&code=c&state=state-1");
+    ssoCallback.mockResolvedValue({ ...SESSION, destination: "observed_interaction" });
+
+    render(<SsoCallback />);
+    await holdPasses();
+
+    expect(replace).toHaveBeenCalledWith("/student/onboarding/sequence");
+  });
+
+  it("takes a returning child Home, through the consent check", async () => {
+    setUrl("provider=microsoft&code=c&state=state-1");
+    ssoCallback.mockResolvedValue({ ...SESSION, destination: "home_dashboard" });
+
+    render(<SsoCallback />);
+    await holdPasses();
+
+    expect(myConsentGate).toHaveBeenCalled();
+    expect(replace).toHaveBeenCalledWith("/student/dashboard");
+    expect(replace).not.toHaveBeenCalledWith("home_dashboard");
+  });
+
+  it("holds a child the server says may not proceed", async () => {
+    setUrl("provider=microsoft&code=c&state=state-1");
+    myConsentGate.mockResolvedValue({ blocked: true });
+    ssoCallback.mockResolvedValue({ ...SESSION, destination: "home_dashboard" });
+
+    render(<SsoCallback />);
+    await holdPasses();
+
+    expect(replace).toHaveBeenCalledWith("/student/waiting");
+  });
+});
+
+describe("the error screen offers only what works", () => {
+  it("has no Try again when there was never a handshake to retry", async () => {
+    render(<SsoCallback />);
+
+    await screen.findByText(/couldn.t sign you in/i);
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    expect(screen.queryByText(/try once more/i)).toBeNull();
+  });
+
+  it("has no Try again once the server has refused the code, which is single-use", async () => {
+    setUrl("provider=microsoft&code=c&state=state-1");
+    ssoCallback.mockRejectedValue(new ApiError(401, "Unauthorized"));
+
+    render(<SsoCallback />);
+
+    await screen.findByText(/couldn.t sign you in/i);
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("offers Try again when the request never reached the server", async () => {
+    setUrl("provider=microsoft&code=c&state=state-1");
+    ssoCallback
+      .mockRejectedValueOnce(new ApiError(0, "Network"))
+      .mockResolvedValue({ ...SESSION, destination: "home_dashboard" });
+
+    render(<SsoCallback />);
+    (await screen.findByRole("button", { name: "Try again" })).click();
+
+    await waitFor(() => expect(getSession()?.token).toBe("server-token"));
+  });
+
+  it("says Contact your school without pretending to be a way somewhere", async () => {
+    // IA: "no navigation, informational only". It pushed the PIN door, which
+    // an SSO child has no PIN for.
+    render(<SsoCallback />);
+
+    await screen.findByText("Contact your school");
+    expect(
+      screen.queryByRole("button", { name: "Contact your school" }),
+    ).toBeNull();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("carries the icon mark, as 00b draws it", async () => {
+    render(<SsoCallback />);
+
+    await screen.findByText(/couldn.t sign you in/i);
+    expect(
+      (screen.getByAltText("Nevo") as HTMLImageElement).getAttribute("src"),
+    ).toBe("/brand/logo-icon-purple.png");
   });
 });

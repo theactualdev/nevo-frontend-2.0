@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import type { AgeBand } from "@/lib/profiling/bands";
-import type { BaselineCapture } from "@/lib/profiling/capture";
+import { tapPoint, type BaselineCapture } from "@/lib/profiling/capture";
 import { AvatarBubble, ProfilingShell } from "./ProfilingShell";
 import { SettleBadge } from "./GridSpanModule";
 import { useTrialRunner } from "./useTrialRunner";
@@ -245,16 +245,20 @@ export function DomainProbeModule({
     return (
       <ProfilingShell filled={3} active={3}>
         <div className="flex min-h-0 w-full max-w-[520px] flex-1 flex-col items-center justify-center gap-6">
+          {/* The frame's words (`Nevo Domain Probe Frame` :29). */}
           <h2 className="text-center text-xl font-semibold text-balance text-nevo-navy">
-            Which subject do you feel most at home in?
+            Which subject would you like to start with?
           </h2>
           <div className="grid w-full grid-cols-2 gap-3">
             {(SUBJECTS[band] ?? SUBJECTS.ss).map((s) => (
               <button
                 key={s}
                 type="button"
-                onClick={() => {
-                  capture?.record("probe_subject", { subject: s });
+                onClick={(e) => {
+                  capture?.record("probe_subject", {
+                    subject: s,
+                    ...tapPoint(e),
+                  });
                   setSubject(s);
                 }}
                 className="cursor-pointer rounded-[10px] border-2 border-nevo-navy bg-nevo-cream px-4 py-[18px] text-center text-base font-medium text-nevo-near-black transition-transform active:scale-[0.97]"
@@ -301,11 +305,15 @@ export function DomainProbeModule({
                   <button
                     key={o.text}
                     type="button"
-                    onClick={() =>
-                      pick(i, {
-                        subject: subject ?? undefined,
-                        correct: i === q.answer,
-                      })
+                    onClick={(e) =>
+                      pick(
+                        i,
+                        {
+                          subject: subject ?? undefined,
+                          correct: i === q.answer,
+                        },
+                        e,
+                      )
                     }
                     className={cn(
                       "flex w-full cursor-pointer items-center gap-3 rounded-[10px] border-2 px-4 text-left text-base leading-[1.4]",

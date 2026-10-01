@@ -1,8 +1,10 @@
 "use client";
 
+import { useContext } from "react";
 import { usePathname } from "next/navigation";
 import { AskNevo } from "@/components/student/AskNevo/AskNevo";
 import { isLessonRoute } from "@/components/student/Shell/lessonRoutes";
+import { LessonContext } from "@/context/LessonContext";
 
 /**
  * Ask Nevo, INSIDE the lesson's provider.
@@ -19,7 +21,14 @@ import { isLessonRoute } from "@/components/student/Shell/lessonRoutes";
  *
  * The route test is the shell's own, shared rather than copied: `/review` and
  * `/summary` sit under this layout and are not the player.
+ *
+ * AND ONLY WHERE THE PLAYER IS NOT TEACHING. IA 31: *"Ask Nevo is never
+ * available during active Lesson Player content."* The move above put it over
+ * every segment, break and after-lesson question, one tap from a hint while
+ * the child's answers were being recorded. The completion screen switches
+ * `askNevoAllowed` on - see `LessonComplete`.
  */
 export function LessonAskNevo() {
-  return isLessonRoute(usePathname()) ? <AskNevo /> : null;
+  const allowed = useContext(LessonContext)?.askNevoAllowed ?? false;
+  return isLessonRoute(usePathname()) && allowed ? <AskNevo /> : null;
 }

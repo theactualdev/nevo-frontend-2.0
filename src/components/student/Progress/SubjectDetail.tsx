@@ -8,7 +8,10 @@ import { SampleRegion } from "@/components/shared/SampleRegion";
 import { useHasSession } from "@/hooks/useHasSession";
 import { useHydrated } from "@/hooks/useHydrated";
 import { useDueReviews } from "@/hooks/useDueReviews";
-import { useStudentProgress } from "@/hooks/useStudentProgress";
+import {
+  subjectFromSlug,
+  useStudentProgress,
+} from "@/hooks/useStudentProgress";
 import { useSubjectProgress } from "@/hooks/useSubjectProgress";
 import type {
   SessionRow,
@@ -72,7 +75,10 @@ export function SubjectDetail({
   const signedIn = useHasSession();
   const hydrated = useHydrated();
   const live = useStudentProgress();
-  const liveSubject = live.subjects.find((s) => s.slug === slug);
+  // Matched on the NAME the segment carries, not on a lossy slug - two
+  // subjects differing only in case used to share one.
+  const asked = subjectFromSlug(slug);
+  const liveSubject = live.subjects.find((s) => s.name === asked);
   // The subject's OWN reflection comes from the narrowed route; the
   // whole-student read above is about all of a child's learning and must not
   // sit under one subject's heading. Both requests fire on the same tick, so
@@ -99,7 +105,7 @@ export function SubjectDetail({
         // not read from it even for a heading. The slug is what the child
         // actually asked for, so it is the honest label when the live read has
         // no subject by that name.
-        name={liveSubject?.name ?? titleFromSlug(slug)}
+        name={liveSubject?.name ?? titleFromSlug(asked)}
         reflection={own.reflection}
         concepts={liveSubject?.concepts ?? []}
         /*
@@ -116,6 +122,14 @@ export function SubjectDetail({
          * made for the reflection alone.
          */
         lessons={own.lessons}
+        /*
+         * WHEN THAT READ FAILS, SAY SO. `own.failed` was never read, so a
+         * failed narrowed read left no lesson section at all and - with no
+         * concepts either - the screen said "Nothing here yet". That is a
+         * failure rendered as emptiness: the child's lessons exist, we just
+         * could not fetch them.
+         */
+        lessonsFailed={own.failed}
         failed={live.failed}
       />
     );
@@ -319,12 +333,14 @@ function LiveSubjectDetail({
   reflection,
   concepts,
   lessons,
+  lessonsFailed,
   failed,
 }: {
   name: string;
   reflection: string | null;
   concepts: { conceptId: string; name: string }[];
   lessons: { lessonId: string; title: string; updatedAt: string }[];
+  lessonsFailed: boolean;
   failed: boolean;
 }) {
   // Which of these concepts the scheduler says are ready again. A failed or
@@ -345,8 +361,8 @@ function LiveSubjectDetail({
           {name}
         </h1>
         <p className="mt-4 text-[15px] leading-[1.55] text-nevo-near-black/66">
-          We couldn&rsquo;t load this just now. Nothing is lost - give it
-          a moment and try again.
+          We couldn&rsquo;t load this just now. Nothing is lost. Give it a
+          moment and try again.
         </p>
       </DetailFrame>
     );
@@ -421,10 +437,29 @@ function LiveSubjectDetail({
         </>
       )}
 
-      {lessons.length > 0 && (
+      {lessonsFailed ? (
         <>
           <h2 className="mt-7 text-base font-semibold text-nevo-near-black">
-            Lessons you&apos;ve done
+            What you&apos;ve been learning
+          </h2>
+          <p className="mt-3 text-[15px] leading-[1.55] text-nevo-near-black/66">
+            We couldn&rsquo;t load your lessons just now. Nothing is lost.
+            Give it a moment and try again.
+          </p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="mt-4 flex h-11 cursor-pointer items-center rounded-[10px] bg-nevo-navy px-6 text-[15px] font-medium text-nevo-cream"
+          >
+            Try again
+          </button>
+        </>
+      ) : lessons.length > 0 && (
+        <>
+          {/* The frame's heading. "Lessons you've done" listed every status,
+              so it called unfinished lessons done. */}
+          <h2 className="mt-7 text-base font-semibold text-nevo-near-black">
+            What you&apos;ve been learning
           </h2>
           <ul className="mt-3">
             {lessons.map((l) => (
@@ -447,9 +482,11 @@ function LiveSubjectDetail({
         </>
       )}
 
-      {concepts.length === 0 && lessons.length === 0 && (
+      {concepts.length === 0 && lessons.length === 0 && !lessonsFailed && (
+        // 29 Empty States, "Subject Detail (Early)".
         <p className="mt-6 text-[15px] leading-[1.55] text-nevo-near-black/60">
-          Nothing here yet. Keep going with your lessons and this will fill in.
+          You&apos;re just getting started in {name}. Check back after a few
+          more lessons.
         </p>
       )}
     </DetailFrame>

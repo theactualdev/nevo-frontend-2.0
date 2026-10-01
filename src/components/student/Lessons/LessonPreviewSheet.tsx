@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/shared";
+import { lessonHref } from "@/lib/lessons/lessonHref";
 import type { LessonSummary } from "./lessonCatalog";
 
 /**
@@ -38,8 +39,8 @@ export function LessonPreviewSheet({
         </SheetTitle>
 
         <div className="mt-3.5 flex items-center gap-2.5">
-          {/* Live lessons carry no subject - the chip is dropped rather than
-              drawn empty, and never filled with a guess. */}
+          {/* A lesson with no subject drops the chip rather than drawing it
+              empty, and never fills it with a guess. */}
           {lesson.subject && (
             <span className="rounded-full bg-nevo-violet/25 px-3 py-1 text-[13px] text-nevo-navy">
               {lesson.subject}
@@ -50,8 +51,8 @@ export function LessonPreviewSheet({
           </span>
         </div>
 
-        {/* Nothing in the contract writes a "what you'll do" for a child, so a
-            live lesson shows none rather than one we invented. */}
+        {/* The lesson's own `description` (1 Oct). Null on the wire means no
+            line, never one we invented. */}
         {lesson.description && (
           <p className="mt-[18px] text-[15px] leading-[1.6] text-nevo-near-black sm:text-base">
             {lesson.description}
@@ -74,7 +75,9 @@ export function LessonPreviewSheet({
 
         <Button
           className="mt-7 w-full"
-          onClick={() => router.push(`/student/lessons/${lesson.lessonId}`)}
+          onClick={() =>
+            router.push(lessonHref(lesson.lessonId, lesson.assignmentId))
+          }
         >
           {inProgress ? "Continue" : "Start"}
         </Button>

@@ -64,7 +64,9 @@ describe("the engine's proactive instruction", () => {
     // The schema declares a bare string, so a seventh value can arrive any
     // day. Rule 5: absence is an instruction, and so is a word we cannot act
     // on - render the nothing-state rather than guess which screen it meant.
-    for (const action of ["escalate_to_teacher", "", "MODULATE_DENSITY", "offer hint"]) {
+    // `modulate_density` is in the list since 1 Oct: design removed it
+    // (SCRUM-180), so it is now a word we do not act on like any other.
+    for (const action of ["escalate_to_teacher", "", "MODULATE_DENSITY", "modulate_density", "offer hint"]) {
       const plan = toAdaptationPlan(response(action), lesson());
       expect(plan.adjustment ?? null, action).toBeNull();
     }
@@ -82,7 +84,7 @@ describe("the engine's proactive instruction", () => {
     // besides, which rule 3 keeps off every screen. The safest place to stop
     // them is here, where they are simply not carried across.
     const plan = toAdaptationPlan(
-      response(ADJUSTMENT_ACTIONS.MODULATE_DENSITY),
+      response(ADJUSTMENT_ACTIONS.SIMPLIFY),
       lesson(),
     );
 
@@ -132,12 +134,12 @@ describe("what the instruction actually shows", () => {
 
   it("ties the content to the instruction it serves", () => {
     /*
-     * A hint arriving beside `modulate_density` is not a hint anybody asked to
-     * show. The action IS the instruction; the text serves it. Dropping it here
+     * A hint arriving beside `simplify` is not a hint anybody asked to show.
+     * The action IS the instruction; the text serves it. Dropping it here
      * beats trusting every future consumer to check which action it belongs to.
      */
     const plan = toAdaptationPlan(
-      response(ADJUSTMENT_ACTIONS.MODULATE_DENSITY, {
+      response(ADJUSTMENT_ACTIONS.SIMPLIFY, {
         hint: "Start with where the light lands.",
         guidedQuestions: ["Where does the energy come from?"],
       }),

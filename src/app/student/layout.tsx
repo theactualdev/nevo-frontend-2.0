@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AccountPauseHost } from "@/components/student/Auth/AccountPauseHost";
 import { RotateLock } from "@/components/student/Shell/RotateLock";
 import { StudentShell } from "@/components/student/Shell/StudentShell";
 
@@ -25,6 +26,10 @@ export default function StudentLayout({
     // holds the one underneath still while it does.
     <RotateLock>
       <StudentShell>{children}</StudentShell>
+      {/* 28b: a pause that lands while a child is here is shown over this
+          screen, not by leaving it. It portals over whatever the shell is
+          showing, the lesson player most of all. */}
+      <AccountPauseHost />
     </RotateLock>
   );
 }
