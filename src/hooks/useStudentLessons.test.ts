@@ -177,3 +177,16 @@ describe("what the live row carries onto the card", () => {
     expect(first().timeEstimate).toBe("1 section");
   });
 });
+
+describe("which piece of set work a card is", () => {
+  it("carries the assignment, so opening it files progress there", () => {
+    // The preview pushed the bare lesson URL, and the player reads
+    // `?assignment=` only - so a lesson opened from this tab recorded
+    // progress against no assignment and never showed the teacher's note.
+    read([assignment("one")]);
+
+    const { result } = renderHook(() => useStudentLessons());
+
+    expect(result.current.lessons[0]?.assignmentId).toBe("a-one");
+  });
+});
