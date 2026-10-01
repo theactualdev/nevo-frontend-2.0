@@ -671,6 +671,8 @@ function assessmentFor(res: LessonDetailResponse): Assessment | undefined {
       // Omitted rather than null: every consumer tests for presence, and a
       // question with no concept simply cannot inform a review.
       ...(checkpoint.conceptId ? { conceptId: checkpoint.conceptId } : {}),
+      // A spoken question (B16), only where the server made it one.
+      ...(quick.promptAudio ? { promptAudio: quick.promptAudio } : {}),
     }));
 
   return questions.length > 0 ? { questions } : undefined;

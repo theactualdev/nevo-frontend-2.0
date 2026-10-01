@@ -65,13 +65,32 @@ function write(batches: HeldBatch[]): void {
   }
 }
 
+/**
+ * Children whose guardian has withdrawn consent, as reported to this page.
+ *
+ * SCRUM-80: a withdrawal - and only a withdrawal - stops processing. What was
+ * held for them is deleted and nothing more is kept or delivered. For the life
+ * of the page only: the next page asks the consent gate again, and a guardian
+ * who consents again is not overruled by a stale list on a shared tablet.
+ */
+const withheld = new Set<string>();
+
+/** Delete everything held for `userId`, and hold and deliver nothing more. */
+export function withholdSignals(userId: string): void {
+  if (!userId) return;
+  withheld.add(userId);
+  const all = read();
+  const kept = all.filter((b) => b.userId !== userId);
+  if (kept.length !== all.length) write(kept);
+}
+
 /** Keep `events` for `userId` until they can be sent. */
 export function holdSignals(
   userId: string,
   session: SignalSessionEnvelope,
   events: SignalEvent[],
 ): void {
-  if (!userId || events.length === 0) return;
+  if (!userId || events.length === 0 || withheld.has(userId)) return;
   const all = [...read(), { userId, session, events, heldAt: Date.now() }];
   // Cap this child's share, oldest batches first.
   let mine = all
@@ -101,6 +120,12 @@ export function deliverHeldSignals(): Promise<void> {
 async function deliver(): Promise<void> {
   const session = getSession();
   if (!session?.token) return;
+  // Nothing of a withdrawn child's goes - and anything another tab has held
+  // for them since is deleted, not left for a later page to send.
+  if (withheld.has(session.userId)) {
+    withholdSignals(session.userId);
+    return;
+  }
   const now = Date.now();
   const all = read();
   const fresh = all.filter((b) => now - b.heldAt <= MAX_AGE_MS);
@@ -116,6 +141,8 @@ async function deliver(): Promise<void> {
   const PER = SIGNAL_BATCH.MAX_EVENTS_PER_REQUEST;
   for (const held of mine) {
     for (let i = 0; i < held.events.length; i += PER) {
+      // A withdrawal reported while this ran stops the rest of it.
+      if (withheld.has(session.userId)) return;
       const chunk = held.events.slice(i, i + PER);
       try {
         await signalsApi.submitBatch(held.session, chunk);

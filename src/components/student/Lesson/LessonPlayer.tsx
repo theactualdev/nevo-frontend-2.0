@@ -27,8 +27,13 @@ import type { SessionOutcome } from "@/hooks/useSignals";
 import { useRuntimeAdaptation } from "@/hooks/useRuntimeAdaptation";
 import { useLessonExit } from "./LessonExit";
 import { useScaffoldLevel } from "@/hooks/useScaffoldLevel";
-import type { AdaptSegment } from "@/lib/api/intelligence";
-import type { AdaptationPlan, Lesson, LessonSegment } from "@/lib/types";
+import { intelligenceApi, type AdaptSegment } from "@/lib/api/intelligence";
+import type {
+  AdaptationPlan,
+  DensityLevel,
+  Lesson,
+  LessonSegment,
+} from "@/lib/types";
 import { cn, randomId } from "@/lib/utils";
 import {
   lessonModules,
@@ -38,19 +43,32 @@ import {
 } from "@/lib/utils/modules";
 import {
   secondaryDim,
-  DifficultyOfferPill,
   HintOverlay,
   SocraticPanel,
+  type PanelPrompt,
 } from "./AffectiveLayer";
 import { AfterLessonAssessment } from "./AfterLessonAssessment";
 import { ADJUSTMENT_ACTIONS } from "@/lib/constants/affect";
 import { densityForAction } from "@/lib/lessons/densityForAction";
+import { densitySpacing } from "@/lib/lessons/densitySpacing";
 import { scaffoldAttemptFor } from "@/lib/lessons/scaffoldAttempt";
 import { scaffoldsApi } from "@/lib/api/scaffolds";
 import { useAssignmentNote } from "@/hooks/useAssignmentNote";
 import { isChunkable } from "@/lib/lessons/chunk";
-import { LESSON_STATUS } from "@/lib/api/lessons";
+import {
+  LESSON_STATUS,
+  lessonsApi,
+  type LessonQuestionAttemptWrite,
+} from "@/lib/api/lessons";
 import { schedulerApi } from "@/lib/api/scheduler";
+import { attemptFor } from "@/lib/lessons/attempts";
+import {
+  REVIEW_COPY,
+  reviewCompletionCopy,
+  reviewOutcome,
+  type RecallEvidence,
+  type ReviewRecord,
+} from "@/lib/lessons/reviewOutcome";
 import { getSession } from "@/lib/auth/session";
 import { useLessonProgress } from "@/hooks/useLessonProgress";
 import { AudioSegment } from "./AudioSegment";
@@ -71,6 +89,7 @@ import { type ReviewAnswer, saveReviewAnswers } from "./reviewStore";
 import { TeacherNote } from "./TeacherNote";
 import { TextSegment } from "./TextSegment";
 import { VisualSegment } from "./VisualSegment";
+import type { MediaFailReason } from "./useMediaSource";
 
 // Finishing a lesson goes back to the lessons (frame: "Back to lessons");
 // leaving one part way goes Home (IA: "Leave for now" -> Home Dashboard).
@@ -196,9 +215,9 @@ export function LessonPlayer({
   lastWorkedAt?: string | null;
   /**
    * Review session (37d): the same player as a spaced-retrieval variant. Adds
-   * only an entry screen, the REVIEW pill during, and the "You strengthened
-   * this concept" completion; the after-lesson assessment is skipped (the
-   * quick checks are the recall).
+   * only an entry screen, the REVIEW pill during, and its own completion
+   * message (D40); the after-lesson assessment is skipped (the quick checks
+   * are the recall).
    */
   review?: boolean;
   /** The concept a review session is for; absent on an ordinary lesson. */
@@ -258,10 +277,25 @@ export function LessonPlayer({
   const firstPlan = planFor(first.id);
 
   // The student's MANUAL density pick (navy chip). Separate from the system's
-  // standing density — the segment plan's, defaulting to Simplify (frame:
-  // `adaptive ?? "Simplify"`) — which renders as the violet chip and supplies
-  // the resting view until the student overrides. Both can show at once.
+  // density - the engine's instruction or the segment plan's, and NOTHING
+  // when neither gave one (D23, below) - which renders as the violet chip and
+  // supplies the view until the student overrides. Both can show at once.
   const [density, setDensity] = useState<Density | null>(null);
+  /*
+   * THE ENGINE'S DENSITY LEVEL, READ ON THE WAY INTO A SEGMENT (D25), and held
+   * for that visit.
+   *
+   * Rendered only as spacing - see `densitySpacing`. Read at the boundary
+   * rather than live because the mid-lesson read is asked as a child arrives,
+   * so its answer lands a moment after the segment has drawn: applied live,
+   * the gaps would visibly shift under a child who had just started reading,
+   * which is the snap rule 7 forbids. A newer answer reaches the next segment
+   * entered. Keyed by segment, like `chunkRead`, so it cannot outlive one.
+   */
+  const [entryDensity, setEntryDensity] = useState<{
+    segmentId: string;
+    level: DensityLevel | null;
+  }>(() => ({ segmentId: first.id, level: firstPlan?.densityLevel ?? null }));
   const [modality, setModality] = useState<Modality>(
     openingModality(first, firstPlan?.startModality),
   );
@@ -283,9 +317,16 @@ export function LessonPlayer({
    * perfect recall for a child who got it wrong twice.
    */
   const firstAnswers = useRef<Map<number, boolean>>(new Map());
-  // The same, for the inline checks, by segment. A review skips the
-  // after-lesson questions, so these are the only answers it ever has.
-  const firstCheckAnswers = useRef<Map<string, boolean>>(new Map());
+  /*
+   * The inline checks, by segment: how many picks it took and whether a hint
+   * was showing first - what B28's `outcome` reports. A review skips the
+   * after-lesson questions, so these are the only answers it ever has.
+   */
+  const checkRecall = useRef<Map<string, RecallEvidence & { picks: number }>>(
+    new Map(),
+  );
+  // Segments whose hint was on screen, for `after_hint`.
+  const hintedSegments = useRef<Set<string>>(new Set());
   const [passedChecks, setPassedChecks] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -374,12 +415,16 @@ export function LessonPlayer({
    * spaced retrieval on ONE concept; crediting it with a right answer about a
    * different one is inventing a signal in a smaller shape. If none of the
    * questions was tagged with it - or the child was never asked - nothing is
-   * sent at all, because there is no evidence either way and a cheerful `true`
-   * for reaching the end is exactly what Zero-Tag exists to stop.
+   * sent at all, because there is no evidence either way and a cheerful
+   * outcome for reaching the end is exactly what Zero-Tag exists to stop.
    *
-   * Failure is swallowed. The scheduler missing one outcome costs a slightly
-   * wrong interval; telling a child their review did not count would be worse
-   * and is not true - they did the work.
+   * What is sent is B28's `outcome` - what happened, not a mark - and the
+   * server decides whether it counts as recall.
+   *
+   * A failure is not announced. The scheduler missing one outcome costs a
+   * slightly wrong interval; telling a child their review did not count would
+   * be worse and is not true - they did the work. The completion screen simply
+   * claims nothing the scheduler did not confirm.
    */
   /*
    * 37a's indicator, sourced from the scaffolds engine where a concept exists.
@@ -393,9 +438,17 @@ export function LessonPlayer({
    */
   const teacherNote = useAssignmentNote(assignmentId);
 
+  /*
+   * SENT FROM THE MOVE THAT FINISHES THE REVIEW, not from an effect on the
+   * phase, because the completion screen now waits on the answer (D40): what
+   * it may claim is what the scheduler said back. See `reviewCompletionCopy`.
+   */
   const reviewRecorded = useRef(false);
-  useEffect(() => {
-    if (phase !== "complete" || !review || !reviewConceptId) return;
+  const [reviewRecord, setReviewRecord] = useState<ReviewRecord>({
+    state: "unsent",
+  });
+  const recordReview = () => {
+    if (!review || !reviewConceptId) return;
     if (reviewRecorded.current) return;
     const studentId = getSession()?.userId;
     if (!studentId) return;
@@ -406,29 +459,38 @@ export function LessonPlayer({
      * This read only the after-lesson questions - which a review skips by
      * design - so `onThisConcept` was always empty and the outcome was never
      * sent, however the child did.
+     *
+     * An after-lesson question has no second try - a miss moves on - so its
+     * first answer is the whole of the evidence.
      */
-    const onThisConcept = [
-      ...questions.map((q, i) => ({
-        conceptId: q.conceptId,
-        answered: firstAnswers.current.get(i),
-      })),
+    const onThisConcept: RecallEvidence[] = [
+      ...questions.map((q, i) => {
+        const first = firstAnswers.current.get(i);
+        return {
+          conceptId: q.conceptId,
+          evidence:
+            first === undefined
+              ? undefined
+              : { rightOnPick: first ? 1 : null, hinted: false },
+        };
+      }),
       ...lesson.segments.map((s) => ({
         conceptId: s.quickCheck?.conceptId,
-        answered: firstCheckAnswers.current.get(s.id),
+        evidence: checkRecall.current.get(s.id),
       })),
-    ].filter((q) => q.conceptId === reviewConceptId && q.answered !== undefined);
-    if (onThisConcept.length === 0) return;
+    ].flatMap((q) =>
+      q.conceptId === reviewConceptId && q.evidence ? [q.evidence] : [],
+    );
+    const outcome = reviewOutcome(onThisConcept);
+    if (!outcome) return;
 
     reviewRecorded.current = true;
-    void schedulerApi
-      .recordReview({
-        studentId,
-        conceptId: reviewConceptId,
-        // Every question about this concept, right first time.
-        recallSuccessful: onThisConcept.every((q) => q.answered === true),
-      })
-      .catch(() => {});
-  }, [phase, review, reviewConceptId, lesson]);
+    setReviewRecord({ state: "pending" });
+    schedulerApi
+      .recordReview({ studentId, conceptId: reviewConceptId, outcome })
+      .then((response) => setReviewRecord({ state: "recorded", response }))
+      .catch(() => setReviewRecord({ state: "failed" }));
+  };
   // SCRUM-101: the segment index the player is about to enter across a module
   // boundary. Non-null takes over the screen with the boundary landing; the
   // student's continue (or break + "I'm ready") completes the move.
@@ -472,8 +534,8 @@ export function LessonPlayer({
   const [spentBreakOffers, setSpentBreakOffers] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-  // Step-up offers, spent per segment by acting on them.
-  const [spentEscalations, setSpentEscalations] = useState<ReadonlySet<string>>(
+  // Hints the child closed, by segment and hint - see `hintHere`.
+  const [closedHints, setClosedHints] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
   /*
@@ -840,17 +902,79 @@ export function LessonPlayer({
   const engineOn = runtime.plan ? runtime.forSegmentId : first.id;
   const contentHere = !engine?.adjustment || engineOn === segment.id;
   const hintText = engine?.hint ?? segPlan?.hint ?? null;
-  const guidedQuestions =
-    engine?.guidedQuestions?.length
-      ? engine.guidedQuestions
-      : (segPlan?.socraticPrompts ?? []);
-  const hintHere = contentHere && action === ADJUSTMENT_ACTIONS.OFFER_HINT;
-  // §4: "'Ready for something harder?' pill, scaffold withdraws." The pill
-  // already carries that exact sentence.
-  const stepUpOffered = action === ADJUSTMENT_ACTIONS.INCREASE_DIFFICULTY;
+  /*
+   * The panel's rows, read the way the questions always were. Where the
+   * engine sent answerable prompts they are shown INSTEAD of its bare
+   * questions, not as well: both describe the same panel, and only a prompt
+   * has an id a reply can be sent against (B19).
+   */
+  const guidedPrompts: PanelPrompt[] = engine?.guidedPrompts?.length
+    ? engine.guidedPrompts
+    : (engine?.guidedQuestions?.length
+        ? engine.guidedQuestions
+        : (segPlan?.socraticPrompts ?? [])
+      ).map((prompt) => ({ prompt }));
+  /*
+   * A hint the child closed stays closed for that segment (D29). Keyed by the
+   * hint as well, so a different hint the engine sends later still shows.
+   */
+  const hintKey = `${segment.id}:${hintText ?? ""}`;
+  const hintHere =
+    contentHere &&
+    action === ADJUSTMENT_ACTIONS.OFFER_HINT &&
+    !closedHints.has(hintKey);
+  /*
+   * `hint_offered` (B20): the hint card went on screen. Once per hint per
+   * segment - a return visit or a re-render is not the engine offering it
+   * again. `hint_used` is not sent from here: this hint is unrequested and
+   * shown whole, so there is no act of using it to observe. The solver's
+   * "Need a hint?" is the hint a child asks for, and it is frozen.
+   */
+  const hintOnScreen = segmentShowing && hintHere && Boolean(hintText);
+  const offeredHints = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!hintOnScreen || offeredHints.current.has(hintKey)) return;
+    offeredHints.current.add(hintKey);
+    trackEvent(SIGNAL_EVENT_TYPES.HINT_OFFERED, { segmentId: segment.id });
+  }, [hintOnScreen, hintKey, segment.id, trackEvent]);
+
+  /*
+   * A REPLY TO A GUIDED PROMPT (B19) goes to its own route, which puts it on
+   * the signal stream as `guided_question_answered` itself - so it is not
+   * also emitted here, or the engine would read one reply as two. Never the
+   * child's words: the option they picked, or that they left it.
+   *
+   * Live lessons and a signed-in child only; a demo's prompt ids mean nothing
+   * to the engine. Fire and forget, like the scaffold attempt: a reply that
+   * did not land costs one reading, and telling a child their thinking did
+   * not count would be worse and untrue.
+   */
+  const answerGuided = (
+    promptId: string,
+    outcome: "moved_on" | "abandoned",
+    option?: string,
+  ) => {
+    const studentId = getSession()?.userId;
+    if (!live || !studentId) return;
+    void intelligenceApi
+      .answerGuidedQuestion({
+        studentId,
+        sessionId: progress.sessionId ?? null,
+        promptId,
+        ...(option !== undefined ? { option } : {}),
+        outcome,
+      })
+      .catch(() => {});
+  };
   // UDL accommodations (37c) - cross-session delivery themes from the plan.
   const readingOn = Boolean(plan?.accommodations?.reading);
   const attentionOn = Boolean(plan?.accommodations?.attention);
+  // A hint seen before the check is answered makes a right answer `after_hint`
+  // rather than `first_time` (B28) - only the first lengthens the interval.
+  useEffect(() => {
+    if (segmentShowing && hintHere && hintText)
+      hintedSegments.current.add(segment.id);
+  }, [segmentShowing, hintHere, hintText, segment.id]);
 
   // Break OFFERS (B.7): the plan names a break type to OFFER on this segment,
   // or the engine suggests one mid-lesson. One ask on screen at a time - an
@@ -947,6 +1071,10 @@ export function LessonPlayer({
     const nextSegment = lesson.segments[next];
     const nextPlan = livePlanFor(nextSegment.id);
     setIndex(next);
+    setEntryDensity({
+      segmentId: nextSegment.id,
+      level: nextPlan?.densityLevel ?? null,
+    });
     /*
      * THE CHILD'S PACE CHOICE HOLDS FOR THE REST OF THE LESSON.
      *
@@ -998,11 +1126,12 @@ export function LessonPlayer({
       go(index + 1);
       return;
     }
-    // Review sessions end on the strengthened completion - the quick checks
-    // were the retrieval, so no second assessment (37d).
+    // Review sessions end on their own completion - the quick checks were the
+    // retrieval, so no second assessment (37d).
     const assess = hasAssessment && !review;
     setPhase(assess ? "assessment" : "complete");
     if (!assess) setEnding(COMPLETED);
+    if (!assess) recordReview();
   };
 
   /**
@@ -1084,10 +1213,23 @@ export function LessonPlayer({
    * claims no adaptation - `TextSegment` falls back to `body.default` on its
    * own. That is the existing rule, not a new one, and it is why this needed
    * no gate of its own.
+   *
+   * **NO INSTRUCTION IS THE STANDARD TEXT** (design, 1 Oct, D23). This fell
+   * back to Simplify - the frame's `adaptive ?? "Simplify"` - so every segment
+   * with a simpler version opened on it, under a pulsing violet chip claiming
+   * a system action nobody had taken. Standard is the lesson as the teacher
+   * wrote it, and "the front end does not choose a teaching treatment the
+   * engine did not ask for." With no instruction there is no system density,
+   * so no chip lights.
+   *
+   * KNOWN GAP: the engine is still not told which version was on screen, so
+   * it cannot tell a child who read the simpler text from one who read the
+   * standard. Nothing in the contract carries that today - raised with
+   * backend rather than spelled into an event of our own.
    */
-  const systemDensity: Density =
-    densityForAction(action) ?? segPlan?.density ?? DENSITY.SIMPLIFY;
-  const effectiveDensity: Density = density ?? systemDensity;
+  const systemDensity: Density | null =
+    densityForAction(action) ?? segPlan?.density ?? null;
+  const effectiveDensity: Density | null = density ?? systemDensity;
   /*
    * Only the densities this segment can actually deliver.
    *
@@ -1173,6 +1315,18 @@ export function LessonPlayer({
    */
   const hasAssessment = (lesson.assessment?.questions.length ?? 0) > 0;
 
+  /*
+   * D36: EVERY ANSWER TO A CHECK IS STORED ON THE ACCOUNT AS IT IS GIVEN, so a
+   * check left part way keeps the answers already given. Marked server-side.
+   * Fire and forget: a failed write costs the record of one answer, never the
+   * child's place in the check. Not for the authored mocks, whose question ids
+   * are not real.
+   */
+  const saveAttempt = (body: LessonQuestionAttemptWrite | null) => {
+    if (!live || !body) return;
+    void lessonsApi.saveAttempt(lesson.id, body).catch(() => {});
+  };
+
   const requestExit = () => {
     trackEvent(SIGNAL_EVENT_TYPES.EXIT_ATTEMPT, {
       segmentId: segment.id,
@@ -1219,6 +1373,13 @@ export function LessonPlayer({
         lessonTitle={lesson.title}
         lastWorkedAt={lastWorkedAt}
         onBegin={() => setPhase("segments")}
+        onLeave={() => {
+          // D36. Not started is not completed: nothing goes to the scheduler,
+          // so the concept stays due, and the lesson's own progress is left
+          // alone as every review leaves it.
+          setEnding({ completionStatus: "exited", exitPosition: first.id });
+          exitTo(HOME_HREF);
+        }}
       />
     );
   }
@@ -1227,10 +1388,45 @@ export function LessonPlayer({
     return (
       <AfterLessonAssessment
         assessment={lesson.assessment!}
+        reading={readingOn}
+        onAudioBusy={(phase) => trackBusy(BUSY_REASON.MEDIA_PLAYING, phase)}
+        onLeave={() => {
+          /*
+           * D36: LEAVING THE CHECK IS NOT FINISHING IT, AND NOT FAILING IT.
+           *
+           * `exited` at the last segment, the same record the leave dialog
+           * makes - so the lesson stays unfinished and comes back on Home to
+           * pick up. No `resultState`: its `not_attempted` and
+           * `nothing_landed` send the child down a depth, which is a verdict,
+           * and an unfinished check has none to give. The answers already
+           * given were stored one by one as they were confirmed.
+           */
+          const last = total - 1;
+          const pos = modulePositionFor(lesson, last);
+          reportProgress(LESSON_STATUS.EXITED, {
+            segment: last,
+            ...(pos ? { module: pos.moduleIndex } : {}),
+          });
+          setEnding({
+            completionStatus: "exited",
+            exitPosition: lesson.segments[last].id,
+          });
+          exitTo(HOME_HREF);
+        }}
         onAnswer={({ questionIndex, selectedId, correct, responseTimeMs }) => {
           // What was picked, which checkpoint it answered and how long it took
           // - the response data frontend §2 says every event carries.
           const checkpointId = lesson.assessment?.questions[questionIndex]?.id;
+          saveAttempt(
+            attemptFor({
+              sessionId: progress.sessionId,
+              questionId: checkpointId,
+              source: "assessment",
+              choice: lesson.assessment?.questions[questionIndex]?.options.find(
+                (o) => o.id === selectedId,
+              ),
+            }),
+          );
           trackEvent(SIGNAL_EVENT_TYPES.COMPREHENSION_RESPONSE, {
             kind: "assessment",
             questionIndex,
@@ -1309,16 +1505,22 @@ export function LessonPlayer({
         ? "Your progress is saved."
         : undefined;
 
-    // Review sessions close on the strengthened-concept variant (37d) - the
-    // standard completion screen with only the message swapped.
+    // Review sessions close on their own variant (37d) - the standard
+    // completion screen with only the message swapped, and the message is
+    // only what the scheduler confirmed (D40). The frame's "is settling in"
+    // and "once more before it fully sticks" go with it: the first claims the
+    // movement the heading now waits for, the second a count nothing carries.
     if (review) {
+      const copy = reviewCompletionCopy(reviewRecord);
       return (
         <LessonComplete
           onDone={() => exitTo(HOME_HREF)}
-          heading="You strengthened this concept"
+          heading={copy.heading}
+          headingHeld={copy.held}
           note={
-            savedNote ??
-            `${lesson.title} is settling in. We'll bring it back once more before it fully sticks.`
+            copy.bringBack && !progress.completionFailed
+              ? REVIEW_COPY.later
+              : savedNote
           }
           doneLabel="Done"
         />
@@ -1452,8 +1654,9 @@ export function LessonPlayer({
           <h1 className="min-w-0 flex-1 truncate text-base font-medium text-nevo-near-black sm:text-lg">
             {lesson.title}
           </h1>
-          {/* 37a: the global scaffold indicator, opposite the exit. 37b:
-              boredom pulses it once at the transition. */}
+          {/* 37a: the global scaffold indicator, opposite the exit. It does
+              not pulse: the step-up that pulsed it is retired (D28), and the
+              dots change quietly (D27). */}
           {/*
             THE CONCEPT'S OWN LEVEL WINS WHERE THERE IS A CONCEPT, and the two
             sources never overlap: the scaffolds engine is keyed per concept
@@ -1461,9 +1664,9 @@ export function LessonPlayer({
             ordinary segments that carry none. Null falls through to the plan,
             because a read that never answered is not evidence about a child.
 
-            It is also the only way the fourth circle is ever reachable - the
-            plan's `ScaffoldingLevel` has three values and the frame draws
-            four. See `lib/lessons/scaffoldLevel.ts`.
+            It is also the only way one filled circle is ever reachable - the
+            plan's `ScaffoldingLevel` runs none, light, standard, strong, and
+            has no minimal. See `lib/lessons/scaffoldLevel.ts`.
 
             NO LEVEL IS THE NOTHING-STATE, NOT "LIGHT" (rule 5). With no plan,
             or a value we do not know, this drew two circles and "Nevo sets it
@@ -1473,7 +1676,6 @@ export function LessonPlayer({
           <ScaffoldIndicator
             key={`scaf-${segment.id}`}
             level={conceptScaffold ?? segPlan?.scaffold ?? null}
-            pulse={stepUpOffered}
           />
         </div>
         {/* Frame: the density toggle sits alone on its own right-aligned row.
@@ -1544,8 +1746,8 @@ export function LessonPlayer({
         )}
       </div>
 
-      {/* Content — centered reading column. 37b: boredom frames it in a soft
-          violet border ("more here if you want it"). */}
+      {/* Content — centered reading column. Its violet frame went with the
+          step-up offer it accompanied (D28). */}
       <div
         ref={scrollerRef}
         className="flex-1 overflow-y-auto"
@@ -1569,7 +1771,6 @@ export function LessonPlayer({
             // the real stylesheet at 375 / 700 / 1280, giving 88 / 32 / 40px -
             // because their media rules come after the base utility.
             "mx-auto w-full max-w-full p-6 pb-[88px] sm:max-w-[620px] sm:p-8 lg:max-w-[680px] lg:p-10",
-            stepUpOffered && "rounded-[12px] border-2 border-nevo-violet/45",
           )}
         >
           {/*
@@ -1589,23 +1790,23 @@ export function LessonPlayer({
             />
           )}
           {feedback && <FeedbackStrip message={feedback} />}
-          {stepUpOffered && !spentEscalations.has(segment.id) && (
-              <DifficultyOfferPill
-                key={`stepup-${segment.id}`}
-                // No note after the tap. "Noted - we'll step things up" was ours,
-                // narrated a decision the engine had not made, and promised a
-                // step up nothing here asks for.
-                onSpent={() =>
-                  setSpentEscalations((prev) => new Set(prev).add(segment.id))
-                }
-              />
-            )}
           {contentHere &&
             action === ADJUSTMENT_ACTIONS.SHOW_SOCRATIC_PANEL &&
-            guidedQuestions.length > 0 && (
+            guidedPrompts.length > 0 && (
               <SocraticPanel
                 key={`socratic-${segment.id}`}
-                prompts={guidedQuestions}
+                prompts={guidedPrompts}
+                onShown={(promptIds) => {
+                  for (const promptId of promptIds)
+                    trackEvent(SIGNAL_EVENT_TYPES.GUIDED_QUESTION_SHOWN, {
+                      segmentId: segment.id,
+                      promptId,
+                    });
+                }}
+                onAnswer={(promptId, option) =>
+                  answerGuided(promptId, "moved_on", option)
+                }
+                onAbandon={(promptId) => answerGuided(promptId, "abandoned")}
               />
             )}
           <div
@@ -1631,7 +1832,15 @@ export function LessonPlayer({
             tabIndex={-1}
             role="group"
             aria-label={positionLine(lesson, index)}
-            className="motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-300 motion-safe:ease-nevo-slide focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-nevo-navy"
+            className={cn(
+              "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-300 motion-safe:ease-nevo-slide focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-nevo-navy",
+              // D25: the engine's density, as spacing and nothing else.
+              densitySpacing(
+                entryDensity.segmentId === segment.id
+                  ? entryDensity.level
+                  : null,
+              ),
+            )}
           >
             <SegmentBody
               segment={segment}
@@ -1651,6 +1860,13 @@ export function LessonPlayer({
               }
               onAudioBusy={(phase) =>
                 trackBusy(BUSY_REASON.MEDIA_PLAYING, phase)
+              }
+              onMediaFailed={(channel, reason) =>
+                trackEvent(SIGNAL_EVENT_TYPES.MEDIA_LOAD_FAILED, {
+                  segmentId: segment.id,
+                  channel,
+                  reason,
+                })
               }
               onCalcSolved={() => {
                 setSolvedCalcs((prev) => new Set(prev).add(segment.id));
@@ -1685,7 +1901,12 @@ export function LessonPlayer({
           </div>
           {/* §4 `offer_hint`: the unrequested hint under the content. */}
           {hintHere && hintText && (
-            <HintOverlay hint={hintText} />
+            <HintOverlay
+              hint={hintText}
+              onClose={() =>
+                setClosedHints((prev) => new Set(prev).add(hintKey))
+              }
+            />
           )}
         </div>
       </div>
@@ -1696,6 +1917,8 @@ export function LessonPlayer({
           check={segment.quickCheck}
           open={checkOpen}
           onOpenChange={setCheckOpen}
+          reading={readingOn}
+          onAudioBusy={(phase) => trackBusy(BUSY_REASON.MEDIA_PLAYING, phase)}
           onAnswered={(correct, answered) => {
             const checkpointId = segment.quickCheck?.id;
             trackEvent(SIGNAL_EVENT_TYPES.COMPREHENSION_RESPONSE, {
@@ -1705,11 +1928,27 @@ export function LessonPlayer({
               correct,
               ...answered,
             });
+            saveAttempt(
+              attemptFor({
+                sessionId: progress.sessionId,
+                questionId: checkpointId,
+                segmentId: segment.id,
+                source: "checkpoint",
+                choice: segment.quickCheck?.options.find(
+                  (o) => o.id === answered.selectedId,
+                ),
+              }),
+            );
             noteAnswer(correct);
-            // First answer only, for the scheduler - a miss re-opens the
+            // Which pick first got it, for the scheduler - a miss re-opens the
             // check until it is passed, so "passed" is true of everyone.
-            if (!firstCheckAnswers.current.has(segment.id))
-              firstCheckAnswers.current.set(segment.id, correct);
+            const seen = checkRecall.current.get(segment.id);
+            const picks = (seen?.picks ?? 0) + 1;
+            checkRecall.current.set(segment.id, {
+              picks,
+              rightOnPick: seen?.rightOnPick ?? (correct ? picks : null),
+              hinted: seen?.hinted ?? hintedSegments.current.has(segment.id),
+            });
             if (correct)
               setPassedChecks((prev) => new Set(prev).add(segment.id));
           }}
@@ -1784,6 +2023,7 @@ function SegmentBody({
   onReplay,
   onNarrationPlayed,
   onAudioBusy,
+  onMediaFailed,
   onCalcSolved,
   onCalcStep,
   onPiecePlaced,
@@ -1797,6 +2037,8 @@ function SegmentBody({
   onReplay: () => void;
   onNarrationPlayed: () => void;
   onAudioBusy: (phase: BusyPhase) => void;
+  /** A picture or recording would not load (B12). */
+  onMediaFailed: (channel: "image" | "audio", reason: MediaFailReason) => void;
   onCalcSolved: () => void;
   onCalcStep: (correct: boolean) => void;
   onPiecePlaced: (placed: number, needed: number) => void;
@@ -1812,7 +2054,12 @@ function SegmentBody({
       />
     );
   if (modality === MODALITY.VISUAL && segment.visual)
-    return <VisualSegment content={segment.visual} />;
+    return (
+      <VisualSegment
+        content={segment.visual}
+        onMediaFailed={(reason) => onMediaFailed("image", reason)}
+      />
+    );
   if (modality === MODALITY.AUDIO && segment.audio)
     return (
       <AudioSegment
@@ -1820,6 +2067,7 @@ function SegmentBody({
         onReplay={onReplay}
         onPlayed={onNarrationPlayed}
         onBusy={onAudioBusy}
+        onMediaFailed={(reason) => onMediaFailed("audio", reason)}
       />
     );
   if (modality === MODALITY.INTERACTIVE) {
