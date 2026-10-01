@@ -62,9 +62,16 @@ export function ComposeModal({
     loading: directoryLoading,
     failed: directoryFailed,
   } = useStudentDirectory();
+  /*
+   * A signed-in teacher's own classes, or none. The chips were built from
+   * `options` unguarded, which is the fixture three while the read is in
+   * flight and after it fails - and picking "JSS 2A" filtered a REAL roster
+   * by an invented class's name. The roster below was already guarded; its
+   * filter was not. Signed out, the walkthrough keeps its three.
+   */
   const classFilters = [
     COMPOSE_CLASS_FILTERS[0],
-    ...classes.map((c) => c.name),
+    ...(live || !signedIn ? classes : []).map((c) => c.name),
   ];
   const [filter, setFilter] = useState(COMPOSE_CLASS_FILTERS[0]);
   // Never preset from the fixtures for a signed-in teacher: those rows carry

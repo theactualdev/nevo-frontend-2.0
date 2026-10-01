@@ -522,3 +522,21 @@ describe("the signed-out walkthrough", () => {
     expect(screen.getByText("DESIGNED SCREEN, SECTION 1")).toBeInTheDocument();
   });
 });
+
+describe("the signed-out walkthrough", () => {
+  it("is marked, like the class, lesson and student routes beside it", () => {
+    getToken.mockReturnValue(undefined);
+    useLessonDetail.mockReturnValue({ lesson: null, loading: false, missing: false });
+    const fixture = {
+      id: "fractions",
+      title: "Fractions",
+      detail: { sections: [{}, {}] },
+    } as never;
+    render(<VariantReviewRoute fixture={fixture} lessonId="fractions" sectionIndex={1} />);
+
+    expect(screen.getByText("DESIGNED SCREEN, SECTION 1")).toBeInTheDocument();
+    expect(
+      document.querySelector('[data-nevo-sample="teacher:variant-review"]'),
+    ).not.toBeNull();
+  });
+});

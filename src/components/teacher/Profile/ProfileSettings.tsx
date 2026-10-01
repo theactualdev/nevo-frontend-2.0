@@ -324,6 +324,9 @@ export function ProfileSettings() {
                   name: identity.name ?? "",
                   email: identity.email ?? "",
                   subjects: identity.subjects.join(", "),
+                  // The fixture's "MA" stood on the avatar of every teacher
+                  // without a photo. Theirs, or nothing.
+                  initials: identity.initials ?? "",
                 }
               : profile
           }
