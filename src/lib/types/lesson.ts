@@ -50,7 +50,16 @@ export interface VisualContent {
    * answer to missing produced assets: real art, never a wireframe box.
    */
   art?: { id: string; alt: string; caption?: string };
-  illustration?: { src: string; alt: string; caption?: string };
+  illustration?: {
+    src: string;
+    alt: string;
+    caption?: string;
+    /** Identifies the stored object, so an expired `src` can be re-issued. */
+    storagePath?: string;
+    /** The asset's own pixel size, when the wire carries it. */
+    width?: number;
+    height?: number;
+  };
   /** e.g. Photosynthesis "TAKES IN → GIVES OUT". */
   diagram?: {
     inLabel: string;
@@ -69,6 +78,8 @@ export interface AudioContent {
   title?: string;
   /** Backend-produced asset ref; absent in the mock (UI animates a placeholder). */
   src?: string;
+  /** Identifies the stored clip, so an expired `src` can be re-issued. */
+  storagePath?: string;
   durationSec?: number;
   transcript: string;
 }
@@ -94,6 +105,13 @@ export interface QuickCheck {
   correctNote: string;
   /** Soft-violet (never red) note on a miss — always reassures continuity. */
   recoveryNote: string;
+  /**
+   * The concept the check is about, from its checkpoint. A review session
+   * skips the after-lesson questions - its inline checks ARE the recall - so
+   * this is the only place a review learns which answers were about the
+   * concept it was opened for. Never rendered.
+   */
+  conceptId?: string;
 }
 
 // ── Calculation subsystem (17b §9 — co-construction) ────────────────────────
