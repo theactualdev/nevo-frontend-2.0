@@ -27,15 +27,11 @@ export interface RecalibratePrompt {
   itemId: string;
   question: string;
   options: { value: string; label: string }[];
-  /**
-   * DECLARED BECAUSE THE WIRE CARRIES IT. NEVER READ.
-   *
-   * The answer key arrives on the device with the question. The frontend
-   * marks nothing (rule 3, and the attempts contract's own words: "clients
-   * never ... decide whether they were correct"), so the warm-up records which
-   * option was picked and leaves marking to whoever receives it.
+  /*
+   * NO `answer`. The prompt carried its answer key until 1 Oct, when backend
+   * took it off the wire (B8) and began marking the pick server-side. The
+   * frontend never read it - it marks nothing (rule 3).
    */
-  answer: string;
 }
 
 export const baselineApi = {
