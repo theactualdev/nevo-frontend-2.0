@@ -68,9 +68,11 @@ export function SsoCallback() {
   const shown: Phase = incomplete ? "error" : phase;
   // Short-lived signal session for the handshake window (SCRUM-94.8): waiting
   // on the identity provider is the system's time, marked so it is never read
-  // as the student hesitating.
-  const [signalSession] = useState(() => `auth-${randomId()}`);
-  const { trackEvent } = useSignals(signalSession);
+  // as the student hesitating. A bare UUID and `sso`: the ingest contract
+  // takes nothing else, and `auth-<id>` defaulted to a lesson stream with no
+  // lesson, so it was held until the screen went and then dropped.
+  const [signalSession] = useState(() => randomId());
+  const { trackEvent } = useSignals(signalSession, undefined, "sso");
 
   useEffect(() => {
     if (shown !== "signing-in") return;

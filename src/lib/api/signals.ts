@@ -41,6 +41,17 @@ export interface SignalSessionEnvelope {
   sessionType?: SignalSessionType;
   /** ISO timestamp of the session's first event capture. */
   startedAt: string;
+  /**
+   * How the session ended, once it has. All four default server-side
+   * (`in_progress`, no end, no position, 0 breaks), so a stream that never
+   * said otherwise told the engine every lesson was abandoned mid-way with no
+   * break taken. Omitted, not nulled, until there is something true to say.
+   */
+  endedAt?: string;
+  completionStatus?: "completed" | "exited";
+  /** `maxLength: 120`. The segment id the child left from. */
+  exitPosition?: string;
+  breakCount?: number;
 }
 
 /** 202 receipt. */
@@ -98,6 +109,11 @@ export const signalsApi = {
   submitBatch: (
     session: SignalSessionEnvelope,
     events: SignalEvent[],
+    /**
+     * `keepalive` lets the request outlive the page - the flush a tab makes
+     * as it is hidden or closed. Bearer rules out `sendBeacon`.
+     */
+    options: { keepalive?: boolean } = {},
   ): Promise<SignalBatchReceipt | null> => {
     const known = events.filter((e) => !CLIENT_ONLY_EVENT_TYPES.has(e.type));
     if (process.env.NODE_ENV === "development" && known.length < events.length) {
@@ -111,19 +127,31 @@ export const signalsApi = {
     if (known.length === 0) return Promise.resolve(null);
     // No trailing slash: Next 308-redirects slashed API routes before the
     // proxy runs; FastAPI's own slash redirect is followed server-side.
-    return api.post<SignalBatchReceipt>("/api/signals", {
-      session: {
-        sessionId: session.sessionId,
-        lessonId: session.lessonId,
-        sessionType: session.sessionType ?? "lesson",
-        startedAt: session.startedAt,
+    return api.post<SignalBatchReceipt>(
+      "/api/signals",
+      {
+        session: {
+          sessionId: session.sessionId,
+          lessonId: session.lessonId,
+          sessionType: session.sessionType ?? "lesson",
+          startedAt: session.startedAt,
+          ...(session.endedAt ? { endedAt: session.endedAt } : {}),
+          ...(session.completionStatus
+            ? { completionStatus: session.completionStatus }
+            : {}),
+          ...(session.exitPosition
+            ? { exitPosition: session.exitPosition.slice(0, 120) }
+            : {}),
+          ...(session.breakCount ? { breakCount: session.breakCount } : {}),
+        },
+        events: known.map((e) => ({
+          sessionId: session.sessionId,
+          eventType: e.type,
+          timestamp: e.timestamp,
+          eventData: e.payload,
+        })),
       },
-      events: known.map((e) => ({
-        sessionId: session.sessionId,
-        eventType: e.type,
-        timestamp: e.timestamp,
-        eventData: e.payload,
-      })),
-    });
+      options.keepalive ? { keepalive: true } : undefined,
+    );
   },
 };
