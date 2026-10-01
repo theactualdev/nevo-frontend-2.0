@@ -1044,7 +1044,7 @@ export function LessonPlayer({
     // the write did not reach Nevo the child is told, in the same words the
     // daily warm-up uses - the fault is ours and it says so.
     const savedNote = progress.completionFailed
-      ? "We couldn’t save that just now — that’s on us, not you. Your work is still yours."
+      ? "We couldn’t save that just now - that’s on us, not you. Your work is still yours."
       : undefined;
 
     // Review sessions close on the strengthened-concept variant (37d) - the

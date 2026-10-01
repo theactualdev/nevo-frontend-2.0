@@ -103,7 +103,7 @@ export function ProfilingIntro({
         <p className="mt-3 max-w-[400px] text-[15px] leading-[1.55] text-pretty text-nevo-near-black sm:text-base">
           {complete
             ? saved === false
-              ? "Thanks for doing that. We couldn’t save it just now — that’s on us, not you."
+              ? "Thanks for doing that. We couldn’t save it just now - that’s on us, not you."
               : "Your learning space has been personalized."
             : "You'll do four quick activities. No tests, no scores. This just helps Nevo work better for you."}
         </p>

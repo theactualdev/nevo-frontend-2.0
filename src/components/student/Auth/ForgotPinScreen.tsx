@@ -51,7 +51,7 @@ export function ForgotPinScreen() {
         Forgot your PIN?
       </h1>
       <p className="mt-2.5 max-w-[320px] text-[15px] leading-[1.55] text-nevo-near-black/70 sm:text-base">
-        That&rsquo;s okay &mdash; it happens. Ask your teacher and they&rsquo;ll
+        That&rsquo;s okay - it happens. Ask your teacher and they&rsquo;ll
         help you sign back in.
       </p>
 

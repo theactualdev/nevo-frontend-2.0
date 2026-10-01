@@ -227,7 +227,7 @@ export function HomeDashboard() {
       // The designed line claims "You've been showing up this week" - a
       // claim about the child that nothing verifies. Live students get a
       // line that asserts nothing. Flagged to design.
-      encouragement = "Go at your own pace \u2014 Nevo keeps up with you.";
+      encouragement = "Go at your own pace - Nevo keeps up with you.";
     } else {
       cont = null;
       today = [];
