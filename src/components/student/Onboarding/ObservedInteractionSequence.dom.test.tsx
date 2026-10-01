@@ -50,6 +50,7 @@ vi.mock("@/lib/api/students", () => ({ studentsApi: { myDashboard } }));
 vi.mock("@/lib/api/consents", () => ({ consentsApi: { myConsentGate } }));
 vi.mock("@/lib/profiling/pendingBaseline", () => ({
   flushPendingBaseline: vi.fn(async () => {}),
+  readPendingBaseline: () => null,
 }));
 
 vi.mock("./TransitionScreen", () => ({

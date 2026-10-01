@@ -174,8 +174,8 @@ export function ProfilingFlow({
       submitted.current = true;
       if (withdrawn) {
         // Nothing is derived from the stream and nothing is parked. The raw
-        // capture goes the same way it always does, and no signal is tracked
-        // either - "baseline submitted" would not be true.
+        // capture goes the same way it always does, and nothing is parked for
+        // anyone to deliver, so no "baseline submitted" can follow either.
         void capture.stop();
         setPhase("complete");
         return;
@@ -211,9 +211,14 @@ export function ProfilingFlow({
       // vector is its own. Nothing else may send it.
       parkedRunRef.current = c.sessionId;
       void c.purge();
-      track?.(ONBOARDING_SIGNAL_TYPES.BASELINE_SUBMITTED, {
-        modules: features.map((f) => f.module),
-      });
+      /*
+       * NO `baseline_submitted` HERE. It fired at this line, on PARKING, and
+       * since 1 Oct that event reaches the engine - so it told the engine the
+       * baseline was in whenever the later submit failed or never happened.
+       * It is now tracked by whoever delivers the parked vector, once
+       * `POST /api/baseline/submit` has succeeded for this run
+       * (`ObservedInteractionSequence`), and never if that stream has gone.
+       */
     }
     setPhase("complete");
   };
