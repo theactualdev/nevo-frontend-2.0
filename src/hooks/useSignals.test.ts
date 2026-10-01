@@ -32,9 +32,24 @@ vi.mock("@/lib/api", async (importOriginal) => {
   return { ...actual, signalsApi: { submitBatch } };
 });
 
+/** The consent gate's answer. Consented unless a test says otherwise. */
+const consentGate = (status: string) => ({
+  studentId: "user-1",
+  granted: status === "confirmed",
+  blocked: false,
+  requiredType: "data_processing",
+  status,
+});
+const myConsentGate = vi.fn();
+vi.mock("@/lib/api/consents", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/consents")>();
+  return { ...actual, consentsApi: { ...actual.consentsApi, myConsentGate } };
+});
+
 const { useSignals } = await import("./useSignals");
 const { ApiError } = await import("@/lib/api");
 const { clearSession, setSession } = await import("@/lib/auth/session");
+const { holdSignals } = await import("@/lib/signals/outbox");
 
 /**
  * These tests encode a defect that destroyed real data silently.
@@ -66,6 +81,8 @@ beforeEach(() => {
   submitBatch.mockClear();
   clearSession();
   vi.restoreAllMocks();
+  myConsentGate.mockReset();
+  myConsentGate.mockResolvedValue(consentGate("confirmed"));
 });
 
 describe("useSignals", () => {
@@ -476,5 +493,184 @@ describe("the session's interpretation context", () => {
     } finally {
       delete document.documentElement.dataset.reducedMotion;
     }
+  });
+
+  it("carries the contract's two keys and nothing else", async () => {
+    const payload = await contextOf(() => {});
+    expect(Object.keys(payload ?? {}).sort()).toEqual([
+      "formFactor",
+      "reducedMotion",
+    ]);
+  });
+
+  /*
+   * FIRST IN THE STREAM, EVEN FOR A LESSON. A lesson's session id lands after
+   * its first events, and the context was keyed on the id: "no id" matched "no
+   * id", nothing was queued, and the context went in after the id arrived -
+   * behind the events it was meant to frame.
+   */
+  it("comes first when events were tracked before the session id landed", async () => {
+    signIn();
+    const { result, rerender } = renderHook(
+      ({ id }: { id: string | null }) => useSignals(id, LESSON, "lesson"),
+      { initialProps: { id: null as string | null } },
+    );
+    act(() => result.current.trackEvent("time_on_segment", { n: 1 }));
+    rerender({ id: UUID });
+    act(() => result.current.trackEvent("time_on_segment", { n: 2 }));
+    await act(async () => {
+      result.current.flush();
+    });
+
+    const types = submitBatch.mock.calls[0]![1].map((e) => e.type);
+    expect(types).toEqual([
+      "session_context",
+      "time_on_segment",
+      "time_on_segment",
+    ]);
+  });
+
+  it("is sent once per session, and again for a new one", async () => {
+    const OTHER = "0b8f3a52-5c1e-4d6a-9f00-112233445566";
+    signIn();
+    const { result, rerender } = renderHook(
+      ({ id }: { id: string }) => useSignals(id, LESSON, "lesson"),
+      { initialProps: { id: UUID } },
+    );
+    act(() => {
+      result.current.trackEvent("time_on_segment", {});
+      result.current.trackEvent("time_on_segment", {});
+    });
+    await act(async () => {
+      result.current.flush();
+    });
+    rerender({ id: OTHER });
+    act(() => result.current.trackEvent("time_on_segment", {}));
+    await act(async () => {
+      result.current.flush();
+    });
+
+    const contexts = (call: number) =>
+      submitBatch.mock.calls[call]![1].filter(
+        (e) => e.type === "session_context",
+      ).length;
+    expect(contexts(0)).toBe(1);
+    expect(contexts(1)).toBe(1);
+    expect(submitBatch.mock.calls[1]![0].sessionId).toBe(OTHER);
+  });
+});
+
+/*
+ * A GUARDIAN'S WITHDRAWAL STOPS THE STREAM. SCRUM-80: a withdrawal, and only a
+ * withdrawal, stops processing - and only the baseline and the warm-up asked,
+ * so a lesson went on sending for a child whose guardian had withdrawn.
+ *
+ * Each test signs in as its own child: the outbox remembers a withdrawal for
+ * the life of the page, which in a test file is every test after it.
+ */
+describe("a withdrawn consent", () => {
+  const OUTBOX = "nevo.signals.outbox";
+  const held = () =>
+    JSON.parse(window.localStorage.getItem(OUTBOX) ?? "[]") as {
+      userId: string;
+    }[];
+  const signInAs = (userId: string) =>
+    setSession({
+      token: "tok-test",
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      userId,
+      role: "student",
+    });
+  /** Let the gate's answer, and anything it set off, settle. */
+  const settle = () =>
+    act(async () => {
+      for (let i = 0; i < 5; i++) await Promise.resolve();
+    });
+
+  it("sends nothing more once the gate reports it", async () => {
+    signInAs("child-w1");
+    myConsentGate.mockResolvedValue(consentGate("withdrawn"));
+    const { result } = renderHook(() => useSignals(UUID, LESSON, "lesson"));
+    await settle();
+
+    act(() => result.current.trackEvent("time_on_segment", {}));
+    await act(async () => {
+      result.current.flush();
+    });
+
+    expect(submitBatch).not.toHaveBeenCalled();
+  });
+
+  it("drops what was queued before the answer came, and keeps none of it", async () => {
+    signInAs("child-w2");
+    let answer!: (gate: unknown) => void;
+    myConsentGate.mockReturnValue(new Promise((r) => (answer = r)));
+    const { result, unmount } = renderHook(() =>
+      useSignals(UUID, LESSON, "lesson"),
+    );
+    act(() => result.current.trackEvent("time_on_segment", { early: true }));
+
+    answer(consentGate("withdrawn"));
+    await settle();
+    await act(async () => {
+      result.current.flush();
+    });
+    unmount();
+    await act(async () => {});
+
+    expect(submitBatch).not.toHaveBeenCalled();
+    expect(held()).toEqual([]);
+  });
+
+  it("deletes what the outbox held for that child, and nobody else's", async () => {
+    const env = {
+      sessionId: UUID,
+      lessonId: LESSON,
+      sessionType: "lesson" as const,
+      startedAt: "2026-10-01T09:00:00.000Z",
+    };
+    const one = [{ type: "time_on_segment" as const, timestamp: env.startedAt }];
+    holdSignals("child-w3", env, one);
+    holdSignals("someone-else", env, one);
+    // Offline, so the delivery the hook starts on mount keeps them held.
+    submitBatch.mockRejectedValueOnce(new ApiError(0, "offline"));
+    signInAs("child-w3");
+    myConsentGate.mockResolvedValue(consentGate("withdrawn"));
+
+    renderHook(() => useSignals(UUID, LESSON, "lesson"));
+    await settle();
+
+    expect(held().map((h) => h.userId)).toEqual(["someone-else"]);
+  });
+
+  it.each(["not_sent", "pending"])(
+    "is not what consent %s is, which stops nothing (SCRUM-121)",
+    async (status) => {
+      signInAs(`child-${status}`);
+      myConsentGate.mockResolvedValue(consentGate(status));
+      const { result } = renderHook(() => useSignals(UUID, LESSON, "lesson"));
+      await settle();
+
+      act(() => result.current.trackEvent("time_on_segment", {}));
+      await act(async () => {
+        result.current.flush();
+      });
+
+      expect(submitBatch).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("is not what a failed read is, which stops nothing either", async () => {
+    signInAs("child-unread");
+    myConsentGate.mockRejectedValue(new Error("network"));
+    const { result } = renderHook(() => useSignals(UUID, LESSON, "lesson"));
+    await settle();
+
+    act(() => result.current.trackEvent("time_on_segment", {}));
+    await act(async () => {
+      result.current.flush();
+    });
+
+    expect(submitBatch).toHaveBeenCalledTimes(1);
   });
 });

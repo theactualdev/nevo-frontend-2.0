@@ -8,7 +8,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
 
 import { ApiError } from "@/lib/api";
 import { clearSession, setSession } from "@/lib/auth/session";
-import { deliverHeldSignals, holdSignals } from "./outbox";
+import { deliverHeldSignals, holdSignals, withholdSignals } from "./outbox";
 
 /**
  * Signals a lesson could not send before it went: delivered later, to the
@@ -106,5 +106,62 @@ describe("held signals", () => {
     await Promise.all([deliverHeldSignals(), deliverHeldSignals()]);
 
     expect(submitBatch).toHaveBeenCalledTimes(1);
+  });
+});
+
+/*
+ * A GUARDIAN'S WITHDRAWAL (SCRUM-80). What was held for that child is deleted,
+ * nothing more is held, and nothing is delivered - while every other child on
+ * a shared tablet keeps theirs. Each test uses its own child: the withdrawal
+ * is remembered for the life of the page, and this file is one page.
+ */
+describe("held signals for a child whose consent was withdrawn", () => {
+  it("are deleted, and nobody else's are", () => {
+    holdSignals("child-w", ENVELOPE, events(2));
+    holdSignals("child-b", ENVELOPE, events(1));
+
+    withholdSignals("child-w");
+
+    expect(held().map((h) => h.userId)).toEqual(["child-b"]);
+  });
+
+  it("are not kept again afterwards", () => {
+    withholdSignals("child-x");
+
+    holdSignals("child-x", ENVELOPE, events(1));
+
+    expect(held()).toEqual([]);
+  });
+
+  it("are never delivered, even when another tab held them", async () => {
+    withholdSignals("child-y");
+    // Written behind this page's back, as another tab would.
+    window.localStorage.setItem(
+      "nevo.signals.outbox",
+      JSON.stringify([
+        { userId: "child-y", session: ENVELOPE, events: events(1), heldAt: Date.now() },
+      ]),
+    );
+    signInAs("child-y");
+
+    await deliverHeldSignals();
+
+    expect(submitBatch).not.toHaveBeenCalled();
+    expect(held()).toEqual([]);
+  });
+
+  it("stop a delivery already under way", async () => {
+    holdSignals("child-z", ENVELOPE, events(250));
+    signInAs("child-z");
+    // The answer lands while the first request is out.
+    submitBatch.mockImplementationOnce(async () => {
+      withholdSignals("child-z");
+      return { acceptedEvents: 100 };
+    });
+
+    await deliverHeldSignals();
+
+    expect(submitBatch).toHaveBeenCalledTimes(1);
+    expect(held()).toEqual([]);
   });
 });

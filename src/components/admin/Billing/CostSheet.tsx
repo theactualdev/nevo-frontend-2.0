@@ -73,7 +73,19 @@ function longDate(iso: string): string | null {
   });
 }
 
-export function CostSheet({ pricing }: { pricing: Pricing }) {
+export function CostSheet({
+  pricing,
+  payStatus = null,
+}: {
+  pricing: Pricing;
+  /**
+   * D11's badge on the card: "Payment due" while the upcoming invoice is
+   * unpaid, "Active" once it is paid. Billing passes it from that invoice;
+   * null - no upcoming invoice, or it could not be read - shows no badge,
+   * because "Active" is a claim about the school's account.
+   */
+  payStatus?: "due" | "active" | null;
+}) {
   const {
     currency,
     studentCount,
@@ -97,6 +109,30 @@ export function CostSheet({ pricing }: { pricing: Pricing }) {
         {pricingPlan === "per_term" ? "Your cost per term" : "Your annual cost"}
       </h2>
       <div className={cn(CARD, "mt-3 px-6 py-[22px]")}>
+        {/* D11's FOUNDING PARTNER pill. The rate type belongs to the
+            subscription as it stands - which is exactly this card. (The
+            invoice page leaves it out: an old invoice may predate it.) */}
+        {rateType === "founding_partner" || payStatus ? (
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            {rateType === "founding_partner" ? (
+              <span className="rounded-full bg-nevo-violet/24 px-3 py-1 text-[11.5px] font-semibold tracking-[0.06em] text-nevo-navy uppercase">
+                Founding Partner
+              </span>
+            ) : null}
+            {payStatus ? (
+              <span
+                className={cn(
+                  "rounded-full px-3 py-1 text-[12.5px] font-semibold",
+                  payStatus === "due"
+                    ? "bg-nevo-violet/24 text-nevo-navy"
+                    : "bg-nevo-navy/12 text-nevo-navy",
+                )}
+              >
+                {payStatus === "due" ? "Payment due" : "Active"}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
         {isAmount(totalWithVat) ? (
           <>
             <div className="flex flex-wrap items-baseline justify-between gap-4">

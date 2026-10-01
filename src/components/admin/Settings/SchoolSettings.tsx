@@ -108,6 +108,8 @@ export function SchoolSettings() {
   const [calendarNote, setCalendarNote] = useState<string | null>(null);
 
   const [labels, setLabels] = useState<Record<string, string>>({});
+  /** A preset chosen over custom labels, waiting on the inline confirm. */
+  const [pendingPreset, setPendingPreset] = useState<PresetId | null>(null);
   const [taxonomy, setTaxonomy] = useState<Phase>("idle");
 
   /*
@@ -308,12 +310,54 @@ export function SchoolSettings() {
 
   /** Derived, never a stored claim - see `presetFor`. */
   const preset: PresetId = presetFor(labels);
-  const applyPreset = (id: PresetId) => setLabels(labelsForPreset(id));
+  const applyPreset = (id: PresetId) => {
+    setLabels(labelsForPreset(id));
+    setPendingPreset(null);
+  };
+  /*
+   * SCRUM-99: "Reset to a preset is available and confirms inline, since it
+   * discards custom labels." Pressing a preset card - or "Back to Nigerian" -
+   * replaced a school's own names in one click with no word. From a custom
+   * set it now asks first, and names how many of their names would go.
+   */
+  const choosePreset = (id: PresetId) => {
+    if (preset === "custom") setPendingPreset(id);
+    else applyPreset(id);
+  };
+  const shown = (map: Record<string, string>, yg: (typeof YEAR_GROUPS)[number]) =>
+    map[yg]?.trim() || defaultYearGroupLabel(yg);
+  const replaced = pendingPreset
+    ? YEAR_GROUPS.filter((yg) => shown(labels, yg) !== shown(labelsForPreset(pendingPreset), yg)).length
+    : 0;
+  const pendingName = PRESETS.find((p) => p.id === pendingPreset)?.name ?? "";
+
+  /*
+   * WHAT DIFFERS FROM WHAT IS SAVED, per section - D12.1's "You've changed
+   * something here that isn't saved yet", by that section's Save. Compared
+   * with the school record each save refreshes, so a save clears its own.
+   */
+  const savedContact = readContact(school);
+  const generalDirty =
+    name.trim() !== (school.name ?? "").trim() ||
+    contactEmail.trim() !== (savedContact.contactEmail ?? "") ||
+    contactPhone.trim() !== (savedContact.contactPhone ?? "") ||
+    location.trim() !== (savedContact.location ?? "");
+  const savedRetention = RETENTION.some((r) => r.value === school.retentionPolicy)
+    ? school.retentionPolicy
+    : "contract";
+  const retentionDirty = retention !== savedRetention;
+  const savedAcademic = readAcademic(school);
+  const calendarDirty =
+    JSON.stringify([academic.yearStart ?? "", academic.yearEnd ?? "", academic.terms ?? []]) !==
+    JSON.stringify([savedAcademic.yearStart ?? "", savedAcademic.yearEnd ?? "", savedAcademic.terms ?? []]);
+  const taxonomyDirty = YEAR_GROUPS.some(
+    (yg) => shown(labels, yg) !== shown(savedAcademic.yearGroupLabels ?? {}, yg),
+  );
 
   return (
     <>
       {/* ------------------------------------------------------------ GENERAL */}
-      <SettingsSection title="General">
+      <SettingsSection id="settings-general" title="General">
         <div className="flex flex-col gap-4">
           <div>
             <label htmlFor="set-name" className={S_LABEL}>
@@ -368,11 +412,16 @@ export function SchoolSettings() {
         {/* General's own save. It sat under Data retention and saved both,
             so changing the name looked like it needed the retention section,
             and vice versa. */}
-        <SaveRow phase={general} onSave={saveGeneral} failureNote={generalNote} />
+        <SaveRow
+          phase={general}
+          onSave={saveGeneral}
+          failureNote={generalNote}
+          dirty={generalDirty}
+        />
       </SettingsSection>
 
       {/* ---------------------------------------------------------- RETENTION */}
-      <SettingsSection title="Data retention">
+      <SettingsSection id="settings-retention" title="Data retention">
         <label htmlFor="set-retention" className={S_LABEL}>
           When a student is deactivated, keep their records for…
         </label>
@@ -421,11 +470,12 @@ export function SchoolSettings() {
           your roster, and to leaving students when you promote a year.
         </p>
 
-        <SaveRow phase={retentionPhase} onSave={saveRetention} />
+        <SaveRow phase={retentionPhase} onSave={saveRetention} dirty={retentionDirty} />
       </SettingsSection>
 
       {/* --------------------------------------------------- ACADEMIC YEAR */}
       <SettingsSection
+        id="settings-academic-year"
         title="Academic year"
         note="Your terms decide what 'this half-term' means everywhere in Nevo."
       >
@@ -649,11 +699,13 @@ export function SchoolSettings() {
           phase={calendar}
           onSave={saveCalendar}
           disabled={issues.length > 0}
+          dirty={calendarDirty}
         />
       </SettingsSection>
 
       {/* ----------------------------------------------------------- TAXONOMY */}
       <SettingsSection
+        id="settings-year-groups"
         title="What year groups are called"
         note="These are only the names you see. The underlying year groups never change, so student records and comparisons across schools stay exactly as they are."
       >
@@ -662,7 +714,7 @@ export function SchoolSettings() {
             <button
               key={p.id}
               type="button"
-              onClick={() => applyPreset(p.id)}
+              onClick={() => choosePreset(p.id)}
               aria-pressed={preset === p.id}
               className={cn(
                 "cursor-pointer rounded-xl px-4 py-3.5 text-left transition-colors",
@@ -705,11 +757,37 @@ export function SchoolSettings() {
             </p>
             <button
               type="button"
-              onClick={() => applyPreset("nigerian")}
+              onClick={() => choosePreset("nigerian")}
               className="cursor-pointer text-[13px] font-semibold text-nevo-navy hover:opacity-75"
             >
               Back to Nigerian
             </button>
+          </div>
+        ) : null}
+
+        {pendingPreset ? (
+          <div className="mt-4 rounded-[10px] bg-nevo-violet/[0.18] px-4 py-3">
+            <p className="m-0 text-[13.5px] leading-[1.5] text-nevo-navy">
+              Switching to {pendingName} replaces{" "}
+              {replaced === 1 ? "one of your own names" : `${replaced} of your own names`} with
+              its labels. Nothing about the year groups themselves changes.
+            </p>
+            <div className="mt-3 flex gap-2.5">
+              <button
+                type="button"
+                onClick={() => applyPreset(pendingPreset)}
+                className="cursor-pointer rounded-lg bg-nevo-navy px-4 py-2 text-[13.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-110"
+              >
+                Replace them
+              </button>
+              <button
+                type="button"
+                onClick={() => setPendingPreset(null)}
+                className="cursor-pointer rounded-lg px-4 py-2 text-[13.5px] font-semibold text-nevo-near-black/70 transition-colors hover:bg-nevo-near-black/[0.06]"
+              >
+                Keep mine
+              </button>
+            </div>
           </div>
         ) : null}
 
@@ -746,11 +824,11 @@ export function SchoolSettings() {
           several classes at once.
         </p>
 
-        <SaveRow phase={taxonomy} onSave={saveTaxonomy} />
+        <SaveRow phase={taxonomy} onSave={saveTaxonomy} dirty={taxonomyDirty} />
       </SettingsSection>
 
       {/* ---------------------------------------------------------- PROMOTION */}
-      <SettingsSection title="Moving everyone up a year">
+      <SettingsSection id="settings-promotion" title="Moving everyone up a year">
         <NotBuiltNote>
           Promotion isn&rsquo;t available yet. It needs to move every year group
           up together, retire the leavers, and stay undoable for a week
