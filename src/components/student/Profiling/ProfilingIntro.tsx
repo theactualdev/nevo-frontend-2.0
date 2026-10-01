@@ -28,6 +28,7 @@ export function ProfilingIntro({
   onContinue,
   saved = null,
   askAge = false,
+  waiting = false,
   age = "",
   onAgeChange,
 }: {
@@ -37,16 +38,23 @@ export function ProfilingIntro({
    * Ask before starting, because we do not know.
    *
    * The band decides the grid size, the span ceiling, whether the dual task
-   * runs and which domain questions a child sees. It normally comes from the
-   * age given in onboarding Step 1 - but a child arriving by SSO never sees
-   * that step, and the code fell back to a FIXTURE's "Year 4". Every SSO child
-   * therefore sat the Primary 4-6 baseline: a sixteen-year-old on a 4x4 grid
-   * with no dual task, a seven-year-old asked "What is 15% of 200?".
+   * runs and which domain questions a child sees. It comes from the roster
+   * when the child is signed in and it has one, or from the age given in
+   * onboarding Step 1 - but a child arriving by SSO never sees that step, and
+   * the code fell back to a FIXTURE's "Year 4". Every SSO child therefore sat
+   * the Primary 4-6 baseline: a sixteen-year-old on a 4x4 grid with no dual
+   * task, a seven-year-old asked "What is 15% of 200?".
    *
-   * Nothing a signed-in child can read carries an age or year group, so it
-   * cannot be derived. One question is cheaper than mis-pitching four modules.
+   * So only when neither says. One question is cheaper than mis-pitching four
+   * modules. NOT DRAWN: design asked on 1 Oct (D13) which case still reaches
+   * this before drawing it; see `ProfilingFlow`.
    */
   askAge?: boolean;
+  /**
+   * The roster has not answered yet, so it is not known whether to ask. No
+   * question, and no start: a run begun now would be sized by a guess.
+   */
+  waiting?: boolean;
   age?: string;
   onAgeChange?: (value: string) => void;
   /**
@@ -77,6 +85,8 @@ export function ProfilingIntro({
   saved?: boolean | null;
 }) {
   const complete = mode === "complete";
+  const blocked =
+    !complete && (waiting || (askAge && !isAgeInRange(age)));
   return (
     <ProfilingShell filled={complete ? 4 : 0} active={complete ? -1 : 0}>
       <div className="flex min-h-0 w-full max-w-[300px] flex-1 flex-col items-center justify-center text-center sm:max-w-[480px]">
@@ -106,9 +116,13 @@ export function ProfilingIntro({
             ? saved === false
               ? "Thanks for doing that. We couldn’t save it just now - that’s on us, not you."
               : "Nevo has everything it needs to set up your learning space."
-            : "You'll do four quick activities. No tests, no scores. This just helps Nevo work better for you."}
+            : // The frame's line less "No tests, no scores.": words the
+              // architecture keeps from a child, and design ruled the line
+              // reworded on 1 Oct (D13) without giving words. Removed, not
+              // replaced.
+              "You'll do four quick activities. This just helps Nevo work better for you."}
         </p>
-        {askAge && !complete && (
+        {askAge && !complete && !waiting && (
           <div className="mt-6 w-full">
             <p className="mb-2 text-[15px] font-medium text-nevo-near-black">
               How old are you?
@@ -119,10 +133,10 @@ export function ProfilingIntro({
 
         <button
           type="button"
-          disabled={askAge && !complete && !isAgeInRange(age)}
+          disabled={blocked}
           onClick={onContinue}
           className={
-            askAge && !complete && !isAgeInRange(age)
+            blocked
               ? "mt-[30px] h-[52px] w-full cursor-not-allowed rounded-[10px] bg-nevo-navy text-base font-semibold text-nevo-cream opacity-40 sm:mt-[34px]"
               : "mt-[30px] h-[52px] w-full cursor-pointer rounded-[10px] bg-nevo-navy text-base font-semibold text-nevo-cream transition-[filter,transform] hover:brightness-109 active:scale-[0.985] sm:mt-[34px]"
           }

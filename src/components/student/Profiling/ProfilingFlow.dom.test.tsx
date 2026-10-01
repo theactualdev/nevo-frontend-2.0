@@ -19,8 +19,8 @@ import {
  * in Nevo. The comment beside the fallback named a different draft-less path (a
  * re-run from Profile) and missed the one that ships.
  *
- * Nothing a signed-in child can read carries an age or year group, so it cannot
- * be derived. When we do not know, we ask.
+ * The roster's band now decides first where there is one to read (see
+ * ProfilingFlow.band). When nothing says, we ask.
  */
 
 beforeEach(() => {
@@ -34,7 +34,7 @@ afterEach(() => {
 
 describe("ProfilingFlow — how the band is decided", () => {
   it("asks a child with no age on record, rather than assuming one", () => {
-    // The SSO path: a session, but no onboarding draft.
+    // No onboarding draft, and no roster band to read.
     render(<ProfilingFlow onDone={vi.fn()} />);
 
     expect(screen.getByText(/how old are you/i)).toBeTruthy();

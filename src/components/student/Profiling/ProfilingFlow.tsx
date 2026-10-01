@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useConsentGate } from "@/hooks/useConsentGate";
+import { useRosterBand } from "@/hooks/useRosterBand";
 import { holdBaseline } from "@/lib/profiling/pendingBaseline";
 import { ONBOARDING_SIGNAL_TYPES } from "@/lib/constants";
 import { bandForAge, gridSpanConfig } from "@/lib/profiling/bands";
@@ -28,9 +29,9 @@ import { StretchInterstitial } from "./StretchInterstitial";
  * spans the run; on completion the raw stream is reduced to a feature vector,
  * submitted, and purged - raw interaction data never leaves the device.
  *
- * The age band comes from the age the child gave at onboarding, falling back
- * to the profile label (mock: "Year 4" → P4-6) when there is no draft, and
- * drives grid sizes, content and targets; the shells are shared.
+ * The age band comes from the roster for a child already signed in, else from
+ * the age the child gave at onboarding, else from the intro's age question; it
+ * drives grid sizes, content and targets, and the shells are shared.
  */
 export function ProfilingFlow({
   track,
@@ -56,7 +57,9 @@ export function ProfilingFlow({
    */
   ownerUserId?: string | null;
   /**
-   * The whole flow is complete - carry on to the Consent Gate.
+   * The whole flow is complete - carry on to the learning notice, which comes
+   * after the baseline (design, 1 Oct, D10: the parent consents, the child is
+   * informed, and the notice explains what the activities just done were for).
    *
    * `runSessionId` is the capture session this run parked its vector under, or
    * null if nothing was parked. The caller hands it back to
@@ -93,15 +96,32 @@ export function ProfilingFlow({
    * grid with no dual task; a seven-year-old with SEND asked "What is 15% of
    * 200?" as their first minutes in Nevo.
    *
-   * Nothing a signed-in child can read carries an age or a year group -
-   * `users/me` has neither and there is no student-facing class read - so it
-   * cannot be derived. When we do not know, we ask, on the intro screen that
-   * was already there. One question is cheaper than mis-pitching four modules,
-   * and far cheaper than a baseline that measures the wrong child.
+   * THE ROSTER'S BAND FIRST, since 1 Oct (D13, B5). The dashboard's
+   * `student.ageBand` is now a closed set derived from the date of birth, so
+   * for a child already signed in it is read rather than asked. That is only
+   * the SSO child here, who is the only one signed in during this run and the
+   * only one who never saw Step 1: everyone else's account is created at the
+   * PIN step, after this, and any session the device holds before then may be
+   * the previous child's - so nothing is read for them (`useRosterBand` takes
+   * no owner) and their Step 1 age decides.
+   *
+   * When neither says, we ask, on the intro screen that was already there. One
+   * question is cheaper than mis-pitching four modules, and far cheaper than a
+   * baseline that measures the wrong child. Asked only once the roster read
+   * has settled without a band, so a child with one never sees the question.
    */
   const [askedAge, setAskedAge] = useState("");
   const draftAge = getOnboardingDraft().age;
-  const band = draftAge ? bandForAge(draftAge) : bandForAge(Number(askedAge));
+  const roster = useRosterBand(ownerUserId);
+  const band =
+    roster.band ??
+    (draftAge ? bandForAge(draftAge) : bandForAge(Number(askedAge)));
+  /**
+   * The roster has not answered, so the band is not known: nothing to ask and
+   * nothing to start - not even on a Step 1 age, which the roster outranks.
+   */
+  const bandPending = !roster.settled;
+  const askAge = roster.settled && !roster.band && !draftAge;
   const [capture] = useState(
     () => new BaselineCapture(`baseline-${randomId()}`),
   );
@@ -201,7 +221,8 @@ export function ProfilingFlow({
   if (phase === "intro") {
     return (
       <ProfilingIntro
-        askAge={!draftAge}
+        askAge={askAge}
+        waiting={bandPending}
         age={askedAge}
         onAgeChange={setAskedAge}
         mode="intro"
