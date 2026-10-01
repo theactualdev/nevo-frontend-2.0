@@ -138,15 +138,21 @@ describe("when the device will not remember", () => {
   });
 });
 
-describe("the account decides; this memory only covers the wait (B10)", () => {
+describe("done when the account or this device says so (B10)", () => {
   it("is done when the account says so, on a tablet that has never seen it", () => {
     // The second tablet: nothing remembered here, and that is the bug.
     expect(warmUpDoneFor(true, "child-1")).toBe(true);
   });
 
-  it("is not done when the account says not, whatever this device remembers", () => {
+  it("stays done on the tablet that watched it finish, whatever the account says", () => {
+    // A device-task day may not set the account's doneToday; trusting its
+    // "not done" would offer a second run on the same tablet.
     markWarmUpDone("child-1");
 
+    expect(warmUpDoneFor(false, "child-1")).toBe(true);
+  });
+
+  it("is not done when neither the account nor this device has seen it", () => {
     expect(warmUpDoneFor(false, "child-1")).toBe(false);
   });
 

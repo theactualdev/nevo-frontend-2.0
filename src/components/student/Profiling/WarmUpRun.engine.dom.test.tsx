@@ -238,9 +238,20 @@ describe("WarmUpRun — done today, on the account (B10)", () => {
     expect(submit).not.toHaveBeenCalled();
   });
 
-  it("does not let this device's memory overrule the account", async () => {
+  it("does not offer a second run on the tablet that watched the first finish", async () => {
+    // The account's "not done" may only mean a device-task day did not set
+    // doneToday; this tablet saw the run end.
     signIn();
     markWarmUpDone("child-1");
+    engine.prompt = attention(false);
+    render(<WarmUpRun />);
+    await settle();
+
+    expect(screen.getByText(/That's it for today/)).toBeInTheDocument();
+  });
+
+  it("runs when neither the account nor this tablet has seen today's", async () => {
+    signIn();
     engine.prompt = attention(false);
     render(<WarmUpRun />);
     await settle();

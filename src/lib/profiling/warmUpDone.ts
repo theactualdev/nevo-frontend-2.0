@@ -11,15 +11,15 @@ const STORAGE_KEY = "nevo.warmup.done";
  * performance. It closes and moves the child into the day's lesson"* - and the
  * screen already had one; what it did not have was a memory that it happened.
  *
- * ## The account decides now; this only covers the wait
+ * ## The account can say "done"; only this device can't say "not done"
  *
  * **The wire says it as of 1 Oct (B10).** `BaselinePromptResponse` carries
  * `doneToday`, held against the account, so a second tablet sees a warm-up
  * done on the first - which this memory, being one device's, never could.
- * Whenever the prompt answers with it, it decides, in both directions; see
- * `warmUpDoneFor`. This memory answers only while nobody has said: the prompt
- * still on its way (so Home's card does not offer a warm-up for a moment and
- * then take it back), a read that failed, or a deployment without the field.
+ * See `warmUpDoneFor`: done when the account says so OR this device saw it
+ * finish today. The memory also covers the wait - the prompt still on its way
+ * (so Home's card does not offer a warm-up for a moment and then take it
+ * back), a read that failed, or a deployment without the field.
  *
  * ## Why it is keyed per CHILD
  *
@@ -67,18 +67,22 @@ export function warmUpDoneToday(userId: string | null | undefined): boolean {
 }
 
 /**
- * Whether today's warm-up is behind this child: the account's `doneToday`
- * when the prompt carried one, and this device's memory only when it did not.
+ * Whether today's warm-up is behind this child: done when the account says
+ * so, or when THIS device saw them finish it today.
  *
- * NEVER BOTH. The device memory does not get to overrule the account in either
- * direction - not "done" on a tablet the account says has not seen today's,
- * and not "not done" on the second tablet, which was the whole of B10.
+ * EITHER, NOT "THE ACCOUNT WINS". The account's "done" is what fixes the
+ * second tablet (B10). But its "not done" cannot overrule a run this tablet
+ * watched finish: on five days of six the warm-up runs a device task and
+ * answers no served question, and whether that submit sets `doneToday` is
+ * unconfirmed (asked of backend, 1 Oct). Trusting the account's "no" would
+ * offer the same child a second run - and a second measurement - on the very
+ * tablet they finished on, which is the bug this module exists to stop.
  */
 export function warmUpDoneFor(
   doneToday: boolean | undefined,
   userId: string | null | undefined,
 ): boolean {
-  return typeof doneToday === "boolean" ? doneToday : warmUpDoneToday(userId);
+  return doneToday === true || warmUpDoneToday(userId);
 }
 
 /**

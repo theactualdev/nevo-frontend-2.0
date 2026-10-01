@@ -145,9 +145,19 @@ describe("the card as Home places it - whose answer is done (B10)", () => {
     expect(screen.queryAllByRole("link")).toHaveLength(0);
   });
 
-  it("is offered when the account says not, whatever this device remembers", () => {
+  it("stays done on the tablet that watched it finish, even when the account says not", () => {
+    // A device-task day may not set the account's doneToday. Offering it
+    // again would be a second run on the same tablet.
     signIn();
     markWarmUpDone("child-1");
+    engine.prompt = ready(false);
+    render(<TodaysWarmUpCard />);
+
+    expect(screen.getByText(/Today's warm-up is done./)).toBeInTheDocument();
+  });
+
+  it("is offered when neither the account nor this tablet has seen it", () => {
+    signIn();
     engine.prompt = ready(false);
     render(<TodaysWarmUpCard />);
 
