@@ -176,6 +176,8 @@ export function TeacherSidebar() {
     archive: archiveNote,
     undoArchive,
     lastArchived,
+    loading: notesLoading,
+    refresh: refreshNotes,
   } = useTeacherNotifications();
   const [notifOpen, setNotifOpen] = useState(false);
   const hasNotifications = unreadCount > 0;
@@ -284,7 +286,11 @@ export function TeacherSidebar() {
         title="Notifications"
         aria-haspopup="dialog"
         aria-expanded={notifOpen}
-        onClick={() => setNotifOpen((v) => !v)}
+        onClick={() => {
+          // Opening the bell is asking "what's new" - so it reads again.
+          if (!notifOpen) refreshNotes();
+          setNotifOpen((v) => !v);
+        }}
         className={cn(
           rowClass(expanded),
           "cursor-pointer hover:bg-nevo-navy/5",
@@ -317,6 +323,8 @@ export function TeacherSidebar() {
         <NotificationsPanel
           notes={notes}
           failed={notesFailed}
+          loading={notesLoading}
+          onRetry={refreshNotes}
           onMarkAllRead={markAllRead}
           onOpen={markRead}
           onArchive={archiveNote}
