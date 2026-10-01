@@ -46,6 +46,9 @@ const clientSnapshot = () => window.matchMedia(HELD_SIDEWAYS).matches;
 /** The server cannot know which way a tablet is being held. */
 const serverSnapshot = () => false;
 
+/** Children of `body` that are not content and must not be touched. */
+const NOT_CONTENT = new Set(["SCRIPT", "STYLE", "LINK", "TEMPLATE", "NEXT-ROUTE-ANNOUNCER"]);
+
 export function RotateLock({ children }: { children: React.ReactNode }) {
   const sideways = useSyncExternalStore(
     subscribe,
@@ -66,9 +69,44 @@ export function RotateLock({ children }: { children: React.ReactNode }) {
   );
 
   const holding = sideways && !staying;
+  const app = useRef<HTMLDivElement>(null);
   const prompt = useRef<HTMLDivElement>(null);
   /** Where the child was before the prompt took over. */
   const returnTo = useRef<HTMLElement | null>(null);
+
+  /*
+   * AND EVERYTHING PORTALLED OUT OF IT. A sheet, a dialog or the pause card is
+   * rendered into `document.body`, outside the subtree above, so an open one
+   * stayed live behind the prompt - tabbable, readable, pressable. While the
+   * prompt holds, every other child of `body` is made inert too, including
+   * one that opens while it is up. Before the focus move below, so a dialog's
+   * own focus trap cannot pull focus back into something now inert.
+   */
+  useEffect(() => {
+    if (!holding) return;
+    const own = app.current;
+    const stilled: Element[] = [];
+    const still = (el: Element) => {
+      // The app (already inert above) and the prompt, which may each sit
+      // directly under `body` - the prompt is the one thing left live.
+      if (own && el.contains(own)) return;
+      if (prompt.current && el.contains(prompt.current)) return;
+      if (el.hasAttribute("inert") || NOT_CONTENT.has(el.tagName)) return;
+      el.setAttribute("inert", "");
+      stilled.push(el);
+    };
+    Array.from(document.body.children).forEach(still);
+    const watch = new MutationObserver((changes) =>
+      changes.forEach((c) =>
+        c.addedNodes.forEach((n) => n instanceof Element && still(n)),
+      ),
+    );
+    watch.observe(document.body, { childList: true });
+    return () => {
+      watch.disconnect();
+      stilled.forEach((el) => el.removeAttribute("inert"));
+    };
+  }, [holding]);
 
   useEffect(() => {
     if (!holding) return;
@@ -86,7 +124,9 @@ export function RotateLock({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <div inert={holding}>{children}</div>
+      <div ref={app} inert={holding}>
+        {children}
+      </div>
       {/*
         Not rendered once the child has said the tablet does not turn. The
         prompt is shown by a media query, so hiding it has to be the absence
