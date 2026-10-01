@@ -2,6 +2,7 @@
 
 import { useHasSession } from "./useHasSession";
 import { isOpenToStudent } from "@/lib/lessons/availability";
+import { lessonHref } from "@/lib/lessons/lessonHref";
 import { useStudentDashboard } from "./useStudentDashboard";
 import { FIRST_LESSON_ID } from "@/lib/mocks";
 
@@ -48,7 +49,8 @@ export function useNextLessonHref(): string {
    * first lesson many children ever open.
    */
   const assigned = data?.assignments.find((a) => isOpenToStudent(a));
+  // With the assignment it came from - see `lessonHref`.
   return assigned
-    ? `/student/lessons/${assigned.lesson.id}`
+    ? lessonHref(assigned.lesson.id, assigned.id)
     : "/student/lessons";
 }

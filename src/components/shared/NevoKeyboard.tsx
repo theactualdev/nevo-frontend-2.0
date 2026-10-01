@@ -142,7 +142,15 @@ export function NevoKeyboard({
   placeholder?: string;
   className?: string;
 }) {
-  // qwerty-only modes: capitalisation + a digits/symbols plane.
+  /*
+   * qwerty-only modes: capitalisation + a digits/symbols plane.
+   *
+   * SHIFT IS ONE-SHOT, armed for the first letter. It started on and stayed
+   * on, so every name and message arrived in capitals - "AMARA" - unless a
+   * child knew to find the shift key after the first letter. A phone's
+   * keyboard capitalises the first letter and drops back by itself, and so
+   * does this one now; tapping shift arms it again for one more letter.
+   */
   const [caps, setCaps] = useState(true);
   const [numeric, setNumeric] = useState(false);
 
@@ -181,6 +189,7 @@ export function NevoKeyboard({
           onBackspace={onBackspace}
           onReturn={onReturn}
           onToggleCaps={() => setCaps((c) => !c)}
+          onShiftSpent={() => setCaps(false)}
           onToggleNumeric={() => setNumeric((n) => !n)}
         />
       )}
@@ -425,6 +434,7 @@ function QwertyLayout({
   onBackspace,
   onReturn,
   onToggleCaps,
+  onShiftSpent,
   onToggleNumeric,
 }: {
   caps: boolean;
@@ -434,9 +444,14 @@ function QwertyLayout({
   onBackspace: () => void;
   onReturn?: () => void;
   onToggleCaps: () => void;
+  /** A capital was typed, so the one-shot shift drops back to lowercase. */
+  onShiftSpent: () => void;
   onToggleNumeric: () => void;
 }) {
-  const emit = (c: string) => onKey(caps ? c.toUpperCase() : c.toLowerCase());
+  const emit = (c: string) => {
+    onKey(caps ? c.toUpperCase() : c.toLowerCase());
+    if (caps) onShiftSpent();
+  };
 
   const backspace = (
     <button
@@ -466,13 +481,13 @@ function QwertyLayout({
             <Key key={c} label={c} onClick={() => onKey(c)} />
           ))}
         </div>
+        {/*
+          NO "#+=" KEY. It offered more symbols, there is no symbols page in
+          the frame or in this component, and it called the SHIFT toggle - so
+          tapping it changed nothing on this page and quietly flipped the case
+          of the letters typed after it.
+        */}
         <div className={ROW}>
-          <ModKey
-            label="#+="
-            onClick={onToggleCaps}
-            ariaLabel="More symbols"
-            grow={1.5}
-          />
           {NUM_ROWS[2].map((c) => (
             <Key key={c} label={c} onClick={() => onKey(c)} />
           ))}

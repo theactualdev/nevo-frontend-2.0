@@ -1,6 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { AudioSegment } from "./AudioSegment";
+
+const mediaUrl = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/api/content", () => ({
+  contentApi: { mediaUrl: (...a: unknown[]) => mediaUrl(...a) },
+}));
 
 /**
  * This card used to lie.
@@ -174,5 +186,89 @@ describe("AudioSegment", () => {
     fireEvent.click(screen.getByRole("button", { name: "Play" }));
     expect(play).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Pause" })).toBeTruthy();
+  });
+});
+
+/**
+ * A recording that is fine, marked broken for good; one that is broken, with
+ * its words still folded away; and one whose link had merely aged out.
+ */
+describe("AudioSegment - when playback does not simply start", () => {
+  beforeEach(() => {
+    vi.useRealTimers();
+    mediaUrl.mockReset();
+  });
+
+  const refuse = (name: string) =>
+    play.mockRejectedValue(Object.assign(new Error(name), { name }));
+
+  it("does not mark the clip broken when a pause interrupts its loading", async () => {
+    // `AbortError` is what pausing while it buffers produces. It disabled
+    // Play until the child left the segment.
+    refuse("AbortError");
+    render(<AudioSegment content={CONTENT} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Play" }));
+    await act(async () => {});
+
+    expect(screen.getByRole("button", { name: "Play" })).toBeEnabled();
+    expect(screen.queryByText(/didn.t load/i)).toBeNull();
+  });
+
+  it("does not mark it broken when the browser wants a tap first", async () => {
+    refuse("NotAllowedError");
+    render(<AudioSegment content={CONTENT} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Play" }));
+    await act(async () => {});
+
+    expect(screen.getByRole("button", { name: "Play" })).toBeEnabled();
+  });
+
+  it("opens the words it points at when the clip fails", () => {
+    const { container } = render(<AudioSegment content={CONTENT} />);
+
+    fireEvent.error(audioEl(container));
+
+    // "Read the same words below" - and now they are there to read.
+    expect(screen.getByText(CONTENT.transcript)).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: /hide transcript/i }),
+    ).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("re-issues a link that has aged out before giving up on it", async () => {
+    mediaUrl.mockResolvedValue({ url: "https://cdn.example/fresh.mp3" });
+    const { container } = render(
+      <AudioSegment content={{ ...CONTENT, storagePath: "audio/a.mp3" }} />,
+    );
+
+    fireEvent.error(audioEl(container));
+
+    await waitFor(() =>
+      expect(audioEl(container).getAttribute("src")).toBe(
+        "https://cdn.example/fresh.mp3",
+      ),
+    );
+    expect(mediaUrl).toHaveBeenCalledWith("audio/a.mp3");
+    expect(screen.queryByText(/didn.t load/i)).toBeNull();
+
+    // Once only: the fresh link failing too is a clip that is really gone.
+    fireEvent.error(audioEl(container));
+    expect(screen.getByText(/didn.t load/i)).toBeTruthy();
+    expect(mediaUrl).toHaveBeenCalledTimes(1);
+  });
+
+  it("tries again when the connection comes back", () => {
+    const { container } = render(<AudioSegment content={CONTENT} />);
+    fireEvent.error(audioEl(container));
+    expect(screen.getByRole("button", { name: "Play" })).toBeDisabled();
+
+    act(() => {
+      window.dispatchEvent(new Event("online"));
+    });
+
+    expect(screen.getByRole("button", { name: "Play" })).toBeEnabled();
+    expect(audioEl(container)).not.toBeNull();
   });
 });

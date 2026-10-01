@@ -23,8 +23,10 @@ const { submit } = vi.hoisted(() => ({ submit: vi.fn() }));
 vi.mock("@/lib/api", () => ({ baselineApi: { submitWithRetry: submit } }));
 const { holdBaseline } = vi.hoisted(() => ({ holdBaseline: vi.fn() }));
 vi.mock("@/lib/profiling/pendingBaseline", () => ({ holdBaseline }));
+// These pin the task with the `dimension` prop; the engine's prompt is
+// covered in WarmUpRun.engine.dom.test.tsx.
 vi.mock("@/hooks/useWarmUpDimension", () => ({
-  useWarmUpDimension: (fallback: string) => fallback,
+  useWarmUpPrompt: () => ({ state: "waiting" }),
 }));
 vi.mock("@/hooks/useNextLessonHref", () => ({
   useNextLessonHref: () => "/student/lessons/x",
@@ -37,26 +39,29 @@ vi.mock("next/navigation", () => ({
 const submitted = () => submit.mock.calls[0][1][0];
 
 /**
- * Watch the tiles light, then sweep the whole grid in order, repeatedly.
+ * Sit the tile task: watch the tiles light, then tap them back in reverse.
  *
- * The module accepts only the next tile in the reversed sequence and ignores
- * everything else, so sweeping finds it without the test knowing what it is.
+ * It used to sweep the whole grid, because a wrong tap was ignored. A wrong
+ * tap now nudges and replays, and the third ends the round - as in tile
+ * memory - so the test has to know the sequence. `Math.random` pinned to 0
+ * draws tiles 0, 1, 2, so the reverse is 2, 1, 0.
  * The 50ms between taps is deliberate: under fake timers `performance.now()`
  * does not move on its own, and a recall gap of zero is filtered out as
  * impossible - which is exactly how a measurement that was never taken looks.
  */
-const tapThroughTheGrid = async () => {
+const sitTheTileTask = async () => {
+  const random = vi.spyOn(Math, "random").mockReturnValue(0);
+  render(<WarmUpRun dimension="wmc" />);
+  random.mockRestore();
   await act(async () => {
     await vi.advanceTimersByTimeAsync(4000);
   });
   const tiles = screen.getAllByRole("button");
-  for (let pass = 0; pass < 3; pass++) {
-    for (const tile of tiles) {
-      fireEvent.click(tile);
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(50);
-      });
-    }
+  for (const i of [2, 1, 0]) {
+    fireEvent.click(tiles[i]);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50);
+    });
   }
 };
 
@@ -134,8 +139,7 @@ describe("WarmUpRun — what actually reaches Nevo", () => {
     // It recorded neither `posInSeq` nor `round_complete`, so a child who did
     // it perfectly reduced to maxSpan 0 - indistinguishable from never
     // finishing.
-    render(<WarmUpRun dimension="wmc" />);
-    await tapThroughTheGrid();
+    await sitTheTileTask();
     await settle();
 
     expect(submitted()).toMatchObject({ maxSpan: 3, roundsCompleted: 1 });
@@ -145,8 +149,7 @@ describe("WarmUpRun — what actually reaches Nevo", () => {
     // `reduceGridSpan` pairs consecutive taps by `posInSeq`, which this never
     // recorded - so every warm-up reported a null recall gap whatever the child
     // did.
-    render(<WarmUpRun dimension="wmc" />);
-    await tapThroughTheGrid();
+    await sitTheTileTask();
     await settle();
 
     expect(submitted().meanRecallGapMs).toEqual(expect.any(Number));
@@ -240,5 +243,23 @@ describe("WarmUpRun — the dot task has no fixed answer", () => {
     await pickLeftAfterTheMask();
 
     expect(submitted().acts.ans.accuracy).toBe(1);
+  });
+});
+
+describe("WarmUpRun — the done state claims a save only once one landed", () => {
+  it("says nothing about saving while the write is still in flight", async () => {
+    submit.mockReturnValue(new Promise(() => {}));
+    await sitTheTileTask();
+    await settle();
+
+    expect(screen.getByText("That's it for today")).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/saved|couldn't save/i);
+  });
+
+  it("says it was saved once the write lands", async () => {
+    await sitTheTileTask();
+    await settle();
+
+    expect(screen.getByText(/Your progress is saved/)).toBeTruthy();
   });
 });

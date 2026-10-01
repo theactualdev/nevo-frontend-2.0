@@ -1,12 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import {
-  ArrowRight,
-  CircleChevronRight,
-  Coffee,
-  SquareCheckBig,
-} from "lucide-react";
+import { useEffect, useRef } from "react";
+import { ArrowRight, CircleChevronRight, SquareCheckBig } from "lucide-react";
 import { ProgressBar } from "@/components/shared";
 import { cn } from "@/lib/utils";
 import { moduleName } from "@/lib/utils/modules";
@@ -20,11 +15,16 @@ import type { LessonModule } from "@/lib/types";
  * peer actions. No confetti, no celebration - the value is knowing the shape of
  * the work.
  *
- * "Take a break first" rests here (progress saved) until "I'm ready"; both
- * paths land on the next module's first segment. With the attention
- * accommodation active, a recap of the finished module and a preview of the
- * next render between the heading and the actions - supportive, never required,
- * and absent text degrades cleanly to the plain screen.
+ * "Take a break first" goes to the break module and comes back to the next
+ * module's first segment, as SCRUM-101 answered it ("routes to the existing
+ * break module, then returns"). It used to rest on this screen instead - a
+ * copy of the prototype's in-frame state, which emitted no break at all and
+ * told the child their progress was saved whether it was or not.
+ *
+ * With the attention accommodation active, a recap of the finished module and
+ * a preview of the next render between the heading and the actions -
+ * supportive, never required, and absent text degrades cleanly to the plain
+ * screen.
  */
 export function ModuleBoundaryScreen({
   lessonTitle,
@@ -37,6 +37,7 @@ export function ModuleBoundaryScreen({
   onReached,
   onAction,
   onEnterNext,
+  onTakeBreak,
 }: {
   lessonTitle: string;
   finished: LessonModule;
@@ -54,8 +55,9 @@ export function ModuleBoundaryScreen({
   onAction: (action: "continue" | "break") => void;
   /** Advance into the next module's first segment. */
   onEnterNext: () => void;
+  /** Go to the break module; it returns to the next module's first segment. */
+  onTakeBreak: () => void;
 }) {
-  const [resting, setResting] = useState(false);
   const reached = useRef(false);
   useEffect(() => {
     if (reached.current) return; // StrictMode double-invoke guard
@@ -86,113 +88,89 @@ export function ModuleBoundaryScreen({
       {/* Boundary body - steps to cream-elevated so it reads as a distinct place */}
       <div className="min-h-0 flex-1 overflow-y-auto bg-nevo-cream-elevated">
         <div className="mx-auto flex min-h-full w-full max-w-[360px] flex-col px-6 py-6 sm:max-w-[560px] sm:px-8 sm:py-10">
-          {resting ? (
-            <div className="flex flex-1 flex-col items-center justify-center text-center motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300">
-              <span className="flex size-14 items-center justify-center rounded-full bg-nevo-violet/28 text-nevo-navy sm:size-[74px]">
-                <Coffee className="size-[30px]" strokeWidth={1.9} />
-              </span>
-              <h2 className="mt-[22px] text-[23px] font-semibold tracking-[-0.012em] text-nevo-near-black sm:text-[30px]">
-                Take your time
-              </h2>
-              <p className="mt-[11px] max-w-[340px] text-[15px] leading-[1.5] text-nevo-near-black/66 sm:text-base">
-                {`Your progress is saved. Come back to ${moduleName(next, "next", isLast)} whenever you're ready.`}
-              </p>
+          <div className="flex flex-1 flex-col items-center text-center">
+            {/* Static anchor - a quiet centre for the pause */}
+            <div
+              className={cn(
+                "flex w-full items-center justify-center",
+                recap || preview
+                  ? "min-h-[150px]"
+                  : "min-h-[150px] flex-1 sm:min-h-[200px]",
+              )}
+            >
+              <div className="flex size-[116px] items-center justify-center rounded-full border-2 border-nevo-violet/50 bg-nevo-violet/16 sm:size-[156px]">
+                <span className="flex size-14 items-center justify-center rounded-full bg-nevo-navy text-nevo-cream shadow-[0_8px_20px_rgba(59,63,110,0.3)] sm:size-[74px]">
+                  <ArrowRight className="size-6 sm:size-8" strokeWidth={1.9} />
+                </span>
+              </div>
+            </div>
+
+            <span className="font-mono text-[11px] font-semibold tracking-[0.1em] text-nevo-near-black/48 uppercase">
+              Section complete
+            </span>
+            <h2 className="mt-3 text-[23px] leading-[1.28] font-semibold tracking-[-0.012em] text-pretty text-nevo-near-black sm:text-[30px]">
+              {heading}
+            </h2>
+
+            {/* Module dots: done navy, just-finished violet pill, upcoming outline */}
+            <div className="mt-[18px] flex items-center justify-center gap-[9px]">
+              {Array.from({ length: moduleCount }, (_, m) => (
+                <span
+                  key={m}
+                  className={cn(
+                    "h-2.5 rounded-full",
+                    m < nextModuleIndex - 1 && "w-2.5 bg-nevo-navy",
+                    m === nextModuleIndex - 1 && "w-[26px] bg-nevo-violet",
+                    m > nextModuleIndex - 1 &&
+                      "w-2.5 border-[1.5px] border-nevo-navy/32",
+                  )}
+                />
+              ))}
+            </div>
+
+            {(recap || preview) && (
+              <div className="mt-6 flex w-full flex-col gap-3 text-left">
+                {recap && (
+                  <RecapBlock
+                    label="What you just did"
+                    text={recap}
+                    glyph="recap"
+                  />
+                )}
+                {preview && (
+                  <RecapBlock
+                    label="What's coming next"
+                    text={preview}
+                    glyph="next"
+                  />
+                )}
+              </div>
+            )}
+
+            {/* Two real peers, pinned to the base of the column */}
+            <div className="mt-auto flex w-full flex-col gap-2.5 pt-6 sm:flex-row">
               <button
                 type="button"
-                onClick={onEnterNext}
-                className="mt-[26px] flex h-14 cursor-pointer items-center justify-center rounded-[10px] bg-nevo-navy px-[34px] text-[15.5px] font-semibold text-nevo-cream shadow-[0_6px_18px_rgba(59,63,110,0.28)] transition-[filter,transform] hover:brightness-106 active:scale-[0.98]"
+                onClick={() => {
+                  onAction("continue");
+                  onEnterNext();
+                }}
+                className="flex h-14 w-full shrink-0 cursor-pointer items-center justify-center rounded-[10px] bg-nevo-navy px-[22px] text-[15.5px] font-semibold text-nevo-cream shadow-[0_6px_18px_rgba(59,63,110,0.28)] transition-[filter,transform] hover:brightness-106 active:scale-[0.98] sm:w-auto sm:flex-1"
               >
-                I&apos;m ready
+                Yes, continue
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onAction("break");
+                  onTakeBreak();
+                }}
+                className="flex h-14 w-full shrink-0 cursor-pointer items-center justify-center rounded-[10px] bg-nevo-navy/8 px-[22px] text-[15.5px] font-semibold text-nevo-navy transition-[background-color,transform] hover:bg-nevo-navy/12 active:scale-[0.98] sm:w-auto sm:flex-1"
+              >
+                Take a break first
               </button>
             </div>
-          ) : (
-            <div className="flex flex-1 flex-col items-center text-center">
-              {/* Static anchor - a quiet centre for the pause */}
-              <div
-                className={cn(
-                  "flex w-full items-center justify-center",
-                  recap || preview
-                    ? "min-h-[150px]"
-                    : "min-h-[150px] flex-1 sm:min-h-[200px]",
-                )}
-              >
-                <div className="flex size-[116px] items-center justify-center rounded-full border-2 border-nevo-violet/50 bg-nevo-violet/16 sm:size-[156px]">
-                  <span className="flex size-14 items-center justify-center rounded-full bg-nevo-navy text-nevo-cream shadow-[0_8px_20px_rgba(59,63,110,0.3)] sm:size-[74px]">
-                    <ArrowRight
-                      className="size-6 sm:size-8"
-                      strokeWidth={1.9}
-                    />
-                  </span>
-                </div>
-              </div>
-
-              <span className="font-mono text-[11px] font-semibold tracking-[0.1em] text-nevo-near-black/48 uppercase">
-                Section complete
-              </span>
-              <h2 className="mt-3 text-[23px] leading-[1.28] font-semibold tracking-[-0.012em] text-pretty text-nevo-near-black sm:text-[30px]">
-                {heading}
-              </h2>
-
-              {/* Module dots: done navy, just-finished violet pill, upcoming outline */}
-              <div className="mt-[18px] flex items-center justify-center gap-[9px]">
-                {Array.from({ length: moduleCount }, (_, m) => (
-                  <span
-                    key={m}
-                    className={cn(
-                      "h-2.5 rounded-full",
-                      m < nextModuleIndex - 1 && "w-2.5 bg-nevo-navy",
-                      m === nextModuleIndex - 1 && "w-[26px] bg-nevo-violet",
-                      m > nextModuleIndex - 1 &&
-                        "w-2.5 border-[1.5px] border-nevo-navy/32",
-                    )}
-                  />
-                ))}
-              </div>
-
-              {(recap || preview) && (
-                <div className="mt-6 flex w-full flex-col gap-3 text-left">
-                  {recap && (
-                    <RecapBlock
-                      label="What you just did"
-                      text={recap}
-                      glyph="recap"
-                    />
-                  )}
-                  {preview && (
-                    <RecapBlock
-                      label="What's coming next"
-                      text={preview}
-                      glyph="next"
-                    />
-                  )}
-                </div>
-              )}
-
-              {/* Two real peers, pinned to the base of the column */}
-              <div className="mt-auto flex w-full flex-col gap-2.5 pt-6 sm:flex-row">
-                <button
-                  type="button"
-                  onClick={() => {
-                    onAction("continue");
-                    onEnterNext();
-                  }}
-                  className="flex h-14 w-full shrink-0 cursor-pointer items-center justify-center rounded-[10px] bg-nevo-navy px-[22px] text-[15.5px] font-semibold text-nevo-cream shadow-[0_6px_18px_rgba(59,63,110,0.28)] transition-[filter,transform] hover:brightness-106 active:scale-[0.98] sm:w-auto sm:flex-1"
-                >
-                  Yes, continue
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onAction("break");
-                    setResting(true);
-                  }}
-                  className="flex h-14 w-full shrink-0 cursor-pointer items-center justify-center rounded-[10px] bg-nevo-navy/8 px-[22px] text-[15.5px] font-semibold text-nevo-navy transition-[background-color,transform] hover:bg-nevo-navy/12 active:scale-[0.98] sm:w-auto sm:flex-1"
-                >
-                  Take a break first
-                </button>
-              </div>
-            </div>
-          )}
+          </div>
         </div>
       </div>
 
@@ -227,7 +205,10 @@ function RecapBlock({
           {label}
         </span>
       </div>
-      <p className="mt-[9px] text-[15px] leading-[1.5] text-pretty text-nevo-near-black sm:text-base">
+      {/* SCRUM-101.2: "on 375x812 the recap and preview are capped at two
+          lines each", so the actions stay above the fold. From tablet up
+          there is room, and the whole text shows. */}
+      <p className="mt-[9px] line-clamp-2 text-[15px] leading-[1.5] text-pretty text-nevo-near-black sm:line-clamp-none sm:text-base">
         {text}
       </p>
     </div>

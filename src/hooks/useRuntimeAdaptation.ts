@@ -73,6 +73,15 @@ export interface RuntimeAdaptation {
    * never the engine's reasoning. Null until the engine has answered.
    */
   plan: AdaptationPlan | null;
+  /**
+   * The segment `plan` was asked for - `currentSegmentId` on the request.
+   *
+   * The instruction is lesson-level on the wire, but a hint or a guided
+   * question is about the content in front of the child when it was asked
+   * for. Kept with the plan so the player can show it there and not under
+   * every segment after, including through a failed read that keeps the plan.
+   */
+  forSegmentId: string | null;
 }
 
 const BREAK_VALUES: readonly string[] = Object.values(BREAK_TYPES);
@@ -94,6 +103,7 @@ export function useRuntimeAdaptation(
     offeredBreak: null,
     reason: null,
     plan: null,
+    forSegmentId: null,
   });
   // Read at response time through a ref, like the runtime state, so a new
   // lesson object does not re-fire the request.
@@ -174,6 +184,7 @@ export function useRuntimeAdaptation(
           offeredBreak: asBreakType(res.breakSuggestion?.breakType),
           reason: res.breakSuggestion?.reason ?? null,
           plan: built ? toAdaptationPlan(res, built) : null,
+          forSegmentId: segmentId,
         });
       })
       .catch(() => {
@@ -182,7 +193,7 @@ export function useRuntimeAdaptation(
         // Nor is it an instruction: the plan falls back to the load-time one
         // rather than to "the engine now says nothing".
         if (active)
-          setResult((prev) => ({ offeredBreak: null, reason: null, plan: prev.plan }));
+          setResult((prev) => ({ ...prev, offeredBreak: null, reason: null }));
       });
 
     return () => {

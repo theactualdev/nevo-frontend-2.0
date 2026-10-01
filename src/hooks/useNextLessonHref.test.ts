@@ -79,6 +79,7 @@ describe("useNextLessonHref", () => {
          */
         { status: "cancelled", availableFrom: null, lesson: { id: "done-1" } },
         {
+          id: "asg-9",
           status: "assigned",
           availableFrom: null,
           lesson: { id: "real-lesson" },
@@ -89,7 +90,10 @@ describe("useNextLessonHref", () => {
 
     const { result } = renderHook(() => useNextLessonHref());
 
-    expect(result.current).toBe("/student/lessons/real-lesson");
+    // With the assignment, or the player files the work under nothing and
+    // never shows the teacher's note. "You're In" and the warm-up both land
+    // here, so this is the first lesson many children ever open.
+    expect(result.current).toBe("/student/lessons/real-lesson?assignment=asg-9");
   });
 
   it("sends a signed-in child with nothing set to their lessons list", () => {

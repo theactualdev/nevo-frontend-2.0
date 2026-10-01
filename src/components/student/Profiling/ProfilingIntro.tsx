@@ -13,9 +13,11 @@ import { ProfilingShell } from "./ProfilingShell";
  * "score" or "ability". No skip, no back. The complete screen shows no results
  * of any kind - a settled figure, not a celebration.
  *
- * The complete copy reports the baseline write rather than assuming it: "your
- * learning space has been personalized" is a claim about the engine, and it is
- * false if the submit never landed. `saved === false` swaps it for the same
+ * The complete copy claims no write. It read "Your learning space has been
+ * personalized", a past-tense claim about the engine that was false whenever
+ * the submit had not landed; design ruled the replacement on 1 Oct
+ * (SCRUM-180), "Nevo has everything it needs to set up your learning space.",
+ * which is true the moment it is read. `saved === false` swaps it for the same
  * plain admission the daily warm-up uses.
  *
  * **THAT BRANCH IS CURRENTLY UNREACHABLE, DELIBERATELY - see `saved` below
@@ -68,10 +70,9 @@ export function ProfilingIntro({
    * the next person write the sentence again, slightly differently, which is
    * how two apologies for the same failure end up in one product.
    *
-   * **If you are about to start passing this: the settled copy is the thing to
-   * look at first.** "Your learning space has been personalized" already runs
-   * ahead of the write; see the note in `ProfilingFlow`, raised with design
-   * 24 Sep.
+   * The settled copy no longer runs ahead of the write: design replaced the
+   * past-tense "has been personalized" on 1 Oct (SCRUM-180), after it was
+   * raised on 24 Sep.
    */
   saved?: boolean | null;
 }) {
@@ -104,7 +105,7 @@ export function ProfilingIntro({
           {complete
             ? saved === false
               ? "Thanks for doing that. We couldn’t save it just now — that’s on us, not you."
-              : "Your learning space has been personalized."
+              : "Nevo has everything it needs to set up your learning space."
             : "You'll do four quick activities. No tests, no scores. This just helps Nevo work better for you."}
         </p>
         {askAge && !complete && (

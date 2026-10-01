@@ -38,6 +38,7 @@ vi.mock("@/lib/lessons/pendingProgress", () => ({
   holdProgress: vi.fn(),
   clearProgress: vi.fn(),
   flushPendingProgress: vi.fn(),
+  claimSlot: vi.fn(() => () => {}),
 }));
 
 const signIn = () =>

@@ -16,7 +16,22 @@ import type {
 } from "@/lib/api/askNevo";
 import { LessonContext } from "@/context/LessonContext";
 import { useAuth } from "@/hooks";
-import { cn, randomId } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+
+/**
+ * Board 26's launcher mark, on both the docked button and the corner pill.
+ *
+ * It was the speech bubble, which is Connect's - a child looking for their
+ * teacher and a child looking for Nevo were shown the same picture. The app
+ * shell prototype also draws the bubble; board 26 is Ask Nevo's own frame and
+ * draws this sparkle, and the teacher drawer already uses it.
+ */
+const SPARKLE = (className: string) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden className={className}>
+    <path d="M12 2l1.6 4.8L18 8.4l-4.4 1.6L12 15l-1.6-5L6 8.4l4.4-1.6z" />
+    <circle cx="18.5" cy="17.5" r="2.2" />
+  </svg>
+);
 
 /** The minimum "Nevo is thinking" beat - real answers never land jarringly
  *  fast, and the mock fallback keeps its original calm pacing. */
@@ -148,8 +163,16 @@ export function AskNevo() {
   // provider is present (future in-player drawer), the active lesson scopes
   // the question.
   const lessonId = useContext(LessonContext)?.lessonId ?? null;
-  // One conversation thread per mount - continuity for the backend assistant.
-  const threadId = useRef(randomId());
+  /*
+   * THE SERVER'S thread id, the same fix the teacher drawer had.
+   *
+   * This was `useRef(randomId())`: a v4 UUID minted here, sent on every turn,
+   * and never one the backend issued - so the thread it stored carried a
+   * different id and Past conversations could never be matched back to the
+   * conversation on screen. Null until an answer carries one; a first turn has
+   * no thread to continue, which is what null says.
+   */
+  const threadId = useRef<string | null>(null);
   const [open, setOpen] = useState(false);
   // One per breakpoint because they are different sizes and clamp differently,
   // but they share a stored offset - only ever one of them is on screen, and a
@@ -204,6 +227,14 @@ export function AskNevo() {
     setInput("");
     recognition.current?.stop();
     setRecording(false);
+    /*
+     * BACK TO THE LIVE THREAD. A question asked from Past conversations was
+     * appended to the conversation underneath, which was hidden - so it, and
+     * its answer, simply vanished. Frame 26 keeps the composer there "to start
+     * something new", and something new is said where it can be seen.
+     */
+    setView("chat");
+    history.closeThread();
     setMessages((m) => [...m, { who: "user", text }]);
     setThinking(true);
 
@@ -234,10 +265,23 @@ export function AskNevo() {
       .catch(() => null);
     void Promise.all([answer, beat]).then(([res]) => {
       if (!alive.current) return;
+      // Adopt the server's thread so the next turn continues this one. Only
+      // ever set from an answer: one without an id must not drop a thread we
+      // already hold.
+      if (res?.threadId) threadId.current = res.threadId;
       setMessages((m) => [
         ...m,
         res
-          ? { who: "nevo", text: res.answer, interactionId: res.interactionId }
+          ? {
+              who: "nevo",
+              text: res.answer,
+              interactionId: res.interactionId,
+              // Frame 26's "Can't help · hands to teacher": the server's own
+              // answer, with the way to the teacher beside it. Strictly
+              // false, so a response that predates the field still reads as
+              // an answer rather than a hand-over.
+              teacherAction: res.canHelp === false,
+            }
           : signedIn
             ? { who: "nevo", text: COULD_NOT_ANSWER, failed: true }
             : // Say so. A visitor on the walkthrough cannot tell a canned
@@ -316,7 +360,7 @@ export function AskNevo() {
           compact.dragging ? "cursor-grabbing" : "active:scale-[0.96]",
         )}
       >
-        <MessageCircle className="size-6" strokeWidth={2} />
+        {SPARKLE("size-6")}
       </button>
       <button
         type="button"
@@ -328,7 +372,7 @@ export function AskNevo() {
           full.dragging ? "cursor-grabbing" : "active:scale-[0.98]",
         )}
       >
-        <MessageCircle className="size-[18px]" strokeWidth={2} />
+        {SPARKLE("size-[18px]")}
         Ask Nevo
       </button>
 
@@ -358,7 +402,9 @@ export function AskNevo() {
                     setView("chat");
                   }
                 }}
-                className="-ml-2 flex size-9 cursor-pointer items-center justify-center rounded-full text-nevo-near-black/70 transition-colors hover:bg-nevo-near-black/6"
+                // 44px to touch; -ml-3 keeps the chevron where the 36px
+                // button drew it.
+                className="-ml-3 flex size-11 cursor-pointer items-center justify-center rounded-full text-nevo-near-black/70 transition-colors hover:bg-nevo-near-black/6"
               >
                 <ChevronLeft className="size-5" strokeWidth={2} />
               </button>
@@ -380,7 +426,7 @@ export function AskNevo() {
                   history.refresh();
                   setView("history");
                 }}
-                className="ml-auto flex size-10 cursor-pointer items-center justify-center rounded-full text-nevo-near-black/60 transition-colors hover:bg-nevo-near-black/6"
+                className="ml-auto flex size-11 cursor-pointer items-center justify-center rounded-full text-nevo-near-black/60 transition-colors hover:bg-nevo-near-black/6"
               >
                 <Clock className="size-[19px]" strokeWidth={2} />
               </button>
@@ -447,8 +493,14 @@ export function AskNevo() {
                     {message.teacherAction && (
                       <button
                         type="button"
-                        onClick={() => router.push("/student/connect")}
-                        className="inline-flex h-10 cursor-pointer items-center gap-2 self-start rounded-[10px] bg-nevo-navy px-4 text-sm font-medium text-nevo-cream transition-[filter] hover:brightness-108 active:scale-[0.98]"
+                        onClick={() => {
+                          // IA 31: "Message my teacher -> closes drawer ->
+                          // Connect Tab". The drawer lives in the shell, so
+                          // without this it stayed open over Connect.
+                          setOpen(false);
+                          router.push("/student/connect");
+                        }}
+                        className="inline-flex h-11 cursor-pointer items-center gap-2 self-start rounded-[10px] bg-nevo-navy px-4 text-sm font-medium text-nevo-cream transition-[filter] hover:brightness-108 active:scale-[0.98]"
                       >
                         <MessageCircle className="size-4" strokeWidth={2} />
                         Message my teacher
@@ -626,12 +678,14 @@ function ThreadList({
     );
   }
 
+  // Frame 26, state 4 - its words and its centring.
   if (threads.length === 0) {
     return (
-      <p className="pt-6 text-center text-sm leading-[1.5] text-nevo-near-black/60">
-        Nothing here yet. Anything you ask will show up so you can look back at
-        it.
-      </p>
+      <div className="flex h-full min-h-[300px] items-center justify-center px-6 text-center">
+        <p className="max-w-[260px] text-[15px] leading-[1.6] text-pretty text-nevo-near-black/55">
+          Your past conversations with Ask Nevo will appear here.
+        </p>
+      </div>
     );
   }
 

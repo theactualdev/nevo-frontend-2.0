@@ -124,6 +124,9 @@ export function useStudentLessons(): StudentLessons {
         return {
           id: a.lesson.id,
           lessonId: a.lesson.id,
+          // Which set work this card is, so opening it files progress there
+          // and shows the teacher's note - see `lessonHref`.
+          assignmentId: a.id,
           title: a.lesson.title,
           timeEstimate,
           ...(subject ? { subject } : {}),

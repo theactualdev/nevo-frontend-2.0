@@ -158,6 +158,27 @@ describe("looking back at a past conversation", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows a question asked from a past conversation, rather than losing it", async () => {
+    /*
+     * It was appended to the live thread underneath, which the history view
+     * hides - so the question and its answer vanished, and nothing on screen
+     * said anything had been sent.
+     */
+    await openHistory();
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Why do plants need light/ }),
+    );
+    await screen.findByText("They use it to make their own food.");
+
+    fireEvent.change(screen.getByLabelText("Ask a question"), {
+      target: { value: "What about at night?" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(screen.getByText("What about at night?")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Ask Nevo" })).toBeVisible();
+  });
+
   it("stays in the same sheet rather than opening a screen", () => {
     // "Same drawer, same styling: no new screen, no modal."
     void openHistory();
@@ -167,12 +188,17 @@ describe("looking back at a past conversation", () => {
 });
 
 describe("what the list says when there is nothing to say", () => {
-  it("tells a child with no history that there is none yet", async () => {
+  it("tells a child with no history that there is none yet, in the frame's words", async () => {
     threadsCall.mockResolvedValue([]);
 
     await openHistory();
 
-    expect(await screen.findByText(/Nothing here yet/i)).toBeInTheDocument();
+    // Frame 26, state 4, verbatim.
+    expect(
+      await screen.findByText(
+        "Your past conversations with Ask Nevo will appear here.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("does not call a failed read an empty history", async () => {
@@ -188,7 +214,7 @@ describe("what the list says when there is nothing to say", () => {
     expect(
       await screen.findByText(/couldn.t load these just now/i),
     ).toBeInTheDocument();
-    expect(screen.queryByText(/Nothing here yet/i)).toBeNull();
+    expect(screen.queryByText(/will appear here/i)).toBeNull();
   });
 
   it("says so when one conversation will not open", async () => {

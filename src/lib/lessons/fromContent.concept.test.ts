@@ -110,3 +110,29 @@ describe("an assessment question's concept", () => {
     expect(assessment).toBeUndefined();
   });
 });
+
+describe("the concept an inline check is about", () => {
+  /*
+   * A review session skips the after-lesson questions - its inline checks are
+   * the recall - so a concept dropped here is a review whose outcome can never
+   * be sent to the scheduler.
+   */
+  const withCheck = (over: Record<string, unknown> = {}) => {
+    const base = lesson([]);
+    base.segments[0] = {
+      ...base.segments[0],
+      comprehensionCheckpoints: [checkpoint(over)],
+    } as unknown as ContentSegment;
+    const built = lessonFromContent(base);
+    if (!built) throw new Error("the adapter refused the lesson");
+    return built.segments[0].quickCheck;
+  };
+
+  it("is carried from the checkpoint", () => {
+    expect(withCheck()?.conceptId).toBe("concept-fractions");
+  });
+
+  it("is omitted, not nulled, when the checkpoint names none", () => {
+    expect(withCheck({ conceptId: null })).not.toHaveProperty("conceptId");
+  });
+});

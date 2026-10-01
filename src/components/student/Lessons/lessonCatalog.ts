@@ -29,10 +29,9 @@ export interface LessonSummary {
    */
   lessonId: string;
   /**
-   * The set work this card came from, when it came from one. The preview's
-   * Start carries it as `?assignment=`, exactly as a Home card's link did
-   * before Today's cards opened the preview. Absent is the truth for a lesson
-   * that was never assigned.
+   * The assignment this card was built from. The preview's Start carries it
+   * as `?assignment=`. Absent on the fixtures, which no teacher set, and on
+   * a lesson that was never assigned.
    */
   assignmentId?: string;
 }

@@ -1,5 +1,8 @@
 import { api } from "./client";
-import type { ComprehensionCheckpoint } from "./checkpoints";
+import type {
+  CheckpointScalar,
+  ComprehensionCheckpoint,
+} from "./checkpoints";
 import type { SegmentVariants } from "./variants";
 
 /**
@@ -443,7 +446,68 @@ export interface LessonProgressResponse {
   intelligence: Record<string, unknown>;
 }
 
+/**
+ * One answer to one lesson question - `LessonQuestionAttemptWrite`, deployed
+ * 1 Oct.
+ *
+ * `answer` is the OPTION'S OWN VALUE (`CheckpointOption.value`), not our
+ * stringified option id: the server marks it against the stored answer key,
+ * and a `"2"` where the key is `2` is a right answer marked wrong. The client
+ * never sends a key or a verdict.
+ */
+export interface LessonQuestionAttemptWrite {
+  sessionId: string;
+  /** `ComprehensionCheckpoint.id`. */
+  questionId: string;
+  segmentId?: string | null;
+  source?: "checkpoint" | "assessment";
+  answer: CheckpointScalar | CheckpointScalar[];
+  /** Ours, for idempotent retries. */
+  clientAttemptId?: string | null;
+}
+
+/** `LessonQuestionAttemptResponse` - one stored answer, marked server-side. */
+export interface LessonQuestionAttempt {
+  id: string;
+  lessonId: string;
+  sessionId: string;
+  questionId: string;
+  segmentId: string | null;
+  source: "checkpoint" | "assessment";
+  attemptNumber: number;
+  /** The question as it stood when answered, snapshotted beside the answer. */
+  question: ComprehensionCheckpoint;
+  answer: unknown;
+  /** NULL MEANS UNMARKABLE, never wrong - see `api/checkpoints.ts`. */
+  correct: boolean | null;
+  submittedAt: string;
+}
+
 export const lessonsApi = {
+  /**
+   * Store one answer. POST /api/v1/lessons/{id}/attempts (201)
+   *
+   * NOT YET CALLED. The player would write each assessment answer here so
+   * Review answers can read the child's own, per account, instead of from
+   * the device - but its options carry a stringified id, not the value the
+   * server marks against, and writing the wrong type marks a right answer
+   * wrong. That mapping, the write and the read are one follow-up.
+   */
+  saveAttempt: (lessonId: string, body: LessonQuestionAttemptWrite) =>
+    api.post<LessonQuestionAttempt>(
+      `/api/v1/lessons/${lessonId}/attempts`,
+      body,
+    ),
+
+  /**
+   * The signed-in child's stored answers for a lesson, optionally one
+   * session's. GET /api/v1/lessons/{id}/attempts?sessionId=
+   */
+  attempts: (lessonId: string, sessionId?: string) =>
+    api.get<LessonQuestionAttempt[]>(`/api/v1/lessons/${lessonId}/attempts`, {
+      params: sessionId ? { sessionId } : undefined,
+    }),
+
   /** One class's progress through this lesson. */
   classProgress: (lessonId: string, classId: string) =>
     api.get<LessonClassProgress>(`/api/v1/lessons/${lessonId}/class-progress`, {

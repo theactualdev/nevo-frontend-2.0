@@ -232,3 +232,16 @@ describe("the preview's what-you'll-do line", () => {
     expect(result.current.lessons[0].description).toBeUndefined();
   });
 });
+
+describe("which piece of set work a card is", () => {
+  it("carries the assignment, so opening it files progress there", () => {
+    // The preview pushed the bare lesson URL, and the player reads
+    // `?assignment=` only - so a lesson opened from this tab recorded
+    // progress against no assignment and never showed the teacher's note.
+    read([assignment("one")]);
+
+    const { result } = renderHook(() => useStudentLessons());
+
+    expect(result.current.lessons[0]?.assignmentId).toBe("a-one");
+  });
+});
