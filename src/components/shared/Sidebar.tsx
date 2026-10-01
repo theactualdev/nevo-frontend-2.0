@@ -36,6 +36,12 @@ export function Sidebar({
     initials: string;
     /** The disc's colours, when the person chose them. Navy otherwise. */
     tone?: { background: string; text: string };
+    /**
+     * Where the row leads: the person's own profile. `Nevo Sidebar Rail`
+     * draws this row AS the way into Profile, with the same active state as a
+     * tab. Inert without it, for a console that has not wired one.
+     */
+    href?: string;
   };
   defaultCollapsed?: boolean;
   /** Controlled collapse. Omit to let the sidebar manage its own state. */
@@ -47,6 +53,7 @@ export function Sidebar({
   const collapsed = collapsedProp ?? internalCollapsed;
   const toggle = () =>
     onToggle ? onToggle(!collapsed) : setInternalCollapsed((v) => !v);
+  const userActive = !!user?.href && user.href === activeHref;
 
   return (
     <nav
@@ -143,12 +150,14 @@ export function Sidebar({
       </button>
 
       {user && (
+        // The frame's hairline between the controls and the person.
         <div
-          className={cn(
-            "flex items-center gap-3 pt-2",
-            collapsed ? "justify-center" : "px-1",
-          )}
-        >
+          aria-hidden
+          className="mt-1 h-px shrink-0 self-stretch bg-nevo-near-black/8"
+        />
+      )}
+      {user && (
+        <UserRow href={user.href} active={userActive} collapsed={collapsed}>
           <span
             style={
               user.tone
@@ -161,7 +170,12 @@ export function Sidebar({
           </span>
           {!collapsed && (
             <div className="flex flex-col">
-              <span className="text-sm font-medium whitespace-nowrap text-nevo-near-black">
+              <span
+                className={cn(
+                  "text-sm whitespace-nowrap text-nevo-near-black",
+                  userActive ? "font-semibold" : "font-medium",
+                )}
+              >
                 {user.name}
               </span>
               {user.subtitle && (
@@ -171,8 +185,49 @@ export function Sidebar({
               )}
             </div>
           )}
-        </div>
+        </UserRow>
       )}
     </nav>
+  );
+}
+
+/**
+ * The person at the foot of the rail. A LINK when there is somewhere to go:
+ * it was a plain `div`, so the one row the frame draws as the way into
+ * Profile answered a tap with nothing.
+ */
+function UserRow({
+  href,
+  active,
+  collapsed,
+  children,
+}: {
+  href?: string;
+  active: boolean;
+  collapsed: boolean;
+  children: React.ReactNode;
+}) {
+  const layout = cn(
+    "relative flex items-center gap-3 rounded-[10px] py-2",
+    collapsed ? "w-full justify-center" : "px-1",
+  );
+  if (!href) return <div className={layout}>{children}</div>;
+  return (
+    <Link
+      href={href}
+      aria-label="Profile"
+      aria-current={active ? "page" : undefined}
+      title={collapsed ? "Profile" : undefined}
+      className={cn(
+        layout,
+        "cursor-pointer transition-colors duration-[130ms]",
+        active ? "bg-nevo-navy/8" : "hover:bg-nevo-navy/5",
+      )}
+    >
+      {active && (
+        <span className="absolute top-2 bottom-2 left-0 w-[3px] rounded-full bg-nevo-violet" />
+      )}
+      {children}
+    </Link>
   );
 }

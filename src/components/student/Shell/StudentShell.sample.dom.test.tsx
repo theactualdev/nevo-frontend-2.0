@@ -19,7 +19,10 @@ import { SAMPLE_ATTR } from "@/lib/sampleData";
  * catches nothing; a mark that always appears makes the assertion meaningless.
  */
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/student/dashboard" }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/student/dashboard",
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
+}));
 vi.mock("@/hooks/useSessionRefresh", () => ({ useSessionRefresh: vi.fn() }));
 vi.mock("@/hooks/useSessionLapse", () => ({ useSessionLapse: vi.fn() }));
 vi.mock("@/lib/lessons/pendingProgress", () => ({
@@ -28,9 +31,9 @@ vi.mock("@/lib/lessons/pendingProgress", () => ({
 vi.mock("./NotificationBell", () => ({ NotificationBell: () => null }));
 
 const { useOnline } = vi.hoisted(() => ({ useOnline: vi.fn(() => true) }));
-vi.mock("./OfflineTakeover", () => ({
+vi.mock("./TabOfflineBanner", () => ({
   useOnline,
-  OfflineTakeover: () => <p>offline takeover</p>,
+  TabOfflineBanner: () => <p>offline banner</p>,
 }));
 vi.mock("@/components/student/AskNevo/AskNevo", () => ({
   AskNevo: () => null,
@@ -136,46 +139,37 @@ describe("StudentShell — no device log of a child's taps", () => {
 });
 
 /**
- * Going offline used to unmount the whole tab.
+ * Going offline used to take the tab away.
  *
- * `offlineTakeover ? <OfflineTakeover /> : children` throws the tab away the
- * instant `navigator.onLine` flips — so a child part-way through typing a
- * message to their teacher lost every word of it on a 3G blip, and was then
- * shown a screen telling them nothing was lost. A failed message waiting on
- * "tap to try again" went the same way.
+ * First `offlineTakeover ? <OfflineTakeover /> : children`, which threw the tab
+ * away the instant `navigator.onLine` flipped - so a child part-way through
+ * typing a message to their teacher lost every word of it on a 3G blip. Then
+ * hidden behind the same takeover, which kept the words but not the child's
+ * view of them, under a "Try again" that could not do anything. Board 28 draws
+ * a banner across the top of the tab instead, and the tab stays where it was.
  */
 describe("StudentShell — going offline", () => {
-  it("shows the takeover when the connection drops", async () => {
+  it("shows the banner when the connection drops", async () => {
     useOnline.mockReturnValue(false);
     renderShell();
 
-    expect(await screen.findByText("offline takeover")).toBeVisible();
+    expect(await screen.findByText("offline banner")).toBeVisible();
   });
 
-  it("keeps the tab mounted, so an unsent message survives", async () => {
-    // THE BUG. The child's words live in the tab's own React state; unmounting
-    // it destroys them, and no amount of reassuring copy brings them back.
+  it("leaves the tab in front of the child, not behind a takeover", async () => {
+    // THE BUG. A takeover - unmounted or merely hidden - put the tab out of
+    // reach, including whatever the child was in the middle of writing.
     useOnline.mockReturnValue(false);
     renderShell();
 
-    await screen.findByText("offline takeover");
-    expect(screen.getByText("content")).toBeInTheDocument();
+    await screen.findByText("offline banner");
+    expect(screen.getByText("content")).toBeVisible();
   });
 
-  it("hides the tab rather than leaving it readable underneath", async () => {
-    // Mounted, but not presented: a screen reader should not be reading a form
-    // its user cannot see or reach.
-    useOnline.mockReturnValue(false);
-    renderShell();
-
-    await screen.findByText("offline takeover");
-    expect(screen.getByText("content")).not.toBeVisible();
-  });
-
-  it("shows the tab again, with its state, when the signal returns", async () => {
+  it("drops the banner, and nothing else changes, when the signal returns", async () => {
     useOnline.mockReturnValue(false);
     const { rerender } = renderShell();
-    await screen.findByText("offline takeover");
+    await screen.findByText("offline banner");
 
     useOnline.mockReturnValue(true);
     rerender(
@@ -187,7 +181,7 @@ describe("StudentShell — going offline", () => {
     );
 
     expect(screen.getByText("content")).toBeVisible();
-    expect(screen.queryByText("offline takeover")).toBeNull();
+    expect(screen.queryByText("offline banner")).toBeNull();
   });
 });
 

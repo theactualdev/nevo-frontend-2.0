@@ -3,22 +3,23 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { BottomNav, Sidebar } from "@/components/shared";
 import { MaybeSample } from "@/components/shared/SampleRegion";
 import { AskNevo } from "@/components/student/AskNevo/AskNevo";
-import { TEXT_ZOOM, useAccessibility } from "@/context/AccessibilityContext";
+import { cn } from "@/lib/utils";
 import { NotificationBell } from "./NotificationBell";
 import { isLessonRoute } from "./lessonRoutes";
-import { OfflineTakeover, useOnline } from "./OfflineTakeover";
+import { TabOfflineBanner, useOnline } from "./TabOfflineBanner";
 import { useHasSession } from "@/hooks/useHasSession";
 import { useHydrated } from "@/hooks/useHydrated";
 import { useSessionLapse } from "@/hooks/useSessionLapse";
 import { useSessionRefresh } from "@/hooks/useSessionRefresh";
 import { flushPendingProgress } from "@/lib/lessons/pendingProgress";
 import { flushPendingBaseline } from "@/lib/profiling/pendingBaseline";
-import { getSession } from "@/lib/auth/session";
-import { MOCK_STUDENT, STUDENT_NAV } from "./studentNav";
+import { arrivedWithoutSession, getSession } from "@/lib/auth/session";
+import { doorAfterLostSession } from "./lostSession";
+import { MOCK_STUDENT, STUDENT_NAV, STUDENT_PROFILE_HREF } from "./studentNav";
 import { useAvatarTone } from "./useAvatarTone";
 import { useDisplayName } from "./useDisplayName";
 
@@ -71,6 +72,20 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
   // and a child reading one segment does not navigate.
   useSessionLapse();
   /*
+   * And when this page arrived on a role cookie with no session behind it -
+   * a token write that failed, storage cleared without its cookies - take the
+   * child to the door rather than leave them in the walkthrough the server
+   * already sent. `getSession` has dropped the cookie by now, so the door
+   * lets them in. Once per load; the cookie is gone after the first look.
+   */
+  const router = useRouter();
+  useEffect(() => {
+    if (!arrivedWithoutSession()) return;
+    const door = doorAfterLostSession(pathname);
+    if (door) router.replace(door);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  /*
    * Deliver anything a lesson could not save before it was closed.
    *
    * Here rather than only in the player, because a child who gave up on a
@@ -108,7 +123,6 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
     window.addEventListener("online", flush);
     return () => window.removeEventListener("online", flush);
   }, []);
-  const { textSize } = useAccessibility();
   // The chrome calls the student by their own name, not the fixture's.
   const student = useDisplayName();
   // The look the child chose on Profile; the navy disc until they choose.
@@ -134,9 +148,6 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
    * another child's name.
    */
   const showingFixtureIdentity = hydrated && !signedIn;
-  // Offline takes over network-backed tabs (board 28); Downloads stays
-  // reachable - it is where "See saved lessons" points.
-  const offlineTakeover = !online && !pathname.startsWith("/student/downloads");
 
   // Sidebar defaults collapsed (matches the server render, so no hydration
   // mismatch), then opens on desktop after mount. Tablet stays collapsed for room.
@@ -154,7 +165,7 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
     // activities are deliberately excluded - see `scalesWithTextSize`.
     if (!scalesWithTextSize(pathname)) return <>{children}</>;
     return (
-      <div style={{ zoom: TEXT_ZOOM[textSize] }}>
+      <div className="nevo-text-zoom">
         {/*
           Ask Nevo is rendered by the LESSON LAYOUT now, not here. As a sibling
           of `children` it sat outside that route's `LessonProvider`, so the
@@ -166,9 +177,13 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  const activeHref = STUDENT_NAV.find(
-    (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
-  )?.href;
+  const within = (href: string) =>
+    pathname === href || pathname.startsWith(`${href}/`);
+  // Profile is not a tab; the child's own disc is its way in, and lights up
+  // like one while they are there.
+  const activeHref = within(STUDENT_PROFILE_HREF)
+    ? STUDENT_PROFILE_HREF
+    : STUDENT_NAV.find((item) => within(item.href))?.href;
 
   return (
     <div className="group/shell flex h-[100dvh] bg-nevo-cream text-nevo-near-black">
@@ -188,6 +203,7 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
                 ? MOCK_STUDENT.subtitle
                 : undefined,
               tone,
+              href: STUDENT_PROFILE_HREF,
             }}
             collapsed={collapsed}
             onToggle={setCollapsed}
@@ -196,6 +212,9 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <div className="relative flex min-w-0 flex-1 flex-col">
+        {/* Board 28: across the top of the tab, never in place of it. */}
+        {!online && <TabOfflineBanner />}
+
         {/* Top bar — mobile only (logo + avatar) */}
         <header className="flex h-[60px] shrink-0 items-center justify-between px-5 md:hidden">
           <Image
@@ -215,12 +234,12 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
               {/*
                 A LINK, not a decoration. It was an inert `span`: the one
                 avatar in the app that looked like every other console's way
-                into a profile and did nothing when tapped. Profile is in the
-                nav too, so this was never a dead end - just a control that
-                taught a child their tap had missed.
+                into a profile and did nothing when tapped. On a phone it is
+                now the ONLY way into Profile - the frames draw five tabs and
+                no Profile among them.
               */}
               <Link
-                href="/student/profile"
+                href={STUDENT_PROFILE_HREF}
                 aria-label="Profile"
                 style={{ background: tone.background, color: tone.text }}
                 className="flex size-10 cursor-pointer items-center justify-center rounded-full text-sm font-semibold transition-[filter] hover:brightness-110"
@@ -231,14 +250,20 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        {/* Notifications — tablet/desktop: quiet bell top-right of the content. */}
-        <div className="absolute top-4 right-5 z-30 hidden md:block">
+        {/* Notifications — tablet/desktop: quiet bell top-right of the content,
+            dropped below the offline banner when there is one. */}
+        <div
+          className={cn(
+            "absolute right-5 z-30 hidden md:block",
+            online ? "top-4" : "top-[60px]",
+          )}
+        >
           <NotificationBell />
         </div>
 
         {/* Only the content region scrolls; the sidebar/nav stay fixed.
-            The Text Size preference is applied here as a numeric `zoom`
-            (`zoom: var(...)` isn't supported, so it's read from context). */}
+            The Text Size preference zooms it through `.nevo-text-zoom`, which
+            the root attribute drives from before the first paint. */}
         <main
           // The bottom padding clears the Ask Nevo trigger, which is `fixed`
           // and so lands ON this scrolling region rather than below it. #313
@@ -252,25 +277,15 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
           // viewport - intruding 61px into this region. Desktop has no nav, so
           // this region reaches the viewport floor and the 44px pill at
           // `bottom-6` intrudes 68px. A few px of margin on each.
-          className="min-h-0 flex-1 overflow-y-auto pb-[68px] md:pb-[76px]"
-          style={{ zoom: TEXT_ZOOM[textSize] }}
+          className="nevo-text-zoom min-h-0 flex-1 overflow-y-auto pb-[68px] md:pb-[76px]"
         >
           {/*
-            THE TAB STAYS MOUNTED. This was
-            `offlineTakeover ? <OfflineTakeover /> : children`, which unmounts
-            the whole tab the instant `navigator.onLine` flips - so a child
-            part-way through typing a message to their teacher lost every word
-            of it on a 3G blip, and was then shown a screen telling them nothing
-            was lost. A failed message waiting on "tap to try again" went the
-            same way.
-
-            Hidden rather than replaced, so React keeps the component and its
-            state alive and the words are still there when the signal returns.
-            `hidden` also takes it out of the accessibility tree, so a screen
-            reader is not reading a form its user cannot see or reach.
+            THE TAB STAYS IN FRONT OF THE CHILD OFFLINE. It was first
+            unmounted, then hidden, behind a full-screen takeover - and either
+            way a child part-way through a message to their teacher could not
+            see it. The banner above is the whole of the offline state now.
           */}
-          <div hidden={offlineTakeover}>{children}</div>
-          {offlineTakeover && <OfflineTakeover />}
+          <div>{children}</div>
         </main>
 
         {/* Bottom nav — mobile only. Down while a tab's on-screen keyboard is
