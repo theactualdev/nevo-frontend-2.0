@@ -21,7 +21,6 @@ import type { AdaptationPlan, Lesson } from "@/lib/types";
  */
 
 vi.mock("@/hooks", () => ({
-  useBreakMonitor: () => ({ due: false, dismiss: vi.fn() }),
   useLesson: () => ({ setActiveLesson: vi.fn() }),
   useSignals: () => ({ trackEvent: vi.fn() }),
 }));
@@ -102,7 +101,7 @@ describe("the hint the engine sends", () => {
       <LessonPlayer
         lesson={LESSON}
         plan={plan({
-          adjustment: ADJUSTMENT_ACTIONS.MODULATE_DENSITY,
+          adjustment: ADJUSTMENT_ACTIONS.SIMPLIFY,
           hint: HINT,
         })}
       />,

@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import SessionExpiredPage from "@/app/auth/session-expired/page";
+import SessionExpiredPage, {
+  generateMetadata,
+} from "@/app/auth/session-expired/page";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
@@ -14,10 +16,13 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
  * mid-lesson was told they had been idle and went back to try again.
  */
 
-const doorFor = async (reason?: string) =>
+const doorFor = async (reason?: string, next?: string) =>
   render(
     await SessionExpiredPage({
-      searchParams: Promise.resolve(reason ? { reason } : {}),
+      searchParams: Promise.resolve({
+        ...(reason ? { reason } : {}),
+        ...(next ? { next } : {}),
+      }),
     }),
   );
 
@@ -62,5 +67,81 @@ describe("the child's session-end door", () => {
       expect(screen.getByText(/away for a while/i)).toBeInTheDocument();
       unmount();
     }
+  });
+});
+
+describe("the way back in", () => {
+  it("returns the child to the lesson they were in", async () => {
+    // IA 31: "Log back in -> Student Login Screen (lesson position
+    // preserved)". It pushed a bare /auth/login, so a lapse mid-lesson signed
+    // the child back in to Home.
+    await doorFor("session_expired", "/student/lessons/frac-3");
+
+    expect(screen.getByRole("link", { name: "Log back in" })).toHaveAttribute(
+      "href",
+      "/auth/login?next=%2Fstudent%2Flessons%2Ffrac-3",
+    );
+  });
+
+  it("does not carry a destination that leaves the site", async () => {
+    await doorFor("session_expired", "//evil.test/x");
+
+    expect(screen.getByRole("link", { name: "Log back in" })).toHaveAttribute(
+      "href",
+      "/auth/login",
+    );
+  });
+
+  it("says Sign in on the revoked screen, as 28a draws it", async () => {
+    await doorFor("session_revoked", "/student/progress");
+
+    expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute(
+      "href",
+      "/auth/login?next=%2Fstudent%2Fprogress",
+    );
+    expect(screen.queryByText(/log back in/i)).toBeNull();
+  });
+});
+
+describe("what each screen carries, per board 28 and 28a", () => {
+  it("puts the logo and the drawn art on the timed-out screen", async () => {
+    await doorFor("session_expired");
+
+    expect(screen.getByAltText("Nevo")).toBeInTheDocument();
+    expect(
+      document.querySelector('img[src*="session-expired"]'),
+    ).not.toBeNull();
+  });
+
+  it("puts the concurrent-session art on the signed-in-elsewhere screen", async () => {
+    await doorFor("session_replaced");
+
+    expect(
+      document.querySelector('img[src*="concurrent-session"]'),
+    ).not.toBeNull();
+  });
+
+  it("draws no picture on the revoked screen, only the wordmark", async () => {
+    // 28a: "Calm and neutral, with one way forward." No icon, no art.
+    await doorFor("session_revoked");
+
+    expect(document.querySelectorAll("img")).toHaveLength(1);
+    expect(screen.getByAltText("Nevo")).toBeInTheDocument();
+    expect(document.querySelector("svg")).toBeNull();
+  });
+});
+
+describe("the tab title", () => {
+  it("does not call a paused account an expired session", async () => {
+    const title = async (reason?: string) =>
+      (
+        await generateMetadata({
+          searchParams: Promise.resolve(reason ? { reason } : {}),
+        })
+      ).title;
+
+    expect(await title("account_paused")).toBe("Account on pause - Nevo");
+    expect(await title("session_expired")).toBe("Session expired - Nevo");
+    expect(await title()).toBe("Session expired - Nevo");
   });
 });

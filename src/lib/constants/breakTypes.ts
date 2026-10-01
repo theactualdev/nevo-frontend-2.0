@@ -1,9 +1,9 @@
 /**
  * Break type definitions (Frontend Architecture Sections 1 & 5).
  *
- * Break decisions are confirmed server-side (the backend has the full signal
- * picture); the `useBreakMonitor` hook renders the matching break component at
- * Design System Level 3 elevation with a calm 500–600ms entry.
+ * Break decisions are the engine's - it has the full signal picture, and
+ * nothing on this side times or primes one (frontend §5b). The player renders
+ * the break the engine or the plan names.
  */
 export const BREAK_TYPES = {
   /** Brief pause. */
@@ -17,6 +17,3 @@ export const BREAK_TYPES = {
 } as const;
 
 export type BreakType = (typeof BREAK_TYPES)[keyof typeof BREAK_TYPES];
-
-/** Client-side elapsed-time threshold that primes the break UI (Section 5). */
-export const BREAK_TIME_THRESHOLD_MS = 20 * 60 * 1_000; // 20 minutes

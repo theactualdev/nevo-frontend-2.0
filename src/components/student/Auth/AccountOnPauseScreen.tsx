@@ -1,5 +1,6 @@
 import Image from "next/image";
-import { PauseCircle } from "lucide-react";
+import { Wordmark } from "@/components/shared/BrandMarks";
+import { cn } from "@/lib/utils";
 
 /**
  * Account on pause (`Account On Pause` frame).
@@ -21,32 +22,54 @@ import { PauseCircle } from "lucide-react";
  * offering an action that cannot work would be worse than offering none. The
  * way back is a teacher.
  *
- * This is the SIGN-IN context only. A child whose account is paused while they
- * are mid-lesson takes a different path (a 401 on their next read), and design
- * has not drawn that one - see docs/BUILD_STATUS.md.
+ * THE BRAND MARK, NOT A PAUSE GLYPH. The frame puts the Nevo icon in a soft
+ * violet circle and the wordmark at the top centre; a pause symbol reads as a
+ * media control, or as something the child could un-pause.
+ *
+ * A pause that lands mid-lesson gets 28b's card over the lesson first - see
+ * `AccountPauseHost` - and settles into this same screen after "Okay", so a
+ * paused child meets one screen whichever way they arrive.
  */
-export function AccountOnPauseScreen() {
+export function AccountOnPauseView({ className }: { className?: string }) {
   return (
-    <main className="flex min-h-[100dvh] flex-col items-center justify-center bg-nevo-cream px-9 text-center text-nevo-near-black">
-      <Image
-        src="/brand/nevo-wordmark.png"
-        alt="Nevo"
-        width={344}
-        height={116}
-        priority
-        className="mb-9 h-5 w-auto"
+    <div
+      className={cn(
+        "relative flex min-h-[100dvh] flex-col items-center justify-center bg-nevo-cream px-10 text-center text-nevo-near-black motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1.5 motion-safe:duration-600",
+        className,
+      )}
+    >
+      <Wordmark
+        size="pause"
+        className="absolute top-[34px] left-1/2 -translate-x-1/2 sm:top-10"
       />
 
-      <span className="flex size-16 items-center justify-center rounded-full bg-nevo-violet/22 text-nevo-navy">
-        <PauseCircle className="size-7" strokeWidth={1.9} />
+      <span className="flex size-[132px] shrink-0 items-center justify-center rounded-full bg-nevo-violet/16 sm:size-40 lg:size-[168px]">
+        <Image
+          src="/brand/logo-icon-purple-tight.png"
+          alt=""
+          width={218}
+          height={217}
+          priority
+          className="size-[70px] object-contain opacity-92 sm:size-[86px] lg:size-[90px]"
+        />
       </span>
 
-      <h1 className="mt-6 max-w-[320px] text-[22px] leading-[1.3] font-semibold tracking-[-0.01em] text-balance sm:text-2xl">
-        Your Nevo account is on pause.
+      <h1 className="mt-10 text-[26px] leading-[1.25] font-semibold tracking-[-0.015em] text-nevo-navy sm:mt-11 sm:text-[32px] sm:leading-[1.22] lg:text-[34px] lg:leading-[1.2]">
+        Your Nevo account
+        {/* The frame breaks the phone heading after "account". */}
+        <br className="sm:hidden" /> is on pause.
       </h1>
-      <p className="mt-2.5 max-w-[320px] text-[15px] leading-[1.55] text-nevo-near-black/70 sm:text-base">
+      <p className="mt-4 max-w-[280px] text-[17px] leading-[1.6] text-pretty text-nevo-near-black/68 sm:mt-[18px] sm:max-w-[360px] sm:text-lg lg:max-w-[420px] lg:text-[19px]">
         If you have questions, talk to your teacher.
       </p>
+    </div>
+  );
+}
+
+export function AccountOnPauseScreen() {
+  return (
+    <main className="w-full">
+      <AccountOnPauseView />
     </main>
   );
 }

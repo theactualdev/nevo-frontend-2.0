@@ -176,8 +176,8 @@ describe("toQuickCheck refuses anything it cannot honestly draw", () => {
     expect(q!.correctId).toBe("2/4");
     expect(q!.options).toHaveLength(2);
     expect(q!.correctNote).toBe("Doubling both gives 2/4.");
-    // The recovery note stays the product's own always-continuous wording
-    // rather than a parse's phrasing.
-    expect(q!.recoveryNote).toMatch(/come back/i);
+    // The recovery note is the Lesson Check frame's own words, as far as a
+    // field carries them - and no promise to come back that nothing keeps.
+    expect(q!.recoveryNote).toBe("Not quite. Let's look again.");
   });
 });

@@ -70,13 +70,19 @@ import type {
  * one, which for a child who finds reading effortful is the channel that
  * matters most.
  *
- * STILL OFF, and why:
+ * STILL OFF, OR ONLY PART-WAY ON, and why:
  *   - INTERACTIVE does not map at all. The wire's `InteractiveVariant` is a
  *     QUESTION (`prompt`, `options`, `answerKey`); the player's
  *     `InteractiveContent` is tickable STEPS with an outcome. Two different
  *     things sharing a name - a design question, not a wiring one.
- *   - CALCULATION is partial: `CalculationSegment` needs `scaffold`
- *     (kind/parts/rows) and `problem.answer`, and the wire carries neither.
+ *   - CALCULATION is on where `calculationFor` can build every step, and draws
+ *     no scaffold. The wire's `CalculationVariant` carries `answer`, read as
+ *     `problem.answer`, and now a `scaffold` of its own too
+ *     (`CalculationScaffold`: kind, parts, rows, marks, labels - deployed spec,
+ *     checked 1 Oct). That one is not read: the solver is frozen pending its
+ *     backend payload (SCRUM-181/177), and the player's `scaffold` is the
+ *     authored demo's shape, whose `rows` lists numerators where the wire's is
+ *     a single integer.
  *
  * ON EXPIRING URLS, which used to be the stated reason visual was off: the
  * variants carry `urlExpiresInSeconds`, and `contentApi.mediaUrl` mints a fresh
@@ -220,9 +226,20 @@ function visualFor(
       // better than narrating a generator's prompt at a child.
       alt: caption ?? "",
       ...(caption ? { caption } : {}),
+      // Kept so a link that has aged out can be re-issued rather than shown
+      // broken - `imageUrl` is signed and expires, `storagePath` does not.
+      ...(variant.storagePath ? { storagePath: variant.storagePath } : {}),
+      // The picture's own shape, when measured. Absent falls back to the
+      // frame's 4:3, which is what every picture was squeezed into before.
+      ...(isPositive(variant.width) && isPositive(variant.height)
+        ? { width: variant.width, height: variant.height }
+        : {}),
     },
   };
 }
+
+const isPositive = (n: number | undefined): n is number =>
+  typeof n === "number" && Number.isFinite(n) && n > 0;
 
 /**
  * The segment's narration, when there is a clip AND words to fall back on.
@@ -256,6 +273,7 @@ function audioFor(
     heading,
     title: `Narrated: ${heading}`,
     src: variant.audioUrl,
+    ...(variant.storagePath ? { storagePath: variant.storagePath } : {}),
     transcript,
     ...(typeof variant.durationMs === "number" && variant.durationMs > 0
       ? { durationSec: Math.round(variant.durationMs / 1000) }
@@ -275,7 +293,13 @@ function audioFor(
 function quickCheckFor(segment: ContentSegment): QuickCheck | undefined {
   for (const checkpoint of segment.comprehensionCheckpoints) {
     const check = toQuickCheck(checkpoint);
-    if (check) return check;
+    // The concept rides along for a review's scheduler write - see
+    // `QuickCheck.conceptId`. Omitted rather than null, like the assessment.
+    if (check) {
+      return checkpoint.conceptId
+        ? { ...check, conceptId: checkpoint.conceptId }
+        : check;
+    }
   }
   return undefined;
 }
@@ -337,10 +361,12 @@ function calculationFor(
         ? { answer: String(variant.answer).trim() }
         : {}),
     },
-    // No scaffold. `{kind, parts, rows}` is the authored fraction variant's
-    // shape and the deployed contract has nothing like it; `scaffoldImage` is
-    // a generated picture and a different question. The solver draws no bars
-    // rather than bars made from numbers that mean something else.
+    // No scaffold yet. The deployed `CalculationVariant` carries one now
+    // (`scaffold`, a `CalculationScaffold`), but the solver is frozen pending
+    // its backend payload (SCRUM-181/177) and this field is the authored
+    // fraction demo's `{parts, rows}`, whose `rows` lists numerators where the
+    // wire's is a single integer. The solver draws no bars rather than bars
+    // made from numbers that mean something else.
     ...(states.length > 1 ? { equationStates: states } : {}),
     steps,
     completion: variant.completionStatement,

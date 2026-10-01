@@ -37,6 +37,14 @@ const CLASS_CODE_STEP = "/student/onboarding/teacher-join?mode=code";
  */
 type ClassOption = { id?: string; name: string };
 
+/**
+ * Which option is which. The id, because a school can have two classes with
+ * the same name - two year groups' "Gold", say - and keyed on the name both
+ * lit up when a child tapped one. The join already posted the right id; only
+ * the highlight was wrong. The name stands in only where the roster gave no id.
+ */
+const optionKey = (option: ClassOption) => option.id ?? option.name;
+
 export function ClassConfirmationStep() {
   const router = useRouter();
   // sessionStorage is invisible to the server, so NOTHING about which classes
@@ -130,7 +138,7 @@ export function ClassConfirmationStep() {
   }, [classes, query]);
 
   const pick = (option: ClassOption) => {
-    setSelected(option.name);
+    setSelected(optionKey(option));
     // The id rides the draft to the step that finally joins the class. It comes
     // off the option the child actually tapped rather than being looked up by
     // NAME afterwards - a name is not a key, and the lookup silently returned
@@ -305,12 +313,12 @@ export function ClassConfirmationStep() {
       <div className="mt-3 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1">
         {filtered.map((option) => (
           <button
-            key={option.id ?? option.name}
+            key={optionKey(option)}
             type="button"
             onClick={() => pick(option)}
             className={cn(
-              "flex h-15 shrink-0 items-center justify-between rounded-[12px] border-[1.5px] bg-nevo-cream-elevated px-[18px] text-left shadow-elevation-1 transition hover:brightness-[0.97] active:brightness-[0.94] sm:h-16",
-              selected === option.name
+              "flex h-15 shrink-0 cursor-pointer items-center justify-between rounded-[12px] border-[1.5px] bg-nevo-cream-elevated px-[18px] text-left shadow-elevation-1 transition hover:brightness-[0.97] active:brightness-[0.94] sm:h-16",
+              selected === optionKey(option)
                 ? "border-nevo-navy"
                 : "border-transparent",
             )}

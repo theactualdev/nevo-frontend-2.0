@@ -3,24 +3,23 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { BottomNav, Sidebar } from "@/components/shared";
 import { MaybeSample } from "@/components/shared/SampleRegion";
 import { AskNevo } from "@/components/student/AskNevo/AskNevo";
-import { TEXT_ZOOM, useAccessibility } from "@/context/AccessibilityContext";
-import { useBehaviouralCapture } from "@/hooks";
-import { useConsentGate } from "@/hooks/useConsentGate";
+import { cn } from "@/lib/utils";
 import { NotificationBell } from "./NotificationBell";
 import { isLessonRoute } from "./lessonRoutes";
-import { OfflineTakeover, useOnline } from "./OfflineTakeover";
+import { TabOfflineBanner, useOnline } from "./TabOfflineBanner";
 import { useHasSession } from "@/hooks/useHasSession";
 import { useHydrated } from "@/hooks/useHydrated";
 import { useSessionLapse } from "@/hooks/useSessionLapse";
 import { useSessionRefresh } from "@/hooks/useSessionRefresh";
 import { flushPendingProgress } from "@/lib/lessons/pendingProgress";
 import { flushPendingBaseline } from "@/lib/profiling/pendingBaseline";
-import { getSession } from "@/lib/auth/session";
-import { MOCK_STUDENT, STUDENT_NAV } from "./studentNav";
+import { arrivedWithoutSession, getSession } from "@/lib/auth/session";
+import { doorAfterLostSession } from "./lostSession";
+import { MOCK_STUDENT, STUDENT_NAV, STUDENT_PROFILE_HREF } from "./studentNav";
 import { useAvatarTone } from "./useAvatarTone";
 import { useDisplayName } from "./useDisplayName";
 
@@ -30,11 +29,13 @@ import { useDisplayName } from "./useDisplayName";
  * onboarding and the immersive Lesson Player — render bare, with no chrome
  * ("no in-lesson sidebar").
  *
- * ASK NEVO IS THE EXCEPTION, AND IT IS NOT CHROME. Frame 26 governs it: "always
- * reachable, never interruptive". It was mounted below the full-screen early
- * return, so it sat on every tab and was missing from the one screen where a
- * child actually gets stuck. Its trigger is right-aligned and the player's
- * chevrons are centred, so it costs the player no room and displaces nothing.
+ * ASK NEVO IS NOT CHROME, and on the player it is not the shell's at all.
+ * Frame 26 governs it: "always reachable, never interruptive". The shell
+ * mounts it below, on every in-shell screen but Profile - the lesson's
+ * `/summary` and `/review` included. On the player the lesson layout renders
+ * it instead (`LessonAskNevo`), inside the `LessonProvider` so a question
+ * carries its lesson, and only on the completion screen - IA 31 keeps it off
+ * the player while it is teaching.
  *
  * NOT on the other full-screen routes, and each for its own reason. The daily
  * warm-up is a calibrated baseline activity - offering help inside it would
@@ -45,33 +46,15 @@ import { useDisplayName } from "./useDisplayName";
  * The shell is a fixed-height viewport frame: the sidebar/nav stay put while only
  * the content region scrolls.
  */
-/**
- * `SampleRegion`, but only when there is something to mark.
- *
- * The chrome is on every student screen, so wrapping it unconditionally would
- * put a sample mark on the page for every signed-in child and make the
- * end-to-end assertion useless. `display: contents` either way, so neither
- * branch changes a pixel.
- */
 export function StudentShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? "";
   /*
-   * SCRUM-76: on-device behavioural timing capture for the affective engine -
-   * ephemeral IndexedDB only, purged at session end, never transmitted.
-   *
-   * GATED ON CONSENT, which it was not. `GET /students/me/consent-gate` has
-   * been deployed for some time and `myConsentGate` had zero callers, so a
-   * child whose guardian had WITHDRAWN consent kept being profiled - every tap
-   * and keystroke still written - and nothing in the student app ever asked.
-   *
-   * `withdrawn` is false until the read answers and false if it fails, so a
-   * flaky network never silently stops measuring a child whose guardian did
-   * consent. Only an answer that says withdrawn stops anything.
+   * NO TAP OR KEYSTROKE IS LOGGED ON THE DEVICE ANY MORE. Every pointerdown
+   * and keydown on every screen went to IndexedDB for a local affective
+   * reader that does not exist and may not: the frontend infers no state
+   * (frontend §6). Whatever an earlier build left is purged at sign-in and
+   * sign-out - see `ephemeralStore`.
    */
-  const { withdrawn } = useConsentGate();
-  // Nor on the hold: a child waiting there is waiting BECAUSE nobody has
-  // consented yet, so there is nothing to capture under.
-  useBehaviouralCapture(!withdrawn && !isHoldRoute(pathname));
   // Renews the session before it expires. Mounted here rather than on a tab,
   // so it covers the full-screen routes below too - a child mid-lesson is the
   // case that matters, and the one the old behaviour handled worst.
@@ -83,11 +66,26 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
   // and a child reading one segment does not navigate.
   useSessionLapse();
   /*
+   * And when this page arrived on a role cookie with no session behind it -
+   * a token write that failed, storage cleared without its cookies - take the
+   * child to the door rather than leave them in the walkthrough the server
+   * already sent. `getSession` has dropped the cookie by now, so the door
+   * lets them in. Once per load; the cookie is gone after the first look.
+   */
+  const router = useRouter();
+  useEffect(() => {
+    if (!arrivedWithoutSession()) return;
+    const door = doorAfterLostSession(pathname);
+    if (door) router.replace(door);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  /*
    * Deliver anything a lesson could not save before it was closed.
    *
    * Here rather than only in the player, because a child who gave up on a
    * lesson while offline may never open that lesson again - and their position
-   * still belongs on Home's "Pick back up" card. Any student screen is enough.
+   * still belongs in Home's "Pick up where you left off" list. Any student
+   * screen is enough.
    */
   useEffect(() => {
     void flushPendingProgress();
@@ -108,7 +106,18 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
      */
     void flushPendingBaseline(getSession()?.userId);
   }, []);
-  const { textSize } = useAccessibility();
+  /*
+   * AND WHEN THE CONNECTION COMES BACK, not only on mount. The shell is a
+   * layout and stays mounted across every tab, so "mount" meant once per
+   * sign-in: a child who finished a lesson offline and was back on Home when
+   * the signal returned had their completion sit on the device, and reopening
+   * the lesson resumed from the stale place the server still had.
+   */
+  useEffect(() => {
+    const flush = () => void flushPendingProgress();
+    window.addEventListener("online", flush);
+    return () => window.removeEventListener("online", flush);
+  }, []);
   // The chrome calls the student by their own name, not the fixture's.
   const student = useDisplayName();
   // The look the child chose on Profile; the navy disc until they choose.
@@ -134,9 +143,6 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
    * another child's name.
    */
   const showingFixtureIdentity = hydrated && !signedIn;
-  // Offline takes over network-backed tabs (board 28); Downloads stays
-  // reachable - it is where "See saved lessons" points.
-  const offlineTakeover = !online && !pathname.startsWith("/student/downloads");
 
   // Sidebar defaults collapsed (matches the server render, so no hydration
   // mismatch), then opens on desktop after mount. Tablet stays collapsed for room.
@@ -150,12 +156,11 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
 
   if (isFullScreen(pathname)) {
     // Text Size is a reading preference, and the player is where the reading
-    // happens - it applies there too, not just in the shell. Onboarding is
-    // deliberately excluded: the baseline activities are spatially
-    // calibrated, and scaling them would distort what they measure.
-    if (pathname.startsWith("/student/onboarding")) return <>{children}</>;
+    // happens - it applies there too, not just in the shell. The calibrated
+    // activities are deliberately excluded - see `scalesWithTextSize`.
+    if (!scalesWithTextSize(pathname)) return <>{children}</>;
     return (
-      <div style={{ zoom: TEXT_ZOOM[textSize] }}>
+      <div className="nevo-text-zoom">
         {/*
           Ask Nevo is rendered by the LESSON LAYOUT now, not here. As a sibling
           of `children` it sat outside that route's `LessonProvider`, so the
@@ -167,12 +172,16 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  const activeHref = STUDENT_NAV.find(
-    (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
-  )?.href;
+  const within = (href: string) =>
+    pathname === href || pathname.startsWith(`${href}/`);
+  // Profile is not a tab; the child's own disc is its way in, and lights up
+  // like one while they are there.
+  const activeHref = within(STUDENT_PROFILE_HREF)
+    ? STUDENT_PROFILE_HREF
+    : STUDENT_NAV.find((item) => within(item.href))?.href;
 
   return (
-    <div className="flex h-[100dvh] bg-nevo-cream text-nevo-near-black">
+    <div className="group/shell flex h-[100dvh] bg-nevo-cream text-nevo-near-black">
       {/* Sidebar — tablet & desktop */}
       <div className="hidden shrink-0 md:block">
         <MaybeSample showing={showingFixtureIdentity} kind="student:identity">
@@ -189,6 +198,7 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
                 ? MOCK_STUDENT.subtitle
                 : undefined,
               tone,
+              href: STUDENT_PROFILE_HREF,
             }}
             collapsed={collapsed}
             onToggle={setCollapsed}
@@ -197,6 +207,9 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <div className="relative flex min-w-0 flex-1 flex-col">
+        {/* Board 28: across the top of the tab, never in place of it. */}
+        {!online && <TabOfflineBanner />}
+
         {/* Top bar — mobile only (logo + avatar) */}
         <header className="flex h-[60px] shrink-0 items-center justify-between px-5 md:hidden">
           <Image
@@ -216,12 +229,12 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
               {/*
                 A LINK, not a decoration. It was an inert `span`: the one
                 avatar in the app that looked like every other console's way
-                into a profile and did nothing when tapped. Profile is in the
-                nav too, so this was never a dead end - just a control that
-                taught a child their tap had missed.
+                into a profile and did nothing when tapped. On a phone it is
+                now the ONLY way into Profile - the frames draw five tabs and
+                no Profile among them.
               */}
               <Link
-                href="/student/profile"
+                href={STUDENT_PROFILE_HREF}
                 aria-label="Profile"
                 style={{ background: tone.background, color: tone.text }}
                 className="flex size-10 cursor-pointer items-center justify-center rounded-full text-sm font-semibold transition-[filter] hover:brightness-110"
@@ -232,14 +245,20 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        {/* Notifications — tablet/desktop: quiet bell top-right of the content. */}
-        <div className="absolute top-4 right-5 z-30 hidden md:block">
+        {/* Notifications — tablet/desktop: quiet bell top-right of the content,
+            dropped below the offline banner when there is one. */}
+        <div
+          className={cn(
+            "absolute right-5 z-30 hidden md:block",
+            online ? "top-4" : "top-[60px]",
+          )}
+        >
           <NotificationBell />
         </div>
 
         {/* Only the content region scrolls; the sidebar/nav stay fixed.
-            The Text Size preference is applied here as a numeric `zoom`
-            (`zoom: var(...)` isn't supported, so it's read from context). */}
+            The Text Size preference zooms it through `.nevo-text-zoom`, which
+            the root attribute drives from before the first paint. */}
         <main
           // The bottom padding clears the Ask Nevo trigger, which is `fixed`
           // and so lands ON this scrolling region rather than below it. #313
@@ -253,48 +272,45 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
           // viewport - intruding 61px into this region. Desktop has no nav, so
           // this region reaches the viewport floor and the 44px pill at
           // `bottom-6` intrudes 68px. A few px of margin on each.
-          className="min-h-0 flex-1 overflow-y-auto pb-[68px] md:pb-[76px]"
-          style={{ zoom: TEXT_ZOOM[textSize] }}
+          className="nevo-text-zoom min-h-0 flex-1 overflow-y-auto pb-[68px] md:pb-[76px]"
         >
           {/*
-            THE TAB STAYS MOUNTED. This was
-            `offlineTakeover ? <OfflineTakeover /> : children`, which unmounts
-            the whole tab the instant `navigator.onLine` flips - so a child
-            part-way through typing a message to their teacher lost every word
-            of it on a 3G blip, and was then shown a screen telling them nothing
-            was lost. A failed message waiting on "tap to try again" went the
-            same way.
-
-            Hidden rather than replaced, so React keeps the component and its
-            state alive and the words are still there when the signal returns.
-            `hidden` also takes it out of the accessibility tree, so a screen
-            reader is not reading a form its user cannot see or reach.
+            THE TAB STAYS IN FRONT OF THE CHILD OFFLINE. It was first
+            unmounted, then hidden, behind a full-screen takeover - and either
+            way a child part-way through a message to their teacher could not
+            see it. The banner above is the whole of the offline state now.
           */}
-          <div hidden={offlineTakeover}>{children}</div>
-          {offlineTakeover && <OfflineTakeover />}
+          <div>{children}</div>
         </main>
 
-        {/* Bottom nav — mobile only */}
-        <div className="shrink-0 px-3 pb-3 md:hidden">
+        {/* Bottom nav — mobile only. Down while a tab's on-screen keyboard is
+            docked (`data-nevo-hide-nav`, e.g. a Connect conversation), as the
+            frames draw it; that keyboard only shows without a fine pointer. */}
+        <div className="shrink-0 px-3 pb-3 md:hidden not-pointer-fine:group-has-[[data-nevo-hide-nav]]/shell:hidden">
           <BottomNav items={STUDENT_NAV} activeHref={activeHref} />
         </div>
       </div>
 
       {/* Ask Nevo (26) — always reachable from the tabs, never interruptive. */}
-      <AskNevo />
+      {/* Except Profile: the app shell frame mounts the launcher on every tab
+          `&& v !== "profile"`, a deliberate exclusion rather than an omission. */}
+      {pathname !== PROFILE_HREF && <AskNevo />}
     </div>
   );
 }
 
+/** The one tab the app shell frame draws without the Ask Nevo launcher. */
+const PROFILE_HREF = "/student/profile";
+
 /**
  * The immersive player, and the review session that reuses it wholesale (37d).
  *
- * Only the BARE lesson route is the player; its sub-routes (e.g. `/summary`)
- * are ordinary in-shell screens and keep the sidebar/nav.
+ * Only the BARE lesson route and `/review-session` are the player; the other
+ * sub-routes (`/summary`, `/review`) are ordinary in-shell screens and keep
+ * the sidebar/nav.
  */
 const isLesson = isLessonRoute;
 
-/** Onboarding and the lesson player (`/student/lessons/<id>`) run without chrome. */
 /**
  * The consent hold (00d) and the school-link door that can end on it.
  *
@@ -302,7 +318,7 @@ const isLesson = isLessonRoute;
  * the server said may not proceed was shown the navigation, the bell and Ask
  * Nevo around the very screen telling them to wait - and could tap straight
  * past it, and ask Ask Nevo a question, before anyone had consented. The frame
- * draws the hold bare. So it is full-screen, and nothing is captured on it.
+ * draws the hold bare. So it is full-screen.
  */
 function isHoldRoute(pathname: string): boolean {
   return (
@@ -310,6 +326,25 @@ function isHoldRoute(pathname: string): boolean {
   );
 }
 
+/**
+ * Whether the child's Text Size zoom applies to a full-screen route.
+ *
+ * NOT ON THE CALIBRATED ACTIVITIES. The baseline in onboarding was always
+ * exempt, because its tasks are sized and timed to measure and scaling them
+ * distorts what they measure. The daily warm-up runs the same tasks and was
+ * not exempt - so tile and dot sizes changed with a reading preference, and a
+ * child's warm-up measured differently from their own baseline.
+ */
+export function scalesWithTextSize(pathname: string): boolean {
+  if (pathname.startsWith("/student/onboarding")) return false;
+  if (pathname === "/student/warm-up") return false;
+  return true;
+}
+
+/**
+ * The routes that run without chrome: onboarding, the consent hold and its
+ * door, the lesson player, Feedback and Change PIN, and the daily warm-up.
+ */
 function isFullScreen(pathname: string): boolean {
   if (pathname.startsWith("/student/onboarding")) return true;
   if (isHoldRoute(pathname)) return true;

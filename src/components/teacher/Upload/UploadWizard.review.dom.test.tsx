@@ -298,5 +298,9 @@ describe("the signed-out walkthrough", () => {
     ).toBeInTheDocument();
     // And it says so, rather than passing the sample off as the upload.
     expect(screen.getByText(/this is a sample lesson/)).toBeInTheDocument();
+    // And it is MARKED - it was the one walkthrough screen that was not.
+    expect(
+      document.querySelector('[data-nevo-sample="teacher:upload-demo-review"]'),
+    ).not.toBeNull();
   });
 });

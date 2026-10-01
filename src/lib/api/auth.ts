@@ -20,6 +20,13 @@ export interface LoginResponse {
   replacedSession: boolean;
 }
 
+/**
+ * `SsoCallbackResponse.destination` - REQUIRED, and an enum, not a route: the
+ * server's answer to whether this is the child's first use. Typed as an
+ * optional string, it was routed to as if it were a path. See `ssoLanding`.
+ */
+export type SsoFirstUseDestination = "observed_interaction" | "home_dashboard";
+
 /** GET /auth/session - the authenticated principal. */
 export interface SessionInfo {
   userId: string;
@@ -235,7 +242,9 @@ export const authApi = {
   /** End the session server-side and locally - local clear always happens. */
   logout: async (): Promise<void> => {
     try {
-      await api.post("/api/v1/auth/logout");
+      // `keepalive`: the sign-out that sends this navigates away at once,
+      // and a page unload would otherwise cancel the revoke in flight.
+      await api.post("/api/v1/auth/logout", undefined, { keepalive: true });
     } finally {
       clearSession();
     }
@@ -279,7 +288,7 @@ export const authApi = {
       expiresAt: string;
       role: string;
       userId: string;
-      destination?: string | null;
+      destination: SsoFirstUseDestination;
       replacedSession?: boolean | null;
     }>("/api/v1/auth/sso/callback", { params: query }),
 };

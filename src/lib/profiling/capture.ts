@@ -38,6 +38,8 @@ function openDb(): Promise<IDBDatabase | null> {
 export class BaselineCapture {
   private events: CaptureEvent[] = [];
   private db: Promise<IDBDatabase | null> | null = null;
+  /** Set by `stop()`; nothing is recorded or written after it. */
+  private stopped = false;
   readonly sessionId: string;
 
   /** Construction is pure (safe in a state initializer); the DB opens lazily. */
@@ -51,13 +53,32 @@ export class BaselineCapture {
   }
 
   record(kind: string, payload?: Record<string, unknown>) {
+    if (this.stopped) return;
     this.events.push({ kind, t: performance.now(), payload });
+  }
+
+  /**
+   * Purge, and record nothing more for the rest of this run.
+   *
+   * WHAT A WITHDRAWN GUARDIAN NEEDS, which `purge()` alone was not. The flows
+   * purged once when the withdrawal arrived and carried on: every module after
+   * it recorded again, and each module's end wrote the new stream back to
+   * IndexedDB, where it sat on a shared tablet until some later run's sweep.
+   * The child keeps playing - what they should SEE is design's question - but
+   * from this call on, nothing they do is kept, in memory or on disk.
+   */
+  async stop() {
+    this.stopped = true;
+    await this.purge();
   }
 
   /** Snapshot the raw stream into IndexedDB (ephemeral, purged on submit). */
   async persist() {
+    if (this.stopped) return;
     const db = await this.ensureDb();
-    if (!db) return;
+    // A stop can land while the database is opening. Writing after it would
+    // put back the key `stop()` has just deleted.
+    if (!db || this.stopped) return;
     try {
       const tx = db.transaction(STORE, "readwrite");
       const store = tx.objectStore(STORE);
@@ -113,6 +134,31 @@ export class BaselineCapture {
   get stream(): readonly CaptureEvent[] {
     return this.events;
   }
+}
+
+/**
+ * Where a tap landed, for the raw stream: viewport x and y, unrounded.
+ *
+ * Frontend §3 lists tap coordinates among what onboarding captures, and §2 says
+ * why precision matters - tap scatter is part of how the engine reads
+ * frustration and anxiety, and rounded coordinates are noise it cannot undo.
+ * Every baseline tap recorded a cell or a choice index and nothing about where
+ * the finger was.
+ *
+ * A keyboard activation is a click with no pointer (`detail` 0, and 0,0 for
+ * the position), so it records no point rather than a false one at the corner.
+ *
+ * NOTE: the raw stream still never leaves the device - only the reduced vector
+ * does, and no reducer reads these. They are here so the stream is complete
+ * when it does travel (the server-side reduction, SCRUM-175).
+ */
+export function tapPoint(e?: {
+  clientX: number;
+  clientY: number;
+  detail: number;
+}): { x: number; y: number } | Record<string, never> {
+  if (!e || e.detail === 0) return {};
+  return { x: e.clientX, y: e.clientY };
 }
 
 /**

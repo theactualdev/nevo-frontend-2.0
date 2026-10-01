@@ -1,10 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/shared";
 import type { QuickCheck } from "@/lib/types";
 import { AnswerCheck, AnswerDot, AnswerOption } from "./AnswerOption";
+
+/** Whole milliseconds since a monotonic reading, or null without one. */
+function msSince(start: number | null): number | null {
+  return start === null
+    ? null
+    : Math.max(0, Math.round(performance.now() - start));
+}
 
 /**
  * Inline comprehension check (Lesson Check frame) — a bottom sheet on mobile,
@@ -15,6 +22,13 @@ import { AnswerCheck, AnswerDot, AnswerOption } from "./AnswerOption";
  * spent by a correct answer.
  *
  * Mount keyed on the segment id so the chosen answer resets per segment.
+ *
+ * NO MANUAL DISMISS (IA 31). A tap on the scrim or Esc closed it, which let a
+ * child step round the check the player gates on - and the player recorded
+ * every one of those scrim taps as `tap_blocked` while they were doing the
+ * opposite. Outside taps and Esc are refused now, so the record is true. The
+ * ways out are the ones the frame draws: Keep going, Try again, See it
+ * explained.
  */
 export function QuickCheckSheet({
   check,
@@ -26,8 +40,14 @@ export function QuickCheckSheet({
   check: QuickCheck;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Fired per attempt, the moment an option is picked (Slice 5 hooks signals here). */
-  onAnswered: (correct: boolean) => void;
+  /**
+   * Fired per attempt, the moment an option is picked - with what was picked
+   * and how long the question had been in front of the child (rule 4).
+   */
+  onAnswered: (
+    correct: boolean,
+    answered: { selectedId: string; responseTimeMs?: number },
+  ) => void;
   /** "Keep going" after a correct answer — close the sheet and advance. */
   onContinue: () => void;
 }) {
@@ -35,10 +55,21 @@ export function QuickCheckSheet({
   const resolved = chosenId !== null;
   const correct = chosenId === check.correctId;
 
+  // When the question was last put in front of the child: on opening, and
+  // again on "Try again".
+  const askedAt = useRef<number | null>(null);
+  useEffect(() => {
+    if (open && chosenId === null) askedAt.current = performance.now();
+  }, [open, chosenId]);
+
   const choose = (id: string) => {
     if (resolved) return;
     setChosenId(id);
-    onAnswered(id === check.correctId);
+    const responseTimeMs = msSince(askedAt.current);
+    onAnswered(id === check.correctId, {
+      selectedId: id,
+      ...(responseTimeMs === null ? {} : { responseTimeMs }),
+    });
   };
 
   const tone = (id: string) => {
@@ -53,6 +84,8 @@ export function QuickCheckSheet({
         side="bottom"
         showCloseButton={false}
         aria-describedby={undefined}
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
         // The `!` marks out-shout the stock data-[side=bottom] variants (class +
         // attribute selectors), which otherwise beat these breakpoint overrides
         // and leave the panel pinned to the bottom-left while the centering
@@ -119,7 +152,13 @@ export function QuickCheckSheet({
               <Button
                 variant="ghost"
                 className="mt-2 h-[46px] w-full text-[15px]"
-                onClick={() => onOpenChange(false)}
+                onClick={() => {
+                  // Cleared on the way out, so the check comes back as a
+                  // question rather than on the answer they just missed -
+                  // which made Try again the only thing they could press.
+                  setChosenId(null);
+                  onOpenChange(false);
+                }}
               >
                 See it explained
               </Button>

@@ -81,8 +81,14 @@ const PRE_AUTH_ADMIN_ROUTES = ["/admin/onboarding"];
  * this cookie) before routing the child into their first lesson - so every
  * route below is genuinely reachable with a session by the time it is asked
  * for.
+ *
+ * The ENTRY LINK is the same kind of door. `GET /api/v1/student-entry/{token}`
+ * is unauthenticated because the child has no account yet and the link is the
+ * credential. Guarding it sent a new child to the PIN screen with the token in
+ * `?next=`, where "I'm new" dropped it - so the link could never reach the
+ * consent hold it exists to show.
  */
-const PRE_AUTH_STUDENT_ROUTES = ["/student/onboarding"];
+const PRE_AUTH_STUDENT_ROUTES = ["/student/onboarding", "/student/entry/"];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

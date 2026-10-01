@@ -14,9 +14,9 @@ import type { Lesson } from "@/lib/types";
  * first frame.
  *
  * Finishing the review put the completion back, which is why this survived.
- * Leaving it partway did not: the lesson stayed demoted, reappeared on Home
- * under "Pick back up" as though unfinished, and the child was invited to redo
- * work they had already done. The record of having completed it was gone.
+ * Leaving it partway did not: the lesson stayed demoted, came back on Home as
+ * unfinished work to pick up, and the child was invited to redo work they had
+ * already done. The record of having completed it was gone.
  *
  * These assert on what is WRITTEN, because nothing on screen differs.
  */
@@ -34,7 +34,6 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
 }));
 vi.mock("@/hooks", () => ({
-  useBreakMonitor: () => ({ due: false, dismiss: vi.fn() }),
   useLesson: () => ({ setActiveLesson: vi.fn() }),
   useSignals: () => ({ trackEvent: vi.fn() }),
 }));
