@@ -13,7 +13,6 @@ import {
   savedLessons,
   type SavedLesson,
 } from "@/lib/offline/savedLessons";
-import { ZipUnsupported } from "@/lib/offline/zip";
 import { LessonExitProvider } from "@/components/student/Lesson/LessonExit";
 import { LessonRoute } from "@/components/student/Lesson/LessonRoute";
 
@@ -98,13 +97,9 @@ export function SavedLessons() {
           "This device wouldn't keep that lesson. Try removing one you've saved.",
         );
       }
-    } catch (err) {
-      // A device that cannot unpack the package will not manage it on a
-      // retry either, so it is not told to try again.
+    } catch {
       setNotice(
-        err instanceof ZipUnsupported
-          ? "That lesson couldn't be saved."
-          : "That lesson couldn't be saved just now. Try again when you're connected.",
+        "That lesson couldn't be saved just now. Try again when you're connected.",
       );
     } finally {
       setBusy((b) => ({ ...b, [id]: "idle" }));

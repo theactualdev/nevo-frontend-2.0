@@ -1,6 +1,6 @@
 import { lessonsApi, type LessonDetailResponse } from "@/lib/api/lessons";
 import { lessonFromContent } from "@/lib/lessons/fromContent";
-import { readZipFile } from "./zip";
+import { readZipFile, ZipUnsupported } from "./zip";
 
 /**
  * A lesson saved for offline, through the backend's offline package (B31).
@@ -23,10 +23,17 @@ import { readZipFile } from "./zip";
  * shown is the package's either way - it is what the child downloaded - and
  * is never measured or estimated here.
  *
- * WHAT FAILS OUTRIGHT. A request that does not answer, an archive that is
- * damaged or uses something this reader does not handle (see `zip.ts`), and a
- * device that cannot inflate it. Each one is a save that says it failed,
- * never a lesson rebuilt from bytes nobody checked.
+ * WHAT FAILS OUTRIGHT. A request that does not answer, and an archive that is
+ * damaged or uses something this reader does not handle (see `zip.ts`). Each
+ * one is a save that says it failed, never a lesson rebuilt from bytes nobody
+ * checked.
+ *
+ * A DEVICE TOO OLD TO INFLATE THE ARCHIVE IS NOT ONE OF THEM. Before Chrome
+ * 103 / Safari 16.4 / Firefox 113 there is no "deflate-raw", and classroom
+ * tablets are often that old. The package is not at fault, and the child
+ * could save on that device before the package existed - so the lesson is
+ * kept from the detail read instead, exactly as for a `lesson.json` this
+ * player cannot open.
  */
 
 export interface DownloadedLesson {
@@ -43,8 +50,16 @@ export async function downloadLesson(
   const { manifest } = await lessonsApi.download(lessonId);
   const archive = await lessonsApi.offlinePackage(lessonId);
   const bytes = new Uint8Array(await archive.arrayBuffer());
-  const packaged = await lessonFromPackage(bytes, lessonId);
-  if (!packaged && process.env.NODE_ENV === "development") {
+  let packaged: LessonDetailResponse | null;
+  let unpackable = false;
+  try {
+    packaged = await lessonFromPackage(bytes, lessonId);
+  } catch (err) {
+    if (!(err instanceof ZipUnsupported)) throw err;
+    packaged = null;
+    unpackable = true;
+  }
+  if (!packaged && !unpackable && process.env.NODE_ENV === "development") {
     console.warn(
       `[offline] lesson.json for ${lessonId} is not a LessonDetailResponse; kept the detail read instead.`,
     );

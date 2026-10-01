@@ -6,7 +6,7 @@ import {
   lessonFromPackage,
 } from "./lessonPackage";
 import { buildZip } from "./testZip";
-import { ZipError, ZipUnsupported } from "./zip";
+import { ZipError } from "./zip";
 
 /**
  * Saving through the offline package. What matters: the lesson kept is the
@@ -167,13 +167,18 @@ describe("saving a lesson through its package", () => {
     expect(detail).not.toHaveBeenCalled();
   });
 
-  it("fails as unsupported on a device that cannot unpack it", async () => {
+  it("still saves on a device too old to unpack it, through the detail read", async () => {
+    // Classroom tablets are often older than "deflate-raw", and could save
+    // before the package existed. The package is not at fault.
     vi.stubGlobal("DecompressionStream", undefined);
     download.mockResolvedValue(manifest());
     offlinePackage.mockResolvedValue(new Blob([pkg(JSON.stringify(lesson()))]));
+    detail.mockResolvedValue(lesson());
 
-    await expect(downloadLesson(ID)).rejects.toBeInstanceOf(ZipUnsupported);
-    expect(detail).not.toHaveBeenCalled();
+    const saved = await downloadLesson(ID);
+
+    expect(detail).toHaveBeenCalledWith(ID);
+    expect(saved.detail.id).toBe(ID);
   });
 });
 

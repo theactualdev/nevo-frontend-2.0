@@ -10,7 +10,6 @@ import {
 import { SavedLessons } from "./SavedLessons";
 import { clearSession, setSession } from "@/lib/auth/session";
 import { saveLesson, savedLesson } from "@/lib/offline/savedLessons";
-import { ZipUnsupported } from "@/lib/offline/zip";
 import { useLessonExit } from "@/components/student/Lesson/LessonExit";
 
 /**
@@ -135,18 +134,6 @@ describe("saving a lesson for offline", () => {
     expect(screen.queryByText("Open")).toBeNull();
   });
 
-  it("does not tell a device that cannot unpack the lesson to try again", async () => {
-    downloadLesson.mockRejectedValue(new ZipUnsupported());
-    render(<SavedLessons />);
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "Save Adding fractions for offline" }),
-    );
-
-    expect(await screen.findByText("That lesson couldn't be saved.")).toBeVisible();
-    expect(screen.queryByText(/Try again/)).toBeNull();
-    expect(savedLesson("ada", "l1")).toBeNull();
-  });
 });
 
 describe("with no connection", () => {
