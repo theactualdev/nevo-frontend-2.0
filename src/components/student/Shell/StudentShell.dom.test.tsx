@@ -100,6 +100,18 @@ describe("StudentShell — where Ask Nevo is reachable", () => {
     expect(screen.getByTestId("ask-nevo")).toBeTruthy();
   });
 
+  it("stays off Profile, the one tab the app shell frame draws without it", () => {
+    // `Nevo Student App`: `showAskFab: TABS.includes(v) && v !== "profile"`.
+    at("/student/profile");
+    expect(screen.queryByTestId("ask-nevo")).toBeNull();
+  });
+
+  it("is still on the other tabs beside Profile", () => {
+    // The exclusion is the tab, not everything that starts with its name.
+    at("/student/connect");
+    expect(screen.getByTestId("ask-nevo")).toBeTruthy();
+  });
+
   it("stays out of the daily warm-up, which is a measurement", () => {
     at("/student/warm-up");
     expect(screen.queryByTestId("ask-nevo")).toBeNull();

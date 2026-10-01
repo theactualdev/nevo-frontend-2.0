@@ -281,10 +281,15 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* Ask Nevo (26) — always reachable from the tabs, never interruptive. */}
-      <AskNevo />
+      {/* Except Profile: the app shell frame mounts the launcher on every tab
+          `&& v !== "profile"`, a deliberate exclusion rather than an omission. */}
+      {pathname !== PROFILE_HREF && <AskNevo />}
     </div>
   );
 }
+
+/** The one tab the app shell frame draws without the Ask Nevo launcher. */
+const PROFILE_HREF = "/student/profile";
 
 /**
  * The immersive player, and the review session that reuses it wholesale (37d).

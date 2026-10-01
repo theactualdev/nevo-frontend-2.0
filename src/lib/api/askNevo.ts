@@ -55,6 +55,16 @@ export type AskNevoCategory =
 
 export interface AskNevoAnswer {
   answer: string;
+  /**
+   * FALSE IS THE SERVER SAYING THIS ONE BELONGS WITH THE TEACHER (1 Oct).
+   *
+   * Frame 26 draws that state - "Can't help · hands to teacher" - and the
+   * student drawer used to reach it only through its own canned engine. The
+   * answer is still safe to render; false adds the hand-over beside it.
+   */
+  canHelp: boolean;
+  /** Why it could not help. Never rendered: no frame draws a reason. */
+  cannotHelpReason?: string | null;
   questionCategory: AskNevoCategory;
   interactionId: string;
   aiGatewayCallId: string;
