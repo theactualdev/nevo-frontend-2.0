@@ -130,6 +130,18 @@ export const authApi = {
     }),
 
   /**
+   * PUBLIC. A child who forgot their PIN asks for it to be cleared - 00a's
+   * "Let my teacher know" (design, D3: SCRUM-216/217).
+   *
+   * A REQUEST, NOT A RESET. It answers 202 with nothing about the account and
+   * no PIN; the adult already linked to the child clears it, and the child
+   * then sets a new one themselves. Nobody but the child ever sets a PIN.
+   * The two fields are the pair a remembered device already holds.
+   */
+  requestPinReset: (payload: { schoolCode: string; loginIdentifier: string }) =>
+    api.post<Record<string, string>>("/api/v1/auth/pin/reset", payload),
+
+  /**
    * PUBLIC. Exchange a class code - or a class the child picked inside a
    * school - for the one-use token that authorises account creation.
    *
