@@ -25,7 +25,14 @@ import { YoureInScreen } from "./YoureInScreen";
  * Onboarding Phase C — one continuous experience: a calm transition, the
  * Baseline Cognitive Profiling flow (SCRUM-104 — design retired the Observed
  * Interaction Sequence's four activities and this flow took their slot), the
- * Consent Gate, PIN Creation, and the "You're In" hand-off into the app.
+ * learning notice, PIN Creation, and the "You're In" hand-off into the app.
+ *
+ * THE NOTICE COMES AFTER THE BASELINE, and design settled that on 1 Oct (D10).
+ * The parent consents and the child is informed - two mechanisms, and the
+ * notice is not a consent step. Before the activities, "Nevo will get to know
+ * how you learn" is an abstraction a child has nothing to attach to; after,
+ * it says what they just did was for. It was named a Consent Gate here, and
+ * that framing is what once pulled it in front of the baseline.
  * Manual students arrive from Steps 1–3, SSO students from the callback; only
  * the transition copy and the PIN step differ, driven by the session
  * (`user.method`), never a URL param.
@@ -188,7 +195,7 @@ export function ObservedInteractionSequence() {
            *
            * The connection token is fetched HERE rather than when the class
            * was chosen: it lives 20 minutes, and the profiling probes and
-           * consent gate sit in between. Asking for it at the moment it is
+           * learning notice sit in between. Asking for it at the moment it is
            * spent means it cannot go stale in a child's hands.
            */
           /*

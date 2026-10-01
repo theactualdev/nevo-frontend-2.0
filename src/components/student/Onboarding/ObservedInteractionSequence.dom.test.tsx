@@ -176,3 +176,21 @@ describe("You're In, for a child who joined by link", () => {
     expect(getRememberedProfile()).toBeNull();
   });
 });
+
+describe("where the learning notice sits (D10, 1 Oct)", () => {
+  it("comes after the baseline and before the PIN", () => {
+    // The parent consents, the child is informed. Placed after, the notice
+    // says what the activities just done were for.
+    render(<ObservedInteractionSequence />);
+    fireEvent.click(screen.getByRole("button", { name: "after transition" }));
+
+    expect(screen.queryByText(/get to know how you learn/i)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "after profiling" }));
+
+    expect(screen.getByText(/get to know how you learn/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "set pin" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(screen.getByRole("button", { name: "set pin" })).toBeInTheDocument();
+  });
+});
