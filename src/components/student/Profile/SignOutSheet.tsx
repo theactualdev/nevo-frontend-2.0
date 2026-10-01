@@ -10,15 +10,22 @@ import { Button } from "@/components/shared";
  * violet log-out badge, "Sign out?", the reassurance that progress is saved,
  * primary Sign out + quiet Stay signed in. Bottom sheet on mobile, centred card
  * on tablet/desktop; honours reduced-motion via the shared sheet.
+ *
+ * A CHILD WHO SIGNS IN THROUGH THEIR SCHOOL HAS NO PIN (D9), so for them the
+ * line loses its PIN and keeps the rest. Removing the false half is the whole
+ * change; nothing new is said in its place.
  */
 export function SignOutSheet({
   open,
   onOpenChange,
   onSignOut,
+  sso = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSignOut: () => void;
+  /** Signed in through their school, so there is no PIN to come back with. */
+  sso?: boolean;
 }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -34,7 +41,9 @@ export function SignOutSheet({
           Sign out?
         </SheetTitle>
         <p className="mt-2 text-sm leading-[1.55] text-nevo-near-black/62">
-          You can come back anytime with your PIN. Your progress is saved.
+          {sso
+            ? "You can come back anytime. Your progress is saved."
+            : "You can come back anytime with your PIN. Your progress is saved."}
         </p>
 
         <Button className="mt-6 w-full" onClick={onSignOut}>
