@@ -1,0 +1,292 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import { ConnectTab } from "./ConnectTab";
+import { clearSession, setSession } from "@/lib/auth/session";
+
+/**
+ * Connect, signed in, against the real thread hook and a stubbed API.
+ *
+ * What these pin is what the child is shown about a conversation, and what the
+ * server is told they read:
+ *
+ * - [184] On a tablet the first thread opens beside the list. It was fetched -
+ *   and the GET marks a thread read - while its row stayed unhighlighted with
+ *   the unread dot on. On a phone the same fetch read the first thread while
+ *   the child was still looking at the list.
+ * - [185] A conversation still loading, or whose read failed, looked empty. And
+ *   the history replaced the thread wholesale, so a message sent before it
+ *   landed was erased - and a failed send vanished.
+ * - [186] The bottom nav stayed up under the docked keyboard on a phone.
+ * - [187] A link could not open a particular thread.
+ */
+
+const api = vi.hoisted(() => ({
+  threads: vi.fn(),
+  thread: vi.fn(),
+  markThreadRead: vi.fn(),
+  reply: vi.fn(),
+}));
+vi.mock("@/lib/api/messages", () => ({ messagesApi: api }));
+
+const row = (id: string, title: string, unread = false) => ({
+  threadId: id,
+  recipientType: "student",
+  recipientId: null,
+  title,
+  className: null,
+  latestPreview: unread ? "See you Thursday" : null,
+  lastMessageAt: new Date().toISOString(),
+  unread,
+  unreadCount: unread ? 1 : 0,
+});
+
+const message = (id: string, content: string) => ({
+  messageId: id,
+  threadId: "t-1",
+  senderId: "teacher-1",
+  senderName: "Ms Okafor",
+  content,
+  createdAt: new Date().toISOString(),
+});
+
+/** A promise this test settles by hand. */
+function deferred<T>() {
+  let resolve!: (v: T) => void;
+  let reject!: (e: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+const viewport = (twoPane: boolean) =>
+  vi.spyOn(window, "matchMedia").mockImplementation(
+    (query: string) =>
+      ({
+        matches: twoPane && query === "(min-width: 768px)",
+        media: query,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      }) as MediaQueryList,
+  );
+
+beforeEach(() => {
+  setSession({
+    token: "tok-connect",
+    expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+    userId: "student-1",
+    role: "student",
+  });
+  api.threads.mockResolvedValue({
+    threads: [row("t-1", "Ms Okafor", true), row("t-2", "Mr Bell", true)],
+    total: 2,
+  });
+  api.thread.mockResolvedValue({ threadId: "t-1", messages: [] });
+  api.markThreadRead.mockImplementation(async (id: string) => ({
+    ...row(id, "x"),
+    unread: false,
+  }));
+  api.reply.mockResolvedValue(message("m-new", "hello"));
+});
+
+afterEach(() => {
+  // Unmount before signing out, so no tab re-renders as a visitor mid-test.
+  cleanup();
+  clearSession();
+  vi.clearAllMocks();
+});
+
+/** A thread's row in the list. Its name also heads the open conversation. */
+const rowFor = (name: string) =>
+  screen
+    .getAllByRole("button")
+    .find(
+      (b) => b.hasAttribute("aria-current") && b.textContent?.includes(name),
+    ) as HTMLButtonElement;
+
+/** The conversation pane - the newest message also previews in its row. */
+const conversation = () => document.querySelector("section") as HTMLElement;
+
+const listed = (name: string) =>
+  waitFor(() => expect(rowFor(name)).toBeTruthy());
+
+describe("[184] the thread that opens beside the list", () => {
+  it("is highlighted and marked read, as if tapped", async () => {
+    viewport(true);
+    render(<ConnectTab />);
+
+    await waitFor(() => expect(api.thread).toHaveBeenCalledWith("t-1"));
+    await waitFor(() =>
+      expect(api.markThreadRead).toHaveBeenCalledWith("t-1"),
+    );
+    expect(rowFor("Ms Okafor")).toHaveAttribute("aria-current", "true");
+    expect(within(rowFor("Ms Okafor")).queryByLabelText("Unread")).toBeNull();
+    // The other thread is untouched.
+    expect(rowFor("Mr Bell")).toHaveAttribute("aria-current", "false");
+    expect(within(rowFor("Mr Bell")).getByLabelText("Unread")).toBeTruthy();
+    expect(api.thread).not.toHaveBeenCalledWith("t-2");
+  });
+});
+
+describe("[184] on a phone, the list", () => {
+  it("reads nothing until the child opens a thread", async () => {
+    viewport(false);
+    render(<ConnectTab />);
+
+    await listed("Ms Okafor");
+    // Nothing is fetched (the GET marks read) and no row claims to be open.
+    expect(api.thread).not.toHaveBeenCalled();
+    expect(api.markThreadRead).not.toHaveBeenCalled();
+    expect(rowFor("Ms Okafor")).toHaveAttribute("aria-current", "false");
+    expect(within(rowFor("Ms Okafor")).getByLabelText("Unread")).toBeTruthy();
+
+    fireEvent.click(rowFor("Mr Bell"));
+
+    await waitFor(() => expect(api.thread).toHaveBeenCalledWith("t-2"));
+    expect(api.markThreadRead).toHaveBeenCalledWith("t-2");
+  });
+});
+
+describe("[185] a conversation's own read", () => {
+  it("says it is loading rather than that it is empty", async () => {
+    viewport(true);
+    api.thread.mockReturnValue(new Promise(() => {}));
+    render(<ConnectTab />);
+
+    expect(await screen.findByLabelText("Loading messages")).toBeTruthy();
+    expect(screen.queryByText("Message your teacher here")).toBeNull();
+  });
+
+  it("says it failed, and tries again on request", async () => {
+    viewport(true);
+    api.thread.mockRejectedValueOnce(new Error("offline"));
+    render(<ConnectTab />);
+
+    expect(
+      await screen.findByText(/We couldn.t load these messages/),
+    ).toBeTruthy();
+    expect(screen.queryByText("Message your teacher here")).toBeNull();
+
+    api.thread.mockResolvedValueOnce({
+      threadId: "t-1",
+      messages: [message("m-1", "Lovely work today")],
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    await waitFor(() =>
+      expect(within(conversation()).getByText("Lovely work today")).toBeTruthy(),
+    );
+  });
+
+  it("uses the frame's line only once it is known to be empty", async () => {
+    viewport(true);
+    render(<ConnectTab />);
+
+    expect(await screen.findByText("Message your teacher here")).toBeTruthy();
+  });
+
+  it("keeps a message sent before the history landed, and its failure", async () => {
+    viewport(true);
+    const history = deferred<{ threadId: string; messages: unknown[] }>();
+    const post = deferred<unknown>();
+    api.thread.mockReturnValue(history.promise);
+    api.reply.mockReturnValue(post.promise);
+    render(<ConnectTab />);
+
+    const input = await screen.findByLabelText("Message Ms Okafor");
+    fireEvent.change(input, { target: { value: "Can we do more?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(within(conversation()).getByText("Can we do more?")).toBeTruthy();
+
+    // The history lands AFTER the send. It used to replace the thread.
+    await act(async () =>
+      history.resolve({
+        threadId: "t-1",
+        messages: [message("m-1", "Lovely work today")],
+      }),
+    );
+    expect(within(conversation()).getByText("Lovely work today")).toBeTruthy();
+    expect(within(conversation()).getByText("Can we do more?")).toBeTruthy();
+
+    // And when the send then fails, there is still a bubble to say so.
+    await act(async () => post.reject(new Error("offline")));
+    expect(screen.getByText(/Didn.t send - tap to try again/)).toBeTruthy();
+  });
+});
+
+describe("[186] the docked keyboard on a phone", () => {
+  it("asks the shell to take the bottom nav down while it is up", async () => {
+    viewport(false);
+    render(<ConnectTab threadId="t-1" />);
+
+    const input = await screen.findByLabelText("Message Ms Okafor");
+    expect(document.querySelector("[data-nevo-hide-nav]")).toBeNull();
+
+    fireEvent.focus(input);
+
+    expect(document.querySelector("[data-nevo-hide-nav]")).not.toBeNull();
+  });
+});
+
+describe("[187] a link to one thread", () => {
+  it("opens that conversation on a phone, not the list", async () => {
+    viewport(false);
+    render(<ConnectTab threadId="t-2" />);
+
+    await waitFor(() => expect(api.thread).toHaveBeenCalledWith("t-2"));
+    expect(api.thread).not.toHaveBeenCalledWith("t-1");
+    expect(screen.getByLabelText("Message Mr Bell")).toBeTruthy();
+  });
+
+  it("falls back to the list for a thread that is not there", async () => {
+    viewport(false);
+    render(<ConnectTab threadId="t-gone" />);
+
+    await listed("Ms Okafor");
+    // Never someone else's conversation in its place.
+    expect(api.thread).not.toHaveBeenCalled();
+  });
+});
+
+describe("[79] a child nobody has written to", () => {
+  it("is told so in the frame's words", async () => {
+    viewport(false);
+    api.threads.mockResolvedValue({ threads: [], total: 0 });
+
+    render(<ConnectTab />);
+
+    expect(
+      await screen.findByText(
+        "Your teacher will be able to message you here soon",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("sees an empty thread's row say there are no messages yet", async () => {
+    // A null \`latestPreview\` is a thread with no messages in it.
+    viewport(false);
+    api.threads.mockResolvedValue({
+      threads: [row("t-1", "Ms Okafor", true), row("t-3", "Mrs Ade")],
+      total: 2,
+    });
+
+    render(<ConnectTab />);
+
+    await listed("Mrs Ade");
+    expect(within(rowFor("Mrs Ade")).getByText("No messages yet")).toBeTruthy();
+    expect(within(rowFor("Ms Okafor")).queryByText("No messages yet")).toBeNull();
+  });
+});
