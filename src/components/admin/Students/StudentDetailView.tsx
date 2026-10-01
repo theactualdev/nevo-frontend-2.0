@@ -35,6 +35,7 @@ import {
 } from "../Roster/primitives";
 import { useSetupGate } from "@/hooks";
 import { AddGuardianForm } from "./AddGuardianForm";
+import { CANNOT_SEND_LINE, useMaySendConsent } from "./consentRole";
 import { EraseRecordModal } from "./EraseRecordModal";
 import { IssuePinSheet } from "./IssuePinSheet";
 import { MoveStudentSheet } from "./MoveStudentSheet";
@@ -81,6 +82,8 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
   const [guardians, setGuardians] = useState<ParentLink[]>([]);
   const [guardiansFailed, setGuardiansFailed] = useState(false);
   const { stateFor: consentStateFor, send: sendConsent } = useConsentRequests();
+  /** Requests, and so adding a guardian, need roster or SENCo access - see `consentRole`. */
+  const maySend = useMaySendConsent();
   const [moving, setMoving] = useState(false);
   /** D24 / D01b: every change to a student pauses while setup is unfinished. */
   const { writesPaused } = useSetupGate();
@@ -348,7 +351,12 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
           * own words for the two cases, and it never claims delivery it has
           * not been told about - the receipt's `deliveryStatus` decides.
           */}
-        {mayRequestConsent(student.consent) ? (
+        {mayRequestConsent(student.consent) && !maySend ? (
+          <p className="m-0 mt-4 max-w-[54ch] border-t border-nevo-near-black/8 pt-4 text-[13.5px] leading-[1.55] text-nevo-near-black/62">
+            {CANNOT_SEND_LINE}
+          </p>
+        ) : null}
+        {mayRequestConsent(student.consent) && maySend ? (
           <div className="mt-4 border-t border-nevo-near-black/8 pt-4">
             <button
               type="button"
@@ -403,9 +411,12 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
             </p>
             <p className="m-0 mt-1.5 max-w-[56ch] text-[13.5px] leading-[1.55] text-nevo-near-black/62">
               {firstName} can&rsquo;t start until a parent or guardian gives
-              permission. Add one and we&rsquo;ll send them the request.
+              permission.{" "}
+              {maySend ? "Add one and we’ll send them the request." : CANNOT_SEND_LINE}
             </p>
-            {addingGuardian ? (
+            {/* No other route writes a guardian onto an existing student: the
+                request is the write. So the form follows the request's role. */}
+            {!maySend ? null : addingGuardian ? (
               <div className="mt-4">
                 <AddGuardianForm
                   studentId={student.id}
@@ -443,13 +454,21 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
                 i < guardians.length - 1 && ROW_DIVIDER,
               )}
             >
-              <Avatar name={g.parentName} size={44} />
+              {/*
+                * A GUARDIAN RECORDED AT ENROLMENT HAS NO NAME YET, on purpose:
+                * enrolment stores the email alone and the parent gives their
+                * own name at consent. So the address stands in for the name
+                * rather than the row rendering blank.
+                */}
+              <Avatar name={g.parentName.trim() || g.parentContact} size={44} />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-base font-semibold text-nevo-near-black">
-                  {g.parentName}
+                  {g.parentName.trim() || g.parentContact}
                 </div>
                 <div className="truncate text-[13.5px] text-nevo-near-black/62">
-                  {g.parentContact}
+                  {g.parentName.trim()
+                    ? g.parentContact
+                    : "They’ll give their own name when they answer the request"}
                 </div>
               </div>
               <span

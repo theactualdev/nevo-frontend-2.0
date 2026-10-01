@@ -1,8 +1,35 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
 import type { AdminStudentRow, ParentLink } from "@/lib/api/students";
 import { StudentsView } from "./StudentsView";
+
+/*
+ * An admin with ROSTER access - the founding admin's, and enough to send the
+ * consent request (backend, 1 Oct: roster OR senco). What an admin with
+ * neither sees is pinned in `ConsentRole.dom.test.tsx`.
+ */
+let scopes: string[] = ["roster"];
+beforeEach(() => {
+  scopes = ["roster"];
+});
+vi.mock("@/context/PermissionContext", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/context/PermissionContext")>();
+  const { createContext } = await import("react");
+  // The context's DEFAULT, read when no provider is mounted - with a getter,
+  // so each test's `scopes` is the one seen.
+  return {
+    ...actual,
+    PermissionContext: createContext({
+      get scopes() {
+        return scopes;
+      },
+      resolved: true,
+      status: "ready",
+      refresh: () => {},
+    } as never),
+  };
+});
 
 /**
  * The trigger nothing in Nevo had.
