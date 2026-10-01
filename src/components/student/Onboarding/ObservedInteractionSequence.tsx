@@ -92,12 +92,23 @@ export function ObservedInteractionSequence() {
 
   const advance = () => setIndex((i) => i + 1);
 
+  /*
+   * An SSO child is signed in for the whole sequence and never reaches the PIN
+   * step that delivers everyone else's baseline, so theirs is parked under
+   * their own id and sent from here. `method: "sso"` is set only by the SSO
+   * callback in this page's lifetime, never restored from storage, so this is
+   * never a session the previous child left behind.
+   */
+  const ssoOwner = isSso ? (user?.id ?? null) : null;
+
   if (index === 0) {
     return (
       <ProfilingFlow
         track={trackEvent}
+        ownerUserId={ssoOwner}
         onDone={(runSessionId) => {
           parkedRunRef.current = runSessionId;
+          if (ssoOwner) void flushPendingBaseline(ssoOwner, runSessionId);
           advance();
         }}
       />

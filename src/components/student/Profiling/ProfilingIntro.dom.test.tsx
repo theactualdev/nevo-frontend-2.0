@@ -69,3 +69,18 @@ describe("the branch that is kept but unreachable", () => {
     expect(document.body.textContent).not.toMatch(/couldn.t save/i);
   });
 });
+
+describe("the completion line (SCRUM-180, 1 Oct)", () => {
+  it("says what is true when it is read, and claims no save", () => {
+    // It said "Your learning space has been personalized" - a past-tense
+    // claim about a write this screen cannot see.
+    render(<ProfilingIntro mode="complete" onContinue={() => {}} />);
+
+    expect(
+      screen.getByText(
+        "Nevo has everything it needs to set up your learning space.",
+      ),
+    ).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/personali[sz]ed/i);
+  });
+});
