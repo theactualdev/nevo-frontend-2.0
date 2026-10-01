@@ -90,3 +90,32 @@ describe("DomainProbeModule", () => {
     expect(screen.queryByText("The capital of Nigeria is:")).toBeNull();
   });
 });
+
+describe("DomainProbeModule — the subject question", () => {
+  it("asks it in the frame's words", () => {
+    // It asked "Which subject do you feel most at home in?" - a question about
+    // the child, where the frame asks which subject to start with.
+    render(<DomainProbeModule band="ss" onComplete={() => {}} />);
+
+    expect(
+      screen.getByText("Which subject would you like to start with?"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/most at home/i)).toBeNull();
+  });
+
+  it("records where the subject tap landed", () => {
+    const capture = new BaselineCapture("d5");
+    render(
+      <DomainProbeModule band="jss" capture={capture} onComplete={() => {}} />,
+    );
+
+    fireEvent.click(screen.getByText("Basic Science"), {
+      detail: 1,
+      clientX: 210,
+      clientY: 388.5,
+    });
+
+    const chose = capture.stream.find((e) => e.kind === "probe_subject");
+    expect(chose?.payload).toMatchObject({ x: 210, y: 388.5 });
+  });
+});

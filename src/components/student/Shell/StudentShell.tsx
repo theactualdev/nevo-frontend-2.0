@@ -150,10 +150,9 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
 
   if (isFullScreen(pathname)) {
     // Text Size is a reading preference, and the player is where the reading
-    // happens - it applies there too, not just in the shell. Onboarding is
-    // deliberately excluded: the baseline activities are spatially
-    // calibrated, and scaling them would distort what they measure.
-    if (pathname.startsWith("/student/onboarding")) return <>{children}</>;
+    // happens - it applies there too, not just in the shell. The calibrated
+    // activities are deliberately excluded - see `scalesWithTextSize`.
+    if (!scalesWithTextSize(pathname)) return <>{children}</>;
     return (
       <div style={{ zoom: TEXT_ZOOM[textSize] }}>
         {/*
@@ -308,6 +307,21 @@ function isHoldRoute(pathname: string): boolean {
   return (
     pathname === "/student/waiting" || pathname.startsWith("/student/entry")
   );
+}
+
+/**
+ * Whether the child's Text Size zoom applies to a full-screen route.
+ *
+ * NOT ON THE CALIBRATED ACTIVITIES. The baseline in onboarding was always
+ * exempt, because its tasks are sized and timed to measure and scaling them
+ * distorts what they measure. The daily warm-up runs the same tasks and was
+ * not exempt - so tile and dot sizes changed with a reading preference, and a
+ * child's warm-up measured differently from their own baseline.
+ */
+export function scalesWithTextSize(pathname: string): boolean {
+  if (pathname.startsWith("/student/onboarding")) return false;
+  if (pathname === "/student/warm-up") return false;
+  return true;
 }
 
 function isFullScreen(pathname: string): boolean {
