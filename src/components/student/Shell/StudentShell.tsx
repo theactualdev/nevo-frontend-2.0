@@ -108,6 +108,18 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
      */
     void flushPendingBaseline(getSession()?.userId);
   }, []);
+  /*
+   * AND WHEN THE CONNECTION COMES BACK, not only on mount. The shell is a
+   * layout and stays mounted across every tab, so "mount" meant once per
+   * sign-in: a child who finished a lesson offline and was back on Home when
+   * the signal returned had their completion sit on the device, and reopening
+   * the lesson resumed from the stale place the server still had.
+   */
+  useEffect(() => {
+    const flush = () => void flushPendingProgress();
+    window.addEventListener("online", flush);
+    return () => window.removeEventListener("online", flush);
+  }, []);
   const { textSize } = useAccessibility();
   // The chrome calls the student by their own name, not the fixture's.
   const student = useDisplayName();

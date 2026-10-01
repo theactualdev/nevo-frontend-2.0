@@ -3,7 +3,10 @@ import { cleanup, renderHook, waitFor, act } from "@testing-library/react";
 import { useLessonProgress } from "./useLessonProgress";
 import { lessonsApi } from "@/lib/api/lessons";
 import { ApiError } from "@/lib/api/client";
-import { pendingProgressFor } from "@/lib/lessons/pendingProgress";
+import {
+  holdProgress,
+  pendingProgressFor,
+} from "@/lib/lessons/pendingProgress";
 import { clearSession, setSession } from "@/lib/auth/session";
 
 /**
@@ -106,5 +109,130 @@ describe("useLessonProgress", () => {
         expect.objectContaining({ sessionId: "sess-old", segmentPosition: 5 }),
       ),
     );
+  });
+});
+
+describe("useLessonProgress - what it may say was saved", () => {
+  it("says a position is saved only once the newest one has landed", async () => {
+    let land: () => void = () => {};
+    vi.spyOn(lessonsApi, "saveProgress").mockImplementation(
+      () => new Promise((resolve) => (land = () => resolve({} as never))),
+    );
+    const { result } = renderHook(() => useLessonProgress(LESSON, true));
+    await waitFor(() => expect(result.current.sessionId).toBe("sess-1"));
+
+    act(() => result.current.report("in_progress", { segment: 2 }));
+    // In flight is not saved - the leave dialog reads this.
+    expect(result.current.positionSaved).toBe(false);
+
+    await act(async () => land());
+    expect(result.current.positionSaved).toBe(true);
+  });
+
+  it("never says so when the write failed", async () => {
+    vi.spyOn(lessonsApi, "saveProgress").mockRejectedValue(
+      new ApiError(0, "offline"),
+    );
+    const { result } = renderHook(() => useLessonProgress(LESSON, true));
+    await waitFor(() => expect(result.current.sessionId).toBe("sess-1"));
+
+    act(() => result.current.report("in_progress", { segment: 2 }));
+    await waitFor(() => expect(pendingProgressFor(LESSON)).not.toBeNull());
+
+    expect(result.current.positionSaved).toBe(false);
+  });
+});
+
+describe("useLessonProgress - when the session will not open", () => {
+  it("holds the position past the player closing, with no session", async () => {
+    vi.spyOn(lessonsApi, "startSession").mockRejectedValue(
+      new ApiError(0, "offline"),
+    );
+    const { result, unmount } = renderHook(() =>
+      useLessonProgress(LESSON, true, "asg-7"),
+    );
+    await waitFor(() => expect(result.current.completionFailed).toBe(true));
+
+    act(() => result.current.report("in_progress", { segment: 4 }));
+    unmount();
+
+    // Nothing recorded at all used to be the answer here.
+    expect(pendingProgressFor(LESSON)).toMatchObject({
+      sessionId: null,
+      segment: 4,
+      assignmentId: "asg-7",
+    });
+  });
+
+  it("tries the session again when the connection returns, and sends the place", async () => {
+    const start = vi
+      .spyOn(lessonsApi, "startSession")
+      .mockRejectedValueOnce(new ApiError(0, "offline"))
+      .mockResolvedValue({ sessionId: "sess-2" } as never);
+    const save = vi
+      .spyOn(lessonsApi, "saveProgress")
+      .mockResolvedValue({} as never);
+    const { result } = renderHook(() => useLessonProgress(LESSON, true));
+    await waitFor(() => expect(result.current.completionFailed).toBe(true));
+    act(() => result.current.report("in_progress", { segment: 4 }));
+
+    act(() => {
+      window.dispatchEvent(new Event("online"));
+    });
+
+    await waitFor(() =>
+      expect(save).toHaveBeenCalledWith(
+        LESSON,
+        expect.objectContaining({ sessionId: "sess-2", segmentPosition: 4 }),
+      ),
+    );
+    expect(start).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(pendingProgressFor(LESSON)).toBeNull());
+  });
+});
+
+describe("useLessonProgress - a write that meets a dead session", () => {
+  it("is still held for the child who made it", async () => {
+    // What `client.ts` does on a 401: clear the session, then reject.
+    vi.spyOn(lessonsApi, "saveProgress").mockImplementation(async () => {
+      clearSession();
+      throw new ApiError(401, "expired");
+    });
+    const { result } = renderHook(() => useLessonProgress(LESSON, true));
+    await waitFor(() => expect(result.current.sessionId).toBe("sess-1"));
+
+    act(() => result.current.report("in_progress", { segment: 6 }));
+    await new Promise((r) => setTimeout(r, 0));
+
+    signIn();
+    expect(pendingProgressFor(LESSON)?.segment).toBe(6);
+  });
+});
+
+describe("useLessonProgress - an earlier visit's finish", () => {
+  it("is not wiped when today's first position lands", async () => {
+    // Yesterday's completion could not be sent and is still held; today's
+    // write lands first. Clearing the LESSON here un-finished it.
+    holdProgress(LESSON, {
+      sessionId: "sess-old",
+      status: "completed" as never,
+      segment: 7,
+    });
+    vi.spyOn(lessonsApi, "saveProgress").mockImplementation(
+      async (_id, body) => {
+        if (body.sessionId === "sess-old") throw new ApiError(0, "offline");
+        return {} as never;
+      },
+    );
+    const { result } = renderHook(() => useLessonProgress(LESSON, true));
+    await waitFor(() => expect(result.current.sessionId).toBe("sess-1"));
+
+    act(() => result.current.report("in_progress", { segment: 0 }));
+    await waitFor(() => expect(result.current.positionSaved).toBe(true));
+
+    expect(pendingProgressFor(LESSON)).toMatchObject({
+      sessionId: "sess-old",
+      status: "completed",
+    });
   });
 });
