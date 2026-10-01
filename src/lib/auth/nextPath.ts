@@ -29,3 +29,19 @@ export function safeNextPath(
   if (path.startsWith("//") || path.startsWith("/\\")) return undefined;
   return path;
 }
+
+/**
+ * `path`, carrying a child's destination along when there is one.
+ *
+ * THE DESTINATION USED TO FALL OFF AT EVERY HOP. The proxy set `?next=` on the
+ * PIN unlock, and from there the picker's "Someone else", "Forgot PIN?" and its
+ * way back, and every session-end screen's way in each built a bare URL of
+ * their own - so a child who lost their session mid-lesson signed back in and
+ * landed on Home, when the IA promises "lesson position preserved". One builder,
+ * so no hop can forget it again.
+ *
+ * Expects a value that has already been through `safeNextPath`.
+ */
+export function withNext(path: string, next: string | undefined): string {
+  return next ? `${path}?next=${encodeURIComponent(next)}` : path;
+}

@@ -8,26 +8,39 @@ export interface LessonSummary {
   id: string;
   title: string;
   /**
-   * Absent on live lessons: assignments carry no subject, so the list renders
-   * ungrouped and the preview omits the chip rather than guessing one.
+   * On a live lesson, the subject its upload recorded - free text, nullable on
+   * the nested summary. Absent when there is none, and then the list puts the
+   * lesson in an unheaded group and the preview omits the chip rather than
+   * guessing one.
    */
   subject?: string;
-  /** Adaptive time estimate — personalised per learner (backend later). */
+  /**
+   * How long the lesson takes, as the card prints it. On a live lesson it is
+   * the summary's `estimatedMinutes` ("About 12 min"), a planning figure and
+   * not a measure of this child, or the section count when there is none -
+   * see `useStudentLessons`.
+   */
   timeEstimate: string;
   status: LessonStatus;
   /**
-   * Plain-language "what you'll do", shown in the preview. Absent on live
-   * lessons - nothing in the contract writes one for a child, and a generated
-   * stand-in would be us describing a lesson we have not read.
+   * Plain-language "what you'll do", shown in the preview. On a live lesson it
+   * is the summary's own `description` (1 Oct), and absent when that is null -
+   * a generated stand-in would be us describing a lesson we have not read.
    */
   description?: string;
   /** 0–1 through the lesson, when `in_progress`. */
   progress?: number;
   /**
-   * The playable lesson this routes to. TODO(api): every summary carries its own
-   * real lesson; for now they all open the one built lesson.
+   * The playable lesson this routes to. A live card opens its own lesson; the
+   * signed-out fixtures each open one of the two authored lessons.
    */
   lessonId: string;
+  /**
+   * The assignment this card was built from. The preview's Start carries it
+   * as `?assignment=`. Absent on the fixtures, which no teacher set, and on
+   * a lesson that was never assigned.
+   */
+  assignmentId?: string;
 }
 
 /** Subject → icon for the card/preview. */
@@ -42,10 +55,9 @@ export const SUBJECT_ICON: Record<string, LucideIcon> = {
  * no longer pending work: a signed-in child's list comes from their own
  * assignments via `useStudentLessons`. Kept because the walkthrough needs it.
  *
- * Historic note, since it explains the shape below. This once read "replace with
- * `GET /api/content/lessons`. Subject grouping, status and adaptive estimates
- * have no source there - the teacher library hides its subject filter for
- * exactly that reason - so those still need somewhere to come from.
+ * That list does not come from `GET /api/content/lessons`, which is the
+ * school's whole library. `useStudentLessons` says why, and where each field
+ * of a live card comes from.
  */
 export const LESSON_CATALOG: LessonSummary[] = [
   {

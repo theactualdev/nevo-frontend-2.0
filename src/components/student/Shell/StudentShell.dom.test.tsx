@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
-import { StudentShell } from "./StudentShell";
+import { StudentShell, scalesWithTextSize } from "./StudentShell";
 import { clearSession, setSession } from "@/lib/auth/session";
 import { AccessibilityProvider } from "@/context/AccessibilityContext";
 
@@ -18,9 +18,20 @@ import { AccessibilityProvider } from "@/context/AccessibilityContext";
  * - onboarding has no lesson to ask about and no session to ask with
  */
 
+const router = vi.hoisted(() => ({
+  push: vi.fn(),
+  replace: vi.fn(),
+  back: vi.fn(),
+}));
 vi.mock("next/navigation", () => ({
   usePathname: () => pathname,
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
+  useRouter: () => router,
+}));
+// Real everywhere except the one question a fresh page load answers.
+const lost = vi.hoisted(() => ({ value: false }));
+vi.mock("@/lib/auth/session", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/auth/session")>()),
+  arrivedWithoutSession: () => lost.value,
 }));
 // Ask Nevo itself is heavy (sheet, keyboard, signals); this is about WHERE the
 // shell mounts it, not what it renders.
@@ -28,7 +39,6 @@ vi.mock("@/components/student/AskNevo/AskNevo", () => ({
   AskNevo: () => <div data-testid="ask-nevo" />,
 }));
 vi.mock("@/hooks", () => ({
-  useBehaviouralCapture: vi.fn(),
   // The in-shell tabs render the notification bell; it reads the network and
   // decides nothing about where Ask Nevo goes.
   useNotifications: () => ({
@@ -63,6 +73,8 @@ const at = (path: string) => {
 beforeEach(() => {
   clearSession();
   signIn();
+  router.replace.mockClear();
+  lost.value = false;
 });
 
 afterEach(() => {
@@ -100,6 +112,18 @@ describe("StudentShell — where Ask Nevo is reachable", () => {
     expect(screen.getByTestId("ask-nevo")).toBeTruthy();
   });
 
+  it("stays off Profile, the one tab the app shell frame draws without it", () => {
+    // `Nevo Student App`: `showAskFab: TABS.includes(v) && v !== "profile"`.
+    at("/student/profile");
+    expect(screen.queryByTestId("ask-nevo")).toBeNull();
+  });
+
+  it("is still on the other tabs beside Profile", () => {
+    // The exclusion is the tab, not everything that starts with its name.
+    at("/student/connect");
+    expect(screen.getByTestId("ask-nevo")).toBeTruthy();
+  });
+
   it("stays out of the daily warm-up, which is a measurement", () => {
     at("/student/warm-up");
     expect(screen.queryByTestId("ask-nevo")).toBeNull();
@@ -118,24 +142,84 @@ describe("StudentShell — where Ask Nevo is reachable", () => {
   });
 });
 
-describe("the top-bar avatar", () => {
-  it("goes to the profile instead of doing nothing", () => {
+describe("the way into Profile", () => {
+  it("is the child's own disc, in the top bar and the sidebar", () => {
     /*
-     * It was an inert `span` - the one avatar in the app that looked like
-     * every other console's way into a profile and answered a tap with
-     * nothing. Profile is in the nav too, so this was never a dead end; it
-     * just taught a child their tap had missed.
+     * The top-bar avatar was an inert `span`, and so was the sidebar's user
+     * row - the one row `Nevo Sidebar Rail` draws AS the Profile link. Both
+     * looked like a way into a profile and answered a tap with nothing.
      */
     at("/student/dashboard");
 
-    // Two of them now - the nav item and the avatar - and both lead to the
-    // same place, which is the point.
     const links = screen.getAllByRole("link", { name: "Profile" });
 
-    expect(links.length).toBeGreaterThan(1);
+    expect(links).toHaveLength(2);
     for (const link of links) {
       expect(link).toHaveAttribute("href", "/student/profile");
     }
+  });
+
+  it("is not a tab: the nav carries the frames' five and no more", () => {
+    // `Nevo Bottom Nav` and `Nevo Sidebar Rail` draw Home, Lessons, Progress,
+    // Downloads and Connect. A sixth "Profile" tab sat beside the disc that
+    // already led there.
+    at("/student/dashboard");
+
+    const navs = screen.getAllByRole("navigation");
+    // The sidebar and the bottom nav.
+    expect(navs).toHaveLength(2);
+    for (const nav of navs) {
+      // Every link but the disc's (which is labelled, not a tab).
+      const tabs = Array.from(nav.querySelectorAll("a"))
+        .filter((a) => a.getAttribute("aria-label") !== "Profile")
+        .map((a) => a.getAttribute("href"));
+      expect(tabs).toEqual([
+        "/student/dashboard",
+        "/student/lessons",
+        "/student/progress",
+        "/student/downloads",
+        "/student/connect",
+      ]);
+    }
+  });
+
+  it("marks the sidebar's disc as where the child is, on Profile", () => {
+    at("/student/profile");
+
+    const current = screen
+      .getAllByRole("link", { name: "Profile" })
+      .filter((link) => link.getAttribute("aria-current") === "page");
+    expect(current).toHaveLength(1);
+    // And no tab claims to be the page instead.
+    for (const nav of screen.getAllByRole("navigation")) {
+      const tabsCurrent = Array.from(
+        nav.querySelectorAll('a[aria-current="page"]'),
+      ).filter((a) => a.getAttribute("aria-label") !== "Profile");
+      expect(tabsCurrent).toHaveLength(0);
+    }
+  });
+});
+
+describe("a page that loaded on a cookie whose session was gone", () => {
+  /*
+   * The guard let it through on the cookie, so the server sent the signed-out
+   * walkthrough - another child's name, another child's lessons - to a child
+   * who believed they were signed in. The shell sends them to the door.
+   */
+  it("goes to the PIN door, and back to this screen after", () => {
+    clearSession();
+    lost.value = true;
+    at("/student/lessons");
+
+    expect(router.replace).toHaveBeenCalledWith(
+      "/auth/login?next=%2Fstudent%2Flessons",
+    );
+  });
+
+  it("stays put on an ordinary load", () => {
+    at("/student/lessons");
+
+    expect(router.replace).not.toHaveBeenCalled();
   });
 });
 
@@ -143,8 +227,7 @@ describe("the consent hold", () => {
   /*
    * A HOLD IS NOT A TAB. The waiting screen rendered inside the full app, so
    * a child the server said may not proceed could tap the nav straight past
-   * it and ask Ask Nevo a question before anyone had consented - and every
-   * tap was captured while they waited.
+   * it and ask Ask Nevo a question before anyone had consented.
    */
   it("shows no navigation, bell or Ask Nevo around the waiting screen", () => {
     at("/student/waiting");
@@ -160,25 +243,23 @@ describe("the consent hold", () => {
 
     expect(screen.queryByRole("navigation")).toBeNull();
   });
+});
 
-  it("captures nothing while the child waits", async () => {
-    const { useBehaviouralCapture } = await import("@/hooks");
-    vi.mocked(useBehaviouralCapture).mockClear();
-
-    at("/student/waiting");
-
-    expect(vi.mocked(useBehaviouralCapture)).toHaveBeenCalled();
-    expect(
-      vi.mocked(useBehaviouralCapture).mock.calls.every(([on]) => on === false),
-    ).toBe(true);
+describe("scalesWithTextSize — Text Size on the full-screen routes", () => {
+  /*
+   * The baseline was always exempt: its tasks are sized and timed to measure.
+   * The daily warm-up runs the same tasks under the child's zoom, so a reading
+   * preference changed tile and dot sizes in a calibration.
+   */
+  it("leaves the daily warm-up unscaled", () => {
+    expect(scalesWithTextSize("/student/warm-up")).toBe(false);
   });
 
-  it("still captures on an ordinary tab", async () => {
-    const { useBehaviouralCapture } = await import("@/hooks");
-    vi.mocked(useBehaviouralCapture).mockClear();
+  it("leaves onboarding unscaled, as before", () => {
+    expect(scalesWithTextSize("/student/onboarding/sequence")).toBe(false);
+  });
 
-    at("/student/dashboard");
-
-    expect(vi.mocked(useBehaviouralCapture)).toHaveBeenCalledWith(true);
+  it("still scales the lesson player, where the reading happens", () => {
+    expect(scalesWithTextSize("/student/lessons/abc-123")).toBe(true);
   });
 });

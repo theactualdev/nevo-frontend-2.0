@@ -213,6 +213,8 @@ export const ADDING_FRACTIONS_PLAN: AdaptationPlan = {
     // ...and the full rest on the way out of the last segment, so all four
     // break types are reachable in the mock (this one lands before the
     // assessment - a real pause between learning and being asked about it).
-    { segmentId: "recap", startModality: MODALITY.TEXT, density: null, suggestModality: MODALITY.AUDIO, breakAfter: BREAK_TYPES.FULL },
+    // Light is authored here now: it used to arrive from the player's own
+    // "light" fallback, which drew a level the plan never gave (rule 5).
+    { segmentId: "recap", startModality: MODALITY.TEXT, density: null, suggestModality: MODALITY.AUDIO, breakAfter: BREAK_TYPES.FULL, scaffold: SCAFFOLD_LEVELS.LIGHT },
   ],
 };

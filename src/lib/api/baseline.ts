@@ -20,6 +20,22 @@ const BASELINE_SUBMIT_BACKOFF_MS = [800, 2400];
  */
 export interface RecalibratePrompt {
   dimension: string;
+  /**
+   * The item the engine is serving with it (`BaselinePromptResponse`, 1 Oct).
+   * The question rotates when a dimension comes round again.
+   */
+  itemId: string;
+  question: string;
+  options: { value: string; label: string }[];
+  /**
+   * DECLARED BECAUSE THE WIRE CARRIES IT. NEVER READ.
+   *
+   * The answer key arrives on the device with the question. The frontend
+   * marks nothing (rule 3, and the attempts contract's own words: "clients
+   * never ... decide whether they were correct"), so the warm-up records which
+   * option was picked and leaves marking to whoever receives it.
+   */
+  answer: string;
 }
 
 export const baselineApi = {

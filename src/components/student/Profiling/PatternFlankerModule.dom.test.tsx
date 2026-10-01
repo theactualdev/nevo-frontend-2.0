@@ -121,3 +121,121 @@ describe("PatternFlankerModule", () => {
     expect(centreRotation()).toBe(180);
   });
 });
+
+describe("PatternFlankerModule — each band's own trials", () => {
+  /*
+   * One congruent/incongruent list ran for every band. JSS and SS never saw
+   * the neutral trial their frame draws, and P1-3 - shown the centre arrow
+   * alone - had "incongruent" recorded against trials with no flankers at all.
+   */
+  const flankerPicks = (band: "p13" | "jss") => {
+    const capture = new BaselineCapture(`fl-${band}`);
+    render(
+      <PatternFlankerModule
+        band={band}
+        capture={capture}
+        onComplete={() => {}}
+      />,
+    );
+    throughThePatterns();
+    for (let i = 0; i < 3; i++) {
+      fireEvent.click(screen.getByLabelText("Right"));
+      act(() => void vi.advanceTimersByTime(500));
+    }
+    return picks(capture, "flanker");
+  };
+
+  it("records no congruency for P1-3, which has no flankers", () => {
+    const p13 = flankerPicks("p13");
+
+    expect(p13).toHaveLength(3);
+    for (const p of p13) expect(p).not.toHaveProperty("congruency");
+  });
+
+  it("shows JSS the neutral trial its frame draws", () => {
+    expect(flankerPicks("jss").map((p) => p.congruency)).toEqual([
+      "congruent",
+      "incongruent",
+      "neutral",
+    ]);
+  });
+
+  it("keeps P4-6 on the prototype's own list", () => {
+    const capture = new BaselineCapture("fl-p46");
+    render(
+      <PatternFlankerModule
+        band="p46"
+        capture={capture}
+        onComplete={() => {}}
+      />,
+    );
+    throughThePatterns();
+    for (let i = 0; i < 3; i++) {
+      fireEvent.click(screen.getByLabelText("Right"));
+      act(() => void vi.advanceTimersByTime(500));
+    }
+
+    expect(picks(capture, "flanker").map((p) => p.congruency)).toEqual([
+      "congruent",
+      "incongruent",
+      "incongruent",
+    ]);
+  });
+});
+
+describe("PatternFlankerModule — each band's own sizes", () => {
+  /*
+   * 180px cards, 56px buttons and a 50px arrow for everyone. The frames give
+   * P1-3 200 / 64 / 64 and step down by band.
+   */
+  const card = () =>
+    [...document.querySelectorAll<HTMLElement>("div")].find((d) =>
+      d.className.includes("h-[150px] w-[300px]"),
+    )!;
+
+  it("gives P1-3 the largest cards and buttons", () => {
+    render(<PatternFlankerModule band="p13" onComplete={() => {}} />);
+
+    expect(card().className).toContain("sm:size-[200px]");
+    expect(screen.getByText("Same").className).toContain("h-16");
+  });
+
+  it("gives SS the smallest cards", () => {
+    render(<PatternFlankerModule band="ss" onComplete={() => {}} />);
+
+    expect(card().className).toContain("sm:size-[140px]");
+    expect(screen.getByText("Same").className).toContain("sm:w-[140px]");
+  });
+
+  it("draws the P1-3 arrow at 64px from tablet up", () => {
+    render(<PatternFlankerModule band="p13" onComplete={() => {}} />);
+    throughThePatterns();
+
+    const centre = document.querySelector(
+      'svg.lucide-arrow-right[stroke-width="3"]',
+    )!;
+    expect(centre.getAttribute("class")).toContain("sm:size-[64px]");
+    expect(screen.getByLabelText("Right").className).toContain("sm:h-20");
+  });
+});
+
+describe("PatternFlankerModule — where a tap landed", () => {
+  it("records the coordinates with the pick", () => {
+    const capture = new BaselineCapture("fl-coords");
+    render(
+      <PatternFlankerModule
+        band="p46"
+        capture={capture}
+        onComplete={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Different"), {
+      detail: 1,
+      clientX: 33.5,
+      clientY: 610,
+    });
+
+    expect(picks(capture, "pattern")[0]).toMatchObject({ x: 33.5, y: 610 });
+  });
+});

@@ -22,7 +22,13 @@ export function WarmUpCard({
   dimension,
   done = false,
 }: {
-  dimension: BaselineDimension;
+  /**
+   * Today's task, or null while the engine has not named one. Null drops the
+   * chip: it named the weekday rotation's task, which the run no longer falls
+   * back to for a signed-in child, so it would promise a task that never
+   * opens.
+   */
+  dimension: BaselineDimension | null;
   /**
    * Today's is already behind them.
    *
@@ -47,9 +53,11 @@ export function WarmUpCard({
           <span className="font-mono text-[11px] font-bold tracking-[0.14em] text-nevo-violet">
             DAILY WARM-UP
           </span>
-          <span className="rounded-full bg-nevo-violet/20 px-2.5 py-[3px] text-[11px] font-medium text-nevo-navy">
-            {WARM_UP_CHIPS[dimension]}
-          </span>
+          {dimension && (
+            <span className="rounded-full bg-nevo-violet/20 px-2.5 py-[3px] text-[11px] font-medium text-nevo-navy">
+              {WARM_UP_CHIPS[dimension]}
+            </span>
+          )}
         </div>
         <h3 className="mt-3 text-xl font-semibold tracking-[-0.01em] text-nevo-navy">
           A quick warm-up to begin

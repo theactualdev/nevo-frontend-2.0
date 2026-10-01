@@ -43,8 +43,11 @@ export function SchoolConnectionStep() {
   // failed. Both render in the same warm error styling.
   const [trouble, setTrouble] = useState(false);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const [signalSession] = useState(() => `onboarding-school-${randomId()}`);
-  const { trackEvent } = useSignals(signalSession);
+  // A bare UUID and `onboarding` - see `ObservedInteractionSequence`, which
+  // had the same prefix and the same fate: never a UUID, read as a lesson
+  // stream with no lesson, and held until the screen went.
+  const [signalSession] = useState(() => randomId());
+  const { trackEvent } = useSignals(signalSession, undefined, "onboarding");
 
   useEffect(() => {
     const active = timers.current;

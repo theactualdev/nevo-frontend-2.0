@@ -121,8 +121,9 @@ function isChild(v: unknown): v is RememberedChild {
  * Without this, shipping 28c would sign out every device that already
  * remembered somebody - the roster key is new, so every tablet in every school
  * would look like a tablet nobody has used. The legacy key is left in place
- * rather than deleted, because `getRememberedProfile` still backs the existing
- * lock screen until the picker replaces it.
+ * rather than deleted: it picks no door any more, but `rememberProfile` still
+ * writes it and `setStoredDisplayName` still reads it through
+ * `getRememberedProfile` - see `rememberProfile` in `session.ts`.
  */
 function migrateLegacy(): RememberedChild[] {
   try {

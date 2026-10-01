@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ChangePinScreen } from "./ChangePinScreen";
 import { ApiError } from "@/lib/api/client";
-import { STUDENT_PIN_LENGTH } from "@/lib/constants";
+import { STUDENT_PIN_LENGTH, STUDENT_PIN_MAX } from "@/lib/constants";
 
 /**
  * Changing a PIN has to prove the old one as of 23 Sep, and the server
@@ -37,13 +37,19 @@ const passStepOne = (pin = CURRENT) => {
   fireEvent.click(continueButton());
 };
 
-/** The new PIN is entered twice by the pattern; advance its 1.2s beat. */
+/** The new PIN, twice; then let the write go and its answer land. */
 const enterNewPinTwice = async () => {
   type(NEXT + NEXT);
   await act(async () => {
-    await vi.advanceTimersByTimeAsync(1500);
+    await vi.advanceTimersByTimeAsync(500);
   });
 };
+
+/** Past the "updated" screen's beat. */
+const readTheConfirmation = () =>
+  act(async () => {
+    await vi.advanceTimersByTimeAsync(2000);
+  });
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -102,8 +108,80 @@ describe("what reaches the wire", () => {
     render(<ChangePinScreen />);
     passStepOne();
     await enterNewPinTwice();
+    await readTheConfirmation();
 
     expect(push).toHaveBeenCalledWith("/student/profile");
+  });
+
+  it("takes an old PIN of any length the server issues, up to eight", async () => {
+    // Six for anyone who set theirs before 25 Sep or had an adult reset it.
+    render(<ChangePinScreen />);
+    type("1234567890");
+    fireEvent.click(continueButton());
+    await enterNewPinTwice();
+
+    // Ten typed, eight kept: the most a PIN can be.
+    expect(setPin).toHaveBeenCalledWith(NEXT, "1234567890".slice(0, STUDENT_PIN_MAX));
+  });
+});
+
+describe("the frame's own steps", () => {
+  it("carries no wordmark bar, on any step", () => {
+    // Frame 27 draws a back chevron and nothing else above the PIN.
+    render(<ChangePinScreen />);
+    expect(screen.queryByAltText("Nevo")).toBeNull();
+    passStepOne();
+    expect(screen.queryByAltText("Nevo")).toBeNull();
+  });
+
+  it("counts the new PIN as step 2 and the confirmation as step 3", () => {
+    render(<ChangePinScreen />);
+    passStepOne();
+    expect(screen.getByText("Step 2 of 3")).toBeInTheDocument();
+
+    type(NEXT);
+
+    expect(screen.getByText("Step 3 of 3")).toBeInTheDocument();
+  });
+
+  it("keeps them on step 3 when the two do not match", () => {
+    render(<ChangePinScreen />);
+    passStepOne();
+    type(NEXT + "3".repeat(STUDENT_PIN_LENGTH));
+
+    expect(screen.getByText("Step 3 of 3")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(/didn.t match/);
+    expect(setPin).not.toHaveBeenCalled();
+  });
+});
+
+describe("saying it worked", () => {
+  it("waits for the server, and never borrows onboarding's words", async () => {
+    // THE BUG: "You're all set" showed for a beat BEFORE the write went, so a
+    // child saw their PIN confirmed even when the server then refused it.
+    let land: () => void = () => {};
+    setPin.mockReturnValue(
+      new Promise<void>((resolve) => {
+        land = resolve;
+      }),
+    );
+    render(<ChangePinScreen />);
+    passStepOne();
+    await enterNewPinTwice();
+
+    expect(setPin).toHaveBeenCalled();
+    expect(screen.queryByText("Your PIN is updated")).toBeNull();
+    expect(document.body.textContent).not.toMatch(/all set/i);
+
+    await act(async () => {
+      land();
+    });
+
+    expect(screen.getByRole("status")).toHaveTextContent("Your PIN is updated");
+    expect(
+      screen.getByText("You'll use the new one next time you sign in."),
+    ).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/all set/i);
   });
 });
 
@@ -155,16 +233,19 @@ describe("a wrong current PIN", () => {
 });
 
 describe("a failure that is not theirs", () => {
-  it("is left to the pattern's own copy", async () => {
+  it("is said in the pattern's own words, and claims nothing", async () => {
     // A dropped network is not a mistyped PIN, and this screen must not claim
-    // it is. `PinCreationScreen` owns that sentence.
+    // it is. The PIN pattern owns that sentence.
     setPin.mockRejectedValue(new TypeError("fetch failed"));
 
     render(<ChangePinScreen />);
     passStepOne();
     await enterNewPinTwice();
+    await readTheConfirmation();
 
     expect(screen.queryByText(/not your current PIN/i)).toBeNull();
+    expect(screen.getByRole("alert")).toHaveTextContent(/on us, not you/);
+    expect(screen.queryByText("Your PIN is updated")).toBeNull();
     expect(push).not.toHaveBeenCalled();
   });
 });

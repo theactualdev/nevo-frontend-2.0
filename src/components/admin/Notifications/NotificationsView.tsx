@@ -117,6 +117,8 @@ export function NotificationsView() {
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [search, setSearch] = useState("");
   const [hasMore, setHasMore] = useState(false);
+  /** The feed's own count of the view - D13b's "N archived". Undefined is unknown. */
+  const [total, setTotal] = useState<number | undefined>(undefined);
   const [olderFailed, setOlderFailed] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [allRead, setAllRead] = useState(false);
@@ -132,6 +134,7 @@ export function NotificationsView() {
       .then((feed) => {
         setRows(feed.notifications);
         setHasMore(Boolean(feed.hasMore));
+        setTotal(typeof feed.total === "number" ? feed.total : undefined);
         setNow(Date.now());
         setAllRead(feed.unreadCount === 0);
         setPhase("ready");
@@ -239,14 +242,26 @@ export function NotificationsView() {
 
   // Archive and Put back both remove the row from the view it is in, because
   // that view is defined by the flag they just changed.
+  //
+  // A refusal reloaded the list SILENTLY - the row came back with no word why,
+  // which reads as the button not working. It now says what didn't happen.
   const onArchive = (id: string) => {
+    setWriteFailed("");
     setRows((prev) => prev.filter((n) => n.notificationId !== id));
-    notificationsApi.archive(id).then(announceReadStateChanged, () => load(archived));
+    notificationsApi.archive(id).then(announceReadStateChanged, () => {
+      setWriteFailed("archive that");
+      load(archived);
+    });
   };
 
   const onRestore = (id: string) => {
+    setWriteFailed("");
     setRows((prev) => prev.filter((n) => n.notificationId !== id));
-    notificationsApi.restore(id).then(announceReadStateChanged, () => load(archived));
+    setTotal((t) => (typeof t === "number" ? Math.max(0, t - 1) : t));
+    notificationsApi.restore(id).then(announceReadStateChanged, () => {
+      setWriteFailed("put that back");
+      load(archived);
+    });
   };
 
   const filtering = Boolean(search.trim() || unreadOnly);
@@ -329,6 +344,11 @@ export function NotificationsView() {
 
             {archived ? (
               <p className="mt-4 text-[13px] leading-[1.55] text-nevo-near-black/58">
+                {/* D13b's count line, from the feed's own total - never the
+                    rows loaded so far, which are one page of it. */}
+                {phase === "ready" && typeof total === "number" && total > 0
+                  ? `${total} archived. `
+                  : ""}
                 Archiving only tidies your list. You can put anything back -
                 nothing is ever deleted.
               </p>
@@ -369,11 +389,19 @@ export function NotificationsView() {
             {phase === "ready" && visible.length === 0 ? (
               <div className={cn(CARD, "mt-4 px-6 py-14 text-center")}>
                 <h3 className="m-0 text-[17px] font-semibold text-nevo-near-black">
+                  {/*
+                    * "You're up to date." ONLY WHEN IT IS KNOWN. Unread-only
+                    * filters the rows loaded so far; with older pages not yet
+                    * fetched it could claim a caught-up inbox over unread
+                    * notifications it had never seen.
+                    */}
                   {archived
                     ? "Nothing archived"
                     : filtering
                       ? unreadOnly && !search.trim()
-                        ? "You're up to date."
+                        ? hasMore
+                          ? "Nothing unread among the latest"
+                          : "You're up to date."
                         : "Nothing matches that"
                       : "Nothing yet"}
                 </h3>
@@ -381,9 +409,23 @@ export function NotificationsView() {
                   {archived
                     ? "Archive anything you've dealt with and it will wait here. Nothing is ever deleted."
                     : filtering
-                      ? "Try a different search, or clear the filters."
+                      ? unreadOnly && !search.trim()
+                        ? hasMore
+                          ? "There are older notifications we haven't shown yet. Show them to check those too."
+                          : "Everything here has been read."
+                        : "Try a different search, or clear the filters."
                       : "When a parent confirms consent, a teacher joins, an invoice arrives or your sign-in needs attention, it'll show up here."}
                 </p>
+                {unreadOnly && !search.trim() && hasMore ? (
+                  <button
+                    type="button"
+                    onClick={showOlder}
+                    disabled={loadingMore}
+                    className="mt-3 mr-4 cursor-pointer text-sm font-semibold text-nevo-navy hover:opacity-75 disabled:cursor-default disabled:opacity-50"
+                  >
+                    {loadingMore ? "Loading…" : "Show older"}
+                  </button>
+                ) : null}
                 {filtering ? (
                   <button
                     type="button"

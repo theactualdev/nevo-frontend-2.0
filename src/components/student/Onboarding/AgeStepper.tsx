@@ -15,17 +15,32 @@ export function isAgeInRange(value: string): boolean {
 
 const clamp = (v: number) => Math.max(AGE_MIN, Math.min(AGE_MAX, v));
 
+/** What the age field keeps of what was typed: two digits, nothing else. */
+export function ageDigits(raw: string): string {
+  return raw.replace(/[^0-9]/g, "").slice(0, 2);
+}
+
 /**
  * Age picker (UI/UX spec B.2 Step 1). Large tap-target stepper with a directly
  * editable numeric field. First +/- from empty jumps to the default age; typing
  * is digits-only and clamps to range on blur.
+ *
+ * THE DEVICE KEYBOARD STAYS DOWN. The step-1 frame docks the Nevo keyboard on
+ * this field exactly as it does on the name, and this was the one field on the
+ * screen that opened the tablet's own keyboard instead. The host owns the
+ * dock: it passes the focus handlers and mounts the `NevoKeyboard`.
  */
 export function AgeStepper({
   value,
   onChange,
+  onFocus,
+  onBlur,
 }: {
   value: string;
   onChange: (value: string) => void;
+  /** The host's keyboard dock opening for this field. */
+  onFocus?: () => void;
+  onBlur?: () => void;
 }) {
   const parsed = value === "" ? null : parseInt(value, 10);
   const age = parsed === null || Number.isNaN(parsed) ? null : parsed;
@@ -63,11 +78,14 @@ export function AgeStepper({
 
       <input
         value={value}
-        onChange={(e) =>
-          onChange(e.target.value.replace(/[^0-9]/g, "").slice(0, 2))
-        }
-        onBlur={commit}
-        inputMode="numeric"
+        onChange={(e) => onChange(ageDigits(e.target.value))}
+        onFocus={onFocus}
+        onBlur={() => {
+          commit();
+          onBlur?.();
+        }}
+        inputMode="none"
+        autoComplete="off"
         aria-label="Age"
         placeholder="-"
         className="w-18 bg-transparent text-center text-[28px] font-semibold tracking-[-0.01em] text-nevo-near-black tabular-nums outline-none placeholder:text-nevo-near-black/40"

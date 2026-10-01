@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { NevoKeyboard } from "./NevoKeyboard";
 
 /**
@@ -29,6 +29,58 @@ import { NevoKeyboard } from "./NevoKeyboard";
  */
 
 const noop = () => {};
+
+afterEach(() => cleanup());
+
+/**
+ * Shift started on and stayed on, so a child typing their name got "AMARA",
+ * and the numbers page's "#+=" key - which offered a symbols page that does
+ * not exist - flipped the case of everything typed after it.
+ */
+describe("NevoKeyboard qwerty case", () => {
+  const typeKeys = (...labels: string[]) =>
+    labels.forEach((label) =>
+      fireEvent.click(screen.getByRole("button", { name: label })),
+    );
+
+  it("capitalises the first letter, then drops back to lowercase", () => {
+    const onKey = vi.fn();
+    render(<NevoKeyboard layout="qwerty" onKey={onKey} onBackspace={noop} />);
+
+    typeKeys("A", "m", "a", "r", "a");
+
+    expect(onKey.mock.calls.map(([c]) => c).join("")).toBe("Amara");
+  });
+
+  it("arms shift for one more capital when the child taps it", () => {
+    const onKey = vi.fn();
+    render(<NevoKeyboard layout="qwerty" onKey={onKey} onBackspace={noop} />);
+
+    typeKeys("A", "d", "a", "space");
+    fireEvent.click(screen.getByRole("button", { name: "Uppercase" }));
+    typeKeys("O", "b", "i");
+
+    expect(onKey.mock.calls.map(([c]) => c).join("")).toBe("Ada Obi");
+  });
+
+  it("offers no key for a symbols page that does not exist", () => {
+    render(<NevoKeyboard layout="qwerty" onKey={noop} onBackspace={noop} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "123" }));
+
+    expect(screen.queryByRole("button", { name: "More symbols" })).toBeNull();
+    expect(screen.queryByText("#+=")).toBeNull();
+  });
+
+  it("comes back from the numbers page in the case it left", () => {
+    const onKey = vi.fn();
+    render(<NevoKeyboard layout="qwerty" onKey={onKey} onBackspace={noop} />);
+
+    typeKeys("A", "123", "1", "ABC", "b");
+
+    expect(onKey.mock.calls.map(([c]) => c).join("")).toBe("A1b");
+  });
+});
 
 describe("NevoKeyboard visibility", () => {
   it("hides itself where a real keyboard exists", () => {

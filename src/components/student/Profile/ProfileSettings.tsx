@@ -4,10 +4,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, ChevronRight, LogOut, MessageCircle } from "lucide-react";
 import { NevoKeyboard, Switch } from "@/components/shared";
+import { MaybeSample } from "@/components/shared/SampleRegion";
 import { useAuth } from "@/hooks";
+import { useHasSession } from "@/hooks/useHasSession";
+import { useHydrated } from "@/hooks/useHydrated";
 import { useDisplayName } from "@/components/student/Shell/useDisplayName";
 import { useAvatarTone } from "@/components/student/Shell/useAvatarTone";
-import { getRememberedProfile, setStoredDisplayName } from "@/lib/auth/session";
+import { setStoredDisplayName } from "@/lib/auth/session";
 import { settingsApi } from "@/lib/api/settings";
 import { useAccessibility } from "@/context/AccessibilityContext";
 import { cn } from "@/lib/utils";
@@ -40,6 +43,11 @@ export function ProfileSettings() {
   // Editable display name (product frame: tap Change → inline input; initials
   // derive from the name). TODO(api): persist via the profile endpoint.
   const stored = useDisplayName();
+  // Signed out, the name and initials are the fixture child's ("Ada"), so the
+  // row is marked - the same gate the shell's identity uses.
+  const signedIn = useHasSession();
+  const hydrated = useHydrated();
+  const showingFixtureIdentity = hydrated && !signedIn;
   const [name, setName] = useState(stored.name);
   const [editingName, setEditingName] = useState(false);
   const [nameKbOpen, setNameKbOpen] = useState(false);
@@ -171,6 +179,7 @@ export function ProfileSettings() {
 
       {/* Account */}
       <SectionHeading>Account</SectionHeading>
+      <MaybeSample showing={showingFixtureIdentity} kind="student:identity">
       <div className="flex items-center gap-3.5 py-3">
         {/* The disc opens "Choose your look" (frame 27). */}
         <button
@@ -240,6 +249,7 @@ export function ProfileSettings() {
           </>
         )}
       </div>
+      </MaybeSample>
       <button
         type="button"
         onClick={() => router.push("/student/profile/feedback")}
@@ -285,6 +295,7 @@ export function ProfileSettings() {
         />
       </button>
 
+      <MaybeSample showing={showingFixtureIdentity} kind="student:identity">
       <AvatarPickerSheet
         open={lookOpen}
         onOpenChange={setLookOpen}
@@ -298,6 +309,7 @@ export function ProfileSettings() {
           chooseTone(next.id).then(flashSaved, () => {});
         }}
       />
+      </MaybeSample>
 
       <SignOutSheet
         open={signOutOpen}
@@ -305,12 +317,13 @@ export function ProfileSettings() {
         onSignOut={() => {
           setSignOutOpen(false);
           signOut();
-          // The sheet promises "you can come back anytime with your PIN" -
-          // onboarding has no route to the PIN unlock, so a remembered
-          // device would have stranded them in the full setup flow.
-          const door = getRememberedProfile()
-            ? "/auth/login"
-            : "/student/onboarding";
+          // The sheet promises "you can come back anytime with your PIN", and
+          // the PIN door is where every child goes - ALWAYS. This read the
+          // legacy one-child profile key and sent a device it did not name to
+          // onboarding, which cannot sign anyone in: on a shared tablet that
+          // is the second-account trap. `/auth/login` handles a device that
+          // remembers nobody itself (28c-2).
+          const door = "/auth/login";
           // A HARD navigation, not router.push - the same race the teacher
           // console hit in #176. The route guard reads the `nevo.role` cookie
           // and a client-side push runs before the clear settles, so the guard

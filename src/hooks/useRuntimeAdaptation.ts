@@ -12,18 +12,16 @@ import type { AdaptationPlan, Lesson } from "@/lib/types";
 
 /**
  * The engine's mid-lesson read, from `POST /api/intelligence/adapt` in
- * `in_lesson` mode.
+ * `in_lesson` mode. The ONLY source of a break offer on a live lesson: the
+ * client's own 20-minute timer is gone, because when to break is the
+ * engine's call (rule 3, and frontend §5b: "No local timer").
  *
- * `useBreakMonitor` has always said the real decision belongs to the backend -
- * "this hook watches for that instruction" - and its `TODO: subscribe to
- * backend break instructions` is what this answers. The client timer stays as
- * the PRIMING signal it was written to be; what changes is that the decision
- * to offer now comes from the engine, which can see the whole session.
- *
- * ASKED AT SEGMENT BOUNDARIES, not on a timer. A child moving between segments
- * is the natural moment to reconsider, it bounds the number of requests to the
- * length of the lesson, and it means nothing is recomputed while they are
- * reading. The clock is read when the request is built, never during render.
+ * ASKED AT SEGMENT BOUNDARIES, and again when the child does something the
+ * request reports - a replay, an answer, a declined offer. Those counts are
+ * about the segment the child is on, so asked only on the way in they were
+ * always zero; frontend §1 has the state read "after every interaction event".
+ * Nothing is asked on a timer and nothing while a child simply reads. The
+ * clock is read when the request is built, never during render.
  */
 
 /**
@@ -37,16 +35,32 @@ import type { AdaptationPlan, Lesson } from "@/lib/types";
  * current. So the caller passes only what it already renders from, and
  * everything time-shaped is tracked here, in effects.
  *
- * `replayCountOnSegment`, `declinedModalities` and the rest of
- * `RuntimeSignalsRequest` are absent because the player does not track them.
- * They default server-side, so omitting them and sending a zero reach the
- * engine identically - but only one of the two is us claiming to know.
+ * The counts are COUNTS - what the child did, tallied, never weighed. The
+ * contract's scores and its two "below baseline" flags stay unsent: those are
+ * measurements of a child this app cannot make (see `RuntimeSignals`).
  */
 export interface RuntimeState {
   currentSegmentId: string | null;
   currentModality: string;
   availableModalities: string[];
   midpointReached: boolean;
+  /** Replays on the segment the child is on. */
+  replayCountOnSegment: number;
+  /**
+   * In-lesson answers wrong in a row - quick checks and calculation steps. A
+   * right answer ends the run. The after-lesson check is not in-lesson.
+   */
+  consecutiveErrors: number;
+  /** Modalities offered and turned down this session, each once. */
+  declinedModalities: string[];
+  /** Every "Not now" to a modality offer this session. */
+  sessionDeclineCount: number;
+  /** Whether an offer has been on screen on this segment. */
+  sameSegmentSuggestionShown: boolean;
+  /** Segments entered since an offer was last on screen; null if none yet. */
+  segmentsSinceLastSuggestion: number | null;
+  /** Breaks finished this session. Each one ends a stretch of work. */
+  breaksTaken: number;
 }
 
 export interface RuntimeAdaptation {
@@ -73,6 +87,18 @@ export interface RuntimeAdaptation {
    * never the engine's reasoning. Null until the engine has answered.
    */
   plan: AdaptationPlan | null;
+  /**
+   * The segment this answer was asked for - `currentSegmentId` on the
+   * request. Between the child moving on and the next answer landing, the
+   * last one is still here - and it was about the segment they left, so its
+   * break, offer or hint is not for the one they are on.
+   *
+   * The instruction is lesson-level on the wire, but a hint or a guided
+   * question is about the content in front of the child when it was asked
+   * for. Kept with the plan so the player can show it there and not under
+   * every segment after, including through a failed read that keeps the plan.
+   */
+  forSegmentId: string | null;
 }
 
 const BREAK_VALUES: readonly string[] = Object.values(BREAK_TYPES);
@@ -94,6 +120,7 @@ export function useRuntimeAdaptation(
     offeredBreak: null,
     reason: null,
     plan: null,
+    forSegmentId: null,
   });
   // Read at response time through a ref, like the runtime state, so a new
   // lesson object does not re-fire the request.
@@ -104,25 +131,42 @@ export function useRuntimeAdaptation(
 
   // The player re-renders constantly (timers, scroll, density). Reading the
   // runtime through a ref keeps it out of the effect's dependencies, so the
-  // request fires on the segment boundary alone and not on every tick.
+  // request fires on the moments below alone and not on every tick.
   const latest = useRef(runtime);
   useEffect(() => {
     latest.current = runtime;
   }, [runtime]);
 
-  const askedAt = useRef<number | null>(null);
   const segmentId = runtime.currentSegmentId;
   const modality = runtime.currentModality;
+  // What the child did that the engine is told about, as values rather than
+  // through the ref - a change in any of them is a reason to ask again.
+  const replays = runtime.replayCountOnSegment;
+  const errors = runtime.consecutiveErrors;
+  const declines = runtime.sessionDeclineCount;
+  const breaksTaken = runtime.breaksTaken;
 
   // The clocks, kept here so nothing reads a ref while rendering.
   const openedAt = useRef(0);
   const segmentStartedAt = useRef(0);
   const modalityShifts = useRef(0);
-  const lastModality = useRef<string | null>(null);
+  const last = useRef<{ segmentId: string | null; modality: string } | null>(
+    null,
+  );
 
   useEffect(() => {
     if (openedAt.current === 0) openedAt.current = performance.now();
   }, []);
+
+  /*
+   * A BREAK ENDS A STRETCH OF CONTINUOUS WORK. `continuousMinutes` counted
+   * from the lesson opening and never stopped, so a child back from a break
+   * was reported as still on the same unbroken run - which is the reading the
+   * engine's `time_threshold` offers a break on.
+   */
+  useEffect(() => {
+    if (breaksTaken > 0) openedAt.current = performance.now();
+  }, [breaksTaken]);
 
   // A new segment restarts the segment clock. Runs before the request effect
   // below on the same change, so the request sees the fresh start.
@@ -130,13 +174,18 @@ export function useRuntimeAdaptation(
     segmentStartedAt.current = performance.now();
   }, [segmentId]);
 
-  // Count only actual changes, and never the first render's initial value.
+  /*
+   * A SHIFT IS A CHANGE WITHIN A SEGMENT - an offer taken. Every segment opens
+   * in its own modality, and counting those openings reported a child who
+   * changed nothing as one who had switched at every segment.
+   */
   useEffect(() => {
-    if (lastModality.current !== null && lastModality.current !== modality) {
+    const prev = last.current;
+    if (prev && prev.segmentId === segmentId && prev.modality !== modality) {
       modalityShifts.current += 1;
     }
-    lastModality.current = modality;
-  }, [modality]);
+    last.current = { segmentId, modality };
+  }, [segmentId, modality]);
 
   useEffect(() => {
     if (!enabled || !lessonId || !segments?.length || !segmentId) return;
@@ -144,8 +193,6 @@ export function useRuntimeAdaptation(
     // Monotonic (rule 4): every duration below is sent to the engine, and a
     // wall clock that jumps would send negatives or fail validation.
     const now = performance.now();
-    const since = askedAt.current;
-    askedAt.current = now;
 
     const state = latest.current;
     const signals: RuntimeSignals = {
@@ -161,9 +208,21 @@ export function useRuntimeAdaptation(
         : 0,
       midpointReached: state.midpointReached,
       sessionModalityShiftCount: modalityShifts.current,
-      secondsSinceLastAdaptation:
-        since === null ? null : Math.max(0, Math.round((now - since) / 1000)),
+      replayCountOnSegment: state.replayCountOnSegment,
+      consecutiveErrors: state.consecutiveErrors,
+      declinedModalities: state.declinedModalities,
+      sessionDeclineCount: state.sessionDeclineCount,
+      sameSegmentSuggestionShown: state.sameSegmentSuggestionShown,
+      segmentsSinceLastSuggestion: state.segmentsSinceLastSuggestion,
+      /*
+       * NOT SENT: `secondsSinceLastAdaptation`. What went out under that name
+       * was the time since this hook last ASKED - in practice the last
+       * segment's dwell - and no adaptation is involved in that at all. Which
+       * moment the engine counts from is backend's to say; until it does, a
+       * mislabelled number is worse than the contract's own null.
+       */
     };
+    const askedFor = state.currentSegmentId;
 
     void intelligenceApi
       .getAdaptation(lessonId, segments, { mode: "in_lesson", signals })
@@ -174,21 +233,22 @@ export function useRuntimeAdaptation(
           offeredBreak: asBreakType(res.breakSuggestion?.breakType),
           reason: res.breakSuggestion?.reason ?? null,
           plan: built ? toAdaptationPlan(res, built) : null,
+          forSegmentId: askedFor,
         });
       })
       .catch(() => {
         // A failed read is not "no break needed", but it is not grounds to
-        // interrupt a child either. The client timer still primes the offer.
-        // Nor is it an instruction: the plan falls back to the load-time one
-        // rather than to "the engine now says nothing".
+        // interrupt a child either, so it offers none. Nor is it an
+        // instruction: the plan falls back to the load-time one rather than
+        // to "the engine now says nothing".
         if (active)
-          setResult((prev) => ({ offeredBreak: null, reason: null, plan: prev.plan }));
+          setResult((prev) => ({ ...prev, offeredBreak: null, reason: null }));
       });
 
     return () => {
       active = false;
     };
-  }, [enabled, lessonId, segments, segmentId]);
+  }, [enabled, lessonId, segments, segmentId, replays, errors, declines]);
 
   return result;
 }
