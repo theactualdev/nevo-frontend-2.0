@@ -57,3 +57,64 @@ describe("NameAndAgeStep", () => {
     expect(field).toHaveValue("Amara Kalu");
   });
 });
+
+/**
+ * The step-1 frame docks the Nevo keyboard on the age field as well as the
+ * name. Age was the one field on the screen that opened the tablet's own
+ * keyboard instead, over the top of the layout the frame draws.
+ */
+describe("NameAndAgeStep keyboard", () => {
+  const tap = (label: string) =>
+    fireEvent.click(screen.getByRole("button", { name: label }));
+
+  it("keeps the device keyboard down on the age field", () => {
+    render(<NameAndAgeStep />);
+
+    expect(screen.getByLabelText("Age")).toHaveAttribute("inputmode", "none");
+  });
+
+  it("docks the Nevo keyboard when the age field is touched", () => {
+    render(<NameAndAgeStep />);
+    expect(screen.queryByRole("group", { name: "On-screen keyboard" })).toBeNull();
+
+    fireEvent.focus(screen.getByLabelText("Age"));
+
+    expect(screen.getByRole("group", { name: "On-screen keyboard" })).toBeInTheDocument();
+  });
+
+  it("types into the age when the age was touched last, and nowhere else", () => {
+    render(<NameAndAgeStep />);
+
+    fireEvent.focus(screen.getByLabelText("Age"));
+    tap("123");
+    tap("9");
+
+    expect(screen.getByLabelText("Age")).toHaveValue("9");
+    expect(screen.getByLabelText("Your name")).toHaveValue("");
+  });
+
+  it("keeps only digits in the age, whatever key is pressed", () => {
+    render(<NameAndAgeStep />);
+
+    fireEvent.focus(screen.getByLabelText("Age"));
+    tap("A");
+    tap("123");
+    tap("1");
+    tap("2");
+    tap("3");
+
+    expect(screen.getByLabelText("Age")).toHaveValue("12");
+  });
+
+  it("still types the name when the name was touched", () => {
+    render(<NameAndAgeStep />);
+
+    fireEvent.focus(screen.getByLabelText("Your name"));
+    tap("A");
+    tap("d");
+    tap("a");
+
+    expect(screen.getByLabelText("Your name")).toHaveValue("Ada");
+    expect(screen.getByLabelText("Age")).toHaveValue("");
+  });
+});
