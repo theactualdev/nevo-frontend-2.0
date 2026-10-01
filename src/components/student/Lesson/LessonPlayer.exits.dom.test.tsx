@@ -43,7 +43,6 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, replace: vi.fn(), back: vi.fn() }),
 }));
 vi.mock("@/hooks", () => ({
-  useBreakMonitor: () => ({ due: false, dismiss: vi.fn() }),
   useLesson: () => ({ setActiveLesson: vi.fn() }),
   useSignals: () => ({ trackEvent }),
 }));

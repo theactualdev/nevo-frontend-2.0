@@ -4,15 +4,15 @@ import type { SignalEventType } from "@/lib/constants";
 /**
  * Signal batch submission (FE Architecture §3) - wired to the live backend
  * (`POST /api/signals/`, Bearer). Batching/flushing lives in the `useSignals`
- * hook; this module shapes a flushed batch to the ingest contract.
+ * hook, and in `lib/signals/outbox` for a batch the lesson could not send;
+ * this module shapes a flushed batch to the ingest contract.
  *
  * The backend validates `eventType` against a closed enum, so a batch may only
- * carry types it knows - one unknown type rejects the whole batch (422).
- * Types outside the enum (session context, system-busy brackets, module
- * boundaries, breaks, baseline profiling) are partitioned out at submit and
- * dropped after a dev-console note.
- * TODO(api): flagged to backend - extend SignalEventType with the Touch Signal
- * Contract + SCRUM-101/104 types so the full stream can land.
+ * carry types it knows - one unknown type rejects the whole batch (422). The
+ * few types we emit that are ours alone (session context, system-busy
+ * brackets, blocked taps, the baseline run's markers) are partitioned out at
+ * submit and dropped after a dev-console note - see `CLIENT_ONLY_EVENT_TYPES`,
+ * which also says why none of them is waiting on backend.
  */
 export interface SignalEvent {
   type: SignalEventType;
@@ -82,7 +82,8 @@ export interface SignalBatchReceipt {
  * know when we do that because we are the ones writing it.
  *
  * Safe because `SignalEvent.type` is `SignalEventType`, our own union - so
- * nothing outside the 22 names we define can reach this filter at all.
+ * nothing outside the names `SIGNAL_EVENT_TYPES` and `ONBOARDING_SIGNAL_TYPES`
+ * define can reach this filter at all.
  *
  * Each entry says why it is ours rather than theirs.
  */

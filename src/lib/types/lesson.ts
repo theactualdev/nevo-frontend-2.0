@@ -190,10 +190,12 @@ export interface CalculationSegment {
    * The drawn scaffold - fraction bars today.
    *
    * OPTIONAL, and this is the change real content forced. `fraction_add_like`
-   * is an authored variant with `{parts, rows}`; the deployed contract has no
-   * such field for anything else, only a generated `scaffoldImage` and a
-   * per-step `equationState` string. A calculation that is not two like
-   * fractions has no bars to draw, and drawing some anyway would be inventing
+   * is an authored variant with `{parts, rows}`, and only the authored lessons
+   * set this. The deployed contract carries a `scaffold` of its own now
+   * (`CalculationScaffold`, checked 1 Oct), but in a different shape - its
+   * `rows` is a single integer, this one's lists numerators - and nothing maps
+   * it here while the solver is frozen (SCRUM-181/177). A calculation without
+   * this field has no bars to draw, and drawing some anyway would be inventing
    * a picture of a child's problem.
    */
   scaffold?: { kind: string; parts: number; rows: number[] };

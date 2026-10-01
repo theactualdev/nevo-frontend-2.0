@@ -37,7 +37,6 @@ import type { AdaptationPlan, Lesson } from "@/lib/types";
 
 const { trackEvent } = vi.hoisted(() => ({ trackEvent: vi.fn() }));
 vi.mock("@/hooks", () => ({
-  useBreakMonitor: () => ({ due: false, dismiss: vi.fn() }),
   useLesson: () => ({ setActiveLesson: vi.fn() }),
   useSignals: () => ({ trackEvent }),
 }));

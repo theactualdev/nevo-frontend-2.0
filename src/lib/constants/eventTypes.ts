@@ -24,8 +24,8 @@ export const SIGNAL_EVENT_TYPES = {
    * centrepiece, and the one component that teaches across every modality -
    * produced no evidence of its own. Steps rode `comprehension_response`
    * under a `kind` of our invention; solving emitted nothing at all; and a
-   * kinesthetic learner placing tiles, which is precisely how that learner
-   * shows their thinking, emitted nothing either.
+   * child placing tiles on the kinesthetic layer, where the placement is
+   * their working, emitted nothing either.
    */
   CALCULATION_STEP_RESPONSE: "calculation_step_response",
   CALCULATION_COMPLETE: "calculation_complete",
@@ -111,12 +111,10 @@ export const BUSY_PHASE = {
 export type BusyPhase = (typeof BUSY_PHASE)[keyof typeof BUSY_PHASE];
 
 /**
- * Observed Interaction Sequence signals (Product Arch B.2) — the first-run
- * onboarding activities seed the learner profile across cognitive dimensions.
- * Each event carries timing/sequence/hesitation in its payload.
- *
- * TODO(intelligence): reconcile exact names + payload schema with the backend
- * Intelligence Framework once the onboarding-signal contract lands.
+ * The baseline run's own markers, tracked by `ProfilingFlow`. None of them
+ * reaches the backend: the baseline reports through `POST /api/baseline/submit`
+ * as a reduced vector, so `signalsApi` drops all three before a batch is
+ * posted - see `CLIENT_ONLY_EVENT_TYPES`.
  */
 export const ONBOARDING_SIGNAL_TYPES = {
   // The OIS activity events (sort_placement, audio_response, pattern_tap,

@@ -21,7 +21,6 @@ const runtime = vi.hoisted(() => ({
 }));
 
 vi.mock("@/hooks", () => ({
-  useBreakMonitor: () => ({ due: false, dismiss: vi.fn() }),
   useLesson: () => ({ setActiveLesson: vi.fn() }),
   useSignals: () => ({ trackEvent: vi.fn() }),
 }));

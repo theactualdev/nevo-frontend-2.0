@@ -303,14 +303,14 @@ export function LessonPlayer({
    * completed lesson as `in_progress, segment 0` on the very first frame.
    *
    * Finishing the review put the completion back. Leaving it partway did not:
-   * the lesson stayed demoted, reappeared on Home under "Pick back up" as
-   * though it were unfinished, and the child was invited to redo work they had
-   * done. The record of having completed it was simply gone.
+   * the lesson stayed demoted, came back on Home as unfinished work to pick
+   * up, and the child was invited to redo work they had done. The record of
+   * having completed it was simply gone.
    *
    * The review's own outcome belongs to the scheduler
-   * (`POST /api/scheduler/record-review`), which nothing calls yet. Until it
-   * does, the honest behaviour is to leave the lesson's progress alone rather
-   * than overwrite it with something false.
+   * (`POST /api/scheduler/record-review`, sent at the end - see below), not to
+   * the lesson's progress, so a review leaves that progress alone rather than
+   * overwrite it with something false.
    */
   // An unknown place opens at the top, and the top is not a position: it is
   // written once the child moves, never over the place they really reached.

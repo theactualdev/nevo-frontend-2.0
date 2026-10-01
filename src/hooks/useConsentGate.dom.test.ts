@@ -7,9 +7,9 @@ import { clearSession, setSession } from "@/lib/auth/session";
  * A child whose guardian had withdrawn consent kept being profiled.
  *
  * `GET /api/v1/students/me/consent-gate` has been deployed for some time, and
- * `consentsApi.myConsentGate` had **zero callers**. Every tap and keystroke
- * still went to the on-device behavioural store. Nothing in the student app
- * ever asked.
+ * `consentsApi.myConsentGate` had **zero callers**. Nothing in the student app
+ * ever asked. The baseline and the daily warm-up read this hook now - see
+ * `ProfilingFlow` and `WarmUpRun`.
  *
  * The delicate part is the DEFAULT, and it cuts both ways:
  *   - Defaulting to withdrawn would silently stop measuring children whose

@@ -29,11 +29,13 @@ import { useDisplayName } from "./useDisplayName";
  * onboarding and the immersive Lesson Player — render bare, with no chrome
  * ("no in-lesson sidebar").
  *
- * ASK NEVO IS THE EXCEPTION, AND IT IS NOT CHROME. Frame 26 governs it: "always
- * reachable, never interruptive". It was mounted below the full-screen early
- * return, so it sat on every tab and was missing from the one screen where a
- * child actually gets stuck. Its trigger is right-aligned and the player's
- * chevrons are centred, so it costs the player no room and displaces nothing.
+ * ASK NEVO IS NOT CHROME, and on the player it is not the shell's at all.
+ * Frame 26 governs it: "always reachable, never interruptive". The shell
+ * mounts it below, on every in-shell screen but Profile - the lesson's
+ * `/summary` and `/review` included. On the player the lesson layout renders
+ * it instead (`LessonAskNevo`), inside the `LessonProvider` so a question
+ * carries its lesson, and only on the completion screen - IA 31 keeps it off
+ * the player while it is teaching.
  *
  * NOT on the other full-screen routes, and each for its own reason. The daily
  * warm-up is a calibrated baseline activity - offering help inside it would
@@ -43,14 +45,6 @@ import { useDisplayName } from "./useDisplayName";
  *
  * The shell is a fixed-height viewport frame: the sidebar/nav stay put while only
  * the content region scrolls.
- */
-/**
- * `SampleRegion`, but only when there is something to mark.
- *
- * The chrome is on every student screen, so wrapping it unconditionally would
- * put a sample mark on the page for every signed-in child and make the
- * end-to-end assertion useless. `display: contents` either way, so neither
- * branch changes a pixel.
  */
 export function StudentShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? "";
@@ -90,7 +84,8 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
    *
    * Here rather than only in the player, because a child who gave up on a
    * lesson while offline may never open that lesson again - and their position
-   * still belongs on Home's "Pick back up" card. Any student screen is enough.
+   * still belongs in Home's "Pick up where you left off" list. Any student
+   * screen is enough.
    */
   useEffect(() => {
     void flushPendingProgress();
@@ -310,12 +305,12 @@ const PROFILE_HREF = "/student/profile";
 /**
  * The immersive player, and the review session that reuses it wholesale (37d).
  *
- * Only the BARE lesson route is the player; its sub-routes (e.g. `/summary`)
- * are ordinary in-shell screens and keep the sidebar/nav.
+ * Only the BARE lesson route and `/review-session` are the player; the other
+ * sub-routes (`/summary`, `/review`) are ordinary in-shell screens and keep
+ * the sidebar/nav.
  */
 const isLesson = isLessonRoute;
 
-/** Onboarding and the lesson player (`/student/lessons/<id>`) run without chrome. */
 /**
  * The consent hold (00d) and the school-link door that can end on it.
  *
@@ -346,6 +341,10 @@ export function scalesWithTextSize(pathname: string): boolean {
   return true;
 }
 
+/**
+ * The routes that run without chrome: onboarding, the consent hold and its
+ * door, the lesson player, Feedback and Change PIN, and the daily warm-up.
+ */
 function isFullScreen(pathname: string): boolean {
   if (pathname.startsWith("/student/onboarding")) return true;
   if (isHoldRoute(pathname)) return true;

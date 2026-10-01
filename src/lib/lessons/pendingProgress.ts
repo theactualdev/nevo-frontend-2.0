@@ -270,8 +270,8 @@ let queue: Promise<void> = Promise.resolve();
  *
  * Deliberately not per-lesson: a child who gave up on a lesson offline may
  * never open that lesson again, and their position should still reach Home's
- * "Pick back up" card. Mounting any student screen is enough, and so is the
- * connection coming back.
+ * "Pick up where you left off" list. Mounting any student screen is enough,
+ * and so is the connection coming back.
  *
  * Only ever the signed-in child's own shelf. Anything belonging to another
  * child on this device is on their shelf, not sent and not deleted.
