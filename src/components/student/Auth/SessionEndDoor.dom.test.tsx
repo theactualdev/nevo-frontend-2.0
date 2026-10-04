@@ -145,3 +145,31 @@ describe("the tab title", () => {
     expect(await title()).toBe("Session expired - Nevo");
   });
 });
+
+describe("what a child is told to do next (1 Oct rulings)", () => {
+  it("tells a child signed in somewhere else who to tell if it was not them (D51)", async () => {
+    await doorFor("session_replaced");
+
+    expect(screen.getByText(/that wasn.t you, tell your teacher/i)).toBeInTheDocument();
+  });
+
+  it("does not say it on the screens where nobody else signed in", async () => {
+    for (const reason of ["session_expired", "session_revoked"]) {
+      const { unmount } = await doorFor(reason);
+      expect(screen.queryByText(/wasn.t you/i)).toBeNull();
+      unmount();
+    }
+  });
+
+  it("gives a paused screen a way back to the picker, and still no retry (D52)", async () => {
+    // A shared tablet left on a screen with no controls locks every other
+    // child out of it.
+    await doorFor("account_paused");
+
+    expect(screen.getByRole("link", { name: "Back to sign in" })).toHaveAttribute(
+      "href",
+      "/auth/login",
+    );
+    expect(screen.queryByText(/log back in|try again/i)).toBeNull();
+  });
+});

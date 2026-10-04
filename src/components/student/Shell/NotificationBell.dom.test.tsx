@@ -119,3 +119,53 @@ describe("what the end-to-end sweep can see", () => {
     expect(marks()).toHaveLength(0);
   });
 });
+
+/**
+ * Board 28 draws each row with a mark: a book for "A new lesson is ready for
+ * you", a speech bubble for a teacher's message. The rows had a dot and no
+ * mark, so a child could not tell a lesson from a message at a glance.
+ */
+describe("each row's mark", () => {
+  const BOOK = "M4 5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2z";
+  const BUBBLE = "M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.5A8 8 0 1 1 21 12z";
+
+  const rowFor = (title: string) =>
+    screen.getByText(title).closest("a, button, div[class*='rounded']")!;
+
+  it("is the frame's book for a lesson and its bubble for a message", () => {
+    ctx.value.notifications = [
+      { id: "n-1", kind: "lesson", title: "A new lesson is ready for you", ago: "2h", read: true },
+      { id: "n-2", kind: "message", title: "Ms Bello replied", ago: "1d", read: true },
+    ];
+
+    openPanel();
+
+    expect(rowFor("A new lesson is ready for you").innerHTML).toContain(BOOK);
+    expect(rowFor("Ms Bello replied").innerHTML).toContain(BUBBLE);
+  });
+
+  it("is the bell's own for a kind the frame does not draw", () => {
+    ctx.value.notifications = [
+      { id: "n-3", kind: "other", title: "Your PIN was reset", ago: "now", read: true },
+    ];
+
+    openPanel();
+
+    const row = rowFor("Your PIN was reset");
+    expect(row.innerHTML).not.toContain(BOOK);
+    expect(row.innerHTML).not.toContain(BUBBLE);
+    expect(row.querySelector("[data-kind='other'] svg")).not.toBeNull();
+  });
+
+  it("carries the unread dot only while the row is unread", () => {
+    ctx.value.notifications = [
+      { id: "n-1", kind: "lesson", title: "Unread one", ago: "2h", read: false },
+      { id: "n-2", kind: "lesson", title: "Read one", ago: "1d", read: true },
+    ];
+
+    openPanel();
+
+    expect(rowFor("Unread one").querySelector("[aria-label='Unread']")).not.toBeNull();
+    expect(rowFor("Read one").querySelector("[aria-label='Unread']")).toBeNull();
+  });
+});

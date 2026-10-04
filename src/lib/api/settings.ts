@@ -99,16 +99,13 @@ export const notificationPrefsApi = {
 };
 
 /**
- * The student's own preferences. Only what belongs to the CHILD lives here -
- * the name they chose for themselves follows them to a school tablet. Motion,
- * contrast and text size stay on the device, for the same reason they do on
- * the teacher side: they describe the screen someone is sitting at, not the
- * account.
+ * The free-form bag behind `/api/settings/me`, which the contract marks
+ * superseded by `/api/v1/settings/me`.
+ *
+ * THE CHILD'S CHOSEN NAME NO LONGER LIVES HERE. It rode in this bag as
+ * `displayName` until `users/me` gained a typed `preferredName` on 1 Oct; it
+ * is read and written there now (`useDisplayName`), as the look already was.
  */
-export interface StudentPreferences {
-  displayName?: string;
-}
-
 export const settingsApi = {
   get: () => api.get<{ settings: SettingsBag }>("/api/settings/me"),
 

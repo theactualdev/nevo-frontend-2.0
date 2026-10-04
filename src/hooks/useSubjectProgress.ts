@@ -28,12 +28,19 @@ interface SubjectSnapshot {
   /** Null when there was nothing to ask for yet. */
   subject: string | null;
   reflection: string | null;
+  note: string | null;
   lessons: LessonProgress[];
 }
 
 export interface SubjectProgressState {
   /** The subject's own reflection; null until read. */
   reflection: string | null;
+  /**
+   * The subject's short note for its Progress card (backend B29, 1 Oct).
+   * Null until read, and null when the backend wrote none - the contract's
+   * empty string is "no note", never a line to draw.
+   */
+  note: string | null;
   /**
    * The lessons THIS SUBJECT's history, which is the only place they exist.
    *
@@ -65,9 +72,16 @@ export function useSubjectProgress(
   const run = useCallback(async (): Promise<SubjectSnapshot> => {
     // `useLiveQuery` has no "enabled" switch, so an unknown subject resolves
     // to an empty snapshot rather than a request with nothing in the path.
-    if (!subject) return { subject: null, reflection: null, lessons: [] };
+    if (!subject) {
+      return { subject: null, reflection: null, note: null, lessons: [] };
+    }
     const res = await studentsApi.subjectProgress(studentId!, subject);
-    return { subject, reflection: res.reflection, lessons: res.lessons ?? [] };
+    return {
+      subject,
+      reflection: res.reflection,
+      note: res.note?.trim() || null,
+      lessons: res.lessons ?? [],
+    };
   }, [studentId, subject]);
 
   const { data, failed, loading } = useLiveQuery<SubjectSnapshot>(run, [
@@ -86,6 +100,7 @@ export function useSubjectProgress(
 
   return {
     reflection: forThisSubject ? (data?.reflection ?? null) : null,
+    note: forThisSubject ? (data?.note ?? null) : null,
     lessons: forThisSubject ? (data?.lessons ?? []) : [],
     loading: Boolean(studentId && subject) && loading,
     failed,

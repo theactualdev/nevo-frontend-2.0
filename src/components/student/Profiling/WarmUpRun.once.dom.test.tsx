@@ -26,9 +26,6 @@ vi.mock("@/lib/profiling/pendingBaseline", () => ({ holdBaseline }));
 vi.mock("@/hooks/useWarmUpDimension", () => ({
   useWarmUpPrompt: () => ({ state: "waiting" }),
 }));
-vi.mock("@/hooks/useNextLessonHref", () => ({
-  useNextLessonHref: () => "/student/lessons/x",
-}));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
@@ -81,15 +78,13 @@ describe("the first warm-up of the day", () => {
     expect(doneHeading()).toBeInTheDocument();
   });
 
-  it("offers the day's lesson rather than another go", async () => {
-    // Design: "it closes and moves the child into the day's lesson."
+  it("offers the way Home rather than another go", async () => {
+    // Design, 23 Sep: "it closes". Where to went Home on 1 Oct (D18).
     render(<WarmUpRun dimension="attention" />);
     fireEvent.click(screen.getByText("Right"));
     await settle();
 
-    expect(
-      screen.getByRole("button", { name: /Start today's lesson/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Home" })).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /again|retry|another/i }),
     ).toBeNull();

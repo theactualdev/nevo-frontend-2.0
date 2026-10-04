@@ -11,6 +11,7 @@ import { authApi } from "@/lib/api/auth";
 import { setSession } from "@/lib/auth/session";
 import { knownRole } from "@/lib/auth/consoleDoor";
 import { ssoLanding, studentDestination } from "@/lib/auth/entryGate";
+import { skipsWelcomeBeat } from "./signInMoments";
 import {
   BUSY_PHASE,
   BUSY_REASON,
@@ -134,13 +135,19 @@ export function SsoCallback() {
         // once the session exists. Seeding a placeholder here would put an
         // invented school into the signed-in child.
         signIn({ id: res.userId, role, schoolId: "", method: "sso" });
-        setPhase("success");
         // Where a first-ever sign-in goes is the SERVER's answer now - read
         // as the enum it is, by `ssoLanding`. Consent is resolved on top of
         // that answer, because SSO is an entry path like any other - and
         // `studentDestination` leaves a teacher's or an admin's home alone,
         // since `consent-gate` is `students/me`.
         void studentDestination(landing).then((destination) => {
+          // D2, as at the PIN doors: a child about to be held is not told
+          // they are in. They go straight to the waiting screen.
+          if (skipsWelcomeBeat(destination)) {
+            router.replace(destination);
+            return;
+          }
+          setPhase("success");
           redirectTimer.current = setTimeout(() => {
             router.replace(destination);
           }, SUCCESS_HOLD_MS);

@@ -32,6 +32,7 @@ import {
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { AccountOnPauseScreen } from "./AccountOnPauseScreen";
+import { REPLACED_ELSEWHERE_COPY, skipsWelcomeBeat } from "./signInMoments";
 import { WrongDoorNote } from "./WrongDoorNote";
 
 /**
@@ -97,6 +98,8 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
   const [username, setUsername] = useState("");
   const [digits, setDigits] = useState("");
   const [done, setDone] = useState(false);
+  /** This sign-in ended the account's session elsewhere (D2). */
+  const [replacedElsewhere, setReplacedElsewhere] = useState(false);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<LoginFailure | null>(null);
   /** Whose door a non-student account belongs at; see `WrongDoorNote`. */
@@ -172,6 +175,8 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
     if (!ready || checking) return;
     setChecking(true);
     setError(null);
+    // Leaving for the waiting screen: the button stays busy until it lands.
+    let leaving = false;
     try {
       const session = await authApi.loginPin({
         schoolCode: school,
@@ -245,8 +250,12 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
       void usersApi
         .me()
         .then((me) => {
+          // The name they chose for themselves first (`preferredName`), then
+          // the school's record - what every signed-in screen calls them.
           const first =
-            (me.firstName ?? me.displayName ?? "").trim().split(/\s+/)[0] || "";
+            (me.preferredName?.trim() || me.firstName || me.displayName || "")
+              .trim()
+              .split(/\s+/)[0] || "";
           if (!first) return;
           rememberProfile({
             schoolCode: school,
@@ -263,22 +272,30 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
           // already passed. The device remembers them namelessly instead, and
           // "Welcome back" alone is a better greeting than their username.
         });
-      setDone(true);
       /*
        * Consent is resolved before the child lands anywhere - design, 23 Sep:
        * the gate is on the child's state, not on the door they used, and PIN
-       * sign-in is an entry path. The read happens INSIDE the "Welcome back"
-       * hold that already exists, so it costs a held child nothing and costs
-       * everybody else nothing either.
+       * sign-in is an entry path.
+       *
+       * BEFORE THE "WELCOME BACK" BEAT, NOT INSIDE IT (D2). A child about to
+       * be held never sees "Taking you to your lessons", because it is not
+       * true: they go straight to the waiting screen.
        */
       const destination = await studentDestination(next);
+      if (skipsWelcomeBeat(destination)) {
+        leaving = true;
+        router.push(destination);
+        return;
+      }
+      setReplacedElsewhere(session.replacedSession === true);
+      setDone(true);
       doneTimer.current = setTimeout(() => router.push(destination), DONE_MS);
     } catch (cause) {
       // Only the PIN clears. The other two fields stay, deliberately.
       setDigits("");
       setError(classifyLoginFailure(cause));
     } finally {
-      setChecking(false);
+      if (!leaving) setChecking(false);
     }
   }, [ready, checking, school, identifier, digits, signIn, router, next]);
 
@@ -287,7 +304,10 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
    * unlock. There is nothing here a child can do, and leaving the form
    * underneath would invite them to keep trying something that cannot work.
    */
-  if (error === "paused") return <AccountOnPauseScreen />;
+  if (error === "paused") {
+    // No retry, but a way back to the picker for whoever is next (D52).
+    return <AccountOnPauseScreen back={{ href: "/auth/login" }} />;
+  }
 
   if (done) {
     return (
@@ -307,6 +327,11 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
         <p className="mt-2.5 text-[15px] text-nevo-near-black/60">
           Taking you to your lessons…
         </p>
+        {replacedElsewhere && (
+          <p className="mt-1.5 text-[15px] text-nevo-near-black/60">
+            {REPLACED_ELSEWHERE_COPY}
+          </p>
+        )}
       </main>
     );
   }

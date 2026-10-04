@@ -8,10 +8,12 @@ import { MaybeSample } from "@/components/shared/SampleRegion";
 import { useAuth } from "@/hooks";
 import { useHasSession } from "@/hooks/useHasSession";
 import { useHydrated } from "@/hooks/useHydrated";
-import { useDisplayName } from "@/components/student/Shell/useDisplayName";
+import {
+  saveChosenName,
+  useDisplayName,
+} from "@/components/student/Shell/useDisplayName";
 import { useAvatarTone } from "@/components/student/Shell/useAvatarTone";
-import { setStoredDisplayName } from "@/lib/auth/session";
-import { settingsApi } from "@/lib/api/settings";
+import { PREFERRED_NAME_MAX } from "@/lib/api/users";
 import { useAccessibility } from "@/context/AccessibilityContext";
 import { cn } from "@/lib/utils";
 import { AvatarPickerSheet } from "./AvatarPickerSheet";
@@ -35,13 +37,19 @@ const TEXT_SIZES = [
  */
 export function ProfileSettings() {
   const router = useRouter();
-  const { signOut } = useAuth();
+  const { signOut, user } = useAuth();
+  /*
+   * A child who signs in through their school (SSO) has no PIN, so Change PIN
+   * is not theirs to see and sign-out does not promise one (D9). Dormant until
+   * school SSO works; the session records the door it came through.
+   */
+  const sso = user?.method === "sso";
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [lookOpen, setLookOpen] = useState(false);
   const { tone, choose: chooseTone } = useAvatarTone();
 
   // Editable display name (product frame: tap Change → inline input; initials
-  // derive from the name). TODO(api): persist via the profile endpoint.
+  // derive from the name). Saved against the account - see `saveChosenName`.
   const stored = useDisplayName();
   // Signed out, the name and initials are the fixture child's ("Ada"), so the
   // row is marked - the same gate the shell's identity uses.
@@ -52,6 +60,8 @@ export function ProfileSettings() {
   const [editingName, setEditingName] = useState(false);
   const [nameKbOpen, setNameKbOpen] = useState(false);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
+  /** The name as it was before this edit, which a refused save goes back to. */
+  const nameBefore = useRef("");
   const initials =
     name
       .split(/\s+/)
@@ -195,7 +205,9 @@ export function ProfileSettings() {
           <input
             ref={nameInputRef}
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) =>
+              setName(e.target.value.slice(0, PREFERRED_NAME_MAX))
+            }
             onFocus={() => setNameKbOpen(true)}
             onBlur={() => {
               setNameKbOpen(false);
@@ -204,16 +216,26 @@ export function ProfileSettings() {
                 setName(stored.name);
                 return;
               }
-              // "Saved" now means it: the name persists to the device and
-              // the rest of the app follows it.
-              setStoredDisplayName(name, initials);
-              // Also against the account, so the name they chose for
-              // themselves follows them to another device. Best-effort: the
-              // device copy is what this screen reads back either way.
-              void settingsApi
-                .update({ displayName: name.trim() })
-                .catch(() => {});
-              flashSaved();
+              if (name.trim() === nameBefore.current.trim()) return;
+              // Signed out there is no account to hold it - the walkthrough's
+              // choice lives in this tab, as its look does.
+              if (!signedIn) {
+                flashSaved();
+                return;
+              }
+              /*
+               * "Saved" only once the ACCOUNT holds it. This wrote the device
+               * copy, fired a best-effort write to the deprecated settings bag
+               * and said Saved in the same breath, so a refused write still
+               * said Saved and the name never reached another tablet. The
+               * field keeps what they typed while it goes; a refusal puts
+               * the name back to what the account still has.
+               */
+              const before = nameBefore.current;
+              void saveChosenName(name).then((ok) => {
+                if (ok) flashSaved();
+                else setName(before);
+              });
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
@@ -224,6 +246,7 @@ export function ProfileSettings() {
             // A.12: the Nevo Keyboard drives entry on touch; hardware keyboard
             // still types on desktop, where the on-screen one is hidden.
             inputMode="none"
+            maxLength={PREFERRED_NAME_MAX}
             autoFocus
             aria-label="Your name"
             className="h-[42px] min-w-0 flex-1 rounded-[10px] border-[1.5px] border-nevo-navy bg-nevo-cream-elevated px-3.5 text-[15px] text-nevo-near-black outline-none"
@@ -240,6 +263,7 @@ export function ProfileSettings() {
                 // server name arriving - so entering edit re-seeds from
                 // whatever the hook now says.
                 setName((n) => n || stored.name);
+                nameBefore.current = name || stored.name;
                 setEditingName(true);
               }}
               className="cursor-pointer text-[15px] font-medium text-nevo-navy"
@@ -269,17 +293,19 @@ export function ProfileSettings() {
           strokeWidth={2}
         />
       </button>
-      <button
-        type="button"
-        onClick={() => router.push("/student/profile/pin")}
-        className="flex w-full cursor-pointer items-center justify-between border-t border-nevo-near-black/8 py-4 text-left"
-      >
-        <span className="text-[15px] text-nevo-near-black">Change PIN</span>
-        <ChevronRight
-          className="size-5 text-nevo-near-black/40"
-          strokeWidth={2}
-        />
-      </button>
+      {!sso && (
+        <button
+          type="button"
+          onClick={() => router.push("/student/profile/pin")}
+          className="flex w-full cursor-pointer items-center justify-between border-t border-nevo-near-black/8 py-4 text-left"
+        >
+          <span className="text-[15px] text-nevo-near-black">Change PIN</span>
+          <ChevronRight
+            className="size-5 text-nevo-near-black/40"
+            strokeWidth={2}
+          />
+        </button>
+      )}
       <button
         type="button"
         onClick={() => setSignOutOpen(true)}
@@ -314,6 +340,7 @@ export function ProfileSettings() {
       <SignOutSheet
         open={signOutOpen}
         onOpenChange={setSignOutOpen}
+        sso={sso}
         onSignOut={() => {
           setSignOutOpen(false);
           signOut();
@@ -338,7 +365,7 @@ export function ProfileSettings() {
       {nameKbOpen && (
         <NevoKeyboard
           layout="qwerty"
-          onKey={(c) => setName((n) => n + c)}
+          onKey={(c) => setName((n) => (n + c).slice(0, PREFERRED_NAME_MAX))}
           onBackspace={() => setName((n) => n.slice(0, -1))}
           onReturn={() => nameInputRef.current?.blur()}
           className="fixed inset-x-0 bottom-0 z-40"

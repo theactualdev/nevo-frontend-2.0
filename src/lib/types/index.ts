@@ -18,5 +18,7 @@ export type {
   Lesson,
   SegmentAdaptation,
   AdaptationPlan,
+  DensityLevel,
+  GuidedPrompt,
 } from "./lesson";
 export { isCardStep, isNumericStep, isTextStep } from "./lesson";

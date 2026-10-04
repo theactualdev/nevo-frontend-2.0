@@ -167,9 +167,16 @@ export function StudentFeedbackScreen() {
               )}
             </button>
 
+            {/*
+              WHERE IT GOES, AND NOWHERE ELSE (design D49, 1 Oct). The frame's
+              line ended "and their teacher sees the themes", but feedback
+              reaches Nevo's own inbox and no teacher view of it exists. It
+              says where the note goes, and promises no teacher view until
+              there is one.
+            */}
             <p className="mx-0.5 mt-3.5 text-xs leading-[1.5] text-nevo-near-black/50">
               No feature requests here - students share how it&apos;s going, and
-              their teacher sees the themes.
+              their note reaches Nevo.
             </p>
           </>
         )}

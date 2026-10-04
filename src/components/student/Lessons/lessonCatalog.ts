@@ -28,8 +28,11 @@ export interface LessonSummary {
    * a generated stand-in would be us describing a lesson we have not read.
    */
   description?: string;
-  /** 0–1 through the lesson, when `in_progress`. */
-  progress?: number;
+  /*
+   * NO `progress`. It was a 0-1 fraction drawn as the preview's bar, and the
+   * fraction is not on the wire - see `PickUp` on Home (design D21, 1 Oct).
+   * `status` is what a card and the preview may say.
+   */
   /**
    * The playable lesson this routes to. A live card opens its own lesson; the
    * signed-out fixtures each open one of the two authored lessons.
@@ -66,7 +69,6 @@ export const LESSON_CATALOG: LessonSummary[] = [
     subject: "Mathematics",
     timeEstimate: "About 12 min",
     status: "in_progress",
-    progress: 0.55,
     description:
       "Learn how to add fractions with the same bottom number, using pictures of pizza and chocolate bars.",
     lessonId: "adding-fractions",

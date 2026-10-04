@@ -2,6 +2,11 @@
 
 import Link from "next/link";
 import type { BaselineDimension } from "@/lib/profiling/bands";
+import { useWarmUpPrompt } from "@/hooks/useWarmUpDimension";
+import { useHydrated } from "@/hooks/useHydrated";
+import { getSession } from "@/lib/auth/session";
+import { warmUpDoneFor } from "@/lib/profiling/warmUpDone";
+import { dimensionForToday } from "./WarmUpRun";
 
 /** The rotating chip copy - warm, never clinical (frame's rotation map). */
 export const WARM_UP_CHIPS: Record<BaselineDimension, string> = {
@@ -14,9 +19,47 @@ export const WARM_UP_CHIPS: Record<BaselineDimension, string> = {
 };
 
 /**
+ * The card as Home places it, with today's task and whether it is done read
+ * here - so the decision is tested where it is made, not only the card that
+ * renders it. (A dashboard that hard-coded `done={false}` once passed every
+ * test the card had.)
+ *
+ * DONE IS THE ACCOUNT'S ANSWER (B10, 1 Oct). `doneToday` on the prompt is
+ * held against the account, so a warm-up done on one tablet reads as done on
+ * the next. This device's memory stands in only while nobody has said - the
+ * prompt in flight, a failed read, a deployment without the field - so the
+ * card does not offer a warm-up for a moment and then take it back.
+ *
+ * Read during render behind `hydrated`, not from an effect: the memory lives
+ * in localStorage, which the server cannot see, and setting state to say so
+ * trips `set-state-in-effect`. False until hydrated means the live card is
+ * what renders first, which is the right way round - offering a warm-up to a
+ * child who has done one is a smaller wrong than telling a child who has not
+ * that they have.
+ */
+export function TodaysWarmUpCard() {
+  const prompt = useWarmUpPrompt(dimensionForToday());
+  const hydrated = useHydrated();
+  const done =
+    hydrated &&
+    warmUpDoneFor(
+      prompt.state === "waiting" ? undefined : prompt.doneToday,
+      getSession()?.userId,
+    );
+  // The same dimension the run will use - the card naming one task and the
+  // run opening another would be a small, avoidable lie.
+  return (
+    <WarmUpCard
+      dimension={prompt.state === "ready" ? prompt.dimension : null}
+      done={done}
+    />
+  );
+}
+
+/**
  * Daily warm-up card (`Nevo Warm-Up Card`, SCRUM-104): the 45-second
  * calibration that opens the daily session, rotating one baseline dimension per
- * day. Presents as a quick warm-up, never an assessment - no score anywhere.
+ * day. Presents as a quick warm-up, never an assessment.
  */
 export function WarmUpCard({
   dimension,
@@ -62,9 +105,15 @@ export function WarmUpCard({
         <h3 className="mt-3 text-xl font-semibold tracking-[-0.01em] text-nevo-navy">
           A quick warm-up to begin
         </h3>
+        {/*
+          The frame's line less "No score,". The architecture bans the word
+          in front of a child ("test", "score" and "ability" never appear),
+          and design ruled the line reworded on 1 Oct (D13) without giving
+          words - so the claim is removed and nothing is added.
+        */}
         <p className="mt-2 max-w-[420px] text-[14.5px] leading-[1.55] text-pretty text-nevo-near-black">
-          About 45 seconds. No score, it just keeps Nevo tuned to how
-          you&apos;re doing today.
+          About 45 seconds. It just keeps Nevo tuned to how you&apos;re doing
+          today.
         </p>
         <Link
           href="/student/warm-up"

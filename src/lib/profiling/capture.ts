@@ -260,12 +260,14 @@ export function reduceTrialModule(capture: BaselineCapture, module: string) {
 /**
  * What the run was calibrated to, which the engine could not otherwise know.
  *
- * The age band travelled only on `baseline_module_start` - a client-only event
- * the signal filter drops - and the subject the child chose for the probe
- * travelled nowhere. So the engine received a child's timings and accuracies
- * with no idea which band's items produced them. Sent as its own feature, and
- * as the band and subject only: nothing about the child that the run did not
- * already use.
+ * The age band travelled only on `baseline_module_start`, which until 1 Oct
+ * was a client-only event the signal filter dropped, and the subject the child
+ * chose for the probe travelled nowhere. So the engine received a child's
+ * timings and accuracies with no idea which band's items produced them. Sent
+ * as its own feature, and as the band and subject only: nothing about the
+ * child that the run did not already use. The signal stream now carries
+ * `baseline_module_start` too, but on a different channel from this vector,
+ * which still needs the band beside the numbers it describes.
  */
 export function reduceRunContext(capture: BaselineCapture) {
   const start = capture.ofKind("run_start").at(-1);

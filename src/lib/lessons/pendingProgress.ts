@@ -283,3 +283,20 @@ export function flushPendingProgress(): Promise<void> {
   queue = queue.then(flushOnce, flushOnce);
   return queue;
 }
+
+/**
+ * Does the signed-in child hold a position this device has not yet sent?
+ *
+ * "In progress", as design's offline rule (D50) means it: a child with nothing
+ * held and nothing downloaded cannot continue at all offline, and is the only
+ * child the full offline screen is for. Only their own shelf, and nothing
+ * older than a flush would still send.
+ */
+export function holdsProgress(): boolean {
+  const owner = getSession()?.userId;
+  if (!owner) return false;
+  const now = Date.now();
+  return Object.values(read(owner)).some(
+    (held) => now - held.heldAt <= MAX_AGE_MS,
+  );
+}

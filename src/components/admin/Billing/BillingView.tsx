@@ -227,7 +227,16 @@ export function BillingView() {
             </div>
           )}
 
-          <CostSheet pricing={subscription.pricing} />
+          <CostSheet
+            pricing={subscription.pricing}
+            payStatus={
+              !upcomingFailed && upcoming?.invoiceId
+                ? upcoming.status === "paid"
+                  ? "active"
+                  : "due"
+                : null
+            }
+          />
 
           <h2 className="mt-8 text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase">
             Next charge

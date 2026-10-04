@@ -7,12 +7,14 @@ export const metadata: Metadata = {
 };
 
 // `?next=` is where the child was going before they forgot; the way back to
-// the PIN carries it on. Next.js 16: `searchParams` is a Promise.
+// the PIN carries it on. `?child=` is which remembered child forgot, as the
+// device roster's opaque id - never an identifier. Next.js 16: `searchParams`
+// is a Promise.
 export default async function ForgotPinPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string }>;
+  searchParams: Promise<{ next?: string; child?: string }>;
 }) {
-  const { next } = await searchParams;
-  return <ForgotPinScreen next={safeNextPath(next)} />;
+  const { next, child } = await searchParams;
+  return <ForgotPinScreen next={safeNextPath(next)} childId={child} />;
 }

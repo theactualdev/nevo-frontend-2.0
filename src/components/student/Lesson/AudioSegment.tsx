@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Pause, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AudioContent } from "@/lib/types";
-import { useMediaSource } from "./useMediaSource";
+import { type MediaFailReason, useMediaSource } from "./useMediaSource";
 
 /** The frame's waveform silhouette — 24 bars, explicit px heights. */
 const BAR_HEIGHTS = [
@@ -48,6 +48,7 @@ export function AudioSegment({
   onReplay,
   onPlayed,
   onBusy,
+  onMediaFailed,
 }: {
   content: AudioContent;
   /** Fired when the student restarts a finished clip (a "replay" signal). */
@@ -64,6 +65,11 @@ export function AudioSegment({
    * pause, finish or unmount mid-clip.
    */
   onBusy?: (phase: "start" | "end") => void;
+  /**
+   * The recording would not load, after its one fresh link (B12). The card
+   * already says so and opens the transcript; this tells the engine.
+   */
+  onMediaFailed?: (reason: MediaFailReason) => void;
 }) {
   // No asset means the designed demo, which animates a placeholder. Anything
   // with a `src` is a real clip and plays for real.
@@ -72,7 +78,11 @@ export function AudioSegment({
   const [pct, setPct] = useState(0);
   // An expired link is re-issued once, and a failure is retried when the
   // connection returns - see `useMediaSource`.
-  const media = useMediaSource(content.src, content.storagePath);
+  const media = useMediaSource(
+    content.src,
+    content.storagePath,
+    onMediaFailed,
+  );
   const failed = media.failed;
   /** What the element says the clip is; null until metadata lands. */
   const [assetDuration, setAssetDuration] = useState<number | null>(null);

@@ -85,7 +85,30 @@ export const PIN_NOT_SAVED_COPY =
  * Input comes from the branded on-screen keypad (touch; shown below lg, matching
  * the design) and from the physical keyboard (desktop), so there is no reliance
  * on the OS keyboard.
+ *
+ * THE CHECK MARK WAITS FOR THE SAVE (design, D8). It used to appear the moment
+ * the two rows matched, with "You're all set" held for a beat while the write
+ * went - so a PIN that was then refused had already been celebrated, and a
+ * path with nowhere to store it was told it was set. Now the rows stay as
+ * typed while the write goes, and "You're all set" is drawn only once the
+ * server has it.
+ *
+ * A FAILED SAVE SAYS SO AND KEEPS WHAT THE CHILD TYPED (D8). It cleared the
+ * confirm row, which asked them to type again something typing could not fix.
+ * Both rows stay filled and "Try again" sends the same PIN again.
+ *
+ * NOT DRAWN: frame 15 has neither the waiting state nor the failed one. The
+ * waiting state adds nothing to the screen; the failed one is the shared
+ * not-saved line and "Try again", the words the other doors already use, until
+ * design gives this one its own.
  */
+type SavePhase = "entry" | "saving" | "saved" | "failed";
+
+/** A beat for the last box to fill before the write goes - and one write, not two, under StrictMode. */
+const WRITE_BEAT_MS = 300;
+/** How long "You're all set" stays up once the PIN is saved (the frame's 1200ms). */
+const SAVED_BEAT_MS = 1200;
+
 export function PinCreationScreen({
   sso = false,
   storePin,
@@ -105,7 +128,9 @@ export function PinCreationScreen({
     error: false,
     done: false,
   });
-  const [saveFailed, setSaveFailed] = useState(false);
+  const [phase, setPhase] = useState<SavePhase>("entry");
+  /** Bumped by "Try again", which sends the same PIN once more. */
+  const [attempt, setAttempt] = useState(0);
   /*
    * THE PAD IS DOCKED AND FOCUS-DRIVEN, per design's ruling D on the PIN
    * frame (15): "a focus-driven pad is transient, and a docked tray reads as
@@ -132,7 +157,6 @@ export function PinCreationScreen({
 
   // Stable handlers — dispatch never goes stale, so rapid input folds correctly.
   const pressDigit = useCallback((d: string) => {
-    setSaveFailed(false);
     dispatch({ type: "digit", value: d });
   }, []);
   const backspace = useCallback(() => dispatch({ type: "backspace" }), []);
@@ -157,19 +181,21 @@ export function PinCreationScreen({
     entryRef.current?.focus({ preventScroll: true });
   }, [sso, done]);
 
-  // Auto-advance once the PIN is set (manual) or the SSO confirmation lands.
-  // With a session, "set" means stored server-side: the write happens inside
-  // the designed beat, and a failure re-opens the confirm row instead of
-  // advancing on a PIN the next sign-in would reject.
+  // SSO: nothing to store, so the confirmation is true at once and moves on.
   useEffect(() => {
-    if (!done && !sso) return;
+    if (!sso) return;
+    const t = setTimeout(() => onCompleteRef.current?.(), 1600);
+    return () => clearTimeout(t);
+  }, [sso]);
+
+  // Manual: once the rows match, store the PIN. "Set" means stored
+  // server-side, and nothing celebrates until it is (D8). A failure keeps both
+  // rows as typed instead of advancing on a PIN the next sign-in would reject.
+  useEffect(() => {
+    if (sso || !done) return;
     let cancelled = false;
     const t = setTimeout(
       () => {
-        if (sso) {
-          onCompleteRef.current?.();
-          return;
-        }
         const pin = digits.slice(0, STUDENT_PIN_LENGTH);
         /*
          * ONBOARDING WINS OVER WHOEVER IS SIGNED IN.
@@ -214,28 +240,35 @@ export function PinCreationScreen({
           onCompleteRef.current?.();
           return;
         }
+        setPhase("saving");
         void store().then(
           () => {
-            if (!cancelled) onCompleteRef.current?.();
+            if (!cancelled) setPhase("saved");
           },
           () => {
-            if (!cancelled) {
-              setSaveFailed(true);
-              dispatch({ type: "saveFailed" });
-            }
+            if (!cancelled) setPhase("failed");
           },
         );
       },
-      sso ? 1600 : 1200,
+      WRITE_BEAT_MS,
     );
     return () => {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [done, sso, digits]);
+    // `attempt` is "Try again": the same PIN, sent once more.
+  }, [done, sso, digits, attempt]);
 
-  const showEntry = !sso && !done;
-  const showConfirmation = sso || done;
+  // Saved: the frame's beat on "You're all set", then on.
+  useEffect(() => {
+    if (phase !== "saved") return;
+    const t = setTimeout(() => onCompleteRef.current?.(), SAVED_BEAT_MS);
+    return () => clearTimeout(t);
+  }, [phase]);
+
+  const saved = phase === "saved";
+  const showEntry = !sso && !saved;
+  const showConfirmation = sso || saved;
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-nevo-cream text-nevo-near-black">
@@ -259,7 +292,7 @@ export function PinCreationScreen({
         )}
 
         <h2 className="text-[23px] font-semibold tracking-[-0.01em] sm:text-[25px]">
-          {sso ? "You're signed in" : done ? "You're all set" : "Create a PIN"}
+          {sso ? "You're signed in" : saved ? "You're all set" : "Create a PIN"}
         </h2>
         <p className="mt-3 text-[15px] text-nevo-near-black/60">
           {sso
@@ -304,7 +337,7 @@ export function PinCreationScreen({
                 `error` IS the child's - the two entries did not match, and
                 typing again is exactly the fix.
                 
-                `saveFailed` never is. By the time it can fire the two entries
+                A failed save never is. By the time it can fire the two entries
                 have already matched; what failed is the write. That can be a
                 403 because a teacher is signed in on this tablet, a network
                 that dropped, or a shape the server refused - and not one of
@@ -316,15 +349,28 @@ export function PinCreationScreen({
               */}
               {error
                 ? PIN_MISMATCH_COPY
-                : saveFailed
+                : phase === "failed"
                   ? PIN_NOT_SAVED_COPY
                   : ""}
             </p>
+            {phase === "failed" && (
+              <button
+                type="button"
+                onClick={() => {
+                  setPhase("entry");
+                  setAttempt((n) => n + 1);
+                }}
+                className="mt-3 h-11 cursor-pointer rounded-[10px] px-5 text-[15px] font-medium text-nevo-navy transition-[background] hover:bg-nevo-navy/8"
+              >
+                Try again
+              </button>
+            )}
           </>
         )}
       </div>
 
-      {showEntry && pad.open && (
+      {/* No pad once the rows match: what they typed is kept, not edited. */}
+      {showEntry && !done && pad.open && (
         <NevoKeyboard
           layout="pad"
           onKey={pressDigit}

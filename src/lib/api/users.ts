@@ -45,7 +45,18 @@ export interface CurrentUser {
    * string up to 40 characters; the ids are ours (`lib/profile/avatarTone`).
    */
   avatarTone?: string | null;
+  /**
+   * The name a child chose to be called on Profile, or null when they have
+   * not chosen one. Its own column since 1 Oct, deliberately not `firstName`:
+   * the roster name is the school's record and the child does not edit it.
+   * `displayName` returns this when it is set, but what it falls back to is
+   * not stated, so a reader that wants "the name they chose" reads this.
+   */
+  preferredName?: string | null;
 }
+
+/** `ProfilePatch.preferredName`'s `maxLength`; longer is a 422. */
+export const PREFERRED_NAME_MAX = 60;
 
 /** 201 of `POST /api/v1/users/me/profile-photo`. */
 export interface ProfilePhoto {
@@ -86,6 +97,7 @@ export const usersApi = {
     lastName?: string | null;
     subjects?: string[] | null;
     avatarTone?: string | null;
+    preferredName?: string | null;
   }) => api.patch<CurrentUser>("/api/v1/users/me", payload),
 
   /**

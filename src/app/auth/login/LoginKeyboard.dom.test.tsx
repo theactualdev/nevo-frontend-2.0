@@ -27,8 +27,13 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/hooks", () => ({ useAuth: () => ({ signIn: vi.fn() }) }));
 vi.mock("@/lib/api", () => ({ authApi: { loginPin: vi.fn() } }));
 
+// Two children, so the door is the shared tablet's picker (28c); one would
+// open straight on 00's PIN.
 const roster = vi.hoisted(() => ({
-  entries: [{ id: "a", name: "Ada", shapeIndex: 0 }],
+  entries: [
+    { id: "a", name: "Ada", shapeIndex: 0 },
+    { id: "k", name: "Kofi", shapeIndex: 1 },
+  ],
 }));
 vi.mock("@/lib/auth/deviceRoster", () => ({
   // `ChildAvatar` imports this from the same module, so a partial mock blanks

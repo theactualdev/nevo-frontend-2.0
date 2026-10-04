@@ -272,3 +272,70 @@ describe("AudioSegment - when playback does not simply start", () => {
     expect(audioEl(container)).not.toBeNull();
   });
 });
+
+/**
+ * B12: a recording that would not load is told to the engine, once per
+ * failure, so a child who never heard it is not read as one who listened.
+ */
+describe("AudioSegment - telling the engine a recording did not load", () => {
+  beforeEach(() => {
+    vi.useRealTimers();
+    mediaUrl.mockReset();
+  });
+
+  it("says so once, when the clip will not load", () => {
+    const onMediaFailed = vi.fn();
+    const { container } = render(
+      <AudioSegment content={CONTENT} onMediaFailed={onMediaFailed} />,
+    );
+
+    fireEvent.error(audioEl(container));
+
+    expect(onMediaFailed).toHaveBeenCalledTimes(1);
+    expect(onMediaFailed).toHaveBeenCalledWith("load_error");
+  });
+
+  it("says nothing about a link that was re-issued and played", async () => {
+    mediaUrl.mockResolvedValue({ url: "https://cdn.example/fresh.mp3" });
+    const onMediaFailed = vi.fn();
+    const { container } = render(
+      <AudioSegment
+        content={{ ...CONTENT, storagePath: "audio/a.mp3" }}
+        onMediaFailed={onMediaFailed}
+      />,
+    );
+
+    fireEvent.error(audioEl(container));
+    await waitFor(() =>
+      expect(audioEl(container).getAttribute("src")).toContain("fresh"),
+    );
+
+    expect(onMediaFailed).not.toHaveBeenCalled();
+  });
+
+  it("says it again when a retry after the connection returns fails too", () => {
+    const onMediaFailed = vi.fn();
+    const { container } = render(
+      <AudioSegment content={CONTENT} onMediaFailed={onMediaFailed} />,
+    );
+    fireEvent.error(audioEl(container));
+
+    act(() => {
+      window.dispatchEvent(new Event("online"));
+    });
+    fireEvent.error(audioEl(container));
+
+    expect(onMediaFailed).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the notice and the transcript it already had", () => {
+    const { container } = render(
+      <AudioSegment content={CONTENT} onMediaFailed={() => {}} />,
+    );
+
+    fireEvent.error(audioEl(container));
+
+    expect(screen.getByRole("status").textContent).toMatch(/didn.t load/i);
+    expect(screen.getByText(CONTENT.transcript)).toBeTruthy();
+  });
+});

@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useHasSession } from "@/hooks/useHasSession";
 import { useHydrated } from "@/hooks/useHydrated";
 import { useStudentProgress } from "@/hooks/useStudentProgress";
+import { useSubjectProgress } from "@/hooks/useSubjectProgress";
 import { GROWTH_SUMMARY, SUBJECTS } from "./progressData";
 
 /**
@@ -30,10 +31,14 @@ import { GROWTH_SUMMARY, SUBJECTS } from "./progressData";
  * THE PROSE ARRIVED ON 3 SEP. The backend now writes `reflection` - a warm,
  * whole-picture sentence in non-diagnostic language - and it takes the slot
  * the designed GROWTH_SUMMARY drew. It is rendered as given, never reworded.
- * The per-card note ("Getting faster at solving problems") still has no field:
- * `highlights` is a student-level list, not a note per subject, so mapping it
- * onto the cards would be fabrication. The live cards carry concept names
- * instead, which are facts, and `highlights` waits on a designed slot.
+ *
+ * THE PER-CARD NOTE ARRIVED ON 1 OCT (backend B29). `note` is short as
+ * written, and each card reads its own subject's from the narrowed route, the
+ * same scoping `reflection` needs - the whole-student read's `note` is about
+ * everything, not about this card's subject. Where the backend wrote none, the
+ * card carries concept names, which are facts (design D42 accepted them).
+ * `highlights` is a student-level list, not a note per subject, and still
+ * waits on a designed slot.
  *
  * No numbers reach the screen (screen 22: no percentile, no score, no
  * comparison, direction of travel only). `understanding` orders the concepts
@@ -126,24 +131,43 @@ function LiveProgress({
       {subjects.length > 0 && (
         <div className={SUBJECT_GRID}>
           {subjects.map((subject) => (
-            <SubjectCard
-              key={subject.slug}
-              href={`/student/progress/${subject.slug}`}
-              name={subject.name}
-              // Concept NAMES, not scores - what they have worked on is a
-              // fact; how well is a judgement the contract carries as a
-              // number and screen 22 forbids showing. The card's "Working on"
-              // line and topic squares need a topic count the contract does
-              // not carry, and wait on it.
-              line={subject.concepts
-                .slice(0, 3)
-                .map((c) => c.name)
-                .join(" · ")}
-            />
+            <LiveSubjectCard key={subject.slug} subject={subject} />
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * One of the child's own subjects, under the backend's note for it.
+ *
+ * The line waits for the subject's own read rather than showing concept names
+ * first: a card whose line changed in front of the child, from a list to a
+ * sentence, is a transition they would see. While it waits the line's space
+ * is held so nothing below moves.
+ */
+function LiveSubjectCard({
+  subject,
+}: {
+  subject: ReturnType<typeof useStudentProgress>["subjects"][number];
+}) {
+  const own = useSubjectProgress(subject.name);
+  // Concept NAMES, not scores, when there is no note - what they have worked
+  // on is a fact; how well is a judgement the contract carries as a number
+  // and screen 22 forbids showing. A failed read falls back the same way: the
+  // names are already here and true. The card's "Working on" line and topic
+  // squares need a topic count the contract does not carry, and wait on it.
+  const names = subject.concepts
+    .slice(0, 3)
+    .map((c) => c.name)
+    .join(" · ");
+  return (
+    <SubjectCard
+      href={`/student/progress/${subject.slug}`}
+      name={subject.name}
+      line={own.loading ? null : (own.note ?? names)}
+    />
   );
 }
 
@@ -233,7 +257,8 @@ function SubjectCard({
 }: {
   href: string;
   name: string;
-  line: string;
+  /** Null while it is still being read: the space is held, nothing drawn. */
+  line: string | null;
 }) {
   return (
     <Link
@@ -245,8 +270,11 @@ function SubjectCard({
         <p className="text-base font-semibold text-nevo-near-black sm:text-[18px]">
           {name}
         </p>
-        <p className="mt-1.5 text-sm leading-[1.4] text-nevo-near-black/66 sm:text-[15px]">
-          {line}
+        <p
+          aria-hidden={line === null || undefined}
+          className="mt-1.5 text-sm leading-[1.4] text-nevo-near-black/66 sm:text-[15px]"
+        >
+          {line ?? " "}
         </p>
       </div>
     </Link>
@@ -331,8 +359,11 @@ export function textureFor(subject: string): {
  * The line was one fixed upward curve on every card, so every child was told
  * every subject was going up. Every motif here is symmetric and repeating: it
  * tells subjects apart and carries no direction. Decorative (`aria-hidden`).
+ *
+ * Subject Detail's session markers sit on this same band (design D41, 1 Oct),
+ * which is why it is exported.
  */
-function SubjectTexture({ subject }: { subject: string }) {
+export function SubjectTexture({ subject }: { subject: string }) {
   const id = useId();
   const { motif, family } = textureFor(subject);
   const m = MOTIFS[motif];

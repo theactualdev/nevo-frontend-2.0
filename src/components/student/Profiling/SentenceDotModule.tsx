@@ -81,6 +81,39 @@ const PASSAGE_OPTIONS = [
 /** The passage says she records each sale because she is saving for the fees. */
 const PASSAGE_ANSWER = 1;
 
+/** One round of 3A, for the daily warm-up. */
+export type WarmUpReading =
+  | { mode: "sentence"; text: string; isTrue: boolean }
+  | {
+      mode: "passage";
+      passage: string;
+      question: string;
+      options: string[];
+      answer: string;
+    };
+
+/**
+ * The daily warm-up's reading round for a band: this module's own first item
+ * for that band, stripped to one round (D17, 1 Oct - the warm-up "reuses the
+ * profiling activity, stripped to a single round").
+ *
+ * Null for P1-3, whose reading is heard rather than read; a heard round is
+ * not built into the warm-up, which keeps its frame's one sentence there.
+ */
+export function warmUpReading(band: AgeBand): WarmUpReading | null {
+  if (band === "ss") {
+    return {
+      mode: "passage",
+      passage: PASSAGE,
+      question: PASSAGE_QUESTION,
+      options: PASSAGE_OPTIONS,
+      answer: PASSAGE_OPTIONS[PASSAGE_ANSWER],
+    };
+  }
+  const first = SENTENCES[band]?.[0];
+  return first ? { mode: "sentence", ...first } : null;
+}
+
 /**
  * P1-3 audio mode: the sentence is heard, the answer is a picture.
  *

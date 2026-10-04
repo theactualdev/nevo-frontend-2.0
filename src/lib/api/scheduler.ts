@@ -40,6 +40,32 @@ export interface ConceptSchedule {
   lessonId: string | null;
 }
 
+/**
+ * How a review actually went (`ReviewOutcome`, B28). A REPORT OF WHAT
+ * HAPPENED, NOT A MARK: right first time, right after a hint, right on a
+ * second try, or not recalled. The contract's own reason for it is the point -
+ * a bare `recallSuccessful` made the client decide what "all right first
+ * time" meant. Whether each counts as recall is decided server-side.
+ */
+export type ReviewOutcome =
+  | "first_time"
+  | "after_hint"
+  | "second_attempt"
+  | "not_recalled";
+
+/**
+ * `RecordReviewResponse`. Typed now - it was `unknown`, which hid that the
+ * schedule (and its `nextReviewDue`) has always come back on the write.
+ *
+ * `recallSuccessful` here is the SERVER's verdict on the outcome sent, not an
+ * echo of anything the client decided.
+ */
+export interface RecordReviewResponse {
+  schedule: ConceptSchedule;
+  recallSuccessful: boolean;
+  outcome?: ReviewOutcome | null;
+}
+
 export const schedulerApi = {
   /** Concepts the scheduler judges ready for another look. */
   dueReviews: (studentId: string) =>
@@ -53,21 +79,22 @@ export const schedulerApi = {
    * gained lessons carrying `comprehensionCheckpoints` and a four-question
    * assessment: a review session now asks, and the answers are marked.
    *
-   * WHAT `recallSuccessful` IS ALLOWED TO MEAN HERE. Only the child's FIRST
-   * answer to the questions tagged with the concept under review. Not whether
-   * they eventually passed - a missed inline check re-opens until it is passed,
-   * so "passed" is true of everyone by the end and would report perfect recall
-   * for a child who got everything wrong twice. Not the whole assessment
-   * either: a review is spaced retrieval on ONE concept, and crediting it with
-   * a question about a different one is the same invention in a smaller shape.
+   * IT SENDS `outcome` NOW, NOT `recallSuccessful` (B28). The four values are
+   * what the screen observed about the questions tagged with the concept under
+   * review - see `lib/lessons/reviewOutcome.ts`. Not whether they eventually
+   * passed - a missed inline check re-opens until it is passed, so "passed" is
+   * true of everyone by the end. Not the whole assessment either: a review is
+   * spaced retrieval on ONE concept. `recallSuccessful` is optional on the
+   * request and no longer sent, because the server derives it.
    *
    * Not sent at all when the review asked nothing about that concept. There is
-   * no evidence either way, and a cheerful `true` because the child reached the
-   * end is precisely the invented signal Zero-Tag exists to stop.
+   * no evidence either way, and a cheerful outcome because the child reached
+   * the end is precisely the invented signal Zero-Tag exists to stop.
    */
   recordReview: (body: {
     studentId: string;
     conceptId: string;
-    recallSuccessful: boolean;
-  }) => api.post<unknown>("/api/scheduler/record-review", body),
+    outcome: ReviewOutcome;
+  }) =>
+    api.post<RecordReviewResponse>("/api/scheduler/record-review", body),
 };

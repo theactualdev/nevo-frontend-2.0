@@ -3,7 +3,10 @@ import Link from "next/link";
 import { Button } from "@/components/shared";
 import { CombinedMark, Wordmark } from "@/components/shared/BrandMarks";
 import { withNext } from "@/lib/auth/nextPath";
-import type { SessionEndReason } from "@/lib/auth/sessionEndReason";
+import {
+  sessionEndCopy,
+  type SessionEndReason,
+} from "@/lib/auth/sessionEndReason";
 
 /**
  * Session-end states (board 28), for a child.
@@ -32,6 +35,12 @@ import type { SessionEndReason } from "@/lib/auth/sessionEndReason";
  * concurrent-session one, and 28a's revoked screen with the wordmark at the
  * top and NO picture at all.
  *
+ * THE SIGNED-IN-ELSEWHERE SCREEN SAYS WHO TO TELL (design, D51). Board 28
+ * draws it with no next step, and a child whose session was ended by somebody
+ * else needs somewhere to go - the teacher is who they have. The line is the
+ * shared ruling's learner note, read from `sessionEndCopy` so the two cannot
+ * drift, and it sits under the button as the staff screen's note does.
+ *
  * `paused` is not in this union. It is an account state rather than a session
  * one and the child has their own drawn frame for it, so the door renders
  * `AccountOnPauseScreen` instead - which is the same call #422 made for staff,
@@ -40,7 +49,10 @@ import type { SessionEndReason } from "@/lib/auth/sessionEndReason";
 
 type Shown = Exclude<SessionEndReason, "paused">;
 
-const COPY: Record<Shown, { heading: string; body: string; action: string }> =
+const COPY: Record<
+  Shown,
+  { heading: string; body: string; action: string; note?: string }
+> =
   {
     expired: {
       heading: "You've been away for a while",
@@ -51,6 +63,7 @@ const COPY: Record<Shown, { heading: string; body: string; action: string }> =
       heading: "You logged in on another device",
       body: "Your progress is saved",
       action: "Log back in",
+      note: sessionEndCopy("replaced", "learner").note ?? undefined,
     },
     // Verbatim from `student/28a Session Ended - Revoked`: the ordinary screen
     // with the inactivity line deleted, because this session did not time out
@@ -78,7 +91,7 @@ export function SessionEndScreen({
    */
   next?: string;
 }) {
-  const { heading, body, action } = COPY[variant];
+  const { heading, body, action, note } = COPY[variant];
   const signIn = withNext("/auth/login", next);
 
   if (variant === "revoked") {
@@ -122,6 +135,11 @@ export function SessionEndScreen({
       <Button asChild className="mt-8 w-full max-w-[290px] text-base sm:mt-9 sm:max-w-[340px]">
         <Link href={signIn}>{action}</Link>
       </Button>
+      {note && (
+        <p className="mt-5 max-w-[290px] text-sm leading-[1.5] text-nevo-near-black/60 sm:max-w-[340px]">
+          {note}
+        </p>
+      )}
     </div>
   );
 }

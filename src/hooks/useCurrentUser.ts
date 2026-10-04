@@ -34,6 +34,8 @@ export interface Identity {
   subjects: string[];
   /** Their own photo, or null - every avatar falls back to initials. */
   photoUrl: string | null;
+  /** The name they chose to be called (`preferredName`), or null. */
+  chosenName: string | null;
 }
 
 function initialsFrom(name: string): string | null {
@@ -62,6 +64,7 @@ function toIdentity(user: CurrentUser): Identity {
     school: user.school?.name ?? null,
     subjects: user.subjects ?? [],
     photoUrl: user.profileImageUrl ?? null,
+    chosenName: user.preferredName?.trim() || null,
   };
 }
 

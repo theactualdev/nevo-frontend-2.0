@@ -62,7 +62,10 @@ export default async function SessionExpiredPage({
 
   // An account state, not a session one, and the child has their own frame for
   // it. It offers no retry, because retrying is the one thing that cannot work.
-  if (ended === "paused") return <AccountOnPauseScreen />;
+  if (ended === "paused") {
+    // No retry, but a way back to the picker for whoever is next (D52).
+    return <AccountOnPauseScreen back={{ href: "/auth/login" }} />;
+  }
 
   return <SessionEndScreen variant={ended} next={safeNextPath(next)} />;
 }
