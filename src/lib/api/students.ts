@@ -350,12 +350,19 @@ export interface StudentSessionDetail {
 }
 
 
-/** `POST /api/v1/students`. Only the name and class are required. */
+/**
+ * `POST /api/v1/students`. Name, class and admission number are required.
+ *
+ * The admission number is the school's own Student ID, required since 1 Oct;
+ * a duplicate within the school is a named 409, `admission_number_in_use`.
+ * There is no `email`: SCRUM-202 took it off enrolment - children have none,
+ * and asking was why schools were inventing them.
+ */
 export interface StudentEnroll {
   firstName: string;
   lastName: string;
   classId: string;
-  email?: string | null;
+  admissionNumber: string;
   ageBand?: string | null;
   /** ISO date. Optional; the server refuses a date in the future. */
   dateOfBirth?: string | null;
