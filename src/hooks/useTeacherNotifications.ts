@@ -100,6 +100,13 @@ export interface TeacherNotificationsState {
   undoArchive: () => void;
   /** The row waiting to be undone, if any. */
   lastArchived: TeacherNotification | null;
+  /**
+   * The first read has not answered yet. Not "nothing new" - the panel used
+   * to say exactly that for the whole 1-6 seconds the feed takes.
+   */
+  loading: boolean;
+  /** Read the feed again - on opening the bell, and from the failed state. */
+  refresh: () => void;
 }
 
 export function useTeacherNotifications(): TeacherNotificationsState {
@@ -108,6 +115,26 @@ export function useTeacherNotifications(): TeacherNotificationsState {
   const [failed, setFailed] = useState(false);
   const [archived, setArchived] = useState<Notification[]>([]);
   const signedIn = useHasSession();
+  /**
+   * Bumped to read again.
+   *
+   * THE FEED WAS READ ONCE PER CONSOLE LOAD. The rail lives in the persistent
+   * layout, so a teacher who kept the console open all day never saw a new
+   * flag, message or reply, and the dot stayed as it was at sign-in. It is
+   * read again when the bell is opened, when the tab comes back into view,
+   * and from the failed state's Try again - not on a timer, because nothing
+   * here is urgent enough to poll for.
+   */
+  const [nonce, setNonce] = useState(0);
+  const refresh = useCallback(() => setNonce((n) => n + 1), []);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [refresh]);
 
   /*
    * NO RACE, NO CAP. This hook used to run the feed against a 6s timeout and
@@ -136,16 +163,16 @@ export function useTeacherNotifications(): TeacherNotificationsState {
       })
       .catch(() => {
         // Empty rather than fixtures - these rows name real children - but
-        // flagged as failed so the panel can say so.
+        // flagged as failed so the panel can say so. A re-read that fails
+        // keeps the rows it already had: they are still true, just not new.
         if (cancelled) return;
-        setFeed([]);
-        setUnread(0);
+        setFeed((f) => f ?? []);
         setFailed(true);
       });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [nonce]);
 
   /*
    * Every one of these does its network call OUTSIDE the state updater.
@@ -229,6 +256,8 @@ export function useTeacherNotifications(): TeacherNotificationsState {
       archive,
       undoArchive,
       lastArchived: null,
+      loading: false,
+      refresh,
     };
   }
 
@@ -242,5 +271,9 @@ export function useTeacherNotifications(): TeacherNotificationsState {
     archive,
     undoArchive,
     lastArchived: archived[0] ? toRow(archived[0]) : null,
+    // A failure sets the feed to what it had or [], so null is only ever
+    // "not answered yet".
+    loading: feed === null,
+    refresh,
   };
 }
