@@ -937,3 +937,58 @@ describe("what is marked as a sample", () => {
     expect(regions()).toEqual([]);
   });
 });
+
+/**
+ * NOTHING TO ASSIGN, SAID. An empty library or no classes left a heading over
+ * nothing and a Continue that would not go - with no reason anywhere.
+ */
+describe("a teacher with nothing to pick from", () => {
+  it("says the library is empty", () => {
+    useLessonLibrary.mockReturnValue({
+      cards: [],
+      live: true,
+      sample: false,
+      loading: false,
+      slow: false,
+    });
+    render(<AssignWizard />);
+
+    expect(screen.getByText(/Your library is empty, so there is nothing to assign yet/)).toBeInTheDocument();
+  });
+
+  it("says nothing of the kind over a library with lessons in it", () => {
+    render(<AssignWizard />);
+
+    expect(screen.queryByText(/library is empty/)).not.toBeInTheDocument();
+  });
+
+  it("says the teacher has no classes yet", () => {
+    useTeacherClasses.mockReturnValue({
+      options: [],
+      classes: [],
+      liveClasses: [],
+      live: true,
+      loading: false,
+      sample: false,
+    });
+    render(<AssignWizard preselect="l-1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(screen.getByText(/You don.t have any classes yet/)).toBeInTheDocument();
+  });
+
+  it("says nothing of the kind while the classes are still loading", () => {
+    useTeacherClasses.mockReturnValue({
+      options: [],
+      classes: [],
+      liveClasses: [],
+      live: false,
+      loading: true,
+      sample: false,
+    });
+    render(<AssignWizard preselect="l-1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(screen.queryByText(/any classes yet/)).not.toBeInTheDocument();
+  });
+});

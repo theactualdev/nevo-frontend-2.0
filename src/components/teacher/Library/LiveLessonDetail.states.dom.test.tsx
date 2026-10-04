@@ -478,3 +478,26 @@ describe("while the review is still being read", () => {
     expect(screen.getByRole("link", { name: "Assign to a class" })).toBeInTheDocument();
   });
 });
+
+/**
+ * THE PAGE HANDS THE SCHEDULE ITS CLASS NAMES. The schedule names a group
+ * from the lesson's own classes first; a page that forgot to pass them would
+ * put every group back to "A class" while the class list loads or fails,
+ * with every schedule test still green.
+ */
+describe("the schedule on this page", () => {
+  it("names a group after the class the lesson went to", () => {
+    render(
+      <LiveLessonDetail
+        lesson={LESSON}
+        modules={[]}
+        assignments={[
+          { id: "a-1", studentId: "st-1", classId: "c-1", status: "assigned", dueAt: null, availableFrom: null },
+        ] as never}
+        classes={[{ id: "c-1", name: "Year 7 Blue", yearGroup: null, studentCount: 1 }] as never}
+      />,
+    );
+
+    expect(screen.queryByText(/A class/)).not.toBeInTheDocument();
+  });
+});

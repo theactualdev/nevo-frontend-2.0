@@ -498,3 +498,20 @@ describe("a resend that cannot know which file a row is", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+/**
+ * A batch that never went returned the teacher to the drop zone with no
+ * word: the sentence was set, and only the results screen read it.
+ */
+describe("a batch that could not be sent", () => {
+  it("says so where the teacher lands", async () => {
+    getToken.mockReturnValue("tok");
+    batch.mockRejectedValue(new Error("network"));
+    render(<BulkIngestion />);
+    drop(3);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /couldn.t send those just now. Nothing has been added/,
+    );
+  });
+});

@@ -178,3 +178,34 @@ describe("the class pills on the landing", () => {
     expect(regions()).toEqual([]);
   });
 });
+
+/**
+ * "PICK ONE OF YOUR CLASSES ABOVE" with no classes above - while the list
+ * loads, and for a teacher who has none.
+ */
+describe("the landing with no classes to pick", () => {
+  it("claims nothing while the class list loads", () => {
+    useTeacherClasses.mockReturnValue(state({ loading: true }));
+    render(<InsightsView />);
+
+    expect(screen.queryByText("Select a class to see insights")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Pick one of your classes/)).not.toBeInTheDocument();
+  });
+
+  it("says the classes list's own sentence to a teacher with none", () => {
+    useTeacherClasses.mockReturnValue(state({ live: true, options: [], classes: [] }));
+    render(<InsightsView />);
+
+    expect(screen.getByText("Your classes will appear here once assigned")).toBeInTheDocument();
+    expect(screen.queryByText("Select a class to see insights")).not.toBeInTheDocument();
+  });
+
+  it("still asks a teacher with classes to pick one", () => {
+    useTeacherClasses.mockReturnValue(
+      state({ live: true, options: [{ id: "c-1", name: "Year 7 Blue", joinCode: null }] as never }),
+    );
+    render(<InsightsView />);
+
+    expect(screen.getByText("Select a class to see insights")).toBeInTheDocument();
+  });
+});

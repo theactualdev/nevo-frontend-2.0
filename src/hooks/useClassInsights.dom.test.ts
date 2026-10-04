@@ -156,3 +156,33 @@ describe("what failed", () => {
     expect(result.current.loading).toBe(true);
   });
 });
+
+describe("which list failed", () => {
+  it("names the one that failed, and only that one", async () => {
+    misconceptions.mockResolvedValue([]);
+    mastery.mockResolvedValue([]);
+    narrative.mockResolvedValue(NARRATIVE);
+    getFlags.mockRejectedValue(new Error("network"));
+    const { result } = renderHook(() => useClassInsights("c-1"));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.sectionFailed).toEqual({
+      misconceptions: false,
+      mastery: false,
+      flags: true,
+    });
+    expect(result.current.failed).toBe(false);
+  });
+
+  it("names mastery when mastery failed", async () => {
+    misconceptions.mockResolvedValue([]);
+    mastery.mockRejectedValue(new Error("network"));
+    narrative.mockResolvedValue(NARRATIVE);
+    getFlags.mockResolvedValue([]);
+    const { result } = renderHook(() => useClassInsights("c-1"));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.sectionFailed.mastery).toBe(true);
+    expect(result.current.sectionFailed.flags).toBe(false);
+  });
+});

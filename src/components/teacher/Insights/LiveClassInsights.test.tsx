@@ -43,6 +43,7 @@ const state = (over: Partial<ReturnType<typeof useClassInsights>> = {}) => ({
   gathering: false,
   settledWeek: false,
   narrativeFailed: false,
+  sectionFailed: { misconceptions: false, mastery: false, flags: false },
   ...over,
 });
 
@@ -222,5 +223,51 @@ describe("LiveClassInsights - with something to say", () => {
 
     expect(screen.queryByText(/Still gathering/)).not.toBeInTheDocument();
     expect(screen.queryByText(/couldn’t load/i)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * A SECTION THAT FAILED ON ITS OWN. Only a failure of all three lists was
+ * said; one failed flags or mastery read just dropped its section - and the
+ * week could still be called settled, "Nothing here needs you", over a flags
+ * read that never arrived.
+ */
+describe("one list that failed while the others landed", () => {
+  const failedOnly = (section: "flags" | "mastery") =>
+    state({
+      summary: "A steady week.",
+      settledWeek: true,
+      sectionFailed: { misconceptions: false, mastery: section === "mastery", flags: section === "flags" },
+    });
+
+  it("keeps the flags section and says it could not be read", () => {
+    useClassInsights.mockReturnValue(failedOnly("flags"));
+    render(<LiveClassInsights {...CLASS} />);
+
+    expect(screen.getByText("Worth a look")).toBeInTheDocument();
+    expect(screen.getByText(/couldn.t load this just now. Nothing has changed for Year 7 Maths/)).toBeInTheDocument();
+  });
+
+  it("keeps the mastery section and says it could not be read", () => {
+    useClassInsights.mockReturnValue(failedOnly("mastery"));
+    render(<LiveClassInsights {...CLASS} />);
+
+    expect(screen.getByText("How the class is doing")).toBeInTheDocument();
+    expect(screen.getByText(/couldn.t load this just now/)).toBeInTheDocument();
+  });
+
+  it("does not call the week settled over a read that never arrived", () => {
+    useClassInsights.mockReturnValue(failedOnly("flags"));
+    render(<LiveClassInsights {...CLASS} />);
+
+    expect(screen.queryByText(/Nothing here needs you/)).not.toBeInTheDocument();
+  });
+
+  it("still calls a settled week settled when everything landed", () => {
+    useClassInsights.mockReturnValue(state({ summary: "A steady week.", settledWeek: true }));
+    render(<LiveClassInsights {...CLASS} />);
+
+    expect(screen.getByText(/Nothing here needs you/)).toBeInTheDocument();
+    expect(screen.queryByText(/couldn.t load this just now/)).not.toBeInTheDocument();
   });
 });
