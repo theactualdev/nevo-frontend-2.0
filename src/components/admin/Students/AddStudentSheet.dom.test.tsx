@@ -114,6 +114,9 @@ const mount = () =>
 const fill = async (first = "Zainab") => {
   fireEvent.change(screen.getByLabelText("First name"), { target: { value: first } });
   fireEvent.change(screen.getByLabelText("Surname"), { target: { value: "Bello" } });
+  fireEvent.change(screen.getByLabelText("Student ID / Admission Number"), {
+    target: { value: "BGA/2142" },
+  });
   await waitFor(() =>
     expect(screen.getByRole("option", { name: "JSS 2A" })).toBeInTheDocument(),
   );
@@ -352,5 +355,48 @@ describe("AddStudentSheet for an admin with neither roster nor SENCo access", ()
     await waitFor(() => expect(onAdded).toHaveBeenCalledWith("s-new"));
     expect((enroll.mock.calls[0][0] as Record<string, unknown>).parentEmail).toBe("bello@example.com");
     expect(addGuardian).not.toHaveBeenCalled();
+  });
+});
+
+describe("the school's own Student ID", () => {
+  /*
+   * Backend, 1 Oct: enrolment REQUIRES the admission number, and a duplicate
+   * within the school is a named 409. Without the field every add was a 422.
+   */
+  it("is required, and sent as typed", async () => {
+    mount();
+    await fill();
+    const add = screen.getByRole("button", { name: /^Add Zainab/ });
+    fireEvent.change(screen.getByLabelText("Student ID / Admission Number"), { target: { value: "  " } });
+    expect(add).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Student ID / Admission Number"), {
+      target: { value: " BGA/2142 " },
+    });
+    expect(add).toBeEnabled();
+    fireEvent.click(add);
+    await waitFor(() =>
+      expect(enroll).toHaveBeenCalledWith(expect.objectContaining({ admissionNumber: "BGA/2142" })),
+    );
+    expect(enroll.mock.calls[0][0]).not.toHaveProperty("email");
+  });
+
+  it("says a taken ID beside the field, in backend's words, until it is changed", async () => {
+    enroll.mockRejectedValueOnce(
+      new ApiError(409, "conflict", {
+        detail: { code: "admission_number_in_use", message: "BGA/2142 is already in use at this school." },
+      }),
+    );
+    const { container } = mount();
+    await fill();
+    fireEvent.click(screen.getByRole("button", { name: /^Add Zainab/ }));
+    const field = screen.getByLabelText("Student ID / Admission Number");
+    await waitFor(() => expect(field).toHaveAttribute("aria-invalid", "true"));
+    expect(field).toHaveAccessibleDescription("BGA/2142 is already in use at this school.");
+    expect(visibleText(container)).not.toMatch(/That didn.t save/);
+    expect(screen.getByRole("button", { name: /^Add Zainab/ })).toBeDisabled();
+
+    fireEvent.change(field, { target: { value: "BGA/2143" } });
+    expect(field).not.toHaveAttribute("aria-invalid");
+    expect(screen.getByRole("button", { name: /^Add Zainab/ })).toBeEnabled();
   });
 });
