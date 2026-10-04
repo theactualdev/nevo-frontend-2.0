@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { publishIdentity, uploadPhoto } from "@/hooks/useCurrentUser";
 import { usersApi } from "@/lib/api/users";
 import { useHasSession } from "@/hooks/useHasSession";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useCurrentUserStatus } from "@/hooks/useCurrentUser";
 import { useTeacherSettings } from "@/hooks/useTeacherSettings";
 import { AvatarDisc } from "@/components/shared/AvatarDisc";
 import { EditProfileModal } from "./EditProfileModal";
@@ -61,7 +61,7 @@ export function ProfileSettings() {
   // preview of the frame.
   const signedIn = useHasSession();
   // Name, email, school and subjects - all of it real, all from one call.
-  const identity = useCurrentUser();
+  const { identity, status: identityStatus } = useCurrentUserStatus();
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [toast, setToast] = useState("");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -182,10 +182,25 @@ export function ProfileSettings() {
             )}
           </AvatarDisc>
           <div className="min-w-0 flex-1">
+            {signedIn && identityStatus === "loading" ? (
+              /* Not "Teacher" and not "not connected" - neither is known
+                 yet. A name-shaped bar until the read answers. */
+              <span
+                aria-busy="true"
+                aria-label="Loading your details"
+                className="block h-5 w-[180px] animate-pulse rounded-[6px] bg-nevo-near-black/9"
+              />
+            ) : signedIn && identityStatus === "failed" ? (
+              <span className="block text-[15px] leading-[1.5] text-nevo-near-black/68">
+                We couldn&rsquo;t load your details just now. Try again in a
+                moment.
+              </span>
+            ) : (
             <span className="text-[17px] font-semibold text-nevo-near-black xl:text-[19px]">
               {signedIn ? (identity?.name ?? "Teacher") : profile.name}
             </span>
-            {signedIn ? (
+            )}
+            {signedIn && identityStatus !== "ready" ? null : signedIn ? (
               <>
                 {(identity?.subjects.length || identity?.school) && (
                   <div className="mt-[3px] text-sm text-nevo-near-black/60">
