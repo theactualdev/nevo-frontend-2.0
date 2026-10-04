@@ -82,6 +82,18 @@ export function helpSeekingLine(
   return `Asked Nevo for help ${times} ${period}${tail}.`;
 }
 
+/** Where one background read stands. */
+export type ReadState = "loading" | "ready" | "failed";
+
+/** The reads that fill a profile in, each allowed to fail on its own. */
+export interface ProfileReads {
+  learnerProfile: ReadState;
+  mastery: ReadState;
+  recommendations: ReadState;
+  adaptations: ReadState;
+  accommodations: ReadState;
+}
+
 export interface StudentProfileState {
   profile: StudentProfileResponse | null;
   concepts: MasteryConcept[];
@@ -96,6 +108,15 @@ export interface StudentProfileState {
   accommodations: Accommodations | null;
   /** `observed` once Nevo has watched enough to adapt. */
   observed: boolean;
+  /**
+   * WHERE EACH ENRICHMENT READ STANDS. Every one of them was swallowed, so
+   * "not back yet" and "failed" both read as "nothing there" - and a child
+   * with weeks of history was told, while the reads were in flight or after
+   * they failed, that Nevo was "still getting to know" them, with "No profile
+   * yet" under their name. Optional so a fixture state needs none: absent
+   * means every read is in.
+   */
+  reads?: ProfileReads;
   loading: boolean;
   missing: boolean;
   failed: boolean;
@@ -114,6 +135,13 @@ export function useStudentProfile(studentId: string): StudentProfileState {
     null,
   );
   const [observed, setObserved] = useState(false);
+  const [reads, setReads] = useState<ProfileReads>({
+    learnerProfile: "loading",
+    mastery: "loading",
+    recommendations: "loading",
+    adaptations: "loading",
+    accommodations: "loading",
+  });
   const [missing, setMissing] = useState(false);
   const [failed, setFailed] = useState(false);
   const signedIn = useHasSession();
@@ -135,13 +163,18 @@ export function useStudentProfile(studentId: string): StudentProfileState {
         else setFailed(true);
       });
 
-    // Enrichment. Each is allowed to fail on its own.
+    // Enrichment. Each is allowed to fail on its own - and each now SAYS
+    // whether it did, rather than leaving its empty default to speak.
+    const settle = (key: keyof ProfileReads, to: ReadState) => {
+      if (!cancelled) setReads((r) => ({ ...r, [key]: to }));
+    };
     void studentsApi
       .mastery(studentId)
       .then((rows) => {
         if (!cancelled) setMastery(rows);
+        settle("mastery", "ready");
       })
-      .catch(() => {});
+      .catch(() => settle("mastery", "failed"));
     void conversationEvidenceApi
       .forStudent(studentId)
       .then((res) => {
@@ -152,16 +185,18 @@ export function useStudentProfile(studentId: string): StudentProfileState {
       .recommendations(studentId)
       .then((rows) => {
         if (!cancelled) setRecommendations(rows);
+        settle("recommendations", "ready");
       })
-      .catch(() => {});
+      .catch(() => settle("recommendations", "failed"));
     void studentsApi
       .adaptations(studentId)
       .then((rows) => {
         // A suppressed adaptation is one Nevo considered and withheld; the
         // section is what actually happened for this student.
         if (!cancelled) setAdaptations(rows.filter((a) => !a.suppressed));
+        settle("adaptations", "ready");
       })
-      .catch(() => {});
+      .catch(() => settle("adaptations", "failed"));
     void studentsApi
       .progress(studentId)
       .then((p) => {
@@ -177,14 +212,16 @@ export function useStudentProfile(studentId: string): StudentProfileState {
       .accommodations(studentId)
       .then((a) => {
         if (!cancelled) setAccommodations(a);
+        settle("accommodations", "ready");
       })
-      .catch(() => {});
+      .catch(() => settle("accommodations", "failed"));
     void studentsApi
       .learnerProfile(studentId)
       .then((p) => {
         if (!cancelled) setObserved(p.status === "observed");
+        settle("learnerProfile", "ready");
       })
-      .catch(() => {});
+      .catch(() => settle("learnerProfile", "failed"));
 
     return () => {
       cancelled = true;
@@ -210,6 +247,7 @@ export function useStudentProfile(studentId: string): StudentProfileState {
     sessions,
     accommodations,
     observed,
+    reads,
     loading,
     missing,
     failed,
