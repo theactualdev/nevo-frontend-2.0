@@ -1,6 +1,9 @@
 "use client";
 
+import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useState } from "react";
+import { Check } from "lucide-react";
 import { Button } from "@/components/shared";
 import { authApi } from "@/lib/api";
 import { childById, type RememberedChild } from "@/lib/auth/deviceRoster";
@@ -8,7 +11,9 @@ import { childById, type RememberedChild } from "@/lib/auth/deviceRoster";
 type Sending = "idle" | "sending" | "sent" | "failed";
 
 /**
- * 00a's "Let my teacher know" (design, D3; SCRUM-217).
+ * 00a's body and its "Let my teacher know" (design, D3; SCRUM-217), as the
+ * frame revised it on 1 Oct: the teacher clears, the child chooses the new
+ * PIN.
  *
  * THE CHILD DOES NOT RESET THEIR OWN PIN, AND NOBODY SETS ONE FOR THEM. This
  * asks; the adult already linked to them clears it; the child then sets a new
@@ -19,28 +24,45 @@ type Sending = "idle" | "sending" | "sent" | "failed";
  * opaque id. The school code and identifier are looked up on the device at
  * the moment of asking and never put in the address. With no remembered child
  * to ask for - this page opened directly, or the entry aged out - there is
- * nothing to send, so there is no button: absence is the instruction.
+ * nothing to send, so there is no button: absence is the instruction. "Back
+ * to sign in" is then the only way on, and takes the primary style the sent
+ * state draws it in. NOT DRAWN: 00a always has a child to ask for.
  *
- * "SENT" ONLY ONCE THE SERVER TOOK IT, and only "sent": a 202 says the request
- * was accepted, not who was told or when, so the screen claims no more than
- * that. A refusal says so and leaves the button to try again.
+ * "YOUR TEACHER KNOWS" ONLY ONCE THE SERVER TOOK IT. The sent state replaces
+ * the whole body, as the frame draws it, and only after the 202 - never on
+ * the tap.
  *
- * NOT DRAWN: 00a has no button and design gave none of these words. They are
- * the plainest the behaviour allows, and are listed for design.
+ * AWAITING DESIGN (D60): THE FAILED STATE. 00a draws none. The line below the
+ * buttons is the interim one this screen already had, the words the other
+ * doors use for a fault that is ours, and the button stays to try again.
  */
-export function LetMyTeacherKnow({ childId }: { childId?: string }) {
-  // Read after mount: the roster is in localStorage, which the server cannot see.
-  const [child, setChild] = useState<RememberedChild | null>(null);
+export function LetMyTeacherKnow({
+  childId,
+  back,
+}: {
+  childId?: string;
+  /** The sign-in door, carrying where the child was going. */
+  back: string;
+}) {
+  /*
+   * Read after mount: the roster is in localStorage, which the server cannot
+   * see. Undefined until then - and while it is, an id in the address draws
+   * the asking layout, so the ordinary arrival does not swap its buttons
+   * under the child's finger. Nothing is sent before the read: `ask` needs
+   * the child it found.
+   */
+  const [child, setChild] = useState<RememberedChild | null | undefined>(
+    undefined,
+  );
   useEffect(() => {
     const find = () => setChild(childId ? childById(childId) : null);
     find();
   }, [childId]);
+  const asking = child === undefined ? Boolean(childId) : child !== null;
   const [sending, setSending] = useState<Sending>("idle");
 
-  if (!child) return null;
-
   const ask = () => {
-    if (sending === "sending" || sending === "sent") return;
+    if (!child || sending === "sending" || sending === "sent") return;
     setSending("sending");
     authApi
       .requestPinReset({
@@ -54,32 +76,86 @@ export function LetMyTeacherKnow({ childId }: { childId?: string }) {
   };
 
   return (
-    <div className="mt-3 flex w-full flex-col items-center">
+    <div
+      aria-live="polite"
+      className="flex flex-1 flex-col items-center justify-center px-9 pb-12 text-center sm:px-10 sm:pb-16"
+    >
       {sending === "sent" ? (
-        <p
-          role="status"
-          className="flex h-13 items-center text-base font-medium text-nevo-navy"
-        >
-          Sent
-        </p>
+        <>
+          <span className="flex size-[72px] items-center justify-center rounded-full bg-nevo-navy motion-safe:animate-nevo-pop sm:size-[88px]">
+            <Check
+              className="size-9 text-nevo-cream sm:size-11"
+              strokeWidth={2.6}
+              aria-hidden
+            />
+          </span>
+          <h1 className="mt-7 text-[23px] font-semibold tracking-[-0.01em] sm:mt-8 sm:text-[28px]">
+            Your teacher knows
+          </h1>
+          <p className="mt-3.5 max-w-[300px] text-base leading-[1.55] text-pretty text-nevo-near-black/70 sm:mt-4 sm:max-w-[420px] sm:text-lg lg:max-w-[440px]">
+            Once they&apos;ve cleared your old PIN, sign in again and choose
+            your new one.
+          </p>
+          <Button
+            asChild
+            className="mt-8 w-full text-base sm:mt-9 sm:max-w-[360px]"
+          >
+            <Link href={back}>Back to sign in</Link>
+          </Button>
+        </>
       ) : (
-        <Button
-          variant="secondary"
-          loading={sending === "sending"}
-          onClick={ask}
-          className="w-full text-base sm:max-w-[360px]"
-        >
-          Let my teacher know
-        </Button>
-      )}
-      {sending === "failed" && (
-        <p
-          role="status"
-          className="mt-3 max-w-[300px] text-sm leading-[1.5] text-nevo-near-black/70 sm:max-w-[360px]"
-        >
-          We couldn&apos;t send that just now - that&apos;s on us, not you. Try
-          again in a moment.
-        </p>
+        <>
+          <Image
+            src="/illustrations/error.png"
+            alt="A calm figure with an open, questioning hand"
+            width={1254}
+            height={1254}
+            sizes="248px"
+            priority
+            className="size-[184px] object-contain sm:size-[248px]"
+          />
+          <h1 className="mt-8 text-[23px] font-semibold tracking-[-0.01em] sm:mt-9 sm:text-[28px]">
+            Forgot your PIN?
+          </h1>
+          <p className="mt-3.5 max-w-[300px] text-base leading-[1.55] text-pretty text-nevo-near-black/70 sm:mt-4 sm:max-w-[420px] sm:text-lg lg:max-w-[440px]">
+            That&apos;s okay. Your teacher can clear your old PIN, and then
+            you&apos;ll choose a new one yourself.
+          </p>
+          {asking ? (
+            <>
+              <Button
+                loading={sending === "sending"}
+                onClick={ask}
+                className="mt-8 w-full text-base sm:mt-9 sm:max-w-[360px]"
+              >
+                Let my teacher know
+              </Button>
+              <Button
+                asChild
+                variant="ghost"
+                className="mt-2 h-12 w-full text-base hover:bg-nevo-cream-elevated sm:max-w-[360px]"
+              >
+                <Link href={back}>Back to sign in</Link>
+              </Button>
+            </>
+          ) : (
+            <Button
+              asChild
+              className="mt-8 w-full text-base sm:mt-9 sm:max-w-[360px]"
+            >
+              <Link href={back}>Back to sign in</Link>
+            </Button>
+          )}
+          {sending === "failed" && (
+            <p
+              role="status"
+              className="mt-3 max-w-[300px] text-sm leading-[1.5] text-nevo-near-black/70 sm:max-w-[360px]"
+            >
+              We couldn&apos;t send that just now - that&apos;s on us, not you.
+              Try again in a moment.
+            </p>
+          )}
+        </>
       )}
     </div>
   );

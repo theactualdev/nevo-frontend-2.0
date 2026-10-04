@@ -50,11 +50,11 @@ import { WrongDoorNote } from "./WrongDoorNote";
  * to anyone holding a class code, and it needs nothing from backend -
  * `POST /auth/login/pin` is public and has always taken these three fields.
  *
- * WHERE A CHILD GETS THEIR USERNAME is the part design did not answer. It is
- * server-issued at account creation and no student screen has ever shown one;
- * teachers see it on their class detail and admins on the student record. So
- * 00c's help row points at the person who can read it out, which is the best
- * this screen can do until someone rules otherwise.
+ * THE SECOND FIELD IS "STUDENT ID / ADMISSION NUMBER", as 00c labels it since
+ * 30 Sep. Sign-in matches either the school's Student ID or the login handle
+ * Nevo issued (backend, 1 Oct), so the field sends exactly what the child
+ * types, as `loginIdentifier`, and the server decides which one it is. The
+ * help row points at the person who can read it out.
  *
  * "DIDN'T MATCH" KEEPS THE FIELDS FILLED, per the frame - only the PIN clears.
  * Making a child retype a school code and a username they have just been read
@@ -377,39 +377,44 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
             <p className="text-[13px] font-semibold text-nevo-near-black/70 sm:text-[13.5px]">
               Your school code
             </p>
-            <CodeInput
-              value={schoolCode}
-              onChange={(v) =>
-                setSchoolCode(normaliseCode(v, SCHOOL_CODE_MAX))
-              }
-              onSubmit={() => void submit()}
-              status={error === "credentials" ? "error" : "idle"}
-              label="School code"
-              placeholder="Your school code"
-              min={SCHOOL_CODE_MIN}
-              max={SCHOOL_CODE_MAX}
-            />
+            {/*
+              CENTRED, as 00c centres its code cells. From here rather than
+              inside `CodeInput`, which the school step shares and which the
+              entry rework (SCRUM-208) owns; this screen never shows its
+              pending or success mark, so the room kept for it goes too.
+            */}
+            <div className="[&_input]:pr-0 [&_input]:text-center">
+              <CodeInput
+                value={schoolCode}
+                onChange={(v) =>
+                  setSchoolCode(normaliseCode(v, SCHOOL_CODE_MAX))
+                }
+                onSubmit={() => void submit()}
+                status={error === "credentials" ? "error" : "idle"}
+                label="School code"
+                placeholder="Your school code"
+                min={SCHOOL_CODE_MIN}
+                max={SCHOOL_CODE_MAX}
+              />
+            </div>
           </div>
           {/*
             NOT `CodeInput`, deliberately. That component normalises everything
             typed into it with `normaliseCode` - uppercase, and strip anything
             that is not A-Z, 0-9 or a hyphen - which is right for a school code
-            and destroys a username. `amara.k` arrives as `AMARAK`, which the
-            server has never heard of, so NO CHILD COULD EVER SIGN IN. The
-            identifier is issued by the server and has to be sent back exactly
-            as it was given.
+            and destroys an identifier. `amara.k` arrives as `AMARAK`, and
+            `BGA/2031` as `BGA2031`, which the server has never heard of. What
+            the child types is sent back exactly as typed.
 
-            "USERNAME", NOT THE FRAME'S "STUDENT ID". 00c labels this field
-            "Your student ID"; what it takes is the server-issued login
-            identifier, and which word a child is told is design's to rule on.
-            Raised - the rest of the frame's copy is built.
+            NO PLACEHOLDER: 00c draws the field empty. It said "Ask your
+            teacher", which the help row under the button already says.
           */}
           <div className="flex flex-col gap-2">
             <label
               htmlFor="returning-username"
               className="text-[13px] font-semibold text-nevo-near-black/70 sm:text-[13.5px]"
             >
-              Your username
+              Student ID / Admission Number
             </label>
             <div
               className={cn(
@@ -436,8 +441,7 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}
-                placeholder="Ask your teacher"
-                className="w-full bg-transparent text-[17px] text-nevo-near-black outline-none placeholder:text-nevo-near-black/35"
+                className="w-full bg-transparent text-[17px] text-nevo-near-black outline-none"
               />
             </div>
           </div>
@@ -555,7 +559,7 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
               </span>
               <span className="text-sm leading-[1.5] text-nevo-near-black">
                 {error === "credentials" &&
-                  "Hmm, that didn't match. Check your school code and username with your teacher and try again."}
+                  "Hmm, that didn't match. Check your school code and Student ID / Admission Number with your teacher and try again."}
                 {error === "throttled" &&
                   "That's a lot of tries in a row. Wait a moment, then try again."}
                 {error === "ours" &&
@@ -583,7 +587,7 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
               Text, not a link: there is nothing on this device to open. */}
           <p className="mt-0.5 text-center text-[14.5px]">
             <span className="text-nevo-near-black/60">
-              Don&apos;t know your username?{" "}
+              Don&apos;t know your Student ID / Admission Number?{" "}
             </span>
             <span className="font-medium text-nevo-navy">Ask your teacher.</span>
           </p>
