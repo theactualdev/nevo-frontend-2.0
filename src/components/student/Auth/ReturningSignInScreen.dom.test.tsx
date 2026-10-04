@@ -281,6 +281,11 @@ describe("ReturningSignInScreen — when it does not work", () => {
 
     expect(screen.getByText(/Your Nevo account is on pause/)).toBeVisible();
     expect(screen.queryByText(/didn't match/)).toBeNull();
+    // D52: and a way back to the picker for whoever is next on this tablet.
+    expect(screen.getByRole("link", { name: "Back to sign in" })).toHaveAttribute(
+      "href",
+      "/auth/login",
+    );
   });
 
   it("does not remember a device it failed to sign into", async () => {
@@ -735,5 +740,78 @@ describe("an account that is not a student's", () => {
     expect(signIn).not.toHaveBeenCalled();
     expect(authApiModule.authApi.logout).toHaveBeenCalled();
     expect(push).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * D2, 1 Oct: two sign-in moments, the same here as at the one-tap unlock.
+ */
+describe("the moment after signing back in", () => {
+  it("takes a held child straight to the waiting screen, never Taking you to your lessons", async () => {
+    loginPin.mockResolvedValue({ ...SESSION, replacedSession: false });
+    myConsentGate.mockResolvedValue({
+      studentId: "student-1",
+      granted: false,
+      blocked: true,
+      requiredType: "data_processing",
+      status: "pending",
+    });
+    render(<ReturningSignInScreen />);
+    fill();
+
+    await signInNow();
+
+    // At once, not after the beat - there is no beat for a held child.
+    expect(push).toHaveBeenCalledWith("/student/waiting");
+    expect(screen.queryByText(/Taking you to your lessons/)).toBeNull();
+  });
+
+  it("says the other session has ended when this sign-in ended one, and not where", async () => {
+    loginPin.mockResolvedValue({ ...SESSION, replacedSession: true });
+    render(<ReturningSignInScreen />);
+    fill();
+
+    await signInNow();
+
+    expect(screen.getByText("Your other session has ended.")).toBeVisible();
+    expect(document.body.textContent).not.toMatch(/another device|tablet|because/i);
+  });
+
+  it("says nothing of the kind when no other session was ended", async () => {
+    loginPin.mockResolvedValue({ ...SESSION, replacedSession: false });
+    render(<ReturningSignInScreen />);
+    fill();
+
+    await signInNow();
+
+    expect(screen.getByText(/Taking you to your lessons/)).toBeVisible();
+    expect(screen.queryByText("Your other session has ended.")).toBeNull();
+  });
+});
+
+describe("the name the device learns (B35)", () => {
+  it("is the name the child chose, when they have chosen one", async () => {
+    // `users/me` `preferredName`, live since 1 Oct. The roster's name is the
+    // school's record; the chosen one is what every signed-in screen uses.
+    loginPin.mockResolvedValue(SESSION);
+    me.mockResolvedValue({
+      userId: "student-1",
+      role: "student",
+      firstName: "Amarachi",
+      lastName: "Kalu",
+      displayName: "Ama",
+      preferredName: "Ama",
+      email: null,
+      school: null,
+    });
+    render(<ReturningSignInScreen />);
+    fill();
+
+    await signInNow();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50);
+    });
+
+    expect(getRememberedProfile()?.displayName).toBe("Ama");
   });
 });

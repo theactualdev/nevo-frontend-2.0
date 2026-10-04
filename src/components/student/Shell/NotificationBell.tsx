@@ -4,8 +4,41 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Bell } from "lucide-react";
 import { useNotifications } from "@/hooks";
+import type { NotificationKind } from "@/context/NotificationContext";
 import { MaybeSample } from "@/components/shared/SampleRegion";
 import { cn } from "@/lib/utils";
+
+/**
+ * Board 28's row marks, drawn with the frame's own paths: a book for a new
+ * lesson, a speech bubble for a teacher's message. A kind the frame does not
+ * draw - a review coming due, a change to how the child signs in - wears the
+ * bell itself rather than a mark we chose for it.
+ */
+function KindMark({ kind }: { kind?: NotificationKind }) {
+  if (kind === "lesson" || kind === "message") {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden
+        className="size-5"
+      >
+        <path
+          d={
+            kind === "lesson"
+              ? "M4 5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2z"
+              : "M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.5A8 8 0 1 1 21 12z"
+          }
+        />
+      </svg>
+    );
+  }
+  return <Bell className="size-5" strokeWidth={2} aria-hidden />;
+}
 
 /**
  * Notifications (board 28) - a quiet bell opening a calm panel: the two-line
@@ -17,6 +50,12 @@ import { cn } from "@/lib/utils";
  * the field is nullable in the contract. A panel anchored under the bell (popover on tablet/desktop, the same
  * card sized to the viewport on mobile). Never a badge count - a single dot
  * marks unread, no numbers anywhere.
+ *
+ * WHAT REACHES IT (backend B34, 1 Oct): the four types addressed to a child -
+ * a lesson set, a review due, a teacher's reply, a change to how they sign in
+ * - and nothing else; see `FOR_A_CHILD` in the context. The words are the
+ * backend's, rendered as written. Each row wears the frame's mark for its
+ * kind.
  */
 export function NotificationBell({ className }: { className?: string }) {
   const { notifications, unreadCount, failed, markRead, showingSamples } =
@@ -95,12 +134,20 @@ export function NotificationBell({ className }: { className?: string }) {
               {notifications.map((n) => {
                 const body = (
                   <>
+                    {/* The frame's mark for the row, with the unread dot on
+                        its shoulder the way the bell wears its own. */}
                     <span
-                      className={cn(
-                        "mt-1.5 size-2 shrink-0 rounded-full",
-                        n.read ? "bg-transparent" : "bg-nevo-violet",
+                      className="relative mt-px size-5 shrink-0 text-nevo-navy"
+                      data-kind={n.kind ?? "other"}
+                    >
+                      <KindMark kind={n.kind} />
+                      {!n.read && (
+                        <span
+                          aria-label="Unread"
+                          className="absolute -top-0.5 -right-1 size-2 rounded-full bg-nevo-violet ring-2 ring-nevo-cream"
+                        />
                       )}
-                    />
+                    </span>
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm leading-[1.4] font-medium text-nevo-near-black">
                         {n.title}

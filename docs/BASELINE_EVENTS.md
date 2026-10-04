@@ -42,17 +42,17 @@ transmission question rather than a local one — flagged, not assumed.
 | `kind` | Payload | Emitted by |
 |---|---|---|
 | `run_start` | `{ band }` | `ProfilingFlow.tsx:187` |
-| `warmup_start` | `{ dimension, itemId? }` - `itemId` only when the engine's served question is the one shown | `WarmUpRun.tsx` |
+| `warmup_start` | `{ dimension, band?, itemId? }` - `band` only when the roster carried one and the task was sized for it; `itemId` whenever the engine served an item with the day's dimension | `WarmUpRun.tsx` |
 | `trial_shown` | `{ module, act, trial }` | `useTrialRunner.ts:51` |
 | `response_open` | `{ module, act, trial, openAfterMs }` - the dot mask landed, or the heard sentence ended | `useTrialRunner.ts` |
 | `trial_pick` | `{ module, act, trial, choice, rtMs, openAfterMs?, beforeOpen?, x?, y?, ...detail }` | `useTrialRunner.ts` |
-| `trial_pick` (warm-up) | `{ module: "warmup", act, choice, rtMs, ...detail }` | `WarmUpRun.tsx:279` |
+| `trial_pick` (warm-up) | `{ module: "warmup", act, choice, rtMs, ...detail }` - the reading act adds `mode: "sentence" \| "passage"` | `WarmUpRun.tsx` |
 | `module_end` | `{ module }` | `useTrialRunner.ts:69`, `GridSpanModule.tsx:124` |
 | `playback_start` | `{ length, litMs, gapMs }` | `GridSpanModule.tsx:141` |
 | `input_start` | `{ length }` | `GridSpanModule.tsx:162`, `:186` |
 | `tap` | `{ cell, correct, posInSeq, length, x?, y? }` | `GridSpanModule.tsx` |
-| `tap` (warm-up) | `{ module: "warmup", act: "wmc", cell, correct, posInSeq, length }` | `WarmUpRun.tsx:514` |
-| `round_complete` | `{ length }` | `GridSpanModule.tsx:207`, `WarmUpRun.tsx:535` |
+| `tap` (warm-up) | `{ module: "warmup", act: "wmc", cell, correct, posInSeq, length }` | `WarmUpRun.tsx` |
+| `round_complete` | `{ length }` | `GridSpanModule.tsx:207`, `WarmUpRun.tsx` |
 | `check_shown` | `{ check }` | `GridSpanModule.tsx:159` |
 | `check_answer` | `{ check, answer, correct, x?, y? }` | `GridSpanModule.tsx` |
 | `replay` | `{ module: "sentence_dot", trial }` | `SentenceDotModule.tsx:263` |
@@ -68,9 +68,23 @@ transmission question rather than a local one — flagged, not assumed.
 - **`x`, `y`** are viewport coordinates of the tap, unrounded (frontend §2,
   §3). A keyboard press records neither rather than a false 0,0. No reducer
   reads them yet; they are in the stream for when the stream travels.
-- **The warm-up's served question** goes up on the feature as
-  `item: { itemId, chosenOption }`, unmarked - the device holds the answer key
-  and does not use it.
+### The warm-up, changed 1 Oct
+
+- **The served question's pick no longer travels on the submit.** It went up
+  on the feature as `item: { itemId, chosenOption }`, unmarked. It now goes to
+  `POST /api/baseline/recalibrate-prompt/{student_id}/response` as
+  `BaselinePromptAnswer` `{ itemId, value }` - the option's `value` - and is
+  marked server-side (B8). The answer key is off the wire, and the reply's
+  `correct` is never read on the device. Answering twice in a day is accepted
+  and does not overwrite the first. The raw `trial_pick` still carries
+  `itemId` and `chosenOption`, on the device only.
+- **The warm-up feature carries `band`** when the roster had one, because the
+  tile task is now sized by it (D17): tile memory's grid, starting sequence
+  length and light time for that band (`gridSpanConfig`), and the reading
+  task the band's own first item (JSS's first sentence, SS's passage and its
+  question). With no band the frame's one version runs and `band` is absent.
+- **"Done today" is the account's.** `doneToday` on the prompt decides; the
+  device's per-child memory stands in only while the prompt has not said.
 
 ### Vocabularies
 

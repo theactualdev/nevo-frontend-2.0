@@ -16,6 +16,10 @@ import { useEffect, useState } from "react";
  * of them, whatever it had already loaded stays readable, and each tab's own
  * failure state answers for what it could not load.
  *
+ * THE BANNER IS THE DEFAULT (design, D50). The full screen is kept for the one
+ * child it is true for - nothing downloaded and nothing in progress, so
+ * nothing to continue - and `OfflineNotice` decides which a tab gets.
+ *
  * NO "TRY AGAIN" BECAUSE THE FRAME DRAWS NONE. Reconnecting is the retry: the
  * banner goes the moment the browser says the connection is back.
  *

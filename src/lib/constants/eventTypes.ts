@@ -10,6 +10,12 @@
  */
 export const SIGNAL_EVENT_TYPES = {
   TIME_ON_SEGMENT: "time_on_segment",
+  /**
+   * A finished narration clip restarted. NOT `narration_replayed`, although
+   * that is in the ingest enum too: the deployed enum carries no description
+   * saying how the two differ, and sending both for one restart would count it
+   * twice. `replay` is what this client has always sent; asked, 1 Oct.
+   */
   REPLAY: "replay",
   SCROLL: "scroll",
   SIMPLIFY_TRIGGER: "simplify_trigger",
@@ -48,7 +54,8 @@ export const SIGNAL_EVENT_TYPES = {
   TAP_BLOCKED: "tap_blocked",
   /**
    * One per session, at start (G6): the form factor and reduced-motion mode the
-   * whole session's signals should be interpreted under.
+   * whole session's signals should be interpreted under. Payload
+   * { formFactor, reducedMotion } - backend's two keys, 1 Oct.
    */
   SESSION_CONTEXT: "session_context",
   /**
@@ -87,6 +94,34 @@ export const SIGNAL_EVENT_TYPES = {
    * suggestion as shown and ignored.
    */
   ADAPTATION_SUPPRESSED: "adaptation_suppressed",
+  /**
+   * A lesson picture or recording that would not load, after its one fresh
+   * link (B12) - payload { segmentId, channel: "image" | "audio", reason }.
+   * The rest of the segment stays usable; this is so the engine does not read
+   * a child who never saw the picture as one who looked at it.
+   */
+  MEDIA_LOAD_FAILED: "media_load_failed",
+  /**
+   * The engine's unrequested hint (`offer_hint`) went on screen (B20) -
+   * payload { segmentId }. Once per hint per segment.
+   */
+  HINT_OFFERED: "hint_offered",
+  /**
+   * A guided prompt was on screen in the opened socratic panel (B20) -
+   * payload { segmentId, promptId }. The reply is not a client event: the
+   * answer route puts `guided_question_answered` on the stream itself.
+   */
+  GUIDED_QUESTION_SHOWN: "guided_question_shown",
+  /**
+   * Ask Nevo, on its own `ask_nevo` session (design D29: a child's use of Ask
+   * Nevo is signal in its own right). A question asked, an answer that could
+   * not help, and the hand-over to the teacher taken. The payload is the
+   * server's own `interactionId` where there is one and nothing else - never
+   * the child's words.
+   */
+  ASK_NEVO_QUESTION_STUDENT: "ask_nevo_question_student",
+  ASK_NEVO_CANNOT_HELP: "ask_nevo_cannot_help",
+  ASK_NEVO_REDIRECT_USED: "ask_nevo_redirect_used",
 } as const;
 
 /** `system_busy` reasons — the closed set from the Touch Signal Contract. */
@@ -111,10 +146,10 @@ export const BUSY_PHASE = {
 export type BusyPhase = (typeof BUSY_PHASE)[keyof typeof BUSY_PHASE];
 
 /**
- * The baseline run's own markers, tracked by `ProfilingFlow`. None of them
- * reaches the backend: the baseline reports through `POST /api/baseline/submit`
- * as a reduced vector, so `signalsApi` drops all three before a batch is
- * posted - see `CLIENT_ONLY_EVENT_TYPES`.
+ * The baseline run's own markers, tracked by `ProfilingFlow` on the onboarding
+ * stream. In the ingest enum as of 1 Oct, so they are sent now; until then
+ * `signalsApi` dropped all three. The measurement itself still reports through
+ * `POST /api/baseline/submit` as a reduced vector - these mark its phases.
  */
 export const ONBOARDING_SIGNAL_TYPES = {
   // The OIS activity events (sort_placement, audio_response, pattern_tap,

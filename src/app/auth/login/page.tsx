@@ -31,6 +31,10 @@ import { ProfilePicker } from "@/components/student/Auth/ProfilePicker";
 import { useAuth } from "@/hooks";
 import { studentDestination } from "@/lib/auth/entryGate";
 import {
+  REPLACED_ELSEWHERE_COPY,
+  skipsWelcomeBeat,
+} from "@/components/student/Auth/signInMoments";
+import {
   LEGACY_PIN_LENGTH,
   STUDENT_PIN_LENGTH,
   STUDENT_PIN_MAX,
@@ -67,6 +71,18 @@ function pinHeading(displayName?: string): string {
 }
 
 /**
+ * Where "Forgot PIN?" goes: 00a, told WHICH remembered child forgot by the
+ * roster's opaque id - never the identifier or the school code, which stay on
+ * the device - so its "Let my teacher know" can ask for that child.
+ */
+function forgotPinHref(childId: string, next: string | undefined): string {
+  const query = new URLSearchParams();
+  if (next) query.set("next", next);
+  query.set("child", childId);
+  return `/auth/forgot-pin?${query}`;
+}
+
+/**
  * The student door, in two beats: WHO, then the PIN (frames 00 and 28c).
  *
  * THIS USED TO REMEMBER EXACTLY ONE CHILD, which on a classroom tablet is the
@@ -75,11 +91,15 @@ function pinHeading(displayName?: string): string {
  * class they might not be able to rejoin. The device now remembers up to six,
  * and this screen asks which of them is here.
  *
- * THE PICKER SHOWS EVEN FOR A SINGLE REMEMBERED CHILD, which costs one tap on a
- * one-child device. That is deliberate: 28c exists to replace "the
- * single-identity lock screen that kept the last child's name and face on an
- * unauthenticated screen", and going straight to a named PIN screen for one
- * child IS that screen. Flagged to design rather than optimised away.
+ * A DEVICE THAT REMEMBERS ONE CHILD OPENS ON 00, THE OWN-DEVICE PIN SCREEN.
+ * The picker used to show even for a single child, on the reading that 28c
+ * replaced 00 outright; that was flagged, and design ruled on 1 Oct (D1) that
+ * both frames are right on different screens. 00 is the own device: "Welcome
+ * back, Ada", the PIN, and "Using a different device?" out to the full sign-in
+ * (00c). 28c is the shared tablet: the picker, and "Not you? Go back" to it.
+ * One remembered child is the only thing that tells the two apart - and it
+ * costs a second child on a week-one tablet nothing, because 00's way out goes
+ * to the same 00c the picker's "Someone else" does.
  *
  * A device that remembers NOBODY shows 28c-2: the wordmark and one "Sign in",
  * which goes to the full sign-in (00c). This used to redirect there instead,
@@ -135,6 +155,8 @@ export default function LoginPage() {
   const [error, setError] = useState<LoginFailure | null>(null);
   const [checking, setChecking] = useState(false);
   const [done, setDone] = useState(false);
+  /** This sign-in ended the account's session elsewhere; see `REPLACED_ELSEWHERE_COPY`. */
+  const [replacedElsewhere, setReplacedElsewhere] = useState(false);
   /**
    * Whether to believe the length this device remembers for the child.
    *
@@ -176,7 +198,10 @@ export default function LoginPage() {
        * be able to rejoin. Its "Sign in" goes to 00c, which carries "I'm new
        * to Nevo" for the children who really are.
        */
-      setEntries(pickerEntries());
+      const remembered = pickerEntries();
+      setEntries(remembered);
+      // One child: 00, straight to their PIN (D1). See the docblock.
+      if (remembered.length === 1) setChosen(childById(remembered[0].id));
     };
     hydrate();
   }, []);
@@ -218,6 +243,8 @@ export default function LoginPage() {
     async (pin: string, remembered: RememberedChild) => {
       setChecking(true);
       setError(null);
+      // Leaving for the waiting screen: the boxes stay checking until it lands.
+      let leaving = false;
       try {
         const session = await authApi.loginPin({
           schoolCode: remembered.schoolCode,
@@ -259,14 +286,25 @@ export default function LoginPage() {
           // Which account this entry is, so a signed-in screen can find it.
           userId: session.userId,
         });
-        setDone(true);
         /*
          * The remembered-device door resolves consent like every other one -
          * design, 23 Sep: a child in the same state meets the same screen
-         * whichever door they use. Inside the existing hold, so it is free.
-         * And to where they were going, which this door used to drop.
+         * whichever door they use. And to where they were going, which this
+         * door used to drop.
+         *
+         * RESOLVED BEFORE THE BEAT, NOT INSIDE IT (D2). A child about to be
+         * held never sees "Taking you to your lessons", because it is not
+         * true: they go straight to the waiting screen. The boxes stay in
+         * their checking state for the one read this costs.
          */
         const destination = await studentDestination(next);
+        if (skipsWelcomeBeat(destination)) {
+          leaving = true;
+          router.push(destination);
+          return;
+        }
+        setReplacedElsewhere(session.replacedSession === true);
+        setDone(true);
         doneTimer.current = setTimeout(() => router.push(destination), DONE_MS);
       } catch (cause) {
         setDigits("");
@@ -278,7 +316,7 @@ export default function LoginPage() {
         if (failure === "credentials") setTrustLength(false);
         setError(failure);
       } finally {
-        setChecking(false);
+        if (!leaving) setChecking(false);
       }
     },
     [router, signIn, next],
@@ -367,14 +405,34 @@ export default function LoginPage() {
     );
   }
 
+  /** One remembered child: this is 00, not 28c. See the docblock at the top. */
+  const ownDevice = entries.length === 1;
+
   /*
    * A paused account takes the whole screen, per the frame: it is shown "in
    * place of the normal login flow", not as a line under a PIN row the child
    * could keep tapping at. Rendered here rather than routed to, deliberately -
    * a `/auth/paused` URL would be a screen anyone could visit and be told their
    * account is on pause when it is not.
+   *
+   * Its way back (D52) is to the picker, so the next child can get in; on an
+   * own device (00) there is no picker, so it is back to the PIN screen, whose
+   * "Using a different device?" is the way past.
    */
-  if (error === "paused") return <AccountOnPauseScreen />;
+  if (error === "paused") {
+    return (
+      <AccountOnPauseScreen
+        back={{
+          onBack: () => {
+            setError(null);
+            setDigits("");
+            setTrustLength(true);
+            if (!ownDevice) setChosen(null);
+          },
+        }}
+      />
+    );
+  }
 
   const focusInput = () => inputRef.current?.focus();
 
@@ -390,6 +448,11 @@ export default function LoginPage() {
         <p className="mt-2.5 text-[15px] text-nevo-near-black/60">
           Taking you to your lessons…
         </p>
+        {replacedElsewhere && (
+          <p className="mt-1.5 text-[15px] text-nevo-near-black/60">
+            {REPLACED_ELSEWHERE_COPY}
+          </p>
+        )}
       </main>
     );
   }
@@ -404,8 +467,20 @@ export default function LoginPage() {
    * tapped the wrong face wants the other five faces, not a school code and a
    * username they may not know by heart. The route out to a full sign-in still
    * exists, one step further on, as the picker's "Someone else".
+   *
+   * ON AN OWN DEVICE (00) THERE IS NO PICKER TO GO BACK TO, and the way out is
+   * 00's own "Using a different device?" to the full sign-in (00c) instead -
+   * design, D1: "neither replaces the other". Same slot, still only one.
    */
-  const notYou = (
+  const notYou = ownDevice ? (
+    <Link
+      href={withNext("/auth/sign-in", next)}
+      onClick={(e) => e.stopPropagation()}
+      className="mt-3 inline-flex h-11 cursor-pointer items-center rounded-[10px] px-4 text-[14.5px] font-medium text-nevo-near-black/60 transition-[background] hover:bg-nevo-navy/8 lg:landscape:col-start-1 lg:landscape:row-start-3 lg:landscape:justify-self-center"
+    >
+      Using a different device?
+    </Link>
+  ) : (
     <button
       type="button"
       onClick={(e) => {
@@ -455,11 +530,12 @@ export default function LoginPage() {
         the child on the left and the PIN on the right; the 1fr rows above and
         below keep the left column centred against the taller right one.
 
-        No wordmark: 28c-3 draws none on this step. The picker before it
-        carries the mark.
+        No wordmark on 28c-3: the picker before it carries the mark. 00 has
+        no picker before it, and draws the wordmark above the child.
       */}
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-10 pt-10 pb-6 text-center sm:px-14 lg:landscape:grid lg:landscape:grid-cols-[auto_auto] lg:landscape:grid-rows-[1fr_auto_auto_1fr] lg:landscape:content-center lg:landscape:gap-x-20 lg:landscape:px-[72px] lg:landscape:pt-9 lg:landscape:pb-[18px]">
         <div className="flex flex-col items-center lg:landscape:col-start-1 lg:landscape:row-start-2">
+          {ownDevice && <Wordmark size="form" className="mb-8" />}
           {/*
             The child's shape, never their initials. 28c: avatars are "soft
             geometric shapes, never a face", and initials on a screen anyone
@@ -471,7 +547,10 @@ export default function LoginPage() {
             className="size-[104px] sm:size-[120px] lg:landscape:size-[132px]"
           />
           <h2 className="mt-6 text-[24px] font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[28px] lg:landscape:mt-[22px] lg:landscape:text-[30px]">
-            {pinHeading(chosen.displayName)}
+            {/* 00 greets ("Welcome back, Ada"); 28c-3 names ("Ada"). */}
+            {ownDevice
+              ? greeting(chosen.displayName)
+              : pinHeading(chosen.displayName)}
           </h2>
         </div>
 
@@ -486,8 +565,11 @@ export default function LoginPage() {
               role="status"
               className="mt-[22px] max-w-[360px] rounded-[10px] bg-nevo-violet/18 px-4 py-[13px] text-[15.5px] leading-[1.5] text-nevo-near-black lg:landscape:mt-0 lg:landscape:max-w-[340px] lg:landscape:px-[15px] lg:landscape:py-3 lg:landscape:text-[15px]"
             >
+              {/* Each frame's own words: 28c-5's, and 00's. */}
               {error === "credentials" &&
-                "That PIN didn't match. Have another go."}
+                (ownDevice
+                  ? "That PIN didn't match. Try again, or ask your teacher."
+                  : "That PIN didn't match. Have another go.")}
               {error === "ours" &&
                 "We couldn't check that just now - that's on us, not you. Try again in a moment."}
               {/* No frame covers this one; the copy is ours and deliberately
@@ -557,7 +639,7 @@ export default function LoginPage() {
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              router.push(withNext("/auth/forgot-pin", next));
+              router.push(forgotPinHref(chosen.id, next));
             }}
             className="mt-2 h-11 cursor-pointer px-4 text-[15px] font-medium text-nevo-navy"
           >

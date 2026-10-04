@@ -97,6 +97,18 @@ export interface InteractiveContent {
 
 // ── Comprehension check (inline Quick Check) ────────────────────────────────
 
+/** One answer a check offers. */
+export interface AnswerChoice {
+  id: string;
+  label: string;
+  /**
+   * The checkpoint option's own value, which is what `POST /attempts` sends:
+   * the server marks it against the key, and `id` is a string of it. Absent on
+   * the authored demo checks, which have no checkpoint behind them.
+   */
+  value?: string | number | boolean;
+}
+
 export interface QuickCheck {
   /**
    * The checkpoint it was built from, so an answer can say which one it
@@ -104,12 +116,18 @@ export interface QuickCheck {
    */
   id?: string;
   question: string;
-  options: { id: string; label: string }[];
+  options: AnswerChoice[];
   correctId: string;
   /** Navy note on a correct answer. */
   correctNote: string;
   /** Soft-violet (never red) note on a miss — always reassures continuity. */
   recoveryNote: string;
+  /**
+   * The recording a SPOKEN check plays (B16). Present only when the server
+   * set the checkpoint's format to spoken and sent one; the printed question
+   * stays on screen either way.
+   */
+  promptAudio?: string;
   /**
    * The concept the check is about, from its checkpoint. A review session
    * skips the after-lesson questions - its inline checks ARE the recall - so
@@ -270,10 +288,12 @@ export interface AssessmentQuestion {
    */
   id?: string;
   prompt: string;
-  options: { id: string; label: string }[];
+  options: AnswerChoice[];
   correctId: string;
   /** Soft-violet recovery note (never a score). */
   recoveryNote?: string;
+  /** A spoken question's recording - see `QuickCheck.promptAudio`. */
+  promptAudio?: string;
   /**
    * The concept this question is about, straight from the checkpoint.
    *
@@ -354,6 +374,21 @@ export interface Lesson {
 
 // ── Adaptation plan (personalization overlay — §4) ──────────────────────────
 
+/** The engine's `DensityLevel`, exactly. */
+export type DensityLevel = "low" | "medium" | "high";
+
+/**
+ * One guided prompt the socratic panel shows (`GuidedPrompt`, 1 Oct). Unlike
+ * a guided question it has an id, so the child's reply can be sent - the
+ * option they picked, or how much they wrote, never the words.
+ */
+export interface GuidedPrompt {
+  id: string;
+  prompt: string;
+  /** Absent when the prompt is answered in the child's own words. */
+  options?: string[];
+}
+
 export interface SegmentAdaptation {
   segmentId: string;
   /** Modality the player opens this segment in. */
@@ -375,6 +410,13 @@ export interface SegmentAdaptation {
    * longer defaults to "light".
    */
   scaffold?: ScaffoldLevel;
+  /**
+   * The engine's `DensityLevel` for this segment. NOT `density` above, which
+   * is which authored reshape of the text the child reads. Rendered only as
+   * spacing - how many elements sit in view at once - and never as a label or
+   * a chip (design, D25). Absent renders the segment as it always has.
+   */
+  densityLevel?: DensityLevel;
   /**
    * The engine's instruction for this segment, in §4's own vocabulary.
    *
@@ -432,6 +474,12 @@ export interface AdaptationPlan {
   hint?: string | null;
   /** Likewise, the questions `show_socratic_panel` opens. */
   guidedQuestions?: string[];
+  /**
+   * The same panel's answerable prompts, beside `guidedQuestions` on the wire.
+   * Where both arrive the prompts are shown, because only they can be replied
+   * to - see `SocraticPanel`.
+   */
+  guidedPrompts?: GuidedPrompt[];
   /**
    * Active UDL accommodations (37c / SCRUM-71, backend-owned). Cross-session
    * delivery themes, never a label.

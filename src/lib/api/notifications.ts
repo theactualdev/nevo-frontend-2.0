@@ -25,12 +25,17 @@ import { api } from "./client";
  * whatever arrives rather than to switch on a set of types that was not there,
  * so listing them here is documentation and autocomplete, not dispatch.
  *
- * Still NOT here: a `category` on the row. `NotificationCategory` exists for
- * preferences, but `NotificationResponse` carries only `type`, so the category
- * filter and "mark this category read" remain unbuildable - see the note on
- * `NotificationsView`. Deriving a category from the type would be an invented
- * mapping, and three of SCRUM-100's six admin categories have no enum value to
- * map onto anyway.
+ * A `category` IS ON THE ROW NOW (backend B34, 1 Oct): nullable, and filled
+ * from the backend's own type-to-category map, which was empty until then.
+ * Typed below. Deriving one from the type here would still be an invented
+ * mapping - the server's is the only one.
+ *
+ * THE FOUR STUDENT TYPES (backend B34, 1 Oct). A child's bell was always
+ * empty because nothing was ever addressed to a child. Backend's word is that
+ * none of the four is about performance (the spec describes no payload per
+ * type: each is a title, a description and a nullable `navigatesTo`).
+ * `sign_in_changed` is what tells a child their PIN was reset, rather than
+ * leaving them at a PIN that no longer works.
  */
 export type NotificationType =
   | "attention_summary"
@@ -41,13 +46,24 @@ export type NotificationType =
   | "roster_sync_completed"
   | "roster_sync_needs_attention"
   | "invoice_issued"
-  | "sso_needs_attention";
+  | "sso_needs_attention"
+  | "lesson_assigned"
+  | "review_due"
+  | "teacher_replied"
+  | "sign_in_changed";
 
 export interface Notification {
   notificationId: string;
   recipientId: string;
   recipientRole: string;
   type: NotificationType | (string & {});
+  /**
+   * The contract's full `NotificationCategory` (assignments, messages,
+   * attention, reports, consent, billing, account) - wider than the three
+   * preference toggles `settings.ts` types under that name, so not that type.
+   * Null where the server's map has no stream for the type.
+   */
+  category?: string | null;
   title: string;
   description: string;
   read: boolean;

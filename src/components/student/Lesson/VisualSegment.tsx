@@ -3,7 +3,7 @@
 import { ArrowRight, Leaf } from "lucide-react";
 import { IllustrationWrapper } from "@/components/shared";
 import type { VisualContent } from "@/lib/types";
-import { useMediaSource } from "./useMediaSource";
+import { type MediaFailReason, useMediaSource } from "./useMediaSource";
 
 /**
  * Visual modality (Lesson Player frame 17) — the segment as a picture: finished
@@ -15,14 +15,32 @@ import { useMediaSource } from "./useMediaSource";
  * image. Now an expired link is re-issued once (`useMediaSource`), and a
  * picture that still fails takes the same quiet tile as a segment with no art -
  * the caption under it carries the description either way.
+ *
+ * AND THE SEGMENT SAYS SO (D26). The quiet tile alone read as a picture that
+ * was meant to be blank, so a child could not tell something was missing. A
+ * short line under it says the picture did not load, in the whole-lesson
+ * failure's words scoped to the one picture; the rest of the segment stays as
+ * it is and the lesson carries on. `onMediaFailed` tells the engine.
  */
-export function VisualSegment({ content }: { content: VisualContent }) {
+export function VisualSegment({
+  content,
+  onMediaFailed,
+}: {
+  content: VisualContent;
+  /** The picture would not load, after its one fresh link. */
+  onMediaFailed?: (reason: MediaFailReason) => void;
+}) {
   const inlineArt = content.art ? INLINE_ART[content.art.id] : undefined;
   const caption = content.art?.caption ?? content.illustration?.caption;
   const media = useMediaSource(
     content.illustration?.src,
     content.illustration?.storagePath,
+    onMediaFailed,
   );
+  // Only a picture that was there to load: inline art cannot fail, and a
+  // segment with no picture at all is the quiet tile and nothing more.
+  const pictureFailed =
+    !(content.art && inlineArt) && Boolean(content.illustration) && media.failed;
 
   return (
     <article>
@@ -69,6 +87,15 @@ export function VisualSegment({ content }: { content: VisualContent }) {
           </figcaption>
         )}
       </figure>
+
+      {pictureFailed && (
+        <p
+          role="status"
+          className="mt-3 text-[14px] leading-[1.55] text-nevo-near-black/70"
+        >
+          This picture didn&rsquo;t load. Nothing you did caused it.
+        </p>
+      )}
 
       {content.diagram && (
         <div className="mt-4 rounded-[12px] bg-nevo-cream-elevated p-5 shadow-elevation-1">

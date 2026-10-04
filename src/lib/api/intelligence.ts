@@ -152,7 +152,7 @@ export interface SegmentAdaptationResponse {
   modality: string;
   /** `DensityLevel` - low | medium | high. NOT the player's Density. */
   density: string;
-  /** `ScaffoldingLevel` - light | standard | strong. */
+  /** `ScaffoldingLevel` - none | light | standard | strong. */
   scaffolding: string;
   priority: number;
 }
@@ -202,8 +202,31 @@ export interface AdaptResponse {
     reason: string;
     hint?: string | null;
     guidedQuestions?: string[];
+    /** `GuidedPrompt[]` (1 Oct): the same questions, answerable. */
+    guidedPrompts?: { id: string; prompt: string; options?: string[] }[];
   } | null;
   modalitySuggestion: ModalitySuggestionResponse | null;
+}
+
+/**
+ * `GuidedAnswerRequest` - a child's reply to one guided prompt.
+ *
+ * THEIR WORDS ARE NOT IN IT, by the contract's design: "the panel sends the
+ * option they picked, or how much they wrote, and the words stay where they
+ * were typed." So `responseLength` is a count and there is no text field to
+ * fill, even by mistake.
+ */
+export interface GuidedAnswerRequest {
+  studentId: string;
+  sessionId?: string | null;
+  promptId: string;
+  conceptId?: string | null;
+  /** The option picked, for a prompt that offers options. */
+  option?: string | null;
+  /** How much the child wrote, for a prompt that has none. 0 to 10000. */
+  responseLength?: number | null;
+  /** The contract's default is `moved_on`; sent explicitly all the same. */
+  outcome: "moved_on" | "asked_again" | "abandoned";
 }
 
 export const intelligenceApi = {
@@ -298,4 +321,18 @@ export const intelligenceApi = {
     api.post<AttentionFlag>(`/api/intelligence/flags/${flagId}/acknowledge`),
   getRecommendations: (studentId: string) =>
     api.get(`/api/intelligence/recommendations/${studentId}`),
+
+  /**
+   * Send a child's reply to a guided prompt (B19).
+   *
+   * The server carries it onto the signal stream as
+   * `guided_question_answered` - the route's own description says so - which
+   * is why the player does not also emit that type: the engine would read
+   * one reply as two.
+   */
+  answerGuidedQuestion: (body: GuidedAnswerRequest) =>
+    api.post<{ recorded: boolean; promptId: string }>(
+      "/api/intelligence/guided-questions/answer",
+      body,
+    ),
 };

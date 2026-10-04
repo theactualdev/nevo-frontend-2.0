@@ -3,7 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { tapPoint, type BaselineCapture } from "@/lib/profiling/capture";
 
-/** The frames' commit beat: a tapped control presses violet, then the next trial. */
+/**
+ * The frames' commit beat: a tapped control presses violet, then the next
+ * trial. No "Loading next pair" in it, though Module 2's frame draws one:
+ * every trial is already on the device, and design dropped that state on
+ * 1 Oct (D14).
+ */
 const PICK_BEAT_MS = 440;
 /** Every module ends on the shared "That's it. Saved." settle. */
 const SETTLE_MS = 1700;

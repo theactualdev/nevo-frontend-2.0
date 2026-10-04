@@ -15,8 +15,9 @@ import type {
   ThreadTranscript,
 } from "@/lib/api/askNevo";
 import { LessonContext } from "@/context/LessonContext";
-import { useAuth } from "@/hooks";
-import { cn } from "@/lib/utils";
+import { useAuth, useSignals } from "@/hooks";
+import { SIGNAL_EVENT_TYPES } from "@/lib/constants";
+import { cn, randomId } from "@/lib/utils";
 
 /**
  * Board 26's launcher mark, on both the docked button and the corner pill.
@@ -176,6 +177,15 @@ export function AskNevo() {
    * no thread to continue, which is what null says.
    */
   const threadId = useRef<string | null>(null);
+  /*
+   * ASK NEVO'S OWN SIGNAL SESSION, `sessionType: "ask_nevo"` (1 Oct). Design
+   * D29: a child's use of Ask Nevo is signal in its own right. A bare UUID of
+   * ours, as onboarding's is - nothing on the Ask Nevo contract issues one -
+   * and no lesson id even inside a lesson: the question already tells the
+   * server which lesson, and this is not that lesson's stream.
+   */
+  const [signalSession] = useState(() => randomId());
+  const { trackEvent } = useSignals(signalSession, undefined, "ask_nevo");
   const [open, setOpen] = useState(false);
   // One per breakpoint because they are different sizes and clamp differently,
   // but they share a stored offset - only ever one of them is on screen, and a
@@ -239,6 +249,8 @@ export function AskNevo() {
     setView("chat");
     history.closeThread();
     setMessages((m) => [...m, { who: "user", text }]);
+    // That the child asked, and when. Never what: their words stay out.
+    trackEvent(SIGNAL_EVENT_TYPES.ASK_NEVO_QUESTION_STUDENT);
     setThinking(true);
 
     // Live assistant first. When the backend can't answer, a signed-in child
@@ -273,6 +285,12 @@ export function AskNevo() {
       // ever set from an answer: one without an id must not drop a thread we
       // already hold.
       if (res?.threadId) threadId.current = res.threadId;
+      // The server's own verdict, reported here rather than inside the state
+      // update below, which React may run twice.
+      if (res?.canHelp === false)
+        trackEvent(SIGNAL_EVENT_TYPES.ASK_NEVO_CANNOT_HELP, {
+          interactionId: res.interactionId,
+        });
       setMessages((m) => [
         ...m,
         res
@@ -501,6 +519,12 @@ export function AskNevo() {
                           // IA 31: "Message my teacher -> closes drawer ->
                           // Connect Tab". The drawer lives in the shell, so
                           // without this it stayed open over Connect.
+                          trackEvent(
+                            SIGNAL_EVENT_TYPES.ASK_NEVO_REDIRECT_USED,
+                            message.interactionId
+                              ? { interactionId: message.interactionId }
+                              : undefined,
+                          );
                           setOpen(false);
                           router.push("/student/connect");
                         }}

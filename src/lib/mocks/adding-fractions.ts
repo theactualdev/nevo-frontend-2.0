@@ -4,7 +4,7 @@
  * remain a data-source swap. The calculation co-construction solver is the
  * centrepiece. Content is illustrative, not curriculum-reviewed.
  */
-import { ADJUSTMENT_ACTIONS, BREAK_TYPES, MODALITY, DENSITY, CALC_MODALITY, SCAFFOLD_LEVELS } from "@/lib/constants";
+import { BREAK_TYPES, MODALITY, DENSITY, CALC_MODALITY, SCAFFOLD_LEVELS } from "@/lib/constants";
 import type { AdaptationPlan, Lesson } from "@/lib/types";
 
 export const ADDING_FRACTIONS: Lesson = {
@@ -206,9 +206,10 @@ export const ADDING_FRACTIONS_PLAN: AdaptationPlan = {
   segments: [
     // Exercises the other break types: a micro breath after the reading
     // stretch, a movement break after the working one. Scaffold (37a) steps to
-    // full through the co-construction, then eases back. Boredom (37b) shows
-    // the escalation offer here - flying through the reading, minimal support.
-    { segmentId: "intro", startModality: MODALITY.TEXT, density: null, suggestModality: null, breakAfter: BREAK_TYPES.MICRO, scaffold: SCAFFOLD_LEVELS.MINIMAL, adjustment: ADJUSTMENT_ACTIONS.INCREASE_DIFFICULTY },
+    // full through the co-construction, then eases back. The step-up offer
+    // that sat here went with design's 1 Oct ruling (D28): nothing in the
+    // contract can trigger it, so only this demo ever showed it.
+    { segmentId: "intro", startModality: MODALITY.TEXT, density: null, suggestModality: null, breakAfter: BREAK_TYPES.MICRO, scaffold: SCAFFOLD_LEVELS.MINIMAL },
     { segmentId: "calc-add-fifths", startModality: MODALITY.INTERACTIVE, density: null, suggestModality: null, breakAfter: BREAK_TYPES.MOVEMENT, scaffold: SCAFFOLD_LEVELS.FULL },
     // ...and the full rest on the way out of the last segment, so all four
     // break types are reachable in the mock (this one lands before the

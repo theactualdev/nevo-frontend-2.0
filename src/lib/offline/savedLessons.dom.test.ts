@@ -53,6 +53,38 @@ describe("the offline shelf", () => {
     expect(savedLesson("ada", "l1")?.title).toBe("New title");
   });
 
+  it("keeps the manifest's size and word on media beside the lesson", () => {
+    saveLesson("ada", detail("l1"), { sizeBytes: 48_200, includesMedia: false });
+
+    expect(savedLesson("ada", "l1")).toMatchObject({
+      sizeBytes: 48_200,
+      includesMedia: false,
+    });
+  });
+
+  it("records no size or media word that no manifest gave", () => {
+    saveLesson("ada", detail("l1"));
+    saveLesson("ada", detail("l2"), { sizeBytes: null });
+
+    expect(savedLesson("ada", "l1")).not.toHaveProperty("sizeBytes");
+    expect(savedLesson("ada", "l1")).not.toHaveProperty("includesMedia");
+    expect(savedLesson("ada", "l2")).not.toHaveProperty("sizeBytes");
+  });
+
+  it("keeps the size and media word through a refresh", () => {
+    saveLesson("ada", detail("l1", "Old title"), {
+      sizeBytes: 48_200,
+      includesMedia: false,
+    });
+    refreshSavedLesson("ada", detail("l1", "New title"));
+
+    expect(savedLesson("ada", "l1")).toMatchObject({
+      title: "New title",
+      sizeBytes: 48_200,
+      includesMedia: false,
+    });
+  });
+
   it("forgets a lesson the child removes", () => {
     saveLesson("ada", detail("l1"));
     removeSavedLesson("ada", "l1");

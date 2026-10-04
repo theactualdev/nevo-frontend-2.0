@@ -84,17 +84,20 @@ describe("the affective vocabulary this codebase is allowed", () => {
     ];
 
     /*
-     * `increase_difficulty` is held on design's instruction of 23 Sep, not yet
-     * ruled on. `no_action` is ours rather than the engine's: the absence of
-     * an instruction is a state the player reasons about. `offer_break` is
+     * `no_action` is ours rather than the engine's: the absence of an
+     * instruction is a state the player reasons about. `offer_break` is
      * correctly absent from the enum, because a break is not an adaptation
      * instruction and has its own signal on `breakSuggestion`.
      *
      * `modulate_density` LEFT THIS LIST ON 1 OCT. Design removed the "dim the
      * screen" state it drove (SCRUM-180): it could never arrive, and screen
      * comfort belongs in device settings rather than an instruction.
+     *
+     * `increase_difficulty` LEFT IT THE SAME DAY (D28). Design retired the
+     * step-up offer: nothing in the contract can trigger it, and a control
+     * nothing can trigger is not a feature.
      */
-    const HELD = ["increase_difficulty", "no_action", "offer_break"];
+    const HELD = ["no_action", "offer_break"];
 
     expect(Object.values(ADJUSTMENT_ACTIONS).sort()).toEqual(
       [...CONTRACT, ...HELD].sort(),
@@ -104,6 +107,11 @@ describe("the affective vocabulary this codebase is allowed", () => {
   it("no longer knows modulate_density, so it can dim nothing", () => {
     // SCRUM-180. Unrecognised is null, and null is the nothing-state.
     expect(asAdjustmentAction("modulate_density")).toBeNull();
+  });
+
+  it("no longer knows increase_difficulty, so it can offer no step up", () => {
+    // D28. A demo row or a stray engine string resolves to nothing.
+    expect(asAdjustmentAction("increase_difficulty")).toBeNull();
   });
 
   it("maps every pace instruction the contract sends, and only those", () => {

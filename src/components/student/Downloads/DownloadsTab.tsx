@@ -34,9 +34,8 @@ const DOWNLOAD_MS = 800;
  * TWO AUDIENCES, TWO SCREENS.
  *
  * A signed-in child gets `SavedLessons`, which really keeps a lesson on this
- * device and opens it without a connection - the smaller version of offline.
- * The real version (the backend's offline package, with sizes and media) waits
- * on backend: `GET /lessons/{id}/offline-package` answers an untyped `{}`.
+ * device, from the backend's offline package, and opens it without a
+ * connection.
  *
  * The signed-out walkthrough keeps the SIMULATION below: it flips a row to
  * "Saved offline" after 800ms having cached nothing, over four lessons that

@@ -15,10 +15,20 @@ import { useHasSession } from "@/hooks/useHasSession";
 import { useHydrated } from "@/hooks/useHydrated";
 import { SAMPLE_NOTIFICATIONS } from "@/lib/mocks/sampleNotifications";
 
+/**
+ * Which of board 28's marks a row wears. The frame draws a book for a new
+ * lesson and a speech bubble for a teacher's message; `review_due` and
+ * `sign_in_changed` have no drawn mark and wear the bell's own until design
+ * draws one. Matched on the closed type, not guessed from the title.
+ */
+export type NotificationKind = "lesson" | "message" | "other";
+
 export interface NotificationItem {
   id: string;
   /** The headline ("A new lesson is ready"). */
   title: string;
+  /** Absent on a row with no type, which wears the neutral mark. */
+  kind?: NotificationKind;
   /**
    * The sentence under it. The feed carries BOTH a title and a description,
    * and this used to collapse them to `description || title` - so every
@@ -87,16 +97,45 @@ function ago(iso: string): string {
   return `${Math.floor(days / 7)}w`;
 }
 
+/**
+ * THE FOUR TYPES ADDRESSED TO A CHILD (backend B34, 1 Oct), and the only ones
+ * this bell shows.
+ *
+ * `NotificationType` is a closed set, and the rest of it is teacher and admin
+ * business - `attention_summary` and `modality_shift` among them, which are
+ * exactly what a child must never read about themselves. The feed is scoped
+ * to the recipient, so none should arrive here; this is what makes "none" true
+ * on a child's screen rather than merely expected. A type added tomorrow is
+ * shown once it is listed here, after someone has read what it says.
+ */
+const FOR_A_CHILD = new Map<string, NotificationKind>([
+  ["lesson_assigned", "lesson"],
+  ["review_due", "other"],
+  ["teacher_replied", "message"],
+  ["sign_in_changed", "other"],
+]);
+
+/**
+ * Where a child's row may take them: somewhere in the student console, or
+ * nowhere. `navigatesTo` is the server's, and a path into another console
+ * would land a child on a screen that is not theirs - so anything else is a
+ * row with no link, which is what a null `navigatesTo` already means.
+ */
+function childHref(target: string | null): string | null {
+  return target && /^\/student(\/|\?|$)/.test(target) ? target : null;
+}
+
 function toItem(n: Notification): NotificationItem {
   return {
     id: n.notificationId,
     // Both, on two lines - see `NotificationItem.text`. A description equal to
     // the title is not a second line, it is the same line twice.
     title: n.title,
+    kind: FOR_A_CHILD.get(n.type),
     text: n.description && n.description !== n.title ? n.description : undefined,
     ago: ago(n.createdAt),
     read: n.read,
-    href: n.navigatesTo,
+    href: childHref(n.navigatesTo),
   };
 }
 
@@ -233,9 +272,16 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         showingSamples: true,
       };
     }
+    // Only what is addressed to a child - see `FOR_A_CHILD`. A row this bell
+    // does not show must not light its dot either.
+    const rows = feed ?? [];
+    const mine = rows.filter((n) => FOR_A_CHILD.has(n.type));
+    const hiddenUnread = rows.filter(
+      (n) => !FOR_A_CHILD.has(n.type) && !n.read,
+    ).length;
     return {
-      notifications: (feed ?? []).map(toItem),
-      unreadCount: unread,
+      notifications: mine.map(toItem),
+      unreadCount: Math.max(0, unread - hiddenUnread),
       failed,
       refresh,
       markRead,

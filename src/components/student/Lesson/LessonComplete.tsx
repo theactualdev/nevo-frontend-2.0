@@ -3,6 +3,7 @@
 import { useContext, useEffect } from "react";
 import { Button, SettlingCharacter } from "@/components/shared";
 import { LessonContext } from "@/context/LessonContext";
+import { cn } from "@/lib/utils";
 
 /**
  * Lesson Complete (Lesson Check frame) — the calm close of a lesson. A settling
@@ -21,18 +22,30 @@ import { LessonContext } from "@/context/LessonContext";
  * no ruling behind it, on a screen the IA gives no path home from.
  *
  * The review session (37d) reuses this same screen with only the message
- * swapped ("You strengthened this concept") — hence the copy overrides.
+ * swapped - hence the copy overrides. What the review may say is D40's, in
+ * `lib/lessons/reviewOutcome.ts`.
+ *
+ * NO "NICELY PACED" (D40, 1 Oct). The frame's heading ends on it, and it is a
+ * verdict on the child with nothing behind it: no field says how they paced
+ * anything, and praise for pace is not something Nevo offers.
  */
 export function LessonComplete({
   onDone,
   onSeeSummary,
-  heading = "That's the lesson done. Nicely paced.",
+  heading = "That's the lesson done.",
+  headingHeld = false,
   note,
   doneLabel = "Back to lessons",
 }: {
   onDone: () => void;
   onSeeSummary?: () => void;
   heading?: string;
+  /**
+   * The heading waits on a write that decides it. Its space is kept, so the
+   * screen does not move when it lands, and it is hidden from screen readers
+   * until then.
+   */
+  headingHeld?: boolean;
   note?: string;
   doneLabel?: string;
 }) {
@@ -60,7 +73,13 @@ export function LessonComplete({
           className="w-[200px] sm:w-[280px] lg:w-[300px]"
         />
 
-        <h2 className="mt-7 text-[23px] font-semibold leading-[1.35] tracking-[-0.01em] sm:text-[26px]">
+        <h2
+          aria-hidden={headingHeld || undefined}
+          className={cn(
+            "mt-7 text-[23px] font-semibold leading-[1.35] tracking-[-0.01em] sm:text-[26px]",
+            headingHeld && "invisible",
+          )}
+        >
           {heading}
         </h2>
         {/* Live and always present, because the save can land a moment after

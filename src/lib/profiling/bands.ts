@@ -1,10 +1,10 @@
 /**
  * Age-band resolution for the Baseline Cognitive Profiling module (SCRUM-104).
  * Four tiers drive content, grid sizes and tap-target sizes; the component
- * shells are shared. Band comes from the age the child gives - onboarding
- * Step 1, or the intro screen when that is missing (see `ProfilingFlow`).
- * Nothing a signed-in child can read carries an age or a year group, so it is
- * asked for rather than derived.
+ * shells are shared. Band comes from the roster when a signed-in child's
+ * dashboard carries one (`bandForRoster`), otherwise from the age the child
+ * gives - onboarding Step 1, or the intro screen when that is missing too (see
+ * `ProfilingFlow`).
  */
 
 export const AGE_BANDS = {
@@ -38,6 +38,35 @@ export function bandForAge(age: number): AgeBand {
   if (age <= 11) return AGE_BANDS.P46;
   if (age <= 14) return AGE_BANDS.JSS;
   return AGE_BANDS.SS;
+}
+
+/**
+ * The band the roster holds for a child, as one of the four here.
+ *
+ * `ageBand` on the dashboard's `student` was free text until 1 Oct. It is now
+ * the spec's closed `AgeBand` (B5): `early_primary`, `upper_primary`,
+ * `junior_secondary`, `senior_secondary` - "the closed set the engine already
+ * reasons about" - derived server-side from the date of birth on every read.
+ * Each names the same school stage as one tier above, so the mapping is one
+ * to one: early primary is Primary 1-3, upper primary is Primary 4-6, and the
+ * two secondary stages are JSS and SS.
+ *
+ * Null for anything else, including null itself: a roster row with no date of
+ * birth has no band, and the caller asks rather than assumes one.
+ */
+export function bandForRoster(ageBand: string | null | undefined): AgeBand | null {
+  switch (ageBand) {
+    case "early_primary":
+      return AGE_BANDS.P13;
+    case "upper_primary":
+      return AGE_BANDS.P46;
+    case "junior_secondary":
+      return AGE_BANDS.JSS;
+    case "senior_secondary":
+      return AGE_BANDS.SS;
+    default:
+      return null;
+  }
 }
 
 /**
