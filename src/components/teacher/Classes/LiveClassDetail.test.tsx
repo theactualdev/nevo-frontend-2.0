@@ -453,3 +453,44 @@ describe("the Lessons tab", () => {
     expect(screen.queryByText("Fractions 3")).not.toBeInTheDocument();
   });
 });
+
+/**
+ * WHEN A READ BEHIND THE ROSTER FAILED.
+ *
+ * The roster's failure card said "Try again in a moment" with nothing to
+ * press, and a failed flags read removed every "Worth a glance" marker with
+ * nothing saying so - a class with nothing worth a glance, as far as the
+ * screen could tell anyone.
+ */
+describe("a roster read that failed", () => {
+  it("offers the Try again it promises", () => {
+    useClassRoster.mockReturnValue({ students: [], loading: false, failed: true });
+    render(<LiveClassDetail klass={klass} />);
+
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+  });
+
+  it("offers no retry over a class nobody has joined yet", () => {
+    useClassRoster.mockReturnValue({ students: [], loading: false, failed: false });
+    render(<LiveClassDetail klass={klass} />);
+
+    expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+  });
+});
+
+describe("a flags read that failed", () => {
+  it("says no one is marked because it could not check, not because nobody is", () => {
+    useTeacherFlags.mockReturnValue({ flags: [], live: false, failed: true });
+    render(<LiveClassDetail klass={klass} />);
+
+    expect(
+      screen.getByText(/couldn.t read what needs your attention just now, so no one below is marked/),
+    ).toBeInTheDocument();
+  });
+
+  it("says nothing of the kind when the flags read landed", () => {
+    render(<LiveClassDetail klass={klass} />);
+
+    expect(screen.queryByText(/no one below is marked/)).not.toBeInTheDocument();
+  });
+});

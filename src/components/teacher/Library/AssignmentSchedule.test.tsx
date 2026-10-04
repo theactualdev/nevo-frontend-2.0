@@ -528,3 +528,38 @@ describe("finishing a write that only partly landed", () => {
     expect(screen.queryByText(/Cancelled/)).not.toBeInTheDocument();
   });
 });
+
+/**
+ * "A CLASS". The group names came from the teacher's class list alone - the
+ * fixture three while it loads or after it fails, none of whose ids match a
+ * real class - so the cancel confirmation asked to cancel the lesson "for 7
+ * students in A class". The lesson read names every class it went to.
+ */
+describe("naming the class a group belongs to", () => {
+  it("uses the lesson's own class name while the class list is not in", () => {
+    useTeacherClasses.mockReturnValue({ options: [], live: false, loading: true, sample: false });
+    render(
+      <AssignmentSchedule
+        assignments={CLASS_OF_THREE}
+        classes={[{ id: CLASS_OF_THREE[0].classId as string, name: "Year 7 Blue" }]}
+      />,
+    );
+
+    expect(screen.getAllByText(/Year 7 Blue/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/A class/)).not.toBeInTheDocument();
+  });
+
+  it("never takes a name from a fixture class list", () => {
+    // A fixture whose id happened to collide would name a real group after
+    // an invented class. Only a live list may name anything.
+    useTeacherClasses.mockReturnValue({
+      options: [{ id: CLASS_OF_THREE[0].classId as string, name: "JSS 2A" }],
+      live: false,
+      loading: false,
+      sample: true,
+    });
+    render(<AssignmentSchedule assignments={CLASS_OF_THREE} />);
+
+    expect(screen.queryByText(/JSS 2A/)).not.toBeInTheDocument();
+  });
+});
