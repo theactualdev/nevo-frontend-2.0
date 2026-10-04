@@ -156,15 +156,31 @@ export function LiveStudentProfile({
     // profile next door, which has no live read to replace it with.
     accommodations,
     observed,
+    reads,
   } = state;
   if (!profile) return null;
+
+  /** Absent means a fixture state, every read in. */
+  const read = (key: keyof NonNullable<typeof reads>) => reads?.[key] ?? "ready";
 
   const { student, openFlagCount } = profile;
   const name = [student.firstName, student.lastName]
     .filter(Boolean)
     .join(" ")
     .trim();
-  const early = !observed && concepts.length === 0;
+  /*
+   * "STILL GETTING TO KNOW THEM" IS A CLAIM, and it needs both reads it rests
+   * on to have answered. It was drawn over in-flight and failed reads alike,
+   * for a child with weeks of history: absence of an answer read as absence
+   * of a profile.
+   */
+  const early =
+    read("learnerProfile") === "ready" &&
+    read("mastery") === "ready" &&
+    !observed &&
+    concepts.length === 0;
+  /** The sessions section's own failure line, for any section that failed. */
+  const failedLine = `We couldn${"’"}t load these just now. Nothing has changed for ${student.firstName ?? "them"}, so you can try again in a moment.`;
 
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
@@ -190,7 +206,14 @@ export function LiveStudentProfile({
             <span className="mt-[3px] block text-[14.5px] text-nevo-near-black/60">
               {[
                 student.ageBand,
-                observed ? "Learning profile building" : "No profile yet",
+                // Only once the learner profile has answered: "No profile
+                // yet" over a read in flight, or one that failed, is a claim
+                // about this child made from our own network.
+                read("learnerProfile") !== "ready"
+                  ? null
+                  : observed
+                    ? "Learning profile building"
+                    : "No profile yet",
               ]
                 .filter(Boolean)
                 .join(" · ")}
@@ -284,6 +307,15 @@ export function LiveStudentProfile({
           </div>
         )}
 
+        {concepts.length === 0 && read("mastery") === "failed" && (
+          <>
+            <h3 className={cn(SECTION_H, "mt-8")}>Concept mastery</h3>
+            <p className="mt-3 text-[14px] leading-[1.55] text-nevo-near-black/68">
+              {failedLine}
+            </p>
+          </>
+        )}
+
         {concepts.length > 0 && (
           <>
             <h3 className={cn(SECTION_H, "mt-8")}>Concept mastery</h3>
@@ -333,6 +365,24 @@ export function LiveStudentProfile({
           </>
         )}
 
+        {read("accommodations") === "failed" && (
+          <>
+            <h3 className={cn(SECTION_H, "mt-8")}>What Nevo is offering</h3>
+            <p className="mt-3 text-[14px] leading-[1.55] text-nevo-near-black/68">
+              {failedLine}
+            </p>
+          </>
+        )}
+
+        {recommendations.length === 0 && read("recommendations") === "failed" && (
+          <>
+            <h3 className={cn(SECTION_H, "mt-8")}>What might help</h3>
+            <p className="mt-3 text-[14px] leading-[1.55] text-nevo-near-black/68">
+              {failedLine}
+            </p>
+          </>
+        )}
+
         {recommendations.length > 0 && (
           <>
             <h3 className={cn(SECTION_H, "mt-8")}>What might help</h3>
@@ -350,6 +400,17 @@ export function LiveStudentProfile({
         )}
 
         {/* C16c - what Nevo quietly adjusted, and why. */}
+        {adaptations.length === 0 && read("adaptations") === "failed" && (
+          <>
+            <h3 className="mt-8 block text-[11px] font-bold tracking-[0.14em] text-nevo-violet uppercase">
+              {ADAPTATIONS_LABEL}
+            </h3>
+            <p className="mt-3 text-[14px] leading-[1.55] text-nevo-near-black/68">
+              {failedLine}
+            </p>
+          </>
+        )}
+
         {adaptations.length > 0 && (
           <>
             <h3 className="mt-8 block text-[11px] font-bold tracking-[0.14em] text-nevo-violet uppercase">
