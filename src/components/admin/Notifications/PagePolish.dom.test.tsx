@@ -100,3 +100,14 @@ describe("Archived", () => {
     await waitFor(() => expect(visibleText(container)).toMatch(/put that back/));
   });
 });
+
+describe("the empty inbox", () => {
+  it("promises only notifications the backend sends", async () => {
+    list.mockResolvedValue({ notifications: [], unreadCount: 0, total: 0, hasMore: false });
+    const { container } = render(<NotificationsView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/Nothing yet/));
+    // No consent-confirmed type exists - only consent_action_required.
+    expect(visibleText(container)).not.toMatch(/parent confirms consent/);
+    expect(visibleText(container)).toMatch(/consent record needs you/);
+  });
+});

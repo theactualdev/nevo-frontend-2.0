@@ -414,7 +414,7 @@ export function NotificationsView() {
                           ? "There are older notifications we haven't shown yet. Show them to check those too."
                           : "Everything here has been read."
                         : "Try a different search, or clear the filters."
-                      : "When a parent confirms consent, a teacher joins, an invoice arrives or your sign-in needs attention, it'll show up here."}
+                      : "When a consent record needs you, an invoice arrives, a roster sync finishes or your sign-in needs attention, it'll show up here."}
                 </p>
                 {unreadOnly && !search.trim() && hasMore ? (
                   <button
