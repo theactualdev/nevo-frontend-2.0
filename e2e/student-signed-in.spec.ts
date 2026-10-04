@@ -23,6 +23,17 @@ import { expect, test, type Page } from "@playwright/test";
  * explicitly rather than defaulted: the write is opt-in. Point it at a probe
  * account nobody reads by hand.
  *
+ * ## The probe is found by NAME, and enrolled if it is missing
+ *
+ * It used to be named by login handle (`NV-E2E000`) - but the server mints
+ * that handle, so a re-seeded tenant could never contain it, and on 2 Oct the
+ * re-seed brought the accounts back and every student test failed with "no
+ * student with login NV-E2E000". Now `E2E_STUDENT_PROBE` names the probe
+ * (default "E2E Probe"): the suite takes the student with that name, and if
+ * there is none it enrols one into the school's first open class and uses the
+ * handle the server hands back. Only a school with no class at all fails, and
+ * it says so. `E2E_STUDENT_LOGIN` still pins a specific existing student.
+ *
  * ## Why the PIN is minted ONCE
  *
  * Each reset changes the PIN, and each `POST /auth/login/pin` issues a session
@@ -52,7 +63,12 @@ import { expect, test, type Page } from "@playwright/test";
 
 const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL;
 const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD;
-const STUDENT_LOGIN = process.env.E2E_STUDENT_LOGIN;
+/** Pins one existing student by handle. Optional; the probe name is the default. */
+const PINNED_LOGIN = process.env.E2E_STUDENT_LOGIN;
+/** Who the probe is, by name - see "The probe is found by NAME" above. */
+const PROBE_NAME = process.env.E2E_STUDENT_PROBE;
+/** The probe's Student ID when this suite enrols it. Unique within the school. */
+const PROBE_ADMISSION = "E2E-PROBE";
 const API = process.env.E2E_API_BASE ?? "https://nevo-backend-2-0-kn3d.onrender.com";
 
 /** Mirrors `lib/auth/session.ts`. Changing either without the other breaks this. */
@@ -61,8 +77,8 @@ const ROLE_COOKIE = "nevo.role";
 const SAMPLE_ATTR = "data-nevo-sample";
 
 test.skip(
-  !ADMIN_EMAIL || !ADMIN_PASSWORD || !STUDENT_LOGIN,
-  "Set E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD and E2E_STUDENT_LOGIN to run the student suite. It resets that student's PIN.",
+  !ADMIN_EMAIL || !ADMIN_PASSWORD || (!PROBE_NAME && !PINNED_LOGIN),
+  "Set E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD and E2E_STUDENT_PROBE (or E2E_STUDENT_LOGIN) to run the student suite. It resets that student's PIN, and enrols the probe if it is missing.",
 );
 
 /** How long a live read may take before we call it broken. See the teacher suite. */
@@ -79,6 +95,8 @@ interface StudentSession {
 let pin = "";
 /** Read from the admin's school in `beforeAll` - see the docblock above. */
 let schoolCode = "";
+/** The probe's server-minted handle, found or enrolled in `beforeAll`. */
+let studentLogin = "";
 let session: StudentSession;
 /**
  * Whether the server says this child may proceed. Read once so the sign-in
@@ -132,17 +150,53 @@ test.describe("a signed-in student", () => {
     schoolCode = String((await me.json()).school?.code ?? "");
     expect(schoolCode, "The E2E admin's school record carries no code.").not.toBe("");
 
-    const listed = await api.get(`${API}/api/v1/students`, { headers: auth });
-    expect(listed.ok(), `Could not list the tenant's students (${listed.status()}).`).toBeTruthy();
-    const raw = await listed.json();
-    const rows: { id: string; loginIdentifier?: string }[] = Array.isArray(raw)
-      ? raw
-      : (raw.items ?? raw.students ?? []);
-    const student = rows.find((s) => s.loginIdentifier === STUDENT_LOGIN);
+    type Row = { id: string; name?: string; loginIdentifier?: string | null };
+    const findProbe = async (): Promise<Row | undefined> => {
+      const listed = await api.get(`${API}/api/v1/students`, { headers: auth });
+      expect(listed.ok(), `Could not list the tenant's students (${listed.status()}).`).toBeTruthy();
+      const raw = await listed.json();
+      const rows: Row[] = Array.isArray(raw) ? raw : (raw.items ?? raw.students ?? []);
+      return rows.find((s) =>
+        PINNED_LOGIN ? s.loginIdentifier === PINNED_LOGIN : s.name === PROBE_NAME,
+      );
+    };
+
+    let student = await findProbe();
+    if (!student && !PINNED_LOGIN) {
+      // Enrol the probe once. A run that loses a race to another run gets a
+      // refusal for the duplicate Student ID, and simply finds it next time.
+      const classes = await api.get(`${API}/api/v1/classes`, { headers: auth });
+      expect(classes.ok(), `Could not list the tenant's classes (${classes.status()}).`).toBeTruthy();
+      const open = ((await classes.json()) as { id: string; archivedAt: string | null }[]).find(
+        (c) => !c.archivedAt,
+      );
+      expect(
+        open,
+        "The E2E school has no open class to enrol its probe student into. Seed it per docs/test-tenant-spec.md.",
+      ).toBeTruthy();
+      const [firstName, ...rest] = PROBE_NAME!.split(" ");
+      const enrol = await api.post(`${API}/api/v1/students`, {
+        headers: auth,
+        data: {
+          firstName,
+          lastName: rest.join(" ") || "Probe",
+          classId: open!.id,
+          admissionNumber: PROBE_ADMISSION,
+        },
+      });
+      // 201 carries the id and the minted handle; a refusal means another run
+      // enrolled it first, so it is there to find now.
+      student = enrol.ok()
+        ? ((await enrol.json()) as { id: string; loginIdentifier: string })
+        : await findProbe();
+    }
     expect(
-      student,
-      `No student with login ${STUDENT_LOGIN} in the E2E tenant.`,
+      student?.loginIdentifier,
+      PINNED_LOGIN
+        ? `No student with login ${PINNED_LOGIN} in the E2E tenant.`
+        : `No probe student named "${PROBE_NAME}" in the E2E tenant, and enrolling one failed.`,
     ).toBeTruthy();
+    studentLogin = student!.loginIdentifier!;
 
     const reset = await api.post(
       `${API}/api/v1/students/${student!.id}/pin/reset`,
@@ -153,7 +207,7 @@ test.describe("a signed-in student", () => {
     expect(pin, "The reset returned no PIN.").toMatch(/^\d+$/);
 
     const login = await api.post(`${API}/api/v1/auth/login/pin`, {
-      data: { schoolCode, loginIdentifier: STUDENT_LOGIN, pin },
+      data: { schoolCode, loginIdentifier: studentLogin, pin },
     });
     expect(
       login.ok(),
@@ -283,7 +337,7 @@ test.describe("a signed-in student", () => {
     await page.goto("/auth/sign-in");
 
     await page.getByRole("textbox", { name: "School code" }).fill(schoolCode);
-    await page.locator("#returning-username").fill(STUDENT_LOGIN!);
+    await page.locator("#returning-username").fill(studentLogin);
     await page
       .locator('input[aria-labelledby="returning-pin-label"]')
       .pressSequentially(pin);

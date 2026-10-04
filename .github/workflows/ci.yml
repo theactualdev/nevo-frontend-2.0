@@ -84,8 +84,10 @@ jobs:
           # Not secrets. The student suite MINTS its own PIN through the admin
           # above, so the only thing it needs is which probe child to use - and
           # every run RESETS that child's PIN, which is why it is named here in
-          # the open rather than defaulted inside the spec.
-          E2E_STUDENT_LOGIN: NV-E2E000
+          # the open rather than defaulted inside the spec. Named by NAME, not
+          # handle: the server mints handles, so a re-seed can never recreate
+          # one. Missing, the suite enrols it into the school's first class.
+          E2E_STUDENT_PROBE: E2E Probe
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
