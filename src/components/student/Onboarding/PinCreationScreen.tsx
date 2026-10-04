@@ -111,10 +111,19 @@ const SAVED_BEAT_MS = 1200;
 
 export function PinCreationScreen({
   sso = false,
+  reset = false,
   storePin,
   onComplete,
 }: {
   sso?: boolean;
+  /**
+   * 15's "New PIN after a clear" (1 Oct, D3): a teacher has cleared the old
+   * PIN and the child chooses the next one. The same screen and components;
+   * only the opening line changes, so it reads as choosing a new PIN rather
+   * than starting again. Where it goes on done is the caller's - Home, not
+   * You're In (see `NewPinAfterClear`).
+   */
+  reset?: boolean;
   /**
    * Store the PIN when there is no session to store it against - the join
    * redemption. Rejecting keeps the child on this screen rather than
@@ -219,14 +228,14 @@ export function PinCreationScreen({
          *   attributing one child's data to another.
          *
          * The two arrivals were always distinguishable without asking about
-         * tokens. `storePin` is passed by `ObservedInteractionSequence`, the
-         * only screen that renders this one; it redeems a join link or spends
-         * an onboarding token and carries its own identity. Change PIN does
-         * not render this screen: it draws its own steps around `pinReducer`
-         * and calls `setPin` itself, with the current PIN. So the `setPin`
-         * branch below is reached only by a caller that passes no `storePin`,
-         * and only for a signed-in student - the one case `setPin` is right
-         * for.
+         * tokens. `storePin` is passed by `ObservedInteractionSequence`; it
+         * redeems a join link or spends an onboarding token and carries its
+         * own identity. Change PIN does not render this screen: it draws its
+         * own steps around `pinReducer` and calls `setPin` itself, with the
+         * current PIN. So the `setPin` branch below is reached only by a
+         * caller that passes no `storePin` - `NewPinAfterClear`, a child whose
+         * PIN a teacher has cleared - and only for a signed-in student, the
+         * one case `setPin` is right for.
          */
         const session = getSession();
         const store = storePinRef.current
@@ -292,7 +301,13 @@ export function PinCreationScreen({
         )}
 
         <h2 className="text-[23px] font-semibold tracking-[-0.01em] sm:text-[25px]">
-          {sso ? "You're signed in" : saved ? "You're all set" : "Create a PIN"}
+          {sso
+            ? "You're signed in"
+            : saved
+              ? "You're all set"
+              : reset
+                ? "Choose a new PIN"
+                : "Create a PIN"}
         </h2>
         <p className="mt-3 text-[15px] text-nevo-near-black/60">
           {sso
