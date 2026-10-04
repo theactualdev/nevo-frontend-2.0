@@ -12,6 +12,7 @@ import {
   ConsentPill,
   mayRequestConsent,
   withoutRecordedConsent,
+  consentDateLine,
 } from "./ConsentPill";
 import { consentRequestLine, useConsentRequests } from "./useConsentRequests";
 import { useMaySendConsent } from "./consentRole";
@@ -329,9 +330,13 @@ export function StudentsView() {
                   className="cursor-pointer appearance-none bg-transparent outline-none"
                 >
                   <option value="">Any consent</option>
-                  <option value="confirmed">Recorded</option>
-                  <option value="pending">Asked, no reply yet</option>
-                  <option value="not_sent">Not asked yet</option>
+                  {/* The pills' own words, so a filter and the rows it narrows
+                      say the same thing - D07's options are "Confirmed",
+                      "Pending", "Not sent". These read "Recorded", "Asked, no
+                      reply yet", "Not asked yet" beside pills that did not. */}
+                  <option value="confirmed">Confirmed</option>
+                  <option value="pending">Pending</option>
+                  <option value="not_sent">Not sent</option>
                   <option value="withdrawn">Withdrawn</option>
                 </select>
               </label>
@@ -473,8 +478,13 @@ export function StudentsView() {
                             <span className="text-nevo-near-black/45">No active class</span>
                           )}
                         </span>
-                        <span className="flex">
+                        <span className="flex flex-col items-start gap-1">
                           <ConsentPill consent={s.consent} />
+                          {consentDateLine(s.consent) ? (
+                            <span className="text-[12px] text-nevo-near-black/50">
+                              {consentDateLine(s.consent)}
+                            </span>
+                          ) : null}
                         </span>
                         <span className="flex">
                           <span

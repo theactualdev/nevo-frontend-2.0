@@ -266,3 +266,39 @@ describe("sending a parent the consent request", () => {
     expect(requestParentConsent).not.toHaveBeenCalled();
   });
 });
+
+describe("D07's consent column", () => {
+  it("dates the two states the frame dates, and nothing else", async () => {
+    const { consentDateLine } = await import("./ConsentPill");
+    const at = (status: string, timestamp: string | null) => ({ status, timestamp });
+    // The console's one short-date format; ICU may spell September "Sept".
+    expect(consentDateLine(at("confirmed", "2026-09-08T10:00:00Z"))).toMatch(/^Responded 8 Sept?$/);
+    expect(consentDateLine(at("pending", "2026-09-14T10:00:00Z"))).toMatch(/^Invited 14 Sept?$/);
+    expect(consentDateLine(at("not_sent", null))).toBeNull();
+    expect(consentDateLine(at("pending", null))).toBeNull();
+    expect(consentDateLine(at("withdrawn", "2026-09-14T10:00:00Z"))).toBeNull();
+  });
+
+  it("shows the date under the pill on the roster", async () => {
+    list.mockResolvedValue([
+      student({
+        consent: { status: "pending", actorId: null, actorName: null, timestamp: "2026-09-14T10:00:00Z", channel: null },
+      }),
+    ]);
+    const { container } = render(<StudentsView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/Invited 14 Sep/));
+  });
+
+  it("filters by the pills' own words", async () => {
+    list.mockResolvedValue([student()]);
+    render(<StudentsView />);
+    const filter = (await screen.findByLabelText("Filter by consent")) as HTMLSelectElement;
+    expect(Array.from(filter.options).map((o) => o.textContent)).toEqual([
+      "Any consent",
+      "Confirmed",
+      "Pending",
+      "Not sent",
+      "Withdrawn",
+    ]);
+  });
+});

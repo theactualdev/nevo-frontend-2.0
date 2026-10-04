@@ -73,8 +73,9 @@ jobs:
       # the admin ones existed, so every signed-in suite skipped and the gate
       # was the signed-out suite alone. A skipped suite is not a passing one.
       #
-      # All three accounts are on the dedicated E2E school (NEVO-E2E) - an
-      # isolated tenant holding no real children.
+      # All three accounts are on the dedicated E2E school - an isolated tenant
+      # holding no real children, re-seeded 4 Oct 2026 after the 1 Oct wipe. Its
+      # school code is read from the admin's own record, never named here.
       - run: npm run e2e
         env:
           E2E_TEACHER_EMAIL: ${{ secrets.E2E_TEACHER_EMAIL }}
@@ -85,7 +86,7 @@ jobs:
           # above, so the only thing it needs is which probe child to use - and
           # every run RESETS that child's PIN, which is why it is named here in
           # the open rather than defaulted inside the spec.
-          E2E_STUDENT_LOGIN: NV-E2E000
+          E2E_STUDENT_LOGIN: NV-DF323F
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
