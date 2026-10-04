@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { classesApi, type AdminClass } from "@/lib/api/classes";
-import { ApiError, apiErrorMessage } from "@/lib/api/client";
+import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import { onboardingApi, type AdditionQuote } from "@/lib/api/onboarding";
 import { consentsApi } from "@/lib/api/consents";
 import { studentsApi } from "@/lib/api/students";
@@ -83,6 +83,9 @@ export function AddStudentSheet({
 }) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [admissionNumber, setAdmissionNumber] = useState("");
+  /** The ID backend said is taken, and its words - cleared once it is edited. */
+  const [taken, setTaken] = useState<{ id: string; note: string } | null>(null);
   const [classId, setClassId] = useState("");
   const [dob, setDob] = useState("");
   const [classes, setClasses] = useState<AdminClass[]>([]);
@@ -135,9 +138,14 @@ export function AddStudentSheet({
   const guardianGiven = gName.length > 0 || gEmail.length > 0;
   const guardianOk = !guardianGiven || isEmail(gEmail);
 
+  const admission = admissionNumber.trim();
+  const admissionTaken = taken !== null && taken.id === admission;
+
   const canSave =
     firstName.trim().length > 0 &&
     lastName.trim().length > 0 &&
+    admission.length > 0 &&
+    !admissionTaken &&
     classId.length > 0 &&
     guardianOk &&
     phase !== "saving";
@@ -151,6 +159,7 @@ export function AddStudentSheet({
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         classId,
+        admissionNumber: admission,
         // Empty is absent, not "": a blank optional field is no answer.
         dateOfBirth: dob || null,
         /*
@@ -178,6 +187,18 @@ export function AddStudentSheet({
           );
       })
       .catch((err: unknown) => {
+        /*
+         * A TAKEN ID IS A FIELD TO FIX, not a save to retry. Said beside the
+         * field, in backend's words, and nothing else the school typed is lost.
+         */
+        if (err instanceof ApiError && apiErrorCode(err.detail) === "admission_number_in_use") {
+          setTaken({
+            id: admission,
+            note: apiErrorMessage(err.detail) ?? "Another student at your school already has this Student ID.",
+          });
+          setPhase("idle");
+          return;
+        }
         /*
          * THE SERVER'S REASON WHEN IT GAVE ONE. A future date of birth is
          * refused with a 422, and "That didn't save" over a date the school
@@ -278,6 +299,26 @@ export function AddStudentSheet({
             className={FIELD}
           />
         </div>
+      </div>
+
+      <div>
+        <label htmlFor="student-admission" className={LABEL}>
+          Student ID / Admission Number
+        </label>
+        <input
+          id="student-admission"
+          value={admissionNumber}
+          onChange={(e) => setAdmissionNumber(e.target.value)}
+          autoComplete="off"
+          aria-invalid={admissionTaken || undefined}
+          aria-describedby={admissionTaken ? "student-admission-taken" : undefined}
+          className={FIELD}
+        />
+        {admissionTaken ? (
+          <p id="student-admission-taken" className="m-0 mt-2 text-[12.5px] text-nevo-near-black/60">
+            {taken.note}
+          </p>
+        ) : null}
       </div>
 
       <div>
