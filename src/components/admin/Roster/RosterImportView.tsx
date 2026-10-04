@@ -17,6 +17,7 @@ import {
   hasStaged,
   mayConfirm,
   rejectedCsv,
+  templateColumns,
   toFixLabel,
 } from "./rosterImport";
 
@@ -43,23 +44,18 @@ import {
  * value, the reason and the fix. No error is only a count. Nothing here is red
  * or urgent - the number states the position and leaves it."*
  *
+ * EXPECTED COLUMNS ARE THE SERVER'S TEMPLATE, READ. OB-01 shows them before
+ * upload, and they are the one thing here that must not be guessed: a school
+ * that reformats four hundred rows to a header we invented gets four hundred
+ * rejections. The frame's own list was wrong once ("Full name", "Class(es)"),
+ * and the columns have changed twice since. So the console holds none: each
+ * panel's template (`onboardingApi.template`) has a header row the server
+ * generates from the parser's own columns; that row is what the panel shows,
+ * and the same file is "Download the … template". A template that cannot be
+ * read shows no list - never a remembered one.
+ *
  * ============================================================================
- * TWO THINGS THE FRAME DRAWS THAT NOTHING CAN FILL:
- *
- * - **"Expected columns"**, shown BEFORE upload rather than after a failure,
- *   and **"Download the … template"**. No endpoint serves either, and the
- *   column names are the one thing here that must not be guessed: a school
- *   that reformats four hundred rows to a header we invented gets four hundred
- *   rejections. Absent rather than wrong.
- *   TODO(api): the expected columns per `kind`, and a template file.
- *
- *   25 Sep, backend named them - and THE FRAME'S LIST IS WRONG. Students:
- *   first_name · last_name · class · date_of_birth · parent_name ·
- *   parent_email. Teachers: first_name · last_name · email · class. All
- *   required. The frame's "Full name", "Class(es)" and missing Parent name
- *   would each fail a file drawn to it. Raised with design; until the frame
- *   is corrected the list stays absent, and a wrong file gets the server's
- *   own 400 naming what is missing (see `uploadFailed`).
+ * ONE THING THE FRAME DRAWS THAT NOTHING CAN FILL:
  *
  * - **"Teachers found"**, a panel of names and initials. `OnboardingState`
  *   carries `teacherCount` and no teacher list, so the count renders and the
@@ -71,18 +67,51 @@ import {
 type Phase = "loading" | "ready" | "failed";
 type Kind = "teacher" | "student";
 
-const KINDS: { kind: Kind; title: string; sub: string }[] = [
+/** A template as fetched: the bytes to save, and the headings read off them. */
+interface Template {
+  blob: Blob;
+  columns: string[] | null;
+}
+
+const KINDS: {
+  kind: Kind;
+  title: string;
+  sub: string;
+  template: "students" | "teachers";
+  /** D24's "Download the {tmpl} template". */
+  tmpl: string;
+  /** The server's own name for the file. */
+  file: string;
+}[] = [
   {
     kind: "student",
     title: "Students",
     sub: "One row per student, with the class they are in.",
+    template: "students",
+    tmpl: "student",
+    file: "nevo-student-roster.csv",
   },
   {
     kind: "teacher",
     title: "Staff",
     sub: "One row per member of staff, with the classes they teach.",
+    template: "teachers",
+    tmpl: "teacher",
+    file: "nevo-teacher-import.csv",
   },
 ];
+
+/** Hand a fetched file to the browser to save, as the invoice PDF does. */
+function saveFile(blob: Blob, name: string) {
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = href;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(href);
+}
 
 export function RosterImportView() {
   const [phase, setPhase] = useState<Phase>("loading");
@@ -112,6 +141,35 @@ export function RosterImportView() {
    * the Overview would still say "Upload your staff" after the staff were in.
    */
   const { refresh: refreshGate } = useSetupGate();
+
+  /*
+   * Both templates, read once the upload panels are what this screen shows -
+   * an active or confirmed school sees no panels, so it fetches nothing.
+   */
+  const [templates, setTemplates] = useState<Partial<Record<Kind, Template>>>({});
+  const showsPanels =
+    phase === "ready" &&
+    state !== null &&
+    state.stage !== "activated" &&
+    state.stage !== "confirmed" &&
+    state.stage !== "awaiting_payment";
+  useEffect(() => {
+    if (!showsPanels) return;
+    let live = true;
+    for (const k of KINDS) {
+      onboardingApi
+        .template(k.template)
+        .then(async (blob) => {
+          const columns = templateColumns(await blob.text());
+          if (live) setTemplates((t) => ({ ...t, [k.kind]: { blob, columns } }));
+        })
+        // Absent, not remembered: no list, and the link fetches it again.
+        .catch(() => {});
+    }
+    return () => {
+      live = false;
+    };
+  }, [showsPanels]);
 
   const load = useCallback(() => {
     onboardingApi
@@ -241,11 +299,22 @@ export function RosterImportView() {
                   failed={uploadFailed?.kind === k.kind}
                   reason={uploadFailed?.kind === k.kind ? uploadFailed.reason : null}
                   onFile={(f) => upload(k.kind, f)}
+                  columns={templates[k.kind]?.columns ?? null}
+                  tmpl={k.tmpl}
+                  fetchTemplate={() => {
+                    const held = templates[k.kind];
+                    return held ? Promise.resolve(held.blob) : onboardingApi.template(k.template);
+                  }}
+                  file={k.file}
                 />
               ))}
             </div>
 
             <p className="mt-5 max-w-[62ch] text-[13px] leading-[1.55] text-nevo-near-black/55">
+              {/* Only true while a list is on screen to point at. */}
+              {KINDS.some((k) => templates[k.kind]?.columns)
+                ? "The format is strict, which is why the columns are shown here. "
+                : null}
               You&rsquo;ll see and confirm everything Nevo derives on the next
               screen before anything is created.
             </p>
@@ -333,6 +402,10 @@ function DropPanel({
   failed,
   reason,
   onFile,
+  columns,
+  tmpl,
+  fetchTemplate,
+  file,
 }: {
   title: string;
   sub: string;
@@ -341,9 +414,27 @@ function DropPanel({
   /** The server's sentence, when it gave one. See `uploadFailed`. */
   reason: string | null;
   onFile: (f: File) => void;
+  /** The template's own header row; null draws no list. */
+  columns: string[] | null;
+  tmpl: string;
+  fetchTemplate: () => Promise<Blob>;
+  file: string;
 }) {
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
+  const [download, setDownload] = useState<"" | "loading" | "failed">("");
+
+  const downloadIt = () => {
+    if (download === "loading") return;
+    setDownload("loading");
+    fetchTemplate()
+      .then((blob) => {
+        saveFile(blob, file);
+        setDownload("");
+      })
+      // No red, and no dead end: it says what happened and stays pressable.
+      .catch(() => setDownload("failed"));
+  };
 
   return (
     <div className={cn(CARD, "px-[22px] py-[20px]")}>
@@ -354,12 +445,26 @@ function DropPanel({
         {sub}
       </p>
 
-      {/*
-        * THE FRAME'S "Expected columns" LIST IS ABSENT. No endpoint serves the
-        * column names and they are the one thing here that must not be
-        * guessed - a school that reformats four hundred rows to a header we
-        * invented gets four hundred rejections. See the header's TODO(api).
-        */}
+      {columns ? (
+        <div className="mt-4 rounded-[10px] border border-nevo-near-black/10 bg-nevo-cream px-3.5 py-3">
+          <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.06em] text-nevo-near-black/50">
+            Expected columns
+          </p>
+          <ul
+            aria-label={`Expected columns for ${title.toLowerCase()}`}
+            className="m-0 mt-2 flex list-none flex-wrap gap-1.5 p-0"
+          >
+            {columns.map((c) => (
+              <li
+                key={c}
+                className="rounded-[6px] bg-nevo-navy/[0.09] px-[9px] py-1 font-mono text-[12px] text-nevo-navy"
+              >
+                {c}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       <div
         onDragOver={(e) => {
@@ -423,6 +528,19 @@ function DropPanel({
               try again in a moment.
             </>
           )}
+        </p>
+      ) : null}
+
+      <button
+        type="button"
+        onClick={downloadIt}
+        className="mt-3.5 inline-flex cursor-pointer items-center gap-[7px] text-[13px] font-semibold text-nevo-navy hover:underline"
+      >
+        {download === "loading" ? "Fetching…" : `Download the ${tmpl} template`}
+      </button>
+      {download === "failed" ? (
+        <p className="m-0 mt-1 text-[12.5px] text-nevo-near-black/55">
+          That didn&rsquo;t download. Try again in a moment.
         </p>
       ) : null}
     </div>

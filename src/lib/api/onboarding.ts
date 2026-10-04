@@ -189,6 +189,18 @@ export const onboardingApi = {
   },
 
   /**
+   * The file a school fills in. GET /api/v1/onboarding/templates/{template}
+   *
+   * Kept as bytes: it is a CSV the school saves, with a BOM so Excel reads
+   * Nigerian names as written, and an example row in the school's own class
+   * names. Its header row is generated from the same columns the parser
+   * checks, so the console holds no column list of its own - a copy here is
+   * how a school once downloaded a file its own upload rejected.
+   */
+  template: (name: "students" | "teachers") =>
+    api.blob(`/api/v1/onboarding/templates/${name}`),
+
+  /**
    * Correct what was derived, before anything is created.
    * PATCH /api/v1/onboarding/classes
    *
