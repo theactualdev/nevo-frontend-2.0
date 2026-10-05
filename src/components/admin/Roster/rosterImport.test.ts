@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { OnboardingState } from "@/lib/api/onboarding";
 import {
+  templateColumns,
   foundCounts,
   hasStaged,
   mayConfirm,
@@ -152,5 +153,30 @@ describe("rejectedCsv", () => {
     ]);
     expect(csv).toMatch(/"40"/);
     expect(csv).not.toMatch(/undefined/);
+  });
+});
+
+describe("templateColumns", () => {
+  it("reads the first row, without the BOM the server adds for Excel", () => {
+    expect(templateColumns("\uFEFFFirst name,Surname,Class\r\nAmara,Okafor,JSS 1A\r\n")).toEqual([
+      "First name",
+      "Surname",
+      "Class",
+    ]);
+  });
+
+  it("keeps a quoted heading whole, comma and all", () => {
+    expect(templateColumns('Name,"Class, or classes",Email\nx,y,z')).toEqual([
+      "Name",
+      "Class, or classes",
+      "Email",
+    ]);
+    expect(templateColumns('"Say ""hi""",B')).toEqual(['Say "hi"', "B"]);
+  });
+
+  it("is null when there is no header to show", () => {
+    expect(templateColumns("")).toBeNull();
+    expect(templateColumns("\uFEFF\r\nAmara")).toBeNull();
+    expect(templateColumns(" , ,")).toBeNull();
   });
 });

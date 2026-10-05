@@ -79,15 +79,18 @@ type Outcome =
 
 export function AssignmentSchedule({
   assignments,
+  classes = [],
 }: {
   assignments: Assignment[];
+  /** The classes this lesson went to, named - from the lesson read itself. */
+  classes?: { id: string; name: string }[];
 }) {
   // `options`, NOT `classes`. `useTeacherClasses` fills `classes` only on the
   // signed-OUT fixture path and returns `classes: []` for a real teacher, so
   // reading it meant every row on this screen rendered "A class" for the only
   // people who can reach it. `options` carries {id, name} on both paths - its
   // own comment calls it "all any picker or selector actually needs".
-  const { options: classOptions } = useTeacherClasses();
+  const { options: classOptions, live: classesLive } = useTeacherClasses();
   // Ids this component has itself cancelled. Kept locally rather than
   // refetching: we know exactly which writes the server accepted, so echoing
   // them is honest, and a refetch would need a refresh seam the route does not
@@ -106,9 +109,20 @@ export function AssignmentSchedule({
   const groups = groupByClass(assignments, cancelled, edited, restored);
   if (groups.length === 0) return null;
 
+  /*
+   * THE LESSON'S OWN CLASSES FIRST. The names came from the teacher's class
+   * list alone, which is the fixture three while it loads and after it fails
+   * - none of whose ids match a real class - so every group read "A class",
+   * and the cancel confirmation asked "Cancel this lesson for 7 students in A
+   * class?". The lesson read already carries each class it went to, by name.
+   */
   const nameFor = (classId: string | null) => {
     if (!classId) return "Individual students";
-    return classOptions.find((c) => c.id === classId)?.name ?? "A class";
+    return (
+      classes.find((c) => c.id === classId)?.name ??
+      (classesLive ? classOptions.find((c) => c.id === classId)?.name : null) ??
+      "A class"
+    );
   };
 
   async function cancelGroup(g: Group) {

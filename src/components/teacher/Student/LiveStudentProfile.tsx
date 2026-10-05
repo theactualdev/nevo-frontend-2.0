@@ -114,8 +114,11 @@ export function LiveStudentProfile({
    * shipped the sessions list and this is the id it hands over.
    */
   const [openSession, setOpenSession] = useState<string | null>(null);
-  const { sessions: realSessions, failed: sessionsFailed } =
-    useStudentSessions(studentId);
+  const {
+    sessions: realSessions,
+    failed: sessionsFailed,
+    loading: sessionsLoading,
+  } = useStudentSessions(studentId);
   /* The noticing banner's source. Like the sessions list, it needs the id
      before `profile` is destructured. */
   const { noticed } = useStudentFlags(studentId);
@@ -505,6 +508,21 @@ export function LiveStudentProfile({
         {/* A failed read is not "no sessions". Saying nothing here would tell a
             teacher this child has never worked, which is a claim about a named
             child made from our own network trouble. */}
+        {/* C14 A5, verbatim with this child's own name. An empty list
+            rendered nothing at all, so a child who had never started a lesson
+            looked the same as a page that had not finished loading. Only once
+            the read has answered, and answered with none. */}
+        {realSessions.length === 0 && !sessionsLoading && !sessionsFailed && (
+          <>
+            <h3 className={cn(SECTION_H, "mt-8")}>Recent sessions</h3>
+            <p className="mt-3 max-w-[560px] text-[13px] leading-[1.6] text-nevo-near-black/50">
+              {student.firstName
+                ? `No sessions yet - ${student.firstName} hasn${"’"}t started a lesson.`
+                : "No sessions yet."}
+            </p>
+          </>
+        )}
+
         {realSessions.length === 0 && sessionsFailed && (
           <>
             <h3 className={cn(SECTION_H, "mt-8")}>Recent sessions</h3>

@@ -50,6 +50,8 @@ const KIND_ICON: Record<NotificationKind, React.ReactNode> = {
 export function NotificationsPanel({
   notes,
   failed = false,
+  loading = false,
+  onRetry,
   onOpen,
   onArchive,
   onUndoArchive,
@@ -60,6 +62,10 @@ export function NotificationsPanel({
   notes: TeacherNotification[];
   /** The feed could not be read. Not the same as having nothing to show. */
   failed?: boolean;
+  /** The feed has not answered yet. Not the same as having nothing either. */
+  loading?: boolean;
+  /** Read the feed again, from the failed state. */
+  onRetry?: () => void;
   /** Marks the row read; the row navigates itself. */
   onOpen?: (id: string) => void;
   onArchive?: (id: string) => void;
@@ -109,7 +115,15 @@ export function NotificationsPanel({
           )}
         </div>
 
-        {empty && failed ? (
+        {loading ? (
+          /* C13 draws no loading state, so this one claims nothing: rows
+             without words, until the feed answers. */
+          <div aria-busy="true" aria-label="Loading notifications" className="flex flex-col gap-2.5 px-5 py-4">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="h-[52px] animate-pulse rounded-[10px] bg-nevo-cream-elevated" />
+            ))}
+          </div>
+        ) : empty && failed ? (
           <div className="flex flex-col items-center px-6 py-11 text-center">
             <div className="flex size-14 items-center justify-center rounded-xl bg-nevo-cream-elevated text-nevo-violet">
               <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -123,6 +137,17 @@ export function NotificationsPanel({
             <p className="mt-1 text-[13.5px] text-nevo-near-black/50">
               This isn&rsquo;t an empty inbox. Try again in a moment.
             </p>
+            {/* "Try again" with nothing to press was a sentence about a
+                control that did not exist. */}
+            {onRetry && (
+              <button
+                type="button"
+                onClick={onRetry}
+                className="mt-4 h-10 cursor-pointer rounded-[10px] border-[1.5px] border-nevo-navy/35 px-4 text-sm font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
+              >
+                Try again
+              </button>
+            )}
           </div>
         ) : empty ? (
           <div className="flex flex-col items-center px-6 py-11 text-center">

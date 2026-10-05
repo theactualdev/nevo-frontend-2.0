@@ -133,6 +133,23 @@ export function InsightsView() {
             height={512}
             className="w-[190px] xl:w-[220px]"
           />
+          {/*
+            "Pick one of your classes above" with no classes above: while the
+            list loads, and for a teacher who has none. Loading claims
+            nothing; no classes says the classes list's own sentence.
+          */}
+          {loading ? null : live && classes.length === 0 ? (
+            <>
+              <h3 className="mt-[22px] text-xl font-semibold tracking-[-0.01em] text-nevo-near-black xl:mt-6 xl:text-[21px]">
+                Your classes will appear here once assigned
+              </h3>
+              <p className="mt-2 max-w-[360px] text-[15px] leading-[1.55] text-nevo-near-black/62 xl:text-[15.5px]">
+                This usually happens before your first sign-in. If it&rsquo;s
+                taking a while, your school admin can set it up.
+              </p>
+            </>
+          ) : (
+          <>
           <h3 className="mt-[22px] text-xl font-semibold tracking-[-0.01em] text-nevo-near-black xl:mt-6 xl:text-[21px]">
             Select a class to see insights
           </h3>
@@ -145,6 +162,8 @@ export function InsightsView() {
               week is going.
             </span>
           </p>
+          </>
+          )}
         </div>
       </div>
     );

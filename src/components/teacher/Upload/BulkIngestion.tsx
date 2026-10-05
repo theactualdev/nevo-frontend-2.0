@@ -495,6 +495,17 @@ export function BulkIngestion() {
               Drop the whole scheme of work in - Nevo will sort it into
               individual lessons for you.
             </p>
+            {/* A batch that never went returned the teacher here with no
+                word: the sentence was set, and only the results screen read
+                it. It belongs where they land. */}
+            {batchError && (
+              <p
+                role="alert"
+                className="mb-4 rounded-[10px] bg-nevo-violet/14 px-[15px] py-3 text-[13.5px] leading-[1.5] text-nevo-near-black/78"
+              >
+                {batchError}
+              </p>
+            )}
             <input
               ref={fileInput}
               type="file"

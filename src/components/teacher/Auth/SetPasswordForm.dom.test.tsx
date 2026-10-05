@@ -22,6 +22,7 @@ vi.mock("@/lib/api/invites", () => ({ invitesApi: { acceptJoin } }));
 
 import { SetPasswordForm } from "./SetPasswordForm";
 import { TeacherPasswordReset } from "./TeacherPasswordReset";
+import { ApiError } from "@/lib/api/client";
 import { clearSession, getSession, setSession } from "@/lib/auth/session";
 
 /**
@@ -210,7 +211,8 @@ describe("where a reset finishes", () => {
   });
 
   it("recovers an expired admin link on the admin's reset screen", async () => {
-    completePasswordReset.mockRejectedValue(new Error("expired"));
+    // A 4xx is the server reading the token and refusing it.
+    completePasswordReset.mockRejectedValue(new ApiError(400, "expired"));
     render(<TeacherPasswordReset signInHref="/auth/admin" resetHref="/auth/admin/reset" />);
     fillAndSubmit(false);
 
@@ -256,5 +258,46 @@ describe("the admin's own routes", () => {
     fillAndSubmit(false);
 
     expect(await pushedTo()).toBe("/auth/admin");
+  });
+});
+
+/**
+ * ONLY AN ANSWER ABOUT THE LINK IS "EXPIRED".
+ *
+ * Every failure setting a new password went to the expired screen - a
+ * dropped connection and a server fault included - so a teacher whose link
+ * was fine was told to ask for a new one.
+ */
+describe("a reset that did not land", () => {
+  beforeEach(() => {
+    params.value = new URLSearchParams("token=rst-1");
+  });
+
+  it("stays on the form when the connection failed, and says so", async () => {
+    completePasswordReset.mockRejectedValue(new ApiError(0, "network"));
+    render(<SetPasswordForm mode="reset" />);
+    fillAndSubmit(false);
+
+    expect(
+      await screen.findByText(/couldn.t reach Nevo just now, so your password hasn.t changed/),
+    ).toBeInTheDocument();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("stays on the form when the server broke", async () => {
+    completePasswordReset.mockRejectedValue(new ApiError(503, "down"));
+    render(<SetPasswordForm mode="reset" />);
+    fillAndSubmit(false);
+
+    expect(await screen.findByText(/password hasn.t changed/)).toBeInTheDocument();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("treats a refusal of the link as expired", async () => {
+    completePasswordReset.mockRejectedValue(new ApiError(422, "invalid"));
+    render(<SetPasswordForm mode="reset" />);
+    fillAndSubmit(false);
+
+    expect(await pushedTo()).toBe("/auth/teacher/reset?expired=1");
   });
 });

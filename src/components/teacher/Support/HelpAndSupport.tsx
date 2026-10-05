@@ -109,11 +109,15 @@ export function HelpAndSupport() {
               </a>
             </Row>
 
-            <Row label="When you&rsquo;ll hear back">
-              <p className="text-[15.5px] text-nevo-near-black/78">
-                {contact.responseTime}
-              </p>
-            </Row>
+            {/* Absent is not "soon": with no promise from the server the
+                row is left out, rather than drawn with nothing in it. */}
+            {contact.responseTime && (
+              <Row label="When you&rsquo;ll hear back">
+                <p className="text-[15.5px] text-nevo-near-black/78">
+                  {contact.responseTime}
+                </p>
+              </Row>
+            )}
           </div>
         )}
 

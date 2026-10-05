@@ -124,3 +124,18 @@ describe("the way out", () => {
     }
   });
 });
+
+describe("a school that publishes no response time", () => {
+  it("leaves the row out rather than drawing it empty", () => {
+    // Nullable in the contract. Absent is not a promise of anything.
+    useSupportContact.mockReturnValue({
+      contact: { ...contact, responseTime: null },
+      loading: false,
+      failed: false,
+    });
+    render(<HelpAndSupport />);
+
+    expect(screen.queryByText(/hear back/)).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: contact.email })).toBeInTheDocument();
+  });
+});

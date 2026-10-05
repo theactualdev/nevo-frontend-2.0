@@ -51,7 +51,13 @@ export function LiveClassInsights({
     gathering,
     settledWeek,
     narrativeFailed,
+    sectionFailed,
   } = useClassInsights(classId);
+  /** Any list we could not read - so nothing may say the week is quiet. */
+  const anySectionFailed =
+    sectionFailed.misconceptions || sectionFailed.mastery || sectionFailed.flags;
+  /** The narrative failure line's own words, for a section that failed. */
+  const sectionFailedLine = `We couldn${"\u2019"}t load this just now. Nothing has changed for ${className} - you can try again in a moment.`;
 
   if (loading) {
     return (
@@ -127,7 +133,7 @@ export function LiveClassInsights({
           <p className="text-[14.5px] leading-[1.6] text-nevo-near-black/82 xl:text-[15.5px]">
             {summary}
           </p>
-          {settledWeek && (
+          {settledWeek && !anySectionFailed && (
             /* A calm week is a RESULT, not an absence. Before the engine
                said which was which, this class got "still gathering". */
             <p className="mt-2.5 text-[13.5px] leading-[1.55] text-nevo-near-black/60">
@@ -184,6 +190,15 @@ export function LiveClassInsights({
         </div>
       )}
 
+      {flags.length === 0 && sectionFailed.flags && (
+        <>
+          <h3 className={SECTION_H}>Worth a look</h3>
+          <p className="mt-3 max-w-[660px] text-[14.5px] leading-[1.55] text-nevo-near-black/68">
+            {sectionFailedLine}
+          </p>
+        </>
+      )}
+
       {flags.length > 0 && (
         <>
           <h3 className={SECTION_H}>Worth a look</h3>
@@ -217,6 +232,15 @@ export function LiveClassInsights({
               </div>
             ))}
           </div>
+        </>
+      )}
+
+      {concepts.length === 0 && sectionFailed.mastery && (
+        <>
+          <h3 className={SECTION_H}>How the class is doing</h3>
+          <p className="mt-3 max-w-[660px] text-[14.5px] leading-[1.55] text-nevo-near-black/68">
+            {sectionFailedLine}
+          </p>
         </>
       )}
 

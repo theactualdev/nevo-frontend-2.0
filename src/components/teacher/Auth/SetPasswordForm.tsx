@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { authApi, teamApi } from "@/lib/api";
 import { invitesApi } from "@/lib/api/invites";
+import { ApiError } from "@/lib/api/client";
 import {
   DOOR_HREF,
   DOOR_LABEL,
@@ -231,10 +232,24 @@ export function SetPasswordForm({
       }
       try {
         await authApi.completePasswordReset({ token, password });
-      } catch {
-        // A rejected reset token is almost always an expired one, and that
-        // screen already offers a way forward.
-        router.push(`${resetAt}?expired=1`);
+      } catch (err: unknown) {
+        /*
+         * ONLY AN ANSWER ABOUT THE LINK IS "EXPIRED". Every failure went to
+         * the expired screen - a dropped connection and a server fault
+         * included - so a teacher whose link was fine was told to request a
+         * new one. A 4xx is the server reading the token and refusing it;
+         * no status, or a 5xx, is ours, and the same link will still work.
+         * The request screen already draws this line between the two.
+         */
+        const status = err instanceof ApiError ? err.status : 0;
+        if (status >= 400 && status < 500) {
+          router.push(`${resetAt}?expired=1`);
+          return;
+        }
+        setPhase("form");
+        setError(
+          "We couldn’t reach Nevo just now, so your password hasn’t changed. Try again in a moment.",
+        );
         return;
       }
       // Whoever was signed in here is not who the door should greet: the
