@@ -23,6 +23,10 @@ import {
   type ConsoleDoor,
 } from "@/lib/auth/consoleDoor";
 import { rememberProfile } from "@/lib/auth/session";
+import {
+  clearSignInHandoff,
+  peekSignInHandoff,
+} from "@/lib/auth/signInHandoff";
 import { studentDestination } from "@/lib/auth/entryGate";
 import { useAuth } from "@/hooks";
 import {
@@ -50,11 +54,17 @@ import { WrongDoorNote } from "./WrongDoorNote";
  * to anyone holding a class code, and it needs nothing from backend -
  * `POST /auth/login/pin` is public and has always taken these three fields.
  *
- * WHERE A CHILD GETS THEIR USERNAME is the part design did not answer. It is
- * server-issued at account creation and no student screen has ever shown one;
- * teachers see it on their class detail and admins on the student record. So
- * 00c's help row points at the person who can read it out, which is the best
- * this screen can do until someone rules otherwise.
+ * THE SECOND FIELD IS THE STUDENT ID / ADMISSION NUMBER (design, 30 Sep: "the
+ * label is always 'Student ID / Admission Number', both words, everywhere a
+ * person reads it"). It is the number the school gave the child, so they can
+ * know it, and sign-in matches it as well as the server-issued login
+ * identifier (backend, 1 Oct) - a child who was given that still gets in with
+ * it. Sent as typed, never reshaped: either one has to reach the server
+ * exactly as it was issued.
+ *
+ * PRE-FILLED FROM 05 ENTRY for a child the lookup says already has an
+ * account (`accountReady`): they typed the code and the ID one screen ago,
+ * and only the PIN is left. See `signInHandoff`.
  *
  * "DIDN'T MATCH" KEEPS THE FIELDS FILLED, per the frame - only the PIN clears.
  * Making a child retype a school code and a username they have just been read
@@ -94,8 +104,15 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
   const router = useRouter();
   const { signIn } = useAuth();
 
-  const [schoolCode, setSchoolCode] = useState("");
-  const [username, setUsername] = useState("");
+  // From 05, when it sent this child here; empty on any other arrival.
+  const [schoolCode, setSchoolCode] = useState(() =>
+    normaliseCode(peekSignInHandoff()?.schoolCode ?? "", SCHOOL_CODE_MAX),
+  );
+  const [username, setUsername] = useState(() =>
+    (peekSignInHandoff()?.identifier ?? "").slice(0, USERNAME_MAX),
+  );
+  // Spent once this screen has it, so the next visit starts empty.
+  useEffect(() => clearSignInHandoff(), []);
   const [digits, setDigits] = useState("");
   const [done, setDone] = useState(false);
   /** This sign-in ended the account's session elsewhere (D2). */
@@ -399,17 +416,16 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
             identifier is issued by the server and has to be sent back exactly
             as it was given.
 
-            "USERNAME", NOT THE FRAME'S "STUDENT ID". 00c labels this field
-            "Your student ID"; what it takes is the server-issued login
-            identifier, and which word a child is told is design's to rule on.
-            Raised - the rest of the frame's copy is built.
+            THE FRAME'S LABEL, "Student ID / Admission Number" (30 Sep). It
+            read "Your username" while design had not ruled; sign-in takes the
+            admission number or the login identifier, so either still works.
           */}
           <div className="flex flex-col gap-2">
             <label
               htmlFor="returning-username"
               className="text-[13px] font-semibold text-nevo-near-black/70 sm:text-[13.5px]"
             >
-              Your username
+              Student ID / Admission Number
             </label>
             <div
               className={cn(
@@ -436,7 +452,6 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}
-                placeholder="Ask your teacher"
                 className="w-full bg-transparent text-[17px] text-nevo-near-black outline-none placeholder:text-nevo-near-black/35"
               />
             </div>
@@ -555,7 +570,7 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
               </span>
               <span className="text-sm leading-[1.5] text-nevo-near-black">
                 {error === "credentials" &&
-                  "Hmm, that didn't match. Check your school code and username with your teacher and try again."}
+                  "Hmm, that didn't match. Check your school code and Student ID / Admission Number with your teacher and try again."}
                 {error === "throttled" &&
                   "That's a lot of tries in a row. Wait a moment, then try again."}
                 {error === "ours" &&
@@ -583,7 +598,7 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
               Text, not a link: there is nothing on this device to open. */}
           <p className="mt-0.5 text-center text-[14.5px]">
             <span className="text-nevo-near-black/60">
-              Don&apos;t know your username?{" "}
+              Don&apos;t know your Student ID / Admission Number?{" "}
             </span>
             <span className="font-medium text-nevo-navy">Ask your teacher.</span>
           </p>
