@@ -659,7 +659,7 @@ export function LiveLessonDetail({
             wrong with the lesson - try again in a moment.
           </p>
         ) : (
-          <AssignmentSchedule assignments={assignments} />
+          <AssignmentSchedule assignments={assignments} classes={classes} />
         )}
 
         {/*

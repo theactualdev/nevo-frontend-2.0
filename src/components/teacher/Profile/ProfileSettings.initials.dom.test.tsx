@@ -8,6 +8,9 @@ const { useHasSession, useCurrentUser } = vi.hoisted(() => ({
 vi.mock("@/hooks/useHasSession", () => ({ useHasSession }));
 vi.mock("@/hooks/useCurrentUser", () => ({
   useCurrentUser,
+  // The profile page reads the identity WITH its status now (loading, ready
+  // or failed). These tests are about a loaded identity, so it is ready.
+  useCurrentUserStatus: () => ({ identity: useCurrentUser(), status: "ready" }),
   publishIdentity: vi.fn(),
   uploadPhoto: vi.fn(),
 }));

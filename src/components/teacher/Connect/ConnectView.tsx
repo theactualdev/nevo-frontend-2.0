@@ -397,9 +397,32 @@ export function ConnectView() {
                     state a freshly-composed thread is in the instant it is
                     opened. Rendering it as an empty conversation is right;
                     crashing the whole Connect screen was not. */}
-                {(active.messages ?? []).map((m) => (
-                  <Bubble key={m.id} m={m} isNew={m.id === newestId} />
-                ))}
+                {active.loadFailed && !active.loaded ? (
+                  <div className="self-center text-center">
+                    <p className="text-[14px] leading-[1.55] text-nevo-near-black/68">
+                      We couldn&rsquo;t load this conversation just now. Try
+                      again in a moment.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => openThread(active.id)}
+                      className="mt-3 h-10 cursor-pointer rounded-[10px] border-[1.5px] border-nevo-navy/35 px-4 text-sm font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
+                    >
+                      Try again
+                    </button>
+                  </div>
+                ) : !active.loaded ? (
+                  /* Asked for and not back: bubbles without words, not an
+                     empty conversation. */
+                  <div aria-busy="true" aria-label="Loading this conversation" className="flex flex-col gap-3.5">
+                    <div className="h-12 w-[55%] animate-pulse rounded-[14px] bg-nevo-cream-elevated" />
+                    <div className="h-12 w-[45%] animate-pulse self-end rounded-[14px] bg-nevo-navy/10" />
+                  </div>
+                ) : (
+                  (active.messages ?? []).map((m) => (
+                    <Bubble key={m.id} m={m} isNew={m.id === newestId} />
+                  ))
+                )}
                 <div ref={endRef} />
               </div>
 

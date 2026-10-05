@@ -33,7 +33,8 @@ export interface WhatsAppContact {
 export interface SupportContact {
   email: string;
   whatsapp: WhatsAppContact;
-  responseTime: string;
+  /** Nullable in the contract: a school may publish no promise at all. */
+  responseTime: string | null;
 }
 
 export const supportApi = {

@@ -800,6 +800,15 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
                     library and try again.
                   </p>
                 )}
+                {/* An empty library had no nothing-state: the heading over
+                    nothing and a Continue that would not go. The recommend
+                    sheet's sentence for the same empty shelf. */}
+                {live && cards.length === 0 && (
+                  <p className="text-[14px] leading-[1.55] text-nevo-near-black/68">
+                    Your library is empty, so there is nothing to assign yet.
+                    Upload a lesson and it will appear here.
+                  </p>
+                )}
                 <MaybeSample showing={!live} kind="teacher:assign-lessons">
                 {lessons.map((l) => (
                   <CheckCard
@@ -851,6 +860,17 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
                         /* The sample classes carry the notice above AND the
                            mark, so the signed-in end-to-end check can see
                            them - it could not before. */
+                        <>
+                        {/* No classes yet: Home's sentence, not a heading
+                            over nothing. Only reachable once the read has
+                            answered - loading draws skeletons above, and a
+                            failure or no session serves the fixtures. */}
+                        {myClasses.length === 0 && (
+                          <p className="text-[14px] leading-[1.55] text-nevo-near-black/68">
+                            You don&rsquo;t have any classes yet. When your
+                            school adds you to one, it will appear here.
+                          </p>
+                        )}
                         <MaybeSample
                           showing={classesSample || !signedIn}
                           kind="teacher:assign-classes"
@@ -869,6 +889,7 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
                           />
                         ))}
                         </MaybeSample>
+                        </>
                       )}
                   </div>
                 ) : (

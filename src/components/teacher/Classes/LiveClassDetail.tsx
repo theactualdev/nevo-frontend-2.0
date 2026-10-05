@@ -66,7 +66,7 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
    * second call. A flag the teacher has for a student in ANOTHER class simply
    * does not match, which is the behaviour we want.
    */
-  const { flags } = useTeacherFlags();
+  const { flags, failed: flagsFailed } = useTeacherFlags();
   const flagFor = new Map(flags.map((f) => [f.studentId, f]));
 
   return (
@@ -169,6 +169,16 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
             <h3 className="mt-7 text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase xl:mt-8 xl:text-sm">
               Student observations
             </h3>
+            {/* The markers come from the flags read. When it failed, every
+                "Worth a glance" vanished with nothing saying so - a roster
+                with no markers reads as a class with nothing worth a glance.
+                Home's sentence for the same failure. */}
+            {flagsFailed && (
+              <p className="mt-2 max-w-[560px] text-[13px] leading-[1.5] text-nevo-near-black/55 italic">
+                We couldn&rsquo;t read what needs your attention just now, so
+                no one below is marked.
+              </p>
+            )}
             {/*
              * C16b's own line, leading the existing profile count rather than
              * stacked above it.
@@ -377,6 +387,17 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
                     ? "Share the class code and your students will appear here as they join."
                     : "Your students will appear here as your school adds them."}
               </p>
+              {/* "Try again" with nothing to press. The class route's own
+                  failure card has always had the button; this one did not. */}
+              {failed && (
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                  className="mt-4 h-10 cursor-pointer rounded-[10px] border-[1.5px] border-nevo-navy/35 px-4 text-sm font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
+                >
+                  Try again
+                </button>
+              )}
             </div>
           </div>
         )}

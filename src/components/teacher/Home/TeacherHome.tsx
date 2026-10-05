@@ -74,6 +74,7 @@ export function TeacherHome() {
     flags: liveFlags,
     live: flagsLive,
     failed: flagsFailed,
+    loading: flagsLoading,
   } = useTeacherFlags();
   const {
     pulse,
@@ -154,7 +155,28 @@ export function TeacherHome() {
             would claim everyone is moving along. */}
         {!noClasses && (
           <>
-            {hasFlags ? (
+            {flagsLoading ? (
+              /*
+               * C03's FIRST LOAD, which was never built - so for the whole
+               * 1-6 seconds the flags take, a teacher was told "Nothing needs
+               * you right now" over a morning that may have three children in
+               * it. Rule 5: not knowing yet is not knowing nothing.
+               *
+               * The frame's own shape: a 200px heading bar and three 118px
+               * cards, no copy.
+               */
+              <div aria-busy="true" aria-label="Loading what needs your attention">
+                <div className="mt-8 h-3.5 w-[200px] rounded-[6px] bg-nevo-near-black/9" />
+                <div className="mt-4 flex flex-col gap-3.5">
+                  {[0, 1, 2].map((i) => (
+                    <div
+                      key={i}
+                      className="h-[118px] animate-pulse rounded-[12px] border border-nevo-near-black/5 bg-nevo-near-black/5"
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : hasFlags ? (
               <>
                 <div className="mt-[26px] flex items-center gap-2.5 xl:mt-8">
                   <h3 className={SECTION_H}>Worth your attention</h3>
