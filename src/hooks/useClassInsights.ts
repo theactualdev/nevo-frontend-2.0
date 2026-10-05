@@ -160,7 +160,9 @@ export function useClassInsights(classId: string | null): ClassInsightsState {
       .catch(fail("mastery"))
       .finally(done);
     void intelligenceApi
-      .getFlags({ classId })
+      // The most one page holds. A class has nowhere near 200 open flags,
+      // and the default 50 was a cap nobody chose.
+      .getFlags({ classId, limit: 200 })
       .then((rows) => {
         if (!cancelled) setFlags(rows.filter((f) => !f.acknowledged));
       })

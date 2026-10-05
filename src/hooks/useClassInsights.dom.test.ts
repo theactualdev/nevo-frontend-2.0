@@ -186,3 +186,15 @@ describe("which list failed", () => {
     expect(result.current.sectionFailed.flags).toBe(false);
   });
 });
+
+describe("a class's flags", () => {
+  it("asks for a whole page of them, not the default 50", async () => {
+    misconceptions.mockResolvedValue([]);
+    mastery.mockResolvedValue([]);
+    narrative.mockResolvedValue(NARRATIVE);
+    getFlags.mockResolvedValue([]);
+    renderHook(() => useClassInsights("c-1"));
+
+    await waitFor(() => expect(getFlags).toHaveBeenCalledWith({ classId: "c-1", limit: 200 }));
+  });
+});
