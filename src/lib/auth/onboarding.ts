@@ -1,44 +1,41 @@
 /**
- * Onboarding draft state - the identity the student gives us across the
- * route-per-step flow (name/age, school code), kept in sessionStorage so it
- * survives the step navigations and dies with the tab. At PIN creation the
- * draft folds into the device's RememberedProfile (`session.ts`), which is
- * what the returning-student login screen unlocks against.
+ * Onboarding draft state - who 05 Entry found, carried from the entry screen
+ * through the baseline to PIN creation, kept in sessionStorage so it survives
+ * the navigation and dies with the tab. At PIN creation the draft folds into
+ * the device's RememberedProfile (`session.ts`), which is what the
+ * returning-student login screen unlocks against.
+ *
+ * NOTHING IN IT IS ASKED OF THE CHILD any more, beyond the two things they
+ * type on 05. Name, age and class are on the school's roster, and the entry
+ * lookup states them (SCRUM-208): the name and age steps, the class step and
+ * the class code are gone, and so are the fields that held their answers.
  */
 
-import { usersApi } from "@/lib/api/users";
 import { STUDENT_PIN_LENGTH } from "@/lib/constants/auth";
+import type { EntryIdentity } from "./firstPin";
 import { getSession, rememberProfile } from "./session";
 
 const DRAFT_KEY = "nevo.onboarding.draft";
 
 export interface OnboardingDraft {
+  /**
+   * The child's first name, from the roster row the lookup matched. Greets
+   * them on a remembered device; never typed by the child.
+   */
   name?: string;
+  /**
+   * From the roster's date of birth, computed server-side. Absent when the
+   * roster has none, and then the baseline asks rather than guesses.
+   */
   age?: number;
+  /** The four-character code the child typed on 05, which the lookup matched. */
   schoolCode?: string;
-  /** From the live school-code verification, when it ran. */
-  schoolName?: string;
-  authMethod?: string;
-  classes?: { id: string; name: string }[];
-  /** The class the student picked (or the only one there was). */
-  classId?: string;
-  className?: string;
   /**
-   * The class code a child joined with, when they came in through Teacher Join.
-   *
-   * Kept as well as `classId`, because `ConnectionResponse.schoolCode` is
-   * NULLABLE - so the `{ classId, schoolCode }` form the sequence uses at PIN
-   * time is not always available, while `{ classCode }` on its own always is.
-   * It is also what marks this child as one who needs neither the school step
-   * nor the class step.
+   * The Student ID / Admission Number the child typed on 05. The other half
+   * of what identifies them until a first-PIN route exists - see
+   * `bindFirstPin`.
    */
-  classCode?: string;
-  /**
-   * The join-link token, when the child arrived by one. Redeeming it at PIN
-   * creation is what creates the account - and what returns the only login
-   * identifier the server will actually recognise.
-   */
-  joinToken?: string;
+  admissionNumber?: string;
 }
 
 export function getOnboardingDraft(): OnboardingDraft {
@@ -67,11 +64,9 @@ export function mergeOnboardingDraft(patch: OnboardingDraft): void {
  *
  * THE DRAFT OUTLIVED ITS CHILD. It is cleared when onboarding remembers a
  * child - and nowhere else. A child who walked away mid-onboarding left their
- * name, age, school and invitation in the tab, so the next child on the same
- * tablet was greeted as them, routed by their class code, and could redeem
- * their invitation at PIN creation. Called where a new child starts (the
- * welcome screen, and a class code arriving directly), so no earlier child's
- * answers are carried in.
+ * name and age in the tab, so the next child on the same tablet was greeted as
+ * them. Called where a new child starts (the welcome screen, and a match on
+ * 05), so no earlier child's answers are carried in.
  */
 export function startOnboardingDraft(seed: OnboardingDraft = {}): void {
   try {
@@ -90,29 +85,16 @@ export function clearOnboardingDraft(): void {
 }
 
 /**
- * The school code the server holds for the account that was just created, for
- * a child who never typed one.
- *
- * A JOIN-LINK OR CLASS-CODE CHILD WAS NEVER REMEMBERED. The join endpoints
- * return a `schoolName` and no code, and `ConnectionResponse.schoolCode` is
- * nullable - so `rememberOnboardedStudent` had no school code for them,
- * refused, and the tablet's picker never showed them. Once the account exists
- * `GET /users/me` carries `school.code`, and that is the code the next sign-in
- * is checked against.
- *
- * Null when there is no session to ask with, or the read fails, or the school
- * has no code: then the device is not remembered, which is the truth about it.
- * Only asked when the draft has no code of its own.
+ * The pair 05 matched this child on, or null when this run did not start
+ * there - a typed URL straight into the sequence. Without it there is nobody
+ * to attach a PIN to, and PIN creation says it could not save rather than
+ * guessing.
  */
-export async function schoolCodeFromAccount(): Promise<string | null> {
-  if (getOnboardingDraft().schoolCode?.trim()) return null;
-  if (!getSession()) return null;
-  try {
-    const me = await usersApi.me();
-    return me.school?.code?.trim() || null;
-  } catch {
-    return null;
-  }
+export function entryIdentityFromDraft(): EntryIdentity | null {
+  const draft = getOnboardingDraft();
+  const schoolCode = draft.schoolCode?.trim();
+  const admissionNumber = draft.admissionNumber?.trim();
+  return schoolCode && admissionNumber ? { schoolCode, admissionNumber } : null;
 }
 
 /** "Amara Kalu" -> "AK"; single names fall back to the first two letters. */
@@ -135,34 +117,28 @@ function initialsOf(name: string): string {
  * it turns a child who never had an account into a child who thinks they are
  * locked out of one.
  *
- * `POST /api/v1/join/{token}/accept` now returns `loginIdentifier`, and it is
- * public, so a join-link child gets a real one before this is called.
+ * The identifier comes back from whatever stores the first PIN - see
+ * `bindFirstPin`.
  *
- * Returns whether the device was remembered. Without a name or without a
- * server-issued identifier it remembers nothing, and the login screen keeps
+ * Returns whether the device was remembered. Without a name, a school code or
+ * a server-issued identifier it remembers nothing, and the login screen keeps
  * routing to onboarding - which is the truth about that device.
- *
- * `accountSchoolCode` is the school code the server holds for the new account,
- * for a child whose draft has none - see `schoolCodeFromAccount`. The draft's
- * own code, which the child typed and the server verified, comes first.
  */
 export function rememberOnboardedStudent(
   loginIdentifier: string | null | undefined,
-  accountSchoolCode?: string | null,
 ): boolean {
   const draft = getOnboardingDraft();
   const name = draft.name?.trim();
   const identifier = loginIdentifier?.trim();
-  const schoolCode = draft.schoolCode?.trim() || accountSchoolCode?.trim();
+  const schoolCode = draft.schoolCode?.trim();
   /*
    * THE SCHOOL CODE IS PART OF THE CREDENTIAL, not decoration.
    * `POST /auth/login/pin` takes `schoolCode + loginIdentifier + pin`, and
    * this used to store `draft.schoolCode ?? ""` - so a child whose class-code
-   * join came back with a null `schoolCode` (the field is nullable on
-   * `ConnectionResponse`) was remembered against an empty one, greeted by name
-   * the next morning, and then 401'd on a PIN they had typed correctly. That is
-   * exactly the failure the paragraph above exists to prevent, and it was left
-   * open for one of the three fields.
+   * join came back with a null `schoolCode` was remembered against an empty
+   * one, greeted by name the next morning, and then 401'd on a PIN they had
+   * typed correctly. That is exactly the failure the paragraph above exists
+   * to prevent, and it was left open for one of the three fields.
    */
   if (!name || !identifier || !schoolCode) {
     clearOnboardingDraft();

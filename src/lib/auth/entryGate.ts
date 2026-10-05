@@ -1,4 +1,5 @@
 import { consentsApi } from "@/lib/api/consents";
+import type { StudentEntryState } from "@/lib/api/studentEntry";
 import { doorForRole } from "./consoleDoor";
 
 /**
@@ -12,8 +13,8 @@ import { doorForRole } from "./consoleDoor";
  *
  * So this exists to be the ONE answer all the doors share. There are four -
  * the returning sign-in form, the remembered-device unlock, the SSO callback
- * and the entry link - and four copies of a consent rule is three too many for
- * something that decides whether a child can start.
+ * and 05 Entry's lookup (`entryRoute`, below) - and four copies of a consent
+ * rule is three too many for something that decides whether a child can start.
  *
  * ## What this is NOT
  *
@@ -85,6 +86,40 @@ export async function enterFirstLesson(
   go: (to: string) => void,
 ): Promise<void> {
   go(await studentDestination(firstLesson));
+}
+
+/**
+ * Where 05 Entry sends a child once the lookup has matched them.
+ *
+ * - `waiting`: 00d, with nothing measured. Consent not given, or a date of
+ *   birth in dispute - the same screen and the same words for both, and the
+ *   child is told neither reason (design, 23 Sep).
+ * - `sign-in`: 00c, because they already have an account. A first run would
+ *   make them a second one.
+ * - `first-run`: the transition into 08 Profiling Intro, the baseline, the
+ *   learning notice and 15 PIN Creation.
+ *
+ * **ONLY `given` LETS A CHILD START.** `pending` and `withdrawn` hold, and so
+ * would any value the contract adds later: a consent state this client does
+ * not know is not a yes. Checked FIRST, so a held child meets 00d whichever of
+ * the other two they would have reached - the 23 Sep rule, one screen per
+ * state whatever the door.
+ *
+ * `accountReady` is read as "already has a PIN". The spec gives the field no
+ * description, so that reading is asked of backend rather than known.
+ */
+export type EntryRoute = "waiting" | "sign-in" | "first-run";
+
+export function entryRoute(
+  state: Pick<
+    StudentEntryState,
+    "consentState" | "accountReady" | "ageCheckPending"
+  >,
+): EntryRoute {
+  if (state.consentState !== "given" || state.ageCheckPending === true) {
+    return "waiting";
+  }
+  return state.accountReady ? "sign-in" : "first-run";
 }
 
 /** The Observed Interaction Sequence - where an SSO child's first use starts. */

@@ -44,40 +44,6 @@ function store(login: LoginResponse): LoginResponse {
   return login;
 }
 
-/** 201 of POST /connections/class-code. */
-export interface ClassConnection {
-  classId: string;
-  status: string;
-  schoolCode: string | null;
-  /** Absent when the caller was already authenticated - then no token is needed. */
-  onboardingToken: string | null;
-  expiresAt: string | null;
-}
-
-/** 200 of the pre-auth POST /auth/pin. */
-export interface AccountCompletion {
-  status: string;
-  userId: string;
-  /** The only identifier the next sign-in will recognise. Null is possible. */
-  loginIdentifier: string | null;
-  session: {
-    accessToken: string;
-    tokenType: string;
-    expiresAt: string;
-    userId: string;
-    role: string;
-  } | null;
-}
-
-/** 200 of POST /auth/school-code/verify - the school, and its classes. */
-export interface SchoolVerification {
-  schoolId: string;
-  schoolName: string;
-  /** How this school's students sign in; no enum in the spec. */
-  authMethod: string;
-  classes: { id: string; name: string; yearGroup: string | null }[];
-}
-
 /** One open sign-in. No IP address and no device name in the contract. */
 export interface AuthSession {
   id: string;
@@ -91,23 +57,11 @@ export interface AuthSession {
 
 export const authApi = {
   /**
-   * Resolve a school code during onboarding. Pre-auth by design - the child
-   * has no session yet - and the response carries the school's class list,
-   * which is exactly what the class-confirmation step needs.
-   */
-  verifySchoolCode: (schoolCode: string) =>
-    api.post<SchoolVerification>("/api/v1/auth/school-code/verify", {
-      schoolCode,
-    }),
-
-  /**
    * Store the chosen PIN for a child who is ALREADY signed in - the SSO path,
    * and changing a PIN from the profile screen.
    *
-   * Pre-auth onboarding uses `completeAccount` below instead. This route was
-   * Bearer-only until 3 Sep, which is why a child arriving by school code
-   * could not be provisioned at all; it is now public and the two callers are
-   * told apart by whether they send an `onboardingToken`.
+   * A child setting a FIRST PIN before any session exists is not this call:
+   * see `bindFirstPin`, which waits on backend (B64).
    */
   setPin: (pin: string, currentPin?: string) =>
     api.post<Record<string, string>>("/api/v1/auth/pin", {
@@ -140,51 +94,6 @@ export const authApi = {
    */
   requestPinReset: (payload: { schoolCode: string; loginIdentifier: string }) =>
     api.post<Record<string, string>>("/api/v1/auth/pin/reset", payload),
-
-  /**
-   * PUBLIC. Exchange a class code - or a class the child picked inside a
-   * school - for the one-use token that authorises account creation.
-   *
-   * Either form is accepted: `{classCode}` on its own, or `{classId,
-   * schoolCode}` which is what our flow has by the time a class is chosen.
-   * The token lives 20 minutes and is spent by `completeAccount`.
-   */
-  connectClassCode: (payload: {
-    classCode?: string;
-    classId?: string;
-    schoolCode?: string;
-  }) => api.post<ClassConnection>("/api/v1/connections/class-code", payload),
-
-  /**
-   * PUBLIC. Turn a completed onboarding into an account.
-   *
-   * This is the endpoint that closes the gap the join-link path had to work
-   * around: it creates the student, enrols them in the chosen class, and
-   * returns BOTH a server-issued `loginIdentifier` and a live session - so
-   * the device can remember a child under an identifier the server will
-   * actually recognise, and the child is signed in when they land.
-   *
-   * The session is stored here rather than by the caller, so no route can
-   * forget to; `loginIdentifier` is handed back for the caller to remember.
-   */
-  completeAccount: async (payload: {
-    pin: string;
-    onboardingToken: string;
-    firstName?: string | null;
-    lastName?: string | null;
-    age?: number | null;
-  }): Promise<AccountCompletion> => {
-    const res = await api.post<AccountCompletion>("/api/v1/auth/pin", payload);
-    if (res.session) {
-      setSession({
-        token: res.session.accessToken,
-        expiresAt: res.session.expiresAt,
-        userId: res.session.userId,
-        role: res.session.role,
-      });
-    }
-    return res;
-  },
 
   /**
    * Change your own password (D12c).

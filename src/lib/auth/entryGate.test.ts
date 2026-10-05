@@ -5,6 +5,7 @@ vi.mock("@/lib/api/consents", () => ({ consentsApi: { myConsentGate } }));
 
 import {
   enterFirstLesson,
+  entryRoute,
   ssoLanding,
   studentDestination,
   WAITING_ROUTE,
@@ -177,5 +178,59 @@ describe("ssoLanding", () => {
   it("has nowhere for a role no console serves", () => {
     expect(ssoLanding("parent_guardian", "home_dashboard")).toBeNull();
     expect(ssoLanding(undefined, "home_dashboard")).toBeNull();
+  });
+});
+
+/**
+ * 05 Entry's share of the rule. The lookup matched a child on their school
+ * code and Student ID; where they go next is decided here and only here.
+ */
+describe("entryRoute", () => {
+  const state = (over: Record<string, unknown> = {}) => ({
+    consentState: "given" as const,
+    accountReady: false,
+    ageCheckPending: false,
+    ...over,
+  });
+
+  it("takes a consented child with no account into the first run", () => {
+    expect(entryRoute(state())).toBe("first-run");
+  });
+
+  it("holds a child whose consent is pending, or withdrawn", () => {
+    expect(entryRoute(state({ consentState: "pending" }))).toBe("waiting");
+    expect(entryRoute(state({ consentState: "withdrawn" }))).toBe("waiting");
+  });
+
+  it("holds a child whose date of birth is in dispute, on the same screen", () => {
+    // Design, 23 Sep: same screen as 00d, same words, different state.
+    expect(entryRoute(state({ ageCheckPending: true }))).toBe("waiting");
+  });
+
+  it("holds on a consent state it does not know", () => {
+    // A value the contract adds later is not a yes.
+    expect(
+      entryRoute(
+        state({ consentState: "not_sent" }) as unknown as Parameters<
+          typeof entryRoute
+        >[0],
+      ),
+    ).toBe("waiting");
+  });
+
+  it("sends a child who already has an account to sign back in", () => {
+    expect(entryRoute(state({ accountReady: true }))).toBe("sign-in");
+  });
+
+  it("holds before it signs in: one screen per state, whatever the door", () => {
+    expect(
+      entryRoute(state({ consentState: "pending", accountReady: true })),
+    ).toBe("waiting");
+  });
+
+  it("treats an absent ageCheckPending as no dispute, as the contract defaults it", () => {
+    expect(
+      entryRoute({ consentState: "given", accountReady: false }),
+    ).toBe("first-run");
   });
 });
