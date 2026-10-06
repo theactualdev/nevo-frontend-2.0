@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { classesApi, type AdminClass } from "@/lib/api/classes";
-import { teachersApi, type TeacherSummary } from "@/lib/api/teachers";
+import { subjectsApi, type SchoolSubject } from "@/lib/api/subjects";
 import { yearGroupOptions } from "@/lib/constants/yearGroups";
 import { collisionNote, findCollision } from "./duplicateName";
 import { cn } from "@/lib/utils";
+import { ReadFailed } from "../ReadFailed";
+import { SubjectPicker } from "./SubjectPicker";
 import {
   FailureLine,
   GHOST_BTN,
@@ -22,12 +24,12 @@ import {
  * they carried at the time. That is a backend property, and this screen simply
  * does not do anything that would undermine it.
  *
- * THE OPTIONAL PRIMARY TEACHER IS TWO CALLS, NOT ONE. The sheet offers it
- * because D5 draws it, but the deployed `POST /api/v1/classes` takes only
- * `{ name, yearGroup }` - SCRUM-40's `primary_teacher_id` was never built. So
- * create posts the class, then posts the assignment with the id it gets back.
- * They are not atomic, and the failure copy is honest about which half landed
- * rather than saying "that didn't save" over a class that now exists.
+ * SUBJECTS, NOT A TEACHER (D05, 6 Oct). Create used to offer an optional
+ * primary teacher. Since SCRUM-194 an assignment needs a subject the class
+ * takes, and a class just created takes none - so that assignment could only
+ * ever be refused. D05's "Add a class" draws "Subjects this class takes"
+ * instead, and teachers are assigned from the class, where the subject is
+ * chosen. Editing leaves subjects to the class page's own section.
  */
 
 const LABEL =
@@ -36,7 +38,7 @@ const LABEL =
 const FIELD =
   "h-[50px] w-full cursor-pointer rounded-[10px] border-[1.5px] border-nevo-near-black/16 bg-nevo-cream px-[15px] text-[15px] text-nevo-near-black outline-none transition-colors focus:border-nevo-navy";
 
-type Phase = "idle" | "saving" | "failed" | "assign-failed";
+type Phase = "idle" | "saving" | "failed";
 
 export function ClassFormSheet({
   existing,
@@ -62,19 +64,23 @@ export function ClassFormSheet({
   const [capacity, setCapacity] = useState(
     existing?.capacity != null ? String(existing.capacity) : "",
   );
-  const [teacherId, setTeacherId] = useState("");
-  const [teachers, setTeachers] = useState<TeacherSummary[]>([]);
+  const [subjects, setSubjects] = useState<string[]>([]);
+  const [schoolSubjects, setSchoolSubjects] = useState<SchoolSubject[] | null>(null);
+  const [subjectsFailed, setSubjectsFailed] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
 
-  // The primary-teacher select only exists on create. A class that already
-  // exists is assigned from its detail page, which is the flow SCRUM-40 says
-  // to optimise; a second door here would be a variant, not a mirror.
-  useEffect(() => {
-    if (editing) return;
-    teachersApi
+  const fetchSubjects = () =>
+    subjectsApi
       .list()
-      .then(setTeachers)
-      .catch(() => setTeachers([]));
+      .then(setSchoolSubjects)
+      .catch(() => setSubjectsFailed(true));
+  const loadSubjects = () => {
+    setSubjectsFailed(false);
+    fetchSubjects();
+  };
+  // Create only - an existing class changes its subjects on its own page.
+  useEffect(() => {
+    if (!editing) fetchSubjects();
   }, [editing]);
 
   /*
@@ -139,25 +145,8 @@ export function ClassFormSheet({
     }
 
     classesApi
-      .create(payload)
-      .then((created) => {
-        if (!teacherId) {
-          onSaved(created.id);
-          return;
-        }
-        return (
-          classesApi
-            .createAssignment({
-              teacherId: teacherId,
-              classId: created.id,
-              role: "primary",
-            })
-            .then(() => onSaved(created.id))
-            // The class exists either way. Send them to it and say what is left
-            // undone, rather than stranding them in a sheet over a saved class.
-            .catch(() => setPhase("assign-failed"))
-        );
-      })
+      .create(subjects.length > 0 ? { ...payload, subjects } : payload)
+      .then((created) => onSaved(created.id))
       .catch(() => setPhase("failed"));
   };
 
@@ -188,16 +177,6 @@ export function ClassFormSheet({
                 'Close'." A failure with one way out is a failure that holds
                 the sheet open until it succeeds. */}
             <button type="button" onClick={onClose} className={GHOST_BTN}>
-              Close
-            </button>
-          </>
-        ) : phase === "assign-failed" ? (
-          <>
-            <FailureLine>
-              The class was created, but the teacher wasn&rsquo;t assigned. You
-              can assign one from the class itself.
-            </FailureLine>
-            <button type="button" onClick={onClose} className={PRIMARY_BTN}>
               Close
             </button>
           </>
@@ -306,26 +285,24 @@ export function ClassFormSheet({
 
       {!editing ? (
         <div>
-          <label htmlFor="class-teacher" className={LABEL}>
-            Primary teacher <span className="font-normal">(optional)</span>
+          <label htmlFor="class-subjects" className={LABEL}>
+            Subjects this class takes
           </label>
-          <select
-            id="class-teacher"
-            value={teacherId}
-            onChange={(e) => setTeacherId(e.target.value)}
-            className={FIELD}
-          >
-            <option value="">Assign later</option>
-            {teachers.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-          <p className="mt-2 text-[12.5px] leading-[1.5] text-nevo-near-black/55">
-            The primary teacher leads the class. You can add co-teachers once it
-            exists.
-          </p>
+          <SubjectPicker
+            id="class-subjects"
+            value={subjects}
+            onChange={setSubjects}
+            subjects={schoolSubjects}
+          />
+          {subjectsFailed ? (
+            <ReadFailed className="mt-2" what="your school's subject list" onRetry={loadSubjects} />
+          ) : (
+            <p className="mt-2 text-[12.5px] leading-[1.5] text-nevo-near-black/55">
+              {subjects.length > 0
+                ? `${subjects.length} ${subjects.length === 1 ? "subject" : "subjects"}. You can change these later from the class.`
+                : "You can change these later from the class."}
+            </p>
+          )}
         </div>
       ) : null}
     </Sheet>
