@@ -60,6 +60,22 @@ describe("Forgot PIN", () => {
     );
   });
 
+  it("says what happens next in 00a's words, revised 1 Oct", async () => {
+    // The old line promised help and described none: "Ask your teacher and
+    // they'll help you sign back in" left a child expecting to be handed a PIN.
+    await page();
+
+    expect(
+      screen.getByRole("heading", { name: "Forgot your PIN?" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "That's okay. Your teacher can clear your old PIN, and then you'll choose a new one yourself.",
+      ),
+    ).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/help you sign back in/);
+  });
+
   it("draws the frame's Back, its art, and no wordmark or em dash", async () => {
     await page();
 

@@ -281,6 +281,52 @@ export function reduceRunContext(capture: BaselineCapture) {
   };
 }
 
+/**
+ * The motor-speed step's samples, exactly as they were taken (08a,
+ * SCRUM-214), for the baseline vector. DELIBERATELY NOT REDUCED.
+ *
+ * Design defines `motor_baseline_ms` as the median of taps three to eight,
+ * the first two being practice. That is a parameter, and rule 3 says the
+ * client computes none: a median here and another in the engine are two
+ * implementations of one number. So every tap travels as recorded - which
+ * target and cell, its latency from the frame the target was painted to the
+ * pointer-down on it, whether it was practice, and the form factor (D12: a
+ * baseline is never compared across a tablet, a phone and a cursor) - and
+ * the median is the engine's to take.
+ *
+ * The reducers around this one average on the device, which predates that
+ * rule; this is the shape raw-trial ingest (B9) asks for. It carries no
+ * coordinates and no dwell (B14): a latency is a timing, not a touch.
+ *
+ * `ended` is how the step finished - "complete" after eight, "idle" after ten
+ * seconds with no tap, "skipped" on a cursor device - and null if it never
+ * ran, which a withdrawn guardian's stopped capture also reads as.
+ */
+export function motorStepSamples(capture: BaselineCapture) {
+  const end = capture.ofKind("motor_end").at(-1)?.payload;
+  const skip = capture.ofKind("motor_skipped").at(-1)?.payload;
+  const formFactor = (skip ?? end)?.formFactor;
+  return {
+    module: "motor_speed",
+    ended: skip
+      ? "skipped"
+      : typeof end?.reason === "string"
+        ? end.reason
+        : null,
+    ...(skip ? { skipReason: skip.reason } : {}),
+    formFactor: typeof formFactor === "string" ? formFactor : null,
+    /** The lattice the cells are numbered on: n of an n x n grid. */
+    grid: typeof end?.grid === "number" ? end.grid : null,
+    samples: capture.ofKind("motor_tap").map((e) => ({
+      target: e.payload?.target,
+      cell: e.payload?.cell,
+      latencyMs: e.payload?.latencyMs,
+      practice: e.payload?.practice === true,
+      formFactor: e.payload?.formFactor,
+    })),
+  };
+}
+
 export function reduceGridSpan(capture: BaselineCapture) {
   const taps = capture.ofKind("tap");
   const correct = taps.filter((t) => t.payload?.correct === true);
