@@ -148,8 +148,7 @@ describe("on a touch device", () => {
     press("motor");
     expect(screen.getByRole("button", { name: "m1" })).toBeInTheDocument();
     expect(track).toHaveBeenCalledWith("baseline_module_start", {
-      module: "grid_span",
-      band: "p46",
+      moduleId: "grid_span",
     });
   });
 
