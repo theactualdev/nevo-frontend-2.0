@@ -14,12 +14,20 @@ import { expect, test, type Page } from "@playwright/test";
  *
  * A child signs in with school code + login identifier + PIN. There is no safe
  * way to keep a child's PIN in a secret store, so this suite MAKES one, the way
- * the product now does it (SCRUM-216, 6 Oct): the E2E admin CLEARS the probe
- * student's PIN (`POST /api/v1/students/{id}/pin/clear`), and the suite then
+ * the product now does it (SCRUM-216, 6 Oct): the probe student's PIN is
+ * CLEARED (`POST /api/v1/students/{id}/pin/clear`), and the suite then
  * plays the child, choosing a fresh four digits through the door that opens
  * only while a PIN is cleared (`POST /api/v1/student-entry/pin`, school code
  * and the child's own Student ID). Nobody hands a PIN back any more - the old
  * `pin/reset` that did is gone.
+ *
+ * WHO CLEARS IT. SCRUM-216 gives the clear to the teachers of the child's
+ * classes; the admin console has no PIN control, and backend is expected to
+ * take admin access off the endpoint. So the suite clears as the E2E TEACHER
+ * whenever `E2E_TEACHER_EMAIL`/`E2E_TEACHER_PASSWORD` are set - and that
+ * teacher must teach one of the probe child's classes - and falls back to the
+ * admin only while those secrets do not exist. When backend removes admin
+ * access, the teacher secrets become required for this suite.
  *
  * That door takes the Student ID / Admission Number, which neither student
  * read returns, so the probe is named twice: `E2E_STUDENT_LOGIN` finds the
@@ -58,6 +66,9 @@ const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL;
 const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD;
 const STUDENT_LOGIN = process.env.E2E_STUDENT_LOGIN;
 const STUDENT_ADMISSION = process.env.E2E_STUDENT_ADMISSION;
+/** Optional here: the teacher who clears the PIN. See "Who clears it" above. */
+const TEACHER_EMAIL = process.env.E2E_TEACHER_EMAIL;
+const TEACHER_PASSWORD = process.env.E2E_TEACHER_PASSWORD;
 const API = process.env.E2E_API_BASE ?? "https://nevo-backend-2-0-kn3d.onrender.com";
 
 /** Mirrors `lib/auth/session.ts`. Changing either without the other breaks this. */
@@ -149,11 +160,28 @@ test.describe("a signed-in student", () => {
       `No student with login ${STUDENT_LOGIN} in the E2E tenant.`,
     ).toBeTruthy();
 
+    // The child's teacher clears it, as SCRUM-216 intends; the admin only
+    // until the teacher secrets exist.
+    let clearer = auth;
+    if (TEACHER_EMAIL && TEACHER_PASSWORD) {
+      const teacher = await api.post(`${API}/api/v1/auth/login/password`, {
+        data: { email: TEACHER_EMAIL, password: TEACHER_PASSWORD },
+      });
+      expect(teacher.ok(), `The E2E teacher could not sign in (${teacher.status()}).`).toBeTruthy();
+      clearer = { Authorization: `Bearer ${(await teacher.json()).accessToken}` };
+    }
     const cleared = await api.post(
       `${API}/api/v1/students/${student!.id}/pin/clear`,
-      { headers: auth },
+      { headers: clearer },
     );
-    expect(cleared.ok(), `The PIN clear was refused (${cleared.status()}).`).toBeTruthy();
+    expect(
+      cleared.ok(),
+      cleared.status() === 404 && clearer !== auth
+        ? `The E2E teacher could not clear ${STUDENT_LOGIN}'s PIN (404): they must teach one of that child's classes.`
+        : cleared.status() === 404
+          ? `The admin could not clear ${STUDENT_LOGIN}'s PIN (404). If backend has taken admin access off pin/clear, set E2E_TEACHER_EMAIL/E2E_TEACHER_PASSWORD to a teacher of that child's class.`
+          : `The PIN clear was refused (${cleared.status()}).`,
+    ).toBeTruthy();
 
     // The child's half: four digits of their own, through the door a clear opens.
     pin = String(1000 + Math.floor(Math.random() * 9000));

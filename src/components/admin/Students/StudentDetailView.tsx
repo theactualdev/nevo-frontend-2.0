@@ -37,7 +37,6 @@ import { useSetupGate } from "@/hooks";
 import { AddGuardianForm } from "./AddGuardianForm";
 import { CANNOT_SEND_LINE, useMaySendConsent } from "./consentRole";
 import { EraseRecordModal } from "./EraseRecordModal";
-import { ClearPinSheet } from "./ClearPinSheet";
 import { MoveStudentSheet } from "./MoveStudentSheet";
 import { NoAccess, failureKind } from "../NoAccess";
 import { WriteFailed } from "../WriteFailed";
@@ -87,7 +86,6 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
   const [moving, setMoving] = useState(false);
   /** D24 / D01b: every change to a student pauses while setup is unfinished. */
   const { writesPaused } = useSetupGate();
-  const [clearingPin, setClearingPin] = useState(false);
   const [confirmDeactivate, setConfirmDeactivate] = useState(false);
   const [erasing, setErasing] = useState(false);
   const [working, setWorking] = useState(false);
@@ -575,27 +573,11 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
               </p>
             </div>
             {/*
-              * THE OTHER END OF "ASK YOUR TEACHER". The child's Forgot-PIN
-              * screen is informational by design and sends them to an adult;
-              * until now no adult in any console had a control to press, and
-              * `pin_reset_requested` notifications arrived nowhere. Active
-              * students only: an invited child has not joined, and a
-              * deactivated one cannot sign in whatever PIN they hold.
+              * NO PIN CONTROL HERE, deliberately. SCRUM-216 gives clearing a
+              * child's PIN to the teachers of that child's classes - the
+              * adults who can recognise her - and no ticket asks for an admin
+              * one. A child who forgets her PIN asks her teacher (C05).
               */}
-            <div>
-              <button
-                type="button"
-                onClick={() => setClearingPin(true)}
-                disabled={writesPaused}
-                className={TEXT_ACTION}
-              >
-                Clear {firstName}&rsquo;s PIN
-              </button>
-              <p className="mt-1.5 max-w-[420px] text-[13px] leading-[1.5] text-nevo-near-black/55">
-                For when they can&rsquo;t get in. They choose a new one
-                themselves.
-              </p>
-            </div>
             <div>
               <button
                 type="button"
@@ -624,18 +606,6 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
             setMoving(false);
             load();
           }}
-        />
-      ) : null}
-
-      {/*
-        * NO `load()` ON CLOSE, unlike the sheets around it. A cleared PIN
-        * changes nothing this screen renders.
-        */}
-      {clearingPin ? (
-        <ClearPinSheet
-          studentId={student.id}
-          studentName={name}
-          onClose={() => setClearingPin(false)}
         />
       ) : null}
 
