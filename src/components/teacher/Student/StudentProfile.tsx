@@ -14,7 +14,7 @@ import {
   type SessionRow,
   type StudentProfileData,
 } from "@/lib/mocks/teacherStudents";
-import { OBSERVATION_COPY } from "@/lib/constants/observations";
+import { OBSERVATION_COPY, observationCount } from "@/lib/constants/observations";
 import { cn } from "@/lib/utils";
 import { MasteryDualTrack } from "./MasteryDualTrack";
 import { RecommendSheet } from "./RecommendSheet";
@@ -180,7 +180,7 @@ export function StudentProfile({
                       className="fixed inset-0 z-30"
                       onClick={() => setMenuOpen(false)}
                     />
-                    <div className="absolute top-[52px] right-0 z-[31] w-[238px] rounded-xl bg-nevo-cream p-1.5 shadow-[0_8px_32px_rgba(0,0,0,0.16)]">
+                    <div className="absolute top-[52px] right-0 z-[31] w-[238px] rounded-[12px] bg-nevo-cream p-1.5 shadow-[0_8px_32px_rgba(0,0,0,0.16)]">
                       {MENU_ITEMS.map((item) => (
                         <button
                           key={item.label}
@@ -206,7 +206,7 @@ export function StudentProfile({
 
         {/* Noticing banner (full) or calm callout (early) */}
         {student.noticing && (
-          <div className="mt-[18px] rounded-xl border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4 xl:mt-7 xl:px-5 xl:py-[18px]">
+          <div className="mt-[18px] rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4 xl:mt-7 xl:px-5 xl:py-[18px]">
             <p className="text-sm leading-[1.5] text-nevo-near-black/82 xl:text-[15px] xl:leading-[1.55]">
               <strong className="font-semibold text-nevo-near-black">
                 This week:
@@ -217,7 +217,7 @@ export function StudentProfile({
           </div>
         )}
         {student.earlyNote && (
-          <div className="mt-5 flex items-start gap-3 rounded-xl bg-nevo-violet/16 px-[18px] py-4 xl:mt-[26px] xl:gap-[13px] xl:px-5 xl:py-[18px]">
+          <div className="mt-5 flex items-start gap-3 rounded-[12px] bg-nevo-violet/16 px-[18px] py-4 xl:mt-[26px] xl:gap-[13px] xl:px-5 xl:py-[18px]">
             <span className="mt-px shrink-0 text-nevo-navy">
               <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-5">
                 <circle cx="12" cy="12" r="9" />
@@ -249,14 +249,26 @@ export function StudentProfile({
           {student.observations.map((pattern) => (
             <div
               key={pattern}
-              className="rounded-xl bg-nevo-cream-elevated px-5 py-[18px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:p-[22px]"
+              className="rounded-[12px] bg-nevo-cream-elevated px-5 py-[18px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:p-[22px]"
             >
-              <p className="font-mono text-[10.5px] tracking-[0.06em] text-nevo-near-black/50 uppercase">
-                {OBSERVATION_COPY[pattern].title}
-              </p>
-              <p className="mt-1.5 text-[15.5px] leading-[1.45] font-medium text-nevo-near-black xl:text-[16.5px]">
-                {OBSERVATION_COPY[pattern].body(firstName)}
-              </p>
+              {/* C08's card: the sentence, and a count only as its own chip
+                  where the copy file allows one. No eyebrow - C08 draws none. */}
+              <div className="flex items-start justify-between gap-4">
+                <p className="text-[15.5px] leading-[1.45] font-medium text-pretty text-nevo-near-black xl:text-[16.5px]">
+                  {OBSERVATION_COPY[pattern].body(firstName)}
+                </p>
+                {(() => {
+                  const chip = observationCount(
+                    pattern,
+                    student.observationCounts?.[pattern],
+                  );
+                  return chip ? (
+                    <span className="shrink-0 rounded-full bg-nevo-violet/24 px-[11px] py-1 text-[12.5px] font-semibold whitespace-nowrap text-nevo-navy">
+                      {chip}
+                    </span>
+                  ) : null;
+                })()}
+              </div>
             </div>
           ))}
         </div>
@@ -276,7 +288,7 @@ export function StudentProfile({
                 {`Two tracks per topic: how well ${firstName} has understood it, and how much the reading load is shaping the result. When the tracks part company, it's usually the reading, not the maths.`}
               </span>
             </p>
-            <div className="mt-3.5 flex flex-col gap-5 rounded-xl bg-nevo-cream-elevated px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-4 xl:gap-[22px] xl:px-[26px] xl:py-6">
+            <div className="mt-3.5 flex flex-col gap-5 rounded-[12px] bg-nevo-cream-elevated px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-4 xl:gap-[22px] xl:px-[26px] xl:py-6">
               {student.concepts.map((c) => (
                 <MasteryDualTrack
                   key={c.name}
@@ -308,7 +320,7 @@ export function StudentProfile({
               {student.evidence.map((e) => (
                 <div
                   key={e.concept}
-                  className="rounded-xl bg-nevo-cream-elevated px-[17px] py-[15px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:px-[18px] xl:py-4"
+                  className="rounded-[12px] bg-nevo-cream-elevated px-[17px] py-[15px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:px-[18px] xl:py-4"
                 >
                   <div className="flex flex-wrap items-center gap-[9px] xl:gap-2.5">
                     <span className="text-[14.5px] font-semibold text-nevo-near-black xl:text-[15px]">
@@ -345,7 +357,7 @@ export function StudentProfile({
             <h3 className="mt-9 text-sm font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase">
               Recent sessions
             </h3>
-            <div className="mt-4 overflow-hidden rounded-xl bg-nevo-cream-elevated shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+            <div className="mt-4 overflow-hidden rounded-[12px] bg-nevo-cream-elevated shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
               {student.sessions.map((s, i) => (
                 <button
                   key={s.id}

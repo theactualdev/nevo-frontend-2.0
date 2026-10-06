@@ -84,9 +84,18 @@ describe("the way back", () => {
    * A refusal used to be a dead end. The way back is this admin's OWN home -
    * not the Overview for everyone, which a finance admin cannot open.
    */
-  it("leads an IT admin to the Overview, where the 6 Oct ruling lands them", () => {
+  it("leads an IT admin to their Systems overview, not the school's Overview", () => {
     scopes = ["it_sso"];
     render(<NoAccess what="the admin team" />);
+    expect(screen.getByRole("link", { name: "Go to Systems overview" })).toHaveAttribute(
+      "href",
+      "/admin/sso/home",
+    );
+  });
+
+  it("leads a proprietor to the Overview", () => {
+    scopes = ["oversight", "roster"];
+    render(<NoAccess what="learning support" />);
     expect(screen.getByRole("link", { name: "Go to Overview" })).toHaveAttribute("href", "/admin/dashboard");
   });
 

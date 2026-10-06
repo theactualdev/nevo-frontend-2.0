@@ -95,7 +95,7 @@ export function SessionPanel({
 
         {/* Body */}
         <div className="min-h-0 flex-1 overflow-y-auto px-[26px] py-5 xl:px-[30px] xl:py-[22px]">
-          <div className="rounded-xl border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-4 py-3.5 xl:px-[18px] xl:py-4">
+          <div className="rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-4 py-3.5 xl:px-[18px] xl:py-4">
             <p className="text-sm leading-[1.55] text-nevo-near-black/82 xl:text-[14.5px]">
               {session.summary ? (
                 <>

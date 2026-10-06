@@ -318,3 +318,20 @@ describe("the school code beside the greeting", () => {
     expect(queryByText("K7DQ")).not.toBeInTheDocument();
   });
 });
+
+/** The Build Lock fixes "Wednesday, 10 July" - with the comma en-GB leaves out. */
+describe("the date line", () => {
+  it("reads weekday, then day and month, with a comma between", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 6, 10, 9, 0));
+    try {
+      useTeacherFlags.mockReturnValue({ flags: [], live: true, failed: false, loading: false, complete: true });
+      useTeacherHome.mockReturnValue({ pulse: [], activity: [], live: true, failed: false });
+      const { getByText } = render(<TeacherHome />);
+
+      expect(getByText("Friday, 10 July")).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

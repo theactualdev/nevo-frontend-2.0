@@ -47,7 +47,7 @@ export function SignOutModal({ onStay }: { onStay: () => void }) {
         aria-modal="true"
         aria-label="Sign out of Nevo?"
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-[400px] rounded-2xl bg-nevo-cream p-8 text-center shadow-[0_24px_60px_rgba(0,0,0,0.3)] motion-safe:animate-in motion-safe:zoom-in-95 motion-safe:duration-200"
+        className="w-full max-w-[400px] rounded-[16px] bg-nevo-cream p-8 text-center shadow-[0_24px_60px_rgba(0,0,0,0.3)] motion-safe:animate-in motion-safe:zoom-in-95 motion-safe:duration-200"
       >
         <span className="inline-flex size-14 items-center justify-center rounded-full bg-nevo-violet/22 text-nevo-navy">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>

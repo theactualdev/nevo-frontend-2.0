@@ -17,7 +17,15 @@ import { cn } from "@/lib/utils";
  * handed an `empty` computed from three array lengths, which could not tell
  * a settled week from a new class - so a class having a good week was told
  * Nevo was still gathering insights about it. `state` says which, and the
- * two now read differently on purpose.
+ * two now read differently on purpose - in the ENGINE'S words. A line of our
+ * own, "A settled week. Nothing here needs you.", sat under the engine's
+ * prose and was in no frame; the contract says the engine owns that copy,
+ * and C14 draws the settled wording inside it.
+ *
+ * THE HEADINGS ARE C09'S: "This week in {class}", "Flags" and "Where the
+ * class stands" - the fixture screen next door has always used them. This
+ * one had drifted to "Worth a look" and "How the class is doing", and gave
+ * the written week no heading at all.
  *
  * The per-student recommendations still have no source and stay absent
  * rather than becoming invented prose about a real class.
@@ -49,13 +57,9 @@ export function LiveClassInsights({
     summary,
     lookingAhead,
     gathering,
-    settledWeek,
     narrativeFailed,
     sectionFailed,
   } = useClassInsights(classId);
-  /** Any list we could not read - so nothing may say the week is quiet. */
-  const anySectionFailed =
-    sectionFailed.misconceptions || sectionFailed.mastery || sectionFailed.flags;
   /** The narrative failure line's own words, for a section that failed. */
   const sectionFailedLine = `We couldn${"\u2019"}t load this just now. Nothing has changed for ${className} - you can try again in a moment.`;
 
@@ -65,7 +69,7 @@ export function LiveClassInsights({
         {[0, 1, 2].map((i) => (
           <div
             key={i}
-            className="h-[120px] animate-pulse rounded-xl bg-nevo-cream-elevated"
+            className="h-[120px] animate-pulse rounded-[12px] bg-nevo-cream-elevated"
           />
         ))}
       </div>
@@ -77,7 +81,7 @@ export function LiveClassInsights({
   // false claim about real children.
   if (failed) {
     return (
-      <div className="mt-8 flex max-w-[640px] items-start gap-4 rounded-xl bg-nevo-cream-elevated p-7 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+      <div className="mt-8 flex max-w-[640px] items-start gap-4 rounded-[12px] bg-nevo-cream-elevated p-7 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
         <span className="mt-px size-[22px] shrink-0 text-nevo-violet xl:size-6">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="size-full">
             <path d="M7 18a4 4 0 0 1-.5-7.97A5.5 5.5 0 0 1 17.5 9.5 4 4 0 0 1 17 18" />
@@ -98,7 +102,7 @@ export function LiveClassInsights({
 
   if (gathering) {
     return (
-      <div className="mt-8 flex max-w-[640px] items-start gap-4 rounded-xl bg-nevo-cream-elevated p-7 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+      <div className="mt-8 flex max-w-[640px] items-start gap-4 rounded-[12px] bg-nevo-cream-elevated p-7 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
         <span className="mt-px size-[22px] shrink-0 text-nevo-violet xl:size-6">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="size-full">
             <circle cx="12" cy="12" r="9" />
@@ -129,17 +133,22 @@ export function LiveClassInsights({
   return (
     <>
       {summary && (
-        <div className="mt-[18px] max-w-[760px] rounded-xl bg-nevo-cream-elevated px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-[22px] xl:px-[26px] xl:py-6">
-          <p className="text-[14.5px] leading-[1.6] text-nevo-near-black/82 xl:text-[15.5px]">
+        <div className="mt-[18px] max-w-[760px] rounded-[12px] bg-nevo-cream-elevated px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-[22px] xl:px-[26px] xl:py-6">
+          <div className="flex items-center gap-2">
+            {/* The lightbulb is desktop-only in the frame. */}
+            <span className="hidden text-nevo-navy xl:inline-flex">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M12 3a5 5 0 0 0-3 9c.6.5 1 1.2 1 2h4c0-.8.4-1.5 1-2a5 5 0 0 0-3-9z" />
+                <path d="M10 20h4" />
+              </svg>
+            </span>
+            <h3 className="text-[13px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase xl:text-sm">
+              {`This week in ${className}`}
+            </h3>
+          </div>
+          <p className="mt-3 text-[14.5px] leading-[1.6] text-nevo-near-black/82 xl:text-[15.5px]">
             {summary}
           </p>
-          {settledWeek && !anySectionFailed && (
-            /* A calm week is a RESULT, not an absence. Before the engine
-               said which was which, this class got "still gathering". */
-            <p className="mt-2.5 text-[13.5px] leading-[1.55] text-nevo-near-black/60">
-              A settled week. Nothing here needs you.
-            </p>
-          )}
         </div>
       )}
 
@@ -153,7 +162,7 @@ export function LiveClassInsights({
       )}
 
       {lead && (
-        <div className="mt-[18px] rounded-xl bg-nevo-violet/14 px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-[22px] xl:px-[26px] xl:py-6">
+        <div className="mt-[18px] rounded-[12px] bg-nevo-violet/14 px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-[22px] xl:px-[26px] xl:py-6">
           <span className="text-[11px] font-bold tracking-[0.14em] text-nevo-navy uppercase">
             A shared sticking point
           </span>
@@ -192,7 +201,7 @@ export function LiveClassInsights({
 
       {flags.length === 0 && sectionFailed.flags && (
         <>
-          <h3 className={SECTION_H}>Worth a look</h3>
+          <h3 className={SECTION_H}>Flags</h3>
           <p className="mt-3 max-w-[660px] text-[14.5px] leading-[1.55] text-nevo-near-black/68">
             {sectionFailedLine}
           </p>
@@ -201,7 +210,7 @@ export function LiveClassInsights({
 
       {flags.length > 0 && (
         <>
-          <h3 className={SECTION_H}>Worth a look</h3>
+          <h3 className={SECTION_H}>Flags</h3>
           <div className="mt-3.5 flex flex-col gap-2">
             {flags.map((f) => (
               /* C09's cards open the student - the frame draws them
@@ -241,7 +250,7 @@ export function LiveClassInsights({
 
       {concepts.length === 0 && sectionFailed.mastery && (
         <>
-          <h3 className={SECTION_H}>How the class is doing</h3>
+          <h3 className={SECTION_H}>Where the class stands</h3>
           <p className="mt-3 max-w-[660px] text-[14.5px] leading-[1.55] text-nevo-near-black/68">
             {sectionFailedLine}
           </p>
@@ -250,11 +259,11 @@ export function LiveClassInsights({
 
       {concepts.length > 0 && (
         <>
-          <h3 className={SECTION_H}>How the class is doing</h3>
+          <h3 className={SECTION_H}>Where the class stands</h3>
           <p className="mt-2 max-w-[62ch] text-[13px] leading-[1.5] text-nevo-near-black/60">
             Each idea, and how much the reading itself is shaping the result.
           </p>
-          <div className="mt-4 flex flex-col gap-5 rounded-xl bg-nevo-cream-elevated px-[22px] py-6 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:px-[26px]">
+          <div className="mt-4 flex flex-col gap-5 rounded-[12px] bg-nevo-cream-elevated px-[22px] py-6 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:px-[26px]">
             {concepts.map((c) => (
               <MasteryDualTrack
                 key={c.conceptId}
@@ -273,7 +282,7 @@ export function LiveClassInsights({
               gives it: violet left rule, its own heading, below the week
               it follows from. The engine writes it. */}
           <h3 className={SECTION_H}>Looking ahead</h3>
-          <div className="mt-3.5 max-w-[660px] rounded-xl border-l-[3px] border-nevo-violet bg-nevo-cream-elevated px-5 py-[18px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-4 xl:px-6 xl:py-[22px]">
+          <div className="mt-3.5 max-w-[660px] rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-cream-elevated px-5 py-[18px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-4 xl:px-6 xl:py-[22px]">
             <p className="text-[14.5px] leading-[1.6] text-nevo-near-black/82 xl:text-[15.5px]">
               {lookingAhead}
             </p>

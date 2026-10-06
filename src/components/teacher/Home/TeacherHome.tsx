@@ -55,12 +55,18 @@ import { FlagCard } from "./FlagCard";
 const SECTION_H =
   "text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase xl:text-sm";
 
+/**
+ * "Wednesday, 10 July", as the Build Lock fixes it - with the comma, which
+ * en-GB's own long format leaves out.
+ */
 function todayLine(): string {
-  return new Date().toLocaleDateString("en-GB", {
-    weekday: "long",
+  const now = new Date();
+  const weekday = now.toLocaleDateString("en-GB", { weekday: "long" });
+  const dayMonth = now.toLocaleDateString("en-GB", {
     day: "numeric",
     month: "long",
   });
+  return `${weekday}, ${dayMonth}`;
 }
 
 export function TeacherHome() {
@@ -109,7 +115,7 @@ export function TeacherHome() {
             </h2>
           </div>
           {signedIn && identity?.schoolCode && (
-            <div className="flex shrink-0 flex-col items-end gap-1 rounded-xl bg-nevo-cream-elevated px-3.5 py-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:px-4 xl:py-3">
+            <div className="flex shrink-0 flex-col items-end gap-1 rounded-[12px] bg-nevo-cream-elevated px-3.5 py-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:px-4 xl:py-3">
               <span className="text-xs font-semibold tracking-[0.05em] text-nevo-near-black/55 uppercase">
                 School code
               </span>
