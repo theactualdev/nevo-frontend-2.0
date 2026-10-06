@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, type RefObject } from "react";
 import {
   ApiError,
   signalsApi,
@@ -131,6 +131,13 @@ export function useSignals(
   sessionType: SignalSessionType = "lesson",
   /** How the session ended, once it has - see `SessionOutcome`. */
   outcome: SessionOutcome | null = null,
+  /**
+   * Adaptations the child saw applied this session, kept by the caller, for
+   * `proactiveAdjustmentsCount` (B42). Read when a batch is built. Absent
+   * means not counted, and the field is then left at the contract's 0, which
+   * reads as "not reported" rather than "none happened".
+   */
+  adjustments: RefObject<{ count: number }> | null = null,
 ) {
   const queue = useRef<SignalEvent[]>([]);
   const sessionRef = useRef(sessionId);
@@ -270,8 +277,11 @@ export function useSignals(
           }
         : {}),
       ...(breaks.current > 0 ? { breakCount: breaks.current } : {}),
+      ...(adjustments && adjustments.current.count > 0
+        ? { proactiveAdjustmentsCount: adjustments.current.count }
+        : {}),
     };
-  }, [anchor]);
+  }, [anchor, adjustments]);
 
   /**
    * Hand what cannot be sent now to the outbox, so it outlives this screen.

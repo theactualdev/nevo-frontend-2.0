@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
 import type { AdaptationPlan, Lesson } from "@/lib/types";
 
@@ -10,21 +10,28 @@ import type { AdaptationPlan, Lesson } from "@/lib/types";
  * - B45: every `time_on_segment` says which text version was on screen.
  * - B41: `hint_used` when the child moves on with the whole hint on screen,
  *   and never for a hint they closed.
+ * - B42: the adaptations the child saw applied, counted where they reach the
+ *   screen, with the moment the last one did.
  */
 
-const { trackEvent } = vi.hoisted(() => ({ trackEvent: vi.fn() }));
+const { trackEvent, signalArgs, runtimeArgs } = vi.hoisted(() => ({
+  trackEvent: vi.fn(),
+  signalArgs: [] as unknown[][],
+  runtimeArgs: [] as unknown[][],
+}));
 
 vi.mock("@/hooks", () => ({
   useLesson: () => ({ setActiveLesson: vi.fn() }),
-  useSignals: () => ({ trackEvent }),
+  useSignals: (...args: unknown[]) => {
+    signalArgs.push(args);
+    return { trackEvent };
+  },
 }));
 vi.mock("@/hooks/useRuntimeAdaptation", () => ({
-  useRuntimeAdaptation: () => ({
-    offeredBreak: null,
-    reason: null,
-    forSegmentId: null,
-    plan: null,
-  }),
+  useRuntimeAdaptation: (...args: unknown[]) => {
+    runtimeArgs.push(args);
+    return { offeredBreak: null, reason: null, forSegmentId: null, plan: null };
+  },
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
@@ -65,10 +72,14 @@ const prev = () =>
 
 beforeEach(() => {
   trackEvent.mockReset();
+  signalArgs.length = 0;
+  runtimeArgs.length = 0;
 });
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 describe("depthShown on time_on_segment (B45)", () => {
@@ -194,5 +205,100 @@ describe("hint_used (B41)", () => {
     prev();
 
     expect(sent("hint_used")).toEqual([]);
+  });
+});
+
+describe("adaptations the child saw applied (B42)", () => {
+  type Applied = { current: { count: number; lastAt: number | null } };
+  /** The record the player keeps, as both hooks receive it. */
+  const applied = () => {
+    const ref = signalArgs.at(-1)![4] as Applied;
+    expect(runtimeArgs.at(-1)![5]).toBe(ref);
+    return ref.current;
+  };
+  const instructed = (adjustment: AdaptationPlan["adjustment"]): AdaptationPlan => ({
+    lessonId: "l-1",
+    segments: [],
+    adjustment,
+  });
+  let now = 0;
+  beforeEach(() => {
+    now = 4_000;
+    vi.spyOn(performance, "now").mockImplementation(() => now);
+  });
+
+  it("counts the engine's reshape once it is on screen, on the monotonic clock", () => {
+    render(<LessonPlayer lesson={TWO} plan={instructed("simplify")} />);
+
+    expect(applied()).toEqual({ count: 1, lastAt: 4_000 });
+  });
+
+  it("does not count a standing instruction again on the next segment", () => {
+    render(<LessonPlayer lesson={TWO} plan={instructed("simplify")} />);
+
+    now = 9_000;
+    next();
+
+    expect(applied()).toEqual({ count: 1, lastAt: 4_000 });
+  });
+
+  it("counts an instruction withdrawn and given again", () => {
+    const { rerender } = render(
+      <LessonPlayer lesson={TWO} plan={instructed("simplify")} />,
+    );
+    rerender(<LessonPlayer lesson={TWO} plan={instructed(null)} />);
+    now = 30_000;
+    rerender(<LessonPlayer lesson={TWO} plan={instructed("simplify")} />);
+
+    expect(applied()).toEqual({ count: 2, lastAt: 30_000 });
+  });
+
+  it("counts nothing the segment could not show", () => {
+    render(
+      <LessonPlayer
+        lesson={lesson(seg("seg-1"), seg("seg-2"))}
+        plan={instructed("simplify")}
+      />,
+    );
+
+    expect(applied()).toEqual({ count: 0, lastAt: null });
+  });
+
+  it("counts nothing while the child's own pick is the version on screen", () => {
+    render(<LessonPlayer lesson={TWO} plan={null} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Simplify" }));
+
+    expect(applied()).toEqual({ count: 0, lastAt: null });
+  });
+
+  it("counts a hint once it is on screen, and not again on a re-render", () => {
+    const hinted = { ...instructed("offer_hint"), hint: HINT };
+    const { rerender } = render(<LessonPlayer lesson={TWO} plan={hinted} />);
+    rerender(<LessonPlayer lesson={TWO} plan={hinted} />);
+
+    expect(applied().count).toBe(1);
+  });
+
+  it("counts a modality change from an offer the child took, and not the offer", () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    render(
+      <LessonPlayer
+        lesson={TWO}
+        plan={{ lessonId: "l-1", segments: [], suggestModality: "audio" }}
+      />,
+    );
+    act(() => {
+      vi.advanceTimersByTime(1600);
+    });
+    expect(applied().count).toBe(0);
+
+    now = 7_000;
+    fireEvent.click(screen.getByRole("button", { name: "Yes, try it" }));
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+
+    expect(applied()).toEqual({ count: 1, lastAt: 7_000 });
   });
 });

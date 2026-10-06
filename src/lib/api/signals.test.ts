@@ -174,6 +174,7 @@ describe("how the session ended", () => {
         endedAt: "2026-09-24T09:10:00.000Z",
         exitPosition: "s".repeat(200),
         breakCount: 2,
+        proactiveAdjustmentsCount: 3,
       },
       [event(SIGNAL_EVENT_TYPES.TIME_ON_SEGMENT)],
     );
@@ -183,6 +184,8 @@ describe("how the session ended", () => {
     };
     expect(session.completionStatus).toBe("exited");
     expect(session.breakCount).toBe(2);
+    // B42: adaptations the child saw applied.
+    expect(session.proactiveAdjustmentsCount).toBe(3);
     // `maxLength: 120` - a longer one would 422 the whole batch.
     expect(String(session.exitPosition)).toHaveLength(120);
   });

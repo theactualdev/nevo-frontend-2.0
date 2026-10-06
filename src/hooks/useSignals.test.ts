@@ -13,6 +13,7 @@ interface Envelope {
   completionStatus?: string;
   exitPosition?: string;
   breakCount?: number;
+  proactiveAdjustmentsCount?: number;
 }
 interface Event {
   type: string;
@@ -457,6 +458,30 @@ describe("the session envelope", () => {
     const [envelope] = submitBatch.mock.calls[0]!;
     expect(envelope.completionStatus).toBeUndefined();
     expect(envelope.endedAt).toBeUndefined();
+  });
+
+  it("carries the adaptations the child saw applied, as counted when it is sent (B42)", async () => {
+    signIn();
+    const applied = { current: { count: 0 } };
+    const { result } = renderHook(() =>
+      useSignals(UUID, LESSON, "lesson", null, applied),
+    );
+    act(() => result.current.trackEvent("time_on_segment", {}));
+    await act(async () => {
+      result.current.flush();
+    });
+    // None yet is left to the contract's 0, not claimed.
+    expect(submitBatch.mock.calls[0]![0]).not.toHaveProperty(
+      "proactiveAdjustmentsCount",
+    );
+
+    applied.current.count = 2;
+    act(() => result.current.trackEvent("time_on_segment", {}));
+    await act(async () => {
+      result.current.flush();
+    });
+
+    expect(submitBatch.mock.calls[1]![0].proactiveAdjustmentsCount).toBe(2);
   });
 });
 
