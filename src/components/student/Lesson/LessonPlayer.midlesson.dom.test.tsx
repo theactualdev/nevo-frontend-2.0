@@ -12,7 +12,12 @@ import type { AdaptationPlan, Lesson } from "@/lib/types";
  */
 
 const runtime = vi.hoisted(() => ({
-  value: { offeredBreak: null, reason: null, plan: null, forSegmentId: null } as {
+  value: {
+    offeredBreak: null,
+    reason: null,
+    plan: null,
+    forSegmentId: null,
+  } as {
     offeredBreak: null;
     reason: null;
     plan: AdaptationPlan | null;
@@ -50,7 +55,10 @@ const LESSON = {
     {
       id: "seg-2",
       modalities: ["text"],
-      text: { heading: "Denominators", body: { default: "The bottom number." } },
+      text: {
+        heading: "Denominators",
+        body: { default: "The bottom number." },
+      },
     },
   ],
 } as unknown as Lesson;
@@ -62,7 +70,8 @@ const hintPlan = {
   hint: "Look at the bottom number first.",
 } as AdaptationPlan;
 
-const next = () => fireEvent.click(screen.getByRole("button", { name: "Next" }));
+const next = () =>
+  fireEvent.click(screen.getByRole("button", { name: "Next" }));
 const glowing = () =>
   screen
     .getByRole("button", { name: "Next" })
@@ -72,7 +81,12 @@ const HINT = "Look at the bottom number first.";
 
 afterEach(() => {
   cleanup();
-  runtime.value = { offeredBreak: null, reason: null, plan: null, forSegmentId: null };
+  runtime.value = {
+    offeredBreak: null,
+    reason: null,
+    plan: null,
+    forSegmentId: null,
+  };
 });
 
 describe("the engine's mid-lesson instruction", () => {
@@ -96,6 +110,63 @@ describe("the engine's mid-lesson instruction", () => {
   });
 });
 
+/*
+ * B18: the engine now sends a hint or the socratic panel after two wrong
+ * answers in a row, as a mid-lesson answer for the segment the child is on.
+ * Nothing here may block it, draw it twice, or bring back one the child shut.
+ */
+describe("support the engine sends after two wrong answers (B18)", () => {
+  const SOCRATIC = {
+    lessonId: "frac-3",
+    segments: [],
+    adjustment: "show_socratic_panel",
+    guidedPrompts: [{ id: "p-1", prompt: "Which number counts the parts?" }],
+  } as AdaptationPlan;
+
+  it("shows the hint once, and D29's Close keeps it shut when it is said again", () => {
+    runtime.value = {
+      offeredBreak: null,
+      reason: null,
+      plan: hintPlan,
+      forSegmentId: "seg-1",
+    };
+    // The load-time plan says the same thing; it is still one card.
+    const { rerender } = render(
+      <LessonPlayer lesson={LESSON} plan={hintPlan} />,
+    );
+    expect(screen.getAllByText(HINT)).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Close hint" }));
+    expect(screen.queryByText(HINT)).toBeNull();
+
+    // A third wrong answer asks again, and the engine answers the same.
+    runtime.value = { ...runtime.value, plan: { ...hintPlan } };
+    rerender(<LessonPlayer lesson={LESSON} plan={hintPlan} />);
+
+    expect(screen.queryByText(HINT)).toBeNull();
+  });
+
+  it("offers the socratic panel once, on the segment it was sent for", () => {
+    runtime.value = {
+      offeredBreak: null,
+      reason: null,
+      plan: SOCRATIC,
+      forSegmentId: "seg-1",
+    };
+    render(<LessonPlayer lesson={LESSON} plan={null} />);
+
+    expect(
+      screen.getAllByRole("button", { name: "Which part is unclear?" }),
+    ).toHaveLength(1);
+
+    next();
+
+    expect(
+      screen.queryByRole("button", { name: "Which part is unclear?" }),
+    ).toBeNull();
+  });
+});
+
 describe("the segment a hint belongs to", () => {
   /*
    * The instruction is lesson-level on the wire, and a hint is about the
@@ -104,7 +175,12 @@ describe("the segment a hint belongs to", () => {
    * segment after, and a failed read kept it there.
    */
   it("shows a mid-lesson hint only on the segment it was asked for", () => {
-    runtime.value = { offeredBreak: null, reason: null, plan: hintPlan, forSegmentId: "seg-1" };
+    runtime.value = {
+      offeredBreak: null,
+      reason: null,
+      plan: hintPlan,
+      forSegmentId: "seg-1",
+    };
 
     render(<LessonPlayer lesson={LESSON} plan={null} />);
     expect(screen.getByText(HINT)).toBeInTheDocument();

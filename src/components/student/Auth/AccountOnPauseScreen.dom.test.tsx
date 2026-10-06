@@ -87,3 +87,41 @@ describe("AccountOnPauseScreen", () => {
     expect(document.querySelector("svg")).toBeNull();
   });
 });
+
+/**
+ * D53: the closed state is this screen with the account called closed. No
+ * frame draws it yet, so what is pinned is what the ruling and the interim
+ * guarantee: it is never called a pause, and it promises nothing.
+ */
+describe("a closed account", () => {
+  it("says closed, and never on pause", () => {
+    render(<AccountOnPauseScreen hold="closed" />);
+
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      "Your Nevo account is closed.",
+    );
+    expect(document.body.textContent).not.toMatch(/pause/i);
+  });
+
+  it("promises nothing about the account coming back", () => {
+    // "Your school can turn it back on" is the line backend called untrue:
+    // it brings a removed child back to the tablet to try again.
+    render(<AccountOnPauseScreen hold="closed" />);
+
+    const body = document.body.textContent?.toLowerCase() ?? "";
+    for (const promise of ["back on", "turn it", "reopen", "again", "soon", "for now"]) {
+      expect(body).not.toContain(promise);
+    }
+    expect(screen.getByText(/talk to your teacher/)).toBeVisible();
+  });
+
+  it("keeps the one way back to the picker (D52)", () => {
+    render(<AccountOnPauseScreen hold="closed" back={{ href: "/auth/login" }} />);
+
+    expect(screen.getByRole("link", { name: "Back to sign in" })).toHaveAttribute(
+      "href",
+      "/auth/login",
+    );
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
+  });
+});

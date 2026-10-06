@@ -97,9 +97,10 @@ describe("LessonEndingRoute", () => {
 
     render(<LessonEndingRoute lessonId="ghost" screen="summary" />);
 
-    expect(screen.getByText(/couldn’t find that lesson/i)).toBeVisible();
+    // The lesson route's own D90 screen, so the two say the same thing.
+    expect(screen.getByText("We couldn't open that lesson.")).toBeVisible();
     expect(
-      screen.getByRole("button", { name: /back to my lessons/i }),
+      screen.getByRole("button", { name: "Back to lessons" }),
     ).toBeVisible();
   });
 

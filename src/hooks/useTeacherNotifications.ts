@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   notificationsApi,
   type Notification,
+  type NotificationType,
 } from "@/lib/api/notifications";
 import { getToken } from "@/lib/auth/session";
 import {
@@ -34,20 +35,36 @@ import { useHasSession } from "./useHasSession";
  */
 
 
-/** The frame's five marks, matched on what the type string contains. */
-function kindOf(type: string): NotificationKind {
-  const t = type.toLowerCase();
-  if (t.includes("message") || t.includes("reply")) return "message";
-  if (t.includes("flag") || t.includes("alert") || t.includes("concern")) {
-    return "flag";
-  }
-  if (t.includes("support") || t.includes("senco") || t.includes("escalat")) {
-    return "support";
-  }
-  if (t.includes("class") || t.includes("enrol") || t.includes("roster")) {
-    return "klass";
-  }
-  return "done";
+/**
+ * The frame's five marks, BY THE CONTRACT'S OWN TYPES.
+ *
+ * This matched words inside the type string - "message", "flag", "class" -
+ * and the deployed types contain almost none of them, so `attention_summary`
+ * wore the "done" tick. The enum is typed now; each type is given the mark
+ * that says what it is about, and only the ones with a plain match. Anything
+ * else - including a type added tomorrow - takes the neutral mark, with the
+ * row's `category` as the second guess.
+ */
+const KIND_BY_TYPE: Partial<Record<NotificationType, NotificationKind>> = {
+  attention_summary: "flag",
+  teacher_replied: "message",
+  roster_sync_completed: "klass",
+  roster_sync_needs_attention: "klass",
+  pin_reset_requested: "support",
+  consent_action_required: "support",
+};
+
+const KIND_BY_CATEGORY: Record<string, NotificationKind> = {
+  attention: "flag",
+  messages: "message",
+};
+
+function kindOf(type: string, category?: string | null): NotificationKind {
+  return (
+    KIND_BY_TYPE[type as NotificationType] ??
+    (category ? KIND_BY_CATEGORY[category] : undefined) ??
+    "done"
+  );
 }
 
 function relative(iso: string): string {
@@ -68,7 +85,7 @@ function relative(iso: string): string {
 function toRow(n: Notification): TeacherNotification {
   return {
     id: n.notificationId,
-    kind: kindOf(n.type),
+    kind: kindOf(n.type, n.category),
     // TWO lines, per design: the title is the label and the description the
     // sentence under it. This used to collapse to `description || title`,
     // which threw away half of every notification.

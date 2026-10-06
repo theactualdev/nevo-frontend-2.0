@@ -14,8 +14,11 @@ import { ErrorScreen } from "@/components/shared/SystemScreens";
  * boundary already carries it.
  *
  * `unstable_retry` re-fetches the segment; `reset` only re-rendered it.
+ *
+ * The error goes to the screen so "We're on it" is kept: it is reported (B36).
  */
 export default function StudentError({
+  error,
   unstable_retry,
 }: {
   error: Error & { digest?: string };
@@ -24,6 +27,8 @@ export default function StudentError({
   return (
     <ErrorScreen
       retry={unstable_retry}
+      error={error}
+      surface="student"
       mark={false}
       className="flex min-h-full flex-1 flex-col items-center justify-center px-8 py-12 text-center text-nevo-near-black"
     />

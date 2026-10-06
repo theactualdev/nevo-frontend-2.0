@@ -30,7 +30,7 @@ import { useConsentGate } from "./useConsentGate";
  * alone tagged a 1024px iPad "desktop", into the very distribution G6 says
  * tablets must stay out of. The primary pointer says what the device is.
  */
-function formFactor(): "mobile" | "tablet" | "desktop" {
+export function formFactor(): "mobile" | "tablet" | "desktop" {
   if (!window.matchMedia("(pointer: coarse)").matches) return "desktop";
   return window.innerWidth < 640 ? "mobile" : "tablet";
 }

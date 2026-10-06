@@ -106,3 +106,16 @@ describe("the progress read", () => {
     expect(api.progress).not.toHaveBeenCalled();
   });
 });
+
+describe("a mastery row the engine could not name", () => {
+  it("is left out rather than drawn as a bar with no label", async () => {
+    api.mastery.mockResolvedValue([
+      { conceptId: "c-1", conceptName: "Fractions", masteryProbabilityConcept: 0.6, masteryProbabilityReading: 0.5, practiceCount: 3 },
+      { conceptId: "c-2", conceptName: null, masteryProbabilityConcept: 0.4, masteryProbabilityReading: 0.3, practiceCount: 1 },
+    ]);
+    const { result } = renderHook(() => useStudentProfile("s-1"));
+
+    await waitFor(() => expect(result.current.reads?.mastery).toBe("ready"));
+    expect(result.current.concepts.map((c) => c.name)).toEqual(["Fractions"]);
+  });
+});

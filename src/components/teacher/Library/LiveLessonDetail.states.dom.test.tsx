@@ -501,3 +501,66 @@ describe("the schedule on this page", () => {
     expect(screen.queryByText(/A class/)).not.toBeInTheDocument();
   });
 });
+
+/**
+ * THE ENGINE'S NOTE ON A SECTION, AND THE SUBJECT.
+ *
+ * Class progress carries a note per section and nothing read it; the slowed
+ * section was marked by colour alone. And the header never said what subject
+ * the lesson is, though C06b draws it first.
+ */
+describe("what the page says about each section", () => {
+  const PROGRESS = {
+    lessonId: "l-9",
+    classId: "c-1",
+    slowestSegmentId: "s-2",
+    slowdownNote: null,
+    segments: [
+      {
+        segmentId: "s-2",
+        segmentKey: "k-2",
+        title: "Inside the leaf",
+        sequenceOrder: 2,
+        assignedStudentCount: 7,
+        completionCount: 4,
+        completionRate: 4 / 7,
+        averageTimeSeconds: 300,
+        slowdownCount: 3,
+        note: "Nevo read this section aloud for most of the class.",
+      },
+    ],
+  };
+
+  it("quotes the engine's note under its section", () => {
+    render(
+      <LiveLessonDetail lesson={LESSON} modules={[]} assignments={[]} progress={PROGRESS as never} />,
+    );
+
+    expect(screen.getByText("Nevo read this section aloud for most of the class.")).toBeInTheDocument();
+  });
+
+  it("builds no note of its own from the slowdown count", () => {
+    render(
+      <LiveLessonDetail
+        lesson={LESSON}
+        modules={[]}
+        assignments={[]}
+        progress={{ ...PROGRESS, segments: [{ ...PROGRESS.segments[0], note: null }] } as never}
+      />,
+    );
+
+    expect(screen.queryByText(/slowed here/i)).not.toBeInTheDocument();
+  });
+
+  it("names the subject in the header", () => {
+    render(
+      <LiveLessonDetail
+        lesson={{ ...LESSON, subject: "Biology" } as LessonDetailResponse}
+        modules={[]}
+        assignments={[]}
+      />,
+    );
+
+    expect(screen.getByText(/Biology ·/)).toBeInTheDocument();
+  });
+});

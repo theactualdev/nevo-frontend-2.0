@@ -196,9 +196,10 @@ export function useClassInsights(classId: string | null): ClassInsightsState {
   return {
     failed: allFailed,
     misconceptions,
-    concepts: mastery.map((m) => ({
+    // Unnamed concepts are left out, as on the student profile.
+    concepts: mastery.filter((m) => m.conceptName).map((m) => ({
       conceptId: m.conceptId,
-      name: m.conceptName,
+      name: m.conceptName as string,
       understanding: pct(m.masteryProbabilityConcept),
       reading: pct(m.masteryProbabilityReading),
       studentCount: m.studentCount,
