@@ -1,4 +1,8 @@
-import type { OnboardingState, RejectedRow } from "@/lib/api/onboarding";
+import type {
+  ClassMergeProposal,
+  OnboardingState,
+  RejectedRow,
+} from "@/lib/api/onboarding";
 
 /**
  * The pure half of D24's OB-01/OB-02 - what the upload screens claim, separate
@@ -121,4 +125,28 @@ export function templateColumns(text: string): string[] | null {
   cells.push(cell);
   const columns = cells.map((c) => c.trim()).filter(Boolean);
   return columns.length ? columns : null;
+}
+
+/** The class questions still open - the server's list, never a guess. */
+export function openMerges(state: OnboardingState | null): ClassMergeProposal[] {
+  return state?.classMerges ?? [];
+}
+
+/**
+ * "JSS2A (3 students) and JSS 2A (31 students)" - every spelling, with what
+ * each holds, because the counts are how a school recognises its own mistake.
+ */
+export function mergeSpellings(p: ClassMergeProposal): string {
+  const parts = p.candidates.map(
+    (c) => `${c.name} (${c.studentCount} ${c.studentCount === 1 ? "student" : "students"})`,
+  );
+  return parts.length > 1
+    ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`
+    : (parts[0] ?? p.proposedName);
+}
+
+/** D24 OB-02's footer line while questions remain; null when none do. */
+export function mergesLeftLine(n: number): string | null {
+  if (n <= 0) return null;
+  return `${n} class ${n === 1 ? "question" : "questions"} still to answer before you can go on.`;
 }
