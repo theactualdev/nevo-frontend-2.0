@@ -83,8 +83,9 @@ describe("HomeDashboard sample marking", () => {
     expect(container.querySelector(`[${SAMPLE_ATTR}]`)).toBeNull();
   });
 
-  it("does not model the retired how-far-in pattern in the walkthrough either", async () => {
+  it("does not model the retired how-far-in phrase in the walkthrough either", async () => {
     // Design D19 covers the fixtures: they show what a real card looks like.
+    // A real card now draws its ring (B51), so the walkthrough does too.
     dashboard.useStudentDashboard.mockReturnValue({
       data: null,
       failed: false,
@@ -102,7 +103,7 @@ describe("HomeDashboard sample marking", () => {
     expect(pickup.textContent).not.toMatch(
       /almost there|halfway|getting started|nearly/i,
     );
-    expect(pickup.innerHTML).not.toMatch(/stroke-dashoffset/);
+    expect(pickup.querySelectorAll("[data-pickup-ring]")).toHaveLength(3);
   });
 
   it("marks the signed-out walkthrough, which is a fictional child's week", async () => {
@@ -368,11 +369,18 @@ describe("Home's two lists", () => {
     ...over,
   });
 
-  const row = (lessonId: string, status: string, minutesAgo = 5, pos = 2) => ({
+  const row = (
+    lessonId: string,
+    status: string,
+    minutesAgo = 5,
+    pos = 2,
+    over: Record<string, unknown> = {},
+  ) => ({
     lessonId,
     status,
     segmentPosition: pos,
     updatedAt: at(minutesAgo),
+    ...over,
   });
 
   const live = (assignments: unknown[], recentProgress: unknown[] = []) =>
@@ -507,16 +515,83 @@ describe("Home's two lists", () => {
     expect(text).not.toMatch(/\d/);
   });
 
-  it("marks a part-way lesson with the same plain mark however far in", async () => {
+  it("draws the ring to the child's own place, read out in words", async () => {
     /*
-     * Design D21. The ring's arc was `segmentPosition / segmentCount`, and
-     * that fraction is not on the wire. Two lessons at different places must
-     * draw identical marks, and none of them an arc.
+     * Backend B51, 5 Oct: `segmentPosition` is a ZERO-based cursor and
+     * `segmentCount` is every segment, so position 2 of 10 is "segment 3 of
+     * 10" and the arc runs a fifth of the way. Design D21 allowed the ring
+     * back once the true fraction was on the wire.
+     */
+    signIn();
+    live(
+      [assignment("mid", "Halfway Fractions")],
+      [row("mid", "in_progress", 5, 2, { segmentCount: 10 })],
+    );
+
+    const { container } = render(<HomeDashboard />);
+    await settled(container);
+
+    const pickup = section(/Pick up where you left off/);
+    const ring = within(pickup).getByRole("img", { name: "Segment 3 of 10" });
+    const arc = ring.querySelectorAll("circle")[1];
+    const length = 2 * Math.PI * 24;
+    expect(Number(arc.getAttribute("stroke-dashoffset"))).toBeCloseTo(
+      length * 0.8,
+    );
+    // Never a percentage, on screen or in the words.
+    expect(pickup.textContent).not.toMatch(/%|\d/);
+  });
+
+  it("draws two lessons at two places as two different rings", async () => {
+    signIn();
+    live(
+      [assignment("early", "Early Fractions"), assignment("late", "Late Fractions")],
+      [
+        row("early", "in_progress", 5, 1, { segmentCount: 4 }),
+        row("late", "in_progress", 6, 3, { segmentCount: 4 }),
+      ],
+    );
+
+    const { container } = render(<HomeDashboard />);
+    await settled(container);
+
+    const pickup = section(/Pick up where you left off/);
+    expect(within(pickup).getByRole("img", { name: "Segment 2 of 4" })).toBeInTheDocument();
+    expect(within(pickup).getByRole("img", { name: "Segment 4 of 4" })).toBeInTheDocument();
+  });
+
+  it("never subtracts the segments flagged for review from the count", async () => {
+    // `reviewSegmentCount` is a subset of `segmentCount` (B51), not a second
+    // kind of segment - the row's own count is the whole lesson.
+    signIn();
+    live(
+      [assignment("mid", "Halfway Fractions", {}, { segmentCount: 10, reviewSegmentCount: 3 })],
+      [row("mid", "in_progress", 5, 2, { segmentCount: 10 })],
+    );
+
+    const { container } = render(<HomeDashboard />);
+    await settled(container);
+
+    expect(
+      within(section(/Pick up where you left off/)).getByRole("img", {
+        name: "Segment 3 of 10",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("wears the plain mark when the row does not say how far in", async () => {
+    /*
+     * Design D21. No count on the row (or the schema's default of 0) is no
+     * fraction, and a ring drawn without one is an amount we composed. Two
+     * such lessons at different places draw identical marks, and no arc.
      */
     signIn();
     live(
       [assignment("early", "Early Fractions"), assignment("late", "Late Fractions")],
-      [row("early", "in_progress", 5, 0), row("late", "in_progress", 6, 3)],
+      [
+        row("early", "in_progress", 5, 0),
+        row("late", "in_progress", 6, 3, { segmentCount: 0 }),
+      ],
     );
 
     const { container } = render(<HomeDashboard />);
@@ -527,6 +602,93 @@ describe("Home's two lists", () => {
     expect(marks).toHaveLength(2);
     expect(marks[0].outerHTML).toBe(marks[1].outerHTML);
     expect(pickup.innerHTML).not.toMatch(/stroke-dashoffset|conic-gradient/);
+  });
+
+  it("does not draw a place the count cannot hold", async () => {
+    signIn();
+    live(
+      [assignment("odd", "Odd Fractions")],
+      [row("odd", "in_progress", 5, 4, { segmentCount: 4 })],
+    );
+
+    const { container } = render(<HomeDashboard />);
+    await settled(container);
+
+    const pickup = section(/Pick up where you left off/);
+    expect(pickup.querySelector("[data-pickup-ring]")).toBeNull();
+    expect(pickup.querySelector("[data-pickup-mark]")).not.toBeNull();
+  });
+
+  it("lists a lesson started from the library, with no assignment on its link", async () => {
+    /*
+     * Backend B52, 5 Oct: the progress row carries the lesson's title and
+     * subject, so a lesson no teacher set can sit here too. It is not set
+     * work, so it opens bare - an `?assignment=` would file the child's own
+     * reading under a teacher's name.
+     */
+    signIn();
+    live(
+      [assignment("set", "Set Fractions")],
+      [
+        row("set", "in_progress", 10),
+        row("lib", "in_progress", 2, 1, {
+          title: "Volcanoes",
+          subject: "Geography",
+          segmentCount: 5,
+        }),
+      ],
+    );
+
+    const { container } = render(<HomeDashboard />);
+    await settled(container);
+
+    const pickup = section(/Pick up where you left off/);
+    const links = within(pickup).getAllByRole("link");
+    // Newest first, whichever door it came in by.
+    expect(links[0].textContent).toMatch(/Volcanoes/);
+    expect(links[0].getAttribute("href")).toBe("/student/lessons/lib");
+    expect(within(pickup).getByText("Geography")).toBeInTheDocument();
+    expect(
+      within(pickup).getByRole("img", { name: "Segment 2 of 5" }),
+    ).toBeInTheDocument();
+    expect(links[1].getAttribute("href")).toBe(
+      "/student/lessons/set?assignment=as-set",
+    );
+  });
+
+  it("leaves off a library lesson the row gives no title", async () => {
+    signIn();
+    live([], [row("lib", "in_progress", 2, 1, { title: "  " })]);
+
+    const { container } = render(<HomeDashboard />);
+    await settled(container);
+
+    expect(screen.queryByText("Pick up where you left off")).toBeNull();
+  });
+
+  it("does not bring a cancelled lesson back in as a library one", async () => {
+    // The row names a lesson an assignment names: that is set work, and the
+    // teacher called it off. Its title on the row is no way back in.
+    signIn();
+    live(
+      [assignment("off", "Called Off", { status: "cancelled" })],
+      [row("off", "in_progress", 2, 1, { title: "Called Off" })],
+    );
+
+    const { container } = render(<HomeDashboard />);
+    await settled(container);
+
+    expect(screen.queryByText("Called Off")).toBeNull();
+  });
+
+  it("leaves a finished library lesson off", async () => {
+    signIn();
+    live([], [row("lib", "completed", 2, 4, { title: "Volcanoes" })]);
+
+    const { container } = render(<HomeDashboard />);
+    await settled(container);
+
+    expect(screen.queryByText("Volcanoes")).toBeNull();
   });
 
   it("gives Today's slot to 29's empty state when the only lesson is part-way", async () => {

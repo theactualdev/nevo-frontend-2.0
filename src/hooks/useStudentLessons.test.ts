@@ -177,34 +177,60 @@ describe("what the live row carries onto the card", () => {
     expect(first().timeEstimate).toBe("1 section");
   });
 
-  it("carries no fraction for a lesson part-way through", () => {
-    /*
-     * Design D21. `segmentPosition / segmentCount` drove the preview's bar,
-     * and that fraction is not on the wire: no base is stated on the row and
-     * nothing ties `segmentCount` to the segments the player indexes. The
-     * card says in progress and nothing about how far.
-     */
+  const partWay = (status: string, over: Record<string, unknown> = {}) =>
     dashboard.mockReturnValue({
       data: {
         assignments: [assignment("mid")],
         recentProgress: [
           {
             lessonId: "mid",
-            status: "in_progress",
+            status,
             segmentPosition: 2,
             updatedAt: new Date().toISOString(),
+            ...over,
           },
         ],
       },
       loading: false,
       failed: false,
     });
+  const card = () =>
+    renderHook(() => useStudentLessons()).result.current.lessons[0];
 
-    const card = renderHook(() => useStudentLessons()).result.current
-      .lessons[0] as unknown as Record<string, unknown>;
+  it("carries the child's place in a lesson part-way through, from the row", () => {
+    /*
+     * Backend B51, 5 Oct: `segmentPosition` is zero-based and the row now
+     * carries `segmentCount`, every segment in the lesson. Position 2 of 10
+     * is "segment 3 of 10", a fifth of the way.
+     */
+    partWay("in_progress", { segmentCount: 10 });
 
-    expect(card.status).toBe("in_progress");
-    expect(card).not.toHaveProperty("progress");
+    expect(card().status).toBe("in_progress");
+    expect(card().place).toEqual({ fraction: 0.2, words: "Segment 3 of 10" });
+  });
+
+  it("reads a lesson the child left part-way the same way", () => {
+    partWay("exited", { segmentCount: 4 });
+
+    expect(card().place?.words).toBe("Segment 3 of 4");
+  });
+
+  it("carries no place when the row gives no count", () => {
+    // Design D21: without the true fraction, the card says in progress and
+    // nothing about how far. The summary's own count is not borrowed.
+    partWay("in_progress");
+    expect(card().status).toBe("in_progress");
+    expect(card()).not.toHaveProperty("place");
+
+    partWay("in_progress", { segmentCount: 0 });
+    expect(card()).not.toHaveProperty("place");
+  });
+
+  it("carries no place for a finished lesson", () => {
+    partWay("completed", { segmentCount: 4 });
+
+    expect(card().status).toBe("completed");
+    expect(card()).not.toHaveProperty("place");
   });
 });
 

@@ -11,6 +11,7 @@ import { SampleRegion } from "@/components/shared/SampleRegion";
 import { useHydrated } from "@/hooks/useHydrated";
 import { useHasSession } from "@/hooks/useHasSession";
 import { useStudentLessons } from "@/hooks/useStudentLessons";
+import type { SegmentPlace } from "@/lib/lessons/segmentPlace";
 import { cn } from "@/lib/utils";
 import {
   LESSON_CATALOG,
@@ -338,7 +339,7 @@ function LessonCard({
     >
       {/* Accent bar (subject) */}
       <div className="h-[5px] bg-nevo-violet/70" />
-      <StatusMark status={lesson.status} />
+      <StatusMark status={lesson.status} place={lesson.place} />
       <div className="p-4">
         <span className="flex size-10 items-center justify-center rounded-[10px] bg-nevo-cream text-nevo-navy">
           <Icon className="size-5" strokeWidth={2} />
@@ -355,16 +356,25 @@ function LessonCard({
 }
 
 /**
- * Calm status dot — completed (navy check), in-progress (violet ring with a
- * navy centre), or not started.
+ * Calm status dot — completed (navy check), in-progress (violet ring filled
+ * as far as the child is), or not started.
  *
- * IN PROGRESS IS A STATE, NOT AN AMOUNT (design D21, 1 Oct). It drew a conic
- * fill fixed at 55% on every in-progress card, which a child reads as how far
- * they are - the same for everyone, so it was the rising curve again. The real
- * fraction is not on the wire (see `PickUp` on Home), so the mark is a plain
- * one: a centre dot, which no reading turns into a portion.
+ * THE FILL IS THE CHILD'S OWN, OR THERE IS NONE (design D21, backend B51). It
+ * was a conic fill fixed at 55% on every in-progress card, which a child reads
+ * as how far they are - the same for everyone, so it was the rising curve
+ * again. D21 allowed the fill back only once the real fraction was on the
+ * wire, and B51 put it there: the frame's conic fill now runs to this child's
+ * `segmentPosition / segmentCount`, and says "Segment 3 of 10" rather than a
+ * number. A row that does not say keeps the plain mark - a centre dot, which
+ * no reading turns into a portion.
  */
-function StatusMark({ status }: { status: LessonStatus }) {
+function StatusMark({
+  status,
+  place,
+}: {
+  status: LessonStatus;
+  place?: SegmentPlace;
+}) {
   if (status === "completed") {
     return (
       <span
@@ -374,6 +384,20 @@ function StatusMark({ status }: { status: LessonStatus }) {
       >
         <Check className="size-3 text-nevo-cream" strokeWidth={3} aria-hidden />
       </span>
+    );
+  }
+  if (status === "in_progress" && place) {
+    return (
+      <span
+        role="img"
+        aria-label={`In progress. ${place.words}`}
+        data-segment-fill
+        className="absolute top-3 right-3 size-5 rounded-full border-2 border-nevo-violet"
+        // Degrees, not a percentage: the amount is drawn, never written.
+        style={{
+          background: `conic-gradient(var(--color-nevo-navy) ${place.fraction * 360}deg, transparent 0)`,
+        }}
+      />
     );
   }
   if (status === "in_progress") {

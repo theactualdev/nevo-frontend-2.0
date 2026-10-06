@@ -175,8 +175,21 @@ export interface DashboardProgressRow {
   lessonId: string;
   /** LessonCompletionStatus: in_progress | completed | exited. */
   status: string;
+  /** ZERO-based cursor (backend B51) - see `lib/lessons/segmentPlace`. */
   segmentPosition: number;
   updatedAt: string;
+  /**
+   * The lesson's own title and subject (backend B52, 5 Oct), so a lesson the
+   * child started from the library can sit on Home with no assignment behind
+   * it. `title` defaults to "" and `subject` is nullable: blank is no title.
+   */
+  title?: string;
+  subject?: string | null;
+  /**
+   * Every segment in the lesson (B51), so the row carries its own fraction.
+   * Defaults to 0, which no playable lesson has: 0 is "not said".
+   */
+  segmentCount?: number;
 }
 
 /**

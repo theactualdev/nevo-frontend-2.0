@@ -7,6 +7,7 @@ import type {
   LessonSummary,
 } from "@/components/student/Lessons/lessonCatalog";
 import { unavailableReason } from "@/lib/lessons/availability";
+import { segmentPlace } from "@/lib/lessons/segmentPlace";
 import { useStudentDashboard } from "./useStudentDashboard";
 
 /**
@@ -113,9 +114,11 @@ export function useStudentLessons(): StudentLessons {
         // or not at all - blank is not a subject.
         const subject = a.lesson.subject?.trim();
         const description = a.lesson.description?.trim();
-        // No fraction from `segmentPosition / segmentCount`: it is not on the
-        // wire, so neither a ring nor a bar may draw it (design D21) - see
-        // `PickUp` on Home.
+        // THE TRUE FRACTION, FROM THE ROW ALONE (backend B51). Position and
+        // count arrive together on the progress row, so neither is borrowed
+        // from the summary. Only for a lesson still part-way: a finished one
+        // wears its check, never a full ring.
+        const place = status === "in_progress" ? segmentPlace(row) : null;
 
         return {
           id: a.lesson.id,
@@ -127,6 +130,7 @@ export function useStudentLessons(): StudentLessons {
           timeEstimate,
           ...(subject ? { subject } : {}),
           ...(description ? { description } : {}),
+          ...(place ? { place } : {}),
           status,
         };
       });
