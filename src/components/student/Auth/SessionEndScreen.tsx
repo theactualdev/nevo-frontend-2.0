@@ -3,10 +3,8 @@ import Link from "next/link";
 import { Button } from "@/components/shared";
 import { CombinedMark, Wordmark } from "@/components/shared/BrandMarks";
 import { withNext } from "@/lib/auth/nextPath";
-import {
-  sessionEndCopy,
-  type SessionEndReason,
-} from "@/lib/auth/sessionEndReason";
+import type { SessionEndReason } from "@/lib/auth/sessionEndReason";
+import { cn } from "@/lib/utils";
 
 /**
  * Session-end states (board 28), for a child.
@@ -35,11 +33,10 @@ import {
  * concurrent-session one, and 28a's revoked screen with the wordmark at the
  * top and NO picture at all.
  *
- * THE SIGNED-IN-ELSEWHERE SCREEN SAYS WHO TO TELL (design, D51). Board 28
- * draws it with no next step, and a child whose session was ended by somebody
- * else needs somewhere to go - the teacher is who they have. The line is the
- * shared ruling's learner note, read from `sessionEndCopy` so the two cannot
- * drift, and it sits under the button as the staff screen's note does.
+ * THE SIGNED-IN-ELSEWHERE SCREEN SAYS WHO TO TELL (design, D51). It was a
+ * note under the button, read from `sessionEndCopy`; board 28's 6 Oct redraw
+ * makes it the body, under "Your session has ended.", and drops "Your
+ * progress is saved" - so it is the frame's own words here now.
  *
  * `paused` is not in this union, and nor is `closed`. They are account states
  * rather than session ones and the child has their own frame for them, so the
@@ -49,21 +46,19 @@ import {
 
 type Shown = Exclude<SessionEndReason, "paused" | "closed">;
 
-const COPY: Record<
-  Shown,
-  { heading: string; body: string; action: string; note?: string }
-> =
+const COPY: Record<Shown, { heading: string; body: string; action: string }> =
   {
     expired: {
       heading: "You've been away for a while",
       body: "Log back in to continue",
       action: "Log back in",
     },
+    // Board 28 as redrawn on 6 Oct, verbatim. "Your progress is saved" is
+    // gone, and the line D51 asked for is the body now, not a note.
     replaced: {
-      heading: "You logged in on another device",
-      body: "Your progress is saved",
+      heading: "Your session has ended.",
+      body: "If that wasn't you, tell your teacher.",
       action: "Log back in",
-      note: sessionEndCopy("replaced", "learner").note ?? undefined,
     },
     // Verbatim from `student/28a Session Ended - Revoked`: the ordinary screen
     // with the inactivity line deleted, because this session did not time out
@@ -91,7 +86,7 @@ export function SessionEndScreen({
    */
   next?: string;
 }) {
-  const { heading, body, action, note } = COPY[variant];
+  const { heading, body, action } = COPY[variant];
   const signIn = withNext("/auth/login", next);
 
   if (variant === "revoked") {
@@ -128,18 +123,20 @@ export function SessionEndScreen({
         priority
         className="-my-3.5 size-[180px] object-contain sm:my-0 sm:h-[184px] sm:w-[220px]"
       />
-      <h1 className="mt-7 text-xl font-medium sm:mt-8 sm:text-2xl">{heading}</h1>
+      <h1
+        className={cn(
+          "mt-7 text-xl font-medium sm:mt-8 sm:text-2xl",
+          variant === "replaced" && "leading-[1.3]",
+        )}
+      >
+        {heading}
+      </h1>
       <p className="mt-2 text-[15px] text-nevo-near-black/60 sm:mt-2.5 sm:text-base">
         {body}
       </p>
       <Button asChild className="mt-8 w-full max-w-[290px] text-base sm:mt-9 sm:max-w-[340px]">
         <Link href={signIn}>{action}</Link>
       </Button>
-      {note && (
-        <p className="mt-5 max-w-[290px] text-sm leading-[1.5] text-nevo-near-black/60 sm:max-w-[340px]">
-          {note}
-        </p>
-      )}
     </div>
   );
 }
