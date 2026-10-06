@@ -293,6 +293,21 @@ describe("ReturningSignInScreen — when it does not work", () => {
     );
   });
 
+  it("tells a removed child their account is closed, not on pause and not a wrong PIN (D53)", async () => {
+    loginPin.mockRejectedValue(refusal("account_closed"));
+    render(<ReturningSignInScreen />);
+    fill();
+
+    await signInNow();
+
+    expect(screen.getByText(/Your Nevo account is closed/)).toBeVisible();
+    expect(screen.queryByText(/on pause|didn't match/)).toBeNull();
+    expect(screen.getByRole("link", { name: "Back to sign in" })).toHaveAttribute(
+      "href",
+      "/auth/login",
+    );
+  });
+
   it("does not remember a device it failed to sign into", async () => {
     // Remembering here would send the child to a PIN unlock for an account they
     // never proved was theirs.
@@ -670,9 +685,42 @@ describe("the form as 00c draws it", () => {
     render(<ReturningSignInScreen />);
 
     expect(
-      screen.getByText("Don't know your Student ID / Admission Number?"),
+      screen.getByText(/Don't know your Student ID \/ Admission Number\?/),
     ).toBeInTheDocument();
     expect(screen.getByText("Ask your teacher.")).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/username/i);
+  });
+
+  it("labels the second field as 00c does, and draws it empty", () => {
+    render(<ReturningSignInScreen />);
+
+    const field = screen.getByLabelText("Student ID / Admission Number");
+    expect(field).toHaveValue("");
+    // It said "Ask your teacher", which the help row already says.
+    expect(field).not.toHaveAttribute("placeholder");
+  });
+
+  it("sends a Student ID exactly as typed, under the field the server reads", async () => {
+    // Sign-in matches the school's Student ID or Nevo's handle (backend,
+    // 1 Oct). A slash is not stripped and nothing is upper-cased.
+    loginPin.mockResolvedValue(SESSION);
+    render(<ReturningSignInScreen />);
+    fill({ user: "BGA/2031" });
+
+    await signInNow();
+
+    expect(loginPin).toHaveBeenCalledWith(
+      expect.objectContaining({ loginIdentifier: "BGA/2031" }),
+    );
+  });
+
+  it("centres the school code, as 00c centres its cells", () => {
+    render(<ReturningSignInScreen />);
+
+    const code = screen.getByLabelText("School code");
+    expect(code.parentElement?.parentElement?.className).toContain(
+      "[&_input]:text-center",
+    );
   });
 
   it("asks them to try again after a PIN that did not match, in the tinted box", async () => {

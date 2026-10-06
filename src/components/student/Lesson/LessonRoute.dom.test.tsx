@@ -23,7 +23,9 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/hooks/useHydrated", () => ({ useHydrated: () => true }));
 
-const lessonState = vi.hoisted(() => ({ value: {} as Record<string, unknown> }));
+const lessonState = vi.hoisted(() => ({
+  value: {} as Record<string, unknown>,
+}));
 vi.mock("@/hooks/useStudentLesson", () => ({
   useStudentLesson: () => lessonState.value,
 }));
@@ -67,14 +69,19 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe("a lesson that is not there", () => {
-  it("is said in the child's words with a way back, not the app's 404", () => {
+  it("is frame 28's D90 screen with its one way back, not the app's 404", () => {
     state({ missing: true });
     render(<LessonRoute lessonId="les-1" />);
 
     expect(notFound).not.toHaveBeenCalled();
-    expect(screen.getByText("We couldn’t find that lesson")).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { name: "We couldn't open that lesson." }),
+    ).toBeTruthy();
+    // The frame's one line: no guess at why, and one action.
+    expect(screen.queryByText(/put away/)).toBeNull();
+    expect(screen.getAllByRole("button")).toHaveLength(1);
 
-    fireEvent.click(screen.getByRole("button", { name: "Back to my lessons" }));
+    fireEvent.click(screen.getByRole("button", { name: "Back to lessons" }));
     expect(push).toHaveBeenCalledWith("/student/lessons");
   });
 });
@@ -84,9 +91,7 @@ describe("a lesson that would not load", () => {
     state({ failed: true });
     render(<LessonRoute lessonId="les-1" />);
 
-    expect(
-      screen.getByText("Something went wrong. We're on it."),
-    ).toBeTruthy();
+    expect(screen.getByText("Something went wrong. We're on it.")).toBeTruthy();
     expect(screen.getByText(/Nothing you did caused it/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
 

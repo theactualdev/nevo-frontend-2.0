@@ -1,5 +1,6 @@
 import { consentsApi } from "@/lib/api/consents";
 import type { StudentEntryState } from "@/lib/api/studentEntry";
+import { WAITING_ROUTE } from "./consentHold";
 import { doorForRole } from "./consoleDoor";
 
 /**
@@ -23,7 +24,8 @@ import { doorForRole } from "./consoleDoor";
  * opening a lesson is a different question, still unruled, and it is the one
  * `consent-gate`'s `blocked`, `admin/D25` PC-03 and the 7 Sep SCRUM-80 ruling
  * disagree about. Running this on every mount would answer it by accident. See
- * `docs/RULINGS_23_SEP.md` §2b.
+ * `docs/RULINGS_23_SEP.md` §2b. A WITHDRAWN child inside the app is the server's
+ * to stop, with a 403 on the thing they tried - see `withdrawnDoor` (B7).
  *
  * ## Why `blocked` and not `granted`
  *
@@ -33,12 +35,8 @@ import { doorForRole } from "./consoleDoor";
  * policy out of a field that does not state one. The engine decides; we render.
  */
 
-/**
- * 00d. Says nothing about consent, and the URL must not either - a child who
- * reads their own address bar learns nothing here, which is the same reason
- * the screen itself does not say why.
- */
-export const WAITING_ROUTE = "/student/waiting";
+/** 00d - see `consentHold`, where it lives so the API client can share it. */
+export { WAITING_ROUTE };
 
 const DEFAULT_DESTINATION = "/student/dashboard";
 

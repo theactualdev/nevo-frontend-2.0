@@ -55,7 +55,23 @@ describe("Let my teacher know", () => {
     });
   });
 
-  it("says Sent only once the server has taken it, and cannot be sent twice", async () => {
+  it("puts the ask first and the way back under it, as 00a draws them", async () => {
+    const ada = rememberAdaAndKofi();
+    await page({ child: ada });
+
+    const ask = await screen.findByRole("button", {
+      name: "Let my teacher know",
+    });
+    const back = screen.getByRole("link", { name: "Back to sign in" });
+    expect(
+      ask.compareDocumentPosition(back) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    // The Button's default is the primary; the way back is the quiet one.
+    expect(ask).not.toHaveAttribute("data-variant");
+    expect(back).toHaveAttribute("data-variant", "ghost");
+  });
+
+  it("says the teacher knows only once the server has taken it, and cannot be sent twice", async () => {
     let accept: (v: unknown) => void = () => {};
     requestPinReset.mockReturnValue(new Promise((r) => (accept = r)));
     const ada = rememberAdaAndKofi();
@@ -64,14 +80,40 @@ describe("Let my teacher know", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: "Let my teacher know" }),
     );
-    expect(screen.queryByText("Sent")).toBeNull();
+    expect(screen.queryByText("Your teacher knows")).toBeNull();
+    expect(screen.getByText("Forgot your PIN?")).toBeInTheDocument();
 
     accept({});
-    expect(await screen.findByText("Sent")).toBeInTheDocument();
+    expect(await screen.findByText("Your teacher knows")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Let my teacher know" }),
     ).toBeNull();
     expect(requestPinReset).toHaveBeenCalledTimes(1);
+  });
+
+  it("draws 00a's sent state whole, with one way back to sign in", async () => {
+    requestPinReset.mockResolvedValue({});
+    const ada = rememberAdaAndKofi();
+    await page({ child: ada, next: "/student/lessons" });
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Let my teacher know" }),
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: "Your teacher knows" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Once they've cleared your old PIN, sign in again and choose your new one.",
+      ),
+    ).toBeInTheDocument();
+    // The ask's screen is replaced, not added to.
+    expect(screen.queryByText("Forgot your PIN?")).toBeNull();
+    expect(document.querySelector('img[src*="error"]')).toBeNull();
+    expect(
+      screen.getByRole("link", { name: "Back to sign in" }),
+    ).toHaveAttribute("href", "/auth/login?next=%2Fstudent%2Flessons");
   });
 
   it("says a refused ask was not sent, and lets them try again", async () => {
@@ -86,7 +128,7 @@ describe("Let my teacher know", () => {
     expect(
       await screen.findByText(/couldn.t send that just now/),
     ).toBeInTheDocument();
-    expect(screen.queryByText("Sent")).toBeNull();
+    expect(screen.queryByText("Your teacher knows")).toBeNull();
     expect(
       screen.getByRole("button", { name: "Let my teacher know" }),
     ).toBeEnabled();
@@ -120,7 +162,7 @@ describe("Let my teacher know", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: "Let my teacher know" }),
     );
-    await screen.findByText("Sent");
+    await screen.findByText("Your teacher knows");
 
     expect(document.body.textContent).not.toMatch(/ada\.o|NEVO-1|\d{4}/);
   });

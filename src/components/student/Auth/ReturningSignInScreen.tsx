@@ -14,8 +14,8 @@ import {
 import { authApi } from "@/lib/api";
 import { usersApi } from "@/lib/api/users";
 import {
-  classifyLoginFailure,
-  type LoginFailure,
+  classifyLearnerLoginFailure,
+  type LearnerLoginFailure,
 } from "@/lib/auth/loginFailure";
 import {
   doorForRole,
@@ -54,13 +54,11 @@ import { WrongDoorNote } from "./WrongDoorNote";
  * to anyone holding a class code, and it needs nothing from backend -
  * `POST /auth/login/pin` is public and has always taken these three fields.
  *
- * THE SECOND FIELD IS THE STUDENT ID / ADMISSION NUMBER (design, 30 Sep: "the
- * label is always 'Student ID / Admission Number', both words, everywhere a
- * person reads it"). It is the number the school gave the child, so they can
- * know it, and sign-in matches it as well as the server-issued login
- * identifier (backend, 1 Oct) - a child who was given that still gets in with
- * it. Sent as typed, never reshaped: either one has to reach the server
- * exactly as it was issued.
+ * THE SECOND FIELD IS "STUDENT ID / ADMISSION NUMBER", as 00c labels it since
+ * 30 Sep. Sign-in matches either the school's Student ID or the login handle
+ * Nevo issued (backend, 1 Oct), so the field sends exactly what the child
+ * types, as `loginIdentifier`, and the server decides which one it is. The
+ * help row points at the person who can read it out.
  *
  * PRE-FILLED FROM 05 ENTRY for a child the lookup says already has an
  * account (`accountReady`): they typed the code and the ID one screen ago,
@@ -118,7 +116,7 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
   /** This sign-in ended the account's session elsewhere (D2). */
   const [replacedElsewhere, setReplacedElsewhere] = useState(false);
   const [checking, setChecking] = useState(false);
-  const [error, setError] = useState<LoginFailure | null>(null);
+  const [error, setError] = useState<LearnerLoginFailure | null>(null);
   /** Whose door a non-student account belongs at; see `WrongDoorNote`. */
   const [wrongDoor, setWrongDoor] = useState<ConsoleDoor | null>(null);
   /**
@@ -310,7 +308,7 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
     } catch (cause) {
       // Only the PIN clears. The other two fields stay, deliberately.
       setDigits("");
-      setError(classifyLoginFailure(cause));
+      setError(classifyLearnerLoginFailure(cause));
     } finally {
       if (!leaving) setChecking(false);
     }
@@ -320,10 +318,11 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
    * A paused account takes the whole screen, exactly as it does at the PIN
    * unlock. There is nothing here a child can do, and leaving the form
    * underneath would invite them to keep trying something that cannot work.
+   * A closed account is the same screen saying closed, never on pause (D53).
    */
-  if (error === "paused") {
+  if (error === "paused" || error === "closed") {
     // No retry, but a way back to the picker for whoever is next (D52).
-    return <AccountOnPauseScreen back={{ href: "/auth/login" }} />;
+    return <AccountOnPauseScreen back={{ href: "/auth/login" }} hold={error} />;
   }
 
   if (done) {
@@ -394,31 +393,37 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
             <p className="text-[13px] font-semibold text-nevo-near-black/70 sm:text-[13.5px]">
               Your school code
             </p>
-            <CodeInput
-              value={schoolCode}
-              onChange={(v) =>
-                setSchoolCode(normaliseCode(v, SCHOOL_CODE_MAX))
-              }
-              onSubmit={() => void submit()}
-              status={error === "credentials" ? "error" : "idle"}
-              label="School code"
-              placeholder="Your school code"
-              min={SCHOOL_CODE_MIN}
-              max={SCHOOL_CODE_MAX}
-            />
+            {/*
+              CENTRED, as 00c centres its code cells. From here rather than
+              inside `CodeInput`, which the school step shares and which the
+              entry rework (SCRUM-208) owns; this screen never shows its
+              pending or success mark, so the room kept for it goes too.
+            */}
+            <div className="[&_input]:pr-0 [&_input]:text-center">
+              <CodeInput
+                value={schoolCode}
+                onChange={(v) =>
+                  setSchoolCode(normaliseCode(v, SCHOOL_CODE_MAX))
+                }
+                onSubmit={() => void submit()}
+                status={error === "credentials" ? "error" : "idle"}
+                label="School code"
+                placeholder="Your school code"
+                min={SCHOOL_CODE_MIN}
+                max={SCHOOL_CODE_MAX}
+              />
+            </div>
           </div>
           {/*
             NOT `CodeInput`, deliberately. That component normalises everything
             typed into it with `normaliseCode` - uppercase, and strip anything
             that is not A-Z, 0-9 or a hyphen - which is right for a school code
-            and destroys a username. `amara.k` arrives as `AMARAK`, which the
-            server has never heard of, so NO CHILD COULD EVER SIGN IN. The
-            identifier is issued by the server and has to be sent back exactly
-            as it was given.
+            and destroys an identifier. `amara.k` arrives as `AMARAK`, and
+            `BGA/2031` as `BGA2031`, which the server has never heard of. What
+            the child types is sent back exactly as typed.
 
-            THE FRAME'S LABEL, "Student ID / Admission Number" (30 Sep). It
-            read "Your username" while design had not ruled; sign-in takes the
-            admission number or the login identifier, so either still works.
+            NO PLACEHOLDER: 00c draws the field empty. It said "Ask your
+            teacher", which the help row under the button already says.
           */}
           <div className="flex flex-col gap-2">
             <label
@@ -452,7 +457,7 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}
-                className="w-full bg-transparent text-[17px] text-nevo-near-black outline-none placeholder:text-nevo-near-black/35"
+                className="w-full bg-transparent text-[17px] text-nevo-near-black outline-none"
               />
             </div>
           </div>
