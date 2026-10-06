@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render } from "@testing-library/react";
-import { SchoolConnectionStep } from "./SchoolConnectionStep";
+import { StudentEntryStep } from "./StudentEntryStep";
 import { SsoCallback } from "../Auth/SsoCallback";
 
 /**
@@ -28,8 +28,9 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
 }));
-vi.mock("@/lib/api/auth", () => ({
-  authApi: { ssoCallback: vi.fn(), verifySchoolCode: vi.fn() },
+vi.mock("@/lib/api/auth", () => ({ authApi: { ssoCallback: vi.fn() } }));
+vi.mock("@/lib/api/studentEntry", () => ({
+  studentEntryApi: { lookup: vi.fn() },
 }));
 
 afterEach(() => {
@@ -47,8 +48,8 @@ describe("signal streams before the first lesson", () => {
     expect(type).toBe("sso");
   });
 
-  it("names the school-code step as onboarding, under a UUID", () => {
-    render(<SchoolConnectionStep />);
+  it("names the entry step as onboarding, under a UUID", () => {
+    render(<StudentEntryStep framing="school" />);
 
     const [id, lessonId, type] = useSignals.mock.calls[0] as unknown[];
     expect(id).toMatch(UUID);

@@ -58,7 +58,7 @@ function KindMark({ kind }: { kind?: NotificationKind }) {
  * kind.
  */
 export function NotificationBell({ className }: { className?: string }) {
-  const { notifications, unreadCount, failed, markRead, showingSamples } =
+  const { notifications, unreadCount, failed, loading, markRead, showingSamples } =
     useNotifications();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -119,6 +119,15 @@ export function NotificationBell({ className }: { className?: string }) {
               <p className="mt-3.5 text-sm text-nevo-near-black/60">
                 We couldn&rsquo;t load these just now
               </p>
+            </div>
+          ) : loading ? (
+            /* Not answered yet is not "nothing new" either. */
+            <div className="flex justify-center px-4 pt-8 pb-10">
+              <span
+                role="status"
+                aria-label="Loading"
+                className="block size-5 rounded-full border-[2.5px] border-nevo-navy/20 border-t-nevo-navy motion-safe:animate-spin motion-safe:[animation-duration:800ms]"
+              />
             </div>
           ) : notifications.length === 0 ? (
             <div className="flex flex-col items-center px-4 pt-6 pb-8 text-center">

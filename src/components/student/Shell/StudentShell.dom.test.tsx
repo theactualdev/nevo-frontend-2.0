@@ -238,8 +238,8 @@ describe("the consent hold", () => {
     expect(screen.getByText("lesson body")).toBeTruthy();
   });
 
-  it("is bare on the school-link door too, which can end on the hold", () => {
-    at("/student/entry/tok-1");
+  it("is bare on 05 Entry too, which draws the hold in place", () => {
+    at("/student/onboarding/school");
 
     expect(screen.queryByRole("navigation")).toBeNull();
   });

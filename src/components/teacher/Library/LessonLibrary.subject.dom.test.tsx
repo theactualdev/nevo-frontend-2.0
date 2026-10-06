@@ -324,3 +324,28 @@ describe("what the card calls a lesson that has been reviewed", () => {
     expect(c.status).toBe("Ready");
   });
 });
+
+describe("the card's meta line", () => {
+  const lesson = (over: Partial<LessonSummary> = {}) =>
+    ({
+      id: "l-1",
+      title: "Solving Linear Equations",
+      status: "ready",
+      sourceType: "pdf",
+      segmentCount: 6,
+      reviewSegmentCount: 0,
+      subject: "Mathematics",
+      assignmentCount: 0,
+      estimatedMinutes: 20,
+      createdAt: "2026-09-18T09:00:00Z",
+      ...over,
+    }) as LessonSummary;
+
+  it("leads with the subject, as C06 draws it", () => {
+    expect(__toCardForTest(lesson()).meta.startsWith("Mathematics · ")).toBe(true);
+  });
+
+  it("starts with the sections when the lesson has no subject", () => {
+    expect(__toCardForTest(lesson({ subject: null })).meta).toMatch(/^\d+ sections?/);
+  });
+});

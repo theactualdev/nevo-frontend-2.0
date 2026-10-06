@@ -4,7 +4,7 @@ import { visibleText } from "@/test/visibleText";
 import type { AdminClass, AssignedClass } from "@/lib/api/classes";
 import { MoveStudentSheet } from "./MoveStudentSheet";
 import { EraseRecordModal } from "./EraseRecordModal";
-import { IssuePinSheet } from "./IssuePinSheet";
+import { ClearPinSheet } from "./ClearPinSheet";
 import { BulkClassSheet } from "../Classes/BulkClassSheet";
 import { RemoveAccessSheet } from "../Teachers/RemoveAccessSheet";
 
@@ -16,7 +16,7 @@ import { RemoveAccessSheet } from "../Teachers/RemoveAccessSheet";
 
 const moveToClass = vi.fn();
 const erase = vi.fn();
-const issuePin = vi.fn();
+const clearPin = vi.fn();
 const createMany = vi.fn();
 const revoke = vi.fn();
 
@@ -28,7 +28,7 @@ vi.mock("@/lib/api/students", async (importOriginal) => {
       ...actual.studentsApi,
       moveToClass: () => moveToClass(),
       erase: () => erase(),
-      issuePin: () => issuePin(),
+      clearPin: () => clearPin(),
     },
   };
 });
@@ -131,11 +131,11 @@ describe("a failed write can be closed, not only retried", () => {
     await closeAfterFailure(onClose);
   });
 
-  it("issuing a PIN", async () => {
-    issuePin.mockRejectedValue(new Error("500"));
+  it("clearing a PIN", async () => {
+    clearPin.mockRejectedValue(new Error("500"));
     const onClose = vi.fn();
-    render(<IssuePinSheet studentId="s1" studentName="Amara Obi" onClose={onClose} />);
-    fireEvent.click(screen.getByRole("button", { name: "Issue a new PIN" }));
+    render(<ClearPinSheet studentId="s1" studentName="Amara Obi" onClose={onClose} />);
+    fireEvent.click(screen.getByRole("button", { name: "Clear PIN" }));
     await closeAfterFailure(onClose);
   });
 

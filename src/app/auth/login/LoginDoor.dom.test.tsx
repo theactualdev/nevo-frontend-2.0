@@ -421,3 +421,31 @@ describe("a paused account at the door", () => {
     expect(screen.queryByText(/on pause/)).toBeNull();
   });
 });
+
+/**
+ * D53: a removed child's right PIN is answered `account_closed` (B58). They
+ * read that the account is closed - not on pause, and not a PIN that did not
+ * match - and the next child still gets the picker back (D52).
+ */
+describe("a closed account at the door", () => {
+  const closed = () =>
+    new ApiError(401, "Unauthorized", {
+      detail: { code: "account_closed", message: "closed" },
+    });
+
+  it("says closed, and goes back to the picker for whoever is next", async () => {
+    loginPin.mockRejectedValue(closed());
+    await chooseAda();
+
+    await tap("1234");
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: /account is closed/ }),
+    ).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/on pause|didn.t match/i);
+
+    fireEvent.click(screen.getByRole("button", { name: "Back to sign in" }));
+
+    expect(await screen.findByText("Who's learning?")).toBeInTheDocument();
+  });
+});

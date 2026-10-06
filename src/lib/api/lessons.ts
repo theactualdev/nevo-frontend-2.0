@@ -142,7 +142,9 @@ export interface LessonClass {
  * that happen.
  */
 /**
- * All 15 values the deployed enum carries, re-polled 16 Sep. This listed 6 for
+ * All 16 values the deployed enum carries, re-polled 6 Oct (the sixteenth,
+ * `calculation_variant_missing_manipulative`, read as "a reason this console
+ * doesn't recognise yet" until then). Was 15 on 16 Sep. This listed 6 for
  * long enough that NINE live reasons rendered as "a reason this console doesn't
  * recognise yet" - and eight of the nine are calculation reasons, on exactly the
  * variant the review screen does not draw a tab for yet (SCRUM-136). A teacher
@@ -167,6 +169,7 @@ export type SegmentReviewReason =
   | "calculation_step_unknown_input_type"
   | "calculation_step_missing_answer"
   | "calculation_step_missing_options"
+  | "calculation_variant_missing_manipulative"
   | "calculation_segment_has_no_interactive_delivery"
   | "model_flagged_for_review";
 
@@ -213,8 +216,9 @@ export interface LessonSegment extends SegmentVariants {
 export interface SegmentApproval {
   lessonId: string;
   segmentId: string;
-  approvedAt: string;
-  approvedBy: string;
+  /** Nullable in the contract, like the segment's own fields above. */
+  approvedAt: string | null;
+  approvedBy: string | null;
   approvedSegmentCount: number;
   segmentCount: number;
   lessonApproved: boolean;
