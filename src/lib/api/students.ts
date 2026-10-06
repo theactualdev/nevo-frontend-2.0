@@ -436,6 +436,23 @@ export const studentsApi = {
       { classId },
     ),
 
+  /**
+   * Clear a child's PIN so they choose a new one themselves. SCRUM-216.
+   * POST /api/v1/students/{student_id}/pin/clear
+   *
+   * A CLEAR, NOT A RESET. It never accepts, returns or generates a PIN, so
+   * there is no path by which an adult learns or chooses one. The old PIN
+   * stops working, the child's sessions end, and the child sets the next one
+   * through the student entry - a door open only while the PIN is cleared.
+   *
+   * THE CHILD'S TEACHERS CALL IT, from the class roster (C05). Admin's
+   * console dropped its own control on 6 Oct for exactly that reason: the
+   * person who can recognise the child is the one who should answer for them.
+   * Scoped server-side to a class this teacher takes.
+   */
+  clearPin: (studentId: string) =>
+    api.post<PinCleared>(`/api/v1/students/${studentId}/pin/clear`),
+
   /** Step one of two. Reversible, keeps everything, frees the seat. */
   deactivate: (studentId: string) =>
     api.post<void>(`/api/v1/students/${studentId}/deactivate`),
@@ -520,6 +537,18 @@ export const studentsApi = {
 };
 
 /** One misconception several students in a class share (C09). */
+/**
+ * What comes back from clearing a child's PIN (SCRUM-216). No PIN in it, by
+ * design: nobody but the child ever sets one, and nobody is told the old one.
+ */
+export interface PinCleared {
+  studentId: string;
+  clearedAt: string;
+  /** Always true: the child chooses the next PIN, at their next sign-in. */
+  childSetsNext?: boolean;
+  pinLength?: number;
+}
+
 export interface ClassMisconception {
   conceptId: string;
   /** Nullable in the contract: a concept the engine has no name for. */
