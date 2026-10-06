@@ -10,6 +10,7 @@ import { LessonPlayer } from "./LessonPlayer";
 import { LESSON_STATUS } from "@/lib/api/lessons";
 import { clearSession, setSession } from "@/lib/auth/session";
 import type { AdaptationPlan, Lesson } from "@/lib/types";
+import { loadCheckOutcome, loadReviewAnswers } from "./reviewStore";
 
 /**
  * The checks and the review, as the player wires them on 1 Oct.
@@ -22,6 +23,8 @@ import type { AdaptationPlan, Lesson } from "@/lib/types";
  *      "You strengthened this concept" showed whatever happened.
  * B28  The review reports what happened (`outcome`), not a verdict.
  * D30  The reading accommodation reaches the checks, not only the segments.
+ * B49  A check left part way reopens where it was left, the same day.
+ * B26  "From the check-in" is the server's, from the completion write.
  */
 
 const SESSION = "4f1c2a9e-8b7d-4c3a-9e2f-1a2b3c4d5e6f";
@@ -34,21 +37,23 @@ const progress = vi.hoisted(() => ({
   positionSaved: false,
   completionSaved: false,
   completionFailed: false,
+  /** The newest progress write's answer - see `useLessonProgress.saved`. */
+  saved: null as unknown,
 }));
 vi.mock("@/hooks/useLessonProgress", () => ({
   useLessonProgress: () => ({ ...progress }),
 }));
 
-const { push, trackEvent, recordReview, saveAttempt, endings } = vi.hoisted(
-  () => ({
+const { push, trackEvent, recordReview, saveAttempt, attempts, endings } =
+  vi.hoisted(() => ({
     push: vi.fn(),
     trackEvent: vi.fn(),
     recordReview: vi.fn(),
     saveAttempt: vi.fn(),
+    attempts: vi.fn(),
     /** How the signal session was said to end, render by render. */
     endings: [] as unknown[],
-  }),
-);
+  }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, replace: vi.fn(), back: vi.fn() }),
 }));
@@ -79,6 +84,7 @@ vi.mock("@/lib/api/lessons", async (importOriginal) => {
     lessonsApi: {
       ...actual.lessonsApi,
       saveAttempt: (...a: unknown[]) => saveAttempt(...a),
+      attempts: (...a: unknown[]) => attempts(...a),
     },
   };
 });
@@ -165,6 +171,9 @@ beforeEach(() => {
   progress.positionSaved = false;
   progress.completionSaved = false;
   progress.completionFailed = false;
+  progress.saved = null;
+  attempts.mockReset().mockResolvedValue([]);
+  window.sessionStorage.clear();
   push.mockReset();
   trackEvent.mockReset();
   recordReview.mockReset().mockResolvedValue({});
@@ -188,6 +197,8 @@ describe("leaving the after-lesson check (D36)", () => {
 
     expect(progress.report).toHaveBeenCalledWith(LESSON_STATUS.EXITED, {
       segment: 1,
+      // B49: the place in the check - question 2, the next one to ask.
+      check: 1,
     });
     expect(statuses()).not.toContain(LESSON_STATUS.COMPLETED);
     expect(push).toHaveBeenCalledWith("/student/dashboard");
@@ -232,6 +243,8 @@ describe("leaving the after-lesson check (D36)", () => {
     leave();
 
     expect(statuses()).toEqual([LESSON_STATUS.EXITED]);
+    // Not begun, so no place in it to keep.
+    expect(progress.report.mock.calls[0][1]).not.toHaveProperty("check");
     expect(push).toHaveBeenCalledWith("/student/dashboard");
   });
 });
@@ -516,5 +529,173 @@ describe("the reading accommodation reaches the checks (D30)", () => {
 
     const label = await screen.findByText("The numerator");
     expect(label.className).not.toContain("text-[18px]");
+  });
+});
+
+/** The last segment's way into the check, without pressing Start. */
+const intoCheck = async () => {
+  next();
+  fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
+  next();
+};
+
+const inAnHour = () => new Date(Date.now() + 3_600_000).toISOString();
+
+describe("picking a check back up (B49)", () => {
+  it("reopens on the question it was left at, the same day", async () => {
+    progress.saved = {
+      status: "in_progress",
+      checkPosition: 1,
+      checkResumableUntil: inAnHour(),
+    };
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+
+    await intoCheck();
+
+    expect(screen.getByRole("heading", { name: "Question 2?" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Start" })).toBeNull();
+  });
+
+  it("starts fresh once the server's day for it is over", async () => {
+    progress.saved = {
+      status: "in_progress",
+      checkPosition: 1,
+      checkResumableUntil: new Date(Date.now() - 1000).toISOString(),
+    };
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+
+    await intoCheck();
+
+    expect(screen.getByRole("button", { name: "Start" })).toBeTruthy();
+    expect(attempts).not.toHaveBeenCalled();
+  });
+
+  it("reads back the answers given before, for Review Answers", async () => {
+    progress.saved = {
+      status: "in_progress",
+      checkPosition: 1,
+      checkResumableUntil: inAnHour(),
+    };
+    attempts.mockResolvedValue([
+      {
+        questionId: "cp-1",
+        source: "assessment",
+        attemptNumber: 1,
+        answer: 3,
+        correct: false,
+      },
+    ]);
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+
+    await intoCheck();
+
+    expect(attempts).toHaveBeenCalledWith("lesson-1", SESSION);
+    await waitFor(() =>
+      expect(loadReviewAnswers("lesson-1")).toEqual([
+        { questionIndex: 0, selectedId: "3" },
+      ]),
+    );
+  });
+
+  it("never reopens a lesson nothing writes", async () => {
+    // The authored walkthrough has no progress row to resume from.
+    progress.saved = {
+      status: "in_progress",
+      checkPosition: 1,
+      checkResumableUntil: inAnHour(),
+    };
+    render(<LessonPlayer lesson={LESSON} plan={null} />);
+
+    await intoCheck();
+
+    expect(screen.getByRole("button", { name: "Start" })).toBeTruthy();
+  });
+});
+
+describe("the check ending completes the lesson", () => {
+  it("writes the completion as the result appears, not on the next tap", async () => {
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    await toAssessment();
+    answer("Two");
+    answer("Two");
+
+    await waitFor(() =>
+      expect(statuses()).toContain(LESSON_STATUS.COMPLETED),
+    );
+    // The child is still on the result.
+    expect(screen.getByRole("button", { name: "Continue" })).toBeTruthy();
+  });
+
+  it("waits for the last answer to be stored first", async () => {
+    // The server reads the check-in's outcome from the answers it holds.
+    let store: () => void = () => {};
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    await toAssessment();
+    answer("Two");
+    saveAttempt.mockImplementation(
+      () => new Promise<void>((resolve) => (store = resolve)),
+    );
+    answer("Two");
+
+    await new Promise((r) => setTimeout(r, 0));
+    expect(statuses()).not.toContain(LESSON_STATUS.COMPLETED);
+
+    store();
+    await waitFor(() =>
+      expect(statuses()).toContain(LESSON_STATUS.COMPLETED),
+    );
+  });
+});
+
+describe("from the check-in (B26)", () => {
+  const completed = {
+    lessonId: "lesson-1",
+    status: "completed",
+    modulePosition: 0,
+    segmentPosition: 1,
+    intelligence: {},
+    masteredConcepts: [
+      { conceptId: null, conceptName: "Numerators", asked: 2, correct: 2 },
+    ],
+    revisitConcepts: [
+      { conceptId: null, conceptName: "Denominators", asked: 2, correct: 0 },
+    ],
+    resultNote: "You can say which number is on top.",
+  };
+
+  it("draws what the completion write brought back, and keeps it for the summary", async () => {
+    const { rerender } = render(
+      <LessonPlayer lesson={LESSON} plan={null} live />,
+    );
+    await toAssessment();
+    answer("Two");
+    answer("Two");
+    expect(screen.queryByText("Numerators")).toBeNull();
+
+    // The completion lands.
+    progress.saved = completed;
+    rerender(<LessonPlayer lesson={LESSON} plan={null} live />);
+
+    expect(screen.getByText("Numerators")).toBeTruthy();
+    expect(screen.getByText(/Denominators/)).toBeTruthy();
+    expect(screen.getByText("You can say which number is on top.")).toBeTruthy();
+    // Concepts, never the counts behind them (rule 9).
+    expect(document.body.textContent).not.toMatch(/\d/);
+    expect(loadCheckOutcome("lesson-1")).toEqual({
+      mastered: ["Numerators"],
+      revisit: ["Denominators"],
+      note: "You can say which number is on top.",
+    });
+  });
+
+  it("draws nothing before it lands", async () => {
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    await toAssessment();
+    answer("Two");
+    answer("Two");
+
+    expect(screen.queryByText(/revisit soon/)).toBeNull();
+    expect(document.querySelectorAll(".shadow-elevation-1")).toHaveLength(0);
   });
 });

@@ -200,3 +200,228 @@ describe("a spoken question (B16)", () => {
     expect(document.querySelector("audio")).toBeNull();
   });
 });
+
+
+describe("where a child left the check (B49)", () => {
+  const leaveWith = () => {
+    const onLeave = vi.fn();
+    render(
+      <AfterLessonAssessment
+        assessment={ASSESSMENT}
+        onFinish={() => {}}
+        onLeave={onLeave}
+      />,
+    );
+    return onLeave;
+  };
+  const leave = () =>
+    fireEvent.click(screen.getByRole("button", { name: "Leave for now" }));
+
+  it("is no place at all from the intro - the check has not begun", () => {
+    const onLeave = leaveWith();
+
+    leave();
+
+    expect(onLeave).toHaveBeenCalledWith();
+  });
+
+  it("is the question on screen when it has not been answered", () => {
+    const onLeave = leaveWith();
+    start();
+
+    leave();
+
+    expect(onLeave).toHaveBeenCalledWith(0);
+  });
+
+  it("is the next question once one has been answered", () => {
+    const onLeave = leaveWith();
+    start();
+    pick("A"); // right: on to question 2
+
+    leave();
+
+    expect(onLeave).toHaveBeenCalledWith(1);
+  });
+
+  it("is past an answer already confirmed, even while its note shows", () => {
+    // A wrong answer stays on screen with its recovery note. It is given, so
+    // coming back to it would ask the child the same question twice.
+    const onLeave = leaveWith();
+    start();
+    pick("B");
+
+    leave();
+
+    expect(onLeave).toHaveBeenCalledWith(1);
+  });
+});
+
+describe("picking the check back up (B49)", () => {
+  it("opens on the question it was left at, past the intro", () => {
+    render(
+      <AfterLessonAssessment
+        assessment={ASSESSMENT}
+        onFinish={() => {}}
+        resumeAt={2}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "Question 3?" })).toBeTruthy();
+    expect(screen.getByText("Question 3 of 4")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Start" })).toBeNull();
+  });
+
+  it("opens on the result when every question had been answered", () => {
+    render(
+      <AfterLessonAssessment
+        assessment={ASSESSMENT}
+        onFinish={() => {}}
+        resumeAt={4}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Continue" })).toBeTruthy();
+  });
+
+  it("counts what landed before the exit", () => {
+    // Two right before leaving, two wrong after: something landed.
+    render(
+      <AfterLessonAssessment
+        assessment={ASSESSMENT}
+        onFinish={() => {}}
+        resumeAt={2}
+        landedBefore={2}
+      />,
+    );
+    for (let i = 0; i < 2; i++) {
+      pick("B");
+      fireEvent.click(screen.getByRole("button", { name: "Next question" }));
+    }
+
+    expect(
+      screen.getByRole("heading", { name: "You’re getting the hang of this" }),
+    ).toBeTruthy();
+  });
+
+  it("claims nothing landed only when it knows", () => {
+    // What landed before could not be read back, so "nothing" is unknown.
+    render(
+      <AfterLessonAssessment
+        assessment={ASSESSMENT}
+        onFinish={() => {}}
+        resumeAt={4}
+        landedBefore={null}
+      />,
+    );
+
+    expect(screen.queryByText(/didn.t land yet/)).toBeNull();
+  });
+
+  it("holds the heading while that is still being read", () => {
+    render(
+      <AfterLessonAssessment
+        assessment={ASSESSMENT}
+        onFinish={() => {}}
+        resumeAt={4}
+        landedBefore={null}
+        landedPending
+      />,
+    );
+
+    // Kept in place, unseen, so one heading is not swapped for another.
+    expect(screen.queryByRole("heading")).toBeNull();
+    expect(document.querySelector("h2")?.closest(".invisible")).toBeTruthy();
+  });
+});
+
+describe("the end of the check", () => {
+  it("is told once, as the result appears", () => {
+    const onComplete = vi.fn();
+    render(
+      <AfterLessonAssessment
+        assessment={ASSESSMENT}
+        onFinish={() => {}}
+        onComplete={onComplete}
+      />,
+    );
+    start();
+    pick("A");
+    pick("A");
+    pick("A");
+    expect(onComplete).not.toHaveBeenCalled();
+
+    pick("B");
+    fireEvent.click(screen.getByRole("button", { name: "Next question" }));
+
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("from the check-in (B26)", () => {
+  const AUTHORED: Assessment = {
+    ...ASSESSMENT,
+    masteredConcepts: ["Sample concept"],
+    resultNote: "Sample note.",
+  };
+  const finish = () => {
+    start();
+    for (let i = 0; i < 4; i++) pick("A");
+  };
+
+  it("draws the server's concepts and note, by name", () => {
+    render(
+      <AfterLessonAssessment
+        assessment={ASSESSMENT}
+        onFinish={() => {}}
+        outcome={{
+          mastered: ["Adding like fractions"],
+          revisit: ["Unlike denominators"],
+          note: "You showed you can add fractions with the same bottom.",
+        }}
+      />,
+    );
+    finish();
+
+    expect(screen.getByText("Adding like fractions")).toBeTruthy();
+    expect(screen.getByText(/Unlike denominators/)).toBeTruthy();
+    expect(
+      screen.getByText("You showed you can add fractions with the same bottom."),
+    ).toBeTruthy();
+  });
+
+  it("draws nothing where the server sent nothing", () => {
+    // Rule 5: an empty answer is not a gap to fill from the sample.
+    render(
+      <AfterLessonAssessment
+        assessment={AUTHORED}
+        onFinish={() => {}}
+        outcome={{ mastered: [], revisit: [], note: "" }}
+      />,
+    );
+    finish();
+
+    expect(screen.queryByText("Sample concept")).toBeNull();
+    expect(screen.queryByText("Sample note.")).toBeNull();
+  });
+
+  it("keeps a concept the server counted as landed where it put it", () => {
+    // The client's own count moved concepts to "revisit" when nothing landed.
+    // The server's split is its answer, not ours to rearrange.
+    render(
+      <AfterLessonAssessment
+        assessment={ASSESSMENT}
+        onFinish={() => {}}
+        outcome={{ mastered: ["Halves"], revisit: [], note: "" }}
+      />,
+    );
+    start();
+    for (let i = 0; i < 4; i++) {
+      pick("B");
+      fireEvent.click(screen.getByRole("button", { name: "Next question" }));
+    }
+
+    expect(screen.getByText("Halves").textContent).toBe("Halves");
+    expect(screen.queryByText(/revisit soon/)).toBeNull();
+  });
+});
