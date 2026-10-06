@@ -116,22 +116,71 @@ describe("Let my teacher know", () => {
     ).toHaveAttribute("href", "/auth/login?next=%2Fstudent%2Flessons");
   });
 
-  it("says a refused ask was not sent, and lets them try again", async () => {
+  /*
+   * D60: 00a's "Request didn't send" replaces the whole body, as the sent
+   * state does. It used to keep the asking body and add a line of ours.
+   */
+  it("draws 00a's didn't-send state whole when the ask is refused", async () => {
     requestPinReset.mockRejectedValueOnce(new Error("503"));
     const ada = rememberAdaAndKofi();
-    await page({ child: ada });
+    await page({ child: ada, next: "/student/lessons" });
 
     fireEvent.click(
       await screen.findByRole("button", { name: "Let my teacher know" }),
     );
 
     expect(
-      await screen.findByText(/couldn.t send that just now/),
+      await screen.findByRole("heading", { name: "That didn't send" }),
     ).toBeInTheDocument();
-    expect(screen.queryByText("Your teacher knows")).toBeNull();
     expect(
-      screen.getByRole("button", { name: "Let my teacher know" }),
-    ).toBeEnabled();
+      screen.getByText(
+        "That's on us, not you. Try letting your teacher know again.",
+      ),
+    ).toBeInTheDocument();
+    // The asking body is gone, not added to.
+    expect(screen.queryByText("Forgot your PIN?")).toBeNull();
+    expect(document.querySelector('img[src*="error"]')).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Let my teacher know" }),
+    ).toBeNull();
+    expect(screen.queryByText("Your teacher knows")).toBeNull();
+
+    // A primary Try again, above a ghost way back.
+    const retry = screen.getByRole("button", { name: "Try again" });
+    const back = screen.getByRole("link", { name: "Back to sign in" });
+    expect(retry).toBeEnabled();
+    expect(retry).not.toHaveAttribute("data-variant");
+    expect(back).toHaveAttribute("data-variant", "ghost");
+    expect(back).toHaveAttribute("href", "/auth/login?next=%2Fstudent%2Flessons");
+    expect(
+      retry.compareDocumentPosition(back) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("sends the same ask again on Try again, and says so only once it lands", async () => {
+    let accept: (v: unknown) => void = () => {};
+    requestPinReset
+      .mockRejectedValueOnce(new Error("503"))
+      .mockReturnValueOnce(new Promise((r) => (accept = r)));
+    const ada = rememberAdaAndKofi();
+    await page({ child: ada });
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Let my teacher know" }),
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
+
+    // Still the didn't-send state while it goes, and it cannot go twice.
+    expect(screen.getByText("That didn't send")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Try again/ }));
+    expect(requestPinReset).toHaveBeenCalledTimes(2);
+    expect(requestPinReset.mock.calls[1][0]).toEqual(
+      requestPinReset.mock.calls[0][0],
+    );
+
+    accept({});
+    expect(await screen.findByText("Your teacher knows")).toBeInTheDocument();
+    expect(screen.queryByText("That didn't send")).toBeNull();
   });
 
   it("is not there when there is no remembered child to ask for", async () => {
