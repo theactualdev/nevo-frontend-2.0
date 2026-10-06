@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import { ArrowRight, Leaf } from "lucide-react";
 import { IllustrationWrapper } from "@/components/shared";
 import type { VisualContent } from "@/lib/types";
+import { cn } from "@/lib/utils";
 import { type MediaFailReason, useMediaSource } from "./useMediaSource";
 
 /**
@@ -21,6 +23,12 @@ import { type MediaFailReason, useMediaSource } from "./useMediaSource";
  * short line under it says the picture did not load, in the whole-lesson
  * failure's words scoped to the one picture; the rest of the segment stays as
  * it is and the lesson carries on. `onMediaFailed` tells the engine.
+ *
+ * THE SMALL COPY PAINTS FIRST (B47). `previewSrc` is the same picture, much
+ * smaller, so on a slow connection the child sees it at once and the full one
+ * takes its place when it has arrived. Only ever a stand-in for the picture
+ * still on its way: absent, or failing itself, it simply is not drawn, and it
+ * never stands in for a picture that failed.
  */
 export function VisualSegment({
   content,
@@ -40,7 +48,13 @@ export function VisualSegment({
   // Only a picture that was there to load: inline art cannot fail, and a
   // segment with no picture at all is the quiet tile and nothing more.
   const pictureFailed =
-    !(content.art && inlineArt) && Boolean(content.illustration) && media.failed;
+    !(content.art && inlineArt) &&
+    Boolean(content.illustration) &&
+    media.failed;
+  const [arrived, setArrived] = useState(false);
+  const [previewFailed, setPreviewFailed] = useState(false);
+  const preview =
+    !arrived && !previewFailed ? content.illustration?.previewSrc : undefined;
 
   return (
     <article>
@@ -63,7 +77,19 @@ export function VisualSegment({
             {inlineArt}
           </div>
         ) : content.illustration && media.src && !media.failed ? (
-          <div className="flex justify-center">
+          // One cell, so the full picture lands exactly over its small copy.
+          <div className="grid justify-items-center">
+            {preview && (
+              <IllustrationWrapper
+                src={preview}
+                // The picture's description is on the full one above it.
+                alt=""
+                width={content.illustration.width ?? 640}
+                height={content.illustration.height ?? 480}
+                onError={() => setPreviewFailed(true)}
+                className="w-full max-w-[420px] [grid-area:1/1]"
+              />
+            )}
             <IllustrationWrapper
               key={media.key}
               src={media.src}
@@ -71,7 +97,11 @@ export function VisualSegment({
               width={content.illustration.width ?? 640}
               height={content.illustration.height ?? 480}
               onError={media.onError}
-              className="w-full max-w-[420px]"
+              onLoad={() => setArrived(true)}
+              className={cn(
+                "w-full max-w-[420px] [grid-area:1/1]",
+                preview && "opacity-0",
+              )}
             />
           </div>
         ) : (
