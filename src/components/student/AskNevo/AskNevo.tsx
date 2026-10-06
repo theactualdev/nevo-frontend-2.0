@@ -264,8 +264,14 @@ export function AskNevo() {
     setView("chat");
     history.closeThread();
     setMessages((m) => [...m, { who: "user", text }]);
-    // That the child asked, and when. Never what: their words stay out.
-    trackEvent(SIGNAL_EVENT_TYPES.ASK_NEVO_QUESTION_STUDENT);
+    // That the child asked, where, and when. Never what: their words stay out.
+    // The catalogue's `interactionId` and `questionCategory` are the server's,
+    // and neither exists until it answers - so they are left out, not made up.
+    const asker = asUuid(user?.id);
+    trackEvent(SIGNAL_EVENT_TYPES.ASK_NEVO_QUESTION_STUDENT, {
+      ...(asker ? { studentId: asker } : {}),
+      currentPage: pathname,
+    });
     setThinking(true);
 
     // Live assistant first. When the backend can't answer, a signed-in child
@@ -310,6 +316,8 @@ export function AskNevo() {
       if (res?.canHelp === false)
         trackEvent(SIGNAL_EVENT_TYPES.ASK_NEVO_CANNOT_HELP, {
           interactionId: res.interactionId,
+          role: "student",
+          currentPage: pathname,
         });
       setMessages((m) => [
         ...m,
@@ -541,14 +549,17 @@ export function AskNevo() {
                           // IA 31: "Message my teacher -> closes drawer ->
                           // Connect Tab". The drawer lives in the shell, so
                           // without this it stayed open over Connect.
-                          trackEvent(
-                            SIGNAL_EVENT_TYPES.ASK_NEVO_REDIRECT_USED,
-                            message.interactionId
+                          const target = "/student/connect";
+                          trackEvent(SIGNAL_EVENT_TYPES.ASK_NEVO_REDIRECT_USED, {
+                            ...(message.interactionId
                               ? { interactionId: message.interactionId }
-                              : undefined,
-                          );
+                              : {}),
+                            role: "student",
+                            currentPage: pathname,
+                            redirectTarget: target,
+                          });
                           setOpen(false);
-                          router.push("/student/connect");
+                          router.push(target);
                         }}
                         className="inline-flex h-11 cursor-pointer items-center gap-2 self-start rounded-[10px] bg-nevo-navy px-4 text-sm font-medium text-nevo-cream transition-[filter] hover:brightness-108 active:scale-[0.98]"
                       >
