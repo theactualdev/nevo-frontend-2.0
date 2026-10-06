@@ -2,11 +2,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ClassStudent } from "@/lib/api/classes";
 
-const { useClassRoster, useTeacherFlags, useClassLessons } = vi.hoisted(() => ({
+const { useClassRoster, useTeacherFlags, useClassLessons, clearPin } = vi.hoisted(() => ({
   useClassRoster: vi.fn(),
   useTeacherFlags: vi.fn(),
   useClassLessons: vi.fn(),
+  clearPin: vi.fn(),
 }));
+
+vi.mock("@/lib/api/students", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/students")>();
+  return { ...actual, studentsApi: { ...actual.studentsApi, clearPin } };
+});
 
 vi.mock("@/hooks/useClassRoster", async (importOriginal) => ({
   // `studentName` and `lastSeenLine` are real: they are the row's own logic and
@@ -137,13 +143,13 @@ describe("observation chips", () => {
 });
 
 describe("seat context", () => {
-  it("shows the seat rather than the login identifier", () => {
-    // A teacher looking at their class wants the seat; the login identifier is
-    // an account detail that belongs on the admin roster.
+  it("shows the login identifier, with the seat beside it", () => {
+    // SCRUM-133: the identifier is how a child finds out their ID - they ask
+    // their teacher. It used to give way to the seat, so a class with seats
+    // showed nobody's ID.
     render(<LiveClassDetail klass={klass} />);
 
-    expect(screen.getByText("Seat 12")).toBeInTheDocument();
-    expect(screen.queryByText("amara.o")).not.toBeInTheDocument();
+    expect(screen.getByText("amara.o · Seat 12")).toBeInTheDocument();
   });
 
   it("falls back to the login identifier when there is no seat", () => {
@@ -476,5 +482,153 @@ describe("a flags read that failed", () => {
     render(<LiveClassDetail klass={klass} />);
 
     expect(screen.queryByText(/no one below is marked/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Clearing a forgotten PIN (SCRUM-216 / SCRUM-217, C05). A clear, never a PIN:
+ * nothing here shows, accepts or generates one.
+ */
+describe("clearing a child's PIN", () => {
+  beforeEach(() => {
+    clearPin.mockReset().mockResolvedValue({ studentId: "s-1", clearedAt: "2026-10-06T09:00:00Z" });
+  });
+
+  const openMenu = (name = "Amara") =>
+    fireEvent.click(screen.getByRole("button", { name: `More options for ${name}` }));
+
+  it("offers the profile and Clear PIN from the row's menu", () => {
+    render(<LiveClassDetail klass={klass} />);
+    openMenu();
+
+    expect(screen.getByRole("menuitem", { name: "View profile" })).toHaveAttribute(
+      "href",
+      "/teacher/students/s-1?class=c-1",
+    );
+    expect(screen.getByRole("menuitem", { name: "Clear PIN" })).toBeInTheDocument();
+  });
+
+  it("clears this child's PIN and says the child chooses the next one", async () => {
+    render(<LiveClassDetail klass={klass} />);
+    openMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Clear PIN" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Amara’s PIN is cleared" });
+    expect(clearPin).toHaveBeenCalledWith("s-1");
+    expect(dialog).toHaveTextContent("Amara chooses a new PIN at the next sign-in.");
+    // SCRUM-217: or a teacher goes looking for a PIN to read out.
+    expect(dialog).toHaveTextContent("You won’t be able to see the new PIN. Only Amara will know it.");
+    expect(dialog.textContent).not.toMatch(/\d{4}/);
+  });
+
+  it("marks the row once it is cleared, and closes on Done", async () => {
+    render(<LiveClassDetail klass={klass} />);
+    openMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Clear PIN" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Done" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByText(/PIN cleared · new one not chosen yet/)).toBeInTheDocument();
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  it("says so when the clear failed, and claims nothing", async () => {
+    clearPin.mockRejectedValue(new Error("500"));
+    render(<LiveClassDetail klass={klass} />);
+    openMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Clear PIN" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "We couldn’t clear Amara’s PIN just now. Nothing has changed.",
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByText(/PIN cleared/)).not.toBeInTheDocument();
+  });
+
+  it("holds the item while the clear is in flight", () => {
+    clearPin.mockReturnValue(new Promise(() => {}));
+    render(<LiveClassDetail klass={klass} />);
+    openMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Clear PIN" }));
+
+    expect(screen.getByRole("menuitem", { name: /Clearing/ })).toBeDisabled();
+  });
+
+  it("explains in place on a deactivated child, and clears nothing", () => {
+    useClassRoster.mockReturnValue({
+      students: [seg({ status: "deactivated" })],
+      loading: false,
+      failed: false,
+    });
+    render(<LiveClassDetail klass={klass} />);
+    openMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Clear PIN" }));
+
+    expect(
+      screen.getByText(
+        "Amara can’t sign in while the account is deactivated, so there’s no PIN to clear yet. Your admin manages access.",
+      ),
+    ).toBeInTheDocument();
+    expect(clearPin).not.toHaveBeenCalled();
+  });
+
+  it("puts account access ahead of a cleared PIN on the row", async () => {
+    useClassRoster.mockReturnValue({
+      students: [seg({ status: "invited" })],
+      loading: false,
+      failed: false,
+    });
+    render(<LiveClassDetail klass={klass} />);
+    openMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Clear PIN" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Done" }));
+
+    expect(screen.getByText("Invited")).toBeInTheDocument();
+    expect(screen.queryByText(/PIN cleared · new one not chosen yet/)).not.toBeInTheDocument();
+  });
+
+  it("closes the menu on Escape and on a press elsewhere", () => {
+    render(<LiveClassDetail klass={klass} />);
+    openMenu();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+
+    openMenu();
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  it("opens one row's menu at a time", () => {
+    useClassRoster.mockReturnValue({
+      students: [seg(), seg({ studentId: "s-2", firstName: "Bello", lastName: "Ibrahim", displayName: "Bello Ibrahim" })],
+      loading: false,
+      failed: false,
+    });
+    render(<LiveClassDetail klass={klass} />);
+    openMenu("Amara");
+    openMenu("Bello");
+
+    expect(screen.getAllByRole("menu")).toHaveLength(1);
+    expect(screen.getByRole("menu", { name: "Options for Bello" })).toBeInTheDocument();
+  });
+
+  it("starts each opening clean", async () => {
+    clearPin.mockRejectedValueOnce(new Error("500"));
+    render(<LiveClassDetail klass={klass} />);
+    openMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Clear PIN" }));
+    await screen.findByRole("alert");
+    openMenu();
+    openMenu();
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("tells the teacher what Clear PIN does, over the rows", () => {
+    render(<LiveClassDetail klass={klass} />);
+
+    expect(
+      screen.getByText(/If a child forgets their PIN, you can clear it and they choose a new one themselves/),
+    ).toBeInTheDocument();
   });
 });
