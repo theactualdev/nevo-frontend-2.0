@@ -24,7 +24,7 @@ export interface WarmUpItem {
  *    flight).
  *  - `none`: a signed-in child, and the engine named nothing this screen can
  *    run - the read failed, or the dimension is not one of our six, or the
- *    day's task is the question and no question came with it.
+ *    day's task is the question and none was served.
  *  - `ready`: run this. `live` is false only for the signed-out walkthrough.
  *
  * `doneToday` is the account's answer to "has this child done today's?" (B10,
@@ -88,7 +88,16 @@ export function useWarmUpPrompt(visitor: BaselineDimension): WarmUpPrompt {
   return answer ?? { state: "waiting" };
 }
 
-/** The served prompt as something the run can render, or `none`. */
+/**
+ * The served prompt as something the run can render, or `none`.
+ *
+ * A QUESTION ONLY WHEN `served` SAYS ONE WAS SERVED (B65, 5 Oct). `question`
+ * and `options` became optional with the flag beside them, because only the
+ * question task has a question and requiring them of all six made the other
+ * five look like served questions with nothing in them. So the flag decides,
+ * not the dimension and not whatever text happens to be present; an absent
+ * flag is a deployment that does not say, and is not read as served.
+ */
 export function toPrompt(res: Partial<RecalibratePrompt>): WarmUpPrompt {
   const dimension = res.dimension;
   // Only a boolean is an answer. Absent is a deployment that does not say.
@@ -108,7 +117,9 @@ export function toPrompt(res: Partial<RecalibratePrompt>): WarmUpPrompt {
           o.label.trim() !== "",
       )
     : [];
+  const served = res.served === true;
   const item: WarmUpItem | null =
+    served &&
     typeof res.itemId === "string" &&
     res.itemId !== "" &&
     typeof res.question === "string" &&
@@ -120,8 +131,9 @@ export function toPrompt(res: Partial<RecalibratePrompt>): WarmUpPrompt {
           options: options.map(({ value, label }) => ({ value, label })),
         }
       : null;
-  // The subject-knowledge task IS the served question. Without one there is
-  // nothing to ask, and the frame's fixture is not this child's question.
+  // The subject-knowledge task has no device version: it IS a served
+  // question. Without one there is nothing to ask, and the frame's fixture is
+  // not this child's question.
   if (dimension === "domain" && !item) return { state: "none", ...done };
   return {
     state: "ready",

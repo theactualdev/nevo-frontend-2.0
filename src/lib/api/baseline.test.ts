@@ -70,13 +70,67 @@ describe("answerPrompt", () => {
   });
 });
 
-describe("submitWithRetry", () => {
-  it("still posts the vector to the submit endpoint", async () => {
-    await baselineApi.submitWithRetry("run-1", [{ module: "warmup" }]);
+describe("deviceTaskDone (B54)", () => {
+  it("tells the prompt's endpoint the device task finished, with no item", async () => {
+    // A completion with no item is what sets `doneToday` on a device-task
+    // day; nothing at all was sent on those days before.
+    await expect(baselineApi.deviceTaskDone("child-1")).resolves.toBe(true);
 
-    expect(post).toHaveBeenCalledWith("/api/baseline/submit", {
+    expect(post).toHaveBeenCalledWith(
+      "/api/baseline/recalibrate-prompt/child-1/response",
+      {},
+    );
+  });
+});
+
+describe("submitTrials (B9)", () => {
+  const trial = {
+    dimension: "attention",
+    condition: "incongruent",
+    response: "1",
+    correct: false,
+    responseTimeMs: 910,
+    probeItemId: null,
+  };
+
+  it("posts the trials raw to /trials, as the spec names the body", async () => {
+    await expect(baselineApi.submitTrials("run-1", [trial])).resolves.toBe(
+      true,
+    );
+
+    expect(post).toHaveBeenCalledWith("/api/baseline/trials", {
       sessionId: "run-1",
-      features: [{ module: "warmup" }],
+      trials: [trial],
     });
+  });
+
+  it("no longer sends a reduced vector to /submit", async () => {
+    await baselineApi.submitTrials("run-1", [trial]);
+
+    expect(post.mock.calls.map(([path]) => path)).not.toContain(
+      "/api/baseline/submit",
+    );
+    expect(baselineApi).not.toHaveProperty("submitWithRetry");
+    expect(baselineApi).not.toHaveProperty("submit");
+  });
+
+  it("sends nothing for a run with no answers, which the contract refuses", async () => {
+    await expect(baselineApi.submitTrials("run-1", [])).resolves.toBe(false);
+
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it("tries again after a blip, and not after a refusal", async () => {
+    post.mockRejectedValueOnce(new ApiError(503)).mockResolvedValueOnce({});
+    const landed = baselineApi.submitTrials("run-1", [trial]);
+    await vi.advanceTimersByTimeAsync(1000);
+    await expect(landed).resolves.toBe(true);
+
+    post.mockReset();
+    post.mockRejectedValue(new ApiError(422));
+    await expect(baselineApi.submitTrials("run-1", [trial])).resolves.toBe(
+      false,
+    );
+    expect(post).toHaveBeenCalledTimes(1);
   });
 });

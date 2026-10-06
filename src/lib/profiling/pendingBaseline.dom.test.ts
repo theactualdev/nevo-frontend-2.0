@@ -12,10 +12,10 @@ import { clearSession, setSession } from "@/lib/auth/session";
 /**
  * What this exists to stop happening.
  *
- * `POST /api/baseline/submit` is Bearer. The profiling run is phase 0 of the
+ * The baseline's write is Bearer. The profiling run is phase 0 of the
  * onboarding sequence; the account is not created until phase 2. So the submit
- * went out with no token, took the 401 as final (`submitWithRetry` does not
- * retry a 4xx), and a `.finally()` purged the capture anyway - destroying the
+ * went out with no token, took the 401 as final (a 4xx is not retried), and a
+ * `.finally()` purged the capture anyway - destroying the
  * whole measurement, in the run that happens once, for every child except those
  * arriving by SSO.
  *
@@ -28,7 +28,17 @@ import { clearSession, setSession } from "@/lib/auth/session";
  * sent to the wrong child.
  */
 
-const FEATURES = [{ module: "grid_span", span: 4 }];
+/** What is parked since B9: the run's trials, raw, not a reduced vector. */
+const TRIALS = [
+  {
+    dimension: "wmc",
+    condition: "length_3",
+    response: "5",
+    correct: true,
+    responseTimeMs: 420,
+    probeItemId: null,
+  },
+];
 
 const signInAs = (userId: string) =>
   setSession({
@@ -53,22 +63,22 @@ describe("a baseline waiting for its account", () => {
   it("survives the run that captured it", () => {
     // The component that captured this unmounts two screens before the account
     // exists. Holding it in a ref is how the original was lost.
-    holdBaseline("sess-1", FEATURES);
+    holdBaseline("sess-1", TRIALS);
 
-    expect(readPendingBaseline()?.features).toEqual(FEATURES);
+    expect(readPendingBaseline()?.trials).toEqual(TRIALS);
   });
 
   it("goes out once the account it belongs to exists", async () => {
     const submit = vi
-      .spyOn(baselineApi, "submitWithRetry")
+      .spyOn(baselineApi, "submitTrials")
       .mockResolvedValue(true);
-    holdBaseline("sess-1", FEATURES);
+    holdBaseline("sess-1", TRIALS);
     signInAs("child-a");
 
     // `sess-1` is the run that parked it, which is what makes it this child's.
     await expect(flushPendingBaseline("child-a", "sess-1")).resolves.toBe(true);
 
-    expect(submit).toHaveBeenCalledWith("sess-1", FEATURES);
+    expect(submit).toHaveBeenCalledWith("sess-1", TRIALS);
     expect(readPendingBaseline()).toBeNull();
   });
 
@@ -84,10 +94,10 @@ describe("a baseline waiting for its account", () => {
    */
   it("does not send an earlier run's vector to the child onboarding now", async () => {
     const submit = vi
-      .spyOn(baselineApi, "submitWithRetry")
+      .spyOn(baselineApi, "submitTrials")
       .mockResolvedValue(true);
     // Child A's onboarding parked this and never completed.
-    holdBaseline("sess-a", FEATURES);
+    holdBaseline("sess-a", TRIALS);
     // Child B now finishes onboarding on the same tablet, with their OWN
     // session - the state the old guard could not tell from the good one.
     signInAs("child-b");
@@ -102,11 +112,11 @@ describe("a baseline waiting for its account", () => {
 
   it("does not send one child's warm-up under another child's account", async () => {
     const submit = vi
-      .spyOn(baselineApi, "submitWithRetry")
+      .spyOn(baselineApi, "submitTrials")
       .mockResolvedValue(true);
     // Child A is signed in and their warm-up submit fails, so it parks WITH
     // their id on it.
-    holdBaseline("sess-a", FEATURES, "child-a");
+    holdBaseline("sess-a", TRIALS, "child-a");
     // Child B then onboards on the same device.
     signInAs("child-b");
 
@@ -122,21 +132,21 @@ describe("a baseline waiting for its account", () => {
     // What the student shell does on every screen: no run to name, so only a
     // vector that carries its owner can go.
     const submit = vi
-      .spyOn(baselineApi, "submitWithRetry")
+      .spyOn(baselineApi, "submitTrials")
       .mockResolvedValue(true);
-    holdBaseline("sess-a", FEATURES, "child-a");
+    holdBaseline("sess-a", TRIALS, "child-a");
     signInAs("child-a");
 
     await expect(flushPendingBaseline("child-a")).resolves.toBe(true);
 
-    expect(submit).toHaveBeenCalledWith("sess-a", FEATURES);
+    expect(submit).toHaveBeenCalledWith("sess-a", TRIALS);
   });
 
   it("does not send a parked vector once consent has been withdrawn", async () => {
     // The case the capture-side gates cannot reach: parked while consent
     // stood, flushed after it was withdrawn.
     const submit = vi
-      .spyOn(baselineApi, "submitWithRetry")
+      .spyOn(baselineApi, "submitTrials")
       .mockResolvedValue(true);
     vi.spyOn(consentsApi, "myConsentGate").mockResolvedValue({
       studentId: "child-a",
@@ -145,7 +155,7 @@ describe("a baseline waiting for its account", () => {
       requiredType: "data_processing",
       status: "withdrawn",
     });
-    holdBaseline("sess-1", FEATURES, "child-a");
+    holdBaseline("sess-1", TRIALS, "child-a");
     signInAs("child-a");
 
     await expect(flushPendingBaseline("child-a")).resolves.toBe(false);
@@ -160,7 +170,7 @@ describe("a baseline waiting for its account", () => {
     // Three of the four statuses are `granted: false`, and only one of them
     // means stop. Reading `granted` instead of `status` would stop all three.
     const submit = vi
-      .spyOn(baselineApi, "submitWithRetry")
+      .spyOn(baselineApi, "submitTrials")
       .mockResolvedValue(true);
     vi.spyOn(consentsApi, "myConsentGate").mockResolvedValue({
       studentId: "child-a",
@@ -169,7 +179,7 @@ describe("a baseline waiting for its account", () => {
       requiredType: "data_processing",
       status: "pending",
     });
-    holdBaseline("sess-1", FEATURES, "child-a");
+    holdBaseline("sess-1", TRIALS, "child-a");
     signInAs("child-a");
 
     await expect(flushPendingBaseline("child-a")).resolves.toBe(true);
@@ -180,12 +190,12 @@ describe("a baseline waiting for its account", () => {
     // A bad minute at the backend must not silently stop delivering a
     // measurement for a guardian who did consent.
     const submit = vi
-      .spyOn(baselineApi, "submitWithRetry")
+      .spyOn(baselineApi, "submitTrials")
       .mockResolvedValue(true);
     vi.spyOn(consentsApi, "myConsentGate").mockRejectedValue(
       new Error("offline"),
     );
-    holdBaseline("sess-1", FEATURES, "child-a");
+    holdBaseline("sess-1", TRIALS, "child-a");
     signInAs("child-a");
 
     await expect(flushPendingBaseline("child-a")).resolves.toBe(true);
@@ -193,9 +203,9 @@ describe("a baseline waiting for its account", () => {
   });
   it("refuses an anonymous vector when no run is named", async () => {
     const submit = vi
-      .spyOn(baselineApi, "submitWithRetry")
+      .spyOn(baselineApi, "submitTrials")
       .mockResolvedValue(true);
-    holdBaseline("sess-1", FEATURES);
+    holdBaseline("sess-1", TRIALS);
     signInAs("child-a");
 
     await expect(flushPendingBaseline("child-a")).resolves.toBe(false);
@@ -208,9 +218,9 @@ describe("a baseline waiting for its account", () => {
   it("is NOT sent to whoever's token happens to be on the device", async () => {
     // The shared-tablet case: child A never signed out, child B sits the run.
     const submit = vi
-      .spyOn(baselineApi, "submitWithRetry")
+      .spyOn(baselineApi, "submitTrials")
       .mockResolvedValue(true);
-    holdBaseline("sess-b", FEATURES);
+    holdBaseline("sess-b", TRIALS);
     signInAs("child-a");
 
     await expect(flushPendingBaseline("child-b")).resolves.toBe(false);
@@ -222,9 +232,9 @@ describe("a baseline waiting for its account", () => {
 
   it("is not sent when there is no session at all", async () => {
     const submit = vi
-      .spyOn(baselineApi, "submitWithRetry")
+      .spyOn(baselineApi, "submitTrials")
       .mockResolvedValue(true);
-    holdBaseline("sess-1", FEATURES);
+    holdBaseline("sess-1", TRIALS);
 
     await expect(flushPendingBaseline("child-a")).resolves.toBe(false);
     expect(submit).not.toHaveBeenCalled();
@@ -234,16 +244,16 @@ describe("a baseline waiting for its account", () => {
   it("is kept when the submit fails, rather than thrown away", async () => {
     // This was the original defect in miniature: a failed submit took the only
     // copy of the measurement with it.
-    vi.spyOn(baselineApi, "submitWithRetry").mockResolvedValue(false);
-    holdBaseline("sess-1", FEATURES);
+    vi.spyOn(baselineApi, "submitTrials").mockResolvedValue(false);
+    holdBaseline("sess-1", TRIALS);
     signInAs("child-a");
 
     await expect(flushPendingBaseline("child-a")).resolves.toBe(false);
-    expect(readPendingBaseline()?.features).toEqual(FEATURES);
+    expect(readPendingBaseline()?.trials).toEqual(TRIALS);
   });
 
   it("stops being worth sending after a week", () => {
-    holdBaseline("sess-1", FEATURES);
+    holdBaseline("sess-1", TRIALS);
     const raw = JSON.parse(
       window.localStorage.getItem("nevo.baseline.pending") ?? "{}",
     );
@@ -267,7 +277,7 @@ describe("a baseline waiting for its account", () => {
         throw new Error("QuotaExceeded");
       });
 
-    expect(() => holdBaseline("sess-1", FEATURES)).not.toThrow();
+    expect(() => holdBaseline("sess-1", TRIALS)).not.toThrow();
     setItem.mockRestore();
   });
 
@@ -276,8 +286,47 @@ describe("a baseline waiting for its account", () => {
     expect(readPendingBaseline()).toBeNull();
   });
 
+  it("parks the trials, and sends them to the trials endpoint as they are", async () => {
+    // B9: the device sends the run as it happened. Nothing is reduced on the
+    // way in or on the way out.
+    const submit = vi.spyOn(baselineApi, "submitTrials").mockResolvedValue(true);
+    holdBaseline("sess-1", TRIALS, "child-a");
+    signInAs("child-a");
+
+    await flushPendingBaseline("child-a");
+
+    expect(submit).toHaveBeenCalledWith("sess-1", TRIALS);
+  });
+
+  it("drops a vector parked before B9 rather than sending it anywhere", async () => {
+    // It holds what the device reduced - a measure of a child decided on the
+    // tablet. `/trials` cannot take it, and nothing should.
+    const submit = vi.spyOn(baselineApi, "submitTrials").mockResolvedValue(true);
+    window.localStorage.setItem(
+      "nevo.baseline.pending",
+      JSON.stringify({
+        sessionId: "sess-old",
+        features: [{ module: "grid_span", maxSpan: 4, meanRecallGapMs: 300 }],
+        capturedAt: Date.now(),
+        ownerUserId: "child-a",
+      }),
+    );
+    signInAs("child-a");
+
+    await expect(flushPendingBaseline("child-a")).resolves.toBe(false);
+
+    expect(submit).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem("nevo.baseline.pending")).toBeNull();
+  });
+
+  it("parks nothing for a run with no answers, which the contract refuses", () => {
+    holdBaseline("sess-1", []);
+
+    expect(readPendingBaseline()).toBeNull();
+  });
+
   it("clears cleanly", () => {
-    holdBaseline("sess-1", FEATURES);
+    holdBaseline("sess-1", TRIALS);
     clearPendingBaseline();
     expect(readPendingBaseline()).toBeNull();
   });

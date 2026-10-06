@@ -31,18 +31,36 @@ vi.mock("@/hooks/useConsentGate", () => ({
   useConsentGate: () => ({ withdrawn: consent.withdrawn, known: true }),
 }));
 
-/** A screen reduced to one button that moves the flow on. */
+/**
+ * A screen reduced to one button that moves the flow on. A module records one
+ * answer on the way, as the real ones do, so there is a run to park.
+ */
 const { next } = vi.hoisted(() => ({
   next: (label: string) =>
     function Stub({
       onComplete,
       onDone,
+      capture,
     }: {
       onComplete?: () => void;
       onDone?: () => void;
+      capture?: BaselineCapture;
     }) {
       return (
-        <button type="button" onClick={() => (onComplete ?? onDone)?.()}>
+        <button
+          type="button"
+          onClick={() => {
+            capture?.record("trial_pick", {
+              module: label,
+              act: "pattern",
+              choice: 0,
+              rtMs: 500,
+              pair: "same",
+              correct: true,
+            });
+            (onComplete ?? onDone)?.();
+          }}
+        >
           {label}
         </button>
       );
@@ -106,6 +124,42 @@ describe("ProfilingFlow — whose baseline it is", () => {
     fireEvent.click(screen.getByRole("button", { name: /first lesson/i }));
 
     expect(onDone).toHaveBeenCalledWith(holdBaseline.mock.calls[0][0]);
+  });
+});
+
+describe("ProfilingFlow — what it parks (B9)", () => {
+  it("parks the trials as they happened, with nothing reduced", () => {
+    // It parked a feature vector: a mean response time, an accuracy and a
+    // longest span per module, computed here. Now one trial per answer.
+    render(<ProfilingFlow onDone={vi.fn()} />);
+
+    sitTheWholeRun();
+
+    const trials = holdBaseline.mock.calls[0][1];
+    expect(trials).toHaveLength(4);
+    for (const trial of trials) {
+      expect(Object.keys(trial).sort()).toEqual([
+        "condition",
+        "correct",
+        "dimension",
+        "probeItemId",
+        "response",
+        "responseTimeMs",
+      ]);
+    }
+    expect(JSON.stringify(trials)).not.toMatch(/mean|accuracy|span|module/i);
+  });
+
+  it("parks them under the id it was given, the profiling stream's", () => {
+    // So the trials and the run's markers name the same session.
+    const onDone = vi.fn();
+    render(<ProfilingFlow onDone={onDone} runId="profiling-session-1" />);
+    sitTheWholeRun();
+
+    fireEvent.click(screen.getByRole("button", { name: /first lesson/i }));
+
+    expect(holdBaseline.mock.calls[0][0]).toBe("profiling-session-1");
+    expect(onDone).toHaveBeenCalledWith("profiling-session-1");
   });
 });
 

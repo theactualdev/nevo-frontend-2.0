@@ -15,12 +15,14 @@ import { WarmUpRun } from "./WarmUpRun";
  * reduce would have had nothing to score - and the working-memory task recorded
  * neither `posInSeq` nor `round_complete`, the two things its reducer reads.
  *
- * These tests assert on what `baselineApi.submitWithRetry` was handed, because that is
- * the only part that leaves the device.
+ * Since B9 (5 Oct) what leaves is the run's TRIALS, one per answer, and the
+ * server reduces them; the device sends no mean, accuracy or span. These tests
+ * assert on what `baselineApi.submitTrials` was handed, because that is the
+ * only part that leaves the device.
  */
 
 const { submit } = vi.hoisted(() => ({ submit: vi.fn() }));
-vi.mock("@/lib/api", () => ({ baselineApi: { submitWithRetry: submit } }));
+vi.mock("@/lib/api", () => ({ baselineApi: { submitTrials: submit } }));
 const { holdBaseline } = vi.hoisted(() => ({ holdBaseline: vi.fn() }));
 vi.mock("@/lib/profiling/pendingBaseline", () => ({ holdBaseline }));
 // These pin the task with the `dimension` prop; the engine's prompt is
@@ -32,8 +34,10 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
 
-/** What the one submitted feature object looked like. */
-const submitted = () => submit.mock.calls[0][1][0];
+/** The trials that were sent. */
+const trials = () => submit.mock.calls[0][1];
+/** The first of them. */
+const submitted = () => trials()[0];
 
 /**
  * Sit the tile task: watch the tiles light, then tap them back in reverse.
@@ -43,8 +47,8 @@ const submitted = () => submit.mock.calls[0][1][0];
  * memory - so the test has to know the sequence. `Math.random` pinned to 0
  * draws tiles 0, 1, 2, so the reverse is 2, 1, 0.
  * The 50ms between taps is deliberate: under fake timers `performance.now()`
- * does not move on its own, and a recall gap of zero is filtered out as
- * impossible - which is exactly how a measurement that was never taken looks.
+ * does not move on its own, and a gap of zero is what a measurement that was
+ * never taken looks like.
  */
 const sitTheTileTask = async () => {
   const random = vi.spyOn(Math, "random").mockReturnValue(0);
@@ -88,10 +92,11 @@ describe("WarmUpRun — what actually reaches Nevo", () => {
     fireEvent.click(screen.getByText("Right"));
     await settle();
 
-    expect(submitted().acts.attention).toMatchObject({
-      trials: 1,
-      scored: 1,
-      accuracy: 1,
+    expect(trials()).toHaveLength(1);
+    expect(submitted()).toMatchObject({
+      dimension: "attention",
+      response: "Right",
+      correct: true,
     });
   });
 
@@ -101,21 +106,36 @@ describe("WarmUpRun — what actually reaches Nevo", () => {
     fireEvent.click(screen.getByText("Left"));
     await settle();
 
-    expect(submitted().acts.attention.accuracy).toBe(0);
+    expect(submitted().correct).toBe(false);
   });
 
-  it("still says which dimension ran, and for how long", async () => {
-    // The two fields it used to send are the two it should keep.
+  it("says which dimension ran on the trial itself, with the answer's own time", async () => {
     render(<WarmUpRun dimension="reading" />);
 
     fireEvent.click(screen.getByText("True"));
     await settle();
 
-    expect(submitted()).toMatchObject({
-      module: "warmup",
-      dimension: "reading",
-    });
-    expect(submitted().durationMs).toBeGreaterThanOrEqual(0);
+    expect(submitted().dimension).toBe("reading");
+    expect(submitted().responseTimeMs).toEqual(expect.any(Number));
+  });
+
+  it("sends the answers as they were, never a mean, an accuracy or a span (B9)", async () => {
+    await sitTheTileTask();
+    await settle();
+
+    for (const trial of trials()) {
+      expect(Object.keys(trial).sort()).toEqual([
+        "condition",
+        "correct",
+        "dimension",
+        "probeItemId",
+        "response",
+        "responseTimeMs",
+      ]);
+    }
+    expect(JSON.stringify(trials())).not.toMatch(
+      /mean|accuracy|span|rounds|retries|duration/i,
+    );
   });
 
   it("says the reading was a sentence read, as the reading activity does", async () => {
@@ -126,8 +146,7 @@ describe("WarmUpRun — what actually reaches Nevo", () => {
     fireEvent.click(screen.getByText("True"));
     await settle();
 
-    expect(submitted().acts.reading.conditions).toHaveProperty("sentence");
-    expect(submitted().acts.reading.accuracy).toBe(1);
+    expect(submitted()).toMatchObject({ condition: "sentence", correct: true });
   });
 
   it("never marks 'Not sure' wrong", async () => {
@@ -136,32 +155,41 @@ describe("WarmUpRun — what actually reaches Nevo", () => {
     fireEvent.click(screen.getByText("Not sure"));
     await settle();
 
-    expect(submitted().acts.reading).toMatchObject({
-      trials: 1,
-      scored: 0,
-      notSure: 1,
-      accuracy: null,
-    });
+    expect(submitted()).toMatchObject({ response: "not_sure", correct: null });
   });
 
-  it("reports a completed working-memory round as completed", async () => {
-    // It recorded neither `posInSeq` nor `round_complete`, so a child who did
-    // it perfectly reduced to maxSpan 0 - indistinguishable from never
-    // finishing.
+  it("sends a completed working-memory recall as three right taps of three", async () => {
+    // A child who did it perfectly once reduced to maxSpan 0 -
+    // indistinguishable from never finishing.
     await sitTheTileTask();
     await settle();
 
-    expect(submitted()).toMatchObject({ maxSpan: 3, roundsCompleted: 1 });
+    expect(trials()).toHaveLength(3);
+    expect(trials().map((t: { response: string }) => t.response)).toEqual([
+      "2",
+      "1",
+      "0",
+    ]);
+    for (const trial of trials()) {
+      expect(trial).toMatchObject({
+        dimension: "wmc",
+        condition: "length_3",
+        correct: true,
+      });
+    }
   });
 
-  it("can measure how fast the recall was", async () => {
-    // `reduceGridSpan` pairs consecutive taps by `posInSeq`, which this never
-    // recorded - so every warm-up reported a null recall gap whatever the child
-    // did.
+  it("times every tap, the first from when the grid was handed over", async () => {
+    // The first tap had nothing to be timed from: the warm-up never recorded
+    // when its grid was handed over.
     await sitTheTileTask();
     await settle();
 
-    expect(submitted().meanRecallGapMs).toEqual(expect.any(Number));
+    const times = trials().map(
+      (t: { responseTimeMs: number | null }) => t.responseTimeMs,
+    );
+    expect(times[0]).toEqual(expect.any(Number));
+    expect(times.slice(1)).toEqual([50, 50]);
   });
 });
 
@@ -242,7 +270,7 @@ describe("WarmUpRun — the dot task has no fixed answer", () => {
 
     await pickLeftAfterTheMask();
 
-    expect(submitted().acts.ans.accuracy).toBe(0);
+    expect(submitted()).toMatchObject({ dimension: "ans", correct: false });
   });
 
   it("marks Left right when the larger array is on the left", async () => {
@@ -251,7 +279,7 @@ describe("WarmUpRun — the dot task has no fixed answer", () => {
 
     await pickLeftAfterTheMask();
 
-    expect(submitted().acts.ans.accuracy).toBe(1);
+    expect(submitted()).toMatchObject({ dimension: "ans", correct: true });
   });
 });
 

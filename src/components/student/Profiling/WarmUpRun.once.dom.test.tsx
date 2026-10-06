@@ -7,7 +7,7 @@ import { markWarmUpDone } from "@/lib/profiling/warmUpDone";
  * ONE WARM-UP A DAY.
  *
  * It was re-sittable any number of times, and the cost was not cosmetic: every
- * run reduces to a feature vector and submits it, so a child who opened it
+ * run submits a measurement, so a child who opened it
  * four times sent four measurements of the same dimension on the same day -
  * and the engine recalibrates on those. The screen already had the gentle done
  * state design confirmed on 23 Sep; what it lacked was a memory that it had
@@ -18,7 +18,7 @@ import { markWarmUpDone } from "@/lib/profiling/warmUpDone";
  */
 
 const { submit } = vi.hoisted(() => ({ submit: vi.fn() }));
-vi.mock("@/lib/api", () => ({ baselineApi: { submitWithRetry: submit } }));
+vi.mock("@/lib/api", () => ({ baselineApi: { submitTrials: submit } }));
 const { holdBaseline } = vi.hoisted(() => ({ holdBaseline: vi.fn() }));
 vi.mock("@/lib/profiling/pendingBaseline", () => ({ holdBaseline }));
 // These pin the task with the `dimension` prop; the engine's prompt is

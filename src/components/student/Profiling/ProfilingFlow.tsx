@@ -8,13 +8,7 @@ import { holdBaseline } from "@/lib/profiling/pendingBaseline";
 import { ONBOARDING_SIGNAL_TYPES } from "@/lib/constants";
 import { bandForAge, gridSpanConfig } from "@/lib/profiling/bands";
 import { getOnboardingDraft } from "@/lib/auth/onboarding";
-import {
-  BaselineCapture,
-  motorStepSamples,
-  reduceGridSpan,
-  reduceRunContext,
-  reduceTrialModule,
-} from "@/lib/profiling/capture";
+import { BaselineCapture, baselineTrials } from "@/lib/profiling/capture";
 import { randomId } from "@/lib/utils";
 import type { TrackEvent } from "@/hooks";
 import { DomainProbeModule } from "./DomainProbeModule";
@@ -29,10 +23,9 @@ import { StretchInterstitial } from "./StretchInterstitial";
  * The Baseline Cognitive Profiling flow (SCRUM-104) - onboarding Phase C.
  * Intro → motor-speed step (08a) → M1 Grid Span → stretch → M2
  * Pattern/Flanker → stretch → M3 Sentence/Dot → stretch → M4 Domain Probe →
- * Complete. One BaselineCapture spans the run; on completion the raw stream is
- * turned into a feature vector, submitted, and purged. The modules' parts are
- * aggregates; the motor step's are its taps as taken, because their median is
- * the engine's to compute (`motorStepSamples`). Nothing else raw leaves.
+ * Complete. One BaselineCapture spans the run; on completion it becomes one
+ * trial per answer, the motor step's taps included, parked to be sent raw for
+ * the server to reduce (B9), and the rest of the stream is purged.
  *
  * The age band comes from the roster for a child already signed in, else from
  * the age the child gave at onboarding, else from the intro's age question; it
@@ -42,8 +35,20 @@ export function ProfilingFlow({
   track,
   onDone,
   ownerUserId = null,
+  runId,
 }: {
+  /**
+   * The baseline's markers go here: a `profiling` stream, not the onboarding
+   * sequence's `onboarding` one (B43, 5 Oct). They are measurements, and on
+   * onboarding a later re-profiling would look like a child's first morning.
+   */
   track?: TrackEvent;
+  /**
+   * The id this run's trials go up under - the caller's `profiling` stream's,
+   * so the trials and the markers of one run name the same session. A run of
+   * its own when none is given.
+   */
+  runId?: string;
   /**
    * The child sitting this run, when that is already known - which is only
    * true for a child who arrived by SSO and so is signed in throughout.
@@ -66,10 +71,10 @@ export function ProfilingFlow({
    * after the baseline (design, 1 Oct, D10: the parent consents, the child is
    * informed, and the notice explains what the activities just done were for).
    *
-   * `runSessionId` is the capture session this run parked its vector under, or
+   * `runSessionId` is the capture session this run parked its trials under, or
    * null if nothing was parked. The caller hands it back to
-   * `flushPendingBaseline`, which is what proves the vector belongs to the
-   * child who just sat it rather than to whoever used this device last.
+   * `flushPendingBaseline`, which is what proves the trials belong to the
+   * child who just sat them rather than to whoever used this device last.
    */
   onDone: (runSessionId: string | null) => void;
 }) {
@@ -129,7 +134,7 @@ export function ProfilingFlow({
   const bandPending = !roster.settled;
   const askAge = roster.settled && !roster.band && !draftAge;
   const [capture] = useState(
-    () => new BaselineCapture(`baseline-${randomId()}`),
+    () => new BaselineCapture(runId ?? `baseline-${randomId()}`),
   );
   /** The device this run is on, read when it starts; the motor step's samples carry it. */
   const [device, setDevice] = useState<FormFactor | null>(null);
@@ -167,7 +172,7 @@ export function ProfilingFlow({
   }, [withdrawn, capture]);
   /*
    * The completion screen's `saved` is left null - "still resolving" - because
-   * that is now literally what it is: the vector is parked and goes out when
+   * that is now literally what it is: the trials are parked and go out when
    * the account exists, a screen or two later. This run cannot know the answer
    * any more, and should not pretend to.
    *
@@ -188,22 +193,23 @@ export function ProfilingFlow({
         setPhase("complete");
         return;
       }
-      const features = [
-        // Which band's items and which subject produced the numbers below.
-        reduceRunContext(capture),
-        // Every tap as taken, never a median: the engine takes that.
-        motorStepSamples(capture),
-        reduceGridSpan(capture),
-        reduceTrialModule(capture, "pattern_flanker"),
-        reduceTrialModule(capture, "sentence_dot"),
-        reduceTrialModule(capture, "domain_probe"),
-      ];
+      /*
+       * THE TRIALS, NOT A REDUCTION (B9, 5 Oct). This built a feature vector
+       * of means, accuracies and the longest span, which is the frontend
+       * computing a measure of a child (frontend §3, rule 3). Each answer now
+       * goes up as it happened and the server does the arithmetic.
+       *
+       * The band the run was built for has no field on a trial, so it is no
+       * longer beside the numbers; it is with backend as an ask. It still
+       * reaches the profiling stream on each `baseline_module_start`.
+       */
+      const trials = baselineTrials(capture);
       const c = capture;
       /*
-       * PARKED, NOT SENT. `POST /api/baseline/submit` is Bearer, and this run
-       * is phase 0 of the sequence - the account is not created until phase 2.
-       * So this used to post with no token, take the 401 as final
-       * (`submitWithRetry` does not retry a 4xx), and purge the capture in a
+       * PARKED, NOT SENT. The baseline's write is Bearer, and this run is
+       * phase 0 of the sequence - the account is not created until phase 2.
+       * So this used to post with no token, take the 401 as final (a 4xx is
+       * not retried), and purge the capture in a
        * `.finally()` regardless: the whole measurement gone, in the run that
        * happens once, for every child except those arriving by SSO.
        *
@@ -212,21 +218,21 @@ export function ProfilingFlow({
        * this SUCCEED - writing one child's cognitive assessment to another
        * child's account.
        *
-       * `flushPendingBaseline` sends it once an account exists and can be shown
-       * to be this child's. The raw capture still never leaves the device and
-       * is still purged the moment it has been reduced.
+       * `flushPendingBaseline` sends them once an account exists and can be
+       * shown to be this child's. The rest of the raw capture never leaves the
+       * device and is purged the moment the trials are taken.
        */
-      holdBaseline(c.sessionId, features, ownerUserId);
+      holdBaseline(c.sessionId, trials, ownerUserId);
       // Remembered so the account this run goes on to create can prove the
-      // vector is its own. Nothing else may send it.
+      // trials are its own. Nothing else may send them.
       parkedRunRef.current = c.sessionId;
       void c.purge();
       /*
        * NO `baseline_submitted` HERE. It fired at this line, on PARKING, and
        * since 1 Oct that event reaches the engine - so it told the engine the
        * baseline was in whenever the later submit failed or never happened.
-       * It is now tracked by whoever delivers the parked vector, once
-       * `POST /api/baseline/submit` has succeeded for this run
+       * It is now tracked by whoever delivers the parked trials, once
+       * `POST /api/baseline/trials` has succeeded for this run
        * (`ObservedInteractionSequence`), and never if that stream has gone.
        */
     }

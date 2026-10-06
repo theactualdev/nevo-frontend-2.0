@@ -33,6 +33,7 @@ const served = {
     { value: "a", label: "Two-thirds" },
     { value: "b", label: "Three-fifths" },
   ],
+  served: true,
 };
 
 beforeEach(() => {
@@ -150,11 +151,48 @@ describe("toPrompt", () => {
     expect(toPrompt({ ...served, options: [] })).toEqual({ state: "none" });
   });
 
-  it("runs another dimension's own task whether or not an item came", () => {
-    expect(toPrompt({ dimension: "attention" })).toMatchObject({
+  it("runs another dimension's own task when no question was served", () => {
+    expect(toPrompt({ dimension: "attention", served: false })).toMatchObject({
       state: "ready",
       dimension: "attention",
       item: null,
     });
+  });
+});
+
+describe("toPrompt - the served flag decides (B65)", () => {
+  it("asks no question the prompt says was not served, whatever text came", () => {
+    // `question` and `options` are optional now; text present on an unserved
+    // prompt is not a question for this child.
+    expect(
+      toPrompt({ ...served, dimension: "attention", served: false }),
+    ).toMatchObject({ state: "ready", dimension: "attention", item: null });
+    expect(toPrompt({ ...served, served: false })).toEqual({ state: "none" });
+  });
+
+  it("reads an absent flag as not served, rather than inferring one", () => {
+    const { served: _flag, ...unsaid } = served;
+    void _flag;
+
+    expect(toPrompt(unsaid)).toEqual({ state: "none" });
+    expect(toPrompt({ ...unsaid, dimension: "ps" })).toMatchObject({
+      state: "ready",
+      item: null,
+    });
+  });
+
+  it("carries a served question on any dimension, not only the question task", () => {
+    expect(toPrompt({ ...served, dimension: "attention" })).toMatchObject({
+      state: "ready",
+      dimension: "attention",
+      item: { itemId: "item-1", question: "Which is larger?" },
+    });
+  });
+
+  it("still runs a device day that carries none of the question fields", () => {
+    // The shape a device-task day now has: no question, no options.
+    expect(
+      toPrompt({ dimension: "wmc", itemId: "wmc-1", served: false }),
+    ).toMatchObject({ state: "ready", dimension: "wmc", item: null });
   });
 });

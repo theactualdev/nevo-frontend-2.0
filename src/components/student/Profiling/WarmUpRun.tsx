@@ -24,8 +24,7 @@ import {
 } from "@/lib/profiling/bands";
 import {
   BaselineCapture,
-  reduceGridSpan,
-  reduceTrialModule,
+  baselineTrials,
   tapPoint,
 } from "@/lib/profiling/capture";
 import { TILE } from "./GridSpanModule";
@@ -88,9 +87,10 @@ export function dimensionForToday(now = new Date()): BaselineDimension {
  * The done state only claims the run was saved if the write actually landed -
  * telling a child their progress was saved when nothing was written would be
  * false every single time. (This note used to say the screen "is not wired to"
- * `POST /api/baseline/submit`. It has been wired for some time; the note went
+ * `POST /api/baseline/submit`. It was wired for some time; the note went
  * stale and was the reason nobody checked WHAT it was submitting, which for
- * longer still was the task name and a duration, and none of the measurement.)
+ * longer still was the task name and a duration, and none of the measurement.
+ * It now sends the run's trials to `POST /api/baseline/trials`, B9.)
  * The day's dimension comes from `GET /api/baseline/recalibrate-prompt/{id}`
  * and from nowhere else for a signed-in child. It used to fall back to a
  * weekday rotation whenever the prompt failed, was unrecognised or was still
@@ -123,6 +123,8 @@ export function WarmUpRun({
     : served;
   const dimension = prompt.state === "ready" ? prompt.dimension : null;
   const item = prompt.state === "ready" ? prompt.item : null;
+  /** The engine named this run, for this child - not the walkthrough, not a pin. */
+  const live = prompt.state === "ready" && prompt.live;
   /** The account's answer, once the prompt has given one. */
   const doneToday = prompt.state === "waiting" ? undefined : prompt.doneToday;
   const hydrated = useHydrated();
@@ -161,7 +163,6 @@ export function WarmUpRun({
   useEffect(() => {
     if (withdrawn) void capture.stop();
   }, [withdrawn, capture]);
-  const startedAt = useRef(0);
   const started = useRef(false);
   const submitted = useRef(false);
 
@@ -169,7 +170,7 @@ export function WarmUpRun({
    * ONE WARM-UP A DAY, AND THE CHECK HAS TO HAPPEN BEFORE THE RUN STARTS.
    *
    * It was re-sittable any number of times, and the cost was not cosmetic:
-   * every run reduces to a feature vector and submits it, so a child who
+   * every run submits a measurement, so a child who
    * opened it four times sent four measurements of the same dimension on the
    * same day, and the engine recalibrates on those. Design ruled the done
    * state on 23 Sep; the screen already had one, what it lacked was a memory
@@ -195,7 +196,6 @@ export function WarmUpRun({
     if (!dimension || !bandSettled || started.current) return;
     if (warmUpDoneFor(doneToday, getSession()?.userId)) return;
     started.current = true;
-    startedAt.current = performance.now();
     capture.record("warmup_start", {
       dimension,
       ...(band ? { band } : {}),
@@ -233,8 +233,8 @@ export function WarmUpRun({
          * A WITHDRAWN GUARDIAN STOPS THE WARM-UP TOO, and this one recurs
          * daily where the onboarding run happens once.
          *
-         * BEFORE the reduction, not after: deriving a feature vector and then
-         * declining to send it is still processing the child's interactions.
+         * BEFORE the trials are taken, not after: deriving them and then
+         * declining to send them is still processing the child's interactions.
          * Nothing is derived, nothing is parked, nothing is sent, and the raw
          * stream goes the same way it always does.
          *
@@ -258,9 +258,9 @@ export function WarmUpRun({
      * Remembered even when nothing was submitted.
      *
      * A withdrawn guardian's run derives nothing and sends nothing, and a
-     * failed write parks the vector rather than losing it. In neither case
+     * failed write parks the trials rather than losing them. In neither case
      * does sitting it again help - the withdrawal still applies, and the
-     * parked vector is already on its way. What the child DID is the thing
+     * parked trials are already on their way. What the child DID is the thing
      * being remembered here, not what reached Nevo.
      *
      * Only ever the fallback now: the account's `doneToday` decides whenever
@@ -270,45 +270,24 @@ export function WarmUpRun({
     setDone(true);
 
     function send() {
-      const durationMs = Math.round(performance.now() - startedAt.current);
       /*
-       * SUBMIT WHAT THE CHILD ACTUALLY DID.
+       * SEND WHAT THE CHILD ACTUALLY DID, AS THEY DID IT (B9, 5 Oct).
        *
-       * This sent `{ module, dimension, durationMs }` - the day's task name and
-       * how long it took - and then purged the capture. Every trial, every
-       * response time, every right and wrong answer was recorded to
-       * IndexedDB and deleted without ever being reduced. The warm-up exists to
-       * recalibrate the engine on one dimension each day; what reached it was
-       * "a child spent 45 seconds".
+       * This first sent `{ module, dimension, durationMs }` - the day's task
+       * name and how long it took - and then a feature vector reduced on the
+       * device: a mean response time, an accuracy, a span. Frontend §3 says
+       * the device computes none of those. Each answer now goes up as one
+       * trial carrying its own dimension, and the server reduces them.
        *
-       * The working-memory task records taps rather than picks, so it reduces
-       * through the grid reducer; the other five go through the trial one. Both
-       * are tagged `warmup` so the engine can tell a daily run from the
-       * onboarding baseline, which uses the same two functions.
+       * Two things the vector carried have no field on a trial and are not
+       * sent: the run's length, and the band the task was sized for (D17).
+       * The band is with backend as an ask; nothing is invented to carry it.
+       *
+       * The served question's pick goes to the prompt's own endpoint as well
+       * (B8, below); here it is a trial naming its item, which the server
+       * marks against its own key.
        */
-      const measured =
-        dimension === "wmc"
-          ? reduceGridSpan(capture)
-          : reduceTrialModule(capture, "warmup");
-      /*
-       * THE BAND THE TASK WAS SIZED FOR, when it was sized for one (D17). A
-       * span of four on a 5x5 grid and a span of two on a 3x3 are not the
-       * same measurement, and nothing else on the vector says which this was.
-       * Absent, never guessed, when the frame's one version ran.
-       *
-       * The served question's pick is NOT here any more. It rode along as
-       * `item: {itemId, chosenOption}` for whoever marked it; it now goes to
-       * the prompt's own endpoint and is marked there (B8, below).
-       */
-      const features = [
-        {
-          ...measured,
-          module: "warmup",
-          dimension,
-          durationMs,
-          ...(band ? { band } : {}),
-        },
-      ];
+      const trials = baselineTrials(capture);
       /*
        * A FAILED WRITE PARKS THE MEASUREMENT; IT DOES NOT DESTROY IT.
        *
@@ -318,7 +297,7 @@ export function WarmUpRun({
        * two different answers to the same failure, and the quieter one lost a
        * child's warm-up.
        *
-       * `submitWithRetry` handles the transient cases; `holdBaseline` keeps
+       * `submitTrials` handles the transient cases; `holdBaseline` keeps
        * what it still cannot send, and `flushPendingBaseline` - already called
        * on every student screen - delivers it later against a session provably
        * this child's.
@@ -328,7 +307,7 @@ export function WarmUpRun({
        *
        * A warm-up is sat by a child who is already signed in, so unlike the
        * onboarding run there IS an id to write down - and writing it down is
-       * what stops this vector being delivered to the next child who onboards
+       * what stops these trials being delivered to the next child who onboards
        * on this tablet. The guard that used to prevent that relied on the
        * device having no session for the new account, which stopped being true
        * when the invite path began storing one.
@@ -347,19 +326,33 @@ export function WarmUpRun({
         pick && owner
           ? baselineApi.answerPrompt(owner, pick).catch(() => false)
           : Promise.resolve(true);
+      /*
+       * AND ON A DEVICE-TASK DAY, WORD THAT IT HAPPENED (B54, 5 Oct).
+       *
+       * Five days in six serve no question, so nothing went to that endpoint
+       * and the account's `doneToday` stayed false: a second tablet offered
+       * the child a second run and took a second measurement. The same
+       * endpoint takes a completion with no item. Only for a run the engine
+       * named for this child.
+       *
+       * Not part of `saved`. That line tells the child whether what they DID
+       * reached Nevo; this is the account's note that it happened, and this
+       * tablet already remembers it (`markWarmUpDone`) if it does not land.
+       */
+      if (!pick && owner && live) void baselineApi.deviceTaskDone(owner);
       const submittedOk = baselineApi
-        .submitWithRetry(capture.sessionId, features)
+        .submitTrials(capture.sessionId, trials)
         .then((ok) => {
-          if (!ok) holdBaseline(capture.sessionId, features, owner);
+          if (!ok) holdBaseline(capture.sessionId, trials, owner);
           return ok;
         })
         .catch(() => {
-          holdBaseline(capture.sessionId, features, owner);
+          holdBaseline(capture.sessionId, trials, owner);
           return false;
         })
-        // The RAW stream is purged either way - only the reduced vector ever
-        // travels, and it must not linger on the device. What is parked above
-        // is the vector, not the raw capture.
+        // The RAW stream is purged either way - only the trials ever travel,
+        // and the rest must not linger on the device. What is parked above is
+        // the trials, not the raw capture.
         .finally(() => void capture.purge());
       void Promise.all([submittedOk, answered]).then(([sent, heard]) =>
         setSaved(sent && heard),
@@ -368,7 +361,7 @@ export function WarmUpRun({
     // `withdrawn` belongs here: without it this closes over the value from the
     // first render, which is always false, and a withdrawal that resolved
     // mid-run would be read as consent.
-  }, [capture, dimension, withdrawn, band]);
+  }, [capture, withdrawn, live]);
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-nevo-cream text-nevo-near-black">
@@ -530,7 +523,7 @@ function WarmUpTask({
   }, []);
   /*
    * `detail` carries whether they were right, which the task knows and nothing
-   * downstream can work out. Without it the vector said only how FAST a child
+   * downstream can work out. Without it a trial said only how FAST a child
    * answered - and a wrong quick tap outscored a right considered one on every
    * dimension but working memory, which records its own taps.
    *
@@ -548,6 +541,45 @@ function WarmUpTask({
       ...detail,
     });
   };
+
+  /*
+   * THE ENGINE'S QUESTION, whenever it served one, on any day (B65, 5 Oct).
+   * `served` on the prompt says so (`toPrompt` builds `item` from nothing
+   * else); the dimension is not asked to imply it.
+   *
+   * This used to be one fixture for every child, every time: "A quick one
+   * from today's lesson." over two-thirds against three-fifths, marked on the
+   * device and submitted as subject knowledge. Now the served question and
+   * options render as they came, and the pick is recorded unmarked.
+   *
+   * No prompt line. "From today's lesson" is something no field says about
+   * the served item, so it is not said.
+   */
+  if (item) {
+    return (
+      <SingleChoice
+        onDone={onDone}
+        onPick={(label, detail, i) => {
+          const option = item.options[i];
+          onServedPick({ itemId: item.itemId, value: option.value });
+          pick(label, {
+            ...detail,
+            itemId: item.itemId,
+            chosenOption: option.value,
+          });
+        }}
+        stacked
+        options={item.options.map((o) => o.label)}
+        stimulus={
+          <div className="w-full rounded-[12px] bg-nevo-cream-elevated px-5 py-[18px]">
+            <p className="text-[17px] leading-[1.5] font-medium text-nevo-near-black">
+              {item.question}
+            </p>
+          </div>
+        }
+      />
+    );
+  }
 
   switch (dimension) {
     case "wmc": {
@@ -668,44 +700,10 @@ function WarmUpTask({
       );
     default:
       /*
-       * THE ENGINE'S QUESTION, when it served one - which for a signed-in
-       * child it must have, or this task never opens (`toPrompt`).
-       *
-       * This used to be one fixture for every child, every time: "A quick one
-       * from today's lesson." over two-thirds against three-fifths, marked on
-       * the device and submitted as subject knowledge. Now the served question
-       * and options render as they came, and the pick is recorded unmarked:
-       * the answer key came down the wire too, and the client does not use it.
-       *
-       * No prompt line. "From today's lesson" is something no field says about
-       * the served item, so it is not said. The fixture below is the
-       * signed-out walkthrough's, the frame's own.
+       * The question task with no question served. A signed-in child never
+       * reaches this: with nothing served it never opens (`toPrompt`). The
+       * fixture is the signed-out walkthrough's, the frame's own.
        */
-      if (item) {
-        return (
-          <SingleChoice
-            onDone={onDone}
-            onPick={(label, detail, i) => {
-              const option = item.options[i];
-              onServedPick({ itemId: item.itemId, value: option.value });
-              pick(label, {
-                ...detail,
-                itemId: item.itemId,
-                chosenOption: option.value,
-              });
-            }}
-            stacked
-            options={item.options.map((o) => o.label)}
-            stimulus={
-              <div className="w-full rounded-[12px] bg-nevo-cream-elevated px-5 py-[18px]">
-                <p className="text-[17px] leading-[1.5] font-medium text-nevo-near-black">
-                  {item.question}
-                </p>
-              </div>
-            }
-          />
-        );
-      }
       return (
         <SingleChoice
           prompt="A quick one from today's lesson."
@@ -843,7 +841,7 @@ function SingleChoice({
  * the tiles by elimination, which measures persistence rather than memory.
  * Now the grid locks under the nudge, the same pattern plays again, and the
  * third miss ends the round (`NUDGE_MS`, `MAX_MISSES`). Nothing says it went
- * wrong, and the vector records the misses and no completed round.
+ * wrong, and the trials record the misses and no completed round.
  */
 function WarmUpGrid({
   n,
@@ -900,9 +898,17 @@ function WarmUpGrid({
         at(t + litMs, () => setLit(-1));
         t += litMs + GAP_MS;
       });
-      at(t + 150, () => setPhase("input"));
+      at(t + 150, () => {
+        setPhase("input");
+        /*
+         * When the grid was handed over, as tile memory records it. The first
+         * tap of a recall is timed from here; without it that tap went up
+         * with no time at all.
+         */
+        capture.record("input_start", { module: "warmup", length: s.length });
+      });
     },
-    [clearTimers, litMs],
+    [capture, clearTimers, litMs],
   );
 
   useEffect(() => {
@@ -923,10 +929,10 @@ function WarmUpGrid({
       act: "wmc",
       cell,
       correct,
-      // `reduceGridSpan` pairs consecutive taps by `posInSeq` to measure recall
-      // speed, and counts completed rounds from `round_complete`. Neither was
-      // recorded here, so a warm-up reduced to maxSpan 0 and no recall gap at
-      // all - a child who did it perfectly looked like one who never finished.
+      // Each tap is timed from the one before it IN THE SAME RECALL, which
+      // `posInSeq` says (`baselineTrials`). Neither it nor `round_complete`
+      // was recorded here once, and a child who did it perfectly looked like
+      // one who never finished.
       posInSeq: pos.current,
       length: seq.length,
       ...tapPoint(e),

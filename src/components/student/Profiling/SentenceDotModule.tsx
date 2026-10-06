@@ -263,8 +263,8 @@ export function SentenceDotModule({
    * A browser with no speech cannot present the audio activity honestly, and
    * miming it produced three-way guesses filed as a reading measure - so the
    * activity is dropped and the module runs its dot half alone. Nothing is
-   * recorded for reading, which `reduceTrialModule` already reports as "not
-   * measured" rather than as a zero.
+   * recorded for reading, so no reading trial is sent: "not measured", never
+   * a zero.
    */
   const [canHear] = useState(() => mode !== "audio" || hasSpeech());
   const sentences = SENTENCES[band] ?? SENTENCES.p46;

@@ -7,9 +7,9 @@ const BASELINE_SUBMIT_ATTEMPTS = 3;
 const BASELINE_SUBMIT_BACKOFF_MS = [800, 2400];
 
 /**
- * Baseline cognitive profiling endpoints (SCRUM-104). The client reduces raw
- * interaction streams to a feature vector before transmission; raw data never
- * leaves the device (see `lib/profiling/capture`).
+ * Baseline cognitive profiling endpoints (SCRUM-104). The device sends the
+ * trials as they happened and the server does the reduction (B9, 5 Oct); see
+ * `lib/profiling/capture` for how a run becomes trials.
  */
 /**
  * Which dimension Nevo wants recalibrated next.
@@ -25,8 +25,18 @@ export interface RecalibratePrompt {
    * The question rotates when a dimension comes round again.
    */
   itemId: string;
-  question: string;
-  options: { value: string; label: string }[];
+  /**
+   * The served question and its options. OPTIONAL SINCE 5 OCT (B65): only the
+   * question task has one, and requiring them of every dimension made the
+   * other five look like served questions with nothing in them.
+   */
+  question?: string;
+  options?: { value: string; label: string }[];
+  /**
+   * Whether a question was served at all (B65). The one thing that says a
+   * question is to be shown: the dimension is not asked to imply it.
+   */
+  served?: boolean;
   /**
    * Whether today's warm-up is behind this child, held against the ACCOUNT
    * (B10, 1 Oct), so a second tablet sees it too. Optional because a
@@ -41,13 +51,32 @@ export interface RecalibratePrompt {
 }
 
 /**
- * POST, and keep trying for a short while. A 4xx is not retried - the request
- * is malformed or unauthorised and the next attempt fails identically.
+ * One trial, as it happened (`BaselineTrial`, B9). Not marked by the server's
+ * key and not averaged: `correct` is what the device saw for a stimulus only
+ * it held, and is ignored wherever `probeItemId` names a bank item the server
+ * marks itself.
  */
-async function postWithRetry(path: string, body: unknown): Promise<boolean> {
+export interface BaselineTrial {
+  dimension: string;
+  condition: string | null;
+  response: string | null;
+  correct: boolean | null;
+  /** Integer milliseconds, 0 to 600000 in the contract. */
+  responseTimeMs: number | null;
+  probeItemId: string | null;
+}
+
+/**
+ * Send, and keep trying for a short while. A 4xx is not retried - the request
+ * is malformed or unauthorised and the next attempt fails identically.
+ *
+ * Takes the call rather than a path and a body so each `api.post` below keeps
+ * its body as a literal, which is what `npm run contract` checks.
+ */
+async function withRetry(send: () => Promise<unknown>): Promise<boolean> {
   for (let attempt = 0; attempt < BASELINE_SUBMIT_ATTEMPTS; attempt++) {
     try {
-      await api.post(path, body);
+      await send();
       return true;
     } catch (cause) {
       const status = cause instanceof ApiError ? cause.status : 0;
@@ -82,39 +111,51 @@ export const baselineApi = {
    * first answer".
    *
    * Resolves to whether it landed, and nothing else. The reply
-   * (`BaselinePromptResult`) carries `correct`, the server's verdict on the
-   * pick, and it is deliberately never read: nothing on the device has a use
-   * for a verdict on a child (rule 9).
+   * (`BaselinePromptResult`) no longer carries a verdict on the pick (B55),
+   * and nothing on the device would have a use for one (rule 9).
    */
   answerPrompt: (studentId: string, pick: { itemId: string; value: string }) =>
-    postWithRetry(
-      `/api/baseline/recalibrate-prompt/${studentId}/response`,
-      pick,
+    withRetry(() =>
+      api.post(`/api/baseline/recalibrate-prompt/${studentId}/response`, {
+        itemId: pick.itemId,
+        value: pick.value,
+      }),
     ),
 
-  /** Submit the reduced feature vector at the end of the profiling run. */
-  submit: (sessionId: string, features: Record<string, unknown>[]) =>
-    api.post("/api/baseline/submit", { sessionId, features }),
+  /**
+   * Word that today's DEVICE task finished, on a day no question was served
+   * (B54, 5 Oct). The same endpoint with no item: "a completion with no item
+   * is accepted for exactly that reason".
+   *
+   * Nothing was sent on five days in six, so `doneToday` stayed false on the
+   * account and a second tablet offered the child a second run - and took a
+   * second measurement.
+   */
+  deviceTaskDone: (studentId: string) =>
+    withRetry(() =>
+      api.post(`/api/baseline/recalibrate-prompt/${studentId}/response`, {}),
+    ),
 
   /**
-   * Submit, and keep trying for a short while.
+   * The run's trials, raw, for the server to reduce (B9, 5 Oct).
    *
-   * The baseline run is several minutes of a child's attention and it happens
-   * ONCE. The first version fired and forgot: a failed submit was swallowed,
-   * the raw capture purged anyway, and the flow advanced to "All set" - so a
-   * momentary blip cost the engine its entire picture of that child, silently
-   * and unrecoverably.
+   * `POST /api/baseline/trials`, body `BaselineTrialsRequest`
+   * `{sessionId, trials}`. It replaced `POST /api/baseline/submit`, which took
+   * a vector the device had already reduced - accuracy, mean response time,
+   * spans - and which the spec now describes as the thing the architecture
+   * forbids. Nothing here calls it any more.
    *
-   * Three attempts with a widening gap covers the blip case without making a
-   * child wait: the run never blocks on this, it resolves in the background
-   * and the completion screen reports whichever way it lands.
+   * Kept trying for a short while, because the run is several minutes of a
+   * child's attention and it happens ONCE: the first version fired and
+   * forgot, and a momentary blip cost the engine its whole picture of that
+   * child. A 4xx is not retried - the batch is malformed or unauthorised and
+   * the next attempt fails identically.
    *
-   * A 4xx is not retried - the batch is malformed or unauthorised and the next
-   * attempt fails identically.
+   * The contract takes one to 600 trials. An empty run has nothing to send,
+   * so nothing is sent, and that is not a delivery.
    */
-  submitWithRetry: (
-    sessionId: string,
-    features: Record<string, unknown>[],
-  ): Promise<boolean> =>
-    postWithRetry("/api/baseline/submit", { sessionId, features }),
+  submitTrials: (sessionId: string, trials: BaselineTrial[]): Promise<boolean> =>
+    trials.length === 0
+      ? Promise.resolve(false)
+      : withRetry(() => api.post("/api/baseline/trials", { sessionId, trials })),
 };

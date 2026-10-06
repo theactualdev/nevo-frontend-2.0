@@ -162,10 +162,11 @@ export const BUSY_PHASE = {
 export type BusyPhase = (typeof BUSY_PHASE)[keyof typeof BUSY_PHASE];
 
 /**
- * The baseline run's own markers, tracked by `ProfilingFlow` on the onboarding
- * stream. In the ingest enum as of 1 Oct, so they are sent now; until then
- * `signalsApi` dropped all three. The measurement itself still reports through
- * `POST /api/baseline/submit` as a reduced vector - these mark its phases.
+ * The baseline run's own markers, tracked by `ProfilingFlow` on a `profiling`
+ * stream of their own (B43, 5 Oct), not the onboarding sequence's. In the
+ * ingest enum as of 1 Oct, so they are sent now; until then `signalsApi`
+ * dropped all three. The measurement itself goes up as raw trials through
+ * `POST /api/baseline/trials` (B9) - these mark its phases.
  */
 export const ONBOARDING_SIGNAL_TYPES = {
   // The OIS activity events (sort_placement, audio_response, pattern_tap,
@@ -174,7 +175,7 @@ export const ONBOARDING_SIGNAL_TYPES = {
   /** Baseline profiling (SCRUM-104) — module lifecycle in the session stream. */
   BASELINE_MODULE_START: "baseline_module_start",
   BASELINE_MODULE_COMPLETE: "baseline_module_complete",
-  /** The reduced feature vector left the device (raw stream purged). */
+  /** The run's trials reached the server (raw stream purged). */
   BASELINE_SUBMITTED: "baseline_submitted",
 } as const;
 
