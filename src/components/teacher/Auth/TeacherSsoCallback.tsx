@@ -17,8 +17,9 @@ import { type UserRole } from "@/lib/constants";
  * `/api/v1/auth/sso/{provider}/callback` (`lib/api/auth.ts:257`) and its result
  * is what sets the session. What is still true is that no school can reach this
  * screen: nothing in the deployed spec ENROLS a school in SSO, so every sso
- * path presupposes a connection that cannot be created. `?mock=error` forces
- * the error state for design review.
+ * path presupposes a connection that cannot be created. Loaded with no code
+ * on the URL, the screen shows its error state - which is also how design
+ * reviews it. There is no `?mock=` switch.
  */
 
 const SUCCESS_HOLD_MS = 900;
@@ -64,7 +65,7 @@ export function TeacherSsoCallback() {
   const shown: Phase = incomplete ? "error" : phase;
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  // Schedules the (mock) handshake; only ever sets state from inside the
+  // Schedules the handshake; only ever sets state from inside the
   // timer callback, so the effect body stays setState-free.
   /*
    * A REAL handshake, or none.

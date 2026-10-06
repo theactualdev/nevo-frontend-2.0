@@ -37,10 +37,18 @@ import { useSystemMessages } from "@/components/shared/SystemMessages";
  * segment's `title` is nullable, so anything unnamed stays a count rather
  * than becoming an invented title.
  *
- * NOTHING IS COMMITTED THAT THE SERVER HAS NOT SEEN. Confirm is refused while
- * there are unsaved edits: the commit acts on the stored structure, so
- * committing a draft would add a unit shaped differently from the one on
- * screen.
+ * NOTHING IS COMMITTED THAT THE SERVER HAS NOT SEEN. The commit acts on the
+ * stored structure, so committing a draft would add a unit shaped differently
+ * from the one on screen. That used to be enforced by greying the commit out
+ * over unsaved edits, explained only by a hover title - a button a teacher
+ * could press and be told nothing. It now saves first and asks second, as
+ * `LiveModuleReview` does on the single path: if the save fails, the error
+ * says so and nothing is asked.
+ *
+ * EXPAND AND COLLAPSE, as C07d draws them: a caret on each lesson and on each
+ * section that has named rows under it, and "Expand all" / "Collapse all"
+ * above the tree. It opens fully expanded, which is how it has always opened,
+ * so the toggle starts as "Collapse all".
  */
 
 type Saving = "idle" | "saving" | "saved" | "failed";
@@ -67,6 +75,32 @@ export function LiveStructureTree({
   const [canUndo, setCanUndo] = useState(false);
   const [phase, setPhase] = useState<"idle" | "confirm" | "committing">("idle");
   const [error, setError] = useState("");
+  /** What a teacher has folded away. Empty is everything open. */
+  const [closed, setClosed] = useState<Set<string>>(() => new Set());
+
+  const lessonKey = (lesson: StructureLesson, li: number) =>
+    lesson.lessonId ?? `new-${li}`;
+  const moduleKey = (lesson: StructureLesson, li: number, mi: number) =>
+    `${lessonKey(lesson, li)}:${mi}`;
+  const toggle = (key: string) =>
+    setClosed((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  const allOpen = closed.size === 0;
+  const toggleAll = () =>
+    setClosed(
+      allOpen
+        ? new Set(
+            draft.flatMap((l, li) => [
+              lessonKey(l, li),
+              ...l.modules.map((_, mi) => moduleKey(l, li, mi)),
+            ]),
+          )
+        : new Set(),
+    );
 
   const plural = (n: number, one: string, many: string) =>
     `${n} ${n === 1 ? one : many}`;
@@ -204,8 +238,9 @@ export function LiveStructureTree({
     };
   };
 
-  const save = async () => {
-    if (saving === "saving") return;
+  /** Resolves true once the server holds what is on screen. */
+  const save = async (): Promise<boolean> => {
+    if (saving === "saving") return false;
     setSaving("saving");
     setError("");
     try {
@@ -214,12 +249,21 @@ export function LiveStructureTree({
       setCanUndo(Boolean(res.canUndo));
       setDirty(false);
       setSaving("saved");
+      return true;
     } catch {
       setSaving("failed");
       setError(
         "We couldn’t save that just now. Your changes are still here. Try again in a moment.",
       );
+      return false;
     }
+  };
+
+  /** Save what is on screen first, then ask: confirm acts on what is stored. */
+  const addToLibrary = async () => {
+    if (phase === "committing" || saving === "saving") return;
+    if (dirty && !(await save())) return;
+    setPhase("confirm");
   };
 
   const undo = async () => {
@@ -256,6 +300,18 @@ export function LiveStructureTree({
   const titleInput =
     "min-w-0 flex-1 rounded-[6px] bg-transparent px-1 py-0.5 outline-none focus:bg-nevo-cream focus:ring-2 focus:ring-nevo-navy/30";
 
+  /** C07d's caret: points right when folded, down when open. */
+  const caret = (open: boolean) =>
+    cn(
+      "inline-flex size-[22px] shrink-0 cursor-pointer items-center justify-center rounded-md text-nevo-near-black/55 transition-transform duration-[160ms] ease-out",
+      open && "rotate-90",
+    );
+  const Caret = () => (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M9 6l6 6-6 6" />
+    </svg>
+  );
+
   const Arrow = ({ up }: { up: boolean }) => (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d={up ? "M12 19V5M6 11l6-6 6 6" : "M12 5v14M18 13l-6 6-6-6"} />
@@ -265,6 +321,18 @@ export function LiveStructureTree({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-[22px] xl:px-8 xl:py-7">
+        <div className="mb-3 flex justify-end">
+          <button
+            type="button"
+            onClick={toggleAll}
+            className="inline-flex shrink-0 cursor-pointer items-center gap-[7px] rounded-[10px] border-[1.5px] border-nevo-near-black/18 px-3.5 py-[9px] text-[13px] font-semibold whitespace-nowrap text-nevo-near-black transition-colors hover:bg-nevo-near-black/5"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d={allOpen ? "M7 11l5-5 5 5M7 17l5-5 5 5" : "M7 13l5 5 5-5M7 7l5 5 5-5"} />
+            </svg>
+            {allOpen ? "Collapse all" : "Expand all"}
+          </button>
+        </div>
         <div className="mb-3.5 flex items-center gap-3 rounded-xl bg-nevo-navy px-[18px] py-[15px]">
           <span className="shrink-0 text-nevo-violet" aria-hidden>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -284,14 +352,25 @@ export function LiveStructureTree({
           </span>
         </div>
 
-        {draft.map((lesson, li) => (
+        {draft.map((lesson, li) => {
+          const lessonOpen = !closed.has(lessonKey(lesson, li));
+          return (
           <div
             /* A split lesson has no id until the server mints one, so the
                key falls back to position rather than going undefined. */
-            key={lesson.lessonId ?? `new-${li}`}
+            key={lessonKey(lesson, li)}
             className="mb-3 rounded-[12px] bg-nevo-cream-elevated px-[18px] py-4 shadow-elevation-1"
           >
             <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => toggle(lessonKey(lesson, li))}
+                aria-expanded={lessonOpen}
+                aria-label={`Lesson ${li + 1} sections`}
+                className={caret(lessonOpen)}
+              >
+                <Caret />
+              </button>
               <span className="shrink-0 font-mono text-[10.5px] font-bold tracking-[0.12em] text-nevo-violet">
                 {`LESSON ${li + 1}`}
               </span>
@@ -321,12 +400,34 @@ export function LiveStructureTree({
               </button>
             </div>
 
+            {lessonOpen && (
             <div className="mt-2.5 flex flex-col gap-2">
-              {lesson.modules.map((m, mi) => (
+              {lesson.modules.map((m, mi) => {
+                // The third level. Only the named ones are listed; a section
+                // whose keys resolve to nothing keeps its count and says
+                // nothing below, so it has nothing to open either.
+                const named = namedSegments(m.segmentIds, segments).filter(
+                  (seg) => seg.title !== null,
+                );
+                const moduleOpen = !closed.has(moduleKey(lesson, li, mi));
+                return (
                 <Fragment key={`${lesson.lessonId ?? "new"}-${li}-${mi}`}>
                 <div
                   className="flex items-center gap-2.5 rounded-[10px] bg-nevo-cream-inset px-3.5 py-2.5"
                 >
+                  {named.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => toggle(moduleKey(lesson, li, mi))}
+                      aria-expanded={moduleOpen}
+                      aria-label={`Section ${mi + 1} segments`}
+                      className={caret(moduleOpen)}
+                    >
+                      <Caret />
+                    </button>
+                  ) : (
+                    <span className="size-[22px] shrink-0" aria-hidden />
+                  )}
                   <span className="shrink-0 font-mono text-[10px] font-bold tracking-[0.1em] text-nevo-near-black/45">
                     {`SECTION ${mi + 1}`}
                   </span>
@@ -366,15 +467,7 @@ export function LiveStructureTree({
                     </svg>
                   </button>
                 </div>
-                {/* The third level. Only the named ones are listed; a section
-                    whose keys resolve to nothing keeps its count above and
-                    says nothing here. */}
-                {(() => {
-                  const named = namedSegments(m.segmentIds, segments).filter(
-                    (seg) => seg.title !== null,
-                  );
-                  if (named.length === 0) return null;
-                  return (
+                {moduleOpen && named.length > 0 && (
                     <ul className="mb-1 ml-9 mt-0.5 list-none space-y-0.5 p-0">
                       {named.map((seg) => (
                         <li
@@ -396,18 +489,20 @@ export function LiveStructureTree({
                         </li>
                       ))}
                     </ul>
-                  );
-                })()}
+                )}
                 </Fragment>
-              ))}
+                );
+              })}
               {lesson.modules.length === 0 && (
                 <p className="text-[13px] text-nevo-near-black/55">
                   Nevo didn&rsquo;t split this lesson into sections.
                 </p>
               )}
             </div>
+            )}
           </div>
-        ))}
+          );
+        })}
 
         {error && (
           <p className="mt-3 max-w-[600px] rounded-[10px] bg-nevo-violet/14 px-[15px] py-3 text-[13px] leading-[1.5] text-nevo-near-black/78">
@@ -453,14 +548,11 @@ export function LiveStructureTree({
 
         <button
           type="button"
-          onClick={() => setPhase("confirm")}
-          disabled={phase === "committing" || dirty}
-          title={
-            dirty ? "Save your changes before adding this to your library" : undefined
-          }
+          onClick={() => void addToLibrary()}
+          disabled={phase === "committing" || saving === "saving"}
           className={cn(
             "flex h-[46px] items-center rounded-[10px] px-[26px] text-[15px] font-semibold",
-            phase === "committing" || dirty
+            phase === "committing" || saving === "saving"
               ? "cursor-not-allowed bg-nevo-navy/18 text-nevo-near-black/40"
               : "cursor-pointer bg-nevo-navy text-nevo-cream transition-[filter] hover:brightness-93",
           )}

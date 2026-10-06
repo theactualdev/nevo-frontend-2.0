@@ -438,6 +438,12 @@ const CLASSIFIER_ALLOWED = new Map([
     "src/components/admin/Settings/academicCalendar.ts:unresolvedLine",
     "`rows === 1` is English grammar - \"1 term needs\" vs \"2 terms need\" - about the school's own calendar settings. Permanent: pluralisation is not a cutoff.",
   ],
+  // Teacher console, 6 Oct: the line under an Assign that is waiting, shared
+  // by the lesson page and the upload finish screen.
+  [
+    "src/components/teacher/Library/LessonDetailActions.tsx:stillToCheck",
+    "`keyPoints > 0` and `sections > 0` ask whether the SERVER'S counts have anything to mention (rule 5, absence), and the word is the server's own verdict restated - Assign gates on `readyToAssign`, never on these. About a lesson's review, not a child. Permanent: there is no cutoff to own.",
+  ],
 ]);
 const allowlistHits = new Set();
 

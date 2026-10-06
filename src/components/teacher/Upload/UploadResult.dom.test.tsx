@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-const { regenerate, awaitParseRun, detail } = vi.hoisted(() => ({
+const { regenerate, awaitParseRun, detail, review } = vi.hoisted(() => ({
   regenerate: vi.fn(),
   awaitParseRun: vi.fn(),
   detail: vi.fn(),
+  review: vi.fn(),
 }));
 vi.mock("@/lib/api/content", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/content")>();
@@ -16,7 +17,7 @@ vi.mock("@/lib/api/content", async (importOriginal) => {
 });
 vi.mock("@/lib/api/lessons", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/lessons")>();
-  return { ...actual, lessonsApi: { ...actual.lessonsApi, detail } };
+  return { ...actual, lessonsApi: { ...actual.lessonsApi, detail, review } };
 });
 
 import { UploadResult } from "./UploadResult";
@@ -74,6 +75,9 @@ beforeEach(() => {
     .mockReset()
     .mockResolvedValue({ status: "completed", finished: true, failureReason: null });
   detail.mockReset().mockResolvedValue({ ...LESSON, title: "Fractions 3, read again" });
+  review
+    .mockReset()
+    .mockResolvedValue({ lessonId: "l-1", keyPoints: [], outstandingCount: 0, readyToAssign: false });
 });
 
 describe("the try-that-again control", () => {
@@ -177,5 +181,62 @@ describe("a re-read whose parse failed", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("7e728d46d73e")).toBeInTheDocument();
     expect(screen.queryByText(/nothing about the lesson has changed/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * LU-04 and C14 B1 both lead with "Assign to a class". It waits on the same
+ * gate as the lesson page: the server's `readyToAssign`, never a count.
+ */
+describe("assigning from the finish screen", () => {
+  it("waits, and says what is left, while the server says not yet", async () => {
+    render(<UploadResult lesson={LESSON} fileName="fractions.pdf" onUploadAnother={vi.fn()} />);
+
+    expect(await screen.findByText("1 section still to check")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Assign to a class" })).not.toBeInTheDocument();
+    expect(screen.getByText("Assign to a class")).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("goes to the assign wizard with this lesson once it can", async () => {
+    review.mockResolvedValue({ lessonId: "l-1", keyPoints: [], outstandingCount: 0, readyToAssign: true });
+    render(<UploadResult lesson={LESSON} fileName="fractions.pdf" onUploadAnother={vi.fn()} />);
+
+    expect(await screen.findByRole("link", { name: "Assign to a class" })).toHaveAttribute(
+      "href",
+      "/teacher/lessons/assign?lesson=l-1",
+    );
+    expect(screen.queryByText(/still to check/)).not.toBeInTheDocument();
+  });
+
+  it("says nothing while the verdict is still on its way", () => {
+    review.mockReturnValue(new Promise(() => {}));
+    render(<UploadResult lesson={LESSON} fileName="fractions.pdf" onUploadAnother={vi.fn()} />);
+
+    expect(screen.getByText("Assign to a class")).toHaveAttribute("aria-disabled", "true");
+    expect(screen.queryByText(/still to check|Still being checked/)).not.toBeInTheDocument();
+  });
+
+  it("keeps the lesson itself one press away, where the checking happens", () => {
+    render(<UploadResult lesson={LESSON} fileName="fractions.pdf" onUploadAnother={vi.fn()} />);
+
+    expect(screen.getByRole("link", { name: "Open the lesson" })).toHaveAttribute(
+      "href",
+      "/teacher/lessons/l-1",
+    );
+  });
+
+  it("asks for the verdict again after a re-read", async () => {
+    render(
+      <UploadResult
+        lesson={LESSON}
+        fileName="fractions.pdf"
+        onUploadAnother={vi.fn()}
+        onRegenerated={vi.fn()}
+      />,
+    );
+    await waitFor(() => expect(review).toHaveBeenCalledTimes(1));
+    tryAgain();
+
+    await waitFor(() => expect(review).toHaveBeenCalledTimes(2));
   });
 });

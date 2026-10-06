@@ -594,8 +594,9 @@ export function LiveLessonDetail({
              * was reviewed or arrived clean, and it says what a teacher can
              * do next rather than what they just did.
              *
-             * SCRUM-152's system message is the other half of this beat and
-             * is not built in this console yet.
+             * SCRUM-152's system message is the other half of this beat. It
+             * is built: `useLessonReview` raises it, above, at the moment the
+             * last thing holding the lesson is settled.
              */
             <div className="mt-6 max-w-[660px] rounded-[12px] bg-nevo-navy/6 px-[18px] py-4">
               <p className="text-[15px] font-semibold text-nevo-near-black">

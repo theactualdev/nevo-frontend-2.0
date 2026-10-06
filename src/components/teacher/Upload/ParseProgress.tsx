@@ -8,8 +8,8 @@ import { cn } from "@/lib/utils";
  * open it and start steering while later levels run - the done rungs carry
  * "Open and steer" into the structure tree.
  *
- * Presentational: the wizard owns the stage clock (mock until the parse
- * seam). NOTE: the C07e frame's own head reads "STEP 2 OF 5 / 40%", which
+ * Presentational: the wizard decides the rung - from the staged upload's
+ * own `stage` on a real unit, from the walkthrough's beats signed out. NOTE: the C07e frame's own head reads "STEP 2 OF 5 / 40%", which
  * contradicts the C07g flow map (parse = step 3) - the wizard keeps 3 OF 5
  * at 50% per the audit; flagged to design.
  */

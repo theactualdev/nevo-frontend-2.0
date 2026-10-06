@@ -20,6 +20,9 @@ import { LiveShareSheet } from "./LiveShareSheet";
  * confirmed or noted until `escalationsApi.create` has resolved, and a
  * rejection keeps the teacher's words on screen. A test that merely checked
  * the confirmation appears would have passed against the lying version.
+ *
+ * Since C.8c the form's button only opens the confirm step; "Yes, send" is
+ * the write. `send()` below presses both, as a teacher would.
  */
 
 const show = (props: Record<string, unknown> = {}) => {
@@ -43,6 +46,11 @@ const type = (text: string) =>
 const sendBtn = () =>
   screen.getByRole("button", { name: "Send to Learning Support" });
 
+const send = () => {
+  fireEvent.click(sendBtn());
+  fireEvent.click(screen.getByRole("button", { name: "Yes, send" }));
+};
+
 beforeEach(() => {
   create.mockReset();
   create.mockResolvedValue({ id: "e-1" });
@@ -52,7 +60,7 @@ describe("sending", () => {
   it("sends the note about this student", async () => {
     const { onSent } = show();
     type("She has gone very quiet in group work this fortnight.");
-    fireEvent.click(sendBtn());
+    send();
 
     expect(create).toHaveBeenCalledWith({
       studentId: "s-1",
@@ -67,7 +75,7 @@ describe("sending", () => {
     create.mockReturnValueOnce(new Promise((r) => (resolve = r)));
     const { onSent } = show();
     type("Something is worrying me.");
-    fireEvent.click(sendBtn());
+    send();
 
     // Mid-flight. The version this replaces confirmed here, with no write at
     // all behind it.
@@ -80,7 +88,7 @@ describe("sending", () => {
   it("trims the note, so a stray newline is not the referral", () => {
     show();
     type("   He is struggling to settle after break.  \n");
-    fireEvent.click(sendBtn());
+    send();
 
     expect(create).toHaveBeenCalledWith({
       studentId: "s-1",
@@ -94,7 +102,7 @@ describe("sending", () => {
     // flag this is about, and guessing would tell the SENCo the wrong thing.
     show();
     type("Worth a look.");
-    fireEvent.click(sendBtn());
+    send();
 
     expect(create).toHaveBeenCalledWith(
       expect.not.objectContaining({ attentionFlagId: expect.anything() }),
@@ -107,7 +115,7 @@ describe("when the send fails", () => {
     create.mockRejectedValueOnce(new Error("500"));
     const { onSent } = show();
     type("She has gone very quiet.");
-    fireEvent.click(sendBtn());
+    send();
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       /Nothing has reached your SENCo/i,
@@ -119,7 +127,7 @@ describe("when the send fails", () => {
     create.mockRejectedValueOnce(new Error("500"));
     show();
     type("He asked to sit on his own again today.");
-    fireEvent.click(sendBtn());
+    send();
 
     await screen.findByRole("alert");
     expect(screen.getByRole("textbox")).toHaveValue(
@@ -131,11 +139,11 @@ describe("when the send fails", () => {
     create.mockRejectedValueOnce(new Error("500"));
     const { onSent } = show();
     type("Please take a look.");
-    fireEvent.click(sendBtn());
+    send();
     await screen.findByRole("alert");
 
     create.mockResolvedValueOnce({ id: "e-2" });
-    fireEvent.click(sendBtn());
+    send();
     await vi.waitFor(() => expect(onSent).toHaveBeenCalledTimes(1));
     expect(create).toHaveBeenCalledTimes(2);
   });
@@ -176,11 +184,47 @@ describe("closing", () => {
     // must not assemble and post one - the promise is kept elsewhere.
     show();
     type("A note.");
-    fireEvent.click(sendBtn());
+    send();
 
     expect(create).toHaveBeenCalledWith(
       expect.not.objectContaining({ recentPicture: expect.anything() }),
     );
-    expect(screen.getByText(/recent picture/)).toBeInTheDocument();
+    // The confirm step repeats the promise, so it may be said twice.
+    expect(screen.getAllByText(/recent picture/).length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * C.8c: the form's button asks once more before anything is posted.
+ */
+describe("the confirm step", () => {
+  it("posts nothing until Yes, send", () => {
+    show();
+    type("She has gone very quiet.");
+    fireEvent.click(sendBtn());
+
+    expect(screen.getByRole("heading", { name: "Send to Learning Support?" })).toBeInTheDocument();
+    expect(screen.getByText(/Amara’s recent picture and the note you wrote/)).toBeInTheDocument();
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("goes back to the note, unchanged, from Back", () => {
+    show();
+    type("He asked to sit on his own again.");
+    fireEvent.click(sendBtn());
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+
+    expect(screen.getByRole("textbox")).toHaveValue("He asked to sit on his own again.");
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("holds Back while the send is in flight", () => {
+    create.mockReturnValueOnce(new Promise(() => {}));
+    show();
+    type("Something is worrying me.");
+    send();
+
+    expect(screen.getByRole("button", { name: "Back" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Sending/ })).toBeDisabled();
   });
 });
