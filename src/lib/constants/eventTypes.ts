@@ -100,6 +100,12 @@ export const SIGNAL_EVENT_TYPES = {
    */
   HINT_OFFERED: "hint_offered",
   /**
+   * The child acted on a hint (B41): opened one they had to open, or moved on
+   * after one shown in full - payload { segmentId }. A hint shown and closed
+   * or left is `hint_offered` alone.
+   */
+  HINT_USED: "hint_used",
+  /**
    * A guided prompt was on screen in the opened socratic panel (B20) -
    * payload { segmentId, promptId }. The reply is not a client event: the
    * answer route puts `guided_question_answered` on the stream itself.
