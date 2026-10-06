@@ -94,7 +94,7 @@ export const HOME_FLAGS: HomeFlag[] = [
  * is all the card was ever entitled to say.
  */
 export const GOOD_TO_KNOW =
-  "Chisom Eze has finished the last four lessons that led with audio. Nevo will keep offering that version.";
+  "Chisom Eze has finished the last four lessons, each one audio-led.";
 
 export interface HomeClass {
   name: string;
