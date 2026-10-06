@@ -118,9 +118,9 @@ const CARD = "rounded-xl bg-nevo-cream-elevated shadow-[0_2px_8px_rgba(0,0,0,0.0
 
 /**
  * No "failed", and no longer "denied". A read that fails costs its own card,
- * and the page renders around it. A refused one does too, since the 6 Oct
- * ruling: an IT admin lands here without `oversight`, and the backend serves
- * the headcounts and the board summary to any admin - so a refused compliance
+ * and the page renders around it. A refused one does too: an admin without
+ * `oversight` can still reach this page by a link, and the backend serves the
+ * headcounts and the board summary to any admin - so a refused compliance
  * read costs the compliance card, not the school.
  */
 type Phase = "loading" | "ready";
@@ -842,7 +842,7 @@ export function OverviewView() {
                   /*
                    * NO LINK TO A REFUSAL. "Open Learning Support" went to a
                    * screen that refuses every admin without SENCo - the
-                   * founding admin and an IT admin among them. The row still
+                   * founding admin among them. The row still
                    * states what the school's own read found.
                    */
                   return mayOpen(g.href) ? (
