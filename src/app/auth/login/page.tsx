@@ -30,8 +30,10 @@ import { ChildAvatar } from "@/components/student/Auth/ChildAvatar";
 import { ProfilePicker } from "@/components/student/Auth/ProfilePicker";
 import { useAuth } from "@/hooks";
 import { studentDestination } from "@/lib/auth/entryGate";
+import { SignedInHereScreen } from "@/components/student/Auth/SignedInHereScreen";
 import {
-  REPLACED_ELSEWHERE_COPY,
+  SIGN_IN_OURS_COPY,
+  SIGN_IN_THROTTLED_COPY,
   skipsWelcomeBeat,
 } from "@/components/student/Auth/signInMoments";
 import {
@@ -155,8 +157,11 @@ export default function LoginPage() {
   const [error, setError] = useState<LearnerLoginFailure | null>(null);
   const [checking, setChecking] = useState(false);
   const [done, setDone] = useState(false);
-  /** This sign-in ended the account's session elsewhere; see `REPLACED_ELSEWHERE_COPY`. */
-  const [replacedElsewhere, setReplacedElsewhere] = useState(false);
+  /**
+   * Where the child goes once they have read that this sign-in ended their
+   * session elsewhere (D59, `SignedInHereScreen`). Null when it ended nothing.
+   */
+  const [releasedTo, setReleasedTo] = useState<string | null>(null);
   /**
    * Whether to believe the length this device remembers for the child.
    *
@@ -239,6 +244,24 @@ export default function LoginPage() {
     inputRef.current?.focus({ preventScroll: true });
   }, [chosen, done]);
 
+  /**
+   * On from a sign-in that worked: the "Welcome back" beat, then where they
+   * were going - or straight there, with no beat, for a child the consent gate
+   * holds (D2). True when it navigated at once.
+   */
+  const goOn = useCallback(
+    (destination: string): boolean => {
+      if (skipsWelcomeBeat(destination)) {
+        router.push(destination);
+        return true;
+      }
+      setDone(true);
+      doneTimer.current = setTimeout(() => router.push(destination), DONE_MS);
+      return false;
+    },
+    [router],
+  );
+
   const submit = useCallback(
     async (pin: string, remembered: RememberedChild) => {
       setChecking(true);
@@ -248,7 +271,8 @@ export default function LoginPage() {
       try {
         const session = await authApi.loginPin({
           schoolCode: remembered.schoolCode,
-          loginIdentifier: remembered.loginIdentifier,
+          // What the device remembered, as it was - a handle or a Student ID.
+          admissionNumber: remembered.loginIdentifier,
           pin,
         });
         /*
@@ -298,14 +322,12 @@ export default function LoginPage() {
          * their checking state for the one read this costs.
          */
         const destination = await studentDestination(next);
-        if (skipsWelcomeBeat(destination)) {
-          leaving = true;
-          router.push(destination);
+        // D59 first, when this ended a session elsewhere; its Continue goes on.
+        if (session.replacedSession === true) {
+          setReleasedTo(destination);
           return;
         }
-        setReplacedElsewhere(session.replacedSession === true);
-        setDone(true);
-        doneTimer.current = setTimeout(() => router.push(destination), DONE_MS);
+        leaving = goOn(destination);
       } catch (cause) {
         setDigits("");
         // 401/403 is the server's answer about these credentials. A 422 means
@@ -319,7 +341,7 @@ export default function LoginPage() {
         if (!leaving) setChecking(false);
       }
     },
-    [router, signIn, next],
+    [signIn, next, goOn],
   );
 
   /** Where the boxes fill and submit themselves, or null for "grow and wait". */
@@ -451,13 +473,13 @@ export default function LoginPage() {
         <p className="mt-2.5 text-[15px] text-nevo-near-black/60">
           Taking you to your lessons…
         </p>
-        {replacedElsewhere && (
-          <p className="mt-1.5 text-[15px] text-nevo-near-black/60">
-            {REPLACED_ELSEWHERE_COPY}
-          </p>
-        )}
       </main>
     );
+  }
+
+  if (releasedTo !== null) {
+    // Stays up for a held child while the waiting screen loads.
+    return <SignedInHereScreen onContinue={() => goOn(releasedTo)} />;
   }
 
   /*
@@ -573,13 +595,11 @@ export default function LoginPage() {
                 (ownDevice
                   ? "That PIN didn't match. Try again, or ask your teacher."
                   : "That PIN didn't match. Have another go.")}
-              {error === "ours" &&
-                "We couldn't check that just now - that's on us, not you. Try again in a moment."}
-              {/* No frame covers this one; the copy is ours and deliberately
-                  plain. What it must not do is what it used to: tell a child
-                  who typed the right PIN too quickly that it was wrong. */}
-              {error === "throttled" &&
-                "That's a lot of tries in a row. Wait a moment, then try again."}
+              {/* 28c-6, 28c-7 and 28c-8 (D68), in the same box. The rate
+                  limit must never read as a wrong PIN: the child may have
+                  typed the right one too quickly. */}
+              {error === "ours" && SIGN_IN_OURS_COPY}
+              {error === "throttled" && SIGN_IN_THROTTLED_COPY}
               {error === "wrong_door" && <WrongDoorNote door={wrongDoor} />}
             </div>
           ) : (
