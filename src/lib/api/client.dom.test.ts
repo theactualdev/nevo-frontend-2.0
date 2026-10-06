@@ -352,3 +352,21 @@ describe("a child paused mid-lesson", () => {
     unregister();
   });
 });
+
+/**
+ * B36: a crash report is sent from an error screen. If the session behind it
+ * has died, its 401 must not clear the session and carry the child off the
+ * screen they are reading - the next ordinary read finds the dead session.
+ */
+describe("a crash report", () => {
+  it("never sends anyone to a door, whatever it is answered", async () => {
+    vi.stubGlobal("fetch", respondWith(401));
+    const { api } = await freshClient();
+
+    await expect(
+      api.post("/api/v1/client-errors", { message: "x" }),
+    ).rejects.toThrow();
+
+    expect(clearSession).not.toHaveBeenCalled();
+  });
+});
