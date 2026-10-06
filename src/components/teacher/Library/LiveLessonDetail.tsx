@@ -165,6 +165,15 @@ function SegmentRow({
             {segment.body}
           </p>
         )}
+        {/* The engine's own words about how the class moved through this
+            section, when it has any - C06b's per-row note. Quoted, never
+            built: "several students slowed here" from `slowdownCount` would
+            be the console choosing how many is several (rule 3). */}
+        {progress?.note && (
+          <p className="mt-1.5 max-w-[62ch] text-[13.5px] leading-[1.5] text-nevo-navy">
+            {progress.note}
+          </p>
+        )}
         {outstanding && (
           /*
            * "Worth a look", and NOT the reasons.
@@ -476,6 +485,8 @@ export function LiveLessonDetail({
               {/* C06b counts KEY POINTS while a review is open and sections
                   otherwise - the meta line describes the thing the screen is
                   currently about. */}
+              {/* C06b's header leads with the subject, as the card does. */}
+              {lesson.subject && `${lesson.subject} · `}
               {waiting > 0 && review.keyPoints.length > 0
                 ? plural(review.keyPoints.length, "key point", "key points")
                 : plural(lesson.segmentCount, "section", "sections")}

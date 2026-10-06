@@ -62,7 +62,8 @@ export interface ConceptMasteryRow {
   studentId: string;
   conceptId: string;
   /** Shipped 31 Aug. Before it, this read had ids only. */
-  conceptName: string;
+  /** Nullable in the contract: a concept the engine has no name for. */
+  conceptName: string | null;
   /** 0-1. The frame's bars are percentages. */
   masteryProbabilityConcept: number;
   masteryProbabilityReading: number;
@@ -548,7 +549,8 @@ export const studentsApi = {
 /** One misconception several students in a class share (C09). */
 export interface ClassMisconception {
   conceptId: string;
-  conceptName: string;
+  /** Nullable in the contract: a concept the engine has no name for. */
+  conceptName: string | null;
   /** A short name for the shape of the error. */
   pattern: string;
   studentCount: number;
@@ -559,7 +561,8 @@ export interface ClassMisconception {
  *  per-student read - see the note at the top of this file. */
 export interface ClassMasteryRow {
   conceptId: string;
-  conceptName: string;
+  /** Nullable in the contract: a concept the engine has no name for. */
+  conceptName: string | null;
   studentCount: number;
   masteryProbabilityConcept: number;
   masteryProbabilityReading: number;

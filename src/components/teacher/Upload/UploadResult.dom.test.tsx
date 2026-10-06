@@ -147,3 +147,35 @@ describe("the try-that-again control", () => {
     ).toBeInTheDocument();
   });
 });
+
+/**
+ * THE PARSE'S OWN REASON, ON THIS SCREEN TOO. A re-read that failed got our
+ * generic line while the upload screens showed the server's, because the
+ * hook threw the reason away.
+ */
+describe("a re-read whose parse failed", () => {
+  it("shows the server's reason and the reference to quote", async () => {
+    awaitParseRun.mockResolvedValue({
+      status: "failed",
+      finished: true,
+      failureReason: "Nevo couldn’t find readable text in that file.",
+      incidentId: "7e728d46d73e",
+    });
+    render(
+      <UploadResult
+        lesson={LESSON}
+        fileName="fractions.pdf"
+        onUploadAnother={vi.fn()}
+        onRegenerated={vi.fn()}
+      />,
+    );
+
+    tryAgain();
+
+    expect(
+      await screen.findByText("Nevo couldn’t find readable text in that file."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("7e728d46d73e")).toBeInTheDocument();
+    expect(screen.queryByText(/nothing about the lesson has changed/)).not.toBeInTheDocument();
+  });
+});

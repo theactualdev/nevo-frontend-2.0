@@ -10,6 +10,7 @@ import type {
 } from "@/lib/api/content";
 import { SplitSourceNotice } from "@/components/teacher/Library/SplitSourceNotice";
 import { cn } from "@/lib/utils";
+import { IncidentLine } from "./ParseFallback";
 
 /**
  * What came back from a real upload (C07g step 3, honestly).
@@ -240,10 +241,16 @@ export function UploadResult({
       )}
 
       {regenerate.state === "failed" && (
-        <p className="mt-3 max-w-[62ch] text-[14px] leading-[1.55] text-nevo-near-black/68">
-          That did not go through, and nothing about the lesson has changed.
-          You can try again, or upload the file once more.
-        </p>
+        <>
+          <p className="mt-3 max-w-[62ch] text-[14px] leading-[1.55] text-nevo-near-black/68">
+            {/* The server's reason leads where the parse gave one - as it
+                does on the upload screens - and ours stands where it did not,
+                which is every failure that never reached the parse. */}
+            {regenerate.failureReason ??
+              "That did not go through, and nothing about the lesson has changed. You can try again, or upload the file once more."}
+          </p>
+          <IncidentLine id={regenerate.incident} />
+        </>
       )}
     </div>
   );
