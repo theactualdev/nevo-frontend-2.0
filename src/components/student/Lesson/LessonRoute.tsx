@@ -6,6 +6,7 @@ import { useStudentLesson } from "@/hooks/useStudentLesson";
 import { LessonError } from "./LessonError";
 import { LessonLoadingSkeleton } from "./LessonLoadingSkeleton";
 import { LessonMessage } from "./LessonMessage";
+import { LessonNotOpened } from "./LessonNotOpened";
 import { LessonPlayer } from "./LessonPlayer";
 import { useLessonExit } from "./LessonExit";
 
@@ -200,17 +201,10 @@ export function LessonRoute({
    * Nothing resolved it. Either the live read said 404, or there was no read
    * to make - a signed-out visitor on an id the mock registry does not hold.
    *
-   * Said here, in the summary route's words, rather than by `notFound()`. That
+   * Said here, in frame 28's D90 screen, rather than by `notFound()`. That
    * dropped the child onto the app's "This page doesn't exist", which is
    * written for a developer and whose only button is `router.back()` - off the
    * site entirely on a reload or a QR arrival.
    */
-  return (
-    <LessonMessage
-      title="We couldn’t find that lesson"
-      body="It may have been put away. Your other lessons are all still here."
-      actionLabel="Back to my lessons"
-      onAction={() => exitTo(LESSONS_HREF)}
-    />
-  );
+  return <LessonNotOpened onBack={() => exitTo(LESSONS_HREF)} />;
 }
