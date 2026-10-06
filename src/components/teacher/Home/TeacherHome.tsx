@@ -75,6 +75,7 @@ export function TeacherHome() {
     live: flagsLive,
     failed: flagsFailed,
     loading: flagsLoading,
+    complete: flagsComplete,
   } = useTeacherFlags();
   const {
     pulse,
@@ -101,7 +102,9 @@ export function TeacherHome() {
         </h2>
         {/* The frame's line says "Three things"; the real count is whatever
             the flags endpoint returned. */}
-        {hasFlags && (
+        {/* The count is said only when it is the whole count. A fixture
+            count is the walkthrough's own; a live one needs every page. */}
+        {hasFlags && (fixtureFlags.length > 0 || flagsComplete) && (
           <p className="mt-2 hidden text-[15.5px] leading-[1.55] text-nevo-near-black/60 xl:block">
             {`${flagCount} ${flagCount === 1 ? "thing is" : "things are"} worth your eye before first period. Everything else is running smoothly.`}
           </p>

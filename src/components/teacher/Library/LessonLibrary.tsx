@@ -97,7 +97,8 @@ export function LessonLibrary() {
   const [filter, setFilter] = useState("All");
   // `live` is no longer read here: the pills used to be gated on it, and now
   // they are gated on having subjects to show, which is the honest condition.
-  const { cards: lessons, live, sample, loading, slow } = useLessonLibrary();
+  const { cards: lessons, live, sample, loading, slow, capped } =
+    useLessonLibrary();
 
   /**
    * "All", then every subject on the shelf, first-seen order.
@@ -182,6 +183,14 @@ export function LessonLibrary() {
       {sample && (
         <p className="mt-2 max-w-[560px] text-[13px] leading-[1.5] text-nevo-near-black/55 italic">
           We couldn&rsquo;t reach your lessons just now, so these are samples.
+        </p>
+      )}
+      {/* The read came back full: there may be lessons it could not return,
+          and a library that drops them without saying so is the bug. */}
+      {capped && (
+        <p className="mt-2 max-w-[560px] text-[13px] leading-[1.5] text-nevo-near-black/55">
+          Showing the first 200 of your lessons. Search only looks through
+          these.
         </p>
       )}
 
