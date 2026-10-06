@@ -83,7 +83,7 @@ export function AccountPauseHost() {
             <DialogPrimitive.Content
               onEscapeKeyDown={(e) => e.preventDefault()}
               onInteractOutside={(e) => e.preventDefault()}
-              className="fixed top-1/2 left-1/2 z-50 flex w-[295px] max-w-[calc(100%-48px)] -translate-x-1/2 -translate-y-1/2 flex-col items-center rounded-2xl bg-nevo-cream-elevated px-[30px] py-9 text-center text-nevo-near-black shadow-[0_8px_32px_rgba(0,0,0,0.16)] outline-none motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-98 motion-safe:slide-in-from-bottom-2.5 motion-safe:duration-[380ms] sm:w-[388px] sm:px-10 sm:py-11"
+              className="fixed top-1/2 left-1/2 z-50 flex w-[295px] max-w-[calc(100%-48px)] -translate-x-1/2 -translate-y-1/2 flex-col items-center rounded-2xl bg-nevo-cream-elevated px-[30px] py-9 text-center text-nevo-near-black shadow-[0_8px_32px_rgba(0,0,0,0.16)] outline-none motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-98 motion-safe:slide-in-from-bottom-[10px] motion-safe:duration-[380ms] sm:w-[388px] sm:px-10 sm:py-11"
             >
               <span className="mb-5 flex size-[52px] items-center justify-center rounded-full bg-nevo-violet/22 sm:mb-6 sm:size-[58px]">
                 <Image
