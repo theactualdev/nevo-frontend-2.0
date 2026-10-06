@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { isOpenToStudent, unavailableReason } from "@/lib/lessons/availability";
 import { lessonHref } from "@/lib/lessons/lessonHref";
+import { segmentPlace, type SegmentPlace } from "@/lib/lessons/segmentPlace";
 import { BookOpen, ChevronRight, Clock, Play, Shapes } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { IllustrationWrapper } from "@/components/shared";
@@ -19,24 +20,29 @@ import type { LessonSummary } from "@/components/student/Lessons/lessonCatalog";
 
 /** One unfinished lesson on "Pick up where you left off" (SCRUM-146). */
 interface PickUp {
-  /** React key - the assignment it came from, or the fixture's own id. */
+  /**
+   * React key - the assignment it came from, the lesson for one started from
+   * the library, or the fixture's own id.
+   */
   key: string;
   title: string;
   /** Omitted when the lesson carries none - never a guessed subject. */
   subject?: string;
-  /*
-   * NO "HOW FAR IN", in words or as a ring (design D19 and D21, 1 Oct).
+  /**
+   * HOW FAR IN, AS A RING AND NEVER IN WORDS (design D19 and D21, backend B51).
    *
-   * This carried a 0-1 fraction and a phrase cut from it at one third and two
-   * thirds ("Just getting started", "About halfway in", "Almost there") - a
-   * threshold we chose, which rule 3 forbids. And the fraction itself is not
-   * on the wire: `RecentProgressResponse.segmentPosition` is the segment the
-   * child was on, with no base stated on that schema, and nothing says
-   * `segmentCount` counts the segments the player indexes (the summary also
-   * carries `reviewSegmentCount` and `unapprovedSegmentCount`). A ring drawn
-   * from the two is an amount we composed. The phrase returns when the
-   * backend sends one.
+   * The ring is back because the true fraction is on the wire: B51 said
+   * `segmentPosition` is a zero-based cursor and `segmentCount` is every
+   * segment, and put both on the progress row. Until then the two were
+   * unexplained and a ring drawn from them was an amount we composed. Absent
+   * when the row does not say, and then the card wears the plain mark.
+   *
+   * STILL NO PHRASE. This once cut the fraction at one third and two thirds
+   * ("Just getting started", "About halfway in", "Almost there") - a threshold
+   * we chose, which rule 3 forbids. The backend sends no phrase, so the card
+   * shows none (D19).
    */
+  place?: SegmentPlace;
   href: string;
 }
 
@@ -77,25 +83,32 @@ const TODAY: TodayLesson[] = [
   fixtureToday("shapes-around-us", "Shapes Around Us", "About 8 min", Shapes),
 ];
 
-// No fraction and no phrase on these either: the walkthrough is what a real
-// child's card looks like, and it must not model the pattern D19 retired.
+// The frame's rings, from positions like a real row's, and no phrase: the
+// walkthrough is what a real child's card looks like, and it must not model
+// the pattern D19 retired.
+const fixturePlace = (segmentPosition: number, segmentCount: number) =>
+  segmentPlace({ segmentPosition, segmentCount }) ?? undefined;
+
 const PICKUP: PickUp[] = [
   {
     key: "adding-fractions",
     title: "Adding Fractions",
     subject: "Mathematics",
+    place: fixturePlace(5, 9),
     href: MOCK_HREF,
   },
   {
     key: "the-water-cycle",
     title: "The Water Cycle",
     subject: "Science",
+    place: fixturePlace(2, 11),
     href: MOCK_HREF,
   },
   {
     key: "punctuation-marks",
     title: "Punctuation Marks",
     subject: "English",
+    place: fixturePlace(6, 7),
     href: MOCK_HREF,
   },
 ];
@@ -204,25 +217,65 @@ export function HomeDashboard() {
         return status === "in_progress" || status === "exited";
       };
 
-      pickup = open
+      const assigned = open
         .filter((a) => partWay(a.lesson.id))
-        .sort(
-          (a, b) =>
-            Date.parse(latest.get(b.lesson.id)!.updatedAt) -
-            Date.parse(latest.get(a.lesson.id)!.updatedAt),
-        )
-        .slice(0, PICKUP_MAX)
         .map((a) => {
+          const row = latest.get(a.lesson.id)!;
           const subject = a.lesson.subject?.trim();
+          const place = segmentPlace(row);
           return {
-            key: a.id,
-            title: a.lesson.title,
-            ...(subject ? { subject } : {}),
-            // Straight back in, with the assignment riding the link - a
-            // lesson the child is already in needs no preview.
-            href: lessonHref(a.lesson.id, a.id),
+            at: row.updatedAt,
+            item: {
+              key: a.id,
+              title: a.lesson.title,
+              ...(subject ? { subject } : {}),
+              ...(place ? { place } : {}),
+              // Straight back in, with the assignment riding the link - a
+              // lesson the child is already in needs no preview.
+              href: lessonHref(a.lesson.id, a.id),
+            },
           };
         });
+
+      /*
+       * AND THE ONES THEY STARTED FROM THE LIBRARY (backend B52, 5 Oct).
+       *
+       * The progress row carries the lesson's own title and subject now, so a
+       * lesson no teacher set can sit here beside the set ones. A lesson ANY
+       * assignment names is not one of these, whatever that assignment's
+       * state: a cancelled or not-yet-open one was filtered out above on
+       * purpose, and must not come back in through this door. A row with no
+       * title is left off - a card with no name is not a lesson a child can
+       * recognise, and we will not write one for it. No assignment, so the
+       * link carries none (`lessonHref`).
+       */
+      const setWork = new Set(live.assignments.map((a) => a.lesson.id));
+      const library = [...latest.values()]
+        .filter((row) => !setWork.has(row.lessonId) && partWay(row.lessonId))
+        .flatMap((row) => {
+          const title = row.title?.trim();
+          if (!title) return [];
+          const subject = row.subject?.trim();
+          const place = segmentPlace(row);
+          return [
+            {
+              at: row.updatedAt,
+              item: {
+                key: `library-${row.lessonId}`,
+                title,
+                ...(subject ? { subject } : {}),
+                ...(place ? { place } : {}),
+                href: lessonHref(row.lessonId),
+              },
+            },
+          ];
+        });
+
+      // Most recently touched first, whichever door the lesson came in by.
+      pickup = [...assigned, ...library]
+        .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
+        .slice(0, PICKUP_MAX)
+        .map((p) => p.item);
 
       /*
        * TODAY'S LESSONS CARRIES ONLY WORK NOT YET STARTED (SCRUM-146).
@@ -480,7 +533,7 @@ function PickUpCard({ item }: { item: PickUp }) {
       href={item.href}
       className="flex cursor-pointer items-center gap-4 rounded-[12px] bg-nevo-cream-elevated px-[18px] py-4 shadow-elevation-1 transition-transform active:scale-[0.98]"
     >
-      <PickUpMark />
+      {item.place ? <PickUpRing place={item.place} /> : <PickUpMark />}
       <span className="min-w-0 flex-1">
         <span className="block text-base font-semibold tracking-[-0.005em] text-nevo-near-black">
           {item.title}
@@ -500,14 +553,69 @@ function PickUpCard({ item }: { item: PickUp }) {
   );
 }
 
+/** The frame's ring: r 24 on a 54 box, so this is its full length. */
+const RING_LENGTH = 2 * Math.PI * 24;
+
 /**
- * The frame's ring without the ring: a status mark, not an amount.
+ * The frame's ring, run to the child's own fraction (backend B51), with the
+ * play glyph in the middle.
  *
- * The arc was the fraction (see `PickUp`), and any ring left in its place still
- * reads as one - a full circle as finished, a bare track as not begun. So the
- * mark is the frame's play glyph on a plain tinted disc, the same for every
- * lesson a child is part-way through. It says what tapping does and nothing
- * about how far.
+ * Read aloud as the position in words, never as a number (rule 9). The arc is
+ * left off entirely at the very start rather than drawn as zero, because a
+ * round cap on a zero-length dash still paints a dot - an amount nobody sent.
+ */
+function PickUpRing({ place }: { place: SegmentPlace }) {
+  return (
+    <span
+      role="img"
+      aria-label={place.words}
+      className="relative flex size-[54px] shrink-0 items-center justify-center text-nevo-navy"
+      data-pickup-ring
+    >
+      <svg
+        viewBox="0 0 54 54"
+        className="absolute inset-0 size-full -rotate-90"
+        aria-hidden
+      >
+        <circle
+          cx="27"
+          cy="27"
+          r="24"
+          fill="none"
+          stroke="rgba(59,63,110,0.14)"
+          strokeWidth="4"
+        />
+        {place.fraction > 0 && (
+          <circle
+            cx="27"
+            cy="27"
+            r="24"
+            fill="none"
+            stroke="var(--color-nevo-violet)"
+            strokeWidth="4"
+            strokeLinecap="round"
+            strokeDasharray={RING_LENGTH}
+            strokeDashoffset={RING_LENGTH * (1 - place.fraction)}
+          />
+        )}
+      </svg>
+      <Play
+        className="relative size-[17px]"
+        fill="currentColor"
+        strokeWidth={0}
+        aria-hidden
+      />
+    </span>
+  );
+}
+
+/**
+ * The plain mark, for a lesson whose row does not say how far in (design D21).
+ *
+ * Not a ring with nothing on it: any ring reads as an amount - a full circle
+ * as finished, a bare track as not begun. So the mark is the frame's play
+ * glyph on a plain tinted disc. It says what tapping does and nothing about
+ * how far.
  */
 function PickUpMark() {
   return (

@@ -54,10 +54,36 @@ describe("starting a lesson from its preview", () => {
 describe("what the preview says about where a child is", () => {
   const sheet = () => screen.getByRole("dialog");
 
-  it("says a lesson is partway without drawing how far", () => {
+  it("draws the frame's bar to the child's own place, read out in words", () => {
     /*
-     * Design D21. The bar's width was `segmentPosition / segmentCount`, which
-     * the wire does not carry; a bar is read as an amount just as a ring is.
+     * Backend B51 put the true fraction on the progress row, which is D21's
+     * condition for drawing one. The bar says the position, never a number.
+     */
+    render(
+      <LessonPreviewSheet
+        lesson={{
+          ...LESSON,
+          status: "in_progress",
+          place: { fraction: 0.2, words: "Segment 3 of 10" },
+        }}
+        open
+        onOpenChange={() => {}}
+      />,
+    );
+
+    const bar = screen.getByRole("progressbar", { name: "Segment 3 of 10" });
+    expect(bar).toHaveAttribute("aria-valuetext", "Segment 3 of 10");
+    expect(
+      screen.getByText("You're partway through this one"),
+    ).toBeInTheDocument();
+    // Spoken, not printed - and never as a percentage.
+    expect(sheet().textContent).not.toMatch(/%|Segment|of 10/);
+  });
+
+  it("says a lesson is partway without drawing how far when the row does not say", () => {
+    /*
+     * Design D21. Without the true fraction a bar is an amount we composed,
+     * and a bar is read as an amount just as a ring is.
      */
     render(
       <LessonPreviewSheet
@@ -71,6 +97,7 @@ describe("what the preview says about where a child is", () => {
       screen.getByText("You're partway through this one"),
     ).toBeInTheDocument();
     expect(sheet().innerHTML).not.toMatch(/width:\s*\d+%/);
+    expect(screen.queryByRole("progressbar")).toBeNull();
     expect(screen.getByRole("button", { name: "Continue" })).toBeInTheDocument();
   });
 

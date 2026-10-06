@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { escalationsApi } from "@/lib/api/escalations";
+import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
 
 /**
  * C.8b Share with Learning Support, for a real student.
@@ -26,9 +27,15 @@ import { escalationsApi } from "@/lib/api/escalations";
  * differs deliberately from C08c's recommend sheet, which does confirm in
  * place. Flagged to design as a divergence between two adjacent sheets.
  *
+ * C.8c ASKS ONCE MORE. "Send to Learning Support" no longer posts: it opens
+ * the confirm step C08 and the profile frame both draw ("Send to Learning
+ * Support?" / Back / Yes, send). A safeguarding referral is the one write on
+ * this console a teacher should not be able to make by a slip of the finger.
+ * C14 B5 resolved the SENT state only, so it does not retire this step.
+ *
  * A FAILED SEND NEVER DISMISSES. `onSent` is called only after the write
- * resolves. If the post fails the sheet stays open with the teacher's words
- * still in the box, because a safeguarding note silently dropped on a flaky
+ * resolves. If the post fails the sheet goes back to the form, with the
+ * teacher's words still in the box and the error under them, because a safeguarding note silently dropped on a flaky
  * connection is the failure that matters most on this screen.
  */
 export function LiveShareSheet({
@@ -44,8 +51,11 @@ export function LiveShareSheet({
   onSent: () => void;
 }) {
   const [note, setNote] = useState("");
+  const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A safeguarding note, of all things, should not vanish on a refresh.
+  useUnsavedGuard(note.trim().length > 0);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -59,6 +69,12 @@ export function LiveShareSheet({
   // nothing. Whitespace is not a note.
   const ready = note.trim().length > 0 && !busy;
 
+  function review() {
+    if (!ready) return;
+    setError(null);
+    setConfirming(true);
+  }
+
   async function send() {
     if (!ready) return;
     setBusy(true);
@@ -67,6 +83,8 @@ export function LiveShareSheet({
       await escalationsApi.create({ studentId, note: note.trim() });
       onSent();
     } catch {
+      // Back to the form: the error says the note "is still here", so it is.
+      setConfirming(false);
       setError(
         `We couldn${"’"}t send that just now. Nothing has reached your SENCo, so your note is still here to try again.`,
       );
@@ -87,6 +105,41 @@ export function LiveShareSheet({
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-[500px] rounded-2xl bg-nevo-cream p-7 shadow-[0_8px_32px_rgba(0,0,0,0.16)] motion-safe:animate-in motion-safe:zoom-in-95 motion-safe:duration-200 xl:max-w-[520px] xl:p-8"
       >
+        {confirming ? (
+          <>
+            <h2 className="text-xl font-semibold tracking-[-0.01em] text-nevo-near-black xl:text-[22px]">
+              Send to Learning Support?
+            </h2>
+            <p className="mt-[9px] text-[14.5px] leading-[1.55] text-nevo-near-black/68 xl:mt-2.5 xl:text-[15px]">
+              {`This shares ${firstName}${"’"}s recent picture and your note with your SENCo. They${"’"}ll follow up with you, and it stays between you and Learning Support.`}
+            </p>
+            <div className="mt-4 rounded-xl border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[15px] py-[13px] xl:mt-[18px] xl:px-4 xl:py-3.5">
+              <p className="text-[13px] leading-[1.5] text-nevo-near-black xl:text-[13.5px]">
+                <strong className="font-semibold">Sending:</strong>
+                {` ${firstName}${"’"}s recent picture and the note you wrote.`}
+              </p>
+            </div>
+            <div className="mt-[18px] flex gap-3 xl:mt-5">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setConfirming(false)}
+                className="flex h-[50px] flex-1 cursor-pointer items-center justify-center rounded-[10px] border-[1.5px] border-nevo-navy/30 text-[14.5px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6 disabled:cursor-not-allowed disabled:opacity-55 xl:h-[52px] xl:text-[15px]"
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                disabled={!ready}
+                onClick={() => void send()}
+                className="flex h-[50px] flex-1 cursor-pointer items-center justify-center rounded-[10px] bg-nevo-navy text-[14.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93 disabled:cursor-not-allowed disabled:opacity-55 xl:h-[52px] xl:text-[15px]"
+              >
+                {busy ? `Sending${"…"}` : "Yes, send"}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
         <h2 className="text-xl font-semibold tracking-[-0.01em] text-nevo-near-black xl:text-[22px]">
           {`Share ${firstName} with Learning Support`}
         </h2>
@@ -116,10 +169,10 @@ export function LiveShareSheet({
           <button
             type="button"
             disabled={!ready}
-            onClick={() => void send()}
+            onClick={review}
             className="flex h-[50px] flex-1 cursor-pointer items-center justify-center rounded-[10px] bg-nevo-navy text-[14.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93 disabled:cursor-not-allowed disabled:opacity-55 xl:h-[52px] xl:text-[15px]"
           >
-            {busy ? `Sending${"…"}` : "Send to Learning Support"}
+            Send to Learning Support
           </button>
         </div>
 
@@ -130,6 +183,8 @@ export function LiveShareSheet({
           >
             {error}
           </p>
+        )}
+          </>
         )}
       </div>
     </div>

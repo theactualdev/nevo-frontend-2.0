@@ -463,6 +463,20 @@ export function LiveLessonDetail({
                   Needs review
                 </span>
               )}
+              {/* C06b's "Ready · not yet assigned": a quiet pill beside the
+                  title, in the frame's own neutral. Only once the review has
+                  answered and found nothing, on a lesson with something to
+                  send that nobody has yet. */}
+              {assignable &&
+                settled &&
+                waiting === 0 &&
+                review.ready &&
+                assignments.length === 0 &&
+                !assignmentsFailed && (
+                  <span className="inline-flex shrink-0 items-center rounded-full bg-nevo-navy/10 px-2.5 py-[3px] text-[11.5px] font-semibold whitespace-nowrap text-nevo-near-black/60">
+                    Ready
+                  </span>
+                )}
             </div>
             {/* C06b's violet reason line sits ABOVE the grey meta, so the
                 reason is read before the statistics. The section number comes
@@ -580,8 +594,9 @@ export function LiveLessonDetail({
              * was reviewed or arrived clean, and it says what a teacher can
              * do next rather than what they just did.
              *
-             * SCRUM-152's system message is the other half of this beat and
-             * is not built in this console yet.
+             * SCRUM-152's system message is the other half of this beat. It
+             * is built: `useLessonReview` raises it, above, at the moment the
+             * last thing holding the lesson is settled.
              */
             <div className="mt-6 max-w-[660px] rounded-[12px] bg-nevo-navy/6 px-[18px] py-4">
               <p className="text-[15px] font-semibold text-nevo-near-black">
@@ -720,7 +735,10 @@ export function LiveLessonDetail({
         )}
 
         <h3 className={cn(SECTION_H, "mt-8")}>
-          What&rsquo;s in this lesson
+          {/* C06b's two headings: what is in the lesson before anyone has
+              worked through it, and how the class moved through it once
+              there is progress to show. */}
+          {progress ? "How the class moved through it" : "What’s inside"}
           {progress && classes.length > 1 && (
             /*
              * THE PROGRESS IS STILL ONE CLASS'S, and now it can say whose.

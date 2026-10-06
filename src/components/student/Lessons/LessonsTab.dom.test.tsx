@@ -87,11 +87,11 @@ describe("what a live lesson row says", () => {
     expect(body()).toMatch(/About 12 min/);
   });
 
-  it("marks a lesson in progress as a state, not a fixed 55%", () => {
+  it("marks a lesson in progress as a state when the row says no more", () => {
     /*
      * Design D21. Every in-progress card drew the same conic fill at 55%,
-     * which a child reads as how far they are. The real fraction is not on
-     * the wire, so the mark carries no portion at all.
+     * which a child reads as how far they are. With no true fraction for this
+     * lesson, the mark carries no portion at all.
      */
     lessons.value = [lesson({ status: "in_progress" })];
 
@@ -100,6 +100,42 @@ describe("what a live lesson row says", () => {
     const mark = screen.getByRole("img", { name: "In progress" });
     expect(mark).toBeInTheDocument();
     expect(container.innerHTML).not.toMatch(/conic-gradient|55%/);
+  });
+
+  it("fills the in-progress mark to the child's own place, in words aloud", () => {
+    /*
+     * Backend B51: the true fraction is on the wire, so D21's condition is
+     * met and the frame's fill comes back - this child's, not a fixed 55%,
+     * and spoken as a position, never a percentage.
+     */
+    lessons.value = [
+      lesson({
+        status: "in_progress",
+        place: { fraction: 0.2, words: "Segment 3 of 10" },
+      }),
+    ];
+
+    const { container } = render(<LessonsTab />);
+
+    const mark = screen.getByRole("img", {
+      name: "In progress. Segment 3 of 10",
+    });
+    expect(mark).toHaveAttribute("data-segment-fill");
+    expect(container.innerHTML).not.toMatch(/55%|20%/);
+  });
+
+  it("draws no fill on a lesson that is not in progress", () => {
+    lessons.value = [
+      lesson({
+        status: "completed",
+        place: { fraction: 0.2, words: "Segment 3 of 10" },
+      }),
+    ];
+
+    render(<LessonsTab />);
+
+    expect(screen.getByRole("img", { name: "Completed" })).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: /Segment/ })).toBeNull();
   });
 });
 

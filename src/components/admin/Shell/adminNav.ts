@@ -23,6 +23,17 @@ import { scopeName } from "../Team/adminScopes";
  * Five items map straight out of those sentences. Four are not covered by the
  * catalogue and are marked `inferred` below - a guess, made once, in one place,
  * and flagged to design rather than scattered through the screens.
+ *
+ * AN IT ADMIN SEES THE SCHOOL (product ruling, 6 Oct). *"An IT admin lands on
+ * the same admin dashboard as everyone else. They can see everything on it
+ * except Settings."* The ruling assumed v1 had no permissions; it has seven
+ * scopes, and the backend refuses some reads per request. So it is built to
+ * what the server allows ("option 1"): an `it_sso` admin's rail adds every
+ * screen whose reads the backend serves to ANY admin - the items marked
+ * `itReadable` - and lands on the Overview. Learning Support, Billing and the
+ * Admin Team stay behind their own scopes, because the server refuses them
+ * without; school Settings stays behind `oversight`, and "the proprietor
+ * promotes them" is ticking General Oversight in Edit access.
  */
 
 export interface AdminNavItem {
@@ -34,15 +45,20 @@ export interface AdminNavItem {
   scope: PermissionScope | null;
   /** True where D03's catalogue does not settle it - see the docblock. */
   inferred?: boolean;
+  /**
+   * Also on an IT / SSO admin's rail: the backend serves this screen's reads
+   * to any admin, whatever they hold. See the 6 Oct ruling above.
+   */
+  itReadable?: boolean;
 }
 
 export const ADMIN_NAV: AdminNavItem[] = [
-  { label: "Overview", href: "/admin/dashboard", group: "", scope: "oversight" },
-  { label: "Classes", href: "/admin/classes", group: "School", scope: "roster" },
-  { label: "Teachers", href: "/admin/teachers", group: "School", scope: "roster" },
-  { label: "Students", href: "/admin/students", group: "School", scope: "roster" },
+  { label: "Overview", href: "/admin/dashboard", group: "", scope: "oversight", itReadable: true },
+  { label: "Classes", href: "/admin/classes", group: "School", scope: "roster", itReadable: true },
+  { label: "Teachers", href: "/admin/teachers", group: "School", scope: "roster", itReadable: true },
+  { label: "Students", href: "/admin/students", group: "School", scope: "roster", itReadable: true },
   // Invitations create teachers and students, which is what `roster` grants.
-  { label: "Invitations", href: "/admin/invitations", group: "School", scope: "roster", inferred: true },
+  { label: "Invitations", href: "/admin/invitations", group: "School", scope: "roster", inferred: true, itReadable: true },
   { label: "Learning Support", href: "/admin/senco", group: "Support", scope: "senco" },
   // Reports are the school-wide picture, which is `oversight`'s own wording.
   { label: "Reports", href: "/admin/reports", group: "Support", scope: "oversight", inferred: true },
@@ -72,7 +88,38 @@ export const ADMIN_NAV: AdminNavItem[] = [
 
 /** The nav an admin holding these scopes actually sees. */
 export function navForScopes(scopes: PermissionScope[]): AdminNavItem[] {
-  return ADMIN_NAV.filter((i) => i.scope === null || scopes.includes(i.scope));
+  const it = scopes.includes("it_sso");
+  return ADMIN_NAV.filter(
+    (i) => i.scope === null || scopes.includes(i.scope) || (it && i.itReadable === true),
+  );
+}
+
+/**
+ * Drill-downs that belong to a rail item but are gated more narrowly than it.
+ * Both read endpoints the backend keeps behind `oversight`, so an IT admin
+ * who can open the Overview still cannot open these.
+ */
+const DRILL_DOWN_SCOPE: Record<string, PermissionScope> = {
+  "/admin/compliance": "oversight",
+  "/admin/adaptations": "oversight",
+};
+
+/**
+ * Whether a link to `href` leads anywhere for this admin.
+ *
+ * A screen offering a link its reader's rail does not include sends them to a
+ * refusal - the Overview's "Open Learning Support" did that to every admin
+ * without SENCo, the founding admin among them. Routes that are not rail
+ * screens (setup, activation) are not this function's to gate.
+ */
+export function canOpen(href: string, scopes: PermissionScope[]): boolean {
+  const under = (p: string) => href === p || href.startsWith(`${p}/`);
+  const drill = Object.entries(DRILL_DOWN_SCOPE).find(([p]) => under(p));
+  if (drill) return scopes.includes(drill[1]);
+  const item = ADMIN_NAV.filter((i) => under(i.href)).sort(
+    (a, b) => b.href.length - a.href.length,
+  )[0];
+  return !item || navForScopes(scopes).includes(item);
 }
 
 /**
@@ -134,10 +181,14 @@ export function scopeSummary(scopes: PermissionScope[]): string {
  *
  * Oversight wins when present: a proprietor who also holds billing wants the
  * school, not the invoices.
+ *
+ * IT LANDS ON THE OVERVIEW TOO (6 Oct ruling, above). It used to land on D17,
+ * the IT & SSO home - a surface for provider sign-in, which is deferred and off
+ * the rail, so a manual school's IT admin began on a page about nothing their
+ * school uses. D17's route still works for anyone who needs it.
  */
 export function adminHomeForScopes(scopes: PermissionScope[]): string {
-  if (scopes.includes("oversight")) return "/admin/dashboard";
-  if (scopes.includes("it_sso")) return "/admin/sso/home";
+  if (scopes.includes("oversight") || scopes.includes("it_sso")) return "/admin/dashboard";
   if (scopes.includes("billing")) return "/admin/billing/home";
   // Whatever their rail offers first, rather than a screen they cannot open.
   return navForScopes(scopes)[0]?.href ?? "/admin/settings";

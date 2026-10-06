@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { intelligenceApi } from "@/lib/api";
 import type {
   AdaptSegment,
@@ -34,6 +34,10 @@ import type { AdaptationPlan, Lesson } from "@/lib/types";
  * reason - a ref read while rendering is a value React never promised to be
  * current. So the caller passes only what it already renders from, and
  * everything time-shaped is tracked here, in effects.
+ *
+ * One reading is the player's: the moment an adaptation reached the screen,
+ * which only the player sees. It takes that in its own effects and hands it
+ * over in a ref - see `AppliedAdaptations`.
  *
  * The counts are COUNTS - what the child did, tallied, never weighed. The
  * contract's scores and its two "below baseline" flags stay unsent: those are
@@ -88,8 +92,9 @@ export interface RuntimeAdaptation {
    */
   plan: AdaptationPlan | null;
   /**
-   * The segment this answer was asked for - `currentSegmentId` on the
-   * request. Between the child moving on and the next answer landing, the
+   * The segment this answer is for: the instruction's own `segmentId` (B46,
+   * 5 Oct), else `currentSegmentId` on the request, which backend says it
+   * always is. Between the child moving on and the next answer landing, the
    * last one is still here - and it was about the segment they left, so its
    * break, offer or hint is not for the one they are on.
    *
@@ -99,6 +104,20 @@ export interface RuntimeAdaptation {
    * every segment after, including through a failed read that keeps the plan.
    */
   forSegmentId: string | null;
+}
+
+/**
+ * THE ADAPTATIONS A CHILD SAW APPLIED, kept by the player because only the
+ * player knows when something reached the screen (B42): a reshape of the text
+ * the system chose, a modality change from an offer taken, a hint. Not
+ * offers, and not instructions the screen could not show.
+ *
+ * `lastAt` is `performance.now()` at that moment (rule 4). Held in a ref and
+ * read only when a request or a batch is built, never while rendering.
+ */
+export interface AppliedAdaptations {
+  count: number;
+  lastAt: number | null;
 }
 
 const BREAK_VALUES: readonly string[] = Object.values(BREAK_TYPES);
@@ -115,6 +134,8 @@ export function useRuntimeAdaptation(
   runtime: RuntimeState,
   /** The built lesson, so the engine's rows are clamped to what it renders. */
   lesson: Lesson | null = null,
+  /** What the player has applied - see `AppliedAdaptations`. */
+  applied: RefObject<AppliedAdaptations> | null = null,
 ): RuntimeAdaptation {
   const [result, setResult] = useState<RuntimeAdaptation>({
     offeredBreak: null,
@@ -178,6 +199,10 @@ export function useRuntimeAdaptation(
    * A SHIFT IS A CHANGE WITHIN A SEGMENT - an offer taken. Every segment opens
    * in its own modality, and counting those openings reported a child who
    * changed nothing as one who had switched at every segment.
+   *
+   * Counted for the whole session and never reset, however the change came
+   * about - backend's definition (B42): it caps how often one session may be
+   * rearranged, and a per-segment count would lift that cap every segment.
    */
   useEffect(() => {
     const prev = last.current;
@@ -190,65 +215,87 @@ export function useRuntimeAdaptation(
   useEffect(() => {
     if (!enabled || !lessonId || !segments?.length || !segmentId) return;
     let active = true;
-    // Monotonic (rule 4): every duration below is sent to the engine, and a
-    // wall clock that jumps would send negatives or fail validation.
-    const now = performance.now();
+    /*
+     * BUILT A MICROTASK LATER, once every effect in this commit has run. The
+     * player notes what reached the screen in its own effects, which run
+     * after this hook's - so a reshape applied as the child arrives on a
+     * segment would otherwise be missing from the request that arrival
+     * makes, and the engine would read a lesson that had just been
+     * rearranged as one that had not been, for one answer.
+     */
+    queueMicrotask(() => {
+      if (!active) return;
+      // Monotonic (rule 4): every duration below is sent to the engine, and a
+      // wall clock that jumps would send negatives or fail validation.
+      const now = performance.now();
 
-    const state = latest.current;
-    const signals: RuntimeSignals = {
-      currentSegmentId: state.currentSegmentId,
-      currentModality: state.currentModality,
-      availableModalities: state.availableModalities,
-      // Worked out here, from the hook's own clocks - see `RuntimeState`.
-      continuousMinutes: openedAt.current
-        ? Math.max(0, (now - openedAt.current) / 60_000)
-        : 0,
-      currentSegmentElapsedSeconds: segmentStartedAt.current
-        ? Math.max(0, Math.round((now - segmentStartedAt.current) / 1000))
-        : 0,
-      midpointReached: state.midpointReached,
-      sessionModalityShiftCount: modalityShifts.current,
-      replayCountOnSegment: state.replayCountOnSegment,
-      consecutiveErrors: state.consecutiveErrors,
-      declinedModalities: state.declinedModalities,
-      sessionDeclineCount: state.sessionDeclineCount,
-      sameSegmentSuggestionShown: state.sameSegmentSuggestionShown,
-      segmentsSinceLastSuggestion: state.segmentsSinceLastSuggestion,
-      /*
-       * NOT SENT: `secondsSinceLastAdaptation`. What went out under that name
-       * was the time since this hook last ASKED - in practice the last
-       * segment's dwell - and no adaptation is involved in that at all. Which
-       * moment the engine counts from is backend's to say; until it does, a
-       * mislabelled number is worse than the contract's own null.
-       */
-    };
-    const askedFor = state.currentSegmentId;
+      const state = latest.current;
+      const appliedAt = applied?.current.lastAt ?? null;
+      const signals: RuntimeSignals = {
+        currentSegmentId: state.currentSegmentId,
+        currentModality: state.currentModality,
+        availableModalities: state.availableModalities,
+        // Worked out here, from the hook's own clocks - see `RuntimeState`.
+        continuousMinutes: openedAt.current
+          ? Math.max(0, (now - openedAt.current) / 60_000)
+          : 0,
+        currentSegmentElapsedSeconds: segmentStartedAt.current
+          ? Math.max(0, Math.round((now - segmentStartedAt.current) / 1000))
+          : 0,
+        midpointReached: state.midpointReached,
+        sessionModalityShiftCount: modalityShifts.current,
+        replayCountOnSegment: state.replayCountOnSegment,
+        consecutiveErrors: state.consecutiveErrors,
+        declinedModalities: state.declinedModalities,
+        sessionDeclineCount: state.sessionDeclineCount,
+        sameSegmentSuggestionShown: state.sameSegmentSuggestionShown,
+        segmentsSinceLastSuggestion: state.segmentsSinceLastSuggestion,
+        /*
+         * B42: FROM THE MOMENT AN ADAPTATION WAS APPLIED ON SCREEN - not
+         * decided, not asked for. It feeds the engine's cooldown, so the
+         * wrong moment makes it too eager or deaf. Null while nothing has
+         * been applied this session. Whole seconds, rounded down, so the
+         * cooldown is never told more time has passed than has. Left out
+         * when the caller does not say what it applied: a number nobody can
+         * vouch for is worse than the contract's own null.
+         */
+        ...(applied
+          ? {
+              secondsSinceLastAdaptation:
+                appliedAt === null
+                  ? null
+                  : Math.max(0, Math.floor((now - appliedAt) / 1000)),
+            }
+          : {}),
+      };
+      const askedFor = state.currentSegmentId;
 
-    void intelligenceApi
-      .getAdaptation(lessonId, segments, { mode: "in_lesson", signals })
-      .then((res) => {
-        if (!active) return;
-        const built = lessonRef.current;
-        setResult({
-          offeredBreak: asBreakType(res.breakSuggestion?.breakType),
-          reason: res.breakSuggestion?.reason ?? null,
-          plan: built ? toAdaptationPlan(res, built) : null,
-          forSegmentId: askedFor,
+      void intelligenceApi
+        .getAdaptation(lessonId, segments, { mode: "in_lesson", signals })
+        .then((res) => {
+          if (!active) return;
+          const built = lessonRef.current;
+          setResult({
+            offeredBreak: asBreakType(res.breakSuggestion?.breakType),
+            reason: res.breakSuggestion?.reason ?? null,
+            plan: built ? toAdaptationPlan(res, built) : null,
+            forSegmentId: res.proactiveAdjustment?.segmentId ?? askedFor,
+          });
+        })
+        .catch(() => {
+          // A failed read is not "no break needed", but it is not grounds to
+          // interrupt a child either, so it offers none. Nor is it an
+          // instruction: the plan falls back to the load-time one rather
+          // than to "the engine now says nothing".
+          if (active)
+            setResult((prev) => ({ ...prev, offeredBreak: null, reason: null }));
         });
-      })
-      .catch(() => {
-        // A failed read is not "no break needed", but it is not grounds to
-        // interrupt a child either, so it offers none. Nor is it an
-        // instruction: the plan falls back to the load-time one rather than
-        // to "the engine now says nothing".
-        if (active)
-          setResult((prev) => ({ ...prev, offeredBreak: null, reason: null }));
-      });
+    });
 
     return () => {
       active = false;
     };
-  }, [enabled, lessonId, segments, segmentId, replays, errors, declines]);
+  }, [enabled, lessonId, segments, segmentId, replays, errors, declines, applied]);
 
   return result;
 }

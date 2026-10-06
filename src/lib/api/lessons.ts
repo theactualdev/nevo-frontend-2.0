@@ -606,6 +606,15 @@ export const lessonsApi = {
     api.post<OfflineDownload>(`/api/v1/lessons/${lessonId}/download`),
 
   /**
+   * What a lesson would cost to keep, WITHOUT keeping it (backend B61, 5 Oct).
+   * GET /api/v1/lessons/{id}/offline-manifest is a read and records nothing,
+   * unlike `download`. The server builds the archive to measure it, so ask
+   * only for lessons about to be shown.
+   */
+  offlineManifest: (lessonId: string) =>
+    api.get<OfflineManifest>(`/api/v1/lessons/${lessonId}/offline-manifest`),
+
+  /**
    * The package itself, as bytes: an `application/zip` holding `lesson.json`
    * and `manifest.json`. GET /api/v1/lessons/{id}/offline-package
    */

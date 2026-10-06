@@ -24,7 +24,10 @@ import {
 } from "@/lib/constants";
 import { useLesson, useSignals } from "@/hooks";
 import type { SessionOutcome } from "@/hooks/useSignals";
-import { useRuntimeAdaptation } from "@/hooks/useRuntimeAdaptation";
+import {
+  useRuntimeAdaptation,
+  type AppliedAdaptations,
+} from "@/hooks/useRuntimeAdaptation";
 import { useLessonExit } from "./LessonExit";
 import { useScaffoldLevel } from "@/hooks/useScaffoldLevel";
 import { intelligenceApi, type AdaptSegment } from "@/lib/api/intelligence";
@@ -53,6 +56,7 @@ import { AfterLessonAssessment } from "./AfterLessonAssessment";
 import { ADJUSTMENT_ACTIONS } from "@/lib/constants/affect";
 import { densityForAction } from "@/lib/lessons/densityForAction";
 import { densitySpacing } from "@/lib/lessons/densitySpacing";
+import { depthShown, type DepthShown } from "@/lib/lessons/depthShown";
 import { scaffoldAttemptFor } from "@/lib/lessons/scaffoldAttempt";
 import { scaffoldsApi } from "@/lib/api/scaffolds";
 import { useAssignmentNote } from "@/hooks/useAssignmentNote";
@@ -257,11 +261,24 @@ export function LessonPlayer({
   // `useSignals`. Null until `POST /session` answers, which the hook holds for.
   // How the session ended travels on its envelope; set where it ends.
   const [ending, setEnding] = useState<SessionOutcome | null>(null);
+  /*
+   * WHAT THE CHILD SAW APPLIED (B42), counted where it reaches the screen:
+   * the system's reshape of the text, a modality change from an offer taken,
+   * a hint. Not offers, not instructions the screen could not show, and not
+   * the child's own picks. The count rides the session envelope and the
+   * moment feeds the engine's cooldown - see `AppliedAdaptations`.
+   */
+  const applied = useRef<AppliedAdaptations>({ count: 0, lastAt: null });
+  const noteApplied = useCallback(() => {
+    applied.current.count += 1;
+    applied.current.lastAt = performance.now();
+  }, []);
   const { trackEvent } = useSignals(
     progress.sessionId,
     lesson.id,
     "lesson",
     ending,
+    applied,
   );
   const { setActiveLesson } = useLesson();
 
@@ -635,6 +652,7 @@ export function LessonPlayer({
       breaksTaken: observed.breaksTaken,
     },
     lesson,
+    applied,
   );
 
   /*
@@ -673,6 +691,10 @@ export function LessonPlayer({
    * segment being asked about or it does not.
    */
   const chunkRead = useRef<{ segmentId: string; pct: number } | null>(null);
+  /** The text version on screen, for `time_on_segment` - see `depthShown`. */
+  const textShown = useRef<{ segmentId: string; depth: DepthShown } | null>(
+    null,
+  );
   /*
    * The segment whose chunked body still has parts to show, for the chevrons
    * (37c, below). State rather than the ref above because the screen changes
@@ -769,9 +791,14 @@ export function LessonPlayer({
        */
       const chunked =
         chunkRead.current?.segmentId === segId ? chunkRead.current.pct : null;
+      // B45: the text version on screen as the child left, stamped with the
+      // segment like `chunkRead`. Unknown is left out rather than guessed.
+      const depth =
+        textShown.current?.segmentId === segId ? textShown.current.depth : null;
       trackEvent(SIGNAL_EVENT_TYPES.TIME_ON_SEGMENT, {
         segmentId: segId,
         durationMs: Math.max(0, Math.round(shownMs)),
+        ...(depth ? { depthShown: depth } : {}),
         scrollDepthPct: chunked ?? Math.round(scrollDepth.current),
       });
     };
@@ -959,17 +986,20 @@ export function LessonPlayer({
   /*
    * `hint_offered` (B20): the hint card went on screen. Once per hint per
    * segment - a return visit or a re-render is not the engine offering it
-   * again. `hint_used` is not sent from here: this hint is unrequested and
-   * shown whole, so there is no act of using it to observe. The solver's
-   * "Need a hint?" is the hint a child asks for, and it is frozen.
+   * again. `hint_used` (B41) is sent as the child moves on with this hint
+   * still on screen - see `advancePastSegment`. The solver's "Need a hint?"
+   * is the hint a child opens, and it is frozen.
    */
   const hintOnScreen = segmentShowing && hintHere && Boolean(hintText);
   const offeredHints = useRef<Set<string>>(new Set());
+  const usedHints = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!hintOnScreen || offeredHints.current.has(hintKey)) return;
     offeredHints.current.add(hintKey);
     trackEvent(SIGNAL_EVENT_TYPES.HINT_OFFERED, { segmentId: segment.id });
-  }, [hintOnScreen, hintKey, segment.id, trackEvent]);
+    // An unrequested hint on screen is an adaptation applied (B42).
+    noteApplied();
+  }, [hintOnScreen, hintKey, segment.id, trackEvent, noteApplied]);
 
   /*
    * A REPLY TO A GUIDED PROMPT (B19) goes to its own route, which puts it on
@@ -1157,6 +1187,12 @@ export function LessonPlayer({
    * intercepts once on the way out; finishing it resumes this same advance.
    */
   const advancePastSegment = () => {
+    // B41: moving on with the whole hint still on screen is acting on it. A
+    // hint the child closed is not on screen, and stays `hint_offered` alone.
+    if (hintOnScreen && !usedHints.current.has(hintKey)) {
+      usedHints.current.add(hintKey);
+      trackEvent(SIGNAL_EVENT_TYPES.HINT_USED, { segmentId: segment.id });
+    }
     const plannedBreak = livePlanFor(segment.id)?.breakAfter ?? null;
     if (plannedBreak && !breaksTaken.current.has(segment.id)) {
       breaksTaken.current.add(segment.id);
@@ -1240,10 +1276,9 @@ export function LessonPlayer({
    * engine did not ask for." With no instruction there is no system density,
    * so no chip lights.
    *
-   * KNOWN GAP: the engine is still not told which version was on screen, so
-   * it cannot tell a child who read the simpler text from one who read the
-   * standard. Nothing in the contract carries that today - raised with
-   * backend rather than spelled into an event of our own.
+   * The engine is told which version was on screen: `depthShown` on every
+   * `time_on_segment` (B45, 5 Oct), so it can tell a child who read the
+   * simpler text from one who read the standard.
    */
   const systemDensity: Density | null =
     densityForAction(action) ?? segPlan?.density ?? null;
@@ -1274,6 +1309,40 @@ export function LessonPlayer({
       density === id ? "manual" : systemDensity === id ? "system" : "default",
   }));
 
+  /*
+   * B45: KEPT AS THE SCREEN CHANGES, READ AS THE CHILD LEAVES. React runs a
+   * commit's effect cleanups before its setups, so the time-on-segment
+   * cleanup reads the segment being left before the next one's version
+   * lands here - and the segment id it is stamped with says so either way.
+   */
+  const depthNow = depthShown(segment, modality, effectiveDensity);
+  useEffect(() => {
+    textShown.current = { segmentId: segment.id, depth: depthNow };
+  }, [segment.id, depthNow]);
+
+  /*
+   * B42: THE SYSTEM'S RESHAPE, APPLIED. Its density on a text segment that
+   * can deliver it, with no pick of the child's over it - the violet chip in
+   * force. Counted once per instruction: a standing Simplify carried on to
+   * the next segment is the same adaptation, not another, while a new or
+   * withdrawn instruction starts over. The child's own picks are not counted.
+   */
+  const systemReshapeShown =
+    segmentShowing &&
+    modality === MODALITY.TEXT &&
+    density === null &&
+    densitySegments.some((d) => d.state === "system")
+      ? systemDensity
+      : null;
+  const reshapeCounted = useRef<Density | null>(null);
+  useEffect(() => {
+    if (reshapeCounted.current !== systemDensity) reshapeCounted.current = null;
+    if (!systemReshapeShown || reshapeCounted.current === systemReshapeShown)
+      return;
+    reshapeCounted.current = systemReshapeShown;
+    noteApplied();
+  }, [systemDensity, systemReshapeShown, noteApplied]);
+
   /** What became of the offer: said to the engine, and the offer spent. */
   const settleSuggestion = useCallback(
     (outcome: SignalEventType) => {
@@ -1291,7 +1360,9 @@ export function LessonPlayer({
     settleSuggestion(SIGNAL_EVENT_TYPES.MODALITY_SUGGESTION_ACCEPTED);
     // The accept beat is over and the new modality is on screen.
     trackBusy(BUSY_REASON.MODALITY_SWITCH, BUSY_PHASE.END);
-  }, [suggested, index, trackBusy, settleSuggestion]);
+    // A modality change, applied (B42).
+    if (suggested) noteApplied();
+  }, [suggested, index, trackBusy, settleSuggestion, noteApplied]);
 
   const dismissSuggestion = useCallback(() => {
     setLastSuggestedIndex(index);

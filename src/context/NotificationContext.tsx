@@ -122,13 +122,40 @@ const FOR_A_CHILD = new Map<string, NotificationKind>([
 ]);
 
 /**
+ * BACKEND'S PATHS THAT ARE NOT OUR ROUTES, AND THE ONE PLACE THEY ARE MAPPED.
+ *
+ * Backend fixed each student type's `navigatesTo` as data on 5 Oct (B62):
+ * `lesson_assigned` to /student/lessons, `review_due` to /student/review,
+ * `teacher_replied` to /student/messages and `sign_in_changed` to
+ * /student/profile. Two of those name screens this app does not have:
+ *
+ * - /student/messages is our Connect tab, /student/connect.
+ * - /student/review has no screen of its own. Reviews due are offered on a
+ *   subject's page ("Ready for another look"), which Progress leads to, and
+ *   the row names no subject or concept to go further than that.
+ *
+ * Mapped here rather than with redirect pages, so a wrong path is fixed in
+ * one line and nothing else in the app learns backend's spelling. Asked of
+ * backend: send our routes, and these entries go. The path is matched
+ * exactly; whatever follows it (`?thread=`) rides along.
+ */
+const CHILD_ROUTE: Record<string, string> = {
+  "/student/messages": "/student/connect",
+  "/student/review": "/student/progress",
+};
+
+/**
  * Where a child's row may take them: somewhere in the student console, or
  * nowhere. `navigatesTo` is the server's, and a path into another console
  * would land a child on a screen that is not theirs - so anything else is a
  * row with no link, which is what a null `navigatesTo` already means.
  */
-function childHref(target: string | null): string | null {
-  return target && /^\/student(\/|\?|$)/.test(target) ? target : null;
+export function childHref(target: string | null): string | null {
+  if (!target || !/^\/student(\/|\?|#|$)/.test(target)) return null;
+  const cut = target.search(/[?#]/);
+  const path = cut === -1 ? target : target.slice(0, cut);
+  const ours = CHILD_ROUTE[path.replace(/\/+$/, "")];
+  return ours ? ours + (cut === -1 ? "" : target.slice(cut)) : target;
 }
 
 function toItem(n: Notification): NotificationItem {

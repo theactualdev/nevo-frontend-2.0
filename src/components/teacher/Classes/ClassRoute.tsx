@@ -56,7 +56,7 @@ export function ClassRoute({
     return (
       <SampleRegion kind="teacher:class-detail">
         {/* Signed in, this is a failed read standing in - never a code. */}
-        <ClassDetail klass={fixture} withCode={!getToken()} />
+        <ClassDetail klass={fixture} />
       </SampleRegion>
     );
 

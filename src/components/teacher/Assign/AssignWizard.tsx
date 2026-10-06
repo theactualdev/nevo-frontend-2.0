@@ -9,6 +9,7 @@ import { useLessonLibrary } from "@/hooks/useLessonLibrary";
 import { useStudentDirectory } from "@/hooks/useStudentDirectory";
 import { useHasSession } from "@/hooks/useHasSession";
 import { useSystemMessages } from "@/components/shared/SystemMessages";
+import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
 import { useTeacherClasses } from "@/hooks/useTeacherClasses";
 import { cn } from "@/lib/utils";
 import { MaybeSample } from "@/components/shared/SampleRegion";
@@ -283,6 +284,8 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
   const [submitting, setSubmitting] = useState(false);
   const signedIn = useHasSession();
   const [error, setError] = useState("");
+  // Past the first step there are choices a teacher would have to remake.
+  useUnsavedGuard(step > 1);
   /**
    * Where the refusal sends them, when there is somewhere to send them.
    *

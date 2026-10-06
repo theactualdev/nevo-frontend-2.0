@@ -42,6 +42,11 @@ import { FlagCard } from "./FlagCard";
  *     arrives; see `LiveClassPulse`.
  *   - the greeting uses the teacher's real name, from `GET /api/v1/users/me`,
  *     and falls back to a nameless welcome rather than the fixture persona.
+ *   - the SCHOOL CODE sits beside it (C03, 30 Sep), from the same read's
+ *     `school.code`, because it is what a teacher now reads out to a class:
+ *     children sign in with it and their own Student ID. It replaced the
+ *     class code. No code, no box - and never on the signed-out walkthrough,
+ *     where a sample code would be one a child could type.
  *
  * TODO(design): the pulse's number-to-word banding is ours - see
  * `useTeacherHome`.
@@ -94,12 +99,26 @@ export function TeacherHome() {
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
       <div className="mx-auto max-w-[940px]">
-        <span className="text-[13px] text-nevo-near-black/55 xl:text-[13.5px]">
-          {todayLine()}
-        </span>
-        <h2 className="mt-1 text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
-          {greetName ? `Welcome back, ${greetName}` : "Welcome back"}
-        </h2>
+        <div className="flex items-start justify-between gap-[18px] xl:gap-6">
+          <div className="min-w-0">
+            <span className="text-[13px] text-nevo-near-black/55 xl:text-[13.5px]">
+              {todayLine()}
+            </span>
+            <h2 className="mt-1 text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
+              {greetName ? `Welcome back, ${greetName}` : "Welcome back"}
+            </h2>
+          </div>
+          {signedIn && identity?.schoolCode && (
+            <div className="flex shrink-0 flex-col items-end gap-1 rounded-xl bg-nevo-cream-elevated px-3.5 py-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:px-4 xl:py-3">
+              <span className="text-xs font-semibold tracking-[0.05em] text-nevo-near-black/55 uppercase">
+                School code
+              </span>
+              <span className="font-mono text-lg font-semibold tracking-[0.14em] text-nevo-navy xl:text-xl">
+                {identity.schoolCode}
+              </span>
+            </div>
+          )}
+        </div>
         {/* The frame's line says "Three things"; the real count is whatever
             the flags endpoint returned. */}
         {/* The count is said only when it is the whole count. A fixture

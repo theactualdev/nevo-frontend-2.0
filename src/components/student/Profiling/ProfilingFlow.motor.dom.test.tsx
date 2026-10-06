@@ -8,13 +8,13 @@ import {
 } from "@/lib/auth/onboarding";
 
 /**
- * Where the motor-speed step sits, and what it leaves in the vector (08a, D12).
+ * Where the motor-speed step sits, and what it leaves in the trials (08a, D12).
  *
  * After the intro and before the first timed activity, on every path into
  * the baseline - so the engine can read every later timing against how long
  * the reach takes. Skipped on a cursor device, which 08a does not draw, with
- * the reason recorded. And its taps reach the vector as taken: the median is
- * the engine's, never the device's.
+ * no taps to send. And its taps leave as trials, one each, as taken (B9): the
+ * median is the engine's, never the device's.
  */
 
 const { holdBaseline } = vi.hoisted(() => ({ holdBaseline: vi.fn() }));
@@ -117,9 +117,9 @@ const sitTheModules = () => {
   for (const s of ["m1", "pause", "m2", "pause", "m3", "pause", "m4"]) press(s);
 };
 
-const motorFeature = () =>
-  (holdBaseline.mock.calls[0][1] as Record<string, unknown>[]).find(
-    (f) => f.module === "motor_speed",
+const motorTrials = () =>
+  (holdBaseline.mock.calls[0][1] as Record<string, unknown>[]).filter(
+    (t) => t.dimension === "motor_speed",
   );
 
 beforeEach(() => {
@@ -160,18 +160,20 @@ describe("on a touch device", () => {
     press("motor");
     sitTheModules();
 
-    const motor = motorFeature();
-    expect(motor).toEqual({
-      module: "motor_speed",
-      ended: "complete",
-      formFactor: "tablet",
-      grid: 4,
-      samples: [
-        { target: 0, cell: 5, latencyMs: 412.5, practice: true, formFactor: "tablet" },
-        { target: 1, cell: 6, latencyMs: 388.25, practice: true, formFactor: "tablet" },
-        { target: 2, cell: 12, latencyMs: 371, practice: false, formFactor: "tablet" },
-      ],
+    const trial = (condition: string | null, response: string, ms: number) => ({
+      dimension: "motor_speed",
+      condition,
+      response,
+      correct: null,
+      responseTimeMs: ms,
+      probeItemId: null,
     });
+    // Whole milliseconds, as the contract takes them.
+    expect(motorTrials()).toEqual([
+      trial("practice", "5", 413),
+      trial("practice", "6", 388),
+      trial(null, "12", 371),
+    ]);
     // The median of the non-practice taps would be 371: it is nowhere.
     expect(JSON.stringify(holdBaseline.mock.calls[0][1])).not.toMatch(
       /median|motor_baseline|motorBaseline/i,
@@ -190,18 +192,16 @@ describe("on a cursor device", () => {
     expect(screen.getByRole("button", { name: "m1" })).toBeInTheDocument();
   });
 
-  it("tells the engine the step was skipped, and why", () => {
+  /*
+   * The skip and its reason have no field on a trial; where they go is with
+   * backend, beside the run's age band and form factor.
+   */
+  it("sends no motor trials", () => {
     render(<ProfilingFlow onDone={vi.fn()} />);
     letsGo();
     sitTheModules();
 
-    expect(motorFeature()).toEqual({
-      module: "motor_speed",
-      ended: "skipped",
-      skipReason: "cursor",
-      formFactor: "desktop",
-      grid: null,
-      samples: [],
-    });
+    expect(holdBaseline).toHaveBeenCalledTimes(1);
+    expect(motorTrials()).toEqual([]);
   });
 });

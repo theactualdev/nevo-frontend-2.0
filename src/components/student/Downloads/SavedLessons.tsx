@@ -1,9 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { Check, CloudDownload } from "lucide-react";
 import { LessonProvider } from "@/context/LessonContext";
 import { useStudentLessons } from "@/hooks/useStudentLessons";
+import { lessonsApi } from "@/lib/api/lessons";
 import { getSession } from "@/lib/auth/session";
 import { downloadLesson, formatSize } from "@/lib/offline/lessonPackage";
 import {
@@ -24,10 +31,15 @@ import { LessonRoute } from "@/components/student/Lesson/LessonRoute";
  * kept on this device (`savedLessons`) - or the detail read, when it is not a
  * lesson the player can open - and a saved lesson opens from here without one.
  *
- * THE SIZE is the package's, as the server measured it (`sizeBytes`), and is
- * shown only once a lesson is saved: the manifest that carries it is what a
- * save asks for, and asking for one per row just to draw the column would
- * register downloads the child never made. A row with no size shows none.
+ * THE SIZE ON EVERY ROW, as the frame draws it (backend B61, 5 Oct). It is
+ * the package's, as the server measured it (`sizeBytes`), never ours. A saved
+ * row shows the size of what the child kept. Any other row asks
+ * `GET /offline-manifest`, a read that records nothing - before B61 the only
+ * manifest was the one a save returns, and asking for it per row would have
+ * registered downloads the child never made. The server builds the archive to
+ * measure it, so a row asks only once it is on screen (or about to be), and
+ * only once. A row with no size shows none: not while it is being asked, not
+ * when the read fails, and not for the manifest's 0, which is "not measured".
  *
  * TEXT ONLY, SAID UP FRONT. The manifest says `includesMedia: false`, so the
  * line that pictures and sound are not saved stands on that, not on our guess,
@@ -38,9 +50,9 @@ import { LessonRoute } from "@/components/student/Lesson/LessonRoute";
  * page instead, and every way out of it closes it again (`LessonExitProvider`).
  * This page itself is exempt from the shell's offline takeover.
  *
- * NOT DRAWN: the frame sizes every row and has no way to open a lesson from
- * here. Sizes show on saved rows only, for the reason above; the Open control
- * and the copy are ours (D43 signed them off).
+ * NOT DRAWN: the frame has no way to open a lesson from here. The Open
+ * control and the copy are ours (D43 signed them off; design confirmed on
+ * 6 Oct the intro line is ours to change).
  */
 
 type RowState = "saving" | "idle";
@@ -52,9 +64,39 @@ export function SavedLessons() {
   const [busy, setBusy] = useState<Record<string, RowState>>({});
   const [notice, setNotice] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
+  /** What each row would cost to keep, from its manifest read (B61). */
+  const [sizes, setSizes] = useState<Record<string, number | null>>({});
+  const asked = useRef(new Set<string>());
+  /**
+   * The shelf has been read. Until it has, no row knows whether it already
+   * holds its size, so none asks - a row's effect runs before this screen's
+   * own, and would otherwise ask for a lesson the device already measured.
+   */
+  const [shelfRead, setShelfRead] = useState(false);
+
+  /**
+   * One manifest read per row, once, when the row comes on screen. A failed
+   * read is forgotten, so the row asks again the next time it is shown.
+   */
+  const askSize = useCallback((id: string) => {
+    if (asked.current.has(id)) return;
+    asked.current.add(id);
+    lessonsApi
+      .offlineManifest(id)
+      .then((m) =>
+        setSizes((s) => ({
+          ...s,
+          [id]: m.sizeBytes && m.sizeBytes > 0 ? m.sizeBytes : null,
+        })),
+      )
+      .catch(() => {
+        asked.current.delete(id);
+      });
+  }, []);
 
   const reload = useCallback(() => {
     setShelf(owner ? savedLessons(owner) : []);
+    setShelfRead(true);
   }, [owner]);
   useEffect(() => {
     // Post-mount read of device storage, which the server cannot see.
@@ -188,11 +230,15 @@ export function SavedLessons() {
           {rows.map((row) => {
             const isSaved = kept.has(row.id);
             const isSaving = busy[row.id] === "saving";
-            const size = formatSize(kept.get(row.id)?.sizeBytes);
+            // The kept download's own size first; otherwise what keeping it
+            // would cost, once its manifest has been read.
+            const keptSize = kept.get(row.id)?.sizeBytes;
+            const size = formatSize(keptSize ?? sizes[row.id]);
             return (
-              <li
+              <Row
                 key={row.id}
-                className="flex items-center gap-3 border-b border-nevo-near-black/8 py-3"
+                id={row.id}
+                onSeen={!shelfRead || keptSize ? null : askSize}
               >
                 <span className="min-w-0 flex-1 truncate text-[15px] text-nevo-near-black">
                   {row.title}
@@ -242,11 +288,55 @@ export function SavedLessons() {
                     <CloudDownload className="size-[22px]" strokeWidth={2} />
                   </button>
                 )}
-              </li>
+              </Row>
             );
           })}
         </ul>
       )}
     </div>
+  );
+}
+
+/**
+ * One row, which asks for its size once it is on screen or about to be
+ * (`onSeen`), and never before. Null when the row already has its size.
+ * With no IntersectionObserver to ask, the row counts as shown.
+ */
+function Row({
+  id,
+  onSeen,
+  children,
+}: {
+  id: string;
+  onSeen: ((id: string) => void) | null;
+  children: ReactNode;
+}) {
+  const ref = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!onSeen || !el) return;
+    if (typeof IntersectionObserver === "undefined") {
+      onSeen(id);
+      return;
+    }
+    const watcher = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((e) => e.isIntersecting)) return;
+        watcher.disconnect();
+        onSeen(id);
+      },
+      // "About to show": a row just below the fold asks a little early.
+      { rootMargin: "0px 0px 160px 0px" },
+    );
+    watcher.observe(el);
+    return () => watcher.disconnect();
+  }, [id, onSeen]);
+  return (
+    <li
+      ref={ref}
+      className="flex items-center gap-3 border-b border-nevo-near-black/8 py-3"
+    >
+      {children}
+    </li>
   );
 }

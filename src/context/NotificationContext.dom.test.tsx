@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   act,
@@ -8,7 +10,11 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { useContext } from "react";
-import { NotificationContext, NotificationProvider } from "./NotificationContext";
+import {
+  childHref,
+  NotificationContext,
+  NotificationProvider,
+} from "./NotificationContext";
 
 /**
  * THE BELL INVENTED A MESSAGE FROM A NAMED TEACHER.
@@ -554,5 +560,65 @@ describe("what a child's bell carries", () => {
     // A row with nowhere a child may go is not a link - not a link elsewhere.
     expect(screen.getByTestId("out").textContent).toBe("no-link");
     expect(screen.getByTestId("none").textContent).toBe("no-link");
+  });
+
+  it("takes each of backend's four destinations to a screen this app has", async () => {
+    /*
+     * Backend B62, 5 Oct fixed `navigatesTo` per type as data. Two of the
+     * four are not our routes: /student/messages is Connect, and
+     * /student/review has no screen - reviews due live on a subject's page,
+     * which Progress leads to. Mapped in one place, `childHref`.
+     */
+    await mount4(
+      [
+        row("a", "lesson_assigned", { navigatesTo: "/student/lessons" }),
+        row("b", "review_due", { navigatesTo: "/student/review" }),
+        row("c", "teacher_replied", { navigatesTo: "/student/messages" }),
+        row("d", "sign_in_changed", { navigatesTo: "/student/profile" }),
+      ],
+      4,
+    );
+
+    await waitFor(() => expect(screen.queryByTestId("d")).not.toBeNull());
+    expect(screen.getByTestId("a").textContent).toBe("/student/lessons");
+    expect(screen.getByTestId("b").textContent).toBe("/student/progress");
+    expect(screen.getByTestId("c").textContent).toBe("/student/connect");
+    expect(screen.getByTestId("d").textContent).toBe("/student/profile");
+  });
+});
+
+describe("where a row's link may go", () => {
+  it("keeps whatever follows a mapped path", () => {
+    expect(childHref("/student/messages?thread=t-1")).toBe(
+      "/student/connect?thread=t-1",
+    );
+    expect(childHref("/student/review/")).toBe("/student/progress");
+  });
+
+  it("leaves our own routes, and paths that merely start alike, alone", () => {
+    expect(childHref("/student/lessons/l-1?assignment=a-1")).toBe(
+      "/student/lessons/l-1?assignment=a-1",
+    );
+    expect(childHref("/student/reviewed")).toBe("/student/reviewed");
+  });
+
+  it("still goes nowhere outside the student console", () => {
+    expect(childHref("/teacher/messages")).toBeNull();
+    expect(childHref("/studentish")).toBeNull();
+    expect(childHref(null)).toBeNull();
+  });
+
+  it("only ever lands on a page that exists", () => {
+    // Every destination a child's row can carry today, after mapping.
+    for (const path of [
+      "/student/lessons",
+      "/student/review",
+      "/student/messages",
+      "/student/profile",
+    ]) {
+      const href = childHref(path)!;
+      const page = resolve(process.cwd(), `src/app${href}/page.tsx`);
+      expect(existsSync(page), `${path} -> ${href}`).toBe(true);
+    }
   });
 });

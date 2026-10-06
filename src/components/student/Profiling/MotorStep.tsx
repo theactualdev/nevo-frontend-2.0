@@ -107,8 +107,9 @@ function canSpeak(): boolean {
  *
  * WHAT IS KEPT is every tap as it happened: which target, its cell, the
  * latency, whether it was practice, and the form factor. The engine takes the
- * median of taps three to eight; the device takes none (rule 3). See
- * `motorStepSamples`.
+ * median of taps three to eight; the device takes none (rule 3). Each tap
+ * leaves as one trial in `baselineTrials`; a trial has no field for the form
+ * factor yet, which is with backend.
  *
  * NO KEYBOARD PATH, deliberately. A key press is not a reach, so it would put
  * the wrong motion in the baseline. A child who cannot tap is not stranded:

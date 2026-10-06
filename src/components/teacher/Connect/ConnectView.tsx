@@ -9,6 +9,8 @@ import {
   type Message,
 } from "@/lib/mocks/teacherConnect";
 import { cn } from "@/lib/utils";
+import { useSystemMessages } from "@/components/shared/SystemMessages";
+import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
 import { ComposeModal } from "./ComposeModal";
 import { MaybeSample } from "@/components/shared/SampleRegion";
 
@@ -24,8 +26,12 @@ import { MaybeSample } from "@/components/shared/SampleRegion";
  * different one for the same state - illustration, warmer heading and a New
  * message CTA. C14 governs, as it has on the previous two slices; flagged.
  *
- * Sending follows C14 B4: the bubble lands in the thread with a pop, a toast
- * confirms, and the thread stays open.
+ * Sending follows C14 B4: the bubble lands in the thread with a pop, the
+ * shared bar confirms, and the thread stays open. Frame 43 settled that C14's
+ * NevoToast and the system message are one thing - "one shared bar, built once
+ * and used everywhere" - and this screen had its own, which also cleared a
+ * failure after three seconds and drew it with a tick. A failure now stays
+ * until dismissed (SM-03), and the words it was about are put back in the box.
  *
  * Live from `/api/messages/*` - see `useConnectThreads`. The thread list has
  * no message bodies, so opening a thread fetches it; sending posts and shows
@@ -34,8 +40,6 @@ import { MaybeSample } from "@/components/shared/SampleRegion";
  * rosters, because a compose list of invented children on a screen that sends
  * messages is the worst possible place for one.
  */
-
-const TOAST_MS = 3000;
 
 const PlusIcon = ({ size = 18 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -100,6 +104,7 @@ export function ConnectView() {
   } = useConnectThreads();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  useUnsavedGuard(draft.trim().length > 0);
   /*
    * "Send them a message" lands here naming a child.
    *
@@ -123,20 +128,12 @@ export function ConnectView() {
   const linked = params.get("student") ?? undefined;
   const [composeOpen, setComposeOpen] = useState(Boolean(linked));
   const [preset, setPreset] = useState<string | undefined>(linked);
-  const [toast, setToast] = useState("");
+  const say = useSystemMessages();
   const [newestId, setNewestId] = useState<string | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   /** Monotonic id source - Date.now() is impure and the lint rule rejects it. */
   const seq = useRef(0);
   const nextId = () => `sent-${(seq.current += 1)}`;
-
-  useEffect(
-    () => () => {
-      if (timer.current) clearTimeout(timer.current);
-    },
-    [],
-  );
 
   // The list arrives asynchronously, so "the first thread" is derived rather
   // than assigned - setting it from an effect would be a setState during
@@ -157,14 +154,8 @@ export function ConnectView() {
     markThreadRead(id);
   };
 
-  const flashToast = (text: string) => {
-    setToast(text);
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => setToast(""), TOAST_MS);
-  };
-
   /**
-   * C14 B4: the bubble lands, a toast confirms, the thread stays open.
+   * C14 B4: the bubble lands, the bar confirms, the thread stays open.
    *
    * The bubble shown is the message the backend stored, not an optimistic
    * copy - a send that fails says so rather than leaving a message on screen
@@ -177,7 +168,7 @@ export function ConnectView() {
   ) => {
     const threadId = await sendLive(to, text);
     if (!threadId) {
-      if (toast) flashToast("That didn’t send. Try again");
+      if (toast) say.show({ kind: "failed", message: "That didn’t send. Try again" });
       // THROW, do not return. Callers cannot tell success from failure if this
       // resolves either way - which is exactly how the compose modal came to
       // report "Message sent" over a send that never happened.
@@ -185,7 +176,7 @@ export function ConnectView() {
     }
     setActiveId(threadId);
     setNewestId(nextId());
-    if (toast) flashToast("Message sent");
+    if (toast) say.show({ kind: "confirm", message: "Message sent" });
     requestAnimationFrame(() =>
       endRef.current?.scrollIntoView({ block: "end" }),
     );
@@ -195,15 +186,18 @@ export function ConnectView() {
     const text = draft.trim();
     if (!text || !active?.recipientId) return;
     setDraft("");
-    // The inline composer reports failure through the toast `deliver` raises,
-    // so the rejection is handled here rather than surfacing twice.
+    // The inline composer reports failure through the bar `deliver` raises,
+    // so the rejection is handled here rather than surfacing twice - and the
+    // words go back in the box. The box was emptied before the send, so a
+    // failure that says "Try again" used to leave nothing to try again with.
+    // A teacher who has started typing something else keeps that instead.
     void deliver(
       {
         recipientId: active.recipientId,
         recipientType: active.recipientType === "class" ? "class" : "student",
       },
       text,
-    ).catch(() => {});
+    ).catch(() => setDraft((current) => current || text));
   };
 
   /**
@@ -486,22 +480,6 @@ export function ConnectView() {
         />
       )}
 
-      {/* C14 NevoToast */}
-      {toast && (
-        <div
-          role="status"
-          className="fixed top-5 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2.5 rounded-full bg-nevo-navy py-3 pr-[22px] pl-[15px] shadow-[0_12px_32px_rgba(0,0,0,0.22)] motion-safe:animate-nevo-pop xl:top-6"
-        >
-          <span className="flex size-[22px] shrink-0 items-center justify-center rounded-full bg-nevo-cream/20 text-nevo-cream">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <path d="M20 6L9 17l-5-5" />
-            </svg>
-          </span>
-          <span className="text-[14.5px] font-semibold whitespace-nowrap text-nevo-cream">
-            {toast}
-          </span>
-        </div>
-      )}
     </div>
   );
 }

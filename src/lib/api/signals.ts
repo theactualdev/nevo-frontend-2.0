@@ -56,6 +56,11 @@ export interface SignalSessionEnvelope {
   /** `maxLength: 120`. The segment id the child left from. */
   exitPosition?: string;
   breakCount?: number;
+  /**
+   * Adaptations the child actually saw applied (B42) - not offers, not
+   * decisions held back. Omitted while none has been, like `breakCount`.
+   */
+  proactiveAdjustmentsCount?: number;
 }
 
 /** 202 receipt. */
@@ -154,6 +159,9 @@ export const signalsApi = {
             ? { exitPosition: session.exitPosition.slice(0, 120) }
             : {}),
           ...(session.breakCount ? { breakCount: session.breakCount } : {}),
+          ...(session.proactiveAdjustmentsCount
+            ? { proactiveAdjustmentsCount: session.proactiveAdjustmentsCount }
+            : {}),
         },
         events: known.map((e) => ({
           sessionId: session.sessionId,

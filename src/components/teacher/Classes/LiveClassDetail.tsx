@@ -1,14 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   OBSERVATION_COPY,
   observationCount,
 } from "@/lib/constants/observations";
-import { rosterMarker } from "@/lib/constants/accountStatus";
+import { accountStatus, rosterMarker } from "@/lib/constants/accountStatus";
 import { useTeacherFlags } from "@/hooks/useTeacherFlags";
-import { useState } from "react";
+import { useCallback, useState } from "react";
+import { PinClearedDialog, RosterRowMenu } from "./RosterRowMenu";
 import { useClassLessons } from "@/hooks/useClassLessons";
 import type { AssignedClass } from "@/lib/api";
 import {
@@ -17,12 +17,17 @@ import {
   useClassRoster,
 } from "@/hooks/useClassRoster";
 import { cn } from "@/lib/utils";
-import { ClassQrDialog } from "./ClassQr";
 
 /**
  * A class the school assigned, drawn from what the backend actually serves:
- * the assignment, the class code, and - since 30 Aug - the real roster from
+ * the assignment and - since 30 Aug - the real roster from
  * `GET /api/v1/classes/{class_id}/students`.
+ *
+ * NO CLASS CODE, since design's 30 Sep rulings. A child now signs in with the
+ * school code and their own Student ID, and their roster row exists before
+ * they arrive, so a class code joins nobody to anything. C12 (the QR) and C18
+ * (the code screen) were deleted from the design that day; the button, its
+ * dialog and the `/code` route went with them.
  *
  * What it still does not have is the intelligence layer. The fixture-backed
  * `ClassDetail` shows per-student chips, seats and "worth a glance" dots;
@@ -42,9 +47,21 @@ import { ClassQrDialog } from "./ClassQr";
  * (backend, 3 Sep), so its contents are guaranteed by the schema rather than
  * by an assurance, and the phrasing for each pattern is ours - it lives in
  * `constants/observations.ts` so the two screens that show them cannot drift.
+ *
+ * CLEARING A FORGOTTEN PIN (SCRUM-216 / SCRUM-217, C05 on 1 Oct). Each row has
+ * C05's menu - View profile, Clear PIN - beside the card rather than inside
+ * it, since a button cannot sit inside a link. The login identifier is always
+ * on the row now (SCRUM-133): it is how a child finds out their ID, by asking
+ * their teacher, and it used to hide whenever the row had a seat.
+ *
+ * WHAT C05 DRAWS THAT THIS DOES NOT, and why. C05 redraws the row as a table -
+ * Student, Student ID / Admission Number, Status - with no observation chips,
+ * and keeps an Activity tab design struck on 16 Sep. Which roster wins is
+ * design's call, so the C16b row stays and gains only what the three tickets
+ * add. "Forgot PIN", a "PIN cleared" that survives a reload and "Ask an admin
+ * about this" all need something the roster read does not carry yet.
  */
 export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
-  const [qr, setQr] = useState<"none" | "dialog">("none");
   /**
    * TWO TABS, NOT THREE. Design ruled on 16 Sep: the Lessons tab ships because
    * the library cannot be filtered by class, so nothing else answers "what has
@@ -54,8 +71,17 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
    * three, was changed to match rather than this one grown to meet it.
    */
   const [tab, setTab] = useState<"roster" | "lessons">("roster");
+  /** Whose row menu is open, by student id. One at a time. */
+  const [menuFor, setMenuFor] = useState<string | null>(null);
+  const closeMenu = useCallback(() => setMenuFor(null), []);
+  /**
+   * Children whose PIN this teacher cleared, this visit. The roster read has
+   * no field for it, so the row's "PIN cleared" lasts until a reload - true
+   * while it shows, because the server has just said so.
+   */
+  const [cleared, setCleared] = useState<Set<string>>(() => new Set());
+  const [clearedName, setClearedName] = useState<string | null>(null);
   const role = klass.role === "co_teacher" ? "Co-teacher" : "Primary teacher";
-  const router = useRouter();
   const { students, loading, failed } = useClassRoster(klass.classId);
   const observed = students.filter(
     (s) => s.profileStatus === "observed",
@@ -103,31 +129,6 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
                 : `${role} · Synced from your school`}
             </span>
           </div>
-          {klass.classCode && (
-            <button
-              type="button"
-              onClick={() => setQr("dialog")}
-              className="inline-flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-[10px] border-[1.5px] border-nevo-navy/35 px-4 text-sm font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
-            >
-              <svg
-                width="17"
-                height="17"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.9"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden
-              >
-                <rect x="3" y="3" width="7" height="7" rx="1.5" />
-                <rect x="14" y="3" width="7" height="7" rx="1.5" />
-                <rect x="3" y="14" width="7" height="7" rx="1.5" />
-                <path d="M14 14h3v3h-3zM20 14h1M14 20h3M20 20h1" />
-              </svg>
-              Class code
-            </button>
-          )}
         </div>
 
 
@@ -196,14 +197,32 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
                 ? "Nobody here has been watched long enough for a learning profile yet. That starts with their first lesson."
                 : `Nevo has a learning profile for ${observed} of ${students.length}. The rest build as they work.`}
             </p>
+            {/* C05's line, over the rows that now carry Clear PIN. */}
+            <p className="mt-1.5 max-w-[640px] text-[13px] leading-[1.5] text-nevo-near-black/60">
+              If a child forgets their PIN, you can clear it and they choose a
+              new one themselves. A deactivated learner can&rsquo;t sign in;
+              your admin manages access.
+            </p>
             <div className="mt-3.5 flex flex-col gap-2 xl:mt-4">
-              {students.map((student) => (
-                <Link
+              {students.map((student, i) => {
+                const href = `/teacher/students/${student.studentId}?class=${klass.classId}`;
+                const firstName = student.firstName?.trim() || studentName(student);
+                const marker = rosterMarker(student.status);
+                // Account access comes first and replaces the rest (C05).
+                const pinCleared =
+                  !marker &&
+                  cleared.has(student.studentId) &&
+                  accountStatus(student.status) !== "deactivated";
+                return (
+                <div
                   key={student.studentId}
-                  href={`/teacher/students/${student.studentId}?class=${klass.classId}`}
+                  className={cn("relative", menuFor === student.studentId && "z-20")}
+                >
+                <Link
+                  href={href}
                   className={cn(
                     "cursor-pointer transition-[filter] hover:brightness-[0.985]",
-                    "flex flex-col rounded-[12px] bg-nevo-cream-elevated px-[18px] py-4 shadow-elevation-1 xl:flex-row xl:items-center xl:gap-4 xl:p-5",
+                    "flex flex-col rounded-[12px] bg-nevo-cream-elevated py-4 pr-14 pl-[18px] shadow-elevation-1 xl:flex-row xl:items-center xl:gap-4 xl:py-5 xl:pr-16 xl:pl-5",
                     student.profileStatus === "observed" &&
                       "border-l-[3px] border-nevo-violet",
                   )}
@@ -212,15 +231,16 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
                     <span className="truncate text-[15px] font-semibold text-nevo-near-black">
                       {studentName(student)}
                     </span>
-                    {/* `seatContext` is a plain string from the roster read -
-                        "Seat 12" in C16b's own sample - and was also arriving
-                        unused. Preferred over the login identifier here, which
-                        is an account detail rather than something a teacher
-                        looking at a class needs. */}
-                    {(student.seatContext || student.loginIdentifier) && (
-                      <span className="shrink-0 text-[12px] text-nevo-near-black/55 xl:mt-0.5">
+                    {/* The login identifier, ALWAYS (SCRUM-133): it is how
+                        a child finds out their ID - they ask their teacher.
+                        It used to give way to `seatContext`, so a class with
+                        seats showed nobody's ID. The seat sits beside it. */}
+                    {(student.loginIdentifier || student.seatContext) && (
+                      <span className="shrink-0 text-[12px] text-nevo-near-black/55 tabular-nums xl:mt-0.5">
                         <span className="xl:hidden">{"· "}</span>
-                        {student.seatContext || student.loginIdentifier}
+                        {[student.loginIdentifier, student.seatContext]
+                          .filter(Boolean)
+                          .join(" · ")}
                       </span>
                     )}
                   </div>
@@ -306,9 +326,15 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
                    * as a state rather than competing with the attention markers
                    * next to it - and it says its word, like they do.
                    */}
-                  {rosterMarker(student.status) && (
+                  {marker && (
                     <span className="mt-1.5 shrink-0 rounded-full border border-nevo-near-black/22 px-2.5 py-1 text-[12px] font-medium whitespace-nowrap text-nevo-near-black/62 xl:mt-0">
-                      {rosterMarker(student.status)}
+                      {marker}
+                    </span>
+                  )}
+                  {pinCleared && (
+                    <span className="mt-1.5 inline-flex shrink-0 items-center gap-[7px] self-start rounded-full bg-nevo-near-black/7 px-[13px] py-[5px] text-[13px] font-semibold whitespace-nowrap text-nevo-near-black/60 xl:mt-0 xl:self-auto">
+                      <span className="size-[7px] shrink-0 rounded-full bg-nevo-near-black/30" aria-hidden />
+                      PIN cleared &middot; new one not chosen yet
                     </span>
                   )}
                   {/*
@@ -347,7 +373,30 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
                     {lastSeenLine(student)}
                   </span>
                 </Link>
-              ))}
+                <div className="absolute top-3 right-3 xl:top-0 xl:right-4 xl:bottom-0 xl:flex xl:items-center">
+                  <RosterRowMenu
+                    studentId={student.studentId}
+                    firstName={firstName}
+                    status={student.status}
+                    profileHref={href}
+                    open={menuFor === student.studentId}
+                    up={students.length > 4 && i >= students.length - 4}
+                    onToggle={() =>
+                      setMenuFor((open) =>
+                        open === student.studentId ? null : student.studentId,
+                      )
+                    }
+                    onClose={closeMenu}
+                    onCleared={() => {
+                      setCleared((prev) => new Set(prev).add(student.studentId));
+                      setMenuFor(null);
+                      setClearedName(firstName);
+                    }}
+                  />
+                </div>
+                </div>
+                );
+              })}
             </div>
             <div className="mt-4 flex items-center gap-[7px] text-[12px] text-nevo-near-black/55">
               <span className="size-2 shrink-0 rounded-full bg-nevo-violet" />
@@ -383,9 +432,7 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
               <p className="mt-1.5 text-sm leading-[1.55] text-nevo-near-black/68 xl:text-[14.5px]">
                 {failed
                   ? "Nothing has changed for your students. Try again in a moment."
-                  : klass.classCode
-                    ? "Share the class code and your students will appear here as they join."
-                    : "Your students will appear here as your school adds them."}
+                  : "Your students will appear here as your school adds them."}
               </p>
               {/* "Try again" with nothing to press. The class route's own
                   failure card has always had the button; this one did not. */}
@@ -404,25 +451,13 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
         {tab === "lessons" && <LessonsPanel classId={klass.classId} />}
       </div>
 
-      {qr === "dialog" && klass.classCode && (
-        <ClassQrDialog
-          className={klass.className}
-          code={klass.classCode}
-          onClose={() => setQr("none")}
-          /*
-           * Projecting now NAVIGATES, where it used to swap local state for an
-           * overlay with no URL. Design's ruling for the standalone route is
-           * that teachers "project it, read it aloud and return to it", and a
-           * projection you cannot link or reopen fails the third of those: the
-           * teacher who closed it had to walk back through class detail and
-           * the dialog to get it up again.
-           *
-           * The route renders the same `ClassQrScreen`, so nothing about what
-           * is projected changes - only that it now has an address.
-           */
-          onProject={() => router.push(`/teacher/classes/${klass.classId}/code`)}
+      {clearedName && (
+        <PinClearedDialog
+          firstName={clearedName}
+          onDone={() => setClearedName(null)}
         />
       )}
+
     </div>
   );
 }

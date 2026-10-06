@@ -18,12 +18,13 @@ import { markWarmUpDone } from "@/lib/profiling/warmUpDone";
  * screen where the child was stuck.
  */
 
-const { submit, answerPrompt } = vi.hoisted(() => ({
+const { submit, answerPrompt, deviceTaskDone } = vi.hoisted(() => ({
   submit: vi.fn(),
   answerPrompt: vi.fn(),
+  deviceTaskDone: vi.fn(),
 }));
 vi.mock("@/lib/api", () => ({
-  baselineApi: { submitWithRetry: submit, answerPrompt },
+  baselineApi: { submitTrials: submit, answerPrompt, deviceTaskDone },
 }));
 const { holdBaseline } = vi.hoisted(() => ({ holdBaseline: vi.fn() }));
 vi.mock("@/lib/profiling/pendingBaseline", () => ({ holdBaseline }));
@@ -50,7 +51,9 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, replace: vi.fn() }),
 }));
 
-const submitted = () => submit.mock.calls[0][1][0];
+/** The run's trials, as `submitTrials` was handed them. */
+const trials = () => submit.mock.calls[0][1];
+const submitted = () => trials()[0];
 const settle = async (ms = 1000) => {
   await act(async () => {
     await vi.advanceTimersByTimeAsync(ms);
@@ -72,6 +75,8 @@ beforeEach(() => {
   submit.mockResolvedValue(true);
   answerPrompt.mockReset();
   answerPrompt.mockResolvedValue(true);
+  deviceTaskDone.mockReset();
+  deviceTaskDone.mockResolvedValue(true);
   holdBaseline.mockReset();
   push.mockReset();
   consent.withdrawn = false;
@@ -167,7 +172,7 @@ describe("WarmUpRun — the question the engine served", () => {
     });
   });
 
-  it("no longer sends it inside the submit, and marks nothing", async () => {
+  it("sends it as a trial carrying the option's value, and marks nothing", async () => {
     signIn();
     engine.prompt = served;
     render(<WarmUpRun />);
@@ -175,12 +180,14 @@ describe("WarmUpRun — the question the engine served", () => {
     fireEvent.click(screen.getByText("56"));
     await settle();
 
-    expect(submitted()).not.toHaveProperty("item");
-    // No answer key is used on the device, so nothing was scored.
-    expect(submitted().acts.domain).toMatchObject({
-      trials: 1,
-      scored: 0,
-      accuracy: null,
+    // No answer key is used on the device, so nothing is marked. `item-7` is
+    // not a UUID, so it is not offered as a `probeItemId` the contract would
+    // refuse.
+    expect(submitted()).toMatchObject({
+      dimension: "domain",
+      response: "opt-b",
+      correct: null,
+      probeItemId: null,
     });
   });
 
@@ -199,7 +206,19 @@ describe("WarmUpRun — the question the engine served", () => {
     expect(screen.getByText(/couldn't save it just now/)).toBeInTheDocument();
   });
 
-  it("sends no pick on a day the engine asked for a device task", async () => {
+  it("does not also send a device-task completion on a served day", async () => {
+    signIn();
+    engine.prompt = served;
+    render(<WarmUpRun />);
+
+    fireEvent.click(screen.getByText("56"));
+    await settle();
+
+    expect(deviceTaskDone).not.toHaveBeenCalled();
+  });
+
+  it("asks a served question whatever the day's dimension (B65)", async () => {
+    // `served` decides; the dimension is not asked to imply it.
     signIn();
     engine.prompt = {
       state: "ready",
@@ -209,11 +228,79 @@ describe("WarmUpRun — the question the engine served", () => {
     };
     render(<WarmUpRun />);
 
+    expect(screen.getByText("What is 7 times 8?")).toBeInTheDocument();
+    expect(screen.queryByText("Right")).toBeNull();
+
+    fireEvent.click(screen.getByText("56"));
+    await settle();
+
+    expect(answerPrompt).toHaveBeenCalledWith("child-1", {
+      itemId: "item-7",
+      value: "opt-b",
+    });
+  });
+});
+
+describe("WarmUpRun - a device-task day tells the account (B54)", () => {
+  const deviceDay: WarmUpPrompt = {
+    state: "ready",
+    dimension: "attention",
+    live: true,
+    item: null,
+  };
+
+  it("sends the completion, with no item, once the run ends", async () => {
+    // Five days in six served no question and so sent nothing: `doneToday`
+    // stayed false and a second tablet offered a second run.
+    signIn();
+    engine.prompt = deviceDay;
+    render(<WarmUpRun />);
+
+    expect(deviceTaskDone).not.toHaveBeenCalled();
     fireEvent.click(screen.getByText("Right"));
     await settle();
 
+    expect(deviceTaskDone).toHaveBeenCalledTimes(1);
+    expect(deviceTaskDone).toHaveBeenCalledWith("child-1");
     expect(answerPrompt).not.toHaveBeenCalled();
     expect(submit).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not let the completion decide what the child is told", async () => {
+    // "Your progress is saved" is about what the child did reaching Nevo; the
+    // completion is the account's note that it happened.
+    signIn();
+    deviceTaskDone.mockResolvedValue(false);
+    engine.prompt = deviceDay;
+    render(<WarmUpRun />);
+
+    fireEvent.click(screen.getByText("Right"));
+    await settle();
+
+    expect(screen.getByText(/Your progress is saved/)).toBeInTheDocument();
+  });
+
+  it("sends none for a run the engine did not name", async () => {
+    // The pinned task, as the signed-out walkthrough's is: nobody's day.
+    signIn();
+    render(<WarmUpRun dimension="attention" />);
+
+    fireEvent.click(screen.getByText("Right"));
+    await settle();
+
+    expect(deviceTaskDone).not.toHaveBeenCalled();
+  });
+
+  it("sends none for a withdrawn guardian's child", async () => {
+    signIn();
+    consent.withdrawn = true;
+    engine.prompt = deviceDay;
+    render(<WarmUpRun />);
+
+    fireEvent.click(screen.getByText("Right"));
+    await settle();
+
+    expect(deviceTaskDone).not.toHaveBeenCalled();
   });
 });
 
@@ -348,7 +435,11 @@ describe("WarmUpRun — the tile task, as tile memory does it", () => {
     }
     await settle();
 
-    expect(submitted()).toMatchObject({ roundsCompleted: 0, retries: 3 });
+    // Three taps, every one wrong: the round never completed.
+    expect(trials()).toHaveLength(3);
+    expect(
+      trials().map((t: { correct: boolean | null }) => t.correct),
+    ).toEqual([false, false, false]);
     expect(screen.getByText(/That's it for today/)).toBeInTheDocument();
   });
 });

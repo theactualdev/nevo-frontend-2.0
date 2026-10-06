@@ -25,7 +25,7 @@ import {
   TEXT_ACTION,
 } from "../Roster/primitives";
 import { useSetupGate } from "@/hooks";
-import { AssignClassSheet } from "./AssignClassSheet";
+import { AssignTeachingSheet } from "../Classes/AssignTeachingSheet";
 import { RemoveAccessSheet } from "./RemoveAccessSheet";
 import { StatusPill, isInvited } from "./status";
 import { NoAccess, failureKind } from "../NoAccess";
@@ -349,10 +349,9 @@ export function TeacherDetailView({ teacherId }: { teacherId: string }) {
       </div>
 
       {assigning ? (
-        <AssignClassSheet
-          teacher={teacher}
+        <AssignTeachingSheet
+          door={{ kind: "teacher", teacher: { id: teacher.id, name: teacher.name }, held }}
           classes={allClasses}
-          held={held}
           onClose={() => setAssigning(false)}
           onAssigned={() => {
             setAssigning(false);

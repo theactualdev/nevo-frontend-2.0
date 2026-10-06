@@ -17,8 +17,9 @@ import { type UserRole } from "@/lib/constants";
  * `/api/v1/auth/sso/{provider}/callback` (`lib/api/auth.ts:257`) and its result
  * is what sets the session. What is still true is that no school can reach this
  * screen: nothing in the deployed spec ENROLS a school in SSO, so every sso
- * path presupposes a connection that cannot be created. `?mock=error` forces
- * the error state for design review.
+ * path presupposes a connection that cannot be created. Loaded with no code
+ * on the URL, the screen shows its error state - which is also how design
+ * reviews it. There is no `?mock=` switch.
  */
 
 const SUCCESS_HOLD_MS = 900;
@@ -64,7 +65,7 @@ export function TeacherSsoCallback() {
   const shown: Phase = incomplete ? "error" : phase;
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  // Schedules the (mock) handshake; only ever sets state from inside the
+  // Schedules the handshake; only ever sets state from inside the
   // timer callback, so the effect body stays setState-free.
   /*
    * A REAL handshake, or none.
@@ -119,10 +120,14 @@ export function TeacherSsoCallback() {
     return () => pending.forEach(clearTimeout);
   }, [schedule]);
 
-  const retry = () => {
-    setPhase("signing-in");
-    schedule();
-  };
+  /*
+   * "TRY AGAIN" STARTS AGAIN. It re-ran the callback, which either did
+   * nothing - with no code, the only state this screen can reach today, it
+   * fell straight back to the error - or would re-send a single-use OAuth
+   * code the provider has already spent. Trying again means beginning the
+   * sign-in again, from the door.
+   */
+  const retry = () => router.push("/auth/teacher");
 
   return (
     <div className="flex w-full max-w-[440px] flex-col items-center px-10 text-center">

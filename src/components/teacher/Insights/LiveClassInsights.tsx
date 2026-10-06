@@ -204,10 +204,14 @@ export function LiveClassInsights({
           <h3 className={SECTION_H}>Worth a look</h3>
           <div className="mt-3.5 flex flex-col gap-2">
             {flags.map((f) => (
-              <div
+              /* C09's cards open the student - the frame draws them
+                 cursor:pointer, and the fixture's have always been links. The
+                 live ones were plain boxes a teacher could only read. */
+              <Link
                 key={f.id}
+                href={`/teacher/students/${f.studentId}`}
                 className={cn(
-                  "relative rounded-[12px] bg-nevo-cream-elevated py-4 pr-[18px] pl-[22px] shadow-[0_2px_8px_rgba(0,0,0,0.06)]",
+                  "relative block cursor-pointer rounded-[12px] bg-nevo-cream-elevated py-4 pr-[18px] pl-[22px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-[filter] hover:brightness-[0.985]",
                 )}
               >
                 <span
@@ -229,7 +233,7 @@ export function LiveClassInsights({
                 <p className="mt-1.5 text-[14.5px] leading-[1.5] text-nevo-near-black/78">
                   {f.note}
                 </p>
-              </div>
+              </Link>
             ))}
           </div>
         </>

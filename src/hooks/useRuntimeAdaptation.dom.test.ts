@@ -1,6 +1,11 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, renderHook, waitFor } from "@testing-library/react";
-import { useRuntimeAdaptation, type RuntimeState } from "./useRuntimeAdaptation";
+import { useEffect } from "react";
+import {
+  useRuntimeAdaptation,
+  type AppliedAdaptations,
+  type RuntimeState,
+} from "./useRuntimeAdaptation";
 import type { RuntimeSignals } from "@/lib/api/intelligence";
 import type { Lesson } from "@/lib/types";
 
@@ -235,5 +240,81 @@ describe("the mid-lesson request", () => {
 
     await waitFor(() => expect(result.current.offeredBreak).toBe("movement"));
     expect(result.current.forSegmentId).toBe("seg-1");
+  });
+});
+
+/*
+ * B42 AND B46, backend's 5 Oct definitions: the cooldown counts from an
+ * adaptation APPLIED ON SCREEN, and the instruction names its own segment.
+ */
+describe("what the engine is told about adaptations applied", () => {
+  let now = 0;
+  beforeEach(() => {
+    now = 50_000;
+    vi.spyOn(performance, "now").mockImplementation(() => now);
+    getAdaptation.mockResolvedValue(answer());
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const ask = (applied: { current: AppliedAdaptations }) =>
+    renderHook(() =>
+      useRuntimeAdaptation(LESSON.id, SEGMENTS as never, true, STATE, LESSON, applied),
+    );
+
+  it("counts the seconds since one was applied, rounded down", async () => {
+    ask({ current: { count: 1, lastAt: 37_400 } });
+
+    await waitFor(() => expect(getAdaptation).toHaveBeenCalled());
+    // 12.6s: the cooldown is never told more time has passed than has.
+    expect(sent().secondsSinceLastAdaptation).toBe(12);
+  });
+
+  it("says null while none has been applied this session", async () => {
+    ask({ current: { count: 0, lastAt: null } });
+
+    await waitFor(() => expect(getAdaptation).toHaveBeenCalled());
+    expect(sent()).toHaveProperty("secondsSinceLastAdaptation", null);
+  });
+
+  it("includes one applied as the child arrives, by the player's own later effect", async () => {
+    // The player notes what reached the screen in effects that run after
+    // this hook's, in the same commit as the arrival that asks.
+    const applied = { current: { count: 0, lastAt: null as number | null } };
+    renderHook(() => {
+      const result = useRuntimeAdaptation(
+        LESSON.id,
+        SEGMENTS as never,
+        true,
+        STATE,
+        LESSON,
+        applied,
+      );
+      useEffect(() => {
+        applied.current = { count: 1, lastAt: performance.now() };
+      }, []);
+      return result;
+    });
+
+    await waitFor(() => expect(getAdaptation).toHaveBeenCalled());
+    expect(sent().secondsSinceLastAdaptation).toBe(0);
+  });
+
+  it("takes the segment an instruction is for from the instruction (B46)", async () => {
+    getAdaptation.mockResolvedValue(
+      answer({
+        proactiveAdjustment: {
+          action: "offer_hint",
+          hint: "Look down.",
+          segmentId: "seg-7",
+        },
+      }),
+    );
+
+    const { result } = ask({ current: { count: 0, lastAt: null } });
+
+    await waitFor(() => expect(result.current.plan).not.toBeNull());
+    expect(result.current.forSegmentId).toBe("seg-7");
   });
 });

@@ -16,6 +16,7 @@ vi.mock("@/hooks/useStudentSessions", () => ({
 }));
 
 import { LiveStudentProfile } from "./LiveStudentProfile";
+import { SystemMessagesProvider } from "@/components/shared/SystemMessages";
 import type { StudentProfileState } from "@/hooks/useStudentProfile";
 
 /**
@@ -56,8 +57,11 @@ const STATE: StudentProfileState = {
 const openSheet = () =>
   fireEvent.click(screen.getByRole("button", { name: "Share with Learning Support" }));
 
-const send = () =>
+// C.8c: the form's button opens the confirm step, and "Yes, send" posts.
+const send = () => {
   fireEvent.click(screen.getByRole("button", { name: "Send to Learning Support" }));
+  fireEvent.click(screen.getByRole("button", { name: "Yes, send" }));
+};
 
 const note = (text: string) =>
   fireEvent.change(screen.getByRole("textbox"), { target: { value: text } });
@@ -80,14 +84,19 @@ describe("the quiet note", () => {
     expect(screen.queryByText(SHARED)).not.toBeInTheDocument();
   });
 
-  it("appears once the escalation is stored, with the toast", async () => {
-    render(<LiveStudentProfile studentId="s-1" state={STATE} />);
+  it("appears once the escalation is stored, with the confirmation", async () => {
+    // C14 B5's toast is the shared bar (frame 43), so the real bar is mounted.
+    render(
+      <SystemMessagesProvider>
+        <LiveStudentProfile studentId="s-1" state={STATE} />
+      </SystemMessagesProvider>,
+    );
     openSheet();
     note("She has gone very quiet in group work.");
     send();
 
     expect(await screen.findByText(SHARED)).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent(/Sent to Learning Support/);
+    expect(screen.getByText("Sent to Learning Support. They’ll take it from here.")).toBeInTheDocument();
     // C14 B5: it dismisses.
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });

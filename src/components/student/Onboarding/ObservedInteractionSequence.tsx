@@ -68,6 +68,24 @@ export function ObservedInteractionSequence() {
    */
   const [sessionId] = useState(() => randomId());
   const { trackEvent, flush } = useSignals(sessionId, undefined, "onboarding");
+  /*
+   * THE BASELINE HAS A STREAM OF ITS OWN, typed `profiling` (B43, 5 Oct).
+   *
+   * Its markers - `baseline_module_start`, `baseline_module_complete`,
+   * `baseline_submitted` - rode the `onboarding` stream above. Backend's
+   * ruling: `profiling` is the assessment itself, `onboarding` is the
+   * account coming into existence - entry, the consent check, PIN creation,
+   * which stay up there. On `onboarding` a later re-profiling would produce
+   * events indistinguishable from a child's first morning.
+   *
+   * Owned HERE, not by `ProfilingFlow`, for the same reason the onboarding
+   * stream is: before the PIN step there is no session, so its events are
+   * held, and a stream that unmounted with the run would take them with it.
+   * Its id is also the run's, so the trials go up under the session their
+   * markers name.
+   */
+  const [profilingSessionId] = useState(() => randomId());
+  const profiling = useSignals(profilingSessionId, undefined, "profiling");
   const [phase, setPhase] = useState<"transition" | "activities">("transition");
   /*
    * Whether this device can sign the child back in on its own. False when the
@@ -78,9 +96,9 @@ export function ObservedInteractionSequence() {
   const [deviceRemembered, setDeviceRemembered] = useState(true);
   const [index, setIndex] = useState(0);
   /**
-   * The capture session the profiling run parked its vector under.
+   * The capture session the profiling run parked its trials under.
    *
-   * Handed to `flushPendingBaseline` so the vector has to be THIS run every
+   * Handed to `flushPendingBaseline` so the trials have to be THIS run's every
    * time, not merely whatever is parked. Before the join path stored a
    * session, a mismatched token was doing that job by accident; it is not
    * doing it any more.
@@ -99,24 +117,24 @@ export function ObservedInteractionSequence() {
    * Deliver this run's parked baseline, and only THEN say so.
    *
    * `baseline_submitted` reaches the engine since 1 Oct, and `ProfilingFlow`
-   * fired it when the vector was parked - a claim that was false whenever the
+   * fired it when the run was parked - a claim that was false whenever the
    * submit later failed or never came. It is tracked here instead: only when
-   * `POST /api/baseline/submit` succeeded, only for the vector THIS run parked
-   * (an older one in the slot is not this baseline), and only while this
-   * stream still exists. A vector delivered later by `StudentShell`'s flush,
-   * after this sequence has gone, sends no event at all rather than one on
+   * `POST /api/baseline/trials` succeeded, only for the trials THIS run parked
+   * (an older run in the slot is not this baseline), and only while this
+   * stream still exists. Trials delivered later by `StudentShell`'s flush,
+   * after this sequence has gone, send no event at all rather than one on
    * some other stream.
+   *
+   * On the `profiling` stream (B43), and with no payload: the catalogue
+   * declares none for it. The module list it carried came from the feature
+   * vector, which is gone.
    */
   const deliverBaseline = async (owner: string, run: string | null) => {
     const parked = readPendingBaseline();
-    const ours = run !== null && parked?.sessionId === run ? parked : null;
+    const ours = run !== null && parked?.sessionId === run;
     const ok = await flushPendingBaseline(owner, run);
     if (ok && ours && alive.current) {
-      trackEvent(ONBOARDING_SIGNAL_TYPES.BASELINE_SUBMITTED, {
-        modules: ours.features
-          .map((f) => f.module)
-          .filter((m) => typeof m === "string"),
-      });
+      profiling.trackEvent(ONBOARDING_SIGNAL_TYPES.BASELINE_SUBMITTED);
     }
   };
 
@@ -145,7 +163,8 @@ export function ObservedInteractionSequence() {
   if (index === 0) {
     return (
       <ProfilingFlow
-        track={trackEvent}
+        track={profiling.trackEvent}
+        runId={profilingSessionId}
         ownerUserId={ssoOwner}
         onDone={(runSessionId) => {
           parkedRunRef.current = runSessionId;
@@ -207,6 +226,7 @@ export function ObservedInteractionSequence() {
            * that navigation.
            */
           flush();
+          profiling.flush();
         }}
         onComplete={() => {
           /*

@@ -129,7 +129,11 @@ export interface RuntimeSignals {
   replayCountOnSegment?: number;
   consecutiveErrors?: number;
   sessionModalityShiftCount?: number | null;
-  /** Typed, deliberately unsent - see `useRuntimeAdaptation`. */
+  /**
+   * Since an adaptation was last APPLIED ON SCREEN (B42) - not decided, not
+   * asked for. Null when none has been this session. See
+   * `useRuntimeAdaptation`.
+   */
   secondsSinceLastAdaptation?: number | null;
   /** Modalities the child was offered and turned down. */
   declinedModalities?: string[];
@@ -204,6 +208,11 @@ export interface AdaptResponse {
     guidedQuestions?: string[];
     /** `GuidedPrompt[]` (1 Oct): the same questions, answerable. */
     guidedPrompts?: { id: string; prompt: string; options?: string[] }[];
+    /**
+     * The segment this instruction is for (B46): always the one the request
+     * named, and where the engine ever means another it says so here.
+     */
+    segmentId?: string | null;
   } | null;
   modalitySuggestion: ModalitySuggestionResponse | null;
 }

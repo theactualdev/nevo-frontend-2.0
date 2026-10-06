@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { Check } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
-import { Button } from "@/components/shared";
+import { Button, ProgressBar } from "@/components/shared";
 import { lessonHref } from "@/lib/lessons/lessonHref";
 import type { LessonSummary } from "./lessonCatalog";
 
@@ -14,10 +14,13 @@ import type { LessonSummary } from "./lessonCatalog";
  * student is partway — says so. The single action starts (or continues) the
  * lesson.
  *
- * THE PARTWAY BAR IS GONE WITH THE RING (design D21, 1 Oct). Its width was
- * `segmentPosition / segmentCount`, a fraction the wire does not carry (see
- * `PickUp` on Home), and a bar is read as an amount exactly as a ring is. The
- * frame's line stays: being partway is a fact the progress row states.
+ * THE PARTWAY BAR CAME BACK WITH THE RING (design D21, backend B51). It went
+ * on 1 Oct because its width was a fraction the wire did not carry, and a bar
+ * is read as an amount exactly as a ring is. B51 put the true one on the
+ * progress row, so the frame's bar runs to `lesson.place` - and says
+ * "Segment 3 of 10", never a number. With no place there is no bar; the
+ * frame's line stays either way, because being partway is a fact the progress
+ * row states.
  *
  * A FINISHED LESSON (design D22). 21 draws never-started and partway only, so
  * the completed state is the minimum: the Lessons card's own completed mark and
@@ -76,6 +79,14 @@ export function LessonPreviewSheet({
           <p className="mt-5 text-sm font-medium text-nevo-near-black">
             You&apos;re partway through this one
           </p>
+        )}
+        {inProgress && lesson.place && (
+          // 21's bar: 5px, violet on a faint navy track.
+          <ProgressBar
+            value={lesson.place.fraction}
+            aria-label={lesson.place.words}
+            className="mt-2.5 h-[5px] bg-nevo-navy/14"
+          />
         )}
 
         {completed && (

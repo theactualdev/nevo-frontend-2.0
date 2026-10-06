@@ -1,9 +1,14 @@
+import type { BaselineTrial } from "@/lib/api/baseline";
+import type { BaselineDimension } from "./bands";
+
 /**
  * Micro-behavioural capture for baseline profiling (SCRUM-104 frontend
  * contract): every interaction is stamped with `performance.now()`, raw streams
- * are held ephemerally (IndexedDB, in-memory fallback), reduced to a feature
- * vector on completion, submitted to `/api/baseline/submit`, and the raw data
- * is purged after transmission. Raw streams never leave the device.
+ * are held ephemerally (IndexedDB, in-memory fallback), turned into one trial
+ * per answer on completion (`baselineTrials`), sent to `/api/baseline/trials`
+ * for the server to reduce (B9), and the raw stream is purged. The device
+ * computes no mean, accuracy or span. What a trial has no field for - tap
+ * coordinates above all - never leaves the device, and goes with the purge.
  */
 
 export interface CaptureEvent {
@@ -113,7 +118,7 @@ export class BaselineCapture {
     }
   }
 
-  /** Purge the raw stream everywhere (after the feature vector is submitted). */
+  /** Purge the raw stream everywhere (once its trials have been taken). */
   async purge() {
     this.events = [];
     const db = await this.ensureDb();
@@ -148,9 +153,11 @@ export class BaselineCapture {
  * A keyboard activation is a click with no pointer (`detail` 0, and 0,0 for
  * the position), so it records no point rather than a false one at the corner.
  *
- * NOTE: the raw stream still never leaves the device - only the reduced vector
- * does, and no reducer reads these. They are here so the stream is complete
- * when it does travel (the server-side reduction, SCRUM-175).
+ * NOTE: these stay on the device. `BaselineTrial` has no field for a point,
+ * and backend ruled on 1 Oct that raw touch stays on the device (B14): a tap's
+ * coordinates are a finer record of a child than anything the server keeps.
+ * `baselineTrials` reads none of them, and the capture is purged once its
+ * trials are taken.
  */
 export function tapPoint(e?: {
   clientX: number;
@@ -162,67 +169,13 @@ export function tapPoint(e?: {
 }
 
 /**
- * Reduce the Module 1 stream to its feature-vector slice. Raw taps stay on
- * device; only these aggregates are transmitted.
- * TODO(api): reconcile field names with the ratified baseline contract.
- */
-/**
- * Reduce a trial-based module's stream (Modules 2-4): counts, mean response
- * time and - where the activity knows its own answer - accuracy, from
- * `trial_pick` events carrying `{module, act, rtMs, correct?}`.
- *
- * Accuracy was absent entirely: the vector carried how FAST a child answered
- * and never whether they were right. `accuracy` is null rather than 0 where
- * nothing was scored, so "not measured" and "got none right" stay
- * distinguishable - the domain probe is deliberately the former, being a
- * prior-knowledge sweep with no key.
- *
- * `scored` travels with it because the reading and probe activities offer "Not
- * sure", which is an honest non-answer and is deliberately NOT marked wrong.
- * Excluding it silently would let a child who answered one of three and
- * shrugged at the rest arrive as 100%. The engine needs the denominator to
- * tell that from three out of three, so it is sent rather than inferred.
- */
-interface TrialStats {
-  trials: number;
-  /** Trials that carried an answer key - the accuracy denominator. */
-  scored: number;
-  /** Declined rather than answered; never counted wrong. */
-  notSure: number;
-  meanRtMs: number | null;
-  accuracy: number | null;
-}
-
-function statsOf(picks: CaptureEvent[]): TrialStats {
-  const rts = picks
-    .map((p) => Number(p.payload?.rtMs))
-    .filter((n) => Number.isFinite(n) && n > 0 && n < 60_000);
-  const scored = picks.filter((p) => typeof p.payload?.correct === "boolean");
-  return {
-    trials: picks.length,
-    scored: scored.length,
-    notSure: picks.filter((p) => p.payload?.notSure === true).length,
-    meanRtMs: rts.length
-      ? Math.round(rts.reduce((a, b) => a + b, 0) / rts.length)
-      : null,
-    // Null means the activity carries no answer key, not zero right.
-    accuracy: scored.length
-      ? scored.filter((p) => p.payload?.correct === true).length /
-        scored.length
-      : null,
-  };
-}
-
-/**
  * The condition a trial was run under, where the activity has one.
  *
- * THESE WERE RECORDED AND THEN THROWN AWAY. The flanker notes whether a trial
- * was congruent, the reading act whether it was read or heard, the pattern act
- * whether the pair matched, the dot act how close the two counts were, the
- * probe which subject it asked about - and the reducer averaged all of it
- * together per act. An interference measure without its congruent/incongruent
- * split is not an interference measure. Kept as a breakdown; the act totals
- * are unchanged.
+ * The flanker notes whether a trial was congruent, the reading act whether it
+ * was read or heard, the pattern act whether the pair matched, the dot act how
+ * close the two counts were, the probe which subject it asked about. An
+ * interference measure without its congruent/incongruent split is not an
+ * interference measure, so each trial carries its own.
  */
 function conditionOf(p: CaptureEvent): string | null {
   const x = p.payload ?? {};
@@ -234,149 +187,174 @@ function conditionOf(p: CaptureEvent): string | null {
   return null;
 }
 
-export function reduceTrialModule(capture: BaselineCapture, module: string) {
-  const picks = capture
-    .ofKind("trial_pick")
-    .filter((e) => e.payload?.module === module);
-  const byAct: Record<
-    string,
-    TrialStats & { conditions?: Record<string, TrialStats> }
-  > = {};
-  for (const act of new Set(picks.map((p) => String(p.payload?.act)))) {
-    const inAct = picks.filter((p) => p.payload?.act === act);
-    const conditions: Record<string, TrialStats> = {};
-    for (const key of new Set(inAct.map(conditionOf))) {
-      if (key === null) continue;
-      conditions[key] = statsOf(inAct.filter((p) => conditionOf(p) === key));
+/**
+ * Which dimension an activity measures, by the `act` its picks record.
+ *
+ * The onboarding modules name their activities (Module 2's pattern match is
+ * processing speed and its flanker attention, Module 3's reading is reading
+ * and its dots number sense, Module 4's probe subject knowledge). The warm-up
+ * records `act` as the dimension itself, the six names the recalibrate prompt
+ * uses, so those map to themselves.
+ */
+const DIMENSION_OF_ACT: Record<string, BaselineDimension> = {
+  pattern: "ps",
+  flanker: "attention",
+  reading: "reading",
+  dots: "ans",
+  probe: "domain",
+  wmc: "wmc",
+  ps: "ps",
+  ans: "ans",
+  attention: "attention",
+  domain: "domain",
+};
+
+/** The contract's id shape for `probeItemId`; anything else would 422 the run. */
+const UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * A response time as the contract takes it: whole milliseconds, 0 to 600000.
+ *
+ * Outside that range is not a time anyone could have measured on this screen
+ * (a tablet left on the task overnight), and sending it would refuse the whole
+ * run with a 422. It goes as null - "not timed" - rather than clamped, which
+ * would be a number nobody measured.
+ */
+function ms(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  const whole = Math.round(value);
+  return whole >= 0 && whole <= 600_000 ? whole : null;
+}
+
+const text = (value: unknown): string | null =>
+  value === undefined || value === null ? null : String(value).slice(0, 200);
+
+/**
+ * The run as `POST /api/baseline/trials` takes it: one `BaselineTrial` per
+ * thing the child answered, in the order they answered it (B9, 5 Oct).
+ *
+ * NOTHING IS REDUCED HERE. This replaced three reducers that sent a mean
+ * response time, an accuracy rate and a maximum span per activity. Frontend §3:
+ * "You compute nothing. Not a span score, not a reaction time median ... not
+ * an accuracy rate." The server does that arithmetic now, and it is the only
+ * place a congruency or dot-ratio split can be trusted. Every number below is
+ * one reading: a single interval between two `performance.now()` stamps.
+ *
+ * What each trial is:
+ *
+ *  - A PICK (`trial_pick`, Modules 2-4 and the warm-up): its dimension, its
+ *    condition, the choice, `correct` where the activity held the stimulus
+ *    (the device drew the dots, the server never saw them), and `rtMs` as
+ *    the trial runner measured it. A served question names its item in
+ *    `probeItemId` and sends the option's value; the server marks it and
+ *    ignores whatever `correct` says.
+ *  - "NOT SURE" is a decline, never a wrong answer: `response: "not_sure"` and
+ *    `correct: null`, so it can never enter an accuracy as a miss.
+ *  - A TILE TAP (`tap`, working memory): one trial per tap, `condition` the
+ *    sequence length, `response` the cell. Its time is from the grid being
+ *    handed over, or from the previous tap of the SAME recall - never across
+ *    a round, which once swallowed the between-round beat and the whole next
+ *    playback into a "gap". A recall ends at a wrong tap or at its length, so
+ *    the order alone says where each recall starts and stops.
+ *  - A DUAL-TASK CHECK (`check_answer`, SS): `condition: "dual_check"`, timed
+ *    from the check appearing.
+ *  - A MOTOR SAMPLE (`motor_tap`, the motor-speed step, PR #645): every tap as
+ *    taken, its latency as the step measured it, practice taps marked as
+ *    such. The median is the server's to take. This is where the step's
+ *    samples leave, rather than in a feature of their own.
+ *
+ * Not carried, because `BaselineTrial` has no field for them: coordinates
+ * (B14, above), the run's age band, and a recall's full timing beyond the one
+ * interval per tap.
+ */
+export function baselineTrials(capture: BaselineCapture): BaselineTrial[] {
+  const trials: BaselineTrial[] = [];
+  /** When the grid was handed to the child for the recall in progress. */
+  let recallOpenedAt: number | null = null;
+  /** The last right tap of the recall in progress. */
+  let lastTap: { t: number; pos: number } | null = null;
+  let checkShownAt: number | null = null;
+
+  for (const e of capture.stream) {
+    const p = e.payload ?? {};
+    switch (e.kind) {
+      case "input_start":
+        recallOpenedAt = e.t;
+        lastTap = null;
+        break;
+      case "round_complete":
+        lastTap = null;
+        break;
+      case "check_shown":
+        checkShownAt = e.t;
+        break;
+      case "check_answer":
+        trials.push({
+          dimension: "wmc",
+          condition: "dual_check",
+          response: typeof p.answer === "boolean" ? String(p.answer) : null,
+          correct: typeof p.correct === "boolean" ? p.correct : null,
+          responseTimeMs:
+            checkShownAt === null ? null : ms(e.t - checkShownAt),
+          probeItemId: null,
+        });
+        checkShownAt = null;
+        break;
+      case "tap": {
+        const pos = Number(p.posInSeq);
+        const from =
+          pos === 0
+            ? recallOpenedAt
+            : lastTap && lastTap.pos === pos - 1
+              ? lastTap.t
+              : null;
+        trials.push({
+          dimension: "wmc",
+          condition:
+            typeof p.length === "number" ? `length_${p.length}` : null,
+          response: text(p.cell),
+          correct: typeof p.correct === "boolean" ? p.correct : null,
+          responseTimeMs: from === null ? null : ms(e.t - from),
+          probeItemId: null,
+        });
+        recallOpenedAt = null;
+        // A wrong tap ends the recall: the pattern plays again from the top.
+        lastTap = p.correct === true ? { t: e.t, pos } : null;
+        break;
+      }
+      case "trial_pick": {
+        const act = String(p.act);
+        const declined = p.notSure === true;
+        trials.push({
+          dimension: DIMENSION_OF_ACT[act] ?? act.slice(0, 60),
+          condition: conditionOf(e),
+          response: declined
+            ? "not_sure"
+            : text(
+                typeof p.chosenOption === "string" ? p.chosenOption : p.choice,
+              ),
+          correct:
+            !declined && typeof p.correct === "boolean" ? p.correct : null,
+          responseTimeMs: ms(p.rtMs),
+          probeItemId:
+            typeof p.itemId === "string" && UUID.test(p.itemId)
+              ? p.itemId
+              : null,
+        });
+        break;
+      }
+      case "motor_tap":
+        trials.push({
+          dimension: "motor_speed",
+          condition: p.practice === true ? "practice" : null,
+          response: text(p.cell ?? p.target),
+          correct: null,
+          responseTimeMs: ms(p.latencyMs),
+          probeItemId: null,
+        });
+        break;
     }
-    byAct[act] = {
-      ...statsOf(inAct),
-      ...(Object.keys(conditions).length ? { conditions } : {}),
-    };
   }
-  return { module, acts: byAct };
-}
-
-/**
- * What the run was calibrated to, which the engine could not otherwise know.
- *
- * The age band travelled only on `baseline_module_start`, which until 1 Oct
- * was a client-only event the signal filter dropped, and the subject the child
- * chose for the probe travelled nowhere. So the engine received a child's
- * timings and accuracies with no idea which band's items produced them. Sent
- * as its own feature, and as the band and subject only: nothing about the
- * child that the run did not already use. The signal stream now carries
- * `baseline_module_start` too, but on a different channel from this vector,
- * which still needs the band beside the numbers it describes.
- */
-export function reduceRunContext(capture: BaselineCapture) {
-  const start = capture.ofKind("run_start").at(-1);
-  const probe = capture.ofKind("probe_subject").at(-1);
-  const band = start?.payload?.band;
-  const subject = probe?.payload?.subject;
-  return {
-    module: "run",
-    band: typeof band === "string" ? band : null,
-    probeSubject: typeof subject === "string" ? subject : null,
-  };
-}
-
-/**
- * The motor-speed step's samples, exactly as they were taken (08a,
- * SCRUM-214), for the baseline vector. DELIBERATELY NOT REDUCED.
- *
- * Design defines `motor_baseline_ms` as the median of taps three to eight,
- * the first two being practice. That is a parameter, and rule 3 says the
- * client computes none: a median here and another in the engine are two
- * implementations of one number. So every tap travels as recorded - which
- * target and cell, its latency from the frame the target was painted to the
- * pointer-down on it, whether it was practice, and the form factor (D12: a
- * baseline is never compared across a tablet, a phone and a cursor) - and
- * the median is the engine's to take.
- *
- * The reducers around this one average on the device, which predates that
- * rule; this is the shape raw-trial ingest (B9) asks for. It carries no
- * coordinates and no dwell (B14): a latency is a timing, not a touch.
- *
- * `ended` is how the step finished - "complete" after eight, "idle" after ten
- * seconds with no tap, "skipped" on a cursor device - and null if it never
- * ran, which a withdrawn guardian's stopped capture also reads as.
- */
-export function motorStepSamples(capture: BaselineCapture) {
-  const end = capture.ofKind("motor_end").at(-1)?.payload;
-  const skip = capture.ofKind("motor_skipped").at(-1)?.payload;
-  const formFactor = (skip ?? end)?.formFactor;
-  return {
-    module: "motor_speed",
-    ended: skip
-      ? "skipped"
-      : typeof end?.reason === "string"
-        ? end.reason
-        : null,
-    ...(skip ? { skipReason: skip.reason } : {}),
-    formFactor: typeof formFactor === "string" ? formFactor : null,
-    /** The lattice the cells are numbered on: n of an n x n grid. */
-    grid: typeof end?.grid === "number" ? end.grid : null,
-    samples: capture.ofKind("motor_tap").map((e) => ({
-      target: e.payload?.target,
-      cell: e.payload?.cell,
-      latencyMs: e.payload?.latencyMs,
-      practice: e.payload?.practice === true,
-      formFactor: e.payload?.formFactor,
-    })),
-  };
-}
-
-export function reduceGridSpan(capture: BaselineCapture) {
-  const taps = capture.ofKind("tap");
-  const correct = taps.filter((t) => t.payload?.correct === true);
-
-  /*
-   * ONLY GAPS WITHIN ONE RECALL.
-   *
-   * This paired every correct tap with the one before it, across round
-   * boundaries included - so the "gap" between the last tap of one round and
-   * the first of the next swallowed the between-round beat, the playback lead
-   * and the whole next sequence lighting up. Several seconds, against a real
-   * within-round gap of a few hundred milliseconds, and the 30s ceiling waved
-   * it through. Over a typical four-round run that is three such gaps inflating
-   * a mean of eighteen.
-   *
-   * `posInSeq` counts up within a recall and resets to 0 on the next, so a pair
-   * is genuine exactly when it advanced by one.
-   */
-  const gaps: number[] = [];
-  for (let i = 1; i < correct.length; i++) {
-    const pos = Number(correct[i].payload?.posInSeq);
-    const prev = Number(correct[i - 1].payload?.posInSeq);
-    if (pos !== prev + 1) continue;
-    const gap = correct[i].t - correct[i - 1].t;
-    if (gap > 0 && gap < 30_000) gaps.push(gap);
-  }
-
-  const spans = capture
-    .ofKind("round_complete")
-    .map((e) => Number(e.payload?.length ?? 0));
-
-  /*
-   * The SS band's dual task, which reached the vector in no form at all - this
-   * function did not read `check_answer`, and the event carried no `correct` to
-   * read. A child who taps True at every check is not carrying the load the
-   * dual task exists to impose, and was indistinguishable from one who was.
-   * Null for every other band, which runs no checks.
-   */
-  const checks = capture.ofKind("check_answer");
-  const checksRight = checks.filter((e) => e.payload?.correct === true).length;
-
-  return {
-    module: "grid_span",
-    maxSpan: spans.length ? Math.max(...spans) : 0,
-    roundsCompleted: spans.length,
-    retries: taps.filter((t) => t.payload?.correct === false).length,
-    meanRecallGapMs: gaps.length
-      ? Math.round(gaps.reduce((a, b) => a + b, 0) / gaps.length)
-      : null,
-    dualChecks: checks.length,
-    dualAccuracy: checks.length ? checksRight / checks.length : null,
-  };
+  return trials;
 }

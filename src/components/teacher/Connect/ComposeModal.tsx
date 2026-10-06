@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
 import { useStudentDirectory } from "@/hooks/useStudentDirectory";
 import { useHasSession } from "@/hooks/useHasSession";
 import { studentSlug } from "@/lib/mocks/teacherStudents";
@@ -85,6 +86,8 @@ export function ComposeModal({
   const [presetUsed, setPresetUsed] = useState(false);
   const [text, setText] = useState("");
   const [phase, setPhase] = useState<Phase>("form");
+  // A message written and not yet sent, or one that failed to go.
+  useUnsavedGuard(text.trim().length > 0 && phase !== "sent");
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
