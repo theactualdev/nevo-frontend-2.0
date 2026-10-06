@@ -203,13 +203,18 @@ function hasSpeech(): boolean {
 /**
  * Dot pairs per trial (left/right counts converge by band difficulty).
  *
- * ASK, NOT SETTLED BY ANY FRAME. Design states one exemplar pair per band
- * (`Nevo Dot Comparison Frame` `cfg()`: 8:4, 9:5, 12:8, 13:12 - each band's
- * first pair below) and one ratio per band (`09c`: 2:1, 1.8:1, 1.5:1,
- * 1.1:1). Trials two and three are not drawn anywhere except for P4-6, whose
- * prototype pairs (11:178) are 8:6 and 10:7 - harder than its own frame's
- * 1.8:1, as are JSS's 11:9 and 13:10 against 1.5:1. They are left as shipped
- * rather than replaced with pairs nobody has designed either.
+ * Design states one exemplar pair per band (`Nevo Dot Comparison Frame`
+ * `cfg()`: 8:4, 9:5, 12:8, 13:12 - each band's first pair below) and one
+ * ratio per band (`09c`: 2:1, 1.8:1, 1.5:1, 1.1:1).
+ *
+ * SS IS SETTLED (6 Oct). 09c now says its "trial-2/3 pairs derived from the
+ * ratio", and 12:11 and 14:13 already are: both sit at about 1.1:1.
+ *
+ * ASK FOR THE OTHER THREE (D76). Their trials two and three are not drawn
+ * anywhere except for P4-6, whose prototype pairs (11:178) are 8:6 and 10:7 -
+ * harder than its own frame's 1.8:1, as are JSS's 11:9 and 13:10 against
+ * 1.5:1. They are left as shipped rather than replaced with pairs nobody has
+ * designed either.
  */
 const DOT_PAIRS: Record<AgeBand, { a: number; b: number }[]> = {
   p13: [
