@@ -141,6 +141,7 @@ describe("the tab title", () => {
       ).title;
 
     expect(await title("account_paused")).toBe("Account on pause - Nevo");
+    expect(await title("account_closed")).toBe("Account closed - Nevo");
     expect(await title("session_expired")).toBe("Session expired - Nevo");
     expect(await title()).toBe("Session expired - Nevo");
   });
@@ -171,5 +172,32 @@ describe("what a child is told to do next (1 Oct rulings)", () => {
       "/auth/login",
     );
     expect(screen.queryByText(/log back in|try again/i)).toBeNull();
+  });
+});
+
+/**
+ * B58 and D53. A removed child gets 401 `account_closed`, and reads that the
+ * account is closed. Before the code existed it reached this door as
+ * `account_paused` and was told the account was on pause - which says it
+ * will start again, and brings them back to the tablet to try.
+ */
+describe("a closed account at the door", () => {
+  it("says closed, never on pause, and offers no way to retry", async () => {
+    await doorFor("account_closed");
+
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      "Your Nevo account is closed.",
+    );
+    expect(document.body.textContent).not.toMatch(/pause/i);
+    expect(screen.queryByText(/log back in|try again|away for a while/i)).toBeNull();
+  });
+
+  it("keeps the way back to the picker for whoever is next (D52)", async () => {
+    await doorFor("account_closed");
+
+    expect(screen.getByRole("link", { name: "Back to sign in" })).toHaveAttribute(
+      "href",
+      "/auth/login",
+    );
   });
 });

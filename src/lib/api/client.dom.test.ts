@@ -315,6 +315,29 @@ describe("a child paused mid-lesson", () => {
     expect(clearSession).toHaveBeenCalledTimes(1);
   });
 
+  it("raises the closed card, not the paused one, for a removed child (B58, D53)", async () => {
+    asStudent();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ detail: { code: "account_closed", message: "x" } }),
+            { status: 401, headers: { "Content-Type": "application/json" } },
+          ),
+      ),
+    );
+    const { api } = await freshClient();
+    const pause = await import("@/lib/auth/accountPause");
+    const unregister = pause.registerPauseHost();
+
+    await expect(api.get("/api/v1/lessons/x")).rejects.toThrow();
+
+    expect(pause.accountHold()).toBe("closed");
+    expect(clearSession).not.toHaveBeenCalled();
+    unregister();
+  });
+
   it("leaves a paused teacher on their own door", async () => {
     // Staff have a frame of their own for this; 28b is the child's.
     vi.stubGlobal("fetch", paused());

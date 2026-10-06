@@ -4,12 +4,12 @@ import Image from "next/image";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import {
-  isAccountPaused,
+  accountHold,
   onAccountPause,
   registerPauseHost,
 } from "@/lib/auth/accountPause";
 import { clearSession } from "@/lib/auth/session";
-import { AccountOnPauseView } from "./AccountOnPauseScreen";
+import { AccountOnPauseView, accountHoldHeading } from "./AccountOnPauseScreen";
 
 /**
  * 28b - an account paused while the child is using it.
@@ -42,6 +42,11 @@ import { AccountOnPauseView } from "./AccountOnPauseScreen";
  * - its icon slot renders nothing - and the frame rules out "an error icon".
  * The `Account On Pause` frame puts the Nevo mark in the same violet circle, so
  * that is what fills it. Flagged to design.
+ *
+ * A CLOSED ACCOUNT GETS THE SAME CARD, saying closed (D53, B58). Losing the
+ * lesson mid-sentence is the same harm whichever state the account is in; only
+ * the heading differs, because "on pause" would tell a removed child it starts
+ * again. Its words are a DESIGN ASK - see `AccountOnPauseScreen`.
  */
 /**
  * The picker, by a full page load (D52): the pause is sticky for this page, and
@@ -51,14 +56,11 @@ const SIGN_IN_DOOR = "/auth/login";
 
 export function AccountPauseHost() {
   useEffect(() => registerPauseHost(), []);
-  const paused = useSyncExternalStore(
-    onAccountPause,
-    isAccountPaused,
-    () => false,
-  );
+  const hold = useSyncExternalStore(onAccountPause, accountHold, () => null);
   const [settled, setSettled] = useState(false);
 
-  if (!paused) return null;
+  if (!hold) return null;
+  const heading = accountHoldHeading(hold);
 
   return (
     <DialogPrimitive.Root open>
@@ -71,9 +73,9 @@ export function AccountPauseHost() {
             className="fixed inset-0 z-50 overflow-y-auto bg-nevo-cream outline-none"
           >
             <DialogPrimitive.Title className="sr-only">
-              Your Nevo account is on pause.
+              {heading}
             </DialogPrimitive.Title>
-            <AccountOnPauseView back={{ href: SIGN_IN_DOOR }} />
+            <AccountOnPauseView back={{ href: SIGN_IN_DOOR }} hold={hold} />
           </DialogPrimitive.Content>
         ) : (
           <>
@@ -93,7 +95,7 @@ export function AccountPauseHost() {
                 />
               </span>
               <DialogPrimitive.Title className="text-xl leading-[1.3] font-semibold tracking-[-0.01em] sm:text-[23px]">
-                Your Nevo account is on pause.
+                {heading}
               </DialogPrimitive.Title>
               <DialogPrimitive.Description className="mt-3 text-[15px] leading-[1.55] text-nevo-near-black/68 sm:mt-3.5 sm:text-base">
                 If you have questions, talk to your teacher.

@@ -241,7 +241,7 @@ function handleAuthFailure(
   // `accountPause.ts` for why, and for the case with nothing to draw it.
   if (pausesInPlace(role, code, pauseHostsMounted())) {
     redirecting = true;
-    announceAccountPause();
+    announceAccountPause(code);
     return;
   }
   clearSession();
