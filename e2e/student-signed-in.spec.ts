@@ -1,7 +1,9 @@
+import { randomInt } from "node:crypto";
 import {
   expect,
   test,
   type APIRequestContext,
+  type APIResponse,
   type Locator,
   type Page,
 } from "@playwright/test";
@@ -18,33 +20,50 @@ import {
  *
  * ## Where the credential comes from, and why it is not a secret
  *
- * A child signs in with school code + login identifier + PIN. There is no safe
- * way to keep a child's PIN in a secret store: it is four to eight digits, it is
- * reset by an adult, and it is the one credential a child is told out loud. So
- * this suite MINTS one: it signs in as the E2E admin, calls
- * `POST /api/v1/students/{id}/pin/reset` for the probe student, and uses the
- * PIN that comes back. Confirmed against the live tenant on 24 Sep.
+ * A child signs in with school code + login identifier + PIN, and there is no
+ * PIN to keep in a secret store: since SCRUM-216 no adult ever sets or sees a
+ * child's PIN. An admin can only CLEAR one, with
+ * `POST /api/v1/students/{id}/pin/clear`, which never accepts, returns or
+ * generates a PIN. The child then sets their own through
+ * `POST /api/v1/student-entry/pin` with the school code and their Student ID.
+ * That door only opens while the PIN is unset, and it answers with a session.
  *
- * **Running it CHANGES that student's PIN**, which is why the student is named
- * explicitly rather than defaulted: the write is opt-in. Point it at a probe
- * account nobody reads by hand.
+ * So this suite does what the school and the child would do. It signs in as
+ * the E2E admin and clears the probe's PIN. Then, as the child, it sets a fresh
+ * random four-digit PIN through that door and keeps the session it returns.
+ * The PIN is never fixed and never printed. It lives in this run's memory and
+ * stops working at the next run's clear.
  *
- * ## Why the PIN is minted ONCE
+ * The Student ID comes from `E2E_STUDENT_ADMISSION` because no student read
+ * returns it, and the child's door takes nothing else. It is not a secret: what
+ * authorises the set is the admin's clear, not anything the child knows. It
+ * must be the Student ID of the child `E2E_STUDENT_LOGIN` names, and
+ * `beforeAll` fails if the door signs in anyone else.
  *
- * Each reset changes the PIN, and each `POST /auth/login/pin` issues a session
- * that REPLACES the last one (`replacedSession`). Minting per test would churn
- * both and invite the rate limit that `too_many_attempts` exists for. So one
- * reset and one sign-in in `beforeAll`; every test plants that same session;
- * and the one test that drives the real sign-in form runs LAST, because the
- * session it creates replaces the planted one.
+ * **Running it CLEARS AND SETS that student's PIN**, which is why the student
+ * is named explicitly rather than defaulted: the write is opt-in. Point it at
+ * a probe account nobody reads by hand.
+ *
+ * ## Why the PIN is set ONCE
+ *
+ * Each clear and set changes the PIN. The set issues a session, and each
+ * `POST /auth/login/pin` issues one too, and every new session REPLACES the
+ * last one (`replacedSession`). Setting per test would churn both and invite
+ * the throttling both doors carry. So there is one clear and one set in
+ * `beforeAll`, and every test plants that same session. The one test that
+ * drives the real sign-in form runs LAST, because the session it creates
+ * replaces the planted one.
  *
  * ## The coupling this catches
  *
- * An administrator's reset issued a SIX-digit PIN until 1 Oct, and now issues
- * four (`pinLength: 4`); six-digit PINs are still accepted for legacy
- * accounts. The sign-in form therefore takes four to eight. The form test
- * below types whatever the reset returned, so a form capped below a PIN the
- * server still accepts fails here.
+ * A child-set PIN is exactly four digits, the only length the child's door
+ * accepts. The form test below types that PIN into the real form, so a form
+ * that cannot take the PIN a child just set fails here.
+ *
+ * Admin resets no longer issue PINs, so this suite has no way to get the
+ * six-digit kind. The sign-in route still accepts six digits for older
+ * accounts, and the form takes four to eight. But nothing here types six any
+ * more, so that path is not covered by this file.
  *
  * ## The school code is read, never written down
  *
@@ -52,8 +71,8 @@ import {
  * four-character alphabet with no 0, O, 1 or I, so a fixture holding the old
  * code signed nobody in. A missing school and a wrong PIN both answer 401
  * `authentication_failed` by design, so that failure read as a bad PIN. The
- * code now comes from the E2E admin's own school record. A rate limit is a
- * 429 `too_many_attempts`, never a 401, so a 401 here is always credentials.
+ * code now comes from the E2E admin's own school record, and both the child's
+ * PIN door and the sign-in form are given that.
  *
  * ## What the child has is asked, never assumed
  *
@@ -66,8 +85,12 @@ import {
  *
  * ## What this file writes, and nothing else
  *
- * 1. **The PIN reset and the one sign-in** in `beforeAll`, and the real
- *    sign-in in the last test. Described above.
+ * 1. **The probe's PIN, on every run.** In `beforeAll` the admin clears it and
+ *    the child's door sets a new one, which also signs the probe in. The real
+ *    sign-in in the last test adds one more session. Described above. If the
+ *    set fails after the clear, the probe is left with NO PIN until the next
+ *    run clears and sets again. The spec says a teacher's clear is logged
+ *    with the child and the time. It does not say whether an admin's is.
  * 2. **Opening a lesson**, in one test. The player opens a lesson session,
  *    writes the child's position (`in_progress` at the segment it opens on),
  *    asks the engine for its `lesson_load` plan and sends the player's
@@ -80,7 +103,8 @@ import {
  * Every other test is READ-ONLY and is held to it: it records every write the
  * page sends and fails on any (`expectNoWrites`). Never, anywhere in this file:
  * finish a lesson, answer a check, submit feedback, sit or submit the warm-up,
- * ask Ask Nevo anything, choose a look, change a PIN, or send a message.
+ * ask Ask Nevo anything, choose a look, change a PIN through Profile, or send
+ * a message.
  *
  * Connect is walked at PHONE width for that reason. On a tablet or desktop the
  * first conversation opens beside the list, and opening one marks it read on
@@ -105,6 +129,8 @@ import {
 const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL;
 const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD;
 const STUDENT_LOGIN = process.env.E2E_STUDENT_LOGIN;
+/** The probe's Student ID, which the child's own PIN door takes. See above. */
+const STUDENT_ADMISSION = process.env.E2E_STUDENT_ADMISSION;
 const API = process.env.E2E_API_BASE ?? "https://nevo-backend-2-0-kn3d.onrender.com";
 
 /** Mirrors `lib/auth/session.ts`. Changing either without the other breaks this. */
@@ -114,7 +140,11 @@ const SAMPLE_ATTR = "data-nevo-sample";
 
 test.skip(
   !ADMIN_EMAIL || !ADMIN_PASSWORD || !STUDENT_LOGIN,
-  "Set E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD and E2E_STUDENT_LOGIN to run the student suite. It resets that student's PIN.",
+  "Set E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD and E2E_STUDENT_LOGIN to run the student suite. It clears that student's PIN and sets a new one.",
+);
+test.skip(
+  !STUDENT_ADMISSION,
+  "Set E2E_STUDENT_ADMISSION to the probe's Student ID. The suite sets the probe's PIN through the child's own door, which takes the school code and that ID, and no student read returns it.",
 );
 
 /** How long a live read may take before we call it broken. See the teacher suite. */
@@ -160,7 +190,13 @@ interface Read<T> {
   body: T | null;
 }
 
-/** Set once in `beforeAll`. */
+/**
+ * Chosen at random in `beforeAll` and set as the probe's own. Never fixed and
+ * never printed: no assertion or message in this file takes it as a value.
+ * The one place it is kept is a FAILED test's trace, which records what the
+ * sign-in test types. CI does not upload traces, and the PIN stops working at
+ * the next run's clear.
+ */
 let pin = "";
 /** Read from the admin's school in `beforeAll` - see the docblock above. */
 let schoolCode = "";
@@ -405,6 +441,20 @@ async function readJson<T>(
   return { status: res.status(), body: res.ok() ? ((await res.json()) as T) : null };
 }
 
+/**
+ * A refusal's `detail.code`, for a failure message, and nothing for a success.
+ * Only the code: an error body is never printed whole, in case it echoes what
+ * was sent - which, for the child's door, includes the PIN.
+ */
+async function errorCode(res: APIResponse): Promise<string> {
+  if (res.ok()) return "";
+  const parsed = (await res.json().catch(() => null)) as {
+    detail?: { code?: unknown };
+  } | null;
+  const code = parsed?.detail?.code;
+  return typeof code === "string" ? ` ${code}` : "";
+}
+
 test.describe("a signed-in student", () => {
   test.describe.configure({ timeout: 150_000, mode: "serial" });
 
@@ -435,30 +485,42 @@ test.describe("a signed-in student", () => {
       `No student with login ${STUDENT_LOGIN} in the E2E tenant.`,
     ).toBeTruthy();
 
-    const reset = await api.post(
-      `${API}/api/v1/students/${student!.id}/pin/reset`,
+    /*
+     * The admin clears and the child sets. See "Where the credential comes
+     * from". The clear comes first because the child's door refuses a child
+     * who still has a PIN.
+     */
+    const cleared = await api.post(
+      `${API}/api/v1/students/${student!.id}/pin/clear`,
       { headers: auth },
     );
-    expect(reset.ok(), `The PIN reset was refused (${reset.status()}).`).toBeTruthy();
-    pin = String((await reset.json()).pin);
-    expect(pin, "The reset returned no PIN.").toMatch(/^\d+$/);
+    expect(
+      cleared.ok(),
+      `The admin could not clear the probe's PIN (${cleared.status()}${await errorCode(cleared)}).`,
+    ).toBeTruthy();
 
-    const login = await api.post(`${API}/api/v1/auth/login/pin`, {
-      data: { schoolCode, loginIdentifier: STUDENT_LOGIN, pin },
+    pin = String(randomInt(10_000)).padStart(4, "0");
+    const entry = await api.post(`${API}/api/v1/student-entry/pin`, {
+      data: { schoolCode, admissionNumber: STUDENT_ADMISSION, pin },
     });
     expect(
-      login.ok(),
-      login.status() === 429
-        ? "The PIN sign-in was rate limited (429 too_many_attempts)."
-        : `The minted PIN did not sign the student in (${login.status()}): the PIN, the login or the school code is wrong.`,
+      entry.ok(),
+      `The probe could not set its own PIN (${entry.status()}${await errorCode(entry)}). Its PIN stays cleared until a run sets one. Check that E2E_STUDENT_ADMISSION is the Student ID of ${STUDENT_LOGIN}.`,
     ).toBeTruthy();
-    const body = await login.json();
-    expect(body.role, "The E2E probe account must be a student").toBe("student");
+    const body: {
+      userId: string;
+      session: { accessToken: string; expiresAt: string; userId: string; role: string };
+    } = await entry.json();
+    expect(
+      body.userId,
+      `E2E_STUDENT_ADMISSION is not the Student ID of ${STUDENT_LOGIN}: the door set a PIN for a different child, who now needs an admin to clear it. Fix the pair before the next run.`,
+    ).toBe(student!.id);
+    expect(body.session.role, "The E2E probe account must be a student").toBe("student");
     session = {
-      token: body.accessToken,
-      expiresAt: body.expiresAt,
-      userId: body.userId,
-      role: body.role,
+      token: body.session.accessToken,
+      expiresAt: body.session.expiresAt,
+      userId: body.session.userId,
+      role: body.session.role,
     };
 
     /*
@@ -991,9 +1053,10 @@ test.describe("a signed-in student", () => {
      * LAST ON PURPOSE: the session this creates replaces the one every other
      * test planted.
      *
-     * Everything above plants a session. This one types, the way a child on a
-     * school laptop does - which is also the path that could not take a
-     * keystroke until 18 Sep, because the PIN field was never focused.
+     * Everything above plants a session. This one types the PIN `beforeAll`
+     * set, the way a child on a school laptop does - which is also the path
+     * that could not take a keystroke until 18 Sep, because the PIN field was
+     * never focused.
      *
      * And it lands through `entryGate`, so it checks the consent wiring end to
      * end: a child the server says may not proceed is held at the waiting

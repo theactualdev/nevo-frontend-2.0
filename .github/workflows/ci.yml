@@ -47,9 +47,9 @@ jobs:
     name: end-to-end
     runs-on: ubuntu-latest
     # ONE AT A TIME, ACROSS EVERY BRANCH. The E2E tenant is a shared resource:
-    # the student suite resets a probe child's PIN on every run, and each
-    # signed-in suite's login REPLACES the account's previous session. Two runs
-    # at once - two open PRs, say - would reset the PIN under each other and
+    # the student suite clears and sets a probe child's PIN on every run, and
+    # each signed-in suite's login REPLACES the account's previous session. Two
+    # runs at once - two open PRs, say - would clear the PIN under each other and
     # kill each other's sessions mid-walk, which reads exactly like a product
     # bug and is not one. Queued, not cancelled: every run still reports.
     concurrency:
@@ -82,11 +82,17 @@ jobs:
           E2E_TEACHER_PASSWORD: ${{ secrets.E2E_TEACHER_PASSWORD }}
           E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
           E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
-          # Not secrets. The student suite MINTS its own PIN through the admin
-          # above, so the only thing it needs is which probe child to use - and
-          # every run RESETS that child's PIN, which is why it is named here in
-          # the open rather than defaulted inside the spec.
-          E2E_STUDENT_LOGIN: NV-DF323F
+          # Not secrets: they only name the probe child. No adult can set or
+          # see a child's PIN (SCRUM-216). So the student suite clears the
+          # probe's PIN through the admin above, then sets a fresh random one
+          # through the child's own door, which takes the school code and the
+          # child's Student ID. No student read returns that ID, so it is named
+          # here beside the login. Every run CLEARS AND SETS that child's PIN,
+          # which is why the child is named here in the open rather than
+          # defaulted inside the spec. Backend seeded this probe for the suite,
+          # with consent given so it can reach a lesson.
+          E2E_STUDENT_LOGIN: NV-E2E000
+          E2E_STUDENT_ADMISSION: E2E/PROBE
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
