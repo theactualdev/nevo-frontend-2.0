@@ -97,3 +97,12 @@ describe("the background reads", () => {
     await waitFor(() => expect(result.current.reads?.adaptations).toBe("failed"));
   });
 });
+
+describe("the progress read", () => {
+  it("is not made - nothing on the live profile renders it", async () => {
+    const { result } = renderHook(() => useStudentProfile("s-1"));
+
+    await waitFor(() => expect(result.current.reads?.mastery).toBe("ready"));
+    expect(api.progress).not.toHaveBeenCalled();
+  });
+});

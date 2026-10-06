@@ -130,7 +130,8 @@ export function useStudentProfile(studentId: string): StudentProfileState {
   const [evidence, setEvidence] = useState<ConversationEvidence | null>(null);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [adaptations, setAdaptations] = useState<StudentAdaptation[]>([]);
-  const [sessions, setSessions] = useState<LessonProgress[]>([]);
+  // Never filled on the live path - see the note where the progress read was.
+  const [sessions] = useState<LessonProgress[]>([]);
   const [accommodations, setAccommodations] = useState<Accommodations | null>(
     null,
   );
@@ -197,17 +198,13 @@ export function useStudentProfile(studentId: string): StudentProfileState {
         settle("adaptations", "ready");
       })
       .catch(() => settle("adaptations", "failed"));
-    void studentsApi
-      .progress(studentId)
-      .then((p) => {
-        if (cancelled) return;
-        setSessions(
-          [...p.lessons].sort(
-            (a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt),
-          ),
-        );
-      })
-      .catch(() => {});
+    /*
+     * NO PROGRESS READ. `GET /api/students/{id}/progress` was fetched on
+     * every profile open and nothing rendered it: the live profile reads the
+     * real sessions list instead. A request whose answer goes nowhere is load
+     * on the server and a failure nobody can see. `sessions` stays on the
+     * state, empty, for the fixture profile that still reads its own.
+     */
     void studentsApi
       .accommodations(studentId)
       .then((a) => {
