@@ -467,7 +467,28 @@ export interface LessonProgressRequest {
   assignmentId?: string | null;
   modulePosition?: number;
   segmentPosition?: number;
+  /**
+   * Where a child left the after-lesson check: the index of the next question
+   * to ask (B49). Sent on the exit write and nowhere else, so the write that
+   * leaves a check is the one that says where.
+   */
+  checkPosition?: number | null;
   status: LessonStatus;
+}
+
+/**
+ * `ConceptOutcomeResponse` - one concept, and how the check-in went on it
+ * (B26). The server marks it from the stored answers; nothing here does.
+ *
+ * `asked` and `correct` are counts of a child's answers. Typed because the
+ * contract sends them, and NEVER RENDERED: the screen names the concept, and a
+ * number beside it would be a mark (rule 9).
+ */
+export interface ConceptOutcome {
+  conceptId?: string | null;
+  conceptName: string;
+  asked: number;
+  correct: number;
 }
 
 export interface LessonProgressResponse {
@@ -477,6 +498,22 @@ export interface LessonProgressResponse {
   segmentPosition: number;
   /** Untyped in the spec (`additionalProperties: true`), so it is not read. */
   intelligence: Record<string, unknown>;
+  /**
+   * What "From the check-in" draws (B26). None is in the schema's `required`
+   * list, so absent and empty both mean there is nothing to show - never that
+   * nothing landed.
+   */
+  masteredConcepts?: ConceptOutcome[];
+  revisitConcepts?: ConceptOutcome[];
+  /** The result's paragraph. `""`, its default, is no paragraph. */
+  resultNote?: string;
+  /**
+   * Where the check was left, and the moment it stops being resumable (B49).
+   * `checkResumableUntil` is the end of the day the check started, decided by
+   * the server so that two tablets agree on when it has lapsed.
+   */
+  checkPosition?: number | null;
+  checkResumableUntil?: string | null;
 }
 
 /**
@@ -524,7 +561,7 @@ export const lessonsApi = {
    * check here, so a child who leaves a check part way keeps the answers they
    * gave (D36). The body is built by `attemptFor`, which sends the option's
    * own value rather than its stringified id. Review answers still reads the
-   * device copy - swapping it for `attempts` below is the follow-up.
+   * device copy, which a resumed check refills from `attempts` below (B49).
    */
   saveAttempt: (lessonId: string, body: LessonQuestionAttemptWrite) =>
     api.post<LessonQuestionAttempt>(

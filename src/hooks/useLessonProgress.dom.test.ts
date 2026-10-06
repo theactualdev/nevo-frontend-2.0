@@ -236,3 +236,76 @@ describe("useLessonProgress - an earlier visit's finish", () => {
     });
   });
 });
+
+describe("useLessonProgress - the after-lesson check (B49, B26)", () => {
+  it("sends where the check was left on the write that leaves it", async () => {
+    const save = vi
+      .spyOn(lessonsApi, "saveProgress")
+      .mockResolvedValue({} as never);
+    const { result } = renderHook(() => useLessonProgress(LESSON, true));
+    await waitFor(() => expect(result.current.sessionId).toBe("sess-1"));
+
+    act(() => result.current.report("exited", { segment: 4, check: 2 }));
+
+    await waitFor(() =>
+      expect(save).toHaveBeenCalledWith(LESSON, {
+        sessionId: "sess-1",
+        status: "exited",
+        segmentPosition: 4,
+        checkPosition: 2,
+      }),
+    );
+  });
+
+  it("sends no place in a check on any other write", async () => {
+    const save = vi
+      .spyOn(lessonsApi, "saveProgress")
+      .mockResolvedValue({} as never);
+    const { result } = renderHook(() => useLessonProgress(LESSON, true));
+    await waitFor(() => expect(result.current.sessionId).toBe("sess-1"));
+
+    act(() => result.current.report("in_progress", { segment: 1 }));
+
+    await waitFor(() => expect(save).toHaveBeenCalled());
+    expect(save.mock.calls[0][1]).not.toHaveProperty("checkPosition");
+  });
+
+  it("gives back what the newest write that landed came back with", async () => {
+    // The only read of the progress row there is: it carries the check-in's
+    // outcome after the completion, and where a check was left.
+    const row = {
+      lessonId: LESSON,
+      status: "completed",
+      modulePosition: 0,
+      segmentPosition: 4,
+      intelligence: {},
+      masteredConcepts: [{ conceptName: "Halves", asked: 1, correct: 1 }],
+    };
+    vi.spyOn(lessonsApi, "saveProgress").mockResolvedValue(row as never);
+    const { result } = renderHook(() => useLessonProgress(LESSON, true));
+    await waitFor(() => expect(result.current.sessionId).toBe("sess-1"));
+    expect(result.current.saved).toBeNull();
+
+    act(() => result.current.report("completed", { segment: 4 }));
+
+    await waitFor(() => expect(result.current.saved).toEqual(row));
+  });
+
+  it("never gives back an older write's answer over a newer one", async () => {
+    const lands: ((row: unknown) => void)[] = [];
+    vi.spyOn(lessonsApi, "saveProgress").mockImplementation(
+      () => new Promise((resolve) => lands.push(resolve as never)),
+    );
+    const { result } = renderHook(() => useLessonProgress(LESSON, true));
+    await waitFor(() => expect(result.current.sessionId).toBe("sess-1"));
+
+    act(() => result.current.report("in_progress", { segment: 1 }));
+    act(() => result.current.report("completed", { segment: 2 }));
+    await act(async () => {
+      lands[1]({ status: "completed", segmentPosition: 2 });
+      lands[0]({ status: "in_progress", segmentPosition: 1 });
+    });
+
+    expect(result.current.saved).toMatchObject({ status: "completed" });
+  });
+});

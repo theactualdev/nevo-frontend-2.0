@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   LESSON_STATUS,
   lessonsApi,
+  type LessonProgressResponse,
   type LessonStatus,
 } from "@/lib/api/lessons";
 import { getSession, getToken } from "@/lib/auth/session";
@@ -58,11 +59,11 @@ import { randomId } from "@/lib/utils";
  */
 
 export interface LessonProgressState {
-  /** Report a position. Safe to call before the session exists. */
-  report: (
-    status: LessonStatus,
-    position: { segment?: number; module?: number },
-  ) => void;
+  /**
+   * Report a position. Safe to call before the session exists. `check` is
+   * where the after-lesson check was left (B49), on the write that leaves it.
+   */
+  report: (status: LessonStatus, position: Position) => void;
   /** The completion write did not reach Nevo. */
   completionFailed: boolean;
   /** True once a completion write has landed. */
@@ -79,7 +80,16 @@ export interface LessonProgressState {
    * backend saying progress and signals are one session, not two.
    */
   sessionId: string | null;
+  /**
+   * What the newest write that landed came back with - the only read of a
+   * lesson's progress row the contract has. Carries the check-in's outcome
+   * (B26) after the completion write, and where a check was left (B49).
+   * Null until a write lands; never an older write's answer.
+   */
+  saved: LessonProgressResponse | null;
 }
+
+type Position = { segment?: number; module?: number; check?: number };
 
 const IDLE: LessonProgressState = {
   report: () => {},
@@ -87,6 +97,7 @@ const IDLE: LessonProgressState = {
   completionSaved: false,
   positionSaved: false,
   sessionId: null,
+  saved: null,
 };
 
 export function useLessonProgress(
@@ -119,6 +130,7 @@ export function useLessonProgress(
     status: LessonStatus;
     segment?: number;
     module?: number;
+    check?: number;
   } | null>(null);
   const seq = useRef(0);
   const landed = useRef(0);
@@ -127,10 +139,12 @@ export function useLessonProgress(
     status: LessonStatus;
     segment?: number;
     module?: number;
+    check?: number;
   } | null>(null);
   const [completionFailed, setCompletionFailed] = useState(false);
   const [completionSaved, setCompletionSaved] = useState(false);
   const [positionSaved, setPositionSaved] = useState(false);
+  const [saved, setSaved] = useState<LessonProgressResponse | null>(null);
   /**
    * This player's own slot for a position held before any session exists.
    * Claimed while mounted, so the shell's flush leaves it to us.
@@ -142,7 +156,7 @@ export function useLessonProgress(
   const retryOpen = useRef<(() => void) | null>(null);
 
   const write = useCallback(
-    (status: LessonStatus, position: { segment?: number; module?: number }) => {
+    (status: LessonStatus, position: Position) => {
       const id = sessionId.current;
       if (!id) return;
       const ticket = ++seq.current;
@@ -165,11 +179,15 @@ export function useLessonProgress(
           ...(position.module !== undefined
             ? { modulePosition: position.module }
             : {}),
+          ...(position.check !== undefined
+            ? { checkPosition: position.check }
+            : {}),
         })
-        .then(() => {
+        .then((res) => {
           // A stale response must not overwrite a newer position.
           if (ticket < landed.current) return;
           landed.current = ticket;
+          setSaved(res ?? null);
           unsent.current = null;
           // It landed, so nothing is owed for THIS SESSION any more. Only
           // this session's: a completion held from an earlier visit is not
@@ -334,5 +352,6 @@ export function useLessonProgress(
     completionSaved,
     positionSaved,
     sessionId: issued,
+    saved,
   };
 }

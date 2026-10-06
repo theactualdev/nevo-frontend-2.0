@@ -88,7 +88,9 @@ export const REVIEW_COPY = {
  *   - THE FIRMER LINE ONLY WHERE THE BACKEND CONFIRMS MOVEMENT. The field that
  *     confirms it is `RecordReviewResponse.recallSuccessful`: the server's own
  *     verdict on the outcome sent, which it alone decides. Nothing the client
- *     counted reaches this line.
+ *     counted reaches this line. Backend confirmed on 5 Oct (B50) that a true
+ *     is only ever an unaided first attempt and always strictly lengthens the
+ *     interval, with both pinned in their tests - so no other field is needed.
  *   - Otherwise "You've been through this one again", which is true of every
  *     child who reached this screen: nothing sent, a failed write, or a review
  *     the server did not count as recall.

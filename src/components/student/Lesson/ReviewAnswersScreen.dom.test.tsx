@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { ReviewAnswersScreen } from "./ReviewAnswersScreen";
 import { LessonSummaryScreen } from "./LessonSummaryScreen";
-import { saveReviewAnswers } from "./reviewStore";
+import { saveCheckOutcome, saveReviewAnswers } from "./reviewStore";
 import { clearSession, setSession } from "@/lib/auth/session";
 import type { Lesson } from "@/lib/types";
 
@@ -115,5 +115,44 @@ describe("Review answers", () => {
 
     expect(screen.queryByText("YOU CHOSE")).toBeNull();
     expect(screen.getByText("THE ANSWER")).toBeTruthy();
+  });
+});
+
+describe("From the check-in, on the summary (B26)", () => {
+  const OUTCOME = {
+    mastered: ["Numerators"],
+    revisit: ["Denominators"],
+    note: "Not drawn here - the summary has no note.",
+  };
+
+  it("draws the outcome the completion write brought back", async () => {
+    signInAs("stu-1");
+    saveCheckOutcome("frac-3", OUTCOME);
+
+    render(<LessonSummaryScreen lesson={lesson()} />);
+
+    expect(await screen.findByText("FROM THE CHECK-IN")).toBeTruthy();
+    expect(screen.getByText("Numerators")).toBeTruthy();
+    expect(screen.getByText(/Denominators/)).toBeTruthy();
+  });
+
+  it("draws no section when there is none to draw", () => {
+    // Finished on another visit, or the completion never answered: nothing
+    // to say, and the sample lists are not a stand-in (rule 5).
+    signInAs("stu-1");
+
+    render(<LessonSummaryScreen lesson={lesson()} />);
+
+    expect(screen.queryByText("FROM THE CHECK-IN")).toBeNull();
+  });
+
+  it("does not show the next child on the tablet the last child's", () => {
+    signInAs("stu-1");
+    saveCheckOutcome("frac-3", OUTCOME);
+    signInAs("stu-2");
+
+    render(<LessonSummaryScreen lesson={lesson()} />);
+
+    expect(screen.queryByText("Numerators")).toBeNull();
   });
 });
