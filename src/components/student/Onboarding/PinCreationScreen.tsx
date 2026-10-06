@@ -21,8 +21,9 @@ import { cn } from "@/lib/utils";
  * Two ways to store it, because there are two ways to arrive:
  *   - with a session, `POST /auth/pin` (Bearer-only);
  *   - with no session yet, `storePin` is supplied by the caller and binds the
- *     PIN to the child 05 Entry found - `bindFirstPin`, which rejects until
- *     backend answers B64, so this screen shows its not-saved state.
+ *     PIN to the child 05 Entry found - `bindFirstPin`, `POST
+ *     /student-entry/pin` (B64). A refusal there is this screen's not-saved
+ *     state.
  *
  * A path with neither is the one that cannot honestly promise anything, and
  * it no longer pretends: see `onboarding.ts`.

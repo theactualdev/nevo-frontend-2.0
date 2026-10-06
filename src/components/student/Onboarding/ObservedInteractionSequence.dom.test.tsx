@@ -12,7 +12,7 @@ import {
   clearOnboardingDraft,
   startOnboardingDraft,
 } from "@/lib/auth/onboarding";
-import { AwaitingBackendB64Error } from "@/lib/auth/firstPin";
+import { ApiError } from "@/lib/api/client";
 import {
   clearSession,
   getRememberedProfile,
@@ -25,10 +25,10 @@ import {
  *
  * The child arrives from 05 Entry, which matched them on their school code and
  * Student ID and left that pair in the draft. The PIN step binds the PIN to
- * that pair through `bindFirstPin` - which REJECTS until backend answers B64.
- * These tests drive the path both ways: resolved, as it will run once B64
- * lands, and rejected, as it runs today. The real stub, against the real PIN
- * screen, is `ObservedInteractionSequence.firstPin.dom.test.tsx`.
+ * that pair through `bindFirstPin` (`POST /student-entry/pin`, B64). These
+ * tests drive the path both ways, stored and refused. The real binding,
+ * against the real PIN screen, is
+ * `ObservedInteractionSequence.firstPin.dom.test.tsx`.
  */
 
 const { push, bindFirstPin, myDashboard, myConsentGate } = vi.hoisted(() => ({
@@ -173,10 +173,10 @@ describe("the first PIN", () => {
     );
   });
 
-  it("keeps the child on the PIN step while backend has no way to bind it", async () => {
-    // Today's path: the stub rejects, so nothing celebrates, nobody is signed
-    // in, and the device remembers nobody.
-    bindFirstPin.mockRejectedValue(new AwaitingBackendB64Error());
+  it("keeps the child on the PIN step when the server refuses it", async () => {
+    // Nothing celebrates, nobody is signed in, and the device remembers
+    // nobody. Nor is the baseline delivered: there is no session to send it on.
+    bindFirstPin.mockRejectedValue(new ApiError(422, "refused"));
 
     walkToPin();
     await act(async () => {});

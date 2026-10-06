@@ -61,7 +61,7 @@ export const authApi = {
    * and changing a PIN from the profile screen.
    *
    * A child setting a FIRST PIN before any session exists is not this call:
-   * see `bindFirstPin`, which waits on backend (B64).
+   * see `bindFirstPin`, which uses `POST /student-entry/pin` (B64).
    */
   setPin: (pin: string, currentPin?: string) =>
     api.post<Record<string, string>>("/api/v1/auth/pin", {

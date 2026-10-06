@@ -1,7 +1,9 @@
 import { api } from "./client";
 
 /**
- * `POST /api/v1/student-entry/lookup` - 05 Entry's one screen (SCRUM-208).
+ * `POST /api/v1/student-entry/lookup` - 05 Entry's one screen (SCRUM-208) -
+ * and `POST /api/v1/student-entry/pin`, which stores the first PIN at the end
+ * of the run the lookup starts (SCRUM-216).
  *
  * **PUBLIC, and that is the point.** The child has no account yet, and the
  * school's code plus their own Student ID / Admission Number is what says who
@@ -50,31 +52,42 @@ export interface StudentEntryState {
   /** Computed server-side from the roster's date of birth. Null is possible. */
   age: number | null;
   /**
-   * Read as "this child already has an account and a PIN", which sends them to
-   * sign back in rather than through a first run that would make a second
-   * account. The spec gives the field no description, so that reading is
-   * ASKED, not known - see `entryRoute`.
+   * "This child has a PIN and can sign in normally" (backend, B64), which
+   * sends them to sign back in rather than through a first run.
+   *
+   * FALSE FOR TWO DIFFERENT CHILDREN: a new one, and one whose PIN an adult
+   * cleared (SCRUM-216). Both have no PIN, and nothing on this response tells
+   * them apart - see `entryRoute`.
    */
   accountReady: boolean;
   /**
-   * A disputed date of birth, which is NOT a missing consent.
+   * The school and the parent disagree about the child's date of birth
+   * (backend, B64). NOT a missing consent: the child cannot start, and there
+   * is nothing they can do about it.
    *
    * The spec gives it no description. `AgeCheckResponse.blocksAccess` is the
    * same fact from the other direction, and `AgeCheckState` (`matched |
-   * mismatch | resolved | awaiting_parent`) says why. **RULED 23 SEP: it holds
-   * the child at the SAME screen as a missing consent, with the same words,
-   * and the child is told neither reason** (`docs/RULINGS_23_SEP.md` §2c).
-   * Optional because the contract gives it a default rather than requiring it.
+   * mismatch | resolved | awaiting_parent`) says why - none of which the
+   * child is told. Optional because the contract gives it a default rather
+   * than requiring it.
    */
   ageCheckPending?: boolean;
 }
 
 /**
- * What a first-PIN route answers with, once there is one this flow can reach.
- *
- * The shape of `POST /api/v1/student-entry/{token}/pin`'s 200, kept because
- * whichever way backend closes B64 is expected to hand this back - see
- * `bindFirstPin`. The PIN length that route also returns is deliberately not
+ * What `POST /api/v1/student-entry/pin` takes (`StudentPinSetup`): the pair 05
+ * matched the child on, and the PIN they chose on 15.
+ */
+export interface StudentPinSetup {
+  schoolCode: string;
+  admissionNumber: string;
+  /** Exactly four digits in the contract. */
+  pin: string;
+}
+
+/**
+ * 200 of `POST /api/v1/student-entry/pin`: the first PIN is stored, and a
+ * session starts with it. The PIN length it also returns is deliberately not
  * declared: nothing may build against it until SCRUM-179 settles the
  * six-digit case.
  */
@@ -106,4 +119,23 @@ export const studentEntryApi = {
    */
   lookup: (payload: StudentEntryLookup) =>
     api.post<StudentEntryState>("/api/v1/student-entry/lookup", payload),
+
+  /**
+   * PUBLIC. Store a first PIN for the child the lookup found, and start their
+   * session (SCRUM-216, B64). The only caller is `bindFirstPin`.
+   *
+   * IT OPENS ONLY WHILE THE CHILD HAS NO PIN, so it cannot overwrite a
+   * classmate's credential, and it is gated on consent and the age check like
+   * every other door a child can reach. The spec declares only the 200 and a
+   * 422; the refusals backend describes carry no declared status or code.
+   *
+   * The body is spelled out rather than passed through, so the contract check
+   * can compare its keys against `StudentPinSetup`.
+   */
+  setPin: ({ schoolCode, admissionNumber, pin }: StudentPinSetup) =>
+    api.post<StudentEntrySession>("/api/v1/student-entry/pin", {
+      schoolCode,
+      admissionNumber,
+      pin,
+    }),
 };

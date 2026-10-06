@@ -170,12 +170,10 @@ export function ObservedInteractionSequence() {
          * one, and it hands back the login identifier the next sign-in will be
          * checked against.
          *
-         * IT CANNOT HAPPEN YET, AND THIS SAYS SO. The lookup returns no session
-         * and no token, so nothing can attach this PIN to the child it found:
-         * `bindFirstPin` rejects until backend answers B64, and the PIN screen
-         * shows its not-saved line rather than celebrating a PIN the next
-         * sign-in would refuse. Everything below it is the path that runs once
-         * it resolves.
+         * `bindFirstPin` sends the pair 05 matched with the PIN (B64). Any
+         * refusal rejects out of here before anything below runs, so nothing
+         * is signed in, delivered or remembered, and the PIN screen shows its
+         * not-saved line rather than celebrating a PIN nobody stored.
          */
         storePin={async (pin) => {
           const entry = entryIdentityFromDraft();

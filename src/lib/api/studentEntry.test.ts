@@ -79,3 +79,23 @@ describe("lookup", () => {
     expect(res.age).toBeNull();
   });
 });
+
+describe("setPin", () => {
+  it("posts StudentPinSetup to the entry PIN route, not to /auth/pin", async () => {
+    // `/auth/pin` sets a PIN on whoever's Bearer token is on the device. This
+    // one is keyed on the pair, and opens only while the child has no PIN.
+    post.mockResolvedValue({});
+
+    await studentEntryApi.setPin({
+      schoolCode: "K7DQ",
+      admissionNumber: "BGA/2031",
+      pin: "1234",
+    });
+
+    expect(post).toHaveBeenCalledWith("/api/v1/student-entry/pin", {
+      schoolCode: "K7DQ",
+      admissionNumber: "BGA/2031",
+      pin: "1234",
+    });
+  });
+});

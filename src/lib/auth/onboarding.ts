@@ -32,8 +32,7 @@ export interface OnboardingDraft {
   schoolCode?: string;
   /**
    * The Student ID / Admission Number the child typed on 05. The other half
-   * of what identifies them until a first-PIN route exists - see
-   * `bindFirstPin`.
+   * of the pair their first PIN is stored against - see `bindFirstPin`.
    */
   admissionNumber?: string;
 }
