@@ -1,4 +1,11 @@
-import { lessonsApi, type LessonDetailResponse } from "@/lib/api/lessons";
+import type { ComprehensionCheckpoint } from "@/lib/api/checkpoints";
+import {
+  lessonsApi,
+  type LessonContentType,
+  type LessonDetailResponse,
+  type LessonSegment,
+} from "@/lib/api/lessons";
+import type { SegmentVariants } from "@/lib/api/variants";
 import { lessonFromContent } from "@/lib/lessons/fromContent";
 import { readZipFile, ZipUnsupported } from "./zip";
 
@@ -14,12 +21,25 @@ import { readZipFile, ZipUnsupported } from "./zip";
  * name the backend's own host - one the browser cannot reach without the
  * same-origin proxy.
  *
- * WHAT `lesson.json` IS, AND WHAT WE CAN SAY ABOUT IT. The contract calls it
- * "the lesson package" and gives it no schema. It is read as a
- * `LessonDetailResponse` - the shape the player already reads - and checked
- * before it is kept: the fields the player reads must be there, the id must be
- * this lesson's, and it must build. If it is not that shape, the lesson is
- * kept from the detail read instead, as the smaller version did. The size
+ * WHAT `lesson.json` IS: an `OfflinePackage` (backend B60, 5 Oct), and NOT a
+ * `LessonDetailResponse`. Until B60 the contract called it "the lesson
+ * package" and nothing more, so it was read as a lesson detail - and a correct
+ * package was rejected every time, because it is narrower and shaped
+ * differently: the four variants are nested under `modalityVariants`, a
+ * segment's key is `key`, and none of the review or authorship fields are
+ * there. Every save fell back to the detail read, so the package was fetched
+ * and thrown away. It is now checked against its own published shape and
+ * mapped onto the detail's field names - see `detailFromPackage` - so the
+ * player builds it exactly as it builds a live open.
+ *
+ * WHAT A PACKAGE DOES NOT CARRY. No modules, no closing recap and no
+ * after-lesson check: `OfflinePackage` has none of them. A lesson opened from
+ * a fresh package therefore plays its segments ungrouped and ends without
+ * either, until the child opens it online once and the shelf takes the full
+ * detail read (`refreshSavedLesson`). Asked of backend; never filled in here.
+ *
+ * If `lesson.json` is not that shape, belongs to another lesson or will not
+ * build, the lesson is kept from the detail read instead, as before. The size
  * shown is the package's either way - it is what the child downloaded - and
  * is never measured or estimated here.
  *
@@ -61,7 +81,7 @@ export async function downloadLesson(
   }
   if (!packaged && !unpackable && process.env.NODE_ENV === "development") {
     console.warn(
-      `[offline] lesson.json for ${lessonId} is not a LessonDetailResponse; kept the detail read instead.`,
+      `[offline] lesson.json for ${lessonId} is not an OfflinePackage this player can open; kept the detail read instead.`,
     );
   }
   return {
@@ -90,53 +110,142 @@ export async function lessonFromPackage(
   } catch {
     return null;
   }
-  if (!isLessonDetail(parsed, lessonId)) return null;
+  if (!isOfflinePackage(parsed, lessonId)) return null;
+  const detail = detailFromPackage(parsed);
   try {
     // The same builder a saved lesson is opened with, run once now so a
-    // package it cannot build is caught at save time, not when the child is
-    // offline and has nothing else.
-    lessonFromContent(parsed, parsed.modules ?? []);
+    // package it cannot build - or one with nothing in it to play - is caught
+    // at save time, not when the child is offline and has nothing else.
+    if (!lessonFromContent(detail)) return null;
   } catch {
     return null;
   }
-  return parsed;
+  return detail;
+}
+
+/**
+ * `OfflinePackage`, the published schema of `lesson.json` (backend B60). Only
+ * `id` and `title` are required of the package, and `id`, `key`, `body`,
+ * `contentType` and `sequenceOrder` of a segment; the rest may be absent.
+ */
+export interface OfflinePackage {
+  id: string;
+  title: string;
+  version?: string | null;
+  segments?: OfflinePackageSegment[];
+}
+
+export interface OfflinePackageSegment {
+  id: string;
+  key: string;
+  title?: string | null;
+  body: string;
+  contentType: LessonContentType;
+  sequenceOrder: number;
+  availableModalities?: LessonSegment["availableModalities"];
+  /** The four variants, nested here where a lesson detail flattens them. */
+  modalityVariants?: {
+    text?: SegmentVariants["textVariant"];
+    visual?: SegmentVariants["visualVariant"];
+    audio?: SegmentVariants["audioVariant"];
+    interactive?: SegmentVariants["interactiveVariant"];
+    calculation?: SegmentVariants["calculationVariant"];
+  } | null;
+  depthVariants?: SegmentVariants["depthVariants"];
+  comprehensionCheckpoints?: ComprehensionCheckpoint[];
 }
 
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj =>
   typeof v === "object" && v !== null && !Array.isArray(v);
 const listOrAbsent = (v: unknown) => v == null || Array.isArray(v);
+const objOrAbsent = (v: unknown) => v == null || isObj(v);
 
 /**
- * The fields the player reads, not the whole schema: the teacher-facing ones
- * (`confirmationSummary`, `classes`, review counts) can be absent from a
- * package without anything a child sees changing.
+ * A package for THIS lesson, in the shape B60 published. Exactly this
+ * lesson's id: the shelf is keyed on it, and the player looks the saved copy
+ * up by the id it was opened with.
  */
-export function isLessonDetail(
+export function isOfflinePackage(
   value: unknown,
   lessonId: string,
-): value is LessonDetailResponse {
+): value is OfflinePackage & { segments: OfflinePackageSegment[] } {
   if (!isObj(value)) return false;
-  // Exactly this lesson's id: the shelf is keyed on it, and the player looks
-  // the saved copy up by the id it was opened with.
   if (value.id !== lessonId) return false;
   if (typeof value.title !== "string") return false;
-  if (!listOrAbsent(value.modules) || !listOrAbsent(value.assessment)) {
-    return false;
-  }
   return Array.isArray(value.segments) && value.segments.every(isSegment);
 }
 
 function isSegment(s: unknown): boolean {
+  if (!isObj(s)) return false;
+  const variants = s.modalityVariants;
   return (
-    isObj(s) &&
     typeof s.id === "string" &&
-    typeof s.sequenceOrder === "number" &&
-    typeof s.contentType === "string" &&
+    typeof s.key === "string" &&
     typeof s.body === "string" &&
-    Array.isArray(s.availableModalities) &&
-    Array.isArray(s.comprehensionCheckpoints)
+    typeof s.contentType === "string" &&
+    typeof s.sequenceOrder === "number" &&
+    (s.title == null || typeof s.title === "string") &&
+    listOrAbsent(s.availableModalities) &&
+    listOrAbsent(s.comprehensionCheckpoints) &&
+    objOrAbsent(s.depthVariants) &&
+    objOrAbsent(variants) &&
+    (!isObj(variants) ||
+      ["text", "visual", "audio", "interactive", "calculation"].every((k) =>
+        objOrAbsent(variants[k]),
+      ))
   );
+}
+
+/**
+ * A package, under the lesson detail's field names, for `lessonFromContent`.
+ *
+ * Every field it carries is moved across as it is: `key` to `segmentKey`, and
+ * each of `modalityVariants`' four out to the segment's own `textVariant`,
+ * `visualVariant` and the rest. Absent lists are empty and absent variants
+ * null, which is how the detail read says "none".
+ *
+ * NOTHING IS ADDED. The package has no review flags (`needsReview`,
+ * `approved`), no authorship and no library fields (`status`, `segmentCount`,
+ * `createdAt`), and they stay absent rather than being given values - an
+ * `approved: true` here would be a claim about a teacher's review that nobody
+ * sent. That is why this is cast to the detail type once, here: it is the
+ * detail's shape for every field the player reads, and the fields it lacks
+ * are ones nothing on a child's side reads.
+ */
+export function detailFromPackage(
+  pkg: OfflinePackage & { segments: OfflinePackageSegment[] },
+): LessonDetailResponse {
+  type Packaged = Pick<LessonDetailResponse, "id" | "title"> & {
+    segments: Omit<
+      LessonSegment,
+      "needsReview" | "reviewReasons" | "approved" | "approvedAt"
+    >[];
+  };
+  const packaged: Packaged = {
+    id: pkg.id,
+    title: pkg.title,
+    segments: pkg.segments.map((s) => {
+      const v = s.modalityVariants;
+      return {
+        id: s.id,
+        segmentKey: s.key,
+        contentType: s.contentType,
+        sequenceOrder: s.sequenceOrder,
+        title: s.title ?? null,
+        body: s.body,
+        availableModalities: s.availableModalities ?? [],
+        comprehensionCheckpoints: s.comprehensionCheckpoints ?? [],
+        textVariant: v?.text ?? null,
+        visualVariant: v?.visual ?? null,
+        audioVariant: v?.audio ?? null,
+        interactiveVariant: v?.interactive ?? null,
+        calculationVariant: v?.calculation ?? null,
+        depthVariants: s.depthVariants ?? null,
+      };
+    }),
+  };
+  return packaged as LessonDetailResponse;
 }
 
 /**

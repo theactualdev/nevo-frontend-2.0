@@ -20,10 +20,15 @@ import { useLessonExit } from "@/components/student/Lesson/LessonExit";
  * what the screen does with its answer.
  */
 
-const { downloadLesson, lessons } = vi.hoisted(() => ({
+const { downloadLesson, lessons, offlineManifest } = vi.hoisted(() => ({
   downloadLesson: vi.fn(),
   lessons: vi.fn(),
+  offlineManifest: vi.fn(),
 }));
+vi.mock("@/lib/api/lessons", async (orig) => {
+  const real = await orig<typeof import("@/lib/api/lessons")>();
+  return { ...real, lessonsApi: { ...real.lessonsApi, offlineManifest } };
+});
 vi.mock("@/lib/offline/lessonPackage", async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
   downloadLesson,
@@ -71,6 +76,10 @@ beforeEach(() => {
     failed: false,
   });
   downloadLesson.mockReset();
+  offlineManifest.mockReset();
+  // Unless a test says otherwise, no row learns what it would cost - so the
+  // sizes on screen are the saves' own.
+  offlineManifest.mockRejectedValue(new Error("offline"));
 });
 
 afterEach(() => {
@@ -177,6 +186,129 @@ describe("with no connection", () => {
 
     expect(screen.queryByText("Playing l1")).toBeNull();
     expect(screen.getByText("Adding fractions")).toBeVisible();
+  });
+});
+
+/**
+ * Backend B61, 5 Oct: `GET /offline-manifest` gives a lesson's size WITHOUT
+ * recording a download, so the frame's size column can be on every row. It
+ * costs the server a build per call, so a row asks once it is on screen and
+ * not before.
+ */
+describe("the size on every row", () => {
+  const manifest = (lessonId: string, sizeBytes?: number) => ({
+    lessonId,
+    version: 1,
+    segmentCount: 3,
+    generatedAt: "2026-10-05T10:00:00Z",
+    packageUrl: `/api/v1/lessons/${lessonId}/offline-package`,
+    ...(sizeBytes === undefined ? {} : { sizeBytes }),
+  });
+
+  it("shows what a lesson would cost to keep before the child saves it", async () => {
+    offlineManifest.mockResolvedValue(manifest("l1", 6_000_000));
+
+    render(<SavedLessons />);
+
+    expect(await screen.findByText("6 MB")).toBeVisible();
+    expect(offlineManifest).toHaveBeenCalledWith("l1");
+    // A read, not a download: nothing was recorded or kept.
+    expect(downloadLesson).not.toHaveBeenCalled();
+    expect(savedLesson("ada", "l1")).toBeNull();
+  });
+
+  it("asks once per row, however often the screen redraws", async () => {
+    offlineManifest.mockResolvedValue(manifest("l1", 6_000_000));
+
+    const { rerender } = render(<SavedLessons />);
+    await screen.findByText("6 MB");
+    rerender(<SavedLessons />);
+
+    expect(offlineManifest).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the kept download's own size, and asks nothing for it", () => {
+    saveLesson("ada", lesson("l1", "Adding fractions") as never, {
+      sizeBytes: 48_200,
+    });
+
+    render(<SavedLessons />);
+
+    expect(screen.getByText("48 KB")).toBeVisible();
+    expect(offlineManifest).not.toHaveBeenCalled();
+  });
+
+  it("shows no size the manifest did not measure, and none while it fails", async () => {
+    lessons.mockReturnValue({
+      lessons: [
+        { id: "l1", title: "Adding fractions" },
+        { id: "l2", title: "The water cycle" },
+      ],
+      live: true,
+      loading: false,
+      failed: false,
+    });
+    offlineManifest.mockImplementation((id: string) =>
+      id === "l1"
+        ? Promise.resolve(manifest("l1", 0))
+        : Promise.reject(new Error("offline")),
+    );
+
+    render(<SavedLessons />);
+
+    await waitFor(() => expect(offlineManifest).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText(/d (KB|MB)$/)).toBeNull();
+  });
+
+  it("does not ask for a row that is not on screen", () => {
+    // A tablet whose browser can say what is visible: nothing has been yet.
+    const observed: Element[] = [];
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        observe(el: Element) {
+          observed.push(el);
+        }
+        disconnect() {}
+      },
+    );
+    offlineManifest.mockResolvedValue(manifest("l1", 6_000_000));
+
+    try {
+      render(<SavedLessons />);
+
+      expect(observed).toHaveLength(1);
+      expect(offlineManifest).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("asks for a row once it comes on screen", async () => {
+    let show: (() => void) | null = null;
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        constructor(cb: (e: { isIntersecting: boolean }[]) => void) {
+          show = () => cb([{ isIntersecting: true }]);
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+    offlineManifest.mockResolvedValue(manifest("l1", 6_000_000));
+
+    try {
+      render(<SavedLessons />);
+      expect(offlineManifest).not.toHaveBeenCalled();
+
+      act(() => show!());
+
+      expect(await screen.findByText("6 MB")).toBeVisible();
+      expect(offlineManifest).toHaveBeenCalledWith("l1");
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 

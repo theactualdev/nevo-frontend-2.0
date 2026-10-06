@@ -5,8 +5,9 @@ import type { LessonDetailResponse } from "@/lib/api/lessons";
  *
  * WHAT IS KEPT: the lesson out of the backend's offline package, which
  * `lessonPackage.ts` fetches and unpacks, with the manifest's size and its
- * word on media. Either way a `LessonDetailResponse`, the shape the player
- * already reads: when the package's `lesson.json` is not one, the detail read
+ * word on media. Either way under a `LessonDetailResponse`'s field names, the
+ * shape the player already reads: the package's `lesson.json` is an
+ * `OfflinePackage` mapped onto them, and when it cannot be, the detail read
  * is kept instead (see `lessonPackage.ts`). It is used when the live read
  * cannot be made, and it rebuilds through the
  * same `lessonFromContent` as a live open, so a saved lesson is the lesson,
