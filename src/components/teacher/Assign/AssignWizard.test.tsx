@@ -992,3 +992,20 @@ describe("a teacher with nothing to pick from", () => {
     expect(screen.queryByText(/any classes yet/)).not.toBeInTheDocument();
   });
 });
+
+/** Whether the browser would ask before leaving: the event was cancelled. */
+const leavingAsks = () => {
+  const e = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(e);
+  return e.defaultPrevented;
+};
+
+describe("choices made in the wizard", () => {
+  it("make the browser ask once past the first step", () => {
+    render(<AssignWizard preselect="l-1" />);
+    expect(leavingAsks()).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(leavingAsks()).toBe(true);
+  });
+});

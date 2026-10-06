@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
 import { ApiError } from "@/lib/api/client";
 import { feedbackApi } from "@/lib/api/feedback";
 import { cn } from "@/lib/utils";
@@ -51,6 +52,7 @@ export function FeedbackPanel({ onClose }: { onClose: () => void }) {
   const [type, setType] = useState<FeedbackType>("feedback");
   const [text, setText] = useState("");
   const [sent, setSent] = useState(false);
+  useUnsavedGuard(text.trim().length > 0 && !sent);
   const [sending, setSending] = useState(false);
   /**
    * Which KIND of failure, not just that there was one.

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { escalationsApi } from "@/lib/api/escalations";
+import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
 
 /**
  * C.8b Share with Learning Support, for a real student.
@@ -53,6 +54,8 @@ export function LiveShareSheet({
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A safeguarding note, of all things, should not vanish on a refresh.
+  useUnsavedGuard(note.trim().length > 0);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

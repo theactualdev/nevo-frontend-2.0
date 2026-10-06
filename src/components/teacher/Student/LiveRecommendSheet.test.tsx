@@ -457,3 +457,20 @@ describe("the note box, when there is no lesson under it", () => {
     expect(screen.getByRole("textbox")).toBeInTheDocument();
   });
 });
+
+/** Whether the browser would ask before leaving: the event was cancelled. */
+const leavingAsks = () => {
+  const e = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(e);
+  return e.defaultPrevented;
+};
+
+describe("a recommendation not yet sent", () => {
+  it("makes the browser ask once a lesson is picked", () => {
+    show();
+    expect(leavingAsks()).toBe(false);
+
+    pick("Fractions 3");
+    expect(leavingAsks()).toBe(true);
+  });
+});

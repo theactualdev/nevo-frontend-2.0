@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
 import { assignmentsApi } from "@/lib/api/assignments";
 import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import { useLessonLibrary } from "@/hooks/useLessonLibrary";
@@ -117,6 +118,7 @@ export function LiveRecommendSheet({
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
   const [sent, setSent] = useState<string | null>(null);
+  useUnsavedGuard((choice !== null || note.trim().length > 0) && sent === null);
   /** Whether the lesson that was sent carried a note, for the confirmation. */
   const [sentWithNote, setSentWithNote] = useState(false);
   const [error, setError] = useState<string | null>(null);

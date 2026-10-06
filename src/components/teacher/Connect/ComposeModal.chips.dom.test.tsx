@@ -80,3 +80,25 @@ describe("the class chips", () => {
     expect(chip("JSS 2A")).toBeInTheDocument();
   });
 });
+
+/** Whether the browser would ask before leaving: the event was cancelled. */
+const leavingAsks = () => {
+  const e = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(e);
+  return e.defaultPrevented;
+};
+
+describe("a new message not yet sent", () => {
+  it("makes the browser ask before leaving", async () => {
+    const { fireEvent } = await import("@testing-library/react");
+    classes({ live: true });
+    render(<ComposeModal onClose={vi.fn()} onSend={vi.fn()} />);
+    expect(leavingAsks()).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: /Ada Obi/ }));
+    fireEvent.change(screen.getByPlaceholderText("Write your message…"), {
+      target: { value: "Can we talk about Friday?" },
+    });
+    expect(leavingAsks()).toBe(true);
+  });
+});

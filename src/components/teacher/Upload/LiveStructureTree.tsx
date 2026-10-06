@@ -12,6 +12,7 @@ import {
 } from "@/lib/api/uploads";
 import { cn } from "@/lib/utils";
 import { useSystemMessages } from "@/components/shared/SystemMessages";
+import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
 
 /**
  * C07d for a REAL staged upload: the unit Nevo made, the steering a teacher
@@ -77,6 +78,8 @@ export function LiveStructureTree({
   const [error, setError] = useState("");
   /** What a teacher has folded away. Empty is everything open. */
   const [closed, setClosed] = useState<Set<string>>(() => new Set());
+  // Edits the server has not seen yet.
+  useUnsavedGuard(dirty);
 
   const lessonKey = (lesson: StructureLesson, li: number) =>
     lesson.lessonId ?? `new-${li}`;
