@@ -11,11 +11,16 @@ import type { RosterBand } from "@/hooks/useRosterBand";
  * SS2 child. Design: vary it by band, reusing the geometry tile memory already
  * has. So with a band the tile task is tile memory's first round for that
  * band, and the reading task the reading activity's own item; with none, the
- * frame's version runs and the vector does not pretend otherwise.
+ * frame's version runs.
+ *
+ * THE BAND NO LONGER TRAVELS WITH THE MEASUREMENT. It rode on the reduced
+ * vector; since B9 the warm-up sends raw trials, which have no field for it,
+ * and it is with backend as an ask. So these assert the trials the band's
+ * task produced, and that no band is invented onto them.
  */
 
 const { submit } = vi.hoisted(() => ({ submit: vi.fn() }));
-vi.mock("@/lib/api", () => ({ baselineApi: { submitWithRetry: submit } }));
+vi.mock("@/lib/api", () => ({ baselineApi: { submitTrials: submit } }));
 vi.mock("@/lib/profiling/pendingBaseline", () => ({ holdBaseline: vi.fn() }));
 vi.mock("@/hooks/useWarmUpDimension", () => ({
   useWarmUpPrompt: () => ({ state: "waiting" }),
@@ -30,7 +35,9 @@ vi.mock("@/hooks/useRosterBand", () => ({
   useRosterBand: () => roster.value,
 }));
 
-const submitted = () => submit.mock.calls[0][1][0];
+type Trial = { condition: string | null; correct: boolean | null };
+const trials = (): Trial[] => submit.mock.calls[0][1];
+const submitted = () => trials()[0];
 const wait = async (ms: number) => {
   await act(async () => {
     await vi.advanceTimersByTimeAsync(ms);
@@ -76,15 +83,15 @@ describe("the tile task, by band", () => {
     expect(screen.getAllByRole("button")).toHaveLength(25);
   });
 
-  it("asks the senior band for tile memory's four tiles, and says which band", async () => {
+  it("asks the senior band for tile memory's four tiles", async () => {
     roster.value = { band: "ss", settled: true };
     await sitTheTileTask(4);
 
-    expect(submitted()).toMatchObject({
-      maxSpan: 4,
-      roundsCompleted: 1,
-      band: "ss",
-    });
+    expect(trials()).toHaveLength(4);
+    expect(trials().every((t) => t.condition === "length_4" && t.correct)).toBe(
+      true,
+    );
+    expect(JSON.stringify(trials())).not.toMatch(/band|"ss"/);
   });
 
   it("runs the youngest band on a 3x3 grid", () => {
@@ -98,14 +105,20 @@ describe("the tile task, by band", () => {
     roster.value = { band: "p13", settled: true };
     await sitTheTileTask(2);
 
-    expect(submitted()).toMatchObject({ maxSpan: 2, band: "p13" });
+    expect(trials().map((t) => t.condition)).toEqual([
+      "length_2",
+      "length_2",
+    ]);
   });
 
   it("runs the frame's one version when the roster gives no band, and claims none", async () => {
     await sitTheTileTask(3);
 
-    expect(submitted()).toMatchObject({ maxSpan: 3, roundsCompleted: 1 });
-    expect(submitted()).not.toHaveProperty("band");
+    expect(trials()).toHaveLength(3);
+    expect(trials().every((t) => t.condition === "length_3" && t.correct)).toBe(
+      true,
+    );
+    expect(JSON.stringify(trials())).not.toMatch(/band/);
   });
 
   it("starts nothing until the band is known, so it never changes size mid-task", async () => {
@@ -139,9 +152,11 @@ describe("the reading task, by band", () => {
     fireEvent.click(screen.getByText("To track her savings for school fees"));
     await wait(1000);
 
-    expect(submitted()).toMatchObject({ band: "ss" });
-    expect(submitted().acts.reading).toMatchObject({ scored: 1, accuracy: 1 });
-    expect(submitted().acts.reading.conditions).toHaveProperty("passage");
+    expect(submitted()).toMatchObject({
+      dimension: "reading",
+      condition: "passage",
+      correct: true,
+    });
   });
 
   it("still lets the senior band decline the passage without being marked wrong", async () => {
@@ -151,10 +166,10 @@ describe("the reading task, by band", () => {
     fireEvent.click(screen.getByText("Not sure"));
     await wait(1000);
 
-    expect(submitted().acts.reading).toMatchObject({
-      notSure: 1,
-      scored: 0,
-      accuracy: null,
+    expect(submitted()).toMatchObject({
+      condition: "passage",
+      response: "not_sure",
+      correct: null,
     });
   });
 

@@ -66,7 +66,7 @@ export function ProfilingIntro({
    * purpose; decided 24 Sep.**
    *
    * `ProfilingFlow` is this component's only caller and renders
-   * `mode="complete"` without it, because the reduction is now PARKED
+   * `mode="complete"` without it, because the trials are now PARKED
    * (`holdBaseline`) and delivered once an account exists a screen or two
    * later. That run cannot know whether the write landed, and a screen that
    * cannot know must not claim either answer - so null, which reads settled.

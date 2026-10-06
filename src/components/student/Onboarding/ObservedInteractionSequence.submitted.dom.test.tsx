@@ -54,7 +54,7 @@ vi.mock("./LearningNotice", () => ({ LearningNotice: () => <p>notice</p> }));
 
 const parkedBy = (sessionId: string) => ({
   sessionId,
-  features: [{ module: "run" }, { module: "grid_span" }],
+  trials: [{ dimension: "wmc" }],
   capturedAt: 0,
   ownerUserId: "child-sso",
 });
@@ -84,9 +84,9 @@ describe("baseline_submitted", () => {
 
     await finishTheBaseline();
 
-    expect(submittedEvents()).toEqual([
-      ["baseline_submitted", { modules: ["run", "grid_span"] }],
-    ]);
+    // No payload: the catalogue declares none, and the module list it
+    // carried came from the feature vector, which is gone.
+    expect(submittedEvents()).toEqual([["baseline_submitted"]]);
   });
 
   it("is not tracked while the submit is still on its way", async () => {
