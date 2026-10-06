@@ -228,3 +228,20 @@ describe("the confirm step", () => {
     expect(screen.getByRole("button", { name: /Sending/ })).toBeDisabled();
   });
 });
+
+/** Whether the browser would ask before leaving: the event was cancelled. */
+const leavingAsks = () => {
+  const e = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(e);
+  return e.defaultPrevented;
+};
+
+describe("a note not yet sent", () => {
+  it("makes the browser ask before a refresh throws it away", () => {
+    show();
+    expect(leavingAsks()).toBe(false);
+
+    type("She has gone very quiet.");
+    expect(leavingAsks()).toBe(true);
+  });
+});

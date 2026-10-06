@@ -10,6 +10,7 @@ import {
 } from "@/lib/mocks/teacherConnect";
 import { cn } from "@/lib/utils";
 import { useSystemMessages } from "@/components/shared/SystemMessages";
+import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
 import { ComposeModal } from "./ComposeModal";
 import { MaybeSample } from "@/components/shared/SampleRegion";
 
@@ -103,6 +104,7 @@ export function ConnectView() {
   } = useConnectThreads();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  useUnsavedGuard(draft.trim().length > 0);
   /*
    * "Send them a message" lands here naming a child.
    *

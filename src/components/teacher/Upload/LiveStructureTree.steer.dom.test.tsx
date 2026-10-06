@@ -204,3 +204,24 @@ describe("the commit itself", () => {
     await waitFor(() => expect(confirm).toHaveBeenCalledWith("u-1"));
   });
 });
+
+/** Whether the browser would ask before leaving: the event was cancelled. */
+const leavingAsks = () => {
+  const e = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(e);
+  return e.defaultPrevented;
+};
+
+describe("edits the server has not seen", () => {
+  it("make the browser ask before leaving, until they are saved", async () => {
+    show();
+    expect(leavingAsks()).toBe(false);
+
+    fireEvent.change(screen.getByLabelText("Lesson 1 title"), { target: { value: "Rivers and streams" } });
+    expect(leavingAsks()).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await screen.findByRole("button", { name: "Saved" });
+    expect(leavingAsks()).toBe(false);
+  });
+});

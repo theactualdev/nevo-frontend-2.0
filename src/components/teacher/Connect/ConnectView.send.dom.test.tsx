@@ -127,3 +127,20 @@ describe("a reply that did not go", () => {
     expect(screen.queryByText("That didn’t send. Try again")).not.toBeInTheDocument();
   });
 });
+
+/** Whether the browser would ask before leaving: the event was cancelled. */
+const leavingAsks = () => {
+  const e = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(e);
+  return e.defaultPrevented;
+};
+
+describe("a reply not yet sent", () => {
+  it("makes the browser ask before leaving", () => {
+    render(<ConnectView />);
+    expect(leavingAsks()).toBe(false);
+
+    type("Half a reply");
+    expect(leavingAsks()).toBe(true);
+  });
+});
