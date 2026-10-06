@@ -119,3 +119,31 @@ describe("a mastery row the engine could not name", () => {
     expect(result.current.concepts.map((c) => c.name)).toEqual(["Fractions"]);
   });
 });
+
+describe("a student this page cannot show", () => {
+  it("is not-found for a malformed id, not a retry", async () => {
+    const { ApiError } = await import("@/lib/api/client");
+    api.profile.mockRejectedValue(new ApiError(422, "unprocessable"));
+    const { result } = renderHook(() => useStudentProfile("not-a-uuid"));
+
+    await waitFor(() => expect(result.current.missing).toBe(true));
+    expect(result.current.failed).toBe(false);
+  });
+
+  it("is not-found for a child outside this teacher's classes", async () => {
+    const { ApiError } = await import("@/lib/api/client");
+    api.profile.mockRejectedValue(new ApiError(403, "forbidden"));
+    const { result } = renderHook(() => useStudentProfile("s-other"));
+
+    await waitFor(() => expect(result.current.missing).toBe(true));
+  });
+
+  it("is still a retry when the server broke", async () => {
+    const { ApiError } = await import("@/lib/api/client");
+    api.profile.mockRejectedValue(new ApiError(500, "server"));
+    const { result } = renderHook(() => useStudentProfile("s-1"));
+
+    await waitFor(() => expect(result.current.failed).toBe(true));
+    expect(result.current.missing).toBe(false);
+  });
+});

@@ -11,6 +11,7 @@ import {
   type UploadStructure,
 } from "@/lib/api/uploads";
 import { cn } from "@/lib/utils";
+import { useSystemMessages } from "@/components/shared/SystemMessages";
 
 /**
  * C07d for a REAL staged upload: the unit Nevo made, the steering a teacher
@@ -57,6 +58,7 @@ export function LiveStructureTree({
   blockName: string;
 }) {
   const router = useRouter();
+  const say = useSystemMessages();
   const [draft, setDraft] = useState<StructureLesson[]>(() =>
     lessonsOf(structure),
   );
@@ -237,6 +239,9 @@ export function LiveStructureTree({
     setError("");
     try {
       await uploadsApi.confirm(uploadId);
+      // C07d draws "Added to your library." and then Done. The shared bar
+      // carries it across to the Library, as the assign wizard's does.
+      say.show({ kind: "confirm", message: "Added to your library." });
       router.push("/teacher/lessons");
     } catch {
       setPhase("idle");

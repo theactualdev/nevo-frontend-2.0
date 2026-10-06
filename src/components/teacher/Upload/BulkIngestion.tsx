@@ -6,6 +6,7 @@ import { SampleRegion } from "@/components/shared/SampleRegion";
 import { uploadsApi, type BatchResult } from "@/lib/api/uploads";
 import { getToken } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
+import { useSystemMessages } from "@/components/shared/SystemMessages";
 
 /**
  * C07h Bulk Curriculum Ingestion: a whole term's scheme of work at once.
@@ -417,6 +418,8 @@ export function BulkIngestion() {
     setCommitting(false);
     const failed = results.filter((r) => r.status === "rejected").length;
     if (failed === 0) {
+      // C07d's own line, in the shared bar, before the Library arrives.
+      say.show({ kind: "confirm", message: "Added to your library." });
       close();
       return;
     }
@@ -432,6 +435,13 @@ export function BulkIngestion() {
   };
 
   const close = () => router.push("/teacher/lessons");
+  const say = useSystemMessages();
+  /*
+   * A WAY OUT OF A BATCH WITH NOTHING TO ADD. When every file was refused,
+   * "Add all" was disabled and the close control lived only on the drop zone -
+   * on a full-screen takeover, so the only exit was the browser's back button.
+   */
+  const nothingToAdd = batch !== null && batch.acceptedCount === 0;
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-nevo-cream text-nevo-near-black">
@@ -439,7 +449,19 @@ export function BulkIngestion() {
       <div className="flex h-16 shrink-0 items-center justify-between border-b border-nevo-near-black/8 px-7 xl:h-[72px] xl:px-8">
         {phase === "results" ? (
           <>
-            <span className="text-[14.5px] font-medium text-nevo-near-black/70 xl:text-[15px]">
+            <span className="flex items-center gap-2 text-[14.5px] font-medium text-nevo-near-black/70 xl:text-[15px]">
+              {nothingToAdd && (
+                <button
+                  type="button"
+                  onClick={close}
+                  aria-label="Close"
+                  className="flex size-10 cursor-pointer items-center justify-center rounded-[10px] text-nevo-near-black/60 transition-colors hover:bg-nevo-near-black/5"
+                >
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M6 6l12 12M18 6L6 18" />
+                  </svg>
+                </button>
+              )}
               Add a term&rsquo;s material
             </span>
             <button

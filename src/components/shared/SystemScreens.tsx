@@ -62,11 +62,26 @@ function useGoBack(home: string): () => void {
 const ART =
   "-my-3.5 size-[180px] object-contain sm:my-0 sm:h-[184px] sm:w-[220px]";
 
-export function NotFoundScreen() {
+export function NotFoundScreen({
+  inShell = false,
+}: {
+  /**
+   * Drawn inside a console's own shell: no full-viewport height, because the
+   * shell is already the page. The teacher console renders it this way, so a
+   * missing record leaves the teacher in the console rather than outside it.
+   */
+  inShell?: boolean;
+} = {}) {
   const home = useHome();
   const goBack = useGoBack(home);
   return (
-    <div className="flex min-h-[100dvh] w-full flex-col items-center justify-center bg-nevo-cream px-10 text-center text-nevo-near-black">
+    <div
+      className={
+        inShell
+          ? "flex w-full flex-1 flex-col items-center justify-center bg-nevo-cream px-10 py-16 text-center text-nevo-near-black"
+          : "flex min-h-[100dvh] w-full flex-col items-center justify-center bg-nevo-cream px-10 text-center text-nevo-near-black"
+      }
+    >
       {/* IA 31: "Nevo wordmark -> Student Home Dashboard". The frame draws
           the combined mark here, so that is what links home. */}
       <Link
