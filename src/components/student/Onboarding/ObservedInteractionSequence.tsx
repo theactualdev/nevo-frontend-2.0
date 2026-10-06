@@ -70,6 +70,24 @@ export function ObservedInteractionSequence() {
    */
   const [sessionId] = useState(() => randomId());
   const { trackEvent, flush } = useSignals(sessionId, undefined, "onboarding");
+  /*
+   * THE BASELINE HAS A STREAM OF ITS OWN, typed `profiling` (B43, 5 Oct).
+   *
+   * Its markers - `baseline_module_start`, `baseline_module_complete`,
+   * `baseline_submitted` - rode the `onboarding` stream above. Backend's
+   * ruling: `profiling` is the assessment itself, `onboarding` is the
+   * account coming into existence - entry, the consent check, PIN creation,
+   * which stay up there. On `onboarding` a later re-profiling would produce
+   * events indistinguishable from a child's first morning.
+   *
+   * Owned HERE, not by `ProfilingFlow`, for the same reason the onboarding
+   * stream is: before the PIN step there is no session, so its events are
+   * held, and a stream that unmounted with the run would take them with it.
+   * Its id is also the run's, so the trials go up under the session their
+   * markers name.
+   */
+  const [profilingSessionId] = useState(() => randomId());
+  const profiling = useSignals(profilingSessionId, undefined, "profiling");
   const [phase, setPhase] = useState<"transition" | "activities">("transition");
   /*
    * Whether this device can sign the child back in on its own. False when no
@@ -109,15 +127,16 @@ export function ObservedInteractionSequence() {
    * after this sequence has gone, send no event at all rather than one on
    * some other stream.
    *
-   * With no payload: the catalogue declares none for it. The module list it
-   * carried came from the feature vector, which is gone.
+   * On the `profiling` stream (B43), and with no payload: the catalogue
+   * declares none for it. The module list it carried came from the feature
+   * vector, which is gone.
    */
   const deliverBaseline = async (owner: string, run: string | null) => {
     const parked = readPendingBaseline();
     const ours = run !== null && parked?.sessionId === run;
     const ok = await flushPendingBaseline(owner, run);
     if (ok && ours && alive.current) {
-      trackEvent(ONBOARDING_SIGNAL_TYPES.BASELINE_SUBMITTED);
+      profiling.trackEvent(ONBOARDING_SIGNAL_TYPES.BASELINE_SUBMITTED);
     }
   };
 
@@ -146,7 +165,8 @@ export function ObservedInteractionSequence() {
   if (index === 0) {
     return (
       <ProfilingFlow
-        track={trackEvent}
+        track={profiling.trackEvent}
+        runId={profilingSessionId}
         ownerUserId={ssoOwner}
         onDone={(runSessionId) => {
           parkedRunRef.current = runSessionId;
@@ -273,6 +293,7 @@ export function ObservedInteractionSequence() {
           await deliverBaseline(res.userId, parkedRunRef.current);
 
           flush();
+          profiling.flush();
         }}
         onComplete={() => {
           /*

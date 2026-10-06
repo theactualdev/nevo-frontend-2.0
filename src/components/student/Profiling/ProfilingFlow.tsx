@@ -32,8 +32,20 @@ export function ProfilingFlow({
   track,
   onDone,
   ownerUserId = null,
+  runId,
 }: {
+  /**
+   * The baseline's markers go here: a `profiling` stream, not the onboarding
+   * sequence's `onboarding` one (B43, 5 Oct). They are measurements, and on
+   * onboarding a later re-profiling would look like a child's first morning.
+   */
   track?: TrackEvent;
+  /**
+   * The id this run's trials go up under - the caller's `profiling` stream's,
+   * so the trials and the markers of one run name the same session. A run of
+   * its own when none is given.
+   */
+  runId?: string;
   /**
    * The child sitting this run, when that is already known - which is only
    * true for a child who arrived by SSO and so is signed in throughout.
@@ -118,7 +130,7 @@ export function ProfilingFlow({
   const bandPending = !roster.settled;
   const askAge = roster.settled && !roster.band && !draftAge;
   const [capture] = useState(
-    () => new BaselineCapture(`baseline-${randomId()}`),
+    () => new BaselineCapture(runId ?? `baseline-${randomId()}`),
   );
   const submitted = useRef(false);
   /*

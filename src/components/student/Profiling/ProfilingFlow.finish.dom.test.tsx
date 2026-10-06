@@ -149,6 +149,18 @@ describe("ProfilingFlow — what it parks (B9)", () => {
     }
     expect(JSON.stringify(trials)).not.toMatch(/mean|accuracy|span|module/i);
   });
+
+  it("parks them under the id it was given, the profiling stream's", () => {
+    // So the trials and the run's markers name the same session.
+    const onDone = vi.fn();
+    render(<ProfilingFlow onDone={onDone} runId="profiling-session-1" />);
+    sitTheWholeRun();
+
+    fireEvent.click(screen.getByRole("button", { name: /first lesson/i }));
+
+    expect(holdBaseline.mock.calls[0][0]).toBe("profiling-session-1");
+    expect(onDone).toHaveBeenCalledWith("profiling-session-1");
+  });
 });
 
 describe("ProfilingFlow — what it tells the signal stream", () => {
