@@ -17,6 +17,7 @@ import {
   pauseHostsMounted,
   pausesInPlace,
 } from "@/lib/auth/accountPause";
+import { withdrawnDoor } from "@/lib/auth/consentHold";
 import { noteServerClock } from "./serverClock";
 import { isAdminRole } from "@/lib/constants/permissions";
 import { API_ORIGIN } from "./upstream";
@@ -264,6 +265,24 @@ function handleAuthFailure(
   );
 }
 
+/**
+ * A child whose parent withdrew consent goes to the held screen (B7) rather
+ * than meeting each refused call's own generic failure. The decision is
+ * `withdrawnDoor`; this only acts on it, once, behind the same latch.
+ */
+function holdIfWithdrawn(status: number, detail: unknown): void {
+  if (typeof window === "undefined" || redirecting) return;
+  const door = withdrawnDoor(
+    getSession()?.role,
+    status,
+    apiErrorCode(detail),
+    window.location.pathname,
+  );
+  if (!door) return;
+  redirecting = true;
+  window.location.assign(door);
+}
+
 /** An array repeats the key - see `buildUrl`. */
 type QueryValue =
   string | number | boolean | null | undefined | readonly (string | number)[];
@@ -383,6 +402,7 @@ export async function request<T>(
     if (response.status === 401) {
       handleAuthFailure(path, Boolean(token), detail);
     }
+    holdIfWithdrawn(response.status, detail);
     throw new ApiError(
       response.status,
       friendlyMessage(response.status),

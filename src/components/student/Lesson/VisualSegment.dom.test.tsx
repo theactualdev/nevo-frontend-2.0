@@ -7,6 +7,8 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
+import { ApiError } from "@/lib/api/client";
+import { STORAGE_RETRY_MS, reissueVerdict } from "./useMediaSource";
 import { VisualSegment } from "./VisualSegment";
 
 /**
@@ -185,5 +187,142 @@ describe("a picture that did not load, said and reported", () => {
     online.mockRestore();
 
     expect(onMediaFailed).toHaveBeenCalledWith("offline");
+  });
+});
+
+/**
+ * B47: what a refused re-issue is worth doing about. A path storage does not
+ * know is never asked about again; storage out of reach is asked once more,
+ * after a short wait, and no more than that.
+ */
+describe("reissueVerdict", () => {
+  const refusal = (status: number, code?: string) =>
+    new ApiError(status, "x", code ? { detail: { code } } : undefined);
+
+  it("retries a 502, the bucket out of reach", () => {
+    expect(reissueVerdict(refusal(502, "storage_unavailable"))).toBe("retry");
+    // A gateway's own 502 carries no code and is the same passing thing.
+    expect(reissueVerdict(refusal(502))).toBe("retry");
+  });
+
+  it("never asks again about a path that is not storage's", () => {
+    expect(reissueVerdict(refusal(400, "invalid_storage_path"))).toBe("never");
+    expect(reissueVerdict(refusal(422))).toBe("never");
+  });
+
+  it("leaves everything else to the connection coming back", () => {
+    expect(reissueVerdict(refusal(0))).toBe("fail");
+    expect(reissueVerdict(refusal(500))).toBe("fail");
+    expect(reissueVerdict(new Error("boom"))).toBe("fail");
+  });
+});
+
+describe("a fresh link that storage refused", () => {
+  const unreachable = () =>
+    new ApiError(502, "x", { detail: { code: "storage_unavailable" } });
+
+  it("is asked for once more when storage was out of reach", async () => {
+    mediaUrl
+      .mockRejectedValueOnce(unreachable())
+      .mockResolvedValueOnce({ url: "https://cdn.example/fresh.png" });
+    render(<VisualSegment content={CONTENT} />);
+
+    fireEvent.error(picture()!);
+
+    await waitFor(
+      () =>
+        expect(picture()?.getAttribute("src")).toBe(
+          "https://cdn.example/fresh.png",
+        ),
+      { timeout: STORAGE_RETRY_MS + 1500 },
+    );
+    expect(mediaUrl).toHaveBeenCalledTimes(2);
+  });
+
+  it("is asked for only once more, then the picture is said not to load", async () => {
+    mediaUrl.mockRejectedValue(unreachable());
+    const onMediaFailed = vi.fn();
+    render(<VisualSegment content={CONTENT} onMediaFailed={onMediaFailed} />);
+
+    fireEvent.error(picture()!);
+
+    await waitFor(() => expect(onMediaFailed).toHaveBeenCalled(), {
+      timeout: STORAGE_RETRY_MS + 1500,
+    });
+    expect(onMediaFailed).toHaveBeenCalledWith("refresh_failed");
+    expect(mediaUrl).toHaveBeenCalledTimes(2);
+    expect(picture()).toBeNull();
+  });
+
+  it("is never asked for again when the path is not storage's", async () => {
+    mediaUrl.mockRejectedValue(
+      new ApiError(400, "x", { detail: { code: "invalid_storage_path" } }),
+    );
+    render(<VisualSegment content={CONTENT} />);
+
+    fireEvent.error(picture()!);
+    await act(async () => {});
+    expect(picture()).toBeNull();
+    expect(mediaUrl).toHaveBeenCalledTimes(1);
+
+    // The connection returning retries the picture, but not the refusal.
+    act(() => {
+      window.dispatchEvent(new Event("online"));
+    });
+    fireEvent.error(picture()!);
+    await act(async () => {});
+
+    expect(mediaUrl).toHaveBeenCalledTimes(1);
+    expect(picture()).toBeNull();
+  });
+});
+
+describe("the small copy of a picture (B47)", () => {
+  const PREVIEWED = {
+    ...CONTENT,
+    illustration: {
+      ...CONTENT.illustration,
+      previewSrc: "https://cdn.example/leaf-small.png",
+    },
+  };
+  const small = () =>
+    document.querySelector('img[src="https://cdn.example/leaf-small.png"]');
+
+  it("paints first, under a full picture still on its way", () => {
+    render(<VisualSegment content={PREVIEWED} />);
+
+    expect(small()).not.toBeNull();
+    // Decorative: the picture's description is on the full one.
+    expect(small()?.getAttribute("alt")).toBe("");
+    expect(picture()?.className).toMatch(/\bopacity-0\b/);
+  });
+
+  it("gives way to the full picture once it has arrived", async () => {
+    render(<VisualSegment content={PREVIEWED} />);
+
+    // next/image reports a load after the picture decodes, a tick later.
+    fireEvent.load(picture()!);
+    await waitFor(() => expect(small()).toBeNull());
+
+    expect(picture()?.className).not.toMatch(/\bopacity-0\b/);
+  });
+
+  it("is simply not drawn when it will not load itself", () => {
+    const onMediaFailed = vi.fn();
+    render(<VisualSegment content={PREVIEWED} onMediaFailed={onMediaFailed} />);
+
+    fireEvent.error(small()!);
+
+    expect(small()).toBeNull();
+    expect(picture()?.className).not.toMatch(/\bopacity-0\b/);
+    // Only the picture itself failing is a failure worth telling.
+    expect(onMediaFailed).not.toHaveBeenCalled();
+  });
+
+  it("is absent on older pictures, which draw the full one as before", () => {
+    render(<VisualSegment content={CONTENT} />);
+
+    expect(document.querySelectorAll("img")).toHaveLength(1);
+    expect(picture()?.className).not.toMatch(/\bopacity-0\b/);
   });
 });
