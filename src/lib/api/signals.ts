@@ -1,5 +1,5 @@
 import { api } from "./client";
-import type { SignalEventType } from "@/lib/constants";
+import { SERVER_WRITTEN_EVENT_TYPES, type SignalEventType } from "@/lib/constants";
 
 /**
  * Signal batch submission (FE Architecture §3) - wired to the live backend
@@ -117,10 +117,19 @@ export const signalsApi = {
      */
     options: { keepalive?: boolean } = {},
   ): Promise<SignalBatchReceipt | null> => {
-    const known = events.filter((e) => !CLIENT_ONLY_EVENT_TYPES.has(e.type));
+    // Ours alone, or the server's own to write (B37) - neither travels.
+    const known = events.filter(
+      (e) =>
+        !CLIENT_ONLY_EVENT_TYPES.has(e.type) &&
+        !SERVER_WRITTEN_EVENT_TYPES.has(e.type),
+    );
     if (process.env.NODE_ENV === "development" && known.length < events.length) {
       const dropped = events
-        .filter((e) => CLIENT_ONLY_EVENT_TYPES.has(e.type))
+        .filter(
+          (e) =>
+            CLIENT_ONLY_EVENT_TYPES.has(e.type) ||
+            SERVER_WRITTEN_EVENT_TYPES.has(e.type),
+        )
         .map((e) => e.type);
       console.debug("[signals] dropped types outside the ingest enum:", [
         ...new Set(dropped),

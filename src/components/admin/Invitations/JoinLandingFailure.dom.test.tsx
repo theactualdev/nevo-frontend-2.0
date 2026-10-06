@@ -70,7 +70,7 @@ describe("JoinLanding when the lookup answers", () => {
      */
     lookupJoin.mockResolvedValueOnce({
       status: "valid",
-      role: "student",
+      role: "teacher",
       schoolName: "Brightgate Academy",
       expiresAt: "2001-01-01T00:00:00Z",
     });
@@ -79,5 +79,41 @@ describe("JoinLanding when the lookup answers", () => {
     await waitFor(() => expect(visibleText(container)).toMatch(/Brightgate Academy/));
     expect(visibleText(container)).not.toMatch(/expired|no longer valid/);
     expect(screen.getByRole("link", { name: "Get started" })).toBeVisible();
+  });
+
+  it("sends a teacher on to set up their account", async () => {
+    lookupJoin.mockResolvedValueOnce({
+      status: "valid",
+      role: "teacher",
+      schoolName: "Brightgate Academy",
+      expiresAt: "2099-01-01T00:00:00Z",
+    });
+    render(<JoinLanding token="tok-1" />);
+
+    const link = await screen.findByRole("link", { name: "Get started" });
+    expect(link.getAttribute("href")).toBe(
+      "/auth/teacher/activate?token=tok-1&via=join",
+    );
+  });
+
+  it("has no door into onboarding for a student link (D5)", async () => {
+    /*
+     * A child is never sent a link, and onboarding no longer reads a token -
+     * children come in through the school code and their Student ID. Until
+     * SCRUM-215 removes the role on the backend a student link can still
+     * resolve, and it meets the dead-link panel, not a way in that is gone.
+     */
+    lookupJoin.mockResolvedValueOnce({
+      status: "valid",
+      role: "student",
+      schoolName: "Brightgate Academy",
+      expiresAt: "2099-01-01T00:00:00Z",
+    });
+    const { container } = render(<JoinLanding token="tok-1" />);
+
+    await waitFor(() => expect(visibleText(container)).toMatch(/no longer valid/));
+    expect(screen.queryByRole("link", { name: "Get started" })).toBeNull();
+    expect(container.innerHTML).not.toContain("/student/onboarding");
+    expect(visibleText(container)).not.toMatch(/as a student/);
   });
 });

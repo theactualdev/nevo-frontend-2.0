@@ -7,15 +7,9 @@ import { cn } from "@/lib/utils";
 
 export type CodeStatus = "idle" | "pending" | "success" | "error";
 
-/**
- * Bounds come from the contract, and differ per code:
- *   school (`SchoolCodeRequest`)          min 2, max 50
- *   class  (`ClassCodeConnectionRequest`) min 4, max 20
- */
+/** The contract's bounds for a school code (`PinLoginRequest.schoolCode`). */
 export const SCHOOL_CODE_MIN = 2;
 export const SCHOOL_CODE_MAX = 50;
-export const CLASS_CODE_MIN = 4;
-export const CLASS_CODE_MAX = 20;
 
 /** Uppercase; letters, digits and the hyphen real codes use. */
 export function normaliseCode(raw: string, max: number): string {
@@ -30,18 +24,15 @@ export function codeIsEnterable(code: string, min: number): boolean {
 }
 
 /**
- * One code field, for both codes a child can be given.
+ * A free-length school code field - 00c Sign Back In's, and nowhere else now.
  *
- * IT WAS FIXED-LENGTH BOXES, TWICE OVER, AND BOTH WERE WRONG. The school screen
- * drew four behind a hardcoded `NEVO–` prefix when real codes are `751A1136`
- * (eight, no prefix) or `BGA-4827`; Teacher Join drew six when
- * `ClassCodeConnectionRequest` accepts 4 to 20. The school one was the wall that
- * stopped any child reaching the product at all.
- *
- * SO IT GUESSES NOTHING, and it exists once rather than twice. One field,
- * uppercased, trimmed, hyphen kept, bounded by whatever the CONTRACT says for
- * that code - and the server decides whether it names anything. A fixed-length
- * field is a guess about a format that is not ours to decide.
+ * 05 Entry draws the four cells design ruled on 30 Sep (D6), from
+ * `lib/auth/schoolCode`, since every school's code became four characters
+ * (SCRUM-201). This field predates that: it was written when real codes were
+ * `751A1136` and `BGA-4827`, so it guesses nothing - uppercased, trimmed,
+ * hyphen kept, bounded by the contract - and the server decides whether it
+ * names anything. 00c's frame draws four cells too; moving it over is its own
+ * change.
  *
  * A code is submitted deliberately - Return, or the step's own button - rather
  * than fired the moment it looks full, because with no fixed length there is no

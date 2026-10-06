@@ -1034,28 +1034,11 @@ export function LessonPlayer({
     offerable && !showBreakOffer && !consecutive && !afterBoundary;
 
   /*
-   * AN ENGINE OFFER THE PLAYER'S OWN RULES HOLD BACK IS SAID TO BE HELD BACK.
-   * Otherwise the engine cannot tell an offer the child never saw from one
-   * they looked at and passed over. A break showing is not here: that only
-   * defers the offer, which then shows.
+   * AN OFFER THE PLAYER'S OWN RULES HOLD BACK IS NOT REPORTED FROM HERE.
+   * `adaptation_suppressed` is server-written (backend, 5 Oct, B37): this
+   * player sent it too, from #623 until 6 Oct, which doubled every
+   * suppression the engine counted. See `SERVER_WRITTEN_EVENT_TYPES`.
    */
-  const heldBack =
-    suggestionFromEngine && offerable
-      ? consecutive
-        ? "consecutive_segment"
-        : afterBoundary
-          ? "after_module_boundary"
-          : null
-      : null;
-  useEffect(() => {
-    if (!heldBack || !suggested) return;
-    trackEvent(SIGNAL_EVENT_TYPES.ADAPTATION_SUPPRESSED, {
-      segmentId: segment.id,
-      adaptation: "modality_suggestion",
-      suggested,
-      reason: heldBack,
-    });
-  }, [heldBack, suggested, segment.id, trackEvent]);
 
   const go = (next: number) => {
     if (next < 0 || next >= total) return;
