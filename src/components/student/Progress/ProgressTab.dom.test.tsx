@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { ProgressTab, textureFor } from "./ProgressTab";
 import { subjectSlug } from "@/hooks/useStudentProgress";
 
@@ -25,7 +25,16 @@ vi.mock("@/hooks/useHydrated", () => ({ useHydrated: () => true }));
 
 /** Each card's own narrowed read, keyed by the subject it was asked for. */
 const narrowed = vi.hoisted(() => ({
-  bySubject: {} as Record<string, { note: string | null; loading?: boolean; failed?: boolean }>,
+  bySubject: {} as Record<
+    string,
+    {
+      note: string | null;
+      loading?: boolean;
+      failed?: boolean;
+      topics?: { done: number; total: number } | null;
+      currentTopic?: string | null;
+    }
+  >,
   asked: [] as (string | null)[],
 }));
 vi.mock("@/hooks/useSubjectProgress", () => ({
@@ -36,6 +45,8 @@ vi.mock("@/hooks/useSubjectProgress", () => ({
       reflection: null,
       lessons: [],
       note: own.note,
+      topics: own.topics ?? null,
+      currentTopic: own.currentTopic ?? null,
       loading: own.loading ?? false,
       failed: own.failed ?? false,
     };
@@ -202,6 +213,147 @@ describe("the line under each subject", () => {
 
     expect(screen.getByText("Mathematics")).toBeInTheDocument();
     expect(screen.queryByText("Fractions")).toBeNull();
+  });
+});
+
+/**
+ * Backend B53, 5 Oct: the subject read carries `topicsDone`, `topicsTotal`
+ * and `currentTopic`, and 33a draws them as a square per topic, "N of M
+ * topics done" and "Working on X". Counts, not scores; the total is topics
+ * this child has met. 33a prints the count only for work in progress - its
+ * none and all-done states have lines about topics SET, which the wire does
+ * not count, so those two draw the squares alone.
+ */
+describe("the topics on a subject card", () => {
+  const card = (name: string) =>
+    screen.getByRole("link", { name: new RegExp(name) }) as HTMLElement;
+  const marks = (el: HTMLElement) =>
+    [...el.querySelectorAll("[data-topic]")].map((m) =>
+      m.getAttribute("data-topic"),
+    );
+
+  it("draws 33a's work-in-progress card as the frame does", () => {
+    state({ subjects: [subject("Mathematics", ["Fractions"])] });
+    narrowed.bySubject = {
+      Mathematics: {
+        note: "A note about maths",
+        topics: { done: 3, total: 8 },
+        currentTopic: "Equivalent fractions",
+      },
+    };
+
+    render(<ProgressTab />);
+
+    const maths = card("Mathematics");
+    expect(within(maths).getByText("Working on Equivalent fractions")).toBeInTheDocument();
+    expect(within(maths).getByText("3 of 8 topics done")).toBeInTheDocument();
+    expect(marks(maths)).toEqual([
+      "done",
+      "done",
+      "done",
+      "current",
+      "open",
+      "open",
+      "open",
+      "open",
+    ]);
+    // The frame's line is "Working on", so the note does not also show.
+    expect(within(maths).queryByText("A note about maths")).toBeNull();
+  });
+
+  it("draws nothing of the topics when the backend counted none", () => {
+    // Rule 5: 0 is the schema's default, so absent and 0 alike draw nothing,
+    // and the line stays the note.
+    state({ subjects: [subject("Mathematics", ["Fractions"])] });
+    narrowed.bySubject = {
+      Mathematics: { note: "A note about maths", topics: null },
+    };
+
+    render(<ProgressTab />);
+
+    const maths = card("Mathematics");
+    expect(within(maths).getByText("A note about maths")).toBeInTheDocument();
+    expect(maths.querySelector("[data-topic-marks]")).toBeNull();
+    expect(maths.textContent).not.toMatch(/topics|Working on/);
+  });
+
+  it("says no 'Working on' with nothing after it", () => {
+    state({ subjects: [subject("Mathematics", ["Fractions"])] });
+    narrowed.bySubject = {
+      Mathematics: { note: null, topics: { done: 3, total: 8 }, currentTopic: null },
+    };
+
+    render(<ProgressTab />);
+
+    const maths = card("Mathematics");
+    expect(maths.textContent).not.toMatch(/Working on/);
+    expect(within(maths).getByText("Fractions")).toBeInTheDocument();
+    expect(within(maths).getByText("3 of 8 topics done")).toBeInTheDocument();
+    // And no square claims a topic is being worked on that nobody named.
+    expect(marks(maths)).not.toContain("current");
+  });
+
+  it("prints no count when none of the topics met is done yet", () => {
+    // 33a never prints "0 of M": its line for that state speaks of topics
+    // set, which the wire does not count. Asked of design.
+    state({ subjects: [subject("Mathematics", ["Fractions"])] });
+    narrowed.bySubject = {
+      Mathematics: {
+        note: null,
+        topics: { done: 0, total: 4 },
+        currentTopic: "Halves",
+      },
+    };
+
+    render(<ProgressTab />);
+
+    const maths = card("Mathematics");
+    expect(within(maths).getByText("Working on Halves")).toBeInTheDocument();
+    expect(maths.textContent).not.toMatch(/of 4|topics done|Nothing started/);
+    expect(marks(maths)).toEqual(["current", "open", "open", "open"]);
+  });
+
+  it("prints no count, and claims nothing set, when every topic met is done", () => {
+    state({ subjects: [subject("English", ["Verbs"])] });
+    narrowed.bySubject = {
+      English: { note: "A note about English", topics: { done: 5, total: 5 } },
+    };
+
+    render(<ProgressTab />);
+
+    const english = card("English");
+    expect(english.textContent).not.toMatch(/5 of 5|Everything set|teacher adds/);
+    expect(marks(english)).toEqual(["done", "done", "done", "done", "done"]);
+    expect(within(english).getByText("A note about English")).toBeInTheDocument();
+  });
+
+  it("holds the topics with the line while the subject is still being read", () => {
+    state({ subjects: [subject("Mathematics", ["Fractions"])] });
+    narrowed.bySubject = {
+      Mathematics: {
+        note: null,
+        loading: true,
+        topics: { done: 3, total: 8 },
+        currentTopic: "Equivalent fractions",
+      },
+    };
+
+    render(<ProgressTab />);
+
+    const maths = card("Mathematics");
+    expect(maths.querySelector("[data-topic-marks]")).toBeNull();
+    expect(maths.textContent).not.toMatch(/Working on/);
+  });
+
+  it("shows no percentage, anywhere", () => {
+    state({ subjects: [subject("Mathematics", ["Fractions"])] });
+    narrowed.bySubject = {
+      Mathematics: { note: null, topics: { done: 3, total: 8 }, currentTopic: "Halves" },
+    };
+
+    const { container } = render(<ProgressTab />);
+
+    expect(container.textContent).not.toMatch(/%/);
   });
 });
 

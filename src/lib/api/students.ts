@@ -168,6 +168,16 @@ export interface StudentProgress {
    * its subject's own from the narrowed route.
    */
   note?: string;
+  /**
+   * The Progress card's topic counts (backend B53, 5 Oct). A topic is done
+   * when understanding passes the engine's own threshold - the engine's, not
+   * ours. The total is topics this child HAS MET, not the curriculum. Not
+   * required, defaulting to 0 and "": 0 total is "not said", and an empty
+   * `currentTopic` is no topic. Scoped like `note`.
+   */
+  topicsDone?: number;
+  topicsTotal?: number;
+  currentTopic?: string;
 }
 
 /** One row of the student's own recent lesson activity. */
