@@ -407,7 +407,7 @@ export function LiveStructureTree({
             {allOpen ? "Collapse all" : "Expand all"}
           </button>
         </div>
-        <div className="mb-3.5 flex items-center gap-3 rounded-xl bg-nevo-navy px-[18px] py-[15px]">
+        <div className="mb-3.5 flex items-center gap-3 rounded-[12px] bg-nevo-navy px-[18px] py-[15px]">
           <span className="shrink-0 text-nevo-violet" aria-hidden>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M4 5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H4z" />
@@ -674,7 +674,7 @@ export function LiveStructureTree({
 
       {phase === "confirm" && (
         <div className="absolute inset-0 z-5 flex items-end justify-center bg-nevo-near-black/32 p-6">
-          <div className="w-full max-w-[520px] rounded-2xl bg-nevo-cream px-[26px] py-6 shadow-[0_20px_56px_rgba(0,0,0,0.24)] motion-safe:animate-nevo-rise">
+          <div className="w-full max-w-[520px] rounded-[16px] bg-nevo-cream px-[26px] py-6 shadow-[0_20px_56px_rgba(0,0,0,0.24)] motion-safe:animate-nevo-rise">
             <span className="font-mono text-[10.5px] font-bold tracking-[0.14em] text-nevo-violet">
               ADD TO LIBRARY
             </span>

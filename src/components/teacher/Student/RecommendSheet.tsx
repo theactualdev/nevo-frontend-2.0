@@ -71,7 +71,7 @@ export function RecommendSheet({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-nevo-near-black/28 p-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-nevo-near-black/28 backdrop-blur-[1.5px] p-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
       onClick={() => !sent && onClose()}
     >
       <div
@@ -80,7 +80,7 @@ export function RecommendSheet({
         aria-label={`Recommend a lesson to ${firstName}`}
         onClick={(e) => e.stopPropagation()}
         className={cn(
-          "w-full rounded-2xl bg-nevo-cream shadow-[0_8px_32px_rgba(0,0,0,0.16)] motion-safe:animate-in motion-safe:zoom-in-95 motion-safe:duration-200",
+          "w-full rounded-[16px] bg-nevo-cream shadow-[0_8px_32px_rgba(0,0,0,0.16)] motion-safe:animate-in motion-safe:zoom-in-95 motion-safe:duration-200",
           sent
             ? "flex max-w-[420px] flex-col items-center p-8 text-center xl:p-9"
             : "max-w-[520px] p-7 xl:max-w-[560px] xl:p-[30px]",
@@ -125,7 +125,7 @@ export function RecommendSheet({
               </button>
             </div>
 
-            <div className="mt-4 rounded-xl border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-4 py-3.5 xl:mt-[18px] xl:px-[18px] xl:py-4">
+            <div className="mt-4 rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-4 py-3.5 xl:mt-[18px] xl:px-[18px] xl:py-4">
               <span className="text-[11.5px] font-semibold tracking-[0.04em] text-nevo-navy uppercase xl:text-xs">
                 Nevo suggests
               </span>

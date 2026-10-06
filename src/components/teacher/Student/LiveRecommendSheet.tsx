@@ -356,7 +356,7 @@ function Shell({
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 z-50 flex items-end justify-center bg-nevo-near-black/28 sm:items-center"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-nevo-near-black/28 backdrop-blur-[1.5px] sm:items-center"
     >
       <div
         role="dialog"

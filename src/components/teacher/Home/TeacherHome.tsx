@@ -115,7 +115,7 @@ export function TeacherHome() {
             </h2>
           </div>
           {signedIn && identity?.schoolCode && (
-            <div className="flex shrink-0 flex-col items-end gap-1 rounded-xl bg-nevo-cream-elevated px-3.5 py-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:px-4 xl:py-3">
+            <div className="flex shrink-0 flex-col items-end gap-1 rounded-[12px] bg-nevo-cream-elevated px-3.5 py-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:px-4 xl:py-3">
               <span className="text-xs font-semibold tracking-[0.05em] text-nevo-near-black/55 uppercase">
                 School code
               </span>

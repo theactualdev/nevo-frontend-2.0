@@ -161,7 +161,7 @@ export function HelpAndSupport() {
             {[0, 1].map((i) => (
               <div
                 key={i}
-                className="h-[92px] animate-pulse rounded-xl bg-nevo-cream-elevated"
+                className="h-[92px] animate-pulse rounded-[12px] bg-nevo-cream-elevated"
               />
             ))}
           </div>
@@ -175,7 +175,7 @@ export function HelpAndSupport() {
           nothing else to offer, and there is: the page they came from.
         */}
         {failed && (
-          <div className="mt-[30px] rounded-xl bg-nevo-cream-elevated p-6 shadow-elevation-1 xl:mt-9">
+          <div className="mt-[30px] rounded-[12px] bg-nevo-cream-elevated p-6 shadow-elevation-1 xl:mt-9">
             <h3 className="text-[15.5px] font-semibold text-nevo-near-black">
               We couldn&rsquo;t load our contact details
             </h3>
@@ -192,14 +192,14 @@ export function HelpAndSupport() {
               {contacts.map((c) => (
                 <div
                   key={c.id}
-                  className="flex items-center gap-2 rounded-xl bg-nevo-cream-elevated py-1.5 pr-2.5 pl-1.5 shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
+                  className="flex items-center gap-2 rounded-[12px] bg-nevo-cream-elevated py-1.5 pr-2.5 pl-1.5 shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
                 >
                   <a
                     href={c.href}
                     {...(c.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
                     className="flex min-w-0 flex-1 cursor-pointer items-center gap-[18px] rounded-[10px] py-4 pr-3 pl-4 transition-[filter] duration-150 hover:brightness-[0.985]"
                   >
-                    <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-nevo-navy/10 text-nevo-navy">
+                    <span className="flex size-12 shrink-0 items-center justify-center rounded-[12px] bg-nevo-navy/10 text-nevo-navy">
                       {c.icon}
                     </span>
                     <span className="min-w-0 flex-1">

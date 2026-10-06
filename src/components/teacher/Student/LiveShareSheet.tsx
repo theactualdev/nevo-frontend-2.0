@@ -95,7 +95,7 @@ export function LiveShareSheet({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-nevo-near-black/28 p-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-nevo-near-black/28 backdrop-blur-[1.5px] p-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
       onClick={onCancel}
     >
       <div
@@ -103,7 +103,7 @@ export function LiveShareSheet({
         aria-modal="true"
         aria-label={`Share ${firstName} with Learning Support`}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-[500px] rounded-2xl bg-nevo-cream p-7 shadow-[0_8px_32px_rgba(0,0,0,0.16)] motion-safe:animate-in motion-safe:zoom-in-95 motion-safe:duration-200 xl:max-w-[520px] xl:p-8"
+        className="w-full max-w-[500px] rounded-[16px] bg-nevo-cream p-7 shadow-[0_8px_32px_rgba(0,0,0,0.16)] motion-safe:animate-in motion-safe:zoom-in-95 motion-safe:duration-200 xl:max-w-[520px] xl:p-8"
       >
         {confirming ? (
           <>
@@ -113,7 +113,7 @@ export function LiveShareSheet({
             <p className="mt-[9px] text-[14.5px] leading-[1.55] text-nevo-near-black/68 xl:mt-2.5 xl:text-[15px]">
               {`This shares ${firstName}${"’"}s recent picture and your note with your SENCo. They${"’"}ll follow up with you, and it stays between you and Learning Support.`}
             </p>
-            <div className="mt-4 rounded-xl border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[15px] py-[13px] xl:mt-[18px] xl:px-4 xl:py-3.5">
+            <div className="mt-4 rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[15px] py-[13px] xl:mt-[18px] xl:px-4 xl:py-3.5">
               <p className="text-[13px] leading-[1.5] text-nevo-near-black xl:text-[13.5px]">
                 <strong className="font-semibold">Sending:</strong>
                 {` ${firstName}${"’"}s recent picture and the note you wrote.`}
@@ -155,7 +155,7 @@ export function LiveShareSheet({
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder={`A sentence or two is plenty${"…"}`}
-            className="mt-2 h-[110px] w-full resize-none rounded-xl border-[1.5px] border-nevo-near-black/16 bg-nevo-cream-elevated px-[15px] py-[13px] text-[14.5px] leading-[1.5] font-normal text-nevo-near-black transition-colors focus:border-nevo-navy focus:outline-none xl:h-[120px] xl:px-4 xl:py-3.5 xl:text-[15px]"
+            className="mt-2 h-[110px] w-full resize-none rounded-[12px] border-[1.5px] border-nevo-near-black/16 bg-nevo-cream-elevated px-[15px] py-[13px] text-[14.5px] leading-[1.5] font-normal text-nevo-near-black transition-colors focus:border-nevo-navy focus:outline-none xl:h-[120px] xl:px-4 xl:py-3.5 xl:text-[15px]"
           />
         </label>
         <div className="mt-[18px] flex gap-3 xl:mt-5">

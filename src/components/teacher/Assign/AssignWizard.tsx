@@ -137,7 +137,7 @@ function CheckCard({
       onClick={onClick}
       aria-pressed={on}
       className={cn(
-        "flex w-full cursor-pointer items-center gap-3.5 rounded-xl bg-nevo-cream-elevated px-[18px] py-4 text-left shadow-[0_2px_8px_rgba(0,0,0,0.06)]",
+        "flex w-full cursor-pointer items-center gap-3.5 rounded-[12px] bg-nevo-cream-elevated px-[18px] py-4 text-left shadow-[0_2px_8px_rgba(0,0,0,0.06)]",
         on && "outline-2 -outline-offset-2 outline-nevo-navy",
       )}
     >

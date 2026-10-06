@@ -361,7 +361,7 @@ export function LiveModuleReview({
 
         {flat && (
           <div className="flex max-w-[720px] flex-col gap-2.5">
-            <div className="flex items-center gap-3 rounded-xl bg-nevo-violet/14 px-4 py-3.5">
+            <div className="flex items-center gap-3 rounded-[12px] bg-nevo-violet/14 px-4 py-3.5">
               <span className="shrink-0 text-nevo-navy" aria-hidden>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M4 7h16M4 12h16M4 17h16" />
@@ -380,7 +380,7 @@ export function LiveModuleReview({
 
         {noSuggestion && (
           <div className="flex max-w-[720px] flex-col gap-2.5">
-            <div className="rounded-xl bg-nevo-cream-elevated px-5 py-[18px]">
+            <div className="rounded-[12px] bg-nevo-cream-elevated px-5 py-[18px]">
               <div className="text-[15px] font-semibold text-nevo-near-black">
                 {/* The frame says "this lesson is short - 5 segments or fewer".
                     We are not told why Nevo proposed nothing, so we do not say

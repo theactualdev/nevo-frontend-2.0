@@ -461,7 +461,7 @@ export function TeacherSidebar() {
             />
             <div
               role="menu"
-              className="absolute bottom-[calc(100%+8px)] left-0 z-40 w-[232px] rounded-xl bg-nevo-cream p-1.5 shadow-[0_8px_32px_rgba(0,0,0,0.16)] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 motion-safe:duration-150"
+              className="absolute bottom-[calc(100%+8px)] left-0 z-40 w-[232px] rounded-[12px] bg-nevo-cream p-1.5 shadow-[0_8px_32px_rgba(0,0,0,0.16)] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 motion-safe:duration-150"
             >
               {ACCOUNT_MENU.map((m) => {
                 const body = (
