@@ -12,11 +12,12 @@ import type { TrackEvent } from "@/hooks";
  * hold is bracketed as `system_busy` (transition_screen, SCRUM-94 fix 9) so
  * the stillness never reads as hesitation.
  *
- * `deviceRemembered` IS NOT DECORATION. A child who joined by invite link ends
- * onboarding with a real account and no school code — the join endpoints return
- * a `schoolName` and never a code — so `rememberOnboardedStudent` correctly
- * refuses to remember them, because a remembered profile the server cannot
- * authenticate is worse than none.
+ * `deviceRemembered` IS NOT DECORATION. A child can end onboarding with a real
+ * account and no school code or no server-issued identifier on this device -
+ * an invite-link child did, because the join endpoints returned a
+ * `schoolName` and never a code - and then `rememberOnboardedStudent`
+ * correctly refuses to remember them, because a remembered profile the server
+ * cannot authenticate is worse than none.
  *
  * That refusal used to be silent. The caller discarded the result and this
  * screen said "You're all set" to a child who, tomorrow, would open Nevo on the
@@ -25,9 +26,9 @@ import type { TrackEvent } from "@/hooks";
  *
  * So when the device could not be remembered, the screen says so, and says the
  * one thing that is actually true and actionable: a teacher can get them back
- * in. Since 1 Oct that is rarer: the join now returns a session, so the
- * account's own school code is read from `users/me` and the child IS
- * remembered. This line is for when that read fails or the school has no code.
+ * in. Since the entry screen (SCRUM-208) every child types their school code
+ * before the baseline, so this line is for when the PIN step hands back no
+ * identifier, or a run did not start on that screen.
  *
  * NOTE FOR DESIGN: the second line is ours, not from a frame. If you would
  * rather it read differently, or sit somewhere other than under the celebration,

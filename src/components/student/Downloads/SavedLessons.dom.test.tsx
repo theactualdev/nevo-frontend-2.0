@@ -322,3 +322,14 @@ describe("a shared tablet", () => {
     expect(screen.queryByText("The water cycle")).toBeNull();
   });
 });
+
+describe("a lesson list that has not answered yet", () => {
+  it("does not say there is nothing to save before it knows", () => {
+    lessons.mockReturnValue({ lessons: [], live: false, loading: true, failed: false });
+    render(<SavedLessons />);
+
+    expect(screen.getByRole("status", { name: "Loading" })).toBeInTheDocument();
+    expect(screen.queryByText(/no lessons to save/i)).toBeNull();
+    expect(screen.queryByText(/haven.t saved any lessons/i)).toBeNull();
+  });
+});

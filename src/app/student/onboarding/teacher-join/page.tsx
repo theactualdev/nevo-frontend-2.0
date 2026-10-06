@@ -1,18 +1,14 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
-import { TeacherJoin } from "@/components/student/Onboarding/TeacherJoin";
+import { StudentEntryStep } from "@/components/student/Onboarding/StudentEntryStep";
 
 export const metadata: Metadata = {
-  title: "Join through your teacher - Nevo",
+  title: "Join your school - Nevo",
 };
 
-// Teacher Join (screen 03) - reached from the Welcome screen's teacher-invite
-// sheet. `TeacherJoin` reads `useSearchParams` (?mode=scan|code), which
-// requires a Suspense boundary.
+// 03 Teacher Join - reached from the Welcome's teacher sheet. The same entry
+// screen as 05, framed for a child whose teacher reads out the school code.
+// The QR and class-code modes it used to switch between were retired on
+// 30 Sep (SCRUM-208), so there is no `?mode=` to read and no Suspense needed.
 export default function TeacherJoinPage() {
-  return (
-    <Suspense>
-      <TeacherJoin />
-    </Suspense>
-  );
+  return <StudentEntryStep framing="teacher" />;
 }

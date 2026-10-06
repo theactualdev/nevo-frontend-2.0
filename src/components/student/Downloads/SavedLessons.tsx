@@ -59,7 +59,7 @@ type RowState = "saving" | "idle";
 
 export function SavedLessons() {
   const owner = getSession()?.userId ?? null;
-  const { lessons, failed } = useStudentLessons();
+  const { lessons, failed, loading } = useStudentLessons();
   const [shelf, setShelf] = useState<SavedLesson[]>([]);
   const [busy, setBusy] = useState<Record<string, RowState>>({});
   const [notice, setNotice] = useState<string | null>(null);
@@ -205,7 +205,21 @@ export function SavedLessons() {
         </p>
       )}
 
-      {rows.length === 0 ? (
+      {/*
+        NOT ANSWERED YET IS NOT "NOTHING TO SAVE". While the lesson list is in
+        flight `lessons` is empty, and with nothing on the shelf this used to
+        tell the child there were no lessons - a claim made before anything
+        had been asked.
+      */}
+      {rows.length === 0 && loading ? (
+        <div className="mt-8 flex justify-center">
+          <span
+            role="status"
+            aria-label="Loading"
+            className="block size-5 rounded-full border-[2.5px] border-nevo-navy/20 border-t-nevo-navy motion-safe:animate-spin motion-safe:[animation-duration:800ms]"
+          />
+        </div>
+      ) : rows.length === 0 ? (
         <p className="mt-8 text-center text-sm text-nevo-near-black/60">
           {failed
             ? "You haven't saved any lessons on this device yet."

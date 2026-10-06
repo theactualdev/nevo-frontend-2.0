@@ -7,6 +7,7 @@ import {
   screen,
 } from "@testing-library/react";
 import { AskNevo } from "./AskNevo";
+import { ApiError } from "@/lib/api/client";
 
 /**
  * WHAT A SIGNED-IN CHILD IS TOLD WHEN ASK NEVO CANNOT ANSWER.
@@ -107,5 +108,74 @@ describe("the signed-out walkthrough", () => {
 
     expect(document.body.textContent).toMatch(/pizza/i);
     expect(document.querySelector("[data-nevo-sample]")).not.toBeNull();
+  });
+});
+
+/**
+ * B33 and D45. Once the day's allowance is spent the server answers 429
+ * `ask_nevo_daily_limit`, and design ruled the child is told plainly that they
+ * have asked everything for today and can ask again tomorrow - never a
+ * connection failure. Before this, it read "Try asking again in a moment",
+ * which sends a child to keep trying something that cannot work until
+ * tomorrow.
+ */
+describe("a child whose questions for today are used up", () => {
+  const spent = () =>
+    new ApiError(429, "Too many", {
+      detail: {
+        code: "ask_nevo_daily_limit",
+        message: "You have used today's questions.",
+        resetsAt: "2026-10-07T00:00:00Z",
+      },
+    });
+
+  it("is told they have asked everything for today, and can ask again tomorrow", async () => {
+    ask.mockReset().mockRejectedValue(spent());
+
+    await askSomething("What is a fraction?");
+
+    expect(
+      screen.getByText(
+        "You've asked everything for today. You can ask again tomorrow.",
+      ),
+    ).toBeVisible();
+  });
+
+  it("is never shown it as a failure to connect or answer", async () => {
+    ask.mockReset().mockRejectedValue(spent());
+
+    await askSomething("What is a fraction?");
+
+    const text = document.body.textContent ?? "";
+    expect(text).not.toMatch(/couldn.t answer|couldn.t connect|in a moment|on us/i);
+    expect(document.querySelector("[data-nevo-sample]")).toBeNull();
+  });
+
+  it("is told the same on the walkthrough, because the server said so", async () => {
+    signedIn.value = false;
+    ask.mockReset().mockRejectedValue(spent());
+
+    await askSomething("Can you explain it differently?");
+
+    expect(screen.getByText(/asked everything for today/)).toBeVisible();
+    expect(document.body.textContent).not.toMatch(/pizza/i);
+  });
+});
+
+describe("a rate limit that is not the allowance", () => {
+  it("still says to try again in a moment, because it does clear", async () => {
+    // Told apart by its code, not its status: both are 429.
+    ask
+      .mockReset()
+      .mockRejectedValue(
+        new ApiError(429, "Too many", {
+          detail: { code: "too_many_requests", message: "slow down" },
+        }),
+      );
+
+    await askSomething("What is a fraction?");
+
+    expect(screen.getByText(/couldn.t answer that just now/i)).toBeVisible();
+    expect(screen.queryByText(/asked everything for today/)).toBeNull();
   });
 });

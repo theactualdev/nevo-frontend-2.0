@@ -65,7 +65,7 @@ export interface TextVariant {
 export interface VisualVariant {
   type: string;
   imageUrl: string;
-  /** Untyped beyond nullable in the spec, so nothing reads it. */
+  /** A much smaller copy of `imageUrl` (B47). Null on older pictures. */
   previewUrl?: string | null;
   /** The image's own size, in pixels - its aspect ratio, for the frame. */
   width?: number;
