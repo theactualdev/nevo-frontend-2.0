@@ -199,7 +199,7 @@ export function ProcessingStages({
                      stood. No red anywhere - a parse that stopped is not an
                      alarm, and the earlier stages really did finish. */
                   <span className="text-nevo-near-black/55">
-                    {" — stopped"}
+                    {" - stopped"}
                   </span>
                 )}
               </span>

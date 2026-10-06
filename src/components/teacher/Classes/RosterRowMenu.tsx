@@ -120,7 +120,7 @@ export function RosterRowMenu({
           role="menu"
           aria-label={`Options for ${firstName}`}
           className={cn(
-            "absolute right-0 z-10 w-[280px] rounded-xl bg-nevo-cream p-1.5 shadow-[0_4px_16px_rgba(0,0,0,0.10)]",
+            "absolute right-0 z-10 w-[280px] rounded-[12px] bg-nevo-cream p-1.5 shadow-[0_4px_16px_rgba(0,0,0,0.10)]",
             up ? "bottom-[46px]" : "top-[46px]",
           )}
         >
@@ -183,7 +183,7 @@ export function PinClearedDialog({
         aria-modal="true"
         aria-label={`${firstName}${"’"}s PIN is cleared`}
         onClick={(e) => e.stopPropagation()}
-        className="w-[460px] max-w-full rounded-2xl bg-nevo-cream-elevated p-8 text-center shadow-[0_8px_32px_rgba(0,0,0,0.16)]"
+        className="w-[460px] max-w-full rounded-[16px] bg-nevo-cream-elevated p-8 text-center shadow-[0_8px_32px_rgba(0,0,0,0.16)]"
       >
         <span className="mx-auto flex size-[52px] items-center justify-center rounded-full bg-nevo-navy motion-safe:animate-nevo-pop">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden>

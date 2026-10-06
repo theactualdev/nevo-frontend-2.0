@@ -384,7 +384,7 @@ export function StructureTree() {
         </div>
 
         {/* L1: the block */}
-        <div className="mb-3.5 flex items-center gap-3 rounded-xl bg-nevo-navy px-[18px] py-[15px]">
+        <div className="mb-3.5 flex items-center gap-3 rounded-[12px] bg-nevo-navy px-[18px] py-[15px]">
           <span className="shrink-0 text-nevo-violet" aria-hidden>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M4 5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H4z" />
@@ -428,7 +428,7 @@ export function StructureTree() {
                 )}
                 <div
                   className={cn(
-                    "rounded-xl bg-nevo-cream-elevated shadow-[0_2px_10px_rgba(0,0,0,0.05)]",
+                    "rounded-[12px] bg-nevo-cream-elevated shadow-[0_2px_10px_rgba(0,0,0,0.05)]",
                     dragging?.kind === "lesson" && dragging.id === les.id && "opacity-50",
                   )}
                 >
@@ -692,7 +692,7 @@ export function StructureTree() {
       {/* 102.5 confirmation - a sheet over the page, never a modal route */}
       {phase !== "edit" && (
         <div className="absolute inset-0 z-5 flex items-end justify-center bg-nevo-near-black/32 p-6">
-          <div className="w-full max-w-[520px] rounded-2xl bg-nevo-cream px-[26px] py-6 shadow-[0_20px_56px_rgba(0,0,0,0.24)] motion-safe:animate-nevo-rise">
+          <div className="w-full max-w-[520px] rounded-[16px] bg-nevo-cream px-[26px] py-6 shadow-[0_20px_56px_rgba(0,0,0,0.24)] motion-safe:animate-nevo-rise">
             {phase === "confirm" && (
               <div>
                 <span className="font-mono text-[10.5px] font-bold tracking-[0.14em] text-nevo-violet">

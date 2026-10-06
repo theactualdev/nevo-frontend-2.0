@@ -667,7 +667,7 @@ export function BulkIngestion() {
                 {/* Per FILE, because that is what the endpoint reports. A
                     rejected file carries the server's own reason and sits on
                     its own line - it has not sunk the others. */}
-                <div className="mt-[22px] overflow-hidden rounded-xl bg-nevo-cream-elevated shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-6">
+                <div className="mt-[22px] overflow-hidden rounded-[12px] bg-nevo-cream-elevated shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-6">
                   {batch.uploads.map((u, i) => (
                     <div
                       key={`${u.filename}-${i}`}
@@ -803,7 +803,7 @@ export function BulkIngestion() {
                 <span className="hidden xl:inline">Ready to go &middot; 11 lessons</span>
               </h3>
             </div>
-            <div className="mt-3 overflow-hidden rounded-xl bg-nevo-cream-elevated shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-3.5">
+            <div className="mt-3 overflow-hidden rounded-[12px] bg-nevo-cream-elevated shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-3.5">
               {READY.map((r, i) => (
                 <div
                   key={r.title}
@@ -843,7 +843,7 @@ export function BulkIngestion() {
               {REVIEW.map((v) => (
                 <div
                   key={v.title}
-                  className="flex cursor-pointer items-center gap-4 rounded-xl border-l-[3px] border-nevo-violet bg-nevo-cream-elevated px-[18px] py-3.5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:px-5 xl:py-4"
+                  className="flex cursor-pointer items-center gap-4 rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-cream-elevated px-[18px] py-3.5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:px-5 xl:py-4"
                 >
                   <div className="min-w-0 flex-1">
                     <span className="text-[14.5px] font-semibold xl:text-[15px]">

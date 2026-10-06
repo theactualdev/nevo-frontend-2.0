@@ -206,7 +206,7 @@ export function SectionReview({
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-[22px] xl:px-8 xl:py-7">
         {flat && (
           <div className="flex max-w-[720px] flex-col gap-2.5">
-            <div className="flex items-center gap-3 rounded-xl bg-nevo-violet/14 px-4 py-3.5">
+            <div className="flex items-center gap-3 rounded-[12px] bg-nevo-violet/14 px-4 py-3.5">
               <span className="shrink-0 text-nevo-navy">
                 <svg
                   width="18"
@@ -239,7 +239,7 @@ export function SectionReview({
 
         {noSuggestion && (
           <div className="flex max-w-[720px] flex-col gap-2.5">
-            <div className="rounded-xl bg-nevo-cream-elevated px-5 py-[18px]">
+            <div className="rounded-[12px] bg-nevo-cream-elevated px-5 py-[18px]">
               <div className="text-[15px] font-semibold text-nevo-near-black">
                 This lesson is short - 5 segments or fewer - so it stays as one
                 flow.

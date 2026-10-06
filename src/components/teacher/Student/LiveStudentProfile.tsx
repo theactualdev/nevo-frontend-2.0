@@ -331,7 +331,7 @@ export function LiveStudentProfile({
                 return (
                   <div
                     key={o.pattern}
-                    className="flex items-start justify-between gap-4 rounded-xl bg-nevo-cream-elevated p-[22px] shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
+                    className="flex items-start justify-between gap-4 rounded-[12px] bg-nevo-cream-elevated p-[22px] shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
                   >
                     <p className="text-[15.5px] leading-[1.45] font-medium text-pretty text-nevo-near-black xl:text-[16.5px]">
                       {OBSERVATION_COPY[o.pattern].body(

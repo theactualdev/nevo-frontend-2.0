@@ -96,7 +96,7 @@ export function EditProfileModal({
         aria-modal="true"
         aria-label="Edit profile"
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-[460px] rounded-2xl bg-nevo-cream px-[30px] py-7 shadow-[0_24px_60px_rgba(0,0,0,0.3)] motion-safe:animate-in motion-safe:zoom-in-95 motion-safe:duration-200"
+        className="w-full max-w-[460px] rounded-[16px] bg-nevo-cream px-[30px] py-7 shadow-[0_24px_60px_rgba(0,0,0,0.3)] motion-safe:animate-in motion-safe:zoom-in-95 motion-safe:duration-200"
       >
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold text-nevo-near-black">
