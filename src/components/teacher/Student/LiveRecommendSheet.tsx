@@ -301,7 +301,8 @@ export function LiveRecommendSheet({
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder={`A line about why you picked this${"…"}`}
+            // C08c's own placeholder: a teacher talking to the child.
+            placeholder={`Try this one - I think it${"’"}ll click${"…"}`}
             className="mt-2 h-[84px] w-full resize-none rounded-[10px] border border-nevo-near-black/15 px-3.5 py-3 text-[14.5px] leading-[1.5] font-normal tracking-normal text-nevo-near-black normal-case transition-colors focus:border-nevo-navy focus:outline-none"
           />
         </label>

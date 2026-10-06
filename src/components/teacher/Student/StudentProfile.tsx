@@ -14,7 +14,7 @@ import {
   type SessionRow,
   type StudentProfileData,
 } from "@/lib/mocks/teacherStudents";
-import { OBSERVATION_COPY } from "@/lib/constants/observations";
+import { OBSERVATION_COPY, observationCount } from "@/lib/constants/observations";
 import { cn } from "@/lib/utils";
 import { MasteryDualTrack } from "./MasteryDualTrack";
 import { RecommendSheet } from "./RecommendSheet";
@@ -251,12 +251,24 @@ export function StudentProfile({
               key={pattern}
               className="rounded-[12px] bg-nevo-cream-elevated px-5 py-[18px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:p-[22px]"
             >
-              <p className="font-mono text-[10.5px] tracking-[0.06em] text-nevo-near-black/50 uppercase">
-                {OBSERVATION_COPY[pattern].title}
-              </p>
-              <p className="mt-1.5 text-[15.5px] leading-[1.45] font-medium text-nevo-near-black xl:text-[16.5px]">
-                {OBSERVATION_COPY[pattern].body(firstName)}
-              </p>
+              {/* C08's card: the sentence, and a count only as its own chip
+                  where the copy file allows one. No eyebrow - C08 draws none. */}
+              <div className="flex items-start justify-between gap-4">
+                <p className="text-[15.5px] leading-[1.45] font-medium text-pretty text-nevo-near-black xl:text-[16.5px]">
+                  {OBSERVATION_COPY[pattern].body(firstName)}
+                </p>
+                {(() => {
+                  const chip = observationCount(
+                    pattern,
+                    student.observationCounts?.[pattern],
+                  );
+                  return chip ? (
+                    <span className="shrink-0 rounded-full bg-nevo-violet/24 px-[11px] py-1 text-[12.5px] font-semibold whitespace-nowrap text-nevo-navy">
+                      {chip}
+                    </span>
+                  ) : null;
+                })()}
+              </div>
             </div>
           ))}
         </div>
