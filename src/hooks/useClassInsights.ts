@@ -60,6 +60,8 @@ export interface InsightsConcept {
 
 export interface InsightsFlag {
   id: string;
+  /** Who the flag is about - required on the contract, and the card's link. */
+  studentId: string;
   name: string | null;
   note: string;
   isSudden: boolean;
@@ -206,6 +208,7 @@ export function useClassInsights(classId: string | null): ClassInsightsState {
     })),
     flags: flags.map((f) => ({
       id: f.id,
+      studentId: f.studentId,
       name: byId.get(f.studentId)?.name ?? null,
       note: f.description,
       isSudden: suddenish(f.flagType),

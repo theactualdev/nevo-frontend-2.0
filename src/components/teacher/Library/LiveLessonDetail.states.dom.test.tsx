@@ -564,3 +564,72 @@ describe("what the page says about each section", () => {
     expect(screen.getByText(/Biology ·/)).toBeInTheDocument();
   });
 });
+
+/**
+ * C06b's "Ready · not yet assigned" pill, and its two headings.
+ */
+describe("the ready lesson's pill and headings", () => {
+  it("draws Ready beside the title on a lesson nobody has yet", () => {
+    show();
+
+    expect(screen.getByText("Ready")).toBeInTheDocument();
+  });
+
+  it("draws no Ready once the lesson is assigned", () => {
+    show([{ id: "a-1", studentId: "st-1", classId: "c-1", status: "assigned", dueAt: null, availableFrom: null }]);
+
+    expect(screen.queryByText("Ready")).not.toBeInTheDocument();
+  });
+
+  it("draws no Ready while the review is still being read", () => {
+    reviewState({ loading: true });
+    show();
+
+    expect(screen.queryByText("Ready")).not.toBeInTheDocument();
+  });
+
+  it("draws no Ready while something is waiting", () => {
+    reviewState({ ready: false, outstanding: 2, hadReview: true });
+    show();
+
+    expect(screen.queryByText("Ready")).not.toBeInTheDocument();
+  });
+
+  it("draws no Ready beside Needs review, even when the server would let it go", () => {
+    // The server can say ready while flagged sections are still unapproved.
+    // Both pills at once would contradict each other.
+    reviewState({ ready: true, outstanding: 0 });
+    useSegmentReview.mockReturnValue({
+      outstanding: [],
+      remaining: 2,
+      ready: false,
+      approving: null,
+      failed: null,
+      approve: vi.fn(),
+      isApproved: () => false,
+    });
+    show();
+
+    expect(screen.getByText("Needs review")).toBeInTheDocument();
+    expect(screen.queryByText("Ready")).not.toBeInTheDocument();
+  });
+
+  it("calls the sections what's inside before anyone has worked through them", () => {
+    show();
+
+    expect(screen.getByText("What’s inside")).toBeInTheDocument();
+  });
+
+  it("calls them how the class moved through it once there is progress", () => {
+    render(
+      <LiveLessonDetail
+        lesson={LESSON}
+        modules={[]}
+        assignments={[]}
+        progress={{ lessonId: "l-9", classId: "c-1", slowestSegmentId: null, slowdownNote: null, segments: [] } as never}
+      />,
+    );
+
+    expect(screen.getByText("How the class moved through it")).toBeInTheDocument();
+  });
+});

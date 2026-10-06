@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 
-const { batch, status, list, create, getToken } = vi.hoisted(() => ({
+const { batch, status, list, create, getToken, confirm } = vi.hoisted(() => ({
+  confirm: vi.fn(),
   batch: vi.fn(),
   status: vi.fn(),
   list: vi.fn(),
@@ -9,7 +10,7 @@ const { batch, status, list, create, getToken } = vi.hoisted(() => ({
   getToken: vi.fn(),
 }));
 vi.mock("@/lib/api/uploads", () => ({
-  uploadsApi: { batch, status, list, create },
+  uploadsApi: { batch, status, list, create, confirm },
 }));
 vi.mock("@/lib/api/lessons", () => ({ lessonsApi: { detail: vi.fn() } }));
 vi.mock("@/lib/auth/session", () => ({ getToken }));
@@ -18,6 +19,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { BulkIngestion } from "./BulkIngestion";
+import { SystemMessagesProvider } from "@/components/shared/SystemMessages";
 
 /**
  * The bulk parsing beat, and the counter that belonged to nobody.
@@ -513,5 +515,60 @@ describe("a batch that could not be sent", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       /couldn.t send those just now. Nothing has been added/,
     );
+  });
+});
+
+/**
+ * A batch where every file was refused had no way out but the browser's
+ * back button; and a batch that went in landed on the Library without a word.
+ */
+describe("the end of a batch", () => {
+  const ALL_REFUSED = {
+    acceptedCount: 0,
+    rejectedCount: 2,
+    uploads: [
+      { uploadId: null, filename: "a.zip", accepted: false, error: "Unsupported file type.", status: null, stage: null },
+      { uploadId: null, filename: "b.zip", accepted: false, error: "Unsupported file type.", status: null, stage: null },
+    ],
+  };
+
+  it("offers a way out when every file was refused", async () => {
+    getToken.mockReturnValue("tok");
+    batch.mockResolvedValue(ALL_REFUSED);
+    render(<BulkIngestion />);
+    drop(2);
+
+    expect(await screen.findByRole("button", { name: "Close" })).toBeInTheDocument();
+  });
+
+  it("offers no close over a batch that still has something to add", async () => {
+    getToken.mockReturnValue("tok");
+    batch.mockResolvedValue(ONE_ACCEPTED);
+    status.mockReturnValue(new Promise(() => {}));
+    render(<BulkIngestion />);
+    drop(1);
+
+    await screen.findByText(/came through cleanly/);
+    expect(screen.queryByRole("button", { name: "Close" })).not.toBeInTheDocument();
+  });
+});
+
+describe("a batch that went in", () => {
+  it("says it was added, in the shared bar, as C07d draws it", async () => {
+    getToken.mockReturnValue("tok");
+    batch.mockResolvedValue(ONE_ACCEPTED);
+    status.mockReturnValue(new Promise(() => {}));
+    confirm.mockReset().mockResolvedValue({});
+    render(
+      <SystemMessagesProvider>
+        <BulkIngestion />
+      </SystemMessagesProvider>,
+    );
+    drop(1);
+    await screen.findByText(/came through cleanly/);
+
+    fireEvent.click(screen.getByRole("button", { name: /Add all/ }));
+
+    expect(await screen.findByText("Added to your library.")).toBeInTheDocument();
   });
 });
