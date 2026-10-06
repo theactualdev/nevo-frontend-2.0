@@ -55,7 +55,7 @@ const STATE: StudentProfileState = {
 };
 
 const openSheet = () =>
-  fireEvent.click(screen.getByRole("button", { name: "Share with Learning Support" }));
+  fireEvent.click(screen.getByRole("button", { name: "Flag for support" }));
 
 // C.8c: the form's button opens the confirm step, and "Yes, send" posts.
 const send = () => {
@@ -79,7 +79,7 @@ describe("the quiet note", () => {
 
     // The action is offered; the claim is not made.
     expect(
-      screen.getByRole("button", { name: "Share with Learning Support" }),
+      screen.getByRole("button", { name: "Flag for support" }),
     ).toBeInTheDocument();
     expect(screen.queryByText(SHARED)).not.toBeInTheDocument();
   });

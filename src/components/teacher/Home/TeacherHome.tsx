@@ -55,12 +55,18 @@ import { FlagCard } from "./FlagCard";
 const SECTION_H =
   "text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase xl:text-sm";
 
+/**
+ * "Wednesday, 10 July", as the Build Lock fixes it - with the comma, which
+ * en-GB's own long format leaves out.
+ */
 function todayLine(): string {
-  return new Date().toLocaleDateString("en-GB", {
-    weekday: "long",
+  const now = new Date();
+  const weekday = now.toLocaleDateString("en-GB", { weekday: "long" });
+  const dayMonth = now.toLocaleDateString("en-GB", {
     day: "numeric",
     month: "long",
   });
+  return `${weekday}, ${dayMonth}`;
 }
 
 export function TeacherHome() {
