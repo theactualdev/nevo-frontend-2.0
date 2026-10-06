@@ -56,6 +56,13 @@ export type AskNevoCategory =
 export interface AskNevoAnswer {
   answer: string;
   /**
+   * The answer as one paragraph of plain text. Defaults to "" on the
+   * contract, so it is only preferred when it says something.
+   */
+  plainText?: string;
+  /** `structured` means `answer` carries markup; `plain` means it does not. */
+  answerFormat?: "plain" | "structured";
+  /**
    * FALSE IS THE SERVER SAYING THIS ONE BELONGS WITH THE TEACHER (1 Oct).
    *
    * Frame 26 draws that state - "Can't help · hands to teacher" - and the
