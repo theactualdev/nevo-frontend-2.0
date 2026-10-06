@@ -1,8 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 
-const { useSupportContact } = vi.hoisted(() => ({ useSupportContact: vi.fn() }));
+const { useSupportContact, show } = vi.hoisted(() => ({
+  useSupportContact: vi.fn(),
+  show: vi.fn(),
+}));
 vi.mock("@/hooks/useSupportContact", () => ({ useSupportContact }));
+vi.mock("@/components/shared/SystemMessages", () => ({
+  useSystemMessages: () => ({ show, resolve: vi.fn(), dismiss: vi.fn() }),
+}));
 
 import { HelpAndSupport } from "./HelpAndSupport";
 
@@ -28,13 +34,14 @@ const contact = {
 beforeEach(() => {
   useSupportContact.mockReset();
   useSupportContact.mockReturnValue({ contact, loading: false, failed: false });
+  show.mockReset();
 });
 
 describe("the three facts", () => {
   it("shows the email as something you can press", () => {
     render(<HelpAndSupport />);
 
-    expect(screen.getByRole("link", { name: contact.email })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /support@nevolearning\.com/ })).toHaveAttribute(
       "href",
       `mailto:${contact.email}`,
     );
@@ -61,7 +68,7 @@ describe("the WhatsApp link", () => {
      */
     render(<HelpAndSupport />);
 
-    const link = screen.getByRole("link", { name: contact.whatsapp.number });
+    const link = screen.getByRole("link", { name: /WhatsApp/ });
     expect(link).toHaveAttribute("href", contact.whatsapp.link);
     expect(link.getAttribute("href")).not.toContain(" ");
     expect(link.getAttribute("href")).not.toContain("+");
@@ -106,9 +113,9 @@ describe("while loading", () => {
 });
 
 describe("the way out", () => {
-  it("always offers the dashboard, whatever the read did", () => {
+  it("always offers the way back to Settings, whatever the read did", () => {
     // Someone on this screen is already stuck; a dead end here is the worst
-    // possible place for one.
+    // possible place for one. C17 draws it as a "Settings" back link.
     for (const state of [
       { contact, loading: false, failed: false },
       { contact: null, loading: false, failed: true },
@@ -117,9 +124,10 @@ describe("the way out", () => {
       useSupportContact.mockReturnValue(state);
       const { unmount } = render(<HelpAndSupport />);
 
-      expect(
-        screen.getByRole("link", { name: /back to your dashboard/i }),
-      ).toHaveAttribute("href", "/teacher/dashboard");
+      expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute(
+        "href",
+        "/teacher/profile",
+      );
       unmount();
     }
   });
@@ -135,7 +143,96 @@ describe("a school that publishes no response time", () => {
     });
     render(<HelpAndSupport />);
 
-    expect(screen.queryByText(/hear back/)).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: contact.email })).toBeInTheDocument();
+    expect(document.querySelector("[data-response-time]")).toBeNull();
+    expect(screen.getByRole("link", { name: /support@nevolearning\.com/ })).toBeInTheDocument();
+  });
+});
+
+/**
+ * C17: "Contacts are tappable and copyable." Each card carries a copy button;
+ * a copy raises "{label} copied" and swaps the glyph for a tick for 1.6s.
+ */
+describe("copying a contact", () => {
+  const clipboard = (writeText: unknown) =>
+    Object.defineProperty(navigator, "clipboard", {
+      value: writeText === undefined ? undefined : { writeText },
+      configurable: true,
+    });
+
+  it("copies the address and says so", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    clipboard(writeText);
+    render(<HelpAndSupport />);
+
+    fireEvent.click(screen.getByRole("button", { name: `Copy ${contact.email}` }));
+
+    expect(writeText).toHaveBeenCalledWith(contact.email);
+    await vi.waitFor(() =>
+      expect(show).toHaveBeenCalledWith({ kind: "confirm", message: "Email us copied" }),
+    );
+  });
+
+  it("copies the WhatsApp number without its reading spaces", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    clipboard(writeText);
+    render(<HelpAndSupport />);
+
+    fireEvent.click(screen.getByRole("button", { name: `Copy ${contact.whatsapp.number}` }));
+
+    expect(writeText).toHaveBeenCalledWith("+2349064678114");
+    await vi.waitFor(() =>
+      expect(show).toHaveBeenCalledWith({ kind: "confirm", message: "WhatsApp copied" }),
+    );
+  });
+
+  it("claims nothing when the browser refused", async () => {
+    // The frame's handler swallows the refusal and says "copied" anyway.
+    const writeText = vi.fn().mockRejectedValue(new Error("denied"));
+    clipboard(writeText);
+    render(<HelpAndSupport />);
+
+    fireEvent.click(screen.getByRole("button", { name: `Copy ${contact.email}` }));
+    await act(async () => {});
+
+    expect(show).not.toHaveBeenCalled();
+  });
+
+  it("claims nothing where there is no clipboard at all", async () => {
+    clipboard(undefined);
+    render(<HelpAndSupport />);
+
+    fireEvent.click(screen.getByRole("button", { name: `Copy ${contact.email}` }));
+    await act(async () => {});
+
+    expect(show).not.toHaveBeenCalled();
+  });
+
+  it("swaps the glyph back after a moment", async () => {
+    vi.useFakeTimers();
+    try {
+      clipboard(vi.fn().mockResolvedValue(undefined));
+      render(<HelpAndSupport />);
+      const button = screen.getByRole("button", { name: `Copy ${contact.email}` });
+      const before = button.innerHTML;
+
+      fireEvent.click(button);
+      await act(async () => {});
+      expect(button.innerHTML).not.toBe(before);
+
+      act(() => vi.advanceTimersByTime(1600));
+      expect(button.innerHTML).toBe(before);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("C17's words", () => {
+  it("uses the frame's subtitle", () => {
+    render(<HelpAndSupport />);
+
+    expect(
+      screen.getByText(/Reach a real person on the Nevo team whenever you need a hand/),
+    ).toBeInTheDocument();
   });
 });

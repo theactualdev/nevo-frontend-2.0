@@ -25,13 +25,11 @@ import { SampleRegion } from "@/components/shared/SampleRegion";
  *    by `GET /api/v1/lessons/{lesson_id}` and `GET /api/content/lessons/
  *    {lessonId}`, and are typed locally at `lib/api/variants.ts`.
  *
- * So the honest state below is now OVER-honest: it tells a signed-in teacher
- * variants are unavailable when the lesson read they came from carries them.
- * Nothing consumes `variantsApi` yet, which is why this still renders - but
- * that is unbuilt work, no longer a blocker.
- *
- * TODO(api): nothing. TODO(fe): consume the variants off the lesson read and
- * render C16d for a signed-in teacher.
+ * So a signed-in teacher gets C16d for real: the route reads the lesson,
+ * picks the section by its number, and hands it to `LiveVariantReview`. The
+ * fixture screen is for a visitor with no session, and the states at the
+ * bottom are the two genuine misses - a lesson that would not load, and a
+ * section number it does not have.
  */
 export function VariantReviewRoute({
   fixture,

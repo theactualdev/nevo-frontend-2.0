@@ -17,9 +17,10 @@ import { studentSlug } from "./teacherStudents";
  * the pieces that do exist - misconceptions, mastery and flags, via
  * `useClassInsights`. These fixtures back the designed screens only.
  *
- * TODO(api): C09's written class summary and its per-student recommendations
- * have no source among those pieces - see `LiveClassInsights.tsx:11-16`. That
- * is the real gap, and it is narrower than "the class-insights endpoint".
+ * C09's written class summary has a source now too: `useClassInsights`
+ * reads the narrative alongside the rest. The per-student recommendations are
+ * the one gap left, and the live screen leaves them absent. These fixtures
+ * back the designed screens only.
  */
 
 /** A run of narrative; `strong` marks the frame's inline emphasis. */

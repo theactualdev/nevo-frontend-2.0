@@ -1,6 +1,21 @@
 import Link from "next/link";
 
 /**
+ * The line under an Assign that cannot go yet: what is left, from the
+ * server's counts, or the one true thing when it cannot be itemised. Shared
+ * with the upload finish screen so the two places Assign waits cannot drift.
+ */
+export function stillToCheck(keyPoints: number, sections: number): string {
+  const plural = (n: number, one: string, many: string) =>
+    `${n} ${n === 1 ? one : many}`;
+  const left = [
+    ...(keyPoints > 0 ? [plural(keyPoints, "key point", "key points")] : []),
+    ...(sections > 0 ? [plural(sections, "section", "sections")] : []),
+  ].join(" and ");
+  return left ? `${left} still to check` : "Still being checked.";
+}
+
+/**
  * Lesson-detail header actions (C06b).
  *
  * "Assign to a class" opens the C07i assignment takeover with this lesson
@@ -60,16 +75,6 @@ export function LessonDetailActions({
 }) {
   const h = compact ? "h-[42px] text-sm" : "h-11 text-[14.5px]";
   const blocked = !ready || checking;
-  const plural = (n: number, one: string, many: string) =>
-    `${n} ${n === 1 ? one : many}`;
-  const left = [
-    ...(outstandingKeyPoints > 0
-      ? [plural(outstandingKeyPoints, "key point", "key points")]
-      : []),
-    ...(outstandingSections > 0
-      ? [plural(outstandingSections, "section", "sections")]
-      : []),
-  ].join(" and ");
 
   return (
     <div className="flex flex-col items-end gap-2">
@@ -105,7 +110,7 @@ export function LessonDetailActions({
           {/* C06b: "2 key points still to check". The "below" this used to
               carry was true on the lesson page and false everywhere else
               this component is drawn. */}
-          {left ? `${left} still to check` : "Still being checked."}
+          {stillToCheck(outstandingKeyPoints, outstandingSections)}
         </span>
       )}
     </div>

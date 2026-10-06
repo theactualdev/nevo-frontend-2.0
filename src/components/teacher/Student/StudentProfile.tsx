@@ -23,8 +23,8 @@ import { ShareSheet } from "./ShareSheet";
 
 /**
  * C08 Student Profile (teacher view) - how this student learns, in plain
- * words. Confidence shows as one-to-three quiet dots, never a percentage,
- * and there is zero clinical language: the page has to hold up if a parent
+ * words. There is no confidence rating of any kind (see below), and there is
+ * zero clinical language: the page has to hold up if a parent
  * or the SENCo reads it.
  *
  * Two states, both designed: the full profile for a student with enough

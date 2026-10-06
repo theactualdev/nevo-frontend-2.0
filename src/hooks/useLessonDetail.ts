@@ -19,9 +19,11 @@ import { useHasSession } from "./useHasSession";
  * `GET /api/content/lessons/{id}` has the segments and their review flags but
  * no modules; `GET /api/v1/lessons/{id}` has the modules but drops the review
  * flags; `GET /api/v1/assignments` has the assignments and cannot be filtered
- * by lesson. Only the first decides whether the page exists. The second is best-effort: a
- * lesson still reads perfectly well without knowing who has it, so a failed
- * assignment call leaves that section absent rather than failing the page.
+ * by lesson. Only the first decides whether the page exists. The others are
+ * best-effort: a lesson still reads perfectly well without knowing who has
+ * it, so a failed assignment call does not fail the page - it raises
+ * `assignmentsFailed`, and the page says it could not find out rather than
+ * drawing a lesson nobody has been given.
  *
  * CLASS PROGRESS needs a class, and a lesson does not name one - so the
  * candidate classes are derived from the lesson's own assignments. A lesson

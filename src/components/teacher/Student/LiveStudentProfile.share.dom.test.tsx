@@ -56,8 +56,11 @@ const STATE: StudentProfileState = {
 const openSheet = () =>
   fireEvent.click(screen.getByRole("button", { name: "Share with Learning Support" }));
 
-const send = () =>
+// C.8c: the form's button opens the confirm step, and "Yes, send" posts.
+const send = () => {
   fireEvent.click(screen.getByRole("button", { name: "Send to Learning Support" }));
+  fireEvent.click(screen.getByRole("button", { name: "Yes, send" }));
+};
 
 const note = (text: string) =>
   fireEvent.change(screen.getByRole("textbox"), { target: { value: text } });

@@ -16,8 +16,9 @@ import { cn } from "@/lib/utils";
  * Renders the step body AND its own C07c foot (Back / note / Reset structure
  * / "Looks right, continue") - the wizard suppresses its generic foot here.
  *
- * TODO(api): segments arrive from the parse; the frame's canonical
- * Photosynthesis six stand in until the content seam lands.
+ * The signed-out walkthrough only, on the frame's canonical Photosynthesis
+ * six. A signed-in teacher reviews what their own upload produced, in
+ * `LiveModuleReview`.
  */
 
 type Segment = { id: number; title: string; mins: string };
