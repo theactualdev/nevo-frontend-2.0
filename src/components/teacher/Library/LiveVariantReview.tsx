@@ -510,6 +510,19 @@ export function LiveVariantReview({
               : `${counts.done} of ${counts.total} sections approved.`}
           </p>
         )}
+        {/* C07b's end state carries its next step: "Lesson approved", then
+            "Assign to classes". Only when the server says it can go - the
+            line above is the reason; this is the way there. */}
+        {counts && counts.done === counts.total && assignable?.ready && (
+          <div className="mt-3 flex justify-end">
+            <Link
+              href={`/teacher/lessons/assign?lesson=${lessonId}`}
+              className="inline-flex h-11 cursor-pointer items-center rounded-[10px] bg-nevo-navy px-5 text-sm font-semibold text-nevo-cream transition-[filter] hover:brightness-93"
+            >
+              Assign to classes
+            </Link>
+          </div>
+        )}
 
         {error && (
           <p className="mt-2.5 text-right text-[13px] leading-[1.5] text-nevo-near-black/72">

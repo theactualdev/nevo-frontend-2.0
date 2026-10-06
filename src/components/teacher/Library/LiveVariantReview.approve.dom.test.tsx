@@ -289,3 +289,45 @@ describe("the last section, while key points are still outstanding", () => {
     expect(review).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * C07b's end state carries its next step: "Assign to classes".
+ */
+describe("the way on from the last approval", () => {
+  const lastOne = () =>
+    approveSegment.mockResolvedValue({
+      lessonId: "l-1",
+      segmentId: "seg-1",
+      approvedAt: "2026-09-17T10:00:00Z",
+      approvedBy: "teacher-1",
+      approvedSegmentCount: 5,
+      segmentCount: 5,
+      lessonApproved: true,
+    });
+
+  beforeEach(() => {
+    review.mockReset();
+  });
+
+  it("offers Assign to classes once the server says it can go", async () => {
+    review.mockResolvedValue({ readyToAssign: true, outstandingCount: 0 });
+    lastOne();
+    show();
+    fireEvent.click(screen.getByRole("button", { name: /approve this section/i }));
+
+    expect(await screen.findByRole("link", { name: "Assign to classes" })).toHaveAttribute(
+      "href",
+      "/teacher/lessons/assign?lesson=l-1",
+    );
+  });
+
+  it("offers nothing while key points are still waiting", async () => {
+    review.mockResolvedValue({ readyToAssign: false, outstandingCount: 2 });
+    lastOne();
+    show();
+    fireEvent.click(screen.getByRole("button", { name: /approve this section/i }));
+
+    await screen.findByText(/2 key points waiting/);
+    expect(screen.queryByRole("link", { name: "Assign to classes" })).not.toBeInTheDocument();
+  });
+});

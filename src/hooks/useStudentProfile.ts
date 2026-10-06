@@ -160,8 +160,18 @@ export function useStudentProfile(studentId: string): StudentProfileState {
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        if (err instanceof ApiError && err.status === 404) setMissing(true);
-        else setFailed(true);
+        /*
+         * NOT A RETRY FOR A STUDENT WHO CANNOT BE SHOWN. The spec answers a
+         * malformed id with 422, and a child outside this teacher's classes
+         * with 403. Both read as "we couldn't load this - try again", a retry
+         * that can never work. Only an answer that might change is a retry.
+         */
+        if (
+          err instanceof ApiError &&
+          (err.status === 404 || err.status === 422 || err.status === 403)
+        ) {
+          setMissing(true);
+        } else setFailed(true);
       });
 
     // Enrichment. Each is allowed to fail on its own - and each now SAYS

@@ -22,15 +22,21 @@ import { adminHomeForScopes } from "@/components/admin/Shell/adminNav";
  *
  * It waits for `resolved`. Redirecting on an empty scope list before the answer
  * arrives would send every admin to the fallback on every cold load.
+ *
+ * A FAILED READ IS NOT "NO SCOPES". The context reports a failed read as
+ * resolved with an empty list, and this used to route that to the scope-less
+ * fallback - Settings - so a proprietor whose permissions GET blipped opened
+ * the console on their password form. The Overview instead: every admin's
+ * home but finance's, and the server answers its reads for any admin.
  */
 export default function AdminRootPage() {
   const router = useRouter();
-  const { scopes, resolved } = usePermissions();
+  const { scopes, resolved, status } = usePermissions();
 
   useEffect(() => {
     if (!resolved) return;
-    router.replace(adminHomeForScopes(scopes));
-  }, [resolved, scopes, router]);
+    router.replace(status === "failed" ? "/admin/dashboard" : adminHomeForScopes(scopes));
+  }, [resolved, status, scopes, router]);
 
   return null;
 }

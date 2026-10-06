@@ -271,3 +271,16 @@ describe("one list that failed while the others landed", () => {
     expect(screen.queryByText(/couldn.t load this just now/)).not.toBeInTheDocument();
   });
 });
+
+describe("a flag card in Worth a look", () => {
+  it("opens the student it is about", () => {
+    useClassInsights.mockReturnValue(
+      state({
+        flags: [{ id: "f-1", studentId: "s-7", name: "Ada Obi", note: "Slower on written work.", isSudden: false }],
+      }),
+    );
+    render(<LiveClassInsights {...CLASS} />);
+
+    expect(screen.getByRole("link", { name: /Ada Obi/ })).toHaveAttribute("href", "/teacher/students/s-7");
+  });
+});

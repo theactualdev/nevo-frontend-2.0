@@ -119,10 +119,14 @@ export function TeacherSsoCallback() {
     return () => pending.forEach(clearTimeout);
   }, [schedule]);
 
-  const retry = () => {
-    setPhase("signing-in");
-    schedule();
-  };
+  /*
+   * "TRY AGAIN" STARTS AGAIN. It re-ran the callback, which either did
+   * nothing - with no code, the only state this screen can reach today, it
+   * fell straight back to the error - or would re-send a single-use OAuth
+   * code the provider has already spent. Trying again means beginning the
+   * sign-in again, from the door.
+   */
+  const retry = () => router.push("/auth/teacher");
 
   return (
     <div className="flex w-full max-w-[440px] flex-col items-center px-10 text-center">
