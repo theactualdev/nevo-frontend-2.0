@@ -171,12 +171,7 @@ export function ClassesList() {
               <span className="text-[19px] font-semibold tracking-[-0.01em] text-nevo-near-black">
                 {a.className}
               </span>
-              {a.classCode && (
-                <span className="mt-[5px] text-[13.5px] text-nevo-near-black/60">
-                  {`Class code ${a.classCode}`}
-                </span>
-              )}
-              <span className="mt-0.5 text-[13.5px] text-nevo-near-black/50">
+              <span className="mt-[5px] text-[13.5px] text-nevo-near-black/60">
                 {headcounts.has(a.classId)
                   ? `${headcounts.get(a.classId)} ${headcounts.get(a.classId) === 1 ? "student" : "students"}`
                   : "Synced from your school"}
@@ -223,15 +218,13 @@ export function ClassesList() {
                 <span className="text-[17px] font-semibold text-nevo-near-black">
                   {a.className}
                 </span>
+                {/* C05 tablet: the count sits on the line under the name. */}
                 <div className="mt-1 text-[13px] text-nevo-near-black/60">
-                  {a.classCode ? `Class code ${a.classCode}` : "Assigned to you"}
+                  {headcounts.has(a.classId)
+                    ? `${headcounts.get(a.classId)} ${headcounts.get(a.classId) === 1 ? "student" : "students"}`
+                    : "Synced from your school"}
                 </div>
               </div>
-              <span className="shrink-0 text-[13.5px] text-nevo-near-black/50">
-                {headcounts.has(a.classId)
-                  ? `${headcounts.get(a.classId)} ${headcounts.get(a.classId) === 1 ? "student" : "students"}`
-                  : "Synced from your school"}
-              </span>
             </Link>
           ))}
         </div>

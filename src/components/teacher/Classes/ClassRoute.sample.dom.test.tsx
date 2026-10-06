@@ -20,9 +20,11 @@ import { clearSession, setSession } from "@/lib/auth/session";
  *
  * A signed-in teacher whose class list failed reached the fixture class
  * detail, and its "Class code" button opened a real, scannable QR of a
- * fixture join code. `ClassCodeRoute` refuses exactly this, because a
- * projected code is the one thing on the console a room of children
- * physically acts on - and a sample mark stops nobody scanning it.
+ * fixture join code. That was refused for the signed-in teacher first.
+ *
+ * Since design's 30 Sep rulings there is no class code anywhere - children
+ * sign in with the school code and their own Student ID - so the walkthrough
+ * no longer offers one either.
  */
 
 const FIXTURE = TEACHER_CLASSES[0];
@@ -57,7 +59,7 @@ describe("the class code on a sample class", () => {
     expect(screen.queryByRole("button", { name: /Class code/ })).not.toBeInTheDocument();
   });
 
-  it("is still offered on the signed-out walkthrough", () => {
+  it("is not offered on the signed-out walkthrough either", () => {
     useTeacherClasses.mockReturnValue({
       classes: TEACHER_CLASSES,
       liveClasses: [],
@@ -68,6 +70,7 @@ describe("the class code on a sample class", () => {
     });
     render(<ClassRoute fixture={FIXTURE} classId={FIXTURE.id} />);
 
-    expect(screen.getByRole("button", { name: /Class code/ })).toBeInTheDocument();
+    expect(screen.getByText(FIXTURE.name)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Class code/ })).not.toBeInTheDocument();
   });
 });

@@ -2,18 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ClassStudent } from "@/lib/api/classes";
 
-const { useClassRoster, useTeacherFlags, push, useClassLessons } = vi.hoisted(() => ({
+const { useClassRoster, useTeacherFlags, useClassLessons } = vi.hoisted(() => ({
   useClassRoster: vi.fn(),
   useTeacherFlags: vi.fn(),
-  push: vi.fn(),
   useClassLessons: vi.fn(),
-}));
-
-// Added when "Show full screen" stopped being a local overlay and became a
-// navigation to /teacher/classes/{id}/code. Without this every test in the file
-// dies on "invariant expected app router to be mounted".
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push, replace: push, prefetch: vi.fn() }),
 }));
 
 vi.mock("@/hooks/useClassRoster", async (importOriginal) => ({
@@ -309,37 +301,29 @@ describe("whether the child can get in", () => {
 });
 
 /**
- * Projecting the class code.
+ * No class code (design, 30 Sep). A child signs in with the school code and
+ * their own Student ID, and their roster row exists before they arrive, so a
+ * class code joins nobody to anything. C12 and C18 were deleted that day.
  *
- * "Show full screen" used to swap local state for an overlay with no URL, so a
- * teacher who closed it had to walk back through class detail and the dialog to
- * get it up again. Design's ruling for the standalone route is that teachers
- * "project it, read it aloud and RETURN TO IT", and the third of those is the
- * one an overlay cannot do.
- *
- * The route renders the same `ClassQrScreen`, so what is projected is unchanged.
+ * `klass` above still carries one, because the server still sends it: these
+ * prove the screen does not show it.
  */
-describe("projecting the class code", () => {
-  it("navigates to the class code route rather than opening an overlay", async () => {
+describe("the class code", () => {
+  it("is not offered, even on a class that has one", () => {
     render(<LiveClassDetail klass={klass} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /Class code/i }));
-    fireEvent.click(await screen.findByRole("button", { name: /Show full screen/i }));
-
-    expect(push).toHaveBeenCalledWith("/teacher/classes/c-1/code");
+    expect(screen.queryByRole("button", { name: /Class code/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/AB12/)).not.toBeInTheDocument();
   });
 
-  it("still opens the dialog from the class header", () => {
-    // The dialog is the in-console view and design kept it; only the
-    // projection moved to a URL.
+  it("is not what an empty roster tells a teacher to share", () => {
+    useClassRoster.mockReturnValue({ students: [], loading: false, failed: false });
     render(<LiveClassDetail klass={klass} />);
 
-    expect(screen.queryByRole("button", { name: /Show full screen/i })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /Class code/i }));
-
-    expect(screen.getByRole("button", { name: /Show full screen/i })).toBeInTheDocument();
-    expect(push).not.toHaveBeenCalled();
+    expect(
+      screen.getByText("Your students will appear here as your school adds them."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/class code/i)).not.toBeInTheDocument();
   });
 });
 

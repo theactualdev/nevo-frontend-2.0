@@ -268,3 +268,34 @@ describe("the sample mark", () => {
     expect(container.querySelector("[data-nevo-sample]")).toBeNull();
   });
 });
+
+/**
+ * Design, 30 Sep: children sign in with the school code and their own Student
+ * ID, so a class code joins nobody to anything. The server still sends one.
+ */
+describe("the class code on a live class card", () => {
+  it("is not shown, on either layout", () => {
+    useTeacherClasses.mockReturnValue(
+      state({
+        classes: [],
+        liveClasses: [
+          {
+            assignmentId: "a-1",
+            classId: "c-1",
+            className: "JSS 2A",
+            classCode: "NEVO-2A",
+            role: "primary",
+            assignedAt: "2026-09-01T09:00:00Z",
+          },
+        ],
+        live: true,
+      }),
+    );
+
+    render(<ClassesList />);
+
+    expect(screen.getAllByText("JSS 2A")).toHaveLength(2);
+    expect(screen.queryByText(/NEVO-2A/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Class code/)).not.toBeInTheDocument();
+  });
+});
