@@ -33,10 +33,18 @@ import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
  *
  * The third level NAMES its rows, also as of 3 Sep. `segments` on the status
  * response carries `{segmentKey, title, estimatedMinutes, needsReview}` and
- * modules point at them by key, so a section can list what is under it. The
- * count remains the fallback: `segments` is optional in the contract, and a
- * segment's `title` is nullable, so anything unnamed stays a count rather
- * than becoming an invented title.
+ * modules point at them by key, so a section can list what is under it. A
+ * segment the parse did not name is NUMBERED, never given an invented title -
+ * the rule `LiveModuleReview` already follows. With no `segments` at all (an
+ * older upload) the section keeps its count and lists nothing.
+ *
+ * AND IT IS STEERED, as C07d asks at every level (6 Oct). A segment moves up
+ * or down within its section, into the section above or below, and "Start a
+ * new section after this segment" splits a section where the teacher says -
+ * all expressible, because `PUT structure` takes `segmentIds` per module.
+ * Buttons rather than drag handles, for the reason the rest of the tree uses
+ * them: HTML5 drag does not fire on a tablet. Segment titles are not
+ * editable: the structure document carries keys, not titles.
  *
  * NOTHING IS COMMITTED THAT THE SERVER HAS NOT SEEN. The commit acts on the
  * stored structure, so committing a draft would add a unit shaped differently
@@ -224,6 +232,69 @@ export function LiveStructureTree({
     edit(next.filter((l) => l.modules.length > 0));
   };
 
+  /** Replace one lesson's sections, through `edit` so it marks dirty. */
+  const withModules = (li: number, mods: StructureLesson["modules"]) =>
+    edit(draft.map((l, i) => (i === li ? { ...l, modules: mods } : l)));
+
+  /** Reorder a segment within its section. */
+  const moveSegment = (li: number, mi: number, pi: number, by: -1 | 1) => {
+    const ids = draft[li].modules[mi].segmentIds;
+    const to = pi + by;
+    if (to < 0 || to >= ids.length) return;
+    const nextIds = [...ids];
+    [nextIds[pi], nextIds[to]] = [nextIds[to], nextIds[pi]];
+    withModules(
+      li,
+      draft[li].modules.map((m, j) => (j === mi ? { ...m, segmentIds: nextIds } : m)),
+    );
+  };
+
+  /**
+   * Move a segment into the section above or below it, in the same lesson:
+   * to the end of the one above, the start of the one below. A section the
+   * move empties is no longer a section.
+   */
+  const moveSegmentAcross = (li: number, mi: number, pi: number, by: -1 | 1) => {
+    const mods = draft[li].modules;
+    const to = mi + by;
+    if (to < 0 || to >= mods.length) return;
+    const key = mods[mi].segmentIds[pi];
+    const next = mods.map((m, j) => {
+      if (j === mi) {
+        return { ...m, segmentIds: m.segmentIds.filter((_, k) => k !== pi) };
+      }
+      if (j === to) {
+        return {
+          ...m,
+          segmentIds: by === -1 ? [...m.segmentIds, key] : [key, ...m.segmentIds],
+        };
+      }
+      return m;
+    });
+    withModules(li, next.filter((m) => m.segmentIds.length > 0));
+  };
+
+  /**
+   * C07d's "Start a new section after this segment": everything after it
+   * moves to a new, untitled section directly below. Offered on every segment
+   * but the last, where it would split off nothing.
+   */
+  const splitSectionAfter = (li: number, mi: number, pi: number) => {
+    const mods = draft[li].modules;
+    const moved = mods[mi].segmentIds.slice(pi + 1);
+    if (moved.length === 0) return;
+    const next = mods.map((m) => ({ ...m, segmentIds: [...m.segmentIds] }));
+    next[mi].segmentIds = next[mi].segmentIds.slice(0, pi + 1);
+    next.splice(mi + 1, 0, {
+      title: "",
+      sequenceOrder: mi + 2,
+      segmentIds: moved,
+      recap: null,
+      preview: null,
+    });
+    withModules(li, next);
+  };
+
   /** Renumber before sending: `sequenceOrder` is the order, not a label. */
   const normalised = (): UploadStructure => {
     const lessons = draft.map((l, i) => ({
@@ -406,12 +477,14 @@ export function LiveStructureTree({
             {lessonOpen && (
             <div className="mt-2.5 flex flex-col gap-2">
               {lesson.modules.map((m, mi) => {
-                // The third level. Only the named ones are listed; a section
-                // whose keys resolve to nothing keeps its count and says
-                // nothing below, so it has nothing to open either.
-                const named = namedSegments(m.segmentIds, segments).filter(
-                  (seg) => seg.title !== null,
-                );
+                // The third level: every segment, named where the parse
+                // named it and numbered where it did not. An older upload
+                // with no segment rows keeps its count and opens nothing.
+                const named = segments ? namedSegments(m.segmentIds, segments) : [];
+                // Numbered across the lesson, as the single path numbers them.
+                const before = lesson.modules
+                  .slice(0, mi)
+                  .reduce((n, x) => n + x.segmentIds.length, 0);
                 const moduleOpen = !closed.has(moduleKey(lesson, li, mi));
                 return (
                 <Fragment key={`${lesson.lessonId ?? "new"}-${li}-${mi}`}>
@@ -471,16 +544,17 @@ export function LiveStructureTree({
                   </button>
                 </div>
                 {moduleOpen && named.length > 0 && (
-                    <ul className="mb-1 ml-9 mt-0.5 list-none space-y-0.5 p-0">
-                      {named.map((seg) => (
+                    <ul className="mb-1 ml-9 mt-0.5 flex list-none flex-col gap-[5px] p-0">
+                      {named.map((seg, pi) => {
+                        const label = seg.title ?? `Segment ${before + pi + 1}`;
+                        return (
                         <li
                           key={seg.key}
-                          className="flex items-center gap-2 text-[12.5px] leading-[1.5] text-nevo-near-black/62"
+                          className="flex items-center gap-2 rounded-lg bg-nevo-cream/55 px-[11px] py-2 text-[13px] leading-[1.45] text-nevo-near-black"
                         >
-                          <span className="size-1 shrink-0 rounded-full bg-nevo-near-black/28" aria-hidden />
-                          <span className="min-w-0 truncate">{seg.title}</span>
+                          <span className="min-w-0 flex-1 truncate">{label}</span>
                           {seg.minutes > 0 && (
-                            <span className="shrink-0 text-nevo-near-black/45">
+                            <span className="shrink-0 text-[11px] text-nevo-near-black/42">
                               {seg.minutes} min
                             </span>
                           )}
@@ -489,8 +563,40 @@ export function LiveStructureTree({
                               needs a look
                             </span>
                           )}
+                          <button type="button" onClick={() => moveSegment(li, mi, pi, -1)} disabled={pi === 0} aria-label={`Move ${label} up`} title="Move up" className={iconBtn}>
+                            <Arrow up />
+                          </button>
+                          <button type="button" onClick={() => moveSegment(li, mi, pi, 1)} disabled={pi === named.length - 1} aria-label={`Move ${label} down`} title="Move down" className={iconBtn}>
+                            <Arrow up={false} />
+                          </button>
+                          <button type="button" onClick={() => moveSegmentAcross(li, mi, pi, -1)} disabled={mi === 0} aria-label={`Move ${label} to the section above`} title="Move to the section above" className={iconBtn}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                              <path d="M9 14l-4-4 4-4M5 10h9a5 5 0 0 1 5 5v4" />
+                            </svg>
+                          </button>
+                          <button type="button" onClick={() => moveSegmentAcross(li, mi, pi, 1)} disabled={mi === lesson.modules.length - 1} aria-label={`Move ${label} to the section below`} title="Move to the section below" className={iconBtn}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                              <path d="M9 10l-4 4 4 4M5 14h9a5 5 0 0 0 5-5V5" />
+                            </svg>
+                          </button>
+                          {/* C07d's own control and title. Not on the last
+                              segment, where it would split off nothing. */}
+                          {pi < named.length - 1 && (
+                            <button
+                              type="button"
+                              onClick={() => splitSectionAfter(li, mi, pi)}
+                              aria-label={`Start a new section after ${label}`}
+                              title="Start a new section after this segment"
+                              className="inline-flex size-[26px] shrink-0 cursor-pointer items-center justify-center rounded-[7px] border-[1.5px] border-nevo-navy/30 text-nevo-navy transition-colors hover:bg-nevo-navy/6"
+                            >
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                                <path d="M8 3v18M3 8h10M3 16h10M21 8l-3 4 3 4" />
+                              </svg>
+                            </button>
+                          )}
                         </li>
-                      ))}
+                        );
+                      })}
                     </ul>
                 )}
                 </Fragment>
