@@ -26,17 +26,35 @@ import { adminHomeForScopes } from "@/components/admin/Shell/adminNav";
  * A FAILED READ IS NOT "NO SCOPES". The context reports a failed read as
  * resolved with an empty list, and this used to route that to the scope-less
  * fallback - Settings - so a proprietor whose permissions GET blipped opened
- * the console on their password form. The Overview instead: every admin's
- * home but finance's, and the server answers its reads for any admin.
+ * the console on their password form. It does not guess a home either: the
+ * Overview would widen an IT admin's view, which the 6 Oct ruling forbids. It
+ * says it could not check, and offers to check again.
  */
 export default function AdminRootPage() {
   const router = useRouter();
-  const { scopes, resolved, status } = usePermissions();
+  const { scopes, resolved, status, refresh } = usePermissions();
 
   useEffect(() => {
-    if (!resolved) return;
-    router.replace(status === "failed" ? "/admin/dashboard" : adminHomeForScopes(scopes));
+    if (!resolved || status === "failed") return;
+    router.replace(adminHomeForScopes(scopes));
   }, [resolved, status, scopes, router]);
 
-  return null;
+  if (status !== "failed") return null;
+  return (
+    <div className="mx-auto w-full max-w-[680px] px-[38px] py-[34px]">
+      <div className="rounded-xl bg-nevo-cream-elevated px-[26px] py-7 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+        <p className="m-0 text-[14.5px] leading-[1.55] text-nevo-near-black/72">
+          We couldn&rsquo;t check which parts of the console you can see, so
+          we haven&rsquo;t opened any of it yet.
+        </p>
+        <button
+          type="button"
+          onClick={refresh}
+          className="mt-3.5 cursor-pointer text-[13.5px] font-semibold text-nevo-navy hover:underline"
+        >
+          Try again
+        </button>
+      </div>
+    </div>
+  );
 }

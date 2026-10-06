@@ -125,6 +125,23 @@ export function LessonLibrary() {
         l.meta.toLowerCase().includes(q)),
   );
   const hasQuery = q.length > 0;
+  /*
+   * C06's result line, which the frame draws on every view - not only under a
+   * search. Filtered, it says how many and by what; unfiltered, how many are
+   * in the library. Not when the read came back capped: the first 200 is not
+   * the library, and the line under the heading already says so.
+   */
+  const filtered = hasQuery || filter !== "All";
+  const plural = (n: number) => `${n} ${n === 1 ? "lesson" : "lessons"}`;
+  const resultLine = filtered
+    ? `${plural(shown.length)}${filter !== "All" ? ` in ${filter}` : ""}${hasQuery ? ` matching “${query.trim()}”` : ""}`
+    : capped
+      ? null
+      : `${plural(lessons.length)} in your library`;
+  /** C06's no-match card names what found nothing. */
+  const noMatchWhat = hasQuery
+    ? `“${query.trim()}”${filter !== "All" ? ` in ${filter}` : ""}`
+    : filter;
 
   if (loading) {
     return (
@@ -254,10 +271,12 @@ export function LessonLibrary() {
               type="button"
               onClick={() => setFilter(label)}
               className={cn(
-                "cursor-pointer rounded-full px-[15px] py-2 text-[13.5px] font-medium transition-[transform,background-color] active:scale-[0.99]",
+                "cursor-pointer rounded-full border px-[13px] py-[7px] text-[12.5px] transition-[transform,background-color] active:scale-[0.99] xl:px-[15px] xl:py-2 xl:text-[13.5px]",
+                // C06: "violet-tinted (not a solid violet fill - violet stays
+                // an accent)". It was a solid navy pill.
                 filter === label
-                  ? "bg-nevo-navy text-nevo-cream"
-                  : "border border-nevo-near-black/8 bg-nevo-cream-elevated text-nevo-near-black/72",
+                  ? "border-nevo-violet/55 bg-nevo-violet/28 font-semibold text-nevo-navy"
+                  : "border-nevo-near-black/8 bg-nevo-cream-elevated font-medium text-nevo-near-black/72",
               )}
             >
               {label}
@@ -266,10 +285,10 @@ export function LessonLibrary() {
         </div>
       )}
 
-      {hasQuery && shown.length > 0 && (
-        <p className="mt-[18px] text-sm text-nevo-near-black/60">
-          {`${shown.length} ${shown.length === 1 ? "lesson" : "lessons"} matching “${query.trim()}”`}
-        </p>
+      {/* Not over the signed-in fallback: a count of sample lessons would be
+          a claim about this teacher's library. */}
+      {resultLine && !sample && (
+        <p className="mt-[18px] text-sm text-nevo-near-black/60">{resultLine}</p>
       )}
 
       {shown.length > 0 ? (
@@ -404,31 +423,9 @@ export function LessonLibrary() {
           </MaybeSample>
         </div>
       ) : (
-        // No lessons match the search/filter
-        <div className="mt-10 flex flex-col items-center p-6 text-center">
-          <div className="flex size-[72px] items-center justify-center rounded-[18px] bg-nevo-cream-elevated text-nevo-violet shadow-elevation-1">
-            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <circle cx="11" cy="11" r="7" />
-              <path d="M21 21l-4-4" />
-            </svg>
-          </div>
-          <h3 className="mt-[18px] text-lg font-semibold text-nevo-near-black">
-            No lessons match that
-          </h3>
-          <p className="mt-1.5 max-w-[340px] text-[14.5px] leading-[1.5] text-nevo-near-black/62">
-            Try a different word or clear the search. You can always upload a
-            new lesson.
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              setQuery("");
-              setFilter("All");
-            }}
-            className="mt-[18px] cursor-pointer text-[14.5px] font-medium text-nevo-navy"
-          >
-            Clear search
-          </button>
+        // C06's own no-match card, naming what found nothing.
+        <div className="mt-4 max-w-[520px] rounded-[12px] bg-nevo-cream-elevated p-7 text-[15px] leading-[1.55] text-nevo-near-black/68 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+          {`No lessons match ${noMatchWhat}. Try another subject or clear the search.`}
         </div>
       )}
     </div>

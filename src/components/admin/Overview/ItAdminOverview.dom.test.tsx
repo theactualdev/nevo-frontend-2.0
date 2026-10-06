@@ -5,8 +5,8 @@ import { ApiError } from "@/lib/api/client";
 import { OverviewView } from "./OverviewView";
 
 /**
- * The Overview for an admin without General Oversight - an IT admin, since the
- * 6 Oct ruling sends them here.
+ * The Overview for an admin without General Oversight, who can still reach it
+ * by a link (a finance admin, say - nobody without oversight lands here).
  *
  * Built to what the server allows: the headcounts and the board summary are
  * served to any admin, the compliance audit and the adaptation log are not. So
@@ -14,7 +14,7 @@ import { OverviewView } from "./OverviewView";
  * links to a screen this admin's rail leaves out.
  */
 
-let scopes: string[] = ["it_sso"];
+let scopes: string[] = ["billing"];
 vi.mock("@/context/PermissionContext", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/context/PermissionContext")>();
   const { createContext } = await import("react");
@@ -93,7 +93,7 @@ vi.mock("@/lib/api/intelligence", () => ({
 }));
 
 beforeEach(() => {
-  scopes = ["it_sso"];
+  scopes = ["billing"];
   audit.mockRejectedValue(new ApiError(403, "forbidden"));
   adaptationLog.mockRejectedValue(new ApiError(403, "forbidden"));
 });
