@@ -106,7 +106,7 @@ export function ParseProgress({
               <div
                 key={s.stage}
                 className={cn(
-                  "flex items-center gap-[13px] rounded-xl px-[15px] py-[11px]",
+                  "flex items-center gap-[13px] rounded-[12px] px-[15px] py-[11px]",
                   active && "bg-nevo-violet/20",
                   done && "bg-nevo-navy/7",
                 )}
@@ -159,7 +159,7 @@ export function ParseProgress({
           })}
         </div>
 
-        <div className="mt-6 flex w-full items-center gap-2.5 rounded-xl bg-nevo-violet/14 px-4 py-3">
+        <div className="mt-6 flex w-full items-center gap-2.5 rounded-[12px] bg-nevo-violet/14 px-4 py-3">
           <span className="shrink-0 text-nevo-navy">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />

@@ -126,7 +126,7 @@ export function ParseFallback({
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-[22px] xl:px-8 xl:py-7">
         {kind === "noBoundary" && (
           <div className="max-w-[600px]">
-            <div className="flex items-start gap-3 rounded-xl bg-nevo-violet/14 px-[17px] py-[15px]">
+            <div className="flex items-start gap-3 rounded-[12px] bg-nevo-violet/14 px-[17px] py-[15px]">
               <span className="mt-px shrink-0 text-nevo-navy">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                   <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z" />
@@ -164,7 +164,7 @@ export function ParseFallback({
             <div className="mt-[18px] font-mono text-[10.5px] tracking-[0.12em] text-nevo-near-black/42">
               FLOWS STRAIGHT INTO THE SECTION PARSE (SCRUM-101)
             </div>
-            <div className="mt-2.5 rounded-xl bg-nevo-cream-elevated px-[18px] py-4 shadow-[0_2px_10px_rgba(0,0,0,0.05)]">
+            <div className="mt-2.5 rounded-[12px] bg-nevo-cream-elevated px-[18px] py-4 shadow-[0_2px_10px_rgba(0,0,0,0.05)]">
               <div className="flex items-center gap-[11px]">
                 <span className="shrink-0 font-mono text-[10px] font-bold tracking-[0.1em] text-nevo-violet">
                   LESSON 1
@@ -200,7 +200,7 @@ export function ParseFallback({
 
         {kind === "partial" && (
           <div className="max-w-[600px]">
-            <div className="flex items-start gap-3 rounded-xl bg-nevo-violet/14 px-[17px] py-[15px]">
+            <div className="flex items-start gap-3 rounded-[12px] bg-nevo-violet/14 px-[17px] py-[15px]">
               <span className="mt-px shrink-0 text-nevo-navy">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                   <path d="M6 3h9l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
@@ -429,7 +429,10 @@ export function ParseFallback({
                   We can read:
                 </div>
                 <div className="mt-1.5 text-[13px] leading-[1.6] text-nevo-near-black/72">
-                  PDF, Word (.docx), and clear photos or scans (JPG, PNG). For
+                  {/* What the picker actually takes. This listed JPG and
+                      PNG, which the picker refuses, and left out
+                      PowerPoint, which it accepts. */}
+                  PDF, Word (.doc, .docx) and PowerPoint (.ppt, .pptx). For
                   scans, brighter and straighter pages read best.
                 </div>
               </div>

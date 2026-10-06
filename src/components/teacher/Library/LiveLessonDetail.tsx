@@ -701,7 +701,7 @@ export function LiveLessonDetail({
         {classes.length > 0 && (
           <>
             <h3 className={cn(SECTION_H, "mt-8")}>Where this lesson went</h3>
-            <ul className="mt-3 flex list-none flex-col gap-0 overflow-hidden rounded-xl bg-nevo-cream-elevated p-0 shadow-elevation-1">
+            <ul className="mt-3 flex list-none flex-col gap-0 overflow-hidden rounded-[12px] bg-nevo-cream-elevated p-0 shadow-elevation-1">
               {classes.map((c, i) => (
                 <li
                   key={c.id}

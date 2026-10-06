@@ -92,7 +92,7 @@ export function NotificationsPanel({
       <div
         role="dialog"
         aria-label="Notifications"
-        className="fixed bottom-20 left-[88px] z-50 w-[360px] overflow-hidden rounded-xl bg-nevo-cream shadow-[0_8px_32px_rgba(0,0,0,0.16)] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 motion-safe:duration-150 xl:bottom-24 xl:left-[200px] xl:w-[380px]"
+        className="fixed bottom-20 left-[88px] z-50 w-[360px] overflow-hidden rounded-[12px] bg-nevo-cream shadow-[0_8px_32px_rgba(0,0,0,0.16)] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 motion-safe:duration-150 xl:bottom-24 xl:left-[200px] xl:w-[380px]"
       >
         <div
           className={cn(
@@ -125,7 +125,7 @@ export function NotificationsPanel({
           </div>
         ) : empty && failed ? (
           <div className="flex flex-col items-center px-6 py-11 text-center">
-            <div className="flex size-14 items-center justify-center rounded-xl bg-nevo-cream-elevated text-nevo-violet">
+            <div className="flex size-14 items-center justify-center rounded-[12px] bg-nevo-cream-elevated text-nevo-violet">
               <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 <path d="M7 18a4 4 0 0 1-.5-7.97A5.5 5.5 0 0 1 17.5 9.5 4 4 0 0 1 17 18" />
                 <path d="M10 20.5l4-4M14 20.5l-4-4" />
@@ -151,7 +151,7 @@ export function NotificationsPanel({
           </div>
         ) : empty ? (
           <div className="flex flex-col items-center px-6 py-11 text-center">
-            <div className="flex size-14 items-center justify-center rounded-xl bg-nevo-cream-elevated text-nevo-violet">
+            <div className="flex size-14 items-center justify-center rounded-[12px] bg-nevo-cream-elevated text-nevo-violet">
               <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
                 <path d="M13.7 21a2 2 0 0 1-3.4 0" />

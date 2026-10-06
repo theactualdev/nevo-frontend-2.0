@@ -188,7 +188,7 @@ export function InsightsView() {
         {data && (
         <SampleRegion kind="teacher:insights">
         {(data.sparse ? (
-          <div className="mt-8 flex max-w-[640px] items-start gap-4 rounded-xl bg-nevo-cream-elevated p-7 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+          <div className="mt-8 flex max-w-[640px] items-start gap-4 rounded-[12px] bg-nevo-cream-elevated p-7 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
             <span className="mt-px size-[22px] shrink-0 text-nevo-violet xl:size-6">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="size-full">
                 <circle cx="12" cy="12" r="9" />
@@ -210,7 +210,7 @@ export function InsightsView() {
         ) : (
           <>
             {/* ---- This week ---- */}
-            <div className="mt-[18px] rounded-xl bg-nevo-cream-elevated px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-[22px] xl:px-[26px] xl:py-6">
+            <div className="mt-[18px] rounded-[12px] bg-nevo-cream-elevated px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-[22px] xl:px-[26px] xl:py-6">
               <div className="flex items-center gap-[9px]">
                 {/* The lightbulb is desktop-only in the frame. */}
                 <span className="hidden text-nevo-navy xl:inline-flex">
@@ -241,7 +241,7 @@ export function InsightsView() {
 
             {/* ---- Misconception callout ---- */}
             {data.misconception && (
-              <div className="mt-3.5 flex items-start gap-[11px] rounded-xl border border-nevo-violet/20 bg-nevo-violet/8 px-4 py-3.5 xl:mt-4 xl:gap-3 xl:px-[18px] xl:py-4">
+              <div className="mt-3.5 flex items-start gap-[11px] rounded-[12px] border border-nevo-violet/20 bg-nevo-violet/8 px-4 py-3.5 xl:mt-4 xl:gap-3 xl:px-[18px] xl:py-4">
                 <span className="mt-px size-[17px] shrink-0 text-nevo-violet xl:size-[18px]">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="size-full">
                     <circle cx="12" cy="12" r="9" />
@@ -280,7 +280,7 @@ export function InsightsView() {
                     <Link
                       key={f.name}
                       href={f.href}
-                      className="relative flex cursor-pointer gap-3.5 rounded-xl bg-nevo-cream-elevated py-4 pr-[18px] pl-[22px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-[filter,transform] hover:brightness-[0.985] active:scale-[0.99] xl:gap-4 xl:py-5 xl:pr-[22px] xl:pl-[26px]"
+                      className="relative flex cursor-pointer gap-3.5 rounded-[12px] bg-nevo-cream-elevated py-4 pr-[18px] pl-[22px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-[filter,transform] hover:brightness-[0.985] active:scale-[0.99] xl:gap-4 xl:py-5 xl:pr-[22px] xl:pl-[26px]"
                     >
                       <span
                         className={cn(
@@ -331,7 +331,7 @@ export function InsightsView() {
                     two pull apart, it&apos;s usually the text, not the maths.
                   </span>
                 </p>
-                <div className="mt-3.5 flex flex-col gap-5 rounded-xl bg-nevo-cream-elevated px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-4 xl:gap-[22px] xl:px-[26px] xl:py-6">
+                <div className="mt-3.5 flex flex-col gap-5 rounded-[12px] bg-nevo-cream-elevated px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-4 xl:gap-[22px] xl:px-[26px] xl:py-6">
                   {data.concepts.map((c) => (
                     <div key={c.name}>
                       <MasteryDualTrack
@@ -360,7 +360,7 @@ export function InsightsView() {
                     <Link
                       key={r.name}
                       href={r.href}
-                      className="flex cursor-pointer flex-col rounded-xl bg-nevo-cream-elevated px-[18px] py-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-[filter,transform] hover:brightness-[0.985] active:scale-[0.99] xl:px-[22px] xl:py-5"
+                      className="flex cursor-pointer flex-col rounded-[12px] bg-nevo-cream-elevated px-[18px] py-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-[filter,transform] hover:brightness-[0.985] active:scale-[0.99] xl:px-[22px] xl:py-5"
                     >
                       <span className="text-[14.5px] font-semibold text-nevo-navy xl:text-[15px]">
                         {r.name}
@@ -381,7 +381,7 @@ export function InsightsView() {
             {data.lookingAhead && (
               <>
                 <h3 className={SECTION_H3}>Looking ahead</h3>
-                <div className="mt-3.5 rounded-xl border-l-[3px] border-nevo-violet bg-nevo-cream-elevated px-5 py-[18px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-4 xl:max-w-[660px] xl:px-6 xl:py-[22px]">
+                <div className="mt-3.5 rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-cream-elevated px-5 py-[18px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-4 xl:max-w-[660px] xl:px-6 xl:py-[22px]">
                   <p className="text-[14.5px] leading-[1.6] text-nevo-near-black/82 xl:text-[15.5px]">
                     <span className="xl:hidden">{data.lookingAhead.tablet}</span>
                     <span className="hidden xl:inline">

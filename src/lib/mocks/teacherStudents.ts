@@ -144,6 +144,8 @@ export interface StudentProfileData {
    */
   /** The sanctioned patterns, straight off the enum. Never local prose. */
   observations: ObservationPattern[];
+  /** The count C08 draws as a chip, where the copy file allows one. */
+  observationCounts?: Partial<Record<ObservationPattern, number>>;
   concepts: ConceptMastery[];
   evidence: EvidenceItem[];
   sessions: SessionRow[];
@@ -165,10 +167,13 @@ const AMARA: Omit<StudentProfileData, "classId" | "className"> = {
   chip: "Worth a glance",
   recommend: {
     suggestDesktop:
-      "Since Amara's been slower on written work lately, the listen-first version of \"Simplifying Expressions\" would play to how this week has gone.",
-    suggestStrong: 'listen-first version of "Simplifying Expressions"',
+      // C08c, as corrected on 17 Sep: a next step, not a modality that
+      // "would play to" how the week went. The frame's "for her" becomes the
+      // child's name - nothing stores a pronoun (frontend section 6).
+      "Since Amara's been slower on written work lately, \"Simplifying Expressions\" is a good next step for Amara.",
+    suggestStrong: '"Simplifying Expressions"',
     suggestTablet:
-      "Since Amara's been slower on written work, the listen-first version of \"Simplifying Expressions\" fits how this week has gone.",
+      "Since Amara's been slower on written work, \"Simplifying Expressions\" is a good next step for Amara.",
     options: [
       {
         id: "simplifying-expressions-listen-first",
@@ -212,7 +217,14 @@ const AMARA: Omit<StudentProfileData, "classId" | "className"> = {
   // `tried_another_format` is the line design named as the replacement for the
   // modality claim. It says a child has worked in more than one way and names
   // no format, which is the whole point.
-  observations: ["tried_another_format", "steadier_pace", "completed_lessons"],
+  // C08's four, in its order, with its count on finished lessons.
+  observations: [
+    "completed_lessons",
+    "tried_another_format",
+    "steadier_pace",
+    "revisited_content",
+  ],
+  observationCounts: { completed_lessons: 12 },
   // None of these four trip the component's auto-flag thresholds, so no flag
   // pill renders on this data - that is the frame's intent, not a gap.
   concepts: [
@@ -244,9 +256,11 @@ const AMARA: Omit<StudentProfileData, "classId" | "className"> = {
       sitting: "finished in two sittings",
       summary: {
         desktop:
-          "Amara spent longer on the written practice and stepped away once, then came back the next morning and finished. The listen-first explanation seemed to help.",
+          // C08d: what the child did, never that a format "seemed to help".
+          // The frame's pronouns become the name, as above.
+          "Amara took time over the written practice and stepped away once, then came back the next morning and finished comfortably. Amara switched to the listen-first explanation partway through.",
         tablet:
-          "Spent longer on the written practice, stepped away once, came back the next morning and finished. Listen-first seemed to help.",
+          "Took time over the written practice, stepped away once, came back the next morning and finished. Switched to listen-first partway through.",
       },
       steps: [
         { title: "What an equation is", note: "Straight through - this was familiar ground.", took: false },
@@ -254,7 +268,7 @@ const AMARA: Omit<StudentProfileData, "classId" | "className"> = {
         { title: "Solving for x", note: "Comfortable here.", took: false },
         {
           title: "Equations with x on both sides",
-          note: "Spent longer here. This is where Amara paused and came back the next day.",
+          note: "Took time here - this is where Amara paused and came back the next day.",
           took: true,
         },
         { title: "Word problems", note: "Switched to listen-first and it went more smoothly.", took: false },

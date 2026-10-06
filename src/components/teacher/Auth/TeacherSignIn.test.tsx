@@ -184,6 +184,16 @@ describe("what a failed sign-in says", () => {
     expect(screen.queryByText(/email and password/i)).not.toBeInTheDocument();
     expect(await screen.findByText(/Nothing on your end/i)).toBeInTheDocument();
   });
+
+  it("names Nevo, not the school's sign-in, as what could not be reached", async () => {
+    // This door is Nevo's own password login; the school's sign-in was never
+    // involved in the request that failed.
+    fail(500);
+    submit();
+
+    expect(await screen.findByText(/couldn.t reach Nevo/)).toBeInTheDocument();
+    expect(screen.queryByText(/school.s sign-in/)).not.toBeInTheDocument();
+  });
 });
 
 /**

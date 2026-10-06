@@ -457,7 +457,7 @@ export function AskNevo() {
                         key={chip}
                         type="button"
                         onClick={() => ask(chip)}
-                        className="flex cursor-pointer items-center gap-2.5 rounded-xl border-[1.5px] border-nevo-violet/60 bg-nevo-violet/6 px-[15px] py-3 text-left text-[14px] leading-[1.35] text-nevo-navy transition-[transform,background-color] duration-[120ms] hover:bg-nevo-violet/14 active:scale-[0.98]"
+                        className="flex cursor-pointer items-center gap-2.5 rounded-[12px] border-[1.5px] border-nevo-violet/60 bg-nevo-violet/6 px-[15px] py-3 text-left text-[14px] leading-[1.35] text-nevo-navy transition-[transform,background-color] duration-[120ms] hover:bg-nevo-violet/14 active:scale-[0.98]"
                       >
                         <span className="shrink-0 text-nevo-navy/55">→</span>
                         {chip}
@@ -672,7 +672,7 @@ function HistoryList({
         {[0, 1, 2, 3].map((i) => (
           <div
             key={i}
-            className="h-[62px] animate-pulse rounded-xl bg-nevo-cream-elevated"
+            className="h-[62px] animate-pulse rounded-[12px] bg-nevo-cream-elevated"
           />
         ))}
       </div>
@@ -696,7 +696,7 @@ function HistoryList({
           <button
             type="button"
             onClick={() => onOpen(t)}
-            className="block w-full cursor-pointer rounded-xl bg-nevo-cream-elevated px-4 py-3.5 text-left transition-transform duration-[120ms] active:scale-[0.99]"
+            className="block w-full cursor-pointer rounded-[12px] bg-nevo-cream-elevated px-4 py-3.5 text-left transition-transform duration-[120ms] active:scale-[0.99]"
           >
             {/* One line, ellipsised - the frame's rows never wrap. */}
             <span className="block truncate text-[14px] leading-[1.4] text-nevo-near-black">

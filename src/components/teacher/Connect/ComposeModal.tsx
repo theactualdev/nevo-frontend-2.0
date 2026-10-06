@@ -200,7 +200,7 @@ export function ComposeModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-nevo-near-black/28 p-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-nevo-near-black/28 backdrop-blur-[1.5px] p-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
       onClick={() => phase === "form" && onClose()}
     >
       <div
@@ -208,7 +208,7 @@ export function ComposeModal({
         aria-modal="true"
         aria-label="New message"
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-[480px] rounded-2xl bg-nevo-cream p-7 shadow-[0_8px_32px_rgba(0,0,0,0.16)] motion-safe:animate-in motion-safe:zoom-in-95 motion-safe:duration-200 xl:max-w-[520px] xl:p-[30px]"
+        className="w-full max-w-[480px] rounded-[16px] bg-nevo-cream p-7 shadow-[0_8px_32px_rgba(0,0,0,0.16)] motion-safe:animate-in motion-safe:zoom-in-95 motion-safe:duration-200 xl:max-w-[520px] xl:p-[30px]"
       >
         {phase === "sending" && (
           <div className="flex flex-col items-center py-10 text-center">

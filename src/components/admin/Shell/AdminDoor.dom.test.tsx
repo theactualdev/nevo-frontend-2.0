@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import AdminRootPage from "@/app/admin/page";
 
 /**
@@ -13,27 +13,32 @@ import AdminRootPage from "@/app/admin/page";
 const replace = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace }) }));
 
-let perms = { scopes: [] as string[], resolved: true, status: "ready" };
+const refresh = vi.fn();
+let perms = { scopes: [] as string[], resolved: true, status: "ready", refresh };
 vi.mock("@/hooks/usePermissions", () => ({ usePermissions: () => perms }));
 
 beforeEach(() => replace.mockReset());
 
 describe("the admin door", () => {
-  it("opens an IT admin on the Overview (6 Oct ruling)", async () => {
-    perms = { scopes: ["it_sso"], resolved: true, status: "ready" };
+  it("opens an IT admin on their Systems overview - IT stays narrow (6 Oct)", async () => {
+    perms = { scopes: ["it_sso"], resolved: true, status: "ready", refresh };
     render(<AdminRootPage />);
-    await waitFor(() => expect(replace).toHaveBeenCalledWith("/admin/dashboard"));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/admin/sso/home"));
   });
 
-  it("opens on the Overview when the permissions read failed, not on Settings", async () => {
-    perms = { scopes: [], resolved: true, status: "failed" };
+  it("opens nothing when the permissions read failed, and offers to check again", async () => {
+    // Not Settings (a proprietor's password form), and not the Overview (wider
+    // than an IT admin may see): it cannot know which, so it says so.
+    perms = { scopes: [], resolved: true, status: "failed", refresh };
     render(<AdminRootPage />);
-    await waitFor(() => expect(replace).toHaveBeenCalledWith("/admin/dashboard"));
-    expect(replace).not.toHaveBeenCalledWith("/admin/settings");
+    expect(screen.getByText(/couldn.t check which parts of the console you can see/)).toBeInTheDocument();
+    expect(replace).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(refresh).toHaveBeenCalled();
   });
 
   it("waits while permissions have not answered", () => {
-    perms = { scopes: [], resolved: false, status: "loading" };
+    perms = { scopes: [], resolved: false, status: "loading", refresh };
     render(<AdminRootPage />);
     expect(replace).not.toHaveBeenCalled();
   });
