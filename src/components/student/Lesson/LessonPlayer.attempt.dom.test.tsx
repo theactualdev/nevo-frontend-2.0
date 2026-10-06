@@ -128,6 +128,29 @@ describe("answering a question", () => {
     });
   });
 
+  it("carries the child's pick and the lesson it came from (B27)", () => {
+    const LESSON_ID = "6f2c1d8e-4b3a-4c5d-9e8f-7a6b5c4d3e2f";
+    const lesson = {
+      ...lessonWith({
+        ...QUESTION,
+        options: [
+          { id: "a", label: "Chloroplasts", value: "chloroplasts" },
+          { id: "b", label: "Roots", value: "roots" },
+        ],
+      }),
+      id: LESSON_ID,
+    } as Lesson;
+    render(<LessonPlayer lesson={lesson} plan={PLAN} live />);
+    reachAssessment();
+
+    answer("Roots");
+
+    // The option's own value, not our id for it.
+    expect(attempt).toHaveBeenCalledWith(
+      expect.objectContaining({ answer: "roots", lessonId: LESSON_ID }),
+    );
+  });
+
   it("reports a wrong answer as wrong", () => {
     render(<LessonPlayer lesson={lessonWith(QUESTION)} plan={PLAN} live />);
     reachAssessment();

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, ClipboardCheck } from "lucide-react";
 import { Button } from "@/components/shared";
+import type { CheckOutcome } from "@/lib/lessons/checkOutcome";
 import type { Assessment } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import {
@@ -39,6 +40,10 @@ const DEFAULT_RECOVERY =
  * records is the player's business: not completed, never failed, with the
  * answers already given kept. The result screen needs none; Continue is its
  * way on.
+ *
+ * AND BACK IN WHERE THEY LEFT (B49). `onLeave` is told the place in the list
+ * - the next question to ask - and `resumeAt` reopens there, past the intro,
+ * which a child who has already started does not need again.
  */
 export function AfterLessonAssessment({
   assessment,
@@ -46,13 +51,43 @@ export function AfterLessonAssessment({
   onAnswer,
   onReviewAnswers,
   onLeave,
+  onComplete,
+  resumeAt,
+  landedBefore = 0,
+  landedPending = false,
+  outcome,
   reading = false,
   onAudioBusy,
 }: {
   assessment: Assessment;
   onFinish: () => void;
-  /** Leave the check part way (D36). Absent, no exit is drawn. */
-  onLeave?: () => void;
+  /**
+   * Leave the check part way (D36). Absent, no exit is drawn. Given the next
+   * question to ask once the questions have begun; nothing from the intro,
+   * where the check has not started.
+   */
+  onLeave?: (checkPosition?: number) => void;
+  /** Every question has been answered: fires once, as the result appears. */
+  onComplete?: () => void;
+  /**
+   * Reopen a check left part way (B49) on this question - or on the result,
+   * when it equals the question count. Read once, when the check opens.
+   */
+  resumeAt?: number;
+  /**
+   * How many of the questions answered before a resume landed, as the server
+   * marked them. Null while that is not known, and then the result claims
+   * nothing about it. Zero for a check that was not resumed.
+   */
+  landedBefore?: number | null;
+  /** Those answers are still being read back. */
+  landedPending?: boolean;
+  /**
+   * The server's outcome of the check-in (B26), once the completion write has
+   * brought it back. Absent, the result draws only what the lesson itself
+   * carries - nothing, for a live lesson (rule 5).
+   */
+  outcome?: CheckOutcome | null;
   /** The reading accommodation is on - see `readingSupport` (D30). */
   reading?: boolean;
   /** `system_busy` bracket while a spoken question plays (B16). */
@@ -68,8 +103,18 @@ export function AfterLessonAssessment({
   /** "Review answers" on the result → the Review Answers screen (A5). */
   onReviewAnswers?: () => void;
 }) {
-  const [stage, setStage] = useState<"intro" | "questions" | "result">("intro");
-  const [qIndex, setQIndex] = useState(0);
+  const [stage, setStage] = useState<"intro" | "questions" | "result">(() =>
+    resumeAt === undefined
+      ? "intro"
+      : resumeAt >= assessment.questions.length
+        ? "result"
+        : "questions",
+  );
+  const [qIndex, setQIndex] = useState(() =>
+    resumeAt !== undefined && resumeAt < assessment.questions.length
+      ? resumeAt
+      : 0,
+  );
   const [selected, setSelected] = useState<string | null>(null);
   // A wrong confirm flips the question into its recovery state (violet, locked).
   const [revealed, setRevealed] = useState(false);
@@ -94,7 +139,7 @@ export function AfterLessonAssessment({
       <Intro
         count={assessment.questions.length}
         onStart={() => setStage("questions")}
-        onLeave={onLeave}
+        onLeave={onLeave ? () => onLeave() : undefined}
         reading={reading}
       />
     );
@@ -102,7 +147,18 @@ export function AfterLessonAssessment({
   if (stage === "result") {
     return (
       <GrowthResult
-        landed={gotRight}
+        // Right answers from before a resume count too. Unknown before it,
+        // a right answer since still means something landed.
+        landed={
+          landedBefore === null
+            ? gotRight > 0
+              ? gotRight
+              : null
+            : gotRight + landedBefore
+        }
+        // Which heading is true waits on them, unless one landed since.
+        held={landedPending && gotRight === 0}
+        outcome={outcome ?? undefined}
         assessment={assessment}
         onFinish={onFinish}
         onReviewAnswers={onReviewAnswers}
@@ -118,8 +174,10 @@ export function AfterLessonAssessment({
   const advance = () => {
     setSelected(null);
     setRevealed(false);
-    if (isLast) setStage("result");
-    else setQIndex((i) => i + 1);
+    if (isLast) {
+      setStage("result");
+      onComplete?.();
+    } else setQIndex((i) => i + 1);
   };
 
   const confirm = () => {
@@ -146,10 +204,14 @@ export function AfterLessonAssessment({
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-nevo-cream text-nevo-near-black">
-      {/* D36: the player's exit, where the player draws it. */}
+      {/* D36: the player's exit, where the player draws it. An answer
+          already confirmed is behind the child, so the place to come back
+          to is the question after it. */}
       {onLeave && (
         <div className="flex shrink-0 px-3.5 pt-2.5">
-          <LeaveButton onLeave={onLeave} />
+          <LeaveButton
+            onLeave={() => onLeave(revealed ? qIndex + 1 : qIndex)}
+          />
         </div>
       )}
       {/* Calm progress — position, never a score */}
@@ -339,9 +401,11 @@ function Intro({
  *
  * TODO(design): the nothing-landed heading is ours, built from the frame's own
  * "we'll come back to together". Confirm the wording.
- * TODO(api): questions carry no concept id, so nothing maps an answer to the
- * concept it evidences. Until they do, "which concept landed" cannot be
- * answered and this can only tell all from none.
+ *
+ * WHICH CONCEPT LANDED IS THE SERVER'S ANSWER NOW (B26). It marks the stored
+ * answers and sends the two lists and the note; they are drawn as sent, and
+ * the move above applies only to the authored walkthrough's own lists. A
+ * concept the server counts as landed is not ours to move.
  *
  * The nothing-landed note no longer says "Nevo will bring it back when you're
  * ready for it". It is D40's promise in other words - a return the scheduler
@@ -350,13 +414,23 @@ function Intro({
  */
 function GrowthResult({
   landed,
+  held,
+  outcome,
   assessment,
   onFinish,
   onReviewAnswers,
   reading,
 }: {
-  /** How many questions landed first time. */
-  landed: number;
+  /** How many questions landed first time. Null when that is not known. */
+  landed: number | null;
+  /**
+   * Whether anything landed is still being read back. The mark and heading
+   * keep their place unseen until it is, rather than one heading being
+   * swapped for the other in front of the child.
+   */
+  held: boolean;
+  /** The server's outcome (B26); absent, the lesson's own lists. */
+  outcome?: CheckOutcome;
   assessment: Assessment;
   onFinish: () => void;
   onReviewAnswers?: () => void;
@@ -371,48 +445,61 @@ function GrowthResult({
     reading && [READING_BODY, READING_INK],
   );
   const nothingLanded = landed === 0 && assessment.questions.length > 0;
-  const mastered = nothingLanded ? [] : (assessment.masteredConcepts ?? []);
-  const revisit = nothingLanded
-    ? [
-        ...(assessment.masteredConcepts ?? []),
-        ...(assessment.revisitConcepts ?? []),
-      ]
+  /*
+   * B26: THE SERVER'S LISTS WHERE IT SENT THEM. A live lesson carries none of
+   * its own, so before the completion write answers - or when it fails - the
+   * section is simply not drawn. The authored walkthrough keeps its own.
+   */
+  const masteredIn = outcome
+    ? outcome.mastered
+    : (assessment.masteredConcepts ?? []);
+  const revisitIn = outcome
+    ? outcome.revisit
     : (assessment.revisitConcepts ?? []);
+  const resultNote = outcome ? outcome.note : assessment.resultNote;
+  const moved = nothingLanded && !outcome;
+  const mastered = moved ? [] : masteredIn;
+  const revisit = moved ? [...masteredIn, ...revisitIn] : revisitIn;
 
   return (
     <div className="flex min-h-[100dvh] flex-col justify-center bg-nevo-cream px-6 text-nevo-near-black">
       <div className="mx-auto w-full max-w-[300px] sm:max-w-[430px]">
-        {/* Success mark: navy circle + cream check, one-shot pop (DS state pattern) */}
-        {nothingLanded ? (
-          // The frame's own revisit mark, not the success check.
-          <span className="mx-auto flex size-20 items-center justify-center rounded-full bg-nevo-violet/35 motion-safe:animate-nevo-pop">
-            <span className="size-[18px] rounded-full bg-nevo-violet" />
-          </span>
-        ) : (
-          <span className="mx-auto flex size-20 items-center justify-center rounded-full bg-nevo-navy motion-safe:animate-nevo-pop">
-            <Check className="size-[38px] text-nevo-cream" strokeWidth={2.6} />
-          </span>
-        )}
-        <h2
-          className={cn(
-            "mt-[26px] text-center text-[23px] font-semibold tracking-[-0.01em] sm:text-[26px]",
-            reading && READING_HEADING,
-          )}
+        <div
+          aria-hidden={held || undefined}
+          className={cn(held && "invisible")}
         >
-          {nothingLanded
-            ? "We’ll come back to this together"
-            : "You’re getting the hang of this"}
-        </h2>
-        {/* The authored note says what the child SHOWED, so it is held back
-            when they showed none of it. */}
-        {nothingLanded && (
-          <p className={note}>
-            This one didn&rsquo;t land yet, and that&rsquo;s completely fine.
-          </p>
-        )}
-        {!nothingLanded && assessment.resultNote && (
-          <p className={note}>{assessment.resultNote}</p>
-        )}
+          {/* Success mark: navy circle + cream check, one-shot pop (DS state pattern) */}
+          {nothingLanded ? (
+            // The frame's own revisit mark, not the success check.
+            <span className="mx-auto flex size-20 items-center justify-center rounded-full bg-nevo-violet/35 motion-safe:animate-nevo-pop">
+              <span className="size-[18px] rounded-full bg-nevo-violet" />
+            </span>
+          ) : (
+            <span className="mx-auto flex size-20 items-center justify-center rounded-full bg-nevo-navy motion-safe:animate-nevo-pop">
+              <Check className="size-[38px] text-nevo-cream" strokeWidth={2.6} />
+            </span>
+          )}
+          <h2
+            className={cn(
+              "mt-[26px] text-center text-[23px] font-semibold tracking-[-0.01em] sm:text-[26px]",
+              reading && READING_HEADING,
+            )}
+          >
+            {nothingLanded
+              ? "We’ll come back to this together"
+              : "You’re getting the hang of this"}
+          </h2>
+          {/* The authored note says what the child SHOWED, so it is held back
+              when they showed none of it. */}
+          {nothingLanded && (
+            <p className={note}>
+              This one didn&rsquo;t land yet, and that&rsquo;s completely fine.
+            </p>
+          )}
+          {!nothingLanded && resultNote && (
+            <p className={note}>{resultNote}</p>
+          )}
+        </div>
 
         <div className="mt-6 flex flex-col gap-2.5">
           {mastered.map((item) => (

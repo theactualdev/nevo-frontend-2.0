@@ -1,9 +1,12 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check } from "lucide-react";
 import { Button } from "@/components/shared";
+import type { CheckOutcome } from "@/lib/lessons/checkOutcome";
 import type { Lesson } from "@/lib/types";
+import { loadCheckOutcome } from "./reviewStore";
 
 const LESSONS_HREF = "/student/lessons";
 
@@ -15,12 +18,24 @@ const LESSONS_HREF = "/student/lessons";
  *
  * Growth framing, never numbers: a warm recap paragraph and a "what you covered"
  * card — no score, no percentile.
+ *
+ * "FROM THE CHECK-IN" IS THE SERVER'S (B26): the outcome the completion write
+ * brought back, kept by the player for this route. A lesson finished on
+ * another visit, or whose completion never answered, has none here, and the
+ * section is not drawn. The signed-out walkthrough keeps its authored lists.
  */
 export function LessonSummaryScreen({ lesson }: { lesson: Lesson }) {
   const router = useRouter();
   const summary = lesson.summary;
-  const mastered = lesson.assessment?.masteredConcepts ?? [];
-  const revisit = lesson.assessment?.revisitConcepts ?? [];
+  // Kept in sessionStorage (client-only) - read after mount.
+  const [outcome, setOutcome] = useState<CheckOutcome | null>(null);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setOutcome(loadCheckOutcome(lesson.id));
+  }, [lesson.id]);
+  const mastered =
+    outcome?.mastered ?? lesson.assessment?.masteredConcepts ?? [];
+  const revisit = outcome?.revisit ?? lesson.assessment?.revisitConcepts ?? [];
 
   return (
     <div className="flex min-h-full flex-col bg-nevo-cream text-nevo-near-black">
