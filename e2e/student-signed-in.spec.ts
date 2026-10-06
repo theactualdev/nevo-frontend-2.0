@@ -13,11 +13,17 @@ import { expect, test, type Page } from "@playwright/test";
  * ## Where the credential comes from, and why it is not a secret
  *
  * A child signs in with school code + login identifier + PIN. There is no safe
- * way to keep a child's PIN in a secret store: it is four to eight digits, it is
- * reset by an adult, and it is the one credential a child is told out loud. So
- * this suite MINTS one: it signs in as the E2E admin, calls
- * `POST /api/v1/students/{id}/pin/reset` for the probe student, and uses the
- * PIN that comes back. Confirmed against the live tenant on 24 Sep.
+ * way to keep a child's PIN in a secret store, so this suite MAKES one, the way
+ * the product now does it (SCRUM-216, 6 Oct): the E2E admin CLEARS the probe
+ * student's PIN (`POST /api/v1/students/{id}/pin/clear`), and the suite then
+ * plays the child, choosing a fresh four digits through the door that opens
+ * only while a PIN is cleared (`POST /api/v1/student-entry/pin`, school code
+ * and the child's own Student ID). Nobody hands a PIN back any more - the old
+ * `pin/reset` that did is gone.
+ *
+ * That door takes the Student ID / Admission Number, which neither student
+ * read returns, so the probe is named twice: `E2E_STUDENT_LOGIN` finds the
+ * record to clear, and `E2E_STUDENT_ADMISSION` is what the child types.
  *
  * **Running it CHANGES that student's PIN**, which is why the student is named
  * explicitly rather than defaulted: the write is opt-in. Point it at a probe
@@ -25,20 +31,18 @@ import { expect, test, type Page } from "@playwright/test";
  *
  * ## Why the PIN is minted ONCE
  *
- * Each reset changes the PIN, and each `POST /auth/login/pin` issues a session
+ * Each clear changes the PIN, and each `POST /auth/login/pin` issues a session
  * that REPLACES the last one (`replacedSession`). Minting per test would churn
  * both and invite the rate limit that `too_many_attempts` exists for. So one
- * reset and one sign-in in `beforeAll`; every test plants that same session;
+ * clear, one choice and one sign-in in `beforeAll`; every test plants that same session;
  * and the one test that drives the real sign-in form runs LAST, because the
  * session it creates replaces the planted one.
  *
  * ## The coupling this catches
  *
- * An administrator's reset issued a SIX-digit PIN until 1 Oct, and now issues
- * four (`pinLength: 4`); six-digit PINs are still accepted for legacy
- * accounts. The sign-in form therefore takes four to eight. The form test
- * below types whatever the reset returned, so a form capped below a PIN the
- * server still accepts fails here.
+ * Every PIN chosen now is four digits; six-digit PINs are still accepted at
+ * sign-in for legacy accounts. The form test below types the PIN this suite
+ * chose, so a form that cannot take a four-digit PIN fails here.
  *
  * ## The school code is read, never written down
  *
@@ -53,6 +57,7 @@ import { expect, test, type Page } from "@playwright/test";
 const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL;
 const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD;
 const STUDENT_LOGIN = process.env.E2E_STUDENT_LOGIN;
+const STUDENT_ADMISSION = process.env.E2E_STUDENT_ADMISSION;
 const API = process.env.E2E_API_BASE ?? "https://nevo-backend-2-0-kn3d.onrender.com";
 
 /** Mirrors `lib/auth/session.ts`. Changing either without the other breaks this. */
@@ -61,8 +66,8 @@ const ROLE_COOKIE = "nevo.role";
 const SAMPLE_ATTR = "data-nevo-sample";
 
 test.skip(
-  !ADMIN_EMAIL || !ADMIN_PASSWORD || !STUDENT_LOGIN,
-  "Set E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD and E2E_STUDENT_LOGIN to run the student suite. It resets that student's PIN.",
+  !ADMIN_EMAIL || !ADMIN_PASSWORD || !STUDENT_LOGIN || !STUDENT_ADMISSION,
+  "Set E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD, E2E_STUDENT_LOGIN and E2E_STUDENT_ADMISSION to run the student suite. It clears and re-chooses that student's PIN.",
 );
 
 /** How long a live read may take before we call it broken. See the teacher suite. */
@@ -144,13 +149,23 @@ test.describe("a signed-in student", () => {
       `No student with login ${STUDENT_LOGIN} in the E2E tenant.`,
     ).toBeTruthy();
 
-    const reset = await api.post(
-      `${API}/api/v1/students/${student!.id}/pin/reset`,
+    const cleared = await api.post(
+      `${API}/api/v1/students/${student!.id}/pin/clear`,
       { headers: auth },
     );
-    expect(reset.ok(), `The PIN reset was refused (${reset.status()}).`).toBeTruthy();
-    pin = String((await reset.json()).pin);
-    expect(pin, "The reset returned no PIN.").toMatch(/^\d+$/);
+    expect(cleared.ok(), `The PIN clear was refused (${cleared.status()}).`).toBeTruthy();
+
+    // The child's half: four digits of their own, through the door a clear opens.
+    pin = String(1000 + Math.floor(Math.random() * 9000));
+    const chosen = await api.post(`${API}/api/v1/student-entry/pin`, {
+      data: { schoolCode, admissionNumber: STUDENT_ADMISSION, pin },
+    });
+    expect(
+      chosen.ok(),
+      chosen.status() === 404
+        ? `No student with Student ID ${STUDENT_ADMISSION} at the E2E school - check E2E_STUDENT_ADMISSION.`
+        : `Choosing a PIN after the clear was refused (${chosen.status()}).`,
+    ).toBeTruthy();
 
     const login = await api.post(`${API}/api/v1/auth/login/pin`, {
       data: { schoolCode, loginIdentifier: STUDENT_LOGIN, pin },
@@ -159,7 +174,7 @@ test.describe("a signed-in student", () => {
       login.ok(),
       login.status() === 429
         ? "The PIN sign-in was rate limited (429 too_many_attempts)."
-        : `The minted PIN did not sign the student in (${login.status()}): the PIN, the login or the school code is wrong.`,
+        : `The chosen PIN did not sign the student in (${login.status()}): the PIN, the login or the school code is wrong.`,
     ).toBeTruthy();
     const body = await login.json();
     expect(body.role, "The E2E probe account must be a student").toBe("student");

@@ -1,9 +1,15 @@
 "use client";
 
+import { useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useHydrated } from "@/hooks/useHydrated";
+import {
+  reportClientError,
+  surfaceForPath,
+  type ClientErrorSurface,
+} from "@/lib/api/clientErrors";
 import { getSession } from "@/lib/auth/session";
 import { doorForRole } from "@/lib/auth/consoleDoor";
 import { Button } from "./Button";
@@ -103,13 +109,23 @@ export function NotFoundScreen() {
  * The generic error. `retry` is Next 16's `unstable_retry`, which re-fetches
  * the segment and renders it again; `reset` only re-rendered, so a fault in a
  * server read came straight back.
+ *
+ * "WE'RE ON IT" IS NOW TRUE. Given the boundary's `error`, the screen reports
+ * it (B36) - once, in the background, and a report that fails changes nothing
+ * on screen. See `lib/api/clientErrors` for what is sent, and what never is.
  */
 export function ErrorScreen({
   retry,
+  error,
+  surface,
   mark = true,
   className,
 }: {
   retry: () => void;
+  /** What the boundary caught. Reported, never rendered. */
+  error?: unknown;
+  /** Whose console. Read from the path when the boundary cannot know. */
+  surface?: ClientErrorSurface;
   /**
    * The frame's wordmark. Off inside the student shell, whose sidebar and top
    * bar already carry it - the logo reference: "logo in the sidebar only".
@@ -119,6 +135,10 @@ export function ErrorScreen({
 }) {
   const home = useHome();
   const goBack = useGoBack(home);
+  useEffect(() => {
+    if (error === undefined) return;
+    reportClientError(error, surface ?? surfaceForPath(window.location.pathname));
+  }, [error, surface]);
   return (
     <div
       className={

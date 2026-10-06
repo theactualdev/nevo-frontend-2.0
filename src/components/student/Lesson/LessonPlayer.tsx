@@ -45,6 +45,8 @@ import {
   secondaryDim,
   HintOverlay,
   SocraticPanel,
+  type GuidedAnswerOutcome,
+  type GuidedReply,
   type PanelPrompt,
 } from "./AffectiveLayer";
 import { AfterLessonAssessment } from "./AfterLessonAssessment";
@@ -942,7 +944,8 @@ export function LessonPlayer({
    * A REPLY TO A GUIDED PROMPT (B19) goes to its own route, which puts it on
    * the signal stream as `guided_question_answered` itself - so it is not
    * also emitted here, or the engine would read one reply as two. Never the
-   * child's words: the option they picked, or that they left it.
+   * child's words: the option they picked, how much they wrote, or that they
+   * left it (6 Oct, frame 38).
    *
    * Live lessons and a signed-in child only; a demo's prompt ids mean nothing
    * to the engine. Fire and forget, like the scaffold attempt: a reply that
@@ -951,8 +954,8 @@ export function LessonPlayer({
    */
   const answerGuided = (
     promptId: string,
-    outcome: "moved_on" | "abandoned",
-    option?: string,
+    outcome: GuidedAnswerOutcome | "abandoned",
+    reply?: GuidedReply,
   ) => {
     const studentId = getSession()?.userId;
     if (!live || !studentId) return;
@@ -961,7 +964,7 @@ export function LessonPlayer({
         studentId,
         sessionId: progress.sessionId ?? null,
         promptId,
-        ...(option !== undefined ? { option } : {}),
+        ...reply,
         outcome,
       })
       .catch(() => {});
@@ -1803,8 +1806,8 @@ export function LessonPlayer({
                       promptId,
                     });
                 }}
-                onAnswer={(promptId, option) =>
-                  answerGuided(promptId, "moved_on", option)
+                onAnswer={(promptId, reply, outcome) =>
+                  answerGuided(promptId, outcome, reply)
                 }
                 onAbandon={(promptId) => answerGuided(promptId, "abandoned")}
               />
