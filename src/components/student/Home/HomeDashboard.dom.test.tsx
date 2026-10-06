@@ -123,6 +123,31 @@ describe("HomeDashboard sample marking", () => {
     ).toBe("student:home");
   });
 
+  it("shows no note in the walkthrough while its lessons are part-way", async () => {
+    /*
+     * Design D98, 6 Oct: Home draws no note while work is outstanding. The
+     * walkthrough is what a real child's Home looks like, so its three
+     * part-way lessons leave the note out, as a real child's would.
+     */
+    dashboard.useStudentDashboard.mockReturnValue({
+      data: null,
+      failed: false,
+      loading: false,
+    });
+
+    const { container } = render(<HomeDashboard />);
+
+    await waitFor(() =>
+      expect(container.querySelector(`[${SAMPLE_ATTR}]`)).not.toBeNull(),
+    );
+    expect(
+      screen.getByRole("region", { name: /Pick up where you left off/ }),
+    ).toBeInTheDocument();
+    const text = document.body.textContent ?? "";
+    expect(text).not.toMatch(/showing up this week/);
+    expect(text).not.toMatch(/caught up/);
+  });
+
   it("shows a signed-in child nothing rather than sample data while the read is in flight", async () => {
     signIn();
     dashboard.useStudentDashboard.mockReturnValue({
@@ -898,8 +923,8 @@ describe("what Home says when there is nothing, or nothing left", () => {
   it("says nothing about the child's week while work is outstanding", async () => {
     /*
      * The frame's line for this state ("You've been showing up this week")
-     * is a claim nothing verifies, and the one that replaced it was in no
-     * frame at all. Absence until design rules.
+     * was a claim nothing verifies, and the one that replaced it was in no
+     * frame at all. Design ruled for absence (D98, 6 Oct).
      */
     signIn();
     live(
