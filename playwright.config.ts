@@ -36,10 +36,10 @@ export default defineConfig({
    * Signed out, the specs are read-only navigations and parallel is safe. The
    * signed-in suites are not, and `mode: "serial"` inside a file cannot help
    * across files: the admin suite and the student suite both sign in as the
-   * SAME admin (the student suite does it to mint a PIN), and every sign-in
-   * replaces that account's previous session. Two workers let one file's login
-   * kill the other's session mid-walk, and the console bounces to "you signed
-   * in on another device" - which reads exactly like a product bug.
+   * SAME admin (the student suite does it to clear the probe's PIN), and every
+   * sign-in replaces that account's previous session. Two workers let one
+   * file's login kill the other's session mid-walk, and the console bounces to
+   * "you signed in on another device" - which reads exactly like a product bug.
    *
    * `undefined` restores Playwright's default for a signed-out run.
    */
