@@ -30,14 +30,8 @@ import { expect, test, type Page } from "@playwright/test";
 
 const SAMPLE_ATTR = "data-nevo-sample";
 
-/**
- * Long enough for a sleeping backend to wake. The two link tests are the
- * only ones that wait on it; everything else is static.
- */
-const BACKEND_MS = 60_000;
-
 /** A token in the shape of one, that no link was ever issued with. */
-const DEAD_TOKEN = "e2e-no-such-link-0000000000000000";
+const OLD_TOKEN = "e2e-no-such-link-0000000000000000";
 
 async function noSampleMarks(page: Page, where: string) {
   await expect(
@@ -92,27 +86,15 @@ test.describe("the student doors, signed out", () => {
   });
 
   /*
-   * Each onboarding step by its address, as a child arrives at one after a
-   * reload or a back button: with nothing in this tab's draft.
-   *
-   * The class step is the one with a lie available to it. With no school
-   * verified it knows nothing about anyone's classes, and it used to draw a
-   * demo list of fourteen anyway; it must say so instead, and offer the class
-   * code that needs no roster.
+   * The entry screen by each of its addresses, as a child arrives at one after
+   * a reload or a back button: with nothing in this tab's draft. Since
+   * SCRUM-208 (30 Sep) both doors on the Welcome reach the same screen, framed
+   * for a code from the school or one read out by a teacher; the name, class,
+   * class-code and QR steps are gone.
    */
   const STEPS: { path: string; heading: string; never?: string }[] = [
-    { path: "/student/onboarding/name", heading: "What should we call you?" },
-    { path: "/student/onboarding/school", heading: "Do you have a code from your school?" },
-    {
-      path: "/student/onboarding/class",
-      heading: "Let's find your class",
-      never: "Which class are you in?",
-    },
-    { path: "/student/onboarding/teacher-join?mode=code", heading: "Enter your class code" },
-    {
-      path: "/student/onboarding/teacher-join?mode=scan",
-      heading: "Point your camera at the QR code",
-    },
+    { path: "/student/onboarding/school", heading: "Find your school" },
+    { path: "/student/onboarding/teacher-join", heading: "Join your school" },
   ];
 
   for (const step of STEPS) {
@@ -130,33 +112,20 @@ test.describe("the student doors, signed out", () => {
   }
 
   /*
-   * The two links a child is sent: an entry link (`/student/entry/{token}`)
-   * and a join link (`/student/onboarding?token=`). A link that resolves to
-   * nothing has to say so in design's words (24 Sep) - "not working any more",
-   * which closes the door, then what to do - and must not offer the way into
-   * onboarding as though the link had worked.
-   *
-   * Only a real backend can answer "no such link". These are public reads.
+   * A join link still in someone's messages (`/student/onboarding?token=`).
+   * Children are no longer sent links (D5, SCRUM-208) and the Welcome no longer
+   * reads the token, so an old one must land on the Welcome with both ways in,
+   * never on a dead end. The entry link's route is gone with it.
    */
-  for (const link of [
-    { name: "an entry link", path: `/student/entry/${DEAD_TOKEN}` },
-    { name: "a join link", path: `/student/onboarding?token=${DEAD_TOKEN}` },
-  ]) {
-    test(`${link.name} that resolves to nothing tells the child so`, async ({
-      page,
-    }) => {
-      test.setTimeout(BACKEND_MS + 30_000);
-      await page.goto(link.path);
+  test("an old join link opens the Welcome", async ({ page }) => {
+    await page.goto(`/student/onboarding?token=${OLD_TOKEN}`);
 
-      await expect(page.getByText("This link is not working any more.")).toBeVisible({
-        timeout: BACKEND_MS,
-      });
-      await expect(page.getByText("Ask your teacher to send you a new one.")).toBeVisible();
-      await expect(page.getByRole("button", { name: "I have a school code" })).toHaveCount(0);
-
-      await noSampleMarks(page, `A dead ${link.name.replace(/^an? /, "")}`);
-    });
-  }
+    await expect(page.getByRole("button", { name: "I have a school code" })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "I'm joining through my teacher" }),
+    ).toBeVisible();
+    await noSampleMarks(page, "The Welcome from an old link");
+  });
 
   test("Forgot PIN explains, and offers the way back to sign in", async ({ page }) => {
     await page.goto("/auth/forgot-pin");

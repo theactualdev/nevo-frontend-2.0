@@ -908,22 +908,23 @@ test.describe("a signed-in student", () => {
     expectNoWrites(writes, "The waiting screen");
   });
 
-  test("a lesson that does not exist says so in the lesson's own words, not the app's 404", async ({
+  test("a lesson that does not exist says so in frame 28's words, not the app's 404", async ({
     page,
   }) => {
     /*
      * Only a real backend can say "no such lesson". The route is a thin shell
      * - the server cannot read the token - so the document is a 200 and the
      * answer arrives from the live read. A 404 there must reach the child as
-     * the lesson's own message, with the way back to their lessons, never as
-     * the app's "This page doesn't exist", which is written for a developer.
+     * frame 28's "We couldn't open that lesson." (D90, 6 Oct), with the one
+     * way back to their lessons, never as the app's "This page doesn't
+     * exist", which is written for a developer.
      */
     const writes = recordWrites(page);
     await plantSession(page);
     const response = await page.goto(`/student/lessons/${MISSING_LESSON}`);
     expect(response?.status(), "The lesson route answered the document itself with an error.").toBe(200);
 
-    const missing = page.getByRole("heading", { name: /We couldn.t find that lesson/ });
+    const missing = page.getByRole("heading", { name: /We couldn.t open that lesson/ });
     const failed = page.getByRole("heading", { name: /Something went wrong/ });
     await expect(missing.or(failed).first()).toBeVisible({ timeout: LIVE_MS });
     await expect(
@@ -935,7 +936,7 @@ test.describe("a signed-in student", () => {
     await expectNoSampleMarks(page, "A missing lesson");
     expectNoWrites(writes, "A missing lesson");
 
-    await page.getByRole("button", { name: "Back to my lessons" }).click();
+    await page.getByRole("button", { name: "Back to lessons" }).click();
     await expect(page).toHaveURL(/\/student\/lessons$/);
   });
 
