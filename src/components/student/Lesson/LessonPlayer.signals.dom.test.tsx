@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
 import type { AdaptationPlan, Lesson } from "@/lib/types";
+import catalogue from "@/lib/api/signals.catalogue.json";
 
 /**
  * What the player tells the engine, and what it no longer decides for it.
@@ -142,7 +143,7 @@ describe("breaks are the engine's to offer", () => {
       vi.advanceTimersByTime(25 * 60_000);
     });
 
-    expect(screen.queryByText("Let's take a short break")).toBeNull();
+    expect(screen.queryByText("Want a break?")).toBeNull();
     expect(sent("break_suggested")).toEqual([]);
   });
 
@@ -151,15 +152,82 @@ describe("breaks are the engine's to offer", () => {
     render(<LessonPlayer lesson={THREE} plan={null} live />);
     beat();
 
-    expect(screen.getByText("Let's take a short break")).toBeInTheDocument();
-    expect(sent("break_suggested")).toEqual([
-      { segmentId: "seg-1", breakType: "movement" },
-    ]);
+    expect(screen.getByText("Want a break?")).toBeInTheDocument();
+    expect(sent("break_suggested")).toEqual([{ trigger: "engine_offer" }]);
 
-    fireEvent.click(screen.getByRole("button", { name: "Yes, take a break" }));
-    expect(sent("break_taken")).toEqual([
-      { segmentId: "seg-1", breakType: "movement" },
+    fireEvent.click(screen.getByRole("button", { name: "Take a break" }));
+    expect(sent("break_taken")).toEqual([{ trigger: "engine_offer" }]);
+    // The break it led to says who asked, start and end.
+    expect(sent("break_start")).toEqual([{ trigger: "engine_offer" }]);
+    now = 42_000;
+    fireEvent.click(screen.getByRole("button", { name: "I'm done" }));
+    expect(sent("break_end")).toEqual([
+      { trigger: "engine_offer", durationMs: 42_000 },
     ]);
+  });
+
+  it("says when the child turns it down, which used to leave no trace", () => {
+    runtime.value = { ...runtime.value, offeredBreak: "movement", forSegmentId: "seg-1" };
+    render(<LessonPlayer lesson={THREE} plan={null} live />);
+    beat();
+
+    fireEvent.click(screen.getByRole("button", { name: "Not now" }));
+
+    expect(sent("break_declined")).toEqual([{ trigger: "engine_offer" }]);
+    expect(sent("break_taken")).toEqual([]);
+    expect(screen.queryByText("Want a break?")).toBeNull();
+  });
+
+  it("says nothing was answered when the child moves on past it", () => {
+    runtime.value = { ...runtime.value, offeredBreak: "movement", forSegmentId: "seg-1" };
+    render(<LessonPlayer lesson={THREE} plan={null} live />);
+    beat();
+
+    next();
+
+    // No answer is not "Not now" - that is the line the type exists to draw.
+    expect(sent("break_declined")).toEqual([]);
+  });
+
+  it("names the plan's offer as the plan's, not the engine's", () => {
+    const plan: AdaptationPlan = {
+      lessonId: "l-1",
+      segments: [
+        { segmentId: "seg-1", startModality: "text", offerBreak: "movement" },
+      ],
+    };
+    render(<LessonPlayer lesson={THREE} plan={plan} />);
+    beat();
+
+    expect(sent("break_suggested")).toEqual([{ trigger: "affect_offer" }]);
+    fireEvent.click(screen.getByRole("button", { name: "Not now" }));
+    expect(sent("break_declined")).toEqual([{ trigger: "affect_offer" }]);
+  });
+
+  it("asks at the foot of the lesson, Not now before Take a break", () => {
+    runtime.value = { ...runtime.value, offeredBreak: "movement", forSegmentId: "seg-1" };
+    render(<LessonPlayer lesson={THREE} plan={null} live />);
+    beat();
+
+    const ask = screen.getByText("Want a break?");
+    const notNow = screen.getByRole("button", { name: "Not now" });
+    const take = screen.getByRole("button", { name: "Take a break" });
+    const after = (a: Node, b: Node) =>
+      Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+    // Below the lesson's content, above the chevrons - not under the top bar.
+    expect(after(screen.getByText("Body of seg-1."), ask)).toBe(true);
+    expect(after(take, screen.getByRole("button", { name: "Next" }))).toBe(true);
+    expect(after(notNow, take)).toBe(true);
+    // Design dropped every line but the question (frame 38, 6 Oct).
+    for (const gone of [
+      /short break/i,
+      /tricky/i,
+      /something different/i,
+      /progress is saved/i,
+    ]) {
+      expect(screen.queryByText(gone)).toBeNull();
+    }
   });
 
   it("still offers the engine's next break after one was turned down", () => {
@@ -174,7 +242,7 @@ describe("breaks are the engine's to offer", () => {
     beat();
 
     // It used to be spent for the rest of the lesson after one offer.
-    expect(screen.getByText("Let's take a short break")).toBeInTheDocument();
+    expect(screen.getByText("Want a break?")).toBeInTheDocument();
   });
 
   it("does not carry an answer about the last segment onto this one", () => {
@@ -182,7 +250,58 @@ describe("breaks are the engine's to offer", () => {
     render(<LessonPlayer lesson={THREE} plan={null} live />);
     beat();
 
-    expect(screen.queryByText("Let's take a short break")).toBeNull();
+    expect(screen.queryByText("Want a break?")).toBeNull();
+  });
+});
+
+describe("every break event, against the catalogue", () => {
+  /*
+   * THE CATALOGUE'S KEYS AND NO OTHERS (B37). `break_suggested` and
+   * `break_taken` carried `{ segmentId, breakType }` where the catalogue
+   * declares `{ trigger }`, `break_start` added the type and the segment, and
+   * `break_end` had no `trigger` at all. This walks every break event a
+   * lesson can send - offered, turned down, taken, started, ended - and holds
+   * each to exactly what `GET /api/signals/catalogue` says it carries.
+   */
+  const declared = new Map(
+    (catalogue as { eventType: string; payload: string[] }[]).map((e) => [
+      e.eventType,
+      e.payload,
+    ]),
+  );
+
+  it("sends exactly the declared keys, each of them", () => {
+    runtime.value = { ...runtime.value, offeredBreak: "movement", forSegmentId: "seg-1" };
+    const { rerender } = render(<LessonPlayer lesson={THREE} plan={null} live />);
+    beat();
+    fireEvent.click(screen.getByRole("button", { name: "Not now" }));
+    next();
+    runtime.value = { ...runtime.value, offeredBreak: "movement", forSegmentId: "seg-2" };
+    rerender(<LessonPlayer lesson={THREE} plan={null} live />);
+    beat();
+    fireEvent.click(screen.getByRole("button", { name: "Take a break" }));
+    fireEvent.click(screen.getByRole("button", { name: "I'm done" }));
+
+    const breakEvents = trackEvent.mock.calls.filter(([t]) =>
+      String(t).startsWith("break_"),
+    );
+    expect(breakEvents.map(([t]) => t)).toEqual([
+      "break_suggested",
+      "break_declined",
+      "break_suggested",
+      "break_taken",
+      "break_start",
+      "break_end",
+    ]);
+    for (const [type, payload] of breakEvents) {
+      // `[key]` in the catalogue is an optional key.
+      const keys = declared.get(type) ?? [];
+      const required = keys.filter((k) => !k.startsWith("["));
+      const allowed = keys.map((k) => k.replace(/^\[|\]$/g, ""));
+      const sentKeys = Object.keys(payload as object);
+      expect(sentKeys.filter((k) => !allowed.includes(k)), type).toEqual([]);
+      expect(required.filter((k) => !sentKeys.includes(k)), type).toEqual([]);
+    }
   });
 });
 

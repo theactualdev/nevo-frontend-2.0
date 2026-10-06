@@ -1060,6 +1060,11 @@ export function LessonPlayer({
       ? engineBreak
       : null;
   const showBreakOffer = breakOffered !== null;
+  // Who asked, as every offer event and the break it leads to say it: the
+  // catalogue's one key. NOT RENAMED, deliberately - these are wire values in
+  // the set backend closed (with `adaptation_plan` and `module_boundary`), so
+  // they are not ours to tidy.
+  const offerTrigger = showOfferedBreak ? "affect_offer" : "engine_offer";
 
   /*
    * THE ENGINE'S SUGGESTION IS ONE OFFER PER ANSWER. It is lesson-level (see
@@ -1208,22 +1213,23 @@ export function LessonPlayer({
   const acceptBreakOffer = () => {
     if (!breakOffered) return;
     setSpentBreakOffers((prev) => new Set(prev).add(segment.id));
-    trackEvent(SIGNAL_EVENT_TYPES.BREAK_TAKEN, {
-      segmentId: segment.id,
-      breakType: breakOffered,
-    });
-    // NOT RENAMED, deliberately. This string is sent to the engine as the
-    // `trigger` on a BREAK_START signal, so it is wire vocabulary and not
-    // ours to tidy. Raised with backend instead - see BUILD_STATUS.
-    breakTrigger.current = showOfferedBreak ? "affect_offer" : "engine_offer";
+    trackEvent(SIGNAL_EVENT_TYPES.BREAK_TAKEN, { trigger: offerTrigger });
+    breakTrigger.current = offerTrigger;
     breakOrigin.current = "offer";
     // The type is whoever asked's: nothing here picks one.
     setBreakActive(breakOffered);
   };
 
-  // No event: the contract has no type for a declined break. Asked for.
+  /*
+   * "NOT NOW" IS AN ANSWER, and the catalogue has a type for it now. Without
+   * `break_declined` the engine could not tell a child who turned the offer
+   * down from one who never answered it, and may offer again a minute later.
+   * Moving on with the pill still up stays no answer at all.
+   */
   const dismissBreakOffer = () => {
+    if (!breakOffered) return;
     setSpentBreakOffers((prev) => new Set(prev).add(segment.id));
+    trackEvent(SIGNAL_EVENT_TYPES.BREAK_DECLINED, { trigger: offerTrigger });
   };
 
   /** Next chevron — an unpassed Quick Check intercepts the advance. */
@@ -1707,16 +1713,16 @@ export function LessonPlayer({
     return (
       <BreakScreen
         type={breakActive}
+        // The catalogue's keys and no others: `trigger`, and how long it
+        // lasted. The type and the segment are not among them.
         onStart={() =>
           trackEvent(SIGNAL_EVENT_TYPES.BREAK_START, {
-            type: breakActive,
             trigger: breakTrigger.current,
-            segmentId: segment.id,
           })
         }
         onEnd={(durationMs) =>
           trackEvent(SIGNAL_EVENT_TYPES.BREAK_END, {
-            type: breakActive,
+            trigger: breakTrigger.current,
             durationMs,
           })
         }
@@ -1876,22 +1882,11 @@ export function LessonPlayer({
       {/* Calm banner while the device is offline — the cached lesson stays usable */}
       <OfflineBanner />
 
-      {/* Anchor for system offers — one ask at a time, just below the top bar.
-          A break offer (B.7) outranks the modality suggestion. */}
+      {/* Anchor for the modality suggestion, just below the top bar. One ask
+          at a time: a break offer (B.7) outranks it, and is asked at the foot
+          of the lesson instead (frame 38 §3) - see below. */}
       <div className="relative">
-        {showBreakOffer ? (
-          <BreakOfferPill
-            key={`break-offer-${segment.id}`}
-            onShown={() =>
-              trackEvent(SIGNAL_EVENT_TYPES.BREAK_SUGGESTED, {
-                segmentId: segment.id,
-                breakType: breakOffered,
-              })
-            }
-            onAccept={acceptBreakOffer}
-            onDismiss={dismissBreakOffer}
-          />
-        ) : (
+        {showBreakOffer ? null : (
           showSuggestion && (
             <ModalitySuggestionPill
               key={`pill-${segment.id}`}
@@ -2140,6 +2135,21 @@ export function LessonPlayer({
           exitTo(HOME_HREF);
         }}
       />
+
+      {/* The break offer (B.7), at the foot of the lesson and above the
+          chevrons (frame 38 §3). Sticky, so a long segment still shows it. */}
+      {showBreakOffer && (
+        <BreakOfferPill
+          key={`break-offer-${segment.id}`}
+          onShown={() =>
+            trackEvent(SIGNAL_EVENT_TYPES.BREAK_SUGGESTED, {
+              trigger: offerTrigger,
+            })
+          }
+          onAccept={acceptBreakOffer}
+          onDismiss={dismissBreakOffer}
+        />
+      )}
 
       {/* Chevron nav — dims under the attention accommodation; `offer_hint`
           guides the forward control with three quiet glow cycles (never

@@ -60,7 +60,7 @@ export const SIGNAL_EVENT_TYPES = {
   SESSION_CONTEXT: "session_context",
   /**
    * Break module (frame 18) — brackets the student's pause so time inside it is
-   * break time, not hesitation. Payload { type, trigger } / { type, durationMs }.
+   * break time, not hesitation. Payload { trigger } / { trigger, durationMs }.
    */
   BREAK_START: "break_start",
   BREAK_END: "break_end",
@@ -70,14 +70,14 @@ export const SIGNAL_EVENT_TYPES = {
    */
   FEELING_CHECKIN: "feeling_checkin",
   /**
-   * What happened to an offer the engine made. All six are in the ingest
-   * enum and none was ever sent, so a "Not now" left no trace and the engine
+   * What happened to an offer the engine made. Each is in the ingest enum,
+   * and at first none was sent, so a "Not now" left no trace and the engine
    * could not tell an offer a child turned down from one it never saw.
-   * Payload { segmentId, suggested } / { segmentId, breakType }.
+   * Payload { segmentId, suggested } / { trigger } for the three break ones.
    *
    * `ignored` is the pill still on screen when the child left the segment -
-   * neither taken nor turned down. A declined BREAK has no type of its own;
-   * that is an ask, not something to spell with another type.
+   * neither taken nor turned down. A break offer left on screen has no type:
+   * it stays no answer, which is what `break_declined` exists to tell apart.
    */
   MODALITY_SUGGESTION_SHOWN: "modality_suggestion_shown",
   MODALITY_SUGGESTION_ACCEPTED: "modality_suggestion_accepted",
@@ -85,6 +85,7 @@ export const SIGNAL_EVENT_TYPES = {
   MODALITY_SUGGESTION_IGNORED: "modality_suggestion_ignored",
   BREAK_SUGGESTED: "break_suggested",
   BREAK_TAKEN: "break_taken",
+  BREAK_DECLINED: "break_declined",
   /** A real narration clip started for the first time on this visit. */
   NARRATION_PLAYED: "narration_played",
   /**
