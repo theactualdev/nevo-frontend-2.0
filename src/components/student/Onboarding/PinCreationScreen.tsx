@@ -121,7 +121,9 @@ export function PinCreationScreen({
    * PIN and the child chooses the next one. The same screen and components;
    * only the opening line changes, so it reads as choosing a new PIN rather
    * than starting again. Where it goes on done is the caller's - Home, not
-   * You're In (see `NewPinAfterClear`).
+   * You're In. A cleared child has no session, so the caller stores the PIN
+   * through `POST /student-entry/pin` (school code + Student ID, SCRUM-216)
+   * via `storePin`; that caller is the entry flow, not wired yet.
    */
   reset?: boolean;
   /**
@@ -233,9 +235,9 @@ export function PinCreationScreen({
          * own identity. Change PIN does not render this screen: it draws its
          * own steps around `pinReducer` and calls `setPin` itself, with the
          * current PIN. So the `setPin` branch below is reached only by a
-         * caller that passes no `storePin` - `NewPinAfterClear`, a child whose
-         * PIN a teacher has cleared - and only for a signed-in student, the
-         * one case `setPin` is right for.
+         * caller that passes no `storePin`, and only for a signed-in student,
+         * the one case `setPin` is right for. (A child whose PIN a teacher
+         * cleared has no session; the entry flow passes `storePin` for them.)
          */
         const session = getSession();
         const store = storePinRef.current
