@@ -49,6 +49,7 @@ export function IllustrationWrapper({
   motion = "none",
   priority,
   onError,
+  onLoad,
 }: {
   src: string;
   alt: string;
@@ -59,6 +60,8 @@ export function IllustrationWrapper({
   priority?: boolean;
   /** The image did not load - a signed link that expired, or no connection. */
   onError?: () => void;
+  /** The image finished loading. */
+  onLoad?: () => void;
 }) {
   return (
     <Image
@@ -68,6 +71,7 @@ export function IllustrationWrapper({
       height={height}
       priority={priority}
       onError={onError}
+      onLoad={onLoad}
       unoptimized={isRemote(src)}
       className={cn(
         "h-auto max-w-full",

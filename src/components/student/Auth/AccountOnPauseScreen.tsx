@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { Wordmark } from "@/components/shared/BrandMarks";
+import type { AccountHold } from "@/lib/auth/accountPause";
 import { cn } from "@/lib/utils";
 
 /**
@@ -35,7 +36,27 @@ import { cn } from "@/lib/utils";
  * A pause that lands mid-lesson gets 28b's card over the lesson first - see
  * `AccountPauseHost` - and settles into this same screen after "Okay", so a
  * paused child meets one screen whichever way they arrive.
+ *
+ * A CLOSED ACCOUNT IS THIS SCREEN WITH ONE WORD CHANGED (design, D53): "A
+ * removed child reads that their account is closed, not that it is on pause."
+ * Backend's 5 Oct answer gives it its own 401, `account_closed` (B58), which
+ * the deployed spec does not name yet. "On pause" says it will start again,
+ * and a removed child told that comes back to the tablet to try. NOT DRAWN: no frame carries the closed state yet, so its heading is
+ * the ruling's own words and its second line is the pause frame's, which
+ * points at a person and promises nothing. Both are a DESIGN ASK until a frame
+ * lands. Same mark, same way back to the picker (D52).
  */
+/** What follows "Your Nevo account", which the phone heading breaks before. */
+const HOLD_STATE: Record<AccountHold, string> = {
+  paused: "is on pause.",
+  closed: "is closed.",
+};
+
+/** The heading in one piece, for the 28b card and the dialog's name. */
+export function accountHoldHeading(hold: AccountHold): string {
+  return `Your Nevo account ${HOLD_STATE[hold]}`;
+}
+
 /**
  * Where "Back to sign in" goes.
  *
@@ -52,9 +73,12 @@ const WAY_BACK =
 export function AccountOnPauseView({
   className,
   back,
+  hold = "paused",
 }: {
   className?: string;
   back?: PauseWayBack;
+  /** Which account state this is. Paused unless a 401 said closed. */
+  hold?: AccountHold;
 }) {
   return (
     <div
@@ -82,7 +106,7 @@ export function AccountOnPauseView({
       <h1 className="mt-10 text-[26px] leading-[1.25] font-semibold tracking-[-0.015em] text-nevo-navy sm:mt-11 sm:text-[32px] sm:leading-[1.22] lg:text-[34px] lg:leading-[1.2]">
         Your Nevo account
         {/* The frame breaks the phone heading after "account". */}
-        <br className="sm:hidden" /> is on pause.
+        <br className="sm:hidden" /> {HOLD_STATE[hold]}
       </h1>
       <p className="mt-4 max-w-[280px] text-[17px] leading-[1.6] text-pretty text-nevo-near-black/68 sm:mt-[18px] sm:max-w-[360px] sm:text-lg lg:max-w-[420px] lg:text-[19px]">
         If you have questions, talk to your teacher.
@@ -102,10 +126,16 @@ export function AccountOnPauseView({
   );
 }
 
-export function AccountOnPauseScreen({ back }: { back?: PauseWayBack }) {
+export function AccountOnPauseScreen({
+  back,
+  hold,
+}: {
+  back?: PauseWayBack;
+  hold?: AccountHold;
+}) {
   return (
     <main className="w-full">
-      <AccountOnPauseView back={back} />
+      <AccountOnPauseView back={back} hold={hold} />
     </main>
   );
 }

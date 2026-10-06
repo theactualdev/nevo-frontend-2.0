@@ -17,6 +17,7 @@ import {
   pauseHostsMounted,
   pausesInPlace,
 } from "@/lib/auth/accountPause";
+import { withdrawnDoor } from "@/lib/auth/consentHold";
 import { noteServerClock } from "./serverClock";
 import { isAdminRole } from "@/lib/constants/permissions";
 import { API_ORIGIN } from "./upstream";
@@ -234,6 +235,9 @@ function handleAuthFailure(
   // token, and exempting it left the student browsing an app that still
   // looked signed in.
   if (path.includes("/auth/login") || path.includes("/auth/logout")) return;
+  // Nor does a crash report: it is sent from an error screen and must never
+  // move the person off it (B36). A dead session is found by the next read.
+  if (path.includes("/client-errors")) return;
   const role = getSession()?.role;
   const code = apiErrorCode(detail);
   // A child's pause is shown where they are (28b), over the lesson, rather
@@ -241,7 +245,7 @@ function handleAuthFailure(
   // `accountPause.ts` for why, and for the case with nothing to draw it.
   if (pausesInPlace(role, code, pauseHostsMounted())) {
     redirecting = true;
-    announceAccountPause();
+    announceAccountPause(code);
     return;
   }
   clearSession();
@@ -259,6 +263,24 @@ function handleAuthFailure(
       `${window.location.pathname}${window.location.search}`,
     ),
   );
+}
+
+/**
+ * A child whose parent withdrew consent goes to the held screen (B7) rather
+ * than meeting each refused call's own generic failure. The decision is
+ * `withdrawnDoor`; this only acts on it, once, behind the same latch.
+ */
+function holdIfWithdrawn(status: number, detail: unknown): void {
+  if (typeof window === "undefined" || redirecting) return;
+  const door = withdrawnDoor(
+    getSession()?.role,
+    status,
+    apiErrorCode(detail),
+    window.location.pathname,
+  );
+  if (!door) return;
+  redirecting = true;
+  window.location.assign(door);
 }
 
 /** An array repeats the key - see `buildUrl`. */
@@ -380,6 +402,7 @@ export async function request<T>(
     if (response.status === 401) {
       handleAuthFailure(path, Boolean(token), detail);
     }
+    holdIfWithdrawn(response.status, detail);
     throw new ApiError(
       response.status,
       friendlyMessage(response.status),

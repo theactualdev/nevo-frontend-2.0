@@ -288,6 +288,21 @@ describe("ReturningSignInScreen — when it does not work", () => {
     );
   });
 
+  it("tells a removed child their account is closed, not on pause and not a wrong PIN (D53)", async () => {
+    loginPin.mockRejectedValue(refusal("account_closed"));
+    render(<ReturningSignInScreen />);
+    fill();
+
+    await signInNow();
+
+    expect(screen.getByText(/Your Nevo account is closed/)).toBeVisible();
+    expect(screen.queryByText(/on pause|didn't match/)).toBeNull();
+    expect(screen.getByRole("link", { name: "Back to sign in" })).toHaveAttribute(
+      "href",
+      "/auth/login",
+    );
+  });
+
   it("does not remember a device it failed to sign into", async () => {
     // Remembering here would send the child to a PIN unlock for an account they
     // never proved was theirs.

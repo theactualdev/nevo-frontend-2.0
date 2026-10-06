@@ -6,6 +6,7 @@ import { useStudentLesson } from "@/hooks/useStudentLesson";
 import { useHydrated } from "@/hooks/useHydrated";
 import { LessonLoadingSkeleton } from "./LessonLoadingSkeleton";
 import { LessonMessage } from "./LessonMessage";
+import { LessonNotOpened } from "./LessonNotOpened";
 import { LessonSummaryScreen } from "./LessonSummaryScreen";
 import { ReviewAnswersScreen } from "./ReviewAnswersScreen";
 
@@ -110,17 +111,15 @@ export function LessonEndingRoute({
    * segments. Either way there is nothing to summarise, and the child is told
    * that in their own words rather than dropped onto the app's "This page
    * doesn't exist", which is written for a developer and has no way back in.
+   * The 404 is the lesson route's own D90 screen, so the two cannot drift.
    */
+  if (!empty) {
+    return <LessonNotOpened onBack={() => router.push(LESSONS_HREF)} />;
+  }
   return (
     <LessonMessage
-      title={
-        empty ? "This lesson isn’t ready yet" : "We couldn’t find that lesson"
-      }
-      body={
-        empty
-          ? "Nevo is still getting it set up. Your teacher will know when it’s ready."
-          : "It may have been put away. Your other lessons are all still here."
-      }
+      title="This lesson isn’t ready yet"
+      body="Nevo is still getting it set up. Your teacher will know when it’s ready."
       actionLabel="Back to my lessons"
       onAction={() => router.push(LESSONS_HREF)}
     />

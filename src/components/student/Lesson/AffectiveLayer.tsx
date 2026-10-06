@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { Check, ChevronDown } from "lucide-react";
+import { NevoKeyboard } from "@/components/shared";
 import { cn } from "@/lib/utils";
 
 /**
@@ -32,10 +33,31 @@ const PILL_HIT = "group -my-1 inline-flex h-11 cursor-pointer items-center";
 const PROMPT_ROW =
   "flex min-h-10 items-center rounded-[10px] bg-nevo-cream px-4 py-2 text-[13.5px] leading-[1.45] text-nevo-near-black";
 
+/** 38's `qActive`: the prompt being answered, ringed in violet. */
+const PROMPT_ACTIVE = "border-[1.5px] border-nevo-violet/60 py-[11px]";
+/** 38's `qAnswered`, without the quoted answer - see `SocraticPanel`. */
+const PROMPT_ANSWERED = "bg-nevo-violet/14 text-[13px] text-nevo-near-black/70";
+/** 38's `qIdle`: the other prompts, while one is being answered. */
+const PROMPT_IDLE = "text-nevo-near-black/50";
+
+/** 38's Send: full width, 44px, navy - never greyed out. */
+const SEND =
+  "flex h-11 w-full cursor-pointer items-center justify-center rounded-[10px] bg-nevo-navy text-[14px] font-semibold text-nevo-cream transition-[filter,transform] hover:brightness-108 active:scale-[0.985]";
+
+/** `GuidedAnswerRequest.responseLength` is 0 to 10000 on the contract. */
+const MAX_RESPONSE_LENGTH = 10_000;
+
 /** Every prompt opened and not answered, said once and forgotten. */
 function leave(still: Set<string>, onAbandon?: (promptId: string) => void) {
   for (const id of still) onAbandon?.(id);
   still.clear();
+}
+
+/** A copy of `map` without `key`, for a state update. */
+function without<V>(map: ReadonlyMap<string, V>, key: string) {
+  const next = new Map(map);
+  next.delete(key);
+  return next;
 }
 
 /** A row the panel lists: an answerable prompt, or a bare guided question. */
@@ -47,18 +69,42 @@ export interface PanelPrompt {
 }
 
 /**
+ * What a reply carries: the option picked, or how much was written. Never the
+ * words - there is no shape here that could hold them.
+ */
+export type GuidedReply = { option: string } | { responseLength: number };
+
+/**
+ * `moved_on` the first time a prompt is answered, `asked_again` every time
+ * after (B41): the child went back to the same question rather than on.
+ */
+export type GuidedAnswerOutcome = "moved_on" | "asked_again";
+
+/**
  * `show_socratic_panel`: "Which part is unclear?" opens 2-3 guided questions
  * that think the idea through rather than handing the answer over. The panel
  * never blocks (no scrim) and carries its own visible 44px dismiss.
  *
- * ANSWERABLE SINCE 1 OCT (B19). A guided prompt has an id and may carry
- * options. 37b draws each question as a target, so tapping one with options
- * opens them beneath it, drawn as the same targets, and picking one is the
- * reply - the option, never anything typed. A prompt without options stays
- * a question to think about: 37b draws no field to answer in, so none is
- * invented here, and the contract's `responseLength` path waits on design.
+ * ANSWERED IN THE PANEL, AS FRAME 38 DRAWS IT (design, 6 Oct). Each prompt
+ * with an id is a target. Tapping one rings it and opens its answer under it:
+ * - WITH CHOICES, single select and then a separate Send. "Picking isn't
+ *   answering": a choice sits selected until Send, and changing it first is
+ *   just a change. Send appears once something is picked - the frame draws
+ *   no state before a pick, and a Send with nothing to send would need words
+ *   the frame does not give.
+ * - WITH NO CHOICES, one line, the Nevo keyboard inside the sheet, and Send.
+ *   Pressed on an empty field Send stays pressable and says so in place, in
+ *   the frame's words, rather than going grey.
  *
- * Leaving a prompt the child had opened without picking is `abandoned`, said
+ * THE CHILD'S WORDS STAY HERE. A write-in sends its length and nothing else,
+ * which is all the contract accepts, and the field is cleared once it is sent.
+ *
+ * WHAT FOLLOWS AN ANSWER IS NOT DRAWN: "left to backend - not drawn here on a
+ * guess", and the answer route returns nothing to show. So the prompt simply
+ * closes, takes 38's answered tint, and stays a target - opening it again and
+ * sending is the child asking the same question again (`asked_again`).
+ *
+ * Leaving a prompt the child had opened without sending is `abandoned`, said
  * once - on the panel's close, or as the segment moves on under it.
  */
 export function SocraticPanel({
@@ -70,9 +116,13 @@ export function SocraticPanel({
   prompts: PanelPrompt[];
   /** The panel opened with these answerable prompts on screen, first time only. */
   onShown?: (promptIds: string[]) => void;
-  /** The child picked an option. */
-  onAnswer?: (promptId: string, option: string) => void;
-  /** The child left a prompt they had opened without picking. */
+  /** The child pressed Send on a prompt. */
+  onAnswer?: (
+    promptId: string,
+    reply: GuidedReply,
+    outcome: GuidedAnswerOutcome,
+  ) => void;
+  /** The child left a prompt they had opened without sending. */
   onAbandon?: (promptId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -80,10 +130,21 @@ export function SocraticPanel({
   const [answered, setAnswered] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+  /** The choice sitting selected, per prompt, until Send. */
+  const [picked, setPicked] = useState<ReadonlyMap<string, string>>(
+    () => new Map(),
+  );
+  /** What the child has typed, per prompt - on this screen and nowhere else. */
+  const [drafts, setDrafts] = useState<ReadonlyMap<string, string>>(
+    () => new Map(),
+  );
+  /** The prompt whose Send was pressed on an empty field. */
+  const [nudged, setNudged] = useState<string | null>(null);
   // Read by the unmount cleanup, which sees only refs.
   const opened = useRef<Set<string>>(new Set());
   const shown = useRef(false);
   const abandon = useRef(onAbandon);
+  const field = useRef<HTMLInputElement | null>(null);
   useEffect(() => {
     abandon.current = onAbandon;
   }, [onAbandon]);
@@ -94,6 +155,11 @@ export function SocraticPanel({
     const still = opened.current;
     return () => leave(still, abandon.current);
   }, []);
+
+  // A write-in opens ready to type into, so a hardware keyboard works too.
+  useEffect(() => {
+    if (active) field.current?.focus();
+  }, [active]);
 
   const openPanel = () => {
     setOpen(true);
@@ -106,15 +172,50 @@ export function SocraticPanel({
   const closePanel = () => {
     setOpen(false);
     setActive(null);
+    setNudged(null);
     leave(opened.current, onAbandon);
   };
 
-  const pick = (id: string, option: string) => {
+  const toggle = (id: string) => {
+    // An answered prompt opened again is not abandoned if it is left: it was
+    // answered. Only one never sent can be.
+    if (!answered.has(id)) opened.current.add(id);
+    setNudged(null);
+    setActive(active === id ? null : id);
+  };
+
+  const send = (id: string, reply: GuidedReply) => {
+    const outcome: GuidedAnswerOutcome = answered.has(id)
+      ? "asked_again"
+      : "moved_on";
     opened.current.delete(id);
     setAnswered((prev) => new Set(prev).add(id));
+    setPicked((prev) => without(prev, id));
+    setDrafts((prev) => without(prev, id));
+    setNudged(null);
     setActive(null);
-    onAnswer?.(id, option);
+    onAnswer?.(id, reply, outcome);
   };
+
+  const sendWritten = (id: string) => {
+    const length = (drafts.get(id) ?? "").trim().length;
+    if (length === 0) {
+      setNudged(id);
+      return;
+    }
+    send(id, { responseLength: Math.min(length, MAX_RESPONSE_LENGTH) });
+  };
+
+  const write = (id: string, next: (text: string) => string) => {
+    setNudged(null);
+    setDrafts((prev) => new Map(prev).set(id, next(prev.get(id) ?? "")));
+  };
+
+  /** The prompt open for a write-in, which is what docks the keyboard. */
+  const writingIn =
+    prompts.find(
+      (p) => p.id !== undefined && p.id === active && !p.options?.length,
+    )?.id ?? null;
 
   return (
     <>
@@ -151,58 +252,158 @@ export function SocraticPanel({
               </button>
             </div>
             {/* Guided questions - 40px+ rows, 44px where a tap does something.
-                Only a prompt with options can be tapped; the rest, and one
-                already answered, read as questions to think about. */}
+                A bare question has no id to answer against, so it reads as a
+                question to think about. */}
             <div className="mt-3 flex flex-col gap-2">
               {prompts.map((p, i) => {
                 const id = p.id;
-                const options = p.options ?? [];
-                if (!id || options.length === 0 || answered.has(id)) {
+                if (!id) {
                   return (
-                    <div key={id ?? `q-${i}`} className={PROMPT_ROW}>
+                    <div key={`q-${i}`} className={PROMPT_ROW}>
                       {p.prompt}
                     </div>
                   );
                 }
+                const options = p.options ?? [];
                 const expanded = active === id;
+                const choice = picked.get(id);
+                const text = drafts.get(id) ?? "";
                 return (
-                  <div key={id} className="flex flex-col gap-2">
+                  <div key={id} className="flex flex-col">
                     <button
                       type="button"
                       aria-expanded={expanded}
-                      onClick={() => {
-                        opened.current.add(id);
-                        setActive(expanded ? null : id);
-                      }}
+                      onClick={() => toggle(id)}
                       className={cn(
                         PROMPT_ROW,
                         "min-h-11 w-full cursor-pointer text-left transition-colors hover:bg-nevo-cream-elevated",
+                        expanded
+                          ? PROMPT_ACTIVE
+                          : answered.has(id)
+                            ? PROMPT_ANSWERED
+                            : active && PROMPT_IDLE,
                       )}
                     >
                       {p.prompt}
                     </button>
-                    {expanded && (
-                      <div
-                        role="group"
-                        aria-label={p.prompt}
-                        className="flex flex-col gap-2 pl-4"
-                      >
-                        {options.map((option) => (
+                    {expanded && options.length > 0 && (
+                      <>
+                        <div
+                          role="radiogroup"
+                          aria-label={p.prompt}
+                          className="mt-2.5 flex flex-col gap-2"
+                        >
+                          {options.map((option) => {
+                            const on = choice === option;
+                            return (
+                              <button
+                                key={option}
+                                type="button"
+                                role="radio"
+                                aria-checked={on}
+                                onClick={() =>
+                                  setPicked((prev) =>
+                                    new Map(prev).set(id, option),
+                                  )
+                                }
+                                className={cn(
+                                  "flex min-h-11 w-full cursor-pointer items-center justify-between gap-2.5 rounded-[10px] border-[1.5px] bg-nevo-cream px-3.5 py-[11px] text-left text-[13.5px] leading-[1.45] text-nevo-near-black transition-colors",
+                                  on
+                                    ? "border-nevo-navy font-semibold"
+                                    : "border-nevo-near-black/18 font-medium hover:border-nevo-near-black/30",
+                                )}
+                              >
+                                {option}
+                                {on && (
+                                  <span
+                                    aria-hidden
+                                    className="flex size-5 shrink-0 items-center justify-center rounded-full bg-nevo-navy"
+                                  >
+                                    <Check
+                                      className="size-[11px] text-nevo-cream"
+                                      strokeWidth={2.8}
+                                    />
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {choice !== undefined && (
                           <button
-                            key={option}
                             type="button"
-                            onClick={() => pick(id, option)}
-                            className="flex min-h-11 w-full cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/25 px-4 py-2 text-left text-[13.5px] leading-[1.45] text-nevo-near-black transition-colors hover:bg-nevo-navy/6"
+                            onClick={() => send(id, { option: choice })}
+                            className={cn(SEND, "mt-3.5")}
                           >
-                            {option}
+                            Send
                           </button>
-                        ))}
-                      </div>
+                        )}
+                      </>
+                    )}
+                    {expanded && options.length === 0 && (
+                      <>
+                        <input
+                          ref={field}
+                          value={text}
+                          onChange={(e) => {
+                            const typed = e.target.value;
+                            write(id, () => typed);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") sendWritten(id);
+                          }}
+                          // The Nevo keyboard below drives entry on touch; a
+                          // hardware keyboard still types on desktop.
+                          inputMode="none"
+                          autoComplete="off"
+                          aria-label={p.prompt}
+                          placeholder="Type your answer"
+                          className={cn(
+                            "mt-3 min-h-12 w-full rounded-[10px] border-[1.5px] bg-nevo-cream px-3.5 py-3 text-[13.5px] leading-[1.4] text-nevo-near-black outline-none placeholder:text-nevo-near-black/40",
+                            text
+                              ? "border-nevo-violet/60"
+                              : "border-nevo-near-black/18",
+                          )}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => sendWritten(id)}
+                          className={cn(SEND, "mt-3")}
+                        >
+                          Send
+                        </button>
+                        {nudged === id && (
+                          <div
+                            role="status"
+                            className="mt-2.5 flex items-start gap-2 rounded-[10px] bg-nevo-violet/18 px-[13px] py-2.5"
+                          >
+                            <span
+                              aria-hidden
+                              className="mt-[5px] size-[7px] shrink-0 rounded-full bg-nevo-violet"
+                            />
+                            <span className="text-[12.5px] leading-[1.5] text-nevo-near-black">
+                              Type a little first, then Send.
+                            </span>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 );
               })}
             </div>
+            {/* Inside the sheet, edge to edge at its foot, and never the
+                device's own keyboard. It hides itself where a real keyboard
+                exists, and stays in reach when the sheet scrolls. */}
+            {writingIn && (
+              <NevoKeyboard
+                layout="qwerty"
+                onKey={(c) => write(writingIn, (t) => t + c)}
+                onBackspace={() => write(writingIn, (t) => t.slice(0, -1))}
+                onReturn={() => sendWritten(writingIn)}
+                className="sticky bottom-0 -mx-[22px] mt-3.5 -mb-[22px]"
+              />
+            )}
           </div>
         </div>
       )}

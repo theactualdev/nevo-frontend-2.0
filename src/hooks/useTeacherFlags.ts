@@ -79,14 +79,33 @@ export interface TeacherFlags {
   /** The call failed; the caller should not claim anything either way. */
   failed: boolean;
   loading: boolean;
+  /**
+   * Every page was read, so `flags` is ALL of them and its length may be
+   * said as a number. False when the pages ran out with more still coming -
+   * then the list is a floor, and a floor said as a total is an under-report.
+   */
+  complete: boolean;
 }
 
 export function useTeacherFlags(): TeacherFlags {
-  const run = useCallback(() => intelligenceApi.getFlags(), []);
-  const { data, failed, loading } = useLiveQuery<AttentionFlag[]>(run, []);
+  /*
+   * EVERY PAGE, NOT THE FIRST. `getFlags()` sent no limit, so it read one
+   * page of 50 - acknowledged rows included, and dropped below - and Home
+   * said "N things are worth your eye" over that page as though it were the
+   * whole. `allFlags` reads 200 at a time until a short page and says
+   * whether it got to the end.
+   */
+  const run = useCallback(() => intelligenceApi.allFlags(), []);
+  const { data: all, failed, loading } = useLiveQuery<{
+    flags: AttentionFlag[];
+    complete: boolean;
+  }>(run, []);
   const { students } = useStudentDirectory();
 
-  if (data === null) return { flags: [], live: false, failed, loading };
+  if (all === null) {
+    return { flags: [], live: false, failed, loading, complete: false };
+  }
+  const data = all.flags;
 
   const byId = new Map(students.map((s) => [s.studentId, s]));
   return {
@@ -107,5 +126,6 @@ export function useTeacherFlags(): TeacherFlags {
     live: true,
     failed: false,
     loading: false,
+    complete: all.complete,
   };
 }

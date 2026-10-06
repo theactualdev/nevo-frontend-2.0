@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  allowanceSpent,
   HISTORY_DAYS,
   HISTORY_LIMIT,
   recentThreads,
   type ThreadSummary,
 } from "./askNevo";
+import { ApiError } from "./client";
 
 /**
  * The history window, which this client has to enforce because the endpoint
@@ -104,5 +106,30 @@ describe("recentThreads", () => {
 
   it("handles an empty list without inventing anything", () => {
     expect(recentThreads([], NOW)).toEqual([]);
+  });
+});
+
+/**
+ * B33: the spent allowance is a 429 with its own code, and so is nothing
+ * else. The code is the spec's, `ask_nevo_daily_limit`, which is what the
+ * deployed contract's 429 description names.
+ */
+describe("allowanceSpent", () => {
+  const refusal = (status: number, code: string) =>
+    new ApiError(status, "x", { detail: { code, message: "m" } });
+
+  it("is the 429 that names the day's allowance", () => {
+    expect(allowanceSpent(refusal(429, "ask_nevo_daily_limit"))).toBe(true);
+  });
+
+  it("is not any other 429, which clears in a moment", () => {
+    expect(allowanceSpent(refusal(429, "too_many_requests"))).toBe(false);
+    expect(allowanceSpent(new ApiError(429, "x"))).toBe(false);
+  });
+
+  it("is not that code on any other status, nor a failure with no response", () => {
+    expect(allowanceSpent(refusal(500, "ask_nevo_daily_limit"))).toBe(false);
+    expect(allowanceSpent(new ApiError(0, "offline"))).toBe(false);
+    expect(allowanceSpent(new Error("ask_nevo_daily_limit"))).toBe(false);
   });
 });

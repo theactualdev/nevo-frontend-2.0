@@ -68,3 +68,35 @@ describe("once the flags have answered", () => {
     expect(screen.queryByLabelText("Loading what needs your attention")).not.toBeInTheDocument();
   });
 });
+
+/**
+ * THE COUNT IS SAID ONLY WHEN IT IS THE WHOLE COUNT. It was one page of 50,
+ * acknowledged rows included, said as the total.
+ */
+describe("how many things are worth the teacher's eye", () => {
+  const twoFlags = (complete: boolean) =>
+    useTeacherFlags.mockReturnValue({
+      flags: [
+        { id: "f-1", studentId: "s-1", name: "Ada Obi", context: null, note: "Slower on written work.", generatedAt: "2026-10-05T08:00:00Z", isSudden: false },
+        { id: "f-2", studentId: "s-2", name: "Tolu Ade", context: null, note: "Stopped partway.", generatedAt: "2026-10-05T08:00:00Z", isSudden: false },
+      ],
+      live: true,
+      failed: false,
+      loading: false,
+      complete,
+    });
+
+  it("is said when every page was read", () => {
+    twoFlags(true);
+    render(<TeacherHome />);
+
+    expect(screen.getByText(/2 things are worth your eye/)).toBeInTheDocument();
+  });
+
+  it("is not said when the pages ran out with more still coming", () => {
+    twoFlags(false);
+    render(<TeacherHome />);
+
+    expect(screen.queryByText(/things are worth your eye/)).not.toBeInTheDocument();
+  });
+});

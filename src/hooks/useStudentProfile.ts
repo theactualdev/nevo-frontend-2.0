@@ -130,7 +130,8 @@ export function useStudentProfile(studentId: string): StudentProfileState {
   const [evidence, setEvidence] = useState<ConversationEvidence | null>(null);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [adaptations, setAdaptations] = useState<StudentAdaptation[]>([]);
-  const [sessions, setSessions] = useState<LessonProgress[]>([]);
+  // Never filled on the live path - see the note where the progress read was.
+  const [sessions] = useState<LessonProgress[]>([]);
   const [accommodations, setAccommodations] = useState<Accommodations | null>(
     null,
   );
@@ -197,17 +198,13 @@ export function useStudentProfile(studentId: string): StudentProfileState {
         settle("adaptations", "ready");
       })
       .catch(() => settle("adaptations", "failed"));
-    void studentsApi
-      .progress(studentId)
-      .then((p) => {
-        if (cancelled) return;
-        setSessions(
-          [...p.lessons].sort(
-            (a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt),
-          ),
-        );
-      })
-      .catch(() => {});
+    /*
+     * NO PROGRESS READ. `GET /api/students/{id}/progress` was fetched on
+     * every profile open and nothing rendered it: the live profile reads the
+     * real sessions list instead. A request whose answer goes nowhere is load
+     * on the server and a failure nobody can see. `sessions` stays on the
+     * state, empty, for the fixture profile that still reads its own.
+     */
     void studentsApi
       .accommodations(studentId)
       .then((a) => {
@@ -231,13 +228,15 @@ export function useStudentProfile(studentId: string): StudentProfileState {
   return {
     helpSeeking: helpSeekingLine(evidence),
     profile,
-    concepts: mastery.map((m) => ({
+    // A row the engine could not name is a bar with no label - nothing a
+    // teacher can act on - so it is left out rather than drawn blank.
+    concepts: mastery.filter((m) => m.conceptName).map((m) => ({
       conceptId: m.conceptId,
       // Straight from the mastery read since 31 Aug. It used to be resolved
       // through a second, best-effort `/api/concepts` call whose failure was
       // swallowed - and when it failed a teacher was shown a raw UUID as the
       // name of the concept their student was struggling with.
-      name: m.conceptName,
+      name: m.conceptName as string,
       understanding: pct(m.masteryProbabilityConcept),
       reading: pct(m.masteryProbabilityReading),
       practiceCount: m.practiceCount,

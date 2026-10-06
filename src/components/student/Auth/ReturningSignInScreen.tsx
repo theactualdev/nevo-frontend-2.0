@@ -14,8 +14,8 @@ import {
 import { authApi } from "@/lib/api";
 import { usersApi } from "@/lib/api/users";
 import {
-  classifyLoginFailure,
-  type LoginFailure,
+  classifyLearnerLoginFailure,
+  type LearnerLoginFailure,
 } from "@/lib/auth/loginFailure";
 import {
   doorForRole,
@@ -101,7 +101,7 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
   /** This sign-in ended the account's session elsewhere (D2). */
   const [replacedElsewhere, setReplacedElsewhere] = useState(false);
   const [checking, setChecking] = useState(false);
-  const [error, setError] = useState<LoginFailure | null>(null);
+  const [error, setError] = useState<LearnerLoginFailure | null>(null);
   /** Whose door a non-student account belongs at; see `WrongDoorNote`. */
   const [wrongDoor, setWrongDoor] = useState<ConsoleDoor | null>(null);
   /**
@@ -293,7 +293,7 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
     } catch (cause) {
       // Only the PIN clears. The other two fields stay, deliberately.
       setDigits("");
-      setError(classifyLoginFailure(cause));
+      setError(classifyLearnerLoginFailure(cause));
     } finally {
       if (!leaving) setChecking(false);
     }
@@ -303,10 +303,11 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
    * A paused account takes the whole screen, exactly as it does at the PIN
    * unlock. There is nothing here a child can do, and leaving the form
    * underneath would invite them to keep trying something that cannot work.
+   * A closed account is the same screen saying closed, never on pause (D53).
    */
-  if (error === "paused") {
+  if (error === "paused" || error === "closed") {
     // No retry, but a way back to the picker for whoever is next (D52).
-    return <AccountOnPauseScreen back={{ href: "/auth/login" }} />;
+    return <AccountOnPauseScreen back={{ href: "/auth/login" }} hold={error} />;
   }
 
   if (done) {

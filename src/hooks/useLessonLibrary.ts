@@ -199,6 +199,9 @@ function toCard(lesson: LessonSummary): LibraryCard {
     // estimate" - the figure is floored per content type server-side, so a
     // real lesson is never 0 minutes and "0 min" would be a claim.
     meta: [
+      // C06's meta leads with the subject. A lesson uploaded without one
+      // simply starts with its sections.
+      lesson.subject || null,
       `${n} ${n === 1 ? "section" : "sections"}`,
       SOURCE_LABEL[lesson.sourceType] ?? lesson.sourceType,
       lesson.estimatedMinutes ? `${lesson.estimatedMinutes} min` : null,
@@ -244,6 +247,9 @@ const FIXTURE_CARDS: LibraryCard[] = LIBRARY_LESSONS.map((l) => ({
   subject: l.subject,
 }));
 
+/** The endpoint's own maximum. */
+const LIBRARY_LIMIT = 200;
+
 export interface LessonLibraryState {
   cards: LibraryCard[];
   /** Real lessons are in hand rather than fixtures. */
@@ -253,14 +259,32 @@ export interface LessonLibraryState {
   loading: boolean;
   /** Still waiting, long enough to say so. */
   slow: boolean;
+  /**
+   * The read came back full, so there may be lessons it could not return.
+   * The endpoint takes up to 200 and has no way to ask for the next 200.
+   */
+  capped: boolean;
 }
 
 export function useLessonLibrary(): LessonLibraryState {
-  const run = useCallback(() => lessonsApi.list(), []);
+  /*
+   * THE MOST THE ENDPOINT WILL RETURN. No limit meant its default of 50, so
+   * lesson 51 onwards was missing from the library, its search, its subject
+   * pills, the assign wizard and the recommend sheet - with nothing saying
+   * so, and "N lessons matching" quietly a floor.
+   */
+  const run = useCallback(() => lessonsApi.list({ limit: LIBRARY_LIMIT }), []);
   const { data, failed, slow, loading } = useLiveQuery<LessonSummary[]>(run, []);
 
   if (data === null) {
-    return { cards: FIXTURE_CARDS, live: false, sample: failed, loading, slow };
+    return {
+      cards: FIXTURE_CARDS,
+      live: false,
+      sample: failed,
+      loading,
+      slow,
+      capped: false,
+    };
   }
   return {
     cards: data.map(toCard),
@@ -268,5 +292,6 @@ export function useLessonLibrary(): LessonLibraryState {
     sample: false,
     loading: false,
     slow: false,
+    capped: data.length >= LIBRARY_LIMIT,
   };
 }
