@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PermissionScope } from "@/lib/constants/permissions";
-import { adminHomeForScopes, canOpen, navForScopes } from "./adminNav";
+import { adminHomeForScopes, canOpen, homeName, navForScopes } from "./adminNav";
 
 /**
  * Where an admin lands after signing in.
@@ -22,10 +22,10 @@ describe("adminHomeForScopes", () => {
     expect(adminHomeForScopes(scopes("billing", "oversight"))).toBe("/admin/dashboard");
   });
 
-  it("sends an IT-only admin to the Overview, like everyone else (6 Oct ruling)", () => {
-    // Not D17 any more: provider sign-in is deferred, so that home was about
-    // nothing a manual school uses.
-    expect(adminHomeForScopes(scopes("it_sso"))).toBe("/admin/dashboard");
+  it("sends an IT-only admin to their own Systems overview, not the school's", () => {
+    // Lydia, 6 Oct: IT admins stay narrow. The Overview is the school's.
+    expect(adminHomeForScopes(scopes("it_sso"))).toBe("/admin/sso/home");
+    expect(homeName("/admin/sso/home")).toBe("Systems overview");
   });
 
   it("sends a billing-only admin to their own home", () => {
@@ -45,24 +45,21 @@ describe("adminHomeForScopes", () => {
 });
 
 /**
- * The 6 Oct ruling, built to what the server allows ("option 1"): an IT admin
- * sees every screen the backend serves to any admin, and nothing it refuses.
+ * Lydia, 6 Oct: IT admins see what their own scope gives them and nothing
+ * wider. An earlier ruling that day widened this rail to every screen the
+ * backend serves any admin; it was withdrawn, and this pins the narrowing.
  */
 describe("an IT / SSO admin's rail", () => {
   const labels = (s: PermissionScope[]) => navForScopes(s).map((i) => i.label);
 
-  it("adds the school's screens any admin may read", () => {
-    expect(labels(scopes("it_sso"))).toEqual([
-      "Overview",
-      "Classes",
-      "Teachers",
-      "Students",
-      "Invitations",
-      "Settings",
-    ]);
+  it("stays narrow - the school's screens are not an IT admin's", () => {
+    const rail = labels(scopes("it_sso"));
+    for (const school of ["Overview", "Classes", "Teachers", "Students", "Invitations"]) {
+      expect(rail).not.toContain(school);
+    }
   });
 
-  it("keeps out what the server refuses without the scope", () => {
+  it("never reaches Learning Support, Billing, the Admin Team or Reports", () => {
     const rail = labels(scopes("it_sso"));
     for (const refused of ["Learning Support", "Billing", "Admin Team", "Reports"]) {
       expect(rail).not.toContain(refused);
@@ -77,7 +74,7 @@ describe("an IT / SSO admin's rail", () => {
 
 describe("canOpen", () => {
   it("is true for a screen on this admin's rail", () => {
-    expect(canOpen("/admin/students", scopes("it_sso"))).toBe(true);
+    expect(canOpen("/admin/students", scopes("roster"))).toBe(true);
     expect(canOpen("/admin/students/s1", scopes("roster"))).toBe(true);
   });
 
@@ -85,11 +82,14 @@ describe("canOpen", () => {
     // The founding admin holds everything but SENCo.
     expect(canOpen("/admin/senco", scopes("oversight", "roster", "billing"))).toBe(false);
     expect(canOpen("/admin/billing", scopes("it_sso"))).toBe(false);
+    expect(canOpen("/admin/students", scopes("it_sso"))).toBe(false);
   });
 
   it("holds an Overview drill-down to its own scope, not the Overview's", () => {
-    expect(canOpen("/admin/compliance", scopes("it_sso"))).toBe(false);
-    expect(canOpen("/admin/adaptations", scopes("it_sso"))).toBe(false);
+    // An admin who holds the Overview's scope but not a drill-down's.
+    expect(canOpen("/admin/dashboard", scopes("oversight"))).toBe(true);
+    expect(canOpen("/admin/compliance", scopes("roster"))).toBe(false);
+    expect(canOpen("/admin/adaptations", scopes("roster"))).toBe(false);
     expect(canOpen("/admin/compliance", scopes("oversight"))).toBe(true);
   });
 

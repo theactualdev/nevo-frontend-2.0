@@ -55,10 +55,10 @@ const show = (reads: Partial<ProfileReads>, observed = false) =>
   render(<LiveStudentProfile studentId="s-1" state={state(reads, observed)} />);
 
 describe("while the learner profile is still on its way", () => {
-  it("does not say Nevo is still getting to know them", () => {
+  it("does not say Nevo has not seen enough of them", () => {
     show({ learnerProfile: "loading" });
 
-    expect(screen.queryByText(/still getting to know/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/not seen enough|Still getting a picture/)).not.toBeInTheDocument();
   });
 
   it("does not say there is no profile yet", () => {
@@ -72,7 +72,7 @@ describe("when the learner profile could not be read", () => {
   it("claims neither an early profile nor no profile", () => {
     show({ learnerProfile: "failed" });
 
-    expect(screen.queryByText(/still getting to know/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/not seen enough|Still getting a picture/)).not.toBeInTheDocument();
     expect(screen.queryByText(/No profile yet/)).not.toBeInTheDocument();
   });
 });
@@ -81,7 +81,7 @@ describe("when mastery has not answered", () => {
   it("does not call the profile early on the strength of an empty list", () => {
     show({ mastery: "loading" });
 
-    expect(screen.queryByText(/still getting to know/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/not seen enough|Still getting a picture/)).not.toBeInTheDocument();
   });
 
   it("says the mastery read failed, under its own heading", () => {
@@ -116,7 +116,7 @@ describe("once everything has answered", () => {
   it("is the early state for a child Nevo genuinely does not know yet", () => {
     show({});
 
-    expect(screen.getByText(/Nevo is still getting to know Amara/)).toBeInTheDocument();
+    expect(screen.getByText(/Nevo has not seen enough of Amara’s work yet/)).toBeInTheDocument();
     expect(screen.getByText(/No profile yet/)).toBeInTheDocument();
     expect(screen.queryByText(/couldn.t load these/)).not.toBeInTheDocument();
   });
@@ -134,6 +134,6 @@ describe("a state that carries no reads at all", () => {
     void _unused;
     render(<LiveStudentProfile studentId="s-1" state={withoutReads} />);
 
-    expect(screen.getByText(/Nevo is still getting to know Amara/)).toBeInTheDocument();
+    expect(screen.getByText(/Nevo has not seen enough of Amara’s work yet/)).toBeInTheDocument();
   });
 });

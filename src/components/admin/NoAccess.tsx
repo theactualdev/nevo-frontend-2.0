@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ApiError } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
-import { activeNavLabel } from "./Shell/adminNav";
+import { homeName } from "./Shell/adminNav";
 import { useAdminHome } from "./Shell/useCanOpen";
 
 /**
@@ -77,7 +77,7 @@ export function NoAccess({
           href={back}
           className="mt-4 inline-block text-[13.5px] font-semibold text-nevo-navy hover:underline"
         >
-          Go to {activeNavLabel(back) ?? "your console"}
+          Go to {homeName(back) ?? "your console"}
         </Link>
       ) : null}
     </div>
