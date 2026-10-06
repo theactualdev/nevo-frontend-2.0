@@ -21,11 +21,14 @@ export function StudentRoute({
   fixture,
   studentId,
   classHref,
+  classId,
   recommendOpen,
 }: {
   fixture: StudentProfileData | null;
   studentId: string;
   classHref?: string;
+  /** The class the roster row came from, which is where observations live. */
+  classId?: string;
   /** C08c opens as its own URL; the gate below has to cover both. */
   recommendOpen?: boolean;
 }) {
@@ -51,6 +54,7 @@ export function StudentRoute({
         state={state}
         studentId={studentId}
         classHref={classHref}
+        classId={classId}
         /* DROPPED UNTIL 15 SEP. `/teacher/students/{id}/recommend` passes this,
            and the live branch ignored it - so the route existed, resolved, and
            rendered an ordinary profile. C08c was unreachable for every
