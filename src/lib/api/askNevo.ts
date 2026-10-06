@@ -1,4 +1,4 @@
-import { api, type RequestOptions } from "./client";
+import { api, ApiError, apiErrorCode, type RequestOptions } from "./client";
 
 /**
  * Ask Nevo endpoints (FE Architecture §1; Student B.12) - wired to the live
@@ -55,6 +55,13 @@ export type AskNevoCategory =
 
 export interface AskNevoAnswer {
   answer: string;
+  /**
+   * The answer as one paragraph of plain text. Defaults to "" on the
+   * contract, so it is only preferred when it says something.
+   */
+  plainText?: string;
+  /** `structured` means `answer` carries markup; `plain` means it does not. */
+  answerFormat?: "plain" | "structured";
   /**
    * FALSE IS THE SERVER SAYING THIS ONE BELONGS WITH THE TEACHER (1 Oct).
    *
@@ -169,6 +176,29 @@ export function recentThreads(
     })
     .sort((a, b) => Date.parse(b.lastMessageAt) - Date.parse(a.lastMessageAt))
     .slice(0, HISTORY_LIMIT);
+}
+
+/**
+ * The code on the 429 `POST /api/v1/ask-nevo/` answers once the day's
+ * allowance is spent (B33). From the spec's own description of that response,
+ * which is the authority here: "ask_nevo_daily_limit when the day's allowance
+ * is spent".
+ */
+export const ALLOWANCE_SPENT_CODE = "ask_nevo_daily_limit";
+
+/**
+ * Was this refusal the day's allowance running out?
+ *
+ * BY ITS CODE, NOT ITS STATUS. A 429 is also what an ordinary rate limit
+ * says, and that one really does clear in a moment - so a bare 429 keeps the
+ * "try again" answer, and only this code means "not until tomorrow" (D45).
+ */
+export function allowanceSpent(cause: unknown): boolean {
+  return (
+    cause instanceof ApiError &&
+    cause.status === 429 &&
+    apiErrorCode(cause.detail) === ALLOWANCE_SPENT_CODE
+  );
 }
 
 export const askNevoApi = {

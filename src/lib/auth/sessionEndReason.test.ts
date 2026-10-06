@@ -28,6 +28,12 @@ describe("mapping the wire code", () => {
     expect(sessionEndReason("account_paused")).toBe("paused");
   });
 
+  it("keeps a closed account apart from a paused one (B58)", () => {
+    // Its own 401 code since 5 Oct. Folding it into `paused` is the exact
+    // thing design ruled against (D53): a removed child told "on pause".
+    expect(sessionEndReason("account_closed")).toBe("closed");
+  });
+
   it("falls back to the ordinary screen for a code added after this shipped", () => {
     // The set has already grown once, from four to five. Guessing `paused` or
     // `replaced` would tell someone something specific and false about their
@@ -109,5 +115,13 @@ describe("the house copy rule", () => {
         expect(all).not.toMatch(/[—–]|\s-\s/);
       }
     }
+  });
+});
+
+describe("a closed account on the staff screen", () => {
+  it("shows what it showed before the code had a name, because no staff frame draws it", () => {
+    // The learner ruling (D53) is the child's door. Changing what a teacher or
+    // an administrator reads is not something to do under it - raised instead.
+    expect(sessionEndCopy("closed", "staff")).toEqual(sessionEndCopy("expired", "staff"));
   });
 });

@@ -53,6 +53,12 @@ export interface NotificationContextValue {
    * ask.
    */
   failed: boolean;
+  /**
+   * The child's feed has not answered yet. Kept apart from an empty feed for
+   * the same reason as `failed`: "Nothing new right now" is a claim, and
+   * while the read is in flight it is a guess.
+   */
+  loading: boolean;
   refresh: () => void;
   /**
    * Mark one notification read. Opening it IS reading it.
@@ -254,6 +260,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         notifications: [],
         unreadCount: 0,
         failed: false,
+        loading: true,
         refresh,
         markRead,
         // Not a sample: a deliberate blank while the client works out who is
@@ -267,6 +274,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         notifications: SAMPLE_NOTIFICATIONS,
         unreadCount: SAMPLE_NOTIFICATIONS.filter((n) => !n.read).length,
         failed: false,
+        loading: false,
         refresh,
         markRead,
         showingSamples: true,
@@ -283,6 +291,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       notifications: mine.map(toItem),
       unreadCount: Math.max(0, unread - hiddenUnread),
       failed,
+      loading: feed === null && !failed,
       refresh,
       markRead,
       showingSamples: false,

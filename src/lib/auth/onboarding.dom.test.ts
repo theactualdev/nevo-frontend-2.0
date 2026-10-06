@@ -1,14 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   clearOnboardingDraft,
+  entryIdentityFromDraft,
   mergeOnboardingDraft,
   rememberOnboardedStudent,
-  schoolCodeFromAccount,
+  startOnboardingDraft,
 } from "./onboarding";
-import { clearSession, getRememberedProfile, setSession } from "./session";
-
-const me = vi.hoisted(() => vi.fn());
-vi.mock("@/lib/api/users", () => ({ usersApi: { me } }));
+import { clearSession, getRememberedProfile } from "./session";
 
 /**
  * A remembered profile the server cannot authenticate is worse than none.
@@ -33,7 +31,6 @@ vi.mock("@/lib/api/users", () => ({ usersApi: { me } }));
 const SERVER_IDENTIFIER = "amara.k";
 
 beforeEach(() => {
-  me.mockReset();
   clearSession();
   window.localStorage.clear();
   window.sessionStorage.clear();
@@ -60,9 +57,9 @@ describe("rememberOnboardedStudent", () => {
   });
 
   it("refuses to remember a child with no school code", () => {
-    // THE INVITE-LINK CHILD. `join/{token}` returns a `schoolName` and never a
-    // code, so this is every child who arrived by QR or link. Remembering them
-    // against "" would greet them by name tomorrow and then 401 them.
+    // A run that never started on 05 - a typed URL straight into the
+    // sequence. Remembering them against "" would greet them by name tomorrow
+    // and then 401 them.
     mergeOnboardingDraft({ name: "Amara Kalu" });
 
     expect(rememberOnboardedStudent(SERVER_IDENTIFIER)).toBe(false);
@@ -128,69 +125,28 @@ describe("rememberOnboardedStudent", () => {
 });
 
 /**
- * A join-link or class-code child never typed a school code, so the tablet
- * never remembered them. The account's own code is on `users/me` once the
- * account exists.
+ * Who 05 matched, read back at the PIN step. Both halves or nothing: half a
+ * pair identifies nobody, and a PIN attached to nobody is the bug.
  */
-describe("a child who never typed a school code", () => {
-  const signedIn = () =>
-    setSession({
-      token: "tok",
-      expiresAt: new Date(Date.now() + 3600_000).toISOString(),
-      userId: "student-9",
-      role: "student",
+describe("entryIdentityFromDraft", () => {
+  it("is the pair 05 matched", () => {
+    startOnboardingDraft({ schoolCode: "K7DQ", admissionNumber: "BGA/2031" });
+
+    expect(entryIdentityFromDraft()).toEqual({
+      schoolCode: "K7DQ",
+      admissionNumber: "BGA/2031",
     });
-
-  it("is remembered with the account's school code", () => {
-    mergeOnboardingDraft({ name: "Amara Kalu" });
-
-    expect(rememberOnboardedStudent(SERVER_IDENTIFIER, "751A1136")).toBe(true);
-    expect(getRememberedProfile()).toMatchObject({ schoolCode: "751A1136" });
   });
 
-  it("keeps the code a child typed over anything else", () => {
-    mergeOnboardingDraft({ name: "Amara Kalu", schoolCode: "TYPED-1" });
-
-    expect(rememberOnboardedStudent(SERVER_IDENTIFIER, "OTHER-2")).toBe(true);
-    expect(getRememberedProfile()).toMatchObject({ schoolCode: "TYPED-1" });
+  it("is nothing when the run did not start on 05", () => {
+    expect(entryIdentityFromDraft()).toBeNull();
   });
 
-  it("asks the account for its code once there is a session", async () => {
-    mergeOnboardingDraft({ name: "Amara Kalu" });
-    signedIn();
-    me.mockResolvedValue({ school: { code: " 751A1136 " } });
+  it("is nothing with only half the pair", () => {
+    startOnboardingDraft({ schoolCode: "K7DQ" });
+    expect(entryIdentityFromDraft()).toBeNull();
 
-    expect(await schoolCodeFromAccount()).toBe("751A1136");
-  });
-
-  it("asks nothing when there is no session to ask with", async () => {
-    mergeOnboardingDraft({ name: "Amara Kalu" });
-
-    expect(await schoolCodeFromAccount()).toBeNull();
-    expect(me).not.toHaveBeenCalled();
-  });
-
-  it("asks nothing when the child already typed one", async () => {
-    mergeOnboardingDraft({ name: "Amara Kalu", schoolCode: "TYPED-1" });
-    signedIn();
-
-    expect(await schoolCodeFromAccount()).toBeNull();
-    expect(me).not.toHaveBeenCalled();
-  });
-
-  it("has no code when the read fails, so the device is not remembered", async () => {
-    mergeOnboardingDraft({ name: "Amara Kalu" });
-    signedIn();
-    me.mockRejectedValue(new Error("offline"));
-
-    expect(await schoolCodeFromAccount()).toBeNull();
-  });
-
-  it("has no code when the school has none", async () => {
-    mergeOnboardingDraft({ name: "Amara Kalu" });
-    signedIn();
-    me.mockResolvedValue({ school: { code: null } });
-
-    expect(await schoolCodeFromAccount()).toBeNull();
+    startOnboardingDraft({ schoolCode: "K7DQ", admissionNumber: "   " });
+    expect(entryIdentityFromDraft()).toBeNull();
   });
 });

@@ -212,3 +212,24 @@ describe("how the session ended", () => {
     expect(post.mock.calls[0][2]).toEqual({ keepalive: true });
   });
 });
+
+describe("types the server writes itself (B37)", () => {
+  it("never sends them, even if one reaches the batch", async () => {
+    // Sending either doubles a count the server already keeps.
+    await signalsApi.submitBatch(SESSION, [
+      event("adaptation_suppressed"),
+      event("guided_question_answered"),
+      event("time_on_segment"),
+    ]);
+
+    expect(sentTypes()).toEqual(["time_on_segment"]);
+  });
+
+  it("makes no request at all when nothing else is in the batch", async () => {
+    const receipt = await signalsApi.submitBatch(SESSION, [
+      event("adaptation_suppressed"),
+    ]);
+
+    expect(receipt).toBeNull();
+  });
+});

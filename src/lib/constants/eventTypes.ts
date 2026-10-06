@@ -123,6 +123,23 @@ export const SIGNAL_EVENT_TYPES = {
   ASK_NEVO_REDIRECT_USED: "ask_nevo_redirect_used",
 } as const;
 
+/**
+ * TYPES THE SERVER WRITES ITSELF, which the client must never send (backend,
+ * 5 Oct, B37; `serverWritten: true` in `GET /api/signals/catalogue`).
+ *
+ * `adaptation_suppressed` is recorded by the server when it holds an
+ * adaptation back, and `guided_question_answered` by the guided-question
+ * answer route. A client that sends either doubles that count - and from
+ * #623 until 6 Oct this one did send `adaptation_suppressed`, whenever the
+ * player's own rules kept an engine suggestion off screen. Not in
+ * `SIGNAL_EVENT_TYPES`, so nothing here can emit them, and refused again at
+ * the door in `signalsApi.submitBatch`.
+ */
+export const SERVER_WRITTEN_EVENT_TYPES: ReadonlySet<string> = new Set([
+  "adaptation_suppressed",
+  "guided_question_answered",
+]);
+
 /** `system_busy` reasons — the closed set from the Touch Signal Contract. */
 export const BUSY_REASON = {
   AUTH_PENDING: "auth_pending",

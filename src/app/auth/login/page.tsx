@@ -8,8 +8,8 @@ import { NevoKeyboard } from "@/components/shared";
 import { Wordmark } from "@/components/shared/BrandMarks";
 import { authApi } from "@/lib/api";
 import {
-  classifyLoginFailure,
-  type LoginFailure,
+  classifyLearnerLoginFailure,
+  type LearnerLoginFailure,
 } from "@/lib/auth/loginFailure";
 import {
   doorForRole,
@@ -152,7 +152,7 @@ export default function LoginPage() {
    * why. The set is not closed - the session-validation codes are not in the
    * document at all - so this must never assume it has seen them all.
    */
-  const [error, setError] = useState<LoginFailure | null>(null);
+  const [error, setError] = useState<LearnerLoginFailure | null>(null);
   const [checking, setChecking] = useState(false);
   const [done, setDone] = useState(false);
   /** This sign-in ended the account's session elsewhere; see `REPLACED_ELSEWHERE_COPY`. */
@@ -312,7 +312,7 @@ export default function LoginPage() {
         // we sent a shape it rejects - the PIN length is the live example -
         // and anything else is the network or the server. Only the first is
         // about the child.
-        const failure = classifyLoginFailure(cause);
+        const failure = classifyLearnerLoginFailure(cause);
         if (failure === "credentials") setTrustLength(false);
         setError(failure);
       } finally {
@@ -418,10 +418,13 @@ export default function LoginPage() {
    * Its way back (D52) is to the picker, so the next child can get in; on an
    * own device (00) there is no picker, so it is back to the PIN screen, whose
    * "Using a different device?" is the way past.
+   *
+   * A closed account is the same screen saying closed, never on pause (D53).
    */
-  if (error === "paused") {
+  if (error === "paused" || error === "closed") {
     return (
       <AccountOnPauseScreen
+        hold={error}
         back={{
           onBack: () => {
             setError(null);

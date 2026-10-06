@@ -5,42 +5,39 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import { ProgressBar } from "@/components/shared";
 
 /**
- * Shared shell for onboarding Steps 1–3 (UI/UX spec B.2): a thin progress line,
- * a back-chevron + wordmark header, and a single-column content area centred
- * both ways.
+ * The shell for 05 Entry and 03 Teacher Join (UI/UX spec B.2): a back-chevron
+ * + wordmark header and a single-column content area centred both ways.
  * Full-viewport, no chrome, solid cream.
  *
- * `fill` makes the content area a fixed-height flex column (no page scroll) so a
- * child can own its own scroll region — e.g. Step 3's pinned search + scrolling
- * class list.
+ * NO PROGRESS LINE. It drew "step 2 of 3" across three steps, and two of them
+ * were deleted on 30 Sep (SCRUM-208). The entry frame draws none, and a line
+ * one step long measures nothing.
+ *
+ * `lifted` is the frame's keyboard-up layout: while the on-screen keyboard is
+ * docked, the content starts at the top so the field being typed into and the
+ * button stay above the tray. Touch only - a fine pointer has a real keyboard
+ * and never shows the tray, so there is nothing to make room for.
+ *
+ * `footer` is where that tray docks, after the content and in the flow, so the
+ * page grows by its height rather than hiding anything under it.
  */
 export function OnboardingShell({
-  step,
-  totalSteps = 3,
   backHref,
-  fill = false,
+  lifted = false,
+  footer,
   children,
 }: {
-  step: number;
-  totalSteps?: number;
   backHref: string;
-  fill?: boolean;
+  lifted?: boolean;
+  footer?: ReactNode;
   children: ReactNode;
 }) {
   const router = useRouter();
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-nevo-cream text-nevo-near-black">
-      {/* Progress — position `step` of `totalSteps` */}
-      <ProgressBar
-        value={step / totalSteps}
-        className="shrink-0"
-        aria-label={`Step ${step} of ${totalSteps}`}
-      />
-
       {/* Header: back + wordmark */}
       <header className="flex h-14 shrink-0 items-center px-4 sm:h-16 sm:px-5 lg:px-6">
         <button
@@ -65,23 +62,20 @@ export function OnboardingShell({
         header (QA, 30 Sep). `my-auto`, not `justify-center`: auto margins
         drop to zero when the content is taller than the space, so a long step
         on a short screen scrolls from its top instead of losing it above the
-        fold. A `fill` step owns the whole height, so there is nothing to centre.
+        fold.
       */}
-      <div
-        className={cn(
-          "flex flex-1 flex-col items-center px-6 pb-6 sm:pb-10",
-          fill ? "min-h-0 overflow-hidden" : "overflow-y-auto",
-        )}
-      >
+      <div className="flex flex-1 flex-col items-center overflow-y-auto px-6 pb-6 sm:pb-10">
         <div
           className={cn(
-            "flex w-full max-w-full flex-col sm:max-w-[440px]",
-            fill ? "min-h-0 flex-1" : "my-auto",
+            "my-auto flex w-full max-w-full flex-col sm:max-w-[440px]",
+            lifted && "[@media(pointer:coarse)]:my-0 [@media(pointer:coarse)]:pt-4",
           )}
         >
           {children}
         </div>
       </div>
+
+      {footer}
     </div>
   );
 }
