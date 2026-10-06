@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useLessonRegenerate } from "@/hooks/useLessonRegenerate";
+import { useLessonReview } from "@/hooks/useLessonReview";
+import { useSegmentReview } from "@/hooks/useSegmentReview";
 import type { LessonDetailResponse } from "@/lib/api/lessons";
 import type {
   ContentModality,
@@ -9,6 +11,7 @@ import type {
   ParsedLessonSegment,
 } from "@/lib/api/content";
 import { SplitSourceNotice } from "@/components/teacher/Library/SplitSourceNotice";
+import { stillToCheck } from "@/components/teacher/Library/LessonDetailActions";
 import { cn } from "@/lib/utils";
 import { IncidentLine } from "./ParseFallback";
 
@@ -22,9 +25,10 @@ import { IncidentLine } from "./ParseFallback";
  * what the parser actually produced - the segments in order, their kind, and
  * which ones it wants confirmed and why.
  *
- * The lesson already exists by the time this renders: `POST /api/content/upload`
- * creates it. There is no separate commit step on this path, so the screen
- * says the lesson is saved rather than implying a pending decision.
+ * The lesson already exists by the time this renders: the staged upload's
+ * confirm creates it, and the wizard reads it back before showing this. So
+ * the screen says the lesson is saved rather than implying a pending
+ * decision.
  *
  * The staged `structure` is typed as of 31 Aug and gained `lessons[]` on
  * 1 Sep, so the module-grouping half of C07g is built - on the block path,
@@ -42,6 +46,12 @@ import { IncidentLine } from "./ParseFallback";
  * The approval gate is the other half of the same answer: since 17 Sep a newly
  * parsed lesson cannot be assigned until a teacher approves every segment, so
  * nothing a teacher has not read reaches a child.
+ *
+ * "ASSIGN TO A CLASS" LEADS, AS LU-04 AND C14 B1 BOTH DRAW IT, and waits on
+ * the same gate as the lesson page (SCRUM-153, LR-04): inactive, with what is
+ * left under it, until the server's `readyToAssign` says it can go. Straight
+ * after an upload that is the usual case, which is why "Open the lesson" -
+ * where the checking happens - stays beside it.
  */
 
 const TYPE_LABEL: Record<LessonContentType, string> = {
@@ -140,10 +150,18 @@ export function UploadResult({
   /** The re-read lesson, which replaces this one in place. */
   onRegenerated?: (lesson: LessonDetailResponse) => void;
 }) {
-  const regenerate = useLessonRegenerate((next) => onRegenerated?.(next));
+  const verdict = useLessonReview(lesson.id);
+  // A re-read can change what is flagged, so the verdict is asked again.
+  const regenerate = useLessonRegenerate((next) => {
+    onRegenerated?.(next);
+    verdict.refresh();
+  });
   const segments = [...lesson.segments].sort(
     (a, b) => a.sequenceOrder - b.sequenceOrder,
   );
+  const sections = useSegmentReview(lesson.id, segments);
+  const checking = verdict.loading;
+  const blocked = !verdict.ready || checking;
   const review = lesson.reviewSegmentCount;
   const rereading = regenerate.state === "running";
 
@@ -205,9 +223,24 @@ export function UploadResult({
       </div>
 
       <div className="mt-7 flex flex-wrap items-center gap-3">
+        {blocked ? (
+          <span
+            aria-disabled="true"
+            className="inline-flex h-[50px] items-center rounded-[10px] bg-nevo-navy/30 px-[22px] text-[15px] font-semibold text-nevo-cream"
+          >
+            Assign to a class
+          </span>
+        ) : (
+          <Link
+            href={`/teacher/lessons/assign?lesson=${lesson.id}`}
+            className="inline-flex h-[50px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[22px] text-[15px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93"
+          >
+            Assign to a class
+          </Link>
+        )}
         <Link
           href={`/teacher/lessons/${lesson.id}`}
-          className="inline-flex h-[50px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[22px] text-[15px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93"
+          className="inline-flex h-[50px] cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 px-[22px] text-[15px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
         >
           Open the lesson
         </Link>
@@ -232,6 +265,12 @@ export function UploadResult({
           Upload another
         </button>
       </div>
+
+      {blocked && !checking && (
+        <p className="mt-2.5 text-[13px] font-medium text-nevo-navy">
+          {stillToCheck(verdict.outstanding, sections.remaining)}
+        </p>
+      )}
 
       {rereading && (
         <p className="mt-3 max-w-[62ch] text-[14px] leading-[1.55] text-nevo-near-black/68">

@@ -12,10 +12,10 @@ import type { SectionType } from "./teacherLibrary";
  * insights and adaptation all read live: `useTeacherFlags`, `LiveClassPulse`,
  * `useClassInsights` (`LiveClassInsights:40`), `useAdaptation`.
  *
- * TODO(api): the residue is Variant Review, and only that. Variants are typed
- * (`lib/api/variants.ts`) and carried on `segments[]` of the lesson reads, but
- * `VariantReviewRoute` consumes neither - it still renders "Variants aren't
- * available yet" (`VariantReviewRoute.tsx:52`) to every signed-in teacher.
+ * Variant Review was the last of them, and it reads live too: variants are
+ * typed (`lib/api/variants.ts`), carried on `segments[]` of the lesson read,
+ * and `VariantReviewRoute` renders them through `LiveVariantReview`. These
+ * fixtures back the signed-out screens only.
  */
 
 /* ---- C16a Class Learning Pulse (Home, above the lesson list) ---- */

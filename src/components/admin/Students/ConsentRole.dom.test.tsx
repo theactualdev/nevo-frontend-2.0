@@ -160,3 +160,12 @@ describe("a parent who already said no", () => {
     expect(visibleText(container)).not.toMatch(/That didn.t go through/i);
   });
 });
+
+describe("the student page's actions", () => {
+  it("offer no PIN control - SCRUM-216 gives clearing a PIN to the child's teachers", async () => {
+    scopes = ["oversight", "roster", "senco"];
+    render(<StudentDetailView studentId="s1" />);
+    expect(await screen.findByRole("button", { name: /Remove Chisom from the school/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /PIN/i })).toBeNull();
+  });
+});

@@ -9,8 +9,8 @@ import { TEACHER_CLASSES, type TeacherClass } from "./teacherClasses";
  *
  * Every roster student resolves: the one with a written profile gets the full
  * page, everyone else gets the designed early state carrying their own name
- * and class. Confidence is one-to-three quiet dots, never a percentage, and
- * there is no clinical language anywhere - the page has to hold up if a
+ * and class. There is no confidence rating, and no clinical language
+ * anywhere - the page has to hold up if a
  * parent or the SENCo reads it.
  *
  * BOTH HALVES OF THIS ARE NOW FALSE (verified against the deployed spec,

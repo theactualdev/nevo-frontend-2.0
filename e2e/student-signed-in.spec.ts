@@ -40,6 +40,13 @@ import {
  * must be the Student ID of the child `E2E_STUDENT_LOGIN` names, and
  * `beforeAll` fails if the door signs in anyone else.
  *
+ * **Who clears it.** SCRUM-216 gives the clear to the teachers of the child's
+ * classes; the admin console has no PIN control, and backend is expected to
+ * take admin access off the endpoint. So the suite clears as the E2E TEACHER
+ * whenever `E2E_TEACHER_EMAIL`/`E2E_TEACHER_PASSWORD` are set - that teacher
+ * must teach one of the probe's classes - and as the admin only while those
+ * secrets do not exist. Once backend removes admin access, they are required.
+ *
  * **Running it CLEARS AND SETS that student's PIN**, which is why the student
  * is named explicitly rather than defaulted: the write is opt-in. Point it at
  * a probe account nobody reads by hand.
@@ -131,6 +138,9 @@ const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD;
 const STUDENT_LOGIN = process.env.E2E_STUDENT_LOGIN;
 /** The probe's Student ID, which the child's own PIN door takes. See above. */
 const STUDENT_ADMISSION = process.env.E2E_STUDENT_ADMISSION;
+/** Who clears the probe's PIN, when set. See "Who clears it" above. */
+const TEACHER_EMAIL = process.env.E2E_TEACHER_EMAIL;
+const TEACHER_PASSWORD = process.env.E2E_TEACHER_PASSWORD;
 const API = process.env.E2E_API_BASE ?? "https://nevo-backend-2-0-kn3d.onrender.com";
 
 /** Mirrors `lib/auth/session.ts`. Changing either without the other breaks this. */
@@ -486,17 +496,33 @@ test.describe("a signed-in student", () => {
     ).toBeTruthy();
 
     /*
-     * The admin clears and the child sets. See "Where the credential comes
-     * from". The clear comes first because the child's door refuses a child
-     * who still has a PIN.
+     * The child's teacher clears and the child sets - the admin clears only
+     * until the teacher secrets exist. See "Where the credential comes from".
+     * The clear comes first because the child's door refuses a child who
+     * still has a PIN.
      */
+    let clearer = auth;
+    let who = "The admin";
+    if (TEACHER_EMAIL && TEACHER_PASSWORD) {
+      const teacher = await api.post(`${API}/api/v1/auth/login/password`, {
+        data: { email: TEACHER_EMAIL, password: TEACHER_PASSWORD },
+      });
+      expect(teacher.ok(), `The E2E teacher could not sign in (${teacher.status()}).`).toBeTruthy();
+      clearer = { Authorization: `Bearer ${(await teacher.json()).accessToken}` };
+      who = "The E2E teacher";
+    }
     const cleared = await api.post(
       `${API}/api/v1/students/${student!.id}/pin/clear`,
-      { headers: auth },
+      { headers: clearer },
     );
     expect(
       cleared.ok(),
-      `The admin could not clear the probe's PIN (${cleared.status()}${await errorCode(cleared)}).`,
+      `${who} could not clear the probe's PIN (${cleared.status()}${await errorCode(cleared)}).` +
+        (cleared.status() === 404
+          ? who === "The admin"
+            ? " If backend has taken admin access off pin/clear, set E2E_TEACHER_EMAIL and E2E_TEACHER_PASSWORD to a teacher of the probe's class."
+            : " The teacher must teach one of the probe's classes."
+          : ""),
     ).toBeTruthy();
 
     pin = String(randomInt(10_000)).padStart(4, "0");

@@ -209,18 +209,6 @@ export interface DashboardProgressRow {
  * drifts, and the half that was wrong made `status === "withdrawn"` a type
  * error, so the name stays for its callers and the values come from one place.
  */
-/**
- * What comes back from clearing a child's PIN (SCRUM-216). No PIN in it, by
- * design: nobody but the child ever sets one, and nobody is told the old one.
- */
-export interface PinCleared {
-  studentId: string;
-  clearedAt: string;
-  /** Always true: the child chooses the next PIN, at their next sign-in. */
-  childSetsNext?: boolean;
-  pinLength?: number;
-}
-
 export type ConsentState = ConsentStatus;
 
 /**
@@ -455,21 +443,6 @@ export const studentsApi = {
   /** Undo a deactivation - they pick up exactly where they left off. */
   restore: (studentId: string) =>
     api.post<void>(`/api/v1/students/${studentId}/restore`),
-
-  /**
-   * Clear a child's PIN so they choose a new one themselves. SCRUM-216.
-   * POST /api/v1/students/{student_id}/pin/clear
-   *
-   * A CLEAR, NOT A RESET. This replaced `pin/reset`, which generated a PIN
-   * and returned it, so an adult both chose a child's credential and knew it.
-   * The clear never accepts, returns or generates one. The old PIN stops
-   * working, every session the child has ends, and the child sets the next
-   * PIN through the student entry (`POST /api/v1/student-entry/pin`, school
-   * code and their own Student ID) - a door open only while the PIN is
-   * cleared. Teachers of the child's classes may call it too, not only admins.
-   */
-  clearPin: (studentId: string) =>
-    api.post<PinCleared>(`/api/v1/students/${studentId}/pin/clear`),
 
   /**
    * Step two of two, and the only permanent deletion in the admin set. Only
