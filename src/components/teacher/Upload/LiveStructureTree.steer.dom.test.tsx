@@ -179,10 +179,19 @@ describe("folding the tree", () => {
     expect(screen.getAllByLabelText("Section 1 title")).toHaveLength(2);
   });
 
-  it("offers no caret on a section with nothing named under it", () => {
+  it("numbers a segment the parse did not name, rather than inventing a title", () => {
     show();
 
-    expect(screen.queryByRole("button", { name: "Section 2 segments" })).not.toBeInTheDocument();
+    // Lesson 1's third segment overall: two in section 1, then this one.
+    expect(screen.getByText("Segment 3")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Section 2 segments" })).toBeInTheDocument();
+  });
+
+  it("opens nothing on an older upload that carries no segment rows", () => {
+    render(<LiveStructureTree uploadId="u-1" structure={STRUCTURE as never} blockName="Water" />);
+
+    expect(screen.queryByRole("button", { name: "Section 1 segments" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Segment 1")).not.toBeInTheDocument();
   });
 
   it("keeps an edit made before folding", () => {
@@ -223,5 +232,80 @@ describe("edits the server has not seen", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
     await screen.findByRole("button", { name: "Saved" });
     expect(leavingAsks()).toBe(false);
+  });
+});
+
+/**
+ * T70. C07d steers at every level, segments included. `PUT structure` takes
+ * `segmentIds` per section, so a segment can be reordered, moved to the
+ * section beside it, or made the start of a new section.
+ */
+describe("steering a segment", () => {
+  /** What Save would send for one lesson: its sections' keys, in order. */
+  const sentKeys = async (li = 0) => {
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(updateStructure).toHaveBeenCalled());
+    const sent = updateStructure.mock.calls.at(-1)?.[1] as {
+      lessons: { modules: { segmentIds: string[]; title: string }[] }[];
+    };
+    return sent.lessons[li].modules;
+  };
+
+  it("reorders a segment within its section", async () => {
+    show();
+    fireEvent.click(screen.getByRole("button", { name: "Move Springs down" }));
+
+    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+    expect((await sentKeys()).map((m) => m.segmentIds)).toEqual([["k-2", "k-1"], ["k-9"]]);
+  });
+
+  it("moves a segment to the start of the section below", async () => {
+    show();
+    fireEvent.click(screen.getByRole("button", { name: "Move Streams to the section below" }));
+
+    expect((await sentKeys()).map((m) => m.segmentIds)).toEqual([["k-1"], ["k-2", "k-9"]]);
+  });
+
+  it("moves a segment to the end of the section above, and drops a section it empties", async () => {
+    show();
+    fireEvent.click(screen.getByRole("button", { name: "Move Segment 3 to the section above" }));
+
+    const mods = await sentKeys();
+    expect(mods.map((m) => m.segmentIds)).toEqual([["k-1", "k-2", "k-9"]]);
+  });
+
+  it("starts a new, untitled section after a segment", async () => {
+    show();
+    fireEvent.click(screen.getByRole("button", { name: "Start a new section after Springs" }));
+
+    const mods = await sentKeys();
+    expect(mods.map((m) => m.segmentIds)).toEqual([["k-1"], ["k-2"], ["k-9"]]);
+    expect(mods[1].title).toBe("");
+    expect(mods[0].title).toBe("Where rivers start");
+  });
+
+  it("offers no split after a section's last segment", () => {
+    show();
+
+    expect(screen.getByRole("button", { name: "Start a new section after Springs" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Start a new section after Streams" })).not.toBeInTheDocument();
+  });
+
+  it("holds the moves that would go nowhere", () => {
+    show();
+
+    expect(screen.getByRole("button", { name: "Move Springs up" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Move Streams down" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Move Springs to the section above" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Move Segment 3 to the section below" })).toBeDisabled();
+  });
+
+  it("keeps a moved segment inside its own lesson", async () => {
+    show();
+    // Lesson 2 has one section, so its segment has nowhere to move across.
+    expect(screen.getByRole("button", { name: "Move Mouths to the section above" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Move Streams to the section below" }));
+
+    expect((await sentKeys(1)).map((m) => m.segmentIds)).toEqual([["k-3"]]);
   });
 });
