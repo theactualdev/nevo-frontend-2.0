@@ -91,24 +91,39 @@ export async function enterFirstLesson(
 /**
  * Where 05 Entry sends a child once the lookup has matched them.
  *
- * - `waiting`: 00d, with nothing measured. Consent not given, or a date of
- *   birth in dispute - the same screen and the same words for both, and the
- *   child is told neither reason (design, 23 Sep).
- * - `sign-in`: 00c, because they already have an account. A first run would
- *   make them a second one.
+ * - `waiting`: 00d, with nothing measured, because consent is not given. The
+ *   child is not told why.
+ * - `age-check`: the school and the parent disagree about the child's date of
+ *   birth (backend, B64). They cannot start and can do nothing about it, so
+ *   they are told Nevo is checking something with their school and to come
+ *   back in a day or two - never what, and never asked to sort it out.
+ * - `sign-in`: 00c, because they already have a PIN (B64). A first run would
+ *   try to make them a second account.
  * - `first-run`: the transition into 08 Profiling Intro, the baseline, the
  *   learning notice and 15 PIN Creation.
  *
  * **ONLY `given` LETS A CHILD START.** `pending` and `withdrawn` hold, and so
  * would any value the contract adds later: a consent state this client does
  * not know is not a yes. Checked FIRST, so a held child meets 00d whichever of
- * the other two they would have reached - the 23 Sep rule, one screen per
+ * the other three they would have reached - the 23 Sep rule, one screen per
  * state whatever the door.
  *
- * `accountReady` is read as "already has a PIN". The spec gives the field no
- * description, so that reading is asked of backend rather than known.
+ * THE AGE CHECK COMES SECOND because "a day or two" is backend's word about
+ * the age check alone. A child whose consent is outstanding as well has been
+ * promised nothing of the kind, so they get 00d.
+ *
+ * NOT DRAWN, AND AGAINST AN EARLIER RULING. Design ruled on 23 Sep that a
+ * disputed date of birth is 00d, "same screen, same words"
+ * (`docs/RULINGS_23_SEP.md` §2c). Backend's B64 gives it words of its own and
+ * no frame draws them, so they sit on 00d's layout and are asked of design.
+ *
+ * A CLEARED CHILD LOOKS NEW. `accountReady` is false for a child whose PIN an
+ * adult cleared (SCRUM-216) as well as for a new one - neither has a PIN, and
+ * nothing else on the lookup tells them apart. So both take `first-run`, and
+ * a cleared child sits the baseline again before 15. Which of the two has
+ * arrived is asked of backend rather than guessed.
  */
-export type EntryRoute = "waiting" | "sign-in" | "first-run";
+export type EntryRoute = "waiting" | "age-check" | "sign-in" | "first-run";
 
 export function entryRoute(
   state: Pick<
@@ -116,9 +131,8 @@ export function entryRoute(
     "consentState" | "accountReady" | "ageCheckPending"
   >,
 ): EntryRoute {
-  if (state.consentState !== "given" || state.ageCheckPending === true) {
-    return "waiting";
-  }
+  if (state.consentState !== "given") return "waiting";
+  if (state.ageCheckPending === true) return "age-check";
   return state.accountReady ? "sign-in" : "first-run";
 }
 

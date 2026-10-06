@@ -9,7 +9,10 @@ import {
   NevoKeyboard,
   useNevoKeyboardDock,
 } from "@/components/shared";
-import { WaitingOnConsent } from "@/components/student/Entry/WaitingOnConsent";
+import {
+  WaitingOnConsent,
+  type WaitingHold,
+} from "@/components/student/Entry/WaitingOnConsent";
 import { useSignals } from "@/hooks";
 import { ApiError } from "@/lib/api/client";
 import {
@@ -112,10 +115,10 @@ function answeredAboutThePair(err: unknown): boolean {
  * the cells.
  *
  * ON A MATCH it shows the frame's "Found you" beat, then routes on the child's
- * state, decided in one place (`entryRoute`): held at 00d, sent to sign back
- * in, or on into the first run. A held child meets 00d HERE, in place: they
- * have no session, so `/student/waiting` would bounce them to the PIN door,
- * and the address they are on says nothing about why.
+ * state, decided in one place (`entryRoute`): held at 00d or at the age check,
+ * sent to sign back in, or on into the first run. A held child is held HERE,
+ * in place: they have no session, so `/student/waiting` would bounce them to
+ * the PIN door, and the address they are on says nothing about why.
  *
  * A MISS keeps both values as typed and turns Continue into "Try again". It
  * never says which field was wrong.
@@ -135,8 +138,8 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
    * never be told to re-check what they typed because our request failed.
    */
   const [trouble, setTrouble] = useState(false);
-  /** Matched, and consent is not in: 00d, drawn in place. */
-  const [held, setHeld] = useState(false);
+  /** Matched, and held - by consent, or by the age check - drawn in place. */
+  const [held, setHeld] = useState<WaitingHold | null>(null);
 
   const cellRefs = useRef<(HTMLInputElement | null)[]>([]);
   const idRef = useRef<HTMLInputElement>(null);
@@ -240,7 +243,11 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
       case "waiting":
         // Nothing of theirs is kept: a held child is not onboarding.
         clearOnboardingDraft();
-        setHeld(true);
+        setHeld("consent");
+        return;
+      case "age-check":
+        clearOnboardingDraft();
+        setHeld("age-check");
         return;
       case "sign-in":
         clearOnboardingDraft();
@@ -292,7 +299,7 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
     else if (at !== null) backspaceCell(at);
   };
 
-  if (held) return <WaitingOnConsent />;
+  if (held) return <WaitingOnConsent hold={held} />;
 
   const { heading, sub } = FRAMING[framing];
   // The frame takes the tray down once the child has been found.

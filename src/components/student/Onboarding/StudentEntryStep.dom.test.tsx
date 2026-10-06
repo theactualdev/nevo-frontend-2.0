@@ -327,7 +327,10 @@ describe("where a match goes", () => {
   it.each([
     ["pending", { consentState: "pending" }],
     ["withdrawn", { consentState: "withdrawn" }],
-    ["a disputed date of birth", { ageCheckPending: true }],
+    [
+      "pending, with a disputed date of birth too",
+      { consentState: "pending", ageCheckPending: true },
+    ],
   ])("holds a child at 00d, in place, when consent is %s", async (_, over) => {
     lookup.mockResolvedValue(matched(over));
     render(<StudentEntryStep framing="school" />);
@@ -342,6 +345,50 @@ describe("where a match goes", () => {
     // theirs kept for a flow they are not starting.
     expect(push).not.toHaveBeenCalled();
     expect(getOnboardingDraft()).toEqual({});
+  });
+
+  it("holds a child whose date of birth is in dispute, in place, with backend's words", async () => {
+    // B64: the school and the parent disagree, the child cannot start and can
+    // do nothing about it. Told to come back, never what or why - and not
+    // sent to 00d, whose "It will be soon" is a promise about consent.
+    lookup.mockResolvedValue(matched({ ageCheckPending: true }));
+    render(<StudentEntryStep framing="school" />);
+
+    await enterAndSubmit();
+    await afterTheBeat();
+
+    expect(
+      screen.getByRole("heading", {
+        name: "Nevo is checking something with your school",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Come back in a day or two.")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", {
+        name: "Nevo isn't quite ready for you yet",
+      }),
+    ).toBeNull();
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
+    expect(push).not.toHaveBeenCalled();
+    expect(getOnboardingDraft()).toEqual({});
+  });
+
+  it("holds a child at the age check even when they already have a PIN", async () => {
+    lookup.mockResolvedValue(
+      matched({ ageCheckPending: true, accountReady: true }),
+    );
+    render(<StudentEntryStep framing="school" />);
+
+    await enterAndSubmit();
+    await afterTheBeat();
+
+    expect(
+      screen.getByRole("heading", {
+        name: "Nevo is checking something with your school",
+      }),
+    ).toBeInTheDocument();
+    expect(push).not.toHaveBeenCalled();
+    expect(peekSignInHandoff()).toBeNull();
   });
 
   it("holds on an accountReady child too, when their consent is not in", async () => {

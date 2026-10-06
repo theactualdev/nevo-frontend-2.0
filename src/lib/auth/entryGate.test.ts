@@ -193,7 +193,9 @@ describe("entryRoute", () => {
     ...over,
   });
 
-  it("takes a consented child with no account into the first run", () => {
+  it("takes a consented child with no PIN into the first run", () => {
+    // New, or cleared by an adult (SCRUM-216): the lookup cannot tell them
+    // apart, so neither is guessed to be the other.
     expect(entryRoute(state())).toBe("first-run");
   });
 
@@ -202,9 +204,27 @@ describe("entryRoute", () => {
     expect(entryRoute(state({ consentState: "withdrawn" }))).toBe("waiting");
   });
 
-  it("holds a child whose date of birth is in dispute, on the same screen", () => {
-    // Design, 23 Sep: same screen as 00d, same words, different state.
-    expect(entryRoute(state({ ageCheckPending: true }))).toBe("waiting");
+  it("holds a child whose date of birth is in dispute, at the age check", () => {
+    // Backend, B64: the child cannot start and can do nothing about it.
+    expect(entryRoute(state({ ageCheckPending: true }))).toBe("age-check");
+  });
+
+  it("holds at the age check before it signs in", () => {
+    // The age check gates every door a child can reach, sign-in included.
+    expect(
+      entryRoute(state({ ageCheckPending: true, accountReady: true })),
+    ).toBe("age-check");
+  });
+
+  it("holds at 00d, not the age check, while consent is outstanding too", () => {
+    // "A day or two" is backend's word about the age check alone. A child
+    // still waiting on consent has been promised nothing of the kind.
+    expect(
+      entryRoute(state({ ageCheckPending: true, consentState: "pending" })),
+    ).toBe("waiting");
+    expect(
+      entryRoute(state({ ageCheckPending: true, consentState: "withdrawn" })),
+    ).toBe("waiting");
   });
 
   it("holds on a consent state it does not know", () => {
@@ -218,7 +238,8 @@ describe("entryRoute", () => {
     ).toBe("waiting");
   });
 
-  it("sends a child who already has an account to sign back in", () => {
+  it("sends a child who already has a PIN to sign back in", () => {
+    // B64: accountReady means "has a PIN and can sign in normally".
     expect(entryRoute(state({ accountReady: true }))).toBe("sign-in");
   });
 
