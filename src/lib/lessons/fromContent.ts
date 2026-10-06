@@ -636,9 +636,10 @@ export function lessonFromContent(
  * this surface - letting the component's default win keeps one string in one
  * place rather than two that can drift.
  *
- * `masteredConcepts`, `revisitConcepts` and `resultNote` are left unset:
- * backend supplies none of them and none is derivable. Both consuming screens
- * already guard on their absence.
+ * `masteredConcepts`, `revisitConcepts` and `resultNote` are left unset: they
+ * are not on the lesson. The server sends them on the completion write's
+ * answer (B26), and the player hands them to both screens - see
+ * `lib/lessons/checkOutcome`. None is derivable here.
  */
 function assessmentFor(res: LessonDetailResponse): Assessment | undefined {
   const questions = (res.assessment ?? [])

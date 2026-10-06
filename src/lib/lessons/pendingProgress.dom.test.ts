@@ -291,6 +291,22 @@ describe("held progress, replayed", () => {
     );
   });
 
+  it("still says where the check was left (B49)", async () => {
+    // Leaving the after-lesson check offline: the exit is held, and the place
+    // in the check has to survive with it or the check cannot be picked up.
+    const save = vi
+      .spyOn(lessonsApi, "saveProgress")
+      .mockResolvedValue({} as never);
+    holdAs("student-1", "lesson-1", { ...held, check: 2 });
+
+    await flushPendingProgress();
+
+    expect(save).toHaveBeenCalledWith(
+      "lesson-1",
+      expect.objectContaining({ status: "exited", checkPosition: 2 }),
+    );
+  });
+
   it("keeps a completion from an earlier visit when a later one lands", async () => {
     // Today's first segment landing says nothing about yesterday's finish.
     holdAs("student-1", "lesson-1", {
