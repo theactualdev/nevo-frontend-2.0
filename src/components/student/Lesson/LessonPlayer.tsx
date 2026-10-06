@@ -68,6 +68,8 @@ import {
 } from "@/lib/api/lessons";
 import { schedulerApi } from "@/lib/api/scheduler";
 import { attemptFor } from "@/lib/lessons/attempts";
+import { answersBefore, checkResumeAt } from "@/lib/lessons/checkResume";
+import { checkOutcomeFrom } from "@/lib/lessons/checkOutcome";
 import {
   REVIEW_COPY,
   reviewCompletionCopy,
@@ -91,7 +93,11 @@ import { OfflineBanner } from "./OfflineBanner";
 import { ScaffoldIndicator } from "./ScaffoldIndicator";
 import { QuickCheckSheet } from "./QuickCheckSheet";
 import { ReviewEntryScreen } from "./ReviewEntryScreen";
-import { type ReviewAnswer, saveReviewAnswers } from "./reviewStore";
+import {
+  type ReviewAnswer,
+  saveCheckOutcome,
+  saveReviewAnswers,
+} from "./reviewStore";
 import { TeacherNote } from "./TeacherNote";
 import { TextSegment } from "./TextSegment";
 import { VisualSegment } from "./VisualSegment";
@@ -419,6 +425,31 @@ export function LessonPlayer({
     if (phase !== "complete") return;
     markComplete();
   }, [phase, markComplete]);
+
+  /*
+   * B49: A CHECK LEFT PART WAY REOPENS WHERE IT WAS LEFT, the same day.
+   * Decided once, as the child moves into the check - see `beginCheck`.
+   * `landed` is how many of the answers from before landed, once read back;
+   * `reading` while that read is out.
+   */
+  const [checkResume, setCheckResume] = useState<{
+    at: number;
+    landed: number | null;
+    reading: boolean;
+  } | null>(null);
+  // The answers still on their way, which the completion waits for.
+  const attemptWrites = useRef<Promise<unknown>[]>([]);
+
+  /*
+   * B26: THE CHECK-IN'S OUTCOME comes back on the completion write and on no
+   * read, so it is kept here for the summary, which is its own route.
+   */
+  const savedRow = progress.saved;
+  useEffect(() => {
+    if (!live) return;
+    const outcome = checkOutcomeFrom(savedRow);
+    if (outcome) saveCheckOutcome(lesson.id, outcome);
+  }, [live, lesson.id, savedRow]);
 
   /*
    * TELL THE SCHEDULER HOW THE REVIEW WENT. Once, at the end, and only when
@@ -1145,6 +1176,7 @@ export function LessonPlayer({
     // Review sessions end on their own completion - the quick checks were the
     // retrieval, so no second assessment (37d).
     const assess = hasAssessment && !review;
+    if (assess) beginCheck();
     setPhase(assess ? "assessment" : "complete");
     if (!assess) setEnding(COMPLETED);
     if (!assess) recordReview();
@@ -1381,7 +1413,65 @@ export function LessonPlayer({
    */
   const saveAttempt = (body: LessonQuestionAttemptWrite | null) => {
     if (!live || !body) return;
-    void lessonsApi.saveAttempt(lesson.id, body).catch(() => {});
+    attemptWrites.current.push(
+      lessonsApi.saveAttempt(lesson.id, body).catch(() => {}),
+    );
+  };
+
+  /*
+   * B49: INTO THE CHECK, OR BACK INTO IT.
+   *
+   * Where it was left comes off the progress row - the answer to the write
+   * this visit opened with, which is the only read of that row the contract
+   * has. So a child who moves on before that write answers starts the check
+   * fresh, as every check started before this. Decided here, once, and never
+   * moved under a child who is already answering.
+   *
+   * The answers given before the exit are read back from the account, for
+   * Review Answers and so the result knows what landed before.
+   */
+  const beginCheck = () => {
+    // A new run of the check; the last run's outcome is not this one's.
+    saveCheckOutcome(lesson.id, null);
+    const questions = lesson.assessment?.questions ?? [];
+    const at = live ? checkResumeAt(progress.saved, questions.length) : null;
+    if (at === null) return;
+    const asked = progress.sessionId;
+    setCheckResume({ at, landed: null, reading: Boolean(asked) });
+    if (at >= questions.length) finishCheck();
+    if (!asked) return;
+    lessonsApi
+      .attempts(lesson.id, asked)
+      .then((rows) => {
+        const before = answersBefore(rows, questions, at);
+        reviewAnswers.current = [
+          ...before.picks.filter(
+            (p) =>
+              !reviewAnswers.current.some(
+                (a) => a.questionIndex === p.questionIndex,
+              ),
+          ),
+          ...reviewAnswers.current,
+        ];
+        saveReviewAnswers(lesson.id, reviewAnswers.current);
+        setCheckResume({ at, landed: before.landed, reading: false });
+      })
+      // Unread, what landed before stays unknown and the result claims
+      // nothing about it.
+      .catch(() => setCheckResume({ at, landed: null, reading: false }));
+  };
+
+  /*
+   * THE CHECK IS DONE WHEN ITS LAST QUESTION IS ANSWERED, and that is when
+   * the lesson is written complete - not on the tap after the result, which a
+   * child who closes the tab there never makes. It is also the write that
+   * brings the check-in's outcome back (B26), and the server reads that from
+   * the answers it has stored - the last of which went a moment ago - so it
+   * waits for the answers still on their way. Continue and Review answers
+   * still complete at once; `markComplete` sends it once either way.
+   */
+  const finishCheck = () => {
+    void Promise.allSettled(attemptWrites.current).then(() => markComplete());
   };
 
   const requestExit = () => {
@@ -1447,7 +1537,12 @@ export function LessonPlayer({
         assessment={lesson.assessment!}
         reading={readingOn}
         onAudioBusy={(phase) => trackBusy(BUSY_REASON.MEDIA_PLAYING, phase)}
-        onLeave={() => {
+        resumeAt={checkResume?.at}
+        landedBefore={checkResume ? checkResume.landed : 0}
+        landedPending={checkResume?.reading ?? false}
+        outcome={live ? checkOutcomeFrom(progress.saved) : null}
+        onComplete={finishCheck}
+        onLeave={(checkPosition) => {
           /*
            * D36: LEAVING THE CHECK IS NOT FINISHING IT, AND NOT FAILING IT.
            *
@@ -1457,12 +1552,16 @@ export function LessonPlayer({
            * `nothing_landed` send the child down a depth, which is a verdict,
            * and an unfinished check has none to give. The answers already
            * given were stored one by one as they were confirmed.
+           *
+           * B49: and WHERE in the check, so it reopens there the same day.
+           * None from the intro - a check not begun has no place to keep.
            */
           const last = total - 1;
           const pos = modulePositionFor(lesson, last);
           reportProgress(LESSON_STATUS.EXITED, {
             segment: last,
             ...(pos ? { module: pos.moduleIndex } : {}),
+            ...(checkPosition !== undefined ? { check: checkPosition } : {}),
           });
           setEnding({
             completionStatus: "exited",
@@ -1523,6 +1622,11 @@ export function LessonPlayer({
               correct,
               studentId: getSession()?.userId,
               responseTimeMs,
+              // B27: the pick itself, and the lesson it came from.
+              choice: lesson.assessment?.questions[questionIndex]?.options.find(
+                (o) => o.id === selectedId,
+              ),
+              lessonId: lesson.id,
             });
             if (attempt) void scaffoldsApi.attempt(attempt).catch(() => {});
           }

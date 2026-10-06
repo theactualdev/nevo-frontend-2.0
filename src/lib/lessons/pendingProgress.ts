@@ -66,6 +66,11 @@ interface PendingWrite {
   status: LessonStatus;
   segment?: number;
   module?: number;
+  /**
+   * Where the after-lesson check was left (B49). Held with the exit it rode
+   * on, so leaving a check offline still says where to pick it up.
+   */
+  check?: number;
   heldAt: number;
 }
 
@@ -208,6 +213,7 @@ async function deliver(held: PendingWrite): Promise<void> {
     ...(held.assignmentId ? { assignmentId: held.assignmentId } : {}),
     ...(held.segment !== undefined ? { segmentPosition: held.segment } : {}),
     ...(held.module !== undefined ? { modulePosition: held.module } : {}),
+    ...(held.check !== undefined ? { checkPosition: held.check } : {}),
   });
 }
 

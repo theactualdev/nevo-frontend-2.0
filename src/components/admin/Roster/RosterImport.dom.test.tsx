@@ -17,6 +17,7 @@ const get = vi.fn();
 const stageImport = vi.fn();
 const confirm = vi.fn();
 const template = vi.fn();
+const decideMerges = vi.fn();
 
 vi.mock("@/lib/api/onboarding", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/onboarding")>();
@@ -28,6 +29,7 @@ vi.mock("@/lib/api/onboarding", async (importOriginal) => {
       stageImport: (k: string, f: File) => stageImport(k, f),
       confirm: () => confirm(),
       template: (name: string) => template(name),
+      decideMerges: (d: unknown) => decideMerges(d),
     },
   };
 });
@@ -392,5 +394,82 @@ describe("OB-01's expected columns and templates", () => {
     await waitFor(() => expect(get).toHaveBeenCalled());
     await new Promise((r) => setTimeout(r, 20));
     expect(template).not.toHaveBeenCalled();
+  });
+});
+
+describe("OB-02's class questions", () => {
+  /*
+   * The server holds Confirm closed while any spelling is unsettled
+   * (`canConfirm` false; `POST /confirm` refuses with class_merges_unresolved).
+   * This screen never asked, so a school whose file wrote "JSS2A" and "JSS 2A"
+   * could not confirm its roster at all.
+   */
+  const PROPOSAL = {
+    key: "m1",
+    proposedName: "JSS 2A",
+    studentCount: 34,
+    reason: "Same letters and digits.",
+    candidates: [
+      { name: "JSS2A", normalisedName: "jss2a", studentCount: 3, teacherCount: 0 },
+      { name: "JSS 2A", normalisedName: "jss 2a", studentCount: 31, teacherCount: 1 },
+    ],
+  };
+  const ASKING = state({ ...READ, canConfirm: false, classMerges: [PROPOSAL] });
+  const SETTLED = state({ ...READ, canConfirm: true, classMerges: [] });
+  /** As a reader sees it: pieces joined as rendered, apostrophes straightened. */
+  const said = (el: HTMLElement) =>
+    (el.textContent ?? "").replace(/\u2019/g, "'").replace(/\s+/g, " ");
+
+  const open = async () => {
+    get.mockResolvedValue(ASKING);
+    const r = render(<RosterImportView />);
+    fireEvent.click(await screen.findByRole("button", { name: /See what Nevo found/i }));
+    await screen.findByText(/What Nevo found/);
+    return r;
+  };
+  const confirmButton = () => screen.getByRole("button", { name: /^Confirm \d+ student/ });
+
+  it("asks each one, says why Confirm is closed, and leaves it closed", async () => {
+    const { container } = await open();
+    expect(said(container)).toMatch(/JSS2A \(3 students\) and JSS 2A \(31 students\): same class\?/);
+    expect(said(container)).toMatch(/1 class question still to answer before you can go on\./);
+    expect(confirmButton()).toBeDisabled();
+  });
+
+  it("sends Same class with the proposed name, and opens Confirm on the server's word", async () => {
+    decideMerges.mockResolvedValue(SETTLED);
+    const { container } = await open();
+    fireEvent.click(screen.getByRole("button", { name: "Same class" }));
+    await waitFor(() =>
+      expect(decideMerges).toHaveBeenCalledWith([{ key: "m1", merge: true, keepName: "JSS 2A" }]),
+    );
+    await waitFor(() => expect(said(container)).toMatch(/One class: JSS 2A · 34/));
+    expect(said(container)).not.toMatch(/still to answer/);
+    expect(confirmButton()).toBeEnabled();
+    // Nothing undoes a merge, so nothing offers to.
+    expect(screen.queryByRole("button", { name: "Change" })).toBeNull();
+  });
+
+  it("sends Keep separate as a no, and says the classes stay as written", async () => {
+    decideMerges.mockResolvedValue(SETTLED);
+    const { container } = await open();
+    fireEvent.click(screen.getByRole("button", { name: "Keep separate" }));
+    await waitFor(() =>
+      expect(decideMerges).toHaveBeenCalledWith([{ key: "m1", merge: false, keepName: null }]),
+    );
+    await waitFor(() =>
+      expect(said(container)).toMatch(/2 classes, kept exactly as your school wrote them: JSS2A, JSS 2A\./),
+    );
+  });
+
+  it("keeps the question and says why when an answer doesn't save", async () => {
+    decideMerges.mockRejectedValue(
+      new ApiError(409, "x", { detail: { code: "stale", message: "Your file changed since this was asked." } }),
+    );
+    const { container } = await open();
+    fireEvent.click(screen.getByRole("button", { name: "Same class" }));
+    await waitFor(() => expect(said(container)).toMatch(/Your file changed since this was asked\./));
+    expect(screen.getByRole("button", { name: "Same class" })).toBeEnabled();
+    expect(confirmButton()).toBeDisabled();
   });
 });

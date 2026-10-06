@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useSystemMessages } from "@/components/shared/SystemMessages";
 import { useStudentFlags } from "@/hooks/useStudentFlags";
 import { useStudentSessions } from "@/hooks/useStudentSessions";
+import { useTeacherClasses } from "@/hooks/useTeacherClasses";
 import { useRosterObservations } from "@/hooks/useRosterObservations";
 import {
   OBSERVATION_COPY,
@@ -138,6 +139,11 @@ export function LiveStudentProfile({
   /* C08's "What Nevo has noticed", from the class this profile was opened
      from. Also before the guard below. */
   const observations = useRosterObservations(classId, studentId);
+  /* C08 and C14 A5 both draw the way back as "{class} · Roster". */
+  const { liveClasses } = useTeacherClasses();
+  const className = classId
+    ? liveClasses.find((c) => c.classId === classId)?.className
+    : undefined;
   const [sharing, setSharing] = useState(false);
   /**
    * C14 B5's two halves, both driven only by a stored escalation.
@@ -188,6 +194,18 @@ export function LiveStudentProfile({
     read("mastery") === "ready" &&
     !observed &&
     concepts.length === 0;
+  /**
+   * C14 A5 rather than C08's early card: no session and no pattern at all.
+   * Only once the sessions read has answered - a list still loading is not
+   * a child who has never started.
+   */
+  const tooEarly =
+    early &&
+    !sessionsLoading &&
+    !sessionsFailed &&
+    realSessions.length === 0 &&
+    observations.length === 0;
+  const first = student.firstName?.trim() || name.split(" ")[0] || "them";
   /** The sessions section's own failure line, for any section that failed. */
   const failedLine = `We couldn${"’"}t load these just now. Nothing has changed for ${student.firstName ?? "them"}, so you can try again in a moment.`;
 
@@ -201,7 +219,7 @@ export function LiveStudentProfile({
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <path d="M15 6l-6 6 6 6" />
           </svg>
-          {classHref ? "Back to the class" : "My Classes"}
+          {className ? `${className} · Roster` : "My Classes"}
         </Link>
 
         <div className="mt-4 flex items-center gap-4">
@@ -296,23 +314,26 @@ export function LiveStudentProfile({
             still getting to know them" underneath a sentence about what Nevo
             noticed contradicts it. A flag means something was observed, so the
             banner wins and the calm note stands down. */}
-        {early && noticed.length === 0 && (
-          <div className="mt-6 flex max-w-[660px] items-start gap-4 rounded-[12px] bg-nevo-cream-elevated px-[26px] py-6 shadow-elevation-1">
-            <span className="mt-px shrink-0 text-nevo-violet">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        {/*
+          TWO EARLY STATES, AS THE FRAMES DRAW THEM, where there used to be
+          one card of our own words that matched neither.
+          - C08's early card: Nevo has started to see something - a session,
+            or a pattern on the roster - but not enough to read much into.
+          - C14 A5, "too early, no data yet": nothing at all. It is a line
+            under "What Nevo has noticed", further down.
+        */}
+        {early && noticed.length === 0 && !tooEarly && !sessionsLoading && (
+          <div className="mt-[26px] flex max-w-[660px] items-start gap-[13px] rounded-[12px] bg-nevo-violet/16 px-5 py-[18px]">
+            <span className="mt-px shrink-0 text-nevo-navy">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 <circle cx="12" cy="12" r="9" />
-                <path d="M12 16v-4M12 8h.01" />
+                <path d="M12 16v-4" />
+                <path d="M12 8h.01" />
               </svg>
             </span>
-            <div>
-              <h3 className="text-[16px] font-semibold text-nevo-near-black xl:text-[17px]">
-                {`Nevo is still getting to know ${name.split(" ")[0] || "them"}`}
-              </h3>
-              <p className="mt-[5px] text-sm leading-[1.55] text-nevo-near-black/66 xl:text-[14.5px]">
-                A picture builds as they work through lessons. There&rsquo;s
-                nothing to read into a quiet profile this early.
-              </p>
-            </div>
+            <p className="text-[15px] leading-[1.55] text-nevo-near-black/78">
+              {`Still getting a picture of ${first}${"’"}s work. A few more sessions and this will fill in - for now, here${"’"}s the early picture.`}
+            </p>
           </div>
         )}
 
@@ -322,6 +343,16 @@ export function LiveStudentProfile({
           the two screens cannot say different things about one child. A
           count shows only as its own chip, and only where that file allows.
         */}
+        {/* C14 A5's own line, under C08's heading, when there is nothing. */}
+        {early && noticed.length === 0 && tooEarly && (
+          <>
+            <h3 className={cn(SECTION_H, "mt-8")}>What Nevo has noticed</h3>
+            <p className="mt-3 max-w-[560px] text-[14.5px] leading-[1.55] text-nevo-near-black/68">
+              {`Nevo has not seen enough of ${first}${"’"}s work yet to say anything useful.`}
+            </p>
+          </>
+        )}
+
         {observations.length > 0 && (
           <>
             <h3 className={cn(SECTION_H, "mt-8")}>What Nevo has noticed</h3>
@@ -442,64 +473,6 @@ export function LiveStudentProfile({
           </>
         )}
 
-        {/* C16c - what Nevo quietly adjusted, and why. */}
-        {adaptations.length === 0 && read("adaptations") === "failed" && (
-          <>
-            <h3 className="mt-8 block text-[11px] font-bold tracking-[0.14em] text-nevo-violet uppercase">
-              {ADAPTATIONS_LABEL}
-            </h3>
-            <p className="mt-3 text-[14px] leading-[1.55] text-nevo-near-black/68">
-              {failedLine}
-            </p>
-          </>
-        )}
-
-        {adaptations.length > 0 && (
-          <>
-            <h3 className="mt-8 block text-[11px] font-bold tracking-[0.14em] text-nevo-violet uppercase">
-              {ADAPTATIONS_LABEL}
-            </h3>
-            <p className="mt-2 text-[13px] text-nevo-near-black/60">
-              {`Nevo quietly adjusts lessons based on how each student learns. Here is what has happened for ${name.split(" ")[0] || "them"} recently.`}
-            </p>
-            <div className="mt-3.5 flex flex-col gap-2 xl:mt-4">
-              {adaptations.map((entry) => (
-                <div
-                  key={entry.id}
-                  className="flex items-start gap-3.5 rounded-[8px] bg-nevo-cream-elevated px-[18px] py-4 xl:gap-4"
-                >
-                  <span className="w-[46px] shrink-0 pt-px text-[12px] text-nevo-near-black/55">
-                    {new Date(entry.timestamp).toLocaleDateString("en-GB", {
-                      day: "numeric",
-                      month: "short",
-                    })}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <span className="block text-[13px] font-semibold text-nevo-near-black">
-                      {entry.lessonTitle}
-                    </span>
-                    <p className="mt-1 text-[13px] leading-[1.55] text-nevo-near-black/72">
-                      {entry.adaptation}
-                    </p>
-                    {entry.trigger && (
-                      <p className="mt-1 text-[12.5px] leading-[1.5] text-nevo-near-black/55">
-                        {`After noticing: ${entry.trigger}`}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <p className="mt-4 text-[12px] leading-[1.55] text-nevo-near-black/55 italic">
-              {ADAPTATIONS_FOOTNOTE_MAIN}
-              <span className="hidden xl:inline">
-                {" "}
-                {ADAPTATIONS_FOOTNOTE_DESKTOP_TAIL}
-              </span>
-            </p>
-          </>
-        )}
-
         {/*
           REAL SESSIONS, NOT LESSON PROGRESS.
           
@@ -575,6 +548,62 @@ export function LiveStudentProfile({
           </>
         )}
 
+        {/* C16c - what Nevo quietly adjusted, and why. BELOW the lesson
+            history, where C16c places it; it sat above the sessions. The
+            frame draws no "After noticing" line, and `trigger` is a free
+            string nobody has reviewed for this screen, so it is not shown. */}
+        {adaptations.length === 0 && read("adaptations") === "failed" && (
+          <>
+            <h3 className="mt-8 block text-[11px] font-bold tracking-[0.14em] text-nevo-violet uppercase">
+              {ADAPTATIONS_LABEL}
+            </h3>
+            <p className="mt-3 text-[14px] leading-[1.55] text-nevo-near-black/68">
+              {failedLine}
+            </p>
+          </>
+        )}
+
+        {adaptations.length > 0 && (
+          <>
+            <h3 className="mt-8 block text-[11px] font-bold tracking-[0.14em] text-nevo-violet uppercase">
+              {ADAPTATIONS_LABEL}
+            </h3>
+            <p className="mt-2 text-[13px] text-nevo-near-black/60">
+              {`Nevo quietly adjusts lessons based on how each student learns. Here is what has happened for ${name.split(" ")[0] || "them"} recently.`}
+            </p>
+            <div className="mt-3.5 flex flex-col gap-2 xl:mt-4">
+              {adaptations.map((entry) => (
+                <div
+                  key={entry.id}
+                  className="flex items-start gap-3.5 rounded-[8px] bg-nevo-cream-elevated px-[18px] py-4 xl:gap-4"
+                >
+                  <span className="w-[46px] shrink-0 pt-px text-[12px] text-nevo-near-black/55">
+                    {new Date(entry.timestamp).toLocaleDateString("en-GB", {
+                      day: "numeric",
+                      month: "short",
+                    })}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <span className="block text-[13px] font-semibold text-nevo-near-black">
+                      {entry.lessonTitle}
+                    </span>
+                    <p className="mt-1 text-[13px] leading-[1.55] text-nevo-near-black/72">
+                      {entry.adaptation}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="mt-4 text-[12px] leading-[1.55] text-nevo-near-black/55 italic">
+              {ADAPTATIONS_FOOTNOTE_MAIN}
+              <span className="hidden xl:inline">
+                {" "}
+                {ADAPTATIONS_FOOTNOTE_DESKTOP_TAIL}
+              </span>
+            </p>
+          </>
+        )}
+
         {/* C08's help-seeking line, per design (1 Sep): the activity section,
             below the engagement data, one plain line at the surrounding scale
             - not a card, not a badge.
@@ -619,7 +648,9 @@ export function LiveStudentProfile({
             onClick={() => setSharing(true)}
             className="inline-flex h-[50px] cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 px-[22px] text-[15px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
           >
-            Share with Learning Support
+            {/* C08's label. The sheet it opens is "Share with Learning
+                Support"; the button that opens it is not. */}
+            Flag for support
           </button>
         </div>
 
