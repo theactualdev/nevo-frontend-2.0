@@ -5,19 +5,12 @@ export const metadata: Metadata = {
   title: "Welcome - Nevo",
 };
 
-// The onboarding flow entry is the Welcome Screen (B.1). Subsequent steps
-// (name, school, class) live under /student/onboarding/*.
+// The onboarding flow entry is the Welcome Screen (B.1). Both of its doors
+// lead to the one entry screen: `/student/onboarding/school` (05) and
+// `/student/onboarding/teacher-join` (03).
 //
-// `?token=` is the join link's hand-off. It is read here, on the server, so
-// the client never needs `useSearchParams` and its Suspense boundary for a
-// value that is known before the page renders.
-//
-// Next.js 16: `searchParams` is a Promise and must be awaited.
-export default async function StudentOnboardingPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ token?: string }>;
-}) {
-  const { token } = await searchParams;
-  return <WelcomeScreen joinToken={token} />;
+// No `?token=` any more. It was the join link's hand-off, and a child is never
+// sent a link (design, D5).
+export default function StudentOnboardingPage() {
+  return <WelcomeScreen />;
 }

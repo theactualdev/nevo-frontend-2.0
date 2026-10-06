@@ -20,8 +20,10 @@ import { cn } from "@/lib/utils";
  *
  * Two ways to store it, because there are two ways to arrive:
  *   - with a session, `POST /auth/pin` (Bearer-only);
- *   - with a join link and no session yet, `storePin` is supplied by the
- *     caller and redeems the invitation, which is what creates the account.
+ *   - with no session yet, `storePin` is supplied by the caller and binds the
+ *     PIN to the child 05 Entry found - `bindFirstPin`, `POST
+ *     /student-entry/pin` (B64). A refusal there is this screen's not-saved
+ *     state.
  *
  * A path with neither is the one that cannot honestly promise anything, and
  * it no longer pretends: see `onboarding.ts`.
@@ -127,9 +129,10 @@ export function PinCreationScreen({
    */
   reset?: boolean;
   /**
-   * Store the PIN when there is no session to store it against - the join
-   * redemption. Rejecting keeps the child on this screen rather than
-   * advancing on a PIN that would be refused at the next sign-in.
+   * Store the PIN when there is no session to store it against - the first
+   * PIN, bound to the child 05 Entry found. Rejecting keeps the child on this
+   * screen rather than advancing on a PIN that would be refused at the next
+   * sign-in.
    */
   storePin?: (pin: string) => Promise<void>;
   onComplete: () => void;
@@ -230,14 +233,15 @@ export function PinCreationScreen({
          *   attributing one child's data to another.
          *
          * The two arrivals were always distinguishable without asking about
-         * tokens. `storePin` is passed by `ObservedInteractionSequence`; it
-         * redeems a join link or spends an onboarding token and carries its
-         * own identity. Change PIN does not render this screen: it draws its
-         * own steps around `pinReducer` and calls `setPin` itself, with the
-         * current PIN. So the `setPin` branch below is reached only by a
-         * caller that passes no `storePin`, and only for a signed-in student,
-         * the one case `setPin` is right for. (A child whose PIN a teacher
-         * cleared has no session; the entry flow passes `storePin` for them.)
+         * tokens. `storePin` is passed by `ObservedInteractionSequence`, the
+         * only screen that renders this one; it binds the PIN to the child 05
+         * Entry found and carries its own identity. Change PIN does
+         * not render this screen: it draws its own steps around `pinReducer`
+         * and calls `setPin` itself, with the current PIN. So the `setPin`
+         * branch below is reached only by a caller that passes no `storePin`,
+         * and only for a signed-in student - the one case `setPin` is right
+         * for. (A child whose PIN a teacher cleared has no session; the entry
+         * flow passes `storePin` for them.)
          */
         const session = getSession();
         const store = storePinRef.current

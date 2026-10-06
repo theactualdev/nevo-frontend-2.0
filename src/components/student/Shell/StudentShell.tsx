@@ -314,7 +314,8 @@ const PROFILE_HREF = "/student/profile";
 const isLesson = isLessonRoute;
 
 /**
- * The consent hold (00d) and the school-link door that can end on it.
+ * The consent hold (00d). Its other door, 05 Entry, is under onboarding and
+ * full-screen already.
  *
  * A HOLD IS NOT A TAB. These rendered inside the full app chrome, so a child
  * the server said may not proceed was shown the navigation, the bell and Ask
@@ -323,9 +324,7 @@ const isLesson = isLessonRoute;
  * draws the hold bare. So it is full-screen.
  */
 function isHoldRoute(pathname: string): boolean {
-  return (
-    pathname === "/student/waiting" || pathname.startsWith("/student/entry")
-  );
+  return pathname === "/student/waiting";
 }
 
 /**
@@ -344,8 +343,8 @@ export function scalesWithTextSize(pathname: string): boolean {
 }
 
 /**
- * The routes that run without chrome: onboarding, the consent hold and its
- * door, the lesson player, Feedback and Change PIN, and the daily warm-up.
+ * The routes that run without chrome: onboarding, the consent hold, the
+ * lesson player, Feedback and Change PIN, and the daily warm-up.
  */
 function isFullScreen(pathname: string): boolean {
   if (pathname.startsWith("/student/onboarding")) return true;

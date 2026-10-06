@@ -23,6 +23,10 @@ import {
   type ConsoleDoor,
 } from "@/lib/auth/consoleDoor";
 import { rememberProfile } from "@/lib/auth/session";
+import {
+  clearSignInHandoff,
+  peekSignInHandoff,
+} from "@/lib/auth/signInHandoff";
 import { studentDestination } from "@/lib/auth/entryGate";
 import { useAuth } from "@/hooks";
 import {
@@ -55,6 +59,10 @@ import { WrongDoorNote } from "./WrongDoorNote";
  * Nevo issued (backend, 1 Oct), so the field sends exactly what the child
  * types, as `loginIdentifier`, and the server decides which one it is. The
  * help row points at the person who can read it out.
+ *
+ * PRE-FILLED FROM 05 ENTRY for a child the lookup says already has an
+ * account (`accountReady`): they typed the code and the ID one screen ago,
+ * and only the PIN is left. See `signInHandoff`.
  *
  * "DIDN'T MATCH" KEEPS THE FIELDS FILLED, per the frame - only the PIN clears.
  * Making a child retype a school code and a username they have just been read
@@ -94,8 +102,15 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
   const router = useRouter();
   const { signIn } = useAuth();
 
-  const [schoolCode, setSchoolCode] = useState("");
-  const [username, setUsername] = useState("");
+  // From 05, when it sent this child here; empty on any other arrival.
+  const [schoolCode, setSchoolCode] = useState(() =>
+    normaliseCode(peekSignInHandoff()?.schoolCode ?? "", SCHOOL_CODE_MAX),
+  );
+  const [username, setUsername] = useState(() =>
+    (peekSignInHandoff()?.identifier ?? "").slice(0, USERNAME_MAX),
+  );
+  // Spent once this screen has it, so the next visit starts empty.
+  useEffect(() => clearSignInHandoff(), []);
   const [digits, setDigits] = useState("");
   const [done, setDone] = useState(false);
   /** This sign-in ended the account's session elsewhere (D2). */

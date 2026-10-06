@@ -10,31 +10,33 @@ import {
 import { ObservedInteractionSequence } from "./ObservedInteractionSequence";
 import {
   clearOnboardingDraft,
-  mergeOnboardingDraft,
+  startOnboardingDraft,
 } from "@/lib/auth/onboarding";
-import { clearSession, getRememberedProfile } from "@/lib/auth/session";
+import { ApiError } from "@/lib/api/client";
+import {
+  clearSession,
+  getRememberedProfile,
+  getSession,
+} from "@/lib/auth/session";
 
 /**
- * The last two screens of onboarding, walked end to end with each earlier
- * screen reduced to the one button that moves it on.
+ * The last screens of onboarding, walked end to end with each earlier screen
+ * reduced to the one button that moves it on.
  *
- * Two things went wrong here for every child who joined by link or class code:
- *   - "You're In" sent them to the Lessons tab, never their first lesson. The
- *     dashboard read was mounted with the sequence, before the account existed,
- *     so it had no token, returned early, and nothing ran it again.
- *   - The tablet never remembered them. The join gives no school code, and the
- *     one the account has on `users/me` was never asked for.
+ * The child arrives from 05 Entry, which matched them on their school code and
+ * Student ID and left that pair in the draft. The PIN step binds the PIN to
+ * that pair through `bindFirstPin` (`POST /student-entry/pin`, B64). These
+ * tests drive the path both ways, stored and refused. The real binding,
+ * against the real PIN screen, is
+ * `ObservedInteractionSequence.firstPin.dom.test.tsx`.
  */
 
-const { push, acceptJoin, me, myDashboard, myConsentGate } = vi.hoisted(
-  () => ({
-    push: vi.fn(),
-    acceptJoin: vi.fn(),
-    me: vi.fn(),
-    myDashboard: vi.fn(),
-    myConsentGate: vi.fn(),
-  }),
-);
+const { push, bindFirstPin, myDashboard, myConsentGate } = vi.hoisted(() => ({
+  push: vi.fn(),
+  bindFirstPin: vi.fn(),
+  myDashboard: vi.fn(),
+  myConsentGate: vi.fn(),
+}));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, replace: vi.fn(), back: vi.fn() }),
@@ -44,8 +46,10 @@ vi.mock("@/hooks", () => ({
   useSignals: () => ({ trackEvent: vi.fn(), flush: vi.fn() }),
 }));
 vi.mock("@/lib/api", () => ({ authApi: {} }));
-vi.mock("@/lib/api/invites", () => ({ invitesApi: { acceptJoin } }));
-vi.mock("@/lib/api/users", () => ({ usersApi: { me } }));
+vi.mock("@/lib/auth/firstPin", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/auth/firstPin")>();
+  return { ...actual, bindFirstPin };
+});
 vi.mock("@/lib/api/students", () => ({ studentsApi: { myDashboard } }));
 vi.mock("@/lib/api/consents", () => ({ consentsApi: { myConsentGate } }));
 vi.mock("@/lib/profiling/pendingBaseline", () => ({
@@ -63,6 +67,11 @@ vi.mock("@/components/student/Profiling/ProfilingFlow", () => ({
     <button onClick={() => onDone("run-1")}>after profiling</button>
   ),
 }));
+/*
+ * The PIN screen's own contract, in one button: store, and move on only if the
+ * store resolved. A rejection keeps the child here, which the real screen
+ * shows as its not-saved line.
+ */
 vi.mock("./PinCreationScreen", () => ({
   PinCreationScreen: ({
     storePin,
@@ -71,7 +80,13 @@ vi.mock("./PinCreationScreen", () => ({
     storePin: (pin: string) => Promise<void>;
     onComplete: () => void;
   }) => (
-    <button onClick={() => void storePin("1234").then(onComplete)}>
+    <button
+      onClick={() =>
+        void storePin("1234").then(onComplete, () => {
+          /* not saved: stay on the PIN step */
+        })
+      }
+    >
       set pin
     </button>
   ),
@@ -93,17 +108,22 @@ vi.mock("./YoureInScreen", () => ({
 
 const future = () => new Date(Date.now() + 60 * 60 * 1000).toISOString();
 
+/** What 05 left behind for a matched child. */
+const MATCHED = {
+  name: "Amara",
+  age: 11,
+  schoolCode: "K7DQ",
+  admissionNumber: "BGA/2031",
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   clearSession();
   window.localStorage.clear();
-  clearOnboardingDraft();
-  // A child who arrived by join link: a name, an invitation, no school code.
-  mergeOnboardingDraft({ name: "Amara Kalu", joinToken: "tok-1" });
-  acceptJoin.mockResolvedValue({
+  startOnboardingDraft(MATCHED);
+  bindFirstPin.mockResolvedValue({
     userId: "student-9",
-    role: "student",
-    loginIdentifier: "amara.k",
+    loginIdentifier: "NV-A1B2C3",
     session: {
       accessToken: "tok-s",
       tokenType: "bearer",
@@ -112,7 +132,6 @@ beforeEach(() => {
       role: "student",
     },
   });
-  me.mockResolvedValue({ school: { code: "751A1136" } });
   myDashboard.mockResolvedValue({
     student: {},
     assignments: [
@@ -130,17 +149,64 @@ afterEach(() => {
   clearOnboardingDraft();
 });
 
-/** Walk the sequence to "You're In", creating the account on the way. */
-async function walkToYoureIn() {
+/** Walk the sequence to the PIN step and set one. */
+function walkToPin() {
   render(<ObservedInteractionSequence />);
   fireEvent.click(screen.getByRole("button", { name: "after transition" }));
   fireEvent.click(screen.getByRole("button", { name: "after profiling" }));
   fireEvent.click(screen.getByRole("button", { name: "Continue" }));
   fireEvent.click(screen.getByRole("button", { name: "set pin" }));
+}
+
+async function walkToYoureIn() {
+  walkToPin();
   await screen.findByRole("button", { name: "you are in" });
 }
 
-describe("You're In, for a child who joined by link", () => {
+describe("the first PIN", () => {
+  it("is bound to the pair 05 matched the child on, and nothing else", async () => {
+    await walkToYoureIn();
+
+    expect(bindFirstPin).toHaveBeenCalledWith(
+      { schoolCode: "K7DQ", admissionNumber: "BGA/2031" },
+      "1234",
+    );
+  });
+
+  it("keeps the child on the PIN step when the server refuses it", async () => {
+    // Nothing celebrates, nobody is signed in, and the device remembers
+    // nobody. Nor is the baseline delivered: there is no session to send it on.
+    bindFirstPin.mockRejectedValue(new ApiError(422, "refused"));
+
+    walkToPin();
+    await act(async () => {});
+
+    expect(screen.getByRole("button", { name: "set pin" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "you are in" })).toBeNull();
+    expect(getSession()).toBeNull();
+    expect(getRememberedProfile()).toBeNull();
+  });
+
+  it("asks for nothing when the run did not start on 05", async () => {
+    // A typed URL straight into the sequence: there is nobody to attach a
+    // PIN to, and guessing would attach it to the wrong child.
+    startOnboardingDraft({ name: "Amara" });
+
+    walkToPin();
+    await act(async () => {});
+
+    expect(bindFirstPin).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "you are in" })).toBeNull();
+  });
+});
+
+describe("You're In, once the PIN is bound", () => {
+  it("signs the child in with the session the binding returned", async () => {
+    await walkToYoureIn();
+
+    expect(getSession()).toMatchObject({ userId: "student-9", role: "student" });
+  });
+
   it("reads their lessons once the account exists", async () => {
     await walkToYoureIn();
 
@@ -155,21 +221,33 @@ describe("You're In, for a child who joined by link", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "you are in" }));
 
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/student/lessons/L-7"));
+    await waitFor(() =>
+      expect(push).toHaveBeenCalledWith("/student/lessons/L-7"),
+    );
   });
 
-  it("is remembered by the tablet, with the account's own school code", async () => {
+  it("is remembered by the tablet, with the school code they typed", async () => {
     await walkToYoureIn();
 
     expect(screen.getByText("remembered:true")).toBeInTheDocument();
     expect(getRememberedProfile()).toMatchObject({
-      schoolCode: "751A1136",
-      loginIdentifier: "amara.k",
+      schoolCode: "K7DQ",
+      loginIdentifier: "NV-A1B2C3",
     });
   });
 
-  it("is told to ask their teacher only when the account's code cannot be read", async () => {
-    me.mockRejectedValue(new Error("offline"));
+  it("says the tablet will not know them when no identifier came back", async () => {
+    bindFirstPin.mockResolvedValue({
+      userId: "student-9",
+      loginIdentifier: null,
+      session: {
+        accessToken: "tok-s",
+        tokenType: "bearer",
+        expiresAt: future(),
+        userId: "student-9",
+        role: "student",
+      },
+    });
 
     await walkToYoureIn();
 
