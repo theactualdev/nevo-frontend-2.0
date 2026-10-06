@@ -37,7 +37,7 @@ import { useSetupGate } from "@/hooks";
 import { AddGuardianForm } from "./AddGuardianForm";
 import { CANNOT_SEND_LINE, useMaySendConsent } from "./consentRole";
 import { EraseRecordModal } from "./EraseRecordModal";
-import { IssuePinSheet } from "./IssuePinSheet";
+import { ClearPinSheet } from "./ClearPinSheet";
 import { MoveStudentSheet } from "./MoveStudentSheet";
 import { NoAccess, failureKind } from "../NoAccess";
 import { WriteFailed } from "../WriteFailed";
@@ -87,7 +87,7 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
   const [moving, setMoving] = useState(false);
   /** D24 / D01b: every change to a student pauses while setup is unfinished. */
   const { writesPaused } = useSetupGate();
-  const [issuingPin, setIssuingPin] = useState(false);
+  const [clearingPin, setClearingPin] = useState(false);
   const [confirmDeactivate, setConfirmDeactivate] = useState(false);
   const [erasing, setErasing] = useState(false);
   const [working, setWorking] = useState(false);
@@ -585,14 +585,15 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
             <div>
               <button
                 type="button"
-                onClick={() => setIssuingPin(true)}
+                onClick={() => setClearingPin(true)}
                 disabled={writesPaused}
                 className={TEXT_ACTION}
               >
-                Give {firstName} a new PIN
+                Clear {firstName}&rsquo;s PIN
               </button>
               <p className="mt-1.5 max-w-[420px] text-[13px] leading-[1.5] text-nevo-near-black/55">
-                For when they can&rsquo;t get in. You hand it over in person.
+                For when they can&rsquo;t get in. They choose a new one
+                themselves.
               </p>
             </div>
             <div>
@@ -627,15 +628,14 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
       ) : null}
 
       {/*
-        * NO `load()` ON CLOSE, unlike the sheets around it. A new PIN changes
-        * nothing this screen renders, and a reload here would replace the
-        * record underneath an admin who is still copying the number down.
+        * NO `load()` ON CLOSE, unlike the sheets around it. A cleared PIN
+        * changes nothing this screen renders.
         */}
-      {issuingPin ? (
-        <IssuePinSheet
+      {clearingPin ? (
+        <ClearPinSheet
           studentId={student.id}
           studentName={name}
-          onClose={() => setIssuingPin(false)}
+          onClose={() => setClearingPin(false)}
         />
       ) : null}
 
