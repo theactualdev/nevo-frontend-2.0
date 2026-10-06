@@ -31,14 +31,17 @@ const FILTERS: { id: Filter; label: string }[] = [
 ];
 
 /**
- * What a chip's empty list says. "No completed lessons yet" is the frame's
- * (29 Empty States); the other two chips are undrawn and keep the line that
- * shipped, flagged to design rather than written here.
+ * What a chip's empty list says, in 29 Empty States' words for each chip
+ * (design D102, 6 Oct). "All" with nothing under it and no search typed has
+ * no drawn line and keeps the one that shipped.
+ *
+ * 29 draws these over `illustration-empty-search.png`, which we do not have
+ * (asked, D127), so the chip states keep the illustration they had.
  */
 const FILTERED_EMPTY: Record<Filter, string> = {
   all: "Nothing in that group yet",
-  in_progress: "Nothing in that group yet",
-  not_started: "Nothing in that group yet",
+  in_progress: "Nothing in progress right now.",
+  not_started: "Nothing waiting.",
   completed: "No completed lessons yet",
 };
 

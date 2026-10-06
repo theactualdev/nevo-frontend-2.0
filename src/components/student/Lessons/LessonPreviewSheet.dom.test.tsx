@@ -101,11 +101,11 @@ describe("what the preview says about where a child is", () => {
     expect(screen.getByRole("button", { name: "Continue" })).toBeInTheDocument();
   });
 
-  it("draws a finished lesson as finished, not as new or partway", () => {
+  it("draws a finished lesson as 21 now does, not as new or partway", () => {
     /*
-     * Design D22. It read exactly like a lesson never started. Frame 21 draws
-     * no completed state, so this is the minimum: the card's completed mark
-     * and the filter's word, with no partway line and no Continue.
+     * Design D22 found it reading exactly like a lesson never started; D100
+     * (6 Oct) drew the state: a 34px navy disc with a check, "You finished
+     * this one.", and "Look again" - no partway line, no Continue, no Start.
      */
     render(
       <LessonPreviewSheet
@@ -115,20 +115,41 @@ describe("what the preview says about where a child is", () => {
       />,
     );
 
-    expect(screen.getByText("Completed")).toBeInTheDocument();
+    const line = screen.getByText("You finished this one.");
+    const disc = line.querySelector("[data-finished-disc]");
+    expect(disc?.className).toMatch(/\bsize-\[34px\]/);
+    expect(disc?.className).toMatch(/\bbg-nevo-navy\b/);
+    expect(line.className).toMatch(/\btext-\[15px\]/);
+    expect(line.className).toMatch(/\bfont-medium\b/);
+    expect(screen.queryByText("Completed")).toBeNull();
     expect(screen.queryByText(/partway/)).toBeNull();
     expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Start" })).toBeNull();
 
-    // It opens the same lesson, from the top; the player does not write it
-    // back as unfinished (see `LessonPlayer.finished`).
-    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    // It opens the same lesson, from the top, as "Start" did; the player does
+    // not write it back as unfinished (see `LessonPlayer.finished`).
+    fireEvent.click(screen.getByRole("button", { name: "Look again" }));
     expect(push).toHaveBeenCalledWith("/student/lessons/l-1?assignment=asg-7");
   });
 
-  it("does not call a lesson never started completed", () => {
+  it("does not call a lesson never started finished", () => {
     render(<LessonPreviewSheet lesson={LESSON} open onOpenChange={() => {}} />);
 
-    expect(screen.queryByText("Completed")).toBeNull();
+    expect(screen.queryByText(/finished/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Look again" })).toBeNull();
     expect(screen.queryByText(/partway/)).toBeNull();
+  });
+
+  it("does not call a lesson partway finished", () => {
+    render(
+      <LessonPreviewSheet
+        lesson={{ ...LESSON, status: "in_progress" }}
+        open
+        onOpenChange={() => {}}
+      />,
+    );
+
+    expect(screen.queryByText(/finished/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Look again" })).toBeNull();
   });
 });

@@ -170,6 +170,29 @@ describe("the empty state names what is actually narrowing the list", () => {
     expect(body()).toMatch(/No completed lessons yet/);
   });
 
+  it.each([
+    // Design D102, 6 Oct: 29 Empty States draws each chip's own line.
+    ["In Progress", "completed", "Nothing in progress right now."],
+    ["Not Started", "completed", "Nothing waiting."],
+    ["Completed", "not_started", "No completed lessons yet"],
+  ])(
+    "says the %s chip's own line when it empties the list",
+    (chip, status, line) => {
+      lessons.value = [lesson({ status })];
+      render(<LessonsTab />);
+
+      fireEvent.click(screen.getByRole("button", { name: chip }));
+
+      expect(
+        screen.getByRole("heading", { level: 2, name: line }),
+      ).toBeInTheDocument();
+      expect(body()).not.toMatch(/Nothing in that group yet/);
+      expect(
+        screen.getByRole("button", { name: "Clear filter" }),
+      ).toBeInTheDocument();
+    },
+  );
+
   it("restores the list from a chip with the control the frame draws", () => {
     // The half that made the old button look broken: it cleared the query and
     // left the chip, so tapping it changed nothing a child could see.
