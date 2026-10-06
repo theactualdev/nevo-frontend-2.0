@@ -170,18 +170,19 @@ describe("a compliance audit that fails", () => {
     expect(pasted).not.toMatch(/Diagnostic labels stored/);
   });
 
-  it("still denies the whole page on a 403, which is not a card failing", async () => {
+  it("treats a 403 as this card's scope, not a failure, and not the page's", async () => {
+    // Until 6 Oct a refused audit denied the whole page. An IT admin now
+    // lands here without oversight, and the server serves them the rest.
     audit.mockRejectedValue(new ApiError(403, "forbidden"));
     const { container } = render(<OverviewView />);
 
     await waitFor(() =>
-      expect(visibleText(container)).toMatch(
-        /don't have access to the school overview/i,
-      ),
+      expect(visibleText(container)).toMatch(/shown to admins with General Oversight/),
     );
-    // No half-built dashboard beside the refusal.
-    expect(visibleText(container)).not.toMatch(/Students enrolled/);
-    expect(visibleText(container)).not.toMatch(/Try again/);
+    expect(visibleText(container)).toMatch(/Two hundred and forty students have been learning/);
+    expect(visibleText(container)).not.toMatch(/don't have access to the school overview/i);
+    // A scope does not become granted by asking again.
+    expect(visibleText(container)).not.toMatch(/couldn't pull this in/i);
   });
 });
 

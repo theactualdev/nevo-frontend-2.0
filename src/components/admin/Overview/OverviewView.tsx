@@ -40,7 +40,9 @@ import {
 import { intelligenceApi, type AttentionFlag } from "@/lib/api/intelligence";
 import { invitesApi } from "@/lib/api/invites";
 import { studentsApi, type AdminStudentRow } from "@/lib/api/students";
-import { NoAccess, failureKind } from "../NoAccess";
+import { failureKind } from "../NoAccess";
+import { scopeName } from "../Team/adminScopes";
+import { useCanOpen } from "../Shell/useCanOpen";
 
 /**
  * D04 Overview Dashboard - the first thing a general-oversight admin sees,
@@ -115,14 +117,19 @@ import { NoAccess, failureKind } from "../NoAccess";
 const CARD = "rounded-xl bg-nevo-cream-elevated shadow-[0_2px_8px_rgba(0,0,0,0.06)]";
 
 /**
- * No "failed". A read that fails costs its own card now, and the page renders
- * around it - so the only thing that can still stop the whole screen is a
- * scope this admin does not hold.
+ * No "failed", and no longer "denied". A read that fails costs its own card,
+ * and the page renders around it. A refused one does too, since the 6 Oct
+ * ruling: an IT admin lands here without `oversight`, and the backend serves
+ * the headcounts and the board summary to any admin - so a refused compliance
+ * read costs the compliance card, not the school.
  */
-type Phase = "loading" | "ready" | "denied";
+type Phase = "loading" | "ready";
 
-/** A card that loads, and fails, on its own. */
-type CardPhase = "loading" | "ready" | "failed";
+/**
+ * A card that loads, and fails, on its own. `denied` is a scope this admin
+ * does not hold - said as such, never as a failure to retry.
+ */
+type CardPhase = "loading" | "ready" | "failed" | "denied";
 
 /** D04's two board-pack glyphs, traced from the frame. */
 function CopyGlyph() {
@@ -186,6 +193,7 @@ export function OverviewView() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [audit, setAudit] = useState<ComplianceAudit | null>(null);
   const [auditPhase, setAuditPhase] = useState<CardPhase>("loading");
+  const mayOpen = useCanOpen();
   const [adaptationTotal, setAdaptationTotal] = useState<number | null>(null);
   /** The commercial band, for the one denominator that has a source. */
   const [band, setBand] = useState<EnrolmentBand | undefined>(undefined);
@@ -233,13 +241,11 @@ export function OverviewView() {
       // tick, which went when the row became "Share your school code"
       // (manual-only launch). One request fewer on every Overview load.
     ]).then(([res, log, n, ov]) => {
-      if (!res.ok && failureKind(res.err) === "denied") {
-        setPhase("denied");
-        return;
-      }
       const a = res.ok ? res.a : null;
       setAudit(a);
-      setAuditPhase(res.ok ? "ready" : "failed");
+      setAuditPhase(
+        res.ok ? "ready" : failureKind(res.err) === "denied" ? "denied" : "failed",
+      );
       setNarrative(n);
       setNarrativeFailed(n === null);
       setCounts(ov ? ov.counts : null);
@@ -452,8 +458,6 @@ export function OverviewView() {
           <div className={cn(CARD, "mt-6 h-[300px] animate-pulse")} />
         )}
 
-        {phase === "denied" && <NoAccess what="the school overview" />}
-
         {phase === "ready" && (
           <>
             {/* Narrative. Real only in the early case, where the frame's copy
@@ -609,6 +613,21 @@ export function OverviewView() {
                     What we store &rarr;
                   </Link>
                 </>
+              ) : auditPhase === "denied" ? (
+                /* Not a failure and not a finding: this admin's account does
+                   not include the check. Said once, with who can change it -
+                   the ruling's "the proprietor promotes them". */
+                <>
+                  <h3 className="text-[15px] font-semibold text-nevo-near-black">
+                    Diagnostic labels stored
+                  </h3>
+                  <p className="mt-2 max-w-[56ch] text-sm leading-[1.6] text-nevo-near-black/62">
+                    The compliance check and your school&rsquo;s learning
+                    activity are shown to admins with{" "}
+                    {scopeName("oversight")}. Whoever manages permissions for
+                    your school can add it to your account.
+                  </p>
+                </>
               ) : auditPhase === "failed" ? (
                 /* SCRUM-39's per-card failure, in its own words. It must not
                    read as a compliance finding: nothing about this school's
@@ -676,7 +695,7 @@ export function OverviewView() {
                     <p className="mt-px text-[13px] text-nevo-near-black/58">
                       {t.desc}
                     </p>
-                    {t.href && t.cta && (
+                    {t.href && t.cta && mayOpen(t.href) && (
                       <Link
                         href={t.href}
                         className="mt-3 inline-block text-[13.5px] font-semibold text-nevo-navy hover:underline"
@@ -787,7 +806,7 @@ export function OverviewView() {
                       </div>
                     );
                   }
-                  return k.href ? (
+                  return k.href && mayOpen(k.href) ? (
                     <Link
                       key={k.title}
                       href={k.href}
@@ -805,15 +824,8 @@ export function OverviewView() {
             ) : (
             glance.length > 0 && (
               <div className={cn(CARD, "mt-3 overflow-hidden")}>
-                {glance.map((g, i) => (
-                  <Link
-                    key={g.key}
-                    href={g.href}
-                    className={cn(
-                      "flex items-center gap-4 px-[22px] py-[18px] transition-[filter] hover:brightness-[0.985]",
-                      i < glance.length - 1 && "border-b border-nevo-near-black/7",
-                    )}
-                  >
+                {glance.map((g, i) => {
+                  const body = (
                     <span className="flex min-w-0 flex-1 flex-col">
                       <span className="text-[15px] font-semibold text-nevo-near-black">
                         {g.title}
@@ -822,11 +834,34 @@ export function OverviewView() {
                         {g.sub}
                       </span>
                     </span>
-                    <span className="shrink-0 text-[13.5px] font-semibold text-nevo-navy">
-                      {g.action} &rarr;
-                    </span>
-                  </Link>
-                ))}
+                  );
+                  const rowClass = cn(
+                    "flex items-center gap-4 px-[22px] py-[18px]",
+                    i < glance.length - 1 && "border-b border-nevo-near-black/7",
+                  );
+                  /*
+                   * NO LINK TO A REFUSAL. "Open Learning Support" went to a
+                   * screen that refuses every admin without SENCo - the
+                   * founding admin and an IT admin among them. The row still
+                   * states what the school's own read found.
+                   */
+                  return mayOpen(g.href) ? (
+                    <Link
+                      key={g.key}
+                      href={g.href}
+                      className={cn(rowClass, "transition-[filter] hover:brightness-[0.985]")}
+                    >
+                      {body}
+                      <span className="shrink-0 text-[13.5px] font-semibold text-nevo-navy">
+                        {g.action} &rarr;
+                      </span>
+                    </Link>
+                  ) : (
+                    <div key={g.key} className={rowClass}>
+                      {body}
+                    </div>
+                  );
+                })}
               </div>
             )
             )}

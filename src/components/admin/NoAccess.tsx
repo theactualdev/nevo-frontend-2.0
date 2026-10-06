@@ -1,7 +1,11 @@
 "use client";
 
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { ApiError } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
+import { activeNavLabel } from "./Shell/adminNav";
+import { useAdminHome } from "./Shell/useCanOpen";
 
 /**
  * What a scope-gated screen shows when the admin is refused.
@@ -48,6 +52,15 @@ export function NoAccess({
   what: string;
   className?: string;
 }) {
+  /*
+   * THE WAY BACK. No retry - but a refusal used to be a dead end too, and the
+   * audit asked for "return to Overview". Not the Overview for everyone: it is
+   * this admin's own home (`adminHomeForScopes`), which is somewhere they can
+   * open, and nothing at all when they are already on it.
+   */
+  const home = useAdminHome();
+  const here = usePathname();
+  const back = home && home !== here ? home : null;
   return (
     <div className={cn(CARD, "px-[26px] py-7", className)}>
       <h3 className="m-0 text-[17px] font-semibold text-nevo-near-black">
@@ -59,6 +72,14 @@ export function NoAccess({
       </p>
       {/* Deliberately NO retry. A refused scope does not become granted by
           asking again, and a button that cannot work is worse than none. */}
+      {back ? (
+        <Link
+          href={back}
+          className="mt-4 inline-block text-[13.5px] font-semibold text-nevo-navy hover:underline"
+        >
+          Go to {activeNavLabel(back) ?? "your console"}
+        </Link>
+      ) : null}
     </div>
   );
 }
