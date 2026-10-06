@@ -20,7 +20,40 @@
  * Primary case is the shared classroom tablet at 768x1024, which is why the
  * copy is centred in the viewport rather than near the top.
  */
-export function WaitingOnConsent() {
+export type WaitingHold = "consent" | "age-check";
+
+/**
+ * 00d's words, and the age check's.
+ *
+ * THE AGE CHECK'S ARE BACKEND'S, NOT DESIGN'S. The school and the parent
+ * disagree about the child's date of birth, the child can do nothing about
+ * it, and backend (B64) asked that the screen say Nevo is checking something
+ * with their school and to come back in a day or two. No frame draws it, and
+ * design ruled on 23 Sep that the age check takes 00d's own words, so this is
+ * backend's sentence on 00d's layout until design rules again. Like 00d, it
+ * never says what is being checked and never asks the child to sort it out.
+ */
+export const WAITING_COPY: Record<
+  WaitingHold,
+  { heading: string; line: string }
+> = {
+  consent: {
+    heading: "Nevo isn't quite ready for you yet",
+    line: "It will be soon.",
+  },
+  "age-check": {
+    heading: "Nevo is checking something with your school",
+    line: "Come back in a day or two.",
+  },
+};
+
+export function WaitingOnConsent({
+  hold = "consent",
+}: {
+  /** What holds the child. Changes the words only, never the screen. */
+  hold?: WaitingHold;
+} = {}) {
+  const { heading, line } = WAITING_COPY[hold];
   return (
     <div className="flex min-h-dvh flex-col bg-nevo-cream">
       {/* Same cropped wordmark as the PIN beat and the picker, so the doors do
@@ -52,10 +85,10 @@ export function WaitingOnConsent() {
         />
 
         <h1 className="m-0 max-w-[440px] text-[27px] leading-[1.3] font-medium tracking-[-0.01em] text-nevo-near-black">
-          Nevo isn&apos;t quite ready for you yet
+          {heading}
         </h1>
         <p className="mt-[18px] max-w-[420px] text-[17px] leading-[1.6] text-nevo-near-black/70">
-          It will be soon.
+          {line}
         </p>
       </div>
     </div>

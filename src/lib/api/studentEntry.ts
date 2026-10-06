@@ -1,73 +1,96 @@
 import { api } from "./client";
 
 /**
- * `GET|POST /api/v1/student-entry/*` - the entry link, re-sequenced.
+ * `POST /api/v1/student-entry/lookup` - 05 Entry's one screen (SCRUM-208) -
+ * and `POST /api/v1/student-entry/pin`, which stores the first PIN at the end
+ * of the run the lookup starts (SCRUM-216).
  *
- * **PUBLIC, and that is the point.** Both paths are addressed by a token and
- * neither needs a session, because this is the flow in which a session comes to
- * exist. Same shape as `invitesApi.lookupJoin`.
+ * **PUBLIC, and that is the point.** The child has no account yet, and the
+ * school's code plus their own Student ID / Admission Number is what says who
+ * they are. The school code comes first because an admission number is only
+ * unique within one school.
  *
- * WHAT CHANGED, AND WHY IT IS NOT A RE-SKIN. The old sequence collected a
- * child's name, school and class, sat them through the whole baseline, and only
- * then redeemed the link. This one resolves the child FROM THE TOKEN - the
- * school already recorded them - so `firstName`, `className` and `age` arrive
- * before the first screen rather than being asked for. Frame 31 (22 Sep):
- * *"Consent is checked at entry, before the sequence - never here."*
+ * WHAT CHANGED, AND WHY IT IS NOT A RE-SKIN. The old sequence asked a child for
+ * their name, age, school and class, sat them through the whole baseline, and
+ * only then found out who they were. The roster already knew all of it, so the
+ * lookup states `firstName`, `className` and `age` rather than asking - and says
+ * where consent stands before the first activity.
+ *
+ * IT REPLACED THE ENTRY LINK. `GET /student-entry/{token}` never resolved for
+ * anyone - nothing ever wrote a grant naming a child, so every token 404'd -
+ * and backend retired it (B2). Its client went with it.
  *
  * **THIS MODULE IS TRANSPORT AND NOTHING ELSE.** It declares what the wire
- * carries so the fields stop being erased. It decides nothing about who may
- * proceed - see `consents.ts`, where the same restraint is written down at
- * greater length, and the 23 Sep note about the ruling that has not landed.
+ * carries so the fields stop being erased. Who may proceed is decided in one
+ * place, `entryRoute` in `lib/auth/entryGate`.
  */
 
 /**
  * Where the school's consent for this child stands, at entry.
  *
- * TWO VALUES, NOT THE FOUR `ConsentStatus` CARRIES. This is not the same field
- * as `ConsentRecord.status` and must not be narrowed to it: `not_sent` and
- * `pending` are a distinction the school cares about and the child cannot see,
- * and the wire collapses them here deliberately. A child is waiting or they are
- * not.
- *
- * `withdrawn` is absent, and that absence is real rather than an omission: a
- * withdrawal concerns a child who already has an account, which is the state
- * this endpoint exists to precede. Withdrawal enforcement stays where it is,
- * on `processingWithdrawn`.
+ * THREE VALUES, NOT THE FOUR `ConsentStatus` CARRIES, and it must not be
+ * narrowed to it: `not_sent` and `pending` are a distinction the school cares
+ * about and the child cannot see, and the wire collapses them deliberately.
+ * `withdrawn` arrived with the lookup; the entry link had only two.
  */
-export type EntryConsentState = "given" | "pending";
+export type EntryConsentState = "given" | "pending" | "withdrawn";
 
-/** `GET /api/v1/student-entry/{token}`. */
+/** What a child types on 05: the school's code, then their own ID. */
+export interface StudentEntryLookup {
+  /** Four characters since SCRUM-201; the contract still bounds it 2-50. */
+  schoolCode: string;
+  /** Matched against `admission_number` on that school's roster. 1-60. */
+  admissionNumber: string;
+}
+
+/** 200 of `POST /api/v1/student-entry/lookup`. */
 export interface StudentEntryState {
   /** The school recorded it. Not asked for, and not editable here. */
   firstName: string;
   className: string | null;
   consentState: EntryConsentState;
+  /** Computed server-side from the roster's date of birth. Null is possible. */
   age: number | null;
   /**
-   * Whether an account exists for this child yet.
+   * "This child has a PIN and can sign in normally" (backend, B64), which
+   * sends them to sign back in rather than through a first run.
    *
-   * **NOT READ BY ANYTHING, PENDING AN ANSWER.** Declared so it is not erased.
-   * The name admits two readings - "no account yet, so create a PIN" and "not
-   * cleared to have one" - and they route a child to different screens. Asked
-   * 23 Sep; until it is answered, nothing branches on it.
+   * FALSE FOR TWO DIFFERENT CHILDREN: a new one, and one whose PIN an adult
+   * cleared (SCRUM-216). Both have no PIN, and nothing on this response tells
+   * them apart - see `entryRoute`.
    */
   accountReady: boolean;
   /**
-   * A disputed date of birth, which is NOT a missing consent.
+   * The school and the parent disagree about the child's date of birth
+   * (backend, B64). NOT a missing consent: the child cannot start, and there
+   * is nothing they can do about it.
    *
-   * `AgeCheckResponse.blocksAccess` is the same fact from the other direction,
-   * and `AgeCheckState` (`matched | mismatch | resolved | awaiting_parent`)
-   * says why. **RULED 23 SEP: it holds the child at the SAME screen as a
-   * missing consent, with the same words, and the child is told neither
-   * reason.** Design: a disputed date of birth is two adults disagreeing with
-   * each other, and telling a child invites them to go and settle it - which
-   * makes a child the arbiter between their parent and their school. The adults
-   * are told in full on the administrator's surface. Read by `StudentEntry`.
+   * The spec gives it no description. `AgeCheckResponse.blocksAccess` is the
+   * same fact from the other direction, and `AgeCheckState` (`matched |
+   * mismatch | resolved | awaiting_parent`) says why - none of which the
+   * child is told. Optional because the contract gives it a default rather
+   * than requiring it.
    */
   ageCheckPending?: boolean;
 }
 
-/** 200 of `POST /api/v1/student-entry/{token}/pin`. */
+/**
+ * What `POST /api/v1/student-entry/pin` takes (`StudentPinSetup`): the pair 05
+ * matched the child on, and the PIN they chose on 15.
+ */
+export interface StudentPinSetup {
+  schoolCode: string;
+  admissionNumber: string;
+  /** Exactly four digits in the contract. */
+  pin: string;
+}
+
+/**
+ * 200 of `POST /api/v1/student-entry/pin`: the first PIN is stored, and a
+ * session starts with it. The PIN length it also returns is deliberately not
+ * declared: nothing may build against it until SCRUM-179 settles the
+ * six-digit case.
+ */
 export interface StudentEntrySession {
   userId: string;
   /** The only identifier the next sign-in will recognise. Null is possible. */
@@ -84,31 +107,35 @@ export interface StudentEntrySession {
 
 export const studentEntryApi = {
   /**
-   * PUBLIC. What an entry link resolves to.
+   * PUBLIC. Which child has arrived, from the school's code and their own ID.
    *
-   * **A SINGLE RESOLVE, NEVER A POLL**, and that is a design instruction rather
-   * than an efficiency: frame 00d says *"no progress, no countdown, no refresh,
-   * no door held shut... when consent arrives, opening the link again goes
-   * straight to the assessment."* The screen this feeds is the one that
-   * replaced a gate which polled. Anything that re-checks on a timer re-creates
-   * it.
+   * ONE CALL PER PRESS OF CONTINUE, never a poll. Frame 00d replaced a gate
+   * that polled, and a held child is told to come back rather than kept at a
+   * spinner for a decision an adult makes on another day.
+   *
+   * The spec declares only the 200 and a 422. What a pair that names nobody
+   * answers with is not written down - see the entry step, which reads any
+   * other 4xx as the server's answer about the pair.
    */
-  resolve: (token: string) =>
-    api.get<StudentEntryState>(
-      `/api/v1/student-entry/${encodeURIComponent(token)}`,
-    ),
+  lookup: (payload: StudentEntryLookup) =>
+    api.post<StudentEntryState>("/api/v1/student-entry/lookup", payload),
 
   /**
-   * PUBLIC. Set the PIN and become an account.
+   * PUBLIC. Store a first PIN for the child the lookup found, and start their
+   * session (SCRUM-216, B64). The only caller is `bindFirstPin`.
    *
-   * `PinChoice` is 4-8 digits, and since 25 Sep so is every door that later
-   * checks it. Until then `PinLoginRequest.pin` was `^\d{6}$`, so a four-digit
-   * PIN set here would have been refused on every later sign-in - which is why
-   * `STUDENT_PIN_LENGTH` stayed at 6 until the unlock door was relaxed.
+   * IT OPENS ONLY WHILE THE CHILD HAS NO PIN, so it cannot overwrite a
+   * classmate's credential, and it is gated on consent and the age check like
+   * every other door a child can reach. The spec declares only the 200 and a
+   * 422; the refusals backend describes carry no declared status or code.
+   *
+   * The body is spelled out rather than passed through, so the contract check
+   * can compare its keys against `StudentPinSetup`.
    */
-  setPin: (token: string, pin: string) =>
-    api.post<StudentEntrySession>(
-      `/api/v1/student-entry/${encodeURIComponent(token)}/pin`,
-      { pin },
-    ),
+  setPin: ({ schoolCode, admissionNumber, pin }: StudentPinSetup) =>
+    api.post<StudentEntrySession>("/api/v1/student-entry/pin", {
+      schoolCode,
+      admissionNumber,
+      pin,
+    }),
 };

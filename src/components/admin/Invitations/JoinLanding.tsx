@@ -39,14 +39,15 @@ import { PRIMARY_BTN, Spinner } from "../Roster/primitives";
  * Amara" cannot be personalised. The greeting is warm but general rather than
  * addressed to somebody we cannot name.
  *
- * DONE. This read: "Students do not: they land on onboarding with the token in
- * the query and nothing yet reads it... the student half of this handoff is not
- * finished until that route exists."
- *
- * Four files read it. `app/student/onboarding/page.tsx` passes `?token=`
- * through as `joinToken`, `WelcomeScreen` persists it to the onboarding draft,
- * `NameAndAgeStep` routes on it, and `ObservedInteractionSequence` redeems it
- * with `invitesApi.acceptJoin`. Both halves of the handoff are finished.
+ * NO CHILD BRANCH (design, 1 Oct, D5). A child is never sent a link - a child
+ * has no email - so no child reaches this page, and it serves teacher
+ * invitations only. Children come in through the school code and their
+ * Student ID on 05 Entry (SCRUM-208). SCRUM-215 takes the student role out of
+ * the invitation machinery on the backend; until it lands
+ * `InvitableRole` still carries `student`, so a student link that resolves
+ * meets the dead-link panel rather than a door into onboarding that no longer
+ * exists. Its words fit: the link is no longer a way in, and the school
+ * administrator is who can say what is.
  */
 
 /**
@@ -82,10 +83,11 @@ export function JoinLanding({ token }: { token: string }) {
       });
   }, [token, attempt]);
 
-  const valid = phase === "ready";
-  const invalid = phase === "failed";
-
   const isTeacher = (lookup?.role ?? "").toLowerCase() === "teacher";
+  // A good link for a role this page no longer serves - see the docblock.
+  const valid = phase === "ready" && isTeacher;
+  const invalid = phase === "failed" || (phase === "ready" && !isTeacher);
+
   /*
    * `via=join` matters. The activation screen serves two token namespaces -
    * admin-team invitations and product-access join links - and posts to a
@@ -93,9 +95,7 @@ export function JoinLanding({ token }: { token: string }) {
    * the admin-team accept, which does not know them, so a teacher invited
    * from the admin console could never redeem their link.
    */
-  const onward = isTeacher
-    ? `/auth/teacher/activate?token=${encodeURIComponent(token)}&via=join`
-    : `/student/onboarding?token=${encodeURIComponent(token)}`;
+  const onward = `/auth/teacher/activate?token=${encodeURIComponent(token)}&via=join`;
 
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center bg-nevo-cream px-6 py-12">
@@ -140,7 +140,7 @@ export function JoinLanding({ token }: { token: string }) {
               Welcome
             </h1>
             <p className="m-0 mt-2.5 text-[15px] text-nevo-near-black/62">
-              You are joining as {isTeacher ? "a teacher" : "a student"}
+              You are joining as a teacher
             </p>
             <Link href={onward} className={cn(PRIMARY_BTN, "mt-8 w-full justify-center")}>
               Get started

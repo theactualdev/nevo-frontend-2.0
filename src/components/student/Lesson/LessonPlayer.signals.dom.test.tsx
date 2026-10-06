@@ -224,7 +224,7 @@ describe("what became of a modality offer", () => {
     ]);
   });
 
-  it("says when the player held one back", () => {
+  it("does not report one the player held back - the server writes that itself", () => {
     runtime.value = engineSuggests("seg-1");
     const { rerender } = render(<LessonPlayer lesson={THREE} plan={null} live />);
     beat();
@@ -236,14 +236,10 @@ describe("what became of a modality offer", () => {
     runtime.value = engineSuggests("seg-2");
     rerender(<LessonPlayer lesson={THREE} plan={null} live />);
 
-    expect(sent("adaptation_suppressed")).toEqual([
-      {
-        segmentId: "seg-2",
-        adaptation: "modality_suggestion",
-        suggested: "audio",
-        reason: "consecutive_segment",
-      },
-    ]);
+    // `adaptation_suppressed` is server-written (B37); sending it doubled the
+    // engine's count. The offer is still held back - it just isn't reported.
+    expect(sent("adaptation_suppressed")).toEqual([]);
+    expect(screen.queryByRole("button", { name: "Not now" })).toBeNull();
   });
 
   it("offers the engine's one load-time suggestion once, not on every other segment", () => {

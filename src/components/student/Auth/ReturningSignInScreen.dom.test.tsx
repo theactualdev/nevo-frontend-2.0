@@ -4,6 +4,11 @@ import { ReturningSignInScreen } from "./ReturningSignInScreen";
 import { ApiError } from "@/lib/api/client";
 import * as authApiModule from "@/lib/api";
 import { clearSession, getRememberedProfile } from "@/lib/auth/session";
+import {
+  clearSignInHandoff,
+  handSignInOver,
+  peekSignInHandoff,
+} from "@/lib/auth/signInHandoff";
 
 /**
  * The door that was not there.
@@ -679,8 +684,43 @@ describe("the form as 00c draws it", () => {
   it("keeps the help on its own row, pointing at the teacher", () => {
     render(<ReturningSignInScreen />);
 
-    expect(screen.getByText(/Don't know your username\?/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Don't know your Student ID \/ Admission Number\?/),
+    ).toBeInTheDocument();
     expect(screen.getByText("Ask your teacher.")).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/username/i);
+  });
+
+  it("labels the second field as 00c does, and draws it empty", () => {
+    render(<ReturningSignInScreen />);
+
+    const field = screen.getByLabelText("Student ID / Admission Number");
+    expect(field).toHaveValue("");
+    // It said "Ask your teacher", which the help row already says.
+    expect(field).not.toHaveAttribute("placeholder");
+  });
+
+  it("sends a Student ID exactly as typed, under the field the server reads", async () => {
+    // Sign-in matches the school's Student ID or Nevo's handle (backend,
+    // 1 Oct). A slash is not stripped and nothing is upper-cased.
+    loginPin.mockResolvedValue(SESSION);
+    render(<ReturningSignInScreen />);
+    fill({ user: "BGA/2031" });
+
+    await signInNow();
+
+    expect(loginPin).toHaveBeenCalledWith(
+      expect.objectContaining({ loginIdentifier: "BGA/2031" }),
+    );
+  });
+
+  it("centres the school code, as 00c centres its cells", () => {
+    render(<ReturningSignInScreen />);
+
+    const code = screen.getByLabelText("School code");
+    expect(code.parentElement?.parentElement?.className).toContain(
+      "[&_input]:text-center",
+    );
   });
 
   it("asks them to try again after a PIN that did not match, in the tinted box", async () => {
@@ -692,7 +732,7 @@ describe("the form as 00c draws it", () => {
 
     expect(
       screen.getByText(
-        "Hmm, that didn't match. Check your school code and username with your teacher and try again.",
+        "Hmm, that didn't match. Check your school code and Student ID / Admission Number with your teacher and try again.",
       ),
     ).toBeVisible();
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
@@ -828,5 +868,62 @@ describe("the name the device learns (B35)", () => {
     });
 
     expect(getRememberedProfile()?.displayName).toBe("Ama");
+  });
+});
+
+/**
+ * 05 Entry sends a child the lookup says already has an account here, rather
+ * than through a first run that would make them a second one. They typed the
+ * school code and their Student ID one screen ago; only the PIN is left.
+ */
+describe("arriving from 05 Entry", () => {
+  afterEach(() => clearSignInHandoff());
+
+  it("labels the second field as the frame does, both words", () => {
+    render(<ReturningSignInScreen />);
+
+    expect(
+      screen.getByLabelText("Student ID / Admission Number"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Your username")).toBeNull();
+  });
+
+  it("starts with the school code and Student ID the child already typed", () => {
+    handSignInOver({ schoolCode: "K7DQ", identifier: "BGA/2031" });
+    render(<ReturningSignInScreen />);
+
+    const [schoolField, idField] = screen.getAllByRole("textbox");
+    expect(schoolField).toHaveValue("K7DQ");
+    expect(idField).toHaveValue("BGA/2031");
+  });
+
+  it("spends the hand-off, so the next visit starts empty", () => {
+    handSignInOver({ schoolCode: "K7DQ", identifier: "BGA/2031" });
+    const first = render(<ReturningSignInScreen />);
+    first.unmount();
+
+    expect(peekSignInHandoff()).toBeNull();
+    render(<ReturningSignInScreen />);
+    const [schoolField, idField] = screen.getAllByRole("textbox");
+    expect(schoolField).toHaveValue("");
+    expect(idField).toHaveValue("");
+  });
+
+  it("signs in with the Student ID as typed, which sign-in accepts", async () => {
+    loginPin.mockResolvedValue(SESSION);
+    handSignInOver({ schoolCode: "K7DQ", identifier: "BGA/2031" });
+    render(<ReturningSignInScreen />);
+    act(() => pinInput().focus());
+    for (const d of ["1", "2", "3", "4"]) {
+      fireEvent.click(screen.getByRole("button", { name: d }));
+    }
+
+    await signInNow();
+
+    expect(loginPin).toHaveBeenCalledWith({
+      schoolCode: "K7DQ",
+      loginIdentifier: "BGA/2031",
+      pin: "1234",
+    });
   });
 });

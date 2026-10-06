@@ -25,6 +25,7 @@ const ctx = vi.hoisted(() => ({
     notifications: [] as unknown[],
     unreadCount: 0,
     failed: false,
+    loading: false,
     refresh: vi.fn(),
     markRead: vi.fn(),
     showingSamples: false,
@@ -47,6 +48,7 @@ beforeEach(() => {
     notifications: [],
     unreadCount: 0,
     failed: false,
+    loading: false,
     refresh: vi.fn(),
     markRead: vi.fn(),
     showingSamples: false,
@@ -167,5 +169,18 @@ describe("each row's mark", () => {
 
     expect(rowFor("Unread one").querySelector("[aria-label='Unread']")).not.toBeNull();
     expect(rowFor("Read one").querySelector("[aria-label='Unread']")).toBeNull();
+  });
+});
+
+describe("a feed that has not answered yet", () => {
+  it("claims nothing while the read is in flight", () => {
+    // "Nothing new right now" is a statement about the child's feed; before
+    // the feed answers it is a guess, and the same panel opened a second later
+    // could show three new rows.
+    ctx.value = { ...ctx.value, loading: true };
+    openPanel();
+
+    expect(screen.getByRole("status", { name: "Loading" })).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/Nothing new right now/i);
   });
 });
