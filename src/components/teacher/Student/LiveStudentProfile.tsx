@@ -2,9 +2,15 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
+import { useSystemMessages } from "@/components/shared/SystemMessages";
 import { useStudentFlags } from "@/hooks/useStudentFlags";
 import { useStudentSessions } from "@/hooks/useStudentSessions";
+import { useRosterObservations } from "@/hooks/useRosterObservations";
+import {
+  OBSERVATION_COPY,
+  observationCount,
+} from "@/lib/constants/observations";
 import { LiveSessionPanel } from "./LiveSessionPanel";
 import { LiveRecommendSheet } from "./LiveRecommendSheet";
 import { LiveShareSheet } from "./LiveShareSheet";
@@ -53,8 +59,14 @@ import { MasteryDualTrack } from "./MasteryDualTrack";
  * absent "for want of an endpoint", and that was never true: the flags route
  * has taken `studentId` all along and `description` is required on every flag
  * it returns. It renders Nevo's own sentences, dated, claiming no window - see
- * `useStudentFlags`. The confidence dimensions beside it in the frame are not
- * deferred either; design deleted the confidence rating outright on 17 Sep.
+ * `useStudentFlags`.
+ *
+ * "WHAT NEVO HAS NOTICED" IS LIVE TOO (6 Oct). This comment used to fold it
+ * into the confidence rating design deleted on 17 Sep, and they were never one
+ * thing: the rating went, the observations stayed in C08. They arrive on the
+ * class roster and not on the profile read, so they are read from the class
+ * the row came from - see `useRosterObservations` - and the section is
+ * absent when there is no class to ask.
  *
  * STILL ABSENT: the "what Nevo has seen" evidence list, which has an endpoint
  * that does not fit it - see `students.ts`.
@@ -66,8 +78,6 @@ import { MasteryDualTrack } from "./MasteryDualTrack";
 const SECTION_H =
   "text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase xl:text-sm";
 
-/** Matches ConnectView, which is the console's other C14 toast. */
-const TOAST_MS = 3000;
 
 /** The support Nevo turned on, named the way the console talks about it. */
 const ACCOMMODATION_LABEL: Record<string, string> = {
@@ -93,6 +103,7 @@ export function LiveStudentProfile({
   state,
   studentId,
   classHref,
+  classId,
   recommendOpen = false,
 }: {
   state: StudentProfileState;
@@ -103,6 +114,8 @@ export function LiveStudentProfile({
    */
   studentId: string;
   classHref?: string;
+  /** The class the roster row came from; observations are read from it. */
+  classId?: string;
   recommendOpen?: boolean;
 }) {
   const router = useRouter();
@@ -122,6 +135,9 @@ export function LiveStudentProfile({
   /* The noticing banner's source. Like the sessions list, it needs the id
      before `profile` is destructured. */
   const { noticed } = useStudentFlags(studentId);
+  /* C08's "What Nevo has noticed", from the class this profile was opened
+     from. Also before the guard below. */
+  const observations = useRosterObservations(classId, studentId);
   const [sharing, setSharing] = useState(false);
   /**
    * C14 B5's two halves, both driven only by a stored escalation.
@@ -135,15 +151,8 @@ export function LiveStudentProfile({
    * nothing about history.
    */
   const [shared, setShared] = useState(false);
-  const [toast, setToast] = useState(false);
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(
-    () => () => {
-      if (toastTimer.current) clearTimeout(toastTimer.current);
-    },
-    [],
-  );
+  /* C14 B5's toast is the shared bar now: frame 43 made them one thing. */
+  const say = useSystemMessages();
   const {
     profile,
     concepts,
@@ -305,6 +314,40 @@ export function LiveStudentProfile({
               </p>
             </div>
           </div>
+        )}
+
+        {/*
+          C08's "What Nevo has noticed": the engine's own patterns, in the
+          copy file's sentences - the same source as the roster's chips, so
+          the two screens cannot say different things about one child. A
+          count shows only as its own chip, and only where that file allows.
+        */}
+        {observations.length > 0 && (
+          <>
+            <h3 className={cn(SECTION_H, "mt-8")}>What Nevo has noticed</h3>
+            <div className="mt-3.5 flex flex-col gap-3.5 xl:mt-4 xl:grid xl:grid-cols-2">
+              {observations.map((o) => {
+                const chip = observationCount(o.pattern, o.count);
+                return (
+                  <div
+                    key={o.pattern}
+                    className="flex items-start justify-between gap-4 rounded-xl bg-nevo-cream-elevated p-[22px] shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
+                  >
+                    <p className="text-[15.5px] leading-[1.45] font-medium text-pretty text-nevo-near-black xl:text-[16.5px]">
+                      {OBSERVATION_COPY[o.pattern].body(
+                        student.firstName?.trim() || "They",
+                      )}
+                    </p>
+                    {chip && (
+                      <span className="shrink-0 rounded-full bg-nevo-violet/24 px-[11px] py-1 text-[12.5px] font-semibold whitespace-nowrap text-nevo-navy">
+                        {chip}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </>
         )}
 
         {concepts.length === 0 && read("mastery") === "failed" && (
@@ -617,25 +660,18 @@ export function LiveStudentProfile({
             firstName={student.firstName ?? name}
             onCancel={() => setSharing(false)}
             /* C14 B5, and every part of it waits on a stored escalation: the
-               sheet dismisses, the toast confirms, the quiet note settles. */
+               sheet dismisses, the bar confirms, the quiet note settles. */
             onSent={() => {
               setSharing(false);
               setShared(true);
-              setToast(true);
-              if (toastTimer.current) clearTimeout(toastTimer.current);
-              toastTimer.current = setTimeout(() => setToast(false), TOAST_MS);
+              say.show({
+                kind: "confirm",
+                message: `Sent to Learning Support. They${"’"}ll take it from here.`,
+              });
             }}
           />
         )}
 
-        {toast && (
-          <div
-            role="status"
-            className="fixed bottom-7 left-1/2 z-50 -translate-x-1/2 rounded-[10px] bg-nevo-near-black px-[18px] py-3 text-[14.5px] font-medium text-nevo-cream shadow-[0_6px_24px_rgba(0,0,0,0.22)]"
-          >
-            {`Sent to Learning Support. They${"’"}ll take it from here.`}
-          </div>
-        )}
       </div>
     </div>
   );
