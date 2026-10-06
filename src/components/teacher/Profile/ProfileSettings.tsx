@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
+import { useSystemMessages } from "@/components/shared/SystemMessages";
 import { Toggle } from "@/components/teacher/shared/Toggle";
 import { useAccessibility } from "@/context/AccessibilityContext";
 import {
@@ -25,8 +26,11 @@ import { SignOutModal } from "./SignOutModal";
  *
  * The save model comes from C14 B6, which C11 itself never draws: a "Save
  * changes" button sits in the header, stays disabled until something is
- * actually dirty, and on save a toast confirms while the page stays exactly
- * where it was. Flagged - C11's header is a bare heading.
+ * actually dirty, and on save the shared bar confirms while the page stays
+ * exactly where it was. Flagged - C11's header is a bare heading. (C14 drew a
+ * NevoToast; frame 43 made it the one shared bar, so this screen's own toast
+ * went - including a failed save that cleared itself after three seconds,
+ * where SM-03 says a failure stays until dismissed.)
  *
  * The Accessibility rows drive the app-wide AccessibilityContext, so they do
  * what their own sub-copy promises - "across Nevo", "across the console" -
@@ -46,7 +50,6 @@ const SECTION_H3 =
 const CARD =
   "mt-3.5 overflow-hidden rounded-xl bg-nevo-cream-elevated shadow-[0_2px_8px_rgba(0,0,0,0.06)]";
 
-const TOAST_MS = 3000;
 
 export function ProfileSettings() {
   const a11y = useAccessibility();
@@ -63,15 +66,7 @@ export function ProfileSettings() {
   // Name, email, school and subjects - all of it real, all from one call.
   const { identity, status: identityStatus } = useCurrentUserStatus();
   const [signOutOpen, setSignOutOpen] = useState(false);
-  const [toast, setToast] = useState("");
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(
-    () => () => {
-      if (timer.current) clearTimeout(timer.current);
-    },
-    [],
-  );
+  const say = useSystemMessages();
 
   const flip = (id: string) => {
     notifications.set(
@@ -102,7 +97,7 @@ export function ProfileSettings() {
   };
 
   /**
-   * The toast follows the save's real outcome, not the click. A failed write
+   * The message follows the save's real outcome, not the click. A failed write
    * that says "Settings saved" is the one thing this button must never do,
    * and the row stays dirty so the teacher can try again.
    */
@@ -110,9 +105,11 @@ export function ProfileSettings() {
     if (!dirty || notifications.saveState === "saving") return;
     void notifications.save().then((ok) => {
       if (ok) setDirty(false);
-      setToast(ok ? "Settings saved" : "We couldn’t save that. Try again");
-      if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(() => setToast(""), TOAST_MS);
+      say.show(
+        ok
+          ? { kind: "confirm", message: "Settings saved" }
+          : { kind: "failed", message: "We couldn’t save that. Try again" },
+      );
     });
   };
 
@@ -364,9 +361,7 @@ export function ProfileSettings() {
               // rather than showing the old name until a reload.
               publishIdentity(saved);
               setEditOpen(false);
-              setToast("Profile updated");
-              if (timer.current) clearTimeout(timer.current);
-              timer.current = setTimeout(() => setToast(""), TOAST_MS);
+              say.show({ kind: "confirm", message: "Profile updated" });
               return true;
             } catch {
               return false;
@@ -377,22 +372,6 @@ export function ProfileSettings() {
 
       {signOutOpen && <SignOutModal onStay={() => setSignOutOpen(false)} />}
 
-      {/* C14 NevoToast */}
-      {toast && (
-        <div
-          role="status"
-          className="fixed top-5 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2.5 rounded-full bg-nevo-navy py-3 pr-[22px] pl-[15px] shadow-[0_12px_32px_rgba(0,0,0,0.22)] motion-safe:animate-nevo-pop xl:top-6"
-        >
-          <span className="flex size-[22px] shrink-0 items-center justify-center rounded-full bg-nevo-cream/20 text-nevo-cream">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <path d="M20 6L9 17l-5-5" />
-            </svg>
-          </span>
-          <span className="text-[14.5px] font-semibold whitespace-nowrap text-nevo-cream">
-            {toast}
-          </span>
-        </div>
-      )}
     </div>
   );
 }
