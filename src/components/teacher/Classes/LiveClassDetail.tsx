@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   OBSERVATION_COPY,
   observationCount,
@@ -17,12 +16,17 @@ import {
   useClassRoster,
 } from "@/hooks/useClassRoster";
 import { cn } from "@/lib/utils";
-import { ClassQrDialog } from "./ClassQr";
 
 /**
  * A class the school assigned, drawn from what the backend actually serves:
- * the assignment, the class code, and - since 30 Aug - the real roster from
+ * the assignment and - since 30 Aug - the real roster from
  * `GET /api/v1/classes/{class_id}/students`.
+ *
+ * NO CLASS CODE, since design's 30 Sep rulings. A child now signs in with the
+ * school code and their own Student ID, and their roster row exists before
+ * they arrive, so a class code joins nobody to anything. C12 (the QR) and C18
+ * (the code screen) were deleted from the design that day; the button, its
+ * dialog and the `/code` route went with them.
  *
  * What it still does not have is the intelligence layer. The fixture-backed
  * `ClassDetail` shows per-student chips, seats and "worth a glance" dots;
@@ -44,7 +48,6 @@ import { ClassQrDialog } from "./ClassQr";
  * `constants/observations.ts` so the two screens that show them cannot drift.
  */
 export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
-  const [qr, setQr] = useState<"none" | "dialog">("none");
   /**
    * TWO TABS, NOT THREE. Design ruled on 16 Sep: the Lessons tab ships because
    * the library cannot be filtered by class, so nothing else answers "what has
@@ -55,7 +58,6 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
    */
   const [tab, setTab] = useState<"roster" | "lessons">("roster");
   const role = klass.role === "co_teacher" ? "Co-teacher" : "Primary teacher";
-  const router = useRouter();
   const { students, loading, failed } = useClassRoster(klass.classId);
   const observed = students.filter(
     (s) => s.profileStatus === "observed",
@@ -103,31 +105,6 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
                 : `${role} · Synced from your school`}
             </span>
           </div>
-          {klass.classCode && (
-            <button
-              type="button"
-              onClick={() => setQr("dialog")}
-              className="inline-flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-[10px] border-[1.5px] border-nevo-navy/35 px-4 text-sm font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
-            >
-              <svg
-                width="17"
-                height="17"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.9"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden
-              >
-                <rect x="3" y="3" width="7" height="7" rx="1.5" />
-                <rect x="14" y="3" width="7" height="7" rx="1.5" />
-                <rect x="3" y="14" width="7" height="7" rx="1.5" />
-                <path d="M14 14h3v3h-3zM20 14h1M14 20h3M20 20h1" />
-              </svg>
-              Class code
-            </button>
-          )}
         </div>
 
 
@@ -383,9 +360,7 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
               <p className="mt-1.5 text-sm leading-[1.55] text-nevo-near-black/68 xl:text-[14.5px]">
                 {failed
                   ? "Nothing has changed for your students. Try again in a moment."
-                  : klass.classCode
-                    ? "Share the class code and your students will appear here as they join."
-                    : "Your students will appear here as your school adds them."}
+                  : "Your students will appear here as your school adds them."}
               </p>
               {/* "Try again" with nothing to press. The class route's own
                   failure card has always had the button; this one did not. */}
@@ -404,25 +379,6 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
         {tab === "lessons" && <LessonsPanel classId={klass.classId} />}
       </div>
 
-      {qr === "dialog" && klass.classCode && (
-        <ClassQrDialog
-          className={klass.className}
-          code={klass.classCode}
-          onClose={() => setQr("none")}
-          /*
-           * Projecting now NAVIGATES, where it used to swap local state for an
-           * overlay with no URL. Design's ruling for the standalone route is
-           * that teachers "project it, read it aloud and return to it", and a
-           * projection you cannot link or reopen fails the third of those: the
-           * teacher who closed it had to walk back through class detail and
-           * the dialog to get it up again.
-           *
-           * The route renders the same `ClassQrScreen`, so nothing about what
-           * is projected changes - only that it now has an address.
-           */
-          onProject={() => router.push(`/teacher/classes/${klass.classId}/code`)}
-        />
-      )}
     </div>
   );
 }

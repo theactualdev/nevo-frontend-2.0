@@ -12,7 +12,6 @@ import {
   OBSERVATIONS_SUBTITLE,
 } from "@/lib/mocks/teacherIntelligence";
 import { cn } from "@/lib/utils";
-import { ClassQrDialog, ClassQrScreen } from "./ClassQr";
 
 /**
  * Class detail (C05 / `Nevo Teacher Classes` frame): back link, class header
@@ -63,27 +62,12 @@ function studentHref(name: string): string {
   return `/teacher/students/${name.toLowerCase().replace(/\s+/g, "-")}`;
 }
 
-export function ClassDetail({
-  klass,
-  withCode = true,
-}: {
-  klass: TeacherClass;
-  /**
-   * Whether the Class code control is offered. Off for a signed-in teacher
-   * looking at a SAMPLE class: a projected join code is the one thing on this
-   * console a room of children physically acts on, and `ClassCodeRoute`
-   * already refuses a fixture code for exactly that reason. A sample mark
-   * does not stop anyone scanning it.
-   */
-  withCode?: boolean;
-}) {
+export function ClassDetail({ klass }: { klass: TeacherClass }) {
   const [tab, setTab] = useState<Tab>("Roster");
-  // C12: the dialog is the entry point; projection is the same code, room-sized.
-  const [qr, setQr] = useState<"none" | "dialog" | "screen">("none");
   // This screen renders only while there is no live class list - a real class
-  // goes to `LiveClassDetail` instead - so everything here, the join code
-  // included, is the fixture's own. Nothing live is merged in.
-  const joinCode = klass.joinCode;
+  // goes to `LiveClassDetail` instead - so everything here is the fixture's
+  // own. Nothing live is merged in. There is no class code: design deleted
+  // C12 and C18 on 30 Sep, when children stopped joining by one.
 
   const glanceCount = klass.roster.filter((r) => r.status === "glance").length;
   const flagCount = klass.roster.filter((r) => r.status === "flag").length;
@@ -110,21 +94,6 @@ export function ClassDetail({
               {`${klass.subjects} · ${klass.count} students`}
             </span>
           </div>
-          {withCode && (
-          <button
-            type="button"
-            onClick={() => setQr("dialog")}
-            className="inline-flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-[10px] border-[1.5px] border-nevo-navy/35 px-4 text-sm font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
-          >
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <rect x="3" y="3" width="7" height="7" rx="1.5" />
-              <rect x="14" y="3" width="7" height="7" rx="1.5" />
-              <rect x="3" y="14" width="7" height="7" rx="1.5" />
-              <path d="M14 14h3v3h-3zM20 14h1M14 20h3M20 20h1" />
-            </svg>
-            Class code
-          </button>
-          )}
           {(glanceCount > 0 || flagCount > 0) && (
             <div className="flex gap-4">
               {glanceCount > 0 && (
@@ -279,21 +248,6 @@ export function ClassDetail({
 
       </div>
 
-      {withCode && qr === "dialog" && (
-        <ClassQrDialog
-          className={klass.name}
-          code={joinCode}
-          onClose={() => setQr("none")}
-          onProject={() => setQr("screen")}
-        />
-      )}
-      {withCode && qr === "screen" && (
-        <ClassQrScreen
-          className={klass.name}
-          code={joinCode}
-          onClose={() => setQr("none")}
-        />
-      )}
     </div>
   );
 }

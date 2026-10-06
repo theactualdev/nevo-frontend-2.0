@@ -31,6 +31,11 @@ export interface Identity {
   email: string | null;
   /** The school's display name, not its id. */
   school: string | null;
+  /**
+   * The school's code - what a child types to sign in, so what a teacher
+   * reads out. Nullable on `SchoolSummary`, and blank is treated as absent.
+   */
+  schoolCode: string | null;
   subjects: string[];
   /** Their own photo, or null - every avatar falls back to initials. */
   photoUrl: string | null;
@@ -62,6 +67,7 @@ function toIdentity(user: CurrentUser): Identity {
     initials: name ? initialsFrom(name) : null,
     email: user.email,
     school: user.school?.name ?? null,
+    schoolCode: user.school?.code?.trim() || null,
     subjects: user.subjects ?? [],
     photoUrl: user.profileImageUrl ?? null,
     chosenName: user.preferredName?.trim() || null,
