@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import NotFound from "@/app/not-found";
+import GlobalError from "@/app/error";
 import StudentError from "@/app/student/error";
 import { canGoBack, homeFor } from "./SystemScreens";
 import { clearSession, setSession } from "@/lib/auth/session";
@@ -17,11 +18,20 @@ import { clearSession, setSession } from "@/lib/auth/session";
 const router = vi.hoisted(() => ({ push: vi.fn(), back: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 
+// The sending half is `clientErrors.dom.test.ts`'s. Here: that the screen
+// reports at all, and once.
+const reportClientError = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/api/clientErrors", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api/clientErrors")>()),
+  reportClientError,
+}));
+
 afterEach(() => {
   cleanup();
   clearSession();
   router.push.mockReset();
   router.back.mockReset();
+  reportClientError.mockReset();
 });
 
 const asStudent = () =>
@@ -104,5 +114,44 @@ describe("the child's error screen", () => {
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
 
     expect(retry).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * B36. The screen tells a child "We're on it", which was untrue until the
+ * error went anywhere. It is reported from the screen, once.
+ */
+describe("what the error screen does with the error", () => {
+  it("reports the child's error as the student console's, once", () => {
+    const error = new Error("boom");
+    const { rerender } = render(
+      <StudentError error={error} unstable_retry={vi.fn()} />,
+    );
+    rerender(<StudentError error={error} unstable_retry={vi.fn()} />);
+
+    expect(reportClientError).toHaveBeenCalledTimes(1);
+    expect(reportClientError).toHaveBeenCalledWith(error, "student");
+  });
+
+  it("reports from the app-wide boundary too, with the console read from the path", () => {
+    // It catches the child's sign-in doors, which have no boundary of their own.
+    window.history.pushState({}, "", "/auth/login");
+    const error = new Error("boom");
+    render(<GlobalError error={error} unstable_retry={vi.fn()} />);
+
+    expect(reportClientError).toHaveBeenCalledWith(error, "student");
+    window.history.pushState({}, "", "/");
+  });
+
+  it("shows nothing about the report, whatever becomes of it", () => {
+    render(<StudentError error={new Error("boom")} unstable_retry={vi.fn()} />);
+
+    expect(document.body.textContent).not.toMatch(/report|sent|boom/i);
+  });
+
+  it("reports nothing from the 404, which is not a fault", () => {
+    render(<NotFound />);
+
+    expect(reportClientError).not.toHaveBeenCalled();
   });
 });

@@ -87,6 +87,32 @@ describe("lessonFromContent — the visual channel", () => {
     );
   });
 
+  it("keeps the small copy to paint first, and reads its absence as none (B47)", () => {
+    const previewed = lessonFromContent(
+      lesson([
+        segment({
+          visualVariant: visualVariant({
+            previewUrl: "https://cdn.example/img-small.png",
+          }),
+        }),
+      ]),
+    );
+    const older = lessonFromContent(
+      lesson([segment({ visualVariant: visualVariant({ previewUrl: null }) })]),
+    );
+
+    expect(previewed?.segments[0].visual?.illustration?.previewSrc).toBe(
+      "https://cdn.example/img-small.png",
+    );
+    // Null on pictures stored before it existed: use the full image.
+    expect(older?.segments[0].visual?.illustration).not.toHaveProperty(
+      "previewSrc",
+    );
+    expect(older?.segments[0].visual?.illustration?.src).toBe(
+      "https://cdn.example/img.png",
+    );
+  });
+
   it("keeps the image's own shape when it is measured, and only then", () => {
     const sized = lessonFromContent(
       lesson([

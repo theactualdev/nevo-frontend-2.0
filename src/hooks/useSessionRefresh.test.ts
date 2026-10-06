@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
 import { useSessionRefresh } from "./useSessionRefresh";
-import { clearSession, setSession } from "@/lib/auth/session";
+import { clearSession, getSession, setSession } from "@/lib/auth/session";
 
 /**
  * This file exists because the hook's own docblock used to assert the property
@@ -120,6 +120,37 @@ describe("useSessionRefresh", () => {
 
     // 30s of a 5s floor is at most 7 attempts, not thousands.
     expect(refresh.mock.calls.length).toBeLessThanOrEqual(8);
+  });
+
+  it("goes quiet at a session's absolute end rather than asking forever (B57)", async () => {
+    // Since 5 Oct a session has an absolute lifetime from sign-in - ten hours
+    // for a child - and a refresh near it reports the SAME deadline every
+    // time: it reports one, it does not move one. That is now the ordinary
+    // end of every long session, not a misbehaving backend.
+    const cap = new Date(Date.now() + MARGIN_MS).toISOString();
+    const capped = () =>
+      setSession({
+        token: "tok-capped",
+        expiresAt: cap,
+        userId: "student-1",
+        role: "student",
+      });
+    refresh.mockImplementation(async () => capped());
+    capped();
+
+    renderHook(() => useSessionRefresh());
+    await vi.advanceTimersByTimeAsync(MARGIN_MS);
+    const duringMargin = refresh.mock.calls.length;
+
+    // The 5s floor across the two-minute margin: two dozen, not thousands.
+    expect(duringMargin).toBeGreaterThan(0);
+    expect(duringMargin).toBeLessThanOrEqual(25);
+
+    // Past the deadline the session clears itself, and nothing asks again -
+    // `useSessionLapse` takes the child to the door from here.
+    await vi.advanceTimersByTimeAsync(60 * 60 * 1000);
+    expect(refresh.mock.calls.length).toBe(duringMargin);
+    expect(getSession()).toBeNull();
   });
 
   it("asks for nothing when nobody is signed in", async () => {

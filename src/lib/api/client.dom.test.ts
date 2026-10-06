@@ -69,8 +69,12 @@ describe("sessionExpiredDoor", () => {
   it("sends both admin roles to the admin door", () => {
     // The backend has no plain "admin" - only these two, and a comparison
     // against "admin" would silently send a SENCo to the child's screen.
-    expect(sessionExpiredDoor("senco_admin")).toBe("/auth/admin/session-expired");
-    expect(sessionExpiredDoor("other_admin")).toBe("/auth/admin/session-expired");
+    expect(sessionExpiredDoor("senco_admin")).toBe(
+      "/auth/admin/session-expired",
+    );
+    expect(sessionExpiredDoor("other_admin")).toBe(
+      "/auth/admin/session-expired",
+    );
   });
 
   it("sends a student, and anyone unknown, to the shared door", () => {
@@ -155,7 +159,10 @@ describe("the auth latch", () => {
     vi.stubGlobal("fetch", respondWith(401));
     const { api } = await freshClient();
     await expect(
-      api.post("/api/v1/auth/login/password", { email: "a@b.c", password: "x" }),
+      api.post("/api/v1/auth/login/password", {
+        email: "a@b.c",
+        password: "x",
+      }),
     ).rejects.toThrow();
 
     expect(clearSession).not.toHaveBeenCalled();
@@ -229,7 +236,11 @@ describe("where a child's session-end door sends them back to", () => {
     // IA 31: "Log back in -> Student Login Screen (lesson position preserved)".
     // The door carried only `?reason=`, so a lapse mid-lesson landed on Home.
     expect(
-      sessionExpiredDoor("student", "session_expired", "/student/lessons/frac-3"),
+      sessionExpiredDoor(
+        "student",
+        "session_expired",
+        "/student/lessons/frac-3",
+      ),
     ).toBe(
       "/auth/session-expired?reason=session_expired&next=%2Fstudent%2Flessons%2Ffrac-3",
     );
@@ -315,6 +326,29 @@ describe("a child paused mid-lesson", () => {
     expect(clearSession).toHaveBeenCalledTimes(1);
   });
 
+  it("raises the closed card, not the paused one, for a removed child (B58, D53)", async () => {
+    asStudent();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ detail: { code: "account_closed", message: "x" } }),
+            { status: 401, headers: { "Content-Type": "application/json" } },
+          ),
+      ),
+    );
+    const { api } = await freshClient();
+    const pause = await import("@/lib/auth/accountPause");
+    const unregister = pause.registerPauseHost();
+
+    await expect(api.get("/api/v1/lessons/x")).rejects.toThrow();
+
+    expect(pause.accountHold()).toBe("closed");
+    expect(clearSession).not.toHaveBeenCalled();
+    unregister();
+  });
+
   it("leaves a paused teacher on their own door", async () => {
     // Staff have a frame of their own for this; 28b is the child's.
     vi.stubGlobal("fetch", paused());
@@ -327,5 +361,105 @@ describe("a child paused mid-lesson", () => {
     expect(pause.isAccountPaused()).toBe(false);
     expect(clearSession).toHaveBeenCalledTimes(1);
     unregister();
+  });
+});
+
+/**
+ * B36: a crash report is sent from an error screen. If the session behind it
+ * has died, its 401 must not clear the session and carry the child off the
+ * screen they are reading - the next ordinary read finds the dead session.
+ */
+describe("a crash report", () => {
+  it("never sends anyone to a door, whatever it is answered", async () => {
+    vi.stubGlobal("fetch", respondWith(401));
+    const { api } = await freshClient();
+
+    await expect(
+      api.post("/api/v1/client-errors", { message: "x" }),
+    ).rejects.toThrow();
+
+    expect(clearSession).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * B7: a withdrawn child's 403 `consent_withdrawn` goes to the held screen,
+ * through the same once-only latch as the session doors. Where it goes is
+ * `withdrawnDoor`'s, tested on its own; what can be observed here is that the
+ * client acts on it - a later 401 finds the latch already taken - and that the
+ * caller still gets its error.
+ */
+describe("a withdrawn child refused mid-use", () => {
+  const sequence = (...replies: [number, unknown][]) => {
+    const fetch = vi.fn();
+    for (const [status, body] of replies) {
+      fetch.mockResolvedValueOnce(
+        new Response(JSON.stringify(body), {
+          status,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    }
+    return fetch;
+  };
+  const WITHDRAWN: [number, unknown] = [
+    403,
+    { detail: { code: "consent_withdrawn", message: "x" } },
+  ];
+  const EXPIRED: [number, unknown] = [
+    401,
+    { detail: { code: "session_expired" } },
+  ];
+  const as = (role: string) =>
+    getSession.mockReturnValue({
+      token: "tok-live",
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+      userId: "u-1",
+      role,
+    });
+
+  afterEach(() => {
+    as("teacher");
+    vi.unstubAllGlobals();
+  });
+
+  it("is sent to the held screen, once, and the caller still hears why", async () => {
+    as("student");
+    vi.stubGlobal("fetch", sequence(WITHDRAWN, EXPIRED));
+    const { api, ApiError } = await freshClient();
+
+    const refused = await api
+      .post("/api/v1/lessons/x/session", {})
+      .catch((e: unknown) => e);
+    expect(refused).toBeInstanceOf(ApiError);
+    expect((refused as InstanceType<typeof ApiError>).status).toBe(403);
+
+    // The latch is taken: nothing else on this page sends them anywhere.
+    await expect(api.get("/api/v1/lessons/x")).rejects.toThrow();
+    expect(clearSession).not.toHaveBeenCalled();
+  });
+
+  it("leaves a teacher's refusal to the screen that met it", async () => {
+    as("teacher");
+    vi.stubGlobal("fetch", sequence(WITHDRAWN, EXPIRED));
+    const { api } = await freshClient();
+
+    await expect(api.get("/api/v1/students/s-1")).rejects.toThrow();
+    // No latch: a later dead session still finds its door.
+    await expect(api.get("/api/v1/classes")).rejects.toThrow();
+    expect(clearSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves an ordinary 403 to the screen that met it", async () => {
+    as("student");
+    vi.stubGlobal(
+      "fetch",
+      sequence([403, { detail: { code: "forbidden" } }], EXPIRED),
+    );
+    const { api } = await freshClient();
+
+    await expect(api.get("/api/v1/lessons/x")).rejects.toThrow();
+    await expect(api.get("/api/v1/lessons/x")).rejects.toThrow();
+    expect(clearSession).toHaveBeenCalledTimes(1);
   });
 });

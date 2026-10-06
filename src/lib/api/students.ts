@@ -62,7 +62,8 @@ export interface ConceptMasteryRow {
   studentId: string;
   conceptId: string;
   /** Shipped 31 Aug. Before it, this read had ids only. */
-  conceptName: string;
+  /** Nullable in the contract: a concept the engine has no name for. */
+  conceptName: string | null;
   /** 0-1. The frame's bars are percentages. */
   masteryProbabilityConcept: number;
   masteryProbabilityReading: number;
@@ -209,16 +210,15 @@ export interface DashboardProgressRow {
  * error, so the name stays for its callers and the values come from one place.
  */
 /**
- * What comes back from issuing a child a new PIN. The `pin` is the only time
- * this value is ever visible to anyone - it is not readable again afterwards,
- * by us or by the contract.
+ * What comes back from clearing a child's PIN (SCRUM-216). No PIN in it, by
+ * design: nobody but the child ever sets one, and nobody is told the old one.
  */
-export interface PinIssueResponse {
+export interface PinCleared {
   studentId: string;
-  pin: string;
-  issuedAt: string;
-  /** The server's own instruction that this must not travel electronically. */
-  mustShareSecurely: boolean;
+  clearedAt: string;
+  /** Always true: the child chooses the next PIN, at their next sign-in. */
+  childSetsNext?: boolean;
+  pinLength?: number;
 }
 
 export type ConsentState = ConsentStatus;
@@ -457,27 +457,19 @@ export const studentsApi = {
     api.post<void>(`/api/v1/students/${studentId}/restore`),
 
   /**
-   * Issue a new PIN for a child who cannot get in, and return it ONCE.
+   * Clear a child's PIN so they choose a new one themselves. SCRUM-216.
+   * POST /api/v1/students/{student_id}/pin/clear
    *
-   * THE PRODUCT PROMISED THIS AND NOTHING PERFORMED IT. `ForgotPinScreen`
-   * carries the frame's own note - "No self-service reset, points gently to
-   * the teacher, never a dead end" - and tells a locked-out child to ask an
-   * adult. No surface in any console could issue one, and
-   * `NotificationType.pin_reset_requested` delivered the child's request to a
-   * screen with no action on it. This is the missing half.
-   *
-   * IT RESETS RATHER THAN REVEALS. The old PIN stops working the moment this
-   * returns, so the child is locked out harder until someone hands them the
-   * new one. That is why the sheet confirms before it calls, and why nothing
-   * calls this speculatively to "look up" a PIN - there is nothing to look up.
-   *
-   * `mustShareSecurely` is the server telling us how the result may travel.
-   * The response is not stored, not logged and not put on the clipboard: the
-   * frame's instruction is that an adult hands it over in person, and a copy
-   * button exists to paste into somewhere that is not in person.
+   * A CLEAR, NOT A RESET. This replaced `pin/reset`, which generated a PIN
+   * and returned it, so an adult both chose a child's credential and knew it.
+   * The clear never accepts, returns or generates one. The old PIN stops
+   * working, every session the child has ends, and the child sets the next
+   * PIN through the student entry (`POST /api/v1/student-entry/pin`, school
+   * code and their own Student ID) - a door open only while the PIN is
+   * cleared. Teachers of the child's classes may call it too, not only admins.
    */
-  issuePin: (studentId: string) =>
-    api.post<PinIssueResponse>(`/api/v1/students/${studentId}/pin/reset`),
+  clearPin: (studentId: string) =>
+    api.post<PinCleared>(`/api/v1/students/${studentId}/pin/clear`),
 
   /**
    * Step two of two, and the only permanent deletion in the admin set. Only
@@ -557,7 +549,8 @@ export const studentsApi = {
 /** One misconception several students in a class share (C09). */
 export interface ClassMisconception {
   conceptId: string;
-  conceptName: string;
+  /** Nullable in the contract: a concept the engine has no name for. */
+  conceptName: string | null;
   /** A short name for the shape of the error. */
   pattern: string;
   studentCount: number;
@@ -568,7 +561,8 @@ export interface ClassMisconception {
  *  per-student read - see the note at the top of this file. */
 export interface ClassMasteryRow {
   conceptId: string;
-  conceptName: string;
+  /** Nullable in the contract: a concept the engine has no name for. */
+  conceptName: string | null;
   studentCount: number;
   masteryProbabilityConcept: number;
   masteryProbabilityReading: number;
