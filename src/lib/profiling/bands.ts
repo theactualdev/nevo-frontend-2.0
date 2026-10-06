@@ -74,14 +74,16 @@ export function bandForRoster(ageBand: string | null | undefined): AgeBand | nul
  *
  * EVERY BAND RAN THE PRIMARY 4-6 PROTOTYPE'S NUMBERS: a span of 3 to 5 or 6
  * and a 660ms highlight, for a six-year-old and a sixteen-year-old alike. The
- * Module 1 frame states each band's own, and those are used wherever it is the
- * only source. Where it is not, the row says so and is an open ask.
+ * Module 1 frame states each band's own, and those are used. Where it does not
+ * yet, the row says so and is an open ask.
  *
  * Sources, cited per row below:
  *  - "09" is `onboarding-assessment/09 Module 1 - Spatial Grid Span`, the
- *    per-band `params` lines.
+ *    per-band `params` lines. Design's 6 Oct pass settled P4-6 and SS there
+ *    (D72, D73, D74), so 09 now wins over the prototype for every band.
  *  - "11" is `11 Profiling Prototype Playable`, which is the Primary 4-6 band
- *    only (4x4): `seqStart 3`, `seqMax 6` at :173, `lit 660` at :202.
+ *    only (4x4): `seqStart 3`, `seqMax 6` at :173, `lit 660` at :202. It is
+ *    the source of the slowing after a miss and nothing else now.
  */
 export interface GridSpanConfig {
   /** Grid is n x n. */
@@ -89,13 +91,17 @@ export interface GridSpanConfig {
   /** Adaptive span start / ceiling. */
   spanStart: number;
   spanMax: number;
-  /**
-   * How long each tile stays lit before any slowing for struggle (ms).
-   * The slowing itself (+300ms lit, +120ms gap per miss, up to three) is the
-   * prototype's, 11:202, and is applied to every band; whether the device
-   * should adapt this at all is with design.
-   */
+  /** How long each tile stays lit (ms), before any slowing after a miss. */
   litMs: number;
+  /**
+   * Whether playback slows after a miss: +300ms lit and +120ms gap per miss,
+   * up to three, easing back one per clean recall (the prototype's, 11:202).
+   *
+   * Per band because 09 rules it per band. P4-6 and SS say "no slowdown after
+   * a miss" (D74, 6 Oct). P1-3 and JSS say nothing yet, so they keep the
+   * prototype's slowing while that is asked.
+   */
+  slowAfterMiss: boolean;
   /**
    * SS runs the dual task: a true/false check between watch and recall.
    * Not drawn in the Grid Span frame or the prototype - design approved it as
@@ -110,21 +116,22 @@ export function gridSpanConfig(band: AgeBand): GridSpanConfig {
   switch (band) {
     case AGE_BANDS.P13:
       // 09, BP-P13-M1: "3×3 grid · sequence 2 → 5 tiles · 800ms highlight".
-      // The prototype is not this band, so nothing disagrees.
-      return { n: 3, spanStart: 2, spanMax: 5, litMs: 800, dual: false, instruction: "Watch the tiles light up, then tap them backwards" };
+      // ASK: 09 does not say whether it slows after a miss; kept as built.
+      return { n: 3, spanStart: 2, spanMax: 5, litMs: 800, slowAfterMiss: true, dual: false, instruction: "Watch the tiles light up, then tap them backwards" };
     case AGE_BANDS.JSS:
       // 09, BP-JSS-M1: "5×5 grid · sequence 4 → 9 tiles · 600ms highlight".
-      return { n: 5, spanStart: 4, spanMax: 9, litMs: 600, dual: false, instruction: "Memorize the sequence, then tap them in reverse" };
+      // ASK: 09 does not say whether it slows after a miss; kept as built.
+      return { n: 5, spanStart: 4, spanMax: 9, litMs: 600, slowAfterMiss: true, dual: false, instruction: "Memorize the sequence, then tap them in reverse" };
     case AGE_BANDS.SS:
-      // 09, BP-SS-M1: "5×5 grid · sequence 4 → 9 tiles".
-      // ASK: 09 states no highlight time for SS. 660 is the prototype's (11),
-      // kept as built rather than borrowing JSS's 600.
-      return { n: 5, spanStart: 4, spanMax: 9, litMs: 660, dual: true, instruction: "Watch the sequence and answer each check, then tap in reverse" };
+      // 09, BP-SS-M1: "5×5 grid · sequence 4 → 9 tiles · 600ms highlight ·
+      // no slowdown after a miss" (D73, D74, 6 Oct). It ran the prototype's
+      // 660 while 09 stated no highlight time for SS.
+      return { n: 5, spanStart: 4, spanMax: 9, litMs: 600, slowAfterMiss: false, dual: true, instruction: "Watch the sequence and answer each check, then tap in reverse" };
     default:
-      // ASK: the two frames disagree for P4-6. 09 says "sequence 3 → 7 tiles
-      // · 700ms highlight"; the prototype (11:173, :202) plays 3 → 6 at 660.
-      // Kept as built - the prototype - until design says which.
-      return { n: 4, spanStart: 3, spanMax: 6, litMs: 660, dual: false, instruction: "Watch the pattern, then tap the tiles in reverse order" };
+      // 09, BP-P46-M1: "4×4 grid · sequence 3 → 7 tiles · 700ms highlight ·
+      // no slowdown after a miss" (D72, D74, 6 Oct). Design settled it over
+      // the prototype (11:173, :202), whose 3 → 6 at 660 ran until then.
+      return { n: 4, spanStart: 3, spanMax: 7, litMs: 700, slowAfterMiss: false, dual: false, instruction: "Watch the pattern, then tap the tiles in reverse order" };
   }
 }
 
