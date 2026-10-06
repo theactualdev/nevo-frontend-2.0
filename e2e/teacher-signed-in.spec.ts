@@ -151,7 +151,7 @@ type RealClass = {
   id: string;
   name: string;
   /** Names as the roster route reports them - never the page's. */
-  children: { firstName: string; displayName: string | null }[];
+  children: { studentId: string; firstName: string; displayName: string | null }[];
 };
 
 /**
@@ -182,10 +182,13 @@ async function realClasses(
       return {
         id: c.classId,
         name: c.className,
-        children: rows.map((row: { firstName?: string; displayName?: string | null }) => ({
-          firstName: row.firstName ?? "",
-          displayName: row.displayName ?? null,
-        })),
+        children: rows.map(
+          (row: { studentId?: string; firstName?: string; displayName?: string | null }) => ({
+            studentId: row.studentId ?? "",
+            firstName: row.firstName ?? "",
+            displayName: row.displayName ?? null,
+          }),
+        ),
       };
     }),
   );
@@ -211,6 +214,30 @@ const LIVE_MS = 30_000;
  */
 async function settled(page: Page, realText: string | RegExp) {
   await expect(page.getByText(realText).first()).toBeVisible({ timeout: LIVE_MS });
+}
+
+/**
+ * THE PAGE'S OWN READS HAVE ANSWERED - waited for, never slept on.
+ *
+ * The sweep below used to settle on the nav and then sleep two seconds. The
+ * console's reads take one to six seconds against the real API, so a slow one
+ * was still on its skeleton when the marks were counted, and a page that
+ * would have degraded to fixtures passed because it had not degraded YET.
+ *
+ * Every loading state in the console is an `animate-pulse` skeleton, so the
+ * reads have answered - live, failed or empty - once none is left. A read
+ * that never answers still fails, at LIVE_MS, which is the point.
+ */
+async function readsAnswered(page: Page) {
+  await expect(page.getByRole("link", { name: "Classes" }).first()).toBeVisible({
+    timeout: LIVE_MS,
+  });
+  await expect
+    .poll(() => page.locator(".animate-pulse").count(), {
+      timeout: LIVE_MS,
+      message: "The page was still on a loading skeleton - a read never answered.",
+    })
+    .toBe(0);
 }
 
 /** Every fixture render in the product carries this. Signed in, there must be none. */
@@ -290,27 +317,74 @@ test.describe("a signed-in teacher", () => {
    * short tests that each sign in fresh are not, and they name the page that
    * broke instead of "somewhere in the console".
    */
+  /*
+   * Five pages became twelve on 7 Oct: the audit found the sweep reached six
+   * of twenty-one rendering routes, and the ones it skipped included every
+   * screen a teacher writes from. The id-carrying routes follow below, on ids
+   * read from the API.
+   */
   for (const path of [
     "/teacher/dashboard",
     "/teacher/classes",
     "/teacher/lessons",
     "/teacher/insights",
     "/teacher/students",
+    "/teacher/connect",
+    "/teacher/profile",
+    "/teacher/help",
+    "/teacher/notifications",
+    "/teacher/lessons/assign",
+    "/teacher/lessons/upload",
+    "/teacher/lessons/upload/bulk",
   ]) {
     test(`shows no fixture data on ${path}`, async ({ page }) => {
       await page.goto(path);
-      // Settle on the shell: every console page renders the nav, and it is
-      // there only once the app has mounted. `.first()` guards strict mode -
-      // the nav appears in more than one breakpoint tree.
-      await expect(
-        page.getByRole("link", { name: "Classes" }).first(),
-      ).toBeVisible({ timeout: LIVE_MS });
-      await page.waitForTimeout(2_000);
+      await readsAnswered(page);
 
       const marks = await sampleMarks(page);
       expect(marks, `${path} rendered fixture data: ${marks.join(", ")}`).toEqual([]);
     });
   }
+
+  test("shows no fixture data on one of their own lessons, or its variant review", async ({
+    page,
+    request,
+  }) => {
+    const res = await request.get(`${API}/api/content/lessons?limit=20`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(res.ok(), `Could not list the teacher's lessons (${res.status()}).`).toBeTruthy();
+    const lessons: { id: string; status: string; segmentCount: number }[] = await res.json();
+    const lesson = lessons.find((l) => l.segmentCount > 0);
+    test.skip(!lesson, "This teacher has no lesson with sections to open.");
+
+    for (const path of [`/teacher/lessons/${lesson!.id}`, `/teacher/lessons/${lesson!.id}/variants?section=1`]) {
+      await page.goto(path);
+      await readsAnswered(page);
+      const marks = await sampleMarks(page);
+      expect(marks, `${path} rendered fixture data: ${marks.join(", ")}`).toEqual([]);
+    }
+  });
+
+  test("shows no fixture data on a real child's profile, or the recommend sheet over it", async ({
+    page,
+    request,
+  }) => {
+    const classes = await realClasses(request, token);
+    const klass = classes.find((c) => c.children.some((ch) => ch.studentId));
+    test.skip(!klass, "None of this teacher's classes has a child to open.");
+    const child = klass!.children.find((ch) => ch.studentId)!;
+
+    for (const path of [
+      `/teacher/students/${child.studentId}?class=${klass!.id}`,
+      `/teacher/students/${child.studentId}/recommend`,
+    ]) {
+      await page.goto(path);
+      await readsAnswered(page);
+      const marks = await sampleMarks(page);
+      expect(marks, `${path} rendered fixture data: ${marks.join(", ")}`).toEqual([]);
+    }
+  });
 
   test("renders an honest empty roster rather than inventing children", async ({ page, request }) => {
     /*
@@ -349,4 +423,33 @@ test.describe("a signed-in teacher", () => {
     await expect(fresh).toHaveURL(/\/auth\/teacher$/);
     await fresh.close();
   });
+});
+
+/*
+ * THE POSITIVE CONTROL, and without it every "no fixture data" test above can
+ * pass vacuously. Each asserts that NO sample mark is present; if
+ * `data-nevo-sample` stopped rendering - an attribute renamed, a wrapper
+ * deleted - they would all still pass. Nothing asserted a mark was ever there.
+ *
+ * So this reproduces the degradation the suite exists to catch, as the student
+ * suite does: the role cookie goes with the document request, which is all the
+ * proxy reads, and is deleted before the app's first line runs. The client
+ * then finds no session and renders the walkthrough's samples - which the same
+ * selector must see.
+ *
+ * Outside the signed-in describe on purpose: it plants no session.
+ */
+test("the detector can see a teacher fixture at all", async ({ page }) => {
+  await page.context().addCookies([
+    { name: ROLE_COOKIE, value: "teacher", url: "http://localhost:3100" },
+  ]);
+  await page.addInitScript((name) => {
+    document.cookie = `${name}=; Max-Age=0; path=/`;
+  }, ROLE_COOKIE);
+  await page.goto("/teacher/lessons");
+
+  await expect(
+    page.locator(`[${SAMPLE_ATTR}]`).first(),
+    "A teacher console with no session rendered NO sample marks. Either the fixtures stopped being marked, or the detector is blind - and every 'no fixture data' test in this file would pass regardless.",
+  ).toBeAttached({ timeout: LIVE_MS });
 });
