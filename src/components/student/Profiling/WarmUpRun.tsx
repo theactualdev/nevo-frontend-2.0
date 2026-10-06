@@ -394,11 +394,15 @@ export function WarmUpRun({
 
       {showDone ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-[22px] px-9 text-center">
-          <span className="flex size-20 items-center justify-center rounded-full bg-nevo-navy motion-safe:animate-nevo-pop">
-            <Check className="size-9 text-nevo-cream" strokeWidth={2.4} />
+          {/*
+            The frame's phone sizes below `sm`: a 64px badge with a 32px
+            check and a 19px title. Tablet and desktop draw 80px and 22px.
+          */}
+          <span className="flex size-16 items-center justify-center rounded-full bg-nevo-navy motion-safe:animate-nevo-pop sm:size-20">
+            <Check className="size-8 text-nevo-cream sm:size-9" strokeWidth={2.4} />
           </span>
           <div>
-            <h3 className="text-[22px] font-semibold tracking-[-0.01em] text-nevo-navy">
+            <h3 className="text-[19px] font-semibold tracking-[-0.01em] text-nevo-navy sm:text-[22px]">
               That&apos;s it for today
             </h3>
             {/*

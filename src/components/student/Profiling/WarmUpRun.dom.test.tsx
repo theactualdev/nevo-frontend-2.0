@@ -306,6 +306,21 @@ describe("WarmUpRun — the done state claims no save", () => {
     expect(screen.queryByRole("button", { name: "Home" })).toBeNull();
   });
 
+  it("draws the frame's phone sizes, and the larger ones from tablet up", async () => {
+    // It was a 22px title and an 80px badge at every width. The Warm-Up Run
+    // frame draws 19px and 64px on a phone, 22px and 80px on tablet and
+    // desktop.
+    await sitTheTileTask();
+    await settle();
+
+    const title = screen.getByText("That's it for today");
+    const badge = title.parentElement!.previousElementSibling!;
+    expect(title.className).toContain("text-[19px]");
+    expect(title.className).toContain("sm:text-[22px]");
+    expect(badge.className).toMatch(/(^| )size-16( |$)/);
+    expect(badge.className).toContain("sm:size-20");
+  });
+
   it("still says so when the write failed (kept while D126 is asked)", async () => {
     submit.mockResolvedValue(false);
     await sitTheTileTask();
