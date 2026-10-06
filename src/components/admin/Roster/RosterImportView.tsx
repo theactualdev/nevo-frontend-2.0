@@ -6,6 +6,7 @@ import { ReadFailed } from "../ReadFailed";
 import { CARD } from "./primitives";
 import {
   onboardingApi,
+  type ClassMergeProposal,
   type OnboardingState,
   type RejectedRow,
 } from "@/lib/api/onboarding";
@@ -16,6 +17,9 @@ import {
   foundCounts,
   hasStaged,
   mayConfirm,
+  mergeSpellings,
+  mergesLeftLine,
+  openMerges,
   rejectedCsv,
   templateColumns,
   toFixLabel,
@@ -133,6 +137,19 @@ export function RosterImportView() {
   } | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [confirmFailed, setConfirmFailed] = useState(false);
+  /*
+   * OB-02's class questions. Each answer is sent as it is given: a yes folds
+   * the students together and a no is remembered, and nothing undoes either,
+   * so there is no draft to hold. What was answered this visit is kept to say
+   * what became of it; the server's state is what the screen counts.
+   */
+  const [deciding, setDeciding] = useState<string | null>(null);
+  const [decideFailed, setDecideFailed] = useState<{ key: string; reason: string | null } | null>(
+    null,
+  );
+  const [answered, setAnswered] = useState<{ proposal: ClassMergeProposal; merge: boolean }[]>(
+    [],
+  );
   /** OB-02 is a step forward from OB-01, not a different screen. */
   const [showFound, setShowFound] = useState(false);
   /*
@@ -208,6 +225,27 @@ export function RosterImportView() {
       .finally(() => setUploading(null));
   };
 
+  const decide = (proposal: ClassMergeProposal, merge: boolean) => {
+    setDeciding(proposal.key);
+    setDecideFailed(null);
+    onboardingApi
+      .decideMerges([
+        { key: proposal.key, merge, keepName: merge ? proposal.proposedName : null },
+      ])
+      .then((s) => {
+        setState(s);
+        setAnswered((a) => [...a, { proposal, merge }]);
+        refreshGate();
+      })
+      .catch((err) =>
+        setDecideFailed({
+          key: proposal.key,
+          reason: err instanceof ApiError ? apiErrorMessage(err.detail) : null,
+        }),
+      )
+      .finally(() => setDeciding(null));
+  };
+
   const confirm = () => {
     setConfirming(true);
     setConfirmFailed(false);
@@ -277,6 +315,10 @@ export function RosterImportView() {
             confirmFailed={confirmFailed}
             onBack={() => setShowFound(false)}
             onConfirm={confirm}
+            answered={answered}
+            deciding={deciding}
+            decideFailed={decideFailed}
+            onDecide={decide}
           />
         ) : (
           <>
@@ -554,6 +596,10 @@ function WhatNevoFound({
   confirmFailed,
   onBack,
   onConfirm,
+  answered,
+  deciding,
+  decideFailed,
+  onDecide,
 }: {
   state: OnboardingState;
   counts: ReturnType<typeof foundCounts>;
@@ -561,8 +607,14 @@ function WhatNevoFound({
   confirmFailed: boolean;
   onBack: () => void;
   onConfirm: () => void;
+  answered: { proposal: ClassMergeProposal; merge: boolean }[];
+  deciding: string | null;
+  decideFailed: { key: string; reason: string | null } | null;
+  onDecide: (proposal: ClassMergeProposal, merge: boolean) => void;
 }) {
   const toFix = toFixLabel(counts.toFix);
+  const merges = openMerges(state);
+  const mergesLeft = mergesLeftLine(merges.length);
 
   return (
     <>
@@ -581,6 +633,75 @@ function WhatNevoFound({
         {/* Absent at zero: a clean file has no position to state. */}
         {toFix ? <Tile n={counts.toFix} label="rows to fix" /> : null}
       </div>
+
+      {merges.length > 0 || answered.length > 0 ? (
+        <section aria-label="Classes that may be one class">
+          <h3 className="mt-9 text-[13px] font-semibold tracking-[0.05em] text-nevo-near-black/50 uppercase">
+            Classes that may be one class
+          </h3>
+          <p className="mt-2 max-w-[64ch] text-[14px] leading-[1.55] text-nevo-near-black/66">
+            Nevo found these names close enough to be the same class written
+            two ways. Answer each once; your headcount, and so your invoice,
+            depends on it.
+          </p>
+          <div className={cn(CARD, "mt-3 divide-y divide-nevo-near-black/7")}>
+            {answered.map(({ proposal: p, merge }) => (
+              <div key={p.key} className="px-[22px] py-3.5 text-[14.5px] text-nevo-near-black">
+                {/*
+                  * No "Change", which the frame draws: a yes has folded the
+                  * students together and a no is remembered, and the contract
+                  * undoes neither. Offering it would promise a reversal.
+                  */}
+                {merge ? (
+                  <>
+                    One class: <strong className="font-semibold">{p.proposedName}</strong> &middot;{" "}
+                    {p.studentCount}
+                  </>
+                ) : (
+                  <>
+                    {p.candidates.length} classes, kept exactly as your school wrote them:{" "}
+                    {p.candidates.map((c) => c.name).join(", ")}.
+                  </>
+                )}
+              </div>
+            ))}
+            {merges.map((p) => {
+              const busy = deciding === p.key;
+              const failed = decideFailed?.key === p.key ? decideFailed : null;
+              return (
+                <div key={p.key} className="px-[22px] py-4">
+                  <p className="m-0 text-[14.5px] leading-[1.5] text-nevo-near-black">
+                    {mergeSpellings(p)}: same class?
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => onDecide(p, true)}
+                      disabled={deciding !== null}
+                      className="h-[42px] cursor-pointer rounded-[10px] bg-nevo-navy px-4 text-[14px] font-semibold text-nevo-cream transition-[filter] hover:brightness-110 disabled:cursor-default disabled:opacity-55"
+                    >
+                      {busy ? "Saving…" : "Same class"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDecide(p, false)}
+                      disabled={deciding !== null}
+                      className="h-[42px] cursor-pointer rounded-[10px] border-[1.5px] border-nevo-near-black/16 px-4 text-[14px] font-semibold text-nevo-near-black/75 transition-colors hover:bg-nevo-near-black/[0.04] disabled:cursor-default disabled:opacity-55"
+                    >
+                      Keep separate
+                    </button>
+                  </div>
+                  {failed ? (
+                    <p className="m-0 mt-2 text-[13px] leading-[1.5] text-nevo-navy">
+                      {failed.reason ?? "That answer didn’t save. Nothing has changed – try again."}
+                    </p>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
 
       {state.rejected.length > 0 ? (
         <RejectedList rows={state.rejected} />
@@ -616,6 +737,13 @@ function WhatNevoFound({
         * so the count is in the tiles above and the panel is not invented.
         * See the header's TODO(api).
         */}
+
+      {mergesLeft ? (
+        /* Why Confirm is closed, said where the button is. */
+        <p className="mt-6 max-w-[56ch] text-[13.5px] leading-[1.5] text-nevo-near-black/66">
+          {mergesLeft}
+        </p>
+      ) : null}
 
       {confirmFailed ? (
         <p className="mt-6 max-w-[56ch] text-[13.5px] leading-[1.5] text-nevo-navy">
