@@ -136,6 +136,39 @@ describe("how far a child is reported to have read", () => {
     drawer.remove();
   });
 
+  it("does not count the player's own move onto a new segment as the child scrolling", () => {
+    /*
+     * Next moves focus onto the new segment, and that moves the page: a
+     * scroll event the child did not make. Nothing goes up until they go
+     * further down than the segment opened showing.
+     */
+    const { container } = render(<LessonPlayer lesson={LESSON} plan={null} />);
+    const page = pageScrolledColumn(container, LONG);
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    page.scrollPageTo(0); // the event, with the page where Next left it
+
+    expect(marks()).toEqual([]);
+
+    page.scrollPageTo(700); // and now the child scrolls
+    expect(sent(SIGNAL_EVENT_TYPES.SCROLL)).toEqual([
+      { segmentId: "seg-2", depthRatio: 0.25 },
+      { segmentId: "seg-2", depthRatio: 0.5 },
+    ]);
+  });
+
+  it("sends nothing for a segment that fits, however the page moves", () => {
+    // A segment all on one screen cannot be scrolled within, so a page that
+    // moves under it - the header scrolling away - is not a depth reached.
+    const { container } = render(<LessonPlayer lesson={LESSON} plan={null} />);
+    const page = pageScrolledColumn(container, { height: 300 });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    page.scrollPageTo(100);
+
+    expect(marks()).toEqual([]);
+  });
+
   it("sends no scroll for a segment nobody scrolled", () => {
     // "The child scrolls within a segment." A segment that fits was never
     // scrolled, and a depth for it would be a scroll that did not happen.

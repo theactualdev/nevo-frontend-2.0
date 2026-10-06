@@ -829,25 +829,44 @@ export function LessonPlayer({
    * Only a scroll of the page or of the column counts. A sheet or a drawer
    * scrolling is not the child scrolling the segment.
    *
-   * A SEGMENT THAT FITS ON ONE SCREEN SENDS NO `scroll`, because nothing
-   * scrolls. The catalogue's `scroll` is "the child scrolls within a
-   * segment"; a depth for one nobody scrolled would be a scroll that never
-   * happened. How much of such a segment was on screen has no declared home
-   * now - see `time_on_segment` above.
+   * AND ONLY ONCE THE CHILD HAS GONE FURTHER DOWN THAN THE SEGMENT OPENED
+   * SHOWING. The catalogue's `scroll` is "the child scrolls within a
+   * segment", and the page also moves when the child did not: the player's
+   * own focus move onto a new segment after Next is a scroll event too. So
+   * how far down was on screen at the start is taken once the segment is in
+   * place, and nothing goes up until the child passes it. A segment that fits
+   * on one screen can never be passed, so it sends no `scroll` - a depth for
+   * one nobody scrolled would be a scroll that never happened. How much of
+   * such a segment was on screen has no declared home now - see
+   * `time_on_segment` above.
    */
-  const handleScroll = useCallback(() => {
+  const columnReach = useCallback(() => {
     const column = columnRef.current;
-    // Every mark already sent: nothing to measure, so no layout read per frame.
-    if (!column || scrollMarks.current.size === SCROLL_MILESTONES.length) return;
-    const room = column.scrollHeight - column.clientHeight;
+    if (!column) return null;
+    if (column.scrollHeight - column.clientHeight > 0)
+      return {
+        reach: column.scrollTop + column.clientHeight,
+        height: column.scrollHeight,
+      };
     const rect = column.getBoundingClientRect();
-    const seen =
-      room > 0
-        ? (column.scrollTop + column.clientHeight) / column.scrollHeight
-        : rect.height > 0
-          ? (Math.min(window.innerHeight, rect.bottom) - rect.top) / rect.height
-          : null;
-    if (seen === null) return;
+    if (rect.height <= 0) return null;
+    return {
+      reach: Math.max(0, Math.min(window.innerHeight, rect.bottom) - rect.top),
+      height: rect.height,
+    };
+  }, []);
+  /** How far down the column was on screen when the segment opened, in px. */
+  const reachAtEntry = useRef(0);
+  // After the focus move above, so it measures where that move left the page.
+  useEffect(() => {
+    reachAtEntry.current = columnReach()?.reach ?? 0;
+  }, [index, modality, columnReach]);
+  const handleScroll = useCallback(() => {
+    // Every mark already sent: nothing to measure, so no layout read per frame.
+    if (scrollMarks.current.size === SCROLL_MILESTONES.length) return;
+    const at = columnReach();
+    if (!at || at.reach <= reachAtEntry.current) return;
+    const seen = at.reach / at.height;
     /*
      * A milestone describes the SEGMENT, so a chunked body cannot raise one.
      * Scrolling to the foot of Part 1 of 3 is the bottom of a third, and
@@ -864,7 +883,7 @@ export function LessonPlayer({
         });
       }
     }
-  }, [segment.id, trackEvent]);
+  }, [columnReach, segment.id, trackEvent]);
   useEffect(() => {
     const onScroll = (e: Event) => {
       const target = e.target;
