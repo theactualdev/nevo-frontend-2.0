@@ -3,23 +3,25 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
 import { SIGNAL_EVENT_TYPES } from "@/lib/constants";
 import type { Lesson } from "@/lib/types";
+import { offendingCalls } from "@/test/signalCatalogue";
+import { pageScrolledColumn, selfScrolledColumn } from "@/test/readingColumn";
 
 /**
- * Every segment that fits on one screen told the engine the child read none of
- * it.
+ * How far into a segment a child is reported to have read, as the catalogue
+ * takes it (6 Oct).
  *
- * `handleScroll` already had the right rule — no room to scroll means the child
- * can see all of it, so depth is 100 — but it lives in an `onScroll` handler.
- * A segment that fits never scrolls, so the handler never runs and the rule
- * never fires. `scrollDepth` stayed at the 0 it is reset to on entry.
+ * Depth goes up on one type only: `scroll`, "the child scrolls within a
+ * segment", carrying `[depthRatio]` - a ratio, so the bottom is 1, not 100.
+ * It used to go up twice and in neither form: `depthPct` on each scroll mark,
+ * and a `scrollDepthPct` on `time_on_segment` that the catalogue does not
+ * declare. That second one also counted a segment that fits on one screen as
+ * read in full, a reading with no declared home now - asked of backend.
  *
- * That is MOST segments: this product keeps them short on purpose, for low
- * cognitive load. So the adaptation engine was being told "read nothing" about
- * children who had read everything.
- *
- * jsdom reports every element as 0×0, so `scrollHeight - clientHeight` is 0 and
- * a segment is "non-scrolling" by default — which is the case under test. The
- * scrollable case is made by giving the container real dimensions.
+ * AND THE MARKS NEVER WENT UP AT ALL. They were read from the column's own
+ * scroll, and the column never scrolls: the player is `min-h-[100dvh]`, so it
+ * grows with the segment and the page scrolls instead. The old tests here gave
+ * the column room of its own, a layout no phone ever showed, and passed.
+ * `pageScrolledColumn` lays it out the way it really is.
  */
 
 const { trackEvent } = vi.hoisted(() => ({ trackEvent: vi.fn() }));
@@ -53,23 +55,20 @@ const LESSON = {
   segments: [
     segment("seg-1", "Numerators"),
     segment("seg-2", "Denominators"),
-    segment("seg-3", "Equivalence"),
   ],
 } as unknown as Lesson;
 
-/** The depth reported for a segment when it was left. */
-const depthFor = (segmentId: string) =>
+/** Every payload of one type, in order. */
+const sent = (type: string) =>
   trackEvent.mock.calls
-    .filter(
-      (c) =>
-        c[0] === SIGNAL_EVENT_TYPES.TIME_ON_SEGMENT &&
-        c[1]?.segmentId === segmentId,
-    )
-    .map((c) => c[1].scrollDepthPct)
-    .at(-1);
+    .filter((c) => c[0] === type)
+    .map((c) => c[1] as Record<string, unknown>);
 
-const next = () =>
-  fireEvent.click(screen.getByRole("button", { name: "Next" }));
+const marks = () =>
+  sent(SIGNAL_EVENT_TYPES.SCROLL).map((p) => p.depthRatio);
+
+/** The long segment measured on a phone: 2665px of column, 812px of screen. */
+const LONG = { height: 2665, top: 120, viewport: 812 };
 
 beforeEach(() => {
   trackEvent.mockReset();
@@ -79,85 +78,82 @@ afterEach(() => {
   cleanup();
 });
 
-describe("how much of a segment a child is reported to have read", () => {
-  it("reports a segment that fits on one screen as fully read", () => {
-    // The bug. A short segment cannot be scrolled, so it reported 0 — the
-    // engine was told the child read none of a thing they could see all of.
+describe("how far a child is reported to have read", () => {
+  it("is measured on the page, because the page is what scrolls", () => {
+    // THE BUG. The column's own scroll never fires on a real layout, so a
+    // child who scrolled a long segment halfway was reported as nothing.
+    const { container } = render(<LessonPlayer lesson={LESSON} plan={null} />);
+    const page = pageScrolledColumn(container, LONG);
+
+    page.scrollPageTo(700); // the screen now reaches halfway down the column
+
+    expect(sent(SIGNAL_EVENT_TYPES.SCROLL)).toEqual([
+      { segmentId: "seg-1", depthRatio: 0.25 },
+      { segmentId: "seg-1", depthRatio: 0.5 },
+    ]);
+  });
+
+  it("credits a child who scrolls to the bottom of a long segment with all of it", () => {
+    const { container } = render(<LessonPlayer lesson={LESSON} plan={null} />);
+    const page = pageScrolledColumn(container, LONG);
+
+    page.scrollPageTo(2100);
+
+    expect(marks()).toEqual([0.25, 0.5, 0.75, 1]);
+  });
+
+  it("sends each mark once per segment, however often it is passed", () => {
+    const { container } = render(<LessonPlayer lesson={LESSON} plan={null} />);
+    const page = pageScrolledColumn(container, LONG);
+
+    page.scrollPageTo(2100);
+    page.scrollPageTo(0);
+    page.scrollPageTo(2100);
+
+    expect(marks()).toHaveLength(4);
+  });
+
+  it("reads the column itself too, if it is ever the one that scrolls", () => {
+    // A layout change must not silently stop the marks a second time.
+    const { container } = render(<LessonPlayer lesson={LESSON} plan={null} />);
+    const column = selfScrolledColumn(container, { room: 1400, shown: 600 });
+
+    column.scrollColumnTo(700); // 1300 of 2000px has been on screen
+
+    expect(marks()).toEqual([0.25, 0.5]);
+  });
+
+  it("does not count something else scrolling as the child scrolling the segment", () => {
+    // A sheet, a drawer: their scroll is not the segment's.
+    const { container } = render(<LessonPlayer lesson={LESSON} plan={null} />);
+    pageScrolledColumn(container, LONG);
+    const drawer = document.createElement("div");
+    document.body.appendChild(drawer);
+
+    fireEvent.scroll(drawer);
+
+    expect(marks()).toEqual([]);
+    drawer.remove();
+  });
+
+  it("sends no scroll for a segment nobody scrolled", () => {
+    // "The child scrolls within a segment." A segment that fits was never
+    // scrolled, and a depth for it would be a scroll that did not happen.
+    const { unmount } = render(<LessonPlayer lesson={LESSON} plan={null} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    unmount();
+
+    expect(marks()).toEqual([]);
+  });
+
+  it("leaves depth off the time on a segment, where the catalogue has none", () => {
     const { unmount } = render(<LessonPlayer lesson={LESSON} plan={null} />);
 
     unmount();
 
-    expect(depthFor("seg-1")).toBe(100);
-  });
-
-  it("keeps reporting it on every later segment, not just the first", () => {
-    /*
-     * THE ORDERING TEST, and it caught a real bug in the first version of this
-     * fix. The depth is RESET to 0 when a segment is entered, and React runs
-     * effects in declaration order — so measuring before the reset means the
-     * reset wipes the measurement on every segment change. The fix looked
-     * correct, passed a single-render test, and did nothing.
-     */
-    const { unmount } = render(<LessonPlayer lesson={LESSON} plan={null} />);
-
-    next();
-    next();
-    unmount();
-
-    expect(depthFor("seg-2")).toBe(100);
-    expect(depthFor("seg-3")).toBe(100);
-  });
-
-  it("does not claim a scrollable segment was read to the end", () => {
-    // The other direction, and the reason this cannot simply hardcode 100: a
-    // segment with room to scroll has to be scrolled to be read, and reporting
-    // otherwise would be the same fabrication pointing the other way.
-    const { container, unmount } = render(
-      <LessonPlayer lesson={LESSON} plan={null} />,
-    );
-    const scroller = container.querySelector(
-      ".overflow-y-auto",
-    ) as HTMLDivElement;
-    Object.defineProperty(scroller, "scrollHeight", {
-      value: 2000,
-      configurable: true,
-    });
-    Object.defineProperty(scroller, "clientHeight", {
-      value: 500,
-      configurable: true,
-    });
-    // Re-enter the segment so the measurement runs against these dimensions.
-    next();
-    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
-
-    unmount();
-
-    expect(depthFor("seg-1")).not.toBe(100);
-  });
-
-  it("still credits a child who scrolls a long segment to the bottom", () => {
-    const { container, unmount } = render(
-      <LessonPlayer lesson={LESSON} plan={null} />,
-    );
-    const scroller = container.querySelector(
-      ".overflow-y-auto",
-    ) as HTMLDivElement;
-    Object.defineProperty(scroller, "scrollHeight", {
-      value: 2000,
-      configurable: true,
-    });
-    Object.defineProperty(scroller, "clientHeight", {
-      value: 500,
-      configurable: true,
-    });
-    Object.defineProperty(scroller, "scrollTop", {
-      value: 1500,
-      configurable: true,
-    });
-    fireEvent.scroll(scroller);
-
-    unmount();
-
-    expect(depthFor("seg-1")).toBe(100);
+    const [time] = sent(SIGNAL_EVENT_TYPES.TIME_ON_SEGMENT);
+    expect(time.segmentId).toBe("seg-1");
+    expect(offendingCalls(trackEvent.mock.calls)).toEqual([]);
   });
 });

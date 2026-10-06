@@ -104,6 +104,12 @@ describe("what a scrim tap records", () => {
     fireEvent.pointerDown(scrim());
 
     expect(blocked()).toHaveLength(1);
+    // The catalogue's two keys: what was tapped, and why it was refused - the
+    // modal's busy window, which it was sent without until 6 Oct.
+    expect(blocked()[0][1]).toEqual({
+      target: "scrim",
+      reason: "blocked_by_modal",
+    });
   });
 
   it("records nothing for a scrim tap while the check is not up", () => {

@@ -51,9 +51,10 @@ export function TextSegment({
    * How much of the body the child has actually been shown, 0-100.
    *
    * Only the chunked flow reports: it is the one mode where the body is
-   * DELIBERATELY not all on screen, so the player's own "it all fits, so they
-   * saw it" measurement would be a lie. Every other mode leaves the player to
-   * measure the layout as it always has.
+   * DELIBERATELY not all on screen, so the player's scroll of the column
+   * describes one part rather than the segment. The player keeps its scroll
+   * marks quiet on a body that reports, and keeps Next back while parts are
+   * left (37c).
    */
   onReadProgress?: (pct: number) => void;
 }) {
@@ -181,12 +182,12 @@ function ChunkedBody({
   /*
    * TELL THE PLAYER HOW MUCH OF THE BODY THE CHILD HAS ACTUALLY SEEN.
    *
-   * Without this the attention accommodation fabricates a reading signal. The
-   * player decides a segment was fully read when its column has no room to
-   * scroll - correct for an ordinary segment, and exactly wrong here, because
-   * a chunk is a third of the body and so always fits. A child who stopped at
-   * Part 1 of 3 was reported to the adaptation engine as having read all of
-   * it, and the engine learns from that.
+   * Without this the attention accommodation fabricates a reading signal. A
+   * chunk is a third of the body and so always fits: any scroll of the column
+   * reads as its bottom, and the player would send that as the whole segment
+   * read. A child who stopped at Part 1 of 3 would be reported to the
+   * adaptation engine as having read all of it, and the engine learns from
+   * that.
    *
    * Worse, it would have been wrong for precisely the children this
    * accommodation exists to help: only a child WITH the attention

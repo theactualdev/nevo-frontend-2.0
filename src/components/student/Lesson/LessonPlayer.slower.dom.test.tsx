@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
-import { SIGNAL_EVENT_TYPES, TRIGGER_SOURCE } from "@/lib/constants";
+import { SIGNAL_EVENT_TYPES } from "@/lib/constants";
 import type { AdaptationPlan, Lesson } from "@/lib/types";
+import { pageScrolledColumn } from "@/test/readingColumn";
 
 /**
  * THE ONE PLACE A CHILD HAS ANY AGENCY, AND IT WAS ABSENT ON EVERY LIVE LESSON.
@@ -24,8 +25,8 @@ import type { AdaptationPlan, Lesson } from "@/lib/types";
  * only place the child can ask, and asking is not a disclosure about
  * themselves. Without it the child is entirely subject to inference.
  *
- * jsdom reports every element as 0x0, so a segment is "non-scrolling" by
- * default - which is exactly the case where a chunk would report a false 100.
+ * A chunk fits on screen, so any scroll past it reads as its bottom - which is
+ * exactly the case where a chunk's scroll would read as the whole segment's.
  */
 
 const { trackEvent } = vi.hoisted(() => ({ trackEvent: vi.fn() }));
@@ -77,15 +78,9 @@ const slowerChip = () => screen.queryByRole("button", { name: "Slower" });
 const continueChip = () =>
   screen.queryByRole("button", { name: "Tap to continue" });
 
-const depthFor = (segmentId: string) =>
-  trackEvent.mock.calls
-    .filter(
-      (c) =>
-        c[0] === SIGNAL_EVENT_TYPES.TIME_ON_SEGMENT &&
-        c[1]?.segmentId === segmentId,
-    )
-    .map((c) => c[1].scrollDepthPct)
-    .at(-1);
+/** Every `scroll` the player sent. */
+const scrolls = () =>
+  trackEvent.mock.calls.filter((c) => c[0] === SIGNAL_EVENT_TYPES.SCROLL);
 
 beforeEach(() => {
   trackEvent.mockReset();
@@ -121,49 +116,34 @@ describe("a child asking for less at a time, on a live lesson", () => {
     expect(continueChip()).toBeInTheDocument();
   });
 
-  it("tells the engine the child asked, and that the CHILD asked", () => {
-    // An observed fact, not a parameter. `source: manual` is what separates
-    // this from the engine's own density instruction.
+  it("tells the engine the child asked, and nothing the catalogue lacks", () => {
+    // An observed fact, not a parameter. The trigger means the child asked -
+    // the catalogue's own definition - so the `source: manual` that rode
+    // with it said nothing new, under a key the catalogue does not take.
     render(<LessonPlayer lesson={LIVE} plan={PLAN} />);
     fireEvent.click(slowerChip()!);
 
-    expect(trackEvent).toHaveBeenCalledWith(
-      SIGNAL_EVENT_TYPES.SLOWER_TRIGGER,
-      expect.objectContaining({
-        segmentId: "seg-1",
-        source: TRIGGER_SOURCE.MANUAL,
-      }),
-    );
+    expect(trackEvent).toHaveBeenCalledWith(SIGNAL_EVENT_TYPES.SLOWER_TRIGGER, {
+      segmentId: "seg-1",
+    });
   });
 
-  it("reports how much of the body was actually seen, not all of it", () => {
+  it("does not report one part's scroll as the whole segment read", () => {
     /*
      * THE HALF THAT MAKES THIS SAFE TO SHIP.
      *
-     * The player calls a segment fully read when its column has no room to
-     * scroll - true of a whole segment, false of one chunk, because a chunk
-     * always fits. Without honest depth a child who asked for less at a time
-     * would be reported as having read all of it, and the engine would learn
-     * from that. Asking for help must not cost the child the accuracy of what
-     * the engine knows about them.
+     * A chunk always fits, so its column has no room to scroll and any scroll
+     * reads as the bottom - of a third. Sent as `depthRatio: 1`, a child who
+     * asked for less at a time would be reported as having read all of it,
+     * and the engine would learn from that. Asking for help must not cost the
+     * child the accuracy of what the engine knows about them.
      */
-    render(
-      <LessonPlayer
-        lesson={lessonWith(
-          { heading: "Inside a leaf", body: { default: THREE } },
-          true,
-        )}
-        plan={PLAN}
-      />,
-    );
+    const { container } = render(<LessonPlayer lesson={LIVE} plan={PLAN} />);
     fireEvent.click(slowerChip()!);
 
-    // Leave at part 1 of 3, without continuing.
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    pageScrolledColumn(container, { height: 300 }).scrollPageTo(2_000);
 
-    const depth = depthFor("seg-1");
-    expect(depth).toBeGreaterThan(0);
-    expect(depth).toBeLessThan(100);
+    expect(scrolls()).toEqual([]);
   });
 
   it("does not offer a control that would do nothing", () => {
@@ -224,44 +204,12 @@ describe("the choice holds for the lesson, and no further", () => {
     expect(continueChip()).toBeNull();
   });
 
-  it("reports no system adaptation for a density the child overrode", () => {
+  it("reports no trigger for a density the plan chose, only for the child's", () => {
     /*
-     * The false signal that carrying the pick forward would otherwise create.
-     * The plan names a density for segment 2, but the child asked for Slower on
-     * segment 1 and that is what is on screen - so reporting that the SYSTEM
-     * applied its own density would tell the engine an adaptation happened that
-     * the child never saw. A false signal is worse than no signal, because the
-     * engine acts on it.
+     * A trigger is the child asking - the catalogue's definition of all three.
+     * The plan's density for the next segment went up as one, with `source:
+     * "system"`, whenever the child had not overridden it.
      */
-    const planned: AdaptationPlan = {
-      lessonId: "photo-1",
-      segments: [
-        { segmentId: "seg-2", startModality: "text", density: "simplify" },
-      ] as unknown as AdaptationPlan["segments"],
-    };
-    render(
-      <LessonPlayer
-        lesson={lessonWith(
-          { heading: "Inside a leaf", body: { default: THREE } },
-          true,
-        )}
-        plan={planned}
-      />,
-    );
-    fireEvent.click(slowerChip()!);
-    trackEvent.mockClear();
-
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-
-    const systemDensity = trackEvent.mock.calls.filter(
-      (c) => c[1]?.source === TRIGGER_SOURCE.SYSTEM,
-    );
-    expect(systemDensity).toEqual([]);
-  });
-
-  it("still reports one when the child has not overridden anything", () => {
-    // The other side: an untouched plan density IS a system adaptation, and
-    // the gate must not have silenced that too.
     const planned: AdaptationPlan = {
       lessonId: "photo-1",
       segments: [
@@ -282,8 +230,10 @@ describe("the choice holds for the lesson, and no further", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     expect(
-      trackEvent.mock.calls.some((c) => c[1]?.source === TRIGGER_SOURCE.SYSTEM),
-    ).toBe(true);
+      trackEvent.mock.calls.filter(
+        (c) => c[0] === SIGNAL_EVENT_TYPES.SIMPLIFY_TRIGGER,
+      ),
+    ).toEqual([]);
   });
 });
 
