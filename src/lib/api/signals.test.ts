@@ -145,38 +145,10 @@ describe("what leaves the device since 1 Oct", () => {
 
 /*
  * NOTHING IS FILTERED NOW, SO A TYPE THE ENUM DOES NOT HOLD 422s THE WHOLE
- * BATCH - every event in it, not just its own. This pins every type the client
- * can emit against `SignalEventType` as deployed on 1 Oct, so a type added here
- * that backend has not got fails a test rather than a child's lesson.
+ * BATCH - every event in it, not just its own. Every type the client can emit
+ * is pinned against backend's own catalogue in `signals.catalogue.test.ts`,
+ * which replaced a copy of the 1 Oct enum kept here by hand.
  */
-const DEPLOYED_1_OCT = new Set([
-  "time_on_segment", "replay", "scroll", "simplify_trigger", "expand_trigger",
-  "slower_trigger", "comprehension_response", "exit_attempt", "break_suggested",
-  "break_taken", "break_start", "break_end", "feeling_checkin",
-  "module_boundary_reached", "module_boundary_action", "engagement_signal",
-  "modality_suggestion_shown", "modality_suggestion_accepted",
-  "modality_suggestion_declined", "modality_suggestion_ignored",
-  "modality_switch_outcome", "modality_manual_switch",
-  "calculation_step_response", "calculation_complete", "narration_played",
-  "narration_replayed", "manipulative_piece_placed",
-  "ask_nevo_question_student", "ask_nevo_question_teacher",
-  "ask_nevo_cannot_help", "ask_nevo_redirect_used", "adaptation_suppressed",
-  "media_load_failed", "system_busy", "tap_blocked", "session_context",
-  "baseline_module_start", "baseline_module_complete", "baseline_submitted",
-  "hint_offered", "hint_used", "step_up_offered", "step_up_accepted",
-  "step_up_declined", "guided_question_shown", "guided_question_answered",
-]);
-
-describe("every type the client can emit", () => {
-  it("is one the deployed ingest enum accepts", () => {
-    const ours = [
-      ...Object.values(SIGNAL_EVENT_TYPES),
-      ...Object.values(ONBOARDING_SIGNAL_TYPES),
-    ];
-
-    expect(ours.filter((t) => !DEPLOYED_1_OCT.has(t))).toEqual([]);
-  });
-});
 
 describe("the property the inversion buys", () => {
   it("lets a type through that nobody added to a list here", async () => {

@@ -1,0 +1,418 @@
+[
+  {
+    "eventType": "time_on_segment",
+    "trigger": "The child leaves a segment, or the lesson ends on it. depthShown says which text version was actually on screen - standard, simplified or expanded - on every segment, not only the ones an adaptation touched. Design D23, ask B45.",
+    "payload": [
+      "segmentId",
+      "durationMs",
+      "depthShown"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "replay",
+    "trigger": "The child plays a finished piece of media again from the start. Use this for a narration restart too, rather than narration_replayed, so one restart is not counted twice.",
+    "payload": [
+      "segmentId",
+      "[channel]"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "scroll",
+    "trigger": "The child scrolls within a segment.",
+    "payload": [
+      "segmentId",
+      "[depthRatio]"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "simplify_trigger",
+    "trigger": "The child asks for the simpler wording.",
+    "payload": [
+      "segmentId"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "expand_trigger",
+    "trigger": "The child asks for the fuller wording.",
+    "payload": [
+      "segmentId"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "slower_trigger",
+    "trigger": "The child asks for a slower pace.",
+    "payload": [
+      "segmentId"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "comprehension_response",
+    "trigger": "The child answers a comprehension checkpoint. Correctness is not sent: it is decided on the server against the stored answer.",
+    "payload": [
+      "segmentId",
+      "questionId"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "exit_attempt",
+    "trigger": "The child tries to leave mid-lesson.",
+    "payload": [
+      "segmentId"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "break_suggested",
+    "trigger": "Nevo offered a break.",
+    "payload": [
+      "trigger"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "break_taken",
+    "trigger": "The child accepted an offered break.",
+    "payload": [
+      "trigger"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "break_declined",
+    "trigger": "The child refused an offered break. Without this the engine cannot tell \"not now\" from no answer and may offer again a minute later.",
+    "payload": [
+      "trigger"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "break_start",
+    "trigger": "A break actually began.",
+    "payload": [
+      "trigger"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "break_end",
+    "trigger": "A break ended. With break_start this is how long it lasted, which is the part that says whether it helped.",
+    "payload": [
+      "trigger",
+      "durationMs"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "feeling_checkin",
+    "trigger": "The child answers the consolidation break's question about how they are getting on.",
+    "payload": [
+      "response"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "module_boundary_reached",
+    "trigger": "The child reaches the end of a module.",
+    "payload": [
+      "moduleId"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "module_boundary_action",
+    "trigger": "What they chose there.",
+    "payload": [
+      "moduleId",
+      "action"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "engagement_signal",
+    "trigger": "A reading the named types do not already cover. The type of last resort: the engine can reason about a named type and can only count these.",
+    "payload": [
+      "indicator",
+      "value"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "modality_suggestion_shown",
+    "trigger": "Nevo offered a different modality.",
+    "payload": [
+      "segmentId",
+      "suggested"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "modality_suggestion_accepted",
+    "trigger": "The child took the offer.",
+    "payload": [
+      "segmentId",
+      "suggested"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "modality_suggestion_declined",
+    "trigger": "The child refused it.",
+    "payload": [
+      "segmentId",
+      "suggested"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "modality_suggestion_ignored",
+    "trigger": "The offer was shown and neither taken nor refused before the child moved on.",
+    "payload": [
+      "segmentId",
+      "suggested"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "modality_switch_outcome",
+    "trigger": "Sent once the child has spent a full segment in the new modality, so there is something to compare. One per switch, from the client that made the switch. Ask B38.",
+    "payload": [
+      "from",
+      "to",
+      "outcome"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "modality_manual_switch",
+    "trigger": "The child changed modality themselves, with nothing offered.",
+    "payload": [
+      "segmentId",
+      "from",
+      "to"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "calculation_step_response",
+    "trigger": "The child answers one step of a calculation.",
+    "payload": [
+      "segmentId",
+      "stepId"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "calculation_complete",
+    "trigger": "The child finishes a calculation.",
+    "payload": [
+      "segmentId"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "narration_played",
+    "trigger": "Narration starts for the first time on a segment.",
+    "payload": [
+      "segmentId"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "narration_replayed",
+    "trigger": "Reserved. Send replay for a restart instead, so one restart is not counted under two types. Ask B39.",
+    "payload": [
+      "segmentId"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "manipulative_piece_placed",
+    "trigger": "The child places a draggable piece.",
+    "payload": [
+      "segmentId",
+      "[stepId]"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "ask_nevo_question_student",
+    "trigger": "A child asks Nevo a question, on an ask_nevo session.",
+    "payload": [
+      "interactionId",
+      "studentId",
+      "currentPage",
+      "questionCategory"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "ask_nevo_question_teacher",
+    "trigger": "A teacher asks Nevo a question.",
+    "payload": [
+      "interactionId",
+      "role",
+      "currentPage",
+      "questionCategory"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "ask_nevo_cannot_help",
+    "trigger": "Ask Nevo declined to answer and handed the asker on.",
+    "payload": [
+      "interactionId",
+      "role",
+      "currentPage"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "ask_nevo_redirect_used",
+    "trigger": "The asker followed where it sent them.",
+    "payload": [
+      "interactionId",
+      "role",
+      "currentPage",
+      "redirectTarget"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "adaptation_suppressed",
+    "trigger": "Server-written. An adaptation was decided and then held back by a rate limit or a cooldown. Clients do not send this.",
+    "payload": [
+      "attemptedType",
+      "reason"
+    ],
+    "serverWritten": true
+  },
+  {
+    "eventType": "media_load_failed",
+    "trigger": "A picture or a recording did not load. reason is one of offline, refresh_failed, load_error.",
+    "payload": [
+      "segmentId",
+      "channel",
+      "reason"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "system_busy",
+    "trigger": "The system owned the wait, not the child - audio playing, a dialog open, a transition running. Counted as idle time until this existed.",
+    "payload": [
+      "reason",
+      "durationMs"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "tap_blocked",
+    "trigger": "A tap the interface refused because something was loading or disabled. Repeated refused taps are a child trying, which reads as a child doing nothing unless it is reported.",
+    "payload": [
+      "target",
+      "reason"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "session_context",
+    "trigger": "Once per session, first. Dwell times on a phone are not dwell times on a desktop, and a child with reduced motion on is not a child ignoring an animation.",
+    "payload": [
+      "formFactor",
+      "reducedMotion"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "baseline_module_start",
+    "trigger": "A baseline module begins.",
+    "payload": [
+      "moduleId"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "baseline_module_complete",
+    "trigger": "A baseline module finishes.",
+    "payload": [
+      "moduleId"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "baseline_submitted",
+    "trigger": "The baseline is submitted. With the two above, an abandoned baseline can be told from one never started.",
+    "payload": [],
+    "serverWritten": false
+  },
+  {
+    "eventType": "hint_offered",
+    "trigger": "Nevo offered a hint, whether or not the child asked for one.",
+    "payload": [
+      "segmentId",
+      "[conceptId]",
+      "[hintIndex]"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "hint_used",
+    "trigger": "The child acted on a hint: opened one they had to open, or moved on after one shown in full. A hint shown and ignored is hint_offered alone. Ask B41.",
+    "payload": [
+      "segmentId",
+      "[conceptId]",
+      "[hintIndex]"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "step_up_offered",
+    "trigger": "Nevo offered harder work.",
+    "payload": [
+      "segmentId"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "step_up_accepted",
+    "trigger": "The child took it.",
+    "payload": [
+      "segmentId"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "step_up_declined",
+    "trigger": "The child refused it.",
+    "payload": [
+      "segmentId"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "guided_question_shown",
+    "trigger": "A guided question was put to the child.",
+    "payload": [
+      "segmentId",
+      "promptId"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "guided_question_answered",
+    "trigger": "Server-written by POST /api/intelligence/guided-questions/answer. Clients do not send this, or one reply would count twice. Ask B41.",
+    "payload": [
+      "segmentId",
+      "promptId",
+      "outcome"
+    ],
+    "serverWritten": true
+  }
+]

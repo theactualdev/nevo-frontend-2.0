@@ -88,13 +88,6 @@ export const SIGNAL_EVENT_TYPES = {
   /** A real narration clip started for the first time on this visit. */
   NARRATION_PLAYED: "narration_played",
   /**
-   * An offer the engine made that the player did not put on screen, because
-   * one of the player's own rendering rules held it back - payload
-   * { segmentId, adaptation, reason }. Without it the engine reads its own
-   * suggestion as shown and ignored.
-   */
-  ADAPTATION_SUPPRESSED: "adaptation_suppressed",
-  /**
    * A lesson picture or recording that would not load, after its one fresh
    * link (B12) - payload { segmentId, channel: "image" | "audio", reason }.
    * The rest of the segment stays usable; this is so the engine does not read
