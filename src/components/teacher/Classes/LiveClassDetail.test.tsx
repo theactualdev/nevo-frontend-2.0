@@ -632,3 +632,44 @@ describe("clearing a child's PIN", () => {
     ).toBeInTheDocument();
   });
 });
+
+/**
+ * C05's status precedence: "account access first, then a forgotten PIN, then
+ * attention. Each replaces the next rather than stacking."
+ */
+describe("what a row says about a child, in order", () => {
+  const flagged = () =>
+    useTeacherFlags.mockReturnValue({
+      flags: [{ id: "f-1", studentId: "s-1", isSudden: false, note: "Slower on written work." }],
+      live: true,
+      failed: false,
+    });
+
+  it("shows the account state instead of the attention marker", () => {
+    flagged();
+    useClassRoster.mockReturnValue({ students: [seg({ status: "deactivated" })], loading: false, failed: false });
+    render(<LiveClassDetail klass={klass} />);
+
+    expect(screen.getByText("Deactivated")).toBeInTheDocument();
+    expect(screen.queryByText("Worth a glance")).not.toBeInTheDocument();
+  });
+
+  it("still shows the attention marker for an active child", () => {
+    flagged();
+    render(<LiveClassDetail klass={klass} />);
+
+    expect(screen.getByText("Worth a glance")).toBeInTheDocument();
+  });
+
+  it("puts a cleared PIN ahead of attention too", async () => {
+    flagged();
+    clearPin.mockReset().mockResolvedValue({ studentId: "s-1", clearedAt: "2026-10-06T09:00:00Z" });
+    render(<LiveClassDetail klass={klass} />);
+    fireEvent.click(screen.getByRole("button", { name: "More options for Amara" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Clear PIN" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Done" }));
+
+    expect(screen.getByText(/PIN cleared · new one not chosen yet/)).toBeInTheDocument();
+    expect(screen.queryByText("Worth a glance")).not.toBeInTheDocument();
+  });
+});
