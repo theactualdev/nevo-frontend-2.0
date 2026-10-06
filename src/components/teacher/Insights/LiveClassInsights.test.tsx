@@ -114,7 +114,8 @@ describe("LiveClassInsights - telling the three states apart", () => {
     expect(
       screen.getByText(/A calm week. Everyone is moving through the material./),
     ).toBeInTheDocument();
-    expect(screen.getByText(/A settled week/)).toBeInTheDocument();
+    // The engine owns the settled wording; no line of ours sits under it.
+    expect(screen.queryByText(/A settled week/)).not.toBeInTheDocument();
   });
 
   it("shows the engine's written week, in its own words", () => {
@@ -244,7 +245,7 @@ describe("one list that failed while the others landed", () => {
     useClassInsights.mockReturnValue(failedOnly("flags"));
     render(<LiveClassInsights {...CLASS} />);
 
-    expect(screen.getByText("Worth a look")).toBeInTheDocument();
+    expect(screen.getByText("Flags")).toBeInTheDocument();
     expect(screen.getByText(/couldn.t load this just now. Nothing has changed for Year 7 Maths/)).toBeInTheDocument();
   });
 
@@ -252,7 +253,7 @@ describe("one list that failed while the others landed", () => {
     useClassInsights.mockReturnValue(failedOnly("mastery"));
     render(<LiveClassInsights {...CLASS} />);
 
-    expect(screen.getByText("How the class is doing")).toBeInTheDocument();
+    expect(screen.getByText("Where the class stands")).toBeInTheDocument();
     expect(screen.getByText(/couldn.t load this just now/)).toBeInTheDocument();
   });
 
@@ -263,16 +264,17 @@ describe("one list that failed while the others landed", () => {
     expect(screen.queryByText(/Nothing here needs you/)).not.toBeInTheDocument();
   });
 
-  it("still calls a settled week settled when everything landed", () => {
+  it("says a settled week in the engine's own words, and adds none of ours", () => {
     useClassInsights.mockReturnValue(state({ summary: "A steady week.", settledWeek: true }));
     render(<LiveClassInsights {...CLASS} />);
 
-    expect(screen.getByText(/Nothing here needs you/)).toBeInTheDocument();
+    expect(screen.getByText("A steady week.")).toBeInTheDocument();
+    expect(screen.queryByText(/Nothing here needs you/)).not.toBeInTheDocument();
     expect(screen.queryByText(/couldn.t load this just now/)).not.toBeInTheDocument();
   });
 });
 
-describe("a flag card in Worth a look", () => {
+describe("a flag card in Flags", () => {
   it("opens the student it is about", () => {
     useClassInsights.mockReturnValue(
       state({
@@ -282,5 +284,22 @@ describe("a flag card in Worth a look", () => {
     render(<LiveClassInsights {...CLASS} />);
 
     expect(screen.getByRole("link", { name: /Ada Obi/ })).toHaveAttribute("href", "/teacher/students/s-7");
+  });
+});
+
+/** C09's headings, as the fixture screen next door has always had them. */
+describe("the headings", () => {
+  it("heads the written week with the class it is about", () => {
+    useClassInsights.mockReturnValue(state({ summary: "Most of the class is through fractions." }));
+    render(<LiveClassInsights {...CLASS} />);
+
+    expect(screen.getByRole("heading", { name: `This week in ${CLASS.className}` })).toBeInTheDocument();
+  });
+
+  it("draws no written-week heading when there is no written week", () => {
+    useClassInsights.mockReturnValue(state({ summary: null }));
+    render(<LiveClassInsights {...CLASS} />);
+
+    expect(screen.queryByRole("heading", { name: /This week in/ })).not.toBeInTheDocument();
   });
 });
