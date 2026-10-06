@@ -29,7 +29,8 @@ import {
   TEXT_ACTION,
 } from "../Roster/primitives";
 import { useSetupGate } from "@/hooks";
-import { AssignTeacherSheet } from "./AssignTeacherSheet";
+import { AssignTeachingSheet } from "./AssignTeachingSheet";
+import { ClassSubjects } from "./ClassSubjects";
 import { ClassFormSheet } from "./ClassFormSheet";
 import { NoAccess, failureKind } from "../NoAccess";
 import { WriteFailed } from "../WriteFailed";
@@ -183,7 +184,11 @@ export function ClassDetailView({ classId }: { classId: string }) {
   const meta = [
     yearGroupLabel(klass.yearGroup),
     `${klass.studentCount} ${klass.studentCount === 1 ? "student" : "students"}`,
-    klass.subjects.length > 0 ? klass.subjects.join(", ") : null,
+    // D05's header: "Year 8 · 34 students · 9 subjects". The names are in
+    // their own section below, where they can be changed.
+    klass.subjects.length > 0
+      ? `${klass.subjects.length} ${klass.subjects.length === 1 ? "subject" : "subjects"}`
+      : null,
   ].filter(Boolean);
 
   return (
@@ -270,6 +275,23 @@ export function ClassDetailView({ classId }: { classId: string }) {
           </Link>
         </p>
       ) : null}
+
+      {/*
+        * SUBJECTS. Above the teachers on purpose: since SCRUM-194 a teacher is
+        * assigned a subject the class takes, so this list is what makes the
+        * section below possible.
+        */}
+      <div className="mt-[30px]">
+        <SectionHeading>Subjects this class takes</SectionHeading>
+      </div>
+      <div className={cn(CARD, "mt-3.5 px-[22px] py-5")}>
+        <ClassSubjects
+          key={klass.subjects.join("\u0000")}
+          klass={klass}
+          editable={!archived && !writesPaused}
+          onSaved={reload}
+        />
+      </div>
 
       {/* TEACHERS */}
       <div className="mt-[30px] flex items-center justify-between gap-4">
@@ -496,11 +518,8 @@ export function ClassDetailView({ classId }: { classId: string }) {
       ) : null}
 
       {assigning ? (
-        <AssignTeacherSheet
-          classId={klass.id}
-          className={klass.name}
-          classSubtitle={yearGroupLabel(klass.yearGroup)}
-          assigned={teachers}
+        <AssignTeachingSheet
+          door={{ kind: "class", klass, assigned: teachers }}
           onClose={() => setAssigning(false)}
           onAssigned={() => {
             setAssigning(false);

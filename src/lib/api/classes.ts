@@ -229,6 +229,12 @@ export interface ClassWrite {
   section?: string | null;
   academicSession?: string | null;
   capacity?: number | null;
+  /**
+   * The class's scheme of work, as subject NAMES the server resolves against
+   * the school's list (SCRUM-194). Absent leaves it as it is; an empty list
+   * clears it. An assignment's subject must be on it.
+   */
+  subjects?: string[] | null;
 }
 
 /**
@@ -305,9 +311,18 @@ export const classesApi = {
   createMany: (classes: ClassWrite[]) =>
     api.post<BulkClassResponse>("/api/v1/classes/bulk", { classes }),
 
-  /** Rename or re-year a class. Does not rewrite assignment history. */
-  update: (classId: string, payload: { name: string; yearGroup: string | null }) =>
-    api.patch<{ id: string; name: string }>(`/api/v1/classes/${classId}`, payload),
+  /**
+   * Rename or re-year a class, or set its subjects. Does not rewrite
+   * assignment history.
+   *
+   * SEND NAME AND YEAR GROUP EVERY TIME. The PATCH writes `yearGroup` from
+   * the body whether or not it was sent, so a subjects-only call would clear
+   * the class's year group.
+   */
+  update: (
+    classId: string,
+    payload: { name: string; yearGroup: string | null; subjects?: string[] },
+  ) => api.patch<{ id: string; name: string }>(`/api/v1/classes/${classId}`, payload),
 
   /** Archive: reversible, keeps records, never touches student progress. */
   archive: (classId: string) =>
@@ -331,11 +346,20 @@ export const classesApi = {
   classStudents: (classId: string) =>
     api.get<ClassStudent[]>(`/api/v1/classes/${classId}/students`),
 
-  /** Assign a teacher to a class (admin seam). */
+  /**
+   * Assign a teacher to a class, for one subject (admin seam).
+   *
+   * The subject is required in practice since SCRUM-194: the schema keeps it
+   * optional only so older rows read back, and a new assignment without one
+   * is refused (`subject_required`). It must be on the teacher's list and the
+   * class's (`subject_not_on_teacher`, `subject_not_on_class`). One primary
+   * per class is enforced (409 `primary_teacher_exists`).
+   */
   createAssignment: (payload: {
     teacherId: string;
     classId: string;
     role: TeacherAssignmentRole;
+    schoolSubjectId: string;
   }) => api.post("/api/v1/teacher-class-assignments", payload),
 
   /** Hand a class to another teacher (admin seam). */
