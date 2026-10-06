@@ -283,7 +283,7 @@ describe("WarmUpRun — the dot task has no fixed answer", () => {
   });
 });
 
-describe("WarmUpRun — the done state claims a save only once one landed", () => {
+describe("WarmUpRun — the done state claims no save", () => {
   it("says nothing about saving while the write is still in flight", async () => {
     submit.mockReturnValue(new Promise(() => {}));
     await sitTheTileTask();
@@ -293,10 +293,24 @@ describe("WarmUpRun — the done state claims a save only once one landed", () =
     expect(document.body.textContent).not.toMatch(/saved|couldn't save/i);
   });
 
-  it("says it was saved once the write lands", async () => {
+  it("is the title and Go on once the write lands, with no body line (D80, D97)", async () => {
+    // It said "Nevo is tuned to how you're doing today. Your progress is
+    // saved." here, and its button read "Home". The 6 Oct frame is the title
+    // and "Go on".
     await sitTheTileTask();
     await settle();
 
-    expect(screen.getByText(/Your progress is saved/)).toBeTruthy();
+    expect(screen.getByText("That's it for today")).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/saved|tuned|couldn't/i);
+    expect(screen.getByRole("button", { name: "Go on" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Home" })).toBeNull();
+  });
+
+  it("still says so when the write failed (kept while D126 is asked)", async () => {
+    submit.mockResolvedValue(false);
+    await sitTheTileTask();
+    await settle();
+
+    expect(screen.getByText(/couldn't save it just now/)).toBeTruthy();
   });
 });

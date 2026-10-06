@@ -79,12 +79,13 @@ describe("the first warm-up of the day", () => {
   });
 
   it("offers the way Home rather than another go", async () => {
-    // Design, 23 Sep: "it closes". Where to went Home on 1 Oct (D18).
+    // Design, 23 Sep: "it closes". Where to went Home on 1 Oct (D18), and the
+    // button reads "Go on" since 6 Oct (D97).
     render(<WarmUpRun dimension="attention" />);
     fireEvent.click(screen.getByText("Right"));
     await settle();
 
-    expect(screen.getByRole("button", { name: "Home" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Go on" })).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /again|retry|another/i }),
     ).toBeNull();
