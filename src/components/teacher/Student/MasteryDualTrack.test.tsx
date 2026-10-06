@@ -41,9 +41,13 @@ describe("MasteryDualTrack - what the numbers say", () => {
     ).toHaveAttribute("aria-valuenow", "0");
   });
 
-  it("falls back rather than emitting NaN when a value is missing", () => {
-    // `width:NaN%` renders as a full-width bar in some engines, which would
-    // show a child at 100% understanding on absent data.
+  /*
+   * THIS PINNED AN INVENTED VALUE. A missing measurement fell back to the
+   * frame's example figures, 72 and 48, so a concept nobody had measured was
+   * drawn as one a child had mostly understood - and this test asserted it.
+   * Absence is an instruction: no bar at all.
+   */
+  it("draws nothing for a value that is not a number", () => {
     render(
       <MasteryDualTrack
         concept="Fractions"
@@ -51,12 +55,15 @@ describe("MasteryDualTrack - what the numbers say", () => {
         reading={Number.NaN}
       />,
     );
-    expect(
-      screen.getByRole("progressbar", { name: "Fractions - understanding" }),
-    ).toHaveAttribute("aria-valuenow", "72");
-    expect(
-      screen.getByRole("progressbar", { name: "Fractions - reading level" }),
-    ).toHaveAttribute("aria-valuenow", "48");
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+    expect(screen.queryByText("Fractions")).not.toBeInTheDocument();
+  });
+
+  it("draws nothing when only one of the two is missing", () => {
+    render(
+      <MasteryDualTrack concept="Fractions" understanding={60} reading={Number.NaN} />,
+    );
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
   });
 });
 

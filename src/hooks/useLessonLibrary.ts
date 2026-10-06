@@ -199,6 +199,9 @@ function toCard(lesson: LessonSummary): LibraryCard {
     // estimate" - the figure is floored per content type server-side, so a
     // real lesson is never 0 minutes and "0 min" would be a claim.
     meta: [
+      // C06's meta leads with the subject. A lesson uploaded without one
+      // simply starts with its sections.
+      lesson.subject || null,
       `${n} ${n === 1 ? "section" : "sections"}`,
       SOURCE_LABEL[lesson.sourceType] ?? lesson.sourceType,
       lesson.estimatedMinutes ? `${lesson.estimatedMinutes} min` : null,

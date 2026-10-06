@@ -228,13 +228,15 @@ export function useStudentProfile(studentId: string): StudentProfileState {
   return {
     helpSeeking: helpSeekingLine(evidence),
     profile,
-    concepts: mastery.map((m) => ({
+    // A row the engine could not name is a bar with no label - nothing a
+    // teacher can act on - so it is left out rather than drawn blank.
+    concepts: mastery.filter((m) => m.conceptName).map((m) => ({
       conceptId: m.conceptId,
       // Straight from the mastery read since 31 Aug. It used to be resolved
       // through a second, best-effort `/api/concepts` call whose failure was
       // swallowed - and when it failed a teacher was shown a raw UUID as the
       // name of the concept their student was struggling with.
-      name: m.conceptName,
+      name: m.conceptName as string,
       understanding: pct(m.masteryProbabilityConcept),
       reading: pct(m.masteryProbabilityReading),
       practiceCount: m.practiceCount,

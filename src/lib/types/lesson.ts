@@ -56,6 +56,11 @@ export interface VisualContent {
     caption?: string;
     /** Identifies the stored object, so an expired `src` can be re-issued. */
     storagePath?: string;
+    /**
+     * A much smaller copy of the same picture (B47), painted while `src`
+     * arrives on a slow connection. Absent means there is none.
+     */
+    previewSrc?: string;
     /** The asset's own pixel size, when the wire carries it. */
     width?: number;
     height?: number;

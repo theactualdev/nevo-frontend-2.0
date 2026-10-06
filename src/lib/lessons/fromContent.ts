@@ -229,6 +229,9 @@ function visualFor(
       // Kept so a link that has aged out can be re-issued rather than shown
       // broken - `imageUrl` is signed and expires, `storagePath` does not.
       ...(variant.storagePath ? { storagePath: variant.storagePath } : {}),
+      // The small copy, to paint first (B47). Null on pictures stored before
+      // it existed, which is "use imageUrl", not a fault.
+      ...(variant.previewUrl ? { previewSrc: variant.previewUrl } : {}),
       // The picture's own shape, when measured. Absent falls back to the
       // frame's 4:3, which is what every picture was squeezed into before.
       ...(isPositive(variant.width) && isPositive(variant.height)
