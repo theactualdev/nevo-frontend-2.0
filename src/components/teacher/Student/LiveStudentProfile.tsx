@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
+import { useSystemMessages } from "@/components/shared/SystemMessages";
 import { useStudentFlags } from "@/hooks/useStudentFlags";
 import { useStudentSessions } from "@/hooks/useStudentSessions";
 import { useRosterObservations } from "@/hooks/useRosterObservations";
@@ -77,8 +78,6 @@ import { MasteryDualTrack } from "./MasteryDualTrack";
 const SECTION_H =
   "text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase xl:text-sm";
 
-/** Matches ConnectView, which is the console's other C14 toast. */
-const TOAST_MS = 3000;
 
 /** The support Nevo turned on, named the way the console talks about it. */
 const ACCOMMODATION_LABEL: Record<string, string> = {
@@ -152,15 +151,8 @@ export function LiveStudentProfile({
    * nothing about history.
    */
   const [shared, setShared] = useState(false);
-  const [toast, setToast] = useState(false);
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(
-    () => () => {
-      if (toastTimer.current) clearTimeout(toastTimer.current);
-    },
-    [],
-  );
+  /* C14 B5's toast is the shared bar now: frame 43 made them one thing. */
+  const say = useSystemMessages();
   const {
     profile,
     concepts,
@@ -668,25 +660,18 @@ export function LiveStudentProfile({
             firstName={student.firstName ?? name}
             onCancel={() => setSharing(false)}
             /* C14 B5, and every part of it waits on a stored escalation: the
-               sheet dismisses, the toast confirms, the quiet note settles. */
+               sheet dismisses, the bar confirms, the quiet note settles. */
             onSent={() => {
               setSharing(false);
               setShared(true);
-              setToast(true);
-              if (toastTimer.current) clearTimeout(toastTimer.current);
-              toastTimer.current = setTimeout(() => setToast(false), TOAST_MS);
+              say.show({
+                kind: "confirm",
+                message: `Sent to Learning Support. They${"’"}ll take it from here.`,
+              });
             }}
           />
         )}
 
-        {toast && (
-          <div
-            role="status"
-            className="fixed bottom-7 left-1/2 z-50 -translate-x-1/2 rounded-[10px] bg-nevo-near-black px-[18px] py-3 text-[14.5px] font-medium text-nevo-cream shadow-[0_6px_24px_rgba(0,0,0,0.22)]"
-          >
-            {`Sent to Learning Support. They${"’"}ll take it from here.`}
-          </div>
-        )}
       </div>
     </div>
   );
