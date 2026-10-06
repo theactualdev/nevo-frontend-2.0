@@ -29,6 +29,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 describe("YoureInScreen", () => {
@@ -99,5 +100,29 @@ describe("YoureInScreen", () => {
     expect(screen.queryByText(THE_HONEST_LINE)).toBeNull();
     act(() => void vi.advanceTimersByTime(2400));
     expect(onDone).toHaveBeenCalled();
+  });
+});
+
+describe("the hold, as the engine is told it", () => {
+  it("is one system_busy, sent as the screen goes, with how long it held", () => {
+    /*
+     * The catalogue's `{ reason, durationMs }`, so the stillness on this
+     * screen is never read as hesitation. It went up as a start and an end,
+     * each `{ reason, phase }` - two events and no length on either.
+     */
+    let now = 0;
+    vi.spyOn(performance, "now").mockImplementation(() => now);
+    const track = vi.fn();
+    const { unmount } = render(
+      <YoureInScreen onDone={() => {}} track={track} />,
+    );
+    expect(track).not.toHaveBeenCalled();
+
+    now = 2_400;
+    unmount();
+
+    expect(track.mock.calls).toEqual([
+      ["system_busy", { reason: "transition_screen", durationMs: 2_400 }],
+    ]);
   });
 });
