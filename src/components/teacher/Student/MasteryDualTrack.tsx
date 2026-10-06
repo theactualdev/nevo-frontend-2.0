@@ -29,9 +29,8 @@
  * as a payload and this component renders it. Until then there is no label.
  */
 
-/** Frame clamps to 0-100; NaN would emit `width:NaN%`, so guard it too. */
-const clamp = (v: number, fallback: number) =>
-  Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : fallback;
+/** Frame clamps to 0-100. Only ever called with a finite value - see below. */
+const clamp = (v: number) => Math.max(0, Math.min(100, v));
 
 export function MasteryDualTrack({
   concept,
@@ -45,8 +44,14 @@ export function MasteryDualTrack({
   reading: number;
   flag?: string;
 }) {
-  const u = clamp(understanding, 72);
-  const r = clamp(reading, 48);
+  /*
+   * NO VALUE IS NOT 72%. A non-number fell back to the frame's own example
+   * figures - 72 and 48 - so a concept with no measurement was drawn as one
+   * a student had mostly understood. Absence is an instruction: no bar.
+   */
+  if (!Number.isFinite(understanding) || !Number.isFinite(reading)) return null;
+  const u = clamp(understanding);
+  const r = clamp(reading);
   // No fallback. Nothing computes a label here; "none" is kept as an explicit
   // suppression so a caller can say "not on this row" as well as say nothing.
   const label = !flag || flag === "none" ? "" : flag;

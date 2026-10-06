@@ -88,13 +88,6 @@ export const SIGNAL_EVENT_TYPES = {
   /** A real narration clip started for the first time on this visit. */
   NARRATION_PLAYED: "narration_played",
   /**
-   * An offer the engine made that the player did not put on screen, because
-   * one of the player's own rendering rules held it back - payload
-   * { segmentId, adaptation, reason }. Without it the engine reads its own
-   * suggestion as shown and ignored.
-   */
-  ADAPTATION_SUPPRESSED: "adaptation_suppressed",
-  /**
    * A lesson picture or recording that would not load, after its one fresh
    * link (B12) - payload { segmentId, channel: "image" | "audio", reason }.
    * The rest of the segment stays usable; this is so the engine does not read
@@ -123,6 +116,23 @@ export const SIGNAL_EVENT_TYPES = {
   ASK_NEVO_CANNOT_HELP: "ask_nevo_cannot_help",
   ASK_NEVO_REDIRECT_USED: "ask_nevo_redirect_used",
 } as const;
+
+/**
+ * TYPES THE SERVER WRITES ITSELF, which the client must never send (backend,
+ * 5 Oct, B37; `serverWritten: true` in `GET /api/signals/catalogue`).
+ *
+ * `adaptation_suppressed` is recorded by the server when it holds an
+ * adaptation back, and `guided_question_answered` by the guided-question
+ * answer route. A client that sends either doubles that count - and from
+ * #623 until 6 Oct this one did send `adaptation_suppressed`, whenever the
+ * player's own rules kept an engine suggestion off screen. Not in
+ * `SIGNAL_EVENT_TYPES`, so nothing here can emit them, and refused again at
+ * the door in `signalsApi.submitBatch`.
+ */
+export const SERVER_WRITTEN_EVENT_TYPES: ReadonlySet<string> = new Set([
+  "adaptation_suppressed",
+  "guided_question_answered",
+]);
 
 /** `system_busy` reasons — the closed set from the Touch Signal Contract. */
 export const BUSY_REASON = {

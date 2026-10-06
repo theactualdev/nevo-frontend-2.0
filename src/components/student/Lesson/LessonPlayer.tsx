@@ -45,6 +45,8 @@ import {
   secondaryDim,
   HintOverlay,
   SocraticPanel,
+  type GuidedAnswerOutcome,
+  type GuidedReply,
   type PanelPrompt,
 } from "./AffectiveLayer";
 import { AfterLessonAssessment } from "./AfterLessonAssessment";
@@ -942,7 +944,8 @@ export function LessonPlayer({
    * A REPLY TO A GUIDED PROMPT (B19) goes to its own route, which puts it on
    * the signal stream as `guided_question_answered` itself - so it is not
    * also emitted here, or the engine would read one reply as two. Never the
-   * child's words: the option they picked, or that they left it.
+   * child's words: the option they picked, how much they wrote, or that they
+   * left it (6 Oct, frame 38).
    *
    * Live lessons and a signed-in child only; a demo's prompt ids mean nothing
    * to the engine. Fire and forget, like the scaffold attempt: a reply that
@@ -951,8 +954,8 @@ export function LessonPlayer({
    */
   const answerGuided = (
     promptId: string,
-    outcome: "moved_on" | "abandoned",
-    option?: string,
+    outcome: GuidedAnswerOutcome | "abandoned",
+    reply?: GuidedReply,
   ) => {
     const studentId = getSession()?.userId;
     if (!live || !studentId) return;
@@ -961,7 +964,7 @@ export function LessonPlayer({
         studentId,
         sessionId: progress.sessionId ?? null,
         promptId,
-        ...(option !== undefined ? { option } : {}),
+        ...reply,
         outcome,
       })
       .catch(() => {});
@@ -1031,28 +1034,11 @@ export function LessonPlayer({
     offerable && !showBreakOffer && !consecutive && !afterBoundary;
 
   /*
-   * AN ENGINE OFFER THE PLAYER'S OWN RULES HOLD BACK IS SAID TO BE HELD BACK.
-   * Otherwise the engine cannot tell an offer the child never saw from one
-   * they looked at and passed over. A break showing is not here: that only
-   * defers the offer, which then shows.
+   * AN OFFER THE PLAYER'S OWN RULES HOLD BACK IS NOT REPORTED FROM HERE.
+   * `adaptation_suppressed` is server-written (backend, 5 Oct, B37): this
+   * player sent it too, from #623 until 6 Oct, which doubled every
+   * suppression the engine counted. See `SERVER_WRITTEN_EVENT_TYPES`.
    */
-  const heldBack =
-    suggestionFromEngine && offerable
-      ? consecutive
-        ? "consecutive_segment"
-        : afterBoundary
-          ? "after_module_boundary"
-          : null
-      : null;
-  useEffect(() => {
-    if (!heldBack || !suggested) return;
-    trackEvent(SIGNAL_EVENT_TYPES.ADAPTATION_SUPPRESSED, {
-      segmentId: segment.id,
-      adaptation: "modality_suggestion",
-      suggested,
-      reason: heldBack,
-    });
-  }, [heldBack, suggested, segment.id, trackEvent]);
 
   const go = (next: number) => {
     if (next < 0 || next >= total) return;
@@ -1803,8 +1789,8 @@ export function LessonPlayer({
                       promptId,
                     });
                 }}
-                onAnswer={(promptId, option) =>
-                  answerGuided(promptId, "moved_on", option)
+                onAnswer={(promptId, reply, outcome) =>
+                  answerGuided(promptId, outcome, reply)
                 }
                 onAbandon={(promptId) => answerGuided(promptId, "abandoned")}
               />

@@ -15,6 +15,9 @@ import {
   ASK_NEVO_CONTEXTS,
   CANNOT_HELP_LINE,
   contextForPath,
+  contextIdsFor,
+  liveContextFor,
+  liveStripFor,
   OUT_OF_SCOPE,
   stripForPath,
 } from "@/lib/mocks/teacherAskNevo";
@@ -76,13 +79,13 @@ type Turn =
       kind: "answer";
       text: string;
       action?: { label: string; href: string };
-      /** Canned stand-in shown after a live attempt failed. */
-      sample?: boolean;
       /** Present only on a REAL answer - what the vote is cast against. */
       interactionId?: string;
       vote?: 1 | -1;
     }
-  | { kind: "cannothelp" };
+  | { kind: "cannothelp" }
+  /** A signed-in question that got no answer. Not a sample - nothing at all. */
+  | { kind: "failed" };
 
 const SPARKLE = (size: number) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
@@ -131,8 +134,11 @@ export function AskNevo() {
   }, []);
 
   const context = contextForPath(pathname);
-  const data = ASK_NEVO_CONTEXTS[context];
-  const strip = stripForPath(context, pathname);
+  // The frame's people stay on the walkthrough. A signed-in teacher is shown
+  // the screen and "this student", never an invented name - see
+  // `liveContextFor`.
+  const data = signedIn ? liveContextFor(context) : ASK_NEVO_CONTEXTS[context];
+  const strip = signedIn ? liveStripFor(context) : stripForPath(context, pathname);
 
   // Closing resets the transcript, per the frame - and with it the thread, or
   // the next question would silently continue a conversation the teacher
@@ -242,7 +248,13 @@ export function AskNevo() {
       .ask({
         role: "teacher",
         currentPage: pathname,
-        contextIds: { threadId: asUuid(threadId.current) },
+        // The record on screen, so the answer is about THIS student, class
+        // or lesson. The routes have carried real ids all along; the drawer
+        // sent only the thread.
+        contextIds: {
+          ...contextIdsFor(pathname),
+          threadId: asUuid(threadId.current),
+        },
         question,
       })
       .catch(() => null);
@@ -258,12 +270,28 @@ export function AskNevo() {
         res
           ? {
               kind: "answer",
-              text: res.answer,
+              // A structured answer's `answer` carries its markup; the
+              // contract gives `plainText` for a client that renders one
+              // paragraph, which this bubble is.
+              text:
+                res.answerFormat === "structured" && res.plainText
+                  ? res.plainText
+                  : res.answer,
               // Kept so the vote below has something to post against; a
               // canned answer has no interaction and gets no vote.
               interactionId: res.interactionId,
             }
-          : { ...cannedFor(question), sample: Boolean(getToken()) },
+          : /*
+             * NOT A SAMPLE ANSWER. A signed-in teacher whose question failed
+             * was shown the frame's canned reply - "Tunde stalled on
+             * Tuesday... eight in JSS 2A slowed", with a button to a profile
+             * that does not exist - under one italic line. An answer about
+             * invented children, in the voice of the assistant, is the worst
+             * thing this drawer can say. It says the question did not land.
+             */
+            getToken()
+            ? { kind: "failed" as const }
+            : cannedFor(question),
       ]);
       setThinking(false);
       requestAnimationFrame(() =>
@@ -388,8 +416,9 @@ export function AskNevo() {
               </div>
             )}
 
-            {/* Context strip - what the teacher is looking at */}
-            {mode === "chat" && (
+            {/* Context strip - what the teacher is looking at. Absent when
+                it could only have named a record it does not know. */}
+            {mode === "chat" && strip && (
             <div className="flex shrink-0 items-center gap-[9px] border-b border-nevo-violet/18 bg-nevo-violet/10 px-[22px] py-[11px]">
               <span className="shrink-0 text-nevo-navy">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -453,12 +482,6 @@ export function AskNevo() {
                           <p className="text-[14.5px] leading-[1.6] text-nevo-near-black">
                             {t.text}
                           </p>
-                          {t.sample && (
-                            <p className="mt-2.5 text-[12px] leading-[1.45] text-nevo-near-black/55 italic">
-                              We couldn&rsquo;t reach Nevo just now, so this is
-                              a sample answer.
-                            </p>
-                          )}
                           {t.interactionId && (
                             <div className="mt-[11px] flex items-center justify-end gap-1 border-t border-nevo-near-black/9 pt-[9px]">
                               {([1, -1] as const).map((v) => {
@@ -508,20 +531,24 @@ export function AskNevo() {
                           )}
                         </div>
                       </div>
+                    ) : t.kind === "failed" ? (
+                      <div key={i} className="mt-3.5 flex justify-start">
+                        <p className="max-w-[88%] text-[14px] leading-[1.55] text-nevo-near-black/68">
+                          We couldn&rsquo;t reach Nevo just now. Try asking
+                          again in a moment.
+                        </p>
+                      </div>
                     ) : (
                       <div key={i} className="mt-3.5 flex flex-col items-start">
                         <div className="max-w-[88%] rounded-[14px_14px_14px_4px] border border-nevo-violet/35 bg-nevo-violet/15 px-4 py-3.5">
+                          {/* One paragraph, as the frame draws it. The admin
+                              sentence is the line's own close; it used to be
+                              printed again underneath. Design deleted
+                              "Message your school admin" on 31 Aug. */}
                           <p className="text-[14.5px] leading-[1.6] text-nevo-near-black">
                             {CANNOT_HELP_LINE}
                           </p>
                         </div>
-                        {/* Design deleted "Message your school admin" from
-                            this state on 31 Aug: Connect messages STUDENTS,
-                            so the link went somewhere that could not do what
-                            it offered. Plain text now, per the frame. */}
-                        <p className="mt-2.5 ml-1 text-[13px] leading-[1.5] text-nevo-near-black/60">
-                          Your school admin looks after that side of things.
-                        </p>
                       </div>
                     ),
                   )}

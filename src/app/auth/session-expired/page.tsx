@@ -17,11 +17,14 @@ export async function generateMetadata({
   searchParams: Params;
 }): Promise<Metadata> {
   const { reason } = await searchParams;
+  const ended = sessionEndReason(reason);
   return {
     title:
-      sessionEndReason(reason) === "paused"
+      ended === "paused"
         ? "Account on pause - Nevo"
-        : "Session expired - Nevo",
+        : ended === "closed"
+          ? "Account closed - Nevo"
+          : "Session expired - Nevo",
   };
 }
 
@@ -62,9 +65,10 @@ export default async function SessionExpiredPage({
 
   // An account state, not a session one, and the child has their own frame for
   // it. It offers no retry, because retrying is the one thing that cannot work.
-  if (ended === "paused") {
+  // A closed account is the same screen saying closed, never on pause (D53).
+  if (ended === "paused" || ended === "closed") {
     // No retry, but a way back to the picker for whoever is next (D52).
-    return <AccountOnPauseScreen back={{ href: "/auth/login" }} />;
+    return <AccountOnPauseScreen back={{ href: "/auth/login" }} hold={ended} />;
   }
 
   return <SessionEndScreen variant={ended} next={safeNextPath(next)} />;

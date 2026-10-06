@@ -261,9 +261,8 @@ const text = (value: unknown): string | null =>
  *    from the check appearing.
  *  - A MOTOR SAMPLE (`motor_tap`, the motor-speed step, PR #645): every tap as
  *    taken, its latency as the step measured it, practice taps marked as
- *    such. The median is the server's to take. Nothing records `motor_tap` on
- *    this branch yet; the step lands with #645, and this is where its samples
- *    leave rather than in a feature of their own.
+ *    such. The median is the server's to take. This is where the step's
+ *    samples leave, rather than in a feature of their own.
  *
  * Not carried, because `BaselineTrial` has no field for them: coordinates
  * (B14, above), the run's age band, and a recall's full timing beyond the one

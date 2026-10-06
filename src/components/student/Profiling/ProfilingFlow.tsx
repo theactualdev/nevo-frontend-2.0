@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useConsentGate } from "@/hooks/useConsentGate";
 import { useRosterBand } from "@/hooks/useRosterBand";
+import { formFactor } from "@/hooks/useSignals";
 import { holdBaseline } from "@/lib/profiling/pendingBaseline";
 import { ONBOARDING_SIGNAL_TYPES } from "@/lib/constants";
 import { bandForAge, gridSpanConfig } from "@/lib/profiling/bands";
@@ -12,6 +13,7 @@ import { randomId } from "@/lib/utils";
 import type { TrackEvent } from "@/hooks";
 import { DomainProbeModule } from "./DomainProbeModule";
 import { GridSpanModule } from "./GridSpanModule";
+import { MotorStep, motorStepRuns, type FormFactor } from "./MotorStep";
 import { PatternFlankerModule } from "./PatternFlankerModule";
 import { ProfilingIntro } from "./ProfilingIntro";
 import { SentenceDotModule } from "./SentenceDotModule";
@@ -19,10 +21,11 @@ import { StretchInterstitial } from "./StretchInterstitial";
 
 /**
  * The Baseline Cognitive Profiling flow (SCRUM-104) - onboarding Phase C.
- * Intro → M1 Grid Span → stretch → M2 Pattern/Flanker → stretch → M3
- * Sentence/Dot → stretch → M4 Domain Probe → Complete. One BaselineCapture
- * spans the run; on completion it becomes one trial per answer, parked to be
- * sent raw for the server to reduce (B9), and the rest of the stream is purged.
+ * Intro → motor-speed step (08a) → M1 Grid Span → stretch → M2
+ * Pattern/Flanker → stretch → M3 Sentence/Dot → stretch → M4 Domain Probe →
+ * Complete. One BaselineCapture spans the run; on completion it becomes one
+ * trial per answer, the motor step's taps included, parked to be sent raw for
+ * the server to reduce (B9), and the rest of the stream is purged.
  *
  * The age band comes from the roster for a child already signed in, else from
  * the age the child gave at onboarding, else from the intro's age question; it
@@ -79,6 +82,7 @@ export function ProfilingFlow({
   const parkedRunRef = useRef<string | null>(null);
   const [phase, setPhase] = useState<
     | "intro"
+    | "motor"
     | "m1"
     | "stretch1"
     | "m2"
@@ -132,6 +136,8 @@ export function ProfilingFlow({
   const [capture] = useState(
     () => new BaselineCapture(runId ?? `baseline-${randomId()}`),
   );
+  /** The device this run is on, read when it starts; the motor step's samples carry it. */
+  const [device, setDevice] = useState<FormFactor | null>(null);
   const submitted = useRef(false);
   /*
    * A WITHDRAWN GUARDIAN STOPS THE MEASUREMENT.
@@ -233,6 +239,19 @@ export function ProfilingFlow({
     setPhase("complete");
   };
 
+  /*
+   * Module 1 starts here, and its start is signalled here, not on "Let's go":
+   * the motor step sits between the two, and a start stamped before it would
+   * fold the step into Module 1's time.
+   */
+  const startGridSpan = () => {
+    track?.(ONBOARDING_SIGNAL_TYPES.BASELINE_MODULE_START, {
+      module: "grid_span",
+      band,
+    });
+    setPhase("m1");
+  };
+
   if (phase === "intro") {
     return (
       <ProfilingIntro
@@ -242,13 +261,34 @@ export function ProfilingFlow({
         onAgeChange={setAskedAge}
         mode="intro"
         onContinue={() => {
-          track?.(ONBOARDING_SIGNAL_TYPES.BASELINE_MODULE_START, {
-            module: "grid_span",
-            band,
-          });
           capture.record("run_start", { band });
-          setPhase("m1");
+          /*
+           * THE MOTOR STEP COMES FIRST, on every path into the baseline (08a,
+           * D12): after this intro and before the first timed activity. A
+           * cursor device skips it, because a click is not a reach and 08a
+           * does not draw one - the skip and its reason are recorded, so the
+           * engine is told rather than left to find no samples.
+           */
+          const on = formFactor();
+          if (motorStepRuns(on)) {
+            setDevice(on);
+            setPhase("motor");
+            return;
+          }
+          capture.record("motor_skipped", { reason: "cursor", formFactor: on });
+          startGridSpan();
         }}
+      />
+    );
+  }
+
+  if (phase === "motor" && device) {
+    return (
+      <MotorStep
+        band={band}
+        formFactor={device}
+        capture={capture}
+        onComplete={startGridSpan}
       />
     );
   }

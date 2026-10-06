@@ -41,13 +41,13 @@ import {
  * shared ruling's learner note, read from `sessionEndCopy` so the two cannot
  * drift, and it sits under the button as the staff screen's note does.
  *
- * `paused` is not in this union. It is an account state rather than a session
- * one and the child has their own drawn frame for it, so the door renders
- * `AccountOnPauseScreen` instead - which is the same call #422 made for staff,
- * one level up.
+ * `paused` is not in this union, and nor is `closed`. They are account states
+ * rather than session ones and the child has their own frame for them, so the
+ * door renders `AccountOnPauseScreen` instead - which is the same call #422
+ * made for staff, one level up.
  */
 
-type Shown = Exclude<SessionEndReason, "paused">;
+type Shown = Exclude<SessionEndReason, "paused" | "closed">;
 
 const COPY: Record<
   Shown,

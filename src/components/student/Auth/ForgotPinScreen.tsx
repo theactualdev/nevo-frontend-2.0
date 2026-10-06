@@ -1,26 +1,15 @@
-import Image from "next/image";
 import Link from "next/link";
-import { Button } from "@/components/shared";
 import { withNext } from "@/lib/auth/nextPath";
 import { LetMyTeacherKnow } from "./LetMyTeacherKnow";
 
 /**
- * Forgot PIN (screen 00a) — informational, and deliberately so.
+ * Forgot PIN (screen 00a, revised 1 Oct): says what happens next.
  *
- * The frame's own note: "No self-service reset · points gently to the teacher ·
- * never a dead end." A child does not reset their own PIN; a teacher issues a
- * new one through `POST /api/v1/students/{id}/pin/reset`, whose response is
- * flagged `mustShareSecurely`, and hands it over in person.
- *
- * "LET MY TEACHER KNOW" CALLS `POST /api/v1/auth/pin/reset` NOW. Design ruled
- * on 1 Oct (D3): nobody but the child ever sets a PIN; the adult linked to
- * them clears it, and the child sets a new one. The request was deliberately
- * left unused until that was decided - see `LetMyTeacherKnow`.
- *
- * THE BODY COPY IS STILL THE FRAME'S, ON PURPOSE. Design says 00a's words
- * change, because they promise teacher help and describe none, but gave no
- * new ones. Until they do, the frame's line stays and the button is the only
- * addition.
+ * Design ruled on 1 Oct (D3): nobody but the child ever sets a PIN. The child
+ * asks, the adult already linked to them clears the old one, and the child
+ * chooses a new one on 15 PIN Creation. So the words say exactly that, and
+ * "Let my teacher know" sends the ask - see `LetMyTeacherKnow`, which owns the
+ * body because the sent state replaces all of it.
  *
  * BOTH WAYS OUT GO TO THE SIGN-IN DOOR, always. They used to read the legacy
  * one-child profile key and send a device it did not name to
@@ -63,30 +52,7 @@ export function ForgotPinScreen({
         </Link>
       </div>
 
-      <div className="flex flex-1 flex-col items-center justify-center px-9 pb-12 text-center sm:px-10 sm:pb-16">
-        <Image
-          src="/illustrations/error.png"
-          alt="A calm figure with an open, questioning hand"
-          width={1254}
-          height={1254}
-          sizes="248px"
-          priority
-          className="size-[184px] object-contain sm:size-[248px]"
-        />
-
-        <h1 className="mt-8 text-[23px] font-semibold tracking-[-0.01em] sm:mt-9 sm:text-[28px]">
-          Forgot your PIN?
-        </h1>
-        <p className="mt-3.5 max-w-[300px] text-base leading-[1.55] text-nevo-near-black/70 sm:mt-4 sm:max-w-[400px] sm:text-lg">
-          That&rsquo;s okay - it happens. Ask your teacher and they&rsquo;ll help
-          you sign back in.
-        </p>
-
-        <Button asChild className="mt-8 w-full text-base sm:mt-9 sm:max-w-[360px]">
-          <Link href={back}>Back to sign in</Link>
-        </Button>
-        <LetMyTeacherKnow childId={childId} />
-      </div>
+      <LetMyTeacherKnow childId={childId} back={back} />
     </main>
   );
 }
