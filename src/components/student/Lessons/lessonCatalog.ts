@@ -1,5 +1,6 @@
 import { BookOpen, Calculator, Leaf, type LucideIcon } from "lucide-react";
 import { FIRST_LESSON_ID } from "@/lib/mocks";
+import { segmentPlace, type SegmentPlace } from "@/lib/lessons/segmentPlace";
 
 /** Where a student is with a lesson (shown as a calm indicator, never a %). */
 export type LessonStatus = "not_started" | "in_progress" | "completed";
@@ -28,11 +29,14 @@ export interface LessonSummary {
    * a generated stand-in would be us describing a lesson we have not read.
    */
   description?: string;
-  /*
-   * NO `progress`. It was a 0-1 fraction drawn as the preview's bar, and the
-   * fraction is not on the wire - see `PickUp` on Home (design D21, 1 Oct).
-   * `status` is what a card and the preview may say.
+  /**
+   * Where the child is in an in-progress lesson, from their own progress row
+   * (backend B51) - drawn as the card's ring and the preview's bar, and
+   * spoken as "Segment 3 of 10". Absent when the row does not say, and then
+   * the card draws the plain in-progress mark (design D21) and the preview no
+   * bar. See `lib/lessons/segmentPlace`.
    */
+  place?: SegmentPlace;
   /**
    * The playable lesson this routes to. A live card opens its own lesson; the
    * signed-out fixtures each open one of the two authored lessons.
@@ -69,6 +73,9 @@ export const LESSON_CATALOG: LessonSummary[] = [
     subject: "Mathematics",
     timeEstimate: "About 12 min",
     status: "in_progress",
+    // The frame draws this card part-way; the walkthrough shows the ring a
+    // real child's card now draws, from a position like a real row's.
+    place: segmentPlace({ segmentPosition: 5, segmentCount: 9 }) ?? undefined,
     description:
       "Learn how to add fractions with the same bottom number, using pictures of pizza and chocolate bars.",
     lessonId: "adding-fractions",

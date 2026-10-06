@@ -169,6 +169,16 @@ export interface StudentProgress {
    * its subject's own from the narrowed route.
    */
   note?: string;
+  /**
+   * The Progress card's topic counts (backend B53, 5 Oct). A topic is done
+   * when understanding passes the engine's own threshold - the engine's, not
+   * ours. The total is topics this child HAS MET, not the curriculum. Not
+   * required, defaulting to 0 and "": 0 total is "not said", and an empty
+   * `currentTopic` is no topic. Scoped like `note`.
+   */
+  topicsDone?: number;
+  topicsTotal?: number;
+  currentTopic?: string;
 }
 
 /** One row of the student's own recent lesson activity. */
@@ -176,8 +186,21 @@ export interface DashboardProgressRow {
   lessonId: string;
   /** LessonCompletionStatus: in_progress | completed | exited. */
   status: string;
+  /** ZERO-based cursor (backend B51) - see `lib/lessons/segmentPlace`. */
   segmentPosition: number;
   updatedAt: string;
+  /**
+   * The lesson's own title and subject (backend B52, 5 Oct), so a lesson the
+   * child started from the library can sit on Home with no assignment behind
+   * it. `title` defaults to "" and `subject` is nullable: blank is no title.
+   */
+  title?: string;
+  subject?: string | null;
+  /**
+   * Every segment in the lesson (B51), so the row carries its own fraction.
+   * Defaults to 0, which no playable lesson has: 0 is "not said".
+   */
+  segmentCount?: number;
 }
 
 /**

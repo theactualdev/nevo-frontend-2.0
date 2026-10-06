@@ -7,14 +7,19 @@ import Link from "next/link";
 import { useHasSession } from "@/hooks/useHasSession";
 import { useHydrated } from "@/hooks/useHydrated";
 import { useStudentProgress } from "@/hooks/useStudentProgress";
-import { useSubjectProgress } from "@/hooks/useSubjectProgress";
+import {
+  useSubjectProgress,
+  type SubjectTopics,
+} from "@/hooks/useSubjectProgress";
+import { cn } from "@/lib/utils";
 import { GROWTH_SUMMARY, SUBJECTS } from "./progressData";
 
 /**
  * Progress Tab (screen 22, SCRUM-144). Growth in plain language: a warm summary
  * of how the student has been doing, then a card per subject (the Student
- * Subject Card, 33a) under its own calm texture. Deliberately no numbers — no
- * percentile, no score, no peer comparison. Each card opens the subject.
+ * Subject Card, 33a) under its own calm texture. Deliberately no scores — no
+ * percentile, no mark, no peer comparison; the only number is 33a's topic
+ * count (see below). Each card opens the subject.
  *
  * A SIGNED-IN CHILD SEES THEIR OWN, and never the fixtures.
  *
@@ -40,9 +45,17 @@ import { GROWTH_SUMMARY, SUBJECTS } from "./progressData";
  * `highlights` is a student-level list, not a note per subject, and still
  * waits on a designed slot.
  *
- * No numbers reach the screen (screen 22: no percentile, no score, no
+ * No score reaches the screen (screen 22: no percentile, no score, no
  * comparison, direction of travel only). `understanding` orders the concepts
  * and never appears.
+ *
+ * THE TOPIC COUNTS ARRIVED ON 5 OCT (backend B53), and they are the one
+ * number on this screen: "3 of 8 topics done", 33a's own line, with a square
+ * per topic. A count of topics, not a mark - and the backend chose the total
+ * as topics the child has MET rather than the curriculum, because a
+ * denominator a child has never seen makes early progress read as failure.
+ * Each card reads its subject's own, from the narrowed route; absent counts
+ * draw nothing at all.
  */
 export function ProgressTab() {
   const signedIn = useHasSession();
@@ -156,17 +169,27 @@ function LiveSubjectCard({
   // Concept NAMES, not scores, when there is no note - what they have worked
   // on is a fact; how well is a judgement the contract carries as a number
   // and screen 22 forbids showing. A failed read falls back the same way: the
-  // names are already here and true. The card's "Working on" line and topic
-  // squares need a topic count the contract does not carry, and wait on it.
+  // names are already here and true.
   const names = subject.concepts
     .slice(0, 3)
     .map((c) => c.name)
     .join(" · ");
+  /*
+   * 33a'S LINE, WHEN ITS TOPIC IS ON THE WIRE (backend B53). The frame draws
+   * "Working on X" under the name, and `currentTopic` is X. Where the backend
+   * names none, the line is what it was: the subject's note, else the names.
+   * Never "Working on" with nothing after it - the line goes with its value.
+   */
+  const line = own.currentTopic
+    ? `Working on ${own.currentTopic}`
+    : (own.note ?? names);
   return (
     <SubjectCard
       href={`/student/progress/${subject.slug}`}
       name={subject.name}
-      line={own.loading ? null : (own.note ?? names)}
+      line={own.loading ? null : line}
+      topics={own.loading ? null : own.topics}
+      working={Boolean(own.currentTopic)}
     />
   );
 }
@@ -249,16 +272,25 @@ function NothingYet() {
 const SUBJECT_GRID =
   "mt-8 grid max-w-[900px] grid-cols-1 gap-[18px] sm:grid-cols-2 lg:grid-cols-3";
 
-/** One subject (Nevo Student Subject Card, 33a): its texture, name and line. */
+/**
+ * One subject (Nevo Student Subject Card, 33a): its texture, name and line,
+ * and - where the backend counted them - one square per topic and the count.
+ */
 function SubjectCard({
   href,
   name,
   line,
+  topics,
+  working = false,
 }: {
   href: string;
   name: string;
   /** Null while it is still being read: the space is held, nothing drawn. */
   line: string | null;
+  /** The subject's topic counts (B53). Absent or null draws no squares. */
+  topics?: SubjectTopics | null;
+  /** The backend named a topic being worked on, so one square says so. */
+  working?: boolean;
 }) {
   return (
     <Link
@@ -276,8 +308,71 @@ function SubjectCard({
         >
           {line ?? " "}
         </p>
+        {topics && <TopicMarks topics={topics} working={working} />}
       </div>
     </Link>
+  );
+}
+
+/**
+ * 33a's topic squares and its count line, from the backend's counts (B53).
+ *
+ * One square per topic this child has met: done ones filled, the one being
+ * worked on outlined in violet, the rest open. They wrap as a set, not a
+ * line, so they show where the child is without a trajectory, a rank or a
+ * level. Decorative: the count line is what is read aloud.
+ *
+ * THE COUNT LINE ONLY WHERE THE FRAME PRINTS IT. 33a writes "3 of 8 topics
+ * done" for work in progress and never "0 of 4" or "5 of 5" - those two
+ * states have their own lines ("Nothing started yet", "Everything set so far
+ * is done") that speak of topics SET, where the total on the wire is topics
+ * MET. Neither is true of what the backend counts, so neither is drawn, and
+ * the count is not stretched over them either: at none and at all, the
+ * squares stand alone. Both lines are asked of design.
+ *
+ * The current square needs the backend to have named a current topic: one
+ * marked "being worked on" with nothing named would be a claim nobody made.
+ */
+function TopicMarks({
+  topics,
+  working,
+}: {
+  topics: SubjectTopics;
+  working: boolean;
+}) {
+  const { done, total } = topics;
+  const midway = done > 0 && done < total;
+  return (
+    <>
+      <div
+        aria-hidden
+        data-topic-marks
+        className="mt-3.5 flex max-w-[180px] flex-wrap gap-[5px]"
+      >
+        {Array.from({ length: total }, (_, i) => {
+          const mark =
+            i < done ? "done" : working && i === done ? "current" : "open";
+          return (
+            <span
+              key={i}
+              data-topic={mark}
+              className={cn(
+                "box-border size-3 shrink-0 rounded-[3px]",
+                mark === "done" && "bg-nevo-navy",
+                mark === "current" &&
+                  "border-2 border-nevo-violet bg-nevo-violet/30",
+                mark === "open" && "border-[1.5px] border-nevo-near-black/22",
+              )}
+            />
+          );
+        })}
+      </div>
+      {midway && (
+        <p className="mt-2 text-[13px] text-nevo-near-black/55">
+          {done} of {total} topics done
+        </p>
+      )}
+    </>
   );
 }
 
