@@ -429,7 +429,10 @@ export function ParseFallback({
                   We can read:
                 </div>
                 <div className="mt-1.5 text-[13px] leading-[1.6] text-nevo-near-black/72">
-                  PDF, Word (.docx), and clear photos or scans (JPG, PNG). For
+                  {/* What the picker actually takes. This listed JPG and
+                      PNG, which the picker refuses, and left out
+                      PowerPoint, which it accepts. */}
+                  PDF, Word (.doc, .docx) and PowerPoint (.ppt, .pptx). For
                   scans, brighter and straighter pages read best.
                 </div>
               </div>
