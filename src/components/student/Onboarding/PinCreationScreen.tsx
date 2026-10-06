@@ -32,9 +32,12 @@ export type PinState = { digits: string; error: boolean; done: boolean };
 type PinAction =
   | { type: "digit"; value: string }
   | { type: "backspace" }
-  | { type: "saveFailed" };
+  | { type: "saveFailed" }
+  | { type: "restart" };
 
 export function pinReducer(state: PinState, action: PinAction): PinState {
+  // Back to an empty first row - Change PIN's Back from "Type it again".
+  if (action.type === "restart") return { digits: "", error: false, done: false };
   // The server rejected the save: keep their first PIN, re-open the confirm
   // row, and let the alert line explain.
   if (action.type === "saveFailed") {
@@ -67,13 +70,23 @@ export function pinReducer(state: PinState, action: PinAction): PinState {
 }
 
 /**
- * The two things that can go wrong once a PIN is typed twice, in the words
- * both PIN-setting doors use. Change PIN draws its own steps around the same
- * reducer and rows, and a second copy of these is how the two would drift.
+ * The two things that can go wrong once a PIN is typed twice. Change PIN
+ * draws its own steps around the same reducer and rows, and a second copy of
+ * these is how the two would drift.
+ *
+ * `PIN_NOT_SAVED_COPY` is Change PIN's line now, and only its: frame 27 draws
+ * no failed save, so it keeps what it had. PIN Creation has frame 15's own
+ * state (D61) - see `PIN_SAVE_FAILED_COPY`.
  */
 export const PIN_MISMATCH_COPY = "Those didn't match - let's try once more";
 export const PIN_NOT_SAVED_COPY =
   "We couldn't save that just now - that's on us, not you. Your teacher can help.";
+
+/** Frame 15's saving and didn't-save states (D61), verbatim. */
+export const PIN_SAVING_COPY = "Saving your PIN…";
+export const PIN_SAVE_FAILED_HEADING = "That didn't save";
+export const PIN_SAVE_FAILED_COPY =
+  "Your PIN is kept. That's on us - try again.";
 
 /**
  * PIN Creation (UI/UX spec) — the last onboarding step before "You're In".
@@ -91,18 +104,16 @@ export const PIN_NOT_SAVED_COPY =
  * THE CHECK MARK WAITS FOR THE SAVE (design, D8). It used to appear the moment
  * the two rows matched, with "You're all set" held for a beat while the write
  * went - so a PIN that was then refused had already been celebrated, and a
- * path with nowhere to store it was told it was set. Now the rows stay as
- * typed while the write goes, and "You're all set" is drawn only once the
- * server has it.
+ * path with nowhere to store it was told it was set. "You're all set" is drawn
+ * only once the server has it.
  *
- * A FAILED SAVE SAYS SO AND KEEPS WHAT THE CHILD TYPED (D8). It cleared the
- * confirm row, which asked them to type again something typing could not fix.
- * Both rows stay filled and "Try again" sends the same PIN again.
- *
- * NOT DRAWN: frame 15 has neither the waiting state nor the failed one. The
- * waiting state adds nothing to the screen; the failed one is the shared
- * not-saved line and "Try again", the words the other doors already use, until
- * design gives this one its own.
+ * WHILE IT SAVES, AND IF IT DOESN'T, frame 15 draws its own states (D61): a
+ * quiet navy ring and "Saving your PIN…", then - if it does not land - a
+ * refresh mark, "That didn't save", and a primary "Try again" that sends the
+ * same PIN again. The rows are hidden in both. The PIN is KEPT, not shown:
+ * "the child presses Try again without entering four digits a second time".
+ * It was the rows left as typed, with the not-saved line and a ghost "Try
+ * again" under them.
  */
 type SavePhase = "entry" | "saving" | "saved" | "failed";
 
@@ -282,7 +293,10 @@ export function PinCreationScreen({
   }, [phase]);
 
   const saved = phase === "saved";
-  const showEntry = !sso && !saved;
+  const saving = phase === "saving";
+  const failed = phase === "failed";
+  // The rows are hidden while it saves and if it does not (D61).
+  const showEntry = !sso && phase === "entry";
   const showConfirmation = sso || saved;
 
   return (
@@ -305,21 +319,73 @@ export function PinCreationScreen({
             <Check className="size-[34px] text-nevo-cream" strokeWidth={2.6} />
           </span>
         )}
+        {saving && (
+          <span
+            aria-hidden
+            className="mb-5 size-11 rounded-full border-[3px] border-nevo-navy/18 border-t-nevo-navy motion-safe:animate-spin"
+          />
+        )}
+        {failed && (
+          <span className="mb-5 flex size-16 items-center justify-center rounded-full bg-nevo-violet/22">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+              className="size-[30px] text-nevo-navy"
+            >
+              <path d="M3 12a9 9 0 1 0 2.6-6.4" />
+              <path d="M3 4v4h4" />
+            </svg>
+          </span>
+        )}
 
-        <h2 className="text-[23px] font-semibold tracking-[-0.01em] sm:text-[25px]">
-          {sso
-            ? "You're signed in"
-            : saved
-              ? "You're all set"
-              : reset
-                ? "Choose a new PIN"
-                : "Create a PIN"}
-        </h2>
-        <p className="mt-3 text-[15px] text-nevo-near-black/60">
-          {sso
-            ? "We'll remember you next time"
-            : "You'll use this to log in next time"}
-        </p>
+        {/* An alert when it did not save, mounted fresh so it is announced. */}
+        <div
+          key={failed ? "failed" : "steady"}
+          role={failed ? "alert" : undefined}
+          aria-live={failed ? undefined : "polite"}
+          className="flex flex-col items-center"
+        >
+          <h2 className="text-[23px] font-semibold tracking-[-0.01em] sm:text-[25px]">
+            {sso
+              ? "You're signed in"
+              : saved
+                ? "You're all set"
+                : failed
+                  ? PIN_SAVE_FAILED_HEADING
+                  : reset
+                    ? "Choose a new PIN"
+                    : "Create a PIN"}
+          </h2>
+          <p className="mt-3 text-[15px] text-nevo-near-black/60">
+            {sso
+              ? "We'll remember you next time"
+              : saving
+                ? PIN_SAVING_COPY
+                : failed
+                  ? PIN_SAVE_FAILED_COPY
+                  : "You'll use this to log in next time"}
+          </p>
+        </div>
+
+        {failed && (
+          <button
+            type="button"
+            onClick={() => {
+              // The kept PIN, sent again: straight to saving, so the rows
+              // do not flash back for the beat before the write.
+              setPhase("saving");
+              setAttempt((n) => n + 1);
+            }}
+            className="mt-7 h-[50px] cursor-pointer rounded-[10px] bg-nevo-navy px-7 text-base font-medium text-nevo-cream transition-[filter,transform] hover:brightness-108 active:scale-[0.985]"
+          >
+            Try again
+          </button>
+        )}
 
         {showEntry && (
           <>
@@ -353,39 +419,22 @@ export function PinCreationScreen({
             </div>
             <p role="alert" className="mt-4 min-h-5 text-sm text-nevo-violet">
               {/*
-                NAMES THE FAILURE THAT ACTUALLY HAPPENED.
-                
+                ONLY THE CHILD'S OWN MISTAKE IS SAID HERE.
+
                 `error` IS the child's - the two entries did not match, and
                 typing again is exactly the fix.
-                
+
                 A failed save never is. By the time it can fire the two entries
                 have already matched; what failed is the write. That can be a
                 403 because a teacher is signed in on this tablet, a network
                 that dropped, or a shape the server refused - and not one of
-                them is fixed by retyping. "Type it again to confirm" sent a
-                child round a loop that could not end, and blamed them for it.
-                
-                The same distinction the login screen draws between "that PIN
-                didn't match" and "that's on us, not you".
+                them is fixed by retyping. So it is not this line at all: it is
+                frame 15's own state above, which keeps the PIN and owns the
+                failure. The same distinction the login screen draws between
+                "that PIN didn't match" and "on our side".
               */}
-              {error
-                ? PIN_MISMATCH_COPY
-                : phase === "failed"
-                  ? PIN_NOT_SAVED_COPY
-                  : ""}
+              {error ? PIN_MISMATCH_COPY : ""}
             </p>
-            {phase === "failed" && (
-              <button
-                type="button"
-                onClick={() => {
-                  setPhase("entry");
-                  setAttempt((n) => n + 1);
-                }}
-                className="mt-3 h-11 cursor-pointer rounded-[10px] px-5 text-[15px] font-medium text-nevo-navy transition-[background] hover:bg-nevo-navy/8"
-              >
-                Try again
-              </button>
-            )}
           </>
         )}
       </div>
@@ -417,6 +466,7 @@ export function PinRow({
   caretAt,
   error,
   length = STUDENT_PIN_LENGTH,
+  className,
 }: {
   filled: number;
   offset: number;
@@ -427,12 +477,15 @@ export function PinRow({
    * that CHECKS an existing PIN passes more, because that PIN may be longer.
    */
   length?: number;
+  /** Spacing a frame draws differently - frame 27's rows sit 36px down, 14px apart. */
+  className?: string;
 }) {
   return (
     <div
       className={cn(
         "flex flex-wrap justify-center gap-3",
         offset === 0 && "mt-10",
+        className,
       )}
     >
       {Array.from({ length }, (_, i) => {
