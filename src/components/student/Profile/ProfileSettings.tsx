@@ -28,8 +28,8 @@ const TEXT_SIZES = [
 
 /**
  * Profile & Settings (screen 27). Read-only learning preferences (observed, not
- * self-reported), accessibility controls, break preference, and account. Every
- * change is acknowledged with a quiet "Saved" pill.
+ * self-reported), accessibility controls, and account. Every change is
+ * acknowledged with a quiet "Saved" pill.
  *
  * The accessibility controls (Reduced Motion / Text Size / High Contrast) are the
  * global, persisted preferences from `AccessibilityContext` — changing one here
@@ -79,9 +79,6 @@ export function ProfileSettings() {
     setHighContrast,
     setTextSize,
   } = useAccessibility();
-  // Was local, unpersisted state that nothing read - flipping it off left
-  // the 20-minute prompt firing exactly as before.
-  const { suggestBreaks, setSuggestBreaks } = useAccessibility();
 
   // Transient "Saved" confirmation.
   const [saved, setSaved] = useState(false);
@@ -168,24 +165,13 @@ export function ProfileSettings() {
         />
       </SettingRow>
 
-      {/* Breaks */}
-      <SectionHeading>Breaks</SectionHeading>
-      <div className="flex items-center justify-between py-1.5">
-        <span className="text-[15px] text-nevo-near-black">
-          Suggest breaks automatically
-        </span>
-        <Switch
-          checked={suggestBreaks}
-          onCheckedChange={(v) => {
-            setSuggestBreaks(v);
-            flashSaved();
-          }}
-          aria-label="Suggest breaks automatically"
-        />
-      </div>
-      <p className="mt-1 text-[13px] text-nevo-near-black/60">
-        Nevo will still check in during moments that really call for a break
-      </p>
+      {/*
+        NO BREAKS SECTION (D87). The Profile frame deleted the heading, the
+        "Suggest breaks automatically" toggle and its helper line on 6 Oct.
+        When to offer a break is the engine's call (frontend §5b), and nothing
+        had read the switch since the client's break timer went - it offered
+        a child a choice that changed nothing.
+      */}
 
       {/* Account */}
       <SectionHeading>Account</SectionHeading>

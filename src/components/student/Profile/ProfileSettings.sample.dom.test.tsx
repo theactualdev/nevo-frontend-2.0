@@ -68,3 +68,23 @@ describe("Profile's name row", () => {
     clearSession();
   });
 });
+
+describe("Profile's breaks section (D87)", () => {
+  it("is gone, heading, switch and helper line", async () => {
+    clearSession();
+    me.user = null;
+
+    renderProfile();
+
+    // Rendered: the sections either side of where it was are there.
+    await waitFor(() =>
+      expect(screen.getByText("Accessibility")).toBeInTheDocument(),
+    );
+    expect(screen.getByText("Account")).toBeInTheDocument();
+    expect(screen.queryByText("Breaks")).toBeNull();
+    expect(
+      screen.queryByRole("switch", { name: "Suggest breaks automatically" }),
+    ).toBeNull();
+    expect(screen.queryByText(/check in during moments/)).toBeNull();
+  });
+});
