@@ -133,3 +133,47 @@ describe("a pause that lands while a child is reading", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 });
+
+/**
+ * D53: "A removed child reads that their account is closed, not that it is on
+ * pause." Backend gave it its own code on 5 Oct (B58); the card and the
+ * settled screen both carry it, and neither says pause.
+ */
+describe("a closed account that lands while a child is reading", () => {
+  it("says closed on the card over the lesson, and never on pause", async () => {
+    const { pause, AccountPauseHost } = await fresh();
+    render(
+      <>
+        <Lesson />
+        <AccountPauseHost />
+      </>,
+    );
+
+    act(() => pause.announceAccountPause("account_closed"));
+
+    expect(
+      screen.getByRole("dialog", { name: "Your Nevo account is closed." }),
+    ).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/pause/i);
+    expect(document.body.textContent).toContain("How a leaf makes food");
+  });
+
+  it("settles into the closed screen on Okay, with the way back to the picker (D52)", async () => {
+    const { pause, AccountPauseHost } = await fresh();
+    render(<AccountPauseHost />);
+    act(() => pause.announceAccountPause("account_closed"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Okay" }));
+
+    expect(clearSession).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      "Your Nevo account is closed.",
+    );
+    expect(document.body.textContent).not.toMatch(/pause/i);
+    expect(screen.getByRole("link", { name: "Back to sign in" })).toHaveAttribute(
+      "href",
+      "/auth/login",
+    );
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
+  });
+});

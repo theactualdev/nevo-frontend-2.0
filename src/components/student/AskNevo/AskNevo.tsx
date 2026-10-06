@@ -10,9 +10,10 @@ import { useDraggablePill } from "./useDraggablePill";
 import { useAskNevoHistory } from "@/hooks/useAskNevoHistory";
 import { useHasSession } from "@/hooks/useHasSession";
 import { askNevoApi, asUuid } from "@/lib/api";
-import type {
-  ThreadSummary,
-  ThreadTranscript,
+import {
+  allowanceSpent,
+  type ThreadSummary,
+  type ThreadTranscript,
 } from "@/lib/api/askNevo";
 import { LessonContext } from "@/context/LessonContext";
 import { useAuth, useSignals } from "@/hooks";
@@ -112,6 +113,20 @@ interface Message {
  */
 const COULD_NOT_ANSWER =
   "I couldn't answer that just now - that's on us, not you. Try asking again in a moment.";
+
+/**
+ * What a child is told once the day's questions are used up (design, D45):
+ * "A spent allowance says plainly that the child has asked everything for
+ * today and can ask again tomorrow. It never renders as a connection failure."
+ * The ruling's own words, as near verbatim as a sentence to a child allows.
+ *
+ * "Tomorrow" and nothing more exact. The 429 carries `resetsAt`, but the
+ * ruling says tomorrow, the allowance is a daily one, and a clock time is one
+ * more thing for a child to read wrong. Nor the server's `message`: design
+ * gave the words.
+ */
+const ALLOWANCE_SPENT =
+  "You've asked everything for today. You can ask again tomorrow.";
 
 /**
  * Mock reply engine - calm, canned, and honest about its limits. The
@@ -264,6 +279,8 @@ export function AskNevo() {
     // thing either fallback ever stands in for is a genuine failure.
     const controller = new AbortController();
     later(() => controller.abort(), LIVE_TIMEOUT_MS);
+    /** The day's allowance is spent: not a failure, and never shown as one. */
+    let spent = false;
     const answer = askNevoApi
       .ask(
         {
@@ -278,7 +295,10 @@ export function AskNevo() {
         },
         { signal: controller.signal },
       )
-      .catch(() => null);
+      .catch((cause) => {
+        spent = allowanceSpent(cause);
+        return null;
+      });
     void Promise.all([answer, beat]).then(([res]) => {
       if (!alive.current) return;
       // Adopt the server's thread so the next turn continues this one. Only
@@ -304,11 +324,13 @@ export function AskNevo() {
               // an answer rather than a hand-over.
               teacherAction: res.canHelp === false,
             }
-          : signedIn
-            ? { who: "nevo", text: COULD_NOT_ANSWER, failed: true }
-            : // Say so. A visitor on the walkthrough cannot tell a canned
-              // reply from real tutoring either, and should not have to.
-              { ...replyFor(text), sample: true },
+          : spent
+            ? { who: "nevo", text: ALLOWANCE_SPENT }
+            : signedIn
+              ? { who: "nevo", text: COULD_NOT_ANSWER, failed: true }
+              : // Say so. A visitor on the walkthrough cannot tell a canned
+                // reply from real tutoring either, and should not have to.
+                { ...replyFor(text), sample: true },
       ]);
       setThinking(false);
     });

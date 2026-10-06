@@ -25,6 +25,12 @@
  *    learner's `Account On Pause` frame one level up: a teacher is pointed at
  *    the school administrator exactly as a learner is pointed at their teacher.
  *    NO retry button, because retrying does nothing.
+ *  - `account_closed` (B58, backend's 5 Oct answer; not yet in the deployed
+ *    spec) is a sixth code and a second account state: a removed account,
+ *    which no school can turn back on. The child's
+ *    door says closed rather than on pause (D53). The STAFF screen has no
+ *    closed state drawn, so it keeps the ordinary copy it showed this code
+ *    before the code had a name - raised, not invented here.
  *
  * A pure module, separate from the screen, because the mapping is the half that
  * can be wrong and a component that reaches Next's router cannot be rendered in
@@ -32,7 +38,12 @@
  * the sign-in doors.
  */
 
-export type SessionEndReason = "expired" | "revoked" | "replaced" | "paused";
+export type SessionEndReason =
+  | "expired"
+  | "revoked"
+  | "replaced"
+  | "paused"
+  | "closed";
 
 export interface SessionEndCopy {
   heading: string;
@@ -64,6 +75,8 @@ export function sessionEndReason(code: string | null | undefined): SessionEndRea
       return "replaced";
     case "account_paused":
       return "paused";
+    case "account_closed":
+      return "closed";
     // `session_expired`, `invalid_session`, anything unrecognised, and nothing.
     default:
       return "expired";
@@ -115,6 +128,9 @@ export function sessionEndCopy(
         offersSignIn: false,
       };
 
+    // NOT DRAWN for staff. What this code showed before it had a name, so the
+    // staff screens do not change under a learner ruling.
+    case "closed":
     case "expired":
     default:
       return {

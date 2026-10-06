@@ -25,12 +25,24 @@ import { USER_ROLES } from "@/lib/constants/permissions";
  * THE FLAG IS STICKY for the life of the page. A host that mounts after the
  * 401 - a route change racing the response - still finds it, and nothing about
  * a paused account changes until the page is left.
+ *
+ * A CLOSED ACCOUNT TAKES THE SAME PATH (B58, D53). Backend's 5 Oct answer gives
+ * a removed account its own 401, `account_closed`; the deployed spec's 401
+ * description does not name it yet and still says `account_paused` covers
+ * "closed or suspended" - raised. Where it arrives, the child gets the same
+ * card over the same lesson but is never told the account is on pause. "On
+ * pause" says it will start again, which for a removed child is not true and
+ * brings them back to the tablet to try. So the flag carries WHICH state
+ * landed, and the screens read it.
  */
 
 const PAUSED_EVENT = "nevo:account-paused";
 
+/** The two account states a child is shown in place. Never a reason. */
+export type AccountHold = "paused" | "closed";
+
 let hosts = 0;
-let paused = false;
+let held: AccountHold | null = null;
 
 /** Mount point for the in-place card. Returns the unregister. */
 export function registerPauseHost(): () => void {
@@ -51,10 +63,10 @@ export function pauseHostsMounted(): number {
 /**
  * Should this 401 be shown where the person is, rather than by leaving?
  *
- * Only a child, only `account_paused`, and only where a host is mounted. A
- * paused STAFF account keeps its own door, and every other code keeps the
- * session-end screens - an expired session really has ended, and there is
- * nothing to stay for.
+ * Only a child, only `account_paused` or `account_closed`, and only where a
+ * host is mounted. A paused STAFF account keeps its own door, and every other
+ * code keeps the session-end screens - an expired session really has ended,
+ * and there is nothing to stay for.
  */
 export function pausesInPlace(
   role: string | null | undefined,
@@ -62,20 +74,31 @@ export function pausesInPlace(
   hostsMounted: number,
 ): boolean {
   return (
-    role === USER_ROLES.STUDENT && code === "account_paused" && hostsMounted > 0
+    role === USER_ROLES.STUDENT &&
+    (code === "account_paused" || code === "account_closed") &&
+    hostsMounted > 0
   );
 }
 
-/** Raise the card. Called by `client.ts` instead of redirecting. */
-export function announceAccountPause(): void {
-  paused = true;
+/**
+ * Raise the card. Called by `client.ts` instead of redirecting, with the 401's
+ * own code: `account_closed` is the closed state, and anything else is the
+ * pause this always was.
+ */
+export function announceAccountPause(code?: string | null): void {
+  held = code === "account_closed" ? "closed" : "paused";
   if (typeof window === "undefined") return;
   window.dispatchEvent(new Event(PAUSED_EVENT));
 }
 
-/** Whether a pause has landed on this page. */
+/** Whether a pause, or a closure, has landed on this page. */
 export function isAccountPaused(): boolean {
-  return paused;
+  return held !== null;
+}
+
+/** Which one landed, or null. `useSyncExternalStore`'s snapshot. */
+export function accountHold(): AccountHold | null {
+  return held;
 }
 
 /** `useSyncExternalStore`'s subscribe. */

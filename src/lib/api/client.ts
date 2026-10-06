@@ -235,6 +235,9 @@ function handleAuthFailure(
   // token, and exempting it left the student browsing an app that still
   // looked signed in.
   if (path.includes("/auth/login") || path.includes("/auth/logout")) return;
+  // Nor does a crash report: it is sent from an error screen and must never
+  // move the person off it (B36). A dead session is found by the next read.
+  if (path.includes("/client-errors")) return;
   const role = getSession()?.role;
   const code = apiErrorCode(detail);
   // A child's pause is shown where they are (28b), over the lesson, rather
@@ -242,7 +245,7 @@ function handleAuthFailure(
   // `accountPause.ts` for why, and for the case with nothing to draw it.
   if (pausesInPlace(role, code, pauseHostsMounted())) {
     redirecting = true;
-    announceAccountPause();
+    announceAccountPause(code);
     return;
   }
   clearSession();

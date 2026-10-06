@@ -326,6 +326,29 @@ describe("a child paused mid-lesson", () => {
     expect(clearSession).toHaveBeenCalledTimes(1);
   });
 
+  it("raises the closed card, not the paused one, for a removed child (B58, D53)", async () => {
+    asStudent();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ detail: { code: "account_closed", message: "x" } }),
+            { status: 401, headers: { "Content-Type": "application/json" } },
+          ),
+      ),
+    );
+    const { api } = await freshClient();
+    const pause = await import("@/lib/auth/accountPause");
+    const unregister = pause.registerPauseHost();
+
+    await expect(api.get("/api/v1/lessons/x")).rejects.toThrow();
+
+    expect(pause.accountHold()).toBe("closed");
+    expect(clearSession).not.toHaveBeenCalled();
+    unregister();
+  });
+
   it("leaves a paused teacher on their own door", async () => {
     // Staff have a frame of their own for this; 28b is the child's.
     vi.stubGlobal("fetch", paused());
@@ -338,6 +361,24 @@ describe("a child paused mid-lesson", () => {
     expect(pause.isAccountPaused()).toBe(false);
     expect(clearSession).toHaveBeenCalledTimes(1);
     unregister();
+  });
+});
+
+/**
+ * B36: a crash report is sent from an error screen. If the session behind it
+ * has died, its 401 must not clear the session and carry the child off the
+ * screen they are reading - the next ordinary read finds the dead session.
+ */
+describe("a crash report", () => {
+  it("never sends anyone to a door, whatever it is answered", async () => {
+    vi.stubGlobal("fetch", respondWith(401));
+    const { api } = await freshClient();
+
+    await expect(
+      api.post("/api/v1/client-errors", { message: "x" }),
+    ).rejects.toThrow();
+
+    expect(clearSession).not.toHaveBeenCalled();
   });
 });
 
