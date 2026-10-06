@@ -82,11 +82,14 @@ jobs:
           E2E_TEACHER_PASSWORD: ${{ secrets.E2E_TEACHER_PASSWORD }}
           E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
           E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
-          # Not secrets. The student suite MINTS its own PIN through the admin
-          # above, so the only thing it needs is which probe child to use - and
-          # every run RESETS that child's PIN, which is why it is named here in
-          # the open rather than defaulted inside the spec.
+          # Not secrets. The student suite makes its own PIN - the admin above
+          # clears the probe child's PIN and the suite chooses a new one - so the
+          # only thing it needs is which child. Every run CHANGES that child's
+          # PIN, which is why it is named here in the open rather than defaulted.
           E2E_STUDENT_LOGIN: NV-DF323F
+          # The same child's Student ID: since SCRUM-216 the suite clears the PIN and
+          # chooses one through /student-entry/pin, which takes this, not the login.
+          E2E_STUDENT_ADMISSION: E2E/002
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
