@@ -1911,21 +1911,13 @@ export function LessonPlayer({
       >
         <div
           className={cn(
-            // The bottom padding clears the Ask Nevo trigger, which is
-            // `fixed` and therefore lands ON this scrolling column rather than
-            // below it. The arithmetic, on mobile: the chevron nav is
-            // pt-2 + size-12 + pb-6 = 80px and `shrink-0`, so this region ends
-            // 80px off the bottom; the trigger is `bottom-[82px]` and 52px
-            // tall, so it sits between 134px and 82px off the bottom - inside
-            // this column, over the last line's right-hand end. 88px of slack
-            // means text always stops above it.
-            //
-            // Not needed from `sm:` up: there the trigger is the 44px pill at
-            // `bottom-6`, which ends 68px off the bottom - below this region
-            // entirely, in the nav row, and clear of the centred chevrons.
-            // `sm:p-8` and `lg:p-10` reset it on their own - measured against
-            // the real stylesheet at 375 / 700 / 1280, giving 88 / 32 / 40px -
-            // because their media rules come after the base utility.
+            // The 88px bottom padding on mobile was sized to clear the Ask Nevo
+            // trigger, which is `fixed` and would land on this column. Ask Nevo
+            // is no longer mounted over lesson content (IA 31, see
+            // `LessonAskNevo`), so it clears nothing now; the last line simply
+            // stops well above the chevrons. `sm:p-8` and `lg:p-10` reset it
+            // on their own, because their media rules come after the base
+            // utility.
             "mx-auto w-full max-w-full p-6 pb-[88px] sm:max-w-[620px] sm:p-8 lg:max-w-[680px] lg:p-10",
           )}
         >
