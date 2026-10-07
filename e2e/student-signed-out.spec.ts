@@ -131,9 +131,11 @@ test.describe("the student doors, signed out", () => {
     await page.goto("/auth/forgot-pin");
 
     await expect(page.getByRole("heading", { name: "Forgot your PIN?" })).toBeVisible();
+    // A fresh browser remembers no child, so the way back is the entry screen,
+    // not the picker: a device that remembers nobody asks who they are (D123).
     await expect(page.getByRole("link", { name: "Back to sign in" })).toHaveAttribute(
       "href",
-      /^\/auth\/login/,
+      "/student/onboarding/school",
     );
 
     await imagesLoad(page, "Forgot PIN");

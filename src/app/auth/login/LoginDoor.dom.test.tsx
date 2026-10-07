@@ -278,53 +278,54 @@ describe("an account that is not a student's", () => {
 });
 
 /**
- * D1, 1 Oct: "Both frames are right, on different screens." 00 is the own
- * device - one remembered child, straight to their PIN, with "Using a
- * different device?" out to 00c. 28c is the shared tablet, with "Not you? Go
- * back" to its picker. The picker used to show for one child too, so 00's way
- * out existed nowhere.
+ * D57, 6 Oct: "One remembered child means one child has used this device, not
+ * that it belongs to them. Every shared tablet starts with exactly one
+ * remembered child. Device ownership is never inferred from use, so the picker
+ * still shows." It used to open straight on 00's own-device PIN screen, with
+ * "Using a different device?".
  */
-describe("a device that remembers one child (00)", () => {
+describe("a device that remembers one child (D57)", () => {
   beforeEach(() => {
     roster.entries = [TWO[0]];
   });
 
-  it("opens straight on that child's PIN, greeting them as 00 draws it", async () => {
-    render(<LoginPage />);
-
-    expect(
-      await screen.findByRole("heading", { name: "Welcome back, Ada" }),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Enter your PIN to keep going")).toBeInTheDocument();
-    // No picker in front of it.
-    expect(screen.queryByText("Who's learning?")).toBeNull();
-  });
-
-  it("offers Using a different device? out to the full sign-in, and no Not you?", async () => {
+  it("opens on the picker, like a device that remembers more", async () => {
     window.history.pushState({}, "", "/auth/login?next=/student/lessons/frac-3");
     render(<LoginPage />);
 
+    expect(await screen.findByText("Who's learning?")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ada" })).toBeInTheDocument();
     expect(
-      await screen.findByRole("link", { name: "Using a different device?" }),
+      screen.getByRole("link", { name: "Someone else" }),
     ).toHaveAttribute("href", "/auth/sign-in?next=%2Fstudent%2Flessons%2Ffrac-3");
-    expect(screen.queryByRole("button", { name: /Not you/ })).toBeNull();
+    // Not 00's own-device PIN screen.
+    expect(screen.queryByText("Enter your PIN to keep going")).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Welcome back, Ada" })).toBeNull();
   });
 
-  it("says 00's words for a PIN that did not match", async () => {
+  it("asks for the PIN as 28c-3 does, with Not you? back to the picker", async () => {
+    await chooseAda();
+
+    expect(screen.getByRole("heading", { name: "Ada" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /different device/ })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Not you? Go back" }));
+
+    expect(await screen.findByText("Who's learning?")).toBeInTheDocument();
+  });
+
+  it("says 28c-5's words for a PIN that did not match", async () => {
     loginPin.mockRejectedValue(
       new ApiError(401, "Unauthorized", {
         detail: { code: "authentication_failed", message: "no" },
       }),
     );
-    render(<LoginPage />);
-    await screen.findByText("Enter your PIN to keep going");
+    await chooseAda();
 
     await tap("1234");
 
     expect(
-      await screen.findByText(
-        "That PIN didn't match. Try again, or ask your teacher.",
-      ),
+      await screen.findByText("That PIN didn't match. Have another go."),
     ).toBeInTheDocument();
   });
 });
@@ -367,7 +368,7 @@ describe("the moment after the PIN", () => {
     expect(
       await screen.findByText(/Taking you to your lessons/),
     ).toBeInTheDocument();
-    expect(screen.queryByText(/signed in on another tablet/)).toBeNull();
+    expect(screen.queryByText(/signed in on another device/)).toBeNull();
   });
 });
 
@@ -377,9 +378,9 @@ describe("the moment after the PIN", () => {
  * waits for Continue. It was a line on the "Welcome back" beat, which moves on
  * by itself.
  */
-describe("a sign-in that ended a session on another tablet", () => {
+describe("a sign-in that ended a session on another device", () => {
   const RELEASED =
-    "You were signed in on another tablet, so that one signed out.";
+    "You were signed in on another device, so that one signed out.";
 
   it("says so on its own screen, and goes nowhere until Continue", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -519,28 +520,26 @@ describe("a paused account at the door", () => {
     expect(screen.getByRole("button", { name: "Kofi" })).toBeInTheDocument();
   });
 
-  it("goes back to 00 on an own device, where the way past is Using a different device?", async () => {
+  it("goes back to the picker on a device that remembers one child too (D57)", async () => {
     roster.entries = [TWO[0]];
     loginPin.mockRejectedValue(paused());
-    render(<LoginPage />);
-    await screen.findByText("Enter your PIN to keep going");
+    await chooseAda();
 
     await tap("1234");
     fireEvent.click(
       await screen.findByRole("button", { name: "Back to sign in" }),
     );
 
-    expect(
-      await screen.findByRole("link", { name: "Using a different device?" }),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Who's learning?")).toBeInTheDocument();
     expect(screen.queryByText(/on pause/)).toBeNull();
   });
 });
 
 /**
- * D53: a removed child's right PIN is answered `account_closed` (B58). They
- * read that the account is closed - not on pause, and not a PIN that did not
- * match - and the next child still gets the picker back (D52).
+ * D53 and D116: a removed child's right PIN is answered `account_closed`
+ * (B58). They read 28d - closed, not on pause, and not a PIN that did not
+ * match - which is terminal: "no sign-in route, because offering a way back
+ * in would be cruel."
  */
 describe("a closed account at the door", () => {
   const closed = () =>
@@ -548,19 +547,25 @@ describe("a closed account at the door", () => {
       detail: { code: "account_closed", message: "closed" },
     });
 
-  it("says closed, and goes back to the picker for whoever is next", async () => {
+  it("says closed in 28d's words, with nothing to press", async () => {
     loginPin.mockRejectedValue(closed());
     await chooseAda();
 
     await tap("1234");
 
     expect(
-      await screen.findByRole("heading", { level: 1, name: /account is closed/ }),
+      await screen.findByRole("heading", {
+        level: 1,
+        name: "Your account is closed",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "This account is closed, so there's nothing more to do here.",
+      ),
     ).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/on pause|didn.t match/i);
-
-    fireEvent.click(screen.getByRole("button", { name: "Back to sign in" }));
-
-    expect(await screen.findByText("Who's learning?")).toBeInTheDocument();
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
+    expect(screen.queryAllByRole("link")).toHaveLength(0);
   });
 });

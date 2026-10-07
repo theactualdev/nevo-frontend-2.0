@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import {
@@ -9,18 +8,21 @@ import {
   registerPauseHost,
 } from "@/lib/auth/accountPause";
 import { clearSession } from "@/lib/auth/session";
-import { AccountOnPauseView, accountHoldHeading } from "./AccountOnPauseScreen";
+import { ACCOUNT_CLOSED_COPY, AccountClosedView } from "./AccountClosedScreen";
+import {
+  ACCOUNT_PAUSED_HEADING,
+  AccountOnPauseView,
+  PauseBars,
+} from "./AccountOnPauseScreen";
 
 /**
  * 28b - an account paused while the child is using it.
  *
  * "The lesson the child was on stays visible but goes quiet behind a soft
  * scrim, and a calm card explains in two lines ... After they tap Okay it
- * settles into a full paused screen with the same two lines and nothing
- * further to do." Until this existed the step was skipped: `client.ts` cleared
- * the session and left the page on the first 401, so the lesson vanished
- * mid-sentence, and `AccountOnPauseScreen`'s docblock said this case was
- * undrawn when 28b had drawn it.
+ * settles into the shared Account On Pause state." Until this existed the step
+ * was skipped: `client.ts` cleared the session and left the page on the first
+ * 401, so the lesson vanished mid-sentence.
  *
  * Mounted once, in the student layout, so it covers every student screen and
  * not only the player - a pause is the same news on Home as mid-read. It is the
@@ -38,15 +40,18 @@ import { AccountOnPauseView, accountHoldHeading } from "./AccountOnPauseScreen";
  * hides the page from assistive tech, which is what "goes quiet" means for a
  * child on a keyboard or a screen reader.
  *
- * THE CARD'S GLYPH IS THE BRAND MARK. 28b's circle is empty in the frame file
- * - its icon slot renders nothing - and the frame rules out "an error icon".
- * The `Account On Pause` frame puts the Nevo mark in the same violet circle, so
- * that is what fills it. Flagged to design.
+ * THE CARD'S GLYPH IS 28b's PAUSE BARS (D64, 6 Oct): "The glyph is the pause
+ * bars, not the brand mark. Our mark does not appear on a screen that is
+ * telling someone their access has been interrupted." It was the Nevo icon,
+ * borrowed from the `Account On Pause` frame while 28b's slot was empty.
  *
- * A CLOSED ACCOUNT GETS THE SAME CARD, saying closed (D53, B58). Losing the
- * lesson mid-sentence is the same harm whichever state the account is in; only
- * the heading differs, because "on pause" would tell a removed child it starts
- * again. Its words are a DESIGN ASK - see `AccountOnPauseScreen`.
+ * A CLOSED ACCOUNT IS 28d, STRAIGHT AWAY (D116). It shared this card, saying
+ * closed, until 28d drew the closed state as a screen of its own - terminal,
+ * nothing to press, "a shared system state is drawn once and reused". No frame
+ * draws a closed card over a lesson, and an "Okay" that leads to a screen with
+ * nothing to do is a button that does nothing, so the screen covers the page
+ * at once. Its session is cleared as it does: nothing on 28d can use it, and
+ * the page beneath is already covered and hidden from assistive tech.
  */
 /**
  * The picker, by a full page load (D52): the pause is sticky for this page, and
@@ -58,14 +63,18 @@ export function AccountPauseHost() {
   useEffect(() => registerPauseHost(), []);
   const hold = useSyncExternalStore(onAccountPause, accountHold, () => null);
   const [settled, setSettled] = useState(false);
+  const closed = hold === "closed";
+
+  useEffect(() => {
+    if (closed) clearSession();
+  }, [closed]);
 
   if (!hold) return null;
-  const heading = accountHoldHeading(hold);
 
   return (
     <DialogPrimitive.Root open>
       <DialogPrimitive.Portal>
-        {settled ? (
+        {closed || settled ? (
           <DialogPrimitive.Content
             aria-describedby={undefined}
             onEscapeKeyDown={(e) => e.preventDefault()}
@@ -73,9 +82,13 @@ export function AccountPauseHost() {
             className="fixed inset-0 z-50 overflow-y-auto bg-nevo-cream outline-none"
           >
             <DialogPrimitive.Title className="sr-only">
-              {heading}
+              {closed ? ACCOUNT_CLOSED_COPY.heading : ACCOUNT_PAUSED_HEADING}
             </DialogPrimitive.Title>
-            <AccountOnPauseView back={{ href: SIGN_IN_DOOR }} hold={hold} />
+            {closed ? (
+              <AccountClosedView />
+            ) : (
+              <AccountOnPauseView back={{ href: SIGN_IN_DOOR }} />
+            )}
           </DialogPrimitive.Content>
         ) : (
           <>
@@ -85,17 +98,11 @@ export function AccountPauseHost() {
               onInteractOutside={(e) => e.preventDefault()}
               className="fixed top-1/2 left-1/2 z-50 flex w-[295px] max-w-[calc(100%-48px)] -translate-x-1/2 -translate-y-1/2 flex-col items-center rounded-2xl bg-nevo-cream-elevated px-[30px] py-9 text-center text-nevo-near-black shadow-[0_8px_32px_rgba(0,0,0,0.16)] outline-none motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-98 motion-safe:slide-in-from-bottom-[10px] motion-safe:duration-[380ms] sm:w-[388px] sm:px-10 sm:py-11"
             >
-              <span className="mb-5 flex size-[52px] items-center justify-center rounded-full bg-nevo-violet/22 sm:mb-6 sm:size-[58px]">
-                <Image
-                  src="/brand/logo-icon-purple-tight.png"
-                  alt=""
-                  width={218}
-                  height={217}
-                  className="size-7 object-contain opacity-92 sm:size-8"
-                />
+              <span className="mb-5 flex size-[52px] items-center justify-center rounded-full bg-nevo-violet/22 text-nevo-navy sm:mb-6 sm:size-[58px]">
+                <PauseBars className="size-[26px]" />
               </span>
               <DialogPrimitive.Title className="text-xl leading-[1.3] font-semibold tracking-[-0.01em] sm:text-[23px]">
-                {heading}
+                {ACCOUNT_PAUSED_HEADING}
               </DialogPrimitive.Title>
               <DialogPrimitive.Description className="mt-3 text-[15px] leading-[1.55] text-nevo-near-black/68 sm:mt-3.5 sm:text-base">
                 If you have questions, talk to your teacher.

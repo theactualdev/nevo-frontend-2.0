@@ -39,9 +39,9 @@ import { cn } from "@/lib/utils";
  * progress is saved" - so it is the frame's own words here now.
  *
  * `paused` is not in this union, and nor is `closed`. They are account states
- * rather than session ones and the child has their own frame for them, so the
- * door renders `AccountOnPauseScreen` instead - which is the same call #422
- * made for staff, one level up.
+ * rather than session ones and the child has their own frames for them, so the
+ * door renders `AccountOnPauseScreen` or 28d's `AccountClosedScreen` instead -
+ * which is the same call #422 made for staff, one level up.
  */
 
 type Shown = Exclude<SessionEndReason, "paused" | "closed">;

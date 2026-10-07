@@ -10,6 +10,31 @@ import { USER_ROLES } from "@/lib/constants/permissions";
  */
 export const WAITING_ROUTE = "/student/waiting";
 
+/**
+ * 00e, for a child whose consent was there and is gone (D117). Says nothing
+ * about why, and neither does the address: "It never uses the word consent,
+ * never mentions a parent, never mentions withdrawal."
+ */
+export const WITHDRAWN_ROUTE = "/student/unavailable";
+
+/**
+ * The hold for a child whose consent could not be read at a sign-in door
+ * (D69): a check that cannot complete does not leave the door open. Carries
+ * where the child was going as `?next=`, for the Try again that reads it
+ * again. See `studentDestination`.
+ */
+export const UNCHECKED_ROUTE = "/student/unchecked";
+
+/** Is this destination one of the holds, rather than somewhere to learn? */
+export function isHoldDestination(destination: string): boolean {
+  const path = destination.split(/[?#]/)[0].replace(/\/+$/, "");
+  return (
+    path === WAITING_ROUTE ||
+    path === WITHDRAWN_ROUTE ||
+    path === UNCHECKED_ROUTE
+  );
+}
+
 /** The refusal a child gets once a parent has withdrawn consent (B7). */
 export const CONSENT_WITHDRAWN = "consent_withdrawn";
 
@@ -25,17 +50,16 @@ export const CONSENT_WITHDRAWN = "consent_withdrawn";
  * - a lesson that "didn't load", a question Nevo "couldn't answer" - none of
  * them true, and all of them inviting the child to try again.
  *
- * THE HELD SCREEN, 00d, BECAUSE NO FRAME DRAWS "SUSPENDED". It is the screen
- * every sign-in door already sends a child the server holds, and design's
- * 23 Sep ruling is that a child in the same state meets the same screen
- * whichever door they use. It names no reason. Its words were written for a
- * wait rather than a withdrawal - raised with design.
+ * 00e CONSENT WITHDRAWN (D117), drawn 6 Oct. Until then this went to 00d as a
+ * stand-in, whose "It will be soon" is a lie to a child whose consent is gone:
+ * "a child told to wait for something never coming goes back every day." The
+ * sign-in doors send a withdrawn child to the same screen (`entryGate`), so a
+ * child in the same state meets the same screen whichever door they use.
  *
  * ONLY A CHILD, ONLY THIS CODE. Staff refused with it, should that ever
  * happen, would be hearing about a child, not about themselves. And never
- * from the held screen itself, so a refusal raised
- * there - a held position flushing, the signal outbox - cannot reload it in a
- * loop.
+ * from 00e itself, so a refusal raised there - a held position flushing, the
+ * signal outbox - cannot reload it in a loop.
  *
  * Pure so it can be tested: jsdom will not let a test observe
  * `window.location`, the same reason `sessionExpiredDoor` is pure.
@@ -48,5 +72,7 @@ export function withdrawnDoor(
 ): string | null {
   if (role !== USER_ROLES.STUDENT) return null;
   if (status !== 403 || code !== CONSENT_WITHDRAWN) return null;
-  return pathname.replace(/\/+$/, "") === WAITING_ROUTE ? null : WAITING_ROUTE;
+  return pathname.replace(/\/+$/, "") === WITHDRAWN_ROUTE
+    ? null
+    : WITHDRAWN_ROUTE;
 }

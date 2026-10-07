@@ -17,6 +17,7 @@ import {
   type ConsoleDoor,
 } from "@/lib/auth/consoleDoor";
 import { safeNextPath, withNext } from "@/lib/auth/nextPath";
+import { AccountClosedScreen } from "@/components/student/Auth/AccountClosedScreen";
 import { AccountOnPauseScreen } from "@/components/student/Auth/AccountOnPauseScreen";
 import { WrongDoorNote } from "@/components/student/Auth/WrongDoorNote";
 import {
@@ -36,12 +37,7 @@ import {
   SIGN_IN_THROTTLED_COPY,
   skipsWelcomeBeat,
 } from "@/components/student/Auth/signInMoments";
-import {
-  LEGACY_PIN_LENGTH,
-  STUDENT_PIN_LENGTH,
-  STUDENT_PIN_MAX,
-  STUDENT_PIN_MIN,
-} from "@/lib/constants";
+import { STUDENT_PIN_LENGTH } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 /** The frame's done beat before navigating home. */
 const DONE_MS = 700;
@@ -93,15 +89,14 @@ function forgotPinHref(childId: string, next: string | undefined): string {
  * class they might not be able to rejoin. The device now remembers up to six,
  * and this screen asks which of them is here.
  *
- * A DEVICE THAT REMEMBERS ONE CHILD OPENS ON 00, THE OWN-DEVICE PIN SCREEN.
- * The picker used to show even for a single child, on the reading that 28c
- * replaced 00 outright; that was flagged, and design ruled on 1 Oct (D1) that
- * both frames are right on different screens. 00 is the own device: "Welcome
- * back, Ada", the PIN, and "Using a different device?" out to the full sign-in
- * (00c). 28c is the shared tablet: the picker, and "Not you? Go back" to it.
- * One remembered child is the only thing that tells the two apart - and it
- * costs a second child on a week-one tablet nothing, because 00's way out goes
- * to the same 00c the picker's "Someone else" does.
+ * ONE REMEMBERED CHILD STILL GETS THE PICKER (D57, 6 Oct). This used to open
+ * a one-child device straight on 00's own-device PIN screen, "Welcome back,
+ * Ada" with "Using a different device?", on the reading that one child meant
+ * the child's own tablet. Design: "One remembered child means one child has
+ * used this device, not that it belongs to them. Every shared tablet starts
+ * with exactly one remembered child. Device ownership is never inferred from
+ * use, so the picker still shows." So the count decides nothing but whether
+ * there is anyone to pick.
  *
  * A device that remembers NOBODY shows 28c-2: the wordmark and one "Sign in",
  * which goes to the full sign-in (00c). This used to redirect there instead,
@@ -113,7 +108,7 @@ function forgotPinHref(childId: string, next: string | undefined): string {
  * and this screen used to read it only on the empty-device redirect: the PIN
  * unlock landed on Home, and "Someone else" and "Forgot PIN?" dropped it.
  *
- * The PIN beat (28c-3): the child's shape and first name, one box per digit,
+ * The PIN beat (28c-3): the child's shape and first name, four boxes (D58),
  * the block pad beside the boxes in landscape and under them in portrait -
  * "every screen is drawn in portrait and landscape, because tray-mounted
  * tablets cannot be rotated" - and a pop-check "Welcome back" before the
@@ -162,21 +157,6 @@ export default function LoginPage() {
    * session elsewhere (D59, `SignedInHereScreen`). Null when it ended nothing.
    */
   const [releasedTo, setReleasedTo] = useState<string | null>(null);
-  /**
-   * Whether to believe the length this device remembers for the child.
-   *
-   * THE SCREEN SUBMITS WHEN THE BOXES FILL, per 28c, so it has to know how
-   * many to draw - and since 25 Sep a PIN is four (new) or six (every earlier
-   * one, and every adult's reset). The roster remembers each child's length,
-   * and a child it predates is six; see `LEGACY_PIN_LENGTH`.
-   *
-   * Dropped after a PIN that did not match, because the likeliest reason a
-   * right-length guess is wrong is an adult resetting the PIN to a different
-   * length. From then on the boxes grow as the child types and the pad's
-   * return key submits, so a remembered length can cost a child one retry
-   * and can never lock them out.
-   */
-  const [trustLength, setTrustLength] = useState(true);
   /** Whose door a non-student account belongs at; see `WrongDoorNote`. */
   const [wrongDoor, setWrongDoor] = useState<ConsoleDoor | null>(null);
   /**
@@ -203,10 +183,8 @@ export default function LoginPage() {
        * be able to rejoin. Its "Sign in" goes to 00c, which carries "I'm new
        * to Nevo" for the children who really are.
        */
-      const remembered = pickerEntries();
-      setEntries(remembered);
-      // One child: 00, straight to their PIN (D1). See the docblock.
-      if (remembered.length === 1) setChosen(childById(remembered[0].id));
+      // One child or six, the picker comes first (D57). See the docblock.
+      setEntries(pickerEntries());
     };
     hydrate();
   }, []);
@@ -303,10 +281,8 @@ export default function LoginPage() {
         // clock. Done on SUCCESS only: a wrong PIN is not a visit, and letting
         // it count would keep a child who has left the school on the tablet
         // indefinitely.
-        // And record the length that worked, so tomorrow's boxes are right.
         rememberChild({
           ...remembered,
-          pinLength: pin.length,
           // Which account this entry is, so a signed-in screen can find it.
           userId: session.userId,
         });
@@ -334,9 +310,7 @@ export default function LoginPage() {
         // we sent a shape it rejects - the PIN length is the live example -
         // and anything else is the network or the server. Only the first is
         // about the child.
-        const failure = classifyLearnerLoginFailure(cause);
-        if (failure === "credentials") setTrustLength(false);
-        setError(failure);
+        setError(classifyLearnerLoginFailure(cause));
       } finally {
         if (!leaving) setChecking(false);
       }
@@ -344,10 +318,17 @@ export default function LoginPage() {
     [signIn, next, goOn],
   );
 
-  /** Where the boxes fill and submit themselves, or null for "grow and wait". */
-  const expected =
-    chosen && trustLength ? (chosen.pinLength ?? LEGACY_PIN_LENGTH) : null;
-
+  /*
+   * FOUR DIGITS, FOUR BOXES (D58, 6 Oct). The boxes fill and submit
+   * themselves on the fourth digit, for every child.
+   *
+   * This used to draw whatever length the device remembered for the child -
+   * six for one it predated - and after a PIN that did not match, grew boxes
+   * up to eight until the pad's return key said done. Design: "SCRUM-179
+   * settles it and the six-digit reference is stale wherever it appears." A
+   * PIN is chosen at four (`PinChoice`, `StudentPinSetup`), and five to eight
+   * digits were only ever a 422 from the server.
+   */
   const addDigits = useCallback(
     (raw: string) => {
       if (done || checking || !chosen) return;
@@ -355,24 +336,22 @@ export default function LoginPage() {
       if (!add) return;
       setError(null);
       setDigits((prev) => {
-        const next = (prev + add).slice(0, expected ?? STUDENT_PIN_MAX);
-        if (next.length === expected) void submit(next, chosen);
+        const next = (prev + add).slice(0, STUDENT_PIN_LENGTH);
+        if (next.length === STUDENT_PIN_LENGTH) void submit(next, chosen);
         return next;
       });
     },
-    [done, checking, chosen, submit, expected],
+    [done, checking, chosen, submit],
   );
 
   /**
-   * "That's all of it" - the pad's return key, or Enter.
-   *
-   * The way in when the boxes will not fill by themselves: a child whose PIN
-   * is shorter than the remembered length, or any child after a PIN that did
-   * not match. Below four digits it does nothing, as the server would refuse
-   * the shape before it looked at the PIN.
+   * "That's all of it" - the pad's return key, or Enter. Only ever four
+   * digits; anything shorter is a shape the server refuses before it looks at
+   * the PIN.
    */
   const submitTyped = useCallback(() => {
-    if (done || checking || !chosen || digits.length < STUDENT_PIN_MIN) return;
+    if (done || checking || !chosen || digits.length !== STUDENT_PIN_LENGTH)
+      return;
     void submit(digits, chosen);
   }, [done, checking, chosen, digits, submit]);
 
@@ -418,7 +397,6 @@ export default function LoginPage() {
             }
             setDigits("");
             setError(null);
-            setTrustLength(true);
             setChosen(child);
           }}
           someoneElseHref={withNext("/auth/sign-in", next)}
@@ -427,9 +405,6 @@ export default function LoginPage() {
     );
   }
 
-  /** One remembered child: this is 00, not 28c. See the docblock at the top. */
-  const ownDevice = entries.length === 1;
-
   /*
    * A paused account takes the whole screen, per the frame: it is shown "in
    * place of the normal login flow", not as a line under a PIN row the child
@@ -437,22 +412,20 @@ export default function LoginPage() {
    * a `/auth/paused` URL would be a screen anyone could visit and be told their
    * account is on pause when it is not.
    *
-   * Its way back (D52) is to the picker, so the next child can get in; on an
-   * own device (00) there is no picker, so it is back to the PIN screen, whose
-   * "Using a different device?" is the way past.
+   * Its way back (D52) is to the picker, so the next child can get in.
    *
-   * A closed account is the same screen saying closed, never on pause (D53).
+   * A closed account is 28d, never on pause (D53, D116), and terminal: the
+   * frame draws no sign-in route on it.
    */
-  if (error === "paused" || error === "closed") {
+  if (error === "closed") return <AccountClosedScreen />;
+  if (error === "paused") {
     return (
       <AccountOnPauseScreen
-        hold={error}
         back={{
           onBack: () => {
             setError(null);
             setDigits("");
-            setTrustLength(true);
-            if (!ownDevice) setChosen(null);
+            setChosen(null);
           },
         }}
       />
@@ -493,19 +466,10 @@ export default function LoginPage() {
    * username they may not know by heart. The route out to a full sign-in still
    * exists, one step further on, as the picker's "Someone else".
    *
-   * ON AN OWN DEVICE (00) THERE IS NO PICKER TO GO BACK TO, and the way out is
-   * 00's own "Using a different device?" to the full sign-in (00c) instead -
-   * design, D1: "neither replaces the other". Same slot, still only one.
+   * There is always a picker to go back to, one remembered child included
+   * (D57), so 00's "Using a different device?" no longer stands in this slot.
    */
-  const notYou = ownDevice ? (
-    <Link
-      href={withNext("/auth/sign-in", next)}
-      onClick={(e) => e.stopPropagation()}
-      className="mt-3 inline-flex h-11 cursor-pointer items-center rounded-[10px] px-4 text-[14.5px] font-medium text-nevo-near-black/60 transition-[background] hover:bg-nevo-navy/8 lg:landscape:col-start-1 lg:landscape:row-start-3 lg:landscape:justify-self-center"
-    >
-      Using a different device?
-    </Link>
-  ) : (
+  const notYou = (
     <button
       type="button"
       onClick={(e) => {
@@ -555,12 +519,10 @@ export default function LoginPage() {
         the child on the left and the PIN on the right; the 1fr rows above and
         below keep the left column centred against the taller right one.
 
-        No wordmark on 28c-3: the picker before it carries the mark. 00 has
-        no picker before it, and draws the wordmark above the child.
+        No wordmark on 28c-3: the picker before it carries the mark.
       */}
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-10 pt-10 pb-6 text-center sm:px-14 lg:landscape:grid lg:landscape:grid-cols-[auto_auto] lg:landscape:grid-rows-[1fr_auto_auto_1fr] lg:landscape:content-center lg:landscape:gap-x-20 lg:landscape:px-[72px] lg:landscape:pt-9 lg:landscape:pb-[18px]">
         <div className="flex flex-col items-center lg:landscape:col-start-1 lg:landscape:row-start-2">
-          {ownDevice && <Wordmark size="form" className="mb-8" />}
           {/*
             The child's shape, never their initials. 28c: avatars are "soft
             geometric shapes, never a face", and initials on a screen anyone
@@ -572,10 +534,8 @@ export default function LoginPage() {
             className="size-[104px] sm:size-[120px] lg:landscape:size-[132px]"
           />
           <h2 className="mt-6 text-[24px] font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[28px] lg:landscape:mt-[22px] lg:landscape:text-[30px]">
-            {/* 00 greets ("Welcome back, Ada"); 28c-3 names ("Ada"). */}
-            {ownDevice
-              ? greeting(chosen.displayName)
-              : pinHeading(chosen.displayName)}
+            {/* 28c-3 names ("Ada"). */}
+            {pinHeading(chosen.displayName)}
           </h2>
         </div>
 
@@ -590,11 +550,9 @@ export default function LoginPage() {
               role="status"
               className="mt-[22px] max-w-[360px] rounded-[10px] bg-nevo-violet/18 px-4 py-[13px] text-[15.5px] leading-[1.5] text-nevo-near-black lg:landscape:mt-0 lg:landscape:max-w-[340px] lg:landscape:px-[15px] lg:landscape:py-3 lg:landscape:text-[15px]"
             >
-              {/* Each frame's own words: 28c-5's, and 00's. */}
+              {/* 28c-5's own words. */}
               {error === "credentials" &&
-                (ownDevice
-                  ? "That PIN didn't match. Try again, or ask your teacher."
-                  : "That PIN didn't match. Have another go.")}
+                "That PIN didn't match. Have another go."}
               {/* 28c-6, 28c-7 and 28c-8 (D68), in the same box. The rate
                   limit must never read as a wrong PIN: the child may have
                   typed the right one too quickly. */}
@@ -610,34 +568,28 @@ export default function LoginPage() {
               Enter your PIN to keep going
             </p>
           )}
-          {/* The remembered length, or four growing to eight. */}
+          {/* Four, for every child (D58). */}
           <div className="mt-8 flex flex-wrap justify-center gap-3.5 sm:mt-[34px] sm:gap-4 lg:landscape:mt-[26px]">
-            {Array.from(
-              {
-                length:
-                  expected ?? Math.max(STUDENT_PIN_LENGTH, digits.length),
-              },
-              (_, i) => {
-                const active = i === digits.length && !checking;
-                return (
-                  <div
-                    key={i}
-                    className={cn(
-                      "flex size-12 items-center justify-center rounded-[10px] border-[1.5px] bg-nevo-cream shadow-[0_2px_8px_rgba(0,0,0,0.05)] sm:size-[58px]",
-                      active
-                        ? "border-nevo-navy"
-                        : error
-                          ? "border-nevo-violet"
-                          : "border-nevo-near-black/20",
-                    )}
-                  >
-                    {digits.length > i && (
-                      <span className="block size-3 rounded-full bg-nevo-near-black sm:size-[13px]" />
-                    )}
-                  </div>
-                );
-              },
-            )}
+            {Array.from({ length: STUDENT_PIN_LENGTH }, (_, i) => {
+              const active = i === digits.length && !checking;
+              return (
+                <div
+                  key={i}
+                  className={cn(
+                    "flex size-12 items-center justify-center rounded-[10px] border-[1.5px] bg-nevo-cream shadow-[0_2px_8px_rgba(0,0,0,0.05)] sm:size-[58px]",
+                    active
+                      ? "border-nevo-navy"
+                      : error
+                        ? "border-nevo-violet"
+                        : "border-nevo-near-black/20",
+                  )}
+                >
+                  {digits.length > i && (
+                    <span className="block size-3 rounded-full bg-nevo-near-black sm:size-[13px]" />
+                  )}
+                </div>
+              );
+            })}
           </div>
           {/*
             THE PAD SITS IN THE SCREEN, under the boxes it fills in portrait and

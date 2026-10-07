@@ -12,11 +12,7 @@ import {
 } from "@/components/student/Onboarding/PinCreationScreen";
 import { authApi } from "@/lib/api";
 import { isCurrentPinRejected } from "@/lib/auth/currentPinFailure";
-import {
-  STUDENT_PIN_LENGTH,
-  STUDENT_PIN_MAX,
-  STUDENT_PIN_MIN,
-} from "@/lib/constants";
+import { STUDENT_PIN_LENGTH } from "@/lib/constants";
 
 const PROFILE_HREF = "/student/profile";
 /**
@@ -47,14 +43,10 @@ type Step = "current" | "new" | "updated";
  *
  * "Your PIN is updated" renders only once the server has said yes.
  *
- * THE OLD PIN MAY BE ANY LENGTH FROM 4 TO 8 - six for anyone who set theirs
- * before 25 Sep or had it reset by an adult - so step 1 takes the whole range
- * and Continue says when it is done. Only the NEW PIN is held to four.
- *
- * NOT DONE HERE: the unlock screen's remembered box count still says what it
- * said before the change. Design ruled (SCRUM-179) that a PIN's length is to
- * arrive from backend with the PIN, not be remembered by the device, so this
- * screen leaves the device's record alone until that ships.
+ * FOUR DIGITS, FOUR BOXES, the old PIN included (D58, 6 Oct). Step 1 took
+ * four to eight, for a PIN that might be six from before 25 Sep; design:
+ * "SCRUM-179 settles it and the six-digit reference is stale wherever it
+ * appears", and `PinUpdateRequest.currentPin` is exactly four.
  */
 export function ChangePinScreen() {
   const router = useRouter();
@@ -67,7 +59,7 @@ export function ChangePinScreen() {
   // Updaters, not values: fast typing lands two keys before a re-render.
   const typeCurrent = useCallback((d: string) => {
     setWrongCurrent(false);
-    setCurrentPin((p) => (p + d).slice(0, STUDENT_PIN_MAX));
+    setCurrentPin((p) => (p + d).slice(0, STUDENT_PIN_LENGTH));
   }, []);
   const eraseCurrent = useCallback(
     () => setCurrentPin((p) => p.slice(0, -1)),
@@ -110,7 +102,7 @@ export function ChangePinScreen() {
   );
 }
 
-/** Step 1: the PIN they have now, whatever its length. */
+/** Step 1: the PIN they have now. */
 function CurrentPinStep({
   pin,
   wrong,
@@ -128,7 +120,7 @@ function CurrentPinStep({
 }) {
   usePhysicalKeys(onDigit, onBackspace);
 
-  const ready = pin.length >= STUDENT_PIN_MIN;
+  const ready = pin.length === STUDENT_PIN_LENGTH;
 
   return (
     <PinFrame onBack={onBack}>
@@ -140,7 +132,7 @@ function CurrentPinStep({
           offset={0}
           caretAt={pin.length}
           error={wrong}
-          length={Math.max(STUDENT_PIN_LENGTH, pin.length)}
+          length={STUDENT_PIN_LENGTH}
           className={FRAME_27_ROW}
         />
 

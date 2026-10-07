@@ -49,7 +49,18 @@ const serverSnapshot = () => false;
 /** Children of `body` that are not content and must not be touched. */
 const NOT_CONTENT = new Set(["SCRIPT", "STYLE", "LINK", "TEMPLATE", "NEXT-ROUTE-ANNOUNCER"]);
 
-export function RotateLock({ children }: { children: React.ReactNode }) {
+export function RotateLock({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  /**
+   * For the wrapper `inert` sits on. The sign-in doors pass `contents`, so
+   * the wrapper draws no box and their screens stay the auth layout's own
+   * flex children.
+   */
+  className?: string;
+}) {
   const sideways = useSyncExternalStore(
     subscribe,
     clientSnapshot,
@@ -124,7 +135,7 @@ export function RotateLock({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <div ref={app} inert={holding}>
+      <div ref={app} inert={holding} className={className}>
         {children}
       </div>
       {/*

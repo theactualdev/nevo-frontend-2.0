@@ -369,7 +369,6 @@ describe("where a match goes", () => {
 
   it.each([
     ["pending", { consentState: "pending" }],
-    ["withdrawn", { consentState: "withdrawn" }],
     [
       "pending, with a disputed date of birth too",
       { consentState: "pending", ageCheckPending: true },
@@ -390,10 +389,31 @@ describe("where a match goes", () => {
     expect(getOnboardingDraft()).toEqual({});
   });
 
-  it("holds a child whose date of birth is in dispute, in place, with backend's words", async () => {
+  it("holds a child whose consent was withdrawn on 00e, in place, never 00d (D117)", async () => {
+    // 00e: "it was there and is gone, so 'soon' would be a lie".
+    lookup.mockResolvedValue(
+      matched({ consentState: "withdrawn", ageCheckPending: true }),
+    );
+    render(<StudentEntryStep framing="school" />);
+
+    await enterAndSubmit();
+    await afterTheBeat();
+
+    expect(
+      screen.getByRole("heading", {
+        name: "Nevo isn't available to you at the moment",
+      }),
+    ).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/soon|consent|parent/i);
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
+    expect(push).not.toHaveBeenCalled();
+    expect(getOnboardingDraft()).toEqual({});
+  });
+
+  it("holds a child whose date of birth is in dispute, in place, with the Entry frame's hold (D121)", async () => {
     // B64: the school and the parent disagree, the child cannot start and can
-    // do nothing about it. Told to come back, never what or why - and not
-    // sent to 00d, whose "It will be soon" is a promise about consent.
+    // do nothing about it. Never told what or why - and not sent to 00d,
+    // whose "It will be soon" is a promise about consent.
     lookup.mockResolvedValue(matched({ ageCheckPending: true }));
     render(<StudentEntryStep framing="school" />);
 
@@ -402,10 +422,12 @@ describe("where a match goes", () => {
 
     expect(
       screen.getByRole("heading", {
-        name: "Nevo is checking something with your school",
+        name: "Nevo is sorting something out with your school",
       }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Come back in a day or two.")).toBeInTheDocument();
+    expect(
+      screen.getByText("It's nothing you did, and there's nothing for you to fix."),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("heading", {
         name: "Nevo isn't quite ready for you yet",
@@ -427,7 +449,7 @@ describe("where a match goes", () => {
 
     expect(
       screen.getByRole("heading", {
-        name: "Nevo is checking something with your school",
+        name: "Nevo is sorting something out with your school",
       }),
     ).toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();

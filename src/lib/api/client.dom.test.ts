@@ -383,7 +383,7 @@ describe("a crash report", () => {
 });
 
 /**
- * B7: a withdrawn child's 403 `consent_withdrawn` goes to the held screen,
+ * B7: a withdrawn child's 403 `consent_withdrawn` goes to 00e (D117),
  * through the same once-only latch as the session doors. Where it goes is
  * `withdrawnDoor`'s, tested on its own; what can be observed here is that the
  * client acts on it - a later 401 finds the latch already taken - and that the

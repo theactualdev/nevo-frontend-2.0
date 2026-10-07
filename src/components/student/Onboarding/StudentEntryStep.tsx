@@ -9,6 +9,7 @@ import {
   NevoKeyboard,
   useNevoKeyboardDock,
 } from "@/components/shared";
+import { ConsentWithdrawn } from "@/components/student/Entry/ConsentWithdrawn";
 import {
   WaitingOnConsent,
   type WaitingHold,
@@ -117,7 +118,7 @@ function answeredAboutThePair(err: unknown): boolean {
  * the cells.
  *
  * ON A MATCH it shows the frame's "Found you" beat, then routes on the child's
- * state, decided in one place (`entryRoute`): held at 00d or at the age check,
+ * state, decided in one place (`entryRoute`): held at 00d, 00e or the age check,
  * sent to sign back in, or on into the first run. A held child is held HERE,
  * in place: they have no session, so `/student/waiting` would bounce them to
  * the PIN door, and the address they are on says nothing about why.
@@ -141,8 +142,11 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
    * never be told to re-check what they typed because our request failed.
    */
   const [trouble, setTrouble] = useState(false);
-  /** Matched, and held - by consent, or by the age check - drawn in place. */
-  const [held, setHeld] = useState<WaitingHold | null>(null);
+  /**
+   * Matched, and held - by consent that has not come, by consent that has
+   * gone (00e, D117), or by the age check - drawn in place.
+   */
+  const [held, setHeld] = useState<WaitingHold | "withdrawn" | null>(null);
 
   const cellRefs = useRef<(HTMLInputElement | null)[]>([]);
   const idRef = useRef<HTMLInputElement>(null);
@@ -240,6 +244,10 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
         clearOnboardingDraft();
         setHeld("consent");
         return;
+      case "withdrawn":
+        clearOnboardingDraft();
+        setHeld("withdrawn");
+        return;
       case "age-check":
         clearOnboardingDraft();
         setHeld("age-check");
@@ -294,6 +302,7 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
     else if (at !== null) backspaceCell(at);
   };
 
+  if (held === "withdrawn") return <ConsentWithdrawn />;
   if (held) return <WaitingOnConsent hold={held} />;
 
   const { heading, sub } = FRAMING[framing];

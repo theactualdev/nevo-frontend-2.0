@@ -191,3 +191,31 @@ describe("PinCreationScreen — the number pad (ruling D)", () => {
     expect(storePin).toHaveBeenCalledWith("1234");
   });
 });
+
+/**
+ * D115, "the returning-child opening line on PIN creation": 15's "New PIN
+ * after a clear" (`Nevo PIN Frame`, `reset`). "Same screen and components;
+ * only the opening line changes, so it reads as choosing a new PIN rather
+ * than starting again." The routing to it waits on backend (B67).
+ */
+describe("PinCreationScreen - a new PIN after a clear (D115)", () => {
+  it("opens on Choose a new PIN, with everything else as on a first PIN", () => {
+    render(<PinCreationScreen reset storePin={storePin} onComplete={() => {}} />);
+
+    expect(
+      screen.getByRole("heading", { name: "Choose a new PIN" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Create a PIN" })).toBeNull();
+    expect(
+      screen.getByText("You'll use this to log in next time"),
+    ).toBeInTheDocument();
+  });
+
+  it("says Create a PIN on a first PIN", () => {
+    render(<PinCreationScreen storePin={storePin} onComplete={() => {}} />);
+
+    expect(
+      screen.getByRole("heading", { name: "Create a PIN" }),
+    ).toBeInTheDocument();
+  });
+});

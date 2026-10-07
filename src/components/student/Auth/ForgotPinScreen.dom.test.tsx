@@ -10,7 +10,18 @@ import { rememberProfile } from "@/lib/auth/session";
  * The way back used to read the legacy one-child profile key, and a device it
  * did not name was sent to `/student/onboarding` - the new-account Welcome,
  * which on a shared tablet is how a returning child makes a second account.
+ *
+ * D123, 6 Oct: a device that remembers nobody goes to the entry screen, "not
+ * the picker. A device that remembers nobody cannot offer a child to pick, so
+ * it asks who they are."
  */
+
+const rememberAda = () =>
+  rememberProfile({
+    schoolCode: "NEVO-1",
+    loginIdentifier: "ada.o",
+    initials: "AO",
+  });
 
 const page = async (next?: string) =>
   render(
@@ -25,7 +36,22 @@ afterEach(() => {
 });
 
 describe("Forgot PIN", () => {
-  it("goes back to the sign-in door, never onboarding, when the device remembers nobody", async () => {
+  it("goes to the entry screen, not the picker, when the device remembers nobody (D123)", async () => {
+    await page("/student/lessons/frac-3");
+
+    expect(screen.getByRole("link", { name: "Back" })).toHaveAttribute(
+      "href",
+      "/student/onboarding/school",
+    );
+    expect(
+      screen.getByRole("link", { name: "Back to sign in" }),
+    ).toHaveAttribute("href", "/student/onboarding/school");
+    // The entry lookup, never the new-account Welcome.
+    expect(document.body.innerHTML).not.toContain('href="/student/onboarding"');
+  });
+
+  it("goes back to the picker when it does remember someone", async () => {
+    rememberAda();
     await page();
 
     expect(screen.getByRole("link", { name: "Back" })).toHaveAttribute(
@@ -35,23 +61,10 @@ describe("Forgot PIN", () => {
     expect(
       screen.getByRole("link", { name: "Back to sign in" }),
     ).toHaveAttribute("href", "/auth/login");
-    expect(document.body.innerHTML).not.toContain("onboarding");
-  });
-
-  it("goes to the same door when it does remember someone", async () => {
-    rememberProfile({
-      schoolCode: "NEVO-1",
-      loginIdentifier: "ada.o",
-      initials: "AO",
-    });
-    await page();
-
-    expect(
-      screen.getByRole("link", { name: "Back to sign in" }),
-    ).toHaveAttribute("href", "/auth/login");
   });
 
   it("keeps where the child was going", async () => {
+    rememberAda();
     await page("/student/lessons/frac-3");
 
     expect(screen.getByRole("link", { name: "Back" })).toHaveAttribute(

@@ -13,55 +13,31 @@ import type { TrackEvent } from "@/hooks";
  * hold is bracketed as `system_busy` (transition_screen, SCRUM-94 fix 9) so
  * the stillness never reads as hesitation.
  *
- * `deviceRemembered` IS NOT DECORATION. A child can end onboarding with a real
- * account and no school code or no server-issued identifier on this device -
- * an invite-link child did, because the join endpoints returned a
- * `schoolName` and never a code - and then `rememberOnboardedStudent`
- * correctly refuses to remember them, because a remembered profile the server
- * cannot authenticate is worse than none.
- *
- * That refusal used to be silent. The caller discarded the result and this
- * screen said "You're all set" to a child who, tomorrow, would open Nevo on the
- * same tablet and find it had never heard of them — with no school code to sign
- * back in with, and nobody having told them or their teacher.
- *
- * So when the device could not be remembered, the screen says so, and says the
- * one thing that is actually true and actionable: a teacher can get them back
- * in. Since the entry screen (SCRUM-208) every child types their school code
- * before the baseline, so this line is for when the PIN step hands back no
- * identifier, or a run did not start on that screen.
- *
- * NOTE FOR DESIGN: the second line is ours, not from a frame. If you would
- * rather it read differently, or sit somewhere other than under the celebration,
- * it is a one-line change.
+ * NO LINE ABOUT SIGNING IN NEXT TIME (D71). It said "Next time you open Nevo,
+ * ask your teacher to help you sign in." when the device could not remember
+ * the child. Design dropped it: "You're In is a passive moment of success, and
+ * a line about asking for help implies something has gone wrong at the exact
+ * moment nothing has." If the device cannot remember them, that matters at
+ * the next sign-in, not this one.
  */
 export function YoureInScreen({
   onDone,
   holdMs = 2400,
   track,
-  deviceRemembered = true,
 }: {
   onDone: () => void;
   holdMs?: number;
   track?: TrackEvent;
-  /** False when this device cannot sign the child back in on its own. */
-  deviceRemembered?: boolean;
 }) {
   const onDoneRef = useRef(onDone);
   useEffect(() => {
     onDoneRef.current = onDone;
   }, [onDone]);
 
-  /*
-   * A second line needs longer than the celebration alone. 2400ms is paced for
-   * six words; a child reading that their teacher has to help them next time
-   * gets the time to read it, which for a SEND learner is not a rounding error.
-   */
-  const hold = deviceRemembered ? holdMs : holdMs + 2600;
   useEffect(() => {
-    const t = setTimeout(() => onDoneRef.current(), hold);
+    const t = setTimeout(() => onDoneRef.current(), holdMs);
     return () => clearTimeout(t);
-  }, [hold]);
+  }, [holdMs]);
 
   useEffect(() => {
     return openBusyWindow(track, BUSY_REASON.TRANSITION_SCREEN);
@@ -87,12 +63,6 @@ export function YoureInScreen({
       <p className="mt-4 max-w-[280px] text-center text-[19px] font-medium leading-[1.45] tracking-[-0.01em] text-balance sm:max-w-[360px] sm:text-[21px] lg:max-w-[380px] motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:delay-200 motion-safe:duration-500">
         You&rsquo;re all set. Let&rsquo;s start learning
       </p>
-
-      {!deviceRemembered && (
-        <p className="mt-4 max-w-[300px] text-center text-[15px] leading-[1.55] text-nevo-near-black/70 text-pretty sm:max-w-[360px]">
-          Next time you open Nevo, ask your teacher to help you sign in.
-        </p>
-      )}
     </div>
   );
 }

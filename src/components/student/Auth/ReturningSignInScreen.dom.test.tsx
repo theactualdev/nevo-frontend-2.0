@@ -99,7 +99,7 @@ function fill({ school = "751A1136", user = "amara.k" } = {}) {
   fireEvent.change(userField, { target: { value: user } });
   // The pad is focus-driven now (ruling D): tap the boxes, then the keys.
   act(() => pinInput().focus());
-  for (const d of ["1", "2", "3", "4", "5", "6"]) {
+  for (const d of ["1", "2", "3", "4"]) {
     fireEvent.click(screen.getByRole("button", { name: d }));
   }
 }
@@ -153,7 +153,7 @@ describe("ReturningSignInScreen — signing back in", () => {
     expect(loginPin).toHaveBeenCalledWith({
       schoolCode: "751A1136",
       admissionNumber: "amara.k",
-      pin: "123456",
+      pin: "1234",
     });
   });
 
@@ -249,6 +249,49 @@ describe("ReturningSignInScreen — signing back in", () => {
     expect(push).not.toHaveBeenCalledWith("/student/lessons/frac-3");
   });
 
+  it("holds a child whose consent was withdrawn on 00e, not 00d (D117)", async () => {
+    loginPin.mockResolvedValue(SESSION);
+    myConsentGate.mockResolvedValue({
+      studentId: "student-1",
+      granted: false,
+      blocked: true,
+      requiredType: "data_processing",
+      status: "withdrawn",
+    });
+    render(<ReturningSignInScreen next="/student/lessons/frac-3" />);
+    fill();
+
+    await signInNow();
+
+    expect(push).toHaveBeenCalledWith("/student/unavailable");
+    expect(push).not.toHaveBeenCalledWith("/student/waiting");
+    expect(screen.queryByText(/Taking you to your lessons/)).toBeNull();
+  });
+
+  it("holds a child whose consent could not be read, rather than letting them in (D69)", async () => {
+    /*
+     * "A check that cannot complete must not leave the door open. If the
+     * consent lookup or the account creation fails, the child does not
+     * proceed. Today they do." This door used to go on to the lesson.
+     */
+    loginPin.mockResolvedValue(SESSION);
+    myConsentGate.mockRejectedValue(new ApiError(503, "Service Unavailable"));
+    render(<ReturningSignInScreen next="/student/lessons/frac-3" />);
+    fill();
+
+    await signInNow();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+
+    expect(push).toHaveBeenCalledWith(
+      "/student/unchecked?next=%2Fstudent%2Flessons%2Ffrac-3",
+    );
+    expect(push).not.toHaveBeenCalledWith("/student/lessons/frac-3");
+    // Straight there: "Taking you to your lessons" would not be true.
+    expect(screen.queryByText(/Taking you to your lessons/)).toBeNull();
+  });
+
   it("signs them in before it asks, so a held child is still signed in", async () => {
     // Being held is not a failed sign-in. They proved who they are; the
     // answer to "may they start" is a different question, and the session has
@@ -315,19 +358,21 @@ describe("ReturningSignInScreen — when it does not work", () => {
     );
   });
 
-  it("tells a removed child their account is closed, not on pause and not a wrong PIN (D53)", async () => {
+  it("tells a removed child their account is closed on 28d, not on pause and not a wrong PIN (D53, D116)", async () => {
     loginPin.mockRejectedValue(refusal("account_closed"));
     render(<ReturningSignInScreen />);
     fill();
 
     await signInNow();
 
-    expect(screen.getByText(/Your Nevo account is closed/)).toBeVisible();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Your account is closed" }),
+    ).toBeVisible();
     expect(screen.queryByText(/on pause|didn't match/)).toBeNull();
-    expect(screen.getByRole("link", { name: "Back to sign in" })).toHaveAttribute(
-      "href",
-      "/auth/login",
-    );
+    // 28d is terminal: "no sign-in route, because offering a way back in
+    // would be cruel."
+    expect(screen.queryAllByRole("link")).toHaveLength(0);
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
   });
 
   it("does not remember a device it failed to sign into", async () => {
@@ -628,36 +673,38 @@ describe("signing in on a device with a real keyboard", () => {
     expect(filledBoxes()).toBe(0);
   });
 
-  it("stops at the longest PIN the server takes, exactly as the pad does", () => {
-    // The pad and the keyboard now share one appender, so they cannot disagree
-    // about the cap - which is the reason to share it.
+  it("stops at four, exactly as the pad does (D58)", async () => {
+    // "Four digits, four boxes." This took up to eight, for a PIN that might
+    // be six from before 25 Sep; five to eight were only ever a 422. The pad
+    // and the keyboard share one appender, so they cannot disagree.
+    loginPin.mockResolvedValue(SESSION);
     render(<ReturningSignInScreen />);
+    const [schoolField, userField] = screen.getAllByRole("textbox");
+    fireEvent.change(schoolField, { target: { value: "751A1136" } });
+    fireEvent.change(userField, { target: { value: "amara.k" } });
     for (const d of "1234567890") {
       fireEvent.change(pinField(), { target: { value: d } });
     }
 
-    expect(filledBoxes()).toBe(8);
+    expect(filledBoxes()).toBe(4);
+    await signInNow();
+    expect(loginPin).toHaveBeenCalledWith(
+      expect.objectContaining({ pin: "1234" }),
+    );
   });
 
-  it("takes a six-digit PIN whole, and remembers it was six", async () => {
-    /*
-     * THE REASON THIS FORM IS NOT CAPPED AT FOUR. Every PIN issued before
-     * 25 Sep is six, and so is every adult's reset. A cap at the length a new
-     * PIN is created at would send "1234" for a child whose PIN is "123456" -
-     * the exact lockout the seeded demo account hit on 31 Aug.
-     *
-     * And the length is remembered, because tomorrow's one-tap unlock submits
-     * when its boxes fill and has to know how many to draw.
-     */
+  it("sends four digits, and remembers no length for tomorrow's unlock", async () => {
+    // "The length arrives with the PIN rather than being remembered by the
+    // device" (D58): the unlock draws four whatever this device was told.
     loginPin.mockResolvedValue(SESSION);
     render(<ReturningSignInScreen />);
     fill();
     await signInNow();
 
     expect(loginPin).toHaveBeenCalledWith(
-      expect.objectContaining({ pin: "123456" }),
+      expect.objectContaining({ pin: "1234" }),
     );
-    expect(getRememberedProfile()?.pinLength).toBe(6);
+    expect(getRememberedProfile()?.pinLength).toBeUndefined();
   });
 
   it("will not sign in with fewer than four digits", () => {
@@ -678,7 +725,7 @@ describe("signing in on a device with a real keyboard", () => {
     fireEvent.change(schoolField, { target: { value: "751A1136" } });
     fireEvent.change(userField, { target: { value: "amara.k" } });
 
-    for (const d of ["1", "2", "3", "4", "5", "6"]) {
+    for (const d of ["1", "2", "3", "4"]) {
       fireEvent.change(pinField(), { target: { value: d } });
     }
 
@@ -864,7 +911,7 @@ describe("the moment after signing back in", () => {
     await signInNow();
 
     expect(screen.getByText(/Taking you to your lessons/)).toBeVisible();
-    expect(screen.queryByText(/signed in on another tablet/)).toBeNull();
+    expect(screen.queryByText(/signed in on another device/)).toBeNull();
   });
 });
 
@@ -872,9 +919,9 @@ describe("the moment after signing back in", () => {
  * D59: board 28's "Signed in here, other tablet released" - its own screen,
  * waiting on Continue, where it was a line on the beat that moves on alone.
  */
-describe("a sign-in that ended a session on another tablet", () => {
+describe("a sign-in that ended a session on another device", () => {
   const RELEASED =
-    "You were signed in on another tablet, so that one signed out.";
+    "You were signed in on another device, so that one signed out.";
 
   it("says so on its own screen, and goes nowhere until Continue", async () => {
     loginPin.mockResolvedValue({ ...SESSION, replacedSession: true });

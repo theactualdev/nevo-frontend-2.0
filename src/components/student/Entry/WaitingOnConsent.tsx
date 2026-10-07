@@ -25,13 +25,14 @@ export type WaitingHold = "consent" | "age-check";
 /**
  * 00d's words, and the age check's.
  *
- * THE AGE CHECK'S ARE BACKEND'S, NOT DESIGN'S. The school and the parent
- * disagree about the child's date of birth, the child can do nothing about
- * it, and backend (B64) asked that the screen say Nevo is checking something
- * with their school and to come back in a day or two. No frame draws it, and
- * design ruled on 23 Sep that the age check takes 00d's own words, so this is
- * backend's sentence on 00d's layout until design rules again. Like 00d, it
- * never says what is being checked and never asks the child to sort it out.
+ * THE AGE CHECK'S ARE THE ENTRY FRAME'S "ON HOLD" STATE (D121, drawn 6 Oct):
+ * "the child is identified, but something on their record has to be settled
+ * with the school before they go on ... a calm hold with no button, because
+ * nothing a child can do moves it along, and no timeframe, because nobody
+ * controls one. It never names age, dates, records, checks or verification,
+ * never blames the school". It replaced backend's stand-in, "Nevo is
+ * checking something with your school" and "Come back in a day or two", which
+ * named a check and promised a timeframe.
  */
 export const WAITING_COPY: Record<
   WaitingHold,
@@ -42,8 +43,8 @@ export const WAITING_COPY: Record<
     line: "It will be soon.",
   },
   "age-check": {
-    heading: "Nevo is checking something with your school",
-    line: "Come back in a day or two.",
+    heading: "Nevo is sorting something out with your school",
+    line: "It's nothing you did, and there's nothing for you to fix.",
   },
 };
 
@@ -81,13 +82,14 @@ export function WaitingOnConsent({
         */}
         <span
           aria-hidden="true"
-          className="mb-[34px] block h-23 w-23 rounded-full bg-nevo-violet/28 motion-safe:animate-nevo-breathe"
+          className="mb-[30px] block size-[76px] rounded-full bg-nevo-violet/28 motion-safe:animate-nevo-breathe sm:mb-[34px] sm:size-23"
         />
 
-        <h1 className="m-0 max-w-[440px] text-[27px] leading-[1.3] font-medium tracking-[-0.01em] text-nevo-near-black">
+        {/* 00d and the hold draw the phone a size down: 76px, 23px, 16px. */}
+        <h1 className="m-0 max-w-[300px] text-[23px] leading-[1.3] font-medium tracking-[-0.01em] text-nevo-near-black sm:max-w-[440px] sm:text-[27px]">
           {heading}
         </h1>
-        <p className="mt-[18px] max-w-[420px] text-[17px] leading-[1.6] text-nevo-near-black/70">
+        <p className="mt-[18px] max-w-[280px] text-base leading-[1.6] text-nevo-near-black/70 sm:max-w-[420px] sm:text-[17px]">
           {line}
         </p>
       </div>
