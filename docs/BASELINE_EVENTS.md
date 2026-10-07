@@ -31,7 +31,7 @@ timing anchors or stays on the device.
 | Event | `dimension` | `condition` | `response` | `correct` | `responseTimeMs` |
 |---|---|---|---|---|---|
 | `tap`, a tile (Module 1, warm-up `wmc`) | `wmc` | `length_N` | the cell | whether it was the right tile | from the grid being handed over, or from the previous right tap of the same recall |
-| `check_answer`, the SS dual task | `wmc` | `dual_check` | `"true"` / `"false"` | whether the answer was right | from the check appearing |
+| `check_answer`, the SS dual task (Module 1, and the SS warm-up's tile round) | `wmc` | `dual_check` | `"true"` / `"false"` | whether the answer was right | from the check appearing |
 | `trial_pick` (Modules 2-4, warm-up) | from the `act`: `pattern` is `ps`, `flanker` `attention`, `reading` `reading`, `dots` `ans`, `probe` `domain`; the warm-up's acts are already dimensions | `congruency`, `pair`, `ratio_N`, the reading `mode`, or the probe's `subject` | the choice's index, or a served option's `value`; `not_sure` for a decline | where the activity holds the answer, else `null` | from the moment the child could answer (the dot mask, the end of a heard sentence) |
 | `motor_tap`, the motor-speed step | `motor_speed` | `practice`, or `null` | the target | `null` | the latency the step measured |
 

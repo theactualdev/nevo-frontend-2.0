@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Play } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { dotPairs, type AgeBand } from "@/lib/profiling/bands";
+import { dotPairs, type AgeBand, type DotPair } from "@/lib/profiling/bands";
 import type { BaselineCapture } from "@/lib/profiling/capture";
 import { AvatarBubble, ProfilingShell } from "./ProfilingShell";
 import { SettleBadge } from "./GridSpanModule";
@@ -90,17 +90,21 @@ export type WarmUpReading =
       question: string;
       options: string[];
       answer: string;
-    };
+    }
+  | { mode: "audio"; sentence: string; answer: string };
 
 /**
  * The daily warm-up's reading round for a band: this module's own first item
  * for that band, stripped to one round (D17, 1 Oct - the warm-up "reuses the
  * profiling activity, stripped to a single round").
  *
- * Null for P1-3, whose reading is heard rather than read; a heard round is
- * not built into the warm-up, which keeps its frame's one sentence there.
+ * P1-3 HEARS ITS SENTENCE, AS IN THE BASELINE (D81, 6 Oct). This returned
+ * nothing for P1-3, and the warm-up showed that band a written sentence to
+ * read - "a defect against the architecture", which defines the band as
+ * audio-led with no reading, and a warm-up that measures a different
+ * construct from the baseline cannot recalibrate it.
  */
-export function warmUpReading(band: AgeBand): WarmUpReading | null {
+export function warmUpReading(band: AgeBand): WarmUpReading {
   if (band === "ss") {
     return {
       mode: "passage",
@@ -110,8 +114,23 @@ export function warmUpReading(band: AgeBand): WarmUpReading | null {
       answer: PASSAGE_OPTIONS[PASSAGE_ANSWER],
     };
   }
-  const first = SENTENCES[band]?.[0];
-  return first ? { mode: "sentence", ...first } : null;
+  if (band === "p13") return { mode: "audio", ...AUDIO_TRIALS[0] };
+  return { mode: "sentence", ...(SENTENCES[band] ?? SENTENCES.p46)[0] };
+}
+
+/**
+ * The daily warm-up's dot round for a band: this module's first dot trial,
+ * shown for the band's own display time in the band's own dot size (D81, 6
+ * Oct). The warm-up ran one 9:6 pair for every child for 850ms - the
+ * playable prototype's display time - in 16px dots.
+ */
+export function warmUpDots(band: AgeBand): {
+  pair: DotPair;
+  revealMs: number;
+  dot: string;
+} {
+  const { revealMs, dot } = DOTS[band] ?? DOTS.p46;
+  return { pair: dotPairs(band)[0], revealMs, dot };
 }
 
 /**
@@ -168,8 +187,10 @@ let speaking: SpeechSynthesisUtterance | null = null;
  *
  * NOTE: no voice is chosen, so what the child hears is whichever voice the
  * device has. Which voice (or a recorded asset per sentence) is with design.
+ *
+ * Shared with the daily warm-up's heard round (D81), so both say it alike.
  */
-function speak(sentence: string, onEnd?: () => void): void {
+export function speak(sentence: string, onEnd?: () => void): void {
   if (!hasSpeech()) return;
   const utterance = new SpeechSynthesisUtterance(sentence);
   utterance.rate = 0.85;
@@ -186,7 +207,7 @@ function speak(sentence: string, onEnd?: () => void): void {
  * capability has gone - and a component tearing down is the worst possible
  * moment to throw, since nothing downstream is left to catch it.
  */
-function stopSpeaking(): void {
+export function stopSpeaking(): void {
   if (!hasSpeech()) return;
   speaking = null;
   window.speechSynthesis.cancel();
@@ -196,8 +217,95 @@ function stopSpeaking(): void {
 const SHRUG =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 4 1.8c0 1.6-2 2-2 3.1"/><circle cx="11.5" cy="16.8" r="0.6" fill="currentColor"/></svg>';
 
-function hasSpeech(): boolean {
+export function hasSpeech(): boolean {
   return typeof window !== "undefined" && "speechSynthesis" in window;
+}
+
+/**
+ * The heard activity's controls: the play button, the three pictures, and the
+ * frame's "I don't know". Shared by this module and the daily warm-up's P1-3
+ * reading round (D81), so a child meets the same activity in both.
+ *
+ * `onPick` gets the control's index (the pictures, then "I don't know" after
+ * them) and what the pick means: right or not against the heard sentence's
+ * `answer`, or declined.
+ */
+export function HeardPictures({
+  answer,
+  picked,
+  onReplay,
+  onPick,
+}: {
+  /** The key of the picture that matches the sentence being heard. */
+  answer: string;
+  /** The index already picked, or -1. */
+  picked: number;
+  onReplay: () => void;
+  onPick: (
+    index: number,
+    detail: { correct: boolean } | { notSure: true },
+    e: React.MouseEvent,
+  ) => void;
+}) {
+  return (
+    <div className="flex w-full max-w-[560px] flex-col items-center gap-8">
+      <button
+        type="button"
+        aria-label="Play the sentence again"
+        onClick={onReplay}
+        className="flex size-[64px] cursor-pointer items-center justify-center rounded-full bg-nevo-navy text-nevo-cream transition-transform active:scale-[0.96]"
+      >
+        <Play className="ml-1 size-6" fill="currentColor" strokeWidth={0} />
+      </button>
+      <div className="flex w-full flex-col items-center gap-3.5 sm:flex-row sm:justify-center sm:gap-4">
+        {AUDIO_PICS.map((p, i) => (
+          <button
+            key={p.key}
+            type="button"
+            aria-label={p.label}
+            onClick={(e) => onPick(i, { correct: p.key === answer }, e)}
+            className={cn(
+              "flex h-[120px] w-full cursor-pointer items-center justify-center rounded-[12px] bg-nevo-cream transition-transform active:scale-[0.97] sm:size-[160px]",
+              picked === i
+                ? "border-[3px] border-nevo-navy"
+                : "border-2 border-nevo-navy",
+            )}
+          >
+            <div
+              className="size-[76px] text-nevo-navy sm:size-[96px]"
+              dangerouslySetInnerHTML={{ __html: p.svg }}
+            />
+          </button>
+        ))}
+      </div>
+      {/*
+        The listening task's honest non-answer, which it did not have:
+        a child who missed the sentence had to guess between pictures,
+        and the guess was filed as their reading measure. The sentence
+        and passage tasks always offered "Not sure"; this is the
+        frame's own control for the audio form, words and mark
+        (`Nevo Sentence Verify Frame` :45, `idkStyle`). Recorded the
+        same way - declined, never wrong.
+      */}
+      <button
+        type="button"
+        onClick={(e) => onPick(AUDIO_PICS.length, { notSure: true }, e)}
+        className={cn(
+          "flex h-14 w-full cursor-pointer items-center justify-center gap-2 rounded-[10px] border-2 border-nevo-violet text-sm font-medium transition-[background-color,transform] active:scale-[0.97] sm:w-[220px]",
+          picked === AUDIO_PICS.length
+            ? "bg-nevo-violet text-nevo-near-black"
+            : "bg-nevo-cream text-nevo-violet",
+        )}
+      >
+        <span
+          aria-hidden
+          className="size-[22px] shrink-0"
+          dangerouslySetInnerHTML={{ __html: SHRUG }}
+        />
+        I don&apos;t know
+      </button>
+    </div>
+  );
 }
 
 /** Deterministic scatter so re-renders never reshuffle a shown array. */
@@ -339,74 +447,15 @@ export function SentenceDotModule({
           <SettleBadge />
         ) : act === "reading" ? (
           mode === "audio" ? (
-            <div className="flex w-full max-w-[560px] flex-col items-center gap-8">
-              <button
-                type="button"
-                aria-label="Play the sentence again"
-                onClick={() => {
-                  capture?.record("replay", { module: "sentence_dot", trial });
-                  speak(heard.sentence, open);
-                }}
-                className="flex size-[64px] cursor-pointer items-center justify-center rounded-full bg-nevo-navy text-nevo-cream transition-transform active:scale-[0.96]"
-              >
-                <Play
-                  className="ml-1 size-6"
-                  fill="currentColor"
-                  strokeWidth={0}
-                />
-              </button>
-              <div className="flex w-full flex-col items-center gap-3.5 sm:flex-row sm:justify-center sm:gap-4">
-                {AUDIO_PICS.map((p, i) => (
-                  <button
-                    key={p.key}
-                    type="button"
-                    aria-label={p.label}
-                    onClick={(e) =>
-                      pick(i, { mode, correct: p.key === heard.answer }, e)
-                    }
-                    className={cn(
-                      "flex h-[120px] w-full cursor-pointer items-center justify-center rounded-[12px] bg-nevo-cream transition-transform active:scale-[0.97] sm:size-[160px]",
-                      picked === i
-                        ? "border-[3px] border-nevo-navy"
-                        : "border-2 border-nevo-navy",
-                    )}
-                  >
-                    <div
-                      className="size-[76px] text-nevo-navy sm:size-[96px]"
-                      dangerouslySetInnerHTML={{ __html: p.svg }}
-                    />
-                  </button>
-                ))}
-              </div>
-              {/*
-                The listening task's honest non-answer, which it did not have:
-                a child who missed the sentence had to guess between pictures,
-                and the guess was filed as their reading measure. The sentence
-                and passage tasks always offered "Not sure"; this is the
-                frame's own control for the audio form, words and mark
-                (`Nevo Sentence Verify Frame` :45, `idkStyle`). Recorded the
-                same way - declined, never wrong.
-              */}
-              <button
-                type="button"
-                onClick={(e) =>
-                  pick(AUDIO_PICS.length, { mode, notSure: true }, e)
-                }
-                className={cn(
-                  "flex h-14 w-full cursor-pointer items-center justify-center gap-2 rounded-[10px] border-2 border-nevo-violet text-sm font-medium transition-[background-color,transform] active:scale-[0.97] sm:w-[220px]",
-                  picked === AUDIO_PICS.length
-                    ? "bg-nevo-violet text-nevo-near-black"
-                    : "bg-nevo-cream text-nevo-violet",
-                )}
-              >
-                <span
-                  aria-hidden
-                  className="size-[22px] shrink-0"
-                  dangerouslySetInnerHTML={{ __html: SHRUG }}
-                />
-                I don&apos;t know
-              </button>
-            </div>
+            <HeardPictures
+              answer={heard.answer}
+              picked={picked}
+              onReplay={() => {
+                capture?.record("replay", { module: "sentence_dot", trial });
+                speak(heard.sentence, open);
+              }}
+              onPick={(i, detail, e) => pick(i, { mode, ...detail }, e)}
+            />
           ) : mode === "passage" ? (
             <div className="flex w-full max-w-[600px] flex-col gap-4">
               <div className="rounded-[12px] border-2 border-nevo-navy bg-nevo-cream px-[18px] py-4 text-[15px] leading-[1.6] text-pretty text-nevo-near-black">

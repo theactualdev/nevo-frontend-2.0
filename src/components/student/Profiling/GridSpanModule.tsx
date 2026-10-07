@@ -53,13 +53,20 @@ const MAX_RETRIES = 3;
  *
  * Never SHOWN to the child, which is what the frames mean by no marking: no
  * tick, no red, no feedback of any kind.
+ *
+ * The daily warm-up's SS tile round runs the same checks (D81, 6 Oct): "A
+ * warm-up that measures a different construct from the baseline cannot
+ * recalibrate it", and the SS baseline is a complex span because of them.
  */
-const DUAL_CHECKS: { text: string; isTrue: boolean }[] = [
+export const DUAL_CHECKS: { text: string; isTrue: boolean }[] = [
   { text: "7 + 5 = 13", isTrue: false },
   { text: "9 - 4 = 5", isTrue: true },
   { text: "6 + 6 = 12", isTrue: true },
   { text: "8 - 3 = 4", isTrue: false },
 ];
+
+/** What a child is asked while a check is up, here and in the warm-up. */
+export const DUAL_CHECK_PROMPT = "Is this true or false?";
 
 type Step = "watching" | "check" | "input" | "wrong" | "between" | "settling";
 
@@ -272,7 +279,7 @@ export function GridSpanModule({
   const bubbleText = settling
     ? ""
     : step === "check"
-      ? "Is this true or false?"
+      ? DUAL_CHECK_PROMPT
       : step === "input" || step === "wrong"
         ? "Now tap them in reverse"
         : firstRound
@@ -363,7 +370,8 @@ export function GridSpanModule({
   );
 }
 
-function CheckButton({
+/** A dual-task answer: 48px tall, the floor 09 bumps these to. */
+export function CheckButton({
   label,
   onClick,
 }: {
