@@ -160,6 +160,27 @@ describe("a calculation's signals", () => {
     ]);
   });
 
+  it("tells the engine when the child opens a step's hint", () => {
+    render(<LessonPlayer lesson={lessonWith([step()])} plan={PLAN} />);
+
+    tap("Need a hint?");
+
+    // Shown and acted on, with the concept the payload names.
+    expect(sent("hint_offered")).toEqual([{ segmentId: "calc-1", conceptId: "c-1" }]);
+    expect(sent("hint_used")).toEqual([{ segmentId: "calc-1", conceptId: "c-1" }]);
+  });
+
+  it("sends no hint event for a miss - the engine decides those", () => {
+    render(<LessonPlayer lesson={lessonWith([step()])} plan={PLAN} />);
+
+    tap("1 and 2");
+    tap("Check my answer");
+    tap("Check my answer");
+
+    expect(sent("hint_offered")).toEqual([]);
+    expect(sent("hint_used")).toEqual([]);
+  });
+
   it("holds the forward chevron until the solution has assembled", () => {
     render(<LessonPlayer lesson={lessonWith([step()])} plan={PLAN} />);
     expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();

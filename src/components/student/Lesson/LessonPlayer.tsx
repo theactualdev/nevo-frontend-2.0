@@ -1075,7 +1075,7 @@ export function LessonPlayer({
    * segment - a return visit or a re-render is not the engine offering it
    * again. `hint_used` (B41) is sent as the child moves on with this hint
    * still on screen - see `advancePastSegment`. The solver's "Need a hint?"
-   * is the hint a child opens, and it is frozen.
+   * is the hint a child opens, and sends its own pair - see `onCalcHint`.
    */
   const hintOnScreen = segmentShowing && hintHere && Boolean(hintText);
   const offeredHints = useRef<Set<string>>(new Set());
@@ -2110,6 +2110,26 @@ export function LessonPlayer({
                   stepId,
                 })
               }
+              onCalcHint={() => {
+                /*
+                 * THE HINT A CHILD OPENS WAS SILENT (audit 44). Opening it is
+                 * both halves of the catalogue's pair: a hint shown "whether
+                 * or not the child asked for one", and one "they had to open"
+                 * acted on. The concept rides along where the payload names
+                 * one; no hint index, which nothing defines.
+                 */
+                const conceptId = segment.calculation?.conceptId;
+                trackEvent(SIGNAL_EVENT_TYPES.HINT_OFFERED, {
+                  segmentId: segment.id,
+                  ...(conceptId ? { conceptId } : {}),
+                });
+                trackEvent(SIGNAL_EVENT_TYPES.HINT_USED, {
+                  segmentId: segment.id,
+                  ...(conceptId ? { conceptId } : {}),
+                });
+                // A right answer to this segment's check is `after_hint` now.
+                hintedSegments.current.add(segment.id);
+              }}
             />
           </div>
           {/* §4 `offer_hint`: the unrequested hint under the content. */}
@@ -2250,6 +2270,7 @@ function SegmentBody({
   onCalcSolved,
   onCalcStep,
   onPiecePlaced,
+  onCalcHint,
 }: {
   segment: LessonSegment;
   modality: Modality;
@@ -2265,6 +2286,8 @@ function SegmentBody({
   onCalcSolved: () => void;
   onCalcStep: (stepId: string, correct: boolean) => void;
   onPiecePlaced: (stepId: string) => void;
+  /** The child opened a calculation step's hint themselves. */
+  onCalcHint: () => void;
 }) {
   if (modality === MODALITY.TEXT && segment.text)
     return (
@@ -2302,6 +2325,7 @@ function SegmentBody({
           onSolved={onCalcSolved}
           onStepAnswered={onCalcStep}
           onPiecePlaced={onPiecePlaced}
+          onHintOpened={onCalcHint}
         />
       );
     if (segment.interactive)
