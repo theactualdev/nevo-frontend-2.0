@@ -25,8 +25,9 @@ import { LessonContext } from "@/context/LessonContext";
  * AND ONLY WHERE THE PLAYER IS NOT TEACHING. IA 31: *"Ask Nevo is never
  * available during active Lesson Player content."* The move above put it over
  * every segment, break and after-lesson question, one tap from a hint while
- * the child's answers were being recorded. The completion screen switches
- * `askNevoAllowed` on - see `LessonComplete`.
+ * the child's answers were being recorded. The completion screen and the
+ * review session's entry (D108) switch `askNevoAllowed` on - see
+ * `LessonComplete` and `ReviewEntryScreen`.
  */
 export function LessonAskNevo() {
   const allowed = useContext(LessonContext)?.askNevoAllowed ?? false;

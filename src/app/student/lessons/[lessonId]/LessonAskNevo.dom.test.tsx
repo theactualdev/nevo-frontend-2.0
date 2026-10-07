@@ -8,10 +8,11 @@ import {
   vi,
 } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { useContext, useEffect } from "react";
+import { useContext, useEffect, useState } from "react";
 import { LessonAskNevo } from "./LessonAskNevo";
 import { LessonContext, LessonProvider } from "@/context/LessonContext";
 import { LessonComplete } from "@/components/student/Lesson/LessonComplete";
+import { ReviewEntryScreen } from "@/components/student/Lesson/ReviewEntryScreen";
 import LessonLayout from "./layout";
 
 /**
@@ -204,6 +205,42 @@ describe("where Ask Nevo belongs", () => {
     mountInsideProvider();
 
     await waitFor(() => expect(launchers().length).toBeGreaterThan(0));
+  });
+
+  it("is present on the review session's entry, and goes when the review begins", async () => {
+    /*
+     * Design D108, 6 Oct: "docked and reachable from anywhere in the student
+     * app". The entry is a landing before the review starts, not lesson
+     * content, so it was wrongly kept off it. Beginning the review is where
+     * IA 31's rule takes over again.
+     */
+    pathname.value = "/student/lessons/les-1/review-session";
+    function ReviewStub() {
+      const [begun, setBegun] = useState(false);
+      return (
+        <>
+          <PlayerStub lessonId={LESSON_ID} />
+          {!begun && (
+            <ReviewEntryScreen
+              lessonTitle="Adding Fractions"
+              onBegin={() => setBegun(true)}
+            />
+          )}
+        </>
+      );
+    }
+    render(
+      <LessonProvider>
+        <ReviewStub />
+        <LessonAskNevo />
+      </LessonProvider>,
+    );
+
+    await waitFor(() => expect(launchers().length).toBeGreaterThan(0));
+
+    fireEvent.click(screen.getByRole("button", { name: "Begin review" }));
+
+    await waitFor(() => expect(launchers()).toEqual([]));
   });
 
   it("leaves the summary to the shell's own launcher", () => {

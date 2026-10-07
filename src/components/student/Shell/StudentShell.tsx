@@ -35,8 +35,8 @@ import { useDisplayName } from "./useDisplayName";
  * mounts it below, on every in-shell screen but Profile - the lesson's
  * `/summary` and `/review` included. On the player the lesson layout renders
  * it instead (`LessonAskNevo`), inside the `LessonProvider` so a question
- * carries its lesson, and only on the completion screen - IA 31 keeps it off
- * the player while it is teaching.
+ * carries its lesson, and only on the completion screen and the review
+ * session's entry (D108) - IA 31 keeps it off the player while it is teaching.
  *
  * NOT on the other full-screen routes, and each for its own reason. The daily
  * warm-up is a calibrated baseline activity - offering help inside it would
