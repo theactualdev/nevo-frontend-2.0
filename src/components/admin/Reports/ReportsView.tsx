@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   analyticsApi,
@@ -28,11 +29,16 @@ import { NoAccess, failureKind } from "../NoAccess";
  * with the growth chart being "Self-Regulation Index, cohort average, week by
  * week" and the headline reading "+8 points since April".
  *
- * None of the four exists anywhere in the API. `GET /api/transformation-metrics`
- * returns VOLUMES - lessons transformed, transformation runs, sessions,
- * adaptations applied and per session - which is how much adapting happened,
- * not how a cohort is growing. There is no index, no month-over-month trend on
- * one, and nothing to put on a week-by-week axis.
+ * `GET /api/transformation-metrics`, which this screen reads, returns VOLUMES -
+ * how much adapting happened, not how a cohort is growing.
+ *
+ * SINCE 7 OCT THREE SCHOOL-WIDE FIGURES EXIST, on their own page under Reports
+ * (D26, `SchoolTransformationView`, linked from the header below) - and under
+ * honest names, because backend computes narrower things than D26's titles:
+ * the share of started lessons finished, the minutes a finished lesson took,
+ * and counts of format changes. Calibration is not measurable at all. None is
+ * a series, so the week-by-week growth chart D20 draws still has nothing to
+ * plot.
  *
  * Inventing an index from the counters would be the worst option available: a
  * proprietor would read a number called Self-Regulation, quote it to a parent
@@ -239,6 +245,13 @@ export function ReportsView() {
           are going, concept by concept. Everything here is school-wide - no
           individual learner appears on this screen.
         </p>
+        {/* D26 lives on its own page under Reports. */}
+        <Link
+          href="/admin/reports/transformation"
+          className="mt-3 inline-block text-[14px] font-semibold text-nevo-navy hover:underline"
+        >
+          School transformation &rarr;
+        </Link>
 
         {phase === "loading" ? (
           <div className={cn(CARD, "mt-7 h-[360px] animate-pulse")} />
