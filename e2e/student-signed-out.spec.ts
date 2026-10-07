@@ -149,7 +149,8 @@ test.describe("the student doors, signed out", () => {
   const ENDINGS: { path: string; heading: string | RegExp; wayOut: string }[] = [
     {
       path: "/auth/session-ended",
-      heading: "You logged in on another device",
+      // Board 28, 6 Oct: the same heading as revoked, with its own body.
+      heading: "Your session has ended.",
       wayOut: "Log back in",
     },
     {

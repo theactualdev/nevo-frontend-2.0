@@ -54,8 +54,23 @@ describe("the check mark", () => {
 
     expect(storePin).toHaveBeenCalledWith("1234");
     expect(allSet()).toBeNull();
-    // What they typed is still on screen while it goes.
-    expect(filledBoxes()).toBe(8);
+  });
+
+  it("shows frame 15's saving state while it goes, with the rows hidden (D61)", async () => {
+    const storePin = vi.fn(() => new Promise<void>(() => {}));
+    render(<PinCreationScreen storePin={storePin} onComplete={vi.fn()} />);
+
+    enterTwice();
+    await settle(3000);
+
+    expect(screen.getByText("Saving your PIN…")).toBeInTheDocument();
+    expect(
+      document.querySelector("span.motion-safe\\:animate-spin"),
+    ).not.toBeNull();
+    // The heading stays the step's own; only the line under it changes.
+    expect(screen.getByRole("heading", { name: "Create a PIN" })).toBeInTheDocument();
+    expect(filledBoxes()).toBe(0);
+    expect(screen.queryByText("Type it again to confirm")).toBeNull();
   });
 
   it("appears once the save lands, and only then moves on", async () => {
@@ -90,16 +105,25 @@ describe("the check mark", () => {
 });
 
 describe("a save that fails", () => {
-  it("says so, and keeps both rows as the child typed them", async () => {
+  it("says so in frame 15's own state, with the rows hidden (D61)", async () => {
     const storePin = vi.fn().mockRejectedValue(new Error("503"));
     render(<PinCreationScreen storePin={storePin} onComplete={vi.fn()} />);
 
     enterTwice();
     await settle(1000);
 
-    expect(screen.getByRole("alert")).toHaveTextContent(/couldn.t save that/i);
-    // Both rows, not just the first: the confirm row used to be cleared.
-    expect(filledBoxes()).toBe(8);
+    expect(
+      screen.getByRole("heading", { name: "That didn't save" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Your PIN is kept. That's on us - try again.",
+    );
+    expect(filledBoxes()).toBe(0);
+    expect(screen.queryByText("Saving your PIN…")).toBeNull();
+    // A primary Try again, not the ghost one it was.
+    expect(screen.getByRole("button", { name: "Try again" }).className).toContain(
+      "bg-nevo-navy",
+    );
   });
 
   it("tries the same PIN again, without retyping, and celebrates only when it lands", async () => {
@@ -113,6 +137,10 @@ describe("a save that fails", () => {
     enterTwice("5678");
     await settle(1000);
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    // Straight back to saving: the kept PIN is not shown again on the way.
+    expect(screen.getByText("Saving your PIN…")).toBeInTheDocument();
+    expect(filledBoxes()).toBe(0);
     await settle(1000);
 
     expect(storePin).toHaveBeenCalledTimes(2);

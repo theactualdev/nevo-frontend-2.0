@@ -11,8 +11,8 @@ import { clearSession, getRememberedProfile } from "./session";
 /**
  * A remembered profile the server cannot authenticate is worse than none.
  *
- * `POST /auth/login/pin` takes THREE things — `schoolCode`, `loginIdentifier`
- * and the PIN. If the device remembers a child against a credential missing any
+ * `POST /auth/login/pin` takes THREE things — `schoolCode`, the identifier
+ * (sent as `admissionNumber`) and the PIN. If the device remembers a child against a credential missing any
  * of them, the next morning it shows that child their own avatar and "Welcome
  * back", they type the PIN they were told to remember, and they get a 401 they
  * can do nothing about. A child who simply has no account at least knows where

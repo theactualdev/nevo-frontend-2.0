@@ -65,14 +65,17 @@ describe("when the write fails", () => {
     await renderFailing();
 
     expect(alertText()).not.toMatch(/type it again/i);
+    // Nothing to type into: frame 15 hides the rows (D61).
+    expect(screen.queryByText("Type it again to confirm")).toBeNull();
+    expect(screen.queryByLabelText("Your PIN")).toBeNull();
   });
 
-  it("says the failure is ours, and points at who can help", async () => {
-    // A child cannot clear a 403 or a dropped network. Their teacher can.
+  it("says the failure is ours, and that the PIN is kept", async () => {
+    // Frame 15's didn't-save state (D61), verbatim.
     await renderFailing();
 
-    expect(alertText()).toMatch(/that.s on us, not you/i);
-    expect(alertText()).toMatch(/teacher can help/i);
+    expect(alertText()).toContain("That didn't save");
+    expect(alertText()).toContain("Your PIN is kept. That's on us - try again.");
   });
 
   it("did try to store the PIN before saying so", async () => {
@@ -97,6 +100,6 @@ describe("when the two entries do not match", () => {
     }
 
     expect(alertText()).toMatch(/didn.t match/i);
-    expect(alertText()).not.toMatch(/on us/i);
+    expect(alertText()).not.toMatch(/on us|didn.t save/i);
   });
 });

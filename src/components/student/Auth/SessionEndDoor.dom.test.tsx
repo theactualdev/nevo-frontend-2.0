@@ -43,11 +43,18 @@ describe("the child's session-end door", () => {
     expect(screen.queryByText(/away for a while/i)).toBeNull();
   });
 
-  it("tells a child they signed in somewhere else", async () => {
+  it("says the session ended, and who to tell, as board 28 redrew it on 6 Oct", async () => {
     await doorFor("session_replaced");
 
-    expect(screen.getByText(/another device/i)).toBeInTheDocument();
-    expect(screen.getByText(/progress is saved/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      "Your session has ended.",
+    );
+    expect(
+      screen.getByText("If that wasn't you, tell your teacher."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Log back in" })).toBeInTheDocument();
+    // Both dropped from the frame, and from the screen with it.
+    expect(document.body.textContent).not.toMatch(/progress is saved|another device/i);
   });
 
   it("keeps board 28's gentler wording for an ordinary timeout", async () => {

@@ -75,13 +75,14 @@ export const ENTRY_MATCHED_COPY = "Found you - one moment…";
 export const ENTRY_NO_MATCH_COPY =
   "That didn't match. Check both with your teacher and try again.";
 /**
- * NOT DRAWN. The frame has no state for a lookup we could not run. Saying
- * "that didn't match" over a dropped network would send a child to their
- * teacher to re-check two things that were right, so the words the school-code
- * screen used for this case stay until design draws one.
+ * The frame's "unreachable" state (29af2a4), for a lookup we could not run.
+ * Saying "that didn't match" over a dropped network would send a child to
+ * their teacher to re-check two things that were right - so this says they
+ * were not wrong, the fields keep their ordinary border, and the button stays
+ * "Continue". Only a real miss tints the fields and reads "Try again".
  */
 export const ENTRY_UNCHECKED_COPY =
-  "We couldn't check that just now. Give it a moment and try again.";
+  "We couldn't check just now. Nothing you typed is wrong - press Continue to try again.";
 
 /**
  * Did the server answer about the pair, rather than fail to answer?
@@ -121,7 +122,8 @@ function answeredAboutThePair(err: unknown): boolean {
  * the PIN door, and the address they are on says nothing about why.
  *
  * A MISS keeps both values as typed and turns Continue into "Try again". It
- * never says which field was wrong.
+ * never says which field was wrong. A lookup we could not run is not a miss:
+ * it says nothing typed is wrong, and leaves the fields and Continue alone.
  *
  * The keyboard docks on focus (touch only), as the frame draws it, and the
  * illustration makes way for it.
@@ -304,6 +306,8 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
   const { heading, sub } = FRAMING[framing];
   // The frame takes the tray down once the child has been found.
   const keyboardUp = pad.open && status !== "success";
+  /** The server answered, and the pair matched nobody. Not a lookup we could not run. */
+  const missed = status === "error" && !trouble;
   const message =
     status === "success"
       ? ENTRY_MATCHED_COPY
@@ -315,13 +319,13 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
   const fieldBorder =
     status === "success"
       ? "border-nevo-navy"
-      : status === "error"
+      : missed
         ? "border-nevo-violet"
         : "border-nevo-near-black/[0.16]";
   const cellBorder =
     status === "success"
       ? "border-nevo-navy"
-      : status === "error"
+      : missed
         ? "border-nevo-violet"
         : "border-nevo-near-black/[0.32]";
   const field =
@@ -485,7 +489,7 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
           disabled={!ready || locked}
           className="w-full text-base"
         >
-          {status === "error" ? "Try again" : "Continue"}
+          {missed ? "Try again" : "Continue"}
         </Button>
       </div>
     </OnboardingShell>

@@ -7,7 +7,7 @@ import {
   screen,
 } from "@testing-library/react";
 import { ObservedInteractionSequence } from "./ObservedInteractionSequence";
-import { PIN_NOT_SAVED_COPY } from "./PinCreationScreen";
+import { PIN_SAVE_FAILED_COPY } from "./PinCreationScreen";
 import { ApiError } from "@/lib/api/client";
 import {
   clearOnboardingDraft,
@@ -211,7 +211,7 @@ describe("a first PIN the server refuses", () => {
 
     await choosePin();
 
-    expect(alertText()).toBe(PIN_NOT_SAVED_COPY);
+    expect(alertText()).toContain(PIN_SAVE_FAILED_COPY);
     expect(screen.queryByText("You're all set")).toBeNull();
     expect(
       screen.getByRole("button", { name: "Try again" }),
@@ -264,7 +264,7 @@ describe("a run that did not start on 05", () => {
     await choosePin();
 
     expect(entrySetPin).not.toHaveBeenCalled();
-    expect(alertText()).toBe(PIN_NOT_SAVED_COPY);
+    expect(alertText()).toContain(PIN_SAVE_FAILED_COPY);
     expect(getSession()).toBeNull();
   });
 });
