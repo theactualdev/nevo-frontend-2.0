@@ -34,10 +34,9 @@ import { PRIMARY_BTN, Spinner } from "../Roster/primitives";
  * a tablet whose clock ran fast it turned a good invite away. Shipped reduced
  * to the one dead panel, whose words fit both, until the wire tells them apart.
  *
- * TODO(api): `GET /api/v1/join/{token}` returns
- * `{status, role, schoolName, expiresAt}` and no NAME, so D19's "Welcome,
- * Amara" cannot be personalised. The greeting is warm but general rather than
- * addressed to somebody we cannot name.
+ * D19'S "Welcome, Amara". `GET /api/v1/join/{token}` carries the invitee's
+ * name since 1 Oct; an invite without one keeps the plain "Welcome" rather
+ * than addressing somebody we cannot name.
  *
  * NO CHILD BRANCH (design, 1 Oct, D5). A child is never sent a link - a child
  * has no email - so no child reaches this page, and it serves teacher
@@ -137,7 +136,7 @@ export function JoinLanding({ token }: { token: string }) {
                 : "You have been invited to Nevo"}
             </p>
             <h1 className="m-0 mt-3 text-[30px] font-semibold tracking-[-0.02em] text-nevo-near-black">
-              Welcome
+              {lookup?.firstName?.trim() ? `Welcome, ${lookup.firstName.trim()}` : "Welcome"}
             </h1>
             <p className="m-0 mt-2.5 text-[15px] text-nevo-near-black/62">
               You are joining as a teacher

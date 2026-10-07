@@ -137,7 +137,14 @@ export function NotificationPreferences({ scopes }: { scopes: PermissionScope[] 
 
     notificationPrefsApi
       .update([after])
-      .then(() => {
+      .then((res) => {
+        // A 200 can still refuse the row: `rejected` is the server saying
+        // this one did not take. That is not "Saved".
+        if (res?.rejected && res.rejected.length > 0) {
+          setPrefs((prev) => ({ ...prev, [c.key]: before }));
+          setFailed(c.key);
+          return;
+        }
         setSavedFlash(c.key);
         setTimeout(() => setSavedFlash((k) => (k === c.key ? null : k)), 1600);
       })
