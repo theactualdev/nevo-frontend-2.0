@@ -26,7 +26,8 @@ import {
 } from "@/lib/auth/onboarding";
 import { SCHOOL_CODE_LENGTH, placeSchoolCode } from "@/lib/auth/schoolCode";
 import { handSignInOver } from "@/lib/auth/signInHandoff";
-import { BUSY_PHASE, BUSY_REASON, SIGNAL_EVENT_TYPES } from "@/lib/constants";
+import { BUSY_REASON } from "@/lib/constants";
+import { openBusyWindow } from "@/lib/signals/busy";
 import { cn, randomId } from "@/lib/utils";
 import { OnboardingShell } from "./OnboardingShell";
 
@@ -168,15 +169,7 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
   // The lookup's wait is the system's, not the child's (SCRUM-94 fix 9).
   useEffect(() => {
     if (status !== "pending") return;
-    trackEvent(SIGNAL_EVENT_TYPES.SYSTEM_BUSY, {
-      reason: BUSY_REASON.CONTENT_LOADING,
-      phase: BUSY_PHASE.START,
-    });
-    return () =>
-      trackEvent(SIGNAL_EVENT_TYPES.SYSTEM_BUSY, {
-        reason: BUSY_REASON.CONTENT_LOADING,
-        phase: BUSY_PHASE.END,
-      });
+    return openBusyWindow(trackEvent, BUSY_REASON.CONTENT_LOADING);
   }, [status, trackEvent]);
 
   /** Checking, or matched and on the way out: what was typed is settled. */

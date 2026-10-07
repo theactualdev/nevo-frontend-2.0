@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
 import type { AdaptationPlan, Lesson } from "@/lib/types";
+import { offendingCalls } from "@/test/signalCatalogue";
 import catalogue from "@/lib/api/signals.catalogue.json";
 
 /**
@@ -100,6 +101,13 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  /*
+   * EVERY PAYLOAD EVERY TEST HERE DROVE OUT OF THE PLAYER, unmount included,
+   * held to the keys the catalogue declares. The source scan in
+   * `signals.catalogue.test.ts` cannot read a call whose type is a variable -
+   * the suggestion outcomes, the density chips - and these tests reach them.
+   */
+  expect(offendingCalls(trackEvent.mock.calls)).toEqual([]);
 });
 
 describe("time on a segment", () => {
@@ -381,7 +389,13 @@ describe("what became of a modality offer", () => {
 });
 
 describe("an answer, as the engine receives it", () => {
-  it("carries the checkpoint, the pick and how long it took", () => {
+  it("names the segment and the checkpoint, and not the pick or whether it was right", () => {
+    /*
+     * The catalogue's `{ segmentId, questionId }`. Correctness is decided on
+     * the server against the stored answer, and the pick goes up on the
+     * attempt it marks - so `correct`, `selectedId` and the rest that rode
+     * here were keys the catalogue does not take.
+     */
     const withCheck = lesson(
       seg("seg-1", {
         quickCheck: {
@@ -405,17 +419,135 @@ describe("an answer, as the engine receives it", () => {
     fireEvent.click(screen.getByRole("button", { name: "One third" }));
 
     expect(sent("comprehension_response")).toEqual([
-      {
-        kind: "quick_check",
-        segmentId: "seg-1",
-        checkpointId: "cp-1",
-        correct: false,
-        selectedId: "b",
-        responseTimeMs: 4_000,
-      },
+      { segmentId: "seg-1", questionId: "cp-1" },
     ]);
+    // The miss is still the player's own reading for the adapt request.
     const state = runtimeArgs.at(-1)![3] as Record<string, unknown>;
     expect(state.consecutiveErrors).toBe(1);
+  });
+});
+
+describe("a wait the system owns", () => {
+  const withCheck = () =>
+    lesson(
+      seg("seg-1", {
+        quickCheck: {
+          id: "cp-1",
+          question: "Which is bigger?",
+          options: [
+            { id: "a", label: "One half" },
+            { id: "b", label: "One third" },
+          ],
+          correctId: "a",
+          correctNote: "Yes.",
+          recoveryNote: "Not quite.",
+        },
+      }),
+      seg("seg-2"),
+    );
+
+  it("goes up once, as it ends, with how long it ran", () => {
+    /*
+     * The catalogue's `{ reason, durationMs }`. It went up as a start and an
+     * end, each `{ reason, phase }` - two events, a key the catalogue does not
+     * take, and no length on either.
+     */
+    render(<LessonPlayer lesson={withCheck()} plan={null} />);
+    now = 1_000;
+    next(); // the check opens over the player
+    expect(sent("system_busy")).toEqual([]);
+
+    now = 3_500;
+    fireEvent.click(screen.getByRole("button", { name: "One half" }));
+    fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
+
+    expect(sent("system_busy")).toEqual([
+      { reason: "blocked_by_modal", durationMs: 2_500 },
+    ]);
+  });
+
+  it("still goes up when the child leaves the player in the middle of it", () => {
+    const { unmount } = render(<LessonPlayer lesson={withCheck()} plan={null} />);
+    now = 1_000;
+    next();
+
+    now = 1_800;
+    unmount();
+
+    expect(sent("system_busy")).toEqual([
+      { reason: "blocked_by_modal", durationMs: 800 },
+    ]);
+  });
+
+  it("goes up for a switch the child left before it finished", () => {
+    /*
+     * "Yes, try it" opens the switch's window and the switch itself closes
+     * it, a beat later. Leaving inside that beat clears the switch, so only
+     * the player's own unmount can send the wait - with no length, it would
+     * have no way to go up at all.
+     */
+    runtime.value = {
+      offeredBreak: null,
+      reason: null,
+      forSegmentId: "seg-1",
+      plan: { lessonId: "l-1", segments: [], suggestModality: "audio" },
+    };
+    const { unmount } = render(<LessonPlayer lesson={THREE} plan={null} live />);
+    beat();
+    now = 5_000;
+    fireEvent.click(screen.getByRole("button", { name: "Yes, try it" }));
+
+    now = 5_120;
+    unmount();
+
+    expect(sent("system_busy")).toEqual([
+      { reason: "modality_switch", durationMs: 120 },
+    ]);
+  });
+});
+
+describe("the rest of what the player sends", () => {
+  it("says which segment a child tried to leave from, and nothing else", () => {
+    render(<LessonPlayer lesson={THREE} plan={null} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Exit lesson" }));
+
+    expect(sent("exit_attempt")).toEqual([{ segmentId: "seg-1" }]);
+  });
+
+  it("sends the feelings a child picked as the catalogue's `response`", () => {
+    const plan: AdaptationPlan = {
+      lessonId: "l-1",
+      segments: [
+        { segmentId: "seg-1", startModality: "text", breakAfter: "consolidation" },
+      ],
+    };
+    render(<LessonPlayer lesson={THREE} plan={plan} />);
+    next(); // the planned consolidation break
+
+    fireEvent.click(screen.getByRole("button", { name: "Curious" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(sent("feeling_checkin")).toEqual([{ response: ["Curious"] }]);
+  });
+
+  it("never reports the plan's density as the child asking for it", () => {
+    /*
+     * `simplify_trigger` is "the child asks for the simpler wording". The
+     * authored per-segment density went up as one with `source: "system"`
+     * on every segment it applied to.
+     */
+    const plan = {
+      lessonId: "l-1",
+      segments: [
+        { segmentId: "seg-2", startModality: "text", density: "simplify" },
+      ],
+    } as unknown as AdaptationPlan;
+    render(<LessonPlayer lesson={THREE} plan={plan} />);
+
+    next();
+
+    expect(sent("simplify_trigger")).toEqual([]);
   });
 });
 

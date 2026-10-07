@@ -7,6 +7,7 @@ import {
   screen,
 } from "@testing-library/react";
 import { AskNevo } from "./AskNevo";
+import { offendingCalls } from "@/test/signalCatalogue";
 
 /**
  * WHAT THE DRAWER DOES WITH AN ANSWER THAT ARRIVED.
@@ -45,8 +46,9 @@ const { trackEvent, useSignals } = vi.hoisted(() => {
     useSignals: vi.fn(() => ({ trackEvent, flush: vi.fn() })),
   };
 });
+const auth = vi.hoisted(() => ({ user: { id: "stu-1" } }));
 vi.mock("@/hooks", () => ({
-  useAuth: () => ({ user: { id: "stu-1" } }),
+  useAuth: () => auth,
   useSignals,
 }));
 
@@ -92,6 +94,7 @@ beforeEach(() => {
   push.mockReset();
   trackEvent.mockReset();
   useSignals.mockClear();
+  auth.user = { id: "stu-1" };
   ask.mockReset().mockResolvedValue(answer());
 });
 
@@ -214,6 +217,22 @@ describe("what the drawer tells the engine", () => {
 
     expect(types()).toEqual(["ask_nevo_question_student"]);
     expect(JSON.stringify(trackEvent.mock.calls)).not.toMatch(/leaves/);
+    // Where it was asked - the catalogue's `currentPage`. Not the question's
+    // id or category: those are the server's, and do not exist yet.
+    expect(trackEvent).toHaveBeenCalledWith("ask_nevo_question_student", {
+      currentPage: "/student/dashboard",
+    });
+  });
+
+  it("names the child who asked, when the id is a real one", async () => {
+    auth.user = { id: "33333333-3333-4333-8333-333333333333" };
+    open();
+    await send("Why do leaves need light?");
+
+    expect(trackEvent).toHaveBeenCalledWith("ask_nevo_question_student", {
+      studentId: "33333333-3333-4333-8333-333333333333",
+      currentPage: "/student/dashboard",
+    });
   });
 
   it("says when the server could not help, with the server's own id", async () => {
@@ -223,6 +242,8 @@ describe("what the drawer tells the engine", () => {
 
     expect(trackEvent).toHaveBeenCalledWith("ask_nevo_cannot_help", {
       interactionId: "11111111-1111-4111-8111-111111111111",
+      role: "student",
+      currentPage: "/student/dashboard",
     });
     // Once: not again from a state update React may run twice.
     expect(types().filter((t) => t === "ask_nevo_cannot_help")).toHaveLength(1);
@@ -244,7 +265,12 @@ describe("what the drawer tells the engine", () => {
 
     expect(trackEvent).toHaveBeenLastCalledWith("ask_nevo_redirect_used", {
       interactionId: "11111111-1111-4111-8111-111111111111",
+      role: "student",
+      currentPage: "/student/dashboard",
+      redirectTarget: "/student/connect",
     });
+    // All three, held to the keys the catalogue declares for each.
+    expect(offendingCalls(trackEvent.mock.calls)).toEqual([]);
   });
 });
 

@@ -41,15 +41,18 @@ export const SIGNAL_EVENT_TYPES = {
   /** The student's boundary choice — payload { moduleId, action: continue|break }. */
   MODULE_BOUNDARY_ACTION: "module_boundary_action",
   /**
-   * Touch Signal Contract (SCRUM-94.8): a start/end pair bracketing every
-   * window in which the system, not the student, owns the wait — so idle time
-   * inside it is never misread as hesitation. Payload { reason, phase }.
+   * Touch Signal Contract (SCRUM-94.8): every window in which the system, not
+   * the student, owns the wait — so idle time inside it is never misread as
+   * hesitation. ONE event per window, sent as it closes: payload
+   * { reason, durationMs }, the catalogue's two keys. The contract's own
+   * start/end `phase` pair is not on the wire - see `openBusyWindow`.
    */
   SYSTEM_BUSY: "system_busy",
   /**
    * A tap on an inert scrim (SCRUM-94.8 G1). Diagnostic only — recorded as
    * blocked, never written to latency or aborted-gesture channels. It tells us
    * the scrim still read as tappable: a design signal, not a student one.
+   * Payload { target, reason }; the reason is the busy window it fell in.
    */
   TAP_BLOCKED: "tap_blocked",
   /**
@@ -65,8 +68,9 @@ export const SIGNAL_EVENT_TYPES = {
   BREAK_START: "break_start",
   BREAK_END: "break_end",
   /**
-   * The consolidation break's feeling check-in — payload { feelings: string[] }.
-   * Qualitative, multi-select, never scored; skipping is a legitimate answer.
+   * The consolidation break's feeling check-in — payload { response: string[] },
+   * the catalogue's key for what the child picked. Qualitative, multi-select,
+   * never scored; skipping is a legitimate answer.
    */
   FEELING_CHECKIN: "feeling_checkin",
   /**
@@ -155,6 +159,11 @@ export const BUSY_REASON = {
 
 export type BusyReason = (typeof BUSY_REASON)[keyof typeof BUSY_REASON];
 
+/**
+ * Where a busy window is, for code that opens and closes one from two places
+ * (the player's audio and its modality switch). Never sent: the window goes
+ * up as one `system_busy` with its length - see `openBusyWindow`.
+ */
 export const BUSY_PHASE = {
   START: "start",
   END: "end",
@@ -183,15 +192,6 @@ export const ONBOARDING_SIGNAL_TYPES = {
 export type SignalEventType =
   | (typeof SIGNAL_EVENT_TYPES)[keyof typeof SIGNAL_EVENT_TYPES]
   | (typeof ONBOARDING_SIGNAL_TYPES)[keyof typeof ONBOARDING_SIGNAL_TYPES];
-
-/** How a toggle/adaptation was triggered — see `simplify_trigger` payload. */
-export const TRIGGER_SOURCE = {
-  MANUAL: "manual",
-  SYSTEM: "system",
-} as const;
-
-export type TriggerSource =
-  (typeof TRIGGER_SOURCE)[keyof typeof TRIGGER_SOURCE];
 
 /** Signal batching thresholds (Section 3). */
 export const SIGNAL_BATCH = {

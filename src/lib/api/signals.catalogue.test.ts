@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join, relative } from "node:path";
+import ts from "typescript";
 import catalogue from "./signals.catalogue.json";
 import { ONBOARDING_SIGNAL_TYPES, SIGNAL_EVENT_TYPES } from "@/lib/constants";
+import { KNOWN_UNDECLARED, undeclaredKeys } from "@/test/signalCatalogue";
 
 /**
  * EVERY TYPE THIS CLIENT CAN EMIT, PINNED AGAINST BACKEND'S OWN CATALOGUE
@@ -64,5 +68,157 @@ describe("every type the client can emit", () => {
 
   it("is one the catalogue names as the client's to send", () => {
     expect(EMITTABLE.filter((t) => !SENDABLE.has(t))).toEqual([]);
+  });
+});
+
+/*
+ * EVERY PAYLOAD KEY, AGAINST THE KEYS THE CATALOGUE DECLARES FOR ITS TYPE.
+ *
+ * The checks above hold the TYPES to the catalogue, and the keys inside them
+ * were held to nothing, so they drifted: `scrollDepthPct` where none is
+ * declared, `depthPct` for `depthRatio`, `phase` for `durationMs`, `feelings`
+ * for `response`, and `correct` on an answer the server marks itself. The
+ * ingest took every one - `eventData` accepts any key - and the engine read
+ * none of them.
+ *
+ * READ FROM THE SOURCE, NOT FROM A RUN, so it covers every call site and not
+ * only the ones a test happens to reach: any call whose first argument names
+ * a type through `SIGNAL_EVENT_TYPES` or `ONBOARDING_SIGNAL_TYPES`, and the
+ * `{ type, payload }` the hook queues itself. The payload has to be written
+ * inline for its keys to be read, and that is checked too. A call whose type
+ * is a variable - the density chips, the suggestion outcomes - cannot be read
+ * here; the player's tests hold those to the same list (`offendingCalls`).
+ */
+const SRC = join(import.meta.dirname, "..", "..");
+const NAMES: Record<string, string> = {
+  ...SIGNAL_EVENT_TYPES,
+  ...ONBOARDING_SIGNAL_TYPES,
+};
+const TABLES = new Set(["SIGNAL_EVENT_TYPES", "ONBOARDING_SIGNAL_TYPES"]);
+
+/** Source files, without tests and without the test helpers. */
+function sourceFiles(dir: string): string[] {
+  return readdirSync(dir).flatMap((entry) => {
+    const path = join(dir, entry);
+    if (statSync(path).isDirectory())
+      return path === join(SRC, "test") ? [] : sourceFiles(path);
+    return /\.tsx?$/.test(entry) && !/\.test\.tsx?$/.test(entry) ? [path] : [];
+  });
+}
+
+/** The event type an expression names, or null when it names none. */
+function typeNamed(node: ts.Expression): string | null {
+  return ts.isPropertyAccessExpression(node) &&
+    ts.isIdentifier(node.expression) &&
+    TABLES.has(node.expression.text)
+    ? (NAMES[node.name.text] ?? null)
+    : null;
+}
+
+/** The keys an inline payload can carry, or null when they cannot be read. */
+function keysOf(node: ts.Expression | undefined): string[] | null {
+  if (!node) return [];
+  if (ts.isParenthesizedExpression(node)) return keysOf(node.expression);
+  if (ts.isIdentifier(node) && node.text === "undefined") return [];
+  if (ts.isConditionalExpression(node)) {
+    const either = [keysOf(node.whenTrue), keysOf(node.whenFalse)];
+    return either.every(Boolean) ? either.flatMap((k) => k ?? []) : null;
+  }
+  if (!ts.isObjectLiteralExpression(node)) return null;
+  const keys: string[] = [];
+  for (const prop of node.properties) {
+    if (ts.isSpreadAssignment(prop)) {
+      const spread = keysOf(prop.expression);
+      if (!spread) return null;
+      keys.push(...spread);
+    } else if (
+      prop.name &&
+      (ts.isIdentifier(prop.name) || ts.isStringLiteral(prop.name))
+    ) {
+      keys.push(prop.name.text);
+    } else return null;
+  }
+  return keys;
+}
+
+interface Site {
+  where: string;
+  type: string;
+  /** Null when the payload is not written inline. */
+  keys: string[] | null;
+}
+
+const SITES: Site[] = sourceFiles(SRC).flatMap((file) => {
+  const text = readFileSync(file, "utf8");
+  if (!/SIGNAL_(EVENT_)?TYPES/.test(text)) return [];
+  const sf = ts.createSourceFile(
+    file,
+    text,
+    ts.ScriptTarget.Latest,
+    true,
+    file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+  const at = (node: ts.Node) =>
+    `${relative(SRC, file).replace(/\\/g, "/")}:${
+      sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1
+    }`;
+  const found: Site[] = [];
+  const visit = (node: ts.Node) => {
+    if (ts.isCallExpression(node) && node.arguments.length > 0) {
+      const type = typeNamed(node.arguments[0]);
+      if (type) found.push({ where: at(node), type, keys: keysOf(node.arguments[1]) });
+    }
+    if (ts.isObjectLiteralExpression(node)) {
+      const prop = (name: string) =>
+        node.properties.find(
+          (p): p is ts.PropertyAssignment =>
+            ts.isPropertyAssignment(p) &&
+            ts.isIdentifier(p.name) &&
+            p.name.text === name,
+        );
+      const type = prop("type");
+      const payload = prop("payload");
+      const named = type ? typeNamed(type.initializer) : null;
+      if (named && payload)
+        found.push({ where: at(node), type: named, keys: keysOf(payload.initializer) });
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  return found;
+});
+
+describe("every payload the client writes", () => {
+  it("is found, so the checks below cannot pass by finding none", () => {
+    const types = new Set(SITES.map((s) => s.type));
+    // One read through a call, one through a helper, one the hook queues.
+    expect(types).toContain("time_on_segment");
+    expect(types).toContain("system_busy");
+    expect(types).toContain("session_context");
+    expect(SITES.length).toBeGreaterThan(20);
+  });
+
+  it("is written inline, where its keys can be read", () => {
+    expect(SITES.filter((s) => s.keys === null).map((s) => s.where)).toEqual([]);
+  });
+
+  it("carries no key the catalogue does not declare for its type", () => {
+    const offences = SITES.flatMap((s) =>
+      undeclaredKeys(s.type, s.keys ?? []).map(
+        (key) => `${s.where} ${s.type}: ${key}`,
+      ),
+    );
+    expect(offences).toEqual([]);
+  });
+
+  it("still sends every key KNOWN_UNDECLARED excuses, or it comes off the list", () => {
+    const stale = Object.entries(KNOWN_UNDECLARED).flatMap(([type, keys]) =>
+      keys
+        .filter(
+          (key) => !SITES.some((s) => s.type === type && s.keys?.includes(key)),
+        )
+        .map((key) => `${type}: ${key}`),
+    );
+    expect(stale).toEqual([]);
   });
 });

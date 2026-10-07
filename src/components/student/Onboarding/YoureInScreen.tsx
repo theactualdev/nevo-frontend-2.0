@@ -2,7 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import { IllustrationWrapper, NevoLockup } from "@/components/shared";
-import { BUSY_PHASE, BUSY_REASON, SIGNAL_EVENT_TYPES } from "@/lib/constants";
+import { BUSY_REASON } from "@/lib/constants";
+import { openBusyWindow } from "@/lib/signals/busy";
 import type { TrackEvent } from "@/hooks";
 
 /**
@@ -63,16 +64,8 @@ export function YoureInScreen({
   }, [hold]);
 
   useEffect(() => {
-    track?.(SIGNAL_EVENT_TYPES.SYSTEM_BUSY, {
-      reason: BUSY_REASON.TRANSITION_SCREEN,
-      phase: BUSY_PHASE.START,
-    });
-    return () =>
-      track?.(SIGNAL_EVENT_TYPES.SYSTEM_BUSY, {
-        reason: BUSY_REASON.TRANSITION_SCREEN,
-        phase: BUSY_PHASE.END,
-      });
-    // Mount-scoped bracket; `track` is stable from useSignals.
+    return openBusyWindow(track, BUSY_REASON.TRANSITION_SCREEN);
+    // Mount-scoped window; `track` is stable from useSignals.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
