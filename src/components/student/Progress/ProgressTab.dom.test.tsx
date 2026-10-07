@@ -166,6 +166,10 @@ describe("the reflection with no subject cards under it", () => {
   });
 });
 
+/** The block at the foot of a card that holds its note (33a, D120). */
+const footNote = (card: HTMLElement) =>
+  card.querySelector("[data-subject-note]") as HTMLElement | null;
+
 /**
  * The signed-out walkthrough still drew the note-per-card layout after the
  * live cards took 33a's topic squares (B53). It is what a real card looks
@@ -179,7 +183,7 @@ describe("the signed-out walkthrough's subject cards", () => {
       m.getAttribute("data-topic"),
     );
 
-  it("draws 33a's squares, count and 'Working on' line, as a real card does", () => {
+  it("draws 33a's squares and 'Working on' line, as a real card does, and no count", () => {
     session.signedIn = false;
 
     render(<ProgressTab />);
@@ -188,7 +192,6 @@ describe("the signed-out walkthrough's subject cards", () => {
     expect(
       within(maths).getByText("Working on Equivalent fractions"),
     ).toBeInTheDocument();
-    expect(within(maths).getByText("3 of 8 topics done")).toBeInTheDocument();
     expect(marks(maths)).toEqual([
       "done",
       "done",
@@ -199,21 +202,45 @@ describe("the signed-out walkthrough's subject cards", () => {
       "open",
       "open",
     ]);
-    // The note gives way to the named topic, as on a live card.
-    expect(within(maths).queryByText(/Getting faster/)).toBeNull();
+    // D119: no "3 of 8 topics done", or any count, on the card.
+    expect(maths.textContent).not.toMatch(/\d|topics done/);
   });
 
-  it("keeps the note where no topic is named, with the squares alone at all done", () => {
+  it("puts the frame's note at the foot of the card, beside a named topic", () => {
+    session.signedIn = false;
+
+    render(<ProgressTab />);
+
+    const note = footNote(card("Mathematics"));
+    expect(note).toHaveTextContent(
+      "Fractions are starting to click. You stayed with a tricky one today before it came.",
+    );
+  });
+
+  it("draws the names where no topic is named, the squares alone at all done", () => {
     session.signedIn = false;
 
     render(<ProgressTab />);
 
     const english = card("English");
     expect(
-      within(english).getByText("Reading longer stories with ease"),
+      within(english).getByText(
+        "Rhyming words · Describing words · Story beginnings",
+      ),
     ).toBeInTheDocument();
     expect(marks(english)).toEqual(["done", "done", "done", "done", "done"]);
-    expect(english.textContent).not.toMatch(/of 5|Working on/);
+    expect(english.textContent).not.toMatch(/\d|Working on|Everything set/);
+    expect(footNote(english)).toHaveTextContent(
+      "A really steady run this term. Reading aloud has got noticeably easier.",
+    );
+  });
+
+  it("draws no note block for the subject the frame gives none", () => {
+    session.signedIn = false;
+
+    render(<ProgressTab />);
+
+    expect(footNote(card("Science"))).toBeNull();
   });
 
   it("shows no percentage, anywhere", () => {
@@ -259,12 +286,16 @@ describe("the subject card's band", () => {
 });
 
 /**
- * Backend B29 and design D42, 1 Oct. The frame draws a short note per subject
- * card and the contract had only a paragraph, so the cards carried concept
- * names. `note` now arrives, written short; a card shows its own subject's,
- * and the names where the backend wrote none.
+ * Backend B29 and design D42, 1 Oct; design D120, 6 Oct. The note arrives
+ * written short, and a card shows its own subject's - at the FOOT of the
+ * card, below the facts, as 33a was redrawn. It used to be the line under the
+ * name, standing in for the concept names; the names keep that line now
+ * wherever no topic is named.
  */
-describe("the line under each subject", () => {
+describe("the note at the foot of each subject card", () => {
+  const card = (name: string) =>
+    screen.getByRole("link", { name: new RegExp(name) }) as HTMLElement;
+
   it("is the backend's note for that subject, as written", () => {
     state({
       subjects: [subject("Mathematics", ["Fractions"]), subject("English", ["Verbs"])],
@@ -276,19 +307,57 @@ describe("the line under each subject", () => {
 
     render(<ProgressTab />);
 
-    expect(screen.getByText("Getting quicker with fractions")).toBeInTheDocument();
-    expect(screen.getByText("Reading longer stories")).toBeInTheDocument();
+    expect(footNote(card("Mathematics"))).toHaveTextContent(
+      "Getting quicker with fractions",
+    );
+    expect(footNote(card("English"))).toHaveTextContent(
+      "Reading longer stories",
+    );
     // Read per subject, from the narrowed route - the whole-student note is
     // about everything, not about one card.
     expect(narrowed.asked).toEqual(
       expect.arrayContaining(["Mathematics", "English"]),
     );
-    expect(screen.queryByText("Fractions")).toBeNull();
   });
 
-  it("falls back to concept names when there is no note", () => {
-    state({ subjects: [subject("Mathematics", ["Fractions", "Decimals"])] });
+  it("sits below the name, the line and the squares", () => {
+    state({ subjects: [subject("Mathematics", ["Fractions"])] });
+    narrowed.bySubject = {
+      Mathematics: {
+        note: "Getting quicker with fractions",
+        topics: { done: 3, total: 8 },
+        currentTopic: "Halves",
+      },
+    };
+
+    render(<ProgressTab />);
+
+    const maths = card("Mathematics");
+    const note = footNote(maths)!;
+    const squares = maths.querySelector("[data-topic-marks]")!;
+    const line = within(maths).getByText("Working on Halves");
+    expect(
+      squares.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      line.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    // Its own block, not the line under the name.
+    expect(line).not.toHaveTextContent(/quicker/);
+  });
+
+  it("draws no block at all where the backend wrote none", () => {
+    state({ subjects: [subject("Mathematics", ["Fractions"])] });
     narrowed.bySubject = { Mathematics: { note: null } };
+
+    render(<ProgressTab />);
+
+    expect(footNote(card("Mathematics"))).toBeNull();
+  });
+
+  it("keeps the line for the concept names when there is a note", () => {
+    state({ subjects: [subject("Mathematics", ["Fractions", "Decimals"])] });
+    narrowed.bySubject = { Mathematics: { note: "A note about maths" } };
 
     render(<ProgressTab />);
 
@@ -303,26 +372,32 @@ describe("the line under each subject", () => {
     render(<ProgressTab />);
 
     expect(screen.getByText("Fractions")).toBeInTheDocument();
+    expect(footNote(card("Mathematics"))).toBeNull();
   });
 
-  it("holds the line rather than showing names that a note will replace", () => {
+  it("holds the line, and draws no note, while the subject is still being read", () => {
     state({ subjects: [subject("Mathematics", ["Fractions"])] });
-    narrowed.bySubject = { Mathematics: { note: null, loading: true } };
+    narrowed.bySubject = {
+      Mathematics: { note: "A note about maths", loading: true },
+    };
 
     render(<ProgressTab />);
 
     expect(screen.getByText("Mathematics")).toBeInTheDocument();
     expect(screen.queryByText("Fractions")).toBeNull();
+    expect(footNote(card("Mathematics"))).toBeNull();
   });
 });
 
 /**
  * Backend B53, 5 Oct: the subject read carries `topicsDone`, `topicsTotal`
- * and `currentTopic`, and 33a draws them as a square per topic, "N of M
- * topics done" and "Working on X". Counts, not scores; the total is topics
- * this child has met. 33a prints the count only for work in progress - its
- * none and all-done states have lines about topics SET, which the wire does
- * not count, so those two draw the squares alone.
+ * and `currentTopic`, and 33a draws them as a square per topic and "Working
+ * on X". The total is topics this child has met.
+ *
+ * NEVER AS A NUMBER (design D119, 6 Oct): "No counts on a child's card, in
+ * any form. '0 of 4' and '5 of 5' both read as a grade". 33a's lines for none
+ * and all-done speak of topics SET, which the wire does not count, so they
+ * are not drawn either; asked.
  */
 describe("the topics on a subject card", () => {
   const card = (name: string) =>
@@ -332,7 +407,7 @@ describe("the topics on a subject card", () => {
       m.getAttribute("data-topic"),
     );
 
-  it("draws 33a's work-in-progress card as the frame does", () => {
+  it("draws 33a's work-in-progress card as the frame does, less the count", () => {
     state({ subjects: [subject("Mathematics", ["Fractions"])] });
     narrowed.bySubject = {
       Mathematics: {
@@ -346,7 +421,6 @@ describe("the topics on a subject card", () => {
 
     const maths = card("Mathematics");
     expect(within(maths).getByText("Working on Equivalent fractions")).toBeInTheDocument();
-    expect(within(maths).getByText("3 of 8 topics done")).toBeInTheDocument();
     expect(marks(maths)).toEqual([
       "done",
       "done",
@@ -357,13 +431,36 @@ describe("the topics on a subject card", () => {
       "open",
       "open",
     ]);
-    // The frame's line is "Working on", so the note does not also show.
-    expect(within(maths).queryByText("A note about maths")).toBeNull();
+    expect(maths.textContent).not.toMatch(/3 of 8|topics done/);
+    // D120: the note no longer gives way to "Working on" - it has its own
+    // place at the foot.
+    expect(footNote(maths)).toHaveTextContent("A note about maths");
   });
 
+  it.each([
+    ["none of them done", { done: 0, total: 4 }, "Halves"],
+    ["some of them done", { done: 3, total: 8 }, "Halves"],
+    ["all of them done", { done: 5, total: 5 }, null],
+    ["some done, no topic named", { done: 2, total: 6 }, null],
+  ])(
+    "prints no count of the topics met, with %s",
+    (_, topics, currentTopic) => {
+      state({ subjects: [subject("Mathematics", ["Fractions"])] });
+      narrowed.bySubject = {
+        Mathematics: { note: null, topics, currentTopic },
+      };
+
+      render(<ProgressTab />);
+
+      const maths = card("Mathematics");
+      expect(maths.querySelector("[data-topic-marks]")).not.toBeNull();
+      expect(maths.textContent).not.toMatch(/\d/);
+      expect(maths.textContent).not.toMatch(/topics/i);
+    },
+  );
+
   it("draws nothing of the topics when the backend counted none", () => {
-    // Rule 5: 0 is the schema's default, so absent and 0 alike draw nothing,
-    // and the line stays the note.
+    // Rule 5: 0 is the schema's default, so absent and 0 alike draw nothing.
     state({ subjects: [subject("Mathematics", ["Fractions"])] });
     narrowed.bySubject = {
       Mathematics: { note: "A note about maths", topics: null },
@@ -372,7 +469,7 @@ describe("the topics on a subject card", () => {
     render(<ProgressTab />);
 
     const maths = card("Mathematics");
-    expect(within(maths).getByText("A note about maths")).toBeInTheDocument();
+    expect(footNote(maths)).toHaveTextContent("A note about maths");
     expect(maths.querySelector("[data-topic-marks]")).toBeNull();
     expect(maths.textContent).not.toMatch(/topics|Working on/);
   });
@@ -388,14 +485,13 @@ describe("the topics on a subject card", () => {
     const maths = card("Mathematics");
     expect(maths.textContent).not.toMatch(/Working on/);
     expect(within(maths).getByText("Fractions")).toBeInTheDocument();
-    expect(within(maths).getByText("3 of 8 topics done")).toBeInTheDocument();
     // And no square claims a topic is being worked on that nobody named.
     expect(marks(maths)).not.toContain("current");
   });
 
-  it("prints no count when none of the topics met is done yet", () => {
-    // 33a never prints "0 of M": its line for that state speaks of topics
-    // set, which the wire does not count. Asked of design.
+  it("claims nothing started when none of the topics met is done yet", () => {
+    // 33a's line for that state speaks of topics set, which the wire does
+    // not count. Asked of design.
     state({ subjects: [subject("Mathematics", ["Fractions"])] });
     narrowed.bySubject = {
       Mathematics: {
@@ -409,11 +505,11 @@ describe("the topics on a subject card", () => {
 
     const maths = card("Mathematics");
     expect(within(maths).getByText("Working on Halves")).toBeInTheDocument();
-    expect(maths.textContent).not.toMatch(/of 4|topics done|Nothing started/);
+    expect(maths.textContent).not.toMatch(/Nothing started|ready when you are/);
     expect(marks(maths)).toEqual(["current", "open", "open", "open"]);
   });
 
-  it("prints no count, and claims nothing set, when every topic met is done", () => {
+  it("claims nothing set when every topic met is done", () => {
     state({ subjects: [subject("English", ["Verbs"])] });
     narrowed.bySubject = {
       English: { note: "A note about English", topics: { done: 5, total: 5 } },
@@ -422,9 +518,9 @@ describe("the topics on a subject card", () => {
     render(<ProgressTab />);
 
     const english = card("English");
-    expect(english.textContent).not.toMatch(/5 of 5|Everything set|teacher adds/);
+    expect(english.textContent).not.toMatch(/Everything set|teacher adds/);
     expect(marks(english)).toEqual(["done", "done", "done", "done", "done"]);
-    expect(within(english).getByText("A note about English")).toBeInTheDocument();
+    expect(footNote(english)).toHaveTextContent("A note about English");
   });
 
   it("holds the topics with the line while the subject is still being read", () => {

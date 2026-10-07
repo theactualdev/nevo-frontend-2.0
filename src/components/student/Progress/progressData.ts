@@ -13,15 +13,18 @@ export const GROWTH_SUMMARY =
   "You've been building strong reading skills this month, and sticking with maths even when it got tricky.";
 
 /**
- * One sample subject, shaped like what a real card reads (33a): the subject's
- * note (B29), its topic counts and the topic being worked on (B53). The
- * counts and topics are 22's own, from the frame's sample subjects.
+ * One sample subject, shaped like what a real card reads (33a): its concept
+ * names, the subject's note (B29), its topic counts and the topic being worked
+ * on (B53). The counts, topics and notes are the Progress frame's own (as
+ * redrawn on 6 Oct), from its sample subjects.
  */
 export interface SubjectSummary {
   slug: string;
   name: string;
-  /** Plain-language growth note, the line where no topic is named. */
-  note: string;
+  /** What a live card's line falls back to where no topic is named (D42). */
+  concepts: string[];
+  /** The note at the card's foot (D120); absent, as in the frame, for one. */
+  note?: string;
   /** Topics met, and how many of them are done. */
   topics: SubjectTopics;
   /** The topic being worked on, which takes the card's line. */
@@ -32,20 +35,22 @@ export const SUBJECTS: SubjectSummary[] = [
   {
     slug: "mathematics",
     name: "Mathematics",
-    note: "Getting faster at solving problems",
+    concepts: ["Equivalent fractions", "Counting in 5s", "Telling the time"],
+    note: "Fractions are starting to click. You stayed with a tricky one today before it came.",
     topics: { done: 3, total: 8 },
     currentTopic: "Equivalent fractions",
   },
   {
     slug: "english",
     name: "English",
-    note: "Reading longer stories with ease",
+    concepts: ["Rhyming words", "Describing words", "Story beginnings"],
+    note: "A really steady run this term. Reading aloud has got noticeably easier.",
     topics: { done: 5, total: 5 },
   },
   {
     slug: "science",
     name: "Science",
-    note: "Asking more of your own questions",
+    concepts: ["Osmosis", "Floating and sinking", "The water cycle"],
     topics: { done: 1, total: 6 },
     currentTopic: "Osmosis",
   },

@@ -18,8 +18,8 @@ import { GROWTH_SUMMARY, SUBJECTS } from "./progressData";
  * Progress Tab (screen 22, SCRUM-144). Growth in plain language: a warm summary
  * of how the student has been doing, then a card per subject (the Student
  * Subject Card, 33a) under its own calm texture. Deliberately no scores — no
- * percentile, no mark, no peer comparison; the only number is 33a's topic
- * count (see below). Each card opens the subject.
+ * percentile, no mark, no peer comparison, and no count (see below). Each
+ * card opens the subject.
  *
  * A SIGNED-IN CHILD SEES THEIR OWN, and never the fixtures.
  *
@@ -40,22 +40,22 @@ import { GROWTH_SUMMARY, SUBJECTS } from "./progressData";
  * THE PER-CARD NOTE ARRIVED ON 1 OCT (backend B29). `note` is short as
  * written, and each card reads its own subject's from the narrowed route, the
  * same scoping `reflection` needs - the whole-student read's `note` is about
- * everything, not about this card's subject. Where the backend wrote none, the
- * card carries concept names, which are facts (design D42 accepted them).
- * `highlights` is a student-level list, not a note per subject, and still
- * waits on a designed slot.
+ * everything, not about this card's subject. It sits at the FOOT of the card
+ * (design D120, 6 Oct; 33a as redrawn that day), below a hairline and marked
+ * with a violet dot so it reads as Nevo's voice rather than another fact.
+ * Where the backend wrote none the block is simply absent, never a
+ * placeholder. `highlights` is a student-level list, not a note per subject,
+ * and still waits on a designed slot.
  *
  * No score reaches the screen (screen 22: no percentile, no score, no
  * comparison, direction of travel only). `understanding` orders the concepts
  * and never appears.
  *
- * THE TOPIC COUNTS ARRIVED ON 5 OCT (backend B53), and they are the one
- * number on this screen: "3 of 8 topics done", 33a's own line, with a square
- * per topic. A count of topics, not a mark - and the backend chose the total
- * as topics the child has MET rather than the curriculum, because a
- * denominator a child has never seen makes early progress read as failure.
- * Each card reads its subject's own, from the narrowed route; absent counts
- * draw nothing at all.
+ * THE TOPIC COUNTS ARRIVED ON 5 OCT (backend B53) and draw 33a's squares, one
+ * per topic the child has MET. They are never printed as a number: design
+ * D119, 6 Oct, "No counts on a child's card, in any form. '0 of 4' and '5 of
+ * 5' both read as a grade". Each card reads its subject's own, from the
+ * narrowed route; absent counts draw nothing at all.
  */
 export function ProgressTab() {
   const signedIn = useHasSession();
@@ -99,17 +99,18 @@ export function ProgressTab() {
         {GROWTH_SUMMARY}
       </p>
 
-      {/* The same card a real child's subject draws (33a): its squares, its
-          count, and "Working on" where a topic is named. */}
+      {/* The same card a real child's subject draws (33a): its squares,
+          "Working on" where a topic is named, and the note at its foot. */}
       <div className={SUBJECT_GRID}>
         {SUBJECTS.map((subject) => (
           <SubjectCard
             key={subject.slug}
             href={`/student/progress/${subject.slug}`}
             name={subject.name}
-            line={cardLine(subject.currentTopic, subject.note)}
+            line={cardLine(subject.currentTopic, subject.concepts.join(" · "))}
             topics={subject.topics}
             working={Boolean(subject.currentTopic)}
+            note={subject.note}
           />
         ))}
       </div>
@@ -165,12 +166,12 @@ function LiveProgress({
 }
 
 /**
- * One of the child's own subjects, under the backend's note for it.
+ * One of the child's own subjects, with the backend's note for it at its foot.
  *
  * The line waits for the subject's own read rather than showing concept names
- * first: a card whose line changed in front of the child, from a list to a
- * sentence, is a transition they would see. While it waits the line's space
- * is held so nothing below moves.
+ * first: a card whose line changed in front of the child, from a list to
+ * "Working on", is a transition they would see. While it waits the line's
+ * space is held so nothing below moves.
  */
 function LiveSubjectCard({
   subject,
@@ -178,7 +179,7 @@ function LiveSubjectCard({
   subject: ReturnType<typeof useStudentProgress>["subjects"][number];
 }) {
   const own = useSubjectProgress(subject.name);
-  // Concept NAMES, not scores, when there is no note - what they have worked
+  // Concept NAMES, not scores, when no topic is named - what they have worked
   // on is a fact; how well is a judgement the contract carries as a number
   // and screen 22 forbids showing. A failed read falls back the same way: the
   // names are already here and true.
@@ -186,7 +187,7 @@ function LiveSubjectCard({
     .slice(0, 3)
     .map((c) => c.name)
     .join(" · ");
-  const line = cardLine(own.currentTopic, own.note ?? names);
+  const line = cardLine(own.currentTopic, names);
   return (
     <SubjectCard
       href={`/student/progress/${subject.slug}`}
@@ -194,6 +195,7 @@ function LiveSubjectCard({
       line={own.loading ? null : line}
       topics={own.loading ? null : own.topics}
       working={Boolean(own.currentTopic)}
+      note={own.loading ? null : own.note}
     />
   );
 }
@@ -201,10 +203,17 @@ function LiveSubjectCard({
 /*
  * 33a'S LINE, WHEN ITS TOPIC IS ON THE WIRE (backend B53). The frame draws
  * "Working on X" under the name, and `currentTopic` is X. Where the backend
- * names none, the line is what it was: the subject's note, else the names.
- * Never "Working on" with nothing after it - the line goes with its value.
- * The signed-out walkthrough reads its line through this too, so it cannot
- * drift from what a real card says.
+ * names none, the line is the concept names (D42), the facts the card already
+ * holds. Never "Working on" with nothing after it - the line goes with its
+ * value. The signed-out walkthrough reads its line through this too, so it
+ * cannot drift from what a real card says.
+ *
+ * NOT 33a'S OTHER TWO LINES. "Nothing started yet" and "Everything set so far
+ * is done" (and the count slot's "N topics set, ready when you are" and "New
+ * topics appear here when your teacher adds them") speak of topics SET, and
+ * the wire counts topics MET. D119 says to fix that by describing what is
+ * counted, but gives no words, and a sentence about how far a child has got
+ * is the backend's to send or nobody's (D19). So neither is drawn; asked.
  */
 function cardLine(currentTopic: string | null | undefined, otherwise: string) {
   return currentTopic ? `Working on ${currentTopic}` : otherwise;
@@ -290,7 +299,8 @@ const SUBJECT_GRID =
 
 /**
  * One subject (Nevo Student Subject Card, 33a): its texture, name and line,
- * and - where the backend counted them - one square per topic and the count.
+ * one square per topic where the backend counted them, and the subject's note
+ * at the foot where the backend wrote one.
  */
 function SubjectCard({
   href,
@@ -298,6 +308,7 @@ function SubjectCard({
   line,
   topics,
   working = false,
+  note = null,
 }: {
   href: string;
   name: string;
@@ -307,7 +318,10 @@ function SubjectCard({
   topics?: SubjectTopics | null;
   /** The backend named a topic being worked on, so one square says so. */
   working?: boolean;
+  /** The subject's note (B29), as written. Null or blank draws no block. */
+  note?: string | null;
 }) {
+  const said = note?.trim();
   return (
     <Link
       href={href}
@@ -325,26 +339,39 @@ function SubjectCard({
           {line ?? " "}
         </p>
         {topics && <TopicMarks topics={topics} working={working} />}
+        {/* 33a, D120: the note at the foot, below a hairline, behind a soft
+            violet dot - Nevo's voice, kept apart from the facts above. */}
+        {said && (
+          <div
+            data-subject-note
+            className="mt-3.5 flex items-start gap-2 border-t border-nevo-near-black/8 pt-3.5 sm:mt-4 sm:pt-4"
+          >
+            <span
+              aria-hidden
+              className="mt-1.5 size-1.5 shrink-0 rounded-full bg-nevo-violet sm:mt-[7px]"
+            />
+            <p className="text-[13.5px] leading-[1.5] text-pretty text-nevo-near-black/72 sm:text-[14.5px]">
+              {said}
+            </p>
+          </div>
+        )}
       </div>
     </Link>
   );
 }
 
 /**
- * 33a's topic squares and its count line, from the backend's counts (B53).
+ * 33a's topic squares, from the backend's counts (B53).
  *
  * One square per topic this child has met: done ones filled, the one being
  * worked on outlined in violet, the rest open. They wrap as a set, not a
  * line, so they show where the child is without a trajectory, a rank or a
- * level. Decorative: the count line is what is read aloud.
+ * level. Decorative, and hidden from screen readers.
  *
- * THE COUNT LINE ONLY WHERE THE FRAME PRINTS IT. 33a writes "3 of 8 topics
- * done" for work in progress and never "0 of 4" or "5 of 5" - those two
- * states have their own lines ("Nothing started yet", "Everything set so far
- * is done") that speak of topics SET, where the total on the wire is topics
- * MET. Neither is true of what the backend counts, so neither is drawn, and
- * the count is not stretched over them either: at none and at all, the
- * squares stand alone. Both lines are asked of design.
+ * NO COUNT LINE, AT ANY STATE (design D119, 6 Oct). 33a printed "3 of 8
+ * topics done" under the squares; "No counts on a child's card, in any form",
+ * because "0 of 4" and "5 of 5" both read as a grade. Nothing reads the
+ * squares out as a number either - a count spoken is still a count.
  *
  * The current square needs the backend to have named a current topic: one
  * marked "being worked on" with nothing named would be a claim nobody made.
@@ -357,38 +384,30 @@ function TopicMarks({
   working: boolean;
 }) {
   const { done, total } = topics;
-  const midway = done > 0 && done < total;
   return (
-    <>
-      <div
-        aria-hidden
-        data-topic-marks
-        className="mt-3.5 flex max-w-[180px] flex-wrap gap-[5px]"
-      >
-        {Array.from({ length: total }, (_, i) => {
-          const mark =
-            i < done ? "done" : working && i === done ? "current" : "open";
-          return (
-            <span
-              key={i}
-              data-topic={mark}
-              className={cn(
-                "box-border size-3 shrink-0 rounded-[3px]",
-                mark === "done" && "bg-nevo-navy",
-                mark === "current" &&
-                  "border-2 border-nevo-violet bg-nevo-violet/30",
-                mark === "open" && "border-[1.5px] border-nevo-near-black/22",
-              )}
-            />
-          );
-        })}
-      </div>
-      {midway && (
-        <p className="mt-2 text-[13px] text-nevo-near-black/55">
-          {done} of {total} topics done
-        </p>
-      )}
-    </>
+    <div
+      aria-hidden
+      data-topic-marks
+      className="mt-3.5 flex max-w-[180px] flex-wrap gap-[5px]"
+    >
+      {Array.from({ length: total }, (_, i) => {
+        const mark =
+          i < done ? "done" : working && i === done ? "current" : "open";
+        return (
+          <span
+            key={i}
+            data-topic={mark}
+            className={cn(
+              "box-border size-3 shrink-0 rounded-[3px]",
+              mark === "done" && "bg-nevo-navy",
+              mark === "current" &&
+                "border-2 border-nevo-violet bg-nevo-violet/30",
+              mark === "open" && "border-[1.5px] border-nevo-near-black/22",
+            )}
+          />
+        );
+      })}
+    </div>
   );
 }
 
