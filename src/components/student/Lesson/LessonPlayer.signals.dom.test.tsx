@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
 import type { AdaptationPlan, Lesson } from "@/lib/types";
+import { offendingCalls } from "@/test/signalCatalogue";
+import catalogue from "@/lib/api/signals.catalogue.json";
 
 /**
  * What the player tells the engine, and what it no longer decides for it.
@@ -99,6 +101,13 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  /*
+   * EVERY PAYLOAD EVERY TEST HERE DROVE OUT OF THE PLAYER, unmount included,
+   * held to the keys the catalogue declares. The source scan in
+   * `signals.catalogue.test.ts` cannot read a call whose type is a variable -
+   * the suggestion outcomes, the density chips - and these tests reach them.
+   */
+  expect(offendingCalls(trackEvent.mock.calls)).toEqual([]);
 });
 
 describe("time on a segment", () => {
@@ -142,7 +151,7 @@ describe("breaks are the engine's to offer", () => {
       vi.advanceTimersByTime(25 * 60_000);
     });
 
-    expect(screen.queryByText("Let's take a short break")).toBeNull();
+    expect(screen.queryByText("Want a break?")).toBeNull();
     expect(sent("break_suggested")).toEqual([]);
   });
 
@@ -151,15 +160,82 @@ describe("breaks are the engine's to offer", () => {
     render(<LessonPlayer lesson={THREE} plan={null} live />);
     beat();
 
-    expect(screen.getByText("Let's take a short break")).toBeInTheDocument();
-    expect(sent("break_suggested")).toEqual([
-      { segmentId: "seg-1", breakType: "movement" },
-    ]);
+    expect(screen.getByText("Want a break?")).toBeInTheDocument();
+    expect(sent("break_suggested")).toEqual([{ trigger: "engine_offer" }]);
 
-    fireEvent.click(screen.getByRole("button", { name: "Yes, take a break" }));
-    expect(sent("break_taken")).toEqual([
-      { segmentId: "seg-1", breakType: "movement" },
+    fireEvent.click(screen.getByRole("button", { name: "Take a break" }));
+    expect(sent("break_taken")).toEqual([{ trigger: "engine_offer" }]);
+    // The break it led to says who asked, start and end.
+    expect(sent("break_start")).toEqual([{ trigger: "engine_offer" }]);
+    now = 42_000;
+    fireEvent.click(screen.getByRole("button", { name: "I'm done" }));
+    expect(sent("break_end")).toEqual([
+      { trigger: "engine_offer", durationMs: 42_000 },
     ]);
+  });
+
+  it("says when the child turns it down, which used to leave no trace", () => {
+    runtime.value = { ...runtime.value, offeredBreak: "movement", forSegmentId: "seg-1" };
+    render(<LessonPlayer lesson={THREE} plan={null} live />);
+    beat();
+
+    fireEvent.click(screen.getByRole("button", { name: "Not now" }));
+
+    expect(sent("break_declined")).toEqual([{ trigger: "engine_offer" }]);
+    expect(sent("break_taken")).toEqual([]);
+    expect(screen.queryByText("Want a break?")).toBeNull();
+  });
+
+  it("says nothing was answered when the child moves on past it", () => {
+    runtime.value = { ...runtime.value, offeredBreak: "movement", forSegmentId: "seg-1" };
+    render(<LessonPlayer lesson={THREE} plan={null} live />);
+    beat();
+
+    next();
+
+    // No answer is not "Not now" - that is the line the type exists to draw.
+    expect(sent("break_declined")).toEqual([]);
+  });
+
+  it("names the plan's offer as the plan's, not the engine's", () => {
+    const plan: AdaptationPlan = {
+      lessonId: "l-1",
+      segments: [
+        { segmentId: "seg-1", startModality: "text", offerBreak: "movement" },
+      ],
+    };
+    render(<LessonPlayer lesson={THREE} plan={plan} />);
+    beat();
+
+    expect(sent("break_suggested")).toEqual([{ trigger: "affect_offer" }]);
+    fireEvent.click(screen.getByRole("button", { name: "Not now" }));
+    expect(sent("break_declined")).toEqual([{ trigger: "affect_offer" }]);
+  });
+
+  it("asks at the foot of the lesson, Not now before Take a break", () => {
+    runtime.value = { ...runtime.value, offeredBreak: "movement", forSegmentId: "seg-1" };
+    render(<LessonPlayer lesson={THREE} plan={null} live />);
+    beat();
+
+    const ask = screen.getByText("Want a break?");
+    const notNow = screen.getByRole("button", { name: "Not now" });
+    const take = screen.getByRole("button", { name: "Take a break" });
+    const after = (a: Node, b: Node) =>
+      Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+    // Below the lesson's content, above the chevrons - not under the top bar.
+    expect(after(screen.getByText("Body of seg-1."), ask)).toBe(true);
+    expect(after(take, screen.getByRole("button", { name: "Next" }))).toBe(true);
+    expect(after(notNow, take)).toBe(true);
+    // Design dropped every line but the question (frame 38, 6 Oct).
+    for (const gone of [
+      /short break/i,
+      /tricky/i,
+      /something different/i,
+      /progress is saved/i,
+    ]) {
+      expect(screen.queryByText(gone)).toBeNull();
+    }
   });
 
   it("still offers the engine's next break after one was turned down", () => {
@@ -174,7 +250,7 @@ describe("breaks are the engine's to offer", () => {
     beat();
 
     // It used to be spent for the rest of the lesson after one offer.
-    expect(screen.getByText("Let's take a short break")).toBeInTheDocument();
+    expect(screen.getByText("Want a break?")).toBeInTheDocument();
   });
 
   it("does not carry an answer about the last segment onto this one", () => {
@@ -182,7 +258,58 @@ describe("breaks are the engine's to offer", () => {
     render(<LessonPlayer lesson={THREE} plan={null} live />);
     beat();
 
-    expect(screen.queryByText("Let's take a short break")).toBeNull();
+    expect(screen.queryByText("Want a break?")).toBeNull();
+  });
+});
+
+describe("every break event, against the catalogue", () => {
+  /*
+   * THE CATALOGUE'S KEYS AND NO OTHERS (B37). `break_suggested` and
+   * `break_taken` carried `{ segmentId, breakType }` where the catalogue
+   * declares `{ trigger }`, `break_start` added the type and the segment, and
+   * `break_end` had no `trigger` at all. This walks every break event a
+   * lesson can send - offered, turned down, taken, started, ended - and holds
+   * each to exactly what `GET /api/signals/catalogue` says it carries.
+   */
+  const declared = new Map(
+    (catalogue as { eventType: string; payload: string[] }[]).map((e) => [
+      e.eventType,
+      e.payload,
+    ]),
+  );
+
+  it("sends exactly the declared keys, each of them", () => {
+    runtime.value = { ...runtime.value, offeredBreak: "movement", forSegmentId: "seg-1" };
+    const { rerender } = render(<LessonPlayer lesson={THREE} plan={null} live />);
+    beat();
+    fireEvent.click(screen.getByRole("button", { name: "Not now" }));
+    next();
+    runtime.value = { ...runtime.value, offeredBreak: "movement", forSegmentId: "seg-2" };
+    rerender(<LessonPlayer lesson={THREE} plan={null} live />);
+    beat();
+    fireEvent.click(screen.getByRole("button", { name: "Take a break" }));
+    fireEvent.click(screen.getByRole("button", { name: "I'm done" }));
+
+    const breakEvents = trackEvent.mock.calls.filter(([t]) =>
+      String(t).startsWith("break_"),
+    );
+    expect(breakEvents.map(([t]) => t)).toEqual([
+      "break_suggested",
+      "break_declined",
+      "break_suggested",
+      "break_taken",
+      "break_start",
+      "break_end",
+    ]);
+    for (const [type, payload] of breakEvents) {
+      // `[key]` in the catalogue is an optional key.
+      const keys = declared.get(type) ?? [];
+      const required = keys.filter((k) => !k.startsWith("["));
+      const allowed = keys.map((k) => k.replace(/^\[|\]$/g, ""));
+      const sentKeys = Object.keys(payload as object);
+      expect(sentKeys.filter((k) => !allowed.includes(k)), type).toEqual([]);
+      expect(required.filter((k) => !sentKeys.includes(k)), type).toEqual([]);
+    }
   });
 });
 
@@ -262,7 +389,13 @@ describe("what became of a modality offer", () => {
 });
 
 describe("an answer, as the engine receives it", () => {
-  it("carries the checkpoint, the pick and how long it took", () => {
+  it("names the segment and the checkpoint, and not the pick or whether it was right", () => {
+    /*
+     * The catalogue's `{ segmentId, questionId }`. Correctness is decided on
+     * the server against the stored answer, and the pick goes up on the
+     * attempt it marks - so `correct`, `selectedId` and the rest that rode
+     * here were keys the catalogue does not take.
+     */
     const withCheck = lesson(
       seg("seg-1", {
         quickCheck: {
@@ -286,17 +419,135 @@ describe("an answer, as the engine receives it", () => {
     fireEvent.click(screen.getByRole("button", { name: "One third" }));
 
     expect(sent("comprehension_response")).toEqual([
-      {
-        kind: "quick_check",
-        segmentId: "seg-1",
-        checkpointId: "cp-1",
-        correct: false,
-        selectedId: "b",
-        responseTimeMs: 4_000,
-      },
+      { segmentId: "seg-1", questionId: "cp-1" },
     ]);
+    // The miss is still the player's own reading for the adapt request.
     const state = runtimeArgs.at(-1)![3] as Record<string, unknown>;
     expect(state.consecutiveErrors).toBe(1);
+  });
+});
+
+describe("a wait the system owns", () => {
+  const withCheck = () =>
+    lesson(
+      seg("seg-1", {
+        quickCheck: {
+          id: "cp-1",
+          question: "Which is bigger?",
+          options: [
+            { id: "a", label: "One half" },
+            { id: "b", label: "One third" },
+          ],
+          correctId: "a",
+          correctNote: "Yes.",
+          recoveryNote: "Not quite.",
+        },
+      }),
+      seg("seg-2"),
+    );
+
+  it("goes up once, as it ends, with how long it ran", () => {
+    /*
+     * The catalogue's `{ reason, durationMs }`. It went up as a start and an
+     * end, each `{ reason, phase }` - two events, a key the catalogue does not
+     * take, and no length on either.
+     */
+    render(<LessonPlayer lesson={withCheck()} plan={null} />);
+    now = 1_000;
+    next(); // the check opens over the player
+    expect(sent("system_busy")).toEqual([]);
+
+    now = 3_500;
+    fireEvent.click(screen.getByRole("button", { name: "One half" }));
+    fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
+
+    expect(sent("system_busy")).toEqual([
+      { reason: "blocked_by_modal", durationMs: 2_500 },
+    ]);
+  });
+
+  it("still goes up when the child leaves the player in the middle of it", () => {
+    const { unmount } = render(<LessonPlayer lesson={withCheck()} plan={null} />);
+    now = 1_000;
+    next();
+
+    now = 1_800;
+    unmount();
+
+    expect(sent("system_busy")).toEqual([
+      { reason: "blocked_by_modal", durationMs: 800 },
+    ]);
+  });
+
+  it("goes up for a switch the child left before it finished", () => {
+    /*
+     * "Yes, try it" opens the switch's window and the switch itself closes
+     * it, a beat later. Leaving inside that beat clears the switch, so only
+     * the player's own unmount can send the wait - with no length, it would
+     * have no way to go up at all.
+     */
+    runtime.value = {
+      offeredBreak: null,
+      reason: null,
+      forSegmentId: "seg-1",
+      plan: { lessonId: "l-1", segments: [], suggestModality: "audio" },
+    };
+    const { unmount } = render(<LessonPlayer lesson={THREE} plan={null} live />);
+    beat();
+    now = 5_000;
+    fireEvent.click(screen.getByRole("button", { name: "Yes, try it" }));
+
+    now = 5_120;
+    unmount();
+
+    expect(sent("system_busy")).toEqual([
+      { reason: "modality_switch", durationMs: 120 },
+    ]);
+  });
+});
+
+describe("the rest of what the player sends", () => {
+  it("says which segment a child tried to leave from, and nothing else", () => {
+    render(<LessonPlayer lesson={THREE} plan={null} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Exit lesson" }));
+
+    expect(sent("exit_attempt")).toEqual([{ segmentId: "seg-1" }]);
+  });
+
+  it("sends the feelings a child picked as the catalogue's `response`", () => {
+    const plan: AdaptationPlan = {
+      lessonId: "l-1",
+      segments: [
+        { segmentId: "seg-1", startModality: "text", breakAfter: "consolidation" },
+      ],
+    };
+    render(<LessonPlayer lesson={THREE} plan={plan} />);
+    next(); // the planned consolidation break
+
+    fireEvent.click(screen.getByRole("button", { name: "Curious" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(sent("feeling_checkin")).toEqual([{ response: ["Curious"] }]);
+  });
+
+  it("never reports the plan's density as the child asking for it", () => {
+    /*
+     * `simplify_trigger` is "the child asks for the simpler wording". The
+     * authored per-segment density went up as one with `source: "system"`
+     * on every segment it applied to.
+     */
+    const plan = {
+      lessonId: "l-1",
+      segments: [
+        { segmentId: "seg-2", startModality: "text", density: "simplify" },
+      ],
+    } as unknown as AdaptationPlan;
+    render(<LessonPlayer lesson={THREE} plan={plan} />);
+
+    next();
+
+    expect(sent("simplify_trigger")).toEqual([]);
   });
 });
 

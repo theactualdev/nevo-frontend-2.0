@@ -253,23 +253,22 @@ describe("what a failed report costs", () => {
 });
 
 describe("what an answer tells the engine", () => {
-  it("names the checkpoint, the pick and how long it took", () => {
+  it("names the checkpoint, and no segment the question never belonged to", () => {
     render(<LessonPlayer lesson={lessonWith(QUESTION)} plan={PLAN} live />);
     reachAssessment();
 
     answer("Roots");
 
-    // It sent `{ questionIndex, correct }`: no checkpoint to join on, no pick
-    // to tell a near miss from a misconception, and no time at all.
-    expect(trackEvent).toHaveBeenCalledWith(
-      "comprehension_response",
-      expect.objectContaining({
-        kind: "assessment",
-        checkpointId: "cp-7",
-        selectedId: "b",
-        correct: false,
-        responseTimeMs: expect.any(Number),
-      }),
-    );
+    /*
+     * The catalogue's `{ segmentId, questionId }`, as far as each is true. An
+     * after-lesson question belongs to the lesson, so it names no segment.
+     * Correctness is decided on the server against the stored answer, and the
+     * pick goes up on the attempt the server marks - so `correct`, the pick
+     * and its timing, which rode here under keys the catalogue does not take,
+     * are not sent.
+     */
+    expect(trackEvent).toHaveBeenCalledWith("comprehension_response", {
+      questionId: "cp-7",
+    });
   });
 });

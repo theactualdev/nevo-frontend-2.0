@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ProfilingFlow } from "./ProfilingFlow";
 import { BaselineCapture } from "@/lib/profiling/capture";
+import catalogue from "@/lib/api/signals.catalogue.json";
 import {
   clearOnboardingDraft,
   mergeOnboardingDraft,
@@ -192,6 +193,30 @@ describe("ProfilingFlow — what it tells the signal stream", () => {
     expect(types.filter((t) => t === "baseline_module_complete")).toHaveLength(
       4,
     );
+  });
+
+  it("marks them with exactly the catalogue's keys", () => {
+    // The catalogue declares `moduleId` for both. They sent `module`, and the
+    // start an undeclared `band`, which has no declared home (B76).
+    const track = vi.fn();
+    render(<ProfilingFlow onDone={vi.fn()} track={track} />);
+
+    sitTheWholeRun();
+
+    const declared = (type: string) =>
+      [...(catalogue.find((e) => e.eventType === type)?.payload ?? [])].sort();
+    const marks = track.mock.calls.filter(([type]) =>
+      String(type).startsWith("baseline_module_"),
+    );
+    expect(marks).toHaveLength(8);
+    for (const [type, payload] of marks) {
+      expect(Object.keys(payload).sort()).toEqual(declared(type));
+    }
+    expect(
+      marks
+        .filter(([type]) => type === "baseline_module_start")
+        .map(([, payload]) => payload.moduleId),
+    ).toEqual(["grid_span", "pattern_flanker", "sentence_dot", "domain_probe"]);
   });
 });
 

@@ -8,8 +8,9 @@ import { tapPoint, type BaselineCapture } from "@/lib/profiling/capture";
 import { AvatarBubble, ProfilingShell } from "./ProfilingShell";
 
 /**
- * Playback pacing (BP-M1 playable, 11:202): slows as struggle accumulates.
- * The base highlight is per band now - `GridSpanConfig.litMs`.
+ * Playback pacing (BP-M1 playable, 11:202): slows as struggle accumulates,
+ * in the bands whose `GridSpanConfig.slowAfterMiss` says so. The base
+ * highlight is per band - `GridSpanConfig.litMs`.
  */
 const LIT_STRUGGLE_MS = 300;
 const GAP_BASE_MS = 280;
@@ -96,8 +97,9 @@ const PHONE_GRID =
  * Module 1 - Spatial Grid Span (BP-M1, working memory). Tiles light in
  * sequence; the student taps them back in reverse. Adaptive: the span starts at
  * the band's start and grows by one per clean recall to the band ceiling, each
- * from the Module 1 frame (see `gridSpanConfig`); playback slows while
- * the student struggles and recovers as they do. A wrong tap gives a gentle
+ * from the Module 1 frame (see `gridSpanConfig`); in the bands that slow
+ * after a miss, playback slows while the student struggles and recovers as
+ * they do, and in the rest it keeps one pace. A wrong tap gives a gentle
  * soft-violet nudge (the tile never fills, nothing shakes, nothing is "wrong"),
  * locks the grid for a beat, and replays the same pattern; three misses at a
  * length end the module seamlessly. The SS band interleaves a true/false check
@@ -115,7 +117,8 @@ export function GridSpanModule({
   capture?: BaselineCapture;
   onComplete: () => void;
 }) {
-  const { n, spanStart, spanMax, litMs, dual, instruction } = config;
+  const { n, spanStart, spanMax, litMs, slowAfterMiss, dual, instruction } =
+    config;
   const cells = n * n;
 
   const [step, setStep] = useState<Step>("watching");
@@ -167,7 +170,7 @@ export function GridSpanModule({
   const startRound = useCallback(
     (seq: number[]) => {
       clearTimers();
-      const s = Math.min(3, struggle.current);
+      const s = slowAfterMiss ? Math.min(3, struggle.current) : 0;
       const lit = litMs + s * LIT_STRUGGLE_MS;
       const gap = GAP_BASE_MS + s * GAP_STRUGGLE_MS;
       setStep("watching");
@@ -201,7 +204,7 @@ export function GridSpanModule({
         }
       });
     },
-    [after, capture, clearTimers, dual, litMs],
+    [after, capture, clearTimers, dual, litMs, slowAfterMiss],
   );
 
   // Kick off round 1 on a zero-delay timer: the cleanup cancels it, so

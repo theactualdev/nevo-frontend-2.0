@@ -133,10 +133,7 @@ function CurrentPinStep({
   return (
     <PinFrame onBack={onBack}>
       <div className="flex flex-1 flex-col items-center justify-center px-10 pb-6 text-center">
-        <h2 className="text-[23px] font-semibold tracking-[-0.01em] sm:text-[25px]">
-          Enter your current PIN
-        </h2>
-        <p className="mt-3 text-[15px] text-nevo-near-black/60">Step 1 of 3</p>
+        <StepHeading title="Enter your current PIN" step={1} />
 
         <PinRow
           filled={pin.length}
@@ -144,6 +141,7 @@ function CurrentPinStep({
           caretAt={pin.length}
           error={wrong}
           length={Math.max(STUDENT_PIN_LENGTH, pin.length)}
+          className={FRAME_27_ROW}
         />
 
         <p role="alert" className="mt-4 min-h-5 text-sm text-nevo-violet">
@@ -177,10 +175,18 @@ function CurrentPinStep({
 }
 
 /**
- * Steps 2 and 3: the new PIN, then the same again. One screen with two rows,
- * as the PIN pattern draws it; the step label moves to 3 when the first row is
- * full, and a mismatch keeps them on 3 (the IA: "mismatch: inline error, stays
- * on Step 3").
+ * Steps 2 and 3: "Choose a new PIN", then "Type it again" - TWO SCREENS, each
+ * with one row of four, as frame 27 draws them since 6 Oct (D62). It was one
+ * screen with both rows, headed "Create a PIN" with "Type it again to
+ * confirm" between them: the PIN pattern's layout, borrowed until the frame
+ * drew these steps.
+ *
+ * Still one reducer underneath: the fourth digit moves them to step 3, and a
+ * mismatch keeps them there with the first PIN kept (the IA: "mismatch:
+ * inline error, stays on Step 3"). Back from step 3 is step 2, emptied.
+ *
+ * NOT DRAWN: a failed save. Frame 27 has none, so it keeps the shared
+ * not-saved line, on step 3, with the new PIN kept.
  *
  * Mounted fresh each time step 1 hands over, so a half-typed new PIN never
  * survives a trip back.
@@ -248,37 +254,38 @@ function NewPinStep({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [done, digits, currentPin]);
 
-  const step = digits.length < STUDENT_PIN_LENGTH ? 2 : 3;
+  /** The new PIN's four are in: this is step 3, the same again. */
+  const again = digits.length >= STUDENT_PIN_LENGTH;
 
   return (
     // No way back while the write is in flight: leaving would hide the answer
     // to a change that may already have landed.
-    <PinFrame onBack={done ? undefined : onBack}>
+    <PinFrame
+      onBack={
+        done
+          ? undefined
+          : again
+            ? () => {
+                setSaveFailed(false);
+                dispatch({ type: "restart" });
+              }
+            : onBack
+      }
+    >
       <div className="flex flex-1 flex-col items-center justify-center px-10 pb-6 text-center">
-        {/*
-          NOT DRAWN: frame 27 draws step 1 and the updated screen only. The
-          heading is the PIN pattern's own words until design gives steps 2
-          and 3 theirs; the step line follows step 1's.
-        */}
-        <h2 className="text-[23px] font-semibold tracking-[-0.01em] sm:text-[25px]">
-          Create a PIN
-        </h2>
-        <p className="mt-3 text-[15px] text-nevo-near-black/60">
-          Step {step} of 3
-        </p>
-
-        <PinRow
-          filled={digits.length}
-          offset={0}
-          caretAt={digits.length}
-          error={false}
+        <StepHeading
+          title={again ? "Type it again" : "Choose a new PIN"}
+          step={again ? 3 : 2}
         />
-        <p className="mt-7 mb-3 text-sm font-medium">Type it again to confirm</p>
+
+        {/* Step 3's row is the second half of the same digits. */}
         <PinRow
+          key={again ? "again" : "new"}
           filled={digits.length}
-          offset={STUDENT_PIN_LENGTH}
+          offset={again ? STUDENT_PIN_LENGTH : 0}
           caretAt={digits.length}
-          error={error}
+          error={again && error}
+          className={FRAME_27_ROW}
         />
         <p role="alert" className="mt-4 min-h-5 text-sm text-nevo-violet">
           {error ? PIN_MISMATCH_COPY : saveFailed ? PIN_NOT_SAVED_COPY : ""}
@@ -295,6 +302,24 @@ function NewPinStep({
         />
       )}
     </PinFrame>
+  );
+}
+
+/** Frame 27's rows: 36px under the step line, the boxes 14px apart. */
+const FRAME_27_ROW = "mt-9 gap-3.5";
+
+/**
+ * Each step's heading and "Step n of 3", as frame 27 draws all three: 22px,
+ * and the step line 10px under it.
+ */
+function StepHeading({ title, step }: { title: string; step: 1 | 2 | 3 }) {
+  return (
+    <>
+      <h2 className="text-[22px] font-semibold sm:text-[25px]">{title}</h2>
+      <p className="mt-2.5 text-[15px] text-nevo-near-black/60">
+        Step {step} of 3
+      </p>
+    </>
   );
 }
 

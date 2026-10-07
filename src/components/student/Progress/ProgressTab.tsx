@@ -99,13 +99,17 @@ export function ProgressTab() {
         {GROWTH_SUMMARY}
       </p>
 
+      {/* The same card a real child's subject draws (33a): its squares, its
+          count, and "Working on" where a topic is named. */}
       <div className={SUBJECT_GRID}>
         {SUBJECTS.map((subject) => (
           <SubjectCard
             key={subject.slug}
             href={`/student/progress/${subject.slug}`}
             name={subject.name}
-            line={subject.note}
+            line={cardLine(subject.currentTopic, subject.note)}
+            topics={subject.topics}
+            working={Boolean(subject.currentTopic)}
           />
         ))}
       </div>
@@ -135,8 +139,16 @@ function LiveProgress({
         Progress
       </h1>
 
+      {/* With no cards under it the reflection stands alone at full width,
+          and the grid is not drawn at all (22, "reflection only", D103). */}
       {summary && (
-        <p className="mt-5 max-w-[300px] text-base leading-[1.55] text-nevo-near-black/72 sm:mt-6 sm:max-w-[560px] sm:text-[18px] lg:mt-7 lg:max-w-[640px] lg:text-[19px]">
+        <p
+          className={cn(
+            "mt-5 text-base leading-[1.55] text-nevo-near-black/72 sm:mt-6 sm:text-[18px] lg:mt-7 lg:text-[19px]",
+            subjects.length > 0 &&
+              "max-w-[300px] sm:max-w-[560px] lg:max-w-[640px]",
+          )}
+        >
           {summary}
         </p>
       )}
@@ -174,15 +186,7 @@ function LiveSubjectCard({
     .slice(0, 3)
     .map((c) => c.name)
     .join(" · ");
-  /*
-   * 33a'S LINE, WHEN ITS TOPIC IS ON THE WIRE (backend B53). The frame draws
-   * "Working on X" under the name, and `currentTopic` is X. Where the backend
-   * names none, the line is what it was: the subject's note, else the names.
-   * Never "Working on" with nothing after it - the line goes with its value.
-   */
-  const line = own.currentTopic
-    ? `Working on ${own.currentTopic}`
-    : (own.note ?? names);
+  const line = cardLine(own.currentTopic, own.note ?? names);
   return (
     <SubjectCard
       href={`/student/progress/${subject.slug}`}
@@ -192,6 +196,18 @@ function LiveSubjectCard({
       working={Boolean(own.currentTopic)}
     />
   );
+}
+
+/*
+ * 33a'S LINE, WHEN ITS TOPIC IS ON THE WIRE (backend B53). The frame draws
+ * "Working on X" under the name, and `currentTopic` is X. Where the backend
+ * names none, the line is what it was: the subject's note, else the names.
+ * Never "Working on" with nothing after it - the line goes with its value.
+ * The signed-out walkthrough reads its line through this too, so it cannot
+ * drift from what a real card says.
+ */
+function cardLine(currentTopic: string | null | undefined, otherwise: string) {
+  return currentTopic ? `Working on ${currentTopic}` : otherwise;
 }
 
 /** The read failed - not the same as having done nothing. */

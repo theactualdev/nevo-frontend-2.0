@@ -113,10 +113,6 @@ const PICKUP: PickUp[] = [
   },
 ];
 
-/** The frame's note while there is unfinished work - a fictional child's week. */
-const ENCOURAGEMENT =
-  "You've been showing up this week. Keep going at your own pace.";
-
 /**
  * The frame's note when nothing is outstanding. True whenever it shows: it is
  * gated on the very thing it states, that no lesson is left part-way.
@@ -167,8 +163,8 @@ function timeEstimate(lesson: {
 /**
  * Home Dashboard (screen 19, SCRUM-146). Today's lessons first, then up to five
  * unfinished lessons under "Pick up where you left off" - each with its subject,
- * never a date - and a quiet note. When nothing is outstanding
- * that section is absent entirely. Reduced-motion aware; a settled empty state
+ * never a date. When nothing is outstanding that section is absent entirely,
+ * and a quiet note says so. Reduced-motion aware; a settled empty state
  * when nothing has been set yet.
  */
 export function HomeDashboard() {
@@ -182,7 +178,6 @@ export function HomeDashboard() {
 
   let today: TodayLesson[] = TODAY;
   let pickup: PickUp[] = PICKUP;
-  let note: string | null = ENCOURAGEMENT;
   /** Something has been set for this child, even if it is all done now. */
   let everSet = true;
 
@@ -305,17 +300,6 @@ export function HomeDashboard() {
           };
         });
 
-      /*
-       * THE NOTE IS THE FRAME'S CAUGHT-UP LINE, OR NOTHING.
-       *
-       * Every child used to read "Go at your own pace - Nevo keeps up with
-       * you", which no frame draws. The frame's line for a child with work
-       * outstanding ("You've been showing up this week") is a claim about the
-       * child that nothing here verifies, so it waits on design. The
-       * caught-up line states only what this screen can see.
-       */
-      note = pickup.length === 0 ? CAUGHT_UP : null;
-
       // Finished work is still work that was set: a child who has done
       // everything is caught up, not waiting on a first lesson.
       everSet =
@@ -330,11 +314,24 @@ export function HomeDashboard() {
     } else {
       today = [];
       pickup = [];
-      note = null;
       everSet = false;
     }
   }
   const nothingSet = signedIn && Boolean(live) && !everSet;
+
+  /*
+   * THE NOTE IS THE FRAME'S CAUGHT-UP LINE, OR NOTHING - signed in or not.
+   *
+   * Every child used to read "Go at your own pace - Nevo keeps up with you",
+   * which no frame draws. The frame's line for work outstanding ("You've been
+   * showing up this week") was a claim about the child that nothing here
+   * verifies, and design took it out (D98, 6 Oct): Home shows no note while
+   * work is outstanding. The signed-out walkthrough follows the same rule,
+   * since it is what a real child's Home looks like. The caught-up line
+   * states only what this screen can see, and needs a read to see it.
+   */
+  const note =
+    (!signedIn || live) && pickup.length === 0 ? CAUGHT_UP : null;
 
   const openPreview = (lesson: LessonSummary) => {
     setPreview(lesson);

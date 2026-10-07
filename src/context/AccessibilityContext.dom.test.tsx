@@ -6,11 +6,10 @@ import { clearSession, setSession } from "@/lib/auth/session";
 /**
  * ONE CHILD'S SETTINGS, NOT THE TABLET'S.
  *
- * Text size, contrast, motion and the break preference lived under one device
- * key. On a shared classroom tablet the next child inherited the last child's
- * zoom - and their break preference, which is learning support rather than a
- * screen setting. These pin that each account keeps its own, and that a
- * change of child is noticed without a reload.
+ * Text size, contrast and motion lived under one device key. On a shared
+ * classroom tablet the next child inherited the last child's zoom. These pin
+ * that each account keeps its own, and that a change of child is noticed
+ * without a reload.
  */
 
 const signInAs = (userId: string) =>
@@ -26,19 +25,19 @@ function Probe() {
   return (
     <div>
       <span data-testid="size">{a11y.textSize}</span>
-      <span data-testid="breaks">{String(a11y.suggestBreaks)}</span>
+      <span data-testid="contrast">{String(a11y.highContrast)}</span>
       <button type="button" onClick={() => a11y.setTextSize("xl")}>
         bigger
       </button>
-      <button type="button" onClick={() => a11y.setSuggestBreaks(false)}>
-        no breaks
+      <button type="button" onClick={() => a11y.setHighContrast(true)}>
+        contrast
       </button>
     </div>
   );
 }
 
 const size = () => screen.getByTestId("size").textContent;
-const breaks = () => screen.getByTestId("breaks").textContent;
+const contrast = () => screen.getByTestId("contrast").textContent;
 
 /** The session store announces a microtask later; let it land. */
 const settle = () => act(async () => {});
@@ -82,15 +81,15 @@ describe("accessibility settings on a shared tablet", () => {
       </AccessibilityProvider>,
     );
     await settle();
-    act(() => screen.getByText("no breaks").click());
+    act(() => screen.getByText("contrast").click());
 
     signInAs("bayo");
     await settle();
-    expect(breaks()).toBe("true");
+    expect(contrast()).toBe("false");
 
     signInAs("ada");
     await settle();
-    expect(breaks()).toBe("false");
+    expect(contrast()).toBe("true");
   });
 
   it("never writes one child's settings under another child's name", async () => {
@@ -125,5 +124,30 @@ describe("accessibility settings on a shared tablet", () => {
     await settle();
 
     expect(size()).toBe("m");
+  });
+});
+
+describe("the break preference, removed (D87)", () => {
+  it("keeps a child's settings and drops the old break switch from storage", async () => {
+    // Written by a build that still had "Suggest breaks automatically".
+    window.localStorage.setItem(
+      "nevo:a11y:ada",
+      JSON.stringify({ textSize: "l", suggestBreaks: false }),
+    );
+    signInAs("ada");
+    render(
+      <AccessibilityProvider>
+        <Probe />
+      </AccessibilityProvider>,
+    );
+    await settle();
+
+    expect(size()).toBe("l");
+    const stored = JSON.parse(window.localStorage.getItem("nevo:a11y:ada")!);
+    expect(stored).toEqual({
+      reducedMotion: false,
+      highContrast: false,
+      textSize: "l",
+    });
   });
 });

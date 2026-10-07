@@ -12,11 +12,8 @@ import { setSession } from "@/lib/auth/session";
 import { knownRole } from "@/lib/auth/consoleDoor";
 import { ssoLanding, studentDestination } from "@/lib/auth/entryGate";
 import { skipsWelcomeBeat } from "./signInMoments";
-import {
-  BUSY_PHASE,
-  BUSY_REASON,
-  SIGNAL_EVENT_TYPES,
-} from "@/lib/constants";
+import { BUSY_REASON } from "@/lib/constants";
+import { openBusyWindow } from "@/lib/signals/busy";
 import { randomId } from "@/lib/utils";
 
 type Phase = "signing-in" | "success" | "error";
@@ -96,15 +93,7 @@ export function SsoCallback() {
 
   useEffect(() => {
     if (shown !== "signing-in") return;
-    trackEvent(SIGNAL_EVENT_TYPES.SYSTEM_BUSY, {
-      reason: BUSY_REASON.AUTH_PENDING,
-      phase: BUSY_PHASE.START,
-    });
-    return () =>
-      trackEvent(SIGNAL_EVENT_TYPES.SYSTEM_BUSY, {
-        reason: BUSY_REASON.AUTH_PENDING,
-        phase: BUSY_PHASE.END,
-      });
+    return openBusyWindow(trackEvent, BUSY_REASON.AUTH_PENDING);
   }, [shown, trackEvent]);
 
   const redirectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);

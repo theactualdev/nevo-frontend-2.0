@@ -14,7 +14,6 @@ import {
   DENSITY,
   MODALITY,
   SIGNAL_EVENT_TYPES,
-  TRIGGER_SOURCE,
   type BreakType,
   type BusyPhase,
   type BusyReason,
@@ -78,6 +77,7 @@ import {
   type ReviewRecord,
 } from "@/lib/lessons/reviewOutcome";
 import { getSession } from "@/lib/auth/session";
+import { openBusyWindow } from "@/lib/signals/busy";
 import { useLessonProgress } from "@/hooks/useLessonProgress";
 import { AudioSegment } from "./AudioSegment";
 import { BreakOfferPill } from "./BreakOfferPill";
@@ -121,7 +121,10 @@ const DENSITY_TRIGGER: Record<Density, SignalEventType> = {
   [DENSITY.SLOWER]: SIGNAL_EVENT_TYPES.SLOWER_TRIGGER,
 };
 
-/** Scroll-depth marks (%) that each emit one `scroll` signal per segment. */
+/**
+ * Scroll-depth marks (%) that each emit one `scroll` signal per segment. Sent
+ * as the catalogue's `depthRatio`, a ratio: 50 goes up as 0.5.
+ */
 const SCROLL_MILESTONES = [25, 50, 75, 100];
 
 /** How long the transient post-answer feedback note lingers before fading. */
@@ -670,18 +673,17 @@ export function LessonPlayer({
   };
 
   // ── Signal helpers ──────────────────────────────────────────────────────
-  // Max scroll depth + which milestones have fired, reset per segment.
-  const scrollDepth = useRef(0);
+  // Which scroll milestones have fired, reset per segment.
   const scrollMarks = useRef<Set<number>>(new Set());
-  /** The scrolling reading column, so a segment can be measured, not guessed. */
-  const scrollerRef = useRef<HTMLDivElement | null>(null);
+  /** The reading column, measured for `scroll` - see `handleScroll`. */
+  const columnRef = useRef<HTMLDivElement | null>(null);
   /**
-   * How much of a CHUNKED body has been shown, reported by the body itself.
+   * The segment whose body is CHUNKED, reported by the body itself.
    *
-   * The attention accommodation deliberately holds most of the body back, so
-   * the layout measurement below - "no room to scroll, therefore they saw all
-   * of it" - becomes false exactly when it is on. The body is the only thing
-   * that knows which part is showing, so it says.
+   * The attention accommodation and the child's own Slower deliberately hold
+   * most of the body back, so the column's scroll describes one part, not the
+   * segment - see `handleScroll`. The body is the only thing that knows it is
+   * in parts, so it says.
    *
    * STAMPED WITH THE SEGMENT ID RATHER THAN CLEARED ON SEGMENT CHANGE, and
    * that is deliberate. React runs child effects before parent ones, so a new
@@ -690,7 +692,7 @@ export function LessonPlayer({
    * that race because it does not race: a report either belongs to the
    * segment being asked about or it does not.
    */
-  const chunkRead = useRef<{ segmentId: string; pct: number } | null>(null);
+  const chunkRead = useRef<{ segmentId: string } | null>(null);
   /** The text version on screen, for `time_on_segment` - see `depthShown`. */
   const textShown = useRef<{ segmentId: string; depth: DepthShown } | null>(
     null,
@@ -703,7 +705,7 @@ export function LessonPlayer({
   const [partsLeftOn, setPartsLeftOn] = useState<string | null>(null);
   const noteReadProgress = useCallback(
     (pct: number) => {
-      chunkRead.current = { segmentId: lesson.segments[index].id, pct };
+      chunkRead.current = { segmentId: lesson.segments[index].id };
       setPartsLeftOn(pct < 100 ? lesson.segments[index].id : null);
     },
     [lesson.segments, index],
@@ -759,7 +761,6 @@ export function LessonPlayer({
     const clock = { shownMs: 0, since: null as number | null };
     segmentClock.current = clock;
     const segId = lesson.segments[index].id;
-    scrollDepth.current = 0;
     scrollMarks.current = new Set();
     return () => {
       // Monotonic (rule 4): this duration goes to the engine, and a wall
@@ -778,28 +779,21 @@ export function LessonPlayer({
           suggested: offer.suggested,
         });
       }
-      /*
-       * A chunked body's own count outranks the layout measurement, and only
-       * ever for the segment it was reported against.
-       *
-       * THIS IS THE WHOLE FIX, and it is deliberately the only place that
-       * knows. An earlier version also guarded the measurement effect above so
-       * it would not write 100 for a chunked segment; a mutation proved that
-       * guard changed nothing, because a chunked segment never reads
-       * `scrollDepth` anyway. Two half-defences that look load-bearing are
-       * worse than one that is.
-       */
-      const chunked =
-        chunkRead.current?.segmentId === segId ? chunkRead.current.pct : null;
       // B45: the text version on screen as the child left, stamped with the
       // segment like `chunkRead`. Unknown is left out rather than guessed.
       const depth =
         textShown.current?.segmentId === segId ? textShown.current.depth : null;
+      /*
+       * THE CATALOGUE'S THREE KEYS AND NO OTHER. This also carried a
+       * `scrollDepthPct` - how much of the segment was on screen, counting a
+       * segment that fits as all of it and a chunked body by its parts - which
+       * the catalogue does not declare for this type. Whether it should is
+       * asked of backend; `scroll` carries depth only where the child scrolled.
+       */
       trackEvent(SIGNAL_EVENT_TYPES.TIME_ON_SEGMENT, {
         segmentId: segId,
         durationMs: Math.max(0, Math.round(shownMs)),
         ...(depth ? { depthShown: depth } : {}),
-        scrollDepthPct: chunked ?? Math.round(scrollDepth.current),
       });
     };
   }, [index, inSegments, lesson.segments, trackEvent]);
@@ -817,63 +811,90 @@ export function LessonPlayer({
   }, [segmentShowing, index]);
 
   /*
-   * A SEGMENT THAT FITS ON ONE SCREEN WAS REPORTED AS UNREAD.
+   * HOW FAR DOWN THE SEGMENT HAS BEEN ON SCREEN, MEASURED ON WHAT SCROLLS.
    *
-   * `handleScroll` already had the right rule - no room to scroll means the
-   * child can see all of it, so depth is 100 - but it lives in an `onScroll`
-   * handler. A segment that fits never scrolls, so the handler never runs and
-   * the rule never fires. `scrollDepth` stayed at the 0 it is reset to on
-   * entry, and every short segment told the adaptation engine the child had
-   * read NONE of it.
+   * The column is `overflow-y-auto`, but the player is `min-h-[100dvh]`, so
+   * the column grows with its segment and the PAGE scrolls instead. Its own
+   * scroll room is always 0 - measured on a 30-paragraph segment at 375px,
+   * scrollHeight == clientHeight == 2665 - so a listener on the column never
+   * fired and no `scroll` mark was ever sent.
    *
-   * That is most segments. This product deliberately keeps them short for low
-   * cognitive load, so the engine was being fed "read nothing" about children
-   * who had read everything - a fabricated signal about a child's learning,
-   * which is the one kind this product must never send.
+   * Measured here rather than fixed by making the column the scroller: that
+   * is a layout change (the chevrons pinned, the break pill's sticky foot
+   * re-anchored), and under the larger text sizes' `zoom` a `100dvh` player
+   * outgrows the screen and the page scrolls again anyway. So whichever
+   * scrolls, this reads it: the column's own room when it has some, and the
+   * viewport's reach down the column when the page carries it.
    *
-   * Measured after the content is laid out, and re-measured when the modality
-   * changes, because an audio segment and a text segment are different heights.
+   * Only a scroll of the page or of the column counts. A sheet or a drawer
+   * scrolling is not the child scrolling the segment.
    *
-   * DECLARED AFTER THE RESET ABOVE, AND THAT ORDER IS LOAD-BEARING. React runs
-   * effects in declaration order, so measuring before the reset means the
-   * reset wipes the measurement on every segment change - which is exactly
-   * what the first version of this fix did, silently, while looking correct.
-   *
-   * Known and accepted: content that grows AFTER this runs - a late image -
-   * could leave 100 recorded for a segment that became scrollable. The child
-   * did see everything present at the time. Over-reporting one late-growing
-   * segment is a far smaller error than under-reporting every short one, which
-   * is what this replaces.
+   * AND ONLY ONCE THE CHILD HAS GONE FURTHER DOWN THAN THE SEGMENT OPENED
+   * SHOWING. The catalogue's `scroll` is "the child scrolls within a
+   * segment", and the page also moves when the child did not: the player's
+   * own focus move onto a new segment after Next is a scroll event too. So
+   * how far down was on screen at the start is taken once the segment is in
+   * place, and nothing goes up until the child passes it. A segment that fits
+   * on one screen can never be passed, so it sends no `scroll` - a depth for
+   * one nobody scrolled would be a scroll that never happened. How much of
+   * such a segment was on screen has no declared home now - see
+   * `time_on_segment` above.
    */
+  const columnReach = useCallback(() => {
+    const column = columnRef.current;
+    if (!column) return null;
+    if (column.scrollHeight - column.clientHeight > 0)
+      return {
+        reach: column.scrollTop + column.clientHeight,
+        height: column.scrollHeight,
+      };
+    const rect = column.getBoundingClientRect();
+    if (rect.height <= 0) return null;
+    return {
+      reach: Math.max(0, Math.min(window.innerHeight, rect.bottom) - rect.top),
+      height: rect.height,
+    };
+  }, []);
+  /** How far down the column was on screen when the segment opened, in px. */
+  const reachAtEntry = useRef(0);
+  // After the focus move above, so it measures where that move left the page.
   useEffect(() => {
-    const el = scrollerRef.current;
-    if (!el) return;
-    if (el.scrollHeight - el.clientHeight <= 0) scrollDepth.current = 100;
-  }, [index, modality]);
-
-  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const el = e.currentTarget;
-    const room = el.scrollHeight - el.clientHeight;
-    const pct = room <= 0 ? 100 : (el.scrollTop / room) * 100;
-    scrollDepth.current = Math.max(scrollDepth.current, pct);
+    reachAtEntry.current = columnReach()?.reach ?? 0;
+  }, [index, modality, columnReach]);
+  const handleScroll = useCallback(() => {
+    // Every mark already sent: nothing to measure, so no layout read per frame.
+    if (scrollMarks.current.size === SCROLL_MILESTONES.length) return;
+    const at = columnReach();
+    if (!at || at.reach <= reachAtEntry.current) return;
+    const seen = at.reach / at.height;
     /*
      * A milestone describes the SEGMENT, so a chunked body cannot raise one.
      * Scrolling to the foot of Part 1 of 3 is the bottom of a third, and
-     * emitting `depthPct: 100` for it would tell the engine the child had read
-     * the whole segment. The honest depth for a chunked segment travels on
-     * `time_on_segment` above; this stays quiet rather than overstating.
+     * emitting `depthRatio: 1` for it would tell the engine the child had read
+     * the whole segment. This stays quiet rather than overstating.
      */
     if (chunkRead.current?.segmentId === segment.id) return;
     for (const mark of SCROLL_MILESTONES) {
-      if (pct >= mark && !scrollMarks.current.has(mark)) {
+      if (seen * 100 >= mark && !scrollMarks.current.has(mark)) {
         scrollMarks.current.add(mark);
         trackEvent(SIGNAL_EVENT_TYPES.SCROLL, {
           segmentId: segment.id,
-          depthPct: mark,
+          depthRatio: mark / 100,
         });
       }
     }
-  };
+  }, [columnReach, segment.id, trackEvent]);
+  useEffect(() => {
+    const onScroll = (e: Event) => {
+      const target = e.target;
+      if (target === document || target === window || target === columnRef.current)
+        handleScroll();
+    };
+    // Captured, because an element's scroll does not bubble to the window.
+    window.addEventListener("scroll", onScroll, { capture: true, passive: true });
+    return () =>
+      window.removeEventListener("scroll", onScroll, { capture: true });
+  }, [handleScroll]);
 
   // Auto-clear the feedback note.
   useEffect(() => {
@@ -883,12 +904,36 @@ export function LessonPlayer({
   }, [feedback]);
 
   // ── Touch Signal Contract markers (SCRUM-94.8) ──────────────────────────
-  /** `system_busy` start/end pair — brackets windows the system owns. */
+  /** The `system_busy` windows open now, one per reason. */
+  const busyWindows = useRef(new Map<BusyReason, () => void>());
+  /**
+   * Opens or closes the window the system owns for `reason`. It goes up once,
+   * as it closes, with its length - see `openBusyWindow`.
+   *
+   * One window per reason: a second start while one is open is the same wait,
+   * and an end with nothing open has no length anyone measured, so it sends
+   * nothing.
+   */
   const trackBusy = useCallback(
-    (reason: BusyReason, phase: BusyPhase) =>
-      trackEvent(SIGNAL_EVENT_TYPES.SYSTEM_BUSY, { reason, phase }),
+    (reason: BusyReason, phase: BusyPhase) => {
+      const open = busyWindows.current;
+      if (phase === BUSY_PHASE.START) {
+        if (!open.has(reason)) open.set(reason, openBusyWindow(trackEvent, reason));
+        return;
+      }
+      open.get(reason)?.();
+      open.delete(reason);
+    },
     [trackEvent],
   );
+  // Leaving the player mid-wait ends the wait: what is open goes up as it was.
+  useEffect(() => {
+    const open = busyWindows.current;
+    return () => {
+      for (const close of open.values()) close();
+      open.clear();
+    };
+  }, []);
 
   // While the Quick Check sheet is up, the player beneath is unavailable.
   useEffect(() => {
@@ -901,11 +946,15 @@ export function LessonPlayer({
   // never as latency or an aborted gesture — a design signal, not a student one.
   // ONLY WHILE THE QUICK CHECK IS UP, the one sheet whose scrim really blocks.
   // Every sheet broadcasts, so this recorded `tap_blocked` for scrim taps that
-  // dismissed something, which is the opposite of blocked.
+  // dismissed something, which is the opposite of blocked. The reason is the
+  // busy window the tap fell in, opened just above.
   useEffect(() => {
     if (!checkOpen) return;
     const onScrimTap = () =>
-      trackEvent(SIGNAL_EVENT_TYPES.TAP_BLOCKED, { target: "scrim" });
+      trackEvent(SIGNAL_EVENT_TYPES.TAP_BLOCKED, {
+        target: "scrim",
+        reason: BUSY_REASON.BLOCKED_BY_MODAL,
+      });
     window.addEventListener("nevo-scrim-tap", onScrimTap);
     return () => window.removeEventListener("nevo-scrim-tap", onScrimTap);
   }, [checkOpen, trackEvent]);
@@ -1060,6 +1109,11 @@ export function LessonPlayer({
       ? engineBreak
       : null;
   const showBreakOffer = breakOffered !== null;
+  // Who asked, as every offer event and the break it leads to say it: the
+  // catalogue's one key. NOT RENAMED, deliberately - these are wire values in
+  // the set backend closed (with `adaptation_plan` and `module_boundary`), so
+  // they are not ours to tidy.
+  const offerTrigger = showOfferedBreak ? "affect_offer" : "engine_offer";
 
   /*
    * THE ENGINE'S SUGGESTION IS ONE OFFER PER ANSWER. It is lesson-level (see
@@ -1133,8 +1187,7 @@ export function LessonPlayer({
      * So it lives in component state and nowhere else: never written to the
      * profile, never sent back to the engine as a value, and gone at the next
      * sign-in because a new lesson is a new player. What the engine still
-     * learns is the truth about what the child was actually shown, through the
-     * chunked flow's exposure reporting.
+     * learns is that the child asked, from the trigger the chip sends.
      *
      * A segment that cannot deliver the chosen density simply renders its
      * default - the pick is not cleared, so it applies again on the next
@@ -1143,22 +1196,12 @@ export function LessonPlayer({
     setModality(openingModality(nextSegment, nextPlan?.startModality));
     setSuggestionSpent(false);
     /*
-     * A plan-applied density is a system-driven adaptation - but only when the
-     * system's density is the one actually on screen.
-     *
-     * Gated on there being no manual pick in force, which became possible the
-     * moment the pick started carrying across segments. Without the gate, a
-     * child who asked for Slower on segment 1 would have every later segment
-     * report that the SYSTEM applied its own density, while the screen showed
-     * the child's. That is a false signal about an adaptation that did not
-     * happen, and the engine would learn from it.
+     * A PLAN'S DENSITY IS NOT A TRIGGER. This sent the authored per-segment
+     * density as `simplify_trigger` / `expand_trigger` / `slower_trigger` with
+     * `source: "system"`, and the catalogue's trigger for all three is the
+     * child asking. Only the demo lessons carry a per-segment density, so no
+     * engine reading is lost; the child's own chip is the one trigger left.
      */
-    if (nextPlan?.density && density === null) {
-      trackEvent(DENSITY_TRIGGER[nextPlan.density], {
-        segmentId: nextSegment.id,
-        source: TRIGGER_SOURCE.SYSTEM,
-      });
-    }
   };
 
   /** The forward move itself — next segment, then assessment, then done. */
@@ -1208,22 +1251,23 @@ export function LessonPlayer({
   const acceptBreakOffer = () => {
     if (!breakOffered) return;
     setSpentBreakOffers((prev) => new Set(prev).add(segment.id));
-    trackEvent(SIGNAL_EVENT_TYPES.BREAK_TAKEN, {
-      segmentId: segment.id,
-      breakType: breakOffered,
-    });
-    // NOT RENAMED, deliberately. This string is sent to the engine as the
-    // `trigger` on a BREAK_START signal, so it is wire vocabulary and not
-    // ours to tidy. Raised with backend instead - see BUILD_STATUS.
-    breakTrigger.current = showOfferedBreak ? "affect_offer" : "engine_offer";
+    trackEvent(SIGNAL_EVENT_TYPES.BREAK_TAKEN, { trigger: offerTrigger });
+    breakTrigger.current = offerTrigger;
     breakOrigin.current = "offer";
     // The type is whoever asked's: nothing here picks one.
     setBreakActive(breakOffered);
   };
 
-  // No event: the contract has no type for a declined break. Asked for.
+  /*
+   * "NOT NOW" IS AN ANSWER, and the catalogue has a type for it now. Without
+   * `break_declined` the engine could not tell a child who turned the offer
+   * down from one who never answered it, and may offer again a minute later.
+   * Moving on with the pill still up stays no answer at all.
+   */
   const dismissBreakOffer = () => {
+    if (!breakOffered) return;
     setSpentBreakOffers((prev) => new Set(prev).add(segment.id));
+    trackEvent(SIGNAL_EVENT_TYPES.BREAK_DECLINED, { trigger: offerTrigger });
   };
 
   /** Next chevron — an unpassed Quick Check intercepts the advance. */
@@ -1239,12 +1283,10 @@ export function LessonPlayer({
     const d = id as Density;
     const next = density === d ? null : d;
     setDensity(next);
-    // A tap that sets (not clears) a density is a manual adaptation.
+    // A tap that sets (not clears) a density is the child asking - the only
+    // thing these triggers mean, so no `source` rides with it.
     if (next) {
-      trackEvent(DENSITY_TRIGGER[next], {
-        segmentId: segment.id,
-        source: TRIGGER_SOURCE.MANUAL,
-      });
+      trackEvent(DENSITY_TRIGGER[next], { segmentId: segment.id });
     }
   };
 
@@ -1475,10 +1517,7 @@ export function LessonPlayer({
   };
 
   const requestExit = () => {
-    trackEvent(SIGNAL_EVENT_TYPES.EXIT_ATTEMPT, {
-      segmentId: segment.id,
-      index,
-    });
+    trackEvent(SIGNAL_EVENT_TYPES.EXIT_ATTEMPT, { segmentId: segment.id });
     setLeaveOpen(true);
   };
 
@@ -1570,8 +1609,7 @@ export function LessonPlayer({
           exitTo(HOME_HREF);
         }}
         onAnswer={({ questionIndex, selectedId, correct, responseTimeMs }) => {
-          // What was picked, which checkpoint it answered and how long it took
-          // - the response data frontend §2 says every event carries.
+          // The pick goes up on the attempt, where the server marks it.
           const checkpointId = lesson.assessment?.questions[questionIndex]?.id;
           saveAttempt(
             attemptFor({
@@ -1583,13 +1621,16 @@ export function LessonPlayer({
               ),
             }),
           );
+          /*
+           * THE CATALOGUE'S KEYS, `segmentId` and `questionId`, and nothing it
+           * does not declare: correctness is decided on the server against the
+           * stored answer, so `correct` - and the pick and its timing beside it
+           * - are not sent here. NO `segmentId`: an after-lesson question
+           * belongs to the lesson, not to any one segment, and naming the last
+           * one would put the answer on a segment it was never about.
+           */
           trackEvent(SIGNAL_EVENT_TYPES.COMPREHENSION_RESPONSE, {
-            kind: "assessment",
-            questionIndex,
-            ...(checkpointId ? { checkpointId } : {}),
-            selectedId,
-            correct,
-            responseTimeMs,
+            ...(checkpointId ? { questionId: checkpointId } : {}),
           });
           // The first answer to each question, for the scheduler. `Map.set` is
           // guarded so a re-answer cannot overwrite what they knew first time.
@@ -1707,21 +1748,22 @@ export function LessonPlayer({
     return (
       <BreakScreen
         type={breakActive}
+        // The catalogue's keys and no others: `trigger`, and how long it
+        // lasted. The type and the segment are not among them.
         onStart={() =>
           trackEvent(SIGNAL_EVENT_TYPES.BREAK_START, {
-            type: breakActive,
             trigger: breakTrigger.current,
-            segmentId: segment.id,
           })
         }
         onEnd={(durationMs) =>
           trackEvent(SIGNAL_EVENT_TYPES.BREAK_END, {
-            type: breakActive,
+            trigger: breakTrigger.current,
             durationMs,
           })
         }
         onFeelings={(feelings) =>
-          trackEvent(SIGNAL_EVENT_TYPES.FEELING_CHECKIN, { feelings })
+          // `response` is the catalogue's key for what the child picked.
+          trackEvent(SIGNAL_EVENT_TYPES.FEELING_CHECKIN, { response: feelings })
         }
         onDone={() => {
           setBreakActive(null);
@@ -1876,22 +1918,11 @@ export function LessonPlayer({
       {/* Calm banner while the device is offline — the cached lesson stays usable */}
       <OfflineBanner />
 
-      {/* Anchor for system offers — one ask at a time, just below the top bar.
-          A break offer (B.7) outranks the modality suggestion. */}
+      {/* Anchor for the modality suggestion, just below the top bar. One ask
+          at a time: a break offer (B.7) outranks it, and is asked at the foot
+          of the lesson instead (frame 38 §3) - see below. */}
       <div className="relative">
-        {showBreakOffer ? (
-          <BreakOfferPill
-            key={`break-offer-${segment.id}`}
-            onShown={() =>
-              trackEvent(SIGNAL_EVENT_TYPES.BREAK_SUGGESTED, {
-                segmentId: segment.id,
-                breakType: breakOffered,
-              })
-            }
-            onAccept={acceptBreakOffer}
-            onDismiss={dismissBreakOffer}
-          />
-        ) : (
+        {showBreakOffer ? null : (
           showSuggestion && (
             <ModalitySuggestionPill
               key={`pill-${segment.id}`}
@@ -1909,28 +1940,16 @@ export function LessonPlayer({
 
       {/* Content — centered reading column. Its violet frame went with the
           step-up offer it accompanied (D28). */}
-      <div
-        ref={scrollerRef}
-        className="flex-1 overflow-y-auto"
-        onScroll={handleScroll}
-      >
+      <div ref={columnRef} className="flex-1 overflow-y-auto">
         <div
           className={cn(
-            // The bottom padding clears the Ask Nevo trigger, which is
-            // `fixed` and therefore lands ON this scrolling column rather than
-            // below it. The arithmetic, on mobile: the chevron nav is
-            // pt-2 + size-12 + pb-6 = 80px and `shrink-0`, so this region ends
-            // 80px off the bottom; the trigger is `bottom-[82px]` and 52px
-            // tall, so it sits between 134px and 82px off the bottom - inside
-            // this column, over the last line's right-hand end. 88px of slack
-            // means text always stops above it.
-            //
-            // Not needed from `sm:` up: there the trigger is the 44px pill at
-            // `bottom-6`, which ends 68px off the bottom - below this region
-            // entirely, in the nav row, and clear of the centred chevrons.
-            // `sm:p-8` and `lg:p-10` reset it on their own - measured against
-            // the real stylesheet at 375 / 700 / 1280, giving 88 / 32 / 40px -
-            // because their media rules come after the base utility.
+            // The 88px bottom padding on mobile was sized to clear the Ask Nevo
+            // trigger, which is `fixed` and would land on this column. Ask Nevo
+            // is no longer mounted over lesson content (IA 31, see
+            // `LessonAskNevo`), so it clears nothing now; the last line simply
+            // stops well above the chevrons. `sm:p-8` and `lg:p-10` reset it
+            // on their own, because their media rules come after the base
+            // utility.
             "mx-auto w-full max-w-full p-6 pb-[88px] sm:max-w-[620px] sm:p-8 lg:max-w-[680px] lg:p-10",
           )}
         >
@@ -2082,12 +2101,11 @@ export function LessonPlayer({
           onAudioBusy={(phase) => trackBusy(BUSY_REASON.MEDIA_PLAYING, phase)}
           onAnswered={(correct, answered) => {
             const checkpointId = segment.quickCheck?.id;
+            // The catalogue's two keys; the pick goes up on the attempt below,
+            // where the server marks it - see the after-lesson check's.
             trackEvent(SIGNAL_EVENT_TYPES.COMPREHENSION_RESPONSE, {
-              kind: "quick_check",
               segmentId: segment.id,
-              ...(checkpointId ? { checkpointId } : {}),
-              correct,
-              ...answered,
+              ...(checkpointId ? { questionId: checkpointId } : {}),
             });
             saveAttempt(
               attemptFor({
@@ -2140,6 +2158,21 @@ export function LessonPlayer({
           exitTo(HOME_HREF);
         }}
       />
+
+      {/* The break offer (B.7), at the foot of the lesson and above the
+          chevrons (frame 38 §3). Sticky, so a long segment still shows it. */}
+      {showBreakOffer && (
+        <BreakOfferPill
+          key={`break-offer-${segment.id}`}
+          onShown={() =>
+            trackEvent(SIGNAL_EVENT_TYPES.BREAK_SUGGESTED, {
+              trigger: offerTrigger,
+            })
+          }
+          onAccept={acceptBreakOffer}
+          onDismiss={dismissBreakOffer}
+        />
+      )}
 
       {/* Chevron nav — dims under the attention accommodation; `offer_hint`
           guides the forward control with three quiet glow cycles (never

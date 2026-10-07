@@ -6,8 +6,10 @@ import { api } from "./client";
  * The list carries its own `unreadCount`, so the badge needs no second call;
  * `/unread-count` exists for surfaces that want the number without the feed.
  *
- * `navigatesTo` is a destination for the row. The C13 frame draws rows as
- * inert, so it is typed here and not yet used - flagged to design.
+ * `navigatesTo` is a destination for the row, and nullable. The student,
+ * teacher and admin notification rows all use it: a row with one is a link,
+ * and a row without one is not. The student bell keeps it inside the student
+ * console (`childHref` in `NotificationContext`).
  *
  * `type` was a bare string when this file was written; the backend has since
  * enumerated it as `NotificationType`. It is still typed loosely here on

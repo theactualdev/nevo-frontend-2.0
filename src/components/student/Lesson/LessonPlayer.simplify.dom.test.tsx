@@ -187,9 +187,9 @@ describe("no instruction is the standard text (D23)", () => {
     expect(chip("Simplify")!.className).toMatch(/animate-nevo-glow/);
   });
 
-  it("claims no system adaptation on the way into a segment", () => {
-    // `go()` reports the system's density as a `simplify_trigger` with
-    // source "system". With no instruction there is none to report.
+  it("claims no density trigger on the way into a segment", () => {
+    // A trigger is the child asking; arriving at a segment is not. `go()`
+    // used to report the plan's density as one, with source "system".
     const two = {
       ...AUTHORED,
       segments: [AUTHORED.segments[0], { ...AUTHORED.segments[0], id: "seg-2" }],
@@ -199,9 +199,7 @@ describe("no instruction is the standard text (D23)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     expect(
-      trackEvent.mock.calls.filter(
-        ([, p]) => (p as { source?: string })?.source === "system",
-      ),
+      trackEvent.mock.calls.filter(([t]) => String(t).endsWith("_trigger")),
     ).toEqual([]);
   });
 });
