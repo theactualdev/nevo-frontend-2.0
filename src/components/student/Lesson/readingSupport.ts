@@ -1,12 +1,21 @@
 /**
- * The reading accommodation's TYPOGRAPHIC half, for the checks (D30, 1 Oct).
+ * The reading accommodation's TYPOGRAPHIC half, wherever a child reads (D30,
+ * 1 Oct).
  *
  * Design split the accommodation in two. Typographic support - size, spacing,
  * contrast - changes how words are presented, not what they say, so it applies
- * everywhere. It had reached only the text segment, so a child with reading
- * support got an accessible lesson and then an inaccessible question: measured
- * on their reading rather than their comprehension, which makes the check
- * measure the wrong thing.
+ * everywhere, "with no exceptions". It had reached only the text segment, so a
+ * child with reading support got an accessible lesson and then an inaccessible
+ * question: measured on their reading rather than their comprehension, which
+ * makes the check measure the wrong thing.
+ *
+ * So it is on the checks, and on the words around a picture or a recording
+ * (heading, introduction, caption, transcript) and the teacher's note (audit
+ * 46). Each takes the typography and nothing else: a transcript simplified is
+ * an inaccurate transcript, and a teacher's words reworded are not what the
+ * teacher said. Design rules the calculation's labels take it too; they are
+ * left to the solver's rebuild from its payload (SCRUM-181), which replaces
+ * every one of them.
  *
  * The values are 37c's, as `TextSegment` already renders them.
  *

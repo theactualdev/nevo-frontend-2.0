@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Pause, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AudioContent } from "@/lib/types";
+import { READING_BODY, READING_HEADING, READING_INK } from "./readingSupport";
 import { type MediaFailReason, useMediaSource } from "./useMediaSource";
 
 /** The frame's waveform silhouette — 24 bars, explicit px heights. */
@@ -45,12 +46,19 @@ function clock(sec: number): string {
  */
 export function AudioSegment({
   content,
+  reading = false,
   onReplay,
   onPlayed,
   onBusy,
   onMediaFailed,
 }: {
   content: AudioContent;
+  /**
+   * The reading accommodation's typographic half (D30) - see
+   * `readingSupport`. Typography only on the transcript: simplified, it would
+   * no longer be a transcript.
+   */
+  reading?: boolean;
   /** Fired when the student restarts a finished clip (a "replay" signal). */
   onReplay?: () => void;
   /**
@@ -197,12 +205,24 @@ export function AudioSegment({
   return (
     <article>
       {content.heading && (
-        <h2 className="text-[22px] font-semibold leading-[1.3] tracking-[-0.01em] text-nevo-near-black sm:text-[26px] lg:text-[28px]">
+        <h2
+          className={cn(
+            "text-[22px] font-semibold leading-[1.3] tracking-[-0.01em] text-nevo-near-black sm:text-[26px] lg:text-[28px]",
+            reading && READING_HEADING,
+          )}
+        >
           {content.heading}
         </h2>
       )}
       {content.intro && (
-        <p className="mt-4 text-base leading-[1.6] text-nevo-near-black/82 sm:text-[18px] lg:text-[19px]">
+        <p
+          className={cn(
+            "mt-4",
+            reading
+              ? [READING_BODY, READING_INK]
+              : "text-base leading-[1.6] text-nevo-near-black/82 sm:text-[18px] lg:text-[19px]",
+          )}
+        >
           {content.intro}
         </p>
       )}
@@ -335,7 +355,13 @@ export function AudioSegment({
       </button>
       {transcriptOpen && (
         <div className="mt-3 rounded-[12px] bg-nevo-violet/8 p-[18px]">
-          <p className="text-base leading-[1.7] text-nevo-near-black/82 sm:text-[18px] lg:text-[19px]">
+          <p
+            className={
+              reading
+                ? cn(READING_BODY, READING_INK)
+                : "text-base leading-[1.7] text-nevo-near-black/82 sm:text-[18px] lg:text-[19px]"
+            }
+          >
             {content.transcript}
           </p>
         </div>
