@@ -113,8 +113,8 @@
   /* One-shot (SCRUM-94: no perpetual motion inside measured windows). */
   --animate-nevo-glow: nevo-glow 2s ease-in-out both;
   --animate-nevo-sparkle: nevo-sparkle 2600ms ease-in-out both;
-  /* Frustration guide (37b): the forward control glows three cycles, then rests. */
-  --animate-nevo-glow-guide: nevo-glow 2s ease-in-out 3 both;
+  /* No glow guide: the forward control's glow under a hint went with design's
+     D124 (6 Oct). Nothing reacts visibly to a child's difficulty. */
   /* Ask Nevo (26): thinking dots + listening mic - state-bound, end with the state. */
   --animate-nevo-dot: nevo-dot 1200ms ease-in-out infinite;
   --animate-nevo-mic-pulse: nevo-mic-pulse 2000ms ease-in-out infinite;

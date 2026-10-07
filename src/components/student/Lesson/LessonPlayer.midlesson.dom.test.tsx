@@ -72,11 +72,6 @@ const hintPlan = {
 
 const next = () =>
   fireEvent.click(screen.getByRole("button", { name: "Next" }));
-const glowing = () =>
-  screen
-    .getByRole("button", { name: "Next" })
-    .className.includes("animate-nevo-glow-guide");
-
 const HINT = "Look at the bottom number first.";
 
 afterEach(() => {
@@ -171,8 +166,8 @@ describe("the segment a hint belongs to", () => {
   /*
    * The instruction is lesson-level on the wire, and a hint is about the
    * content in front of the child when it was asked for. Keyed on the plan
-   * alone, the same hint - and the glow guiding to it - sat under every
-   * segment after, and a failed read kept it there.
+   * alone, the same hint sat under every segment after, and a failed read
+   * kept it there.
    */
   it("shows a mid-lesson hint only on the segment it was asked for", () => {
     runtime.value = {
@@ -184,12 +179,10 @@ describe("the segment a hint belongs to", () => {
 
     render(<LessonPlayer lesson={LESSON} plan={null} />);
     expect(screen.getByText(HINT)).toBeInTheDocument();
-    expect(glowing()).toBe(true);
 
     next();
 
     expect(screen.queryByText(HINT)).toBeNull();
-    expect(glowing()).toBe(false);
   });
 
   it("shows a load-time hint on the segment the lesson opened on, and not after", () => {

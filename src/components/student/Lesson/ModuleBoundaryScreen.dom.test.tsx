@@ -5,11 +5,10 @@ import { ModuleBoundaryScreen } from "./ModuleBoundaryScreen";
 /**
  * SCRUM-101, as answered rather than as prototyped.
  *
- * "Take a break first" rested on this screen with "Your progress is saved",
- * where the spec routes it to the break module and back - so a child who asked
- * for a break got no break and no break signal. And the attention recap was
- * uncapped on phones, where the spec caps it at two lines so "Yes, continue"
- * stays above the fold.
+ * The attention recap was uncapped on phones, where the spec caps it at two
+ * lines so "Yes, continue" stays above the fold. And "Take a break first" is
+ * gone (D91, 6 Oct): "The module boundary already carries the stretch, and
+ * offering a break on top of a break turns a rhythm into a negotiation."
  */
 
 afterEach(() => cleanup());
@@ -29,34 +28,28 @@ const renderBoundary = (over: Record<string, unknown> = {}) => {
     onReached: vi.fn(),
     onAction: vi.fn(),
     onEnterNext: vi.fn(),
-    onTakeBreak: vi.fn(),
     ...over,
   };
   render(<ModuleBoundaryScreen {...props} />);
   return props;
 };
 
-describe("Take a break first", () => {
-  it("goes to the break module rather than resting here", () => {
-    const props = renderBoundary();
+describe("the boundary's one action", () => {
+  it("offers no break (D91)", () => {
+    renderBoundary();
 
-    fireEvent.click(screen.getByRole("button", { name: "Take a break first" }));
-
-    expect(props.onAction).toHaveBeenCalledWith("break");
-    expect(props.onTakeBreak).toHaveBeenCalledTimes(1);
-    // No rest state, and no claim about saving.
-    expect(screen.queryByText("Take your time")).toBeNull();
+    expect(screen.queryByRole("button", { name: /break/i })).toBeNull();
+    expect(screen.getAllByRole("button")).toHaveLength(1);
     expect(screen.queryByText(/progress is saved/i)).toBeNull();
-    expect(props.onEnterNext).not.toHaveBeenCalled();
   });
 
-  it("leaves 'Yes, continue' entering the next module", () => {
+  it("is 'Yes, continue', into the next module", () => {
     const props = renderBoundary();
 
     fireEvent.click(screen.getByRole("button", { name: "Yes, continue" }));
 
+    expect(props.onAction).toHaveBeenCalledWith("continue");
     expect(props.onEnterNext).toHaveBeenCalledTimes(1);
-    expect(props.onTakeBreak).not.toHaveBeenCalled();
   });
 });
 

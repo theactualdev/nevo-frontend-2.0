@@ -47,6 +47,33 @@ const SEND =
 /** `GuidedAnswerRequest.responseLength` is 0 to 10000 on the contract. */
 const MAX_RESPONSE_LENGTH = 10_000;
 
+/** Frame 38's line for Send on an empty write-in, verbatim. */
+const TYPE_FIRST = "Type a little first, then Send.";
+/**
+ * Send with no choice picked. Design ruled the behaviour ("exactly as the
+ * empty written answer does") and drew no words for it, so this is the drawn
+ * sentence with a pick in place of typing - an interim for design to confirm.
+ */
+const PICK_FIRST = "Pick one first, then Send.";
+
+/** 38's in-place note under a Send that had nothing to send. */
+function SendNudge({ children }: { children: string }) {
+  return (
+    <div
+      role="status"
+      className="mt-2.5 flex items-start gap-2 rounded-[10px] bg-nevo-violet/18 px-[13px] py-2.5"
+    >
+      <span
+        aria-hidden
+        className="mt-[5px] size-[7px] shrink-0 rounded-full bg-nevo-violet"
+      />
+      <span className="text-[12.5px] leading-[1.5] text-nevo-near-black">
+        {children}
+      </span>
+    </div>
+  );
+}
+
 /** Every prompt opened and not answered, said once and forgotten. */
 function leave(still: Set<string>, onAbandon?: (promptId: string) => void) {
   for (const id of still) onAbandon?.(id);
@@ -81,6 +108,11 @@ export type GuidedReply = { option: string } | { responseLength: number };
 export type GuidedAnswerOutcome = "moved_on" | "asked_again";
 
 /**
+ * How the panel was reached, which decides how it ends - see `SocraticPanel`.
+ */
+export type PanelEntry = "self" | "handoff";
+
+/**
  * `show_socratic_panel`: "Which part is unclear?" opens 2-3 guided questions
  * that think the idea through rather than handing the answer over. The panel
  * never blocks (no scrim) and carries its own visible 44px dismiss.
@@ -89,32 +121,63 @@ export type GuidedAnswerOutcome = "moved_on" | "asked_again";
  * with an id is a target. Tapping one rings it and opens its answer under it:
  * - WITH CHOICES, single select and then a separate Send. "Picking isn't
  *   answering": a choice sits selected until Send, and changing it first is
- *   just a change. Send appears once something is picked - the frame draws
- *   no state before a pick, and a Send with nothing to send would need words
- *   the frame does not give.
+ *   just a change.
  * - WITH NO CHOICES, one line, the Nevo keyboard inside the sheet, and Send.
- *   Pressed on an empty field Send stays pressable and says so in place, in
- *   the frame's words, rather than going grey.
+ * Either way Send is there from the start, and pressed with nothing to send
+ * it stays pressable and says so in place rather than going grey (design, 6
+ * Oct: "exactly as the empty written answer does"). The written path's words
+ * are the frame's; the choices path has none drawn, so its line is the same
+ * sentence for a pick - see `PICK_FIRST`.
  *
  * THE CHILD'S WORDS STAY HERE. A write-in sends its length and nothing else,
  * which is all the contract accepts, and the field is cleared once it is sent.
  *
- * WHAT FOLLOWS AN ANSWER IS NOT DRAWN: "left to backend - not drawn here on a
- * guess", and the answer route returns nothing to show. So the prompt simply
- * closes, takes 38's answered tint, and stays a target - opening it again and
- * sending is the child asking the same question again (`asked_again`).
+ * AN ANSWER IS NOT MARKED: "left to backend - not drawn here on a guess", and
+ * the answer route returns nothing to show. So the prompt simply closes, takes
+ * 38's answered tint, and stays a target - opening it again and sending is the
+ * child asking the same question again (`asked_again`).
+ *
+ * TWO ENDINGS, AND THE PANEL IS TOLD WHICH (SCRUM-241, frame 38 §4 and 38a).
+ * Once every answerable prompt has been answered the panel closes on one:
+ * - "self", the child opened it from the confusion prompt: "Want to try the
+ *   question again now?" and Try again, the way back to the question. Only
+ *   where there is a question to go back to (`onTryAgain`); otherwise the
+ *   panel simply stays as it is.
+ * - "handoff", the system handed the child off after repeated attempts at the
+ *   check: the panel arrives open, with nothing to accept or decline, and
+ *   ends on "Let's keep going." and Keep going, on into the next segment. No
+ *   Try again: sending this child back to the question is the loop the
+ *   hand-off exists to break.
+ * Which one is never worked out from what the child does in here. The backend
+ * owns the hand-off and the front end never counts attempts.
+ *
+ * NOT RENDERED from the frame's endings: the "You've got it" label and the
+ * sentence naming the idea ("That's photosynthesis."). Guided answers are not
+ * marked, so nothing says the child got it, and no field names the idea.
  *
  * Leaving a prompt the child had opened without sending is `abandoned`, said
  * once - on the panel's close, or as the segment moves on under it.
  */
 export function SocraticPanel({
   prompts,
+  entry = "self",
+  onTryAgain,
+  onKeepGoing,
   onShown,
   onAnswer,
   onAbandon,
 }: {
   prompts: PanelPrompt[];
-  /** The panel opened with these answerable prompts on screen, first time only. */
+  /** How the panel was reached. Told at the way in, never inferred. */
+  entry?: PanelEntry;
+  /** The self-opened ending's way back to the question. */
+  onTryAgain?: () => void;
+  /** The handed-off ending's way on into the next segment. */
+  onKeepGoing?: () => void;
+  /**
+   * The panel opened, first time only, with these answerable prompts on
+   * screen - none when it lists only bare questions.
+   */
   onShown?: (promptIds: string[]) => void;
   /** The child pressed Send on a prompt. */
   onAnswer?: (
@@ -125,7 +188,8 @@ export function SocraticPanel({
   /** The child left a prompt they had opened without sending. */
   onAbandon?: (promptId: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  // A hand-off arrives open; the child opens it otherwise.
+  const [open, setOpen] = useState(entry === "handoff");
   const [active, setActive] = useState<string | null>(null);
   const [answered, setAnswered] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -138,7 +202,7 @@ export function SocraticPanel({
   const [drafts, setDrafts] = useState<ReadonlyMap<string, string>>(
     () => new Map(),
   );
-  /** The prompt whose Send was pressed on an empty field. */
+  /** The prompt whose Send was pressed with nothing picked or typed. */
   const [nudged, setNudged] = useState<string | null>(null);
   // Read by the unmount cleanup, which sees only refs.
   const opened = useRef<Set<string>>(new Set());
@@ -161,13 +225,15 @@ export function SocraticPanel({
     if (active) field.current?.focus();
   }, [active]);
 
-  const openPanel = () => {
-    setOpen(true);
-    if (shown.current) return;
+  // Said once, the first time the panel is on screen: opened by the child, or
+  // arriving open on a hand-off.
+  useEffect(() => {
+    if (!open || shown.current) return;
     shown.current = true;
-    const ids = prompts.flatMap((p) => (p.id ? [p.id] : []));
-    if (ids.length > 0) onShown?.(ids);
-  };
+    onShown?.(prompts.flatMap((p) => (p.id ? [p.id] : [])));
+  }, [open, prompts, onShown]);
+
+  const openPanel = () => setOpen(true);
 
   const closePanel = () => {
     setOpen(false);
@@ -175,6 +241,31 @@ export function SocraticPanel({
     setNudged(null);
     leave(opened.current, onAbandon);
   };
+
+  /*
+   * WORKED THROUGH: every prompt that can be answered has been. A panel of
+   * bare questions has nothing to answer, so only a hand-off - which must
+   * always have a way on - counts it as worked through from the start.
+   */
+  const answerable = prompts.flatMap((p) => (p.id ? [p.id] : []));
+  const workedThrough =
+    answerable.length > 0
+      ? answerable.every((id) => answered.has(id))
+      : entry === "handoff";
+  const ending =
+    workedThrough && active === null
+      ? entry === "handoff"
+        ? onKeepGoing && {
+            line: "Let's keep going.",
+            action: "Keep going",
+            go: onKeepGoing,
+          }
+        : onTryAgain && {
+            line: "Want to try the question again now?",
+            action: "Try again",
+            go: onTryAgain,
+          }
+      : undefined;
 
   const toggle = (id: string) => {
     // An answered prompt opened again is not abandoned if it is left: it was
@@ -195,6 +286,15 @@ export function SocraticPanel({
     setNudged(null);
     setActive(null);
     onAnswer?.(id, reply, outcome);
+  };
+
+  const sendPicked = (id: string) => {
+    const choice = picked.get(id);
+    if (choice === undefined) {
+      setNudged(id);
+      return;
+    }
+    send(id, { option: choice });
   };
 
   const sendWritten = (id: string) => {
@@ -301,11 +401,12 @@ export function SocraticPanel({
                                 type="button"
                                 role="radio"
                                 aria-checked={on}
-                                onClick={() =>
+                                onClick={() => {
+                                  setNudged(null);
                                   setPicked((prev) =>
                                     new Map(prev).set(id, option),
-                                  )
-                                }
+                                  );
+                                }}
                                 className={cn(
                                   "flex min-h-11 w-full cursor-pointer items-center justify-between gap-2.5 rounded-[10px] border-[1.5px] bg-nevo-cream px-3.5 py-[11px] text-left text-[13.5px] leading-[1.45] text-nevo-near-black transition-colors",
                                   on
@@ -329,15 +430,14 @@ export function SocraticPanel({
                             );
                           })}
                         </div>
-                        {choice !== undefined && (
-                          <button
-                            type="button"
-                            onClick={() => send(id, { option: choice })}
-                            className={cn(SEND, "mt-3.5")}
-                          >
-                            Send
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => sendPicked(id)}
+                          className={cn(SEND, "mt-3.5")}
+                        >
+                          Send
+                        </button>
+                        {nudged === id && <SendNudge>{PICK_FIRST}</SendNudge>}
                       </>
                     )}
                     {expanded && options.length === 0 && (
@@ -372,26 +472,34 @@ export function SocraticPanel({
                         >
                           Send
                         </button>
-                        {nudged === id && (
-                          <div
-                            role="status"
-                            className="mt-2.5 flex items-start gap-2 rounded-[10px] bg-nevo-violet/18 px-[13px] py-2.5"
-                          >
-                            <span
-                              aria-hidden
-                              className="mt-[5px] size-[7px] shrink-0 rounded-full bg-nevo-violet"
-                            />
-                            <span className="text-[12.5px] leading-[1.5] text-nevo-near-black">
-                              Type a little first, then Send.
-                            </span>
-                          </div>
-                        )}
+                        {nudged === id && <SendNudge>{TYPE_FIRST}</SendNudge>}
                       </>
                     )}
                   </div>
                 );
               })}
             </div>
+            {/* 38's ending: Nevo's line in navy, then the one way on. */}
+            {ending && (
+              <>
+                <p
+                  role="status"
+                  className="mt-2 rounded-[10px] bg-nevo-navy px-4 py-3.5 text-[13.5px] leading-[1.5] text-nevo-cream"
+                >
+                  {ending.line}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    closePanel();
+                    ending.go();
+                  }}
+                  className={cn(SEND, "mt-3.5")}
+                >
+                  {ending.action}
+                </button>
+              </>
+            )}
             {/* Inside the sheet, edge to edge at its foot, and never the
                 device's own keyboard. It hides itself where a real keyboard
                 exists, and stays in reach when the sheet scrolls. */}

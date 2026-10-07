@@ -6,8 +6,12 @@ import { Button } from "@/components/shared";
 /**
  * Lesson error state (Lesson Player frame) — a failed load, handled in the house
  * style: never red, never an alarm icon. The system owns the failure ("We're on
- * it"), explicitly absolves the learner ("Nothing you did caused it"), keeps the
- * reassurance motif, and always offers a forward path.
+ * it"), explicitly absolves the learner ("Nothing you did caused it"), and
+ * always offers a forward path.
+ *
+ * NO "AND YOUR PROGRESS IS SAVED" (design D89, 6 Oct): "Only where it is
+ * actually saved. If the player cannot confirm the save, the line comes out."
+ * A screen for a load that failed has no write to confirm.
  */
 export function LessonError({
   onRetry,
@@ -26,8 +30,7 @@ export function LessonError({
         Something went wrong. We&apos;re on it.
       </h2>
       <p className="mt-3 max-w-[320px] text-base leading-[1.6] text-nevo-near-black/72 sm:text-[18px] lg:text-[19px]">
-        This one didn&apos;t load. Nothing you did caused it, and your progress
-        is saved.
+        This one didn&apos;t load. Nothing you did caused it.
       </p>
 
       <Button className="mt-7 w-full max-w-[300px]" onClick={onRetry}>

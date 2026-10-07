@@ -21,6 +21,8 @@ import type { AdaptationPlan, Lesson } from "@/lib/types";
  *   the answer route, not the player, puts it on the signal stream.
  * - Frame 38 (6 Oct) / B41: a separate Send, a write-in that sends its length,
  *   an empty Send that explains itself, and `asked_again`.
+ * - 6 Oct: Send with no choice picked explains itself the same way, and
+ *   SCRUM-241's self-opened ending goes back to the question.
  * - B12/D26: a picture that would not load is told to the engine.
  * - D25: the engine's density is spacing, set on the way into a segment.
  */
@@ -166,17 +168,14 @@ describe("the hint card, closed by the child", () => {
     expect(screen.queryByText(HINT)).toBeNull();
   });
 
-  it("stops guiding the forward chevron once it is closed", () => {
+  it("never makes the forward chevron glow (D124)", () => {
+    // "Anything that reacts visibly to a child's difficulty tells them they
+    // are being watched." The hint is on screen; the chevron is unchanged.
     render(<LessonPlayer lesson={TWO} plan={hinted()} />);
-    expect(screen.getByRole("button", { name: "Next" }).className).toMatch(
-      /glow-guide/,
-    );
+    expect(screen.getByText(HINT)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Close hint" }));
-
-    expect(screen.getByRole("button", { name: "Next" }).className).not.toMatch(
-      /glow-guide/,
-    );
+    const nextChevron = screen.getByRole("button", { name: "Next" });
+    expect(nextChevron.className).not.toMatch(/glow|animate/);
   });
 });
 
@@ -346,12 +345,25 @@ describe("guided prompts", () => {
     expect(answer.mock.calls[0][0]).toMatchObject({ option: "The sun" });
   });
 
-  it("offer no Send before anything is picked", () => {
+  it("keep Send pressable before anything is picked, and say why nothing went", () => {
+    // Design, 6 Oct: "exactly as the empty written answer does".
     render(<LessonPlayer lesson={TWO} plan={panel()} live />);
     openPanel();
     fireEvent.click(screen.getByRole("button", { name: PROMPTS[0].prompt }));
 
-    expect(screen.queryByRole("button", { name: "Send" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Send" })).not.toBeDisabled();
+    send();
+
+    expect(answer).not.toHaveBeenCalled();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Pick one first, then Send.",
+    );
+
+    // Picking takes the note away, and Send then sends the pick.
+    choose("The sun");
+    expect(screen.queryByText("Pick one first, then Send.")).toBeNull();
+    send();
+    expect(answer).toHaveBeenCalledTimes(1);
   });
 
   it("send how much was written to a prompt without options, never the words", () => {
@@ -498,6 +510,67 @@ describe("guided prompts", () => {
     send();
 
     expect(answer).not.toHaveBeenCalled();
+  });
+
+  describe("the ending, for a child who opened the panel (SCRUM-241)", () => {
+    const CHECKED = lesson(
+      seg("seg-1", {
+        quickCheck: {
+          question: "What does a leaf catch?",
+          options: [
+            { id: "a", label: "Light" },
+            { id: "b", label: "Soil" },
+          ],
+          correctId: "a",
+          correctNote: "Yes.",
+          recoveryNote: "Not quite. Let's look again.",
+        },
+      }),
+      seg("seg-2"),
+    );
+    const ENDING = "Want to try the question again now?";
+    const answerFirst = () => {
+      fireEvent.click(screen.getByRole("button", { name: PROMPTS[0].prompt }));
+      choose("The sun");
+      send();
+    };
+    const answerSecond = () => {
+      fireEvent.click(screen.getByRole("button", { name: PROMPTS[1].prompt }));
+      fireEvent.change(field(), { target: { value: "It catches it" } });
+      send();
+    };
+
+    it("offers the way back to the question once every prompt is answered", () => {
+      render(<LessonPlayer lesson={CHECKED} plan={panel()} live />);
+      openPanel();
+      answerFirst();
+      expect(screen.queryByText(ENDING)).toBeNull();
+
+      answerSecond();
+
+      expect(screen.getByRole("status")).toHaveTextContent(ENDING);
+      // Not the hand-off's ending, and no verdict nothing marked.
+      expect(screen.queryByRole("button", { name: "Keep going" })).toBeNull();
+      expect(screen.queryByText(/got it/i)).toBeNull();
+
+      fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+      // Back to the question: the check, with the panel put away.
+      expect(screen.getByRole("dialog")).toHaveTextContent(
+        "What does a leaf catch?",
+      );
+      expect(screen.queryByText(ENDING)).toBeNull();
+    });
+
+    it("has no way back where there is no question to go back to", () => {
+      render(<LessonPlayer lesson={TWO} plan={panel()} live />);
+      openPanel();
+      answerFirst();
+      answerSecond();
+
+      expect(screen.queryByText(ENDING)).toBeNull();
+      expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    });
   });
 });
 

@@ -37,6 +37,8 @@ import { readZipFile, ZipUnsupported } from "./zip";
  * a fresh package therefore plays its segments ungrouped and ends without
  * either, until the child opens it online once and the shelf takes the full
  * detail read (`refreshSavedLesson`). Asked of backend; never filled in here.
+ * Played that way it is never recorded complete - see `isPackageCopy` in
+ * `savedLessons.ts`.
  *
  * If `lesson.json` is not that shape, belongs to another lesson or will not
  * build, the lesson is kept from the detail read instead, as before. The size

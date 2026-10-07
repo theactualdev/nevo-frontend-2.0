@@ -29,9 +29,13 @@ const BAR_HEIGHTS = [6, 10, 13, 8, 14, 10, 12, 7, 13, 9, 11, 14, 8, 12, 10, 7, 1
  * uses, and the control goes quiet. One fresh attempt when the connection
  * returns - see `useMediaSource`.
  *
- * NOT DRAWN: the bar's label. 17a's reads "Read this step aloud · TEXT STAYS",
- * which names a calculation step; a question has no drawn line, so none is
- * written for it. Listed for design.
+ * THE LABEL IS "LISTEN", THEN "LISTEN AGAIN" (design D95, 6 Oct): "'Listen
+ * again' where the child has already heard it, 'Listen' where they have not.
+ * Both are things a child understands without being taught." It sits where
+ * 17a's label sits, above the waveform, and the play control carries the same
+ * words as its name. Heard means played through to the end: that is when
+ * pressing play starts it again from the top. 17a's own words, "Read this step
+ * aloud · TEXT STAYS", name a calculation step and are not used here.
  */
 export function SpokenPrompt({
   src,
@@ -51,6 +55,9 @@ export function SpokenPrompt({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const [pct, setPct] = useState(0);
+  /** Played through to the end at least once. */
+  const [heard, setHeard] = useState(false);
+  const label = heard ? "Listen again" : "Listen";
   const playingRef = useRef(false);
   const onBusyRef = useRef(onBusy);
 
@@ -113,6 +120,7 @@ export function SpokenPrompt({
           onPause={() => setPlayState(false)}
           onEnded={() => {
             setPct(100);
+            setHeard(true);
             setPlayState(false);
           }}
           onError={() => {
@@ -123,7 +131,7 @@ export function SpokenPrompt({
       )}
       <button
         type="button"
-        aria-label={playing ? "Pause" : "Play"}
+        aria-label={playing ? "Pause" : label}
         disabled={failed}
         onClick={toggle}
         className={cn(
@@ -148,17 +156,27 @@ export function SpokenPrompt({
           {"Couldn't load this recording"}
         </span>
       ) : (
-        <div aria-hidden className="flex h-3.5 items-end gap-0.5">
-          {BAR_HEIGHTS.map((h, i) => (
-            <span
-              key={i}
-              className="w-[3px] shrink-0 rounded-full bg-nevo-navy transition-opacity duration-150"
-              style={{
-                height: `${h}px`,
-                opacity: (i + 1) / BAR_HEIGHTS.length <= pct / 100 ? 0.95 : 0.28,
-              }}
-            />
-          ))}
+        <div className="flex min-w-0 flex-1 flex-col gap-[5px]">
+          {/* Shown, and the control already says it: read once, not twice. */}
+          <span
+            aria-hidden
+            className="text-[13px] font-semibold text-nevo-near-black"
+          >
+            {label}
+          </span>
+          <div aria-hidden className="flex h-3.5 items-end gap-0.5">
+            {BAR_HEIGHTS.map((h, i) => (
+              <span
+                key={i}
+                className="w-[3px] shrink-0 rounded-full bg-nevo-navy transition-opacity duration-150"
+                style={{
+                  height: `${h}px`,
+                  opacity:
+                    (i + 1) / BAR_HEIGHTS.length <= pct / 100 ? 0.95 : 0.28,
+                }}
+              />
+            ))}
+          </div>
         </div>
       )}
     </div>

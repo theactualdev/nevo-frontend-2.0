@@ -7,6 +7,7 @@ import {
   lessonFromPackage,
 } from "./lessonPackage";
 import { lessonFromContent } from "@/lib/lessons/fromContent";
+import { isPackageCopy } from "./savedLessons";
 import { buildZip } from "./testZip";
 import { ZipError } from "./zip";
 
@@ -295,6 +296,22 @@ describe("saving a lesson through its package", () => {
 
     expect(detail).toHaveBeenCalledWith(ID);
     expect(saved.detail.id).toBe(ID);
+  });
+});
+
+describe("telling the package's copy from the full lesson", () => {
+  // Lydia, 6 Oct: the package's copy is never recorded completed, because it
+  // has no modules, recap or after-lesson check. The player has to know.
+  it("knows the copy saved out of a package", async () => {
+    const kept = await lessonFromPackage(pkg(JSON.stringify(lesson())), ID);
+
+    expect(isPackageCopy(kept!)).toBe(true);
+  });
+
+  it("knows the detail read, which always carries modules", () => {
+    expect(isPackageCopy({ ...detailShaped(), modules: [] } as never)).toBe(
+      false,
+    );
   });
 });
 

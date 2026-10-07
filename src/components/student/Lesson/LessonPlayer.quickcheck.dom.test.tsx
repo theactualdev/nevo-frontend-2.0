@@ -9,9 +9,10 @@ import type { Lesson } from "@/lib/types";
  *
  * A scrim tap or Esc closed it, so a child could step round the check the
  * player gates on - and every scrim tap anywhere was recorded as
- * `tap_blocked`, including the ones that dismissed something. And after "See
- * it explained" it came back on the wrong answer they had just picked, with
- * Try again the only thing left to press.
+ * `tap_blocked`, including the ones that dismissed something.
+ *
+ * And a miss offers Try again alone (D93, confirmed 6 Oct): "See it
+ * explained" went back to the segment and explained nothing.
  */
 
 const { trackEvent } = vi.hoisted(() => ({ trackEvent: vi.fn() }));
@@ -125,17 +126,18 @@ describe("what a scrim tap records", () => {
   });
 });
 
-describe("after See it explained", () => {
-  it("comes back as the question, not on the answer they missed", async () => {
+describe("after a miss (D93)", () => {
+  it("offers Try again alone, and no See it explained", async () => {
     await openCheck();
     fireEvent.click(screen.getByRole("button", { name: /Oxygen/ }));
-    fireEvent.click(screen.getByRole("button", { name: "See it explained" }));
 
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByText("Not quite. Let's look again.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /See it explained/i })).toBeNull();
+    expect(screen.queryByText(/progress is saved/i)).toBeNull();
 
+    // Try again puts the question back, answerable straight away.
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(screen.queryByText("Not quite. Let's look again.")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
-    // And it can be answered straight away.
     fireEvent.click(screen.getByRole("button", { name: /Carbon dioxide/ }));
     expect(screen.getByText("That's it.")).toBeInTheDocument();
   });

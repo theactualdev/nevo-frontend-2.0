@@ -56,6 +56,7 @@ const state = (over: Record<string, unknown>) => {
     opensAt: null,
     placeUnknown: false,
     fromShelf: false,
+    fromPackage: false,
     ...over,
   };
 };
@@ -93,6 +94,8 @@ describe("a lesson that would not load", () => {
 
     expect(screen.getByText("Something went wrong. We're on it.")).toBeTruthy();
     expect(screen.getByText(/Nothing you did caused it/)).toBeTruthy();
+    // D89: a load that failed has no save to confirm, so it claims none.
+    expect(document.body.textContent).not.toMatch(/saved/i);
     expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Go back" }));
@@ -132,6 +135,34 @@ describe("a lesson whose saved place could not be read", () => {
 
     expect(screen.getByTestId("player")).toBeTruthy();
     expect(playerProps.value).toMatchObject({ placeUnknown: false });
+  });
+});
+
+describe("a lesson the teacher called off", () => {
+  it("says so, and claims no save it cannot confirm (D89)", () => {
+    state({ lesson: LESSON, unavailable: "cancelled" });
+    render(<LessonRoute lessonId="les-1" />);
+
+    expect(screen.getByText("Your teacher took it off.")).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/saved/i);
+  });
+});
+
+describe("a lesson opened from the offline package's copy", () => {
+  // Lydia, 6 Oct: played without its modules, recap and check, it is not
+  // recorded completed. The player is told, because the player writes it.
+  it("tells the player it is the partial copy", () => {
+    state({ lesson: LESSON, fromShelf: true, fromPackage: true });
+    render(<LessonRoute lessonId="les-1" />);
+
+    expect(playerProps.value).toMatchObject({ partial: true });
+  });
+
+  it("does not for the whole lesson", () => {
+    state({ lesson: LESSON, fromShelf: true, fromPackage: false });
+    render(<LessonRoute lessonId="les-1" />);
+
+    expect(playerProps.value).toMatchObject({ partial: false });
   });
 });
 

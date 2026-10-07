@@ -46,6 +46,27 @@ export interface SavedPackage {
   includesMedia?: boolean;
 }
 
+/**
+ * Whether a saved copy is the package's rather than a detail read's - the
+ * copy with no modules, closing recap or after-lesson check.
+ *
+ * WHY IT MATTERS (Lydia, 6 Oct): "A lesson played offline without its
+ * modules, recap and after-lesson check is not recorded as completed, and it
+ * comes back when the child is next online." Booked complete, the engine
+ * would teach that child from a check that never happened.
+ *
+ * TOLD BY THE SHAPE, because the shape is the difference. `modules` is
+ * required on `LessonDetailResponse` and `OfflinePackage` has none, so a detail
+ * read always carries the key and `detailFromPackage` never writes it - which
+ * also covers copies saved before this was asked. A copy is a detail read
+ * once `refreshSavedLesson` below has replaced it on an online open. Should
+ * a detail read ever come without `modules`, it is taken for a package copy:
+ * the lesson then comes back online rather than counting a check nobody took.
+ */
+export function isPackageCopy(detail: LessonDetailResponse): boolean {
+  return !Array.isArray((detail as Partial<LessonDetailResponse>).modules);
+}
+
 /** A shelf, not an archive - device storage is small and shared. */
 export const MAX_SAVED_LESSONS = 10;
 

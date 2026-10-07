@@ -77,6 +77,7 @@ export function LessonRoute({
     opensAt,
     placeUnknown,
     fromShelf,
+    fromPackage,
     finished,
   } = useStudentLesson(lessonId);
   const hydrated = useHydrated();
@@ -101,13 +102,14 @@ export function LessonRoute({
    * Nothing is said about the work they may already have done: cancelling
    * removes what is ahead, and a child's record of what they finished is still
    * theirs. The summary and review screens are deliberately NOT gated for the
-   * same reason.
+   * same reason. "Anything you already did on it is still saved" went for
+   * D89's reason (6 Oct): this screen confirms no save, so it claims none.
    */
   if (unavailable === "cancelled") {
     return (
       <LessonMessage
         title="This one isn’t on your list any more"
-        body="Your teacher took it off. Anything you already did on it is still saved."
+        body="Your teacher took it off."
         actionLabel="Back to my lessons"
         onAction={() => exitTo(LESSONS_HREF)}
       />
@@ -155,6 +157,7 @@ export function LessonRoute({
         plan={plan}
         live={live}
         finished={finished}
+        partial={fromPackage}
         review={review}
         reviewConceptId={reviewConceptId}
         startAt={resumeAt ?? 0}

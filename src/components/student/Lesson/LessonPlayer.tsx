@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import {
   AdaptiveToggleBar,
@@ -8,7 +8,6 @@ import {
   type ToggleSegment,
 } from "@/components/shared";
 import {
-  BREAK_TYPES,
   BUSY_PHASE,
   BUSY_REASON,
   DENSITY,
@@ -183,6 +182,7 @@ export function LessonPlayer({
   reviewConceptId,
   live = false,
   finished = false,
+  partial = false,
   assignmentId,
   startAt = 0,
   placeUnknown = false,
@@ -216,6 +216,12 @@ export function LessonPlayer({
    * never marked unfinished. Finishing it again still reports completion.
    */
   finished?: boolean;
+  /**
+   * The lesson as the offline package carries it: no modules, closing recap
+   * or after-lesson check. Reaching its end is never written `completed` -
+   * see `markComplete`.
+   */
+  partial?: boolean;
   /**
    * Segment to open on, from saved progress. Clamped by the caller; a review
    * session always opens at the top regardless.
@@ -335,7 +341,7 @@ export function LessonPlayer({
   );
 
   // Segments whose Quick Check has been answered correctly — only a correct
-  // answer spends the check (a miss offers Try again / See it explained).
+  // answer spends the check (a miss offers Try again).
   /*
    * FIRST answers in a review session, kept only to tell the scheduler how
    * recall went. Cleared with the session; never rendered to the child.
@@ -353,7 +359,8 @@ export function LessonPlayer({
   const checkRecall = useRef<Map<string, RecallEvidence & { picks: number }>>(
     new Map(),
   );
-  // Segments whose hint was on screen, for `after_hint`.
+  // Segments whose hint - or guided questions - were on screen, for
+  // `after_hint`.
   const hintedSegments = useRef<Set<string>>(new Set());
   const [passedChecks, setPassedChecks] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -415,14 +422,45 @@ export function LessonPlayer({
   //
   // So completion is a function both exits call, not a side effect of one of
   // them. The ref keeps it idempotent.
+  /*
+   * THE OFFLINE PACKAGE'S COPY IS NEVER COMPLETED (Lydia, 6 Oct): "A lesson
+   * played offline without its modules, recap and after-lesson check is not
+   * recorded as completed, and it comes back when the child is next online."
+   * Booked complete, the engine would teach this child from a check that
+   * never happened. Its end is written `exited` at the last segment instead -
+   * the furthest place, and how they left - so it comes back on Home and
+   * opens there online, with its check. The signal session ends the same way
+   * (`finishedAs`). A review or a finished lesson reopened writes nothing,
+   * as neither ever writes `exited`.
+   */
   const completionReported = useRef(false);
   const markComplete = useCallback(() => {
     if (completionReported.current) return;
     completionReported.current = true;
-    reportProgress(LESSON_STATUS.COMPLETED, {
-      segment: Math.max(0, lesson.segments.length - 1),
-    });
-  }, [lesson, reportProgress]);
+    const last = Math.max(0, lesson.segments.length - 1);
+    if (partial) {
+      if (review || finished) return;
+      const pos = modulePositionFor(lesson, last);
+      reportProgress(LESSON_STATUS.EXITED, {
+        segment: last,
+        ...(pos ? { module: pos.moduleIndex } : {}),
+      });
+      return;
+    }
+    reportProgress(LESSON_STATUS.COMPLETED, { segment: last });
+  }, [lesson, reportProgress, partial, review, finished]);
+  // How the signal session ends when the child reaches the end: completed,
+  // or - for the package's copy, above - exited at the last segment.
+  const finishedAs = useMemo<SessionOutcome>(
+    () =>
+      partial
+        ? {
+            completionStatus: "exited",
+            exitPosition: lesson.segments[lesson.segments.length - 1].id,
+          }
+        : COMPLETED,
+    [partial, lesson],
+  );
 
   useEffect(() => {
     if (phase !== "complete") return;
@@ -546,7 +584,7 @@ export function LessonPlayer({
   };
   // SCRUM-101: the segment index the player is about to enter across a module
   // boundary. Non-null takes over the screen with the boundary landing; the
-  // student's continue (or break + "I'm ready") completes the move.
+  // student's continue completes the move.
   const [boundaryTo, setBoundaryTo] = useState<number | null>(null);
   /*
    * ARRIVING AT A BOUNDARY IS ARRIVING IN THE NEXT MODULE.
@@ -570,9 +608,9 @@ export function LessonPlayer({
   const [breakActive, setBreakActive] = useState<BreakType | null>(null);
   const breaksTaken = useRef<Set<string>>(new Set());
   // Where the active break came from: "advance" resumes the interrupted move,
-  // "offer" returns to the same segment, "boundary" enters the next module.
+  // "offer" returns to the same segment. A module boundary offers none (D91).
   // Trigger travels into `break_start`.
-  const breakOrigin = useRef<"advance" | "offer" | "boundary">("advance");
+  const breakOrigin = useRef<"advance" | "offer">("advance");
   const breakTrigger = useRef<string>("adaptation_plan");
   // Break OFFERS (B.7/§4): spent per segment, whoever made them. Declining
   // spends; the same segment never re-asks.
@@ -1221,7 +1259,7 @@ export function LessonPlayer({
     const assess = hasAssessment && !review;
     if (assess) beginCheck();
     setPhase(assess ? "assessment" : "complete");
-    if (!assess) setEnding(COMPLETED);
+    if (!assess) setEnding(finishedAs);
     if (!assess) recordReview();
   };
 
@@ -1682,13 +1720,13 @@ export function LessonPlayer({
         }}
         onFinish={() => {
           setPhase("complete");
-          setEnding(COMPLETED);
+          setEnding(finishedAs);
         }}
         onReviewAnswers={() => {
           // The lesson IS finished at this point - reviewing is a way of
           // leaving it, not of abandoning it.
           markComplete();
-          setEnding(COMPLETED);
+          setEnding(finishedAs);
           exitTo(`${LESSONS_HREF}/${lesson.id}/review`);
         }}
       />
@@ -1769,20 +1807,15 @@ export function LessonPlayer({
           setBreakActive(null);
           setObserved((o) => ({ ...o, breaksTaken: o.breaksTaken + 1 }));
           // An offered break returns to the segment it interrupted; a
-          // plan-delivered one resumes the advance it intercepted; one taken
-          // at a module boundary lands on the next module's first segment.
+          // plan-delivered one resumes the advance it intercepted.
           if (breakOrigin.current === "advance") continueAdvance();
-          if (breakOrigin.current === "boundary" && boundaryTo !== null) {
-            setBoundaryTo(null);
-            go(boundaryTo);
-          }
         }}
       />
     );
   }
 
   // Module boundary landing (SCRUM-101) — a full player screen between modules,
-  // never a modal. Continue (or break + "I'm ready") completes the move.
+  // never a modal. Its one action, Continue, completes the move (D91).
   if (boundaryTo !== null) {
     const modules = lessonModules(lesson);
     const nextPos = modulePositionFor(lesson, boundaryTo);
@@ -1810,19 +1843,6 @@ export function LessonPlayer({
           onEnterNext={() => {
             setBoundaryTo(null);
             go(boundaryTo);
-          }}
-          onTakeBreak={() => {
-            /*
-             * SCRUM-101, answered: "Take a break first" routes to the break
-             * module and returns to the next module's first segment. It
-             * rested in place instead, which emitted no break at all.
-             *
-             * The full break, because it is the one the child ends: they
-             * chose to stop, so nothing times them back in.
-             */
-            breakOrigin.current = "boundary";
-            breakTrigger.current = "module_boundary";
-            setBreakActive(BREAK_TYPES.FULL);
           }}
         />
       );
@@ -1976,7 +1996,24 @@ export function LessonPlayer({
               <SocraticPanel
                 key={`socratic-${segment.id}`}
                 prompts={guidedPrompts}
+                /*
+                 * SCRUM-241: ONLY THE CHILD'S OWN WAY IN IS WIRED. The panel
+                 * opens here from the confusion prompt, so it ends on the way
+                 * back to the question - the check, while it is still to
+                 * pass. The hand-off ending is built and waits on a trigger:
+                 * nothing on the contract says "hand this child off", and
+                 * `show_socratic_panel` is this confusion prompt, not that.
+                 */
+                entry="self"
+                onTryAgain={
+                  segment.quickCheck && !passedChecks.has(segment.id)
+                    ? () => setCheckOpen(true)
+                    : undefined
+                }
                 onShown={(promptIds) => {
+                  // Reached through the panel is not reached first time: a
+                  // check answered after it reports as after help (B28).
+                  hintedSegments.current.add(segment.id);
                   for (const promptId of promptIds)
                     trackEvent(SIGNAL_EVENT_TYPES.GUIDED_QUESTION_SHOWN, {
                       segmentId: segment.id,
@@ -2142,7 +2179,7 @@ export function LessonPlayer({
       <LeaveLessonDialog
         open={leaveOpen}
         onOpenChange={setLeaveOpen}
-        saved={progress.positionSaved}
+        resumable={live && !review && !finished}
         onLeave={() => {
           // `exited` is a status the contract defines and nothing ever sent.
           // Leaving deliberately is not the same fact as drifting off mid
@@ -2174,9 +2211,10 @@ export function LessonPlayer({
         />
       )}
 
-      {/* Chevron nav — dims under the attention accommodation; `offer_hint`
-          guides the forward control with three quiet glow cycles (never
-          displaces it). */}
+      {/* Chevron nav — dims under the attention accommodation. Nothing on it
+          reacts to a hint: the forward control's glow went with design's
+          D124 (6 Oct), "Anything that reacts visibly to a child's difficulty
+          tells them they are being watched." */}
       <nav
         aria-hidden={partsLeft || undefined}
         inert={partsLeft}
@@ -2195,11 +2233,6 @@ export function LessonPlayer({
           dir="next"
           disabled={nextDisabled}
           onClick={handleNext}
-          className={cn(
-            hintHere &&
-              !nextDisabled &&
-              "motion-safe:animate-nevo-glow-guide",
-          )}
         />
       </nav>
     </div>

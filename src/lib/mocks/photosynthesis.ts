@@ -101,8 +101,7 @@ export const PHOTOSYNTHESIS: Lesson = {
         ],
         correctId: "co2",
         correctNote: "That's it - plants take in carbon dioxide and give out oxygen.",
-        recoveryNote:
-          "Not quite - oxygen is what plants give out. Let's look again. Your progress is saved.",
+        recoveryNote: "Not quite. Let's look again.",
       },
     },
     {
@@ -145,8 +144,7 @@ export const PHOTOSYNTHESIS: Lesson = {
         ],
         correctId: "sugar",
         correctNote: "That's it - the light becomes sugar, the plant's food.",
-        recoveryNote:
-          "Not quite - water is something the plant takes in. Let's look again. Your progress is saved.",
+        recoveryNote: "Not quite. Let's look again.",
       },
     },
     {
@@ -308,7 +306,8 @@ export const PHOTOSYNTHESIS_PLAN: AdaptationPlan = {
         "What might the plant make from it?",
       ],
     },
-    // `offer_hint`: the unrequested hint and the guided forward glow. The
+    // `offer_hint`: the unrequested hint (no glow on the forward control -
+    // D124). The
     // OFFERED consolidation break rides its own field, because §4 keeps
     // `offer_break` as a separate action and one segment carries one
     // instruction. Offered, never forced.

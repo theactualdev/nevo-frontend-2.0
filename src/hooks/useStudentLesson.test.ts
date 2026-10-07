@@ -610,6 +610,46 @@ describe("a lesson the child saved for offline", () => {
     expect(result.current.lesson?.title).toBe("Fractions Lesson 3");
   });
 
+  /*
+   * Lydia, 6 Oct: a lesson played without its modules, recap and check is not
+   * recorded completed. The package's copy carries none of them, and the
+   * player is told which copy it has.
+   */
+  it("says when the saved copy is the offline package's", async () => {
+    signIn();
+    // The package's shape under the detail's names: no `modules` key at all.
+    saveLesson("student-1", LIVE_LESSON as never);
+    detail.mockRejectedValue(new ApiError(0, "Network"));
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.lesson).not.toBeNull());
+    expect(result.current.fromPackage).toBe(true);
+  });
+
+  it("does not for a copy taken from the full detail read", async () => {
+    signIn();
+    saveLesson("student-1", { ...LIVE_LESSON, modules: [] } as never);
+    detail.mockRejectedValue(new ApiError(0, "Network"));
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.lesson).not.toBeNull());
+    expect(result.current.fromShelf).toBe(true);
+    expect(result.current.fromPackage).toBe(false);
+  });
+
+  it("does not for a lesson read live", async () => {
+    signIn();
+    saveLesson("student-1", LIVE_LESSON as never);
+    detail.mockResolvedValue(LIVE_LESSON);
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.lesson).not.toBeNull());
+    expect(result.current.fromPackage).toBe(false);
+  });
+
   it("does not bring back a lesson the school removed", async () => {
     signIn();
     saveLesson("student-1", LIVE_LESSON as never);
