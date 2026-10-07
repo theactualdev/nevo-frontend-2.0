@@ -8,13 +8,12 @@ import { tapPoint, type BaselineCapture } from "@/lib/profiling/capture";
 import { AvatarBubble, ProfilingShell } from "./ProfilingShell";
 
 /**
- * Playback pacing (BP-M1 playable, 11:202): slows as struggle accumulates,
- * in the bands whose `GridSpanConfig.slowAfterMiss` says so. The base
- * highlight is per band - `GridSpanConfig.litMs`.
+ * Playback pacing (BP-M1 playable, 11:202). The highlight is per band -
+ * `GridSpanConfig.litMs` - and one pace holds for the whole module: no band
+ * slows after a miss (D74, 6 Oct), so a replay plays exactly as the first
+ * playback did.
  */
-const LIT_STRUGGLE_MS = 300;
-const GAP_BASE_MS = 280;
-const GAP_STRUGGLE_MS = 120;
+const GAP_MS = 280;
 const PLAYBACK_LEAD_MS = 560;
 /** The wrong-tap nudge: grid locks, soft-violet ring, then the pattern replays. */
 const NUDGE_MS = 1500;
@@ -97,9 +96,8 @@ const PHONE_GRID =
  * Module 1 - Spatial Grid Span (BP-M1, working memory). Tiles light in
  * sequence; the student taps them back in reverse. Adaptive: the span starts at
  * the band's start and grows by one per clean recall to the band ceiling, each
- * from the Module 1 frame (see `gridSpanConfig`); in the bands that slow
- * after a miss, playback slows while the student struggles and recovers as
- * they do, and in the rest it keeps one pace. A wrong tap gives a gentle
+ * from the Module 1 frame (see `gridSpanConfig`), and playback keeps one
+ * pace throughout, misses or not (D74). A wrong tap gives a gentle
  * soft-violet nudge (the tile never fills, nothing shakes, nothing is "wrong"),
  * locks the grid for a beat, and replays the same pattern; three misses at a
  * length end the module seamlessly. The SS band interleaves a true/false check
@@ -117,8 +115,7 @@ export function GridSpanModule({
   capture?: BaselineCapture;
   onComplete: () => void;
 }) {
-  const { n, spanStart, spanMax, litMs, slowAfterMiss, dual, instruction } =
-    config;
+  const { n, spanStart, spanMax, litMs, dual, instruction } = config;
   const cells = n * n;
 
   const [step, setStep] = useState<Step>("watching");
@@ -130,7 +127,6 @@ export function GridSpanModule({
   const [firstRound, setFirstRound] = useState(true);
   const [check, setCheck] = useState(DUAL_CHECKS[0]);
 
-  const struggle = useRef(0);
   const retries = useRef(0);
   const checkIdx = useRef(0);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -170,9 +166,6 @@ export function GridSpanModule({
   const startRound = useCallback(
     (seq: number[]) => {
       clearTimers();
-      const s = slowAfterMiss ? Math.min(3, struggle.current) : 0;
-      const lit = litMs + s * LIT_STRUGGLE_MS;
-      const gap = GAP_BASE_MS + s * GAP_STRUGGLE_MS;
       setStep("watching");
       setSequence(seq);
       setLitIndex(-1);
@@ -181,14 +174,14 @@ export function GridSpanModule({
       setWrongCell(-1);
       capture?.record("playback_start", {
         length: seq.length,
-        litMs: lit,
-        gapMs: gap,
+        litMs,
+        gapMs: GAP_MS,
       });
       let t = PLAYBACK_LEAD_MS;
       seq.forEach((cell) => {
         after(t, () => setLitIndex(cell));
-        after(t + lit, () => setLitIndex(-1));
-        t += lit + gap;
+        after(t + litMs, () => setLitIndex(-1));
+        t += litMs + GAP_MS;
       });
       after(t + 150, () => {
         setLitIndex(-1);
@@ -204,7 +197,7 @@ export function GridSpanModule({
         }
       });
     },
-    [after, capture, clearTimers, dual, litMs, slowAfterMiss],
+    [after, capture, clearTimers, dual, litMs],
   );
 
   // Kick off round 1 on a zero-delay timer: the cleanup cancels it, so
@@ -251,7 +244,6 @@ export function GridSpanModule({
         if (sequence.length >= spanMax) {
           after(END_AT_MAX_MS, settle);
         } else {
-          struggle.current = Math.max(0, struggle.current - 1);
           retries.current = 0;
           after(NEXT_ROUND_MS, () => startRound(genSeq(sequence.length + 1)));
         }
@@ -261,7 +253,6 @@ export function GridSpanModule({
       }
     } else {
       retries.current += 1;
-      struggle.current = Math.min(3, struggle.current + 1);
       setWrongCell(cell);
       setStep("wrong");
       const fails = retries.current;
