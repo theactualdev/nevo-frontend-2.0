@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { studentsApi, type AccommodationType } from "@/lib/api/students";
+import { intelligenceApi } from "@/lib/api/intelligence";
+import type { AccommodationType } from "@/lib/api/students";
 import { getSession } from "@/lib/auth/session";
 import { useHasSession } from "./useHasSession";
 
@@ -23,11 +24,19 @@ export interface ActiveAccommodations {
  * carried one was the authored mock, which only a signed-OUT visitor sees. The
  * demo had the accommodation; the SEND learner it was built for did not.
  *
- * WHY A SECOND CALL. `POST /api/intelligence/adapt` carries no accommodation
- * field of any kind, so there is nothing on the plan route to map. These are
- * cross-session and slow-moving - the teacher's own screen reads them from
- * this same route - so a read per lesson load is the same shape the rest of
- * the console already uses.
+ * FROM THE SESSION-START READ (B24, audit 50). `POST /api/intelligence/adapt`
+ * carries no accommodation field, so these come from
+ * `GET /api/session/state/{id}`: the one read frontend §1 and §4 specify for
+ * the start of a lesson, which carries the accommodations, the engine's
+ * configuration and the consent state from one moment. It replaces the
+ * separate `/api/intelligence/accommodations` read, which the teacher's and
+ * SENCo's screens still use for the evidence behind each one.
+ *
+ * ONLY THE ACCOMMODATIONS ARE APPLIED. The engine configuration it carries is
+ * the engine's own parameters, and the contract does not say what any of them
+ * changes on screen - see `EngineConfig`. The consent state is already acted
+ * on where a lesson opens: a withdrawn child is refused it (B7) and taken to
+ * 00e (`withdrawnDoor`).
  *
  * DEFAULTS TO NONE, and note this points the OPPOSITE way to `useConsentGate`,
  * which defaults to allowed. The asymmetry is the point: there, silence must
@@ -35,15 +44,12 @@ export interface ActiveAccommodations {
  * provision. An accommodation is a claim that Nevo is doing something for a
  * particular child, and a failed read is not evidence for it.
  *
- * SCOPE IS UNCONFIRMED. Every current caller of this route is a teacher or a
- * SENCo, and the OpenAPI contract carries no scope information at all -
- * student-only and admin-only routes declare byte-identical security blocks.
- * The neighbouring `/api/intelligence/adapt` does answer 200 to a student's
- * own token, which is why this is worth attempting, but it is not proof. If
- * the route turns out to be staff-only the read simply fails and the child
- * gets what they get today, because a 403 is an ordinary `ApiError` here -
- * only a 401 reaches `handleAuthFailure`. Asked of backend; until answered,
- * failing closed is the whole design.
+ * A CHILD READS THEIR OWN. Backend answered this for the accommodations
+ * route (B22): a student's own token on their own id is allowed, and the
+ * guard refuses only a student reading another. This route takes the id the
+ * same way; that it shares the guard is asked of backend. Refused all the
+ * same, the read fails closed like any other failure - a 403 is an ordinary
+ * `ApiError` here; only a 401 reaches `handleAuthFailure`.
  */
 export function useAccommodations(): ActiveAccommodations | null {
   return useAccommodationsState().active;
@@ -83,11 +89,12 @@ export function useAccommodationsState(): {
     const studentId = getSession()?.userId;
     if (!studentId) return;
     let cancelled = false;
-    void studentsApi
-      .accommodations(studentId)
+    void intelligenceApi
+      .sessionState(studentId)
       .then((res) => {
         if (cancelled) return;
-        const on = new Set<AccommodationType>(res.activeAccommodations ?? []);
+        // Absent is none: the field is not in the schema's `required` list.
+        const on = new Set<AccommodationType>(res.accommodations ?? []);
         setActive({
           reading: on.has("reading"),
           attention: on.has("attention"),

@@ -23,26 +23,36 @@ import { clearSession, setSession } from "@/lib/auth/session";
  *     claim that Nevo is doing something particular for this child, and a
  *     network error is not evidence for it.
  *
- * The 403 case is not hypothetical. Every other caller of this route is a
- * teacher or a SENCo, and the contract carries no scope information at all, so
- * the route may yet turn out to be staff-only. If it is, the child must simply
- * get what they get today — never a crash, and never an accommodation we made
- * up.
+ * THE READ IS THE SESSION-START STATE (B24, audit 50): one answer, from one
+ * moment, carrying the accommodations beside the engine's configuration and
+ * the consent state. A refusal of a child's own token must still leave them
+ * with what they get today - never a crash, and never an accommodation we
+ * made up.
  */
 
-const { accommodations } = vi.hoisted(() => ({ accommodations: vi.fn() }));
+const { accommodations, sessionState } = vi.hoisted(() => ({
+  accommodations: vi.fn(),
+  sessionState: vi.fn(),
+}));
 vi.mock("@/lib/api/students", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/students")>();
   return { ...actual, studentsApi: { ...actual.studentsApi, accommodations } };
 });
+vi.mock("@/lib/api/intelligence", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/intelligence")>();
+  return {
+    ...actual,
+    intelligenceApi: { ...actual.intelligenceApi, sessionState },
+  };
+});
 
-const answer = (active: string[]) => ({
+const answer = (active?: string[]) => ({
   studentId: "student-1",
-  activeAccommodations: active,
-  frontendSignals: [],
-  signals: [],
-  source: "engine",
-  persistedAsLabel: false,
+  configured: true,
+  engineConfig: {},
+  baselineVersion: 1,
+  ...(active ? { accommodations: active } : {}),
+  consentState: "given",
 });
 
 const signIn = () =>
@@ -63,6 +73,7 @@ const settle = async () => {
 
 beforeEach(() => {
   accommodations.mockReset();
+  sessionState.mockReset();
   clearSession();
   window.localStorage.clear();
 });
@@ -76,7 +87,7 @@ describe("useAccommodations", () => {
   it("turns on the accommodation the engine says is active", async () => {
     // The defect in one line: this is what the teacher is already being shown.
     signIn();
-    accommodations.mockResolvedValue(answer(["reading"]));
+    sessionState.mockResolvedValue(answer(["reading"]));
 
     const { result } = renderHook(() => useAccommodations());
 
@@ -88,12 +99,12 @@ describe("useAccommodations", () => {
     // The route takes a student id in the path. Reading another child's
     // accommodations would be a data leak, and reading nobody's is a 404.
     signIn();
-    accommodations.mockResolvedValue(answer([]));
+    sessionState.mockResolvedValue(answer([]));
 
     renderHook(() => useAccommodations());
 
     await waitFor(() =>
-      expect(accommodations).toHaveBeenCalledWith("student-1"),
+      expect(sessionState).toHaveBeenCalledWith("student-1"),
     );
   });
 
@@ -103,7 +114,7 @@ describe("useAccommodations", () => {
      * against a hook that turned everything on.
      */
     signIn();
-    accommodations.mockResolvedValue(answer(["attention"]));
+    sessionState.mockResolvedValue(answer(["attention"]));
 
     const { result } = renderHook(() => useAccommodations());
 
@@ -115,7 +126,7 @@ describe("useAccommodations", () => {
 
   it("carries more than one at a time", async () => {
     signIn();
-    accommodations.mockResolvedValue(answer(["reading", "attention"]));
+    sessionState.mockResolvedValue(answer(["reading", "attention"]));
 
     const { result } = renderHook(() => useAccommodations());
 
@@ -127,28 +138,55 @@ describe("useAccommodations", () => {
   it("does not invent an accommodation when the read fails", async () => {
     // A network error is not evidence that a child was granted anything.
     signIn();
-    accommodations.mockRejectedValue(new ApiError(0, "Network"));
+    sessionState.mockRejectedValue(new ApiError(0, "Network"));
 
     const { result } = renderHook(() => useAccommodations());
 
-    await waitFor(() => expect(accommodations).toHaveBeenCalled());
+    await waitFor(() => expect(sessionState).toHaveBeenCalled());
     await settle();
 
     expect(result.current).toBeNull();
   });
 
-  it("survives the route turning out to be staff-only", async () => {
+  it("comes from the session-start read, not a second route", async () => {
+    // One read, so the accommodations and the rest of the session's state
+    // cannot disagree. The evidence route stays the teacher's.
+    signIn();
+    sessionState.mockResolvedValue(answer(["reading"]));
+
+    const { result } = renderHook(() => useAccommodations());
+
+    await waitFor(() => expect(result.current?.reading).toBe(true));
+    expect(accommodations).not.toHaveBeenCalled();
+  });
+
+  it("turns none on when the answer carries no list", async () => {
+    // `accommodations` is outside the schema's required list.
+    signIn();
+    sessionState.mockResolvedValue(answer());
+
+    const { result } = renderHook(() => useAccommodations());
+
+    await waitFor(() => expect(result.current).not.toBeNull());
+    expect(result.current).toEqual({
+      reading: false,
+      attention: false,
+      numerical: false,
+    });
+  });
+
+  it("survives a child's own token being refused", async () => {
     /*
      * A 403 here is a scope refusal, not a dead session — only a 401 reaches
      * `handleAuthFailure`. So this must degrade to today's behaviour and must
      * not take the child's lesson down with it.
      */
     signIn();
-    accommodations.mockRejectedValue(new ApiError(403, "Forbidden"));
+    sessionState.mockRejectedValue(new ApiError(403, "Forbidden"));
 
     const { result } = renderHook(() => useAccommodations());
 
-    await waitFor(() => expect(accommodations).toHaveBeenCalled());
+    await waitFor(() => expect(sessionState).toHaveBeenCalled());
     await settle();
 
     expect(result.current).toBeNull();
@@ -160,6 +198,6 @@ describe("useAccommodations", () => {
     renderHook(() => useAccommodations());
 
     await new Promise((r) => setTimeout(r, 20));
-    expect(accommodations).not.toHaveBeenCalled();
+    expect(sessionState).not.toHaveBeenCalled();
   });
 });
