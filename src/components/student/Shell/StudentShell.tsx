@@ -19,6 +19,7 @@ import { useSessionRefresh } from "@/hooks/useSessionRefresh";
 import { flushPendingProgress } from "@/lib/lessons/pendingProgress";
 import { flushPendingBaseline } from "@/lib/profiling/pendingBaseline";
 import { arrivedWithoutSession, getSession } from "@/lib/auth/session";
+import { isHoldDestination } from "@/lib/auth/consentHold";
 import { doorAfterLostSession } from "./lostSession";
 import { MOCK_STUDENT, STUDENT_NAV, STUDENT_PROFILE_HREF } from "./studentNav";
 import { useAvatarTone } from "./useAvatarTone";
@@ -314,8 +315,8 @@ const PROFILE_HREF = "/student/profile";
 const isLesson = isLessonRoute;
 
 /**
- * The consent hold (00d). Its other door, 05 Entry, is under onboarding and
- * full-screen already.
+ * The holds: 00d, 00e (D117) and the unchecked consent read (D69). 05 Entry,
+ * which holds in place, is under onboarding and full-screen already.
  *
  * A HOLD IS NOT A TAB. These rendered inside the full app chrome, so a child
  * the server said may not proceed was shown the navigation, the bell and Ask
@@ -324,7 +325,7 @@ const isLesson = isLessonRoute;
  * draws the hold bare. So it is full-screen.
  */
 function isHoldRoute(pathname: string): boolean {
-  return pathname === "/student/waiting";
+  return isHoldDestination(pathname);
 }
 
 /**

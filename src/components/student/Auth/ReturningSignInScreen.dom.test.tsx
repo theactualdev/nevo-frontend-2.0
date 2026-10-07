@@ -249,6 +249,49 @@ describe("ReturningSignInScreen — signing back in", () => {
     expect(push).not.toHaveBeenCalledWith("/student/lessons/frac-3");
   });
 
+  it("holds a child whose consent was withdrawn on 00e, not 00d (D117)", async () => {
+    loginPin.mockResolvedValue(SESSION);
+    myConsentGate.mockResolvedValue({
+      studentId: "student-1",
+      granted: false,
+      blocked: true,
+      requiredType: "data_processing",
+      status: "withdrawn",
+    });
+    render(<ReturningSignInScreen next="/student/lessons/frac-3" />);
+    fill();
+
+    await signInNow();
+
+    expect(push).toHaveBeenCalledWith("/student/unavailable");
+    expect(push).not.toHaveBeenCalledWith("/student/waiting");
+    expect(screen.queryByText(/Taking you to your lessons/)).toBeNull();
+  });
+
+  it("holds a child whose consent could not be read, rather than letting them in (D69)", async () => {
+    /*
+     * "A check that cannot complete must not leave the door open. If the
+     * consent lookup or the account creation fails, the child does not
+     * proceed. Today they do." This door used to go on to the lesson.
+     */
+    loginPin.mockResolvedValue(SESSION);
+    myConsentGate.mockRejectedValue(new ApiError(503, "Service Unavailable"));
+    render(<ReturningSignInScreen next="/student/lessons/frac-3" />);
+    fill();
+
+    await signInNow();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+
+    expect(push).toHaveBeenCalledWith(
+      "/student/unchecked?next=%2Fstudent%2Flessons%2Ffrac-3",
+    );
+    expect(push).not.toHaveBeenCalledWith("/student/lessons/frac-3");
+    // Straight there: "Taking you to your lessons" would not be true.
+    expect(screen.queryByText(/Taking you to your lessons/)).toBeNull();
+  });
+
   it("signs them in before it asks, so a held child is still signed in", async () => {
     // Being held is not a failed sign-in. They proved who they are; the
     // answer to "may they start" is a different question, and the session has
@@ -315,19 +358,21 @@ describe("ReturningSignInScreen — when it does not work", () => {
     );
   });
 
-  it("tells a removed child their account is closed, not on pause and not a wrong PIN (D53)", async () => {
+  it("tells a removed child their account is closed on 28d, not on pause and not a wrong PIN (D53, D116)", async () => {
     loginPin.mockRejectedValue(refusal("account_closed"));
     render(<ReturningSignInScreen />);
     fill();
 
     await signInNow();
 
-    expect(screen.getByText(/Your Nevo account is closed/)).toBeVisible();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Your account is closed" }),
+    ).toBeVisible();
     expect(screen.queryByText(/on pause|didn't match/)).toBeNull();
-    expect(screen.getByRole("link", { name: "Back to sign in" })).toHaveAttribute(
-      "href",
-      "/auth/login",
-    );
+    // 28d is terminal: "no sign-in route, because offering a way back in
+    // would be cruel."
+    expect(screen.queryAllByRole("link")).toHaveLength(0);
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
   });
 
   it("does not remember a device it failed to sign into", async () => {

@@ -1,4 +1,4 @@
-import { WAITING_ROUTE } from "@/lib/auth/entryGate";
+import { isHoldDestination } from "@/lib/auth/consentHold";
 
 /**
  * The sign-in moments design ruled on (D2, D59, D68), shared by both PIN doors
@@ -9,12 +9,13 @@ import { WAITING_ROUTE } from "@/lib/auth/entryGate";
 /**
  * Does this child go straight on, with no "Welcome back" beat?
  *
- * A child about to be held at 00d never sees "Taking you to your lessons",
- * because it is not true. They go straight to the waiting screen. The beat is
- * for a child who is actually on their way in.
+ * A child about to be held never sees "Taking you to your lessons", because it
+ * is not true. They go straight to the hold - 00d, 00e (D117), or the one for a
+ * consent check that could not complete (D69). The beat is for a child who is
+ * actually on their way in.
  */
 export function skipsWelcomeBeat(destination: string): boolean {
-  return destination === WAITING_ROUTE;
+  return isHoldDestination(destination);
 }
 
 /**

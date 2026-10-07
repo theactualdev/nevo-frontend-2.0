@@ -135,6 +135,7 @@ export function ErrorScreen({
   surface,
   mark = true,
   className,
+  onBack,
 }: {
   retry: () => void;
   /** What the boundary caught. Reported, never rendered. */
@@ -147,9 +148,15 @@ export function ErrorScreen({
    */
   mark?: boolean;
   className?: string;
+  /**
+   * Where "Go back" goes, when back or home is the wrong place: a child held
+   * at a sign-in door goes back to the door, never into the app (D69).
+   */
+  onBack?: () => void;
 }) {
   const home = useHome();
-  const goBack = useGoBack(home);
+  const historyBack = useGoBack(home);
+  const goBack = onBack ?? historyBack;
   useEffect(() => {
     if (error === undefined) return;
     reportClientError(error, surface ?? surfaceForPath(window.location.pathname));

@@ -274,4 +274,20 @@ describe("a held child arriving through their school", () => {
 
     expect(await screen.findByText(/You.re in/)).toBeInTheDocument();
   });
+
+  it("holds a child whose consent could not be read, never You're in (D69)", async () => {
+    // A check that cannot complete does not leave the door open.
+    handshake();
+    myConsentGate.mockRejectedValue(new ApiError(0, "Network error"));
+
+    render(<SsoCallback />);
+
+    await waitFor(() =>
+      expect(replace).toHaveBeenCalledWith(
+        "/student/unchecked?next=%2Fstudent%2Fdashboard",
+      ),
+    );
+    expect(replace).not.toHaveBeenCalledWith("/student/dashboard");
+    expect(screen.queryByText(/You.re in/)).toBeNull();
+  });
 });

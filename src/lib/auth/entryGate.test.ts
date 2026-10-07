@@ -1,14 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { myConsentGate } = vi.hoisted(() => ({ myConsentGate: vi.fn() }));
+const { myConsentGate, reportClientError } = vi.hoisted(() => ({
+  myConsentGate: vi.fn(),
+  reportClientError: vi.fn(),
+}));
 vi.mock("@/lib/api/consents", () => ({ consentsApi: { myConsentGate } }));
+vi.mock("@/lib/api/clientErrors", () => ({ reportClientError }));
 
 import {
   enterFirstLesson,
   entryRoute,
   ssoLanding,
   studentDestination,
+  UNCHECKED_ROUTE,
   WAITING_ROUTE,
+  WITHDRAWN_ROUTE,
 } from "./entryGate";
 
 /**
@@ -28,16 +34,37 @@ const gate = (over: Record<string, unknown> = {}) => ({
 
 beforeEach(() => {
   myConsentGate.mockReset();
+  reportClientError.mockReset();
 });
 
 describe("a child the server says may not proceed", () => {
   it("is held, whatever they were heading for", async () => {
-    myConsentGate.mockResolvedValue(gate({ blocked: true }));
+    myConsentGate.mockResolvedValue(gate({ blocked: true, status: "pending" }));
 
     expect(await studentDestination(null)).toBe(WAITING_ROUTE);
     expect(await studentDestination("/student/lessons/l-1")).toBe(
       WAITING_ROUTE,
     );
+  });
+
+  it("is held on 00e, not 00d, when the consent was withdrawn (D117)", async () => {
+    // 00e: "it was there and is gone, so 'soon' would be a lie".
+    myConsentGate.mockResolvedValue(
+      gate({ blocked: true, granted: false, status: "withdrawn" }),
+    );
+
+    expect(await studentDestination("/student/lessons/l-1")).toBe(
+      WITHDRAWN_ROUTE,
+    );
+  });
+
+  it("is not held on 00e for a withdrawal the server does not block on", async () => {
+    // `blocked` decides; `status` only says which hold.
+    myConsentGate.mockResolvedValue(
+      gate({ blocked: false, granted: false, status: "withdrawn" }),
+    );
+
+    expect(await studentDestination(null)).toBe("/student/dashboard");
   });
 });
 
@@ -83,17 +110,38 @@ describe("what it reads, and what it refuses to read", () => {
 });
 
 describe("when the read does not answer", () => {
-  it("lets them through - a dropped network is not a missing consent", async () => {
+  it("holds them, carrying where they were going - a check that cannot complete does not leave the door open (D69)", async () => {
     /*
-     * Same ruling `useConsentGate` made for withdrawal and `StudentEntry` made
-     * for the link. Holding on an outage builds a wall a child cannot pass and
-     * cannot be told about, at the moment they have just proved who they are.
+     * Design, 4 and 6 Oct, raised as a defect: "If the consent lookup or the
+     * account creation fails, the child does not proceed. Today they do."
+     * This used to let them through on the reading that a dropped network is
+     * not a missing consent.
      */
     myConsentGate.mockRejectedValue(new Error("network"));
 
-    expect(await studentDestination("/student/dashboard")).toBe(
-      "/student/dashboard",
-    );
+    const to = await studentDestination("/student/lessons/l-1");
+
+    expect(to).toBe(`${UNCHECKED_ROUTE}?next=%2Fstudent%2Flessons%2Fl-1`);
+    expect(to).not.toBe("/student/lessons/l-1");
+  });
+
+  it("is its own hold, not 00d or 00e: the consent was not read as missing", async () => {
+    myConsentGate.mockRejectedValue(new Error("503"));
+
+    const to = await studentDestination(null);
+
+    expect(to.startsWith(UNCHECKED_ROUTE)).toBe(true);
+    expect(to).not.toBe(WAITING_ROUTE);
+    expect(to).not.toBe(WITHDRAWN_ROUTE);
+  });
+
+  it("reports the failure, so the hold's We're on it is true (B36)", async () => {
+    const cause = new Error("503");
+    myConsentGate.mockRejectedValue(cause);
+
+    await studentDestination(null);
+
+    expect(reportClientError).toHaveBeenCalledWith(cause, "student");
   });
 });
 
@@ -132,13 +180,16 @@ describe("the hand-off out of onboarding", () => {
     expect(go).toHaveBeenCalledWith(FIRST);
   });
 
-  it("does not turn a failed read into a hold", async () => {
+  it("holds on a failed read rather than opening the lesson (D69)", async () => {
     myConsentGate.mockRejectedValue(new Error("offline"));
     const go = vi.fn();
 
     await enterFirstLesson(FIRST, go);
 
-    expect(go).toHaveBeenCalledWith(FIRST);
+    expect(go).toHaveBeenCalledWith(
+      `${UNCHECKED_ROUTE}?next=%2Fstudent%2Flessons%2Ffrac-1`,
+    );
+    expect(go).not.toHaveBeenCalledWith(FIRST);
   });
 });
 
@@ -199,9 +250,15 @@ describe("entryRoute", () => {
     expect(entryRoute(state())).toBe("first-run");
   });
 
-  it("holds a child whose consent is pending, or withdrawn", () => {
+  it("holds a child whose consent is pending at 00d, and one whose consent was withdrawn at 00e", () => {
     expect(entryRoute(state({ consentState: "pending" }))).toBe("waiting");
-    expect(entryRoute(state({ consentState: "withdrawn" }))).toBe("waiting");
+    // D117: there and gone, so 00d's "It will be soon" would be a lie.
+    expect(entryRoute(state({ consentState: "withdrawn" }))).toBe(
+      "withdrawn",
+    );
+    expect(
+      entryRoute(state({ consentState: "withdrawn", accountReady: true })),
+    ).toBe("withdrawn");
   });
 
   it("holds a child whose date of birth is in dispute, at the age check", () => {
@@ -216,15 +273,13 @@ describe("entryRoute", () => {
     ).toBe("age-check");
   });
 
-  it("holds at 00d, not the age check, while consent is outstanding too", () => {
-    // "A day or two" is backend's word about the age check alone. A child
-    // still waiting on consent has been promised nothing of the kind.
+  it("holds for consent before the age check, while consent is outstanding or gone", () => {
     expect(
       entryRoute(state({ ageCheckPending: true, consentState: "pending" })),
     ).toBe("waiting");
     expect(
       entryRoute(state({ ageCheckPending: true, consentState: "withdrawn" })),
-    ).toBe("waiting");
+    ).toBe("withdrawn");
   });
 
   it("holds on a consent state it does not know", () => {

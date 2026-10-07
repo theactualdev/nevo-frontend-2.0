@@ -212,11 +212,21 @@ let pin = "";
 let schoolCode = "";
 let session: StudentSession;
 /**
- * Whether the server says this child may proceed. Read once so the sign-in
- * test knows which door is the right one - the dashboard, or the waiting
- * screen - rather than asserting one and failing on the other.
+ * Where the server's consent answer sends this child. Read once so the sign-in
+ * test knows which door is the right one - the dashboard, 00d, 00e, or the
+ * hold for a read that failed - rather than asserting one and failing on
+ * another.
  */
-let consentBlocked = false;
+type ConsentDoor = "open" | "waiting" | "withdrawn" | "unread";
+let consentDoor: ConsentDoor = "open";
+
+/** The address each answer lands a child on, as `entryGate` routes it. */
+const CONSENT_LANDING: Record<ConsentDoor, RegExp> = {
+  open: /\/student\/dashboard/,
+  waiting: /\/student\/waiting/,
+  withdrawn: /\/student\/unavailable/,
+  unread: /\/student\/unchecked/,
+};
 let dashboardRead: Read<ProbeDashboard> = { status: 0, body: null };
 let progressRead: Read<ProbeProgress> = { status: 0, body: null };
 
@@ -550,14 +560,28 @@ test.describe("a signed-in student", () => {
     };
 
     /*
-     * Where the sign-in door should send this child. A read that fails is NOT
-     * treated as blocked - the product makes the same call in `entryGate`, and
-     * the test has to agree with it rather than with a guess.
+     * Where the sign-in door should send this child. A read that fails HOLDS
+     * them (D69: "a check that cannot complete must not leave the door
+     * open") - the product makes that call in `entryGate`, and the test has
+     * to agree with it rather than with a guess. It used to read a failure as
+     * not blocked, which is the rule design reversed.
      */
     const gate = await api.get(`${API}/api/v1/students/me/consent-gate`, {
       headers: { Authorization: `Bearer ${session.token}` },
     });
-    consentBlocked = gate.ok() ? Boolean((await gate.json()).blocked) : false;
+    if (!gate.ok()) {
+      consentDoor = "unread";
+    } else {
+      const answer = (await gate.json()) as {
+        blocked?: unknown;
+        status?: unknown;
+      };
+      consentDoor = !answer.blocked
+        ? "open"
+        : answer.status === "withdrawn"
+          ? "withdrawn"
+          : "waiting";
+    }
 
     /*
      * What this child actually has, on their own session - the same two reads
@@ -1114,14 +1138,11 @@ test.describe("a signed-in student", () => {
     // Recorded, so a green run says WHICH door this child was sent through.
     test.info().annotations.push({
       type: "consent",
-      description: consentBlocked
-        ? "blocked - expected the waiting screen"
-        : "not blocked - expected the dashboard",
+      description: `${consentDoor} - expected ${CONSENT_LANDING[consentDoor]}`,
     });
 
-    await expect(page).toHaveURL(
-      consentBlocked ? /\/student\/waiting/ : /\/student\/dashboard/,
-      { timeout: LIVE_MS },
-    );
+    await expect(page).toHaveURL(CONSENT_LANDING[consentDoor], {
+      timeout: LIVE_MS,
+    });
   });
 });

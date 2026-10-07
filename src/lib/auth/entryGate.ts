@@ -1,7 +1,9 @@
+import { reportClientError } from "@/lib/api/clientErrors";
 import { consentsApi } from "@/lib/api/consents";
 import type { StudentEntryState } from "@/lib/api/studentEntry";
-import { WAITING_ROUTE } from "./consentHold";
+import { UNCHECKED_ROUTE, WAITING_ROUTE, WITHDRAWN_ROUTE } from "./consentHold";
 import { doorForRole } from "./consoleDoor";
+import { withNext } from "./nextPath";
 
 /**
  * Where a child goes the moment they get through a door.
@@ -35,21 +37,37 @@ import { doorForRole } from "./consoleDoor";
  * policy out of a field that does not state one. The engine decides; we render.
  */
 
-/** 00d - see `consentHold`, where it lives so the API client can share it. */
-export { WAITING_ROUTE };
+/**
+ * The holds - see `consentHold`, where they live so the API client and the
+ * sign-in moments can share them: 00d, 00e (D117), and the unchecked hold
+ * (D69).
+ */
+export { UNCHECKED_ROUTE, WAITING_ROUTE, WITHDRAWN_ROUTE };
 
 const DEFAULT_DESTINATION = "/student/dashboard";
 
 /**
- * The destination for a child who has just signed in, held at 00d if the
- * server says they may not proceed.
+ * The destination for a child who has just signed in: where they were going,
+ * or a hold.
  *
- * **A FAILED READ IS NOT A MISSING CONSENT**, and that is the same ruling
- * `useConsentGate` made for withdrawal and `StudentEntry` made for the link. A
- * dropped network, a backend having a bad minute and a child on 3G are
- * indistinguishable from "not consented" - holding on any of them turns an
- * outage into a wall a child cannot pass and cannot be told about, at the exact
- * moment they have just proved who they are.
+ * - Blocked by the server: 00d, or 00e when the consent that blocks them was
+ *   withdrawn (D117) - there and gone, so 00d's "It will be soon" would be a
+ *   lie.
+ * - THE READ FAILED: the unchecked hold, carrying where they were going.
+ *
+ * **A CHECK THAT CANNOT COMPLETE MUST NOT LEAVE THE DOOR OPEN** (D69, design,
+ * 4 and 6 Oct, raised as a defect): "If the consent lookup or the account
+ * creation fails, the child does not proceed. Today they do." This used to
+ * read the opposite way - "a failed read is not a missing consent" - and let
+ * a child whose consent nobody could read straight in. It now holds them on
+ * frame 28's own failed-read states, with a way to try again; see
+ * `EntryCheckFailed`. A network problem, a failed lookup and a missing
+ * consent each keep a state of their own: offline, "Something went wrong",
+ * and 00d/00e.
+ *
+ * The failure is reported (B36) before the child is told "We're on it", so
+ * that is true. A report that cannot leave - offline - is dropped, and the
+ * child is shown the offline state, which promises nothing.
  */
 export async function studentDestination(
   preferred?: string | null,
@@ -65,9 +83,11 @@ export async function studentDestination(
 
   try {
     const gate = await consentsApi.myConsentGate();
-    return gate.blocked ? WAITING_ROUTE : destination;
-  } catch {
-    return destination;
+    if (!gate.blocked) return destination;
+    return gate.status === "withdrawn" ? WITHDRAWN_ROUTE : WAITING_ROUTE;
+  } catch (cause) {
+    reportClientError(cause, "student");
+    return withNext(UNCHECKED_ROUTE, destination);
   }
 }
 
@@ -91,10 +111,12 @@ export async function enterFirstLesson(
  *
  * - `waiting`: 00d, with nothing measured, because consent is not given. The
  *   child is not told why.
+ * - `withdrawn`: 00e (D117) - consent was given and is gone, so 00d's "soon"
+ *   would be a lie. Not told why either.
  * - `age-check`: the school and the parent disagree about the child's date of
  *   birth (backend, B64). They cannot start and can do nothing about it, so
- *   they are told Nevo is checking something with their school and to come
- *   back in a day or two - never what, and never asked to sort it out.
+ *   they are told Nevo is sorting something out with their school (D121) -
+ *   never what, and never asked to sort it out.
  * - `sign-in`: 00c, because they already have a PIN (B64). A first run would
  *   try to make them a second account.
  * - `first-run`: the transition into 08 Profiling Intro, the baseline, the
@@ -102,18 +124,18 @@ export async function enterFirstLesson(
  *
  * **ONLY `given` LETS A CHILD START.** `pending` and `withdrawn` hold, and so
  * would any value the contract adds later: a consent state this client does
- * not know is not a yes. Checked FIRST, so a held child meets 00d whichever of
- * the other three they would have reached - the 23 Sep rule, one screen per
- * state whatever the door.
+ * not know is not a yes. Checked FIRST, so a held child meets 00d or 00e
+ * whichever of the other three they would have reached - the 23 Sep rule, one
+ * screen per state whatever the door. `withdrawn` is 00e, the same screen the
+ * sign-in doors and a refused request send them to.
  *
- * THE AGE CHECK COMES SECOND because "a day or two" is backend's word about
- * the age check alone. A child whose consent is outstanding as well has been
- * promised nothing of the kind, so they get 00d.
+ * THE AGE CHECK COMES SECOND: it is a hold about the child's record, and a
+ * child whose consent is outstanding or gone is held for that first.
  *
- * NOT DRAWN, AND AGAINST AN EARLIER RULING. Design ruled on 23 Sep that a
- * disputed date of birth is 00d, "same screen, same words"
- * (`docs/RULINGS_23_SEP.md` §2c). Backend's B64 gives it words of its own and
- * no frame draws them, so they sit on 00d's layout and are asked of design.
+ * DRAWN SINCE 6 OCT (D121): the Entry frame's "On hold" state, "Nevo is
+ * sorting something out with your school", replacing backend's "come back in
+ * a day or two", which promised a timeframe nobody controls. See
+ * `WaitingOnConsent`.
  *
  * A CLEARED CHILD LOOKS NEW. `accountReady` is false for a child whose PIN an
  * adult cleared (SCRUM-216) as well as for a new one - neither has a PIN, and
@@ -121,7 +143,8 @@ export async function enterFirstLesson(
  * a cleared child sits the baseline again before 15. Which of the two has
  * arrived is asked of backend rather than guessed.
  */
-export type EntryRoute = "waiting" | "age-check" | "sign-in" | "first-run";
+export type EntryRoute =
+  "waiting" | "withdrawn" | "age-check" | "sign-in" | "first-run";
 
 export function entryRoute(
   state: Pick<
@@ -129,6 +152,7 @@ export function entryRoute(
     "consentState" | "accountReady" | "ageCheckPending"
   >,
 ): EntryRoute {
+  if (state.consentState === "withdrawn") return "withdrawn";
   if (state.consentState !== "given") return "waiting";
   if (state.ageCheckPending === true) return "age-check";
   return state.accountReady ? "sign-in" : "first-run";
