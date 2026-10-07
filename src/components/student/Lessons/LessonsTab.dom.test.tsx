@@ -170,10 +170,23 @@ describe("the empty state names what is actually narrowing the list", () => {
     expect(body()).toMatch(/No completed lessons yet/);
   });
 
+  it("names each chip in sentence case", () => {
+    // Design D127, 6 Oct: "Sentence case throughout, so 'In progress'
+    // everywhere." Exact text, so a title-cased chip fails here.
+    render(<LessonsTab />);
+
+    for (const chip of ["All", "In progress", "Not started", "Completed"]) {
+      expect(screen.getByRole("button", { name: chip })).toHaveTextContent(
+        new RegExp(`^${chip}$`),
+      );
+    }
+    expect(body()).not.toMatch(/In Progress|Not Started/);
+  });
+
   it.each([
     // Design D102, 6 Oct: 29 Empty States draws each chip's own line.
-    ["In Progress", "completed", "Nothing in progress right now."],
-    ["Not Started", "completed", "Nothing waiting."],
+    ["In progress", "completed", "Nothing in progress right now."],
+    ["Not started", "completed", "Nothing waiting."],
     ["Completed", "not_started", "No completed lessons yet"],
   ])(
     "says the %s chip's own line when it empties the list",

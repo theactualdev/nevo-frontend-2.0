@@ -716,12 +716,13 @@ describe("Home's two lists", () => {
     expect(screen.queryByText("Volcanoes")).toBeNull();
   });
 
-  it("gives Today's slot to 29's empty state when the only lesson is part-way", async () => {
+  it("shows the caught-up state below a part-way lesson when nothing new is open", async () => {
     /*
-     * Design D20, 1 Oct. Nothing new is open today and the one lesson sits on
-     * "Pick up where you left off", so there is no heading and no empty grid -
-     * the empty state stands in their place. Not Home's own 29 line ("your
-     * first lesson"), which would be false for a child with one underway.
+     * Design D99, 6 Oct: "The part-way lesson appears in
+     * continue-where-you-left-off, and the slot below shows the caught-up
+     * state. A child with one unfinished lesson is not empty-handed." No
+     * Today heading over an empty grid (D20), and no empty state telling the
+     * child their lessons are still to come.
      */
     signIn();
     live([assignment("mid", "Halfway Fractions")], [row("mid", "in_progress")]);
@@ -730,18 +731,20 @@ describe("Home's two lists", () => {
     await settled(container);
 
     expect(screen.queryByText(/Today's lessons/)).toBeNull();
-    expect(
-      screen.getByText("Your lessons will show up here soon"),
-    ).toBeInTheDocument();
+    expect(screen.queryByText("Your lessons will show up here soon")).toBeNull();
     expect(screen.queryByText(/your first lesson/)).toBeNull();
+    const pickUp = section(/Pick up where you left off/);
+    expect(within(pickUp).getByText("Halfway Fractions")).toBeInTheDocument();
+    const note = screen.getByText(
+      "You're all caught up. Nice and steady - come back any time.",
+    );
+    // In the slot below the list, as the frame places its note.
     expect(
-      within(section(/Pick up where you left off/)).getByText(
-        "Halfway Fractions",
-      ),
-    ).toBeInTheDocument();
+      pickUp.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
-  it("keeps Today's lessons when something new is open, with no empty state", async () => {
+  it("keeps Today's lessons when something new is open, with no empty state and no note", async () => {
     signIn();
     live(
       [assignment("mid", "Halfway Fractions"), assignment("new", "New Decimals")],
@@ -753,6 +756,8 @@ describe("Home's two lists", () => {
 
     expect(section(/Today's lessons/)).toBeInTheDocument();
     expect(screen.queryByText("Your lessons will show up here soon")).toBeNull();
+    // New and part-way work both waiting: D98's no-note state.
+    expect(screen.queryByText(/caught up/)).toBeNull();
   });
 
   it("counts a lesson opening later today as not today's yet", async () => {
@@ -773,9 +778,8 @@ describe("Home's two lists", () => {
     await settled(container);
 
     expect(screen.queryByText("Later Decimals")).toBeNull();
-    expect(
-      screen.getByText("Your lessons will show up here soon"),
-    ).toBeInTheDocument();
+    expect(screen.queryByText(/Today's lessons/)).toBeNull();
+    expect(screen.getByText(/You're all caught up/)).toBeInTheDocument();
   });
 
   it("is absent entirely when nothing is part-way", async () => {
@@ -924,11 +928,21 @@ describe("what Home says when there is nothing, or nothing left", () => {
     /*
      * The frame's line for this state ("You've been showing up this week")
      * was a claim nothing verifies, and the one that replaced it was in no
-     * frame at all. Design ruled for absence (D98, 6 Oct).
+     * frame at all. Design ruled for absence (D98, 6 Oct). Outstanding is the
+     * frame's state: something new today AND something part-way - with
+     * nothing new, the caught-up note shows (D99).
      */
     signIn();
     live(
-      [{ ...done, id: "as-mid", status: "assigned" }],
+      [
+        { ...done, id: "as-mid", status: "assigned" },
+        {
+          ...done,
+          id: "as-new",
+          status: "assigned",
+          lesson: { id: "l-new", title: "New Decimals", segmentCount: 4 },
+        },
+      ],
       [
         {
           lessonId: "l-done",

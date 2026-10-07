@@ -23,10 +23,15 @@ import { LessonPreviewSheet } from "./LessonPreviewSheet";
 
 type Filter = "all" | LessonStatus;
 
+/**
+ * Sentence case, as every place that names a status says it (design D127,
+ * 6 Oct: "Sentence case throughout, so 'In progress' everywhere") - the
+ * cards' own marks already read "In progress" and "Not started".
+ */
 const FILTERS: { id: Filter; label: string }[] = [
   { id: "all", label: "All" },
-  { id: "in_progress", label: "In Progress" },
-  { id: "not_started", label: "Not Started" },
+  { id: "in_progress", label: "In progress" },
+  { id: "not_started", label: "Not started" },
   { id: "completed", label: "Completed" },
 ];
 
@@ -36,7 +41,8 @@ const FILTERS: { id: Filter; label: string }[] = [
  * no drawn line and keeps the one that shipped.
  *
  * 29 draws these over `illustration-empty-search.png`, which we do not have
- * (asked, D127), so the chip states keep the illustration they had.
+ * yet ("The illustration export is coming", D127), so the chip states keep
+ * the illustration they had.
  */
 const FILTERED_EMPTY: Record<Filter, string> = {
   all: "Nothing in that group yet",

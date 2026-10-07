@@ -114,8 +114,11 @@ const PICKUP: PickUp[] = [
 ];
 
 /**
- * The frame's note when nothing is outstanding. True whenever it shows: it is
- * gated on the very thing it states, that no lesson is left part-way.
+ * The frame's caught-up note. It shows where the frame's caught-up state
+ * does - nothing left part-way - and, by design's D99 (6 Oct), where nothing
+ * new is waiting and the only work is a lesson part-way: "the part-way lesson
+ * appears in continue-where-you-left-off, and the slot below shows the
+ * caught-up state. A child with one unfinished lesson is not empty-handed."
  */
 const CAUGHT_UP = "You're all caught up. Nice and steady - come back any time.";
 
@@ -326,12 +329,17 @@ export function HomeDashboard() {
    * which no frame draws. The frame's line for work outstanding ("You've been
    * showing up this week") was a claim about the child that nothing here
    * verifies, and design took it out (D98, 6 Oct): Home shows no note while
-   * work is outstanding. The signed-out walkthrough follows the same rule,
-   * since it is what a real child's Home looks like. The caught-up line
-   * states only what this screen can see, and needs a read to see it.
+   * new lessons AND part-way ones are both waiting. The signed-out
+   * walkthrough follows the same rule, since it is what a real child's Home
+   * looks like. The caught-up line states only what this screen can see, and
+   * needs a read to see it.
+   *
+   * With nothing new today it shows even beside a part-way lesson (D99).
    */
   const note =
-    (!signedIn || live) && pickup.length === 0 ? CAUGHT_UP : null;
+    (!signedIn || live) && (pickup.length === 0 || today.length === 0)
+      ? CAUGHT_UP
+      : null;
 
   const openPreview = (lesson: LessonSummary) => {
     setPreview(lesson);
@@ -425,26 +433,18 @@ export function HomeDashboard() {
       ) : (
         <>
           {/*
-            NOTHING NEW TODAY, AND THE ONLY LESSON IS PART-WAY (design D20,
-            1 Oct). "Today" means open from today - `isOpenToStudent` reads
-            `availableFrom`, never `dueAt` - and a heading over an empty grid
-            gives way to 29's empty state. Its Home line says "your first
-            lesson", which is false for a child with one underway, so this
-            takes the line 29 draws for an empty Lessons list. Flagged to
-            design.
+            NOTHING NEW TODAY, AND THE ONLY LESSON IS PART-WAY (design D99,
+            6 Oct). "Today" means open from today - `isOpenToStudent` reads
+            `availableFrom`, never `dueAt` - and the heading and grid give way
+            rather than draw with nothing in them (D20). The slot used to hold
+            an empty state ("Your lessons will show up here soon"), which told
+            a child with a lesson underway they had nothing. Design: "the
+            part-way lesson appears in continue-where-you-left-off, and the
+            slot below shows the caught-up state" - the note under the list.
 
-            With nothing part-way either, the slot stays empty: the caught-up
-            note below already says so.
+            Absent rather than an empty heading when nothing new is set - the
+            frame never draws Today's lessons with nothing under it.
           */}
-          {today.length === 0 && pickup.length > 0 && (
-            <EmptyState
-              line="Your lessons will show up here soon"
-              className="pt-9 pb-2"
-            />
-          )}
-
-          {/* Absent rather than an empty heading when nothing new is set -
-              the frame never draws Today's lessons with nothing under it. */}
           {today.length > 0 && (
             <section aria-labelledby="home-today">
               <div className="mt-7 flex items-baseline justify-between motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-500 motion-safe:[animation-delay:140ms]">
