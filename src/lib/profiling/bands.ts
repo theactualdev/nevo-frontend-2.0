@@ -131,6 +131,58 @@ export function gridSpanConfig(band: AgeBand): GridSpanConfig {
   }
 }
 
+/** One dot comparison: the larger array's count, then the smaller's. */
+export interface DotPair {
+  a: number;
+  b: number;
+}
+
+/**
+ * Module 3B's three dot pairs for a band (D76, 6 Oct). A FIXED STIMULUS SPEC,
+ * written down once: every child in a band sees the same three, and nothing
+ * about any child goes into it.
+ *
+ * Design states two things per band and draws nothing more. The first pair
+ * is the `Nevo Dot Comparison Frame` exemplar (`cfg()`: 8:4, 9:5, 12:8,
+ * 13:12), and the ratio is 09c's (2:1, 1.8:1, 1.5:1, 1.1:1): "Ratio
+ * tightening from 2:1 to 1.1:1 is the architecture, and trials 2 and 3 derive
+ * from the ratio in all of them." So trials 2 and 3 are generated:
+ *
+ *   the smaller array holds one dot fewer, then one dot more, than the
+ *   exemplar's; the larger holds that times the band's ratio, to the nearest
+ *   whole dot (a half rounds up).
+ *
+ * Which gives this, pinned in `bands.test.ts` (the ratio shown in brackets):
+ *
+ *   | band | trial 1, drawn | trial 2      | trial 3      |
+ *   |------|----------------|--------------|--------------|
+ *   | P1-3 | 8:4            | 6:3 (2.0)    | 10:5 (2.0)   |
+ *   | P4-6 | 9:5            | 7:4 (1.75)   | 11:6 (1.83)  |
+ *   | JSS  | 12:8           | 11:7 (1.57)  | 14:9 (1.56)  |
+ *   | SS   | 13:12          | 12:11 (1.09) | 14:13 (1.08) |
+ *
+ * SS's two are the pairs it already ran, which design took as derived from
+ * its ratio. The other three bands' were written by hand and sat off their
+ * own ratio: P4-6's 8:6 and 10:7 (the prototype's, 11:178) and JSS's 11:9 and
+ * 13:10 were all harder than the band's ratio, and P1-3's 7:3 and 9:5 one
+ * easier and one harder.
+ *
+ * Each answer still carries the ratio the child was actually shown
+ * (`ratio_N`), so a pair that rounds a little off its band's ratio says so.
+ */
+const DOT_SPEC: Record<AgeBand, { first: DotPair; ratio: number }> = {
+  p13: { first: { a: 8, b: 4 }, ratio: 2 },
+  p46: { first: { a: 9, b: 5 }, ratio: 1.8 },
+  jss: { first: { a: 12, b: 8 }, ratio: 1.5 },
+  ss: { first: { a: 13, b: 12 }, ratio: 1.1 },
+};
+
+export function dotPairs(band: AgeBand): DotPair[] {
+  const { first, ratio } = DOT_SPEC[band] ?? DOT_SPEC.p46;
+  const at = (b: number): DotPair => ({ a: Math.round(b * ratio), b });
+  return [first, at(first.b - 1), at(first.b + 1)];
+}
+
 /** The six baseline dimensions (also the daily warm-up rotation). */
 export const BASELINE_DIMENSIONS = [
   "wmc",

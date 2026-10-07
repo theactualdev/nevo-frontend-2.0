@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Play } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { AgeBand } from "@/lib/profiling/bands";
+import { dotPairs, type AgeBand } from "@/lib/profiling/bands";
 import type { BaselineCapture } from "@/lib/profiling/capture";
 import { AvatarBubble, ProfilingShell } from "./ProfilingShell";
 import { SettleBadge } from "./GridSpanModule";
@@ -200,45 +200,6 @@ function hasSpeech(): boolean {
   return typeof window !== "undefined" && "speechSynthesis" in window;
 }
 
-/**
- * Dot pairs per trial (left/right counts converge by band difficulty).
- *
- * Design states one exemplar pair per band (`Nevo Dot Comparison Frame`
- * `cfg()`: 8:4, 9:5, 12:8, 13:12 - each band's first pair below) and one
- * ratio per band (`09c`: 2:1, 1.8:1, 1.5:1, 1.1:1).
- *
- * SS IS SETTLED (6 Oct). 09c now says its "trial-2/3 pairs derived from the
- * ratio", and 12:11 and 14:13 already are: both sit at about 1.1:1.
- *
- * ASK FOR THE OTHER THREE (D76). Their trials two and three are not drawn
- * anywhere except for P4-6, whose prototype pairs (11:178) are 8:6 and 10:7 -
- * harder than its own frame's 1.8:1, as are JSS's 11:9 and 13:10 against
- * 1.5:1. They are left as shipped rather than replaced with pairs nobody has
- * designed either.
- */
-const DOT_PAIRS: Record<AgeBand, { a: number; b: number }[]> = {
-  p13: [
-    { a: 8, b: 4 },
-    { a: 7, b: 3 },
-    { a: 9, b: 5 },
-  ],
-  p46: [
-    { a: 9, b: 5 },
-    { a: 8, b: 6 },
-    { a: 10, b: 7 },
-  ],
-  jss: [
-    { a: 12, b: 8 },
-    { a: 11, b: 9 },
-    { a: 13, b: 10 },
-  ],
-  ss: [
-    { a: 13, b: 12 },
-    { a: 12, b: 11 },
-    { a: 14, b: 13 },
-  ],
-};
-
 /** Deterministic scatter so re-renders never reshuffle a shown array. */
 function scatter(count: number, seed: number): { x: number; y: number }[] {
   let s = seed >>> 0;
@@ -281,7 +242,8 @@ export function SentenceDotModule({
           ? AUDIO_TRIALS.length
           : 0
         : 1;
-  const dotPairs = DOT_PAIRS[band] ?? DOT_PAIRS.p46;
+  // The frame's pair, then two derived from the band's ratio (D76).
+  const pairs = dotPairs(band);
   const dots = DOTS[band] ?? DOTS.p46;
 
   const { act, trial, picked, settling, pick, open } = useTrialRunner({
@@ -289,7 +251,7 @@ export function SentenceDotModule({
     counts: (
       [
         ["reading", readingCount],
-        ["dots", dotPairs.length],
+        ["dots", pairs.length],
       ] as [string, number][]
     ).filter(([, n]) => n > 0),
     capture,
@@ -325,12 +287,12 @@ export function SentenceDotModule({
    * Drawn in the initializer so a re-render never moves a shown array.
    */
   const [largerOnRight] = useState(() =>
-    dotPairs.map(() => Math.random() < 0.5),
+    pairs.map(() => Math.random() < 0.5),
   );
 
   const sentence = sentences[Math.min(trial, sentences.length - 1)];
   const heard = AUDIO_TRIALS[Math.min(trial, AUDIO_TRIALS.length - 1)];
-  const pair = dotPairs[Math.min(trial, dotPairs.length - 1)];
+  const pair = pairs[Math.min(trial, pairs.length - 1)];
   const flipped = largerOnRight[Math.min(trial, largerOnRight.length - 1)];
   const [left, right] = flipped ? [pair.b, pair.a] : [pair.a, pair.b];
   /** How hard the comparison is - the engine's reason for the band's pairs. */
