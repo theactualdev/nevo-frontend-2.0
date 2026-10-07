@@ -14,6 +14,7 @@ import {
   knownRole,
 } from "@/lib/auth/consoleDoor";
 import { clearSession } from "@/lib/auth/session";
+import { AuthWordmark, ContactFooter } from "./AuthChrome";
 
 /**
  * Set Password (`Nevo Set Password`) - one component behind two flows:
@@ -63,7 +64,8 @@ const RESET_HREF: Record<StaffDoor, string> = {
 const REQUIREMENTS = [
   { label: "At least 8 characters", test: (p: string) => p.length >= 8 },
   { label: "Contains a letter", test: (p: string) => /[a-zA-Z]/.test(p) },
-  { label: "At least one number", test: (p: string) => /[0-9]/.test(p) },
+  // The frame's words, matching the line above it.
+  { label: "Contains a number", test: (p: string) => /[0-9]/.test(p) },
 ];
 
 /** Display only - it never gates the button, the three requirements do. */
@@ -345,6 +347,7 @@ export function SetPasswordForm({
   if (phase === "done") {
     return (
       <div className="flex w-full max-w-[440px] flex-col items-center px-6 text-center">
+        <AuthWordmark />
         <span className="flex size-[72px] items-center justify-center rounded-full bg-nevo-navy motion-safe:animate-nevo-pop">
           <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#f7f1e6" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <path d="M5 12.5l4.5 4.5L19 7.5" />
@@ -376,6 +379,7 @@ export function SetPasswordForm({
 
   return (
     <div className="flex w-full max-w-[440px] flex-col items-stretch px-6">
+      <AuthWordmark />
       {school && (
         <span className="text-center text-[12.5px] font-semibold tracking-[0.14em] text-nevo-violet uppercase">
           {school}
@@ -430,7 +434,10 @@ export function SetPasswordForm({
               />
             ))}
           </div>
-          <span className="text-[12.5px] text-nevo-near-black/60">{s.label}</span>
+          {/* The frame's weight and colour: the label is read, not muted. */}
+          <span className="shrink-0 text-[12.5px] font-semibold text-nevo-navy">
+            {s.label}
+          </span>
         </div>
       )}
 
@@ -466,7 +473,23 @@ export function SetPasswordForm({
         }
       />
       {confirm.length > 0 && (
-        <p className="mt-[7px] text-[13px] text-nevo-near-black/60">
+        <p
+          className={cn(
+            "mt-[7px] inline-flex items-center gap-1.5 text-[13px] font-medium",
+            matches ? "text-nevo-navy" : "text-[#7c7ea8]",
+          )}
+        >
+          {matches ? (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M20 6L9 17l-5-5" />
+            </svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 8v4" />
+              <path d="M12 16h.01" />
+            </svg>
+          )}
           {matches ? "Passwords match" : "Passwords don't match yet"}
         </p>
       )}
@@ -516,11 +539,20 @@ export function SetPasswordForm({
         </label>
       )}
 
+      {/* The frame's violet callout, not a plain line. */}
       {!activation && (
-        <p className="mt-6 text-[13.5px] leading-[1.55] text-nevo-near-black/60">
-          For your security, saving a new password signs you out of Nevo on your
-          other devices.
-        </p>
+        <div className="mt-[22px] flex w-full items-start gap-2.5 rounded-[10px] bg-nevo-violet/16 px-[15px] py-[13px] text-left">
+          <span className="mt-px flex shrink-0 text-nevo-navy">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 11v5M12 8h.01" />
+            </svg>
+          </span>
+          <span className="text-[13.5px] leading-[1.5] text-nevo-near-black/78">
+            For your security, saving a new password signs you out of Nevo on
+            your other devices.
+          </span>
+        </div>
       )}
 
       {error && (
@@ -565,13 +597,17 @@ export function SetPasswordForm({
       </button>
 
       {activation && (
-        <p className="mt-5 text-[13px] leading-[1.5] text-nevo-near-black/55">
+        <div className="mt-[22px] flex items-center justify-center gap-2 text-[13px] text-nevo-near-black/55">
+          <span className="flex text-nevo-navy">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M12 3l7 3v5c0 4.4-3 8.3-7 9.5C8 21.3 5 17.4 5 13V6z" />
+              <path d="M9.5 12.5l1.8 1.8 3.2-3.6" />
+            </svg>
+          </span>
           Your information is protected from the moment you sign in.
-        </p>
+        </div>
       )}
-      <p className="mt-2 text-[13px] leading-[1.5] text-nevo-near-black/55">
-        Having trouble? Contact your school administrator.
-      </p>
+      <ContactFooter className="mt-5" />
     </div>
   );
 }

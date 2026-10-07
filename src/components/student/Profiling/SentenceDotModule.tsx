@@ -18,16 +18,16 @@ import { useTrialRunner } from "./useTrialRunner";
  *  - Dot and box size: `Nevo Dot Comparison Frame` `cfg()` - dots 22 / 16 /
  *    13 / 10px, box 220 for P1-3 and 200 for the rest. On a phone every box
  *    is 200 (`boxPx = L.mobile ? 200 : C.box`).
- *  - Display time: `09c Module 3` per-band notes - P1-3 "800ms display", JSS
- *    "500ms". ASK for the other two: for P4-6 09c says 600ms and the playable
- *    prototype (11:240) shows 850; for SS 09c states none. Both keep the
- *    850ms already shipped until design says which.
+ *  - Display time: `09c Module 3` per-band notes - P1-3 "800ms display",
+ *    P4-6 "600ms display", JSS "500ms", SS "600ms display (not shorter:
+ *    ratio is already at threshold)". P4-6 and SS ran the playable
+ *    prototype's 850 (11:240) until design settled 09c over it (D75, 6 Oct).
  */
 const DOTS: Record<AgeBand, { revealMs: number; dot: string; box: string }> = {
   p13: { revealMs: 800, dot: "size-[22px]", box: "size-[200px] sm:size-[220px]" },
-  p46: { revealMs: 850, dot: "size-4", box: "size-[200px]" },
+  p46: { revealMs: 600, dot: "size-4", box: "size-[200px]" },
   jss: { revealMs: 500, dot: "size-[13px]", box: "size-[200px]" },
-  ss: { revealMs: 850, dot: "size-2.5", box: "size-[200px]" },
+  ss: { revealMs: 600, dot: "size-2.5", box: "size-[200px]" },
 };
 
 /**
@@ -203,13 +203,18 @@ function hasSpeech(): boolean {
 /**
  * Dot pairs per trial (left/right counts converge by band difficulty).
  *
- * ASK, NOT SETTLED BY ANY FRAME. Design states one exemplar pair per band
- * (`Nevo Dot Comparison Frame` `cfg()`: 8:4, 9:5, 12:8, 13:12 - each band's
- * first pair below) and one ratio per band (`09c`: 2:1, 1.8:1, 1.5:1,
- * 1.1:1). Trials two and three are not drawn anywhere except for P4-6, whose
- * prototype pairs (11:178) are 8:6 and 10:7 - harder than its own frame's
- * 1.8:1, as are JSS's 11:9 and 13:10 against 1.5:1. They are left as shipped
- * rather than replaced with pairs nobody has designed either.
+ * Design states one exemplar pair per band (`Nevo Dot Comparison Frame`
+ * `cfg()`: 8:4, 9:5, 12:8, 13:12 - each band's first pair below) and one
+ * ratio per band (`09c`: 2:1, 1.8:1, 1.5:1, 1.1:1).
+ *
+ * SS IS SETTLED (6 Oct). 09c now says its "trial-2/3 pairs derived from the
+ * ratio", and 12:11 and 14:13 already are: both sit at about 1.1:1.
+ *
+ * ASK FOR THE OTHER THREE (D76). Their trials two and three are not drawn
+ * anywhere except for P4-6, whose prototype pairs (11:178) are 8:6 and 10:7 -
+ * harder than its own frame's 1.8:1, as are JSS's 11:9 and 13:10 against
+ * 1.5:1. They are left as shipped rather than replaced with pairs nobody has
+ * designed either.
  */
 const DOT_PAIRS: Record<AgeBand, { a: number; b: number }[]> = {
   p13: [

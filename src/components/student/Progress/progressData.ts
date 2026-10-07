@@ -6,15 +6,26 @@
 // have no field and remain fixture-only. All framing is plain-language and
 // qualitative — never a percentile, score, or peer comparison.
 
+import type { SubjectTopics } from "@/hooks/useSubjectProgress";
+
 /** Warm, whole-picture summary shown at the top of the Progress tab. */
 export const GROWTH_SUMMARY =
   "You've been building strong reading skills this month, and sticking with maths even when it got tricky.";
 
+/**
+ * One sample subject, shaped like what a real card reads (33a): the subject's
+ * note (B29), its topic counts and the topic being worked on (B53). The
+ * counts and topics are 22's own, from the frame's sample subjects.
+ */
 export interface SubjectSummary {
   slug: string;
   name: string;
-  /** Plain-language growth note for the Progress card. */
+  /** Plain-language growth note, the line where no topic is named. */
   note: string;
+  /** Topics met, and how many of them are done. */
+  topics: SubjectTopics;
+  /** The topic being worked on, which takes the card's line. */
+  currentTopic?: string;
 }
 
 export const SUBJECTS: SubjectSummary[] = [
@@ -22,9 +33,22 @@ export const SUBJECTS: SubjectSummary[] = [
     slug: "mathematics",
     name: "Mathematics",
     note: "Getting faster at solving problems",
+    topics: { done: 3, total: 8 },
+    currentTopic: "Equivalent fractions",
   },
-  { slug: "english", name: "English", note: "Reading longer stories with ease" },
-  { slug: "science", name: "Science", note: "Asking more of your own questions" },
+  {
+    slug: "english",
+    name: "English",
+    note: "Reading longer stories with ease",
+    topics: { done: 5, total: 5 },
+  },
+  {
+    slug: "science",
+    name: "Science",
+    note: "Asking more of your own questions",
+    topics: { done: 1, total: 6 },
+    currentTopic: "Osmosis",
+  },
 ];
 
 export interface SessionRow {

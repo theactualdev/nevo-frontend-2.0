@@ -1,156 +1,93 @@
-# The baseline event list
+# The baseline: what the device captures and what it sends
 
-For Teslim, 22 Sep 2026. Everything below is read out of the code rather than
-described from memory — every `kind` and every payload field here has a
-`capture.record(...)` call behind it, cited by file and line.
-
-**Why it is wanted now.** SCRUM-175/176 and the baseline reduction are the same
-server-side move, so this list unblocks both: the server cannot own the
-reduction without knowing what the device actually emits, and 176's
-per-question serving needs the same response shape the trial events already
-carry.
+Rewritten 6 Oct 2026. Since B9 (5 Oct) the device sends a run's **trials**, one
+per answer, to `POST /api/baseline/trials`, and the server does every
+reduction. The reducers and the feature vector this page used to describe are
+gone, and nothing calls `POST /api/baseline/submit` any more. Read the code
+before this page: `src/lib/profiling/capture.ts` (`baselineTrials`) is the
+mapping, and `BaselineTrial` in the live spec is the contract.
 
 ---
 
-## The shape every event has
+## 1. The raw stream stays on the device
 
-`src/lib/profiling/capture.ts`
+`BaselineCapture` records every interaction as `{ kind, t, payload }`, where
+`t` is `performance.now()` at the moment it happened (rule 4). The stream is
+held in memory and IndexedDB and is never sent. When the run ends it is turned
+into trials, and then purged, whether or not the trials were delivered.
 
-```ts
-interface CaptureEvent {
-  kind: string;                        // the names in the table below
-  t: number;                           // performance.now() at the interaction
-  payload?: Record<string, unknown>;
-}
-```
+A withdrawn guardian `stop()`s the capture: nothing more is recorded, no trials
+are taken, and nothing is sent or parked.
 
-`t` is **`performance.now()`, never `Date.now()`** — rule 4. It is a monotonic
-reading taken at the moment of the interaction, so every *within-run* difference
-is the difference of two monotonic readings and survives a device clock
-correction mid-run. It is not a wall-clock time and cannot be turned into one.
+Tap coordinates (`x`, `y`) are recorded and stay here (B14). A trial has no
+field for them.
 
-**Raw streams never leave the device today.** They are held in IndexedDB (with
-an in-memory fallback), reduced to a feature vector on completion, submitted to
-`POST /api/baseline/submit`, and purged after transmission. If the reduction
-moves server-side, that purge guarantee moves with it and becomes a
-transmission question rather than a local one — flagged, not assumed.
+## 2. What becomes a trial
 
----
+`BaselineTrial` is `{ dimension, condition, response, correct, responseTimeMs,
+probeItemId }`. Four kinds of event become one; the rest of the stream is
+timing anchors or stays on the device.
 
-## Every event the run emits
+| Event | `dimension` | `condition` | `response` | `correct` | `responseTimeMs` |
+|---|---|---|---|---|---|
+| `tap`, a tile (Module 1, warm-up `wmc`) | `wmc` | `length_N` | the cell | whether it was the right tile | from the grid being handed over, or from the previous right tap of the same recall |
+| `check_answer`, the SS dual task | `wmc` | `dual_check` | `"true"` / `"false"` | whether the answer was right | from the check appearing |
+| `trial_pick` (Modules 2-4, warm-up) | from the `act`: `pattern` is `ps`, `flanker` `attention`, `reading` `reading`, `dots` `ans`, `probe` `domain`; the warm-up's acts are already dimensions | `congruency`, `pair`, `ratio_N`, the reading `mode`, or the probe's `subject` | the choice's index, or a served option's `value`; `not_sure` for a decline | where the activity holds the answer, else `null` | from the moment the child could answer (the dot mask, the end of a heard sentence) |
+| `motor_tap`, the motor-speed step | `motor_speed` | `practice`, or `null` | the target | `null` | the latency the step measured |
 
-| `kind` | Payload | Emitted by |
-|---|---|---|
-| `run_start` | `{ band }` | `ProfilingFlow.tsx:187` |
-| `warmup_start` | `{ dimension, band?, itemId? }` - `band` only when the roster carried one and the task was sized for it; `itemId` whenever the engine served an item with the day's dimension | `WarmUpRun.tsx` |
-| `trial_shown` | `{ module, act, trial }` | `useTrialRunner.ts:51` |
-| `response_open` | `{ module, act, trial, openAfterMs }` - the dot mask landed, or the heard sentence ended | `useTrialRunner.ts` |
-| `trial_pick` | `{ module, act, trial, choice, rtMs, openAfterMs?, beforeOpen?, x?, y?, ...detail }` | `useTrialRunner.ts` |
-| `trial_pick` (warm-up) | `{ module: "warmup", act, choice, rtMs, ...detail }` - the reading act adds `mode: "sentence" \| "passage"` | `WarmUpRun.tsx` |
-| `module_end` | `{ module }` | `useTrialRunner.ts:69`, `GridSpanModule.tsx:124` |
-| `playback_start` | `{ length, litMs, gapMs }` | `GridSpanModule.tsx:141` |
-| `input_start` | `{ length }` | `GridSpanModule.tsx:162`, `:186` |
-| `tap` | `{ cell, correct, posInSeq, length, x?, y? }` | `GridSpanModule.tsx` |
-| `tap` (warm-up) | `{ module: "warmup", act: "wmc", cell, correct, posInSeq, length }` | `WarmUpRun.tsx` |
-| `round_complete` | `{ length }` | `GridSpanModule.tsx:207`, `WarmUpRun.tsx` |
-| `check_shown` | `{ check }` | `GridSpanModule.tsx:159` |
-| `check_answer` | `{ check, answer, correct, x?, y? }` | `GridSpanModule.tsx` |
-| `replay` | `{ module: "sentence_dot", trial }` | `SentenceDotModule.tsx:263` |
-| `probe_subject` | `{ subject, x?, y? }` | `DomainProbeModule.tsx` |
+`probeItemId` is the served item's id when the engine served one and it is a
+UUID, as the contract requires, and `null` otherwise. The server marks a served
+pick against its own key.
 
-### Timing and position, added 1 Oct
+Anchors only: `input_start`, `round_complete`, `check_shown`. Never sent:
+`run_start`, `warmup_start`, `trial_shown`, `response_open`, `playback_start`,
+`module_end`, `replay`, `probe_subject`, `motor_end`, `motor_skipped`.
 
-- **`rtMs` starts when the child can answer.** For the dots that is the mask,
-  for the heard P1-3 sentence the end of speech; `openAfterMs` on the pick is
-  the offset from presentation. An answer given before the sentence ended
-  carries `rtMs: null` and `beforeOpen: true` - there is no honest number for
-  it - and the reducer leaves a missing time out of the mean.
-- **`x`, `y`** are viewport coordinates of the tap, unrounded (frontend §2,
-  §3). A keyboard press records neither rather than a false 0,0. No reducer
-  reads them yet; they are in the stream for when the stream travels.
-### The warm-up, changed 1 Oct
+### Properties the trials keep
 
-- **The served question's pick no longer travels on the submit.** It went up
-  on the feature as `item: { itemId, chosenOption }`, unmarked. It now goes to
-  `POST /api/baseline/recalibrate-prompt/{student_id}/response` as
-  `BaselinePromptAnswer` `{ itemId, value }` - the option's `value` - and is
-  marked server-side (B8). The answer key is off the wire, and the reply's
-  `correct` is never read on the device. Answering twice in a day is accepted
-  and does not overwrite the first. The raw `trial_pick` still carries
-  `itemId` and `chosenOption`, on the device only.
-- **The warm-up feature carries `band`** when the roster had one, because the
-  tile task is now sized by it (D17): tile memory's grid, starting sequence
-  length and light time for that band (`gridSpanConfig`), and the reading
-  task the band's own first item (JSS's first sentence, SS's passage and its
-  question). With no band the frame's one version runs and `band` is absent.
-- **"Done today" is the account's.** `doneToday` on the prompt decides; the
-  device's per-child memory stands in only while the prompt has not said.
+- **A recall's time is never measured across a round.** A tap is timed from
+  the previous right tap of the same recall, and a wrong tap ends the recall.
+  Pairing across rounds once swallowed the between-round beat and the whole
+  next playback into one "gap".
+- **"Not sure" is a decline, not a miss**: `response: "not_sure"`,
+  `correct: null`.
+- **No answer key means no accuracy**: `correct` is `null`, never `false`.
+- **An answer given before it could be** (a heard sentence still playing) has
+  `responseTimeMs: null`, not a number nobody measured.
+- **Times are whole milliseconds, 0 to 600000.** Anything outside is `null`
+  rather than clamped, so one bad reading cannot 422 the run.
 
-### Vocabularies
+## 3. What is not sent, and why
 
-- **`module`**: `grid_span`, `pattern_flanker`, `sentence_dot`, `domain_probe`,
-  `warmup`
-- **`act`** (the phase within a module): `pattern`, `flanker`, `dots`,
-  `reading`, `probe`, and `wmc` for the warm-up's working-memory dimension
-- **`band`**: the age band the run was built for
-- **`choice`**: the index of the control tapped, not its label
+- **Coordinates.** Raw touch stays on the device (B14).
+- **The age band** the run was sized for. A trial has no field for it, and the
+  catalogue declares no `band` on `baseline_module_start` either. Backend is
+  asked where it goes (B76).
+- **The run's length**, and a recall's full timing beyond one interval per tap.
+- **Identity and wall-clock time.** The request carries the session; the
+  trials carry interactions.
 
-### `...detail` — the per-module extras on `trial_pick`
+## 4. Where the trials go, and when
 
-These are merged in at the call site and are the fields a reduction actually
-needs, so they are worth reading as part of the contract rather than as extras:
+- **The onboarding run** has no account yet, so it parks its trials on the
+  device (`holdBaseline`). `flushPendingBaseline` sends them once the account
+  exists and is provably this child's, and only then is `baseline_submitted`
+  tracked.
+- **The daily warm-up** sends at once (`baselineApi.submitTrials`: three
+  attempts, a 4xx not retried) and parks under the child's id if that fails.
+  A served question's pick also goes to
+  `POST /api/baseline/recalibrate-prompt/{id}/response` as `{ itemId, value }`
+  (B8). On a day with no served question, a completion with no item goes there
+  instead (B54).
+- A parked run older than seven days is dropped, not sent.
 
-- `correct: boolean` — **only present when the trial had an answer key.** It is
-  the accuracy denominator: `reduceTrialModule` counts `scored` as the trials
-  where `typeof correct === "boolean"`, so a trial without a key is never
-  counted wrong.
-- `pair: "same" | "different"` — pattern-match trials
-- `congruency: "congruent" | "incongruent" | "neutral"` — flanker trials.
-  Absent for P1-3, whose flanker task draws the centre arrow alone.
-  Without it the vector said how *fast* a child answered an interference trial
-  and never whether the flankers had captured them.
+## 5. The markers on the `profiling` signal stream
 
----
+| Event | Payload |
+|---|---|
+| `baseline_module_start` | `{ moduleId }`: `grid_span`, `pattern_flanker`, `sentence_dot`, `domain_probe` |
+| `baseline_module_complete` | `{ moduleId }` |
+| `baseline_submitted` | `{}` |
 
-## Three things that will bite a server-side reduction
-
-These are all bugs we have already hit and fixed locally. They are properties
-of the data, not of our code, so they will recur in any reimplementation.
-
-**1. Recall gaps must be paired within one round, not across rounds.**
-`reduceGridSpan` pairs consecutive correct taps to measure recall speed. Pairing
-across a round boundary swallows the between-round beat, the playback lead and
-the whole next sequence lighting up — several seconds against a real
-within-round gap of a few hundred milliseconds. `posInSeq` counts up within a
-recall and resets to 0 on the next, so a pair is genuine exactly when it
-advanced by one. A 30-second sanity ceiling does **not** catch this.
-
-**2. `notSure` is a decline, never a wrong answer.** It is counted separately
-and must not enter the accuracy denominator.
-
-**3. A trial with no answer key has no accuracy.** `correct` is absent, not
-false. Treating absent as wrong scores a child down for a trial nobody could be
-wrong about.
-
----
-
-## Two things that are NOT in this list, deliberately
-
-**No identity.** No name, no login identifier, no school code, no class. The
-submission carries the session; the events carry interactions.
-
-**No wall-clock timestamps.** See `t` above. If the reduction needs to know
-*when* a run happened rather than the intervals within it, that is a field on
-the submission, not on an event — and it is a question worth asking explicitly
-rather than deriving.
-
----
-
-## One open question, and it is ours rather than yours
-
-ISO 8601 bottoms out at 1ms. Tap dwell, response latency and idle all live at
-100ms and up, so 1ms reads as ample. **If affective inference needs finer than
-that, it is a contract ask for a numeric monotonic field** — and the per-session
-anchor we date signal events from becomes its origin rather than its
-replacement. Raised 17 Sep, still open, and it belongs to whoever owns the
-engine rather than to backend.
+These are exactly the keys the catalogue declares
+(`src/lib/api/signals.catalogue.json`, from `GET /api/signals/catalogue`).

@@ -270,6 +270,35 @@ describe("SentenceDotModule — each band's dots", () => {
 
     expect(screen.queryByText("Watch the dots")).toBeNull();
   });
+
+  /*
+   * P4-6 and SS ran the prototype's 850ms while 09c disagreed with it or said
+   * nothing. Design settled both at 600ms on 6 Oct (D75); SS "not shorter:
+   * ratio is already at threshold". The mask is when the dots open for an
+   * answer, so `openAfterMs` on the first dot trial is the display time.
+   */
+  const firstDotDisplay = (band: "p46" | "ss", readings: number) => {
+    const capture = new BaselineCapture(`reveal-${band}`);
+    render(
+      <SentenceDotModule band={band} capture={capture} onComplete={() => {}} />,
+    );
+    for (let i = 0; i < readings; i++) {
+      fireEvent.click(screen.getByText("Not sure"));
+      act(() => void vi.advanceTimersByTime(500));
+    }
+    act(() => void vi.advanceTimersByTime(1_000));
+    return capture.stream.find(
+      (e) => e.kind === "response_open" && e.payload?.act === "dots",
+    )?.payload?.openAfterMs;
+  };
+
+  it("masks P4-6's after 600ms (D75)", () => {
+    expect(firstDotDisplay("p46", 3)).toBe(600);
+  });
+
+  it("masks SS's after 600ms, no shorter (D75)", () => {
+    expect(firstDotDisplay("ss", 1)).toBe(600);
+  });
 });
 
 describe("SentenceDotModule — the question matches the buttons", () => {

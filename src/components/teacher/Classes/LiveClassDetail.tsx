@@ -354,6 +354,11 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
                    * simply does not match, which is what we want.
                    */}
                   {(() => {
+                    // C05's precedence: account access first, then a cleared
+                    // PIN, then attention - "each replaces the next rather
+                    // than stacking". A switched-off child's flag is history,
+                    // not a prompt.
+                    if (marker || pinCleared) return null;
                     const flag = flagFor.get(student.studentId);
                     if (!flag) return null;
                     return (

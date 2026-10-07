@@ -117,3 +117,30 @@ describe("JoinLanding when the lookup answers", () => {
     expect(visibleText(container)).not.toMatch(/as a student/);
   });
 });
+
+describe("the greeting", () => {
+  it("names the invitee, as D19 does, when the link carries a name", async () => {
+    lookupJoin.mockResolvedValueOnce({
+      status: "valid",
+      role: "teacher",
+      schoolName: "Brightgate Academy",
+      expiresAt: "2099-01-01T00:00:00Z",
+      firstName: "Amara",
+      lastName: "Obi",
+    });
+    render(<JoinLanding token="tok" />);
+    expect(await screen.findByRole("heading", { name: "Welcome, Amara" })).toBeInTheDocument();
+  });
+
+  it("stays a plain Welcome when it does not", async () => {
+    lookupJoin.mockResolvedValueOnce({
+      status: "valid",
+      role: "teacher",
+      schoolName: "Brightgate Academy",
+      expiresAt: "2099-01-01T00:00:00Z",
+      firstName: null,
+    });
+    render(<JoinLanding token="tok" />);
+    expect(await screen.findByRole("heading", { name: "Welcome" })).toBeInTheDocument();
+  });
+});
