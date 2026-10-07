@@ -1099,6 +1099,18 @@ test.describe("a signed-in student", () => {
     // 00c's label for the button (it read "Sign in" until 1 Oct).
     await page.getByRole("button", { name: "That's me" }).click();
 
+    /*
+     * The session `beforeAll` was given when the probe chose its PIN is still
+     * live, so this sign-in replaces it, and the door says so on its own
+     * screen before going on (frame 28, D59, 6 Oct). Asserted rather than
+     * skipped past: a replaced session that went unannounced would be a
+     * regression too.
+     */
+    await expect(
+      page.getByText("You were signed in on another tablet, so that one signed out."),
+    ).toBeVisible({ timeout: LIVE_MS });
+    await page.getByRole("button", { name: "Continue" }).click();
+
     // Recorded, so a green run says WHICH door this child was sent through.
     test.info().annotations.push({
       type: "consent",

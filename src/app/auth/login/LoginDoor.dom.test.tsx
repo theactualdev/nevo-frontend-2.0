@@ -236,11 +236,13 @@ describe("an account that is not a student's", () => {
 
     await tap("1234");
 
-    expect(await screen.findByText(/this is the student sign-in/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "sign in as a teacher" })).toHaveAttribute(
-      "href",
-      "/auth/teacher",
-    );
+    // 28c-8's words (D68), with no link.
+    expect(
+      await screen.findByText(
+        "This sign-in is for students. Staff sign in with an email address.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /sign in as/ })).toBeNull();
     expect(signIn).not.toHaveBeenCalled();
     expect(roster.rememberChild).not.toHaveBeenCalled();
     // The login succeeded server-side, so its session is ended, not left.
@@ -365,19 +367,132 @@ describe("the moment after the PIN", () => {
     expect(
       await screen.findByText(/Taking you to your lessons/),
     ).toBeInTheDocument();
-    expect(screen.queryByText("Your other session has ended.")).toBeNull();
+    expect(screen.queryByText(/signed in on another tablet/)).toBeNull();
   });
+});
 
-  it("says the other session has ended when this sign-in ended one, and not where", async () => {
+/**
+ * D59: a sign-in that ended the same account's session elsewhere says so on a
+ * screen of its own, board 28's "Signed in here, other tablet released", and
+ * waits for Continue. It was a line on the "Welcome back" beat, which moves on
+ * by itself.
+ */
+describe("a sign-in that ended a session on another tablet", () => {
+  const RELEASED =
+    "You were signed in on another tablet, so that one signed out.";
+
+  it("says so on its own screen, and goes nowhere until Continue", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     loginPin.mockResolvedValue({ ...SESSION, replacedSession: true });
     await chooseAda();
 
     await tap("1234");
 
     expect(
-      await screen.findByText("Your other session has ended."),
+      await screen.findByRole("heading", { name: RELEASED }),
     ).toBeInTheDocument();
-    expect(document.body.textContent).not.toMatch(/another device|tablet|because/i);
+    expect(screen.queryByText(/Taking you to your lessons/)).toBeNull();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(router.push).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Continue" })).toBeInTheDocument();
+  });
+
+  it("goes on as before after Continue: the beat, then where they were going", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    window.history.pushState({}, "", "/auth/login?next=/student/lessons/frac-3");
+    loginPin.mockResolvedValue({ ...SESSION, replacedSession: true });
+    await chooseAda();
+    await tap("1234");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Continue" }));
+
+    expect(screen.getByText(/Taking you to your lessons/)).toBeInTheDocument();
+    expect(screen.queryByText(RELEASED)).toBeNull();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(800);
+    });
+    expect(router.push).toHaveBeenCalledWith("/student/lessons/frac-3");
+  });
+
+  it("takes a held child straight to the waiting screen after Continue", async () => {
+    loginPin.mockResolvedValue({ ...SESSION, replacedSession: true });
+    studentDestination.mockResolvedValueOnce("/student/waiting");
+    await chooseAda();
+    await tap("1234");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Continue" }));
+
+    expect(router.push).toHaveBeenCalledWith("/student/waiting");
+    expect(screen.queryByText(/Taking you to your lessons/)).toBeNull();
+  });
+});
+
+/**
+ * PinLoginRequest takes `{schoolCode, admissionNumber, pin}` (1 Oct). The
+ * identifier the device remembered goes as `admissionNumber`, exactly.
+ */
+describe("what the unlock sends", () => {
+  it("is the contract's three fields, with the remembered identifier as admissionNumber", async () => {
+    loginPin.mockResolvedValue(SESSION);
+    await chooseAda();
+
+    await tap("1234");
+
+    await waitFor(() =>
+      expect(loginPin).toHaveBeenCalledWith({
+        schoolCode: "NEVO-1",
+        admissionNumber: "ada.o",
+        pin: "1234",
+      }),
+    );
+  });
+});
+
+/**
+ * D68: 28c-6, 28c-7 and 28c-8 - the three door lines, in 28c-5's tinted box.
+ */
+describe("the door lines 28c draws", () => {
+  it("says a fault on our side is ours (28c-6)", async () => {
+    loginPin.mockRejectedValue(new ApiError(503, "Service Unavailable"));
+    await chooseAda();
+
+    await tap("1234");
+
+    expect(
+      await screen.findByText("Something went wrong on our side. Try again."),
+    ).toBeInTheDocument();
+  });
+
+  it("asks a rate-limited child to wait, never that the PIN was wrong (28c-7)", async () => {
+    loginPin.mockRejectedValue(
+      new ApiError(401, "Unauthorized", {
+        detail: { code: "too_many_attempts", message: "slow" },
+      }),
+    );
+    await chooseAda();
+
+    await tap("1234");
+
+    expect(
+      await screen.findByText("Let's wait a moment before trying again."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/didn.t match/)).toBeNull();
+  });
+
+  it("tells a staff account to sign in with an email address, with no link (28c-8)", async () => {
+    loginPin.mockResolvedValue({ ...SESSION, role: "other_admin" });
+    await chooseAda();
+
+    await tap("1234");
+
+    expect(
+      await screen.findByText(
+        "This sign-in is for students. Staff sign in with an email address.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /sign in as/ })).toBeNull();
   });
 });
 

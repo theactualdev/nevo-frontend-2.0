@@ -1,7 +1,7 @@
 import { WAITING_ROUTE } from "@/lib/auth/entryGate";
 
 /**
- * The two sign-in moments design ruled on 1 Oct (D2), shared by both PIN doors
+ * The sign-in moments design ruled on (D2, D59, D68), shared by both PIN doors
  * - the remembered-device unlock and the full sign-in - so the two cannot say
  * different things about the same moment.
  */
@@ -18,13 +18,27 @@ export function skipsWelcomeBeat(destination: string): boolean {
 }
 
 /**
- * Said on the beat when this sign-in ended the same account's session on
- * another device (`SessionResponse.replacedSession`, required on the wire and
- * read by nothing until now).
+ * Said when this sign-in ended the same account's session on another device
+ * (`SessionResponse.replacedSession`). Board 28's "Signed in here, other
+ * tablet released" (D59), verbatim, on a screen of its own - see
+ * `SignedInHereScreen`. It replaced an interim line of ours, "Your other
+ * session has ended.", which rode the "Welcome back" beat.
  *
- * Design, D2: the device "says the session has ended and does not explain
- * where or why" - no device, no place, and no "because you signed in here",
- * which on a shared tablet would tell whoever is holding it more than they
- * need. NOT DRAWN: the words are ours until design gives theirs.
+ * "TABLET" IS THE FRAME'S WORD, and is used as drawn on every device. Whether
+ * a laptop or a phone should read something else is asked (D130).
  */
-export const REPLACED_ELSEWHERE_COPY = "Your other session has ended.";
+export const REPLACED_ELSEWHERE_COPY =
+  "You were signed in on another tablet, so that one signed out.";
+
+/**
+ * The PIN doors' lines for a failure that is not the child's PIN - 28c-6 and
+ * 28c-7 (D68), drawn in 28c-5's tinted box. One copy for every door that
+ * shares the box, so the remembered-device unlock and the full sign-in cannot
+ * say different things about the same refusal.
+ *
+ * The rate limit is said as a wait, never as a wrong PIN: the child may have
+ * typed the right one too quickly, and "try again" is the instruction that
+ * extends the lockout.
+ */
+export const SIGN_IN_OURS_COPY = "Something went wrong on our side. Try again.";
+export const SIGN_IN_THROTTLED_COPY = "Let's wait a moment before trying again.";

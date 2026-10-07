@@ -132,11 +132,19 @@ export const authApi = {
       .post<LoginResponse>("/api/v1/auth/login/password", payload)
       .then(store),
 
-  /** Student sign-in - school code + identifier from the remembered device
-   *  profile, plus the PIN they just entered (frame 00). */
+  /**
+   * Student sign-in - `PinLoginRequest`, `{schoolCode, admissionNumber, pin}`
+   * (frames 00, 00c and 28c).
+   *
+   * `admissionNumber` CARRIES WHAT THE CHILD TYPED OR THE DEVICE REMEMBERED,
+   * exactly. Sign-in matches either the school's admission number or the
+   * handle Nevo issued (backend, 1 Oct), so the server decides which it is.
+   * This sent `loginIdentifier`, which the spec stopped naming on 1 Oct and
+   * which worked only because the server still accepts it as an alias.
+   */
   loginPin: (payload: {
     schoolCode: string;
-    loginIdentifier: string;
+    admissionNumber: string;
     pin: string;
   }) => api.post<LoginResponse>("/api/v1/auth/login/pin", payload).then(store),
 

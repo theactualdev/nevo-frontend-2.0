@@ -36,7 +36,12 @@ import {
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { AccountOnPauseScreen } from "./AccountOnPauseScreen";
-import { REPLACED_ELSEWHERE_COPY, skipsWelcomeBeat } from "./signInMoments";
+import { SignedInHereScreen } from "./SignedInHereScreen";
+import {
+  SIGN_IN_OURS_COPY,
+  SIGN_IN_THROTTLED_COPY,
+  skipsWelcomeBeat,
+} from "./signInMoments";
 import { WrongDoorNote } from "./WrongDoorNote";
 
 /**
@@ -57,7 +62,7 @@ import { WrongDoorNote } from "./WrongDoorNote";
  * THE SECOND FIELD IS "STUDENT ID / ADMISSION NUMBER", as 00c labels it since
  * 30 Sep. Sign-in matches either the school's Student ID or the login handle
  * Nevo issued (backend, 1 Oct), so the field sends exactly what the child
- * types, as `loginIdentifier`, and the server decides which one it is. The
+ * types, as `admissionNumber`, and the server decides which one it is. The
  * help row points at the person who can read it out.
  *
  * PRE-FILLED FROM 05 ENTRY for a child the lookup says already has an
@@ -69,9 +74,13 @@ import { WrongDoorNote } from "./WrongDoorNote";
  * out is how you lose them at the last step.
  */
 
-/** The username is server-issued; we bound it only by what the contract takes. */
+/**
+ * Bound only by what the contract takes: `PinLoginRequest.admissionNumber` is
+ * 1-60. It was 50, the old identifier's cap, which cut a long Student ID from
+ * 05 Entry (60 there too) short before it was ever sent.
+ */
 const USERNAME_MIN = 1;
-const USERNAME_MAX = 50;
+const USERNAME_MAX = 60;
 
 /**
  * Avatar initials from a USERNAME, which is not a name.
@@ -113,8 +122,11 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
   useEffect(() => clearSignInHandoff(), []);
   const [digits, setDigits] = useState("");
   const [done, setDone] = useState(false);
-  /** This sign-in ended the account's session elsewhere (D2). */
-  const [replacedElsewhere, setReplacedElsewhere] = useState(false);
+  /**
+   * Where the child goes once they have read that this sign-in ended their
+   * session elsewhere (D59, `SignedInHereScreen`). Null when it ended nothing.
+   */
+  const [releasedTo, setReleasedTo] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<LearnerLoginFailure | null>(null);
   /** Whose door a non-student account belongs at; see `WrongDoorNote`. */
@@ -186,6 +198,24 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
     identifier.length >= USERNAME_MIN &&
     digits.length >= STUDENT_PIN_MIN;
 
+  /**
+   * On from a sign-in that worked: the "Welcome back" beat, then where they
+   * were going - or straight there, with no beat, for a child the consent gate
+   * holds (D2). True when it navigated at once.
+   */
+  const goOn = useCallback(
+    (destination: string): boolean => {
+      if (skipsWelcomeBeat(destination)) {
+        router.push(destination);
+        return true;
+      }
+      setDone(true);
+      doneTimer.current = setTimeout(() => router.push(destination), DONE_MS);
+      return false;
+    },
+    [router],
+  );
+
   const submit = useCallback(async () => {
     if (!ready || checking) return;
     setChecking(true);
@@ -195,7 +225,7 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
     try {
       const session = await authApi.loginPin({
         schoolCode: school,
-        loginIdentifier: identifier,
+        admissionNumber: identifier,
         pin: digits,
       });
       /*
@@ -297,14 +327,12 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
        * true: they go straight to the waiting screen.
        */
       const destination = await studentDestination(next);
-      if (skipsWelcomeBeat(destination)) {
-        leaving = true;
-        router.push(destination);
+      // D59 first, when this ended a session elsewhere; its Continue goes on.
+      if (session.replacedSession === true) {
+        setReleasedTo(destination);
         return;
       }
-      setReplacedElsewhere(session.replacedSession === true);
-      setDone(true);
-      doneTimer.current = setTimeout(() => router.push(destination), DONE_MS);
+      leaving = goOn(destination);
     } catch (cause) {
       // Only the PIN clears. The other two fields stay, deliberately.
       setDigits("");
@@ -312,7 +340,7 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
     } finally {
       if (!leaving) setChecking(false);
     }
-  }, [ready, checking, school, identifier, digits, signIn, router, next]);
+  }, [ready, checking, school, identifier, digits, signIn, next, goOn]);
 
   /*
    * A paused account takes the whole screen, exactly as it does at the PIN
@@ -343,13 +371,13 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
         <p className="mt-2.5 text-[15px] text-nevo-near-black/60">
           Taking you to your lessons…
         </p>
-        {replacedElsewhere && (
-          <p className="mt-1.5 text-[15px] text-nevo-near-black/60">
-            {REPLACED_ELSEWHERE_COPY}
-          </p>
-        )}
       </main>
     );
+  }
+
+  if (releasedTo !== null) {
+    // Stays up for a held child while the waiting screen loads.
+    return <SignedInHereScreen onContinue={() => goOn(releasedTo)} />;
   }
 
   /*
@@ -576,10 +604,9 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
               <span className="text-sm leading-[1.5] text-nevo-near-black">
                 {error === "credentials" &&
                   "Hmm, that didn't match. Check your school code and Student ID / Admission Number with your teacher and try again."}
-                {error === "throttled" &&
-                  "That's a lot of tries in a row. Wait a moment, then try again."}
-                {error === "ours" &&
-                  "We couldn't check that just now - that's on us, not you. Try again in a moment."}
+                {/* 28c's door lines (D68), the same on every PIN door. */}
+                {error === "throttled" && SIGN_IN_THROTTLED_COPY}
+                {error === "ours" && SIGN_IN_OURS_COPY}
                 {error === "wrong_door" && <WrongDoorNote door={wrongDoor} />}
               </span>
             </div>
