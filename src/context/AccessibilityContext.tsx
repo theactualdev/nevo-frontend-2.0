@@ -18,22 +18,18 @@ export interface AccessibilityPrefs {
   reducedMotion: boolean;
   highContrast: boolean;
   textSize: TextSize;
-  /** Learning-support preference (B.11): the 20-minute break prompt. */
-  suggestBreaks: boolean;
 }
 
 export interface AccessibilityValue extends AccessibilityPrefs {
   setReducedMotion: (v: boolean) => void;
   setHighContrast: (v: boolean) => void;
   setTextSize: (v: TextSize) => void;
-  setSuggestBreaks: (v: boolean) => void;
 }
 
 const DEFAULTS: AccessibilityPrefs = {
   reducedMotion: false,
   highContrast: false,
   textSize: "m",
-  suggestBreaks: true,
 };
 
 const STORAGE_KEY = A11Y_STORAGE_KEY;
@@ -47,9 +43,14 @@ function prefsKey(): string {
 function readPrefs(key: string): AccessibilityPrefs {
   try {
     const raw = localStorage.getItem(key);
-    return raw
-      ? { ...DEFAULTS, ...(JSON.parse(raw) as Partial<AccessibilityPrefs>) }
-      : DEFAULTS;
+    if (!raw) return DEFAULTS;
+    // The three it holds and nothing else: an older build's `suggestBreaks`
+    // (D87, gone) is left behind here and dropped at the next write.
+    const { reducedMotion, highContrast, textSize } = {
+      ...DEFAULTS,
+      ...(JSON.parse(raw) as Partial<AccessibilityPrefs>),
+    };
+    return { reducedMotion, highContrast, textSize };
   } catch {
     // Malformed or unavailable storage is no preference at all.
     return DEFAULTS;
@@ -163,20 +164,14 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
     (v: TextSize) => update({ textSize: v }),
     [update],
   );
-  const setSuggestBreaks = useCallback(
-    (v: boolean) => update({ suggestBreaks: v }),
-    [update],
-  );
-
   const value = useMemo<AccessibilityValue>(
     () => ({
       ...prefs,
       setReducedMotion,
       setHighContrast,
       setTextSize,
-      setSuggestBreaks,
     }),
-    [prefs, setReducedMotion, setHighContrast, setTextSize, setSuggestBreaks],
+    [prefs, setReducedMotion, setHighContrast, setTextSize],
   );
 
   return (
