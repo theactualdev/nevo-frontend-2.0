@@ -133,3 +133,42 @@ describe("the onboarding routes SCRUM-208 retired", () => {
     expect(page("student/onboarding/sequence")).toBe(true);
   });
 });
+
+/**
+ * THE TEACHER BRANCH, which had no test of its own (audit T246). Every case
+ * is a route somebody can type.
+ */
+describe("the teacher console's guard", () => {
+  const TEACHER = USER_ROLES.TEACHER;
+
+  it("lets a teacher in", () => {
+    expect(destination("/teacher/dashboard", TEACHER)).toBeNull();
+    expect(destination("/teacher/classes/c-1", TEACHER)).toBeNull();
+  });
+
+  it("sends anyone else to the teacher door, remembering where they were headed", () => {
+    const res = proxy(request("/teacher/classes/c-1"));
+    const to = new URL(res.headers.get("location")!);
+
+    expect(to.pathname).toBe("/auth/teacher");
+    expect(to.searchParams.get("next")).toBe("/teacher/classes/c-1");
+  });
+
+  it("does not take a child's or an admin's cookie as a teacher's", () => {
+    expect(destination("/teacher/dashboard", USER_ROLES.STUDENT)).toBe("/auth/teacher");
+    // There is no plain "admin": these are the two the backend sends.
+    expect(destination("/teacher/dashboard", USER_ROLES.SENCO_ADMIN)).toBe("/auth/teacher");
+    expect(destination("/teacher/dashboard", USER_ROLES.OTHER_ADMIN)).toBe("/auth/teacher");
+    expect(destination("/teacher/dashboard", USER_ROLES.PARENT_GUARDIAN)).toBe("/auth/teacher");
+  });
+
+  it("leaves help open to a teacher who cannot sign in", () => {
+    // Its endpoint is public for the same reason: the person who needs the
+    // support details most is the one locked out.
+    expect(destination("/teacher/help")).toBeNull();
+  });
+
+  it("leaves onboarding open, since it is how a teacher gets a session", () => {
+    expect(destination("/teacher/onboarding")).toBeNull();
+  });
+});

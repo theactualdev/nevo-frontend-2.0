@@ -99,6 +99,9 @@ export interface JoinLookup {
   role: string;
   schoolName: string | null;
   expiresAt: string;
+  /** The invitee's name, on the wire since 1 Oct - D19's "Welcome, Amara". */
+  firstName?: string | null;
+  lastName?: string | null;
 }
 
 /** 201 of `POST /join/{token}/accept`. See `acceptJoin` for why each field is here. */

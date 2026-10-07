@@ -7,6 +7,7 @@ import { usersApi, type CurrentUser } from "@/lib/api/users";
 import type { PermissionScope } from "@/lib/constants/permissions";
 import { cn } from "@/lib/utils";
 import { Avatar, CARD } from "../Roster/primitives";
+import { ReadFailed } from "../ReadFailed";
 import { scopeName } from "../Team/adminScopes";
 import {
   NotBuiltNote,
@@ -96,11 +97,20 @@ export function AccountSettings() {
   const [endFailed, setEndFailed] = useState("");
   const [othersPhase, setOthersPhase] = useState<"idle" | "working" | "done" | "failed">("idle");
 
+  /*
+   * THREE STATES. A failed read used to become an empty list, which rendered
+   * as "We couldn't list your sessions" with no way to ask again - and an
+   * unanswered one said the same thing while the request was still out.
+   */
+  const [sessionsRead, setSessionsRead] = useState<"loading" | "ready" | "failed">("loading");
   const loadSessions = useCallback(() => {
     authApi
       .sessions()
-      .then(setSessions)
-      .catch(() => setSessions([]));
+      .then((s) => {
+        setSessions(s);
+        setSessionsRead("ready");
+      })
+      .catch(() => setSessionsRead("failed"));
   }, []);
 
   useEffect(() => {
@@ -460,10 +470,16 @@ export function AccountSettings() {
         title="Where you're signed in"
         note="Sign out anywhere that isn't you."
       >
-        {sessions.length === 0 ? (
-          <p className="m-0 text-sm text-nevo-near-black/62">
-            We couldn&rsquo;t list your sessions just now.
-          </p>
+        {/* Empty is not "only this device": the device asking is always in
+            the list, so none at all means we could not tell. */}
+        {sessionsRead === "loading" ? null : sessionsRead === "failed" || sessions.length === 0 ? (
+          <ReadFailed
+            what="where you're signed in"
+            onRetry={() => {
+              setSessionsRead("loading");
+              loadSessions();
+            }}
+          />
         ) : others.length === 0 ? (
           /*
            * THE SINGLE-SESSION STATE, which rendered as a one-row list with
