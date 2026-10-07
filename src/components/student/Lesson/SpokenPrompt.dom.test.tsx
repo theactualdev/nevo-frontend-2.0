@@ -6,6 +6,7 @@ import { SpokenPrompt } from "./SpokenPrompt";
  * A spoken question's prompt (B16). It says the question on arrival, says it
  * again on request, and when the recording will not load it says so - the
  * printed question beside it is the fallback, and that lives with the caller.
+ * Its label is "Listen", then "Listen again" once it has been heard (D95).
  *
  * jsdom implements no playback, so `play` is stubbed and the element's own
  * events stand in for the browser's.
@@ -39,7 +40,7 @@ describe("a spoken prompt", () => {
   it("plays on request", () => {
     render(<SpokenPrompt src="https://cdn.example/q.mp3" />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Play" }));
+    fireEvent.click(screen.getByRole("button", { name: "Listen" }));
 
     expect(play).toHaveBeenCalled();
   });
@@ -50,7 +51,7 @@ describe("a spoken prompt", () => {
     fireEvent.ended(audio());
     audio().currentTime = 4;
 
-    fireEvent.click(screen.getByRole("button", { name: "Play" }));
+    fireEvent.click(screen.getByRole("button", { name: "Listen again" }));
 
     expect(audio().currentTime).toBe(0);
     expect(play).toHaveBeenCalled();
@@ -66,6 +67,40 @@ describe("a spoken prompt", () => {
   });
 });
 
+describe("its label (D95)", () => {
+  // The words on screen; the control's name is checked by role.
+  const label = () => screen.getByText(/^Listen/);
+
+  it("is 'Listen' before the child has heard it, shown and as the control's name", () => {
+    render(<SpokenPrompt src="https://cdn.example/q.mp3" />);
+
+    expect(label().textContent).toBe("Listen");
+    expect(screen.getByRole("button", { name: "Listen" })).toBeTruthy();
+  });
+
+  it("is still 'Listen' part way through, which is not heard yet", () => {
+    render(<SpokenPrompt src="https://cdn.example/q.mp3" />);
+    fireEvent.play(audio());
+    fireEvent.pause(audio());
+
+    expect(label().textContent).toBe("Listen");
+  });
+
+  it("is 'Listen again' once it has played through, and stays so", () => {
+    render(<SpokenPrompt src="https://cdn.example/q.mp3" />);
+    fireEvent.play(audio());
+    fireEvent.ended(audio());
+
+    expect(label().textContent).toBe("Listen again");
+    expect(screen.getByRole("button", { name: "Listen again" })).toBeTruthy();
+
+    // Said again: still something they have heard.
+    fireEvent.play(audio());
+    expect(label().textContent).toBe("Listen again");
+    expect(screen.getByRole("button", { name: "Pause" })).toBeTruthy();
+  });
+});
+
 describe("a recording that will not load", () => {
   it("says so, and stops offering to play", () => {
     render(<SpokenPrompt src="https://cdn.example/gone.mp3" />);
@@ -75,7 +110,7 @@ describe("a recording that will not load", () => {
     expect(screen.getByRole("status").textContent).toBe(
       "Couldn't load this recording",
     );
-    expect(screen.getByRole("button", { name: "Play" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Listen" })).toBeDisabled();
   });
 
   it("is not called broken when the browser only wants a tap first", async () => {
@@ -83,12 +118,12 @@ describe("a recording that will not load", () => {
     play.mockRejectedValue(Object.assign(new Error("x"), { name: "NotAllowedError" }));
     render(<SpokenPrompt src="https://cdn.example/q.mp3" />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Play" }));
+    fireEvent.click(screen.getByRole("button", { name: "Listen" }));
     await Promise.resolve();
     await Promise.resolve();
 
     expect(screen.queryByRole("status")).toBeNull();
-    expect(screen.getByRole("button", { name: "Play" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Listen" })).toBeEnabled();
   });
 });
 

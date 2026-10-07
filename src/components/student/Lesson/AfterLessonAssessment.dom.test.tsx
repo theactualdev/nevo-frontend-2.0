@@ -132,6 +132,27 @@ describe("the recovery note (D40)", () => {
     expect(screen.getByText(/didn.t land yet/)).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/bring it back/i);
   });
+
+  it("promises no return nobody scheduled (D96)", () => {
+    // "We'll come back to this together" and "revisit soon" render only
+    // where the engine scheduled the return, and nothing here carries one.
+    render(
+      <AfterLessonAssessment
+        assessment={{ ...ASSESSMENT, revisitConcepts: ["Halves"] }}
+        onFinish={() => {}}
+      />,
+    );
+    start();
+    for (let i = 0; i < 4; i++) {
+      pick("B");
+      fireEvent.click(screen.getByRole("button", { name: "Next question" }));
+    }
+
+    expect(document.body.textContent).not.toMatch(/come back|revisit soon/i);
+    expect(screen.queryByRole("heading")).toBeNull();
+    // The concept is still named, with the revisit mark and nothing after.
+    expect(screen.getByText("Halves").textContent).toBe("Halves");
+  });
 });
 
 describe("the reading accommodation on the check (D30)", () => {
@@ -384,7 +405,10 @@ describe("from the check-in (B26)", () => {
     finish();
 
     expect(screen.getByText("Adding like fractions")).toBeTruthy();
-    expect(screen.getByText(/Unlike denominators/)).toBeTruthy();
+    // Named, without "· revisit soon" (D96).
+    expect(screen.getByText(/Unlike denominators/).textContent).toBe(
+      "Unlike denominators",
+    );
     expect(
       screen.getByText("You showed you can add fractions with the same bottom."),
     ).toBeTruthy();

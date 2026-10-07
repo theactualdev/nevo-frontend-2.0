@@ -399,8 +399,14 @@ function Intro({
  *
  * No score either way: still concepts, never numbers.
  *
- * TODO(design): the nothing-landed heading is ours, built from the frame's own
- * "we'll come back to together". Confirm the wording.
+ * NO PROMISE OF A RETURN NOBODY SCHEDULED (design D96, 6 Oct). "We'll come
+ * back to this together" (the nothing-landed heading) and "· revisit soon" (on
+ * each concept to revisit) render "only where the engine has actually
+ * scheduled the return... Where there is no scheduled return, say nothing."
+ * The only scheduled return the contract carries is `nextReviewDue`, on the
+ * scheduler's answer to a REVIEW (D40, `reviewCompletionCopy`); the completion
+ * write this screen follows carries none. So the heading is not drawn when
+ * nothing landed, and a concept to revisit is its name and the revisit mark.
  *
  * WHICH CONCEPT LANDED IS THE SERVER'S ANSWER NOW (B26). It marks the stored
  * answers and sends the two lists and the note; they are drawn as sent, and
@@ -479,20 +485,20 @@ function GrowthResult({
               <Check className="size-[38px] text-nevo-cream" strokeWidth={2.6} />
             </span>
           )}
-          <h2
-            className={cn(
-              "mt-[26px] text-center text-[23px] font-semibold tracking-[-0.01em] sm:text-[26px]",
-              reading && READING_HEADING,
-            )}
-          >
-            {nothingLanded
-              ? "We’ll come back to this together"
-              : "You’re getting the hang of this"}
-          </h2>
+          {!nothingLanded && (
+            <h2
+              className={cn(
+                "mt-[26px] text-center text-[23px] font-semibold tracking-[-0.01em] sm:text-[26px]",
+                reading && READING_HEADING,
+              )}
+            >
+              You’re getting the hang of this
+            </h2>
+          )}
           {/* The authored note says what the child SHOWED, so it is held back
               when they showed none of it. */}
           {nothingLanded && (
-            <p className={note}>
+            <p className={cn(note, "mt-[26px]")}>
               This one didn&rsquo;t land yet, and that&rsquo;s completely fine.
             </p>
           )}
@@ -521,12 +527,7 @@ function GrowthResult({
               <span className="flex size-[22px] shrink-0 items-center justify-center rounded-full bg-nevo-violet/35">
                 <span className="size-2 rounded-full bg-nevo-violet" />
               </span>
-              <span className={conceptLabel}>
-                {item}{" "}
-                <span className="font-normal text-nevo-near-black/60">
-                  · revisit soon
-                </span>
-              </span>
+              <span className={conceptLabel}>{item}</span>
             </div>
           ))}
         </div>

@@ -104,6 +104,17 @@ describe("Review answers", () => {
     expect(screen.getByText("YOU CHOSE")).toBeTruthy();
   });
 
+  it("tags a miss with no promise of a return (D96)", () => {
+    // "Revisit soon" renders only where the engine scheduled the return.
+    signInAs("child-a");
+    saveReviewAnswers("frac-3", [{ questionIndex: 0, selectedId: "b" }]);
+
+    render(<ReviewAnswersScreen lesson={lesson()} />);
+
+    expect(screen.getByText("THE IDEA")).toBeTruthy();
+    expect(screen.queryByText(/revisit/i)).toBeNull();
+  });
+
   it("does not show the next child on the tablet the last child's picks", () => {
     signInAs("child-a");
     saveReviewAnswers("frac-3", [{ questionIndex: 0, selectedId: "b" }]);
@@ -133,7 +144,9 @@ describe("From the check-in, on the summary (B26)", () => {
 
     expect(await screen.findByText("FROM THE CHECK-IN")).toBeTruthy();
     expect(screen.getByText("Numerators")).toBeTruthy();
-    expect(screen.getByText(/Denominators/)).toBeTruthy();
+    // Named, without "· we'll revisit soon" (D96): nothing scheduled it.
+    expect(screen.getByText(/Denominators/).textContent).toBe("Denominators");
+    expect(screen.queryByText(/revisit/i)).toBeNull();
   });
 
   it("draws no section when there is none to draw", () => {

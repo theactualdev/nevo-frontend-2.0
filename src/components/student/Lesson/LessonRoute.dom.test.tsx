@@ -93,6 +93,8 @@ describe("a lesson that would not load", () => {
 
     expect(screen.getByText("Something went wrong. We're on it.")).toBeTruthy();
     expect(screen.getByText(/Nothing you did caused it/)).toBeTruthy();
+    // D89: a load that failed has no save to confirm, so it claims none.
+    expect(document.body.textContent).not.toMatch(/saved/i);
     expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Go back" }));

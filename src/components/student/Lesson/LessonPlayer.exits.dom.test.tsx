@@ -116,27 +116,41 @@ describe("leaving part way", () => {
     expect(push).toHaveBeenCalledWith("/student/dashboard");
   });
 
-  it("does not say progress is saved when the newest place has not landed", () => {
-    progress.positionSaved = false;
-    render(<LessonPlayer lesson={LESSON} plan={null} />);
+  const LAST_SAVED = "You'll pick up from the last point that was saved.";
+
+  it.each([false, true])(
+    "never says the latest place is saved (D88), landed: %s",
+    (landed) => {
+      progress.positionSaved = landed;
+      render(<LessonPlayer lesson={LESSON} plan={null} live />);
+
+      fireEvent.click(screen.getByRole("button", { name: "Exit lesson" }));
+
+      expect(screen.queryByText(/progress is saved/i)).toBeNull();
+      expect(screen.queryByText(/pick up where you left off/i)).toBeNull();
+      // What is true either way: the last point that landed is where they
+      // come back to.
+      expect(screen.getByRole("heading", { name: LAST_SAVED })).toBeTruthy();
+      // And the two choices, exactly as they were.
+      expect(screen.getByRole("button", { name: "Keep learning" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Leave for now" })).toBeTruthy();
+    },
+  );
+
+  it.each([
+    ["the signed-out walkthrough", {}],
+    ["a review", { live: true, review: true }],
+    ["a finished lesson reopened", { live: true, finished: true }],
+  ])("says nothing about a saved place on %s, which writes none", (_, over) => {
+    render(<LessonPlayer lesson={LESSON} plan={null} {...over} />);
+    if ("review" in over)
+      fireEvent.click(screen.getByRole("button", { name: /begin|start|ready/i }));
 
     fireEvent.click(screen.getByRole("button", { name: "Exit lesson" }));
 
-    expect(screen.queryByText(/progress is saved/i)).toBeNull();
-    expect(screen.queryByText(/pick up where you left off/i)).toBeNull();
-    // Still a choice the child can make either way.
-    expect(screen.getByRole("button", { name: /keep learning/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /leave for now/i })).toBeTruthy();
-  });
-
-  it("says so, in the frame's words, once it has", () => {
-    progress.positionSaved = true;
-    render(<LessonPlayer lesson={LESSON} plan={null} />);
-
-    fireEvent.click(screen.getByRole("button", { name: "Exit lesson" }));
-
-    expect(screen.getByText("Your progress is saved")).toBeTruthy();
-    expect(screen.getByText("You can pick up where you left off")).toBeTruthy();
+    expect(screen.queryByText(LAST_SAVED)).toBeNull();
+    expect(screen.queryByText(/saved/i)).toBeNull();
+    expect(screen.getByRole("button", { name: "Leave for now" })).toBeTruthy();
   });
 });
 

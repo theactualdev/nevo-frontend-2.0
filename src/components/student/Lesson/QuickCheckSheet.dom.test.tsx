@@ -97,7 +97,7 @@ describe("a spoken check (B16)", () => {
     expect(document.querySelector("audio")?.getAttribute("src")).toBe(
       "https://cdn.example/q.mp3",
     );
-    expect(screen.getByRole("button", { name: "Play" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Listen" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: CHECK.question })).toBeTruthy();
   });
 
@@ -105,7 +105,20 @@ describe("a spoken check (B16)", () => {
     mount();
 
     expect(document.querySelector("audio")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Play" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Listen" })).toBeNull();
+  });
+});
+
+describe("a miss (D93)", () => {
+  it("offers Try again alone: no See it explained, no save claimed", () => {
+    mount();
+
+    fireEvent.click(screen.getByRole("button", { name: "Oxygen" }));
+
+    expect(screen.getByRole("status").textContent).toBe(CHECK.recoveryNote);
+    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /explained/i })).toBeNull();
+    expect(document.body.textContent).not.toMatch(/saved/i);
   });
 });
 

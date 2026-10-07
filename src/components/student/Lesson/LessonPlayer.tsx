@@ -335,7 +335,7 @@ export function LessonPlayer({
   );
 
   // Segments whose Quick Check has been answered correctly — only a correct
-  // answer spends the check (a miss offers Try again / See it explained).
+  // answer spends the check (a miss offers Try again).
   /*
    * FIRST answers in a review session, kept only to tell the scheduler how
    * recall went. Cleared with the session; never rendered to the child.
@@ -2142,7 +2142,7 @@ export function LessonPlayer({
       <LeaveLessonDialog
         open={leaveOpen}
         onOpenChange={setLeaveOpen}
-        saved={progress.positionSaved}
+        resumable={live && !review && !finished}
         onLeave={() => {
           // `exited` is a status the contract defines and nothing ever sent.
           // Leaving deliberately is not the same fact as drifting off mid

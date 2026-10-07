@@ -23,6 +23,10 @@ const LESSONS_HREF = "/student/lessons";
  * brought back, kept by the player for this route. A lesson finished on
  * another visit, or whose completion never answered, has none here, and the
  * section is not drawn. The signed-out walkthrough keeps its authored lists.
+ *
+ * A concept to revisit is its name and the revisit mark, without the frame's
+ * "· we'll revisit soon": design D96 (6 Oct) renders that promise only where
+ * the engine scheduled the return, and nothing this screen reads carries one.
  */
 export function LessonSummaryScreen({ lesson }: { lesson: Lesson }) {
   const router = useRouter();
@@ -103,10 +107,7 @@ export function LessonSummaryScreen({ lesson }: { lesson: Lesson }) {
                       <span className="size-2 rounded-full bg-nevo-violet" />
                     </span>
                     <span className="text-[15px] font-medium text-nevo-near-black">
-                      {item}{" "}
-                      <span className="font-normal text-nevo-near-black/60">
-                        · we&rsquo;ll revisit soon
-                      </span>
+                      {item}
                     </span>
                   </div>
                 ))}

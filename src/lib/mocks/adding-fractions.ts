@@ -71,8 +71,7 @@ export const ADDING_FRACTIONS: Lesson = {
         ],
         correctId: "top",
         correctNote: "That's it - add the top numbers and keep the bottom the same.",
-        recoveryNote:
-          "Not quite - you add the top numbers and keep the bottom number. Let's look again. Your progress is saved.",
+        recoveryNote: "Not quite. Let's look again.",
       },
     },
     {

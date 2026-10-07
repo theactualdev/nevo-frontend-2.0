@@ -21,8 +21,13 @@ function msSince(start: number | null): number | null {
  * a centred card on tablet/desktop, over the dimmed player. Feedback is warm
  * and system-owned: a correct pick is affirmed plainly (navy) and "Keep going"
  * advances; a miss is marked softly in violet — never red — and offers "Try
- * again" plus "See it explained" (back to the segment). The check is only
- * spent by a correct answer.
+ * again". The check is only spent by a correct answer.
+ *
+ * NO "SEE IT EXPLAINED" (design D93, confirmed 6 Oct). The frame's recovery
+ * state draws "Try again" alone. It went back to the segment and explained
+ * nothing - no field carries an explanation. A child who cannot reach the
+ * answer is the Socratic hand-off's to move on (SCRUM-241), which the backend
+ * triggers and which waits on that trigger - see `SocraticPanel`.
  *
  * Mount keyed on the segment id so the chosen answer resets per segment.
  *
@@ -30,8 +35,7 @@ function msSince(start: number | null): number | null {
  * child step round the check the player gates on - and the player recorded
  * every one of those scrim taps as `tap_blocked` while they were doing the
  * opposite. Outside taps and Esc are refused now, so the record is true. The
- * ways out are the ones the frame draws: Keep going, Try again, See it
- * explained.
+ * ways out are the ones the frame draws: Keep going and Try again.
  *
  * A SPOKEN CHECK (B16) says its question aloud on opening, with the printed
  * question still in place - see `SpokenPrompt`. The reading accommodation's
@@ -171,24 +175,9 @@ export function QuickCheckSheet({
               Keep going
             </Button>
           ) : (
-            <>
-              <Button className="mt-5 w-full" onClick={() => setChosenId(null)}>
-                Try again
-              </Button>
-              <Button
-                variant="ghost"
-                className="mt-2 h-[46px] w-full text-[15px]"
-                onClick={() => {
-                  // Cleared on the way out, so the check comes back as a
-                  // question rather than on the answer they just missed -
-                  // which made Try again the only thing they could press.
-                  setChosenId(null);
-                  onOpenChange(false);
-                }}
-              >
-                See it explained
-              </Button>
-            </>
+            <Button className="mt-5 w-full" onClick={() => setChosenId(null)}>
+              Try again
+            </Button>
           ))}
       </SheetContent>
     </Sheet>

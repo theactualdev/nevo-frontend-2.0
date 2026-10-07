@@ -15,8 +15,11 @@ const HOME_HREF = "/student/dashboard";
  * Review Answers (frame 18a · Review Answers) — the after-lesson assessment
  * result's "Review answers" destination (A5). A calm look-back, never a mark:
  * no score, no red, no error iconography. A correct pick shows a single navy
- * check; a miss shows the violet-dot "you chose" above the navy-check "the idea",
- * tagged "Revisit soon" — framed as something to revisit, not a failure.
+ * check; a miss shows the violet-dot "you chose" above the navy-check "the idea".
+ *
+ * NO "REVISIT SOON" TAG (design D96, 6 Oct). It is a promise of a return, and
+ * design renders those only where the engine scheduled one. Nothing this
+ * screen reads carries a scheduled return, so the miss is the two rows alone.
  *
  * Renders inside the app shell (like the summary). Reads the student's picks from
  * `reviewStore` (written by the player); if there are none (e.g. opened directly),
@@ -66,16 +69,9 @@ export function ReviewAnswersScreen({ lesson }: { lesson: Lesson }) {
                   key={i}
                   className="rounded-[12px] bg-nevo-cream-elevated p-[18px] shadow-elevation-1 sm:p-5"
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <span className="font-mono text-[10.5px] tracking-[0.06em] text-nevo-near-black/50">
-                      QUESTION {i + 1}
-                    </span>
-                    {answered && !isCorrect && (
-                      <span className="shrink-0 rounded-full bg-nevo-violet/22 px-3 py-1 text-[11px] font-semibold text-nevo-navy">
-                        Revisit soon
-                      </span>
-                    )}
-                  </div>
+                  <span className="font-mono text-[10.5px] tracking-[0.06em] text-nevo-near-black/50">
+                    QUESTION {i + 1}
+                  </span>
                   <p className="mt-2 text-[15px] font-semibold leading-[1.35] text-nevo-near-black sm:text-base">
                     {q.prompt}
                   </p>
