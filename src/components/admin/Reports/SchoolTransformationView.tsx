@@ -12,7 +12,10 @@ import { acrossLine, comparisonLine, figure } from "./transformationLines";
 
 /**
  * D26 School Transformation, under Reports (SCRUM-163) - BUILT REDUCED, WITH
- * HONEST NAMES (user's go-ahead, 7 Oct).
+ * HONEST NAMES, and the names are RULED (Lydia, 7 Oct): "Lessons seen
+ * through", "Time to finish a lesson" and "Changing format" stay. Nothing
+ * here may state a quantity or a claim the backend did not send. Design is
+ * taking the construct names out of the frame, so D26 will match this page.
  *
  * D26 draws four indices: Self-Regulation Index, Metacognitive Calibration,
  * Conceptual Flexibility and Active Learning Efficiency, each described as the
@@ -28,7 +31,7 @@ import { acrossLine, comparisonLine, figure } from "./transformationLines";
  * Under D26's names a proprietor would read a completion rate as a measure of
  * self-regulation and quote it. So each card is named for what it measures,
  * Calibration comes off the page as D26 itself allows ("if one can't be
- * computed... it comes off the page"), and D26's names go to design.
+ * computed... it comes off the page").
  *
  * NOTHING IS COMPUTED HERE. Every figure is the server's as it came; "+3 this
  * month" would be our subtraction, so the comparison names the earlier figure
