@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { Pointer } from "lucide-react";
 import type { formFactor } from "@/hooks/useSignals";
 import { AGE_BANDS, gridSpanConfig, type AgeBand } from "@/lib/profiling/bands";
 import type { BaselineCapture } from "@/lib/profiling/capture";
@@ -56,6 +57,19 @@ const TARGET: Record<number, string> = {
   5: "size-[62px] sm:size-[66px]",
 };
 
+/**
+ * The Primary 1-3 demonstration's beats, from the moment it starts: the
+ * target alone, then a hand reaching it, pressing it, both gone, and a beat
+ * of empty ground before the first real target. See `Demonstration`.
+ */
+const DEMO_BEATS = [
+  ["reach", 400],
+  ["press", 1_100],
+  ["gone", 1_350],
+  ["done", 1_950],
+] as const;
+type DemoBeat = "target" | (typeof DEMO_BEATS)[number][0];
+
 /** 08a's one line. No speed words: a comfortable pace is the comparator. */
 const LINE = "Tap the square each time you see it.";
 /** Primary 1-3 hear it instead, once, in 08a's spoken wording. */
@@ -89,7 +103,8 @@ function canSpeak(): boolean {
  * screen's short side, and positions are fractions of it, so a reach is the
  * same share of the space on a phone and a tablet. The lattice and the target
  * size are the band's tile-memory ones, so a sample is comparable to a tap in
- * the activity it corrects.
+ * the activity it corrects. Primary 1-3, who read nothing, are first shown
+ * one tap (D122, `Demonstration`), which is not a sample.
  *
  * NOTHING REACTS. No pressed state, sound, count, progress, timer, praise or
  * summary, before, during or after: anything that answers a tap tells the
@@ -132,15 +147,20 @@ export function MotorStep({
   const order = MOTOR_ORDER[n] ?? MOTOR_ORDER[4];
 
   /*
-   * PRIMARY 1-3 HEAR THE LINE AND READ NOTHING (08a). The first target waits
-   * for the voice; the line's slot stays empty so the ground does not move.
-   * Where the device cannot speak, the target simply appears. NOT DRAWN: what
-   * a child that young is told when there is no voice; the written line is
-   * not put back in its place.
+   * PRIMARY 1-3 HEAR THE LINE AND READ NOTHING (08a). The line's slot stays
+   * empty so the ground does not move. Where the device cannot speak there is
+   * no voice to wait for, and the written line is not put back in its place.
+   *
+   * AND THEN THEY ARE SHOWN (D122, 6 Oct): "For P1 to 3 children who cannot
+   * yet read the instruction, demonstrate rather than instruct: show one
+   * target appearing and being tapped, then begin." After the voice, or at
+   * once without one, `Demonstration` plays, and the first real target comes
+   * after it.
    */
   const spoken = band === AGE_BANDS.P13;
   const [voiced] = useState(() => spoken && canSpeak());
   const [heard, setHeard] = useState(false);
+  const [demo, setDemo] = useState<DemoBeat>(spoken ? "target" : "done");
   const [step, setStep] = useState(0);
   const [ended, setEnded] = useState(false);
 
@@ -192,7 +212,20 @@ export function MotorStep({
     };
   }, [voiced]);
 
-  const showing = (!voiced || heard) && !ended;
+  /** The voice has had its say, or there was none to wait for. */
+  const ready = !voiced || heard;
+
+  // The demonstration's beats, once the voice is done. On timers, so nothing
+  // is set synchronously in the effect; the cleanup cancels them all.
+  useEffect(() => {
+    if (!spoken || !ready) return;
+    const beats = DEMO_BEATS.map(([beat, at]) =>
+      setTimeout(() => setDemo(beat), at),
+    );
+    return () => beats.forEach(clearTimeout);
+  }, [spoken, ready]);
+
+  const showing = ready && demo === "done" && !ended;
   const cell = order[Math.min(step, order.length - 1)];
 
   /*
@@ -249,6 +282,9 @@ export function MotorStep({
         </p>
       )}
       <div className="absolute top-1/2 left-1/2 size-[min(90vw,90dvh)] -translate-x-1/2 translate-y-[calc(-50%+24px)] rounded-[12px] bg-nevo-cream-elevated">
+        {ready && demo !== "done" && (
+          <Demonstration beat={demo} target={TARGET[n] ?? TARGET[4]} />
+        )}
         {showing && (
           <div
             data-testid="motor-target"
@@ -266,6 +302,52 @@ export function MotorStep({
           />
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * The Primary 1-3 demonstration (D122, 6 Oct): one target appears in the
+ * middle of the ground, a hand reaches it and taps it, both go, and the step
+ * begins. Design's sentence is the whole of it; no frame draws it, so it
+ * borrows what the step already has - the band's target, no words - and adds
+ * only the hand.
+ *
+ * NOT A SAMPLE, AND NOT A TARGET. It takes no touch at all (`pointer-events`
+ * off, so a child copying the hand meets the ground, which does nothing),
+ * nothing about it is recorded, and the ten seconds wait for the first real
+ * target. The tap it shows is the hand's, so the target going is the same
+ * thing a real one does when tapped: it is removed, with nothing else.
+ *
+ * Under reduced motion the hand does not travel; it is simply there on the
+ * target when it reaches it.
+ */
+function Demonstration({ beat, target }: { beat: DemoBeat; target: string }) {
+  if (beat === "gone") return null;
+  return (
+    <div
+      data-testid="motor-demo"
+      aria-hidden
+      className="pointer-events-none absolute inset-0"
+    >
+      <div
+        className={cn(
+          "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-[12px] bg-nevo-navy",
+          target,
+        )}
+      />
+      {/* The pointer's fingertip sits a third across and near the top of
+          its box, so the box is offset to put that tip on the centre. */}
+      <Pointer
+        strokeWidth={1.8}
+        className={cn(
+          "absolute top-[calc(50%-5px)] left-[calc(50%-19px)] size-14 fill-nevo-cream text-nevo-near-black ease-calm motion-safe:transition-[translate,opacity,scale] motion-safe:duration-[var(--duration-break-entry)]",
+          beat === "target"
+            ? "translate-x-[64px] translate-y-[96px] opacity-0"
+            : "translate-x-0 translate-y-0 opacity-100",
+          beat === "press" && "scale-90",
+        )}
+      />
     </div>
   );
 }

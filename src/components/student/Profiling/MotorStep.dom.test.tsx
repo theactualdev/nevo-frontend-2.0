@@ -123,12 +123,15 @@ describe("the samples", () => {
   });
 
   it("uses the same eight cells, in the same order, for every child in a band", () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     for (const [band, n] of [
       ["p13", 3],
       ["p46", 4],
       ["ss", 5],
     ] as const) {
       const { capture } = step(band);
+      // Past P1-3's demonstration (D122); the others have none.
+      act(() => vi.advanceTimersByTime(1_950));
       for (let i = 0; i < 8; i++) tapAfter(500);
       expect(capture.ofKind("motor_tap").map((e) => e.payload?.cell)).toEqual(
         MOTOR_ORDER[n],
@@ -262,7 +265,12 @@ describe("Primary 1-3", () => {
     });
   });
 
-  it("hears the line once, reads nothing, and gets the target when the voice ends", () => {
+  const demo = () => screen.queryByTestId("motor-demo");
+  /** The demonstration runs from its first beat to its last. */
+  const watchTheDemonstration = () =>
+    act(() => vi.advanceTimersByTime(1_950));
+
+  it("hears the line once, reads nothing, and is shown one tap when the voice ends", () => {
     step("p13");
 
     expect(spoken.map((u) => u.text)).toEqual([
@@ -270,20 +278,31 @@ describe("Primary 1-3", () => {
     ]);
     expect(document.body.textContent).toBe("");
     expect(target()).toBeNull();
+    expect(demo()).toBeNull();
 
     act(() => spoken[0].onend?.());
+    // D122: "show one target appearing and being tapped, then begin."
+    expect(demo()).not.toBeNull();
+    expect(demo()!.querySelector("svg")).not.toBeNull(); // the hand
+    expect(target()).toBeNull();
+
+    watchTheDemonstration();
+    expect(demo()).toBeNull();
     expect(target()).toHaveAttribute("data-cell", "4");
+    expect(document.body.textContent).toBe("");
   });
 
   it("is never left waiting on a voice that does not finish", () => {
     step("p13");
 
     act(() => vi.advanceTimersByTime(8_000));
+    expect(demo()).not.toBeNull();
+    watchTheDemonstration();
 
     expect(target()).not.toBeNull();
   });
 
-  it("still reads nothing on a device that cannot speak, and gets the target at once", () => {
+  it("still reads nothing on a device that cannot speak, and is shown the tap at once", () => {
     vi.unstubAllGlobals();
     vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
       frames.push(cb);
@@ -293,6 +312,38 @@ describe("Primary 1-3", () => {
     step("p13");
 
     expect(document.body.textContent).toBe("");
+    expect(demo()).not.toBeNull();
+    watchTheDemonstration();
+    expect(target()).not.toBeNull();
+  });
+
+  it("counts nothing from the demonstration: no sample, no tap, no clock", () => {
+    const { capture, onComplete } = step("p13");
+    act(() => spoken[0].onend?.());
+
+    // A child copying the hand touches the demonstration's target.
+    fireEvent.pointerDown(demo()!.firstElementChild!);
+    act(() => vi.advanceTimersByTime(1_000));
+    fireEvent.pointerDown(demo()!.firstElementChild!);
+    watchTheDemonstration();
+
+    expect(capture.stream).toHaveLength(0);
+    // The ten seconds wait for the first real target to be painted.
+    expect(onComplete).not.toHaveBeenCalled();
+
+    for (let i = 0; i < 8; i++) tapAfter(500);
+    const taps = capture.ofKind("motor_tap").map((e) => e.payload);
+    expect(taps).toHaveLength(8);
+    expect(taps.map((t) => t?.practice)).toEqual([
+      true, true, false, false, false, false, false, false,
+    ]);
+    expect(taps[0]).toMatchObject({ target: 0, cell: 4 });
+  });
+
+  it("is only for Primary 1-3: the other bands begin at once", () => {
+    step("p46");
+
+    expect(demo()).toBeNull();
     expect(target()).not.toBeNull();
   });
 });
