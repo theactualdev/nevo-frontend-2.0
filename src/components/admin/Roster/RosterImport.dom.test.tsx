@@ -473,3 +473,12 @@ describe("OB-02's class questions", () => {
     expect(confirmButton()).toBeDisabled();
   });
 });
+
+describe("a refusal on the roster screen", () => {
+  it("says it is about access, with no retry", async () => {
+    get.mockRejectedValue(new ApiError(403, "forbidden"));
+    const { container } = render(<RosterImportView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/don't have access to the roster upload/));
+    expect(screen.queryByRole("button", { name: /Try again/ })).toBeNull();
+  });
+});
