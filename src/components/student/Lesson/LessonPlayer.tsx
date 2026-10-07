@@ -2093,25 +2093,21 @@ export function LessonPlayer({
                   segmentId: segment.id,
                 });
               }}
-              onCalcStep={(correct) => {
-                // The ingest enum has a type for this. It was riding
-                // `comprehension_response` under a `kind` of our own invention,
-                // which obliges the engine to know our convention - and no
-                // batch had ever actually landed under it, so switching now
-                // costs no history.
-                // The step and the child's answer are not added: the solver is
-                // frozen pending its backend payload (SCRUM-181/177).
+              onCalcStep={(stepId, correct) => {
+                // The catalogue's keys, exactly: which step, never whether it
+                // was right. The match against the stored answers feeds the
+                // error streak the engine reads (`consecutiveErrors`) - that
+                // is where correctness is declared, not on this event.
                 trackEvent(SIGNAL_EVENT_TYPES.CALCULATION_STEP_RESPONSE, {
                   segmentId: segment.id,
-                  correct,
+                  stepId,
                 });
                 noteAnswer(correct);
               }}
-              onPiecePlaced={(placed, needed) =>
+              onPiecePlaced={(stepId) =>
                 trackEvent(SIGNAL_EVENT_TYPES.MANIPULATIVE_PIECE_PLACED, {
                   segmentId: segment.id,
-                  placed,
-                  needed,
+                  stepId,
                 })
               }
             />
@@ -2267,8 +2263,8 @@ function SegmentBody({
   /** A picture or recording would not load (B12). */
   onMediaFailed: (channel: "image" | "audio", reason: MediaFailReason) => void;
   onCalcSolved: () => void;
-  onCalcStep: (correct: boolean) => void;
-  onPiecePlaced: (placed: number, needed: number) => void;
+  onCalcStep: (stepId: string, correct: boolean) => void;
+  onPiecePlaced: (stepId: string) => void;
 }) {
   if (modality === MODALITY.TEXT && segment.text)
     return (
@@ -2305,7 +2301,6 @@ function SegmentBody({
           calculation={segment.calculation}
           onSolved={onCalcSolved}
           onStepAnswered={onCalcStep}
-          onReplay={onReplay}
           onPiecePlaced={onPiecePlaced}
         />
       );
