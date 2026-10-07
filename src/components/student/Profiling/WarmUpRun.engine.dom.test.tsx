@@ -267,7 +267,7 @@ describe("WarmUpRun - a device-task day tells the account (B54)", () => {
   });
 
   it("does not let the completion decide what the child is told", async () => {
-    // "Your progress is saved" is about what the child did reaching Nevo; the
+    // The failed-save line is about what the child did reaching Nevo; the
     // completion is the account's note that it happened.
     signIn();
     deviceTaskDone.mockResolvedValue(false);
@@ -277,7 +277,21 @@ describe("WarmUpRun - a device-task day tells the account (B54)", () => {
     fireEvent.click(screen.getByText("Right"));
     await settle();
 
-    expect(screen.getByText(/Your progress is saved/)).toBeInTheDocument();
+    expect(screen.getByText("That's it for today")).toBeInTheDocument();
+    expect(screen.queryByText(/couldn't save/)).toBeNull();
+  });
+
+  it("goes Home from the done screen's Go on (D97)", async () => {
+    // The label changed; where it goes did not (D18).
+    signIn();
+    engine.prompt = deviceDay;
+    render(<WarmUpRun />);
+
+    fireEvent.click(screen.getByText("Right"));
+    await settle();
+    fireEvent.click(screen.getByRole("button", { name: "Go on" }));
+
+    expect(push).toHaveBeenCalledWith("/student/dashboard");
   });
 
   it("sends none for a run the engine did not name", async () => {
@@ -379,7 +393,7 @@ describe("WarmUpRun — a withdrawn guardian", () => {
     await settle();
 
     expect(screen.getByText(/That's it for today/)).toBeInTheDocument();
-    expect(homeButton()).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Go on" })).toBeInTheDocument();
   });
 
   it("neither sends anything nor says it was saved", async () => {

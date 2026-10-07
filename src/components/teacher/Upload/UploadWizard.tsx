@@ -970,7 +970,9 @@ export function UploadWizard() {
                     raised on the ticket; this sentence is deliberately a
                     statement about the work rather than an invitation to go,
                     until there is somewhere to come back from. */}
-                Carry on &mdash; we&rsquo;ll tell you when it&rsquo;s ready.
+                {/* C07j's own line, with its hyphen: no em dashes in
+                    rendered copy (D1). */}
+                Carry on - we&rsquo;ll tell you when it&rsquo;s ready.
                 {/*
                   WHAT THE WAIT IS, SAID ON THE RUNG THAT IS LONG.
 
@@ -989,7 +991,7 @@ export function UploadWizard() {
                   is happening.
                 */}
                 {singleStage === LONGEST_STAGE &&
-                  " This part is the long one — Nevo is making the pictures and the spoken version, and that runs into minutes."}
+                  " This part is the long one - Nevo is making the pictures and the spoken version, and that runs into minutes."}
                 {/*
                   THE SLOW LINE USED TO BLAME THE DOCUMENT'S LENGTH - "a longer
                   document takes longer to read" - and that is the wrong

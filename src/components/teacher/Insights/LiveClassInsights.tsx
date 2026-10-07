@@ -69,7 +69,7 @@ export function LiveClassInsights({
         {[0, 1, 2].map((i) => (
           <div
             key={i}
-            className="h-[120px] animate-pulse rounded-xl bg-nevo-cream-elevated"
+            className="h-[120px] animate-pulse rounded-[12px] bg-nevo-cream-elevated"
           />
         ))}
       </div>
@@ -81,7 +81,7 @@ export function LiveClassInsights({
   // false claim about real children.
   if (failed) {
     return (
-      <div className="mt-8 flex max-w-[640px] items-start gap-4 rounded-xl bg-nevo-cream-elevated p-7 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+      <div className="mt-8 flex max-w-[640px] items-start gap-4 rounded-[12px] bg-nevo-cream-elevated p-7 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
         <span className="mt-px size-[22px] shrink-0 text-nevo-violet xl:size-6">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="size-full">
             <path d="M7 18a4 4 0 0 1-.5-7.97A5.5 5.5 0 0 1 17.5 9.5 4 4 0 0 1 17 18" />
@@ -102,7 +102,7 @@ export function LiveClassInsights({
 
   if (gathering) {
     return (
-      <div className="mt-8 flex max-w-[640px] items-start gap-4 rounded-xl bg-nevo-cream-elevated p-7 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+      <div className="mt-8 flex max-w-[640px] items-start gap-4 rounded-[12px] bg-nevo-cream-elevated p-7 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
         <span className="mt-px size-[22px] shrink-0 text-nevo-violet xl:size-6">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="size-full">
             <circle cx="12" cy="12" r="9" />
@@ -133,7 +133,7 @@ export function LiveClassInsights({
   return (
     <>
       {summary && (
-        <div className="mt-[18px] max-w-[760px] rounded-xl bg-nevo-cream-elevated px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-[22px] xl:px-[26px] xl:py-6">
+        <div className="mt-[18px] max-w-[760px] rounded-[12px] bg-nevo-cream-elevated px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-[22px] xl:px-[26px] xl:py-6">
           <div className="flex items-center gap-2">
             {/* The lightbulb is desktop-only in the frame. */}
             <span className="hidden text-nevo-navy xl:inline-flex">
@@ -162,7 +162,7 @@ export function LiveClassInsights({
       )}
 
       {lead && (
-        <div className="mt-[18px] rounded-xl bg-nevo-violet/14 px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-[22px] xl:px-[26px] xl:py-6">
+        <div className="mt-[18px] rounded-[12px] bg-nevo-violet/14 px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-[22px] xl:px-[26px] xl:py-6">
           <span className="text-[11px] font-bold tracking-[0.14em] text-nevo-navy uppercase">
             A shared sticking point
           </span>
@@ -263,7 +263,7 @@ export function LiveClassInsights({
           <p className="mt-2 max-w-[62ch] text-[13px] leading-[1.5] text-nevo-near-black/60">
             Each idea, and how much the reading itself is shaping the result.
           </p>
-          <div className="mt-4 flex flex-col gap-5 rounded-xl bg-nevo-cream-elevated px-[22px] py-6 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:px-[26px]">
+          <div className="mt-4 flex flex-col gap-5 rounded-[12px] bg-nevo-cream-elevated px-[22px] py-6 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:px-[26px]">
             {concepts.map((c) => (
               <MasteryDualTrack
                 key={c.conceptId}
@@ -282,7 +282,7 @@ export function LiveClassInsights({
               gives it: violet left rule, its own heading, below the week
               it follows from. The engine writes it. */}
           <h3 className={SECTION_H}>Looking ahead</h3>
-          <div className="mt-3.5 max-w-[660px] rounded-xl border-l-[3px] border-nevo-violet bg-nevo-cream-elevated px-5 py-[18px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-4 xl:px-6 xl:py-[22px]">
+          <div className="mt-3.5 max-w-[660px] rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-cream-elevated px-5 py-[18px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-4 xl:px-6 xl:py-[22px]">
             <p className="text-[14.5px] leading-[1.6] text-nevo-near-black/82 xl:text-[15.5px]">
               {lookingAhead}
             </p>

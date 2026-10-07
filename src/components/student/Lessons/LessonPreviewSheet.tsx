@@ -1,7 +1,6 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Check } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Button, ProgressBar } from "@/components/shared";
 import { lessonHref } from "@/lib/lessons/lessonHref";
@@ -22,11 +21,11 @@ import type { LessonSummary } from "./lessonCatalog";
  * frame's line stays either way, because being partway is a fact the progress
  * row states.
  *
- * A FINISHED LESSON (design D22). 21 draws never-started and partway only, so
- * the completed state is the minimum: the Lessons card's own completed mark and
- * the filter's word for it, and "Start", which is what the button does - it
- * opens the lesson from the top, for review, and the player no longer writes
- * that open back as unfinished. Its label and any line are asked of design.
+ * A FINISHED LESSON (design D100, 6 Oct). 21 now draws it on a phone: a navy
+ * disc with a check, "You finished this one.", and "Look again". The button
+ * does what "Start" did here before (D22) - it opens the lesson from the top,
+ * for review, and the player does not write that open back as unfinished.
+ * Tablet and desktop take it into the centred modal, as the other states do.
  */
 export function LessonPreviewSheet({
   lesson,
@@ -90,14 +89,28 @@ export function LessonPreviewSheet({
         )}
 
         {completed && (
-          <p className="mt-5 flex items-center gap-2 text-sm font-medium text-nevo-near-black">
+          // 21's completed row: a 34px navy disc with the frame's own check.
+          <p className="mt-[22px] flex items-center gap-3 text-[15px] font-medium text-nevo-near-black">
             <span
               aria-hidden
-              className="flex size-5 items-center justify-center rounded-full bg-nevo-navy"
+              data-finished-disc
+              className="flex size-[34px] shrink-0 items-center justify-center rounded-full bg-nevo-navy"
             >
-              <Check className="size-3 text-nevo-cream" strokeWidth={3} />
+              <svg
+                width="17"
+                height="17"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="text-nevo-cream"
+              >
+                <path d="M5 13l4 4L19 7" />
+              </svg>
             </span>
-            Completed
+            You finished this one.
           </p>
         )}
 
@@ -107,7 +120,7 @@ export function LessonPreviewSheet({
             router.push(lessonHref(lesson.lessonId, lesson.assignmentId))
           }
         >
-          {inProgress ? "Continue" : "Start"}
+          {inProgress ? "Continue" : completed ? "Look again" : "Start"}
         </Button>
       </SheetContent>
     </Sheet>

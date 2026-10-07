@@ -67,8 +67,8 @@ export function LiveSessionPanel({
 
   if (loading || failed || !detail) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-nevo-near-black/28 p-6">
-        <div className="w-full max-w-[560px] rounded-2xl bg-nevo-cream p-8 shadow-[0_8px_32px_rgba(0,0,0,0.16)]">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-nevo-near-black/28 backdrop-blur-[1.5px] p-6">
+        <div className="w-full max-w-[560px] rounded-[16px] bg-nevo-cream p-8 shadow-[0_8px_32px_rgba(0,0,0,0.16)]">
           {failed ? (
             <>
               <h2 className="text-[19px] font-semibold text-nevo-near-black">

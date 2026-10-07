@@ -474,3 +474,13 @@ describe("a recommendation not yet sent", () => {
     expect(leavingAsks()).toBe(true);
   });
 });
+
+/** C08c's own placeholder: a teacher talking to the child. */
+describe("the note's placeholder", () => {
+  it("is the frame's", () => {
+    show();
+    pick("Fractions 3");
+
+    expect(screen.getByPlaceholderText("Try this one - I think it’ll click…")).toBeInTheDocument();
+  });
+});

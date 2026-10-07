@@ -48,7 +48,7 @@ const SECTION_H3 =
   "mt-7 text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase xl:mt-8 xl:text-sm";
 
 const CARD =
-  "mt-3.5 overflow-hidden rounded-xl bg-nevo-cream-elevated shadow-[0_2px_8px_rgba(0,0,0,0.06)]";
+  "mt-3.5 overflow-hidden rounded-[12px] bg-nevo-cream-elevated shadow-[0_2px_8px_rgba(0,0,0,0.06)]";
 
 
 export function ProfileSettings() {
@@ -162,7 +162,7 @@ export function ProfileSettings() {
         </div>
 
         {/* Identity */}
-        <div className="mt-5 flex items-center gap-4 rounded-xl bg-nevo-cream-elevated px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-6 xl:gap-[18px] xl:px-[26px] xl:py-6">
+        <div className="mt-5 flex items-center gap-4 rounded-[12px] bg-nevo-cream-elevated px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-6 xl:gap-[18px] xl:px-[26px] xl:py-6">
           <AvatarDisc
             photoUrl={signedIn ? identity?.photoUrl : null}
             className="size-14 text-xl font-semibold xl:size-16 xl:text-[22px]"

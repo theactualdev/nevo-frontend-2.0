@@ -67,8 +67,13 @@ const THROTTLED_MSG =
  */
 const SSO_UNAVAILABLE_MSG =
   "School sign-in isn't set up for Nevo yet. Use your email and password for now - your school admin can tell you when that changes.";
+/**
+ * NEVO, NOT "YOUR SCHOOL'S SIGN-IN". This door is Nevo's own password login,
+ * so a network failure here is ours to own; naming the school's sign-in
+ * pointed a teacher at a system that was never involved.
+ */
 const UNREACHABLE_MSG =
-  "We couldn't reach your school's sign-in right now. Nothing on your end - try again in a moment.";
+  "We couldn't reach Nevo right now. Nothing on your end - try again in a moment.";
 /**
  * For a role no door serves. The admin door's sentence, word for word - the
  * two doors refuse the same way.

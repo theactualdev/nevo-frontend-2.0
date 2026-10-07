@@ -6,6 +6,7 @@ import { CostSheet } from "../Billing/CostSheet";
 import { HowToPayPanel } from "../Billing/HowToPayPanel";
 import { InvoiceBreakdown } from "../Billing/InvoiceBreakdown";
 import { ReadFailed } from "../ReadFailed";
+import { NoAccess, failureKind } from "../NoAccess";
 import { SupportEmailLink } from "../SupportEmail";
 import { CARD, CheckIcon } from "./primitives";
 import {
@@ -50,7 +51,7 @@ import { billingCurrency, mayActivate, screenFor } from "./activation";
  * counts hours and decides the school has a problem.
  */
 
-type Phase = "loading" | "ready" | "failed";
+type Phase = "loading" | "ready" | "failed" | "denied";
 
 export function ActivationView() {
   const [phase, setPhase] = useState<Phase>("loading");
@@ -90,7 +91,8 @@ export function ActivationView() {
         setState(s);
         setPhase("ready");
       })
-      .catch(() => setPhase("failed"));
+      // A 403 is this admin's scope, not a failure: no retry can grant it.
+      .catch((err) => setPhase(failureKind(err) === "denied" ? "denied" : "failed"));
 
     billingApi.subscription().then(setSub).catch(() => setSub(null));
     billingApi.receivingAccount().then(setAccount).catch(() => setAccount(null));
@@ -139,6 +141,9 @@ export function ActivationView() {
 
   if (phase === "loading") {
     return <div className={cn(CARD, "mt-5 h-[380px] animate-pulse")} />;
+  }
+  if (phase === "denied") {
+    return <NoAccess className="mt-5" what="your school's activation" />;
   }
   if (phase === "failed" || !state) {
     return (

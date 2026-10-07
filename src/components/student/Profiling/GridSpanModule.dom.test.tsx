@@ -125,19 +125,71 @@ describe("GridSpanModule — each band's own span and pace", () => {
     expect(firstPlayback("jss")).toMatchObject({ length: 4, litMs: 600 });
   });
 
-  it("starts SS at four tiles", () => {
-    expect(firstPlayback("ss")).toMatchObject({ length: 4 });
+  it("starts SS at four tiles, lit for 600ms (D73)", () => {
+    // It ran the prototype's 660 while the frame stated no time for SS.
+    expect(firstPlayback("ss")).toMatchObject({ length: 4, litMs: 600 });
   });
 
-  it("leaves P4-6 as built while its two frames disagree", () => {
-    expect(firstPlayback("p46")).toMatchObject({ length: 3, litMs: 660 });
+  it("starts P4-6 at three tiles, lit for 700ms (D72)", () => {
+    // Design settled the frame over the prototype's 660 on 6 Oct.
+    expect(firstPlayback("p46")).toMatchObject({ length: 3, litMs: 700 });
   });
 
   it("takes the ceilings from the frame too", () => {
     expect(gridSpanConfig("p13").spanMax).toBe(5);
+    expect(gridSpanConfig("p46").spanMax).toBe(7);
     expect(gridSpanConfig("jss").spanMax).toBe(9);
     expect(gridSpanConfig("ss").spanMax).toBe(9);
   });
+});
+
+describe("GridSpanModule — after a miss (D74)", () => {
+  /*
+   * Every band slowed the replay after a miss, by the prototype's 300ms lit
+   * and 120ms gap. The Module 1 frame now says "no slowdown after a miss" for
+   * P4-6 and SS. P1-3 and JSS are still asked, so they keep the slowing.
+   */
+  const playbacksAroundAMiss = (band: "p13" | "p46" | "jss" | "ss") => {
+    // Math.random at 0 lights tiles 0, 1, 2... in order, so the first tile
+    // to tap back is the last one lit and tile 0 is always a miss.
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    const capture = new BaselineCapture(`miss-${band}`);
+    render(
+      <GridSpanModule
+        config={gridSpanConfig(band)}
+        capture={capture}
+        onComplete={() => {}}
+      />,
+    );
+    watchItPlay();
+    if (band === "ss") fireEvent.click(screen.getByText("False"));
+    fireEvent.click(screen.getAllByRole("button", { hidden: true })[0]);
+    act(() => void vi.advanceTimersByTime(2_000));
+    return capture.stream
+      .filter((e) => e.kind === "playback_start")
+      .map((e) => e.payload);
+  };
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it.each(["p46", "ss"] as const)(
+    "replays %s at the same pace",
+    (band) => {
+      const [first, replay] = playbacksAroundAMiss(band);
+      expect(replay).toEqual(first);
+    },
+  );
+
+  it.each(["p13", "jss"] as const)(
+    "still slows %s, which the frame has not ruled on",
+    (band) => {
+      const [first, replay] = playbacksAroundAMiss(band);
+      expect(replay).toMatchObject({
+        litMs: gridSpanConfig(band).litMs + 300,
+        gapMs: (first?.gapMs as number) + 120,
+      });
+    },
+  );
 });
 
 describe("GridSpanModule — where a tap landed", () => {

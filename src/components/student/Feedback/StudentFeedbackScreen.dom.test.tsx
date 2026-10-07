@@ -87,11 +87,15 @@ describe("what the screen promises about where feedback goes", () => {
    * Design D49, 1 Oct. It said "their teacher sees the themes", and feedback
    * only ever reaches Nevo's own inbox - no teacher view exists. The screen
    * says it reaches Nevo and promises no teacher view until there is one.
+   * D106, 6 Oct: the frame's line is now that alone, in its own words.
    */
-  it("says the note reaches Nevo", () => {
+  it("says the note goes to the Nevo team, in the frame's words alone", () => {
     render(<StudentFeedbackScreen />);
 
-    expect(screen.getByText(/their note reaches Nevo./)).toBeInTheDocument();
+    expect(
+      screen.getByText("Your note goes to the Nevo team."),
+    ).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/feature requests/i);
   });
 
   it("promises no teacher anything", () => {
