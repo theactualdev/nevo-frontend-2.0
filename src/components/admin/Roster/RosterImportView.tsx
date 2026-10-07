@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ReadFailed } from "../ReadFailed";
+import { NoAccess, failureKind } from "../NoAccess";
 import { CARD } from "./primitives";
 import {
   onboardingApi,
@@ -68,7 +69,7 @@ import {
  *   classes.
  */
 
-type Phase = "loading" | "ready" | "failed";
+type Phase = "loading" | "ready" | "failed" | "denied";
 type Kind = "teacher" | "student";
 
 /** A template as fetched: the bytes to save, and the headings read off them. */
@@ -195,7 +196,8 @@ export function RosterImportView() {
         setState(s);
         setPhase("ready");
       })
-      .catch(() => setPhase("failed"));
+      // A 403 is this admin's scope, not a failure: no retry can grant it.
+      .catch((err) => setPhase(failureKind(err) === "denied" ? "denied" : "failed"));
   }, []);
 
   useEffect(() => {
@@ -261,6 +263,9 @@ export function RosterImportView() {
 
   if (phase === "loading") {
     return <div className={cn(CARD, "mt-5 h-[380px] animate-pulse")} />;
+  }
+  if (phase === "denied") {
+    return <NoAccess className="mt-5" what="the roster upload" />;
   }
   if (phase === "failed" || !state) {
     return (

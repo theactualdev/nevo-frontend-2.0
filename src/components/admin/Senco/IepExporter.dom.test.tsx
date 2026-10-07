@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
+import { ApiError } from "@/lib/api/client";
 import type { AdminStudentRow } from "@/lib/api/students";
 import { IepExporterView } from "./IepExporterView";
 
@@ -17,6 +18,11 @@ import { IepExporterView } from "./IepExporterView";
  */
 
 const list = vi.fn();
+const create = vi.fn();
+vi.mock("@/lib/api/export", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/export")>();
+  return { ...actual, exportApi: { ...actual.exportApi, create: (b: unknown) => create(b) } };
+});
 
 vi.mock("@/lib/api/students", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/students")>();
@@ -100,3 +106,24 @@ describe("opening the exporter on a child", () => {
     expect(screen.getByRole("button", { name: "Generate draft" })).toBeDisabled();
   });
 });
+
+describe("a refusal in the IEP exporter", () => {
+  it("says it is about access instead of offering to read again", async () => {
+    list.mockRejectedValue(new ApiError(403, "forbidden"));
+    const { container } = render(<IepExporterView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/don't have access to the IEP exporter/));
+    expect(visibleText(container)).not.toMatch(/couldn't read your student list/i);
+  });
+});
+
+  it("says a refused draft is about access, not something to try again", async () => {
+    list.mockResolvedValue([student(1)]);
+    create.mockRejectedValue(new ApiError(403, "forbidden"));
+    const { container } = render(<IepExporterView initialStudentId="s1" />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Generate draft" })).toBeInTheDocument());
+    fireEvent.change(container.querySelector("#iep-from")!, { target: { value: "2026-09-01" } });
+    fireEvent.change(container.querySelector("#iep-to")!, { target: { value: "2026-09-30" } });
+    fireEvent.click(screen.getByRole("button", { name: "Generate draft" }));
+    await waitFor(() => expect(visibleText(container)).toMatch(/don't have access to the IEP exporter/));
+    expect(visibleText(container)).not.toMatch(/give it another try/);
+  });
