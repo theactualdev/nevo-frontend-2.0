@@ -6,7 +6,8 @@ import type { CohortTransformation } from "@/lib/api/analytics";
 import { SchoolTransformationView } from "./SchoolTransformationView";
 
 /**
- * D26, reduced with honest names (user's go-ahead, 7 Oct).
+ * D26, reduced with honest names - ruled by Lydia on 7 Oct: the names stay,
+ * and nothing may state a quantity or claim the backend did not send.
  *
  * Backend computes a completion share, minutes per finished lesson and counts
  * of format changes - not the constructs D26's titles name. So the cards are
