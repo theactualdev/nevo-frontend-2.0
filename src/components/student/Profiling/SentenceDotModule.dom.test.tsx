@@ -292,6 +292,30 @@ describe("SentenceDotModule — each band's dots", () => {
     )?.payload?.openAfterMs;
   };
 
+  it("shows the frame's pair, then the two its ratio derives (D76)", () => {
+    // P1-3 ran 7:3 and 9:5 after the frame's 8:4: one easier than 2:1 and
+    // one harder. Its trials 2 and 3 are now 6:3 and 10:5 (see `dotPairs`).
+    const capture = new BaselineCapture("pairs");
+    render(
+      <SentenceDotModule band="p13" capture={capture} onComplete={() => {}} />,
+    );
+    for (let i = 0; i < 3; i++) {
+      act(() => void vi.advanceTimersByTime(1_000)); // past the reveal
+      fireEvent.click(screen.getByRole("button", { name: /Top|Left/ }));
+      act(() => void vi.advanceTimersByTime(500)); // the pressed beat
+    }
+
+    const shown = picks(capture, "dots").map(({ a, b }) => [
+      Math.max(Number(a), Number(b)),
+      Math.min(Number(a), Number(b)),
+    ]);
+    expect(shown).toEqual([
+      [8, 4],
+      [6, 3],
+      [10, 5],
+    ]);
+  });
+
   it("masks P4-6's after 600ms (D75)", () => {
     expect(firstDotDisplay("p46", 3)).toBe(600);
   });

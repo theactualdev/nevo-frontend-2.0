@@ -74,16 +74,15 @@ export function bandForRoster(ageBand: string | null | undefined): AgeBand | nul
  *
  * EVERY BAND RAN THE PRIMARY 4-6 PROTOTYPE'S NUMBERS: a span of 3 to 5 or 6
  * and a 660ms highlight, for a six-year-old and a sixteen-year-old alike. The
- * Module 1 frame states each band's own, and those are used. Where it does not
- * yet, the row says so and is an open ask.
+ * Module 1 frame states each band's own, and those are used.
  *
  * Sources, cited per row below:
  *  - "09" is `onboarding-assessment/09 Module 1 - Spatial Grid Span`, the
  *    per-band `params` lines. Design's 6 Oct pass settled P4-6 and SS there
  *    (D72, D73, D74), so 09 now wins over the prototype for every band.
  *  - "11" is `11 Profiling Prototype Playable`, which is the Primary 4-6 band
- *    only (4x4): `seqStart 3`, `seqMax 6` at :173, `lit 660` at :202. It is
- *    the source of the slowing after a miss and nothing else now.
+ *    only (4x4): `seqStart 3`, `seqMax 6` at :173, `lit 660` at :202. Nothing
+ *    here comes from it any more.
  */
 export interface GridSpanConfig {
   /** Grid is n x n. */
@@ -91,17 +90,16 @@ export interface GridSpanConfig {
   /** Adaptive span start / ceiling. */
   spanStart: number;
   spanMax: number;
-  /** How long each tile stays lit (ms), before any slowing after a miss. */
-  litMs: number;
   /**
-   * Whether playback slows after a miss: +300ms lit and +120ms gap per miss,
-   * up to three, easing back one per clean recall (the prototype's, 11:202).
+   * How long each tile stays lit (ms), on every playback of the module.
    *
-   * Per band because 09 rules it per band. P4-6 and SS say "no slowdown after
-   * a miss" (D74, 6 Oct). P1-3 and JSS say nothing yet, so they keep the
-   * prototype's slowing while that is asked.
+   * NO BAND SLOWS AFTER A MISS (D74, 6 Oct: "No, for every band"). The
+   * prototype added 300ms lit and 120ms gap per miss (11:202), and round 6
+   * kept that for P1-3 and JSS while they were asked. Slowing the playback
+   * after a miss changes what is being measured, so a child who missed early
+   * would have their span taken on an easier task than everyone else's.
    */
-  slowAfterMiss: boolean;
+  litMs: number;
   /**
    * SS runs the dual task: a true/false check between watch and recall.
    * Not drawn in the Grid Span frame or the prototype - design approved it as
@@ -116,23 +114,73 @@ export function gridSpanConfig(band: AgeBand): GridSpanConfig {
   switch (band) {
     case AGE_BANDS.P13:
       // 09, BP-P13-M1: "3×3 grid · sequence 2 → 5 tiles · 800ms highlight".
-      // ASK: 09 does not say whether it slows after a miss; kept as built.
-      return { n: 3, spanStart: 2, spanMax: 5, litMs: 800, slowAfterMiss: true, dual: false, instruction: "Watch the tiles light up, then tap them backwards" };
+      return { n: 3, spanStart: 2, spanMax: 5, litMs: 800, dual: false, instruction: "Watch the tiles light up, then tap them backwards" };
     case AGE_BANDS.JSS:
       // 09, BP-JSS-M1: "5×5 grid · sequence 4 → 9 tiles · 600ms highlight".
-      // ASK: 09 does not say whether it slows after a miss; kept as built.
-      return { n: 5, spanStart: 4, spanMax: 9, litMs: 600, slowAfterMiss: true, dual: false, instruction: "Memorize the sequence, then tap them in reverse" };
+      return { n: 5, spanStart: 4, spanMax: 9, litMs: 600, dual: false, instruction: "Memorize the sequence, then tap them in reverse" };
     case AGE_BANDS.SS:
       // 09, BP-SS-M1: "5×5 grid · sequence 4 → 9 tiles · 600ms highlight ·
       // no slowdown after a miss" (D73, D74, 6 Oct). It ran the prototype's
       // 660 while 09 stated no highlight time for SS.
-      return { n: 5, spanStart: 4, spanMax: 9, litMs: 600, slowAfterMiss: false, dual: true, instruction: "Watch the sequence and answer each check, then tap in reverse" };
+      return { n: 5, spanStart: 4, spanMax: 9, litMs: 600, dual: true, instruction: "Watch the sequence and answer each check, then tap in reverse" };
     default:
       // 09, BP-P46-M1: "4×4 grid · sequence 3 → 7 tiles · 700ms highlight ·
       // no slowdown after a miss" (D72, D74, 6 Oct). Design settled it over
       // the prototype (11:173, :202), whose 3 → 6 at 660 ran until then.
-      return { n: 4, spanStart: 3, spanMax: 7, litMs: 700, slowAfterMiss: false, dual: false, instruction: "Watch the pattern, then tap the tiles in reverse order" };
+      return { n: 4, spanStart: 3, spanMax: 7, litMs: 700, dual: false, instruction: "Watch the pattern, then tap the tiles in reverse order" };
   }
+}
+
+/** One dot comparison: the larger array's count, then the smaller's. */
+export interface DotPair {
+  a: number;
+  b: number;
+}
+
+/**
+ * Module 3B's three dot pairs for a band (D76, 6 Oct). A FIXED STIMULUS SPEC,
+ * written down once: every child in a band sees the same three, and nothing
+ * about any child goes into it.
+ *
+ * Design states two things per band and draws nothing more. The first pair
+ * is the `Nevo Dot Comparison Frame` exemplar (`cfg()`: 8:4, 9:5, 12:8,
+ * 13:12), and the ratio is 09c's (2:1, 1.8:1, 1.5:1, 1.1:1): "Ratio
+ * tightening from 2:1 to 1.1:1 is the architecture, and trials 2 and 3 derive
+ * from the ratio in all of them." So trials 2 and 3 are generated:
+ *
+ *   the smaller array holds one dot fewer, then one dot more, than the
+ *   exemplar's; the larger holds that times the band's ratio, to the nearest
+ *   whole dot (a half rounds up).
+ *
+ * Which gives this, pinned in `bands.test.ts` (the ratio shown in brackets):
+ *
+ *   | band | trial 1, drawn | trial 2      | trial 3      |
+ *   |------|----------------|--------------|--------------|
+ *   | P1-3 | 8:4            | 6:3 (2.0)    | 10:5 (2.0)   |
+ *   | P4-6 | 9:5            | 7:4 (1.75)   | 11:6 (1.83)  |
+ *   | JSS  | 12:8           | 11:7 (1.57)  | 14:9 (1.56)  |
+ *   | SS   | 13:12          | 12:11 (1.09) | 14:13 (1.08) |
+ *
+ * SS's two are the pairs it already ran, which design took as derived from
+ * its ratio. The other three bands' were written by hand and sat off their
+ * own ratio: P4-6's 8:6 and 10:7 (the prototype's, 11:178) and JSS's 11:9 and
+ * 13:10 were all harder than the band's ratio, and P1-3's 7:3 and 9:5 one
+ * easier and one harder.
+ *
+ * Each answer still carries the ratio the child was actually shown
+ * (`ratio_N`), so a pair that rounds a little off its band's ratio says so.
+ */
+const DOT_SPEC: Record<AgeBand, { first: DotPair; ratio: number }> = {
+  p13: { first: { a: 8, b: 4 }, ratio: 2 },
+  p46: { first: { a: 9, b: 5 }, ratio: 1.8 },
+  jss: { first: { a: 12, b: 8 }, ratio: 1.5 },
+  ss: { first: { a: 13, b: 12 }, ratio: 1.1 },
+};
+
+export function dotPairs(band: AgeBand): DotPair[] {
+  const { first, ratio } = DOT_SPEC[band] ?? DOT_SPEC.p46;
+  const at = (b: number): DotPair => ({ a: Math.round(b * ratio), b });
+  return [first, at(first.b - 1), at(first.b + 1)];
 }
 
 /** The six baseline dimensions (also the daily warm-up rotation). */

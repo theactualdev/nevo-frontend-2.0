@@ -146,10 +146,12 @@ describe("GridSpanModule — each band's own span and pace", () => {
 describe("GridSpanModule — after a miss (D74)", () => {
   /*
    * Every band slowed the replay after a miss, by the prototype's 300ms lit
-   * and 120ms gap. The Module 1 frame now says "no slowdown after a miss" for
-   * P4-6 and SS. P1-3 and JSS are still asked, so they keep the slowing.
+   * and 120ms gap per miss, up to three. Design's 6 Oct ruling is "No, for
+   * every band": slowing the presentation after misses changes what is being
+   * measured, and keeps the baselines from being comparable. Two misses in a
+   * row, so a slowing that only starts at the second would be caught too.
    */
-  const playbacksAroundAMiss = (band: "p13" | "p46" | "jss" | "ss") => {
+  const playbacksAroundTwoMisses = (band: "p13" | "p46" | "jss" | "ss") => {
     // Math.random at 0 lights tiles 0, 1, 2... in order, so the first tile
     // to tap back is the last one lit and tile 0 is always a miss.
     vi.spyOn(Math, "random").mockReturnValue(0);
@@ -161,10 +163,12 @@ describe("GridSpanModule — after a miss (D74)", () => {
         onComplete={() => {}}
       />,
     );
-    watchItPlay();
-    if (band === "ss") fireEvent.click(screen.getByText("False"));
-    fireEvent.click(screen.getAllByRole("button", { hidden: true })[0]);
-    act(() => void vi.advanceTimersByTime(2_000));
+    for (let miss = 0; miss < 2; miss++) {
+      watchItPlay();
+      if (band === "ss") fireEvent.click(screen.getByText("False"));
+      fireEvent.click(screen.getAllByRole("button", { hidden: true })[0]);
+      act(() => void vi.advanceTimersByTime(2_000));
+    }
     return capture.stream
       .filter((e) => e.kind === "playback_start")
       .map((e) => e.payload);
@@ -172,22 +176,15 @@ describe("GridSpanModule — after a miss (D74)", () => {
 
   afterEach(() => vi.restoreAllMocks());
 
-  it.each(["p46", "ss"] as const)(
-    "replays %s at the same pace",
+  it.each(["p13", "p46", "jss", "ss"] as const)(
+    "replays %s at the pace it first played, however many misses",
     (band) => {
-      const [first, replay] = playbacksAroundAMiss(band);
-      expect(replay).toEqual(first);
-    },
-  );
+      const playbacks = playbacksAroundTwoMisses(band);
 
-  it.each(["p13", "jss"] as const)(
-    "still slows %s, which the frame has not ruled on",
-    (band) => {
-      const [first, replay] = playbacksAroundAMiss(band);
-      expect(replay).toMatchObject({
-        litMs: gridSpanConfig(band).litMs + 300,
-        gapMs: (first?.gapMs as number) + 120,
-      });
+      expect(playbacks).toHaveLength(3);
+      expect(playbacks[1]).toEqual(playbacks[0]);
+      expect(playbacks[2]).toEqual(playbacks[0]);
+      expect(playbacks[0]).toMatchObject({ litMs: gridSpanConfig(band).litMs });
     },
   );
 });

@@ -17,38 +17,59 @@ import { useConsentGate } from "@/hooks/useConsentGate";
 import { useHydrated } from "@/hooks/useHydrated";
 import { useRosterBand } from "@/hooks/useRosterBand";
 import {
+  AGE_BANDS,
   BASELINE_DIMENSIONS,
   gridSpanConfig,
   type AgeBand,
   type BaselineDimension,
+  type DotPair,
 } from "@/lib/profiling/bands";
 import {
   BaselineCapture,
   baselineTrials,
   tapPoint,
 } from "@/lib/profiling/capture";
-import { TILE } from "./GridSpanModule";
-import { warmUpReading } from "./SentenceDotModule";
+import {
+  CheckButton,
+  DUAL_CHECK_PROMPT,
+  DUAL_CHECKS,
+  TILE,
+} from "./GridSpanModule";
+import {
+  flankerTurns,
+  warmUpFlanker,
+  warmUpPattern,
+} from "./PatternFlankerModule";
+import {
+  HeardPictures,
+  hasSpeech,
+  speak,
+  stopSpeaking,
+  warmUpDots,
+  warmUpReading,
+} from "./SentenceDotModule";
 
 /** Where every way out of the warm-up goes (D18). */
 const HOME = "/student/dashboard";
 
 /**
- * The tile task with no band known: the frame's one version, a 4x4 grid and
- * three tiles at 660ms. One round only; the whole run should feel like ~45
- * seconds, never a test.
+ * The band the warm-up runs when the roster gives none: Primary 4-6, whose
+ * version is the one the warm-up frame draws - tile memory's 4x4 grid and
+ * three tiles, and "Garri is made from cassava.", P4-6's first sentence.
+ *
+ * IT RAN THE PROTOTYPE'S TIMES THERE, a 660ms light and an 850ms dot display,
+ * which no frame states for any band. With no band it now runs P4-6's version
+ * whole, its 700ms light (D72) and 600ms display (D75) included. One round
+ * only; the whole run should feel like ~45 seconds, never a test.
  */
-const FRAME_GRID = { n: 4, length: 3, litMs: 660 };
-/** The frame's one sentence, for a band with no read sentence of its own. */
-const FRAME_SENTENCE = { text: "Garri is made from cassava.", isTrue: true };
+const FRAME_BAND: AgeBand = AGE_BANDS.P46;
 const GAP_MS = 280;
-const DOT_REVEAL_MS = 850;
 const PICK_BEAT_MS = 440;
 /**
  * The tile task's wrong tap, as tile memory has it (`GridSpanModule`, from
  * 11:225-228): the grid locks under a soft-violet ring for 1.5s, then the same
- * pattern plays again; the third miss ends the round. No slowing - the
- * warm-up's one round stays at the frame's single pace.
+ * pattern plays again; the third miss ends the round. No slowing, in any band
+ * (D74).
  */
 const NUDGE_MS = 1500;
 const MAX_MISSES = 3;
@@ -107,9 +128,9 @@ export function dimensionForToday(now = new Date()): BaselineDimension {
  * lesson. A warm-up is not conditional on there being work waiting." Both go
  * Home now, whatever is queued.
  *
- * SIZED TO THE CHILD'S BAND (D17, 1 Oct) when the roster carries one: the
- * tile task runs tile memory's own grid, sequence length and light time for
- * that band, and the reading task the band's own item. See `WarmUpTask`.
+ * THE BAND'S OWN VERSION OF EACH TASK (D17, 1 Oct; D81, 6 Oct): "The warm-up
+ * re-checks one baseline measure, so it uses that band's own version of that
+ * module." See `WarmUpTask`.
  */
 export function WarmUpRun({
   dimension: dimensionProp,
@@ -165,6 +186,19 @@ export function WarmUpRun({
   }, [withdrawn, capture]);
   const started = useRef(false);
   const submitted = useRef(false);
+  /*
+   * A HEARD ROUND NEEDS A VOICE. P1-3's reading round is a sentence heard, as
+   * in the baseline (D81). Where the device cannot speak, the baseline skips
+   * that activity rather than mime it, and the warm-up shows its nothing-state
+   * for the same reason: it never puts another task in place of the one the
+   * engine asked for. Settled on the client only, like everything that waits
+   * on `hydrated` here.
+   */
+  const unheard =
+    dimension === "reading" &&
+    !item &&
+    warmUpReading(band ?? FRAME_BAND).mode === "audio" &&
+    !(hydrated && hasSpeech());
 
   /*
    * ONE WARM-UP A DAY, AND THE CHECK HAS TO HAPPEN BEFORE THE RUN STARTS.
@@ -190,10 +224,11 @@ export function WarmUpRun({
    * "Done" is the ACCOUNT's answer when the prompt carried one (B10), so a
    * warm-up done on another tablet is done here too; this device's memory
    * answers only when it did not (`warmUpDoneFor`). Nor before the band has
-   * settled, which decides the task's size and goes on the event.
+   * settled, which decides the task's size and goes on the event. Nor for a
+   * heard round the device cannot say, which never starts.
    */
   useEffect(() => {
-    if (!dimension || !bandSettled || started.current) return;
+    if (!dimension || !bandSettled || unheard || started.current) return;
     if (warmUpDoneFor(doneToday, getSession()?.userId)) return;
     started.current = true;
     capture.record("warmup_start", {
@@ -201,7 +236,7 @@ export function WarmUpRun({
       ...(band ? { band } : {}),
       ...(item ? { itemId: item.itemId } : {}),
     });
-  }, [capture, dimension, item, doneToday, band, bandSettled]);
+  }, [capture, dimension, item, doneToday, band, bandSettled, unheard]);
 
   /*
    * Derived during render rather than set from an effect.
@@ -422,7 +457,7 @@ export function WarmUpRun({
           </div>
           <HomeButton label="Go on" onClick={() => router.push(HOME)} />
         </div>
-      ) : !dimension || !bandSettled ? (
+      ) : !dimension || !bandSettled || unheard ? (
         <WarmUpNothing onHome={() => router.push(HOME)} />
       ) : (
         <div className="flex min-h-0 flex-1 items-center justify-center px-7 pb-10">
@@ -485,7 +520,8 @@ function HomeButton({
  * full-screen and a child must never be left on it with nothing to press.
  * Shown while the prompt (or the band) is in flight too: the client has no
  * timeout, so a read that never answers would otherwise be a blank screen for
- * good. When the task arrives it replaces this.
+ * good. When the task arrives it replaces this. And for a P1-3 reading round
+ * on a device that cannot speak, which cannot be presented honestly (D81).
  */
 function WarmUpNothing({ onHome }: { onHome: () => void }) {
   return (
@@ -496,21 +532,91 @@ function WarmUpNothing({ onHome }: { onHome: () => void }) {
 }
 
 /**
+ * How the warm-up times and records an answer: as the baseline's
+ * `useTrialRunner` does, from the moment the round was shown, or from when it
+ * opened for answers where it has a stimulus phase first.
+ */
+function useWarmUpPicks(
+  capture: BaselineCapture,
+  dimension: BaselineDimension,
+) {
+  const shownAt = useRef(0);
+  /*
+   * WHEN THE CHILD COULD FIRST ANSWER, for a round with a stimulus phase: the
+   * dot mask, the end of a heard sentence. The answer is timed from there, as
+   * the baseline times it (`useTrialRunner`'s `open`), and carries
+   * `openAfterMs`, the offset, so nothing is folded in silently. The warm-up's
+   * dots were timed from the moment they appeared, which put the display time
+   * - now each band's own - into every answer.
+   */
+  const openedAt = useRef<number | null>(null);
+  useEffect(() => {
+    shownAt.current = performance.now();
+  }, []);
+  /** First call only: a replayed sentence does not move the moment later. */
+  const open = useCallback(() => {
+    if (openedAt.current === null) openedAt.current = performance.now();
+  }, []);
+  /*
+   * `detail` carries whether they were right, which the task knows and nothing
+   * downstream can work out. Without it a trial said only how FAST a child
+   * answered - and a wrong quick tap outscored a right considered one on every
+   * dimension but working memory, which records its own taps.
+   *
+   * Every warm-up task has exactly one fixed stimulus, so the answer is the same
+   * every day that dimension comes round. That limits what accuracy can tell
+   * you here and is worth an item bank; it is not a reason to keep discarding
+   * it. See the note in docs/BUILD_STATUS.md.
+   *
+   * `opensLate` marks a round that opens for answers only once its stimulus
+   * has run. One answered before then - a picture tapped while the sentence
+   * is still being said - has no honest time, so it goes with `rtMs: null`
+   * and `beforeOpen`, exactly as in the baseline.
+   */
+  const record = (
+    choice: number | string,
+    detail: Record<string, unknown>,
+    opensLate: boolean,
+  ) => {
+    const now = performance.now();
+    const opened = openedAt.current;
+    const early = opensLate && opened === null;
+    capture.record("trial_pick", {
+      module: "warmup",
+      act: dimension,
+      choice,
+      rtMs: early ? null : Math.round(now - (opened ?? shownAt.current)),
+      ...(opened !== null
+        ? { openAfterMs: Math.round(opened - shownAt.current) }
+        : {}),
+      ...(early ? { beforeOpen: true } : {}),
+      ...detail,
+    });
+  };
+  return { open, record };
+}
+
+/**
  * One round of the day's task - the frame's simplified single-trial forms.
  *
- * BY BAND, WHERE THE BASELINE ALREADY VARIES BY BAND (D17, 1 Oct). The frame
- * draws one version - a 4x4 grid, three tiles, "Garri is made from cassava." -
- * and that was every child's, "tuned for neither" a Primary 2 nor an SS2
- * child. With a band known:
+ * THE BAND'S OWN VERSION OF THE MODULE IT RE-CHECKS (D17, 1 Oct; D81, 6 Oct).
+ * The frame draws one version - a 4x4 grid, three tiles, "Garri is made from
+ * cassava." - and that was every child's, "tuned for neither" a Primary 2 nor
+ * an SS2 child. Then only the tiles and the reading followed the band, and
+ * not all of either. Design: "A warm-up that measures a different construct
+ * from the baseline cannot recalibrate it." So, for the child's band, each
+ * task is that module's first round, from the module's own config:
  *
- *  - the tile task runs tile memory's grid for it, its starting sequence
- *    length and its light time (`gridSpanConfig`), not its dual task;
- *  - the reading task reads the band's own first item from the reading
- *    activity (`warmUpReading`): JSS's sentence, SS's passage and its
- *    question. P4-6's first sentence is the frame's.
+ *  - tiles: tile memory's grid, first sequence length and light time
+ *    (`gridSpanConfig`), and for SS its dual check between watch and recall;
+ *  - pattern: 2A's first pair in the band's icons (`warmUpPattern`);
+ *  - reading: 3A's first item (`warmUpReading`) - P1-3's sentence HEARD,
+ *    JSS's sentence, SS's passage and its question;
+ *  - dots: 3B's first pair, display time and dot size (`warmUpDots`);
+ *  - flanker: the frame's trial drawn the band's way (`warmUpFlanker`).
  *
- * With none, and for P1-3's reading, which that activity runs by ear, the
- * frame's one version runs. Nothing here is a new value.
+ * With no band, P4-6's version runs (`FRAME_BAND`). Nothing here is a new
+ * value: each one is the baseline module's.
  */
 function WarmUpTask({
   dimension,
@@ -529,30 +635,15 @@ function WarmUpTask({
   onServedPick: (pick: { itemId: string; value: string }) => void;
   onDone: () => void;
 }) {
-  const shownAt = useRef(0);
-  useEffect(() => {
-    shownAt.current = performance.now();
-  }, []);
-  /*
-   * `detail` carries whether they were right, which the task knows and nothing
-   * downstream can work out. Without it a trial said only how FAST a child
-   * answered - and a wrong quick tap outscored a right considered one on every
-   * dimension but working memory, which records its own taps.
-   *
-   * Every task below has exactly one fixed stimulus, so the answer is the same
-   * every day that dimension comes round. That limits what accuracy can tell
-   * you here and is worth an item bank; it is not a reason to keep discarding
-   * it. See the note in docs/BUILD_STATUS.md.
-   */
-  const pick = (choice: number | string, detail: Record<string, unknown>) => {
-    capture.record("trial_pick", {
-      module: "warmup",
-      act: dimension,
-      choice,
-      rtMs: Math.round(performance.now() - shownAt.current),
-      ...detail,
-    });
-  };
+  /** The band this round is sized for: the roster's, or the frame's. */
+  const sized = band ?? FRAME_BAND;
+  const { open, record } = useWarmUpPicks(capture, dimension);
+  const pick = (choice: number | string, detail: Record<string, unknown>) =>
+    record(choice, detail, false);
+  const pickOpened = (
+    choice: number | string,
+    detail: Record<string, unknown>,
+  ) => record(choice, detail, true);
 
   /*
    * THE ENGINE'S QUESTION, whenever it served one, on any day (B65, 5 Oct).
@@ -595,38 +686,39 @@ function WarmUpTask({
 
   switch (dimension) {
     case "wmc": {
-      const config = band ? gridSpanConfig(band) : null;
+      const config = gridSpanConfig(sized);
       return (
         <WarmUpGrid
-          n={config?.n ?? FRAME_GRID.n}
-          length={config?.spanStart ?? FRAME_GRID.length}
-          litMs={config?.litMs ?? FRAME_GRID.litMs}
+          n={config.n}
+          length={config.spanStart}
+          litMs={config.litMs}
+          dual={config.dual}
           capture={capture}
           onDone={onDone}
         />
       );
     }
-    case "ps":
+    case "ps": {
+      // 2A's first trial, a different pair; `pair` is its condition there.
+      const { icons, same } = warmUpPattern(sized);
+      const pair = same ? "same" : "different";
       return (
         <SingleChoice
           prompt="Same, or different?"
           onDone={onDone}
-          onPick={pick}
+          onPick={(choice, detail) => pick(choice, { ...detail, pair })}
           options={["Same", "Different"]}
-          // A circle and a rounded square - never the same shape.
-          answer="Different"
+          answer={same ? "Same" : "Different"}
           stimulus={
             <div className="flex gap-5 sm:gap-7">
-              {[0, 1].map((i) => (
+              {[icons[0], same ? icons[0] : icons[1]].map((svg, i) => (
                 <div
                   key={i}
                   className="flex size-[120px] items-center justify-center rounded-[16px] border-2 border-nevo-navy bg-nevo-cream sm:size-[150px]"
                 >
-                  <span
-                    className={cn(
-                      "block size-1/2 border-[3px] border-nevo-violet",
-                      i === 0 ? "rounded-full" : "rounded-[6px]",
-                    )}
+                  <div
+                    className="size-1/2 text-nevo-navy"
+                    dangerouslySetInnerHTML={{ __html: svg }}
                   />
                 </div>
               ))}
@@ -634,11 +726,26 @@ function WarmUpTask({
           }
         />
       );
+    }
     case "reading": {
-      const reading = band ? warmUpReading(band) : null;
+      const reading = warmUpReading(sized);
       // Each pick carries `mode` as the reading activity records it, so the
-      // engine can tell a passage read from a sentence read.
-      if (reading?.mode === "passage") {
+      // engine can tell a passage read from a sentence read or one heard.
+      if (reading.mode === "audio") {
+        return (
+          <WarmUpHeard
+            sentence={reading.sentence}
+            answer={reading.answer}
+            capture={capture}
+            onOpen={open}
+            onPick={(choice, detail) =>
+              pickOpened(choice, { ...detail, mode: "audio" })
+            }
+            onDone={onDone}
+          />
+        );
+      }
+      if (reading.mode === "passage") {
         return (
           <SingleChoice
             onDone={onDone}
@@ -662,7 +769,6 @@ function WarmUpTask({
           />
         );
       }
-      const sentence = reading ?? FRAME_SENTENCE;
       return (
         <SingleChoice
           prompt="True or false?"
@@ -672,44 +778,63 @@ function WarmUpTask({
           }
           stacked
           options={["True", "False", "Not sure"]}
-          answer={sentence.isTrue ? "True" : "False"}
+          answer={reading.isTrue ? "True" : "False"}
           softLast
           stimulus={
             <div className="w-full rounded-[12px] border-2 border-nevo-navy/50 bg-nevo-cream p-[18px] text-center text-[17px] leading-[1.5] text-nevo-near-black">
-              {sentence.text}
+              {reading.text}
             </div>
           }
         />
       );
     }
     case "ans":
-      return <WarmUpDots onDone={onDone} onPick={pick} />;
-    case "attention":
+      return (
+        <WarmUpDots
+          {...warmUpDots(sized)}
+          onOpen={open}
+          onDone={onDone}
+          onPick={pickOpened}
+        />
+      );
+    case "attention": {
+      const { trial, alone, violet, arrow } = warmUpFlanker(sized);
+      const turns = flankerTurns(trial);
+      // The flanker's condition there; P1-3's lone arrow has none.
+      const congruency = trial.congruency
+        ? { congruency: trial.congruency }
+        : {};
       return (
         <SingleChoice
           prompt="Which way is the middle arrow pointing?"
           onDone={onDone}
-          onPick={pick}
+          onPick={(choice, detail) => pick(choice, { ...detail, ...congruency })}
           options={["Left", "Right"]}
-          // The four flankers are mirrored; only the centre points right.
-          answer="Right"
+          answer={trial.target === "left" ? "Left" : "Right"}
           stimulus={
             <div className="flex items-center gap-1.5">
-              {[0, 1, 2, 3, 4].map((i) => (
+              {(alone ? [2] : [0, 1, 2, 3, 4]).map((i) => (
                 <ArrowRight
                   key={i}
-                  strokeWidth={2.4}
+                  strokeWidth={i === 2 ? 3 : 2.6}
                   className={cn(
                     i === 2
-                      ? "size-10 text-nevo-navy"
-                      : "size-8 -scale-x-100 text-nevo-near-black/40",
+                      ? cn("text-nevo-navy", arrow)
+                      : cn(
+                          "size-[28px] sm:size-[34px]",
+                          violet ? "text-nevo-violet" : "text-nevo-near-black/40",
+                        ),
                   )}
+                  style={{
+                    transform: `rotate(${i === 2 ? turns.target : turns.flank}deg)`,
+                  }}
                 />
               ))}
             </div>
           }
         />
       );
+    }
     default:
       /*
        * The question task with no question served. A signed-in child never
@@ -844,8 +969,8 @@ function SingleChoice({
 }
 
 /**
- * wmc: one sequence on an n x n grid, tapped back in reverse - three tiles on
- * a 4x4 grid in the frame, or tile memory's first round for the child's band.
+ * wmc: one sequence on an n x n grid, tapped back in reverse - tile memory's
+ * first round for the child's band.
  *
  * A WRONG TAP NOW DOES WHAT IT DOES IN TILE MEMORY, which this reuses. It rang
  * violet for 900ms and left the child to keep guessing at a pattern they had
@@ -854,11 +979,18 @@ function SingleChoice({
  * Now the grid locks under the nudge, the same pattern plays again, and the
  * third miss ends the round (`NUDGE_MS`, `MAX_MISSES`). Nothing says it went
  * wrong, and the trials record the misses and no completed round.
+ *
+ * SS ANSWERS A CHECK BETWEEN WATCH AND RECALL, as in tile memory (D81, 6
+ * Oct): "Yes, SS's warm-up tile round includes the dual check", because the
+ * SS baseline is a complex span because of it. The same checks, the same
+ * dimmed grid and the same unmarked True and False (`GridSpanModule`'s
+ * `DUAL_CHECKS`); every playback, a replay too, is followed by the next one.
  */
 function WarmUpGrid({
   n,
   length,
   litMs,
+  dual,
   capture,
   onDone,
 }: {
@@ -868,16 +1000,22 @@ function WarmUpGrid({
   length: number;
   /** How long each stays lit. */
   litMs: number;
+  /** Whether a true/false check sits between watch and recall (SS). */
+  dual: boolean;
   capture: BaselineCapture;
   onDone: () => void;
 }) {
   const [seq, setSeq] = useState<number[]>([]);
   const [lit, setLit] = useState(-1);
-  const [phase, setPhase] = useState<"watch" | "input" | "nudge">("watch");
+  const [phase, setPhase] = useState<"watch" | "check" | "input" | "nudge">(
+    "watch",
+  );
+  const [check, setCheck] = useState(DUAL_CHECKS[0]);
   const [tapped, setTapped] = useState<ReadonlySet<number>>(() => new Set());
   const [wrongCell, setWrongCell] = useState(-1);
   const pos = useRef(0);
   const misses = useRef(0);
+  const checks = useRef(0);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const onDoneRef = useRef(onDone);
   useEffect(() => {
@@ -893,7 +1031,20 @@ function WarmUpGrid({
     timers.current.push(setTimeout(fn, ms));
   };
 
-  /** Light the sequence, then hand the grid to the child. */
+  /*
+   * When the grid was handed over, as tile memory records it. The first tap
+   * of a recall is timed from here; without it that tap went up with no time
+   * at all.
+   */
+  const handOver = useCallback(
+    (shown: number) => {
+      setPhase("input");
+      capture.record("input_start", { module: "warmup", length: shown });
+    },
+    [capture],
+  );
+
+  /** Light the sequence, then the check (SS), then hand the grid over. */
   const play = useCallback(
     (s: number[]) => {
       clearTimers();
@@ -911,16 +1062,18 @@ function WarmUpGrid({
         t += litMs + GAP_MS;
       });
       at(t + 150, () => {
-        setPhase("input");
-        /*
-         * When the grid was handed over, as tile memory records it. The first
-         * tap of a recall is timed from here; without it that tap went up
-         * with no time at all.
-         */
-        capture.record("input_start", { module: "warmup", length: s.length });
+        if (!dual) {
+          handOver(s.length);
+          return;
+        }
+        const next = DUAL_CHECKS[checks.current % DUAL_CHECKS.length];
+        checks.current += 1;
+        setCheck(next);
+        setPhase("check");
+        capture.record("check_shown", { module: "warmup", check: next.text });
       });
     },
-    [capture, clearTimers, litMs],
+    [capture, clearTimers, dual, handOver, litMs],
   );
 
   useEffect(() => {
@@ -931,6 +1084,19 @@ function WarmUpGrid({
     play(s);
     return clearTimers;
   }, [play, clearTimers, n, length]);
+
+  /** Marked for the engine, as tile memory marks it; never shown. */
+  const answerCheck = (answer: boolean, e: React.MouseEvent) => {
+    if (phase !== "check") return;
+    capture.record("check_answer", {
+      module: "warmup",
+      check: check.text,
+      answer,
+      correct: answer === check.isTrue,
+      ...tapPoint(e),
+    });
+    handOver(seq.length);
+  };
 
   const tap = (cell: number, e: React.MouseEvent) => {
     if (phase !== "input") return;
@@ -973,6 +1139,7 @@ function WarmUpGrid({
   };
 
   const inputOn = phase === "input";
+  const checking = phase === "check";
   /*
    * Tile memory's sizing for this n: a square of its column on a phone, so a
    * 5x5 grid fits a 320px screen, and the frame's fixed sizes from `sm` up.
@@ -985,51 +1152,85 @@ function WarmUpGrid({
       <p className="text-center text-[17px] leading-[1.5] font-medium text-nevo-near-black">
         {phase === "watch"
           ? "Watch the tiles"
-          : "Tap the tiles you saw, in reverse order."}
+          : checking
+            ? DUAL_CHECK_PROMPT
+            : "Tap the tiles you saw, in reverse order."}
       </p>
-      <div
-        className={cn("grid w-full max-w-[420px] sm:w-auto", tile.g)}
-        style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}
-      >
-        {Array.from({ length: n * n }, (_, i) => (
-          <button
-            key={i}
-            type="button"
-            tabIndex={inputOn ? 0 : -1}
-            onClick={(e) => tap(i, e)}
-            className={cn(
-              "flex items-center justify-center rounded-[12px] transition-[transform,box-shadow] duration-150",
-              tile.m,
-              i === lit &&
-                "scale-105 bg-nevo-violet shadow-[0_6px_18px_rgba(154,156,203,0.5)]",
-              tapped.has(i) && "bg-nevo-navy",
-              i === wrongCell &&
-                "border-2 border-nevo-violet bg-nevo-cream shadow-[0_0_0_3px_rgba(154,156,203,0.35)]",
-              i !== lit &&
-                !tapped.has(i) &&
-                i !== wrongCell &&
-                "border-2 border-nevo-navy bg-nevo-cream",
-              inputOn ? "cursor-pointer" : "pointer-events-none",
-            )}
-          >
-            {tapped.has(i) && (
-              <Check
-                className="size-[34%] min-h-5 min-w-5 text-nevo-cream"
-                strokeWidth={2.6}
-              />
-            )}
-          </button>
-        ))}
+      <div className="relative w-full max-w-[420px] sm:w-auto">
+        <div
+          className={cn("grid w-full sm:w-auto", tile.g)}
+          style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}
+        >
+          {Array.from({ length: n * n }, (_, i) => (
+            <button
+              key={i}
+              type="button"
+              tabIndex={inputOn ? 0 : -1}
+              onClick={(e) => tap(i, e)}
+              className={cn(
+                "flex items-center justify-center rounded-[12px] transition-[transform,box-shadow] duration-150",
+                tile.m,
+                i === lit &&
+                  "scale-105 bg-nevo-violet shadow-[0_6px_18px_rgba(154,156,203,0.5)]",
+                tapped.has(i) && "bg-nevo-navy",
+                i === wrongCell &&
+                  "border-2 border-nevo-violet bg-nevo-cream shadow-[0_0_0_3px_rgba(154,156,203,0.35)]",
+                i !== lit &&
+                  !tapped.has(i) &&
+                  i !== wrongCell &&
+                  "border-2 border-nevo-navy bg-nevo-cream",
+                inputOn ? "cursor-pointer" : "pointer-events-none",
+                checking && "opacity-40",
+              )}
+            >
+              {tapped.has(i) && (
+                <Check
+                  className="size-[34%] min-h-5 min-w-5 text-nevo-cream"
+                  strokeWidth={2.6}
+                />
+              )}
+            </button>
+          ))}
+        </div>
+        {/* The check floats over the dimmed grid, as in tile memory. */}
+        {checking && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="rounded-[12px] bg-nevo-cream px-[22px] py-3.5 text-xl font-medium tracking-[0.01em] text-nevo-navy shadow-[0_8px_24px_rgba(0,0,0,0.12)] sm:text-2xl">
+              {check.text}
+            </span>
+          </div>
+        )}
       </div>
+      {checking && (
+        <div className="flex gap-3">
+          <CheckButton label="True" onClick={(e) => answerCheck(true, e)} />
+          <CheckButton label="False" onClick={(e) => answerCheck(false, e)} />
+        </div>
+      )}
     </>
   );
 }
 
-/** ans: one dot comparison - reveal, mask, then answer. */
+/**
+ * ans: one dot comparison - reveal, mask, then answer. Module 3B's first pair
+ * for the band, shown for its display time in its dot size (`warmUpDots`).
+ * The buttons arm at the mask, and that is when the answer's time starts
+ * (`onOpen`), as in the baseline.
+ */
 function WarmUpDots({
+  pair,
+  revealMs,
+  dot,
+  onOpen,
   onPick,
   onDone,
 }: {
+  pair: DotPair;
+  /** How long the arrays show before the mask. */
+  revealMs: number;
+  /** The band's dot size. */
+  dot: string;
+  onOpen: () => void;
   onPick: (choice: string, detail: Record<string, unknown>) => void;
   onDone: () => void;
 }) {
@@ -1041,7 +1242,7 @@ function WarmUpDots({
    * dot task, repeated every day in the warm-up.
    */
   const [counts] = useState<[number, number]>(() =>
-    Math.random() < 0.5 ? [9, 6] : [6, 9],
+    Math.random() < 0.5 ? [pair.a, pair.b] : [pair.b, pair.a],
   );
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const onDoneRef = useRef(onDone);
@@ -1049,9 +1250,12 @@ function WarmUpDots({
     onDoneRef.current = onDone;
   }, [onDone]);
   useEffect(() => {
-    const t = setTimeout(() => setMasked(true), DOT_REVEAL_MS);
+    const t = setTimeout(() => {
+      setMasked(true);
+      onOpen();
+    }, revealMs);
     return () => clearTimeout(t);
-  }, []);
+  }, [revealMs, onOpen]);
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
   const scatter = (count: number, seed: number) => {
@@ -1066,9 +1270,18 @@ function WarmUpDots({
     }));
   };
 
+  /** How close the two counts are: the baseline's `ratio`, its condition. */
+  const ratio = Math.round((pair.a / pair.b) * 100) / 100;
+
   const choose = (i: number, label: string, e: React.MouseEvent) => {
     if (!masked || picked !== -1) return;
-    onPick(label, { correct: counts[i] > counts[1 - i], ...tapPoint(e) });
+    onPick(label, {
+      a: counts[0],
+      b: counts[1],
+      ratio,
+      correct: counts[i] > counts[1 - i],
+      ...tapPoint(e),
+    });
     setPicked(i);
     timers.current.push(setTimeout(() => onDoneRef.current(), PICK_BEAT_MS));
   };
@@ -1087,7 +1300,7 @@ function WarmUpDots({
             {scatter(count, 17 + side * 29).map((d, i) => (
               <span
                 key={i}
-                className="absolute size-4 rounded-full bg-nevo-violet"
+                className={cn("absolute rounded-full bg-nevo-violet", dot)}
                 style={{ left: `${d.x}%`, top: `${d.y}%` }}
               />
             ))}
@@ -1121,6 +1334,73 @@ function WarmUpDots({
           </button>
         ))}
       </div>
+    </>
+  );
+}
+
+/**
+ * reading, for P1-3: a sentence heard and a picture tapped, as the baseline
+ * runs it (D81, 6 Oct) - said on arrival, again from the play button, with
+ * the baseline's "I don't know" and its line, "Listen, then tap the matching
+ * picture". The answer is timed from the end of the sentence (`onOpen`); one
+ * made while it is still being said goes with no time at all.
+ *
+ * Only reached where the device can speak; see `unheard` in `WarmUpRun`.
+ */
+function WarmUpHeard({
+  sentence,
+  answer,
+  capture,
+  onOpen,
+  onPick,
+  onDone,
+}: {
+  sentence: string;
+  /** The key of the picture that matches it. */
+  answer: string;
+  capture: BaselineCapture;
+  onOpen: () => void;
+  onPick: (choice: number, detail: Record<string, unknown>) => void;
+  onDone: () => void;
+}) {
+  const [picked, setPicked] = useState(-1);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onDoneRef = useRef(onDone);
+  useEffect(() => {
+    onDoneRef.current = onDone;
+  }, [onDone]);
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
+  // Said on arrival: a six-year-old should not have to find the button to be
+  // given the question. The button is there to hear it again.
+  useEffect(() => {
+    speak(sentence, onOpen);
+    return stopSpeaking;
+  }, [sentence, onOpen]);
+
+  return (
+    <>
+      <p className="text-center text-[17px] leading-[1.5] font-medium text-nevo-near-black">
+        Listen, then tap the matching picture
+      </p>
+      <HeardPictures
+        answer={answer}
+        picked={picked}
+        onReplay={() => {
+          capture.record("replay", { module: "warmup" });
+          speak(sentence, onOpen);
+        }}
+        onPick={(i, detail, e) => {
+          if (picked !== -1) return;
+          onPick(i, { ...detail, ...tapPoint(e) });
+          setPicked(i);
+          timer.current = setTimeout(() => onDoneRef.current(), PICK_BEAT_MS);
+        }}
+      />
     </>
   );
 }

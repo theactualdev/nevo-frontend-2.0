@@ -8,13 +8,12 @@ import { tapPoint, type BaselineCapture } from "@/lib/profiling/capture";
 import { AvatarBubble, ProfilingShell } from "./ProfilingShell";
 
 /**
- * Playback pacing (BP-M1 playable, 11:202): slows as struggle accumulates,
- * in the bands whose `GridSpanConfig.slowAfterMiss` says so. The base
- * highlight is per band - `GridSpanConfig.litMs`.
+ * Playback pacing (BP-M1 playable, 11:202). The highlight is per band -
+ * `GridSpanConfig.litMs` - and one pace holds for the whole module: no band
+ * slows after a miss (D74, 6 Oct), so a replay plays exactly as the first
+ * playback did.
  */
-const LIT_STRUGGLE_MS = 300;
-const GAP_BASE_MS = 280;
-const GAP_STRUGGLE_MS = 120;
+const GAP_MS = 280;
 const PLAYBACK_LEAD_MS = 560;
 /** The wrong-tap nudge: grid locks, soft-violet ring, then the pattern replays. */
 const NUDGE_MS = 1500;
@@ -54,13 +53,20 @@ const MAX_RETRIES = 3;
  *
  * Never SHOWN to the child, which is what the frames mean by no marking: no
  * tick, no red, no feedback of any kind.
+ *
+ * The daily warm-up's SS tile round runs the same checks (D81, 6 Oct): "A
+ * warm-up that measures a different construct from the baseline cannot
+ * recalibrate it", and the SS baseline is a complex span because of them.
  */
-const DUAL_CHECKS: { text: string; isTrue: boolean }[] = [
+export const DUAL_CHECKS: { text: string; isTrue: boolean }[] = [
   { text: "7 + 5 = 13", isTrue: false },
   { text: "9 - 4 = 5", isTrue: true },
   { text: "6 + 6 = 12", isTrue: true },
   { text: "8 - 3 = 4", isTrue: false },
 ];
+
+/** What a child is asked while a check is up, here and in the warm-up. */
+export const DUAL_CHECK_PROMPT = "Is this true or false?";
 
 type Step = "watching" | "check" | "input" | "wrong" | "between" | "settling";
 
@@ -97,9 +103,8 @@ const PHONE_GRID =
  * Module 1 - Spatial Grid Span (BP-M1, working memory). Tiles light in
  * sequence; the student taps them back in reverse. Adaptive: the span starts at
  * the band's start and grows by one per clean recall to the band ceiling, each
- * from the Module 1 frame (see `gridSpanConfig`); in the bands that slow
- * after a miss, playback slows while the student struggles and recovers as
- * they do, and in the rest it keeps one pace. A wrong tap gives a gentle
+ * from the Module 1 frame (see `gridSpanConfig`), and playback keeps one
+ * pace throughout, misses or not (D74). A wrong tap gives a gentle
  * soft-violet nudge (the tile never fills, nothing shakes, nothing is "wrong"),
  * locks the grid for a beat, and replays the same pattern; three misses at a
  * length end the module seamlessly. The SS band interleaves a true/false check
@@ -117,8 +122,7 @@ export function GridSpanModule({
   capture?: BaselineCapture;
   onComplete: () => void;
 }) {
-  const { n, spanStart, spanMax, litMs, slowAfterMiss, dual, instruction } =
-    config;
+  const { n, spanStart, spanMax, litMs, dual, instruction } = config;
   const cells = n * n;
 
   const [step, setStep] = useState<Step>("watching");
@@ -130,7 +134,6 @@ export function GridSpanModule({
   const [firstRound, setFirstRound] = useState(true);
   const [check, setCheck] = useState(DUAL_CHECKS[0]);
 
-  const struggle = useRef(0);
   const retries = useRef(0);
   const checkIdx = useRef(0);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -170,9 +173,6 @@ export function GridSpanModule({
   const startRound = useCallback(
     (seq: number[]) => {
       clearTimers();
-      const s = slowAfterMiss ? Math.min(3, struggle.current) : 0;
-      const lit = litMs + s * LIT_STRUGGLE_MS;
-      const gap = GAP_BASE_MS + s * GAP_STRUGGLE_MS;
       setStep("watching");
       setSequence(seq);
       setLitIndex(-1);
@@ -181,14 +181,14 @@ export function GridSpanModule({
       setWrongCell(-1);
       capture?.record("playback_start", {
         length: seq.length,
-        litMs: lit,
-        gapMs: gap,
+        litMs,
+        gapMs: GAP_MS,
       });
       let t = PLAYBACK_LEAD_MS;
       seq.forEach((cell) => {
         after(t, () => setLitIndex(cell));
-        after(t + lit, () => setLitIndex(-1));
-        t += lit + gap;
+        after(t + litMs, () => setLitIndex(-1));
+        t += litMs + GAP_MS;
       });
       after(t + 150, () => {
         setLitIndex(-1);
@@ -204,7 +204,7 @@ export function GridSpanModule({
         }
       });
     },
-    [after, capture, clearTimers, dual, litMs, slowAfterMiss],
+    [after, capture, clearTimers, dual, litMs],
   );
 
   // Kick off round 1 on a zero-delay timer: the cleanup cancels it, so
@@ -251,7 +251,6 @@ export function GridSpanModule({
         if (sequence.length >= spanMax) {
           after(END_AT_MAX_MS, settle);
         } else {
-          struggle.current = Math.max(0, struggle.current - 1);
           retries.current = 0;
           after(NEXT_ROUND_MS, () => startRound(genSeq(sequence.length + 1)));
         }
@@ -261,7 +260,6 @@ export function GridSpanModule({
       }
     } else {
       retries.current += 1;
-      struggle.current = Math.min(3, struggle.current + 1);
       setWrongCell(cell);
       setStep("wrong");
       const fails = retries.current;
@@ -281,7 +279,7 @@ export function GridSpanModule({
   const bubbleText = settling
     ? ""
     : step === "check"
-      ? "Is this true or false?"
+      ? DUAL_CHECK_PROMPT
       : step === "input" || step === "wrong"
         ? "Now tap them in reverse"
         : firstRound
@@ -372,7 +370,8 @@ export function GridSpanModule({
   );
 }
 
-function CheckButton({
+/** A dual-task answer: 48px tall, the floor 09 bumps these to. */
+export function CheckButton({
   label,
   onClick,
 }: {

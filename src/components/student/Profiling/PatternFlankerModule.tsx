@@ -68,7 +68,7 @@ const PATTERN_TRIALS: { same: boolean }[] = [
  * The target sequence (right, left, right) is the one already shipped; no
  * frame states one, and the frames' arrows only ever point right.
  */
-type FlankerTrial = {
+export type FlankerTrial = {
   congruency: "congruent" | "incongruent" | "neutral" | null;
   target: "left" | "right";
 };
@@ -143,6 +143,74 @@ const SIZE: Record<
   },
 };
 
+/**
+ * How a band's flanker is drawn (`09b`): P1-3's centre arrow stands alone
+ * ("single central arrow, no flankers"), and SS's flankers are violet
+ * ("colour interference · violet flankers (Stroop-like)").
+ */
+function flankerLook(band: AgeBand): { alone: boolean; violet: boolean } {
+  return { alone: band === "p13", violet: band === "ss" };
+}
+
+/**
+ * Which way each arrow of a trial turns, in degrees from pointing right.
+ * Congruent flankers point with the target, incongruent against it - which is
+ * only meaningful now that the target itself moves. Neutral sits across both.
+ */
+export function flankerTurns(trial: FlankerTrial): {
+  target: number;
+  flank: number;
+} {
+  const target = trial.target === "left" ? 180 : 0;
+  const flank =
+    trial.congruency === "neutral"
+      ? -90
+      : trial.congruency === "incongruent"
+        ? (target + 180) % 360
+        : target;
+  return { target, flank };
+}
+
+/**
+ * The daily warm-up's pattern round for a band (D81, 6 Oct): this module's
+ * first 2A trial, a different pair, in the band's own icons. The warm-up drew
+ * one circle-and-square pair for every child, where 2A runs object icons for
+ * P1-3 up to complex symbols for SS.
+ */
+export function warmUpPattern(band: AgeBand): {
+  icons: [string, string];
+  same: boolean;
+} {
+  return { icons: PAIR_ICONS[band] ?? PAIR_ICONS.p46, same: PATTERN_TRIALS[0].same };
+}
+
+/**
+ * The daily warm-up's flanker round for a band (D81, 6 Oct), drawn the way
+ * this module draws that band's: P1-3's arrow alone, SS's flankers violet, and
+ * the band's own centre-arrow size.
+ *
+ * The trial is the warm-up frame's one - centre pointing right, flankers
+ * against it - which is an incongruent trial every band with flankers runs
+ * here. P1-3 has no flankers, so its trial carries no congruency, as its own
+ * trials here do not.
+ */
+export function warmUpFlanker(band: AgeBand): {
+  trial: FlankerTrial;
+  alone: boolean;
+  violet: boolean;
+  arrow: string;
+} {
+  const look = flankerLook(band);
+  return {
+    trial: {
+      congruency: look.alone ? null : "incongruent",
+      target: "right",
+    },
+    ...look,
+    arrow: (SIZE[band] ?? SIZE.p46).arrow,
+  };
+}
+
 export function PatternFlankerModule({
   band,
   capture,
@@ -169,21 +237,13 @@ export function PatternFlankerModule({
     PATTERN_TRIALS[Math.min(trial, PATTERN_TRIALS.length - 1)];
   const flankerTrial =
     flankerTrials[Math.min(trial, flankerTrials.length - 1)];
-  const targetRotate = flankerTrial.target === "left" ? 180 : 0;
-  // Congruent flankers point with the target, incongruent against it - which is
-  // only meaningful now that the target itself moves. Neutral sits across both.
-  const flankRotate =
-    flankerTrial.congruency === "neutral"
-      ? -90
-      : flankerTrial.congruency === "incongruent"
-        ? (targetRotate + 180) % 360
-        : targetRotate;
+  const { target: targetRotate, flank: flankRotate } =
+    flankerTurns(flankerTrial);
   // A P1-3 trial has no flankers, so it has no congruency to record.
   const congruency = flankerTrial.congruency
     ? { congruency: flankerTrial.congruency }
     : {};
-  const flankViolet = band === "ss";
-  const singleArrow = band === "p13";
+  const { violet: flankViolet, alone: singleArrow } = flankerLook(band);
 
   return (
     <ProfilingShell filled={settling ? 2 : 1} active={settling ? -1 : 1}>
