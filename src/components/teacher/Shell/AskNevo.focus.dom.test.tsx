@@ -46,6 +46,14 @@ describe("Ask Nevo's drawer", () => {
     );
   });
 
+  it("names its question box, and shows when it has focus (C10)", () => {
+    openIt();
+    const box = screen.getByLabelText("Ask about a student, class, or lesson");
+
+    expect(box).toBe(document.activeElement);
+    expect(box.parentElement?.className).toMatch(/\bfocus-within:border-nevo-navy\b/);
+  });
+
   it("closes on Escape", () => {
     openIt();
     fireEvent.keyDown(document, { key: "Escape" });

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { roleLabel } from "@/lib/constants/permissions";
 import { MOCK_TEACHER, TEACHER_NAV, type TeacherNavItem } from "./teacherNav";
@@ -10,6 +10,7 @@ import { useHasSession } from "@/hooks/useHasSession";
 import { useHydrated } from "@/hooks/useHydrated";
 import { MaybeSample } from "@/components/shared/SampleRegion";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { useTeacherNotifications } from "@/hooks/useTeacherNotifications";
 import { AvatarDisc } from "@/components/shared/AvatarDisc";
 // Lives under Profile/ because that page owned it first; it is generic.
@@ -213,6 +214,35 @@ export function TeacherSidebar() {
 
   const collapsed = !expanded;
 
+  /*
+   * THE ACCOUNT MENU ANSWERED ONLY A MOUSE (C08). It said `role="menu"` and
+   * did none of what a menu does: focus stayed on the trigger, Escape did
+   * nothing, and the arrows did nothing. Now it takes focus on its first item,
+   * the arrows and Home/End move through it, Escape closes it back onto the
+   * trigger, and Tab closes it and moves on. Not a trap - a menu never is.
+   */
+  const menuRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(menuRef, {
+    active: menuOpen,
+    trap: false,
+    onEscape: () => setMenuOpen(false),
+  });
+  const onMenuKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const items = Array.from(
+      e.currentTarget.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+    );
+    const at = items.indexOf(document.activeElement as HTMLElement);
+    const go = (i: number) => {
+      e.preventDefault();
+      items[(i + items.length) % items.length]?.focus();
+    };
+    if (e.key === "ArrowDown") go(at + 1);
+    else if (e.key === "ArrowUp") go(at < 0 ? items.length - 1 : at - 1);
+    else if (e.key === "Home") go(0);
+    else if (e.key === "End") go(items.length - 1);
+    else if (e.key === "Tab") setMenuOpen(false);
+  };
+
   return (
     <aside
       className={cn(
@@ -343,6 +373,7 @@ export function TeacherSidebar() {
           onArchive={archiveNote}
           onUndoArchive={undoArchive}
           lastArchived={lastArchived}
+          railExpanded={expanded}
           onClose={() => setNotifOpen(false)}
         />
       )}
@@ -375,6 +406,9 @@ export function TeacherSidebar() {
           type="button"
           aria-haspopup="menu"
           aria-expanded={menuOpen}
+          // Collapsed, all the trigger shows is a disc of initials, and that
+          // was its whole name: "AO, button". Its own title says what it is.
+          aria-label={collapsed ? "Account menu" : undefined}
           title="Account menu"
           onClick={() => setMenuOpen((v) => !v)}
           className={cn(
@@ -460,7 +494,10 @@ export function TeacherSidebar() {
               onClick={() => setMenuOpen(false)}
             />
             <div
+              ref={menuRef}
               role="menu"
+              aria-label="Account menu"
+              onKeyDown={onMenuKey}
               className="absolute bottom-[calc(100%+8px)] left-0 z-40 w-[232px] rounded-[12px] bg-nevo-cream p-1.5 shadow-[0_8px_32px_rgba(0,0,0,0.16)] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 motion-safe:duration-150"
             >
               {ACCOUNT_MENU.map((m) => {

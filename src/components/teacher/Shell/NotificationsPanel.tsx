@@ -58,6 +58,7 @@ export function NotificationsPanel({
   onUndoArchive,
   lastArchived,
   onMarkAllRead,
+  railExpanded = false,
   onClose,
 }: {
   notes: TeacherNotification[];
@@ -74,6 +75,13 @@ export function NotificationsPanel({
   /** Present only while an archive can still be undone. */
   lastArchived?: { id: string; text: string } | null;
   onMarkAllRead: () => void;
+  /**
+   * Where the bell is (C13). The popover sat by the viewport's breakpoint, so a
+   * rail collapsed on a desktop left it floating 136px from its bell, and a
+   * rail expanded on a tablet covered it. C13 draws it off the rail: 88px from
+   * a collapsed one, 200px from an expanded one.
+   */
+  railExpanded?: boolean;
   onClose: () => void;
 }) {
   useEffect(() => {
@@ -100,7 +108,10 @@ export function NotificationsPanel({
         tabIndex={-1}
         role="dialog"
         aria-label="Notifications"
-        className="fixed bottom-20 left-[88px] z-50 w-[360px] overflow-hidden rounded-[12px] bg-nevo-cream shadow-[0_8px_32px_rgba(0,0,0,0.16)] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 motion-safe:duration-150 xl:bottom-24 xl:left-[200px] xl:w-[380px]"
+        className={cn(
+          "fixed bottom-20 z-50 w-[360px] overflow-hidden rounded-[12px] bg-nevo-cream shadow-[0_8px_32px_rgba(0,0,0,0.16)] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 motion-safe:duration-150 xl:bottom-24 xl:w-[380px]",
+          railExpanded ? "left-[200px]" : "left-[88px]",
+        )}
       >
         <div
           className={cn(

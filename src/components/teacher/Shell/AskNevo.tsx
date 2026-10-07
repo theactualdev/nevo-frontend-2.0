@@ -592,7 +592,7 @@ export function AskNevo() {
 
             {/* Input */}
             <div className="shrink-0 border-t border-nevo-near-black/8 px-[18px] pt-3.5 pb-[18px]">
-              <div className="flex h-[46px] items-center gap-2 rounded-full border-[1.5px] border-nevo-near-black/16 bg-nevo-cream pr-2 pl-4">
+              <div className="flex h-[46px] items-center gap-2 rounded-full border-[1.5px] border-nevo-near-black/16 bg-nevo-cream pr-2 pl-4 transition-colors focus-within:border-nevo-navy">
                 <input
                   data-autofocus
                   value={draft}
@@ -604,6 +604,8 @@ export function AskNevo() {
                     }
                   }}
                   placeholder={"Ask about a student, class, or lesson"}
+                  // A placeholder is not a name: it goes the moment you type.
+                  aria-label="Ask about a student, class, or lesson"
                   className="min-w-0 flex-1 border-none bg-transparent text-[14.5px] text-nevo-near-black outline-none"
                 />
                 {/* Visual affordance only in the frame - no recording state. */}

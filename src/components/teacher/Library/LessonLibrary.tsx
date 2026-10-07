@@ -228,7 +228,7 @@ export function LessonLibrary() {
             placeholder="Search lessons"
             aria-label="Search lessons"
             className={cn(
-              "h-12 w-full rounded-[10px] border-[1.5px] bg-nevo-cream-elevated px-11 text-[15px] text-nevo-near-black outline-none placeholder:text-nevo-near-black/45 xl:h-[50px] xl:text-[15.5px]",
+              "h-12 w-full rounded-[10px] border-[1.5px] bg-nevo-cream-elevated px-11 text-[15px] text-nevo-near-black outline-none transition-colors placeholder:text-nevo-near-black/45 focus:border-nevo-navy xl:h-[50px] xl:text-[15.5px]",
               hasQuery ? "border-nevo-navy" : "border-nevo-near-black/14",
             )}
           />

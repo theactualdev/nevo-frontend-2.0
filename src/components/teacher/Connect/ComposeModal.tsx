@@ -333,6 +333,7 @@ export function ComposeModal({
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder="Search your students"
+                    aria-label="Search your students"
                     className="h-12 w-full rounded-[10px] border-[1.5px] border-nevo-near-black/14 bg-nevo-cream-elevated pr-4 pl-[42px] text-[15px] text-nevo-near-black outline-none transition-colors focus:border-nevo-navy"
                   />
                 </div>
