@@ -2326,6 +2326,12 @@ function SegmentBody({
           onStepAnswered={onCalcStep}
           onPiecePlaced={onPiecePlaced}
           onHintOpened={onCalcHint}
+          // A step's narration is the segment's narration: the same four
+          // signals the audio card sends, from the same handlers.
+          onReplay={onReplay}
+          onNarrationPlayed={onNarrationPlayed}
+          onAudioBusy={onAudioBusy}
+          onNarrationFailed={(reason) => onMediaFailed("audio", reason)}
         />
       );
     if (segment.interactive)

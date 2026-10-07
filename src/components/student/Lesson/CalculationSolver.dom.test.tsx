@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { CalculationSolver } from "./CalculationSolver";
 import { calculationFromVariant } from "@/lib/lessons/fromContent";
@@ -320,5 +320,95 @@ describe("the drawing", () => {
 
     expect(document.querySelectorAll("[aria-hidden].flex.flex-1")).toHaveLength(2);
     expect(screen.queryByText("3/4")).toBeNull();
+  });
+});
+
+describe("the narration layer", () => {
+  /*
+   * jsdom implements no playback, so `play` is stubbed and the element's own
+   * events stand in for the browser's - as in `SpokenPrompt`'s tests.
+   */
+  const play = vi.fn();
+  beforeEach(() => {
+    play.mockReset().mockResolvedValue(undefined);
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(play);
+    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  const clip = (n: number) => ({
+    audioUrl: `https://cdn.example/step-${n}.mp3`,
+    storagePath: null,
+  });
+  const narrated = () =>
+    build({
+      steps: [
+        // No confirmation, so a right pick moves straight to the next step.
+        step({ narrationAudio: clip(1), confirmationText: "" }),
+        step({
+          stepId: "s2",
+          prompt: "What do we add together?",
+          confirmationText: "",
+          narrationAudio: clip(2),
+        }),
+        step({ stepId: "s3", prompt: "So what is 1 + 2?", narrationAudio: null }),
+      ],
+    });
+  const audio = () => document.querySelector("audio");
+  const listen = (props: Record<string, unknown>) =>
+    render(
+      <CalculationSolver
+        calculation={narrated()}
+        onSolved={vi.fn()}
+        {...props}
+      />,
+    );
+
+  it("plays this step's own recording, and only when asked", () => {
+    listen({});
+
+    expect(audio()?.getAttribute("src")).toBe("https://cdn.example/step-1.mp3");
+    // Sound nobody asked for is not this layer's to start.
+    expect(audio()?.autoplay).toBe(false);
+    expect(screen.getByText("Read this step aloud")).toBeInTheDocument();
+
+    tap("Play narration");
+    expect(play).toHaveBeenCalled();
+  });
+
+  it("reads each next step as it arrives once the child is listening", () => {
+    listen({});
+    fireEvent.play(audio()!);
+
+    pick("4 and 4");
+
+    expect(audio()?.getAttribute("src")).toBe("https://cdn.example/step-2.mp3");
+    expect(audio()?.autoplay).toBe(true);
+  });
+
+  it("draws no bar for a step with no recording", () => {
+    listen({});
+    pick("4 and 4");
+    pick("4 and 4");
+
+    expect(screen.getByText("So what is 1 + 2?")).toBeInTheDocument();
+    expect(audio()).toBeNull();
+    expect(screen.queryByRole("button", { name: "Play narration" })).toBeNull();
+  });
+
+  it("says narration started once, a restart is a replay, and the wait is the system's", () => {
+    const onNarrationPlayed = vi.fn();
+    const onReplay = vi.fn();
+    const onAudioBusy = vi.fn();
+    listen({ onNarrationPlayed, onReplay, onAudioBusy });
+
+    fireEvent.play(audio()!);
+    fireEvent.ended(audio()!);
+    tap("Play narration");
+    fireEvent.play(audio()!);
+
+    expect(onNarrationPlayed).toHaveBeenCalledTimes(1);
+    expect(onReplay).toHaveBeenCalledTimes(1);
+    expect(onAudioBusy.mock.calls).toEqual([["start"], ["end"], ["start"]]);
   });
 });

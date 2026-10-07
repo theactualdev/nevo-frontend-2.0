@@ -181,6 +181,36 @@ describe("a calculation's signals", () => {
     expect(sent("hint_used")).toEqual([]);
   });
 
+  it("reports a step's narration the way the audio card reports its own", () => {
+    render(
+      <LessonPlayer
+        lesson={lessonWith([
+          step({
+            narrationAudio: {
+              audioUrl: "https://cdn.example/s1.mp3",
+              storagePath: null,
+            },
+          }),
+        ])}
+        plan={PLAN}
+      />,
+    );
+    const audio = document.querySelector("audio")!;
+
+    fireEvent.play(audio);
+    fireEvent.ended(audio);
+    tap("Play narration");
+    fireEvent.error(audio);
+
+    expect(sent("narration_played")).toEqual([{ segmentId: "calc-1" }]);
+    expect(sent("replay")).toEqual([{ segmentId: "calc-1" }]);
+    expect(sent("system_busy")).toHaveLength(1);
+    // No storage path to re-issue from, so the first failure is the failure.
+    expect(sent("media_load_failed")).toEqual([
+      expect.objectContaining({ segmentId: "calc-1", channel: "audio" }),
+    ]);
+  });
+
   it("holds the forward chevron until the solution has assembled", () => {
     render(<LessonPlayer lesson={lessonWith([step()])} plan={PLAN} />);
     expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
