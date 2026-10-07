@@ -539,7 +539,8 @@ describe("a paused account at the door", () => {
  * D53 and D116: a removed child's right PIN is answered `account_closed`
  * (B58). They read 28d - closed, not on pause, and not a PIN that did not
  * match - which is terminal: "no sign-in route, because offering a way back
- * in would be cruel."
+ * in would be cruel." Product, 7 Oct: one line, "Someone else using this
+ * device?", frees the device for whoever is next.
  */
 describe("a closed account at the door", () => {
   const closed = () =>
@@ -547,7 +548,7 @@ describe("a closed account at the door", () => {
       detail: { code: "account_closed", message: "closed" },
     });
 
-  it("says closed in 28d's words, with nothing to press", async () => {
+  it("says closed in 28d's words, with nothing to press but the next child's way to the picker", async () => {
     loginPin.mockRejectedValue(closed());
     await chooseAda();
 
@@ -564,8 +565,33 @@ describe("a closed account at the door", () => {
         "This account is closed, so there's nothing more to do here.",
       ),
     ).toBeInTheDocument();
-    expect(document.body.textContent).not.toMatch(/on pause|didn.t match/i);
-    expect(screen.queryAllByRole("button")).toHaveLength(0);
+    expect(document.body.textContent).not.toMatch(
+      /on pause|didn.t match|back to sign in/i,
+    );
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+    expect(
+      screen.getByRole("button", { name: "Someone else using this device?" }),
+    ).toBeInTheDocument();
     expect(screen.queryAllByRole("link")).toHaveLength(0);
+  });
+
+  it("goes back to the picker, where the device still remembers everyone", async () => {
+    // Nothing is forgotten on the way: the roster is the device's, and the
+    // closed child's face stays on it until it ages out.
+    loginPin.mockRejectedValue(closed());
+    await chooseAda();
+    await tap("1234");
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Someone else using this device?",
+      }),
+    );
+
+    expect(await screen.findByText("Who's learning?")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ada" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Kofi" })).toBeInTheDocument();
+    expect(screen.queryByText(/account is closed/)).toBeNull();
+    expect(signIn).not.toHaveBeenCalled();
   });
 });

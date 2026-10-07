@@ -199,10 +199,15 @@ describe("a closed account at the door", () => {
     expect(screen.queryByText(/log back in|try again|away for a while/i)).toBeNull();
   });
 
-  it("is terminal, as 28d draws it: no sign-in route at all", async () => {
-    await doorFor("account_closed");
+  it("is terminal, as 28d draws it: no sign-in route, only the next child's way to the picker", async () => {
+    // Product, 7 Oct: "Someone else using this device?" frees the device. It
+    // is not the closed child's way back, so where they were going stays here.
+    await doorFor("account_closed", "/student/lessons/frac-3");
 
-    expect(screen.queryAllByRole("link")).toHaveLength(0);
+    expect(
+      screen.getByRole("link", { name: "Someone else using this device?" }),
+    ).toHaveAttribute("href", "/auth/login");
+    expect(screen.getAllByRole("link")).toHaveLength(1);
     expect(screen.queryAllByRole("button")).toHaveLength(0);
   });
 });

@@ -52,7 +52,8 @@ const TYPE_FIRST = "Type a little first, then Send.";
 /**
  * Send with no choice picked. Design ruled the behaviour ("exactly as the
  * empty written answer does") and drew no words for it, so this is the drawn
- * sentence with a pick in place of typing - an interim for design to confirm.
+ * sentence with a pick in place of typing - ruled correct as written by
+ * product (7 Oct).
  */
 const PICK_FIRST = "Pick one first, then Send.";
 

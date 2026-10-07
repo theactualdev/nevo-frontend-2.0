@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen, within } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createPortal } from "react-dom";
 import { RotateLock } from "./RotateLock";
@@ -110,7 +110,7 @@ describe("RotateLock", () => {
 
     expect(document.activeElement).toBe(screen.getByRole("status"));
     expect(document.activeElement).toHaveTextContent(
-      "Turn your tablet upright",
+      "Turn your device upright",
     );
   });
 
@@ -161,12 +161,12 @@ describe("a tablet that does not turn", () => {
     expect(app()?.hasAttribute("inert")).toBe(true);
 
     const through = screen.getByRole("button", {
-      name: /my tablet doesn.t turn/i,
+      name: /my device doesn.t turn/i,
     });
     act(() => through.click());
 
     // The prompt is gone and the lesson is usable, still sideways.
-    expect(screen.queryByRole("button", { name: /my tablet doesn.t turn/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /my device doesn.t turn/i })).toBeNull();
     expect(app()?.hasAttribute("inert")).toBe(false);
     expect(screen.getByRole("button", { name: "Next" })).toBeInTheDocument();
   });
@@ -176,7 +176,7 @@ describe("a tablet that does not turn", () => {
     turn("sideways");
     act(() =>
       screen
-        .getByRole("button", { name: /my tablet doesn.t turn/i })
+        .getByRole("button", { name: /my device doesn.t turn/i })
         .click(),
     );
 
@@ -186,7 +186,7 @@ describe("a tablet that does not turn", () => {
     render(<Lesson />);
     turn("sideways");
 
-    expect(screen.queryByRole("button", { name: /my tablet doesn.t turn/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /my device doesn.t turn/i })).toBeNull();
     expect(app()?.hasAttribute("inert")).toBe(false);
   });
 
@@ -198,7 +198,7 @@ describe("a tablet that does not turn", () => {
 
     expect(app()?.hasAttribute("inert")).toBe(true);
     expect(
-      screen.getByRole("button", { name: /my tablet doesn.t turn/i }),
+      screen.getByRole("button", { name: /my device doesn.t turn/i }),
     ).toBeInTheDocument();
   });
 });
@@ -207,7 +207,7 @@ describe("a tablet that does not turn", () => {
  * A SHEET IS NOT INSIDE THE APP. Radix portals a sheet or a dialog into
  * `document.body`, outside the subtree `RotateLock` made inert - so an open
  * one stayed live behind the prompt: its buttons tabbable and pressable, its
- * text read out over "Turn your tablet upright".
+ * text read out over "Turn your device upright".
  */
 describe("what is portalled out of the app", () => {
   function LessonWithSheet() {
@@ -263,5 +263,38 @@ describe("what is portalled out of the app", () => {
     turn("sideways");
 
     expect(screen.getByRole("status").closest("[inert]")).toBeNull();
+  });
+});
+
+/*
+ * Product, 7 Oct: "Say 'another device', never 'another tablet', in everything
+ * a child reads. That includes the rotate prompt's label." The prompt shows on
+ * a phone held sideways too, where "tablet" names a device the child is not
+ * holding.
+ */
+describe("the prompt's words", () => {
+  it("say device, never tablet, in everything a child reads or hears", () => {
+    render(<Lesson />);
+    turn("sideways");
+
+    const prompt = screen.getByRole("status");
+    expect(
+      within(prompt).getByRole("img", { name: "Rotate your device upright" }),
+    ).toBeInTheDocument();
+    expect(
+      within(prompt).getByRole("heading", { name: "Turn your device upright" }),
+    ).toBeInTheDocument();
+    expect(prompt).toHaveTextContent(
+      "Nevo is designed to stand tall. Rotate your device and we'll pick up right where you were.",
+    );
+    expect(
+      within(prompt).getByRole("button", { name: "My device doesn't turn" }),
+    ).toBeInTheDocument();
+
+    // The labels a screen reader speaks, as well as the words on screen.
+    const labels = [...prompt.querySelectorAll("[aria-label]")]
+      .map((el) => el.getAttribute("aria-label"))
+      .join(" ");
+    expect(`${prompt.textContent} ${labels}`).not.toMatch(/tablet/i);
   });
 });

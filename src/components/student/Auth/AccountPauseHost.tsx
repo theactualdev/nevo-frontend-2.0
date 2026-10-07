@@ -47,11 +47,15 @@ import {
  *
  * A CLOSED ACCOUNT IS 28d, STRAIGHT AWAY (D116). It shared this card, saying
  * closed, until 28d drew the closed state as a screen of its own - terminal,
- * nothing to press, "a shared system state is drawn once and reused". No frame
- * draws a closed card over a lesson, and an "Okay" that leads to a screen with
- * nothing to do is a button that does nothing, so the screen covers the page
- * at once. Its session is cleared as it does: nothing on 28d can use it, and
- * the page beneath is already covered and hidden from assistive tech.
+ * nothing for the child to do, "a shared system state is drawn once and
+ * reused". No frame draws a closed card over a lesson, and an "Okay" that
+ * leads to a screen with nothing to do is a button that does nothing, so the
+ * screen covers the page at once: no card, nothing about a pause or about
+ * progress (product, 7 Oct). Its session is cleared as it does: nothing on 28d
+ * can use it, the page beneath is already covered and hidden from assistive
+ * tech, and its one line - "Someone else using this device?", to the picker by
+ * the same full page load - must not find a role cookie the proxy would send
+ * back to the student app.
  */
 /**
  * The picker, by a full page load (D52): the pause is sticky for this page, and
@@ -85,7 +89,7 @@ export function AccountPauseHost() {
               {closed ? ACCOUNT_CLOSED_COPY.heading : ACCOUNT_PAUSED_HEADING}
             </DialogPrimitive.Title>
             {closed ? (
-              <AccountClosedView />
+              <AccountClosedView toPicker={{ href: SIGN_IN_DOOR }} />
             ) : (
               <AccountOnPauseView back={{ href: SIGN_IN_DOOR }} />
             )}

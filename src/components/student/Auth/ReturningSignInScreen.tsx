@@ -336,9 +336,11 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
    * unlock. There is nothing here a child can do, and leaving the form
    * underneath would invite them to keep trying something that cannot work.
    * A closed account is 28d, never on pause (D53, D116), with no sign-in
-   * route on it.
+   * route on it - only its line to the picker for whoever is next (7 Oct).
    */
-  if (error === "closed") return <AccountClosedScreen />;
+  if (error === "closed") {
+    return <AccountClosedScreen toPicker={{ href: "/auth/login" }} />;
+  }
   if (error === "paused") {
     // No retry, but a way back to the picker for whoever is next (D52).
     return <AccountOnPauseScreen back={{ href: "/auth/login" }} />;
