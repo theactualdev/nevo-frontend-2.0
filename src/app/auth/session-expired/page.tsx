@@ -66,8 +66,11 @@ export default async function SessionExpiredPage({
 
   // An account state, not a session one, and the child has their own frame for
   // it. It offers no retry, because retrying is the one thing that cannot work.
-  // A closed account is 28d, never on pause (D53, D116): terminal, no way in.
-  if (ended === "closed") return <AccountClosedScreen />;
+  // A closed account is 28d, never on pause (D53, D116): terminal, no way in,
+  // but a line to the picker for whoever is next (7 Oct).
+  if (ended === "closed") {
+    return <AccountClosedScreen toPicker={{ href: "/auth/login" }} />;
+  }
   if (ended === "paused") {
     // No retry, but a way back to the picker for whoever is next (D52).
     return <AccountOnPauseScreen back={{ href: "/auth/login" }} />;

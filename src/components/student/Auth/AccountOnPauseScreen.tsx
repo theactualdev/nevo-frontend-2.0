@@ -71,7 +71,12 @@ export function PauseBars({ className }: { className?: string }) {
  */
 export type PauseWayBack = { href: string } | { onBack: () => void };
 
-const WAY_BACK =
+/**
+ * The doors' quiet line, as "Not you? Go back" draws it. 28d's "Someone else
+ * using this device?" takes it too, so the two account screens' one way out
+ * looks the same.
+ */
+export const WAY_BACK =
   "mt-9 inline-flex h-[46px] cursor-pointer items-center rounded-[10px] px-[18px] text-base font-medium text-nevo-navy transition-[background] hover:bg-nevo-navy/8 sm:mt-10";
 
 export function AccountOnPauseView({

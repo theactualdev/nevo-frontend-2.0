@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 
 /**
  * 28b: "the lesson the child was on stays visible but goes quiet behind a soft
@@ -154,10 +154,11 @@ describe("the card's glyph", () => {
  * D53 and D116: a removed child reads that their account is closed, never on
  * pause - on 28d, the closed state drawn once and reused. No frame draws a
  * closed card over a lesson, so the screen covers the page at once, and it is
- * terminal: nothing to press, no way back in.
+ * terminal: no way back in. Product, 7 Oct: straight there, with nothing about
+ * saving or pausing, and one line that frees the device for the next child.
  */
 describe("a closed account that lands while a child is reading", () => {
-  it("covers the page with 28d at once, with no card and no Okay", async () => {
+  it("covers the page with 28d at once, with no card, no Okay and nothing about progress", async () => {
     const { pause, AccountPauseHost } = await fresh();
     render(
       <>
@@ -168,15 +169,23 @@ describe("a closed account that lands while a child is reading", () => {
 
     act(() => pause.announceAccountPause("account_closed"));
 
-    expect(
-      screen.getByRole("dialog", { name: "Your account is closed" }),
-    ).toBeInTheDocument();
+    const dialog = screen.getByRole("dialog", {
+      name: "Your account is closed",
+    });
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
       "Your account is closed",
     );
-    expect(document.body.textContent).not.toMatch(/pause/i);
+    expect(document.body.textContent).not.toMatch(/pause|saved|progress/i);
+    expect(screen.queryByText("If you have questions, talk to your teacher.")).toBeNull();
     expect(screen.queryAllByRole("button")).toHaveLength(0);
-    expect(screen.queryAllByRole("link")).toHaveLength(0);
+    // Its one control is the next child's, to the picker by a full page load:
+    // the closure is sticky for this page.
+    expect(
+      within(dialog).getByRole("link", {
+        name: "Someone else using this device?",
+      }),
+    ).toHaveAttribute("href", "/auth/login");
+    expect(screen.getAllByRole("link")).toHaveLength(1);
   });
 
   it("ends the session, which nothing on 28d can use", async () => {

@@ -414,23 +414,20 @@ export default function LoginPage() {
    *
    * Its way back (D52) is to the picker, so the next child can get in.
    *
-   * A closed account is 28d, never on pause (D53, D116), and terminal: the
-   * frame draws no sign-in route on it.
+   * A closed account is 28d, never on pause (D53, D116), and terminal for the
+   * child: the frame draws no sign-in route on it. Its one line, "Someone else
+   * using this device?" (7 Oct), goes back to the same picker, for whoever is
+   * next.
    */
-  if (error === "closed") return <AccountClosedScreen />;
-  if (error === "paused") {
-    return (
-      <AccountOnPauseScreen
-        back={{
-          onBack: () => {
-            setError(null);
-            setDigits("");
-            setChosen(null);
-          },
-        }}
-      />
-    );
-  }
+  const toPicker = {
+    onBack: () => {
+      setError(null);
+      setDigits("");
+      setChosen(null);
+    },
+  };
+  if (error === "closed") return <AccountClosedScreen toPicker={toPicker} />;
+  if (error === "paused") return <AccountOnPauseScreen back={toPicker} />;
 
   const focusInput = () => inputRef.current?.focus();
 
