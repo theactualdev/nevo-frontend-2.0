@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import {
   AdaptiveToggleBar,
@@ -183,6 +183,7 @@ export function LessonPlayer({
   reviewConceptId,
   live = false,
   finished = false,
+  partial = false,
   assignmentId,
   startAt = 0,
   placeUnknown = false,
@@ -216,6 +217,12 @@ export function LessonPlayer({
    * never marked unfinished. Finishing it again still reports completion.
    */
   finished?: boolean;
+  /**
+   * The lesson as the offline package carries it: no modules, closing recap
+   * or after-lesson check. Reaching its end is never written `completed` -
+   * see `markComplete`.
+   */
+  partial?: boolean;
   /**
    * Segment to open on, from saved progress. Clamped by the caller; a review
    * session always opens at the top regardless.
@@ -415,14 +422,45 @@ export function LessonPlayer({
   //
   // So completion is a function both exits call, not a side effect of one of
   // them. The ref keeps it idempotent.
+  /*
+   * THE OFFLINE PACKAGE'S COPY IS NEVER COMPLETED (Lydia, 6 Oct): "A lesson
+   * played offline without its modules, recap and after-lesson check is not
+   * recorded as completed, and it comes back when the child is next online."
+   * Booked complete, the engine would teach this child from a check that
+   * never happened. Its end is written `exited` at the last segment instead -
+   * the furthest place, and how they left - so it comes back on Home and
+   * opens there online, with its check. The signal session ends the same way
+   * (`finishedAs`). A review or a finished lesson reopened writes nothing,
+   * as neither ever writes `exited`.
+   */
   const completionReported = useRef(false);
   const markComplete = useCallback(() => {
     if (completionReported.current) return;
     completionReported.current = true;
-    reportProgress(LESSON_STATUS.COMPLETED, {
-      segment: Math.max(0, lesson.segments.length - 1),
-    });
-  }, [lesson, reportProgress]);
+    const last = Math.max(0, lesson.segments.length - 1);
+    if (partial) {
+      if (review || finished) return;
+      const pos = modulePositionFor(lesson, last);
+      reportProgress(LESSON_STATUS.EXITED, {
+        segment: last,
+        ...(pos ? { module: pos.moduleIndex } : {}),
+      });
+      return;
+    }
+    reportProgress(LESSON_STATUS.COMPLETED, { segment: last });
+  }, [lesson, reportProgress, partial, review, finished]);
+  // How the signal session ends when the child reaches the end: completed,
+  // or - for the package's copy, above - exited at the last segment.
+  const finishedAs = useMemo<SessionOutcome>(
+    () =>
+      partial
+        ? {
+            completionStatus: "exited",
+            exitPosition: lesson.segments[lesson.segments.length - 1].id,
+          }
+        : COMPLETED,
+    [partial, lesson],
+  );
 
   useEffect(() => {
     if (phase !== "complete") return;
@@ -1221,7 +1259,7 @@ export function LessonPlayer({
     const assess = hasAssessment && !review;
     if (assess) beginCheck();
     setPhase(assess ? "assessment" : "complete");
-    if (!assess) setEnding(COMPLETED);
+    if (!assess) setEnding(finishedAs);
     if (!assess) recordReview();
   };
 
@@ -1682,13 +1720,13 @@ export function LessonPlayer({
         }}
         onFinish={() => {
           setPhase("complete");
-          setEnding(COMPLETED);
+          setEnding(finishedAs);
         }}
         onReviewAnswers={() => {
           // The lesson IS finished at this point - reviewing is a way of
           // leaving it, not of abandoning it.
           markComplete();
-          setEnding(COMPLETED);
+          setEnding(finishedAs);
           exitTo(`${LESSONS_HREF}/${lesson.id}/review`);
         }}
       />

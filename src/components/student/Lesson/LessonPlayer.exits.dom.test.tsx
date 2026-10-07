@@ -34,17 +34,22 @@ vi.mock("@/hooks/useLessonProgress", () => ({
   useLessonProgress: () => ({ sessionId: null, ...progress }),
 }));
 
-const { push, trackEvent, recordReview } = vi.hoisted(() => ({
+const { push, trackEvent, recordReview, signals } = vi.hoisted(() => ({
   push: vi.fn(),
   trackEvent: vi.fn(),
   recordReview: vi.fn(),
+  /** How the player last told the signal session it ended. */
+  signals: { ending: null as unknown },
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, replace: vi.fn(), back: vi.fn() }),
 }));
 vi.mock("@/hooks", () => ({
   useLesson: () => ({ setActiveLesson: vi.fn() }),
-  useSignals: () => ({ trackEvent }),
+  useSignals: (...args: unknown[]) => {
+    signals.ending = args[3];
+    return { trackEvent };
+  },
 }));
 vi.mock("@/hooks/useRuntimeAdaptation", () => ({
   useRuntimeAdaptation: () => ({ suggestion: null, breakSuggestion: null }),
@@ -99,6 +104,7 @@ beforeEach(() => {
   push.mockReset();
   trackEvent.mockReset();
   recordReview.mockReset().mockResolvedValue({});
+  signals.ending = null;
 });
 
 afterEach(() => {
@@ -182,6 +188,53 @@ describe("finishing", () => {
     finish();
 
     expect(screen.getByText("Your progress is saved.")).toBeTruthy();
+  });
+});
+
+describe("a lesson played from the offline package's copy", () => {
+  /*
+   * Lydia, 6 Oct: a lesson played without its modules, recap and after-lesson
+   * check "is not recorded as completed, and it comes back when the child is
+   * next online". The package carries none of the three.
+   */
+  const playThrough = (over: Record<string, unknown> = {}) => {
+    render(<LessonPlayer lesson={LESSON} plan={null} live {...over} />);
+    next();
+    next();
+    next();
+  };
+
+  it("is never written completed, and ends exited at its furthest place", () => {
+    playThrough({ partial: true });
+
+    expect(writes().map(([status]) => status)).not.toContain(
+      LESSON_STATUS.COMPLETED,
+    );
+    expect(writes().at(-1)).toEqual([LESSON_STATUS.EXITED, { segment: 2 }]);
+  });
+
+  it("tells the signal session it was left there, not completed", () => {
+    playThrough({ partial: true });
+
+    expect(signals.ending).toEqual({
+      completionStatus: "exited",
+      exitPosition: "seg-3",
+    });
+  });
+
+  it("writes nothing at all for a finished lesson reopened from it", () => {
+    // Finished stays finished; the package cannot complete it again either.
+    playThrough({ partial: true, finished: true });
+
+    expect(writes()).toEqual([]);
+  });
+
+  it("is still written completed when it is the whole lesson", () => {
+    // Without this, a player that never wrote completion passes the above.
+    playThrough();
+
+    expect(writes().at(-1)).toEqual([LESSON_STATUS.COMPLETED, { segment: 2 }]);
+    expect(signals.ending).toEqual({ completionStatus: "completed" });
   });
 });
 

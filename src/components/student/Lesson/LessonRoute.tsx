@@ -77,6 +77,7 @@ export function LessonRoute({
     opensAt,
     placeUnknown,
     fromShelf,
+    fromPackage,
     finished,
   } = useStudentLesson(lessonId);
   const hydrated = useHydrated();
@@ -156,6 +157,7 @@ export function LessonRoute({
         plan={plan}
         live={live}
         finished={finished}
+        partial={fromPackage}
         review={review}
         reviewConceptId={reviewConceptId}
         startAt={resumeAt ?? 0}

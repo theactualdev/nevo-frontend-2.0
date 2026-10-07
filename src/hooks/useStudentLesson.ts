@@ -4,7 +4,11 @@ import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/api/client";
 import { lessonsApi } from "@/lib/api/lessons";
 import { getSession, getToken } from "@/lib/auth/session";
-import { refreshSavedLesson, savedLesson } from "@/lib/offline/savedLessons";
+import {
+  isPackageCopy,
+  refreshSavedLesson,
+  savedLesson,
+} from "@/lib/offline/savedLessons";
 import type { AdaptSegment } from "@/lib/api/intelligence";
 import { adaptSegmentsFor } from "@/lib/lessons/adaptation";
 import { lessonFromContent } from "@/lib/lessons/fromContent";
@@ -66,6 +70,8 @@ interface Resolution {
   empty?: boolean;
   /** Built from the child's offline shelf because the read could not be made. */
   fromShelf?: boolean;
+  /** That shelf copy is the offline package's - see `isPackageCopy`. */
+  fromPackage?: boolean;
 }
 
 export interface StudentLessonState {
@@ -131,6 +137,11 @@ export interface StudentLessonState {
   placeUnknown: boolean;
   /** Opened from the child's offline shelf, not from a live read. */
   fromShelf: boolean;
+  /**
+   * Opened from the shelf's copy of the offline PACKAGE: no modules, recap or
+   * after-lesson check. The player never records it completed (Lydia, 6 Oct).
+   */
+  fromPackage: boolean;
   /**
    * The child has already finished this lesson: their newest progress row
    * says `completed`, or the assignment does (the feed is recent activity, so
@@ -285,6 +296,7 @@ export function useStudentLesson(
             lesson: fromShelf,
             adaptSegments: adaptSegmentsFor(kept.detail.segments),
             fromShelf: true,
+            fromPackage: isPackageCopy(kept.detail),
           });
         } else {
           setResolved({ id: lessonId, failed: true });
@@ -399,6 +411,8 @@ export function useStudentLesson(
     opensAt: assignment?.availableFrom ?? null,
     placeUnknown: Boolean(live) && !dashboard && dashboardFailed,
     fromShelf: Boolean(live) && state.fromShelf === true,
+    fromPackage:
+      Boolean(live) && state.fromShelf === true && state.fromPackage === true,
     // A live lesson gets the engine's plan; a mock keeps its authored one.
     // Never crossed: a mock must not borrow a live plan, and a live lesson
     // must not borrow another lesson's authored one.
