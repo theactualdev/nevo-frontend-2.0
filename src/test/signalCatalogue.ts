@@ -33,8 +33,6 @@ export function declaredKeys(type: string): ReadonlySet<string> | null {
  *
  * - The break events are the player batch's, rebuilt with the break pill.
  * - The solver's two are frozen with it (SCRUM-181/177).
- * - The baseline markers are the baseline batch's (`moduleId`, and B76 for
- *   where `band` goes).
  */
 export const KNOWN_UNDECLARED: Readonly<Record<string, readonly string[]>> = {
   break_suggested: ["segmentId", "breakType"],
@@ -43,8 +41,6 @@ export const KNOWN_UNDECLARED: Readonly<Record<string, readonly string[]>> = {
   break_end: ["type"],
   calculation_step_response: ["correct"],
   manipulative_piece_placed: ["placed", "needed"],
-  baseline_module_start: ["module", "band"],
-  baseline_module_complete: ["module"],
 };
 
 /**
