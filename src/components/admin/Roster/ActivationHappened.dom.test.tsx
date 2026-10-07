@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
+import { ApiError } from "@/lib/api/client";
 import type { DerivedClass, OnboardingState } from "@/lib/api/onboarding";
 import { ActivationView } from "./ActivationView";
 
@@ -111,5 +112,16 @@ describe("OB-05's What just happened", () => {
     await waitFor(() => expect(visibleText(container)).toMatch(/Brightgate is active/));
     expect(visibleText(container)).not.toMatch(/just happened/);
     expect(visibleText(container)).not.toMatch(/accounts created/);
+  });
+});
+
+describe("a refusal on the activation screen", () => {
+  it("says it is about access, with no retry", async () => {
+    get.mockRejectedValue(new ApiError(403, "forbidden"));
+    const { container } = render(<ActivationView />);
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/don't have access to your school's activation/),
+    );
+    expect(screen.queryByRole("button", { name: /Try again/ })).toBeNull();
   });
 });

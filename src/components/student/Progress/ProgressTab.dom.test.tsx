@@ -20,7 +20,10 @@ vi.mock("@/hooks/useStudentProgress", async (orig) => ({
   ...(await orig<typeof import("@/hooks/useStudentProgress")>()),
   useStudentProgress: () => progress.state,
 }));
-vi.mock("@/hooks/useHasSession", () => ({ useHasSession: () => true }));
+const session = vi.hoisted(() => ({ signedIn: true }));
+vi.mock("@/hooks/useHasSession", () => ({
+  useHasSession: () => session.signedIn,
+}));
 vi.mock("@/hooks/useHydrated", () => ({ useHydrated: () => true }));
 
 /** Each card's own narrowed read, keyed by the subject it was asked for. */
@@ -90,6 +93,7 @@ beforeEach(() => {
   state({});
   narrowed.bySubject = {};
   narrowed.asked = [];
+  session.signedIn = true;
 });
 
 describe("who is told there is nothing to show", () => {
@@ -122,6 +126,102 @@ describe("who is told there is nothing to show", () => {
     render(<ProgressTab />);
 
     expect(screen.queryByText(/Here’s what you’ve been working on/)).toBeNull();
+  });
+});
+
+/**
+ * Design D103, 6 Oct: with lessons begun and no subject cards yet, "the
+ * reflection stands alone at full width; the subject-card grid is suppressed,
+ * not drawn empty." The caps that sized it to sit over cards go with them.
+ */
+describe("the reflection with no subject cards under it", () => {
+  const caps = /max-w-\[(300|560|640)px\]/;
+
+  it("stands alone at full width, with no grid drawn", () => {
+    state({
+      lessons: [LESSON],
+      reflection: "You finished a whole lesson this week.",
+    });
+
+    const { container } = render(<ProgressTab />);
+
+    const para = screen.getByText("You finished a whole lesson this week.");
+    expect(para.className).not.toMatch(caps);
+    expect(container.querySelector(".grid")).toBeNull();
+    expect(screen.queryByRole("link")).toBeNull();
+  });
+
+  it("keeps the frame's measure where cards sit below it", () => {
+    state({
+      subjects: [subject("Mathematics")],
+      reflection: "You finished a whole lesson this week.",
+    });
+
+    render(<ProgressTab />);
+
+    const para = screen.getByText("You finished a whole lesson this week.");
+    expect(para.className).toMatch(/\bmax-w-\[300px\]/);
+    expect(para.className).toMatch(/\bsm:max-w-\[560px\]/);
+    expect(para.className).toMatch(/\blg:max-w-\[640px\]/);
+  });
+});
+
+/**
+ * The signed-out walkthrough still drew the note-per-card layout after the
+ * live cards took 33a's topic squares (B53). It is what a real card looks
+ * like, so it draws what a real card draws.
+ */
+describe("the signed-out walkthrough's subject cards", () => {
+  const card = (name: string) =>
+    screen.getByRole("link", { name: new RegExp(name) }) as HTMLElement;
+  const marks = (el: HTMLElement) =>
+    [...el.querySelectorAll("[data-topic]")].map((m) =>
+      m.getAttribute("data-topic"),
+    );
+
+  it("draws 33a's squares, count and 'Working on' line, as a real card does", () => {
+    session.signedIn = false;
+
+    render(<ProgressTab />);
+
+    const maths = card("Mathematics");
+    expect(
+      within(maths).getByText("Working on Equivalent fractions"),
+    ).toBeInTheDocument();
+    expect(within(maths).getByText("3 of 8 topics done")).toBeInTheDocument();
+    expect(marks(maths)).toEqual([
+      "done",
+      "done",
+      "done",
+      "current",
+      "open",
+      "open",
+      "open",
+      "open",
+    ]);
+    // The note gives way to the named topic, as on a live card.
+    expect(within(maths).queryByText(/Getting faster/)).toBeNull();
+  });
+
+  it("keeps the note where no topic is named, with the squares alone at all done", () => {
+    session.signedIn = false;
+
+    render(<ProgressTab />);
+
+    const english = card("English");
+    expect(
+      within(english).getByText("Reading longer stories with ease"),
+    ).toBeInTheDocument();
+    expect(marks(english)).toEqual(["done", "done", "done", "done", "done"]);
+    expect(english.textContent).not.toMatch(/of 5|Working on/);
+  });
+
+  it("shows no percentage, anywhere", () => {
+    session.signedIn = false;
+
+    const { container } = render(<ProgressTab />);
+
+    expect(container.textContent).not.toMatch(/%/);
   });
 });
 

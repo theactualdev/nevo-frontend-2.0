@@ -7,6 +7,7 @@ import { authApi } from "@/lib/api";
 import { ApiError } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 import { SetPasswordForm } from "./SetPasswordForm";
+import { AuthWordmark, ContactFooter } from "./AuthChrome";
 
 /**
  * Password reset (C02d) - two steps and a failure state, lifted out of the
@@ -101,6 +102,7 @@ export function TeacherPasswordReset({
   if (expired) {
     return (
       <div className="flex w-full max-w-[420px] flex-col items-center px-6 text-center">
+        <AuthWordmark />
         <Medallion tone="violet">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <circle cx="12" cy="12" r="9" />
@@ -128,6 +130,7 @@ export function TeacherPasswordReset({
         >
           {"← Back to sign in"}
         </Link>
+        <ContactFooter />
       </div>
     );
   }
@@ -136,6 +139,7 @@ export function TeacherPasswordReset({
   if (phase === "unreachable") {
     return (
       <div className="flex w-full max-w-[420px] flex-col items-center px-6 text-center">
+        <AuthWordmark />
         <span className="text-[12.5px] font-semibold tracking-[0.14em] text-nevo-violet uppercase">
           Password reset
         </span>
@@ -153,6 +157,7 @@ export function TeacherPasswordReset({
         >
           Try again
         </button>
+        <ContactFooter />
       </div>
     );
   }
@@ -160,6 +165,7 @@ export function TeacherPasswordReset({
   if (phase === "sent") {
     return (
       <div className="flex w-full max-w-[420px] flex-col items-center px-6 text-center motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300">
+        <AuthWordmark />
         <Medallion tone="violet">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <path d="M4 6h16v12H4z" />
@@ -182,6 +188,7 @@ export function TeacherPasswordReset({
         >
           {"← Back to sign in"}
         </Link>
+        <ContactFooter />
       </div>
     );
   }
@@ -218,6 +225,7 @@ export function TeacherPasswordReset({
 
   return (
     <div className="flex w-full max-w-[420px] flex-col items-center px-6 text-center">
+      <AuthWordmark />
       <span className="text-[12.5px] font-semibold tracking-[0.14em] text-nevo-violet uppercase">
         Password reset
       </span>
@@ -272,9 +280,7 @@ export function TeacherPasswordReset({
       >
         {"← Back to sign in"}
       </Link>
-      <p className="mt-5 text-[13px] leading-[1.5] text-nevo-near-black/55">
-        Having trouble? Contact your school administrator.
-      </p>
+      <ContactFooter />
     </div>
   );
 }

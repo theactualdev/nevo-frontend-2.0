@@ -200,8 +200,8 @@ export function ProfilingFlow({
        * goes up as it happened and the server does the arithmetic.
        *
        * The band the run was built for has no field on a trial, so it is no
-       * longer beside the numbers; it is with backend as an ask. It still
-       * reaches the profiling stream on each `baseline_module_start`.
+       * longer beside the numbers; it is with backend as an ask (B76). Nor
+       * does it ride `baseline_module_start` any more: see `startGridSpan`.
        */
       const trials = baselineTrials(capture);
       const c = capture;
@@ -243,11 +243,17 @@ export function ProfilingFlow({
    * Module 1 starts here, and its start is signalled here, not on "Let's go":
    * the motor step sits between the two, and a start stamped before it would
    * fold the step into Module 1's time.
+   *
+   * THE CATALOGUE'S KEY AND NOTHING ELSE. `baseline_module_start` and
+   * `baseline_module_complete` declare one payload key, `moduleId`
+   * (`GET /api/signals/catalogue`). Both sent `module`, which it does not
+   * name, and the start an undeclared `band` too. The band has no declared
+   * home on either event, nor on a trial, so it is not sent; where it goes is
+   * asked (B76).
    */
   const startGridSpan = () => {
     track?.(ONBOARDING_SIGNAL_TYPES.BASELINE_MODULE_START, {
-      module: "grid_span",
-      band,
+      moduleId: "grid_span",
     });
     setPhase("m1");
   };
@@ -300,7 +306,7 @@ export function ProfilingFlow({
         capture={capture}
         onComplete={() => {
           track?.(ONBOARDING_SIGNAL_TYPES.BASELINE_MODULE_COMPLETE, {
-            module: "grid_span",
+            moduleId: "grid_span",
           });
           setPhase("stretch1");
         }}
@@ -308,10 +314,10 @@ export function ProfilingFlow({
     );
   }
 
-  const startSignal = (module: string) =>
-    track?.(ONBOARDING_SIGNAL_TYPES.BASELINE_MODULE_START, { module, band });
-  const completeSignal = (module: string) =>
-    track?.(ONBOARDING_SIGNAL_TYPES.BASELINE_MODULE_COMPLETE, { module });
+  const startSignal = (moduleId: string) =>
+    track?.(ONBOARDING_SIGNAL_TYPES.BASELINE_MODULE_START, { moduleId });
+  const completeSignal = (moduleId: string) =>
+    track?.(ONBOARDING_SIGNAL_TYPES.BASELINE_MODULE_COMPLETE, { moduleId });
 
   if (phase === "stretch1") {
     return (

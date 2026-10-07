@@ -233,8 +233,10 @@ export function RemoveAccessSheet({
       >
         <p className="m-0 text-[14.5px] leading-[1.6] text-nevo-near-black/72">
           {teacher.name} will no longer be able to open their Nevo console.
-          Their classes and notes stay with the school, and you can restore
-          access later.
+          Their classes and notes stay with the school.
+          {/* No "and you can restore access later": nothing in the contract
+              undoes `POST /teachers/{id}/revoke`. Cut from the other two
+              copies of this sentence earlier; this one was missed. */}
         </p>
       </Sheet>
     );

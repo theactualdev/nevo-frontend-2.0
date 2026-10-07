@@ -11,6 +11,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { studentsApi, type AdminStudentRow, type ParentLink } from "@/lib/api/students";
 import { cn } from "@/lib/utils";
 import { ReadFailed } from "../ReadFailed";
+import { NoAccess, failureKind } from "../NoAccess";
 import {
   Avatar,
   CARD,
@@ -183,6 +184,16 @@ export function IepExporterView({
   const [guardiansFailed, setGuardiansFailed] = useState(false);
   const [shareFailed, setShareFailed] = useState(false);
   /*
+   * A 403 from any call here is this admin's scope, not a failure. It used to
+   * read "Something went wrong... give it another try", and no retry grants a
+   * scope - so it says what it is instead.
+   */
+  const [denied, setDenied] = useState(false);
+  const failWith = (err: unknown) => {
+    if (failureKind(err) === "denied") setDenied(true);
+    setPhase("failed");
+  };
+  /*
    * NULL IS "WE HAVE NOT LOOKED", NOT "NOBODY". The empty array is a real
    * answer - this export has reached no guardian - and it is now a fact rather
    * than an assumption, so the two must not collapse into one another. See
@@ -229,7 +240,8 @@ export function IepExporterView({
         // a child to preselect - the picker starts empty instead.
         setStudentId((cur) => (rows.some((r) => r.id === cur) ? cur : ""));
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        if (failureKind(err) === "denied") setDenied(true);
         setStudents([]);
         setStudentsFailed(true);
       })
@@ -284,7 +296,7 @@ export function IepExporterView({
         setPhase(d.status === "final" ? "final" : "draft");
         loadGuardians(studentId);
       })
-      .catch(() => setPhase("failed"));
+      .catch(failWith);
   };
 
   const saveDraft = () => {
@@ -300,7 +312,7 @@ export function IepExporterView({
         setPhase(d.status === "final" ? "final" : "draft");
         setTimeout(() => setSavedAt(false), 2000);
       })
-      .catch(() => setPhase("failed"));
+      .catch(failWith);
   };
 
   const reviewedOn =
@@ -341,7 +353,7 @@ export function IepExporterView({
         setContent(d.exportContent);
         setPhase("final");
       })
-      .catch(() => setPhase("failed"));
+      .catch(failWith);
   };
 
   /*
@@ -382,7 +394,8 @@ export function IepExporterView({
         // attempt that came before this one and did not confirm.
         loadShares(draft.id);
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        if (failureKind(err) === "denied") setDenied(true);
         // A failed SHARE is the one write here whose outcome the client
         // genuinely cannot know: a transport failure (ApiError status 0) can
         // leave a share committed server-side. Generate, save and finalise
@@ -445,7 +458,7 @@ export function IepExporterView({
                       <p className="mt-1.5 text-[13px] text-nevo-near-black/45">
                         Looking up your students&hellip;
                       </p>
-                    ) : studentsFailed ? (
+                    ) : studentsFailed && !denied ? (
                       <ReadFailed
                         className="mt-1.5"
                         what="your student list"
@@ -795,7 +808,8 @@ export function IepExporterView({
         ) : null}
 
         {/* --------------------------------------------------------- FAILED */}
-        {phase === "failed" ? (
+        {denied ? <NoAccess className="mt-6" what="the IEP exporter" /> : null}
+        {phase === "failed" && !denied ? (
           <div className={cn(CARD, "mt-6 px-[26px] py-7")}>
             <h3 className="text-[17px] font-semibold text-nevo-near-black">
               Something went wrong. We&rsquo;re on it.

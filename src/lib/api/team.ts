@@ -72,14 +72,15 @@ export function roleForScopes(scopes: PermissionScope[]): UserRole {
  * only reachable at a URL reading "teacher", which is not an address to send a
  * proprietor's new deputy head.
  *
- * The email rides along because the accept response carries none, and the form
- * treats the query as the only thing that knows who is activating.
+ * NO EMAIL IN THE LINK. It used to ride along so the form could sign the new
+ * admin straight in after activating (the accept response carries no
+ * address) - but a link is pasted into chats, forwarded and logged, and the
+ * address went everywhere it did. Without it the form already does the right
+ * thing: it activates, then sends them to the sign-in door.
  */
 export function adminActivationLink(invited: InvitedTeamMember): string {
   const origin = typeof window === "undefined" ? "" : window.location.origin;
-  return `${origin}/auth/admin/activate?token=${encodeURIComponent(
-    invited.invitationToken,
-  )}&email=${encodeURIComponent(invited.email)}`;
+  return `${origin}/auth/admin/activate?token=${encodeURIComponent(invited.invitationToken)}`;
 }
 
 export const teamApi = {
