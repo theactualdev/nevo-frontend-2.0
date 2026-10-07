@@ -46,7 +46,7 @@ export function RotatePrompt({
           viewBox="0 0 120 120"
           fill="none"
           role="img"
-          aria-label="Rotate your tablet upright"
+          aria-label="Rotate your device upright"
         >
           <g
             stroke="#9a9ccb"
@@ -79,10 +79,10 @@ export function RotatePrompt({
         </svg>
       </span>
       <h2 className="mt-6 text-xl font-semibold tracking-[-0.01em] md:mt-7 md:text-2xl [@media(max-height:460px)]:mt-4 [@media(max-height:460px)]:text-lg">
-        Turn your tablet upright
+        Turn your device upright
       </h2>
       <p className="mt-3 max-w-[280px] text-[15px] leading-[1.55] text-nevo-near-black/66 md:max-w-[360px] md:text-[17px]">
-        Nevo is designed to stand tall. Rotate your tablet and we&apos;ll pick
+        Nevo is designed to stand tall. Rotate your device and we&apos;ll pick
         up right where you were.
       </p>
       {/*
@@ -101,7 +101,7 @@ export function RotatePrompt({
           onClick={onContinue}
           className="mt-7 shrink-0 cursor-pointer rounded-[10px] px-4 py-2.5 text-[15px] font-medium text-nevo-violet underline decoration-nevo-violet/40 underline-offset-4 transition hover:decoration-nevo-violet md:text-base [@media(max-height:460px)]:mt-4"
         >
-          My tablet doesn&apos;t turn
+          My device doesn&apos;t turn
         </button>
       )}
     </div>

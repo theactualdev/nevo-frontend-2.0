@@ -28,8 +28,9 @@ export function skipsWelcomeBeat(destination: string): boolean {
  * "DEVICE", NOT THE FRAME'S "TABLET" (D130, 6 Oct): "A child on a phone or a
  * laptop reading the word tablet is being told about a device they are not
  * holding." Design asked for device-neutral words and gave no sentence, so
- * this is the frame's sentence with that one word changed - AN INTERIM for
- * design to confirm.
+ * this is the frame's sentence with that one word changed - and product has
+ * ruled it (7 Oct): "Say 'another device', never 'another tablet', in
+ * everything a child reads."
  */
 export const REPLACED_ELSEWHERE_COPY =
   "You were signed in on another device, so that one signed out.";

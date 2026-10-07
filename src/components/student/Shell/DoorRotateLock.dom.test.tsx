@@ -20,7 +20,7 @@ afterEach(() => {
   cleanup();
 });
 
-const prompt = () => screen.queryByText("Turn your tablet upright");
+const prompt = () => screen.queryByText("Turn your device upright");
 
 describe("which doors are a child's", () => {
   it("names every student door under /auth", () => {
