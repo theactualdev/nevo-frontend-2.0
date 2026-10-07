@@ -1,6 +1,31 @@
+"use client";
+
 import Link from "next/link";
+import { useHydrated } from "@/hooks/useHydrated";
+import { rememberedChildren } from "@/lib/auth/deviceRoster";
 import { withNext } from "@/lib/auth/nextPath";
 import { LetMyTeacherKnow } from "./LetMyTeacherKnow";
+
+/** The entry screen (05): school code and Student ID, which asks who they are. */
+const ENTRY_SCREEN = "/student/onboarding/school";
+
+/**
+ * Where both ways out of Forgot PIN go.
+ *
+ * The picker, when the device remembers anyone. A DEVICE THAT REMEMBERS NOBODY
+ * GOES TO THE ENTRY SCREEN (D123, 6 Oct): "The entry screen, not the picker. A
+ * device that remembers nobody cannot offer a child to pick, so it asks who
+ * they are." The entry screen is a lookup of a child the school already
+ * uploaded, not a new account, so this is not the second-account trap the old
+ * onboarding Welcome was: a child with a PIN is sent on to sign in, and a
+ * cleared one to choose a new PIN.
+ */
+export function forgotPinWayBack(
+  remembersAnyone: boolean,
+  next: string | undefined,
+): string {
+  return remembersAnyone ? withNext("/auth/login", next) : ENTRY_SCREEN;
+}
 
 /**
  * Forgot PIN (screen 00a, revised 1 Oct): says what happens next.
@@ -11,11 +36,13 @@ import { LetMyTeacherKnow } from "./LetMyTeacherKnow";
  * "Let my teacher know" sends the ask - see `LetMyTeacherKnow`, which owns the
  * body because the sent state replaces all of it.
  *
- * BOTH WAYS OUT GO TO THE SIGN-IN DOOR, always. They used to read the legacy
- * one-child profile key and send a device it did not name to
+ * BOTH WAYS OUT GO THE SAME WAY - see `forgotPinWayBack`. They used to read
+ * the legacy one-child profile key and send a device it did not name to
  * `/student/onboarding` - the new-account Welcome - which on a shared tablet
- * is how a returning child makes a second account. `/auth/login` already
- * knows what to do with a device that remembers nobody (28c-2).
+ * is how a returning child makes a second account.
+ *
+ * The roster is the device's, so it is read once the client is running; until
+ * then the way back is the sign-in door, which handles an empty device itself.
  *
  * Laid out as 00a draws it: a 44px Back at the top left, the drawn
  * illustration, no wordmark. This replaced a literal placeholder reading
@@ -30,7 +57,11 @@ export function ForgotPinScreen({
   /** The remembered child who forgot, as the roster's opaque id. */
   childId?: string;
 }) {
-  const back = withNext("/auth/login", next);
+  const hydrated = useHydrated();
+  const back = forgotPinWayBack(
+    !hydrated || rememberedChildren().length > 0,
+    next,
+  );
 
   return (
     <main className="flex min-h-[100dvh] w-full flex-col bg-nevo-cream text-nevo-near-black">

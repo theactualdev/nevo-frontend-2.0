@@ -20,15 +20,18 @@ export function skipsWelcomeBeat(destination: string): boolean {
 /**
  * Said when this sign-in ended the same account's session on another device
  * (`SessionResponse.replacedSession`). Board 28's "Signed in here, other
- * tablet released" (D59), verbatim, on a screen of its own - see
- * `SignedInHereScreen`. It replaced an interim line of ours, "Your other
- * session has ended.", which rode the "Welcome back" beat.
+ * tablet released" (D59), on a screen of its own - see `SignedInHereScreen`.
+ * It replaced an interim line of ours, "Your other session has ended.", which
+ * rode the "Welcome back" beat.
  *
- * "TABLET" IS THE FRAME'S WORD, and is used as drawn on every device. Whether
- * a laptop or a phone should read something else is asked (D130).
+ * "DEVICE", NOT THE FRAME'S "TABLET" (D130, 6 Oct): "A child on a phone or a
+ * laptop reading the word tablet is being told about a device they are not
+ * holding." Design asked for device-neutral words and gave no sentence, so
+ * this is the frame's sentence with that one word changed - AN INTERIM for
+ * design to confirm.
  */
 export const REPLACED_ELSEWHERE_COPY =
-  "You were signed in on another tablet, so that one signed out.";
+  "You were signed in on another device, so that one signed out.";
 
 /**
  * The PIN doors' lines for a failure that is not the child's PIN - 28c-6 and

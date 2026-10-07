@@ -1107,7 +1107,7 @@ test.describe("a signed-in student", () => {
      * regression too.
      */
     await expect(
-      page.getByText("You were signed in on another tablet, so that one signed out."),
+      page.getByText("You were signed in on another device, so that one signed out."),
     ).toBeVisible({ timeout: LIVE_MS });
     await page.getByRole("button", { name: "Continue" }).click();
 

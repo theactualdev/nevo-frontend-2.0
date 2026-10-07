@@ -29,11 +29,7 @@ import {
 } from "@/lib/auth/signInHandoff";
 import { studentDestination } from "@/lib/auth/entryGate";
 import { useAuth } from "@/hooks";
-import {
-  STUDENT_PIN_LENGTH,
-  STUDENT_PIN_MAX,
-  STUDENT_PIN_MIN,
-} from "@/lib/constants";
+import { STUDENT_PIN_LENGTH } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { AccountOnPauseScreen } from "./AccountOnPauseScreen";
 import { SignedInHereScreen } from "./SignedInHereScreen";
@@ -172,31 +168,25 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
    * all; two copies of "add a digit unless we are full" is how they end up
    * disagreeing about the cap.
    */
-  const addDigits = useCallback(
-    (raw: string) => {
-      const add = raw.replace(/[^0-9]/g, "");
-      if (!add) return;
-      setError(null);
-      /*
-       * UP TO EIGHT, NOT THE LENGTH A NEW PIN IS CREATED AT.
-       *
-       * A child meets this form on a device that has never seen them, so it
-       * has no idea how long their PIN is - and since 25 Sep it could be four
-       * (any new one) or six (every earlier one, and every adult's reset).
-       * Capping at four would submit two-thirds of a six-digit PIN. The Sign
-       * in button is what says "done", so the form can take the whole range.
-       */
-      setDigits((d) => (d + add).slice(0, STUDENT_PIN_MAX));
-    },
-    [],
-  );
+  const addDigits = useCallback((raw: string) => {
+    const add = raw.replace(/[^0-9]/g, "");
+    if (!add) return;
+    setError(null);
+    /*
+     * FOUR DIGITS, FOUR BOXES (D58, 6 Oct). This took up to eight, for a
+     * PIN that might be six from before 25 Sep; design: "SCRUM-179 settles
+     * it and the six-digit reference is stale wherever it appears." Five to
+     * eight were only ever a 422.
+     */
+    setDigits((d) => (d + add).slice(0, STUDENT_PIN_LENGTH));
+  }, []);
 
   const identifier = username.trim();
   const school = schoolCode.trim();
   const ready =
     school.length >= SCHOOL_CODE_MIN &&
     identifier.length >= USERNAME_MIN &&
-    digits.length >= STUDENT_PIN_MIN;
+    digits.length === STUDENT_PIN_LENGTH;
 
   /**
    * On from a sign-in that worked: the "Welcome back" beat, then where they
@@ -262,8 +252,6 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
         // Two letters, not an identifier. Better than a blank circle, and it
         // is replaced the moment the real name lands below.
         initials: initialsFromUsername(identifier),
-        // So the one-tap unlock tomorrow draws the right number of boxes.
-        pinLength: digits.length,
         // So a signed-in screen can find THIS child's entry on a shared tablet.
         userId: session.userId,
       });
@@ -548,30 +536,27 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
                 role="group"
                 aria-labelledby="returning-pin-label"
               >
-                {/* Four boxes, and one more for each digit past four. */}
-                {Array.from(
-                  { length: Math.max(STUDENT_PIN_LENGTH, digits.length) },
-                  (_, i) => {
-                    const active = i === digits.length && !checking;
-                    return (
-                      <div
-                        key={i}
-                        className={cn(
-                          "flex size-[58px] items-center justify-center rounded-[10px] bg-nevo-cream shadow-[0_2px_8px_rgba(0,0,0,0.05)] sm:size-[66px]",
-                          active
-                            ? "border-2 border-nevo-navy"
-                            : error
-                              ? "border-[1.5px] border-nevo-violet"
-                              : "border-[1.5px] border-nevo-near-black/20",
-                        )}
-                      >
-                        {digits.length > i && (
-                          <span className="block size-[13px] rounded-full bg-nevo-near-black sm:size-3.5" />
-                        )}
-                      </div>
-                    );
-                  },
-                )}
+                {/* Four boxes, for every child (D58). */}
+                {Array.from({ length: STUDENT_PIN_LENGTH }, (_, i) => {
+                  const active = i === digits.length && !checking;
+                  return (
+                    <div
+                      key={i}
+                      className={cn(
+                        "flex size-[58px] items-center justify-center rounded-[10px] bg-nevo-cream shadow-[0_2px_8px_rgba(0,0,0,0.05)] sm:size-[66px]",
+                        active
+                          ? "border-2 border-nevo-navy"
+                          : error
+                            ? "border-[1.5px] border-nevo-violet"
+                            : "border-[1.5px] border-nevo-near-black/20",
+                      )}
+                    >
+                      {digits.length > i && (
+                        <span className="block size-[13px] rounded-full bg-nevo-near-black sm:size-3.5" />
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>

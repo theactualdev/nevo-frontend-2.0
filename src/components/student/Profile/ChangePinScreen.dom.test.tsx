@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ChangePinScreen } from "./ChangePinScreen";
 import { ApiError } from "@/lib/api/client";
-import { STUDENT_PIN_LENGTH, STUDENT_PIN_MAX } from "@/lib/constants";
+import { STUDENT_PIN_LENGTH } from "@/lib/constants";
 
 /**
  * Changing a PIN has to prove the old one as of 23 Sep, and the server
@@ -118,15 +118,17 @@ describe("what reaches the wire", () => {
     expect(push).toHaveBeenCalledWith("/student/profile");
   });
 
-  it("takes an old PIN of any length the server issues, up to eight", async () => {
-    // Six for anyone who set theirs before 25 Sep or had an adult reset it.
+  it("takes four digits for the old PIN, in four boxes (D58)", async () => {
+    // "Four digits, four boxes." Step 1 took up to eight, for a PIN that
+    // might be six from before 25 Sep; `currentPin` is exactly four.
     render(<ChangePinScreen />);
     type("1234567890");
+    expect(boxes()).toBe(4);
+    expect(dots()).toBe(4);
     fireEvent.click(continueButton());
     await enterNewPinTwice();
 
-    // Ten typed, eight kept: the most a PIN can be.
-    expect(setPin).toHaveBeenCalledWith(NEXT, "1234567890".slice(0, STUDENT_PIN_MAX));
+    expect(setPin).toHaveBeenCalledWith(NEXT, "1234");
   });
 });
 
