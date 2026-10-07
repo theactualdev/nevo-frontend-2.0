@@ -31,6 +31,7 @@ export interface LessonContextValue {
    * Lesson Completion and Lesson Summary screens."* Completion is a phase of
    * the player rather than a route of its own, so the route alone cannot say
    * which one is up - the screen says it, by switching this on while mounted.
+   * The review session's entry does the same (design D108).
    */
   askNevoAllowed: boolean;
   setAskNevoAllowed: (allowed: boolean) => void;

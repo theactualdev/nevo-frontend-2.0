@@ -92,6 +92,12 @@ export type SystemMessageInput = AdultMessage | ChildMessage;
  * A factual system state, in the frame's own register: what happened to their
  * work. No tick, no count, no "well done", nothing a child could read as a
  * score - and nothing about the connection, which is the banner's (D55).
+ *
+ * ONLY ONCE THE BACKEND HAS CONFIRMED THE SAVE (design D112, 6 Oct): "Yes,
+ * if it states something the backend confirmed. If the save is not confirmed,
+ * the line does not appear at all, per D88 and D89." So `saved` is raised
+ * from a write's success and never from its attempt, a queued retry or a
+ * device copy. Nothing raises it today.
  */
 const CHILD_COPY: Record<ChildMessage["state"], string> = {
   saved: "Your work is saved.",

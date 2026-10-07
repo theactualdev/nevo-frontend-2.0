@@ -1,6 +1,8 @@
 "use client";
 
+import { useContext, useEffect } from "react";
 import { Button } from "@/components/shared";
+import { LessonContext } from "@/context/LessonContext";
 import { LeaveButton } from "./LeaveButton";
 
 /**
@@ -14,6 +16,12 @@ import { LeaveButton } from "./LeaveButton";
  * child was told two weeks whatever the truth was. It is now derived from the
  * progress row when there is one, and when there is not it says nothing about
  * timing rather than picking a number.
+ *
+ * ASK NEVO IS DOCKED HERE (design D108, 6 Oct: "docked and reachable from
+ * anywhere in the student app"). This is a landing, not lesson content - the
+ * review has not begun - so IA 31's rule for the player does not reach it.
+ * Like the completion screen, it says so while it is up; "Begin review"
+ * unmounts it, and the drawer goes as the review starts.
  */
 
 /** "two weeks ago", "yesterday" - only ever from a real timestamp. */
@@ -46,6 +54,15 @@ export function ReviewEntryScreen({
    */
   onLeave?: () => void;
 }) {
+  // A tolerant read, as on the completion screen: rendered with no provider,
+  // there is no drawer to allow.
+  const allowAskNevo = useContext(LessonContext)?.setAskNevoAllowed;
+  useEffect(() => {
+    if (!allowAskNevo) return;
+    allowAskNevo(true);
+    return () => allowAskNevo(false);
+  }, [allowAskNevo]);
+
   const ago = lastWorkedAt ? agoPhrase(lastWorkedAt) : null;
   const note = ago
     ? `You worked on this ${ago}. Let's see what's stuck.`
