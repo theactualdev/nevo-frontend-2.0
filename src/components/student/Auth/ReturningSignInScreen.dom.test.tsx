@@ -148,11 +148,33 @@ describe("ReturningSignInScreen — signing back in", () => {
 
     await signInNow();
 
+    // `PinLoginRequest` since 1 Oct. `loginIdentifier` only worked because the
+    // server still took it as an alias.
     expect(loginPin).toHaveBeenCalledWith({
       schoolCode: "751A1136",
-      loginIdentifier: "amara.k",
+      admissionNumber: "amara.k",
       pin: "123456",
     });
+  });
+
+  it("sends a Student ID as long as the contract takes, uncut", async () => {
+    // `admissionNumber` is 1-60. The field stopped at 50, the old
+    // identifier's cap, so a long ID handed over from 05 was sent short.
+    const long = "S".repeat(60);
+    loginPin.mockResolvedValue(SESSION);
+    handSignInOver({ schoolCode: "K7DQ", identifier: long });
+    render(<ReturningSignInScreen />);
+    act(() => pinInput().focus());
+    for (const d of ["1", "2", "3", "4"]) {
+      fireEvent.click(screen.getByRole("button", { name: d }));
+    }
+
+    await signInNow();
+
+    expect(loginPin).toHaveBeenCalledWith(
+      expect.objectContaining({ admissionNumber: long }),
+    );
+    clearSignInHandoff();
   });
 
   it("remembers the device, so tomorrow is one tap", async () => {
@@ -327,7 +349,10 @@ describe("ReturningSignInScreen — when it does not work", () => {
 
     await signInNow();
 
-    expect(screen.getByText(/that's on us, not you/)).toBeVisible();
+    // 28c-6 (D68): the same words on every PIN door that shares the box.
+    expect(
+      screen.getByText("Something went wrong on our side. Try again."),
+    ).toBeVisible();
   });
 
   it("does not tell a rate-limited child they typed it wrong", async () => {
@@ -337,7 +362,11 @@ describe("ReturningSignInScreen — when it does not work", () => {
 
     await signInNow();
 
-    expect(screen.getByText(/a lot of tries in a row/)).toBeVisible();
+    // 28c-7 (D68).
+    expect(
+      screen.getByText("Let's wait a moment before trying again."),
+    ).toBeVisible();
+    expect(screen.queryByText(/didn.t match/)).toBeNull();
   });
 });
 
@@ -710,7 +739,7 @@ describe("the form as 00c draws it", () => {
     await signInNow();
 
     expect(loginPin).toHaveBeenCalledWith(
-      expect.objectContaining({ loginIdentifier: "BGA/2031" }),
+      expect.objectContaining({ admissionNumber: "BGA/2031" }),
     );
   });
 
@@ -790,7 +819,13 @@ describe("an account that is not a student's", () => {
 
     await signInNow();
 
-    expect(screen.getByText(/this is the student sign-in/)).toBeVisible();
+    // 28c-8's words (D68), the same on this door, with no link.
+    expect(
+      screen.getByText(
+        "This sign-in is for students. Staff sign in with an email address.",
+      ),
+    ).toBeVisible();
+    expect(screen.queryByRole("link", { name: /sign in as/ })).toBeNull();
     expect(getRememberedProfile()).toBeNull();
     expect(signIn).not.toHaveBeenCalled();
     expect(authApiModule.authApi.logout).toHaveBeenCalled();
@@ -821,17 +856,6 @@ describe("the moment after signing back in", () => {
     expect(screen.queryByText(/Taking you to your lessons/)).toBeNull();
   });
 
-  it("says the other session has ended when this sign-in ended one, and not where", async () => {
-    loginPin.mockResolvedValue({ ...SESSION, replacedSession: true });
-    render(<ReturningSignInScreen />);
-    fill();
-
-    await signInNow();
-
-    expect(screen.getByText("Your other session has ended.")).toBeVisible();
-    expect(document.body.textContent).not.toMatch(/another device|tablet|because/i);
-  });
-
   it("says nothing of the kind when no other session was ended", async () => {
     loginPin.mockResolvedValue({ ...SESSION, replacedSession: false });
     render(<ReturningSignInScreen />);
@@ -840,7 +864,65 @@ describe("the moment after signing back in", () => {
     await signInNow();
 
     expect(screen.getByText(/Taking you to your lessons/)).toBeVisible();
-    expect(screen.queryByText("Your other session has ended.")).toBeNull();
+    expect(screen.queryByText(/signed in on another tablet/)).toBeNull();
+  });
+});
+
+/**
+ * D59: board 28's "Signed in here, other tablet released" - its own screen,
+ * waiting on Continue, where it was a line on the beat that moves on alone.
+ */
+describe("a sign-in that ended a session on another tablet", () => {
+  const RELEASED =
+    "You were signed in on another tablet, so that one signed out.";
+
+  it("says so on its own screen, and goes nowhere until Continue", async () => {
+    loginPin.mockResolvedValue({ ...SESSION, replacedSession: true });
+    render(<ReturningSignInScreen />);
+    fill();
+
+    await signInNow();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+
+    expect(screen.getByRole("heading", { name: RELEASED })).toBeVisible();
+    expect(screen.queryByText(/Taking you to your lessons/)).toBeNull();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("goes on as before after Continue: the beat, then their lessons", async () => {
+    loginPin.mockResolvedValue({ ...SESSION, replacedSession: true });
+    render(<ReturningSignInScreen />);
+    fill();
+    await signInNow();
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(screen.getByText(/Taking you to your lessons/)).toBeVisible();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1300);
+    });
+    expect(push).toHaveBeenCalledWith("/student/dashboard");
+  });
+
+  it("takes a held child straight to the waiting screen after Continue", async () => {
+    loginPin.mockResolvedValue({ ...SESSION, replacedSession: true });
+    myConsentGate.mockResolvedValue({
+      studentId: "student-1",
+      granted: false,
+      blocked: true,
+      requiredType: "data_processing",
+      status: "pending",
+    });
+    render(<ReturningSignInScreen />);
+    fill();
+    await signInNow();
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(push).toHaveBeenCalledWith("/student/waiting");
+    expect(screen.queryByText(/Taking you to your lessons/)).toBeNull();
   });
 });
 
@@ -922,7 +1004,7 @@ describe("arriving from 05 Entry", () => {
 
     expect(loginPin).toHaveBeenCalledWith({
       schoolCode: "K7DQ",
-      loginIdentifier: "BGA/2031",
+      admissionNumber: "BGA/2031",
       pin: "1234",
     });
   });

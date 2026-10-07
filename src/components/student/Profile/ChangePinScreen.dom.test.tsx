@@ -31,6 +31,11 @@ const type = (pin: string) => {
 
 const continueButton = () => screen.getByRole("button", { name: "Continue" });
 
+/** The PIN boxes on screen, and how many of them hold a dot. */
+const boxes = () => document.querySelectorAll("div.size-12").length;
+const dots = () =>
+  document.querySelectorAll("div.size-12 > span.rounded-full").length;
+
 /** Step 1 through to the new-PIN screen. */
 const passStepOne = (pin = CURRENT) => {
   type(pin);
@@ -142,6 +147,48 @@ describe("the frame's own steps", () => {
     type(NEXT);
 
     expect(screen.getByText("Step 3 of 3")).toBeInTheDocument();
+  });
+
+  /*
+   * D62: frame 27 draws steps 2 and 3 as two screens, each one row of four.
+   * It was one screen with both rows, headed "Create a PIN".
+   */
+  it("draws step 2 as Choose a new PIN, with one row of four", () => {
+    render(<ChangePinScreen />);
+    passStepOne();
+
+    expect(
+      screen.getByRole("heading", { name: "Choose a new PIN" }),
+    ).toBeInTheDocument();
+    expect(boxes()).toBe(STUDENT_PIN_LENGTH);
+    expect(screen.queryByText(/Create a PIN|Type it again/)).toBeNull();
+  });
+
+  it("draws step 3 as Type it again, a screen of its own with one empty row", () => {
+    render(<ChangePinScreen />);
+    passStepOne();
+
+    type(NEXT);
+
+    expect(screen.getByRole("heading", { name: "Type it again" })).toBeInTheDocument();
+    expect(screen.queryByText("Choose a new PIN")).toBeNull();
+    expect(boxes()).toBe(STUDENT_PIN_LENGTH);
+    expect(dots()).toBe(0);
+
+    type(NEXT.slice(0, 2));
+
+    expect(dots()).toBe(2);
+  });
+
+  it("goes back from step 3 to an empty step 2, not to step 1", () => {
+    render(<ChangePinScreen />);
+    passStepOne();
+    type(NEXT);
+
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+
+    expect(screen.getByText("Step 2 of 3")).toBeInTheDocument();
+    expect(dots()).toBe(0);
   });
 
   it("keeps them on step 3 when the two do not match", () => {

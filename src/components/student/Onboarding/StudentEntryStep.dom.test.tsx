@@ -267,6 +267,49 @@ describe("the lookup", () => {
     expect(message()).not.toBe(ENTRY_NO_MATCH_COPY);
   });
 
+  /*
+   * The frame's "unreachable" state (root entry frame, 29af2a4): its own
+   * words, the fields NOT tinted, and the button still "Continue". It used to
+   * look exactly like a miss but for the line.
+   */
+  it("says nothing typed is wrong, in the frame's words, and leaves the fields and Continue alone", async () => {
+    lookup.mockRejectedValue(new ApiError(503, "cold start"));
+    render(<StudentEntryStep framing="school" />);
+
+    await enterAndSubmit();
+
+    expect(message()).toBe(
+      "We couldn't check just now. Nothing you typed is wrong - press Continue to try again.",
+    );
+    expect(continueButton()).toHaveTextContent("Continue");
+    expect(continueButton()).toBeEnabled();
+    expect(idField().parentElement?.className).not.toContain("border-nevo-violet");
+    expect(cells()[0].className).not.toContain("border-nevo-violet");
+  });
+
+  it("asks again on Continue after a lookup we could not run", async () => {
+    lookup.mockRejectedValueOnce(new ApiError(503, "cold start"));
+    lookup.mockResolvedValueOnce(matched());
+    render(<StudentEntryStep framing="school" />);
+    await enterAndSubmit();
+
+    fireEvent.click(continueButton());
+    await act(async () => {});
+
+    expect(lookup).toHaveBeenCalledTimes(2);
+    expect(message()).toBe(ENTRY_MATCHED_COPY);
+  });
+
+  it("still tints the fields for a real miss", async () => {
+    lookup.mockRejectedValue(new ApiError(404, "not found"));
+    render(<StudentEntryStep framing="school" />);
+
+    await enterAndSubmit();
+
+    expect(idField().parentElement?.className).toContain("border-nevo-violet");
+    expect(cells()[0].className).toContain("border-nevo-violet");
+  });
+
   it("reads a dropped network and a rate limit the same way", async () => {
     for (const err of [new Error("offline"), new ApiError(429, "slow down")]) {
       lookup.mockReset().mockRejectedValue(err);

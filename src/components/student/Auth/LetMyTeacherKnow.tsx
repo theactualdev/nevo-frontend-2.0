@@ -8,7 +8,8 @@ import { Button } from "@/components/shared";
 import { authApi } from "@/lib/api";
 import { childById, type RememberedChild } from "@/lib/auth/deviceRoster";
 
-type Sending = "idle" | "sending" | "sent" | "failed";
+/** `resending` is "Try again" on the didn't-send state, which stays up while it goes. */
+type Sending = "idle" | "sending" | "sent" | "failed" | "resending";
 
 /**
  * 00a's body and its "Let my teacher know" (design, D3; SCRUM-217), as the
@@ -32,9 +33,11 @@ type Sending = "idle" | "sending" | "sent" | "failed";
  * the whole body, as the frame draws it, and only after the 202 - never on
  * the tap.
  *
- * AWAITING DESIGN (D60): THE FAILED STATE. 00a draws none. The line below the
- * buttons is the interim one this screen already had, the words the other
- * doors use for a fault that is ours, and the button stays to try again.
+ * "THAT DIDN'T SEND" REPLACES THE WHOLE BODY TOO (D60), as 00a draws it on
+ * 6 Oct: "didn't-send state owns the failure, stays pressable". A refresh
+ * mark, the frame's words, "Try again" - which sends the same ask again - and
+ * the way back under it. It was the asking body with an interim line of ours
+ * added under the buttons.
  */
 export function LetMyTeacherKnow({
   childId,
@@ -61,9 +64,12 @@ export function LetMyTeacherKnow({
   const asking = child === undefined ? Boolean(childId) : child !== null;
   const [sending, setSending] = useState<Sending>("idle");
 
+  const didntSend = sending === "failed" || sending === "resending";
+
   const ask = () => {
-    if (!child || sending === "sending" || sending === "sent") return;
-    setSending("sending");
+    if (!child || sending === "sent") return;
+    if (sending === "sending" || sending === "resending") return;
+    setSending(didntSend ? "resending" : "sending");
     authApi
       .requestPinReset({
         schoolCode: child.schoolCode,
@@ -99,6 +105,44 @@ export function LetMyTeacherKnow({
           <Button
             asChild
             className="mt-8 w-full text-base sm:mt-9 sm:max-w-[360px]"
+          >
+            <Link href={back}>Back to sign in</Link>
+          </Button>
+        </>
+      ) : didntSend ? (
+        <>
+          <span className="flex size-[72px] items-center justify-center rounded-full bg-nevo-violet/22 sm:size-[88px]">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+              className="size-8 text-nevo-navy sm:size-10"
+            >
+              <path d="M3 12a9 9 0 1 0 2.6-6.4" />
+              <path d="M3 4v4h4" />
+            </svg>
+          </span>
+          <h1 className="mt-7 text-[23px] font-semibold tracking-[-0.01em] sm:mt-8 sm:text-[28px]">
+            That didn&apos;t send
+          </h1>
+          <p className="mt-3.5 max-w-[300px] text-base leading-[1.55] text-pretty text-nevo-near-black/70 sm:mt-4 sm:max-w-[420px] sm:text-lg lg:max-w-[440px]">
+            That&apos;s on us, not you. Try letting your teacher know again.
+          </p>
+          <Button
+            loading={sending === "resending"}
+            onClick={ask}
+            className="mt-8 w-full text-base sm:mt-9 sm:max-w-[360px]"
+          >
+            Try again
+          </Button>
+          <Button
+            asChild
+            variant="ghost"
+            className="mt-2 h-12 w-full text-base hover:bg-nevo-cream-elevated sm:max-w-[360px]"
           >
             <Link href={back}>Back to sign in</Link>
           </Button>
@@ -145,15 +189,6 @@ export function LetMyTeacherKnow({
             >
               <Link href={back}>Back to sign in</Link>
             </Button>
-          )}
-          {sending === "failed" && (
-            <p
-              role="status"
-              className="mt-3 max-w-[300px] text-sm leading-[1.5] text-nevo-near-black/70 sm:max-w-[360px]"
-            >
-              We couldn&apos;t send that just now - that&apos;s on us, not you.
-              Try again in a moment.
-            </p>
           )}
         </>
       )}
