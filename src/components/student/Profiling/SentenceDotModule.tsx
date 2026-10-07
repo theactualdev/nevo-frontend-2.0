@@ -257,6 +257,9 @@ export function HeardPictures({
       >
         <Play className="ml-1 size-6" fill="currentColor" strokeWidth={0} />
       </button>
+      {/* From `sm` up each picture is a 160px square, or the square of a
+          third of the row where that is narrower (the warm-up's column is
+          480px, three 160s and their gaps 512). */}
       <div className="flex w-full flex-col items-center gap-3.5 sm:flex-row sm:justify-center sm:gap-4">
         {AUDIO_PICS.map((p, i) => (
           <button
@@ -265,7 +268,7 @@ export function HeardPictures({
             aria-label={p.label}
             onClick={(e) => onPick(i, { correct: p.key === answer }, e)}
             className={cn(
-              "flex h-[120px] w-full cursor-pointer items-center justify-center rounded-[12px] bg-nevo-cream transition-transform active:scale-[0.97] sm:size-[160px]",
+              "flex h-[120px] w-full cursor-pointer items-center justify-center rounded-[12px] bg-nevo-cream transition-transform active:scale-[0.97] sm:aspect-square sm:h-auto sm:w-[160px] sm:min-w-0",
               picked === i
                 ? "border-[3px] border-nevo-navy"
                 : "border-2 border-nevo-navy",
