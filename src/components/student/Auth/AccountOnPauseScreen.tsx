@@ -1,6 +1,4 @@
-import Image from "next/image";
 import { Wordmark } from "@/components/shared/BrandMarks";
-import type { AccountHold } from "@/lib/auth/accountPause";
 import { cn } from "@/lib/utils";
 
 /**
@@ -23,38 +21,44 @@ import { cn } from "@/lib/utils";
  * here they can do about the pause, and offering an action that cannot work
  * would be worse than offering none. The way back is a teacher.
  *
- * BUT ONE WAY BACK TO THE PICKER (design, D52). The frame drew no controls at
- * all, and on a shared classroom tablet a screen with no controls locks every
- * other child out of the device. So it carries "Back to sign in" - 00a's own
- * words for the same door - which takes the NEXT child to the picker. It is
- * not a retry and does not present itself as one.
+ * BUT ONE WAY BACK TO THE PICKER (design, D52; "Back to sign in" confirmed,
+ * D64). The frame drew no controls at all, and on a shared classroom tablet a
+ * screen with no controls locks every other child out of the device. So it
+ * carries "Back to sign in" - 00a's own words for the same door - which takes
+ * the NEXT child to the picker. It is not a retry and does not present itself
+ * as one.
  *
- * THE BRAND MARK, NOT A PAUSE GLYPH. The frame puts the Nevo icon in a soft
- * violet circle and the wordmark at the top centre; a pause symbol reads as a
- * media control, or as something the child could un-pause.
+ * THE PAUSE BARS, NOT THE BRAND MARK (D64, 6 Oct): "The glyph is the pause
+ * bars, not the brand mark. Our mark does not appear on a screen that is
+ * telling someone their access has been interrupted." 28b draws the bars in its
+ * card; the `Account On Pause` frame still has the Nevo icon in its circle, and
+ * the ruling covers both, so both carry the bars - the circle as that frame
+ * sizes it, the bars in it at the share of the circle 28b gives them. The
+ * wordmark at the top is the page's, not the glyph, and stays.
  *
  * A pause that lands mid-lesson gets 28b's card over the lesson first - see
  * `AccountPauseHost` - and settles into this same screen after "Okay", so a
- * paused child meets one screen whichever way they arrive.
+ * paused child meets one screen whichever way they arrive ("a shared system
+ * state is drawn once and reused").
  *
- * A CLOSED ACCOUNT IS THIS SCREEN WITH ONE WORD CHANGED (design, D53): "A
- * removed child reads that their account is closed, not that it is on pause."
- * Backend's 5 Oct answer gives it its own 401, `account_closed` (B58), which
- * the deployed spec does not name yet. "On pause" says it will start again,
- * and a removed child told that comes back to the tablet to try. NOT DRAWN: no frame carries the closed state yet, so its heading is
- * the ruling's own words and its second line is the pause frame's, which
- * points at a person and promises nothing. Both are a DESIGN ASK until a frame
- * lands. Same mark, same way back to the picker (D52).
+ * A CLOSED ACCOUNT IS NOT THIS SCREEN ANY MORE. It was, with one word changed
+ * (D53), until 28d drew its own: see `AccountClosedScreen`.
  */
-/** What follows "Your Nevo account", which the phone heading breaks before. */
-const HOLD_STATE: Record<AccountHold, string> = {
-  paused: "is on pause.",
-  closed: "is closed.",
-};
+export const ACCOUNT_PAUSED_HEADING = "Your Nevo account is on pause.";
 
-/** The heading in one piece, for the 28b card and the dialog's name. */
-export function accountHoldHeading(hold: AccountHold): string {
-  return `Your Nevo account ${HOLD_STATE[hold]}`;
+/** 28b's pause bars, as the frame draws them. Decorative: the words say it. */
+export function PauseBars({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+      className={className}
+    >
+      <rect x="7" y="5" width="3.4" height="14" rx="1.4" />
+      <rect x="13.6" y="5" width="3.4" height="14" rx="1.4" />
+    </svg>
+  );
 }
 
 /**
@@ -73,12 +77,9 @@ const WAY_BACK =
 export function AccountOnPauseView({
   className,
   back,
-  hold = "paused",
 }: {
   className?: string;
   back?: PauseWayBack;
-  /** Which account state this is. Paused unless a 401 said closed. */
-  hold?: AccountHold;
 }) {
   return (
     <div
@@ -92,21 +93,14 @@ export function AccountOnPauseView({
         className="absolute top-[34px] left-1/2 -translate-x-1/2 sm:top-10"
       />
 
-      <span className="flex size-[132px] shrink-0 items-center justify-center rounded-full bg-nevo-violet/16 sm:size-40 lg:size-[168px]">
-        <Image
-          src="/brand/logo-icon-purple-tight.png"
-          alt=""
-          width={218}
-          height={217}
-          priority
-          className="size-[70px] object-contain opacity-92 sm:size-[86px] lg:size-[90px]"
-        />
+      <span className="flex size-[132px] shrink-0 items-center justify-center rounded-full bg-nevo-violet/16 text-nevo-navy sm:size-40 lg:size-[168px]">
+        <PauseBars className="size-[60px] sm:size-[72px] lg:size-[76px]" />
       </span>
 
       <h1 className="mt-10 text-[26px] leading-[1.25] font-semibold tracking-[-0.015em] text-nevo-navy sm:mt-11 sm:text-[32px] sm:leading-[1.22] lg:text-[34px] lg:leading-[1.2]">
         Your Nevo account
         {/* The frame breaks the phone heading after "account". */}
-        <br className="sm:hidden" /> {HOLD_STATE[hold]}
+        <br className="sm:hidden" /> is on pause.
       </h1>
       <p className="mt-4 max-w-[280px] text-[17px] leading-[1.6] text-pretty text-nevo-near-black/68 sm:mt-[18px] sm:max-w-[360px] sm:text-lg lg:max-w-[420px] lg:text-[19px]">
         If you have questions, talk to your teacher.
@@ -126,16 +120,10 @@ export function AccountOnPauseView({
   );
 }
 
-export function AccountOnPauseScreen({
-  back,
-  hold,
-}: {
-  back?: PauseWayBack;
-  hold?: AccountHold;
-}) {
+export function AccountOnPauseScreen({ back }: { back?: PauseWayBack }) {
   return (
     <main className="w-full">
-      <AccountOnPauseView back={back} hold={hold} />
+      <AccountOnPauseView back={back} />
     </main>
   );
 }

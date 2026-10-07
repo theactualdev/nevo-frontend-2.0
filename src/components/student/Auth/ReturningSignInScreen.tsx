@@ -31,6 +31,7 @@ import { studentDestination } from "@/lib/auth/entryGate";
 import { useAuth } from "@/hooks";
 import { STUDENT_PIN_LENGTH } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { AccountClosedScreen } from "./AccountClosedScreen";
 import { AccountOnPauseScreen } from "./AccountOnPauseScreen";
 import { SignedInHereScreen } from "./SignedInHereScreen";
 import {
@@ -334,11 +335,13 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
    * A paused account takes the whole screen, exactly as it does at the PIN
    * unlock. There is nothing here a child can do, and leaving the form
    * underneath would invite them to keep trying something that cannot work.
-   * A closed account is the same screen saying closed, never on pause (D53).
+   * A closed account is 28d, never on pause (D53, D116), with no sign-in
+   * route on it.
    */
-  if (error === "paused" || error === "closed") {
+  if (error === "closed") return <AccountClosedScreen />;
+  if (error === "paused") {
     // No retry, but a way back to the picker for whoever is next (D52).
-    return <AccountOnPauseScreen back={{ href: "/auth/login" }} hold={error} />;
+    return <AccountOnPauseScreen back={{ href: "/auth/login" }} />;
   }
 
   if (done) {

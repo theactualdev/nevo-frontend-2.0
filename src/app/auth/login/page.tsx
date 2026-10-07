@@ -17,6 +17,7 @@ import {
   type ConsoleDoor,
 } from "@/lib/auth/consoleDoor";
 import { safeNextPath, withNext } from "@/lib/auth/nextPath";
+import { AccountClosedScreen } from "@/components/student/Auth/AccountClosedScreen";
 import { AccountOnPauseScreen } from "@/components/student/Auth/AccountOnPauseScreen";
 import { WrongDoorNote } from "@/components/student/Auth/WrongDoorNote";
 import {
@@ -413,12 +414,13 @@ export default function LoginPage() {
    *
    * Its way back (D52) is to the picker, so the next child can get in.
    *
-   * A closed account is the same screen saying closed, never on pause (D53).
+   * A closed account is 28d, never on pause (D53, D116), and terminal: the
+   * frame draws no sign-in route on it.
    */
-  if (error === "paused" || error === "closed") {
+  if (error === "closed") return <AccountClosedScreen />;
+  if (error === "paused") {
     return (
       <AccountOnPauseScreen
-        hold={error}
         back={{
           onBack: () => {
             setError(null);

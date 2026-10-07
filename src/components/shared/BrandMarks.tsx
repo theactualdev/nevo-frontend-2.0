@@ -23,15 +23,19 @@ import { cn } from "@/lib/utils";
  * error screens. `pause`: 18 / 21 / 22px - the `Account On Pause` frame.
  * `revoked`: 26px - frame 28a. `door`: 30px - 28c-2, the device that
  * remembers nobody. `form`: 17px, 19px from `sm` - 00c's sign-back-in form.
+ * `corner`: 15 / 18 / 19px - the top-left mark on 28d Account Closed and 00e
+ * Consent Withdrawn.
  */
 export function Wordmark({
   size,
   className,
 }: {
-  size: "compact" | "pause" | "revoked" | "door" | "form";
+  size: "compact" | "pause" | "revoked" | "door" | "form" | "corner";
   className?: string;
 }) {
   const box = {
+    corner:
+      "h-[15px] w-[47px] sm:h-[18px] sm:w-[56px] lg:h-[19px] lg:w-[59px]",
     form: "h-[17px] w-[53px] sm:h-[19px] sm:w-[59px]",
     compact: "h-[14px] w-[44px] sm:h-6 sm:w-[75px]",
     pause: "h-[18px] w-[56px] sm:h-[21px] sm:w-[65px] lg:h-[22px] lg:w-[68px]",
@@ -39,6 +43,8 @@ export function Wordmark({
     door: "h-[30px] w-[93px]",
   }[size];
   const img = {
+    corner:
+      "h-[150px] w-[150px] -translate-x-[54px] -translate-y-[73px] sm:h-[180px] sm:w-[180px] sm:-translate-x-[65px] sm:-translate-y-[87px] lg:h-[190px] lg:w-[190px] lg:-translate-x-[69px] lg:-translate-y-[92px]",
     form: "h-[170px] w-[170px] -translate-x-[62px] -translate-y-[82px] sm:h-[190px] sm:w-[190px] sm:-translate-x-[69px] sm:-translate-y-[92px]",
     compact:
       "h-[140px] w-[140px] -translate-x-[51px] -translate-y-[68px] sm:h-[240px] sm:w-[240px] sm:-translate-x-[87px] sm:-translate-y-[116px]",

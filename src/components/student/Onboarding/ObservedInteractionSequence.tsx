@@ -87,13 +87,6 @@ export function ObservedInteractionSequence() {
   const [profilingSessionId] = useState(() => randomId());
   const profiling = useSignals(profilingSessionId, undefined, "profiling");
   const [phase, setPhase] = useState<"transition" | "activities">("transition");
-  /*
-   * Whether this device can sign the child back in on its own. False when the
-   * draft has no school code or the server issued no identifier to pair with
-   * it - see `rememberOnboardedStudent`. Starts true so the celebration does
-   * not flash a warning before there is anything to warn about.
-   */
-  const [deviceRemembered, setDeviceRemembered] = useState(true);
   const [index, setIndex] = useState(0);
   /**
    * The capture session the profiling run parked its trials under.
@@ -230,31 +223,24 @@ export function ObservedInteractionSequence() {
         }}
         onComplete={() => {
           /*
-           * The device now belongs to this student - but only if the server
-           * issued an identifier it will recognise AND the draft carries the
-           * school code that is the other half of the credential. SSO students
+           * The device remembers this student - but only if the server issued
+           * an identifier it will recognise AND the draft carries the school
+           * code that is the other half of the credential. SSO students
            * re-enter through their provider, not a PIN.
            *
-           * THE ANSWER IS NOT DISCARDED. When the device cannot be remembered,
-           * "You're In" says so, rather than "You're all set" to a child the
-           * tablet will not know tomorrow.
+           * WHEN IT CANNOT, "You're In" NO LONGER SAYS SO (D71, 6 Oct): "You're
+           * In is a passive moment of success, and a line about asking for
+           * help implies something has gone wrong at the exact moment nothing
+           * has." It matters at the next sign-in, not this one.
            */
-          setDeviceRemembered(
-            isSso ? true : rememberOnboardedStudent(identifierRef.current),
-          );
+          if (!isSso) rememberOnboardedStudent(identifierRef.current);
           advance();
         }}
       />
     );
   }
 
-  return (
-    <YoureInStep
-      go={(to) => router.push(to)}
-      track={trackEvent}
-      deviceRemembered={deviceRemembered}
-    />
-  );
+  return <YoureInStep go={(to) => router.push(to)} track={trackEvent} />;
 }
 
 /**
@@ -273,11 +259,9 @@ export function ObservedInteractionSequence() {
 function YoureInStep({
   go,
   track,
-  deviceRemembered,
 }: {
   go: (to: string) => void;
   track: TrackEvent;
-  deviceRemembered: boolean;
 }) {
   const firstLesson = useNextLessonHref();
   return (
@@ -288,12 +272,13 @@ function YoureInStep({
          * first lesson directly - so a child who joined by link, class code or
          * school code was never checked, and one the server holds went
          * straight into a lesson. `enterFirstLesson` opens the lesson, or
-         * the waiting screen for a held child; a failed read is not a hold.
+         * a hold for a held child - and for one whose consent could not be
+         * read, since a check that cannot complete does not open the door
+         * (D69).
          */
         void enterFirstLesson(firstLesson, go);
       }}
       track={track}
-      deviceRemembered={deviceRemembered}
     />
   );
 }

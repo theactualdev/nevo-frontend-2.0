@@ -105,32 +105,34 @@ describe("the breathing mark", () => {
 });
 
 /**
- * A date of birth the school and the parent disagree about (backend, B64).
- * Backend's sentence on 00d's layout, until design draws it: the words change,
- * and nothing else may.
+ * A date of birth the school and the parent disagree about (backend, B64), in
+ * the Entry frame's "On hold" words (D121, 6 Oct): the words change, and
+ * nothing else may.
  */
 describe("held at the age check", () => {
-  it("says Nevo is checking something with their school, and to come back", () => {
+  it("says the Entry frame's On hold words, verbatim (D121)", () => {
     render(<WaitingOnConsent hold="age-check" />);
-
-    const text = (document.body.textContent ?? "").replace(/\s+/g, " ").trim();
 
     expect(
       screen.getByRole("heading", {
-        name: "Nevo is checking something with your school",
+        name: "Nevo is sorting something out with your school",
       }),
     ).toBeTruthy();
-    expect(text).toBe(
-      "Nevo is checking something with your schoolCome back in a day or two.",
-    );
+    expect(
+      screen.getByText(
+        "It's nothing you did, and there's nothing for you to fix.",
+      ),
+    ).toBeTruthy();
   });
 
-  it("never says what, and never asks the child to resolve it", () => {
-    // Two adults disagreeing is not the child's to settle (design, 23 Sep).
+  it("names no age, date, record, check or verification, and no timeframe", () => {
+    // The frame: "It never names age, dates, records, checks or verification,
+    // never blames the school", and "no timeframe, because nobody controls
+    // one" - which is what backend's "a day or two" stand-in promised.
     render(<WaitingOnConsent hold="age-check" />);
 
     expect(document.body.textContent).not.toMatch(
-      /birth|age|parent|date|ask|tell|fix|sort/i,
+      /birth|\bage\b|date|record|check|verif|parent|day|soon|ask/i,
     );
   });
 

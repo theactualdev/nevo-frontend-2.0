@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { SessionEndScreen } from "@/components/student/Auth/SessionEndScreen";
+import { AccountClosedScreen } from "@/components/student/Auth/AccountClosedScreen";
 import { AccountOnPauseScreen } from "@/components/student/Auth/AccountOnPauseScreen";
 import { safeNextPath } from "@/lib/auth/nextPath";
 import { sessionEndReason } from "@/lib/auth/sessionEndReason";
@@ -65,10 +66,11 @@ export default async function SessionExpiredPage({
 
   // An account state, not a session one, and the child has their own frame for
   // it. It offers no retry, because retrying is the one thing that cannot work.
-  // A closed account is the same screen saying closed, never on pause (D53).
-  if (ended === "paused" || ended === "closed") {
+  // A closed account is 28d, never on pause (D53, D116): terminal, no way in.
+  if (ended === "closed") return <AccountClosedScreen />;
+  if (ended === "paused") {
     // No retry, but a way back to the picker for whoever is next (D52).
-    return <AccountOnPauseScreen back={{ href: "/auth/login" }} hold={ended} />;
+    return <AccountOnPauseScreen back={{ href: "/auth/login" }} />;
   }
 
   return <SessionEndScreen variant={ended} next={safeNextPath(next)} />;

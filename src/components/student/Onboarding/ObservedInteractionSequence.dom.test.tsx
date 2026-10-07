@@ -92,17 +92,8 @@ vi.mock("./PinCreationScreen", () => ({
   ),
 }));
 vi.mock("./YoureInScreen", () => ({
-  YoureInScreen: ({
-    onDone,
-    deviceRemembered,
-  }: {
-    onDone: () => void;
-    deviceRemembered: boolean;
-  }) => (
-    <div>
-      <p>remembered:{String(deviceRemembered)}</p>
-      <button onClick={onDone}>you are in</button>
-    </div>
+  YoureInScreen: ({ onDone }: { onDone: () => void }) => (
+    <button onClick={onDone}>you are in</button>
   ),
 }));
 
@@ -229,14 +220,16 @@ describe("You're In, once the PIN is bound", () => {
   it("is remembered by the tablet, with the school code they typed", async () => {
     await walkToYoureIn();
 
-    expect(screen.getByText("remembered:true")).toBeInTheDocument();
     expect(getRememberedProfile()).toMatchObject({
       schoolCode: "K7DQ",
       loginIdentifier: "NV-A1B2C3",
     });
   });
 
-  it("says the tablet will not know them when no identifier came back", async () => {
+  it("goes on to You're In, remembered by nobody, when no identifier came back (D71)", async () => {
+    // You're In no longer says the tablet will not know them: "a line about
+    // asking for help implies something has gone wrong at the exact moment
+    // nothing has." The device still refuses to remember them.
     bindFirstPin.mockResolvedValue({
       userId: "student-9",
       loginIdentifier: null,
@@ -251,7 +244,7 @@ describe("You're In, once the PIN is bound", () => {
 
     await walkToYoureIn();
 
-    expect(screen.getByText("remembered:false")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "you are in" })).toBeInTheDocument();
     expect(getRememberedProfile()).toBeNull();
   });
 });

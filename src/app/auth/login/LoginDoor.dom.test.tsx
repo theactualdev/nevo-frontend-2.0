@@ -536,9 +536,10 @@ describe("a paused account at the door", () => {
 });
 
 /**
- * D53: a removed child's right PIN is answered `account_closed` (B58). They
- * read that the account is closed - not on pause, and not a PIN that did not
- * match - and the next child still gets the picker back (D52).
+ * D53 and D116: a removed child's right PIN is answered `account_closed`
+ * (B58). They read 28d - closed, not on pause, and not a PIN that did not
+ * match - which is terminal: "no sign-in route, because offering a way back
+ * in would be cruel."
  */
 describe("a closed account at the door", () => {
   const closed = () =>
@@ -546,19 +547,25 @@ describe("a closed account at the door", () => {
       detail: { code: "account_closed", message: "closed" },
     });
 
-  it("says closed, and goes back to the picker for whoever is next", async () => {
+  it("says closed in 28d's words, with nothing to press", async () => {
     loginPin.mockRejectedValue(closed());
     await chooseAda();
 
     await tap("1234");
 
     expect(
-      await screen.findByRole("heading", { level: 1, name: /account is closed/ }),
+      await screen.findByRole("heading", {
+        level: 1,
+        name: "Your account is closed",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "This account is closed, so there's nothing more to do here.",
+      ),
     ).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/on pause|didn.t match/i);
-
-    fireEvent.click(screen.getByRole("button", { name: "Back to sign in" }));
-
-    expect(await screen.findByText("Who's learning?")).toBeInTheDocument();
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
+    expect(screen.queryAllByRole("link")).toHaveLength(0);
   });
 });

@@ -71,9 +71,7 @@ vi.mock("@/components/student/Profiling/ProfilingFlow", () => ({
   ),
 }));
 vi.mock("./YoureInScreen", () => ({
-  YoureInScreen: ({ deviceRemembered }: { deviceRemembered: boolean }) => (
-    <p>you are in, remembered:{String(deviceRemembered)}</p>
-  ),
+  YoureInScreen: () => <p>you are in</p>,
 }));
 
 const PIN = "1234567".slice(0, STUDENT_PIN_LENGTH);
@@ -181,9 +179,7 @@ describe("a first PIN the server stores", () => {
     await choosePin();
     await pastTheBeat();
 
-    expect(
-      screen.getByText("you are in, remembered:true"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("you are in")).toBeInTheDocument();
     expect(getRememberedProfile()).toMatchObject({
       schoolCode: "K7DQ",
       loginIdentifier: "NV-A1B2C3",

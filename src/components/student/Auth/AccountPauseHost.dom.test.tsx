@@ -135,12 +135,29 @@ describe("a pause that lands while a child is reading", () => {
 });
 
 /**
- * D53: "A removed child reads that their account is closed, not that it is on
- * pause." Backend gave it its own code on 5 Oct (B58); the card and the
- * settled screen both carry it, and neither says pause.
+ * D64, 6 Oct: "The glyph is the pause bars, not the brand mark." The card's
+ * circle carried the Nevo icon, borrowed while 28b's slot was empty.
+ */
+describe("the card's glyph", () => {
+  it("is 28b's pause bars, not the brand mark", async () => {
+    const { pause, AccountPauseHost } = await fresh();
+    render(<AccountPauseHost />);
+    act(() => pause.announceAccountPause());
+
+    const card = screen.getByRole("dialog");
+    expect(card.querySelectorAll("svg rect")).toHaveLength(2);
+    expect(card.querySelector("img")).toBeNull();
+  });
+});
+
+/**
+ * D53 and D116: a removed child reads that their account is closed, never on
+ * pause - on 28d, the closed state drawn once and reused. No frame draws a
+ * closed card over a lesson, so the screen covers the page at once, and it is
+ * terminal: nothing to press, no way back in.
  */
 describe("a closed account that lands while a child is reading", () => {
-  it("says closed on the card over the lesson, and never on pause", async () => {
+  it("covers the page with 28d at once, with no card and no Okay", async () => {
     const { pause, AccountPauseHost } = await fresh();
     render(
       <>
@@ -152,28 +169,22 @@ describe("a closed account that lands while a child is reading", () => {
     act(() => pause.announceAccountPause("account_closed"));
 
     expect(
-      screen.getByRole("dialog", { name: "Your Nevo account is closed." }),
+      screen.getByRole("dialog", { name: "Your account is closed" }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      "Your account is closed",
+    );
     expect(document.body.textContent).not.toMatch(/pause/i);
-    expect(document.body.textContent).toContain("How a leaf makes food");
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
+    expect(screen.queryAllByRole("link")).toHaveLength(0);
   });
 
-  it("settles into the closed screen on Okay, with the way back to the picker (D52)", async () => {
+  it("ends the session, which nothing on 28d can use", async () => {
     const { pause, AccountPauseHost } = await fresh();
     render(<AccountPauseHost />);
+
     act(() => pause.announceAccountPause("account_closed"));
 
-    fireEvent.click(screen.getByRole("button", { name: "Okay" }));
-
     expect(clearSession).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-      "Your Nevo account is closed.",
-    );
-    expect(document.body.textContent).not.toMatch(/pause/i);
-    expect(screen.getByRole("link", { name: "Back to sign in" })).toHaveAttribute(
-      "href",
-      "/auth/login",
-    );
-    expect(screen.queryAllByRole("button")).toHaveLength(0);
   });
 });
