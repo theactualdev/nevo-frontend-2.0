@@ -84,9 +84,10 @@ export function dimensionForToday(now = new Date()): BaselineDimension {
  * one-shot done state. Never reads as an assessment; nothing is marked
  * right or wrong.
  *
- * The done state only claims the run was saved if the write actually landed -
- * telling a child their progress was saved when nothing was written would be
- * false every single time. (This note used to say the screen "is not wired to"
+ * The done state is the title and "Go on", and claims no save (D80, D97, 6
+ * Oct). It said "Your progress is saved" once the write landed, and design
+ * dropped that line. It still says when the write failed (D126 is asking
+ * whether to keep that). (This note used to say the screen "is not wired to"
  * `POST /api/baseline/submit`. It was wired for some time; the note went
  * stale and was the reason nobody checked WHAT it was submitting, which for
  * longer still was the task name and a duration, and none of the measurement.
@@ -141,9 +142,8 @@ export function WarmUpRun({
   const [saved, setSaved] = useState<boolean | null>(null);
   /*
    * Nothing was kept, by choice: the guardian withdrew. The done state then
-   * claims no save either way - not "your progress is saved", which would be
-   * false, and not "we couldn't save it", which would blame a failure that did
-   * not happen.
+   * says nothing about saving - not "we couldn't save it", which would blame a
+   * failure that did not happen.
    */
   const [withheld, setWithheld] = useState(false);
   /** The served question's pick, sent to the prompt's own endpoint (B8). */
@@ -241,8 +241,7 @@ export function WarmUpRun({
          * `saved` is left null rather than set false. False renders "we
          * couldn't save it just now - that's on us, not you", and that is not
          * what happened: we chose not to. A child is not told their work
-         * failed when it did not. Nor that it was saved: `withheld` drops
-         * that line too.
+         * failed when it did not.
          *
          * AND THEN THE DONE STATE, which this used to return before reaching.
          * The route is full-screen with no other way out, so a withdrawn
@@ -318,8 +317,7 @@ export function WarmUpRun({
        * `POST .../recalibrate-prompt/{id}/response` takes `{itemId, value}`
        * and marks it server-side; the key never reaches the device. It is not
        * parked when it fails - the parking is the submit's - so a pick that
-       * never landed makes the done state say it could not be saved, rather
-       * than "Your progress is saved" over a pick nobody received.
+       * never landed makes the done state say it could not be saved.
        */
       const pick = servedPick.current;
       const answered =
@@ -396,28 +394,33 @@ export function WarmUpRun({
 
       {showDone ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-[22px] px-9 text-center">
-          <span className="flex size-20 items-center justify-center rounded-full bg-nevo-navy motion-safe:animate-nevo-pop">
-            <Check className="size-9 text-nevo-cream" strokeWidth={2.4} />
+          {/*
+            The frame's phone sizes below `sm`: a 64px badge with a 32px
+            check and a 19px title. Tablet and desktop draw 80px and 22px.
+          */}
+          <span className="flex size-16 items-center justify-center rounded-full bg-nevo-navy motion-safe:animate-nevo-pop sm:size-20">
+            <Check className="size-8 text-nevo-cream sm:size-9" strokeWidth={2.4} />
           </span>
           <div>
-            <h3 className="text-[22px] font-semibold tracking-[-0.01em] text-nevo-navy">
+            <h3 className="text-[19px] font-semibold tracking-[-0.01em] text-nevo-navy sm:text-[22px]">
               That&apos;s it for today
             </h3>
             {/*
-              Nothing until the write settles. `saved` is null while the
-              submit is in flight, and the done state used to read that as
-              "Your progress is saved" - a claim made before any save had
-              happened, and false whenever the write then failed.
+              NO BODY LINE WHEN IT SAVED (D80, 6 Oct). The frame is the title
+              and the button. "Nevo is tuned to how you're doing today. Your
+              progress is saved." is gone from it.
+
+              KEPT WHEN IT DID NOT, until D126 answers. The frame draws no
+              failed state; this says so only once the write has settled and
+              failed, never while it is in flight.
             */}
-            {!withheld && saved !== null && (
+            {!withheld && saved === false && (
               <p className="mt-2.5 max-w-[320px] text-[15.5px] leading-[1.55] text-nevo-near-black">
-                {saved
-                  ? "Nevo is tuned to how you're doing today. Your progress is saved."
-                  : "Thanks for doing that. We couldn't save it just now - that's on us, not you."}
+                Thanks for doing that. We couldn&apos;t save it just now - that&apos;s on us, not you.
               </p>
             )}
           </div>
-          <HomeButton onClick={() => router.push(HOME)} />
+          <HomeButton label="Go on" onClick={() => router.push(HOME)} />
         </div>
       ) : !dimension || !bandSettled ? (
         <WarmUpNothing onHome={() => router.push(HOME)} />
@@ -444,21 +447,29 @@ export function WarmUpRun({
 /**
  * The warm-up's one way out, to the child's Home (D18).
  *
- * DESIGN ASK, THE LABEL. The frame's button reads "Start today's lesson",
- * which stopped being true when design sent it Home on 1 Oct - and a child
- * with no lesson queued would be promised one. No frame draws "Back to home".
- * "Home" is the frames' own label for a button that goes there (32 Prototype,
- * the lesson summary's second button; 30 Flow Reference, "Back to lessons" /
- * "Home"), so it is used until design names this one.
+ * THE LABEL. On the done screen it is the frame's "Go on" (D97, 6 Oct). It
+ * read "Start today's lesson", which stopped being true when design sent it
+ * Home on 1 Oct, and then "Home" while design named it.
+ *
+ * The nothing-state's is still "Home" (D79 is open). No frame draws that
+ * state; "Home" is the frames' own label for a button that goes there (32
+ * Prototype, the lesson summary's second button; 30 Flow Reference, "Back to
+ * lessons" / "Home").
  */
-function HomeButton({ onClick }: { onClick: () => void }) {
+function HomeButton({
+  label = "Home",
+  onClick,
+}: {
+  label?: string;
+  onClick: () => void;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
       className="h-12 cursor-pointer rounded-[10px] bg-nevo-navy px-6 text-base font-semibold text-nevo-cream transition-[filter,transform] hover:brightness-109 active:scale-[0.985]"
     >
-      Home
+      {label}
     </button>
   );
 }
@@ -470,10 +481,11 @@ function HomeButton({ onClick }: { onClick: () => void }) {
  * and the gap used to be filled with the weekday rotation's task - run, and
  * then submitted as a measurement. So: no task, no words of explanation (none
  * is designed, and none is true for every cause), and the done state's own
- * button Home, because this route is full-screen and a child must never be
- * left on it with nothing to press. Shown while the prompt (or the band) is in
- * flight too: the client has no timeout, so a read that never answers would
- * otherwise be a blank screen for good. When the task arrives it replaces this.
+ * button, labelled "Home" here while D79 is open, because this route is
+ * full-screen and a child must never be left on it with nothing to press.
+ * Shown while the prompt (or the band) is in flight too: the client has no
+ * timeout, so a read that never answers would otherwise be a blank screen for
+ * good. When the task arrives it replaces this.
  */
 function WarmUpNothing({ onHome }: { onHome: () => void }) {
   return (

@@ -283,7 +283,7 @@ describe("WarmUpRun — the dot task has no fixed answer", () => {
   });
 });
 
-describe("WarmUpRun — the done state claims a save only once one landed", () => {
+describe("WarmUpRun — the done state claims no save", () => {
   it("says nothing about saving while the write is still in flight", async () => {
     submit.mockReturnValue(new Promise(() => {}));
     await sitTheTileTask();
@@ -293,10 +293,39 @@ describe("WarmUpRun — the done state claims a save only once one landed", () =
     expect(document.body.textContent).not.toMatch(/saved|couldn't save/i);
   });
 
-  it("says it was saved once the write lands", async () => {
+  it("is the title and Go on once the write lands, with no body line (D80, D97)", async () => {
+    // It said "Nevo is tuned to how you're doing today. Your progress is
+    // saved." here, and its button read "Home". The 6 Oct frame is the title
+    // and "Go on".
     await sitTheTileTask();
     await settle();
 
-    expect(screen.getByText(/Your progress is saved/)).toBeTruthy();
+    expect(screen.getByText("That's it for today")).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/saved|tuned|couldn't/i);
+    expect(screen.getByRole("button", { name: "Go on" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Home" })).toBeNull();
+  });
+
+  it("draws the frame's phone sizes, and the larger ones from tablet up", async () => {
+    // It was a 22px title and an 80px badge at every width. The Warm-Up Run
+    // frame draws 19px and 64px on a phone, 22px and 80px on tablet and
+    // desktop.
+    await sitTheTileTask();
+    await settle();
+
+    const title = screen.getByText("That's it for today");
+    const badge = title.parentElement!.previousElementSibling!;
+    expect(title.className).toContain("text-[19px]");
+    expect(title.className).toContain("sm:text-[22px]");
+    expect(badge.className).toMatch(/(^| )size-16( |$)/);
+    expect(badge.className).toContain("sm:size-20");
+  });
+
+  it("still says so when the write failed (kept while D126 is asked)", async () => {
+    submit.mockResolvedValue(false);
+    await sitTheTileTask();
+    await settle();
+
+    expect(screen.getByText(/couldn't save it just now/)).toBeTruthy();
   });
 });
