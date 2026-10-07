@@ -59,28 +59,28 @@ export const DPA_CLAUSES: DpaClause[] = [
   },
   /*
    * ============================================================================
-   * CONFLICT WITH SCRUM-80 - NOT RESOLVED HERE, BECAUSE IT IS COUNSEL'S TO
-   * RESOLVE. Flagged 11 Sep 2026.
+   * CLAUSE 5 IS COUNSEL'S, AND STILL OPEN. Flagged 11 Sep 2026; the consent
+   * position beside it moved on 23 Sep.
    *
    * This clause warrants that Nevo "will not activate a learner whose consent
-   * has not been confirmed". SCRUM-80 (7 Sep) ruled the opposite: the School
-   * warrants consent through the DSA, so an unconfirmed consent is the
-   * school's administrative task and the learner PROCEEDS - only an explicit
-   * withdrawal stops processing. `lib/api/consents.ts` encodes that ruling and
-   * the deployed `ConsentGateResponse` carries `granted` and `blocked` as two
-   * separate booleans precisely because they are different questions.
+   * has not been confirmed". When it was flagged, SCRUM-80 (7 Sep) had ruled
+   * the opposite - an unconfirmed consent was the school's administrative
+   * task and the learner proceeded. Design's 23 Sep ruling superseded that:
+   * every entry path resolves consent before anything mounts, so a child
+   * whose consent is not given waits on 00d, a withdrawn child on 00e, and a
+   * check that cannot complete holds them too (D69). See
+   * `docs/waiting-on-counsel.md` item 1.
    *
-   * Both cannot be true. This matters more than ordinary copy drift because
-   * the school FORMALLY ACCEPTS this document - `POST /school/dpa-acceptance`
-   * records the version, the accepting administrator and the timestamp, and
-   * the D22 compliance surface then cites that acceptance as evidence. So it
-   * is a contractual term that may not describe the product.
+   * Whether the clause stands as written is still counsel's question. It
+   * matters more than ordinary copy because the school FORMALLY ACCEPTS this
+   * document - `POST /school/dpa-acceptance` records the version, the
+   * accepting administrator and the timestamp, and the D22 compliance surface
+   * then cites that acceptance as evidence.
    *
    * Unlike clauses 6 and 7 this one carries no `[Placeholder: ...]` marker, so
    * it reads as settled. The text is deliberately left EXACTLY as counsel last
    * had it: silently rewording a term a school has already accepted would be
-   * the worse error. Either the clause changes or the product gates - and
-   * whichever it is, it is not a decision this file gets to make.
+   * the worse error, and it is not a decision this file gets to make.
    * ============================================================================
    */
   {

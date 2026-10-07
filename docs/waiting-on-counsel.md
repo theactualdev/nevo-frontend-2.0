@@ -22,25 +22,44 @@ Before chasing anything here, re-read the code it names.
 
 ---
 
-## 1 · DPA clause 5 — the one that can reverse shipped work
+## 1 · DPA clause 5 — still with counsel; the consent position beside it has moved
 
-**With Oladayo. Nothing is built in either direction until he answers.**
+**With Oladayo. The clause text is unchanged, and nothing here decides it.**
 
-Clause 5 of the DPA warrants that Nevo "will not activate a learner" without
-consent. SCRUM-80 rules the opposite: Nevo is not the consent gate and a child
-may begin lessons while the school's consent record is outstanding. Both cannot
-be true. **Two readings, leading opposite ways:**
+Clause 5 of the DPA warrants that Nevo "will not activate a learner whose
+consent has not been confirmed".
 
-- **We are a PROCESSOR** and the clause simply needs redrafting. SCRUM-80 stands
-  and everything already built is correct.
-- **We are a CONTROLLER for the adaptation engine** and the gate is deliberate.
-  **Then SCRUM-80 reverses**, the admin consent trigger becomes a launch blocker,
-  and the consent-gate correction shipped across the admin console on 11 Sep
-  inverts. Not wasted — but not final either.
+**What this item used to say (17 Sep).** SCRUM-80 (7 Sep) ruled the opposite:
+Nevo is not the consent gate, and a child may begin lessons while the school's
+consent record is outstanding. So the clause promised a gate the product
+deliberately did not have, and the question for counsel was which of the two
+was right — a PROCESSOR reading (redraft the clause, SCRUM-80 stands) or a
+CONTROLLER reading for the adaptation engine (the gate is deliberate, SCRUM-80
+reverses).
 
-**Cost of waiting:** this is the only open item that can invalidate merged work.
-Everything else on this list is text or a sign-off; this one is architectural.
-It should be chased first regardless of how small the redraft turns out to be.
+**Where the product stands now (updated 7 Oct).** That SCRUM-80 position was
+superseded by design's ruling of 23 Sep (`docs/RULINGS_23_SEP.md` §2b): *"The
+gate is on the child's consent state, not on the route they arrived by. Every
+entry path resolves consent before anything mounts."* As built:
+
+- A child the consent gate holds — consent not given — waits on 00d at every
+  door, and reaches neither the baseline nor a lesson (`studentDestination`,
+  `src/lib/auth/entryGate.ts`).
+- A child whose consent was withdrawn is held on 00e (D117).
+- A consent check that cannot complete holds the child as well (D69, 4 and 6
+  Oct).
+- Inside the app, the server refuses a withdrawn child lessons, progress,
+  offline copies and Ask Nevo (B7) and the signal stream (B44), and the client
+  takes them to 00e.
+
+So the conflict this item described, between the clause and SCRUM-80, no longer
+describes the product.
+
+**What is still open, and is counsel's.** Whether clause 5 stands as written,
+and the processor-or-controller reading it rests on. The product's position
+does not answer that, and this file does not either. The clause sits exactly as
+counsel last had it in `src/lib/mocks/dpa.ts`, because rewording a term schools
+formally accept is not engineering's to do.
 
 ## 2 · The DPA wording itself
 
@@ -150,5 +169,6 @@ been set with counsel, since the sentence asserts it.
   **both rows PULLED**, done. See `open-questions-consent.md` §4 of Rulings.
 - **The scan is not an admin-facing list** — ruled 14 Sep, built.
 - **NDPA s31 verifiable parental consent must be in place before launch** —
-  confirmed by legal review; this is the ruling SCRUM-80 rests on, and item 1
-  above is the question of whether clause 5 contradicts it.
+  confirmed by legal review; this is the ruling SCRUM-80 rested on. Item 1
+  above records where the consent position stands now, and what counsel still
+  has open on clause 5.
