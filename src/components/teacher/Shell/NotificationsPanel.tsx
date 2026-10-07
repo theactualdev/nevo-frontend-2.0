@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import type {
   NotificationKind,
   TeacherNotification,
@@ -86,10 +87,17 @@ export function NotificationsPanel({
   const hasUnread = notes.some((n) => n.unread);
   const empty = notes.length === 0;
 
+  // A popover, not a modal: focus goes in and comes back, but Tab is free
+  // to leave it (C07).
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogRef, { trap: false });
+
   return (
     <>
       <div aria-hidden onClick={onClose} className="fixed inset-0 z-40" />
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-label="Notifications"
         className="fixed bottom-20 left-[88px] z-50 w-[360px] overflow-hidden rounded-[12px] bg-nevo-cream shadow-[0_8px_32px_rgba(0,0,0,0.16)] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 motion-safe:duration-150 xl:bottom-24 xl:left-[200px] xl:w-[380px]"
