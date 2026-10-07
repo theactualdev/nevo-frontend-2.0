@@ -138,3 +138,13 @@ describe("ReportsView section failures", () => {
     );
   });
 });
+
+describe("the way to D26", () => {
+  it("links to the school transformation page from the header", () => {
+    render(<ReportsView />);
+    expect(screen.getByRole("link", { name: /School transformation/ })).toHaveAttribute(
+      "href",
+      "/admin/reports/transformation",
+    );
+  });
+});
