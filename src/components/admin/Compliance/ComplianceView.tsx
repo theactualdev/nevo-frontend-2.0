@@ -32,10 +32,12 @@ import { NoAccess, failureKind } from "../NoAccess";
  * category" directly beneath a live number that can come back non-zero.
  *
  * Claim states are honest about their own provenance - see `ndpaClaims.ts`.
- * Only "zero diagnostic labels" is verified from live data; three claims
- * describe architecture rather than a per-school measurement; and three need
- * school data no endpoint returns, so they carry their mechanism with no state
- * chip. On a compliance screen, an invented figure is the worst possible bug.
+ * "Zero diagnostic labels" is verified from live data; consent coverage and
+ * records retention carry this school's own figures; data-flow transparency
+ * describes architecture rather than a per-school measurement; and
+ * Subprocessors needs data no endpoint returns, so it carries its mechanism
+ * with no state chip. On a compliance screen, an invented figure is the worst
+ * possible bug.
  *
  * The export is real: `GET /api/admin/compliance-audit/report.pdf`. It is
  * fetched with the Bearer token and handed to the browser as a blob, because

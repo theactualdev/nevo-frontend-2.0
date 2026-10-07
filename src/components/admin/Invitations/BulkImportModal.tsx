@@ -231,7 +231,8 @@ export function BulkImportModal({
           /* Was: "Each parent has been sent a consent request." The bulk
              response is `{created, rejected}` and carries no delivery state at
              all, so this had even less behind it than the single-invite claim.
-             See `deliveryCopy.ts` - nothing in the product requests consent. */
+             See `deliveryCopy.ts` - nothing queues a consent request against
+             an invitation. */
           <p className="mt-4 text-center text-[14.5px] leading-[1.6] text-nevo-near-black/72">
             {/* The SIBLING of the branch above, and it kept the claim that
                 branch was corrected for. SCRUM-80: an unconfirmed consent is

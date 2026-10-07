@@ -94,15 +94,18 @@ export function orderScopes(scopes: PermissionScope[]): PermissionScope[] {
  * had the Invite button taken away; a school already holding six read "6 of 5
  * admin accounts" with six rows listed underneath it.
  *
- * The band is the school's own answer, written at onboarding and readable from
- * the school record, so the allowance is derived from it.
+ * The band was the school's own answer, written at onboarding and readable
+ * from the school record, so the allowance is derived from it. The band step
+ * has since gone with flat pricing, so a school onboarded after it has no band
+ * and gets no cap asserted (see `adminSeatAllowance`). Whether the cap still
+ * exists at all is with design.
  *
  * TODO(api): a seat allowance on the team response. The table below is the
  * client's copy of a commercial fact it does not own, and it is only right for
  * as long as the two agree.
  */
 
-/** Must match `BANDS` in `Onboarding/BandStep.tsx` - the same v1 defaults. */
+/** SCRUM-98's per-band admin seat defaults for v1. */
 const SEATS_BY_BAND: Record<EnrolmentBand, number> = {
   boutique: 5,
   mid_market: 10,

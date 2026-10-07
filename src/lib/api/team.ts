@@ -98,7 +98,7 @@ export const teamApi = {
       payload,
     ),
 
-  /** PUT /api/v1/admin/team/{id}/scopes - D03 draws no UI for this yet. */
+  /** PUT /api/v1/admin/team/{id}/scopes - Admin Team's Edit access sheet. */
   updateScopes: (targetUserId: string, scopes: PermissionScope[]) =>
     api.put<TeamMember>(`/api/v1/admin/team/${targetUserId}/scopes`, {
       scopes,

@@ -43,24 +43,25 @@ import {
  * is theirs and has not gone anywhere.
  *
  * ============================================================================
- * "ESCALATED BY A TEACHER" IS NOT BUILT, AND CANNOT BE.
+ * "ESCALATED BY A TEACHER" IS NOT BUILT - HELD BY COUNSEL, NOT BY THE API.
  *
  * D8 puts teacher escalations ABOVE Nevo's own flags, and says why: "a
  * teacher's escalation carries a human concern". It is the more important half
  * of this screen.
  *
- * There is no teacher-to-SENCo transport anywhere in the API. Nothing creates
- * an escalation, nothing stores one, nothing lists one. The teacher console
- * already hit this from the other side - its escalation sheet had to stop
- * confirming delivery, because it was reporting a safeguarding referral as
- * sent over a handler that posted nothing.
+ * This said there was no teacher-to-SENCo transport. There is, since 15 Sep:
+ * `POST /api/v1/escalations` from the teacher console, which is live, and
+ * `GET /api/v1/escalations` plus `.../{id}/acknowledge` for this side - see
+ * `lib/api/escalations.ts`. What holds the section is the 21 Sep counsel hold
+ * on the learning-support surface. Whether escalations fall inside it is with
+ * counsel, and until they rule teachers' concerns are sent and no admin screen
+ * shows them.
  *
  * So the section is ABSENT rather than empty-stated: an empty "Escalated by a
  * teacher" list would tell a SENCo that no teacher has raised a concern, which
  * is a claim this console cannot make and the most damaging possible thing to
  * get wrong on this screen. The overview says plainly what it does and does not
- * cover instead. Raised with backend as the single highest priority on the
- * SENCo surface.
+ * cover instead.
  * ============================================================================
  *
  * THE ARITHMETIC THAT JUSTIFIED THIS DEFERRAL WAS TWO-THIRDS WRONG. It read:

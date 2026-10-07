@@ -39,15 +39,13 @@ import { NoAccess, failureKind } from "../NoAccess";
  *
  * 1. THE COST SHEET IS BUILT (7 Sep). The dispute that blocked it is settled in
  *    the contract itself: `pricingModel` is a const `"per_student"`, and the
- *    read carries `activeStudentCount`, `perStudentAnnualRate` and `currency`.
- *    See `CostSheet` - it computes from the numbers the school is billed on,
- *    not from `studentsProfiled` or `invitedStudents`, which are different
- *    populations.
- * 2. THE "HOW TO PAY" PANEL now exists (D11c, design ruling 7 Sep) but as a
- *    SEAM: Teslim is building the endpoint, nothing serves one yet, and until
- *    it answers the panel says the details are not available rather than
- *    inventing them. See `HowToPayPanel` - the frame's Kuda Bank account number
- *    is its illustration, not a value to hard-code.
+ *    read carries `studentCount`, `perStudentRate`, the server's VAT figures
+ *    and `currency`. See `CostSheet` - it shows the totals the server computed
+ *    and does no arithmetic of its own.
+ * 2. THE "HOW TO PAY" PANEL IS LIVE (D11c, design ruling 7 Sep). Its account
+ *    comes from `GET /billing/bank-transfer-details`, served since 8 Sep; see
+ *    `HowToPayPanel`. The frame's Kuda Bank account number is its
+ *    illustration, not a value to hard-code.
  * 3. PAYMENT METHOD AND CHECKOUT. `PUT /billing/payment-method` takes `card` or
  *    `direct_debit`, and `POST /payments/checkout` returns a Paystack
  *    `authorizationUrl`. D11: "no cards, no in-app checkout."
@@ -154,8 +152,8 @@ export function BillingView() {
             setInvoicesFailed(true);
           });
 
-        // The receiving account is its own read and its own absence. A 404 is
-        // the ordinary "no endpoint yet" state, not a failure worth reporting.
+        // The receiving account is its own read and its own absence: when it
+        // fails, How to pay says the details aren't available, not "try again".
         billingApi
           .receivingAccount()
           .then(setAccount)

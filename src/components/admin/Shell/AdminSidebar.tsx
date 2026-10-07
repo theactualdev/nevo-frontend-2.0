@@ -25,14 +25,10 @@ import { SampleRegion } from "@/components/shared/SampleRegion";
  * proprietor's is eleven. Scopes come from `permissions/me` through the
  * provider the admin layout already mounts.
  *
- * Identity follows the same rule as the teacher console: the session carries a
- * `userId` and a role and no name, so a signed-in admin gets their scope
- * summary over a neutral glyph rather than the frame's fixture persona.
- *
- * DONE, and this said otherwise. It read "TODO(api): a profile endpoint,
- * after which the name and job title are real." `GET /api/v1/users/me`
- * returns `{userId, role, firstName, lastName, displayName, email,
- * school}` and `PATCH` writes it; `usersApi.me` is consumed two files away.
+ * IDENTITY IS THE ADMIN'S OWN NAME. The session carries only a `userId` and
+ * a role, so the name comes from `GET /api/v1/users/me` (`useCurrentUser`) - never
+ * the frame's fixture persona. It once said "TODO(api): a profile endpoint"
+ * after that endpoint had shipped.
  *
  * THE NOTIFICATIONS INDICATOR IS A DOT, NEVER A COUNT. SCRUM-100's first rule,
  * and its "done when" goes further: no count is rendered OR EVEN FETCHED. So

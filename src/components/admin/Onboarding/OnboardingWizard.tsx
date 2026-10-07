@@ -19,11 +19,9 @@ import { SignUpStep } from "./SignUpStep";
  * back-out to a marketing site - once a proprietor starts, the only way is
  * through or away.
  *
- * FIVE STEPS OR SIX? The D1 frame draws "Step 1 of 5"; SCRUM-39 says "Six
- * short steps" and specifies a row of six pills. The spec enumerates D1.1
- * through D1.5 as five distinct SCREENS, with 1.5 having two variants - so the
- * sixth pill is the workspace itself, arriving. Five steps are built, and the
- * indicator shows five. Raised with design; it is a one-line change either way.
+ * FOUR STEPS, ANSWERED BY DESIGN (D01, 20 Sep). The old frame drew five and
+ * SCRUM-39 six; the band and sign-in method steps have both gone. See `TOTAL`
+ * below for why each went.
  *
  * FAILURE IS A RECOVERY MOMENT throughout: no red, no alarm glyph, no blame.
  * The system owns the fault, the work so far is preserved AND SAID to be

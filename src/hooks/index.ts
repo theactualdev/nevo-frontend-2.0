@@ -8,4 +8,3 @@ export { useLesson } from "./useLesson";
 export { useNotifications } from "./useNotifications";
 export { usePermissions } from "./usePermissions";
 export { useSetupGate } from "./useSetupGate";
-export { useRosterSync } from "./useRosterSync";

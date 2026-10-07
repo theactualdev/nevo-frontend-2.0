@@ -55,16 +55,11 @@ import { WriteFailed } from "../WriteFailed";
  * deactivated, and is gated on the typed name. Nothing goes from live to
  * erased in a single pass.
  *
- * TODO(api): BUILT, and this marker outlived it. `StudentDetailResponse.consent` is a
- * REQUIRED `{status, actorId, actorName, timestamp, channel}` - all four
- * things it says are missing - and the card is rendered in this very file
- * (the `Consent` section, with `ConsentPill` and `consentDetailLine`).
- * Formerly: "the CONSENT card is not built." `GET /api/v1/students/{id}`
- * carries no consent state, no giver, no date and no channel, and
- * `parent-links` carries `accountCreated`, which answers a different
- * question. The card is a record a school may have to stand behind, so it is
- * absent rather than assembled from the nearest-looking fields. This also
- * removes the header's consent pill and the "View record" link.
+ * THE CONSENT CARD IS BUILT. `StudentDetailResponse.consent` is a REQUIRED
+ * `{status, actorId, actorName, timestamp, channel}`, and the card is the
+ * `Consent` section in this file, with `ConsentPill` and `consentDetailLine`.
+ * It was absent while the read carried none of that, rather than assembled
+ * from `parent-links`' `accountCreated`, which answers a different question.
  *
  * TODO(api): three enrolment fields the frame draws have no source - the
  * ENROLLED date, the "Added by" line (hand-enrolled vs roster sync), and the

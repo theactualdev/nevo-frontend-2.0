@@ -54,8 +54,10 @@ import { SupportEmailLink } from "../SupportEmail";
  * unauthenticated, and HandoverStep in this same console already calls the
  * second. Two wrong entries on one line, one of them already corrected in
  * place - which is the argument for correcting rather than deleting these.
- * TODO(screen): D17 IT Admin Home and D18 Finance Home. The frame routes each
- * persona to their own landing; until those exist everyone lands on Overview.
+ *
+ * D17 IT Admin Home and D18 Finance Home EXIST NOW, and sign-in routes each
+ * persona to their own landing through `adminHomeForScopes` - oversight to the
+ * Overview, IT to Systems overview, billing to Finance home.
  */
 
 const SUCCESS_HOLD_MS = 1400;

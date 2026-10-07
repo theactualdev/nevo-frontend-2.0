@@ -22,13 +22,9 @@ import { isOwnApiHost } from "./upstream";
  *   backend's own words are that it asks Paystack about a transaction and
  *   settles the invoice off the answer, so a bank reference 404s there. Manual
  *   transfers go through `manualTransfer` below instead.
- * - D11's "How to pay" panel needs Nevo's own bank account, and NOTHING in the
- *   spec carries one (checked field by field across every schema). The frame
- *   fills it with literal account details. Hard-coding a real payable account
- *   into the frontend is not a shortcut worth taking, so the panel is absent.
- *
- * What IS honest today: the invoice list and its PDFs, the upcoming charge, the
- * renewal banner, and the billing contact.
+ * - D11's "How to pay" panel needs Nevo's own bank account. When this was
+ *   written nothing in the spec carried one, and the panel was absent rather
+ *   than hard-coding the frame's literal account; it is live now - see below.
  *
  * THE RECEIVING ACCOUNT IS REAL NOW (8 Sep). `GET /billing/bank-transfer-details`
  * is deployed and serves `{bankName, accountNumber, accountName, currency}`,

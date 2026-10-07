@@ -33,7 +33,7 @@ import { attentionCount, itHomeRows } from "./itHomeRows";
  *   than counting providers. This is a product question, not a missing
  *   endpoint - do not file it as one.
  *
- * THE SECOND ONE IS NOW BUILT. "SSO signing certificate renews in 40 days" sat
+ * THE CREDENTIAL EXPIRY IS BUILT. "SSO signing certificate renews in 40 days" sat
  * here for weeks as a deliberate absence, under a `TODO(api)` asking for a
  * certificate expiry. Backend shipped it on 21 Sep as `credentialExpiresAt` /
  * `credentialExpiresInDays` / `credentialExpiringSoon`, and we did not notice
