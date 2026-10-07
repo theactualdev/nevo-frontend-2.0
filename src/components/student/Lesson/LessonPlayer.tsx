@@ -8,7 +8,6 @@ import {
   type ToggleSegment,
 } from "@/components/shared";
 import {
-  BREAK_TYPES,
   BUSY_PHASE,
   BUSY_REASON,
   DENSITY,
@@ -360,7 +359,8 @@ export function LessonPlayer({
   const checkRecall = useRef<Map<string, RecallEvidence & { picks: number }>>(
     new Map(),
   );
-  // Segments whose hint was on screen, for `after_hint`.
+  // Segments whose hint - or guided questions - were on screen, for
+  // `after_hint`.
   const hintedSegments = useRef<Set<string>>(new Set());
   const [passedChecks, setPassedChecks] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -584,7 +584,7 @@ export function LessonPlayer({
   };
   // SCRUM-101: the segment index the player is about to enter across a module
   // boundary. Non-null takes over the screen with the boundary landing; the
-  // student's continue (or break + "I'm ready") completes the move.
+  // student's continue completes the move.
   const [boundaryTo, setBoundaryTo] = useState<number | null>(null);
   /*
    * ARRIVING AT A BOUNDARY IS ARRIVING IN THE NEXT MODULE.
@@ -608,9 +608,9 @@ export function LessonPlayer({
   const [breakActive, setBreakActive] = useState<BreakType | null>(null);
   const breaksTaken = useRef<Set<string>>(new Set());
   // Where the active break came from: "advance" resumes the interrupted move,
-  // "offer" returns to the same segment, "boundary" enters the next module.
+  // "offer" returns to the same segment. A module boundary offers none (D91).
   // Trigger travels into `break_start`.
-  const breakOrigin = useRef<"advance" | "offer" | "boundary">("advance");
+  const breakOrigin = useRef<"advance" | "offer">("advance");
   const breakTrigger = useRef<string>("adaptation_plan");
   // Break OFFERS (B.7/§4): spent per segment, whoever made them. Declining
   // spends; the same segment never re-asks.
@@ -1807,20 +1807,15 @@ export function LessonPlayer({
           setBreakActive(null);
           setObserved((o) => ({ ...o, breaksTaken: o.breaksTaken + 1 }));
           // An offered break returns to the segment it interrupted; a
-          // plan-delivered one resumes the advance it intercepted; one taken
-          // at a module boundary lands on the next module's first segment.
+          // plan-delivered one resumes the advance it intercepted.
           if (breakOrigin.current === "advance") continueAdvance();
-          if (breakOrigin.current === "boundary" && boundaryTo !== null) {
-            setBoundaryTo(null);
-            go(boundaryTo);
-          }
         }}
       />
     );
   }
 
   // Module boundary landing (SCRUM-101) — a full player screen between modules,
-  // never a modal. Continue (or break + "I'm ready") completes the move.
+  // never a modal. Its one action, Continue, completes the move (D91).
   if (boundaryTo !== null) {
     const modules = lessonModules(lesson);
     const nextPos = modulePositionFor(lesson, boundaryTo);
@@ -1848,19 +1843,6 @@ export function LessonPlayer({
           onEnterNext={() => {
             setBoundaryTo(null);
             go(boundaryTo);
-          }}
-          onTakeBreak={() => {
-            /*
-             * SCRUM-101, answered: "Take a break first" routes to the break
-             * module and returns to the next module's first segment. It
-             * rested in place instead, which emitted no break at all.
-             *
-             * The full break, because it is the one the child ends: they
-             * chose to stop, so nothing times them back in.
-             */
-            breakOrigin.current = "boundary";
-            breakTrigger.current = "module_boundary";
-            setBreakActive(BREAK_TYPES.FULL);
           }}
         />
       );
@@ -2014,7 +1996,24 @@ export function LessonPlayer({
               <SocraticPanel
                 key={`socratic-${segment.id}`}
                 prompts={guidedPrompts}
+                /*
+                 * SCRUM-241: ONLY THE CHILD'S OWN WAY IN IS WIRED. The panel
+                 * opens here from the confusion prompt, so it ends on the way
+                 * back to the question - the check, while it is still to
+                 * pass. The hand-off ending is built and waits on a trigger:
+                 * nothing on the contract says "hand this child off", and
+                 * `show_socratic_panel` is this confusion prompt, not that.
+                 */
+                entry="self"
+                onTryAgain={
+                  segment.quickCheck && !passedChecks.has(segment.id)
+                    ? () => setCheckOpen(true)
+                    : undefined
+                }
                 onShown={(promptIds) => {
+                  // Reached through the panel is not reached first time: a
+                  // check answered after it reports as after help (B28).
+                  hintedSegments.current.add(segment.id);
                   for (const promptId of promptIds)
                     trackEvent(SIGNAL_EVENT_TYPES.GUIDED_QUESTION_SHOWN, {
                       segmentId: segment.id,
@@ -2212,9 +2211,10 @@ export function LessonPlayer({
         />
       )}
 
-      {/* Chevron nav — dims under the attention accommodation; `offer_hint`
-          guides the forward control with three quiet glow cycles (never
-          displaces it). */}
+      {/* Chevron nav — dims under the attention accommodation. Nothing on it
+          reacts to a hint: the forward control's glow went with design's
+          D124 (6 Oct), "Anything that reacts visibly to a child's difficulty
+          tells them they are being watched." */}
       <nav
         aria-hidden={partsLeft || undefined}
         inert={partsLeft}
@@ -2233,11 +2233,6 @@ export function LessonPlayer({
           dir="next"
           disabled={nextDisabled}
           onClick={handleNext}
-          className={cn(
-            hintHere &&
-              !nextDisabled &&
-              "motion-safe:animate-nevo-glow-guide",
-          )}
         />
       </nav>
     </div>

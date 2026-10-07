@@ -306,7 +306,8 @@ export const PHOTOSYNTHESIS_PLAN: AdaptationPlan = {
         "What might the plant make from it?",
       ],
     },
-    // `offer_hint`: the unrequested hint and the guided forward glow. The
+    // `offer_hint`: the unrequested hint (no glow on the forward control -
+    // D124). The
     // OFFERED consolidation break rides its own field, because §4 keeps
     // `offer_break` as a separate action and one segment carries one
     // instruction. Offered, never forced.

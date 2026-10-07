@@ -9,7 +9,7 @@ import {
 import { LessonPlayer } from "./LessonPlayer";
 import { LESSON_STATUS } from "@/lib/api/lessons";
 import { clearSession, setSession } from "@/lib/auth/session";
-import type { Lesson } from "@/lib/types";
+import type { AdaptationPlan, Lesson } from "@/lib/types";
 
 /**
  * How a child leaves a lesson, and what they are told on the way out.
@@ -19,9 +19,13 @@ import type { Lesson } from "@/lib/types";
  * completion screen said "Your progress is saved" whether or not anything had
  * landed; the completion button had become "Back to home" where the frame
  * says "Back to lessons"; a child who stopped at a module boundary resumed in
- * the module they had finished; "Take a break first" rested in place instead
- * of taking the break; an unknown place was written over the real one; and a
- * review's outcome never reached the scheduler.
+ * the module they had finished; an unknown place was written over the real
+ * one; and a review's outcome never reached the scheduler.
+ *
+ * Since 6 Oct: the leave dialog never says the latest place is saved, only
+ * that the child picks up from the last point that was (D88); a module
+ * boundary offers no break (D91); and a lesson played from the offline
+ * package's copy is never written completed (Lydia).
  */
 
 const progress = vi.hoisted(() => ({
@@ -281,21 +285,18 @@ describe("a module boundary", () => {
     ]);
   });
 
-  it("sends 'Take a break first' to the break module and back into the next module", () => {
+  it("offers no break on top of the boundary (D91), and continues into the next module", () => {
     toBoundary();
 
-    fireEvent.click(screen.getByRole("button", { name: "Take a break first" }));
+    expect(screen.queryByRole("button", { name: /break/i })).toBeNull();
+    expect(screen.getAllByRole("button")).toHaveLength(1);
 
-    // The break module, not a rest state on the boundary.
-    expect(screen.queryByText("Section complete")).toBeNull();
-    expect(screen.queryByText("Take your time")).toBeNull();
-    expect(trackEvent).toHaveBeenCalledWith(
+    fireEvent.click(screen.getByRole("button", { name: "Yes, continue" }));
+
+    expect(trackEvent).not.toHaveBeenCalledWith(
       "break_start",
-      expect.objectContaining({ trigger: "module_boundary" }),
+      expect.anything(),
     );
-
-    fireEvent.click(screen.getByRole("button", { name: /I.m back/i }));
-
     expect(screen.getByRole("group", { name: /Module 2 of 2/ })).toBeTruthy();
     expect(screen.getByText("Equivalence")).toBeTruthy();
   });
@@ -356,6 +357,47 @@ describe("a review session's outcome", () => {
         conceptId: "concept-1",
         outcome: "second_attempt",
       }),
+    );
+  });
+
+  it("does not count a check reached through the guided questions as first time", async () => {
+    // SCRUM-241: "a concept reached through the panel is never recorded as
+    // mastered first time". Right on the first pick, after the panel: help
+    // was on screen, so it is reported as after a hint.
+    setSession({
+      token: "tok",
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+      userId: "stu-1",
+      role: "student",
+    });
+    const guided = {
+      lessonId: "frac-3",
+      segments: [],
+      adjustment: "show_socratic_panel",
+      guidedQuestions: ["Which number counts the parts?"],
+    } as AdaptationPlan;
+    render(
+      <LessonPlayer
+        lesson={REVIEW}
+        plan={guided}
+        review
+        reviewConceptId="concept-1"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /begin|start|ready/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Which part is unclear?" }),
+    );
+
+    next();
+    fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
+    next();
+
+    await waitFor(() =>
+      expect(recordReview).toHaveBeenCalledWith(
+        expect.objectContaining({ outcome: "after_hint" }),
+      ),
     );
   });
 });

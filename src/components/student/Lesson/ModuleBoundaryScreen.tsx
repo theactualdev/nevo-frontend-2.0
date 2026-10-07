@@ -11,15 +11,13 @@ import type { LessonModule } from "@/lib/types";
  * Module boundary (SCRUM-101.1/101.2, `Nevo Module Boundary`). A calm landing
  * between two stretches of a lesson - a full player screen, never a modal, and
  * it never blocks: "Yes, continue" is immediately pressable. It names where the
- * student is, what they finished and what is next, and offers two discrete 44px+
- * peer actions. No confetti, no celebration - the value is knowing the shape of
- * the work.
+ * student is, what they finished and what is next. No confetti, no celebration
+ * - the value is knowing the shape of the work.
  *
- * "Take a break first" goes to the break module and comes back to the next
- * module's first segment, as SCRUM-101 answered it ("routes to the existing
- * break module, then returns"). It used to rest on this screen instead - a
- * copy of the prototype's in-frame state, which emitted no break at all and
- * told the child their progress was saved whether it was or not.
+ * ONE ACTION, NO BREAK OFFER (design D91, 6 Oct). The frame's "Take a break
+ * first" sat beside it and opened the full break module: "No. The module
+ * boundary already carries the stretch, and offering a break on top of a
+ * break turns a rhythm into a negotiation." The pause is this screen.
  *
  * With the attention accommodation active, a recap of the finished module and
  * a preview of the next render between the heading and the actions -
@@ -37,7 +35,6 @@ export function ModuleBoundaryScreen({
   onReached,
   onAction,
   onEnterNext,
-  onTakeBreak,
 }: {
   lessonTitle: string;
   finished: LessonModule;
@@ -52,11 +49,9 @@ export function ModuleBoundaryScreen({
   /** Emits `module_boundary_reached` - fired once on mount. */
   onReached: () => void;
   /** Emits `module_boundary_action` with the student's choice. */
-  onAction: (action: "continue" | "break") => void;
+  onAction: (action: "continue") => void;
   /** Advance into the next module's first segment. */
   onEnterNext: () => void;
-  /** Go to the break module; it returns to the next module's first segment. */
-  onTakeBreak: () => void;
 }) {
   const reached = useRef(false);
   useEffect(() => {
@@ -147,7 +142,7 @@ export function ModuleBoundaryScreen({
               </div>
             )}
 
-            {/* Two real peers, pinned to the base of the column */}
+            {/* The one action, pinned to the base of the column */}
             <div className="mt-auto flex w-full flex-col gap-2.5 pt-6 sm:flex-row">
               <button
                 type="button"
@@ -158,16 +153,6 @@ export function ModuleBoundaryScreen({
                 className="flex h-14 w-full shrink-0 cursor-pointer items-center justify-center rounded-[10px] bg-nevo-navy px-[22px] text-[15.5px] font-semibold text-nevo-cream shadow-[0_6px_18px_rgba(59,63,110,0.28)] transition-[filter,transform] hover:brightness-106 active:scale-[0.98] sm:w-auto sm:flex-1"
               >
                 Yes, continue
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onAction("break");
-                  onTakeBreak();
-                }}
-                className="flex h-14 w-full shrink-0 cursor-pointer items-center justify-center rounded-[10px] bg-nevo-navy/8 px-[22px] text-[15.5px] font-semibold text-nevo-navy transition-[background-color,transform] hover:bg-nevo-navy/12 active:scale-[0.98] sm:w-auto sm:flex-1"
-              >
-                Take a break first
               </button>
             </div>
           </div>
