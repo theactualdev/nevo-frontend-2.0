@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { fireEvent, render, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
 import { AccountSettings } from "./AccountSettings";
 
@@ -142,9 +142,23 @@ describe("a single session", () => {
     sessions.mockResolvedValue([]);
     const { container } = render(<AccountSettings />);
     await waitFor(() =>
-      expect(visibleText(container)).toMatch(/couldn't list your sessions/),
+      expect(visibleText(container)).toMatch(/couldn't read where you're signed in/),
     );
     expect(visibleText(container)).not.toMatch(/only device signed in as you/);
+  });
+
+  it("offers a retry when the read fails, and says nothing while it is out", async () => {
+    let fail!: (e: unknown) => void;
+    sessions.mockReturnValue(new Promise((_, r) => (fail = r)));
+    const { container } = render(<AccountSettings />);
+    // The section must be on the page for its silence to mean anything.
+    await screen.findByText("Where you're signed in");
+    expect(visibleText(container)).not.toMatch(/couldn't read where you're signed in/);
+    fail(new Error("down"));
+    await waitFor(() => expect(visibleText(container)).toMatch(/couldn't read where you're signed in/));
+    sessions.mockResolvedValue([session("s1", true)]);
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(visibleText(container)).toMatch(/only device signed in as you/));
   });
 });
 

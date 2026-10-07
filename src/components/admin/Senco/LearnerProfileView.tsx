@@ -471,8 +471,13 @@ export function LearnerProfileView({ studentId }: { studentId: string }) {
               0,
               Math.min(1, row.masteryProbabilityReading),
             );
-            const gap = concept - reading;
-            const textIsTheBarrier = gap > 0.15;
+            /*
+             * No "Reading is the barrier here". It was drawn whenever the
+             * concept track led the reading track by more than 0.15 - a
+             * threshold this screen invented (architecture rule 3), turned
+             * into a statement about a named child the engine never made.
+             * Reports dropped its copy of the same label in #573.
+             */
             return (
               <div
                 key={row.conceptId}
@@ -485,11 +490,6 @@ export function LearnerProfileView({ studentId }: { studentId: string }) {
                   <span className="text-[14.5px] font-semibold text-nevo-near-black">
                     {row.conceptName}
                   </span>
-                  {textIsTheBarrier ? (
-                    <span className="flex-none text-[12.5px] font-semibold text-nevo-navy">
-                      Reading is the barrier here
-                    </span>
-                  ) : null}
                 </div>
                 <div className="mt-3 flex flex-col gap-2">
                   <Track
