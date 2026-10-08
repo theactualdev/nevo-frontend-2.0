@@ -37,6 +37,22 @@ export interface TextContent {
   callouts?: Partial<
     Record<Density | "default", { label: string; text: string; sub?: string }>
   >;
+  /**
+   * The payload's key points (`TextVariant.keyPoints`, SCRUM-224): the frame's
+   * "IN SHORT" box. Design, D24: "The boxes stay. They are key points."
+   */
+  keyPoints?: string[];
+  /**
+   * The payload's equation callouts (`TextVariant.equationCallouts`): the
+   * frame's "WORD EQUATION" box, one per equation, under Expand.
+   */
+  equations?: { equation: string; label?: string }[];
+  /**
+   * Where the server breaks `body.default` for reading (SCRUM-234), in order.
+   * Absent is one body. They describe the default body only, so a reshape
+   * never reads through them.
+   */
+  readingChunks?: { id: string; text: string }[];
 }
 
 /** Visual modality — an illustration and/or a simple input→output diagram. */

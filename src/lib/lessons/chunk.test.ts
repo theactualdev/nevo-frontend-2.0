@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chunkBody, isChunkable } from "./chunk";
+import { bodyParts, chunkBody, isChunkable } from "./chunk";
 
 /**
  * SLOWER, ON CONTENT NOBODY AUTHORED A RESHAPE FOR.
@@ -61,5 +61,39 @@ describe("how much arrives at once", () => {
     expect(isChunkable("The leaf catches light. Sugar is what they make.")).toBe(
       true,
     );
+  });
+});
+
+describe("the server's reading chunks, where it sent them (SCRUM-234)", () => {
+  /*
+   * Where the breaks fall is the backend's now (SCRUM-236). B23's on-device
+   * split was its rule for a client that had to make its own, and it gives
+   * way to the server's chunks rather than running beside them.
+   */
+  const server = [
+    { text: "Plants need light to grow." },
+    { text: "The leaf catches it. Sugar is what they make." },
+  ];
+
+  it("are the parts, as sent, where there are any", () => {
+    expect(bodyParts(three, server)).toEqual([
+      "Plants need light to grow.",
+      "The leaf catches it. Sugar is what they make.",
+    ]);
+  });
+
+  it("leave the on-device split to a body that came with none", () => {
+    expect(bodyParts(three, [])).toEqual(chunkBody(three));
+    expect(bodyParts(three)).toEqual(chunkBody(three));
+  });
+
+  it("offer Slower when they break the body", () => {
+    expect(isChunkable(three, server)).toBe(true);
+  });
+
+  it("offer nothing for a body the server sent as one chunk", () => {
+    // Three sentences would split on the device. The server says one block,
+    // so a Slower that splits it anyway would be the client overruling it.
+    expect(isChunkable(three, [{ text: three }])).toBe(false);
   });
 });

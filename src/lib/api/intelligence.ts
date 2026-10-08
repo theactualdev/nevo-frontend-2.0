@@ -249,6 +249,13 @@ export interface GuidedAnswerRequest {
  * screen, so nothing reads them yet - asked of backend. Typed so a reader can
  * see what is here, and never rendered: a number about a child's reading or
  * attention is the kind of measurement Zero-Tag keeps off every surface.
+ *
+ * B103 (8 Oct) named what they control - chunk size, pacing, the attention
+ * window, where scaffolding starts, the check interval, step-by-step numbers
+ * and shorter text blocks - and not who applies them. The spec gives the two
+ * that sound like rendering, `numberProblemsStepByStep` and
+ * `shorterTextBlocks`, no description at all, so the client still acts on
+ * none of them rather than choosing a treatment from a flag. Asked again.
  */
 export interface EngineConfig {
   version?: number;
