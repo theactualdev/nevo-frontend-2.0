@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { IllustrationWrapper } from "@/components/shared/IllustrationWrapper";
 import { MasteryDualTrack } from "@/components/teacher/Student/MasteryDualTrack";
 import { useTeacherClasses } from "@/hooks/useTeacherClasses";
 import { getClassInsights, hasGap } from "@/lib/mocks/teacherInsights";
 import { MaybeSample, SampleRegion } from "@/components/shared/SampleRegion";
 import { LiveClassInsights } from "./LiveClassInsights";
+import { setAskNevoClass } from "@/components/teacher/Shell/askNevoScope";
 import { cn } from "@/lib/utils";
 
 /**
@@ -39,6 +40,8 @@ const CHEVRON = (
 export function InsightsView() {
   // C14 A3: nothing is selected on arrival, so this is nullable by contract.
   const [classId, setClassId] = useState<string | null>(null);
+  // Ask Nevo hears which class this page is about (T182), until it leaves.
+  useEffect(() => () => setAskNevoClass(null), []);
   // The selector offers the teacher's real classes, not the fixture three.
   const { options: classes, live, sample, loading } = useTeacherClasses();
   // A live class reads from the intelligence endpoints (see
@@ -83,7 +86,10 @@ export function InsightsView() {
             key={c.id}
             type="button"
             aria-pressed={on}
-            onClick={() => setClassId(c.id)}
+            onClick={() => {
+              setClassId(c.id);
+              setAskNevoClass(c.id);
+            }}
             className={cn(
               "cursor-pointer rounded-full px-[13px] py-[7px] text-[12.5px] font-medium transition-[filter,background-color] xl:px-[15px] xl:py-2 xl:text-[13.5px]",
               on
