@@ -29,11 +29,12 @@ import { cn } from "@/lib/utils";
  * (the code screen) were deleted from the design that day; the button, its
  * dialog and the `/code` route went with them.
  *
- * What it still does not have is the intelligence layer. The fixture-backed
- * `ClassDetail` shows per-student chips, seats and "worth a glance" dots;
- * none of that has an endpoint, so these rows carry only what is real:
- * who is on the roster, whether Nevo has observed them yet, and when they
- * were last here.
+ * The fixture-backed `ClassDetail` shows per-student chips, seats and "worth
+ * a glance" dots, and these rows now draw all three from the backend: the
+ * roster read carries `observations` and `seatContext`, and "worth a
+ * glance" is the teacher's own flags from `useTeacherFlags`. Alongside
+ * them, who is on the roster, whether Nevo has observed them yet, and when
+ * they were last here.
  *
  * Rows link to the student's profile, which reads live since the student
  * endpoints were wired.

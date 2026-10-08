@@ -61,8 +61,15 @@ export function EditProfileModal({
    * dismiss in the same breath, which would have reported a saved profile
    * over a failed PATCH the moment there was a PATCH to fail.
    */
+  /*
+   * A NAME IS REQUIRED (T194). A blank one saved - `ProfilePatch` sets no
+   * minimum - and the rail then called the teacher "Teacher" with a note that
+   * their details were not connected. Save waits for a name rather than
+   * explaining itself, because no screen draws the sentence it would need.
+   */
+  const named = name.trim().length > 0;
   const submit = async () => {
-    if (saving) return;
+    if (saving || !named) return;
     setSaving(true);
     setFailed(false);
     const ok = await onSave({
@@ -91,7 +98,7 @@ export function EditProfileModal({
   useDialogFocus(dialogRef);
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-nevo-near-black/50 p-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-nevo-near-black/50 backdrop-blur-[1.5px] p-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
       onClick={onCancel}
     >
       <div
@@ -214,7 +221,8 @@ export function EditProfileModal({
         <div className="mt-6 flex gap-3">
           <button
             type="submit"
-            className="h-12 flex-1 cursor-pointer rounded-[10px] bg-nevo-navy text-[15px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93"
+            disabled={!named}
+            className="h-12 flex-1 cursor-pointer rounded-[10px] bg-nevo-navy text-[15px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93 disabled:cursor-not-allowed disabled:opacity-55"
           >
             {saving ? "Saving…" : failed ? "Try again" : "Save changes"}
           </button>

@@ -363,7 +363,11 @@ export function ComposeModal({
                 <div className="mt-3.5 max-h-[300px] overflow-y-auto">
                   {shown.map((s) => (
                     <button
-                      key={s.name}
+                      // By who, not what they are called (T169): two Amaras
+                      // shared a key, and React drew one where there were two.
+                      // With the class, because the directory lists a child
+                      // once per class they are in.
+                      key={`${s.studentId ?? s.name}:${s.className}`}
                       type="button"
                       onClick={() => setChosen(s)}
                       className="flex w-full cursor-pointer items-center gap-[13px] rounded-[10px] px-2 py-[11px] text-left transition-colors hover:bg-nevo-navy/6"

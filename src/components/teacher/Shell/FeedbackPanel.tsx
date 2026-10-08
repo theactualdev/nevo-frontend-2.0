@@ -131,7 +131,7 @@ export function FeedbackPanel({ onClose }: { onClose: () => void }) {
       <div
         aria-hidden
         onClick={onClose}
-        className="fixed inset-0 z-40 bg-nevo-near-black/28 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
+        className="fixed inset-0 z-40 bg-nevo-near-black/28 backdrop-blur-[1.5px] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
       />
 
       {sent ? (

@@ -138,6 +138,7 @@ export interface ConnectState {
   send: (
     to: { recipientId: string; recipientType: RecipientType },
     content: string,
+    about?: { name: string; className?: string },
   ) => Promise<string | null>;
 }
 
@@ -246,6 +247,12 @@ export function useConnectThreads(): ConnectState {
     async (
       to: { recipientId: string; recipientType: RecipientType },
       content: string,
+      /**
+       * Who the thread is with, when the caller knows - the compose picker
+       * does. A brand-new thread has no row of its own until the list is read
+       * again, and the send response names only its AUTHOR.
+       */
+      about?: { name: string; className?: string },
     ): Promise<string | null> => {
       try {
         const saved = await messagesApi.send({ ...to, content });
@@ -268,9 +275,15 @@ export function useConnectThreads(): ConnectState {
           return [
             {
               id: saved.threadId,
-              studentName: saved.senderName ?? "New conversation",
-              initials: initialsOf(saved.senderName ?? "?"),
-              className: "",
+              /*
+               * NOT `senderName` (T162). That is the message's author - the
+               * teacher - so a conversation they started with a child was
+               * titled with their own name, and their initials, until a
+               * reload. The picker knew the child; it was not passed.
+               */
+              studentName: about?.name ?? "New conversation",
+              initials: initialsOf(about?.name ?? "?"),
+              className: about?.className ?? "",
               preview: `You: ${content}`,
               time: "now",
               messages: [msg],
