@@ -254,6 +254,18 @@ describe("leaving the after-lesson check (D36)", () => {
     expect(progress.report.mock.calls[0][1]).not.toHaveProperty("check");
     expect(push).toHaveBeenCalledWith("/student/dashboard");
   });
+
+  it("writes nothing that demotes a finished lesson reopened (D22)", async () => {
+    // A finished lesson stays finished, as the leave dialog already keeps it.
+    render(<LessonPlayer lesson={LESSON} plan={null} live finished />);
+    await toAssessment();
+    answer("Two");
+
+    leave();
+
+    expect(statuses()).toEqual([]);
+    expect(push).toHaveBeenCalledWith("/student/dashboard");
+  });
 });
 
 describe("leaving a review before it starts (D36)", () => {

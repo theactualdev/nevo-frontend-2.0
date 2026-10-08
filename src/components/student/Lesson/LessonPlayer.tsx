@@ -1717,14 +1717,20 @@ export function LessonPlayer({
            *
            * B49: and WHERE in the check, so it reopens there the same day.
            * None from the intro - a check not begun has no place to keep.
+           *
+           * NOTHING FOR A FINISHED LESSON REOPENED (D22), as the leave dialog
+           * writes nothing for one: `exited` here demoted a lesson the child
+           * had completed back to unfinished work on Home.
            */
           const last = total - 1;
           const pos = modulePositionFor(lesson, last);
-          reportProgress(LESSON_STATUS.EXITED, {
-            segment: last,
-            ...(pos ? { module: pos.moduleIndex } : {}),
-            ...(checkPosition !== undefined ? { check: checkPosition } : {}),
-          });
+          if (!review && !finished) {
+            reportProgress(LESSON_STATUS.EXITED, {
+              segment: last,
+              ...(pos ? { module: pos.moduleIndex } : {}),
+              ...(checkPosition !== undefined ? { check: checkPosition } : {}),
+            });
+          }
           setEnding({
             completionStatus: "exited",
             exitPosition: lesson.segments[last].id,
