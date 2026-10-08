@@ -46,7 +46,9 @@ export function useNevoKeyboardDock() {
 /**
  * Nevo Keyboard (design frame · "Nevo Keyboard") — the branded on-screen keyboard
  * used wherever the app suppresses the native OS keyboard on web (Product Arch
- * A.12): onboarding text entry, PIN, and the calc numeric answer. Two layouts —
+ * A.12): onboarding text entry and PIN. Not the calculation's number entry,
+ * which takes the device's numeric keyboard as the solver frame draws it -
+ * this pad has no minus sign or decimal point (audit 51). Two layouts —
  * `pad` (3×4 numeric) and `qwerty` — sized for mobile (default) and tablet (md+).
  *
  * Presentational only: it emits key presses; the host owns the field state, so

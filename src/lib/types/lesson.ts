@@ -8,7 +8,6 @@
 import type {
   AdjustmentAction,
   BreakType,
-  CalcModality,
   Density,
   Modality,
   ScaffoldLevel,
@@ -142,111 +141,109 @@ export interface QuickCheck {
   conceptId?: string;
 }
 
-// ── Calculation subsystem (17b §9 — co-construction) ────────────────────────
+// ── Calculation subsystem (17b co-construction, SCRUM-181 on SCRUM-177) ─────
 
-/** Which calculation the solver co-constructs; non-null triggers the seam (§8). */
-export type CalculationVariant = "fraction_add_like" | (string & {});
+/**
+ * The wire's `CalculationVariant.type`, which is `co_construction` - the tag
+ * that routes the Interactive modality to the solver (17b §8).
+ */
+export type CalculationVariant = "co_construction" | (string & {});
 
-export interface CalcCardStep {
-  prompt: string;
-  choices: string[];
-  /** Index into `choices`. */
-  correct: number;
-  hint: string;
-  onCorrect?: { highlight?: string; confirm?: string };
-}
-
-export interface CalcNumericStep {
-  prompt: string;
-  input: "numeric";
-  answer: string;
-  hint: string;
-  /** "naira", "years", "%" - shown beside the field where the wire gives one. */
-  unit?: string | null;
+/**
+ * One quantity a scaffold draws: the wire's `marks[i]`, named by its
+ * `labels[i]` where there is one. A count, as the pipeline wrote it - never
+ * one this app worked out.
+ */
+export interface ScaffoldQuantity {
+  count: number;
+  label?: string;
 }
 
 /**
- * A step whose answer is an expression rather than a number.
+ * The drawing beside the notation, as the payload describes it (SCRUM-177).
  *
- * ADDED FOR REAL CONTENT. The player knew two kinds of step, cards and a
- * numeric finish, because the only calculation that existed was
- * `fraction_add_like`. The backend's algebra lesson answers "3x - 4" and "3x"
- * before it answers 5, so two of its three steps had no kind to be - and a
- * mapper that dropped them would have left a child solving the last third of
- * an equation.
- *
- * Separate from `CalcNumericStep` because the keypad differs: an expression
- * needs letters and an operator, a number does not.
+ * Only the kinds a frame draws are here: `bar` is 17b's fraction bars, `dots`
+ * and `number_line` are 37c's grouped dots and number line. `array` and
+ * `place_value` have no frame yet, so a calculation carrying one draws
+ * nothing beside its notation rather than an invented picture.
  */
-export interface CalcTextStep {
+export type CalcScaffold =
+  | { kind: "bar"; parts: number; quantities: ScaffoldQuantity[] }
+  | { kind: "dots"; quantities: ScaffoldQuantity[] }
+  | { kind: "number_line"; parts: number; points: ScaffoldQuantity[] };
+
+/** Narration for one step: the clip, and how to re-issue its link. */
+export interface CalcNarration {
+  src: string;
+  storagePath?: string;
+}
+
+interface CalcStepBase {
+  /** The wire's `stepId` - what `calculation_step_response` names. */
+  stepId: string;
   prompt: string;
-  input: "text";
-  answer: string;
+  /** Empty where the step has none, and then no hint is offered. */
   hint: string;
-  unit?: string | null;
+  /** The solution as it stands while this step is asked. May be empty. */
+  assembles: string;
+  /** How the equation reads once this step is done. May be empty. */
+  equationState: string;
+  narration?: CalcNarration;
 }
 
-export type CalculationStep = CalcCardStep | CalcNumericStep | CalcTextStep;
-
-export function isNumericStep(step: CalculationStep): step is CalcNumericStep {
-  return "input" in step && step.input === "numeric";
+/**
+ * A step the child answers by picking.
+ *
+ * `accepted` is every option value the pipeline stored as right - the step's
+ * `answer` and its `targets` - so a pick is matched against that list, never
+ * reasoned about.
+ */
+export interface CalcChoiceStep extends CalcStepBase {
+  input: "choice";
+  options: { value: string; label: string }[];
+  accepted: string[];
+  /** Shown with the confirmed pick, where the step carries one. */
+  confirm?: string;
 }
 
-export function isTextStep(step: CalculationStep): step is CalcTextStep {
-  return "input" in step && step.input === "text";
+/**
+ * A step the child types into. `entry` is the wire's `expectedInput` read for
+ * the keyboard it needs: an expression ("3x - 4") takes letters and an
+ * operator; a number takes digits, a minus sign and a decimal point.
+ */
+export interface CalcNumberStep extends CalcStepBase {
+  input: "number";
+  entry: "numeric" | "text";
+  accepted: string[];
+  /** "naira", "years", "%" - shown beside the field where the wire gives one. */
+  unit?: string;
 }
 
-/** Card steps are the ones the student picks from rather than types into. */
-export function isCardStep(step: CalculationStep): step is CalcCardStep {
-  return !("input" in step);
+/**
+ * A step the child builds by tapping pieces into the manipulative (17b §6).
+ * `target` is the stored answer as written - a whole number of pieces the bar
+ * holds - never derived from a fraction.
+ */
+export interface CalcTapStep extends CalcStepBase {
+  input: "tap";
+  target: number;
 }
+
+export type CalculationStep = CalcChoiceStep | CalcNumberStep | CalcTapStep;
 
 export interface CalculationSegment {
   variant: CalculationVariant;
-  /**
-   * `answer` is the whole calculation's answer, and it is OPTIONAL because the
-   * wire's is. The solver shows it only where it has one; it never derives it
-   * from the last step, which is a different claim.
-   */
-  problem: { expression: string; answer?: string };
-  /**
-   * The drawn scaffold - fraction bars today.
-   *
-   * OPTIONAL, and this is the change real content forced. `fraction_add_like`
-   * is an authored variant with `{parts, rows}`, and only the authored lessons
-   * set this. The deployed contract carries a `scaffold` of its own now
-   * (`CalculationScaffold`, checked 1 Oct), but in a different shape - its
-   * `rows` is a single integer, this one's lists numerators - and nothing maps
-   * it here while the solver is frozen (SCRUM-181/177). A calculation without
-   * this field has no bars to draw, and drawing some anyway would be inventing
-   * a picture of a child's problem.
-   */
-  scaffold?: { kind: string; parts: number; rows: number[] };
-  /**
-   * The generated manipulative a `drag` step is built on (21 Sep).
-   *
-   * SEPARATE FROM `scaffold` ABOVE, deliberately. That one is the authored
-   * demo's, and its `rows` is `number[]` - the numerators of the fractions
-   * being added. The wire's `rows` is a count of piece rows. Folding them into
-   * one field would draw a bar with as many divisions as there are addends.
-   *
-   * `target` is how many pieces the child places, resolved from the drag
-   * step's own answer rather than computed here - rule 3 keeps the frontend
-   * out of deciding what a correct quantity is.
-   */
-  manipulative?: { kind: string; parts: number; target: number };
-  /**
-   * How the equation should read as the child works, one entry per step, plus
-   * the opening state at index 0 where the backend gives one. Authored
-   * fraction content has none and renders its own bars instead.
-   */
-  equationStates?: string[];
+  /** The concept taught, for the hint events. Omitted when the wire has none. */
+  conceptId?: string;
+  /** The problem's notation, shown before any step has assembled anything. */
+  expression: string;
+  /** The drawing. Absent means the payload carries none this app can draw. */
+  scaffold?: CalcScaffold;
+  /** What a `tap` step builds on. Only the fraction bar has a frame (17b). */
+  manipulative?: { kind: "fraction_bar"; parts: number };
   steps: CalculationStep[];
+  /** Shown once the solution has assembled. Empty means nothing is said. */
   completion: string;
-  /** Per-step narration asset refs — producer-generated content. */
-  narration?: string[];
-  /** Available layers (interactive always; audio/kinesthetic optional). */
-  modalities: CalcModality[];
 }
 
 // ── Segment + lesson ────────────────────────────────────────────────────────

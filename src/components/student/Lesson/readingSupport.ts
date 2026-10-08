@@ -13,9 +13,12 @@
  * (heading, introduction, caption, transcript) and the teacher's note (audit
  * 46). Each takes the typography and nothing else: a transcript simplified is
  * an inaccurate transcript, and a teacher's words reworded are not what the
- * teacher said. Design rules the calculation's labels take it too; they are
- * left to the solver's rebuild from its payload (SCRUM-181), which replaces
- * every one of them.
+ * teacher said. The calculation player takes it too, as design ruled for its
+ * labels: the prompt, the options, the confirmation and completion lines, the
+ * hint, the scaffold's labels and the unit, with the notation taking the
+ * heading's spacing only - "notation is never simplified away, because the
+ * notation is the content". Not the drawing itself, nor the field a child
+ * types into.
  *
  * The values are 37c's, as `TextSegment` already renders them.
  *

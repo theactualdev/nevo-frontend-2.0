@@ -124,6 +124,41 @@ export interface ScaffoldImage {
 
 export type CalculationStepInput = "selection" | "numeric" | "text" | "drag";
 
+/**
+ * What the child does at a step (SCRUM-177): tap, pick a choice, or enter a
+ * number. Beside `expectedInput`, which predates it and still says whether a
+ * typed answer is a number or an expression.
+ */
+export type CalculationStepEntry = "tap" | "choice" | "number";
+
+/** The drawings a scaffold can name (SCRUM-177). */
+export type CalculationScaffoldKind =
+  | "bar"
+  | "number_line"
+  | "dots"
+  | "array"
+  | "place_value";
+
+/**
+ * "A calculation drawing described as data, never as a generated image" -
+ * the spec's own description, and the whole of it. `rows`, `marks` and
+ * `labels` carry no description on the wire; SCRUM-177's worked example is
+ * `3/5 + 1/5` as `{kind: "bar", parts: 5, rows: 1, marks: [3, 1], labels:
+ * ["3/5", "1/5"]}`, which is what `fromContent` reads them by.
+ *
+ * ABSENT IS AN INSTRUCTION: no `kind`, no drawing, and the front end infers
+ * none.
+ */
+export interface CalculationScaffold {
+  kind: CalculationScaffoldKind;
+  /** 1-100. */
+  parts: number;
+  /** 1-20, default 1. */
+  rows?: number;
+  marks?: CheckpointScalar[];
+  labels?: string[];
+}
+
 export interface CalculationStep {
   stepId: string;
   stepNumber: number;
@@ -165,11 +200,28 @@ export interface CalculationStep {
   /** How the equation should read once this step is done. */
   visualUpdate: string;
   equationState: string;
+  /**
+   * SCRUM-177's three, REQUIRED in the spec and optional here only so that
+   * content stored before them reads as what it is: a step that names no
+   * input cannot be drawn, and `fromContent` refuses it rather than guessing.
+   *
+   * `targets` are further acceptable answers the pipeline wrote down (Lydia
+   * on SCRUM-177: every acceptable form of a step is stored, and the child's
+   * entry is matched against that list - nothing is judged at runtime).
+   * `assembles` is the solution as it stands while this step is asked.
+   */
+  input?: CalculationStepEntry;
+  targets?: CheckpointScalar[];
+  assembles?: string;
 }
 
 export interface CalculationVariant {
   type: string;
+  /** The concept this calculation teaches, when the pipeline named one. */
+  conceptId?: string | null;
   fullEquation: string;
+  /** The problem's notation, "3/5 + 1/5". Required in the spec (SCRUM-177). */
+  expression?: string;
   /**
    * The WHOLE calculation's answer, not any step's.
    *
@@ -180,7 +232,14 @@ export interface CalculationVariant {
    */
   answer?: string | number | boolean | null;
   steps: CalculationStep[];
-  scaffoldImage: ScaffoldImage | null;
+  /**
+   * Gone from the spec with SCRUM-177, which stopped generating an image for
+   * a calculation so a picture can never disagree with the drawn scaffold.
+   * Optional so content stored before it still types.
+   */
+  scaffoldImage?: ScaffoldImage | null;
+  /** The drawing, as data. Null or absent means there is none. */
+  scaffold?: CalculationScaffold | null;
   /** The structure a `drag` step is built on. Null on older content. */
   manipulative?: Manipulative | null;
   completionStatement: string;
