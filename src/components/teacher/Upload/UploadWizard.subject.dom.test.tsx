@@ -82,7 +82,7 @@ beforeEach(() => {
     modules: [],
     confirmationSummary: null,
   });
-  start.mockReset();
+  start.mockReset().mockResolvedValue("staged");
   useCurrentUser.mockReset().mockReturnValue(identity(["Mathematics", "English"]));
   clearSession();
   window.localStorage.clear();
