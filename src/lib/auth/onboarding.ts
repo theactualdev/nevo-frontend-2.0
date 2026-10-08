@@ -11,7 +11,6 @@
  * the class code are gone, and so are the fields that held their answers.
  */
 
-import { STUDENT_PIN_LENGTH } from "@/lib/constants/auth";
 import type { EntryIdentity } from "./firstPin";
 import { getSession, rememberProfile } from "./session";
 
@@ -150,8 +149,6 @@ export function rememberOnboardedStudent(
     loginIdentifier: identifier,
     displayName: name.split(/\s+/)[0],
     initials: initialsOf(name),
-    // They have just created it, at the one length a new PIN can be.
-    pinLength: STUDENT_PIN_LENGTH,
     // Account creation has just stored the session this child now owns.
     ...(userId ? { userId } : {}),
   });

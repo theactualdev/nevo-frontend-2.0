@@ -1,8 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 import { ReviewAnswersScreen } from "./ReviewAnswersScreen";
 import { LessonSummaryScreen } from "./LessonSummaryScreen";
 import { saveCheckOutcome, saveReviewAnswers } from "./reviewStore";
+import { lessonsApi, type LessonQuestionAttempt } from "@/lib/api/lessons";
+import { ApiError } from "@/lib/api/client";
 import { clearSession, setSession } from "@/lib/auth/session";
 import type { Lesson } from "@/lib/types";
 
@@ -55,6 +63,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   clearSession();
+  vi.restoreAllMocks();
 });
 
 describe("the summary's way to the review", () => {
@@ -167,5 +176,108 @@ describe("From the check-in, on the summary (B26)", () => {
     render(<LessonSummaryScreen lesson={lesson()} />);
 
     expect(screen.queryByText("Numerators")).toBeNull();
+  });
+});
+
+describe("the picks the account holds (audit 61)", () => {
+  /*
+   * They were read from this tab's sessionStorage only, so the same child
+   * opening the same review on another visit or tablet saw no picks at all.
+   */
+  const LIVE = lesson({
+    assessment: {
+      questions: [
+        {
+          ...QUESTION,
+          id: "cp-1",
+          options: [
+            { id: "a", label: "The numerator", value: 1 },
+            { id: "b", label: "The denominator", value: 2 },
+          ],
+        },
+      ],
+    },
+  });
+  const chose = (value: number) =>
+    [
+      {
+        questionId: "cp-1",
+        source: "assessment",
+        answer: value,
+        attemptNumber: 1,
+        submittedAt: "2026-10-06T09:00:00Z",
+      },
+    ] as LessonQuestionAttempt[];
+
+  it("are shown on a tablet that holds none of them", async () => {
+    signInAs("child-a");
+    const read = vi.spyOn(lessonsApi, "attempts").mockResolvedValue(chose(2));
+
+    render(<ReviewAnswersScreen lesson={LIVE} live />);
+
+    expect(await screen.findByText("YOU CHOSE")).toBeTruthy();
+    expect(screen.getByText("The denominator")).toBeTruthy();
+    expect(read).toHaveBeenCalledWith("frac-3");
+  });
+
+  it("win over this tab's copy where the two disagree", async () => {
+    signInAs("child-a");
+    saveReviewAnswers("frac-3", [{ questionIndex: 0, selectedId: "a" }]);
+    vi.spyOn(lessonsApi, "attempts").mockResolvedValue(chose(2));
+
+    render(<ReviewAnswersScreen lesson={LIVE} live />);
+
+    expect(await screen.findByText("YOU CHOSE")).toBeTruthy();
+  });
+
+  it("are filled from this tab where the account has no answer yet", async () => {
+    // "Review answers" opens as the last answer is given, and its write can
+    // still be on the way.
+    signInAs("child-a");
+    saveReviewAnswers("frac-3", [{ questionIndex: 0, selectedId: "b" }]);
+    let land: (rows: LessonQuestionAttempt[]) => void = () => {};
+    const read = vi.spyOn(lessonsApi, "attempts").mockReturnValue(
+      new Promise((resolve) => (land = resolve)),
+    );
+
+    render(<ReviewAnswersScreen lesson={LIVE} live />);
+    // This tab's copy is the first paint.
+    expect(await screen.findByText("YOU CHOSE")).toBeTruthy();
+
+    await act(async () => land([]));
+
+    expect(read).toHaveBeenCalled();
+    expect(screen.getByText("YOU CHOSE")).toBeTruthy();
+  });
+
+  it("are never stood in for by this tab's copy when the read fails (rule 5)", async () => {
+    signInAs("child-a");
+    saveReviewAnswers("frac-3", [{ questionIndex: 0, selectedId: "b" }]);
+    const read = vi
+      .spyOn(lessonsApi, "attempts")
+      .mockRejectedValueOnce(new ApiError(0, "offline"))
+      .mockResolvedValueOnce(chose(2));
+
+    render(<ReviewAnswersScreen lesson={LIVE} live />);
+
+    expect(
+      await screen.findByText("We couldn’t open this just now"),
+    ).toBeTruthy();
+    expect(screen.queryByText("YOU CHOSE")).toBeNull();
+    expect(screen.queryByText("THE ANSWER")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(await screen.findByText("YOU CHOSE")).toBeTruthy();
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  it("are not asked for on the signed-out walkthrough", () => {
+    const read = vi.spyOn(lessonsApi, "attempts");
+
+    render(<ReviewAnswersScreen lesson={LIVE} />);
+
+    expect(read).not.toHaveBeenCalled();
+    expect(screen.getByText("THE ANSWER")).toBeTruthy();
   });
 });

@@ -4,8 +4,12 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check } from "lucide-react";
 import { Button } from "@/components/shared";
+import { lessonsApi } from "@/lib/api/lessons";
+import { mergePicks, picksFromAttempts } from "@/lib/lessons/reviewPicks";
 import type { AssessmentQuestion, Lesson } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { LessonLoadingSkeleton } from "./LessonLoadingSkeleton";
+import { LessonMessage } from "./LessonMessage";
 import { loadReviewAnswers, type ReviewAnswer } from "./reviewStore";
 
 const LESSONS_HREF = "/student/lessons";
@@ -21,20 +25,89 @@ const HOME_HREF = "/student/dashboard";
  * design renders those only where the engine scheduled one. Nothing this
  * screen reads carries a scheduled return, so the miss is the two rows alone.
  *
- * Renders inside the app shell (like the summary). Reads the student's picks from
- * `reviewStore` (written by the player); if there are none (e.g. opened directly),
- * each question falls back to just showing the answer.
+ * Renders inside the app shell (like the summary). A question with no pick
+ * shows just the answer.
+ *
+ * THE PICKS ARE THE ACCOUNT'S (audit 61). They were read from `reviewStore`
+ * alone - this tab's sessionStorage - so the same child opening the same review
+ * on another visit or another tablet saw no picks at all. A live lesson now
+ * reads them from the answers the account holds (`lessonsApi.attempts`).
+ *
+ * The tab's copy stays as the first paint, and fills a question whose answer
+ * has not reached the account yet (`mergePicks`). It is NEVER shown in place
+ * of a failed read (rule 5): a read that failed is not "no answers", and the
+ * tab's copy is not the record. That is the route's own failure, in its words,
+ * with a way to try again.
+ *
+ * A signed-out visitor's authored lesson has no account to read: its picks are
+ * the tab's, as they always were.
  */
-export function ReviewAnswersScreen({ lesson }: { lesson: Lesson }) {
+export function ReviewAnswersScreen({
+  lesson,
+  live = false,
+}: {
+  lesson: Lesson;
+  /** A real lesson with a signed-in child, whose answers the account holds. */
+  live?: boolean;
+}) {
   const router = useRouter();
   const questions = lesson.assessment?.questions ?? [];
 
-  // Picks live in sessionStorage (client-only) — read after mount.
-  const [answers, setAnswers] = useState<ReviewAnswer[]>([]);
+  // This tab's picks live in sessionStorage (client-only) — read after mount.
+  const [held, setHeld] = useState<ReviewAnswer[]>([]);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setAnswers(loadReviewAnswers(lesson.id));
+    setHeld(loadReviewAnswers(lesson.id));
   }, [lesson.id]);
+
+  /*
+   * The account's picks, stamped with the read they answer - this lesson and
+   * this try - so a retry or a different lesson is never shown an older
+   * answer, with no reset at the top of the effect.
+   */
+  const [tries, setTries] = useState(0);
+  const readKey = `${lesson.id}:${tries}`;
+  const [stored, setStored] = useState<{
+    key: string;
+    picks: ReviewAnswer[] | null;
+  } | null>(null);
+  const reads = live && (lesson.assessment?.questions.length ?? 0) > 0;
+  useEffect(() => {
+    if (!reads) return;
+    let cancelled = false;
+    const key = `${lesson.id}:${tries}`;
+    void lessonsApi
+      .attempts(lesson.id)
+      .then((rows) => {
+        if (cancelled) return;
+        setStored({
+          key,
+          picks: picksFromAttempts(rows, lesson.assessment?.questions ?? []),
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setStored({ key, picks: null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reads, lesson, tries]);
+
+  const answer = stored?.key === readKey ? stored : null;
+  if (reads && answer && !answer.picks) {
+    return (
+      <LessonMessage
+        title="We couldn’t open this just now"
+        body="It hasn’t gone anywhere. Give it a moment and try again."
+        actionLabel="Try again"
+        onAction={() => setTries((n) => n + 1)}
+        onBack={() => router.push(LESSONS_HREF)}
+      />
+    );
+  }
+  // Nothing to show yet: no answer from the account, and nothing in this tab.
+  if (reads && !answer && held.length === 0) return <LessonLoadingSkeleton />;
+  const answers = answer?.picks ? mergePicks(answer.picks, held) : held;
 
   const labelFor = (q: AssessmentQuestion, id: string | undefined) =>
     q.options.find((o) => o.id === id)?.label;

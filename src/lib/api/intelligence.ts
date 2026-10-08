@@ -1,4 +1,5 @@
 import { api } from "./client";
+import type { AccommodationType } from "./students";
 
 /**
  * Intelligence Framework endpoints (FE Architecture §1 & §4): learner profile,
@@ -238,6 +239,49 @@ export interface GuidedAnswerRequest {
   outcome: "moved_on" | "asked_again" | "abandoned";
 }
 
+/**
+ * `EngineConfig` - the engine's settings for one child, typed since B24.
+ *
+ * THE ENGINE'S OWN INPUTS. Every value here is a parameter or a threshold the
+ * engine decides with (rule 3): a reading speed, a word target, how long a
+ * pause is, where support starts. None of them is an instruction to draw
+ * something, and the contract does not say what any of them changes on
+ * screen, so nothing reads them yet - asked of backend. Typed so a reader can
+ * see what is here, and never rendered: a number about a child's reading or
+ * attention is the kind of measurement Zero-Tag keeps off every surface.
+ */
+export interface EngineConfig {
+  version?: number;
+  reading?: { targetWordsPerMinute?: number; segmentWordTarget?: number };
+  pacing?: { responseTimeTargetMs?: number; attentionWindowMinutes?: number };
+  support?: {
+    /** `ScaffoldingLevel`. */
+    initialScaffoldLevel?: "none" | "light" | "standard" | "strong";
+    comprehensionCheckInterval?: number;
+    numberProblemsStepByStep?: boolean;
+    shorterTextBlocks?: boolean;
+  };
+  generatedFromBaselineAt?: string | null;
+}
+
+/**
+ * `SessionStateResponse` - everything a lesson needs at the moment it starts
+ * (B24): the engine's configuration, the accommodations and the consent
+ * state, from one read at one moment so they cannot disagree.
+ *
+ * A child with no baseline yet is `configured: false` with the engine's
+ * defaults, never nulls. `accommodations` and `consentState` are outside
+ * the schema's `required` list, so either may be absent.
+ */
+export interface SessionState {
+  studentId: string;
+  configured: boolean;
+  engineConfig: EngineConfig;
+  baselineVersion: number | null;
+  accommodations?: AccommodationType[];
+  consentState?: "given" | "pending" | "withdrawn";
+}
+
 export const intelligenceApi = {
   getProfile: (studentId: string) =>
     api.get(`/api/intelligence/profile/${studentId}`),
@@ -344,4 +388,14 @@ export const intelligenceApi = {
       "/api/intelligence/guided-questions/answer",
       body,
     ),
+
+  /**
+   * The session-start read. GET /api/session/state/{student_id} (B24)
+   *
+   * Frontend §1 and §4: read when a lesson opens, and the accommodations it
+   * carries are applied before the first screen (rule 6). See
+   * `useAccommodationsState`, its caller.
+   */
+  sessionState: (studentId: string) =>
+    api.get<SessionState>(`/api/session/state/${studentId}`),
 };

@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { READING_BODY, READING_INK } from "./readingSupport";
 
 /**
  * What a teacher wrote to this child when they set this lesson.
@@ -55,11 +56,18 @@ import { cn } from "@/lib/utils";
 export function TeacherNote({
   note,
   author = null,
+  reading = false,
   className,
 }: {
   note: string;
   /** The teacher who set the assignment. Null is unsigned, never an error. */
   author?: string | null;
+  /**
+   * The reading accommodation's TYPOGRAPHIC half (D30): "the teacher's note
+   * takes typographic support only". Size and spacing change how the words
+   * are presented, never which words they are.
+   */
+  reading?: boolean;
   className?: string;
 }) {
   return (
@@ -72,7 +80,14 @@ export function TeacherNote({
         className,
       )}
     >
-      <blockquote className="text-[15px] leading-[1.6] whitespace-pre-line text-nevo-near-black italic">
+      <blockquote
+        className={cn(
+          "whitespace-pre-line italic",
+          reading
+            ? [READING_BODY, READING_INK]
+            : "text-[15px] leading-[1.6] text-nevo-near-black",
+        )}
+      >
         {note}
       </blockquote>
       {/*
