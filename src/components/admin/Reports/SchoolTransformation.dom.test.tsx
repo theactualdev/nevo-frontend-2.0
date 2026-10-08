@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
 import { ApiError } from "@/lib/api/client";
 import type { CohortTransformation } from "@/lib/api/analytics";
@@ -143,6 +143,21 @@ describe("when there is nothing to show", () => {
     const { container } = render(<SchoolTransformationView />);
     await waitFor(() =>
       expect(visibleText(container)).toMatch(/don't have access to your school's figures/),
+    );
+  });
+});
+
+describe("inside Reports (Lydia, 7 Oct)", () => {
+  it("is a view of Reports, marked current, beside cohort analytics", async () => {
+    render(<SchoolTransformationView />);
+    const views = await screen.findByRole("navigation", { name: "Reports" });
+    expect(within(views).getByRole("link", { name: "School transformation" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(within(views).getByRole("link", { name: "Cohort analytics" })).toHaveAttribute(
+      "href",
+      "/admin/reports",
     );
   });
 });

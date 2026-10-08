@@ -647,3 +647,34 @@ describe("the ready lesson's pill and headings", () => {
     expect(screen.getByText("How the class moved through it")).toBeInTheDocument();
   });
 });
+
+/**
+ * C06b AT TABLET WIDTH (1024 x 768). Unprefixed classes are the tablet
+ * layout here and `xl:` is desktop. The section rows were a column below
+ * 1280px, so the number sat on a line of its own above every section, and
+ * the header set the actions beside the title where the frame stacks them.
+ */
+describe("at tablet width", () => {
+  it("keeps each section on one line, without the type tag", () => {
+    show();
+    const title = screen.getByText("What a leaf does");
+    const row = title.closest("[class*='py-[13px]']")!;
+
+    expect(row).not.toBeNull();
+    expect(row.className.split(" ")).not.toContain("flex-col");
+    expect(row).toHaveClass("flex", "items-start");
+    expect(title.parentElement!.querySelector("[class*='rounded-full']")).toHaveClass(
+      "hidden",
+      "xl:inline",
+    );
+  });
+
+  it("stacks the header: the actions under the title, beside it from 1280px", () => {
+    show();
+    const header = screen
+      .getByRole("heading", { level: 1, name: "Photosynthesis in Leaves" })
+      .closest("[class*='xl:justify-between']")!;
+
+    expect(header).toHaveClass("flex-col", "xl:flex-row");
+  });
+});

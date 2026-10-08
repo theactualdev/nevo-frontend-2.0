@@ -13,12 +13,13 @@ import { cn } from "@/lib/utils";
 import { feedbackApi } from "@/lib/api/feedback";
 import { CheckIcon, CloseIcon, PausedNote } from "../Roster/primitives";
 import { useSetupGate } from "@/hooks";
-import { readOnboarding, schoolApi } from "@/lib/api/school";
+import { schoolApi } from "@/lib/api/school";
 import { NoAccess, failureKind } from "../NoAccess";
 import { getSession } from "@/lib/auth/session";
 import { EditAccessPanel, ScopeChecklist } from "./EditAccess";
 import { useSupportEmail } from "../SupportEmail";
 import {
+  ADMIN_SEATS_STANDARD,
   adminSeatAllowance,
   SCOPE_CATALOGUE,
   initialsFor,
@@ -86,24 +87,16 @@ export function AdminTeamView() {
   const [inviting, setInviting] = useState(false);
   /** The admin whose access is being edited, if any. */
   const [editing, setEditing] = useState<TeamMember | null>(null);
-  /*
-   * The seat allowance follows the school's BAND, which onboarding recorded
-   * and quoted to them ("Mid-Market comes with 10 admin seats"). It was a
-   * hardcoded five for every school - see `adminScopes.ts`. Null means we
-   * could not read it, and then nothing is asserted and nothing is blocked.
-   */
-  const [seats, setSeats] = useState<number | null>(null);
+  /** Five for every school (Lydia, 7 Oct) - see `adminSeatAllowance`. */
+  const seats = adminSeatAllowance();
   /** D03 names the school - "can administer Brightgate Academy". */
   const [school, setSchool] = useState<string | null>(null);
 
   useEffect(() => {
     schoolApi
       .get()
-      .then((sc) => {
-        setSeats(adminSeatAllowance(readOnboarding(sc).band));
-        setSchool(sc.name?.trim() || null);
-      })
-      .catch(() => setSeats(null));
+      .then((sc) => setSchool(sc.name?.trim() || null))
+      .catch(() => setSchool(null));
   }, []);
 
   // No synchronous setState in the effect body (react-hooks/set-state-in-effect):
@@ -414,10 +407,12 @@ function TeamList({
       {atAllowance && (
         <div className={cn(CARD, "mt-3 px-[26px] py-6")}>
           <h3 className="text-[16px] font-semibold text-nevo-near-black">
-            {`All ${seats} admin accounts are in use`}
+            {seats === ADMIN_SEATS_STANDARD
+              ? "All five admin accounts are in use"
+              : `All ${seats} admin accounts are in use`}
           </h3>
           <p className="mt-2 max-w-[60ch] text-sm leading-[1.6] text-nevo-near-black/66">
-            {`${school ?? "This school"} includes ${seats} admin accounts as standard.`}{" "}
+            {`${school ?? "This school"} includes ${seats === ADMIN_SEATS_STANDARD ? "five" : seats} admin accounts as standard.`}{" "}
             Need another?
             We&rsquo;ll add it at no charge - just ask. Keeping the standing
             number small is a data-governance and security measure, not a

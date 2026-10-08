@@ -222,37 +222,77 @@ export function LiveStudentProfile({
           {className ? `${className} · Roster` : "My Classes"}
         </Link>
 
-        <div className="mt-4 flex items-center gap-4">
-          <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-nevo-navy text-xl font-semibold text-nevo-cream xl:size-16">
-            {initialsOf(student.firstName, student.lastName)}
-          </span>
-          <div className="min-w-0">
-            <h1 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
-              {name || "This student"}
-            </h1>
-            <span className="mt-[3px] block text-[14.5px] text-nevo-near-black/60">
-              {[
-                student.ageBand,
-                // Only once the learner profile has answered: "No profile
-                // yet" over a read in flight, or one that failed, is a claim
-                // about this child made from our own network.
-                read("learnerProfile") !== "ready"
-                  ? null
-                  : observed
-                    ? "Learning profile building"
-                    : "No profile yet",
-              ]
-                .filter(Boolean)
-                .join(" · ")}
+        {/*
+          C08's HEADER: who this is, then what a teacher can do about it -
+          beside the name on desktop, in a row of their own under it on tablet
+          ("actions wrap"). The actions used to sit at the very foot of the
+          page, under every section, at both widths: a teacher who came to
+          recommend a lesson scrolled past the whole profile to find the
+          button. The fixture profile always had them here.
+        */}
+        <div className="mt-3.5 flex flex-col items-start gap-4 xl:mt-4 xl:flex-row xl:flex-wrap xl:justify-between xl:gap-6">
+          <div className="flex items-center gap-3.5 xl:gap-4">
+            <span className="flex size-[50px] shrink-0 items-center justify-center rounded-full bg-nevo-navy text-[17px] font-semibold text-nevo-cream xl:size-16 xl:text-xl">
+              {initialsOf(student.firstName, student.lastName)}
             </span>
-            {/* C14 B5's quiet note. The frame writes it with a dash; design
-                ruled on 15 Sep that Nevo copy carries no dashes anywhere, so
-                it reads straight. It appears only after a stored escalation. */}
-            {shared && (
-              <span className="mt-[3px] block text-[14.5px] text-nevo-near-black/60">
-                Shared with Learning Support today
+            <div className="min-w-0">
+              <h1 className="text-[22px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
+                {name || "This student"}
+              </h1>
+              <span className="mt-[3px] block text-sm text-nevo-near-black/60 xl:text-[14.5px]">
+                {[
+                  student.ageBand,
+                  // Only once the learner profile has answered: "No profile
+                  // yet" over a read in flight, or one that failed, is a claim
+                  // about this child made from our own network.
+                  read("learnerProfile") !== "ready"
+                    ? null
+                    : observed
+                      ? "Learning profile building"
+                      : "No profile yet",
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
               </span>
-            )}
+              {/* C14 B5's quiet note. The frame writes it with a dash; design
+                  ruled on 15 Sep that Nevo copy carries no dashes anywhere, so
+                  it reads straight. It appears only after a stored escalation. */}
+              {shared && (
+                <span className="mt-[3px] block text-sm text-nevo-near-black/60 xl:text-[14.5px]">
+                  Shared with Learning Support today
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* C08's order: the primary action first. `flex-wrap` since 15 Sep -
+              a third action turned a bare row into one that ran off a tablet. */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setRecommending(true)}
+              className="inline-flex h-[42px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[18px] text-sm font-semibold text-nevo-cream transition-[filter] hover:brightness-93 xl:h-11 xl:px-5 xl:text-[14.5px]"
+            >
+              Recommend a lesson
+            </button>
+            {/* `POST /api/v1/escalations` landed 15 Sep; before it this action
+                existed only on the fixture profile. C08's label - the sheet it
+                opens is "Share with Learning Support"; the button is not. */}
+            <button
+              type="button"
+              onClick={() => setSharing(true)}
+              className="inline-flex h-[42px] cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 px-4 text-sm font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6 xl:h-11 xl:px-[18px] xl:text-[14.5px]"
+            >
+              Flag for support
+            </button>
+            <Link
+              /* With the child's id: compose opens on them rather than on
+                 an empty recipient list. */
+              href={`/teacher/connect?student=${student.id}`}
+              className="inline-flex h-[42px] cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 px-4 text-sm font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6 xl:h-11 xl:px-[18px] xl:text-[14.5px]"
+            >
+              Send them a message
+            </Link>
           </div>
         </div>
 
@@ -618,41 +658,6 @@ export function LiveStudentProfile({
           </p>
         )}
 
-        {/* `flex flex-wrap gap-3` replaced a bare block on 15 Sep. Two
-            inline-flex children were separated only by a whitespace text node,
-            which a third action turns into a row that runs off a tablet. */}
-        <div className="mt-8 flex flex-wrap gap-3">
-          <Link
-            /* With the child's id: compose opens on them rather than on
-               an empty recipient list. */
-            href={`/teacher/connect?student=${student.id}`}
-            className="inline-flex h-[50px] cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 px-[22px] text-[15px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
-          >
-            Send them a message
-          </Link>
-          {/* THE SECOND ACTION. Until 15 Sep this profile offered exactly one
-              of the four C08 draws, and the other three were mounted only from
-              the fixture profile. */}
-          <button
-            type="button"
-            onClick={() => setRecommending(true)}
-            className="inline-flex h-[50px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[22px] text-[15px] font-medium text-nevo-cream transition-[filter] hover:brightness-93"
-          >
-            Recommend a lesson
-          </button>
-          {/* THE THIRD. `POST /api/v1/escalations` landed 15 Sep; before it
-              this action existed only on the fixture profile, behind a
-              disabled button explaining there was nowhere to send it. */}
-          <button
-            type="button"
-            onClick={() => setSharing(true)}
-            className="inline-flex h-[50px] cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 px-[22px] text-[15px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
-          >
-            {/* C08's label. The sheet it opens is "Share with Learning
-                Support"; the button that opens it is not. */}
-            Flag for support
-          </button>
-        </div>
 
         {/*
           C08d. The panel makes no request while `openSession` is null, so a

@@ -51,6 +51,26 @@ export function toYmd(d: Date): string {
 }
 
 /**
+ * The term `now` falls in, as the school set it in Settings, or null.
+ *
+ * The school's own rows only - never a third of the year, and never the last
+ * term once it has ended. Between terms there is no "this term" to name, so
+ * the caller says nothing rather than reusing the one just gone.
+ */
+export function currentTerm(
+  terms: SchoolTerm[],
+  now: number,
+): { name: string; from: string } | null {
+  for (const term of terms) {
+    const start = startOfDay(term.start);
+    const end = endOfDay(term.end);
+    if (!start || !end || now < start.getTime() || now > end.getTime()) continue;
+    return { name: term.name.trim(), from: term.start.slice(0, 10) };
+  }
+  return null;
+}
+
+/**
  * Which half of which term `now` is in.
  *
  * Before the break, the first half, from the term's start. After it, the

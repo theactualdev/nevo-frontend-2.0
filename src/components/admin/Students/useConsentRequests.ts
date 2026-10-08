@@ -61,6 +61,80 @@ export type ConsentRequestState =
 
 const IDLE: ConsentRequestState = { kind: "idle" };
 
+/** Requests in flight at once during a bulk send. */
+const BULK_AT_ONCE = 4;
+
+/**
+ * What a bulk send came to, by the receipt each request got. `sent` is only
+ * a receipt that says sent - a queued one is counted apart, because "N sent"
+ * over requests still queued is the invite defect again.
+ */
+export interface BulkConsentTally {
+  sent: number;
+  queued: number;
+  undelivered: number;
+  /** No guardian on record, or only a phone number: no email to send to. */
+  noEmail: number;
+  refused: number;
+  failed: number;
+}
+
+const EMPTY_TALLY: BulkConsentTally = {
+  sent: 0,
+  queued: 0,
+  undelivered: 0,
+  noEmail: 0,
+  refused: 0,
+  failed: 0,
+};
+
+function countInto(t: BulkConsentTally, s: ConsentRequestState) {
+  if (s.kind === "done") {
+    if (s.delivery === "sent") t.sent++;
+    else if (s.delivery === "failed") t.undelivered++;
+    else t.queued++;
+  } else if (s.kind === "noContact" || s.kind === "needsEmail") t.noEmail++;
+  else if (s.kind === "refused") t.refused++;
+  else if (s.kind === "failed") t.failed++;
+}
+
+const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
+
+/**
+ * The lines after a bulk send. D07's own words where it has them - "{ok}
+ * invitation(s) sent", and "could not be sent: those students do not have a
+ * parent email address on file yet" - and a line for each other outcome, so
+ * no request disappears from the count.
+ */
+export function bulkConsentLines(t: BulkConsentTally): string[] {
+  const lines: string[] = [];
+  if (t.sent) lines.push(`${t.sent} ${plural(t.sent, "invitation", "invitations")} sent.`);
+  if (t.queued) {
+    lines.push(
+      `${t.queued} ${plural(t.queued, "invitation is", "invitations are")} queued and ${plural(t.queued, "goes", "go")} out shortly.`,
+    );
+  }
+  if (t.undelivered) {
+    lines.push(
+      `${t.undelivered} couldn’t be delivered. Those parents’ contact details may need checking.`,
+    );
+  }
+  if (t.noEmail) {
+    lines.push(
+      `${t.noEmail} could not be sent: ${plural(t.noEmail, "that student does", "those students do")} not have a parent email address on file yet.`,
+    );
+  }
+  if (t.refused) {
+    lines.push(
+      `${t.refused} ${plural(t.refused, "parent was", "parents were")} already asked and did not consent, so Nevo did not contact them again.`,
+    );
+  }
+  if (t.failed) {
+    lines.push(`${t.failed} didn’t send, and nothing changed for those. Try them again in a moment.`);
+  }
+  return lines;
+}
+
 /**
  * SCRUM-162 (20 Sep): parent contact is EMAIL ONLY. No phone, no SMS.
  *
@@ -103,71 +177,107 @@ export function useConsentRequests() {
     setByStudent((prev) => ({ ...prev, [studentId]: next }));
   }, []);
 
-  const send = useCallback(
-    (studentId: string) => {
+  /**
+   * One request, start to finish, and the state it ended in. Every outcome is
+   * written to the row as it lands, so a bulk send fills the roster in row by
+   * row rather than all at once at the end.
+   */
+  const run = useCallback(
+    (studentId: string): Promise<ConsentRequestState> => {
+      const end = (next: ConsentRequestState) => {
+        set(studentId, next);
+        return next;
+      };
       set(studentId, { kind: "sending" });
-      studentsApi
-        .parentLinks(studentId)
-        .then((links) => {
-          /*
-           * A named guardian first; failing that, one recorded at enrolment
-           * with an email and no name yet. This took named links only, and
-           * told a school with a guardian on record that there was nobody.
-           * The name is optional on the request now (backend, 1 Oct): the
-           * parent gives their own at consent, and a blank one reads
-           * "Parent or guardian" on their screen.
-           */
-          const link =
-            links.find((l) => l.parentContact && l.parentName.trim()) ??
-            links.find((l) => l.parentContact);
-          if (!link) {
-            set(studentId, { kind: "noContact" });
-            return;
-          }
-          const who = link.parentName.trim() || link.parentContact;
-          /*
-           * A PHONE NUMBER IS NO LONGER SOMETHING WE CAN SEND TO (SCRUM-162).
-           * Before the ruling this fell through to `contactMethod: "sms"`.
-           * Sending it as `"email"` instead would be worse than refusing: the
-           * request would go nowhere and the school would be told it was
-           * queued. Refusing names the record that needs an email, which is
-           * the action the ruling actually requires of the school.
-           */
-          if (!isEmail(link.parentContact)) {
-            set(studentId, {
-              kind: "needsEmail",
-              parentName: who,
-            });
-            return;
-          }
-          return consentsApi
-            .requestParentConsent(studentId, {
-              parentName: link.parentName,
-              parentContact: link.parentContact,
-              contactMethod: CONTACT_METHOD,
-            })
-            .then((receipt) =>
-              set(studentId, {
-                kind: "done",
-                parentName: who,
-                delivery: receipt.deliveryStatus,
-              }),
-            );
-        })
-        // One catch for both round trips is deliberate here, unlike the
-        // onboarding case: neither of them writes anything on the way to the
-        // POST, so a failure at either point means no request was created.
-        .catch((err: unknown) =>
-          set(
-            studentId,
-            refusal(err) ?? { kind: "failed" },
-          ),
-        );
+      return (
+        studentsApi
+          .parentLinks(studentId)
+          .then((links): ConsentRequestState | Promise<ConsentRequestState> => {
+            /*
+             * A named guardian first; failing that, one recorded at enrolment
+             * with an email and no name yet. This took named links only, and
+             * told a school with a guardian on record that there was nobody.
+             * The name is optional on the request now (backend, 1 Oct): the
+             * parent gives their own at consent, and a blank one reads
+             * "Parent or guardian" on their screen.
+             */
+            const link =
+              links.find((l) => l.parentContact && l.parentName.trim()) ??
+              links.find((l) => l.parentContact);
+            if (!link) return end({ kind: "noContact" });
+            const who = link.parentName.trim() || link.parentContact;
+            /*
+             * A PHONE NUMBER IS NO LONGER SOMETHING WE CAN SEND TO (SCRUM-162).
+             * Before the ruling this fell through to `contactMethod: "sms"`.
+             * Sending it as `"email"` instead would be worse than refusing: the
+             * request would go nowhere and the school would be told it was
+             * queued. Refusing names the record that needs an email, which is
+             * the action the ruling actually requires of the school.
+             */
+            if (!isEmail(link.parentContact)) {
+              return end({ kind: "needsEmail", parentName: who });
+            }
+            return consentsApi
+              .requestParentConsent(studentId, {
+                parentName: link.parentName,
+                parentContact: link.parentContact,
+                contactMethod: CONTACT_METHOD,
+              })
+              .then((receipt) =>
+                end({ kind: "done", parentName: who, delivery: receipt.deliveryStatus }),
+              );
+          })
+          // One catch for both round trips is deliberate here, unlike the
+          // onboarding case: neither of them writes anything on the way to the
+          // POST, so a failure at either point means no request was created.
+          .catch((err: unknown) => end(refusal(err) ?? { kind: "failed" }))
+      );
     },
     [set],
   );
 
-  return { stateFor, send };
+  const send = useCallback(
+    (studentId: string) => {
+      void run(studentId);
+    },
+    [run],
+  );
+
+  /**
+   * D07's bulk send (Lydia, 7 Oct: "D07 wins. Bulk send exists.").
+   *
+   * THE SAME REQUEST, MANY TIMES - not a bulk route, because the contract has
+   * none: `POST /students/{id}/parent-consent-requests` is per student. A few
+   * at a time rather than all at once, so three hundred children are not three
+   * hundred simultaneous requests, and each row reports its own outcome as it
+   * lands. Nothing is retried on the admin's behalf: a failure is counted and
+   * said, and the row keeps its own "Send request".
+   */
+  const sendMany = useCallback(
+    async (
+      studentIds: string[],
+      onProgress?: (done: number) => void,
+    ): Promise<BulkConsentTally> => {
+      const tally: BulkConsentTally = { ...EMPTY_TALLY };
+      let next = 0;
+      let done = 0;
+      const worker = async () => {
+        while (next < studentIds.length) {
+          const id = studentIds[next++];
+          const outcome = await run(id);
+          countInto(tally, outcome);
+          onProgress?.(++done);
+        }
+      };
+      await Promise.all(
+        Array.from({ length: Math.min(BULK_AT_ONCE, studentIds.length) }, worker),
+      );
+      return tally;
+    },
+    [run],
+  );
+
+  return { stateFor, send, sendMany };
 }
 
 /** What to tell the admin, in the frame's own voice. Never red, never alarm. */

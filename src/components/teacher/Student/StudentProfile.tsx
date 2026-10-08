@@ -107,11 +107,15 @@ export function StudentProfile({
           {`${student.className} · Roster`}
         </Link>
 
-        {/* Identity + actions */}
+        {/* Identity + actions. C08 tablet: "actions wrap" - into their own
+            row under the name. This stayed a row below 1280px, so on a tablet
+            the actions squeezed in beside the name instead. */}
         <div
           className={cn(
-            "flex items-center gap-3.5 xl:mt-4 xl:gap-4",
-            early ? "mt-3.5" : "xl:flex-wrap xl:items-start xl:justify-between xl:gap-6",
+            "mt-3.5 flex xl:mt-4",
+            early
+              ? "items-center gap-3.5 xl:gap-4"
+              : "flex-col items-start xl:flex-row xl:flex-wrap xl:justify-between xl:gap-6",
           )}
         >
           <div className="flex items-center gap-3.5 xl:gap-4">

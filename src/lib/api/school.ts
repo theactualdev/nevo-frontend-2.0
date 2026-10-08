@@ -9,8 +9,9 @@ import { api } from "./client";
  * SCRUM-39 asked for three: `PATCH school.authMethod`, `PATCH school.band`,
  * and a DPA acceptance. Two have resolved since. The DPA acceptance is a typed
  * record (7 Sep, `GET/POST /school/dpa-acceptance` - see `acceptDpa`), and the
- * band is retired with flat pricing. Only `authMethod` is left, and its step
- * is deferred with SSO and kept off the flow.
+ * band is retired with flat pricing. The sign-in method is cut from
+ * onboarding (Lydia, 7 Oct). `authMethod` stays on the type below only so an
+ * older school's record still reads back; nothing writes it.
  *
  * `PATCH /api/v1/school` accepts only `{name, profile, academicConfig,
  * retentionPolicy}`, and `profile` is an untyped `object`, so what remains is

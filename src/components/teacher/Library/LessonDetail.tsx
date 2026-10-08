@@ -64,7 +64,8 @@ export function LessonDetail({
         </Link>
 
         {/* Header */}
-        <div className="mt-3.5 flex flex-wrap items-start justify-between gap-4 xl:mt-4 xl:gap-6">
+        {/* C06b tablet stacks the actions under the title; desktop sets them beside it. */}
+        <div className="mt-3.5 flex flex-col gap-4 xl:mt-4 xl:flex-row xl:flex-wrap xl:items-start xl:justify-between xl:gap-6">
           <div>
             <div className="flex items-center gap-2.5">
               <h1 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[27px]">

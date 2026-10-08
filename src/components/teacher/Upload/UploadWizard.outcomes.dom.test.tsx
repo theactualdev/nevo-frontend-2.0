@@ -758,3 +758,99 @@ describe("a file the step itself would refuse", () => {
     expect(screen.queryByText(/That file didn’t come through/)).not.toBeInTheDocument();
   });
 });
+
+/** T244: the wizard tests stopped short of the tree they lead to. */
+describe("a unit that has been read", () => {
+  it("opens its structure to steer, in the wizard", () => {
+    stagedState({
+      uploadId: "u-1",
+      status: "ready",
+      structure: {
+        lessonId: "l-1",
+        modules: [],
+        lessons: [
+          {
+            lessonId: "l-1",
+            title: "Rivers",
+            sequenceOrder: 1,
+            modules: [{ title: "Where rivers start", sequenceOrder: 1, segmentIds: [], recap: null, preview: null }],
+          },
+        ],
+      },
+      segments: [],
+    });
+    startUnitUpload();
+
+    expect(screen.getByDisplayValue("Rivers")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Looks right - add to my library/ })).toBeInTheDocument();
+  });
+});
+
+/**
+ * C07d and C07e AT EVERY WIDTH. The live tree is built as a pane - its own
+ * scroll, its commit bar pinned at the foot, its confirm sheet over its own
+ * area - and it was mounted inside the body's 760px reading column, where
+ * the bar scrolled away with the tree and the sheet anchored to whatever was
+ * positioned further up. And the live ladder sat in a plain block that
+ * collapsed to its own height, so it never centred.
+ */
+describe("where a unit's reading is drawn", () => {
+  const READY = {
+    uploadId: "u-1",
+    status: "ready",
+    structure: {
+      lessonId: "l-1",
+      modules: [],
+      lessons: [
+        {
+          lessonId: "l-1",
+          title: "Rivers",
+          sequenceOrder: 1,
+          modules: [{ title: "Where rivers start", sequenceOrder: 1, segmentIds: [], recap: null, preview: null }],
+        },
+      ],
+    },
+    segments: [],
+  };
+  const commitBar = () =>
+    screen.getByRole("button", { name: /Looks right - add to my library/ }).parentElement!;
+
+  it("gives the tree the pane, not a slot in the reading column", () => {
+    stagedState(READY);
+    startUnitUpload();
+
+    expect(commitBar().closest("[class*='max-w-[760px]']")).toBeNull();
+    expect(commitBar().closest("[class*='overflow-y-auto']")).toBeNull();
+    // The confirm sheet is `absolute inset-0`: its pane is what it covers.
+    expect(commitBar().parentElement).toHaveClass("relative");
+  });
+
+  it("and the body gives way to it - no reading spinner left beside the tree", () => {
+    stagedState(READY);
+    startUnitUpload();
+
+    expect(screen.queryByText("Nevo is reading your unit")).not.toBeInTheDocument();
+    expect(screen.queryByText("Reading your upload")).not.toBeInTheDocument();
+  });
+
+  it("keeps the faint-pages card, above the tree and inside its scroll", () => {
+    stagedState({ ...READY, failedPages: [3] });
+    startUnitUpload();
+
+    const retry = screen.getByRole("button", { name: "Read that page again" });
+    const scroll = retry.closest("[class*='overflow-y-auto']");
+
+    expect(scroll).not.toBeNull();
+    expect(scroll).toContainElement(screen.getByDisplayValue("Rivers"));
+  });
+
+  it("centres the live ladder in a full-height column", () => {
+    stagedState({ uploadId: "u-1", status: "parsing", stage: "lessons" });
+    startUnitUpload();
+
+    const ladder = screen.getAllByText("Reading your upload")[0].closest("div.min-h-full")!;
+
+    expect(ladder).toHaveClass("flex-1", "justify-center");
+    expect(ladder.parentElement).toHaveClass("flex", "flex-col", "min-h-full");
+  });
+});

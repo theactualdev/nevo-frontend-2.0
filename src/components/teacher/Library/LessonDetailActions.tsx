@@ -73,11 +73,13 @@ export function LessonDetailActions({
   /** Flagged sections nobody has approved. */
   outstandingSections?: number;
 }) {
-  const h = compact ? "h-[42px] text-sm" : "h-11 text-[14.5px]";
+  // C06b's tablet draws 42px / 14px buttons; desktop 44px / 14.5px.
+  const h = compact ? "h-[42px] text-sm" : "h-[42px] text-sm xl:h-11 xl:text-[14.5px]";
   const blocked = !ready || checking;
 
   return (
-    <div className="flex flex-col items-end gap-2">
+    // Under the title on tablet, so it reads from the left; beside it on desktop.
+    <div className="flex flex-col items-start gap-2 xl:items-end">
       <div className="flex items-center gap-2.5">
         {variantsHref && (
           <Link
@@ -90,21 +92,21 @@ export function LessonDetailActions({
         {blocked ? (
           <span
             aria-disabled="true"
-            className={`inline-flex items-center rounded-[10px] bg-nevo-navy/30 px-5 font-semibold text-nevo-cream ${h}`}
+            className={`inline-flex items-center rounded-[10px] bg-nevo-navy/30 px-[18px] font-semibold text-nevo-cream xl:px-5 ${h}`}
           >
             Assign to a class
           </span>
         ) : (
           <Link
             href={`/teacher/lessons/assign?lesson=${lessonId}`}
-            className={`inline-flex cursor-pointer items-center rounded-[10px] bg-nevo-navy px-5 font-semibold text-nevo-cream transition-[filter,transform] hover:brightness-93 active:scale-[0.99] ${h}`}
+            className={`inline-flex cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[18px] font-semibold text-nevo-cream transition-[filter,transform] hover:brightness-93 active:scale-[0.99] xl:px-5 ${h}`}
           >
             Assign to a class
           </Link>
         )}
       </div>
       {blocked && !checking && (
-        <span className="text-right text-[13px] font-medium text-nevo-navy">
+        <span className="text-[13px] font-medium text-nevo-navy xl:text-right">
           {/* The server says it is not ready and we do not always know why -
               a refusal we cannot itemise still has to say something true. */}
           {/* C06b: "2 key points still to check". The "below" this used to
