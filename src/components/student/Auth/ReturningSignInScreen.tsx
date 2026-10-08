@@ -17,11 +17,7 @@ import {
   classifyLearnerLoginFailure,
   type LearnerLoginFailure,
 } from "@/lib/auth/loginFailure";
-import {
-  doorForRole,
-  knownRole,
-  type ConsoleDoor,
-} from "@/lib/auth/consoleDoor";
+import { doorForRole, knownRole } from "@/lib/auth/consoleDoor";
 import { rememberProfile } from "@/lib/auth/session";
 import {
   clearSignInHandoff,
@@ -39,7 +35,12 @@ import {
   SIGN_IN_THROTTLED_COPY,
   skipsWelcomeBeat,
 } from "./signInMoments";
-import { WrongDoorNote } from "./WrongDoorNote";
+import {
+  WrongDoorNote,
+  studentDoorRefusal,
+  type StudentDoorRefusal,
+} from "./WrongDoorNote";
+import { WrongDoorScreen } from "./WrongDoorScreen";
 
 /**
  * Returning Student Sign-In, unrecognised device (frame 00c).
@@ -126,8 +127,8 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
   const [releasedTo, setReleasedTo] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<LearnerLoginFailure | null>(null);
-  /** Whose door a non-student account belongs at; see `WrongDoorNote`. */
-  const [wrongDoor, setWrongDoor] = useState<ConsoleDoor | null>(null);
+  /** Whose account a non-student one is; see `studentDoorRefusal`. */
+  const [wrongDoor, setWrongDoor] = useState<StudentDoorRefusal | null>(null);
   /**
    * The number pad is DOCKED AND FOCUS-DRIVEN here - design's ruling D on
    * 00c, PIN creation and 00: "a focus-driven pad is transient, and a docked
@@ -229,7 +230,7 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
       const door = doorForRole(role);
       if (door !== "student" || !role) {
         setDigits("");
-        setWrongDoor(door);
+        setWrongDoor(studentDoorRefusal(session.role));
         setError("wrong_door");
         void authApi.logout().catch(() => {});
         return;
@@ -344,6 +345,14 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
   if (error === "paused") {
     // No retry, but a way back to the picker for whoever is next (D52).
     return <AccountOnPauseScreen back={{ href: "/auth/login" }} />;
+  }
+  /*
+   * D128: a parent, or an account we do not recognise, gets a screen of its
+   * own. Either way back is this form, with what they typed kept and the PIN
+   * cleared, as after "didn't match".
+   */
+  if (error === "wrong_door" && wrongDoor && wrongDoor !== "staff") {
+    return <WrongDoorScreen kind={wrongDoor} onBack={() => setError(null)} />;
   }
 
   if (done) {
@@ -597,7 +606,7 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
                 {/* 28c's door lines (D68), the same on every PIN door. */}
                 {error === "throttled" && SIGN_IN_THROTTLED_COPY}
                 {error === "ours" && SIGN_IN_OURS_COPY}
-                {error === "wrong_door" && <WrongDoorNote door={wrongDoor} />}
+                {error === "wrong_door" && <WrongDoorNote />}
               </span>
             </div>
           )}

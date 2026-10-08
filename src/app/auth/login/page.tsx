@@ -11,15 +11,16 @@ import {
   classifyLearnerLoginFailure,
   type LearnerLoginFailure,
 } from "@/lib/auth/loginFailure";
-import {
-  doorForRole,
-  knownRole,
-  type ConsoleDoor,
-} from "@/lib/auth/consoleDoor";
+import { doorForRole, knownRole } from "@/lib/auth/consoleDoor";
 import { safeNextPath, withNext } from "@/lib/auth/nextPath";
 import { AccountClosedScreen } from "@/components/student/Auth/AccountClosedScreen";
 import { AccountOnPauseScreen } from "@/components/student/Auth/AccountOnPauseScreen";
-import { WrongDoorNote } from "@/components/student/Auth/WrongDoorNote";
+import {
+  WrongDoorNote,
+  studentDoorRefusal,
+  type StudentDoorRefusal,
+} from "@/components/student/Auth/WrongDoorNote";
+import { WrongDoorScreen } from "@/components/student/Auth/WrongDoorScreen";
 import {
   childById,
   pickerEntries,
@@ -157,8 +158,8 @@ export default function LoginPage() {
    * session elsewhere (D59, `SignedInHereScreen`). Null when it ended nothing.
    */
   const [releasedTo, setReleasedTo] = useState<string | null>(null);
-  /** Whose door a non-student account belongs at; see `WrongDoorNote`. */
-  const [wrongDoor, setWrongDoor] = useState<ConsoleDoor | null>(null);
+  /** Whose account a non-student one is; see `studentDoorRefusal`. */
+  const [wrongDoor, setWrongDoor] = useState<StudentDoorRefusal | null>(null);
   /**
    * Where the child was going, from the proxy's `?next=` - for every way out of
    * this screen, not only the empty-device one it used to be read for.
@@ -265,7 +266,7 @@ export default function LoginPage() {
         const door = doorForRole(role);
         if (door !== "student" || !role) {
           setDigits("");
-          setWrongDoor(door);
+          setWrongDoor(studentDoorRefusal(session.role));
           setError("wrong_door");
           void authApi.logout().catch(() => {});
           return;
@@ -417,6 +418,26 @@ export default function LoginPage() {
   };
   if (error === "closed") return <AccountClosedScreen toPicker={toPicker} />;
   if (error === "paused") return <AccountOnPauseScreen back={toPicker} />;
+  /*
+   * D128: a parent, or an account we do not recognise, gets a screen of its
+   * own, not a line under the PIN. A parent's "Back to sign in" is the picker,
+   * where every way in on this device starts; "Try again" is this child's PIN.
+   */
+  if (error === "wrong_door" && wrongDoor && wrongDoor !== "staff") {
+    return (
+      <WrongDoorScreen
+        kind={wrongDoor}
+        onBack={
+          wrongDoor === "parent"
+            ? toPicker.onBack
+            : () => {
+                setError(null);
+                setDigits("");
+              }
+        }
+      />
+    );
+  }
 
   const focusInput = () => inputRef.current?.focus();
 
@@ -545,7 +566,7 @@ export default function LoginPage() {
                   typed the right one too quickly. */}
               {error === "ours" && SIGN_IN_OURS_COPY}
               {error === "throttled" && SIGN_IN_THROTTLED_COPY}
-              {error === "wrong_door" && <WrongDoorNote door={wrongDoor} />}
+              {error === "wrong_door" && <WrongDoorNote />}
             </div>
           ) : (
             <p

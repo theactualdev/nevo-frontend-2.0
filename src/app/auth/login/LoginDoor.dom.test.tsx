@@ -250,16 +250,56 @@ describe("an account that is not a student's", () => {
     expect(router.push).not.toHaveBeenCalled();
   });
 
-  it("is refused when the role is one this build has never heard of", async () => {
+  /*
+   * D128 (8 Oct), drawn as a screen of its own. These read "Those details are
+   * right, but this account can't be used to sign in here", which told
+   * whoever typed them that the account exists.
+   */
+  it("shows a parent the student door and their own, and goes back to the picker", async () => {
     loginPin.mockResolvedValue({ ...SESSION, role: "parent_guardian" });
     await chooseAda();
 
     await tap("1234");
 
     expect(
-      await screen.findByText(/can.t be used to sign in here/),
+      await screen.findByText(
+        "This is where students sign in. Parents have their own door.",
+      ),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "This is the student door" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Go to the parent portal" }),
+    ).toHaveAttribute("href", "/parent-sign-in");
+    expect(screen.queryByText(/can.t be used to sign in here/)).toBeNull();
     expect(signIn).not.toHaveBeenCalled();
+    expect(logout).toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Back to sign in" }));
+
+    expect(await screen.findByRole("button", { name: "Kofi" })).toBeVisible();
+  });
+
+  it("tells an account it does not recognise nothing about it, and offers no other door", async () => {
+    loginPin.mockResolvedValue({ ...SESSION, role: "superuser" });
+    await chooseAda();
+
+    await tap("1234");
+
+    expect(
+      await screen.findByText("We couldn't sign you in with those details."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("link")).toBeNull();
+    expect(screen.queryByText(/parent|staff|email/i)).toBeNull();
+    expect(signIn).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    // Back at this child's PIN, not the picker.
+    expect(
+      await screen.findByText("Enter your PIN to keep going"),
+    ).toBeInTheDocument();
   });
 
   it("lets a student through", async () => {
