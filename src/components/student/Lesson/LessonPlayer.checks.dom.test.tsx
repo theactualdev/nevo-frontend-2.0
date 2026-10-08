@@ -34,7 +34,6 @@ const SEG_2 = "7a6b5c4d-3e2f-4a1b-9c8d-7e6f5a4b3c2d";
 const progress = vi.hoisted(() => ({
   report: vi.fn(),
   sessionId: null as string | null,
-  positionSaved: false,
   completionSaved: false,
   completionFailed: false,
   /** The newest progress write's answer - see `useLessonProgress.saved`. */
@@ -168,7 +167,6 @@ const signIn = () =>
 beforeEach(() => {
   progress.report.mockReset();
   progress.sessionId = SESSION;
-  progress.positionSaved = false;
   progress.completionSaved = false;
   progress.completionFailed = false;
   progress.saved = null;

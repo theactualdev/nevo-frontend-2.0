@@ -168,11 +168,24 @@ describe("the one-tap unlock, now that every PIN is four", () => {
     await waitFor(() => expect(sentPins()).toEqual(["1234", "5678"]));
   });
 
-  it("does not send fewer than four digits from the check key", async () => {
+  it("draws no Done key: the fourth digit is what sends the PIN (D54, D58)", async () => {
+    // The keyboard frame leaves the pad's bottom-left corner blank, and with
+    // every PIN four digits long a check key there had nothing to finish.
     await chooseAda();
 
-    await tap("123");
-    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(screen.queryByRole("button", { name: "Done" })).toBeNull();
+  });
+
+  it("sends nothing for a hardware keyboard's Enter", async () => {
+    // The laptop path: digits and Backspace on the hidden field, and the
+    // fourth digit sends. Enter has no PIN to finish.
+    await chooseAda();
+    const field = document.querySelector(
+      'input[aria-label="PIN"]',
+    ) as HTMLInputElement;
+
+    fireEvent.change(field, { target: { value: "123" } });
+    fireEvent.keyDown(field, { key: "Enter" });
 
     expect(loginPin).not.toHaveBeenCalled();
   });

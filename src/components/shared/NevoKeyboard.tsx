@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, Delete } from "lucide-react";
+import { Delete } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type KeyboardLayout = "qwerty" | "pad";
@@ -92,7 +92,6 @@ export function NevoKeyboard({
   onKey,
   onBackspace,
   onReturn,
-  onDone,
   composer,
   value,
   placeholder = "Type here",
@@ -118,19 +117,16 @@ export function NevoKeyboard({
   /** A character key was pressed (letter, digit, or " "). */
   onKey: (char: string) => void;
   onBackspace: () => void;
-  /** The accent "return" key (qwerty only). In `multi` it inserts a newline. */
-  onReturn?: () => void;
   /**
-   * PAD ONLY: a navy check key in the grid's empty bottom-left corner, for
-   * "that's all of it".
+   * The accent "return" key (qwerty only). In `multi` it inserts a newline.
    *
-   * Separate from `onReturn` on purpose. A pad has never drawn a return key,
-   * and callers already pass `onReturn` to one expecting nothing to appear -
-   * the full sign-in does, and has its own Sign in button. This key exists for
-   * the one screen that submits by itself and sometimes cannot: the one-tap
-   * unlock, when a child's PIN is not the length the device remembers.
+   * A PAD HAS NO RETURN OR DONE KEY, and its bottom-left corner stays blank as
+   * the keyboard frame draws it (D54). A check key there served the one-tap
+   * unlock when a child's PIN might not be the length the device remembered;
+   * every PIN is four now and the boxes submit themselves on the fourth digit
+   * (D58), so it had nothing left to do.
    */
-  onDone?: () => void;
+  onReturn?: () => void;
   /**
    * Attach a composer field above the tray (Nevo Keyboard frame) — for fields
    * the docked keyboard would cover, and `multi` for notes. Displays `value`.
@@ -174,12 +170,7 @@ export function NevoKeyboard({
       )}
     >
       {layout === "pad" ? (
-        <PadLayout
-          block={block}
-          onKey={onKey}
-          onBackspace={onBackspace}
-          onDone={onDone}
-        />
+        <PadLayout block={block} onKey={onKey} onBackspace={onBackspace} />
       ) : (
         <QwertyLayout
           caps={caps}
@@ -333,13 +324,11 @@ function PadLayout({
   block,
   onKey,
   onBackspace,
-  onDone,
 }: {
   /** Content-sized keys rather than a full-width tray. See `presentation`. */
   block: boolean;
   onKey: (d: string) => void;
   onBackspace: () => void;
-  onDone?: () => void;
 }) {
   const grid = [
     ["1", "2", "3"],
@@ -367,22 +356,6 @@ function PadLayout({
       )}
     >
       {grid.flat().map((d, i) => {
-        if (d === "" && onDone) {
-          return (
-            <button
-              key={i}
-              type="button"
-              aria-label="Done"
-              onClick={onDone}
-              className={cn(
-                block ? blockKey : KEY_BASE,
-                "bg-nevo-navy text-nevo-cream",
-              )}
-            >
-              <Check className="size-5" strokeWidth={2.4} />
-            </button>
-          );
-        }
         if (d === "") return <span key={i} aria-hidden />;
         if (d === "⌫") {
           return (

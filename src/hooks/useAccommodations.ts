@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ApiError } from "@/lib/api/client";
+import { intelligenceApi } from "@/lib/api/intelligence";
 import { studentsApi, type AccommodationType } from "@/lib/api/students";
 import { getSession } from "@/lib/auth/session";
 import { useHasSession } from "./useHasSession";
@@ -23,11 +25,26 @@ export interface ActiveAccommodations {
  * carried one was the authored mock, which only a signed-OUT visitor sees. The
  * demo had the accommodation; the SEND learner it was built for did not.
  *
- * WHY A SECOND CALL. `POST /api/intelligence/adapt` carries no accommodation
- * field of any kind, so there is nothing on the plan route to map. These are
- * cross-session and slow-moving - the teacher's own screen reads them from
- * this same route - so a read per lesson load is the same shape the rest of
- * the console already uses.
+ * FROM THE SESSION-START READ (B24, audit 50). `POST /api/intelligence/adapt`
+ * carries no accommodation field, so these come from
+ * `GET /api/session/state/{id}`: the one read frontend §1 and §4 specify for
+ * the start of a lesson, which carries the accommodations, the engine's
+ * configuration and the consent state from one moment.
+ *
+ * WITH THE CONFIRMED ROUTE BEHIND IT. Backend confirmed a child may read
+ * their own `/api/intelligence/accommodations/{id}` (B22); this route is not
+ * confirmed yet. So when the session-state read fails for any reason but a
+ * dead session - refused, missing, rejected, the server or the network - the
+ * accommodations are read from there instead, and the first frame waits for
+ * that answer too. A child is never left without an accommodation because a
+ * newer route turned them away. A 401 is the client's to handle
+ * (`handleAuthFailure`), and there is no child left to read for.
+ *
+ * ONLY THE ACCOMMODATIONS ARE APPLIED. The engine configuration it carries is
+ * the engine's own parameters, and the contract does not say what any of them
+ * changes on screen - see `EngineConfig`. The consent state is already acted
+ * on where a lesson opens: a withdrawn child is refused it (B7) and taken to
+ * 00e (`withdrawnDoor`).
  *
  * DEFAULTS TO NONE, and note this points the OPPOSITE way to `useConsentGate`,
  * which defaults to allowed. The asymmetry is the point: there, silence must
@@ -35,15 +52,8 @@ export interface ActiveAccommodations {
  * provision. An accommodation is a claim that Nevo is doing something for a
  * particular child, and a failed read is not evidence for it.
  *
- * SCOPE IS UNCONFIRMED. Every current caller of this route is a teacher or a
- * SENCo, and the OpenAPI contract carries no scope information at all -
- * student-only and admin-only routes declare byte-identical security blocks.
- * The neighbouring `/api/intelligence/adapt` does answer 200 to a student's
- * own token, which is why this is worth attempting, but it is not proof. If
- * the route turns out to be staff-only the read simply fails and the child
- * gets what they get today, because a 403 is an ordinary `ApiError` here -
- * only a 401 reaches `handleAuthFailure`. Asked of backend; until answered,
- * failing closed is the whole design.
+ * Only when both reads fail is it none, which is what a failed read always
+ * meant here.
  */
 export function useAccommodations(): ActiveAccommodations | null {
   return useAccommodationsState().active;
@@ -83,21 +93,30 @@ export function useAccommodationsState(): {
     const studentId = getSession()?.userId;
     if (!studentId) return;
     let cancelled = false;
-    void studentsApi
-      .accommodations(studentId)
-      .then((res) => {
-        if (cancelled) return;
-        const on = new Set<AccommodationType>(res.activeAccommodations ?? []);
-        setActive({
-          reading: on.has("reading"),
-          attention: on.has("attention"),
-          numerical: on.has("numerical"),
-        });
-        setSettledFor(studentId);
-      })
-      .catch(() => {
-        // Deliberately silent and deliberately not an accommodation. See above.
-        if (!cancelled) setSettledFor(studentId);
+    const apply = (list: readonly AccommodationType[] | undefined) => {
+      if (cancelled) return;
+      // Absent is none: the field is not in the schema's `required` list.
+      const on = new Set<AccommodationType>(list ?? []);
+      setActive({
+        reading: on.has("reading"),
+        attention: on.has("attention"),
+        numerical: on.has("numerical"),
+      });
+      setSettledFor(studentId);
+    };
+    // Deliberately silent and deliberately not an accommodation. See above.
+    const none = () => {
+      if (!cancelled) setSettledFor(studentId);
+    };
+    void intelligenceApi
+      .sessionState(studentId)
+      .then((res) => apply(res.accommodations))
+      .catch((err: unknown) => {
+        if (err instanceof ApiError && err.status === 401) return none();
+        return studentsApi
+          .accommodations(studentId)
+          .then((res) => apply(res.activeAccommodations))
+          .catch(none);
       });
     return () => {
       cancelled = true;

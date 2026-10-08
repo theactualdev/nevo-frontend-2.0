@@ -161,10 +161,11 @@ export function ProfilingFlow({
    * later run's sweep. `stop()` purges and then refuses every later record
    * and write for the rest of the run.
    *
-   * THE SCREENS ARE UNCHANGED, deliberately. What a withdrawn child should
-   * actually SEE is an open design question, and inventing an answer here
-   * would put unreviewed copy in front of the child this protects. Stopping
-   * the processing needs no ruling; changing the flow does.
+   * WHAT THE CHILD SEES IS NOT DECIDED HERE. It is drawn now - 00e, Consent
+   * Withdrawn (D117) - and every door sends a withdrawn child there
+   * (`studentDestination`), as does the server's refusal of one from wherever
+   * they are (B7, B44; `withdrawnDoor`). This covers the moments before
+   * either: the run keeps its own screens, and records nothing.
    */
   const { withdrawn } = useConsentGate();
   useEffect(() => {

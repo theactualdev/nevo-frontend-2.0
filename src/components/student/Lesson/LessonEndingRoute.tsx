@@ -80,7 +80,7 @@ export function LessonEndingRoute({
       screen === "summary" ? (
         <LessonSummaryScreen lesson={lesson} />
       ) : (
-        <ReviewAnswersScreen lesson={lesson} />
+        <ReviewAnswersScreen lesson={lesson} live={live} />
       );
     /*
      * `live` false means one of the two authored lessons, which only a

@@ -1987,6 +1987,7 @@ export function LessonPlayer({
             <TeacherNote
               note={teacherNote.text}
               author={teacherNote.author}
+              reading={readingOn}
             />
           )}
           {feedback && <FeedbackStrip message={feedback} />}
@@ -2284,6 +2285,7 @@ function SegmentBody({
     return (
       <VisualSegment
         content={segment.visual}
+        reading={reading}
         onMediaFailed={(reason) => onMediaFailed("image", reason)}
       />
     );
@@ -2291,6 +2293,7 @@ function SegmentBody({
     return (
       <AudioSegment
         content={segment.audio}
+        reading={reading}
         onReplay={onReplay}
         onPlayed={onNarrationPlayed}
         onBusy={onAudioBusy}
