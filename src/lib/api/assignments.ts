@@ -97,6 +97,18 @@ export interface Assignment {
    */
   assignedByName?: string | null;
   assignedById?: string | null;
+  /**
+   * WHETHER CANCELLING THIS ALSO WITHDREW ITS REVIEWS (SCRUM-225, 8 Oct).
+   *
+   * A cancellation now carries a fixed reason. A housekeeping one keeps the
+   * lesson's spaced-review schedule; a genuine retraction withdraws it. The
+   * server turns the reason into this flag, so the child's screens read the
+   * flag and never the reason - `cancellationReason` is deliberately not
+   * typed here, because mapping reasons to behaviour would be the client
+   * deciding what the server already decided. Defaults to false, and is not
+   * in the schema's `required` list.
+   */
+  recallWithdrawn?: boolean;
   assignedAt: string;
 }
 
