@@ -328,11 +328,9 @@ test.describe("a signed-in teacher", () => {
     "/teacher/classes",
     "/teacher/lessons",
     "/teacher/insights",
-    "/teacher/students",
     "/teacher/connect",
     "/teacher/profile",
     "/teacher/help",
-    "/teacher/notifications",
     "/teacher/lessons/assign",
     "/teacher/lessons/upload",
     "/teacher/lessons/upload/bulk",
@@ -345,6 +343,72 @@ test.describe("a signed-in teacher", () => {
       expect(marks, `${path} rendered fixture data: ${marks.join(", ")}`).toEqual([]);
     });
   }
+
+  /*
+   * TWO OF THE TWELVE WERE REDIRECTS (T233). `/teacher/students` and
+   * `/teacher/notifications` render nothing of their own - they send the
+   * teacher on - so sweeping them for fixtures re-checked another page under
+   * the wrong name. Each is held to where it sends instead.
+   */
+  for (const [from, to] of [
+    ["/teacher/students", "/teacher/classes"],
+    ["/teacher/notifications", "/teacher/dashboard"],
+  ] as const) {
+    test(`sends ${from} on to ${to}`, async ({ page }) => {
+      await page.goto(from);
+      await expect(page).toHaveURL(new RegExp(`${to}$`));
+    });
+  }
+
+  /**
+   * T240. The bell, opened. The sweep read every page and never pressed it, so
+   * its feed - real rows naming real children - was never checked for fixtures.
+   */
+  test("opens the bell on the teacher's own notifications, with no fixture in it", async ({
+    page,
+  }) => {
+    await page.goto("/teacher/dashboard");
+    await readsAnswered(page);
+    await page.getByRole("button", { name: "Notifications" }).click();
+
+    const panel = page.getByRole("dialog", { name: "Notifications" });
+    await expect(panel).toBeVisible();
+    await expect
+      .poll(() => panel.locator(".animate-pulse").count(), {
+        timeout: LIVE_MS,
+        message: "The bell was still on its loading rows - the feed never answered.",
+      })
+      .toBe(0);
+    expect(await panel.locator(`[${SAMPLE_ATTR}]`).count()).toBe(0);
+
+    await page.keyboard.press("Escape");
+    await expect(panel).toBeHidden();
+  });
+
+  /**
+   * T245. Signing out, end to end: the account menu, the sheet, the door that
+   * says so (SCRUM-88), and a console that will not take them back without
+   * signing in again. It ends this session, which is safe here because every
+   * test signs in afresh in `beforeEach`.
+   */
+  test("signs out from the account menu, and the console will not take them back", async ({
+    page,
+  }) => {
+    await page.goto("/teacher/dashboard");
+    await readsAnswered(page);
+    await page.locator('button[aria-haspopup="menu"]').click();
+    await page.getByRole("menuitem", { name: "Sign out" }).click();
+    await page
+      .getByRole("dialog", { name: "Sign out of Nevo?" })
+      .getByRole("button", { name: "Sign out" })
+      .click();
+
+    await expect(page).toHaveURL(/\/auth\/teacher/, { timeout: LIVE_MS });
+    await expect(page.getByText("Signed out", { exact: true })).toBeVisible();
+
+    await page.goto("/teacher/dashboard");
+    await expect(page).toHaveURL(/\/auth\/teacher/);
+  });
 
   test("shows no fixture data on one of their own lessons, or its variant review", async ({
     page,

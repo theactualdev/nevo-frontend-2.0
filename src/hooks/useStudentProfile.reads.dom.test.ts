@@ -147,3 +147,20 @@ describe("a student this page cannot show", () => {
     expect(result.current.missing).toBe(false);
   });
 });
+
+/**
+ * T241. A suppressed adaptation is one Nevo considered and withheld. It is
+ * not something that happened to the child, and it is not shown as one.
+ */
+describe("what Nevo adjusted", () => {
+  it("leaves out what Nevo considered and withheld", async () => {
+    api.adaptations.mockResolvedValue([
+      { id: "a-1", suppressed: false, summary: "Read aloud" },
+      { id: "a-2", suppressed: true, summary: "Held back" },
+    ]);
+    const { result } = renderHook(() => useStudentProfile("s-1"));
+
+    await waitFor(() => expect(result.current.reads?.adaptations).toBe("ready"));
+    expect(result.current.adaptations.map((a) => a.id)).toEqual(["a-1"]);
+  });
+});

@@ -71,3 +71,47 @@ describe("saving notification preferences", () => {
     expect(result.current.saveState).toBe("saved");
   });
 });
+
+/**
+ * T237. Every write sends all three categories - so saving over preferences it
+ * never managed to read would overwrite the two untouched ones with defaults,
+ * and switch off each category's email, which has no control on this screen.
+ */
+describe("the guards on a preferences write", () => {
+  it("refuses to save over preferences it could not read", async () => {
+    list.mockRejectedValue(new Error("network"));
+    const { result } = renderHook(() => useTeacherSettings());
+    await waitFor(() => expect(result.current.failed).toBe(true));
+
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.save();
+    });
+
+    expect(ok).toBe(false);
+    expect(update).not.toHaveBeenCalled();
+    expect(result.current.saveState).toBe("failed");
+  });
+
+  it("sends back the email choice it read, which this screen has no switch for", async () => {
+    update.mockResolvedValue({ preferences: ROWS, savedCount: 3, rejected: [] });
+    await saving();
+
+    const sent = update.mock.calls[0][0] as { category: string; email: boolean }[];
+    expect(sent.find((r) => r.category === "messages")?.email).toBe(true);
+    expect(sent.find((r) => r.category === "attention")?.email).toBe(false);
+  });
+
+  it("sends the in-app choice the teacher changed", async () => {
+    update.mockResolvedValue({ preferences: ROWS, savedCount: 3, rejected: [] });
+    const { result } = renderHook(() => useTeacherSettings());
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    act(() => result.current.set("reports", true));
+    await act(async () => {
+      await result.current.save();
+    });
+
+    const sent = update.mock.calls[0][0] as { category: string; inApp: boolean }[];
+    expect(sent.find((r) => r.category === "reports")?.inApp).toBe(true);
+  });
+});
