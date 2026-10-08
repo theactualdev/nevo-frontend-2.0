@@ -17,9 +17,9 @@ import { useSetupGate } from "@/hooks";
  * three careful copies.
  *
  * FRAME vs SPEC, where the two disagree, and why the spec wins:
- * - Sheet width. The D5 frame draws 468px; SCRUM-40 says 420px for the create
- *   sheet and again for the assign sheet. Two independent spec statements
- *   against one frame value, so 420. Raised with design.
+ * - Sheet width: 468, RULED (Lydia, 7 Oct), and design records it in the
+ *   design system. The D5 frame drew 468 and SCRUM-40 said 420, so this shipped
+ *   420 until the ruling; D6's 472 folds into the same one width.
  * - Backdrop. The frame dims only; the spec's G1 rule adds a 0.4px blur.
  */
 
@@ -179,15 +179,38 @@ export function RolePill({ role }: { role: TeacherAssignmentRole }) {
 }
 
 /**
- * The "worth a glance" marker: a class with nobody teaching it.
+ * A class with nobody teaching it, where something can be done about it.
  *
- * SCRUM-40 fixes this copy and explains the reasoning - it is a STATE, not an
- * error and not a button. A violet dot, navy text, no icon, no red.
- *
- * The D5 frame's own text node reads "Assign a teacher", which turns the same
- * marker into an action. The spec names "No teacher yet" twice, once in its
- * FIXED COPY block marked do-not-paraphrase and once in D5b's no-teacher
- * state, so that is what ships. Raised with design.
+ * "ASSIGN A TEACHER", RULED (Lydia, 7 Oct): "It is a control, and a control
+ * says what pressing it does." SCRUM-40's "No teacher yet" called it a state;
+ * D5's own text node said "Assign a teacher", and the ruling took the frame's.
+ * The violet dot stays - it is still the thing worth a glance - and it now
+ * opens the assign sheet for that class.
+ */
+export function AssignTeacherButton({
+  onClick,
+  disabled = false,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="relative z-10 inline-flex cursor-pointer items-center gap-[6px] text-[13.5px] font-semibold text-nevo-navy transition-opacity hover:opacity-75 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      <span aria-hidden="true" className="size-[7px] flex-none rounded-full bg-nevo-violet" />
+      Assign a teacher
+    </button>
+  );
+}
+
+/**
+ * The same fact where NOTHING can be assigned from here: an archived class,
+ * or one a provider's roster sync owns. A control there would promise an
+ * action the screen cannot take, so the plain state stays.
  */
 export function NoTeacherYet() {
   return (
@@ -261,12 +284,8 @@ export function Sheet({
   onClose,
   children,
   footer,
-  /**
-   * 420px is the default the spec sets for create and assign. D6's
-   * reassignment sheet is the one exception at 472px, "matching the built
-   * invite sheet" - it carries a scrolling list rather than two fields.
-   */
-  widthClass = "max-w-[420px]",
+  /** 468px, every sheet (Lydia, 7 Oct). Modals are the other family. */
+  widthClass = "max-w-[468px]",
   busy = false,
 }: {
   title: string;

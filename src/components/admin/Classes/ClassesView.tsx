@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import {
   CARD,
   GHOST_BTN,
+  AssignTeacherButton,
   NoTeacherYet,
   PausedNote,
   PRIMARY_BTN,
@@ -26,6 +27,7 @@ import {
 import { useSetupGate } from "@/hooks";
 import { BulkClassSheet } from "./BulkClassSheet";
 import { ClassFormSheet } from "./ClassFormSheet";
+import { AssignTeachingSheet } from "./AssignTeachingSheet";
 import { NoAccess, failureKind } from "../NoAccess";
 
 /**
@@ -120,6 +122,8 @@ export function ClassesView() {
   /** D24 / D01b: reachable, and visibly locked while setup is unfinished. */
   const { writesPaused } = useSetupGate();
   const [bulking, setBulking] = useState(false);
+  /** The class whose "Assign a teacher" was pressed, straight from its row. */
+  const [assigningClass, setAssigningClass] = useState<AdminClass | null>(null);
   /** The row that just arrived, so it can be marked for one shot. */
   const [justCreated, setJustCreated] = useState<string | null>(null);
   /**
@@ -445,18 +449,28 @@ export function ClassesView() {
                           {section.label}
                         </h3>
                       ) : null}
-                    <button
-                      type="button"
-                      onClick={() => router.push(`/admin/classes/${c.id}`)}
+                    {/*
+                      * THE ROW OPENS THE CLASS, AND "ASSIGN A TEACHER" IS ITS
+                      * OWN BUTTON. The row was one <button>, and a control
+                      * cannot sit inside a button. So the class name is the
+                      * button, stretched over the row by its ::after, and the
+                      * assign control is lifted above it - two siblings, each
+                      * doing what it says.
+                      */}
+                    <div
                       className={cn(
-                        "grid w-full cursor-pointer grid-cols-[1.6fr_90px_1.2fr] items-center gap-4 px-6 py-4 text-left transition-colors hover:bg-nevo-navy/[0.03] max-xl:grid-cols-[1.4fr_70px_1fr] max-xl:px-[18px] max-xl:py-[13px]",
+                        "relative grid w-full grid-cols-[1.6fr_90px_1.2fr] items-center gap-4 px-6 py-4 text-left transition-colors hover:bg-nevo-navy/[0.03] max-xl:grid-cols-[1.4fr_70px_1fr] max-xl:px-[18px] max-xl:py-[13px]",
                         /* Only the very last row in the list loses its
                             divider; a group's last row butts against the next
                             heading and keeps one. */
                         !(lastSection && lastRow) && ROW_DIVIDER,
                       )}
                     >
-                      <span className="min-w-0">
+                      <button
+                        type="button"
+                        onClick={() => router.push(`/admin/classes/${c.id}`)}
+                        className="min-w-0 cursor-pointer text-left after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-nevo-navy/40"
+                      >
                         <span className="block truncate text-[15.5px] font-semibold text-nevo-near-black">
                           {c.name}
                         </span>
@@ -476,7 +490,7 @@ export function ClassesView() {
                             Archived
                           </span>
                         ) : null}
-                      </span>
+                      </button>
                       <span className="text-sm text-nevo-near-black/66">{c.studentCount}</span>
                       <span className="flex min-w-0 items-center gap-2">
                         {justCreated === c.id ? (
@@ -492,15 +506,25 @@ export function ClassesView() {
                           * the names arrived after the list; now they arrive
                           * with it, so an empty array means what it says.
                           */}
+                        {/* A control where one can act (Lydia, 7 Oct); the plain
+                            state where nothing can be assigned from here - an
+                            archived class, or one the provider's sync owns. */}
                         {assigned.length === 0 ? (
-                          <NoTeacherYet />
+                          c.archivedAt || c.source === "roster_sync" ? (
+                            <NoTeacherYet />
+                          ) : (
+                            <AssignTeacherButton
+                              disabled={writesPaused}
+                              onClick={() => setAssigningClass(c)}
+                            />
+                          )
                         ) : (
                           <span className="truncate text-sm text-nevo-near-black/78">
                             {teacherLabel(assigned)}
                           </span>
                         )}
                       </span>
-                    </button>
+                    </div>
                     </div>
                   );
                   }),
@@ -540,6 +564,17 @@ export function ClassesView() {
         * for a single arriving row; a dozen rows pulsing at once is noise,
         * and the sheet's own result already names what was made.
         */}
+      {assigningClass ? (
+        <AssignTeachingSheet
+          door={{ kind: "class", klass: assigningClass, assigned: [] }}
+          onClose={() => setAssigningClass(null)}
+          onAssigned={() => {
+            setAssigningClass(null);
+            load(showArchived);
+          }}
+        />
+      ) : null}
+
       {bulking ? (
         <BulkClassSheet
           onClose={() => setBulking(false)}

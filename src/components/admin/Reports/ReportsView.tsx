@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { ReportsViews } from "./ReportsViews";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   analyticsApi,
@@ -32,8 +32,8 @@ import { NoAccess, failureKind } from "../NoAccess";
  * `GET /api/transformation-metrics`, which this screen reads, returns VOLUMES -
  * how much adapting happened, not how a cohort is growing.
  *
- * SINCE 7 OCT THREE SCHOOL-WIDE FIGURES EXIST, on their own page under Reports
- * (D26, `SchoolTransformationView`, linked from the header below) - and under
+ * SINCE 7 OCT THREE SCHOOL-WIDE FIGURES EXIST, in the view beside this one
+ * under Reports (D26, `SchoolTransformationView`; see `ReportsViews`) - and under
  * honest names, because backend computes narrower things than D26's titles:
  * the share of started lessons finished, the minutes a finished lesson took,
  * and counts of format changes. Calibration is not measurable at all. None is
@@ -237,7 +237,8 @@ export function ReportsView() {
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
       <div className="mx-auto max-w-[880px]">
-        <h2 className="m-0 text-[28px] font-semibold tracking-[-0.018em] text-nevo-near-black">
+        <ReportsViews current="cohort" />
+        <h2 className="m-0 mt-6 text-[28px] font-semibold tracking-[-0.018em] text-nevo-near-black">
           Cohort analytics
         </h2>
         <p className="mt-1.5 max-w-[62ch] text-[14.5px] leading-[1.6] text-nevo-near-black/62">
@@ -245,13 +246,6 @@ export function ReportsView() {
           are going, concept by concept. Everything here is school-wide - no
           individual learner appears on this screen.
         </p>
-        {/* D26 lives on its own page under Reports. */}
-        <Link
-          href="/admin/reports/transformation"
-          className="mt-3 inline-block text-[14px] font-semibold text-nevo-navy hover:underline"
-        >
-          School transformation &rarr;
-        </Link>
 
         {phase === "loading" ? (
           <div className={cn(CARD, "mt-7 h-[360px] animate-pulse")} />

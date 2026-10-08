@@ -33,9 +33,8 @@ import {
  *
  * A duplicate email is not a dead end: it offers a way to sign in.
  *
- * The sign-in method is not asked here or anywhere in onboarding: it is
- * deferred with SSO. Why the server's `authMethod` cannot simply be written
- * to - a missing write AND a vocabulary mismatch - is in `AuthMethodStep`.
+ * The sign-in method is not asked here or anywhere in onboarding: it is cut
+ * (Lydia, 7 Oct), and a school connects a provider from IT & SSO when ready.
  *
  * TWO ROUND TRIPS, AND THEY FAIL DIFFERENTLY. `POST /schools/register` answers
  * `{schoolId, adminId, schoolCode}` and NO session, so the wizard signs in

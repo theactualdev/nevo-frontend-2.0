@@ -1,5 +1,3 @@
-import type { EnrolmentBand } from "@/lib/api/school";
-
 import {
   ALL_PERMISSION_SCOPES,
   type PermissionScope,
@@ -22,6 +20,12 @@ export interface ScopeDescriptor {
   desc: string;
   /** Ticked by default in the invite panel. */
   defaultOn: boolean;
+  /**
+   * False for a scope that is no longer handed out. It still has a name, so an
+   * admin who already holds it sees it - and can untick it - but nobody new
+   * is given it.
+   */
+  grantable?: false;
 }
 
 export const SCOPE_CATALOGUE: ScopeDescriptor[] = [
@@ -42,6 +46,9 @@ export const SCOPE_CATALOGUE: ScopeDescriptor[] = [
     name: "Curriculum",
     desc: "The lesson library and uploads.",
     defaultOn: false,
+    // NOT GRANTED (Lydia, 7 Oct): no admin screen sits behind it, and "a
+    // permission that opens nothing is a defect rather than a feature".
+    grantable: false,
   },
   {
     scope: "senco",
@@ -87,42 +94,26 @@ export function orderScopes(scopes: PermissionScope[]): PermissionScope[] {
 /**
  * D03: "Brightgate Academy includes five admin accounts as standard."
  *
- * FIVE IS THE BOUTIQUE NUMBER, NOT EVERY SCHOOL'S. Onboarding's band step
- * tells a school its allowance in its own words - "Mid-Market comes with 10
- * admin seats" - and this file then asserted five to all of them. A 10-seat
- * school was told "All five admin accounts are in use" at its fifth admin and
- * had the Invite button taken away; a school already holding six read "6 of 5
- * admin accounts" with six rows listed underneath it.
+ * FIVE, FOR EVERY SCHOOL, RULED (Lydia, 7 Oct): "The five-admin cap stays and
+ * is enforced ... it exists to control who can reach student data rather than
+ * to sell seats. More are available on request at no charge." It used to
+ * follow the onboarding band (5 / 10 / 15 / 25); the band went with flat
+ * pricing, and a school onboarded since then was shown no cap at all.
  *
- * The band was the school's own answer, written at onboarding and readable
- * from the school record, so the allowance is derived from it. The band step
- * has since gone with flat pricing, so a school onboarded after it has no band
- * and gets no cap asserted (see `adminSeatAllowance`). Whether the cap still
- * exists at all is with design.
+ * ENFORCEMENT IS THE SERVER'S. A school granted a sixth seat on request is
+ * still told five here, because nothing tells this console otherwise - so
+ * the console states the cap and offers the request, and never closes the
+ * invite path on its own count. The refusal of an invite past the allowance,
+ * and the allowance itself, belong on the backend.
  *
- * TODO(api): a seat allowance on the team response. The table below is the
- * client's copy of a commercial fact it does not own, and it is only right for
- * as long as the two agree.
+ * TODO(api): the school's admin allowance on the team response, and a refused
+ * invite past it with its own error code.
  */
+export const ADMIN_SEATS_STANDARD = 5;
 
-/** SCRUM-98's per-band admin seat defaults for v1. */
-const SEATS_BY_BAND: Record<EnrolmentBand, number> = {
-  boutique: 5,
-  mid_market: 10,
-  premium: 15,
-  enterprise: 25,
-};
-
-/**
- * The school's allowance, or null when we cannot say.
- *
- * Null is not a number to fall back on. A school whose band we could not read
- * gets no cap asserted and no invite path closed, because guessing low locks
- * an admin out of their own team and guessing high promises seats they may
- * not have.
- */
-export function adminSeatAllowance(band: EnrolmentBand | undefined): number | null {
-  return band ? (SEATS_BY_BAND[band] ?? null) : null;
+/** The school's allowance: the standard five, until the server says more. */
+export function adminSeatAllowance(): number {
+  return ADMIN_SEATS_STANDARD;
 }
 
 /** "Mrs. F. Adebayo" -> "FA"; falls back to the email's first letter. */
