@@ -1,4 +1,8 @@
-import { baselineApi, type BaselineTrial } from "@/lib/api/baseline";
+import {
+  baselineApi,
+  type BaselineRunContext,
+  type BaselineTrial,
+} from "@/lib/api/baseline";
 import { consentsApi, processingWithdrawn } from "@/lib/api/consents";
 import { getSession } from "@/lib/auth/session";
 
@@ -56,12 +60,19 @@ interface PendingBaseline {
    * and `sessionId` is what ties it to that run.
    */
   ownerUserId: string | null;
+  /**
+   * The run's band, device and motor-step skip (B76, 8 Oct), parked with the
+   * trials so they leave together. A record parked before then has none, and
+   * goes without: not told, rather than guessed at delivery.
+   */
+  context: BaselineRunContext;
 }
 
 export function holdBaseline(
   sessionId: string,
   trials: BaselineTrial[],
   ownerUserId: string | null = null,
+  context: BaselineRunContext = {},
 ): void {
   // Nothing answered is nothing to send; the contract takes one trial or more.
   if (trials.length === 0) return;
@@ -73,6 +84,7 @@ export function holdBaseline(
         trials,
         capturedAt: Date.now(),
         ownerUserId,
+        context,
       }),
     );
   } catch {
@@ -106,7 +118,11 @@ export function readPendingBaseline(): PendingBaseline | null {
     }
     // A record written before `ownerUserId` existed reads as an onboarding
     // run's, which is the safe reading: it then has to prove its run.
-    return { ...(v as PendingBaseline), ownerUserId: v.ownerUserId ?? null };
+    return {
+      ...(v as PendingBaseline),
+      ownerUserId: v.ownerUserId ?? null,
+      context: v.context && typeof v.context === "object" ? v.context : {},
+    };
   } catch {
     return null;
   }
@@ -196,7 +212,11 @@ export async function flushPendingBaseline(
     return false;
   }
 
-  const ok = await baselineApi.submitTrials(pending.sessionId, pending.trials);
+  const ok = await baselineApi.submitTrials(
+    pending.sessionId,
+    pending.trials,
+    pending.context,
+  );
   if (ok) clearPendingBaseline();
   return ok;
 }

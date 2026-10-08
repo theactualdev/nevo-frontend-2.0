@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { BaselineCapture, baselineTrials, tapPoint } from "./capture";
+import {
+  BaselineCapture,
+  baselineRunContext,
+  baselineTrials,
+  tapPoint,
+} from "./capture";
 
 /**
  * The trials are the only thing that leaves the device (B9, 5 Oct).
@@ -131,8 +136,8 @@ describe("baselineTrials - nothing on the wire is a summary", () => {
     expect(JSON.stringify(baselineTrials(aWholeRun()))).not.toMatch(/"x"|"y"/);
   });
 
-  it("does not invent the band, which a trial has no field for", () => {
-    // It travelled on the vector; it is an open ask now, not a guess.
+  it("does not put the band on a trial, which has no field for it", () => {
+    // It goes beside the trials since B76 (`baselineRunContext`), not on them.
     expect(JSON.stringify(baselineTrials(aWholeRun()))).not.toMatch(/"ss"/);
   });
 
@@ -321,6 +326,97 @@ describe("baselineTrials - the motor-speed step's samples (PR #645)", () => {
       { dimension: "motor_speed", condition: "practice", response: "4", correct: null, responseTimeMs: 812, probeItemId: null },
       { dimension: "motor_speed", condition: null, response: "7", correct: null, responseTimeMs: 455, probeItemId: null },
     ]);
+  });
+
+  it("marks the target left untapped when the step ended itself as skipped (B76)", () => {
+    // Ten seconds on a painted target with no tap: the one trial the capture
+    // records as put in front of the child and not answered. No response and
+    // no time, because there was neither.
+    const c = new BaselineCapture("m2");
+    c.record("motor_tap", { target: 0, cell: 5, latencyMs: 500, practice: true, formFactor: "tablet" });
+    c.record("motor_end", { reason: "idle", grid: 4, formFactor: "tablet", target: 1, practice: true });
+
+    expect(baselineTrials(c)).toEqual([
+      { dimension: "motor_speed", condition: "practice", response: "5", correct: null, responseTimeMs: 500, probeItemId: null },
+      { dimension: "motor_speed", condition: "practice", response: null, correct: null, responseTimeMs: null, probeItemId: null, skipped: true },
+    ]);
+  });
+
+  it("marks nothing skipped when the step ran to its end", () => {
+    const c = new BaselineCapture("m3");
+    c.record("motor_tap", { target: 7, cell: 8, latencyMs: 430, practice: false, formFactor: "tablet" });
+    c.record("motor_end", { reason: "complete", grid: 4, formFactor: "tablet" });
+
+    const trials = baselineTrials(c);
+    expect(trials).toHaveLength(1);
+    expect(trials[0]).not.toHaveProperty("skipped");
+  });
+
+  it("marks no other trial skipped - a 'Not sure' is an answer", () => {
+    expect(
+      baselineTrials(aWholeRun()).some((t) => "skipped" in t),
+    ).toBe(false);
+  });
+});
+
+describe("baselineRunContext - what the run was built for and sat on (B76)", () => {
+  it("is the onboarding run's band and device, as the contract names them", () => {
+    const c = new BaselineCapture("r1");
+    c.record("run_start", { band: "jss", formFactor: "tablet" });
+    c.record("motor_end", { reason: "complete", grid: 4, formFactor: "tablet" });
+
+    expect(baselineRunContext(c)).toEqual({
+      ageBand: "junior_secondary",
+      formFactor: "tablet_touch",
+      motorStepSkipped: false,
+    });
+  });
+
+  it("names each of the four bands and the three devices one to one", () => {
+    const of = (band: string, formFactor: string) => {
+      const c = new BaselineCapture("r2");
+      c.record("run_start", { band, formFactor });
+      return baselineRunContext(c);
+    };
+
+    expect(of("p13", "mobile")).toMatchObject({ ageBand: "early_primary", formFactor: "mobile_touch" });
+    expect(of("p46", "tablet")).toMatchObject({ ageBand: "upper_primary", formFactor: "tablet_touch" });
+    expect(of("jss", "desktop")).toMatchObject({ ageBand: "junior_secondary", formFactor: "desktop_cursor" });
+    expect(of("ss", "tablet")).toMatchObject({ ageBand: "senior_secondary" });
+  });
+
+  it("says the motor step was skipped where the capture recorded the skip", () => {
+    const c = new BaselineCapture("r3");
+    c.record("run_start", { band: "ss", formFactor: "desktop" });
+    c.record("motor_skipped", { reason: "cursor", formFactor: "desktop" });
+
+    expect(baselineRunContext(c)).toEqual({
+      ageBand: "senior_secondary",
+      formFactor: "desktop_cursor",
+      motorStepSkipped: true,
+    });
+  });
+
+  it("leaves the motor step out of a warm-up, which has none", () => {
+    const c = new BaselineCapture("w1");
+    c.record("warmup_start", { dimension: "wmc", band: "p13", formFactor: "mobile" });
+
+    expect(baselineRunContext(c)).toEqual({
+      ageBand: "early_primary",
+      formFactor: "mobile_touch",
+    });
+  });
+
+  it("claims no band the run did not record, and nothing it cannot name", () => {
+    // A warm-up with no roster band runs the frame's default; that is the
+    // task's size, not the child's age band.
+    const c = new BaselineCapture("w2");
+    c.record("warmup_start", { dimension: "ans", formFactor: "tablet" });
+    expect(baselineRunContext(c)).toEqual({ formFactor: "tablet_touch" });
+
+    const odd = new BaselineCapture("w3");
+    odd.record("run_start", { band: "year4", formFactor: "watch" });
+    expect(baselineRunContext(odd)).toEqual({});
   });
 });
 

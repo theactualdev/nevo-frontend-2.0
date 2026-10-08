@@ -178,6 +178,21 @@ describe("on a touch device", () => {
       /median|motor_baseline|motorBaseline/i,
     );
   });
+
+  it("parks the run's band and device beside the trials, and that the step ran (B76)", () => {
+    // Age 9 is Primary 4-6; a coarse pointer at jsdom's 1024px is a tablet.
+    onTouch();
+    render(<ProfilingFlow onDone={vi.fn()} />);
+    letsGo();
+    press("motor");
+    sitTheModules();
+
+    expect(holdBaseline.mock.calls[0][3]).toEqual({
+      ageBand: "upper_primary",
+      formFactor: "tablet_touch",
+      motorStepSkipped: false,
+    });
+  });
 });
 
 describe("on a cursor device", () => {
@@ -191,10 +206,6 @@ describe("on a cursor device", () => {
     expect(screen.getByRole("button", { name: "m1" })).toBeInTheDocument();
   });
 
-  /*
-   * The skip and its reason have no field on a trial; where they go is with
-   * backend, beside the run's age band and form factor.
-   */
   it("sends no motor trials", () => {
     render(<ProfilingFlow onDone={vi.fn()} />);
     letsGo();
@@ -202,5 +213,21 @@ describe("on a cursor device", () => {
 
     expect(holdBaseline).toHaveBeenCalledTimes(1);
     expect(motorTrials()).toEqual([]);
+  });
+
+  /*
+   * The skip goes beside the trials, as the request names it (B76, 8 Oct).
+   * Its reason has no field of its own: the cursor is the form factor.
+   */
+  it("parks the skip and the cursor with the run's band", () => {
+    render(<ProfilingFlow onDone={vi.fn()} />);
+    letsGo();
+    sitTheModules();
+
+    expect(holdBaseline.mock.calls[0][3]).toEqual({
+      ageBand: "upper_primary",
+      formFactor: "desktop_cursor",
+      motorStepSkipped: true,
+    });
   });
 });
