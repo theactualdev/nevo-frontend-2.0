@@ -612,31 +612,37 @@ describe("a lesson the child saved for offline", () => {
 
   /*
    * Lydia, 6 Oct: a lesson played without its modules, recap and check is not
-   * recorded completed. The package's copy carries none of them, and the
-   * player is told which copy it has.
+   * recorded completed. A copy saved before B85 (8 Oct) carries none of them,
+   * and the player is told which copy it has.
    */
-  it("says when the saved copy is the offline package's", async () => {
+  it("says when the saved copy lacks what completion needs", async () => {
     signIn();
-    // The package's shape under the detail's names: no `modules` key at all.
+    // An older package copy under the detail's names: none of the three keys.
     saveLesson("student-1", LIVE_LESSON as never);
     detail.mockRejectedValue(new ApiError(0, "Network"));
 
     const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
 
     await waitFor(() => expect(result.current.lesson).not.toBeNull());
-    expect(result.current.fromPackage).toBe(true);
+    expect(result.current.partial).toBe(true);
   });
 
-  it("does not for a copy taken from the full detail read", async () => {
+  it("does not for a copy that carries all three", async () => {
+    // The detail read's, or a package's since B85: either completes.
     signIn();
-    saveLesson("student-1", { ...LIVE_LESSON, modules: [] } as never);
+    saveLesson("student-1", {
+      ...LIVE_LESSON,
+      modules: [],
+      recap: null,
+      assessment: [],
+    } as never);
     detail.mockRejectedValue(new ApiError(0, "Network"));
 
     const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
 
     await waitFor(() => expect(result.current.lesson).not.toBeNull());
     expect(result.current.fromShelf).toBe(true);
-    expect(result.current.fromPackage).toBe(false);
+    expect(result.current.partial).toBe(false);
   });
 
   it("does not for a lesson read live", async () => {
@@ -647,7 +653,7 @@ describe("a lesson the child saved for offline", () => {
     const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
 
     await waitFor(() => expect(result.current.lesson).not.toBeNull());
-    expect(result.current.fromPackage).toBe(false);
+    expect(result.current.partial).toBe(false);
   });
 
   it("does not bring back a lesson the school removed", async () => {

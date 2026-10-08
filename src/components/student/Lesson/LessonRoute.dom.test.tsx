@@ -56,7 +56,7 @@ const state = (over: Record<string, unknown>) => {
     opensAt: null,
     placeUnknown: false,
     fromShelf: false,
-    fromPackage: false,
+    partial: false,
     ...over,
   };
 };
@@ -148,18 +148,18 @@ describe("a lesson the teacher called off", () => {
   });
 });
 
-describe("a lesson opened from the offline package's copy", () => {
+describe("a lesson opened from a partial saved copy", () => {
   // Lydia, 6 Oct: played without its modules, recap and check, it is not
   // recorded completed. The player is told, because the player writes it.
   it("tells the player it is the partial copy", () => {
-    state({ lesson: LESSON, fromShelf: true, fromPackage: true });
+    state({ lesson: LESSON, fromShelf: true, partial: true });
     render(<LessonRoute lessonId="les-1" />);
 
     expect(playerProps.value).toMatchObject({ partial: true });
   });
 
   it("does not for the whole lesson", () => {
-    state({ lesson: LESSON, fromShelf: true, fromPackage: false });
+    state({ lesson: LESSON, fromShelf: true, partial: false });
     render(<LessonRoute lessonId="les-1" />);
 
     expect(playerProps.value).toMatchObject({ partial: false });

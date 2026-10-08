@@ -217,9 +217,9 @@ export function LessonPlayer({
    */
   finished?: boolean;
   /**
-   * The lesson as the offline package carries it: no modules, closing recap
-   * or after-lesson check. Reaching its end is never written `completed` -
-   * see `markComplete`.
+   * A saved copy missing its modules, closing recap or after-lesson check -
+   * see `isPartialCopy`. Reaching its end is never written `completed` - see
+   * `markComplete`. A package copy carrying all three is not partial.
    */
   partial?: boolean;
   /**
@@ -423,11 +423,13 @@ export function LessonPlayer({
   // So completion is a function both exits call, not a side effect of one of
   // them. The ref keeps it idempotent.
   /*
-   * THE OFFLINE PACKAGE'S COPY IS NEVER COMPLETED (Lydia, 6 Oct): "A lesson
-   * played offline without its modules, recap and after-lesson check is not
+   * A PARTIAL COPY IS NEVER COMPLETED (Lydia, 6 Oct): "A lesson played
+   * offline without its modules, recap and after-lesson check is not
    * recorded as completed, and it comes back when the child is next online."
    * Booked complete, the engine would teach this child from a check that
-   * never happened. Its end is written `exited` at the last segment instead -
+   * never happened. Since B85 a package copy carries all three and completes
+   * as usual; one that does not, or one saved before 8 Oct, is partial. Its
+   * end is written `exited` at the last segment instead -
    * the furthest place, and how they left - so it comes back on Home and
    * opens there online, with its check. The signal session ends the same way
    * (`finishedAs`). A review or a finished lesson reopened writes nothing,
@@ -450,7 +452,7 @@ export function LessonPlayer({
     reportProgress(LESSON_STATUS.COMPLETED, { segment: last });
   }, [lesson, reportProgress, partial, review, finished]);
   // How the signal session ends when the child reaches the end: completed,
-  // or - for the package's copy, above - exited at the last segment.
+  // or - for a partial copy, above - exited at the last segment.
   const finishedAs = useMemo<SessionOutcome>(
     () =>
       partial

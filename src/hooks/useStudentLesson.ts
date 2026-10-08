@@ -5,7 +5,7 @@ import { ApiError } from "@/lib/api/client";
 import { lessonsApi } from "@/lib/api/lessons";
 import { getSession, getToken } from "@/lib/auth/session";
 import {
-  isPackageCopy,
+  isPartialCopy,
   refreshSavedLesson,
   savedLesson,
 } from "@/lib/offline/savedLessons";
@@ -70,8 +70,8 @@ interface Resolution {
   empty?: boolean;
   /** Built from the child's offline shelf because the read could not be made. */
   fromShelf?: boolean;
-  /** That shelf copy is the offline package's - see `isPackageCopy`. */
-  fromPackage?: boolean;
+  /** That shelf copy lacks what completion needs - see `isPartialCopy`. */
+  partial?: boolean;
 }
 
 export interface StudentLessonState {
@@ -138,10 +138,12 @@ export interface StudentLessonState {
   /** Opened from the child's offline shelf, not from a live read. */
   fromShelf: boolean;
   /**
-   * Opened from the shelf's copy of the offline PACKAGE: no modules, recap or
-   * after-lesson check. The player never records it completed (Lydia, 6 Oct).
+   * Opened from a shelf copy missing its modules, recap or after-lesson check
+   * - a package saved before backend B85 (8 Oct), or one that left any out.
+   * The player never records it completed (Lydia, 6 Oct). A package copy that
+   * carries all three is not partial, and completes as it would online.
    */
-  fromPackage: boolean;
+  partial: boolean;
   /**
    * The child has already finished this lesson: their newest progress row
    * says `completed`, or the assignment does (the feed is recent activity, so
@@ -296,7 +298,7 @@ export function useStudentLesson(
             lesson: fromShelf,
             adaptSegments: adaptSegmentsFor(kept.detail.segments),
             fromShelf: true,
-            fromPackage: isPackageCopy(kept.detail),
+            partial: isPartialCopy(kept.detail),
           });
         } else {
           setResolved({ id: lessonId, failed: true });
@@ -411,8 +413,8 @@ export function useStudentLesson(
     opensAt: assignment?.availableFrom ?? null,
     placeUnknown: Boolean(live) && !dashboard && dashboardFailed,
     fromShelf: Boolean(live) && state.fromShelf === true,
-    fromPackage:
-      Boolean(live) && state.fromShelf === true && state.fromPackage === true,
+    partial:
+      Boolean(live) && state.fromShelf === true && state.partial === true,
     // A live lesson gets the engine's plan; a mock keeps its authored one.
     // Never crossed: a mock must not borrow a live plan, and a live lesson
     // must not borrow another lesson's authored one.
