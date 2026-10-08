@@ -137,6 +137,12 @@ const FEEDBACK_MS = 3500;
 /** One object, so the signal session is not told the same ending twice. */
 const COMPLETED: SessionOutcome = { completionStatus: "completed" };
 
+/** Design's ending for a partial offline copy (D142, 8 Oct), verbatim. */
+const PARTIAL_ENDING = {
+  heading: "That's as far as this one goes for now.",
+  note: "We'll pick up the rest when you're back online.",
+} as const;
+
 /** A calculation segment whose Interactive modality routes to the solver (§8). */
 function isCalculation(segment: LessonSegment): boolean {
   return Boolean(segment.calculationVariant) && Boolean(segment.calculation);
@@ -819,6 +825,19 @@ export function LessonPlayer({
     }
     bodyRef.current?.focus();
   }, [segment.id, modality]);
+  /*
+   * D148: "SEGMENT 3 OF 10" IS SAID ONCE, WHEN THE SEGMENT OPENS - "not on
+   * every interaction inside it" (design, 8 Oct). It is the group's name, so a
+   * screen reader says it whenever focus lands on the group or comes back
+   * into it. Two things inside a segment did that: a modality taken from the
+   * suggestion rebuilds the body and focus lands on it again, and a child who
+   * stepped out to the chips or the hint and came back walked into it again.
+   * So the name is dropped for the rest of the visit once focus has left the
+   * group, and a rebuild for a new modality comes up without it. A new
+   * segment - or the same one opened again - is named afresh. The line above
+   * the progress bar still shows it throughout.
+   */
+  const [positionSaidOn, setPositionSaidOn] = useState<string | null>(null);
 
   // time_on_segment: one event per segment, emitted when it's left (index
   // change, or the segments phase ending) or on unmount. Keyed on `index` so
@@ -1253,6 +1272,8 @@ export function LessonPlayer({
     const nextSegment = lesson.segments[next];
     const nextPlan = livePlanFor(nextSegment.id);
     setIndex(next);
+    // Opening a segment names it, a return visit included (D148).
+    setPositionSaidOn(null);
     setEntryDensity({
       segmentId: nextSegment.id,
       level: nextPlan?.densityLevel ?? null,
@@ -1372,8 +1393,8 @@ export function LessonPlayer({
   };
 
   // Frame contract: the manual pick is navy; the system's standing density is
-  // violet (glow-once) and KEEPS showing beside a different manual pick. The
-  // sparkle rides the unfollowed system chip (AdaptiveToggleBar).
+  // violet and KEEPS showing beside a different manual pick. No glow and no
+  // sparkle on it since D144 - see `AdaptiveToggleBar`.
   /*
    * ONE PATH, TWO CALLERS - design, 23 Sep. The engine's `simplify`, `slower`
    * and `expand` are the same operation as the child's own chips, so they
@@ -1478,6 +1499,8 @@ export function LessonPlayer({
 
   const acceptSuggestion = useCallback(() => {
     if (suggested) setModality(suggested);
+    // The body comes back in the new modality without its position (D148).
+    setPositionSaidOn(segment.id);
     setLastSuggestedIndex(index);
     setSuggestionSpent(true);
     settleSuggestion(SIGNAL_EVENT_TYPES.MODALITY_SUGGESTION_ACCEPTED);
@@ -1485,7 +1508,7 @@ export function LessonPlayer({
     trackBusy(BUSY_REASON.MODALITY_SWITCH, BUSY_PHASE.END);
     // A modality change, applied (B42).
     if (suggested) noteApplied();
-  }, [suggested, index, trackBusy, settleSuggestion, noteApplied]);
+  }, [suggested, index, segment.id, trackBusy, settleSuggestion, noteApplied]);
 
   const dismissSuggestion = useCallback(() => {
     setLastSuggestedIndex(index);
@@ -1882,6 +1905,22 @@ export function LessonPlayer({
         />
       );
     }
+    /*
+     * D142: A PARTIAL COPY'S END IS NOT THE LESSON DONE. It stopped short of
+     * its modules, recap and check and is written `exited`, not completed (see
+     * `markComplete`), so "That's the lesson done." was untrue. Design's words,
+     * 8 Oct, and nothing else: no saved line, since nothing here was completed
+     * to save, and no summary, which is the recap this copy lacks.
+     */
+    if (partial) {
+      return (
+        <LessonComplete
+          onDone={() => exitTo(LESSONS_HREF)}
+          heading={PARTIAL_ENDING.heading}
+          note={PARTIAL_ENDING.note}
+        />
+      );
+    }
     return (
       <LessonComplete
         onDone={() => exitTo(LESSONS_HREF)}
@@ -2161,11 +2200,21 @@ export function LessonPlayer({
              * `role="group"` with the position as its name so that landing here
              * announces "Module 2 of 3 · Segment 1 of 4 in this module" before
              * the content - the orientation a sighted child gets for free from
-             * the line above the progress bar.
+             * the line above the progress bar. Once per opening (D148): see
+             * `positionSaidOn`.
              */
             tabIndex={-1}
             role="group"
-            aria-label={positionLine(lesson, index)}
+            aria-label={
+              positionSaidOn === segment.id
+                ? undefined
+                : positionLine(lesson, index)
+            }
+            onBlur={(e) => {
+              // Focus leaving the group, not moving inside it.
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null))
+                setPositionSaidOn(segment.id);
+            }}
             className={cn(
               "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-300 motion-safe:ease-nevo-slide focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-nevo-navy",
               // D25: the engine's density, as spacing and nothing else.
