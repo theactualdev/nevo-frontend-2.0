@@ -218,6 +218,19 @@ export interface ParentConsentRequestReceipt {
   expiresAt: string;
 }
 
+/**
+ * One child's outcome from the bulk route. `queued` with the same receipt the
+ * single route returns, or not queued with the server's own code and words -
+ * `parent_already_refused` among them.
+ */
+export interface BulkParentConsentResult {
+  studentId: string;
+  queued: boolean;
+  request: ParentConsentRequestReceipt | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+}
+
 export interface ParentLink {
   id: string;
   schoolId: string;
@@ -277,6 +290,23 @@ export const consentsApi = {
       `/api/v1/students/${studentId}/parent-consent-requests`,
       { consentTypes: REQUESTED_CONSENT_TYPES, ...payload },
     ),
+
+  /**
+   * D07's bulk send, as one call (backend, 8 Oct): up to 500 requests, each
+   * answered with its own outcome under a 207. Same body per child as the
+   * single route, types always stated for the same reason.
+   */
+  requestParentConsentBulk: (
+    requests: {
+      studentId: string;
+      parentName: string;
+      parentContact: string;
+      contactMethod: ParentContactMethod;
+    }[],
+  ) =>
+    api.post<BulkParentConsentResult[]>("/api/v1/consents/parent-consent-requests/bulk", {
+      requests: requests.map((r) => ({ consentTypes: REQUESTED_CONSENT_TYPES, ...r })),
+    }),
 
   /**
    * Put a guardian on a student's record, and send them the consent request.
