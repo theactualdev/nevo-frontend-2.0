@@ -353,9 +353,9 @@ export function SetPasswordForm({
             <path d="M5 12.5l4.5 4.5L19 7.5" />
           </svg>
         </span>
-        <h2 className="mt-[26px] text-[30px] font-semibold tracking-[-0.02em] text-nevo-near-black">
+        <h1 className="mt-[26px] text-[30px] font-semibold tracking-[-0.02em] text-nevo-near-black">
           {activation ? "You're all set" : "Password updated"}
-        </h2>
+        </h1>
         <p className="mt-3 text-[16px] leading-[1.55] text-nevo-near-black/70">
           {!activation
             ? "You can now sign in with your new password."
@@ -378,16 +378,23 @@ export function SetPasswordForm({
   }
 
   return (
-    <div className="flex w-full max-w-[440px] flex-col items-stretch px-6">
+    <form
+      noValidate
+      onSubmit={(e) => {
+        e.preventDefault();
+        void submit();
+      }}
+      className="flex w-full max-w-[440px] flex-col items-stretch px-6"
+    >
       <AuthWordmark />
       {school && (
         <span className="text-center text-[12.5px] font-semibold tracking-[0.14em] text-nevo-violet uppercase">
           {school}
         </span>
       )}
-      <h2 className="mt-3.5 text-center text-[34px] leading-[1.15] font-semibold tracking-[-0.02em] text-nevo-near-black">
+      <h1 className="mt-3.5 text-center text-[34px] leading-[1.15] font-semibold tracking-[-0.02em] text-nevo-near-black">
         {activation ? "Create your password" : "Choose a new password"}
-      </h2>
+      </h1>
       <p className="mt-3 text-center text-[16px] leading-[1.55] text-nevo-near-black/70">
         {activation
           ? "One last thing before your dashboard. Choose a password you’ll remember."
@@ -570,8 +577,7 @@ export function SetPasswordForm({
       )}
 
       <button
-        type="button"
-        onClick={() => void submit()}
+        type="submit"
         disabled={!canSubmit}
         className={cn(
           "mt-7 flex h-[54px] w-full items-center justify-center gap-2.5 rounded-[10px] text-[16px] font-semibold transition-[filter] duration-150",
@@ -608,6 +614,6 @@ export function SetPasswordForm({
         </div>
       )}
       <ContactFooter className="mt-5" />
-    </div>
+    </form>
   );
 }

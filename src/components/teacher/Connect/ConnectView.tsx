@@ -250,9 +250,9 @@ export function ConnectView() {
       {/* Page head */}
       <div className="flex shrink-0 items-center justify-between px-7 pt-[22px] pb-4 xl:px-8 xl:pt-7 xl:pb-5">
         <div className="min-w-0">
-          <h2 className="text-[21px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-2xl">
+          <h1 className="text-[21px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-2xl">
             Connect
-          </h2>
+          </h1>
           {sample && (
             <p className="mt-1 text-[13px] leading-[1.5] text-nevo-near-black/55 italic">
               We couldn&rsquo;t reach your messages, so these are samples.

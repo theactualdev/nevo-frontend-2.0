@@ -26,9 +26,9 @@ export default function TeacherError({
             <path d="M12 8h.01M11 12h1v4h1" />
           </svg>
         </span>
-        <h2 className="mt-6 text-[22px] font-semibold tracking-[-0.01em] text-nevo-near-black">
+        <h1 className="mt-6 text-[22px] font-semibold tracking-[-0.01em] text-nevo-near-black">
           This part of the console stalled
-        </h2>
+        </h1>
         <p className="mt-2.5 text-[15px] leading-[1.55] text-nevo-near-black/66">
           Nothing you did, and nothing is lost. Try it again, or head back to
           your dashboard.
