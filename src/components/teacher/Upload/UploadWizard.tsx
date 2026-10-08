@@ -454,9 +454,9 @@ export function UploadWizard() {
             />
           </div>
         </div>
-        <h2 className="mt-3 text-[21px] font-semibold tracking-[-0.014em] text-nevo-near-black xl:text-2xl">
+        <h1 className="mt-3 text-[21px] font-semibold tracking-[-0.014em] text-nevo-near-black xl:text-2xl">
           {heading}
-        </h2>
+        </h1>
         {phase === "scope" && (
           <p className="mt-1.5 max-w-[560px] text-sm leading-[1.55] text-nevo-near-black/62">
             This just tells us how deeply to break it up. You can change any of

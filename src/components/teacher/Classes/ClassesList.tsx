@@ -69,9 +69,9 @@ export function ClassesList() {
               <path d="M18.5 20a6.5 6.5 0 0 0-3.2-5.6" />
             </svg>
           </div>
-          <h2 className="mt-[26px] text-[22px] font-semibold tracking-[-0.01em] text-nevo-near-black">
+          <h1 className="mt-[26px] text-[22px] font-semibold tracking-[-0.01em] text-nevo-near-black">
             Your classes will appear here once assigned
-          </h2>
+          </h1>
           <p className="mt-3 text-base leading-[1.6] text-nevo-near-black/66">
             This usually happens before your first sign-in. If it&rsquo;s
             taking a while, your school admin can set it up.
@@ -84,9 +84,9 @@ export function ClassesList() {
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
       <div className="mx-auto max-w-[1000px]">
-        <h2 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
+        <h1 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
           My Classes
-        </h2>
+        </h1>
         {/* The real school from `users/me`; the fixture line, term and all,
             belongs only to the designed screens. Absent beats invented.
             `!loading` is load-bearing, not defensive: `live` is false while the

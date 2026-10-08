@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import {
   askNevoApi,
   asUuid,
@@ -324,10 +325,23 @@ export function AskNevo() {
 
   const showEntry = turns.length === 0 && !thinking;
 
+  // The drawer had no Escape and never took focus (C07). Opening it unmounts
+  // the pill that had focus, so the hook has nothing to give focus back to -
+  // the pill takes it back itself when the drawer closes.
+  const drawerRef = useRef<HTMLElement>(null);
+  const pillRef = useRef<HTMLButtonElement>(null);
+  const wasOpen = useRef(false);
+  useDialogFocus(drawerRef, { active: open, onEscape: close });
+  useEffect(() => {
+    if (wasOpen.current && !open) pillRef.current?.focus();
+    wasOpen.current = open;
+  }, [open]);
+
   return (
     <>
       {!open && (
         <button
+          ref={pillRef}
           type="button"
           aria-label="Ask Nevo"
           title="Ask Nevo"
@@ -346,10 +360,12 @@ export function AskNevo() {
             className="fixed inset-0 z-40 bg-nevo-near-black/28 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
           />
           <aside
+            ref={drawerRef}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-label="Ask Nevo"
-            className={`fixed inset-y-0 right-0 z-50 flex flex-col bg-nevo-cream shadow-[-8px_0_32px_rgba(0,0,0,0.16)] motion-safe:animate-nevo-sheet-r ${SHEET}`}
+            className={`nevo-text-zoom fixed inset-y-0 right-0 z-50 flex max-w-full flex-col bg-nevo-cream shadow-[-8px_0_32px_rgba(0,0,0,0.16)] motion-safe:animate-nevo-sheet-r ${SHEET}`}
           >
             {/* Header */}
             <div className="flex shrink-0 items-center justify-between border-b border-nevo-near-black/8 px-[22px] pt-5 pb-4">
@@ -576,8 +592,9 @@ export function AskNevo() {
 
             {/* Input */}
             <div className="shrink-0 border-t border-nevo-near-black/8 px-[18px] pt-3.5 pb-[18px]">
-              <div className="flex h-[46px] items-center gap-2 rounded-full border-[1.5px] border-nevo-near-black/16 bg-nevo-cream pr-2 pl-4">
+              <div className="flex h-[46px] items-center gap-2 rounded-full border-[1.5px] border-nevo-near-black/16 bg-nevo-cream pr-2 pl-4 transition-colors focus-within:border-nevo-navy">
                 <input
+                  data-autofocus
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   onKeyDown={(e) => {
@@ -587,6 +604,8 @@ export function AskNevo() {
                     }
                   }}
                   placeholder={"Ask about a student, class, or lesson"}
+                  // A placeholder is not a name: it goes the moment you type.
+                  aria-label="Ask about a student, class, or lesson"
                   className="min-w-0 flex-1 border-none bg-transparent text-[14.5px] text-nevo-near-black outline-none"
                 />
                 {/* Visual affordance only in the frame - no recording state. */}

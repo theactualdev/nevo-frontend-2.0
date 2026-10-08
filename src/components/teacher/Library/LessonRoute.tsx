@@ -87,9 +87,9 @@ export function LessonRoute({
     return (
       <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
         <div className="mx-auto max-w-[660px] rounded-[12px] bg-nevo-cream-elevated px-[26px] py-7 shadow-elevation-1">
-          <h2 className="text-[17px] font-semibold text-nevo-near-black">
+          <h1 className="text-[17px] font-semibold text-nevo-near-black">
             We couldn&rsquo;t load this lesson
-          </h2>
+          </h1>
           <p className="mt-2 text-sm leading-[1.55] text-nevo-near-black/62">
             It hasn&rsquo;t gone anywhere. Try again in a moment.
           </p>

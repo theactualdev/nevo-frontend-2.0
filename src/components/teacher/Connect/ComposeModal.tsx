@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
 import { useStudentDirectory } from "@/hooks/useStudentDirectory";
 import { useHasSession } from "@/hooks/useHasSession";
@@ -198,12 +199,16 @@ export function ComposeModal({
   };
 
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogRef);
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-nevo-near-black/28 backdrop-blur-[1.5px] p-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
       onClick={() => phase === "form" && onClose()}
     >
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label="New message"
@@ -328,6 +333,7 @@ export function ComposeModal({
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder="Search your students"
+                    aria-label="Search your students"
                     className="h-12 w-full rounded-[10px] border-[1.5px] border-nevo-near-black/14 bg-nevo-cream-elevated pr-4 pl-[42px] text-[15px] text-nevo-near-black outline-none transition-colors focus:border-nevo-navy"
                   />
                 </div>

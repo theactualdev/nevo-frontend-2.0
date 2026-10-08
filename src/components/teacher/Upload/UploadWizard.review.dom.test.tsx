@@ -190,6 +190,17 @@ describe("a teacher's own lesson reaches the review", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("makes the wizard header the one h1, over whatever step it hosts (C20)", () => {
+    ready();
+
+    uploadOneLesson();
+
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      "How should this lesson be split up?",
+    );
+  });
+
   it("asks the question the frame asks", () => {
     ready();
 

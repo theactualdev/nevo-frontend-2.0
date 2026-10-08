@@ -109,9 +109,9 @@ export function TeacherPasswordReset({
             <path d="M12 7v5l3 2" />
           </svg>
         </Medallion>
-        <h2 className="mt-[22px] text-[28px] leading-[1.15] font-semibold tracking-[-0.02em] text-nevo-near-black">
+        <h1 className="mt-[22px] text-[28px] leading-[1.15] font-semibold tracking-[-0.02em] text-nevo-near-black">
           This link has expired
-        </h2>
+        </h1>
         <p className="mt-3 text-[16px] leading-[1.55] text-nevo-near-black/70">
           Reset links last 30 minutes, for your security. Nothing is wrong
           with your account - request a fresh link and we&rsquo;ll send it right
@@ -143,9 +143,9 @@ export function TeacherPasswordReset({
         <span className="text-[12.5px] font-semibold tracking-[0.14em] text-nevo-violet uppercase">
           Password reset
         </span>
-        <h2 className="mt-3.5 text-[30px] leading-[1.15] font-semibold tracking-[-0.02em] text-nevo-near-black">
+        <h1 className="mt-3.5 text-[30px] leading-[1.15] font-semibold tracking-[-0.02em] text-nevo-near-black">
           We couldn&rsquo;t reach Nevo
-        </h2>
+        </h1>
         <p className="mt-3 text-[16px] leading-[1.55] text-nevo-near-black/70">
           No link has been sent, so there&rsquo;s nothing waiting in your
           inbox. Try again in a moment.
@@ -172,9 +172,9 @@ export function TeacherPasswordReset({
             <path d="M4 7l8 6 8-6" />
           </svg>
         </Medallion>
-        <h2 className="mt-[22px] text-[28px] leading-[1.15] font-semibold tracking-[-0.02em] text-nevo-near-black">
+        <h1 className="mt-[22px] text-[28px] leading-[1.15] font-semibold tracking-[-0.02em] text-nevo-near-black">
           Check your inbox
-        </h2>
+        </h1>
         <p className="mt-3 text-[16px] leading-[1.55] text-nevo-near-black/70">
           {"If an account exists for "}
           <b className="font-semibold text-nevo-near-black">
@@ -224,14 +224,21 @@ export function TeacherPasswordReset({
   };
 
   return (
-    <div className="flex w-full max-w-[420px] flex-col items-center px-6 text-center">
+    <form
+      noValidate
+      onSubmit={(e) => {
+        e.preventDefault();
+        send();
+      }}
+      className="flex w-full max-w-[420px] flex-col items-center px-6 text-center"
+    >
       <AuthWordmark />
       <span className="text-[12.5px] font-semibold tracking-[0.14em] text-nevo-violet uppercase">
         Password reset
       </span>
-      <h2 className="mt-3.5 text-[34px] leading-[1.15] font-semibold tracking-[-0.02em] text-nevo-near-black">
+      <h1 className="mt-3.5 text-[34px] leading-[1.15] font-semibold tracking-[-0.02em] text-nevo-near-black">
         Reset your password
-      </h2>
+      </h1>
       <p className="mt-3 text-[16px] leading-[1.55] text-nevo-near-black/70">
         Enter the email you use for Nevo and we&rsquo;ll send you a link to set
         a new password.
@@ -246,16 +253,12 @@ export function TeacherPasswordReset({
         autoComplete="email"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") send();
-        }}
         placeholder="you@yourschool.edu.ng"
         className="mt-2 h-[52px] w-full rounded-[10px] border-[1.5px] border-nevo-near-black/16 bg-nevo-cream-elevated px-4 text-[16px] text-nevo-near-black transition-[border-color,background-color] duration-150 outline-none focus:border-nevo-navy focus:bg-nevo-cream"
       />
 
       <button
-        type="button"
-        onClick={send}
+        type="submit"
         disabled={!valid}
         className={cn(
           "mt-7 flex h-[54px] w-full items-center justify-center gap-2.5 rounded-[10px] text-[16px] font-semibold transition-[filter] duration-150",
@@ -281,6 +284,6 @@ export function TeacherPasswordReset({
         {"← Back to sign in"}
       </Link>
       <ContactFooter />
-    </div>
+    </form>
   );
 }
