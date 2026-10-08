@@ -223,7 +223,7 @@ describe("leaving the after-lesson check (D36)", () => {
 
     expect(saveAttempt).toHaveBeenCalledWith("lesson-1", {
       sessionId: SESSION,
-      questionId: "cp-1",
+      problemId: "cp-1",
       source: "assessment",
       // The option's own value - a number, as the checkpoint has it.
       answer: 2,
@@ -285,7 +285,7 @@ describe("every answer to a check is stored as it is given", () => {
         "lesson-1",
         {
           sessionId: SESSION,
-          questionId: "cp-inline",
+          problemId: "cp-inline",
           segmentId: SEG_1,
           source: "checkpoint",
           answer: "b",
@@ -295,7 +295,7 @@ describe("every answer to a check is stored as it is given", () => {
         "lesson-1",
         {
           sessionId: SESSION,
-          questionId: "cp-inline",
+          problemId: "cp-inline",
           segmentId: SEG_1,
           source: "checkpoint",
           answer: "a",

@@ -530,8 +530,13 @@ export interface LessonProgressResponse {
  */
 export interface LessonQuestionAttemptWrite {
   sessionId: string;
-  /** `ComprehensionCheckpoint.id`. */
-  questionId: string;
+  /**
+   * `ComprehensionCheckpoint.id` - "the server-issued question/problem id".
+   * Named `problemId` on the write since 8 Oct (it was `questionId`, which
+   * the server now refuses); the stored attempt still reads it back as
+   * `questionId`.
+   */
+  problemId: string;
   segmentId?: string | null;
   source?: "checkpoint" | "assessment";
   answer: CheckpointScalar | CheckpointScalar[];
