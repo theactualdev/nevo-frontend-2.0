@@ -14,7 +14,12 @@ import {
   withoutRecordedConsent,
   consentDateLine,
 } from "./ConsentPill";
-import { consentRequestLine, useConsentRequests } from "./useConsentRequests";
+import {
+  bulkConsentLines,
+  consentRequestLine,
+  useConsentRequests,
+  type BulkConsentTally,
+} from "./useConsentRequests";
 import { useMaySendConsent } from "./consentRole";
 import { AddStudentSheet } from "./AddStudentSheet";
 import { statusLabel, studentStatus } from "./status";
@@ -23,6 +28,7 @@ import {
   Avatar,
   CARD,
   GHOST_BTN,
+  Modal,
   PausedNote,
   PRIMARY_BTN,
   PlusIcon,
@@ -78,7 +84,11 @@ function SearchIcon() {
 
 export function StudentsView() {
   const router = useRouter();
-  const { stateFor: consentStateFor, send: sendConsent } = useConsentRequests();
+  const {
+    stateFor: consentStateFor,
+    send: sendConsent,
+    sendMany: sendConsentMany,
+  } = useConsentRequests();
   /** SENCo admins only - for everyone else the row's "Not sent" pill says it. */
   const maySend = useMaySendConsent();
   const params = useSearchParams();
@@ -109,6 +119,16 @@ export function StudentsView() {
   /** Set by student detail when a record was erased - see its `onErased`. */
   const erased = params.get("erased");
   const [includeInactive, setIncludeInactive] = useState(false);
+  /*
+   * D07's BULK SEND (Lydia, 7 Oct: "D07 wins. Bulk send exists."). Ticked
+   * students, by id. What is SENT is always the ticked rows still on screen
+   * and still askable - see `chosen` - so a filter changed after ticking can
+   * never send to someone the admin can no longer see.
+   */
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [confirmingBulk, setConfirmingBulk] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
+  const [bulkResult, setBulkResult] = useState<BulkConsentTally | null>(null);
 
   const load = useCallback((cid: string, inactive: boolean) => {
     Promise.all([
@@ -192,6 +212,43 @@ export function StudentsView() {
           : true,
       );
   }, [students, search, consent]);
+
+  /**
+   * A row that can be ticked: the same rule as its own "Send request", and
+   * never a deactivated child. D07: "responded rows are excluded".
+   */
+  const askable = useCallback(
+    (s: AdminStudentRow) =>
+      maySend && mayRequestConsent(s.consent) && studentStatus(s.status) !== "deactivated",
+    [maySend],
+  );
+  const selectable = useMemo(() => visible.filter(askable), [visible, askable]);
+  const chosen = useMemo(
+    () => selectable.filter((s) => selected.has(s.id)),
+    [selectable, selected],
+  );
+  const allChosen = selectable.length > 0 && chosen.length === selectable.length;
+  const bulkBusy = bulkProgress !== null;
+
+  const toggle = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const sendChosen = () => {
+    const ids = chosen.map((s) => s.id);
+    setConfirmingBulk(false);
+    setBulkResult(null);
+    setBulkProgress({ done: 0, total: ids.length });
+    sendConsentMany(ids, (done) => setBulkProgress({ done, total: ids.length })).then((tally) => {
+      setBulkProgress(null);
+      setBulkResult(tally);
+      setSelected(new Set());
+    });
+  };
 
   const filtering = Boolean(
     search.trim() || classId || includeInactive || consent,
@@ -371,11 +428,53 @@ export function StudentsView() {
               </p>
             ) : null}
 
+            {/* What the bulk send came to, every request accounted for. Each
+                row also carries its own line, so the ones that did not go
+                can be seen where they are. */}
+            {bulkResult && bulkConsentLines(bulkResult).length > 0 ? (
+              <div
+                role="status"
+                className="mt-4 rounded-[10px] bg-nevo-violet/[0.18] px-4 py-3 text-[13.5px] leading-[1.55] text-nevo-navy"
+              >
+                {bulkConsentLines(bulkResult).map((line) => (
+                  <p key={line} className="m-0">
+                    {line}
+                  </p>
+                ))}
+              </div>
+            ) : null}
+
             <div className={cn(CARD, "mt-[18px]")}>
               {/* Four tracks, matching the rows. Consent sits BEFORE status
                   deliberately: it is the question D07 exists to answer, and the
                   two are easy to conflate when read side by side. */}
-              <div className="grid grid-cols-[1.5fr_1fr_112px_112px_136px] gap-4 border-b border-nevo-near-black/8 bg-nevo-near-black/[0.03] px-6 py-[13px] text-[11.5px] font-semibold uppercase tracking-[0.05em] text-nevo-near-black/50">
+              <div
+                className={cn(
+                  "grid gap-4 border-b border-nevo-near-black/8 bg-nevo-near-black/[0.03] px-6 py-[13px] text-[11.5px] font-semibold uppercase tracking-[0.05em] text-nevo-near-black/50",
+                  maySend
+                    ? "grid-cols-[20px_1.5fr_1fr_112px_112px_136px]"
+                    : "grid-cols-[1.5fr_1fr_112px_112px_136px]",
+                )}
+              >
+                {maySend ? (
+                  <span className="flex items-center">
+                    {/* D07's select-all: the visible rows that can still be
+                        asked, never a responded one. */}
+                    <input
+                      type="checkbox"
+                      aria-label="Select every student who can be sent a request"
+                      checked={allChosen}
+                      ref={(el) => {
+                        if (el) el.indeterminate = chosen.length > 0 && !allChosen;
+                      }}
+                      disabled={selectable.length === 0 || bulkBusy}
+                      onChange={() =>
+                        setSelected(allChosen ? new Set() : new Set(selectable.map((s) => s.id)))
+                      }
+                      className="size-4 cursor-pointer accent-nevo-navy disabled:cursor-not-allowed"
+                    />
+                  </span>
+                ) : null}
                 <span>Student</span>
                 <span>Class</span>
                 <span>Consent</span>
@@ -425,14 +524,32 @@ export function StudentsView() {
                     <div
                       key={s.id}
                       className={cn(
-                        "grid grid-cols-[1.5fr_1fr_112px_112px_136px] items-center gap-4 transition-colors hover:bg-nevo-navy/[0.03]",
+                        "grid items-center gap-4 transition-colors hover:bg-nevo-navy/[0.03]",
+                        maySend
+                          ? "grid-cols-[20px_1.5fr_1fr_112px_112px_136px] pl-6"
+                          : "grid-cols-[1.5fr_1fr_112px_112px_136px]",
                         i < visible.length - 1 && ROW_DIVIDER,
                       )}
                     >
+                      {maySend ? (
+                        <span className="flex items-center">
+                          <input
+                            type="checkbox"
+                            aria-label={`Select ${s.name}`}
+                            checked={askable(s) && selected.has(s.id)}
+                            disabled={!askable(s) || bulkBusy}
+                            onChange={() => toggle(s.id)}
+                            className="size-4 cursor-pointer accent-nevo-navy disabled:cursor-not-allowed disabled:opacity-35"
+                          />
+                        </span>
+                      ) : null}
                       <button
                         type="button"
                         onClick={() => router.push(`/admin/students/${s.id}`)}
-                        className="col-span-4 grid cursor-pointer grid-cols-subgrid items-center gap-4 py-[15px] pl-6 text-left"
+                        className={cn(
+                          "col-span-4 grid cursor-pointer grid-cols-subgrid items-center gap-4 py-[15px] text-left",
+                          !maySend && "pl-6",
+                        )}
                       >
                         <span className="flex min-w-0 items-center gap-3">
                           <Avatar name={s.name} size={34} />
@@ -523,7 +640,7 @@ export function StudentsView() {
                       consentStateFor(s.id).kind !== "sending" ? (
                         <p
                           role="status"
-                          className="col-span-5 m-0 px-6 pb-3 text-[13px] leading-[1.5] text-nevo-near-black/62"
+                          className="col-span-full m-0 px-6 pb-3 text-[13px] leading-[1.5] text-nevo-near-black/62"
                         >
                           {consentRequestLine(consentStateFor(s.id), s.name)}
                         </p>
@@ -533,6 +650,60 @@ export function StudentsView() {
                 })
               )}
             </div>
+
+            {/* D07's selection bar: what is ticked, a way to clear it, and the
+                send - then the progress, so a long send is visibly moving. */}
+            {chosen.length > 0 || bulkProgress ? (
+              <div className="sticky bottom-4 z-20 mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-nevo-navy px-5 py-3 text-nevo-cream shadow-[0_8px_28px_rgba(0,0,0,0.24)]">
+                {bulkProgress ? (
+                  <span role="status" className="text-[14px] font-semibold">
+                    {`Sending ${bulkProgress.done} of ${bulkProgress.total}…`}
+                  </span>
+                ) : (
+                  <>
+                    <span className="text-[14px] font-semibold">{`${chosen.length} selected`}</span>
+                    <span className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelected(new Set())}
+                        className="cursor-pointer rounded-lg px-3.5 py-2 text-[13.5px] font-semibold text-nevo-cream/85 transition-colors hover:bg-nevo-cream/10"
+                      >
+                        Clear
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmingBulk(true)}
+                        className="cursor-pointer rounded-lg bg-nevo-cream px-4 py-2 text-[13.5px] font-semibold text-nevo-navy transition-[filter] hover:brightness-95"
+                      >
+                        Send consent invitations
+                      </button>
+                    </span>
+                  </>
+                )}
+              </div>
+            ) : null}
+
+            {confirmingBulk ? (
+              <Modal
+                title={`Send consent invitations to ${chosen.length} ${chosen.length === 1 ? "parent" : "parents"}?`}
+                onClose={() => setConfirmingBulk(false)}
+                footer={
+                  <>
+                    <button type="button" onClick={() => setConfirmingBulk(false)} className={GHOST_BTN}>
+                      Cancel
+                    </button>
+                    <button type="button" onClick={sendChosen} className={PRIMARY_BTN}>
+                      Send
+                    </button>
+                  </>
+                }
+              >
+                <p className="m-0 text-[14.5px] leading-[1.6] text-nevo-near-black/72">
+                  Each parent will receive a secure link to review and confirm
+                  consent for their child.
+                </p>
+              </Modal>
+            ) : null}
 
             {/*
               * D07's footer line, and SCRUM-40 says to keep it by name: "Keep
