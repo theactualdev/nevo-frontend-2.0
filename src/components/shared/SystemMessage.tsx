@@ -164,10 +164,13 @@ export function SystemMessage({
   /** Absent when the bar leaves on its own (SM-01, SM-02, SM-05). */
   onDismiss?: () => void;
 }) {
+  // Neither bar is a live region of its own: the provider's rail is one,
+  // mounted before anything is said, which is what makes a screen reader
+  // announce it (C14). A region inserted already holding its words is often
+  // not read at all, and one nested in another can be read twice.
   if (isChild(message)) {
     return (
       <div
-        role="status"
         className="inline-flex w-max max-w-[420px] items-center gap-[9px] rounded-[12px] bg-nevo-violet/20 px-3.5 py-[9px] motion-safe:animate-nevo-rise"
       >
         {/* The dot and nothing else. No tick - a tick is the shape of a
@@ -184,7 +187,6 @@ export function SystemMessage({
 
   return (
     <div
-      role="status"
       className="inline-flex w-max max-w-[560px] items-center gap-3 rounded-[12px] bg-nevo-navy py-3.5 pr-4 pl-[15px] shadow-[0_8px_32px_rgba(0,0,0,0.16)] motion-safe:animate-nevo-rise"
     >
       <Mark kind={message.kind} />

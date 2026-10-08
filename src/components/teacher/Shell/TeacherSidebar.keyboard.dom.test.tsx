@@ -6,6 +6,11 @@ vi.mock("@/hooks/useHasSession", () => ({ useHasSession: () => true }));
 vi.mock("@/hooks/useCurrentUser", () => ({
   useCurrentUser: () => ({ name: "Adaeze Okafor", initials: "AO", role: "teacher" }),
 }));
+// The sign-out sheet signs out through useAuth; nothing here signs anyone out.
+vi.mock("@/hooks", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/hooks")>()),
+  useAuth: () => ({ logout: vi.fn() }),
+}));
 vi.mock("@/hooks/useTeacherNotifications", () => ({
   useTeacherNotifications: () => ({
     notes: [],
@@ -138,5 +143,37 @@ describe("the notifications popover", () => {
     const panel = screen.getByRole("dialog", { name: "Notifications" });
     expect(panel).toHaveClass("left-[200px]");
     expect(panel).not.toHaveClass("left-[88px]");
+  });
+});
+
+describe("Larger text on what the rail opens (C12)", () => {
+  it("reaches the feedback sheet, which sized itself against the viewport", () => {
+    render(<TeacherSidebar />);
+    openMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Share feedback" }));
+    const panel = screen.getByRole("dialog", { name: "Share feedback" });
+
+    expect(panel.closest(".nevo-text-zoom")).not.toBeNull();
+    // Zoom multiplies a vw length; at 1.2 on a phone that overflowed.
+    expect(panel.className).not.toMatch(/100vw/);
+  });
+
+  it("reaches the sign-out sheet", () => {
+    render(<TeacherSidebar />);
+    openMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Sign out" }));
+
+    expect(
+      screen.getByRole("dialog", { name: "Sign out of Nevo?" }).closest(".nevo-text-zoom"),
+    ).not.toBeNull();
+  });
+
+  it("zooms the popover's words but not its box, which stays by the bell", () => {
+    render(<TeacherSidebar />);
+    fireEvent.click(screen.getByRole("button", { name: /notifications/i }));
+    const panel = screen.getByRole("dialog", { name: "Notifications" });
+
+    expect(panel.closest(".nevo-text-zoom")).toBeNull();
+    expect(panel.firstElementChild).toHaveClass("nevo-text-zoom");
   });
 });

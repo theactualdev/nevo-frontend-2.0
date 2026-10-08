@@ -365,7 +365,7 @@ export function AskNevo() {
             role="dialog"
             aria-modal="true"
             aria-label="Ask Nevo"
-            className={`fixed inset-y-0 right-0 z-50 flex flex-col bg-nevo-cream shadow-[-8px_0_32px_rgba(0,0,0,0.16)] motion-safe:animate-nevo-sheet-r ${SHEET}`}
+            className={`nevo-text-zoom fixed inset-y-0 right-0 z-50 flex max-w-full flex-col bg-nevo-cream shadow-[-8px_0_32px_rgba(0,0,0,0.16)] motion-safe:animate-nevo-sheet-r ${SHEET}`}
           >
             {/* Header */}
             <div className="flex shrink-0 items-center justify-between border-b border-nevo-near-black/8 px-[22px] pt-5 pb-4">

@@ -231,7 +231,9 @@ describe("edits the server has not seen", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
     await screen.findByRole("button", { name: "Saved" });
-    expect(leavingAsks()).toBe(false);
+    // The guard lets go in an effect after the render that says "Saved", so
+    // reading it on that same tick raced in CI (#696). Wait for it.
+    await waitFor(() => expect(leavingAsks()).toBe(false));
   });
 });
 

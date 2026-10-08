@@ -8,10 +8,6 @@ const { useSessionLapse, usePathname } = vi.hoisted(() => ({
 
 vi.mock("@/hooks/useSessionLapse", () => ({ useSessionLapse }));
 vi.mock("next/navigation", () => ({ usePathname }));
-vi.mock("@/context/AccessibilityContext", () => ({
-  TEXT_ZOOM: { normal: "", large: "" },
-  useAccessibility: () => ({ textSize: "normal" }),
-}));
 vi.mock("./AskNevo", () => ({ AskNevo: () => null }));
 vi.mock("./TeacherSidebar", () => ({ TeacherSidebar: () => null }));
 
@@ -65,6 +61,18 @@ describe("the teacher console shell", () => {
     );
 
     expect(useSessionLapse).toHaveBeenCalled();
+  });
+
+  it("zooms the page by the class the boot script keys, not an inline style (C12)", () => {
+    const { container } = render(
+      <TeacherShell>
+        <div>console</div>
+      </TeacherShell>,
+    );
+    const main = container.querySelector("main");
+
+    expect(main).toHaveClass("nevo-text-zoom");
+    expect(main?.style.zoom).toBe("");
   });
 
   it("still renders what it was given", () => {

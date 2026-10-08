@@ -54,6 +54,15 @@ describe("Ask Nevo's drawer", () => {
     expect(box.parentElement?.className).toMatch(/\bfocus-within:border-nevo-navy\b/);
   });
 
+  it("takes the teacher's text size, which it ignored outside <main> (C12)", () => {
+    openIt();
+
+    expect(screen.getByRole("dialog", { name: "Ask Nevo" })).toHaveClass(
+      "nevo-text-zoom",
+      "max-w-full",
+    );
+  });
+
   it("closes on Escape", () => {
     openIt();
     fireEvent.keyDown(document, { key: "Escape" });

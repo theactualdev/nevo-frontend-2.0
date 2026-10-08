@@ -117,7 +117,7 @@ export function FeedbackPanel({ onClose }: { onClose: () => void }) {
   };
 
   const panel =
-    "fixed top-1/2 right-6 z-50 flex w-[360px] max-w-[calc(100vw-3rem)] -translate-y-1/2 flex-col rounded-[16px] bg-nevo-cream-inset p-6 shadow-[0_20px_56px_rgba(0,0,0,0.2)]";
+    "fixed top-1/2 right-6 z-50 flex w-[360px] max-w-[calc(100%-3rem)] -translate-y-1/2 flex-col rounded-[16px] bg-nevo-cream-inset p-6 shadow-[0_20px_56px_rgba(0,0,0,0.2)]";
 
   // Two dialogs take turns in this panel: the form, then its thank-you. Each
   // takes focus in its turn, and the last to close gives it back (C07).

@@ -358,9 +358,14 @@ export function TeacherSidebar() {
         )}
       </button>
 
-      {feedbackOpen && <FeedbackPanel onClose={() => setFeedbackOpen(false)} />}
-
-      {signOutOpen && <SignOutModal onStay={() => setSignOutOpen(false)} />}
+      {/* The rail keeps its own scale; the sheets it opens take the
+          teacher's text size like any page's (C12). A wrapper rather than a
+          class inside them, because the sign-out sheet also opens from
+          Settings, inside <main>, and zoom compounds. */}
+      <div className="nevo-text-zoom">
+        {feedbackOpen && <FeedbackPanel onClose={() => setFeedbackOpen(false)} />}
+        {signOutOpen && <SignOutModal onStay={() => setSignOutOpen(false)} />}
+      </div>
 
       {notifOpen && (
         <NotificationsPanel
