@@ -45,7 +45,7 @@ export function attemptFor({
   if (choice?.value === undefined) return null;
   return {
     sessionId,
-    questionId,
+    problemId: questionId,
     source,
     answer: choice.value,
     ...(segmentId && UUID.test(segmentId) ? { segmentId } : {}),

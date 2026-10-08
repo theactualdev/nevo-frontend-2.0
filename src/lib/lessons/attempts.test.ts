@@ -46,7 +46,8 @@ describe("an attempt", () => {
       }),
     ).toEqual({
       sessionId: SESSION,
-      questionId: "cp-9",
+      // The write names it problemId since 8 Oct; questionId is refused.
+      problemId: "cp-9",
       segmentId: SEGMENT,
       source: "checkpoint",
       answer: "a",
