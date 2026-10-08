@@ -124,3 +124,14 @@ describe("the subject pills", () => {
     expect(screen.getByRole("button", { name: "All" }).className).toMatch(/bg-nevo-cream-elevated/);
   });
 });
+
+describe("the search box (C10)", () => {
+  it("shows where focus is before anything is typed", () => {
+    // `outline-none` took the browser's ring and gave nothing back: an empty
+    // box looked the same focused as not.
+    state();
+    render(<LessonLibrary />);
+
+    expect(screen.getByLabelText("Search lessons").className).toMatch(/\bfocus:border-nevo-navy\b/);
+  });
+});

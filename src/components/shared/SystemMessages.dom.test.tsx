@@ -37,6 +37,20 @@ const show = (...messages: SystemMessageInput[]) => {
   fireEvent.click(screen.getByRole("button", { name: "go" }));
 };
 
+/**
+ * The bars on the rail, newest first. The rail is the one live region (C14),
+ * so the bars are read off it rather than found as regions of their own.
+ */
+const bars = () =>
+  Array.from(screen.getByRole("log").children).map(
+    (wrapper) => wrapper.firstElementChild as HTMLElement,
+  );
+const onlyBar = () => {
+  const all = bars();
+  expect(all).toHaveLength(1);
+  return all[0];
+};
+
 beforeEach(() => vi.useFakeTimers({ shouldAdvanceTime: true }));
 afterEach(() => vi.useRealTimers());
 
@@ -44,7 +58,7 @@ describe("what it says", () => {
   it("says the thing, in the past tense, with no ceremony", () => {
     show({ kind: "confirm", message: "JSS 2A created." });
 
-    const bar = screen.getByRole("status");
+    const bar = onlyBar();
     expect(bar).toHaveTextContent("JSS 2A created.");
     // Design names all three: no "Success", no "successfully", no "!".
     expect(bar.textContent).not.toMatch(/success/i);
@@ -72,11 +86,11 @@ describe("what it says", () => {
 describe("what leaves and what stays", () => {
   it("lets a confirmation go on its own", () => {
     show({ kind: "confirm", message: "JSS 2A created." });
-    expect(screen.getByRole("status")).toBeInTheDocument();
+    expect(onlyBar()).toBeInTheDocument();
 
     act(() => void vi.advanceTimersByTime(6000));
 
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(bars()).toHaveLength(0);
   });
 
   it("keeps a failure until somebody has seen it", () => {
@@ -89,7 +103,7 @@ describe("what leaves and what stays", () => {
 
     act(() => void vi.advanceTimersByTime(60_000));
 
-    expect(screen.getByRole("status")).toBeInTheDocument();
+    expect(onlyBar()).toBeInTheDocument();
   });
 
   it("keeps a partial too, and offers the way into the page that lists them", () => {
@@ -101,7 +115,7 @@ describe("what leaves and what stays", () => {
     });
 
     act(() => void vi.advanceTimersByTime(60_000));
-    expect(screen.getByRole("status")).toBeInTheDocument();
+    expect(onlyBar()).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "See the four" }));
     expect(onAction).toHaveBeenCalledTimes(1);
@@ -112,7 +126,7 @@ describe("what leaves and what stays", () => {
     expect(screen.getByRole("button", { name: "Dismiss" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(bars()).toHaveLength(0);
   });
 
   it("keeps a running message until it is resolved", () => {
@@ -120,7 +134,7 @@ describe("what leaves and what stays", () => {
 
     act(() => void vi.advanceTimersByTime(60_000));
 
-    expect(screen.getByRole("status")).toBeInTheDocument();
+    expect(onlyBar()).toBeInTheDocument();
   });
 });
 
@@ -156,8 +170,8 @@ describe("SM-05, resolving in place", () => {
 
     // ONE bar, carrying the finished words. "It never vanishes and gets
     // replaced by a second bar."
-    expect(screen.getAllByRole("status")).toHaveLength(1);
-    expect(screen.getByRole("status")).toHaveTextContent(
+    expect(bars()).toHaveLength(1);
+    expect(onlyBar()).toHaveTextContent(
       "Twelve classes created.",
     );
   });
@@ -189,12 +203,12 @@ describe("SM-05, resolving in place", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "start" }));
     act(() => void vi.advanceTimersByTime(60_000));
-    expect(screen.getByRole("status")).toBeInTheDocument();
+    expect(onlyBar()).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "finish" }));
     act(() => void vi.advanceTimersByTime(6000));
 
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(bars()).toHaveLength(0);
   });
 });
 
@@ -205,9 +219,9 @@ describe("SM-06, several at once", () => {
       { kind: "confirm", message: "Second." },
     );
 
-    const bars = screen.getAllByRole("status");
-    expect(bars).toHaveLength(2);
-    expect(bars[0]).toHaveTextContent("Second.");
+    const stack = bars();
+    expect(stack).toHaveLength(2);
+    expect(stack[0]).toHaveTextContent("Second.");
   });
 
   it("caps at three and drops the oldest", () => {
@@ -218,7 +232,7 @@ describe("SM-06, several at once", () => {
       { kind: "confirm", message: "Four." },
     );
 
-    expect(screen.getAllByRole("status")).toHaveLength(3);
+    expect(bars()).toHaveLength(3);
     expect(screen.queryByText("One.")).not.toBeInTheDocument();
   });
 
@@ -243,7 +257,7 @@ describe("SM-07, a child's screen", () => {
   it("says the factual state and nothing else", () => {
     show({ audience: "child", state: "saved" });
 
-    expect(screen.getByRole("status")).toHaveTextContent("Your work is saved.");
+    expect(onlyBar()).toHaveTextContent("Your work is saved.");
   });
 
   it("carries no tick, no action and no dismiss", () => {
@@ -255,7 +269,7 @@ describe("SM-07, a child's screen", () => {
      */
     show({ audience: "child", state: "saved" });
 
-    const bar = screen.getByRole("status");
+    const bar = onlyBar();
     expect(bar.querySelector("svg")).toBeNull();
     expect(bar.querySelector("button")).toBeNull();
   });
@@ -263,7 +277,7 @@ describe("SM-07, a child's screen", () => {
   it("says nothing that reads as praise or a score", () => {
     show({ audience: "child", state: "saved" });
 
-    const bar = screen.getByRole("status");
+    const bar = onlyBar();
     expect(bar.textContent).not.toMatch(
       /well done|great|nice|complete|streak|\d/i,
     );
@@ -282,5 +296,93 @@ describe("SM-07, a child's screen", () => {
     show(offline, online);
 
     expect(document.body.textContent).not.toMatch(/offline|online/i);
+  });
+});
+
+describe("C14, being heard", () => {
+  it("has its live region in the page before anything is said", () => {
+    // A region that arrives already holding its words is the case screen
+    // readers most often skip. The rail used to mount only with a bar in it.
+    show();
+
+    const rail = screen.getByRole("log");
+    expect(rail).toBeEmptyDOMElement();
+  });
+
+  it("says each bar through that one region, with none of its own to read it twice", () => {
+    show({ kind: "confirm", message: "JSS 2A created." });
+
+    expect(screen.getByRole("log")).toHaveTextContent("JSS 2A created.");
+    expect(screen.queryAllByRole("status")).toHaveLength(0);
+    expect(screen.queryAllByRole("alert")).toHaveLength(0);
+  });
+
+  it("does the same for a child's bar", () => {
+    show({ audience: "child", state: "saved" });
+
+    expect(screen.getByRole("log")).toHaveTextContent("Your work is saved.");
+    expect(screen.queryAllByRole("status")).toHaveLength(0);
+  });
+
+  it("takes the teacher's text size, as the page does (C12)", () => {
+    show();
+
+    expect(screen.getByRole("log")).toHaveClass("nevo-text-zoom");
+  });
+});
+
+describe("C14, being read", () => {
+  const wrapper = () => screen.getByRole("log").firstElementChild as HTMLElement;
+
+  it("waits while the pointer is on a confirmation", () => {
+    show({ kind: "confirm", message: "JSS 2A created." });
+    fireEvent.mouseEnter(wrapper());
+    act(() => void vi.advanceTimersByTime(60_000));
+
+    expect(bars()).toHaveLength(1);
+  });
+
+  it("gets the full five seconds again once the pointer leaves", () => {
+    show({ kind: "confirm", message: "JSS 2A created." });
+    act(() => void vi.advanceTimersByTime(4000));
+    fireEvent.mouseEnter(wrapper());
+    fireEvent.mouseLeave(wrapper());
+
+    act(() => void vi.advanceTimersByTime(4000));
+    expect(bars()).toHaveLength(1);
+    act(() => void vi.advanceTimersByTime(2000));
+    expect(bars()).toHaveLength(0);
+  });
+
+  it("waits while focus is on its button", () => {
+    show({ kind: "confirm", message: "Saved.", action: { label: "Undo", onAction: vi.fn() } });
+    const undo = screen.getByRole("button", { name: "Undo" });
+    act(() => undo.focus());
+    act(() => void vi.advanceTimersByTime(60_000));
+    expect(bars()).toHaveLength(1);
+
+    act(() => undo.blur());
+    act(() => void vi.advanceTimersByTime(6000));
+    expect(bars()).toHaveLength(0);
+  });
+
+  it("is not let go by the pointer while focus is still in it", () => {
+    show({ kind: "confirm", message: "Saved.", action: { label: "Undo", onAction: vi.fn() } });
+    const undo = screen.getByRole("button", { name: "Undo" });
+    fireEvent.mouseEnter(wrapper());
+    act(() => undo.focus());
+    fireEvent.mouseLeave(wrapper());
+    act(() => void vi.advanceTimersByTime(60_000));
+
+    expect(bars()).toHaveLength(1);
+  });
+
+  it("never holds a failure on a clock it never had", () => {
+    show({ kind: "failed", message: "Couldn't create JSS 2A." });
+    fireEvent.mouseEnter(wrapper());
+    fireEvent.mouseLeave(wrapper());
+    act(() => void vi.advanceTimersByTime(60_000));
+
+    expect(bars()).toHaveLength(1);
   });
 });

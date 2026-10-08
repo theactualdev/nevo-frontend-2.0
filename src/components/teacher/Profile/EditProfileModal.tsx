@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { AvatarDisc } from "@/components/shared/AvatarDisc";
 import type { TeacherProfile } from "@/lib/mocks/teacherProfile";
 
@@ -86,12 +87,16 @@ export function EditProfileModal({
   const label =
     "text-xs font-semibold tracking-[0.03em] text-nevo-near-black/55 uppercase";
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogRef);
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-nevo-near-black/50 p-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
       onClick={onCancel}
     >
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label="Edit profile"
