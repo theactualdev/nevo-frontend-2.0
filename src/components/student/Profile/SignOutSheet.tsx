@@ -7,13 +7,16 @@ import { Button } from "@/components/shared";
 /**
  * Sign-out confirmation (`Sign Out Modal` - student, gentler variant). A calm
  * check before ending a session, so an accidental tap never signs anyone out:
- * violet log-out badge, "Sign out?", the reassurance that progress is saved,
- * primary Sign out + quiet Stay signed in. Bottom sheet on mobile, centred card
- * on tablet/desktop; honours reduced-motion via the shared sheet.
+ * violet log-out badge, "Sign out?", that they can come back, primary Sign out
+ * + quiet Stay signed in. Bottom sheet on mobile, centred card on
+ * tablet/desktop; honours reduced-motion via the shared sheet.
  *
  * A CHILD WHO SIGNS IN THROUGH THEIR SCHOOL HAS NO PIN (D9), so for them the
  * line loses its PIN and keeps the rest. Removing the false half is the whole
  * change; nothing new is said in its place.
+ *
+ * NO "YOUR PROGRESS IS SAVED." (D136, 8 Oct): "nothing claims a save that has
+ * not been confirmed", and signing out confirms nothing about any write.
  */
 export function SignOutSheet({
   open,
@@ -42,8 +45,8 @@ export function SignOutSheet({
         </SheetTitle>
         <p className="mt-2 text-sm leading-[1.55] text-nevo-near-black/62">
           {sso
-            ? "You can come back anytime. Your progress is saved."
-            : "You can come back anytime with your PIN. Your progress is saved."}
+            ? "You can come back anytime."
+            : "You can come back anytime with your PIN."}
         </p>
 
         <Button className="mt-6 w-full" onClick={onSignOut}>

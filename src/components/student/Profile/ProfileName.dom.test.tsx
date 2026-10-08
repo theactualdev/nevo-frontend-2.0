@@ -222,9 +222,11 @@ describe("an SSO child's account rows (D9)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
 
     expect(
-      await screen.findByText("You can come back anytime. Your progress is saved."),
+      await screen.findByText("You can come back anytime."),
     ).toBeInTheDocument();
     expect(screen.queryByText(/PIN/)).toBeNull();
+    // D136 (8 Oct): signing out confirms no write, so it claims none.
+    expect(screen.queryByText(/progress is saved/i)).toBeNull();
   });
 
   it("keeps both for a child who signs in with a PIN", async () => {
@@ -236,7 +238,8 @@ describe("an SSO child's account rows (D9)", () => {
     expect(screen.getByRole("button", { name: "Change PIN" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
     expect(
-      await screen.findByText(/come back anytime with your PIN/),
+      await screen.findByText("You can come back anytime with your PIN."),
     ).toBeInTheDocument();
+    expect(screen.queryByText(/progress is saved/i)).toBeNull();
   });
 });

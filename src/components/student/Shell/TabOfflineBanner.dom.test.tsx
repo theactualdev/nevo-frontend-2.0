@@ -37,9 +37,11 @@ describe("the tab's offline banner", () => {
 
     go("offline");
 
+    // D136 (8 Oct): the line claims no save it cannot confirm.
     expect(screen.getByRole("status")).toHaveTextContent(
-      "No internet connection - your progress is saved",
+      /^No internet connection$/,
     );
+    expect(screen.getByRole("status").textContent).not.toMatch(/saved/i);
     expect(screen.getByText("the tab")).toBeVisible();
   });
 

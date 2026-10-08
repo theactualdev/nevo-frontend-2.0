@@ -59,8 +59,12 @@ export function OfflineNotice({ online }: { online: boolean }) {
  * progress is saved - and your downloaded lessons are still here", under "See
  * saved lessons". This screen only ever shows a child with nothing downloaded,
  * so the second half and the button are the two things it must not say.
- * "Your progress is saved" stays, and is true by construction: nothing is
- * held unsent, so everything they did has reached the server.
+ *
+ * "Your progress is saved" came out too (D136, 8 Oct: "nothing claims a save
+ * that has not been confirmed"). It stood on `holdsProgress()` being false,
+ * which says only that no lesson POSITION waits on this device - not that a
+ * held answer, a signal in the outbox or a write that failed outright ever
+ * reached the server. That is an inference, not a confirmation.
  *
  * NO "TRY AGAIN", for the reason the banner gives: reconnecting is the retry,
  * and the screen goes the moment the browser says the connection is back. A
@@ -98,7 +102,7 @@ export function OfflineScreen() {
             id="offline-screen-body"
             className="mt-2 max-w-[440px] text-[15px] leading-[1.55] text-nevo-near-black/60 sm:mt-2.5 sm:text-base"
           >
-            No internet connection right now. Your progress is saved.
+            No internet connection right now.
           </p>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>

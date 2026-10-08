@@ -531,7 +531,12 @@ export function PinRow({
             key={idx}
             className={cn(
               "flex size-12 items-center justify-center rounded-[10px] border-[1.5px] bg-nevo-cream shadow-[0_2px_8px_rgba(0,0,0,0.05)]",
-              isActive
+              /*
+               * A FILLED BOX KEEPS THE NAVY BORDER, as frame 27's Change PIN
+               * draws it - on PIN creation too (D132, 8 Oct): "the same
+               * component doing the same job". Only the caret's box was navy.
+               */
+              isActive || isFilled
                 ? "border-nevo-navy"
                 : error
                   ? "border-nevo-violet"
