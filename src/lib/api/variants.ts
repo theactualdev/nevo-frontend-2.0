@@ -35,11 +35,10 @@ import {
  * generated content, so §4's *"the one place modalities layer rather than
  * switch"* could not happen outside the authored demo.
  *
- * `rows` IS NOT THE PLAYER'S `rows`, and the collision is worth naming: here it
- * is how many rows of pieces to lay out (1-20, default 1); on the player's
- * authored `CalculationSegment.scaffold` it is `number[]`, the numerators of
- * the fractions being added. Mapping one onto the other would draw a bar with
- * as many divisions as there are addends.
+ * `rows` is how many rows of pieces to lay out (1-20, default 1) - the
+ * physical row count, as on `CalculationScaffold` (B100). `fromContent`
+ * builds the kinds a frame draws: `fraction_bar` (17b, one row) and `array`
+ * (D149, `rows` rows of `parts` places).
  */
 export type ManipulativeKind =
   | "fraction_bar"

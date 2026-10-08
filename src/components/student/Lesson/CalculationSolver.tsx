@@ -331,12 +331,22 @@ export function CalculationSolver({
 
             {step.input === "tap" && (
               <>
-                <BuildTray
-                  parts={calculation.manipulative?.parts ?? 0}
-                  target={step.target}
-                  placed={placed}
-                  onPlace={place}
-                />
+                {calculation.manipulative?.kind === "array" ? (
+                  <ArrayBuild
+                    rows={calculation.manipulative.rows}
+                    parts={calculation.manipulative.parts}
+                    target={step.target}
+                    placed={placed}
+                    onPlace={place}
+                  />
+                ) : (
+                  <BuildTray
+                    parts={calculation.manipulative?.parts ?? 0}
+                    target={step.target}
+                    placed={placed}
+                    onPlace={place}
+                  />
+                )}
                 {placed >= step.target && (
                   <Button
                     className="mt-[18px] w-full"
@@ -687,9 +697,20 @@ function ScaffoldCard({
           />
         )}
         {/*
-          37c draws no choreography on dots or a line, so neither takes one.
-          A result is still kept back until its step is answered.
+          No frame draws choreography on dots, a line, an array or place
+          value, so none takes one. A result is still kept back until its
+          step is answered.
         */}
+        {scaffold.kind === "array" && (
+          <ArrayRows
+            parts={scaffold.parts}
+            quantities={scaffold.quantities.filter(shown)}
+            reading={reading}
+          />
+        )}
+        {scaffold.kind === "place_value" && (
+          <PlaceValue places={scaffold.places} shown={shown} reading={reading} />
+        )}
         {scaffold.kind === "dots" && (
           <DotGroups
             quantities={scaffold.quantities.filter(shown)}
@@ -823,6 +844,150 @@ function DotGroups({
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+/**
+ * D149's square place, at its 40px where the column has room and narrower
+ * where it does not. Filled is navy with the frame's inset; empty is the
+ * frame's dashed place.
+ */
+const SQUARE =
+  "aspect-square min-w-0 flex-[0_1_40px] rounded-lg transition-colors duration-200";
+const SQUARE_FILLED = "bg-nevo-navy shadow-[inset_0_-3px_0_rgba(0,0,0,0.12)]";
+const SQUARE_EMPTY =
+  "border-2 border-dashed border-nevo-navy/30 bg-nevo-near-black/[0.05]";
+
+/**
+ * D149's array: a row of `parts` square places per quantity, `count` of them
+ * filled. D149 draws no labels on an array; where the payload pairs one with
+ * a row, it sits at the row's start as it does on the bars.
+ */
+function ArrayRows({
+  parts,
+  quantities,
+  reading,
+}: {
+  parts: number;
+  quantities: ScaffoldQuantity[];
+  reading: boolean;
+}) {
+  const labelled = quantities.some((q) => q.label);
+  return (
+    <div className="flex flex-col gap-2.5">
+      {quantities.map((q, row) => (
+        <div key={row} className="flex items-center gap-3">
+          {labelled && (
+            <span
+              className={cn(
+                "min-w-[34px] shrink-0 text-sm text-nevo-near-black/60 sm:text-[15px]",
+                reading && [READING_BODY, READING_INK],
+              )}
+            >
+              {q.label}
+            </span>
+          )}
+          <div
+            aria-hidden
+            data-array-row
+            className="flex min-w-0 flex-1 justify-center gap-2.5"
+          >
+            {Array.from({ length: parts }).map((_, cell) => (
+              <span
+                key={cell}
+                className={cn(
+                  SQUARE,
+                  cell < q.count ? SQUARE_FILLED : SQUARE_EMPTY,
+                )}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** D149's three place-value pieces, largest first, in its own sizes. */
+const PIECES = [
+  {
+    piece: "flat",
+    className: "size-[58px] rounded-md shadow-[inset_0_-3px_0_rgba(0,0,0,0.14)]",
+    grid: "repeating-linear-gradient(0deg,rgba(247,241,230,0.22) 0 1px,transparent 1px 11.6px),repeating-linear-gradient(90deg,rgba(247,241,230,0.22) 0 1px,transparent 1px 11.6px)",
+  },
+  {
+    piece: "rod",
+    className: "h-[58px] w-3.5 rounded shadow-[inset_0_-3px_0_rgba(0,0,0,0.14)]",
+    grid: "repeating-linear-gradient(0deg,rgba(247,241,230,0.22) 0 1px,transparent 1px 6.8px)",
+  },
+  {
+    piece: "unit",
+    className: "size-4 rounded-[3px] shadow-[inset_0_-2px_0_rgba(0,0,0,0.14)]",
+    grid: undefined,
+  },
+] as const;
+
+/**
+ * D149's place value: three columns, flats then rods then units, each holding
+ * its mark's count of pieces. The shapes say ten to one at each step, which is
+ * true of any three neighbouring places; which places they are is the
+ * payload's labels to say, under each column. D149's "Hundreds", "Tens" and
+ * "Ones" are not drawn for a payload that names none - for a lesson on
+ * tenths they would be wrong.
+ *
+ * A column whose quantity is a result still kept back is not drawn; the
+ * others keep their own shapes.
+ */
+function PlaceValue({
+  places,
+  shown,
+  reading,
+}: {
+  places: ScaffoldQuantity[];
+  shown: (q: ScaffoldQuantity) => boolean;
+  reading: boolean;
+}) {
+  return (
+    <div className="flex flex-wrap items-end justify-center gap-5">
+      {places.map((place, i) => {
+        const shape = PIECES[i];
+        if (!shape || !shown(place)) return null;
+        return (
+          <div key={i} className="flex flex-col items-center gap-2.5">
+            <div
+              aria-hidden
+              className={cn(
+                "gap-1.5",
+                shape.piece === "unit"
+                  ? "grid grid-cols-[repeat(2,auto)]"
+                  : "flex flex-wrap items-end justify-center",
+              )}
+            >
+              {Array.from({ length: place.count }).map((_, n) => (
+                <span
+                  key={n}
+                  data-piece={shape.piece}
+                  className={cn("bg-nevo-navy", shape.className)}
+                  style={
+                    shape.grid ? { backgroundImage: shape.grid } : undefined
+                  }
+                />
+              ))}
+            </div>
+            {place.label && (
+              <span
+                className={cn(
+                  "text-xs font-medium text-nevo-near-black/60",
+                  reading && [READING_BODY, READING_INK],
+                )}
+              >
+                {place.label}
+              </span>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -967,6 +1132,72 @@ function BuildTray({
               + 1/{parts}
             </button>
           ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * An array build (D149): `rows` rows of `parts` empty places, filled in
+ * reading order as the child taps the one piece the tray offers. "Nothing
+ * marks right or wrong while building", and the tray goes once the stored
+ * count is placed, as the bar's does.
+ */
+function ArrayBuild({
+  rows,
+  parts,
+  target,
+  placed,
+  onPlace,
+}: {
+  rows: number;
+  parts: number;
+  target: number;
+  placed: number;
+  onPlace: () => void;
+}) {
+  return (
+    <>
+      <div className="mt-[18px] rounded-[12px] bg-nevo-cream-elevated p-[18px] shadow-elevation-1 sm:p-6">
+        <span className="font-mono text-[10px] tracking-[0.06em] text-nevo-near-black/50 uppercase">
+          The total
+        </span>
+        <div aria-hidden className="mt-3 flex flex-col gap-2.5">
+          {Array.from({ length: rows }).map((_, row) => (
+            <div
+              key={row}
+              data-array-row
+              className="flex justify-center gap-2.5"
+            >
+              {Array.from({ length: parts }).map((_, cell) => (
+                <span
+                  key={cell}
+                  className={cn(
+                    SQUARE,
+                    // Reading order: a row fills before the next one starts.
+                    row * parts + cell < placed ? SQUARE_FILLED : SQUARE_EMPTY,
+                  )}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+      {placed < target && (
+        <div className="mt-4 flex items-center justify-center gap-2.5">
+          <span aria-hidden className="text-xs text-nevo-near-black/55">
+            Tap to add
+          </span>
+          {/* D149's 34px piece, in a 44px target. */}
+          <button
+            type="button"
+            aria-label="Tap to add"
+            onClick={onPlace}
+            className="flex size-11 cursor-pointer items-center justify-center"
+          >
+            <span className="size-[34px] rounded-lg border-2 border-nevo-violet bg-nevo-violet/18 shadow-elevation-1" />
+          </button>
         </div>
       )}
     </>

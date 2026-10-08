@@ -409,6 +409,85 @@ describe("the drawing", () => {
   });
 });
 
+describe("D149's array and place value", () => {
+  const arrayRows = () => [
+    ...document.querySelectorAll<HTMLElement>("[data-array-row]"),
+  ];
+  const filled = () =>
+    arrayRows().map((r) => r.querySelectorAll(".bg-nevo-navy").length);
+  const pieces = (piece: string) =>
+    document.querySelectorAll(`[data-piece="${piece}"]`).length;
+
+  it("draws an array as rows of parts places, each mark's count filled", () => {
+    show(build({ scaffold: { kind: "array", parts: 4, rows: 3, marks: [4, 4, 0] } }));
+
+    expect(screen.getByText("Picture it")).toBeInTheDocument();
+    expect(arrayRows()).toHaveLength(3);
+    expect(arrayRows().map((r) => r.children.length)).toEqual([4, 4, 4]);
+    expect(filled()).toEqual([4, 4, 0]);
+    // The rest are D149's empty places.
+    expect(arrayRows()[2].querySelectorAll(".border-dashed")).toHaveLength(4);
+  });
+
+  it("draws place value as flats, rods and units, a mark to each column", () => {
+    show(
+      build({
+        scaffold: {
+          kind: "place_value",
+          parts: 1,
+          marks: [1, 2, 3],
+          labels: ["Hundreds", "Tens", "Ones"],
+        },
+      }),
+    );
+
+    expect([pieces("flat"), pieces("rod"), pieces("unit")]).toEqual([1, 2, 3]);
+    expect(screen.getByText("Hundreds")).toBeInTheDocument();
+    expect(screen.getByText("Ones")).toBeInTheDocument();
+  });
+
+  it("names no column the payload did not name", () => {
+    show(build({ scaffold: { kind: "place_value", parts: 1, marks: [0, 4, 7] } }));
+
+    expect([pieces("flat"), pieces("rod"), pieces("unit")]).toEqual([0, 4, 7]);
+    for (const name of ["Hundreds", "Tens", "Ones"]) {
+      expect(screen.queryByText(name)).toBeNull();
+    }
+  });
+
+  it("builds into an array's empty places in reading order, from one piece", () => {
+    const props = show(
+      build({
+        manipulative: { kind: "array", parts: 3, rows: 2 },
+        steps: [
+          step({
+            stepId: "a1",
+            prompt: "Build the total.",
+            expectedInput: "drag",
+            input: "tap",
+            options: [],
+            tapCount: 4,
+          }),
+        ],
+      }),
+    );
+    // The scaffold card is not an array here; only the build's rows count.
+    expect(arrayRows()).toHaveLength(2);
+    expect(filled()).toEqual([0, 0]);
+    // D149 offers one piece to tap, not one per piece still to place.
+    expect(screen.getAllByRole("button", { name: "Tap to add" })).toHaveLength(1);
+
+    for (let i = 0; i < 4; i++) tap("Tap to add");
+
+    expect(filled()).toEqual([3, 1]);
+    expect(props.onPiecePlaced).toHaveBeenCalledTimes(4);
+    expect(screen.queryByRole("button", { name: "Tap to add" })).toBeNull();
+    tap("That's the total");
+    expect(props.onStepAnswered).toHaveBeenCalledWith("a1", true);
+    expect(props.onSolved).toHaveBeenCalled();
+  });
+});
+
 describe("what each answered step does to the drawing (B107)", () => {
   /**
    * 17b's choreography as the payload names it: step 1's answer rings both

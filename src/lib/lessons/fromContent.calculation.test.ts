@@ -435,13 +435,38 @@ describe("a tap step and what it builds on", () => {
     expect(calcOf(quarters({ manipulative: null }))).toBeUndefined();
   });
 
-  it("draws none of the four manipulative kinds nobody has designed", () => {
-    for (const kind of ["number_line", "array", "place_value", "counters"]) {
+  it("builds into D149's array: rows of parts places, up to every place", () => {
+    const array = (tapCount: number) =>
+      calcOf(
+        quarters({
+          manipulative: { kind: "array", parts: 4, rows: 3, labels: [] },
+          steps: [step({ input: "tap", tapCount })],
+        }),
+      );
+
+    expect(array(12)?.manipulative).toEqual({ kind: "array", parts: 4, rows: 3 });
+    expect(array(12)?.steps[0]).toMatchObject({ input: "tap", target: 12 });
+    // More than the places drawn is refused, never clamped.
+    expect(array(13)).toBeUndefined();
+  });
+
+  it("builds no kind without a frame, or without a count for each piece", () => {
+    /*
+     * D149 draws place value too, but building 123 is one flat, two rods and
+     * three units, and one `tapCount` cannot say how many of each.
+     */
+    for (const kind of ["number_line", "place_value", "counters"]) {
       expect(
         calcOf(quarters({ manipulative: { kind, parts: 4, rows: 1 } })),
         kind,
       ).toBeUndefined();
     }
+  });
+
+  it("builds a fraction bar on one row only, as 17b draws it", () => {
+    expect(
+      calcOf(quarters({ manipulative: { kind: "fraction_bar", parts: 4, rows: 2 } })),
+    ).toBeUndefined();
   });
 
   it("refuses a bar with no parts to divide", () => {
@@ -510,10 +535,52 @@ describe("the scaffold drawing", () => {
     ).toEqual({ kind: "number_line", parts: 4, points: [{ count: 3, label: "3" }] });
   });
 
-  it("draws no kind that has no frame", () => {
-    for (const kind of ["array", "place_value"]) {
-      expect(drawn({ kind, parts: 4, rows: 3, marks: [2] }), kind).toBeUndefined();
+  it("draws D149's array as the bars are read: a row of parts places per mark", () => {
+    expect(
+      drawn({ kind: "array", parts: 4, rows: 3, marks: [4, 4, 0] }),
+    ).toEqual({
+      kind: "array",
+      parts: 4,
+      quantities: [{ count: 4 }, { count: 4 }, { count: 0 }],
+    });
+    // `parts` is a row's places: reading it as the whole array would mean
+    // dividing it to lay the rows out.
+    expect(drawn({ kind: "array", parts: 4, rows: 3, marks: [12] })).toBeUndefined();
+    expect(drawn({ kind: "array", parts: 4, rows: 2, marks: [5, 1] })).toBeUndefined();
+    // Three physical rows, two marks: which row is left empty is not said.
+    expect(drawn({ kind: "array", parts: 4, rows: 3, marks: [4, 4] })).toBeUndefined();
+  });
+
+  it("draws D149's place value as three columns, named only by the payload", () => {
+    expect(
+      drawn({
+        kind: "place_value",
+        parts: 1,
+        marks: [1, 2, 3],
+        labels: ["Hundreds", "Tens", "Ones"],
+      }),
+    ).toEqual({
+      kind: "place_value",
+      places: [
+        { count: 1, label: "Hundreds" },
+        { count: 2, label: "Tens" },
+        { count: 3, label: "Ones" },
+      ],
+    });
+    // No labels, no names: the frame's would be wrong for tenths.
+    expect(drawn({ kind: "place_value", parts: 1, marks: [0, 4, 7] })).toEqual({
+      kind: "place_value",
+      places: [{ count: 0 }, { count: 4 }, { count: 7 }],
+    });
+  });
+
+  it("draws place value only as D149's three columns on one row", () => {
+    for (const marks of [[2, 3], [1, 2, 3, 4]]) {
+      expect(drawn({ kind: "place_value", parts: 1, marks }), String(marks)).toBeUndefined();
     }
+    expect(
+      drawn({ kind: "place_value", parts: 1, rows: 2, marks: [1, 2, 3] }),
+    ).toBeUndefined();
   });
 
   it("draws nothing it would have to reinterpret", () => {

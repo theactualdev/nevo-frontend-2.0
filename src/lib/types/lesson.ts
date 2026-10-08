@@ -162,14 +162,17 @@ export interface ScaffoldQuantity {
 /**
  * The drawing beside the notation, as the payload describes it (SCRUM-177).
  *
- * Only the kinds a frame draws are here: `bar` is 17b's fraction bars, one
- * physical row per quantity, `dots` and `number_line` are 37c's grouped dots
- * and number line, each on one row. `array` and `place_value` have no frame
- * yet, so a calculation carrying one draws nothing beside its notation rather
- * than an invented picture.
+ * Only the kinds a frame draws are here, each named as the wire names it:
+ * `bar` is 17b's fraction bars (D149's "fraction_bars"), one physical row per
+ * quantity; `dots` and `number_line` are 37c's grouped dots and number line,
+ * each on one row; `array` is D149's rows of square places, one physical row
+ * per quantity; `place_value` is D149's three columns of flats, rods and
+ * units, largest first.
  */
 export type CalcScaffold =
   | { kind: "bar"; parts: number; quantities: ScaffoldQuantity[] }
+  | { kind: "array"; parts: number; quantities: ScaffoldQuantity[] }
+  | { kind: "place_value"; places: ScaffoldQuantity[] }
   | { kind: "dots"; quantities: ScaffoldQuantity[] }
   | { kind: "number_line"; parts: number; points: ScaffoldQuantity[] };
 
@@ -258,8 +261,13 @@ export interface CalculationSegment {
   fullEquation: string;
   /** The drawing. Absent means the payload carries none this app can draw. */
   scaffold?: CalcScaffold;
-  /** What a `tap` step builds on. Only the fraction bar has a frame (17b). */
-  manipulative?: { kind: "fraction_bar"; parts: number };
+  /**
+   * What a `tap` step builds on: 17b's fraction bar, one row of `parts`, or
+   * D149's array, `rows` rows of `parts` square places each.
+   */
+  manipulative?:
+    | { kind: "fraction_bar"; parts: number }
+    | { kind: "array"; parts: number; rows: number };
   steps: CalculationStep[];
   /** Shown once the solution has assembled. Empty means nothing is said. */
   completion: string;
