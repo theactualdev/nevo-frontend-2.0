@@ -444,6 +444,11 @@ const CLASSIFIER_ALLOWED = new Map([
     "src/components/teacher/Library/LessonDetailActions.tsx:stillToCheck",
     "`keyPoints > 0` and `sections > 0` ask whether the SERVER'S counts have anything to mention (rule 5, absence), and the word is the server's own verdict restated - Assign gates on `readyToAssign`, never on these. About a lesson's review, not a child. Permanent: there is no cutoff to own.",
   ],
+  // Teacher console, 8 Oct (T95): the bulk upload's results line.
+  [
+    "src/components/teacher/Upload/BulkIngestion.tsx:resultsLine",
+    "`reading > 0`, `refused > 0` and `look === 0` ask whether any of a teacher's UPLOADED FILES is still being read, was refused, or stopped - the server's own statuses counted, nothing measured about anyone - and `n === 1` is \"file\"/\"files\" grammar. About a batch of documents, not a child. Permanent: there is no cutoff to own.",
+  ],
 ]);
 const allowlistHits = new Set();
 

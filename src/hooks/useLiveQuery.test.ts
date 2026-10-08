@@ -116,3 +116,73 @@ describe("useLiveQuery", () => {
     expect(run).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * C06. Every read here was once per page load; `refresh` asks again without
+ * dropping what is on screen.
+ */
+describe("useLiveQuery, asked again", () => {
+  it("reads again, and shows the new answer", async () => {
+    signIn();
+    const run = vi.fn().mockResolvedValueOnce("first").mockResolvedValueOnce("second");
+    const { result } = renderHook(() => useLiveQuery(run, []));
+    await waitFor(() => expect(result.current.data).toBe("first"));
+
+    act(() => result.current.refresh());
+
+    await waitFor(() => expect(result.current.data).toBe("second"));
+    expect(run).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps what it had when the re-read fails, and claims no failure", async () => {
+    signIn();
+    const run = vi.fn().mockResolvedValueOnce("first").mockRejectedValueOnce(new Error("blip"));
+    const { result } = renderHook(() => useLiveQuery(run, []));
+    await waitFor(() => expect(result.current.data).toBe("first"));
+
+    act(() => result.current.refresh());
+
+    await waitFor(() => expect(run).toHaveBeenCalledTimes(2));
+    await act(async () => {});
+    expect(result.current.data).toBe("first");
+    expect(result.current.failed).toBe(false);
+  });
+
+  it("recovers a failed read when asked again", async () => {
+    signIn();
+    const run = vi.fn().mockRejectedValueOnce(new Error("down")).mockResolvedValueOnce("back");
+    const { result } = renderHook(() => useLiveQuery(run, []));
+    await waitFor(() => expect(result.current.failed).toBe(true));
+
+    act(() => result.current.refresh());
+
+    await waitFor(() => expect(result.current.data).toBe("back"));
+    expect(result.current.failed).toBe(false);
+  });
+
+  it("is still failed when asking again fails too", async () => {
+    signIn();
+    const run = vi.fn().mockRejectedValue(new Error("down"));
+    const { result } = renderHook(() => useLiveQuery(run, []));
+    await waitFor(() => expect(result.current.failed).toBe(true));
+
+    act(() => result.current.refresh());
+
+    await waitFor(() => expect(run).toHaveBeenCalledTimes(2));
+    await act(async () => {});
+    expect(result.current.failed).toBe(true);
+  });
+
+  it("still says a first read has failed when its deps change, as before", async () => {
+    signIn();
+    const run = vi.fn().mockResolvedValueOnce("a").mockRejectedValueOnce(new Error("down"));
+    const { result, rerender } = renderHook(({ id }) => useLiveQuery(run, [id]), {
+      initialProps: { id: 1 },
+    });
+    await waitFor(() => expect(result.current.data).toBe("a"));
+
+    rerender({ id: 2 });
+
+    await waitFor(() => expect(result.current.failed).toBe(true));
+  });
+});

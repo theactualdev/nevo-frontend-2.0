@@ -360,7 +360,7 @@ describe("ReturningSignInScreen — when it does not work", () => {
 
   it("tells a removed child their account is closed on 28d, not on pause and not a wrong PIN (D53, D116)", async () => {
     loginPin.mockRejectedValue(refusal("account_closed"));
-    render(<ReturningSignInScreen />);
+    render(<ReturningSignInScreen next="/student/lessons/frac-3" />);
     fill();
 
     await signInNow();
@@ -370,8 +370,12 @@ describe("ReturningSignInScreen — when it does not work", () => {
     ).toBeVisible();
     expect(screen.queryByText(/on pause|didn't match/)).toBeNull();
     // 28d is terminal: "no sign-in route, because offering a way back in
-    // would be cruel."
-    expect(screen.queryAllByRole("link")).toHaveLength(0);
+    // would be cruel." Its one line is for the next child (7 Oct), so it goes
+    // to the picker and carries nothing of where this child was going.
+    expect(
+      screen.getByRole("link", { name: "Someone else using this device?" }),
+    ).toHaveAttribute("href", "/auth/login");
+    expect(screen.getAllByRole("link")).toHaveLength(1);
     expect(screen.queryAllByRole("button")).toHaveLength(0);
   });
 

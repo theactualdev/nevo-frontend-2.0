@@ -110,9 +110,9 @@ export function TeacherHome() {
             <span className="text-[13px] text-nevo-near-black/55 xl:text-[13.5px]">
               {todayLine()}
             </span>
-            <h2 className="mt-1 text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
+            <h1 className="mt-1 text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
               {greetName ? `Welcome back, ${greetName}` : "Welcome back"}
-            </h2>
+            </h1>
           </div>
           {signedIn && identity?.schoolCode && (
             <div className="flex shrink-0 flex-col items-end gap-1 rounded-[12px] bg-nevo-cream-elevated px-3.5 py-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:px-4 xl:py-3">

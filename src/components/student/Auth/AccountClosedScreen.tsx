@@ -1,11 +1,13 @@
 import { Wordmark } from "@/components/shared/BrandMarks";
 import { cn } from "@/lib/utils";
+import { type PauseWayBack, WAY_BACK } from "./AccountOnPauseScreen";
 
-/** 28d's child version, verbatim. */
+/** 28d's child version, verbatim, and the one line product added (7 Oct). */
 export const ACCOUNT_CLOSED_COPY = {
   heading: "Your account is closed",
   line: "This account is closed, so there's nothing more to do here.",
   ask: "If you're not sure why, ask your teacher or someone at your school.",
+  someoneElse: "Someone else using this device?",
 } as const;
 
 /**
@@ -17,12 +19,15 @@ export const ACCOUNT_CLOSED_COPY = {
  * the brand mark, with "Back to sign in" - because no frame drew it. 28d does
  * now, and differs on everything that matters:
  *
- *  - TERMINAL. "No sign-in route, because offering a way back in would be
- *    cruel." So there is nothing to press, here or on any surface that shows
- *    it - including the sign-in doors, where the pause screen keeps D52's way
- *    back to the picker. That is the frame's call and is raised with design:
- *    on a shared tablet a screen with no control holds the device until the
- *    app is reopened.
+ *  - TERMINAL FOR THIS CHILD. "No sign-in route, because offering a way back
+ *    in would be cruel." So there is no "Back to sign in", here or on any
+ *    surface that shows it - including the sign-in doors, where the pause
+ *    screen keeps D52's.
+ *  - BUT NOT FOR THE DEVICE (product, 7 Oct). A screen with no control held a
+ *    shared tablet until the app was reopened, so it carries one line, "Someone
+ *    else using this device?", which takes the NEXT child to the picker. It
+ *    says nothing about the closed child's own access and is not a way back in
+ *    for them. 28d does not draw it yet.
  *  - "A QUIET STATIC RING, NOT THE BREATHING DOT (this is settled, not
  *    waiting)", and not the brand mark the pause screen used to carry.
  *  - "Gives no reason, names no decision, attaches no blame in any direction,
@@ -32,7 +37,20 @@ export const ACCOUNT_CLOSED_COPY = {
  * The wordmark sits top left at the frame's three sizes; the content fades up
  * as the frame's does.
  */
-export function AccountClosedView({ className }: { className?: string }) {
+export function AccountClosedView({
+  className,
+  toPicker,
+}: {
+  className?: string;
+  /**
+   * Where "Someone else using this device?" goes: the picker, in the pause
+   * screen's two shapes. A full page load where the closure landed mid-session
+   * (it is sticky for the page, `accountPause.ts`); `onBack` at the PIN
+   * unlock, which only has to put its picker back. Required, because every
+   * surface that shows 28d is on a device the next child may need.
+   */
+  toPicker: PauseWayBack;
+}) {
   return (
     <div
       className={cn(
@@ -58,15 +76,24 @@ export function AccountClosedView({ className }: { className?: string }) {
         <p className="mt-2.5 max-w-[300px] text-base leading-[1.6] text-nevo-near-black/70 sm:max-w-[440px] sm:text-lg lg:max-w-[460px]">
           {ACCOUNT_CLOSED_COPY.ask}
         </p>
+        {"href" in toPicker ? (
+          <a href={toPicker.href} className={WAY_BACK}>
+            {ACCOUNT_CLOSED_COPY.someoneElse}
+          </a>
+        ) : (
+          <button type="button" onClick={toPicker.onBack} className={WAY_BACK}>
+            {ACCOUNT_CLOSED_COPY.someoneElse}
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
-export function AccountClosedScreen() {
+export function AccountClosedScreen({ toPicker }: { toPicker: PauseWayBack }) {
   return (
     <main className="w-full">
-      <AccountClosedView />
+      <AccountClosedView toPicker={toPicker} />
     </main>
   );
 }

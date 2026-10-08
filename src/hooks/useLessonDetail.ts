@@ -13,14 +13,16 @@ import { getToken } from "@/lib/auth/session";
 import { useHasSession } from "./useHasSession";
 
 /**
- * One lesson: its parsed segments, plus who it has been given to.
+ * One lesson: its parsed segments and modules, plus who it has been given to.
  *
- * Three calls, because the contract splits them three ways.
- * `GET /api/content/lessons/{id}` has the segments and their review flags but
- * no modules; `GET /api/v1/lessons/{id}` has the modules but drops the review
- * flags; `GET /api/v1/assignments` has the assignments and cannot be filtered
- * by lesson. Only the first decides whether the page exists. The others are
- * best-effort: a lesson still reads perfectly well without knowing who has
+ * Two calls. `GET /api/content/lessons/{id}` carries the segments, their
+ * review flags AND the modules - `modules` is in `LessonDetailResponse`'s
+ * required list, the same schema both detail routes return. This used to make
+ * a third call to `GET /api/v1/lessons/{id}` for the modules, on a docblock
+ * that said the content route had none: the whole lesson read twice on every
+ * open (T52). `GET /api/v1/assignments` has the assignments and cannot be
+ * filtered by lesson. Only the lesson decides whether the page exists. The
+ * assignments are best-effort: a lesson still reads perfectly well without knowing who has
  * it, so a failed assignment call does not fail the page - it raises
  * `assignmentsFailed`, and the page says it could not find out rather than
  * drawing a lesson nobody has been given.
@@ -84,7 +86,12 @@ export function useLessonDetail(lessonId: string): LessonDetailState {
     void lessonsApi
       .detail(lessonId)
       .then((res) => {
-        if (!cancelled) setLesson(res);
+        if (cancelled) return;
+        setLesson(res);
+        // Optional on the type: required today, absent on an older deployment.
+        setModules(
+          [...(res.modules ?? [])].sort((a, b) => a.sequenceOrder - b.sequenceOrder),
+        );
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -101,16 +108,6 @@ export function useLessonDetail(lessonId: string): LessonDetailState {
           setMissing(true);
         } else setFailed(true);
       });
-
-    // Best-effort: a lesson reads fine ungrouped.
-    void lessonsApi
-      .modules(lessonId)
-      .then((m) => {
-        if (!cancelled) {
-          setModules([...m].sort((a, b) => a.sequenceOrder - b.sequenceOrder));
-        }
-      })
-      .catch(() => {});
 
     // Best-effort: the page is worth showing without it.
     void assignmentsApi

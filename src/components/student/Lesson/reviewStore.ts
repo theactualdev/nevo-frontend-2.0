@@ -16,9 +16,11 @@ import type { CheckOutcome } from "@/lib/lessons/checkOutcome";
  * own. Keyed by account now; a signed-out visitor (the designed walkthrough)
  * has a shelf of their own that no signed-in child reads.
  *
- * TODO(api): `GET /api/v1/lessons/{id}/attempts` now returns a child's own
- * marked answers, per account and server-side (`lessonsApi.attempts`). Swap
- * this for that read once the player writes them - see the docblock there.
+ * NOT THE RECORD. For a live lesson the review reads the account's own
+ * answers (`lessonsApi.attempts`), which reach another visit and another
+ * tablet; this copy is its first paint, and fills an answer whose write has
+ * not landed yet. It is never shown in place of a read that failed - see
+ * `ReviewAnswersScreen`.
  */
 export interface ReviewAnswer {
   questionIndex: number;

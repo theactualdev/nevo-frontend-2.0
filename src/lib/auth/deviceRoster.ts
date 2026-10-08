@@ -241,14 +241,7 @@ export function rememberChild(profile: RememberedProfile): RememberedChild[] {
     // tablet shows six different shapes.
     shapeIndex: match?.shapeIndex ?? freeShapeIndex(rest),
     lastUsedAt: new Date().toISOString(),
-    // Same for the PIN's length: the name lookup after a full sign-in writes
-    // again without it, and must not drop what the sign-in itself recorded.
-    ...(profile.pinLength
-      ? { pinLength: profile.pinLength }
-      : match?.pinLength
-        ? { pinLength: match.pinLength }
-        : {}),
-    // And the account id: a write that does not carry it (the name lookup,
+    // The account id: a write that does not carry it (the name lookup,
     // an older caller) must not forget which account this entry is.
     ...(profile.userId
       ? { userId: profile.userId }
@@ -264,6 +257,13 @@ export function rememberChild(profile: RememberedProfile): RememberedChild[] {
         ? { displayName: match.displayName }
         : {}),
   };
+
+  /*
+   * NO PIN LENGTH, written or carried over (D58, 6 Oct): every PIN door draws
+   * four whatever a device remembers. An entry stored before then still reads
+   * - the field stays on the type - and sheds it at its next sign-in.
+   */
+  delete updated.pinLength;
 
   const next = [updated, ...rest].slice(0, MAX_REMEMBERED);
   write(next);

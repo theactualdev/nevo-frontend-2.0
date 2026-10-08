@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
 import { ApiError } from "@/lib/api/client";
 import { feedbackApi } from "@/lib/api/feedback";
@@ -116,18 +117,27 @@ export function FeedbackPanel({ onClose }: { onClose: () => void }) {
   };
 
   const panel =
-    "fixed top-1/2 right-6 z-50 flex w-[360px] max-w-[calc(100vw-3rem)] -translate-y-1/2 flex-col rounded-[16px] bg-nevo-cream-inset p-6 shadow-[0_20px_56px_rgba(0,0,0,0.2)]";
+    "fixed top-1/2 right-6 z-50 flex w-[360px] max-w-[calc(100%-3rem)] -translate-y-1/2 flex-col rounded-[16px] bg-nevo-cream-inset p-6 shadow-[0_20px_56px_rgba(0,0,0,0.2)]";
+
+  // Two dialogs take turns in this panel: the form, then its thank-you. Each
+  // takes focus in its turn, and the last to close gives it back (C07).
+  const formRef = useRef<HTMLDivElement>(null);
+  const sentRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(formRef, { active: !sent });
+  useDialogFocus(sentRef, { active: sent });
 
   return (
     <>
       <div
         aria-hidden
         onClick={onClose}
-        className="fixed inset-0 z-40 bg-nevo-near-black/28 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
+        className="fixed inset-0 z-40 bg-nevo-near-black/28 backdrop-blur-[1.5px] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
       />
 
       {sent ? (
         <div
+          ref={sentRef}
+          tabIndex={-1}
           role="dialog"
           aria-label="Feedback sent"
           className={cn(
@@ -149,6 +159,8 @@ export function FeedbackPanel({ onClose }: { onClose: () => void }) {
         </div>
       ) : (
         <div
+          ref={formRef}
+          tabIndex={-1}
           role="dialog"
           aria-modal="true"
           aria-label="Share feedback"

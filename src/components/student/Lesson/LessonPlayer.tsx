@@ -1075,7 +1075,7 @@ export function LessonPlayer({
    * segment - a return visit or a re-render is not the engine offering it
    * again. `hint_used` (B41) is sent as the child moves on with this hint
    * still on screen - see `advancePastSegment`. The solver's "Need a hint?"
-   * is the hint a child opens, and it is frozen.
+   * is the hint a child opens, and sends its own pair - see `onCalcHint`.
    */
   const hintOnScreen = segmentShowing && hintHere && Boolean(hintText);
   const offeredHints = useRef<Set<string>>(new Set());
@@ -1987,6 +1987,7 @@ export function LessonPlayer({
             <TeacherNote
               note={teacherNote.text}
               author={teacherNote.author}
+              reading={readingOn}
             />
           )}
           {feedback && <FeedbackStrip message={feedback} />}
@@ -2093,27 +2094,43 @@ export function LessonPlayer({
                   segmentId: segment.id,
                 });
               }}
-              onCalcStep={(correct) => {
-                // The ingest enum has a type for this. It was riding
-                // `comprehension_response` under a `kind` of our own invention,
-                // which obliges the engine to know our convention - and no
-                // batch had ever actually landed under it, so switching now
-                // costs no history.
-                // The step and the child's answer are not added: the solver is
-                // frozen pending its backend payload (SCRUM-181/177).
+              onCalcStep={(stepId, correct) => {
+                // The catalogue's keys, exactly: which step, never whether it
+                // was right. The match against the stored answers feeds the
+                // error streak the engine reads (`consecutiveErrors`) - that
+                // is where correctness is declared, not on this event.
                 trackEvent(SIGNAL_EVENT_TYPES.CALCULATION_STEP_RESPONSE, {
                   segmentId: segment.id,
-                  correct,
+                  stepId,
                 });
                 noteAnswer(correct);
               }}
-              onPiecePlaced={(placed, needed) =>
+              onPiecePlaced={(stepId) =>
                 trackEvent(SIGNAL_EVENT_TYPES.MANIPULATIVE_PIECE_PLACED, {
                   segmentId: segment.id,
-                  placed,
-                  needed,
+                  stepId,
                 })
               }
+              onCalcHint={() => {
+                /*
+                 * THE HINT A CHILD OPENS WAS SILENT (audit 44). Opening it is
+                 * both halves of the catalogue's pair: a hint shown "whether
+                 * or not the child asked for one", and one "they had to open"
+                 * acted on. The concept rides along where the payload names
+                 * one; no hint index, which nothing defines.
+                 */
+                const conceptId = segment.calculation?.conceptId;
+                trackEvent(SIGNAL_EVENT_TYPES.HINT_OFFERED, {
+                  segmentId: segment.id,
+                  ...(conceptId ? { conceptId } : {}),
+                });
+                trackEvent(SIGNAL_EVENT_TYPES.HINT_USED, {
+                  segmentId: segment.id,
+                  ...(conceptId ? { conceptId } : {}),
+                });
+                // A right answer to this segment's check is `after_hint` now.
+                hintedSegments.current.add(segment.id);
+              }}
             />
           </div>
           {/* §4 `offer_hint`: the unrequested hint under the content. */}
@@ -2254,6 +2271,7 @@ function SegmentBody({
   onCalcSolved,
   onCalcStep,
   onPiecePlaced,
+  onCalcHint,
 }: {
   segment: LessonSegment;
   modality: Modality;
@@ -2267,8 +2285,10 @@ function SegmentBody({
   /** A picture or recording would not load (B12). */
   onMediaFailed: (channel: "image" | "audio", reason: MediaFailReason) => void;
   onCalcSolved: () => void;
-  onCalcStep: (correct: boolean) => void;
-  onPiecePlaced: (placed: number, needed: number) => void;
+  onCalcStep: (stepId: string, correct: boolean) => void;
+  onPiecePlaced: (stepId: string) => void;
+  /** The child opened a calculation step's hint themselves. */
+  onCalcHint: () => void;
 }) {
   if (modality === MODALITY.TEXT && segment.text)
     return (
@@ -2284,6 +2304,7 @@ function SegmentBody({
     return (
       <VisualSegment
         content={segment.visual}
+        reading={reading}
         onMediaFailed={(reason) => onMediaFailed("image", reason)}
       />
     );
@@ -2291,6 +2312,7 @@ function SegmentBody({
     return (
       <AudioSegment
         content={segment.audio}
+        reading={reading}
         onReplay={onReplay}
         onPlayed={onNarrationPlayed}
         onBusy={onAudioBusy}
@@ -2303,10 +2325,18 @@ function SegmentBody({
       return (
         <CalculationSolver
           calculation={segment.calculation}
+          // D30: the same accommodation the text segment and the checks take.
+          reading={reading}
           onSolved={onCalcSolved}
           onStepAnswered={onCalcStep}
-          onReplay={onReplay}
           onPiecePlaced={onPiecePlaced}
+          onHintOpened={onCalcHint}
+          // A step's narration is the segment's narration: the same four
+          // signals the audio card sends, from the same handlers.
+          onReplay={onReplay}
+          onNarrationPlayed={onNarrationPlayed}
+          onAudioBusy={onAudioBusy}
+          onNarrationFailed={(reason) => onMediaFailed("audio", reason)}
         />
       );
     if (segment.interactive)

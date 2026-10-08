@@ -78,3 +78,38 @@ describe("whose voice it is", () => {
     expect(caption).toBe("— Your teacher");
   });
 });
+
+describe("the reading accommodation (D30, audit 46)", () => {
+  /*
+   * "The teacher's note takes typographic support only." It was the one block
+   * in the reading column a child with reading support still met at 15px.
+   */
+  const NOTE = "Take your time on question 3.";
+
+  it("sets the note in the accommodation's type", () => {
+    render(<TeacherNote note={NOTE} reading />);
+
+    const quote = document.querySelector("blockquote")?.className ?? "";
+    expect(quote).toContain("text-[18px]");
+    expect(quote).toContain("leading-[2]");
+    expect(quote).not.toContain("text-[15px]");
+  });
+
+  it("changes nothing else about it", () => {
+    // Typography is how the words are presented, never which words they are.
+    render(<TeacherNote note={NOTE} reading />);
+
+    const quote = document.querySelector("blockquote");
+    expect(quote?.textContent).toBe(NOTE);
+    expect(quote?.className).toContain("italic");
+    expect(quote?.className).toContain("whitespace-pre-line");
+  });
+
+  it("leaves the note as drawn without it", () => {
+    render(<TeacherNote note={NOTE} />);
+
+    expect(document.querySelector("blockquote")?.className).toContain(
+      "text-[15px]",
+    );
+  });
+});

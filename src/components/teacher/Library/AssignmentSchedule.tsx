@@ -69,7 +69,7 @@ type Busy = { key: string; kind: "dates" | "cancel" } | null;
 type Again =
   | { action: "cancel" }
   | { action: "restore" }
-  | { action: "dates"; availableFrom: string | null; dueAt: string | null };
+  | { action: "dates"; changes: DateChanges };
 
 type Outcome =
   | { key: string; kind: "done"; text: string }
@@ -174,15 +174,23 @@ export function AssignmentSchedule({
     );
   }
 
-  async function saveDates(g: Group, availableFrom: string | null, dueAt: string | null) {
+  async function saveDates(g: Group, changes: DateChanges) {
     setBusy({ key: g.key, kind: "dates" });
     setOutcome(null);
-    const { ok, failed } = await applyToAssignments(g.ids, { availableFrom, dueAt });
+    // Only the field the teacher changed (C03): sending both rewrote an
+    // untouched opening time every time a due date moved.
+    const { ok, failed } = await applyToAssignments(g.ids, changes);
     setBusy(null);
     if (ok.length > 0) {
       setEdited((prev) => {
         const next = { ...prev };
-        for (const id of ok) next[id] = { availableFrom, dueAt };
+        for (const id of ok) {
+          next[id] = {
+            availableFrom:
+              "availableFrom" in changes ? (changes.availableFrom ?? null) : g.availableFrom,
+            dueAt: "dueAt" in changes ? (changes.dueAt ?? null) : g.dueAt,
+          };
+        }
         return next;
       });
     }
@@ -197,7 +205,7 @@ export function AssignmentSchedule({
         kind: "partial",
         text: `Updated for ${ok.length} of ${g.ids.length} students. The rest keep the old dates.`,
         retry: failed,
-        again: { action: "dates", availableFrom, dueAt },
+        again: { action: "dates", changes },
       });
     }
   }
@@ -207,7 +215,7 @@ export function AssignmentSchedule({
     const rest = { ...g, ids: retry, students: retry.length };
     if (again.action === "cancel") return cancelGroup(rest);
     if (again.action === "restore") return restoreGroup(rest);
-    return saveDates(rest, again.availableFrom, again.dueAt);
+    return saveDates(rest, again.changes);
   }
 
   return (
@@ -293,7 +301,7 @@ export function AssignmentSchedule({
                   dueAt={g.dueAt}
                   busy={working && busy?.kind === "dates"}
                   onCancel={() => setEditing(null)}
-                  onSave={(a, d) => void saveDates(g, a, d)}
+                  onSave={(changes) => void saveDates(g, changes)}
                 />
               )}
 
@@ -373,7 +381,7 @@ function DateForm({
   availableFrom: string | null;
   dueAt: string | null;
   busy: boolean;
-  onSave: (availableFrom: string | null, dueAt: string | null) => void;
+  onSave: (changes: DateChanges) => void;
   onCancel: () => void;
 }) {
   const [opens, setOpens] = useState(toDateInput(availableFrom));
@@ -383,6 +391,13 @@ function DateForm({
   // it is due is not a schedule, it is a mistake, so it is refused here rather
   // than sent.
   const backwards = Boolean(opens && due && opens > due);
+  /** What the teacher actually moved - the rest is left exactly as it was. */
+  const changes: DateChanges = {};
+  if (opens !== toDateInput(availableFrom)) {
+    changes.availableFrom = onDay(opens, availableFrom, "start");
+  }
+  if (due !== toDateInput(dueAt)) changes.dueAt = onDay(due, dueAt, "end");
+  const unchanged = Object.keys(changes).length === 0;
 
   return (
     <div className="mt-3.5 rounded-[10px] bg-nevo-cream p-3.5">
@@ -416,8 +431,8 @@ function DateForm({
       <div className="mt-3 flex gap-2">
         <button
           type="button"
-          disabled={busy || backwards}
-          onClick={() => onSave(fromDateInput(opens), fromDateInput(due))}
+          disabled={busy || backwards || unchanged}
+          onClick={() => onSave(changes)}
           className="cursor-pointer rounded-[9px] bg-nevo-navy px-3.5 py-1.5 text-[13.5px] font-semibold text-nevo-cream disabled:cursor-not-allowed disabled:opacity-45"
         >
           {busy ? "Saving…" : "Save dates"}
@@ -507,14 +522,48 @@ function shortDate(iso: string | null): string {
     : d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
-/** ISO timestamp to the `yyyy-mm-dd` an `<input type="date">` wants. */
-function toDateInput(iso: string | null): string {
+/** A date edit: only the fields present are sent. */
+export type DateChanges = { availableFrom?: string | null; dueAt?: string | null };
+
+const pad = (n: number) => String(n).padStart(2, "0");
+
+/**
+ * ISO timestamp to the `yyyy-mm-dd` an `<input type="date">` wants - IN THE
+ * TEACHER'S OWN DAY (C03). This took the UTC date, so a lesson set to open
+ * between midnight and 01:00 in Lagos showed the day before.
+ */
+export function toDateInput(iso: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-/** Back again. An empty box means "no date", which is a real value here. */
-function fromDateInput(value: string): string | null {
-  return value ? new Date(`${value}T00:00:00.000Z`).toISOString() : null;
+/**
+ * Back again, onto the chosen day. An empty box means "no date", which is a
+ * real value here.
+ *
+ * KEEPING THE TIME IT HAD (C03). This wrote midnight UTC whatever the date had
+ * been: the wizard schedules a lesson for 08:00, and moving it a day here
+ * moved it to 01:00 as well. A date that had a time keeps it; one that had
+ * none starts at the beginning of the day if it opens, and runs to the end of
+ * the day if it is due - "due Friday" is due by the end of Friday, not before
+ * it starts.
+ */
+export function onDay(
+  value: string,
+  had: string | null,
+  fresh: "start" | "end",
+): string | null {
+  if (!value) return null;
+  const [y, m, d] = value.split("-").map(Number);
+  const before = had ? new Date(had) : null;
+  const at =
+    before && !Number.isNaN(before.getTime())
+      ? new Date(before)
+      : fresh === "start"
+        ? new Date(y, m - 1, d, 0, 0, 0, 0)
+        : new Date(y, m - 1, d, 23, 59, 0, 0);
+  at.setFullYear(y, m - 1, d);
+  return at.toISOString();
 }

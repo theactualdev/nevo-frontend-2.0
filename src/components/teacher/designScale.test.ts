@@ -45,3 +45,17 @@ describe("the teacher console's design scale", () => {
     expect(offenders.map((p) => relative(root, p))).toEqual([]);
   });
 });
+
+describe("the teacher console's scrims", () => {
+  it("blur what they cover, as C10b draws, and do not only dim it (T172)", () => {
+    // A class string that covers the screen in the near-black wash is a
+    // scrim; a click-catcher with no wash is not, and needs no blur.
+    const offenders = files(root).flatMap((p) =>
+      (readFileSync(p, "utf8").match(/"[^"]*\bfixed inset-0\b[^"]*"/g) ?? [])
+        .filter((cls) => /bg-nevo-near-black\//.test(cls) && !/backdrop-blur/.test(cls))
+        .map(() => relative(root, p)),
+    );
+
+    expect(offenders).toEqual([]);
+  });
+});

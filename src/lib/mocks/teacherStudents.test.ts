@@ -90,3 +90,14 @@ describe("what the student profile says about a child", () => {
     }
   });
 });
+
+describe("the early profile's note (T128)", () => {
+  it("opens with C08's own sentence, about the child's work", () => {
+    const early = profiles.find((p) => p.earlyNote);
+    const first = early!.name.split(" ")[0];
+
+    expect(early!.earlyNote).toBe(
+      `Still getting a picture of ${first}'s work. A few more sessions and this will fill in - for now, here's the early picture.`,
+    );
+  });
+});

@@ -29,8 +29,8 @@ import { USER_ROLES } from "@/lib/constants/permissions";
  * A CLOSED ACCOUNT TAKES THE SAME PATH (B58, D53). Backend's 5 Oct answer gives
  * a removed account its own 401, `account_closed`; the deployed spec's 401
  * description does not name it yet and still says `account_paused` covers
- * "closed or suspended" - raised. Where it arrives, the child gets the same
- * card over the same lesson but is never told the account is on pause. "On
+ * "closed or suspended" - raised. Where it arrives, the host covers the lesson
+ * with 28d at once, with no card, and never says the account is on pause. "On
  * pause" says it will start again, which for a removed child is not true and
  * brings them back to the tablet to try. So the flag carries WHICH state
  * landed, and the screens read it.

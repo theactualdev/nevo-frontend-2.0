@@ -20,9 +20,10 @@ import { useHasSession } from "./useHasSession";
  * The response carries `unreadCount` alongside the rows, so the badge is read
  * from the same call rather than polling `/unread-count`.
  *
- * `type` has no enum in the spec, so `kindOf` maps what the C13 frame drew and
- * anything unrecognised falls back to `done`'s neutral mark. A type the
- * backend adds tomorrow renders as a plain row rather than an empty square.
+ * `type` is the spec's `NotificationType` enum, and `kindOf` maps it to the
+ * C13 frame's marks; anything unrecognised falls back to `done`'s neutral
+ * mark, so a type the backend adds tomorrow renders as a plain row rather
+ * than an empty square.
  *
  * Fixtures back the designed panel when there is no session; a signed-in
  * teacher whose feed fails sees an empty bell rather than invented events,

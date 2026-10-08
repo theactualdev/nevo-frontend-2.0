@@ -30,7 +30,6 @@ import type { AdaptationPlan, Lesson } from "@/lib/types";
 
 const progress = vi.hoisted(() => ({
   report: vi.fn(),
-  positionSaved: false,
   completionSaved: false,
   completionFailed: false,
 }));
@@ -102,7 +101,6 @@ const writes = () => progress.report.mock.calls;
 
 beforeEach(() => {
   progress.report.mockReset();
-  progress.positionSaved = false;
   progress.completionSaved = false;
   progress.completionFailed = false;
   push.mockReset();
@@ -128,24 +126,20 @@ describe("leaving part way", () => {
 
   const LAST_SAVED = "You'll pick up from the last point that was saved.";
 
-  it.each([false, true])(
-    "never says the latest place is saved (D88), landed: %s",
-    (landed) => {
-      progress.positionSaved = landed;
-      render(<LessonPlayer lesson={LESSON} plan={null} live />);
+  it("never says the latest place is saved (D88)", () => {
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
 
-      fireEvent.click(screen.getByRole("button", { name: "Exit lesson" }));
+    fireEvent.click(screen.getByRole("button", { name: "Exit lesson" }));
 
-      expect(screen.queryByText(/progress is saved/i)).toBeNull();
-      expect(screen.queryByText(/pick up where you left off/i)).toBeNull();
-      // What is true either way: the last point that landed is where they
-      // come back to.
-      expect(screen.getByRole("heading", { name: LAST_SAVED })).toBeTruthy();
-      // And the two choices, exactly as they were.
-      expect(screen.getByRole("button", { name: "Keep learning" })).toBeTruthy();
-      expect(screen.getByRole("button", { name: "Leave for now" })).toBeTruthy();
-    },
-  );
+    expect(screen.queryByText(/progress is saved/i)).toBeNull();
+    expect(screen.queryByText(/pick up where you left off/i)).toBeNull();
+    // What is true whatever has landed: the last point that did is where they
+    // come back to.
+    expect(screen.getByRole("heading", { name: LAST_SAVED })).toBeTruthy();
+    // And the two choices, exactly as they were.
+    expect(screen.getByRole("button", { name: "Keep learning" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Leave for now" })).toBeTruthy();
+  });
 
   it.each([
     ["the signed-out walkthrough", {}],

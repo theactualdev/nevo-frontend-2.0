@@ -344,17 +344,6 @@ export default function LoginPage() {
     [done, checking, chosen, submit],
   );
 
-  /**
-   * "That's all of it" - the pad's return key, or Enter. Only ever four
-   * digits; anything shorter is a shape the server refuses before it looks at
-   * the PIN.
-   */
-  const submitTyped = useCallback(() => {
-    if (done || checking || !chosen || digits.length !== STUDENT_PIN_LENGTH)
-      return;
-    void submit(digits, chosen);
-  }, [done, checking, chosen, digits, submit]);
-
   const backspace = useCallback(() => {
     setError(null);
     setDigits((prev) => prev.slice(0, -1));
@@ -414,23 +403,20 @@ export default function LoginPage() {
    *
    * Its way back (D52) is to the picker, so the next child can get in.
    *
-   * A closed account is 28d, never on pause (D53, D116), and terminal: the
-   * frame draws no sign-in route on it.
+   * A closed account is 28d, never on pause (D53, D116), and terminal for the
+   * child: the frame draws no sign-in route on it. Its one line, "Someone else
+   * using this device?" (7 Oct), goes back to the same picker, for whoever is
+   * next.
    */
-  if (error === "closed") return <AccountClosedScreen />;
-  if (error === "paused") {
-    return (
-      <AccountOnPauseScreen
-        back={{
-          onBack: () => {
-            setError(null);
-            setDigits("");
-            setChosen(null);
-          },
-        }}
-      />
-    );
-  }
+  const toPicker = {
+    onBack: () => {
+      setError(null);
+      setDigits("");
+      setChosen(null);
+    },
+  };
+  if (error === "closed") return <AccountClosedScreen toPicker={toPicker} />;
+  if (error === "paused") return <AccountOnPauseScreen back={toPicker} />;
 
   const focusInput = () => inputRef.current?.focus();
 
@@ -497,14 +483,15 @@ export default function LoginPage() {
           addDigits(e.target.value);
           e.target.value = "";
         }}
+        /*
+          NO ENTER. The fourth digit sends the PIN, so there is never a
+          finished PIN waiting for a key to say so - the pad's check key went
+          for the same reason (D54, D58).
+        */
         onKeyDown={(e) => {
           if (e.key === "Backspace") {
             e.preventDefault();
             backspace();
-          }
-          if (e.key === "Enter") {
-            e.preventDefault();
-            submitTyped();
           }
         }}
         inputMode="none"
@@ -606,7 +593,6 @@ export default function LoginPage() {
             presentation="block"
             onKey={addDigits}
             onBackspace={backspace}
-            onDone={submitTyped}
             className="mt-[30px] lg:landscape:mt-6"
           />
 

@@ -102,3 +102,38 @@ describe("a new message not yet sent", () => {
     expect(leavingAsks()).toBe(true);
   });
 });
+
+describe("the student search (C10)", () => {
+  it("is named, not only placeholdered", () => {
+    classes({ live: true, options: [] });
+    render(<ComposeModal onClose={vi.fn()} onSend={vi.fn()} />);
+
+    expect(screen.getByLabelText("Search your students")).toHaveAttribute(
+      "placeholder",
+      "Search your students",
+    );
+  });
+});
+
+describe("two children of one name (T169)", () => {
+  it("are two rows, not one key fought over", () => {
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    classes({ live: true, options: [] });
+    useStudentDirectory.mockReturnValue({
+      students: [
+        { studentId: "s-1", name: "Amara Okafor", className: "Year 7 Blue", initials: "AO" },
+        { studentId: "s-2", name: "Amara Okafor", className: "Year 7 Blue", initials: "AO" },
+      ],
+      loading: false,
+      failed: false,
+      live: true,
+    });
+    render(<ComposeModal onClose={vi.fn()} onSend={vi.fn()} />);
+
+    expect(screen.getAllByText("Amara Okafor")).toHaveLength(2);
+    expect(
+      err.mock.calls.some((c) => String(c[0]).includes("same key")),
+    ).toBe(false);
+    err.mockRestore();
+  });
+});

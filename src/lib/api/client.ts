@@ -191,9 +191,12 @@ export function sessionExpiredDoor(
   /**
    * Where the person was when it ended, carried as `?next=` so signing back in
    * returns them there - IA 31: "Log back in -> Student Login Screen (lesson
-   * position preserved)". The learner door only, and only a student route: the
-   * staff doors' sign-in links do not read it, and anything else is not a
-   * place the child's door should send them.
+   * position preserved)". Each door takes only its own console's routes, so
+   * nothing else can be a place it sends anyone.
+   *
+   * THE TEACHER DOOR TOO (T217). Its screen promises "continue where you left
+   * off" and then lost the place: the next was dropped here and nothing read
+   * it there. The admin door's sign-in still reads no `next`, so it gets none.
    */
   from?: string | null,
 ): string {
@@ -205,8 +208,9 @@ export function sessionExpiredDoor(
         : "/auth/session-expired";
   const query = [
     code ? `reason=${encodeURIComponent(code)}` : null,
-    base === "/auth/session-expired" && from?.startsWith("/student")
-      ? `next=${encodeURIComponent(from)}`
+    (base === "/auth/session-expired" && from?.startsWith("/student")) ||
+    (base === "/auth/teacher/session-expired" && from?.startsWith("/teacher/"))
+      ? `next=${encodeURIComponent(from!)}`
       : null,
   ].filter(Boolean);
   return query.length ? `${base}?${query.join("&")}` : base;

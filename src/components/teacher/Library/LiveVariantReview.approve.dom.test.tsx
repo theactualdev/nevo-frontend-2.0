@@ -331,3 +331,86 @@ describe("the way on from the last approval", () => {
     expect(screen.queryByRole("link", { name: "Assign to classes" })).not.toBeInTheDocument();
   });
 });
+
+/**
+ * T58. The picture's sign-off line read the segment the page loaded with, so
+ * the teacher who had just approved it was told nobody had.
+ */
+describe("the picture's sign-off line", () => {
+  const PICTURE = { imageUrl: null, caption: "A leaf in cross-section", reviewedBy: null };
+  const visual = () => fireEvent.click(screen.getByRole("tab", { name: "Visual" }));
+
+  it("says nobody has signed it off while the section waits", () => {
+    show({ visualVariant: PICTURE as never });
+    visual();
+
+    expect(screen.getByText("No one has signed this picture off yet.")).toBeInTheDocument();
+  });
+
+  it("stops saying so the moment the teacher approves it", async () => {
+    show({ visualVariant: PICTURE as never });
+    visual();
+    fireEvent.click(screen.getByRole("button", { name: "Approve this section" }));
+
+    await screen.findByText("Approved");
+    expect(screen.queryByText("No one has signed this picture off yet.")).not.toBeInTheDocument();
+  });
+
+  it("does not say so of a section approved before the page opened", () => {
+    show({ approved: true, visualVariant: PICTURE as never });
+    visual();
+
+    expect(screen.queryByText("No one has signed this picture off yet.")).not.toBeInTheDocument();
+  });
+
+  it("still names who signed it off, when the server says", () => {
+    show({ approved: true, visualVariant: { ...PICTURE, reviewedBy: "Ms Bello" } as never });
+    visual();
+
+    expect(screen.getByText("Signed off by Ms Bello.")).toBeInTheDocument();
+  });
+});
+
+/**
+ * T54. One section per URL, and no way to the next but back to the lesson.
+ * C07b draws a pill per section.
+ */
+describe("the section pills", () => {
+  const pills = () => screen.getByRole("navigation", { name: "Sections" });
+
+  it("draws one per section, each its own address", () => {
+    show({}, 5);
+    const links = Array.from(pills().querySelectorAll("a"));
+
+    expect(links.map((a) => a.textContent)).toEqual([
+      "Section 1",
+      "Section 2",
+      "Section 3",
+      "Section 4",
+      "Section 5",
+    ]);
+    expect(links[3]).toHaveAttribute("href", "/teacher/lessons/l-1/variants?section=4");
+  });
+
+  it("marks this section as the current one, in the frame's filled pill", () => {
+    show({}, 5);
+    const here = screen.getByRole("link", { name: "Section 2" });
+
+    expect(here).toHaveAttribute("aria-current", "page");
+    expect(here.className).toMatch(/bg-nevo-navy/);
+  });
+
+  it("tints the sections before this one and leaves the rest plain", () => {
+    show({}, 5);
+
+    expect(screen.getByRole("link", { name: "Section 1" }).className).toMatch(/bg-nevo-violet\/12/);
+    expect(screen.getByRole("link", { name: "Section 3" }).className).toMatch(/bg-nevo-cream-elevated/);
+    expect(screen.getByRole("link", { name: "Section 3" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("draws none for a lesson of one section", () => {
+    show({}, 1);
+
+    expect(screen.queryByRole("navigation", { name: "Sections" })).not.toBeInTheDocument();
+  });
+});

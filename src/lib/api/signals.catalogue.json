@@ -181,11 +181,16 @@
   },
   {
     "eventType": "modality_switch_outcome",
-    "trigger": "Sent once the child has spent a full segment in the new modality, so there is something to compare. One per switch, from the client that made the switch. Ask B38.",
+    "trigger": "Sent once when the next segment entered in the new modality is left or completed. That entry-to-exit interval is a full segment; it has no minimum number of seconds. One per switch. Ask B38.",
     "payload": [
-      "from",
-      "to",
-      "outcome"
+      "segmentId",
+      "[from]",
+      "[to]",
+      "[outcome: better|worse|no_change]",
+      "[modality]",
+      "[comprehensionScore]",
+      "[engagementScore]",
+      "[timeOnSegment]"
     ],
     "serverWritten": false
   },

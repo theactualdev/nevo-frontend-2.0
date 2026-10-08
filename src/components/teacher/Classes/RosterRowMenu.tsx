@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { studentsApi } from "@/lib/api/students";
 import { accountStatus } from "@/lib/constants/accountStatus";
 import { cn } from "@/lib/utils";
@@ -173,12 +174,16 @@ export function PinClearedDialog({
     return () => window.removeEventListener("keydown", onKey);
   }, [onDone]);
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogRef);
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-nevo-near-black/28 p-10 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-nevo-near-black/28 backdrop-blur-[1.5px] p-10 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
       onClick={onDone}
     >
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label={`${firstName}${"’"}s PIN is cleared`}

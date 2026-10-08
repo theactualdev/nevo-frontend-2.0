@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
 import { useStudentDirectory } from "@/hooks/useStudentDirectory";
 import { useHasSession } from "@/hooks/useHasSession";
@@ -198,12 +199,16 @@ export function ComposeModal({
   };
 
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogRef);
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-nevo-near-black/28 backdrop-blur-[1.5px] p-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
       onClick={() => phase === "form" && onClose()}
     >
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label="New message"
@@ -328,6 +333,7 @@ export function ComposeModal({
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder="Search your students"
+                    aria-label="Search your students"
                     className="h-12 w-full rounded-[10px] border-[1.5px] border-nevo-near-black/14 bg-nevo-cream-elevated pr-4 pl-[42px] text-[15px] text-nevo-near-black outline-none transition-colors focus:border-nevo-navy"
                   />
                 </div>
@@ -357,7 +363,11 @@ export function ComposeModal({
                 <div className="mt-3.5 max-h-[300px] overflow-y-auto">
                   {shown.map((s) => (
                     <button
-                      key={s.name}
+                      // By who, not what they are called (T169): two Amaras
+                      // shared a key, and React drew one where there were two.
+                      // With the class, because the directory lists a child
+                      // once per class they are in.
+                      key={`${s.studentId ?? s.name}:${s.className}`}
                       type="button"
                       onClick={() => setChosen(s)}
                       className="flex w-full cursor-pointer items-center gap-[13px] rounded-[10px] px-2 py-[11px] text-left transition-colors hover:bg-nevo-navy/6"

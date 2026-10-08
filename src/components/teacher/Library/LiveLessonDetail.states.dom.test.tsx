@@ -291,6 +291,20 @@ describe("the section rows once a teacher has checked them", () => {
     expect(screen.queryByText("Worth a look")).not.toBeInTheDocument();
   });
 
+  it("numbers a flagged section as the list below does, from 1 (T51)", () => {
+    // `sequenceOrder` is the server's sort key and nothing says it starts at
+    // 1. The review list used it as the number, so a 0 read "Section 0" above
+    // "Section 1" for the same section in the list.
+    const FIRST = seg({ id: "s-0", sequenceOrder: 0, title: null, needsReview: true });
+    const SECOND = seg({ id: "s-9", sequenceOrder: 1, title: "Inside the leaf" });
+    sectionReview([FIRST], []);
+
+    showWith([SECOND, FIRST]);
+
+    expect(screen.queryByText("Section 0")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Section 1").length).toBeGreaterThanOrEqual(2);
+  });
+
   it("marks only the section that is still waiting", () => {
     sectionReview([FLAGGED_B], ["s-1"]);
 

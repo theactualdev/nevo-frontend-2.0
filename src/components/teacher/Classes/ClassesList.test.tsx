@@ -299,3 +299,22 @@ describe("the class code on a live class card", () => {
     expect(screen.queryByText(/Class code/)).not.toBeInTheDocument();
   });
 });
+
+describe("its title (C20)", () => {
+  it("is the screen's one h1", () => {
+    useTeacherClasses.mockReturnValue(state({ loading: false }));
+    render(<ClassesList />);
+
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("My Classes");
+  });
+
+  it("is the empty state's sentence when there are no classes yet", () => {
+    useTeacherClasses.mockReturnValue(state({ loading: false, classes: [] }));
+    render(<ClassesList />);
+
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      "Your classes will appear here once assigned",
+    );
+  });
+});

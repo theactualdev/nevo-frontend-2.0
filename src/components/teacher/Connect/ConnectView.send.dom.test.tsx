@@ -144,3 +144,34 @@ describe("a reply not yet sent", () => {
     expect(leavingAsks()).toBe(true);
   });
 });
+
+/**
+ * T162. The picker knows who the message is to; the new thread was titled
+ * with the send response's AUTHOR - the teacher - because nothing passed it on.
+ */
+describe("a message started from New message", () => {
+  it("hands on who it is to, so the new thread is theirs", async () => {
+    send.mockResolvedValue("t-new");
+    useStudentDirectory.mockReturnValue({
+      students: [{ studentId: "s-2", name: "Tunde Bello", className: "Year 7 Blue", initials: "TB" }],
+      loading: false,
+      failed: false,
+      live: true,
+    });
+    render(<ConnectView />);
+    fireEvent.click(screen.getAllByRole("button", { name: /new message/i })[0]);
+    fireEvent.click(screen.getByRole("button", { name: /Tunde Bello/ }));
+    fireEvent.change(screen.getAllByPlaceholderText("Write your message…").at(-1)!, {
+      target: { value: "Well done on the quiz." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+
+    await waitFor(() =>
+      expect(send).toHaveBeenCalledWith(
+        { recipientId: "s-2", recipientType: "student" },
+        "Well done on the quiz.",
+        { name: "Tunde Bello", className: "Year 7 Blue" },
+      ),
+    );
+  });
+});

@@ -87,6 +87,19 @@ export const SIGNAL_EVENT_TYPES = {
   MODALITY_SUGGESTION_ACCEPTED: "modality_suggestion_accepted",
   MODALITY_SUGGESTION_DECLINED: "modality_suggestion_declined",
   MODALITY_SUGGESTION_IGNORED: "modality_suggestion_ignored",
+  /*
+   * DECLARED IN THE CATALOGUE AND DELIBERATELY NOT SENT (audit 38, 7 Oct):
+   * - `modality_switch_outcome`. Its trigger is the next segment ENTERED in
+   *   the new modality, and this player applies a switch to the segment on
+   *   screen only: the next one opens in the modality the plan names. Which
+   *   exit sends it is asked of backend. Its `outcome` (better, worse, no
+   *   change) and its two scores are judgements the client may not make
+   *   (rule 3).
+   * - `modality_manual_switch`. A child has no way to change modality
+   *   themselves; the frames draw only the engine's offer (17 §C).
+   * - `engagement_signal`. Its `indicator` has no vocabulary, and every
+   *   reading this client takes has a named type of its own.
+   */
   BREAK_SUGGESTED: "break_suggested",
   BREAK_TAKEN: "break_taken",
   BREAK_DECLINED: "break_declined",
