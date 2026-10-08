@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { useAccommodations } from "./useAccommodations";
+import { useAccommodations, useAccommodationsState } from "./useAccommodations";
 import { ApiError } from "@/lib/api/client";
 import { clearSession, setSession } from "@/lib/auth/session";
 
@@ -25,8 +25,9 @@ import { clearSession, setSession } from "@/lib/auth/session";
  *
  * THE READ IS THE SESSION-START STATE (B24, audit 50): one answer, from one
  * moment, carrying the accommodations beside the engine's configuration and
- * the consent state. A refusal of a child's own token must still leave them
- * with what they get today - never a crash, and never an accommodation we
+ * the consent state. That route is not yet confirmed for a child's own token,
+ * so any failure but a dead session falls back to the confirmed accommodations
+ * route (B22) - never a crash, never a lost accommodation, and never one we
  * made up.
  */
 
@@ -44,6 +45,16 @@ vi.mock("@/lib/api/intelligence", async (importOriginal) => {
     ...actual,
     intelligenceApi: { ...actual.intelligenceApi, sessionState },
   };
+});
+
+/** The confirmed route's answer (B22), the fallback. */
+const fallback = (active: string[]) => ({
+  studentId: "student-1",
+  activeAccommodations: active,
+  frontendSignals: [],
+  signals: [],
+  source: "engine",
+  persistedAsLabel: false,
 });
 
 const answer = (active?: string[]) => ({
@@ -135,14 +146,15 @@ describe("useAccommodations", () => {
     expect(result.current?.attention).toBe(true);
   });
 
-  it("does not invent an accommodation when the read fails", async () => {
+  it("does not invent an accommodation when both reads fail", async () => {
     // A network error is not evidence that a child was granted anything.
     signIn();
     sessionState.mockRejectedValue(new ApiError(0, "Network"));
+    accommodations.mockRejectedValue(new ApiError(0, "Network"));
 
     const { result } = renderHook(() => useAccommodations());
 
-    await waitFor(() => expect(sessionState).toHaveBeenCalled());
+    await waitFor(() => expect(accommodations).toHaveBeenCalled());
     await settle();
 
     expect(result.current).toBeNull();
@@ -175,21 +187,68 @@ describe("useAccommodations", () => {
     });
   });
 
-  it("survives a child's own token being refused", async () => {
+  it("falls back to the confirmed route when a child's own token is refused", async () => {
     /*
-     * A 403 here is a scope refusal, not a dead session — only a 401 reaches
-     * `handleAuthFailure`. So this must degrade to today's behaviour and must
-     * not take the child's lesson down with it.
+     * The session-state route is not yet confirmed for a child's own token;
+     * the accommodations route is (B22). A 403 is a scope refusal, not a dead
+     * session, and must not cost the child their accommodation.
      */
     signIn();
     sessionState.mockRejectedValue(new ApiError(403, "Forbidden"));
+    accommodations.mockResolvedValue(fallback(["reading"]));
+
+    const { result } = renderHook(() => useAccommodations());
+
+    await waitFor(() => expect(result.current).not.toBeNull());
+    expect(result.current?.reading).toBe(true);
+    expect(accommodations).toHaveBeenCalledWith("student-1");
+  });
+
+  it.each([
+    ["missing", 404],
+    ["rejected", 422],
+    ["a server failure", 503],
+    ["the network", 0],
+  ])("falls back on %s too", async (_, status) => {
+    signIn();
+    sessionState.mockRejectedValue(new ApiError(status, "no"));
+    accommodations.mockResolvedValue(fallback(["attention"]));
+
+    const { result } = renderHook(() => useAccommodations());
+
+    await waitFor(() => expect(result.current?.attention).toBe(true));
+  });
+
+  it("leaves a dead session to the client, and asks nothing more", async () => {
+    // A 401 is `handleAuthFailure`'s; there is no child left to read for.
+    signIn();
+    sessionState.mockRejectedValue(new ApiError(401, "Unauthorized"));
 
     const { result } = renderHook(() => useAccommodations());
 
     await waitFor(() => expect(sessionState).toHaveBeenCalled());
     await settle();
 
+    expect(accommodations).not.toHaveBeenCalled();
     expect(result.current).toBeNull();
+  });
+
+  it("keeps the first frame waiting for the fallback's answer (rule 6)", async () => {
+    signIn();
+    sessionState.mockRejectedValue(new ApiError(403, "Forbidden"));
+    let land: (v: unknown) => void = () => {};
+    accommodations.mockReturnValue(new Promise((resolve) => (land = resolve)));
+
+    const { result } = renderHook(() => useAccommodationsState());
+
+    await waitFor(() => expect(accommodations).toHaveBeenCalled());
+    await settle();
+    expect(result.current.settled).toBe(false);
+
+    await act(async () => land(fallback(["reading"])));
+
+    expect(result.current.settled).toBe(true);
+    expect(result.current.active?.reading).toBe(true);
   });
 
   it("does not ask on behalf of a signed-out visitor", async () => {

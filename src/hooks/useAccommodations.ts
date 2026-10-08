@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ApiError } from "@/lib/api/client";
 import { intelligenceApi } from "@/lib/api/intelligence";
-import type { AccommodationType } from "@/lib/api/students";
+import { studentsApi, type AccommodationType } from "@/lib/api/students";
 import { getSession } from "@/lib/auth/session";
 import { useHasSession } from "./useHasSession";
 
@@ -28,9 +29,16 @@ export interface ActiveAccommodations {
  * carries no accommodation field, so these come from
  * `GET /api/session/state/{id}`: the one read frontend §1 and §4 specify for
  * the start of a lesson, which carries the accommodations, the engine's
- * configuration and the consent state from one moment. It replaces the
- * separate `/api/intelligence/accommodations` read, which the teacher's and
- * SENCo's screens still use for the evidence behind each one.
+ * configuration and the consent state from one moment.
+ *
+ * WITH THE CONFIRMED ROUTE BEHIND IT. Backend confirmed a child may read
+ * their own `/api/intelligence/accommodations/{id}` (B22); this route is not
+ * confirmed yet. So when the session-state read fails for any reason but a
+ * dead session - refused, missing, rejected, the server or the network - the
+ * accommodations are read from there instead, and the first frame waits for
+ * that answer too. A child is never left without an accommodation because a
+ * newer route turned them away. A 401 is the client's to handle
+ * (`handleAuthFailure`), and there is no child left to read for.
  *
  * ONLY THE ACCOMMODATIONS ARE APPLIED. The engine configuration it carries is
  * the engine's own parameters, and the contract does not say what any of them
@@ -44,12 +52,8 @@ export interface ActiveAccommodations {
  * provision. An accommodation is a claim that Nevo is doing something for a
  * particular child, and a failed read is not evidence for it.
  *
- * A CHILD READS THEIR OWN. Backend answered this for the accommodations
- * route (B22): a student's own token on their own id is allowed, and the
- * guard refuses only a student reading another. This route takes the id the
- * same way; that it shares the guard is asked of backend. Refused all the
- * same, the read fails closed like any other failure - a 403 is an ordinary
- * `ApiError` here; only a 401 reaches `handleAuthFailure`.
+ * Only when both reads fail is it none, which is what a failed read always
+ * meant here.
  */
 export function useAccommodations(): ActiveAccommodations | null {
   return useAccommodationsState().active;
@@ -89,22 +93,30 @@ export function useAccommodationsState(): {
     const studentId = getSession()?.userId;
     if (!studentId) return;
     let cancelled = false;
+    const apply = (list: readonly AccommodationType[] | undefined) => {
+      if (cancelled) return;
+      // Absent is none: the field is not in the schema's `required` list.
+      const on = new Set<AccommodationType>(list ?? []);
+      setActive({
+        reading: on.has("reading"),
+        attention: on.has("attention"),
+        numerical: on.has("numerical"),
+      });
+      setSettledFor(studentId);
+    };
+    // Deliberately silent and deliberately not an accommodation. See above.
+    const none = () => {
+      if (!cancelled) setSettledFor(studentId);
+    };
     void intelligenceApi
       .sessionState(studentId)
-      .then((res) => {
-        if (cancelled) return;
-        // Absent is none: the field is not in the schema's `required` list.
-        const on = new Set<AccommodationType>(res.accommodations ?? []);
-        setActive({
-          reading: on.has("reading"),
-          attention: on.has("attention"),
-          numerical: on.has("numerical"),
-        });
-        setSettledFor(studentId);
-      })
-      .catch(() => {
-        // Deliberately silent and deliberately not an accommodation. See above.
-        if (!cancelled) setSettledFor(studentId);
+      .then((res) => apply(res.accommodations))
+      .catch((err: unknown) => {
+        if (err instanceof ApiError && err.status === 401) return none();
+        return studentsApi
+          .accommodations(studentId)
+          .then((res) => apply(res.activeAccommodations))
+          .catch(none);
       });
     return () => {
       cancelled = true;
