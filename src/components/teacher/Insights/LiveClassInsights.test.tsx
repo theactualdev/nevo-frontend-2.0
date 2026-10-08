@@ -150,7 +150,11 @@ describe("LiveClassInsights - telling the three states apart", () => {
     expect(screen.queryByText(/Still gathering/)).not.toBeInTheDocument();
   });
 
-  it("says nothing about a missing summary when the sections have content", () => {
+  it("says the summary is missing over real sections too (T158)", () => {
+    // It said nothing here, so the summary - the section a teacher reads
+    // first - went missing without a word whenever anything else had loaded.
+    // A failed read is not an empty one; rule 5's nothing-state is for the
+    // second.
     useClassInsights.mockReturnValue(
       state({
         narrativeFailed: true,
@@ -161,7 +165,41 @@ describe("LiveClassInsights - telling the three states apart", () => {
     );
     render(<LiveClassInsights {...CLASS} />);
 
+    expect(screen.getByText(/couldn’t load this week’s summary/i)).toBeInTheDocument();
+    expect(screen.getByText("Stopped halfway")).toBeInTheDocument();
+  });
+
+  it("says nothing of a summary that did arrive", () => {
+    useClassInsights.mockReturnValue(
+      state({ summary: "Eight students slowed on the same step." }),
+    );
+    render(<LiveClassInsights {...CLASS} />);
+
     expect(screen.queryByText(/couldn’t load this week’s summary/i)).not.toBeInTheDocument();
+  });
+
+  it("says a failed sticking-point read failed, under its own label (T158)", () => {
+    useClassInsights.mockReturnValue(
+      state({
+        flags: [{ id: "f1", name: "Amara", note: "Stopped halfway", isSudden: false }],
+        sectionFailed: { misconceptions: true, mastery: false, flags: false },
+      }),
+    );
+    render(<LiveClassInsights {...CLASS} />);
+
+    expect(screen.getByText("A shared sticking point")).toBeInTheDocument();
+    expect(screen.getAllByText(/couldn’t load this just now/).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("gives a flag card C09's chevron, as the sample cards have (T152)", () => {
+    useClassInsights.mockReturnValue(
+      state({ flags: [{ id: "f1", name: "Amara", studentId: "s-1", note: "Stopped halfway", isSudden: false }] }),
+    );
+    const { container } = render(<LiveClassInsights {...CLASS} />);
+
+    const card = screen.getByRole("link", { name: /Amara/ });
+    expect(card.querySelector("[data-chevron] svg")).not.toBeNull();
+    expect(container.querySelectorAll("[data-chevron]")).toHaveLength(1);
   });
 
   it("prefers the failure message when everything failed", () => {

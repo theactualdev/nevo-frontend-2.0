@@ -34,6 +34,13 @@ import { cn } from "@/lib/utils";
 const SECTION_H =
   "mt-[26px] text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase xl:mt-[34px] xl:text-sm";
 
+/** C09's card chevron - desktop-only in the frame, as on the sample cards. */
+const CHEVRON = (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M9 6l6 6-6 6" />
+  </svg>
+);
+
 const DROP_GLYPH = (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
     <path d="M12 5v9" />
@@ -123,9 +130,6 @@ export function LiveClassInsights({
     );
   }
 
-  const nothingElse =
-    misconceptions.length === 0 && concepts.length === 0 && flags.length === 0;
-
   const lead = [...misconceptions].sort(
     (a, b) => b.studentCount - a.studentCount,
   )[0];
@@ -155,7 +159,10 @@ export function LiveClassInsights({
       {/* The written week failed on its own, and the sections below it did
           not. Saying nothing would let an empty screen read as a quiet
           class, which is the claim this hook exists to stop making. */}
-      {narrativeFailed && nothingElse && (
+      {/* AND WHEN THEY DID NOT (T158). This spoke only over an empty screen,
+          so a failed summary above real sections simply went missing - the
+          section a teacher reads first, gone without a word. */}
+      {narrativeFailed && (
         <p className="mt-[18px] max-w-[660px] text-[14.5px] leading-[1.55] text-nevo-near-black/68">
           {`We couldn${"\u2019"}t load this week${"\u2019"}s summary for ${className}. Nothing has changed for the class - you can try again in a moment.`}
         </p>
@@ -176,6 +183,18 @@ export function LiveClassInsights({
             {`${lead.studentCount} ${lead.studentCount === 1 ? "student" : "students"} · ${lead.pattern}`}
           </p>
         </div>
+      )}
+
+      {/* A FAILED READ OF THE STICKING POINTS SAID NOTHING (T158), where the
+          flags and mastery sections each say so under their own heading. The
+          frame's own label for this section, and the same line as theirs. */}
+      {misconceptions.length === 0 && sectionFailed.misconceptions && (
+        <>
+          <h3 className={SECTION_H}>A shared sticking point</h3>
+          <p className="mt-3 max-w-[660px] text-[14.5px] leading-[1.55] text-nevo-near-black/68">
+            {sectionFailedLine}
+          </p>
+        </>
       )}
 
       {misconceptions.length > 1 && (
@@ -220,7 +239,7 @@ export function LiveClassInsights({
                 key={f.id}
                 href={`/teacher/students/${f.studentId}`}
                 className={cn(
-                  "relative block cursor-pointer rounded-[12px] bg-nevo-cream-elevated py-4 pr-[18px] pl-[22px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-[filter] hover:brightness-[0.985]",
+                  "relative flex cursor-pointer gap-3.5 rounded-[12px] bg-nevo-cream-elevated py-4 pr-[18px] pl-[22px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-[filter] hover:brightness-[0.985] xl:gap-4",
                 )}
               >
                 <span
@@ -229,19 +248,29 @@ export function LiveClassInsights({
                     f.isSudden ? "bg-nevo-navy" : "bg-nevo-violet",
                   )}
                 />
-                <div className="flex items-center gap-2">
-                  {f.isSudden && (
-                    <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-nevo-navy text-nevo-cream">
-                      {DROP_GLYPH}
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-2">
+                    {f.isSudden && (
+                      <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-nevo-navy text-nevo-cream">
+                        {DROP_GLYPH}
+                      </span>
+                    )}
+                    <span className="text-[15px] font-semibold text-nevo-near-black">
+                      {f.name ?? "One of your students"}
                     </span>
-                  )}
-                  <span className="text-[15px] font-semibold text-nevo-near-black">
-                    {f.name ?? "One of your students"}
                   </span>
-                </div>
-                <p className="mt-1.5 text-[14.5px] leading-[1.5] text-nevo-near-black/78">
-                  {f.note}
-                </p>
+                  <span className="mt-1.5 block text-[14.5px] leading-[1.5] text-nevo-near-black/78">
+                    {f.note}
+                  </span>
+                </span>
+                {/* C09's chevron (T152): the card opens the student, and the
+                    live one was the only one that did not say so. */}
+                <span
+                  data-chevron
+                  className="hidden shrink-0 self-center text-nevo-near-black/40 xl:block"
+                >
+                  {CHEVRON}
+                </span>
               </Link>
             ))}
           </div>

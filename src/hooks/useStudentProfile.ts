@@ -78,7 +78,16 @@ export function helpSeekingLine(
   const times = `${ev.interactionCount} ${ev.interactionCount === 1 ? "time" : "times"}`;
   const ranked = Object.entries(ev.categories ?? {}).sort((a, b) => b[1] - a[1]);
   const clear = ranked.length > 0 && (ranked.length === 1 || ranked[0][1] > ranked[1][1]);
-  const tail = clear ? `, mostly about ${ranked[0][0]}` : "";
+  /*
+   * A CODE IS NOT A TOPIC (T142). The categories are an untyped map, and the
+   * one vocabulary on the contract near them is Ask Nevo's own tokens -
+   * `lesson_help`, `class_planning` - so this could tell a teacher a child
+   * asked "mostly about lesson_help". A key with an underscore is a code, and
+   * the line stops before it rather than printing it or guessing its words.
+   * The words for each are a backend/design ask.
+   */
+  const readable = clear && !ranked[0][0].includes("_");
+  const tail = readable ? `, mostly about ${ranked[0][0]}` : "";
   return `Asked Nevo for help ${times} ${period}${tail}.`;
 }
 

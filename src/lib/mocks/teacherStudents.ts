@@ -344,9 +344,11 @@ export function getStudentProfile(slug: string): StudentProfileData | null {
     classId: klass.id,
     className: klass.name,
     meta: `${klass.name} · joined 6 days ago`,
-    // Opening clause deleted: "Still learning how X learns best" is the same
-    // modality framing in a hedge, and a hedge does not stop it being a claim.
-    earlyNote: `A few more sessions and this will fill in - for now, here's the early picture.`,
+    // C08's own sentence (T128). "Still learning how X learns best" was cut
+    // as modality framing in a hedge; the frame's opener since is about the
+    // WORK, not how a child learns, and the note read as half a thought
+    // without it.
+    earlyNote: `Still getting a picture of ${student.name.split(" ")[0]}'s work. A few more sessions and this will fill in - for now, here's the early picture.`,
     observations: EARLY_OBSERVATIONS,
     concepts: [],
     evidence: [],
