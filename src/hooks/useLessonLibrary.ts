@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { lessonsApi, type LessonSummary, type LessonSourceType } from "@/lib/api/lessons";
 import { useLiveQuery } from "./useLiveQuery";
 import { LIBRARY_LESSONS } from "@/lib/mocks/teacherLibrary";
@@ -266,6 +266,9 @@ export interface LessonLibraryState {
   capped: boolean;
 }
 
+/** How often to look again while a lesson is still being read. */
+const PARSING_REREAD_MS = 10_000;
+
 export function useLessonLibrary(): LessonLibraryState {
   /*
    * THE MOST THE ENDPOINT WILL RETURN. No limit meant its default of 50, so
@@ -274,7 +277,29 @@ export function useLessonLibrary(): LessonLibraryState {
    * so, and "N lessons matching" quietly a floor.
    */
   const run = useCallback(() => lessonsApi.list({ limit: LIBRARY_LIMIT }), []);
-  const { data, failed, slow, loading } = useLiveQuery<LessonSummary[]>(run, []);
+  const { data, failed, slow, loading, refresh } = useLiveQuery<LessonSummary[]>(run, []);
+
+  /*
+   * A PARSING CARD THAT NEVER FINISHED (C06). "Processing your lesson... It
+   * will appear here when it's done" - and the library was read once, so it
+   * never appeared until the teacher reloaded. While any lesson is still being
+   * read, read the library again every little while, and as soon as the tab
+   * is looked at again. Nothing parsing, nothing asked.
+   */
+  const parsing =
+    data?.some((l) => l.status === "pending" || l.status === "processing") ?? false;
+  useEffect(() => {
+    if (!parsing) return;
+    const timer = setInterval(refresh, PARSING_REREAD_MS);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [parsing, refresh]);
 
   if (data === null) {
     return {

@@ -1,16 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 
-const { detail, modules, list } = vi.hoisted(() => ({
+const { detail, list } = vi.hoisted(() => ({
   detail: vi.fn(),
-  modules: vi.fn(),
   list: vi.fn(),
 }));
 vi.mock("@/lib/api/lessons", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/lessons")>();
   return {
     ...actual,
-    lessonsApi: { ...actual.lessonsApi, detail, modules, classProgress: vi.fn() },
+    lessonsApi: { ...actual.lessonsApi, detail, classProgress: vi.fn() },
   };
 });
 vi.mock("@/lib/api/assignments", async (importOriginal) => {
@@ -42,7 +41,6 @@ beforeEach(() => {
     role: "teacher",
   });
   detail.mockReset().mockResolvedValue(LESSON);
-  modules.mockReset().mockResolvedValue([]);
   list.mockReset().mockResolvedValue([]);
 });
 
@@ -95,5 +93,41 @@ describe("who has this lesson", () => {
 
     await waitFor(() => expect(result.current.lesson).not.toBeNull());
     expect(result.current.failed).toBe(false);
+  });
+});
+
+/**
+ * T52. The modules are on the lesson already - `modules` is required on the
+ * response both detail routes return - and the whole lesson was read a second
+ * time to get them.
+ */
+describe("a lesson's modules", () => {
+  it("come from the lesson it read, in their order", async () => {
+    detail.mockResolvedValue({
+      ...LESSON,
+      modules: [
+        { id: "m-2", title: "Second", sequenceOrder: 2, segmentIds: [] },
+        { id: "m-1", title: "First", sequenceOrder: 1, segmentIds: [] },
+      ],
+    });
+    const { result } = renderHook(() => useLessonDetail("l-1"));
+
+    await waitFor(() => expect(result.current.modules).toHaveLength(2));
+    expect(result.current.modules.map((m) => m.id)).toEqual(["m-1", "m-2"]);
+  });
+
+  it("cost one read of the lesson, not two", async () => {
+    const { result } = renderHook(() => useLessonDetail("l-1"));
+
+    await waitFor(() => expect(result.current.lesson).not.toBeNull());
+    expect(detail).toHaveBeenCalledTimes(1);
+  });
+
+  it("are none, not a crash, from a deployment that sends none", async () => {
+    detail.mockResolvedValue({ ...LESSON });
+    const { result } = renderHook(() => useLessonDetail("l-1"));
+
+    await waitFor(() => expect(result.current.lesson).not.toBeNull());
+    expect(result.current.modules).toEqual([]);
   });
 });

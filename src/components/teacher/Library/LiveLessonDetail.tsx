@@ -651,7 +651,11 @@ export function LiveLessonDetail({
               <ReviewSection
                 key={s.id}
                 segment={s}
-                index={s.sequenceOrder}
+                // Its place in the lesson, counted from 1 as the section rows
+                // below count (T51). `sequenceOrder` is the server's sort key,
+                // and nothing says it starts at 1 - a 0 read "Section 0" here
+                // beside "Section 1" for the same section in the list.
+                index={segments.indexOf(s) + 1}
                 approved={sections.isApproved(s)}
                 approving={sections.approving === s.id}
                 failed={sections.failed === s.id}

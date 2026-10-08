@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getToken } from "@/lib/auth/session";
 import { useHasSession } from "./useHasSession";
 
@@ -32,6 +32,15 @@ export interface LiveQuery<T> {
   slow: boolean;
   /** Signed in, nothing yet, no failure - a skeleton belongs here. */
   loading: boolean;
+  /**
+   * Ask again (C06). What is on screen stays there while it does: a re-read
+   * that answers replaces it, one that fails changes nothing - a screen that
+   * had data keeps it rather than dropping to fixtures over a blip, and one
+   * that had failed is still failed. Every read here used to be once per
+   * page load, so a lesson still parsing said "it will appear here when it's
+   * done" and never did.
+   */
+  refresh: () => void;
 }
 
 /**
@@ -46,13 +55,26 @@ export function useLiveQuery<T>(
   const [failed, setFailed] = useState(false);
   const [slow, setSlow] = useState(false);
   const signedIn = useHasSession();
+  const [asked, setAsked] = useState(0);
+  /** The next run was asked for, rather than started by its deps changing. */
+  const again = useRef(false);
+  const refresh = useCallback(() => {
+    again.current = true;
+    setAsked((n) => n + 1);
+  }, []);
 
   useEffect(() => {
     if (!getToken()) return;
     let cancelled = false;
-    const timer = setTimeout(() => {
-      if (!cancelled) setSlow(true);
-    }, SLOW_AFTER_MS);
+    const reread = again.current;
+    again.current = false;
+    // A re-read has something on screen already; "taking a moment" is for
+    // the first answer.
+    const timer = reread
+      ? null
+      : setTimeout(() => {
+          if (!cancelled) setSlow(true);
+        }, SLOW_AFTER_MS);
 
     void run()
       .then((res) => {
@@ -62,16 +84,24 @@ export function useLiveQuery<T>(
         setSlow(false);
       })
       .catch(() => {
-        if (!cancelled) setFailed(true);
+        if (!cancelled && !reread) setFailed(true);
       })
-      .finally(() => clearTimeout(timer));
+      .finally(() => {
+        if (timer) clearTimeout(timer);
+      });
 
     return () => {
       cancelled = true;
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
+  }, [...deps, asked]);
 
-  return { data, failed, slow, loading: signedIn && data === null && !failed };
+  return {
+    data,
+    failed,
+    slow,
+    loading: signedIn && data === null && !failed,
+    refresh,
+  };
 }

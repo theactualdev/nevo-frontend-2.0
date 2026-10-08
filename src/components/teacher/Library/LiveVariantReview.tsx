@@ -99,9 +99,12 @@ function Para({ children }: { children: React.ReactNode }) {
 function VariantBody({
   tab,
   segment,
+  approved,
 }: {
   tab: VariantTab;
   segment: LessonSegment;
+  /** This section has been approved, here or before this screen opened. */
+  approved: boolean;
 }) {
   if (tab === "Text") {
     const v = segment.textVariant;
@@ -150,12 +153,20 @@ function VariantBody({
         )}
         {v.caption && <Para>{v.caption}</Para>}
         {/* The frame draws no sign-off line, but "reviewed by nobody" is the
-            thing a reviewer most wants to know on a review screen. */}
-        <p className="text-[12.5px] text-nevo-near-black/55">
-          {v.reviewedBy
-            ? `Signed off by ${v.reviewedBy}.`
-            : "No one has signed this picture off yet."}
-        </p>
+            thing a reviewer most wants to know on a review screen.
+
+            NOT ONCE IT IS APPROVED (T58). The segment this reads is the one
+            the page loaded with, so a teacher who had just approved the
+            section was told, under their own approval, that nobody had
+            signed the picture off. The name is the server's to give; until
+            it does, an approved section claims nothing either way. */}
+        {(v.reviewedBy || !approved) && (
+          <p className="text-[12.5px] text-nevo-near-black/55">
+            {v.reviewedBy
+              ? `Signed off by ${v.reviewedBy}.`
+              : "No one has signed this picture off yet."}
+          </p>
+        )}
       </div>
     );
   }
@@ -462,7 +473,7 @@ export function LiveVariantReview({
             {`${tab} variant`}
           </h3>
           <div className="mt-3">
-            <VariantBody tab={tab} segment={segment} />
+            <VariantBody tab={tab} segment={segment} approved={approved} />
           </div>
         </div>
 
@@ -528,6 +539,37 @@ export function LiveVariantReview({
           <p className="mt-2.5 text-right text-[13px] leading-[1.5] text-nevo-near-black/72">
             {error}
           </p>
+        )}
+
+        {/*
+          C07b'S SECTION PILLS (T54). Each section was its own URL with no way
+          to the next one but back to the lesson and down the list - six
+          sections, six round trips. The frame draws a pill per section under
+          the review: this one filled, the ones before it tinted, the rest
+          plain. Links rather than buttons, because each is still its own
+          address and the back button should walk them. "Section", as this
+          screen says everywhere else, where the frame says "Segment".
+        */}
+        {segmentCount !== undefined && segmentCount > 1 && (
+          <nav aria-label="Sections" className="mt-4 flex flex-wrap gap-2">
+            {Array.from({ length: segmentCount }, (_, i) => i + 1).map((n) => (
+              <Link
+                key={n}
+                href={`/teacher/lessons/${lessonId}/variants?section=${n}`}
+                aria-current={n === sectionIndex ? "page" : undefined}
+                className={cn(
+                  "inline-flex h-8 cursor-pointer items-center rounded-full px-3.5 text-[12px] transition-[filter]",
+                  n === sectionIndex
+                    ? "bg-nevo-navy font-semibold text-nevo-cream"
+                    : n < sectionIndex
+                      ? "bg-nevo-violet/12 font-medium text-nevo-navy hover:brightness-95"
+                      : "bg-nevo-cream-elevated font-normal text-nevo-near-black/70 hover:brightness-95",
+                )}
+              >
+                {`Section ${n}`}
+              </Link>
+            ))}
+          </nav>
         )}
       </div>
     </div>
