@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Delete } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type KeyboardLayout = "qwerty" | "pad";
+export type KeyboardLayout = "qwerty" | "pad" | "calc";
 export type KeyboardComposer = "single" | "multi";
 
 /** Handoff: dock the keyboard behind focus state, debouncing blur ~120ms. */
@@ -46,13 +46,13 @@ export function useNevoKeyboardDock() {
 /**
  * Nevo Keyboard (design frame · "Nevo Keyboard") — the branded on-screen keyboard
  * used wherever the app suppresses the native OS keyboard on web (Product Arch
- * A.12): onboarding text entry and PIN. Not the calculation's number entry,
- * which takes the device's numeric keyboard as the solver frame draws it -
- * this pad has no minus sign or decimal point (audit 51). Two layouts —
- * `pad` (3×4 numeric) and `qwerty` — sized for mobile (default) and tablet (md+).
+ * A.12): onboarding text entry, PIN, and the calculation's number entry. Three
+ * layouts — `pad` (3×4 numeric), `qwerty`, and `calc` (D150, below) — sized
+ * for mobile (default) and tablet (md+).
  *
  * Presentational only: it emits key presses; the host owns the field state, so
- * the same physical-keyboard path keeps working on desktop (where this is hidden).
+ * the same physical-keyboard path keeps working on desktop (where every layout
+ * but `calc` is hidden).
  * Chrome tones (`#e4ddcc` tray, `#d8d0be` modifier keys) are keyboard-specific,
  * not DS surface tokens.
  */
@@ -98,8 +98,14 @@ export function NevoKeyboard({
   value,
   placeholder = "Type here",
   className,
-}: {
-  layout: KeyboardLayout;
+}: (
+  | { layout: Exclude<KeyboardLayout, "calc">; onBackspace: () => void }
+  /**
+   * The calculation pad has no delete key: "Delete sits at the field" (D150),
+   * so the host's field deletes, and nothing here can be wired to do it.
+   */
+  | { layout: "calc"; onBackspace?: never }
+) & {
   /**
    * How the keys sit on the screen.
    *
@@ -116,9 +122,8 @@ export function NevoKeyboard({
    * form, and the type says so.
    */
   presentation?: KeyboardPresentation;
-  /** A character key was pressed (letter, digit, or " "). */
+  /** A character key was pressed (letter, digit, "-", "." or " "). */
   onKey: (char: string) => void;
-  onBackspace: () => void;
   /**
    * The accent "return" key (qwerty only). In `multi` it inserts a newline.
    *
@@ -151,6 +156,25 @@ export function NevoKeyboard({
    */
   const [caps, setCaps] = useState(true);
   const [numeric, setNumeric] = useState(false);
+
+  if (layout === "calc") {
+    /*
+     * SHOWN WHATEVER THE POINTER, unlike every other layout. D150 draws this
+     * pad at desktop as well as on a phone and a tablet, at its own sizes, so
+     * it does not take the `pointer: fine` gate. A laptop's own keys still
+     * type into the host's field; the pad is there beside them.
+     */
+    return (
+      <div
+        role="group"
+        aria-label="On-screen keyboard"
+        onMouseDown={(e) => e.preventDefault()}
+        className={cn("flex flex-col", className)}
+      >
+        <CalcLayout onKey={onKey} />
+      </div>
+    );
+  }
 
   const isMulti = composer === "multi";
   const hasVal = Boolean(value && value.length > 0);
@@ -389,6 +413,84 @@ function PadLayout({
         }
         return <Key key={i} label={d} onClick={() => onKey(d)} />;
       })}
+    </div>
+  );
+}
+
+/* ── calc (D150) ────────────────────────────────────────────────────────── */
+
+/**
+ * The calculation keypad (D150, "Nevo Calc Keypad Frame"): "The Nevo pad,
+ * with minus and decimal point." The device's own number keyboard cannot be
+ * relied on - an iPhone's has no minus key, so a child doing subtraction on
+ * one is simply stuck.
+ *
+ * "An input surface, not a calculator": the digits, and below them a minus
+ * sign and a point in the modifier tone. No equals, no operators, no delete
+ * key - delete sits at the field. The PIN pad (`pad`) never gains these keys.
+ *
+ * Sized as the frame's three variants, at the solver's own breakpoints: a
+ * full-width tray on a phone, then 460px (tablet) and 420px (desktop) with
+ * rounded top corners. Keys do not move when pressed; the frame draws none.
+ */
+const CALC_ROWS = [
+  ["1", "2", "3"],
+  ["4", "5", "6"],
+  ["7", "8", "9"],
+];
+
+const CALC_KEY =
+  "flex h-14 min-w-0 flex-1 cursor-pointer items-center justify-center rounded-lg text-nevo-near-black select-none sm:h-16 lg:h-[62px]";
+const CALC_DIGIT = cn(
+  CALC_KEY,
+  "bg-nevo-cream text-[24px] font-normal shadow-[0_1px_1px_rgba(43,43,47,0.28)] sm:text-[28px] lg:text-[27px]",
+);
+const CALC_SIGN = cn(
+  CALC_KEY,
+  "bg-[#d8d0be] text-[26px] font-medium shadow-[0_1px_1px_rgba(43,43,47,0.22)] sm:text-[30px] lg:text-[29px]",
+);
+const CALC_ROW = "flex justify-center gap-2 sm:gap-2.5";
+
+function CalcLayout({ onKey }: { onKey: (c: string) => void }) {
+  return (
+    <div className="mx-auto flex w-full flex-col gap-2.5 border-t border-nevo-near-black/8 bg-[#e4ddcc] px-2 pt-2 pb-3.5 sm:mb-2 sm:max-w-[460px] sm:gap-3 sm:rounded-t-[14px] sm:px-3.5 sm:pt-3.5 sm:pb-5 lg:max-w-[420px]">
+      {CALC_ROWS.map((row) => (
+        <div key={row[0]} className={CALC_ROW}>
+          {row.map((d) => (
+            <button
+              key={d}
+              type="button"
+              onClick={() => onKey(d)}
+              className={CALC_DIGIT}
+            >
+              {d}
+            </button>
+          ))}
+        </div>
+      ))}
+      <div className={CALC_ROW}>
+        {/* Drawn as the minus sign; what it types is the hyphen a stored
+            answer is written with. */}
+        <button
+          type="button"
+          aria-label="Minus sign"
+          onClick={() => onKey("-")}
+          className={CALC_SIGN}
+        >
+          {"\u2212"}
+        </button>
+        <button type="button" onClick={() => onKey("0")} className={CALC_DIGIT}>
+          0
+        </button>
+        <button
+          type="button"
+          aria-label="Point"
+          onClick={() => onKey(".")}
+          className={CALC_SIGN}
+        >
+          .
+        </button>
+      </div>
     </div>
   );
 }
