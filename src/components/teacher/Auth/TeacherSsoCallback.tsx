@@ -143,7 +143,7 @@ export function TeacherSsoCallback() {
   const retry = () => router.push("/auth/teacher");
 
   return (
-    <div className="flex w-full max-w-[440px] flex-col items-center px-10 text-center">
+    <div className="flex w-full max-w-none flex-col items-center px-10 text-center xl:max-w-[440px]">
       {shown === "signing-in" && (
         <>
           <span className="mb-7">

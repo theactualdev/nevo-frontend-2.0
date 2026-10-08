@@ -59,20 +59,20 @@ export function ClassesList() {
 
   if (classes.length === 0 && liveClasses.length === 0) {
     return (
-      <div className="flex flex-1 items-center justify-center p-12">
-        <div className="flex max-w-[400px] flex-col items-center text-center">
-          <div className="flex size-[88px] items-center justify-center rounded-[20px] bg-nevo-cream-elevated text-nevo-violet shadow-elevation-1">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <div className="flex flex-1 items-center justify-center p-10 xl:p-12">
+        <div className="flex max-w-[380px] flex-col items-center text-center xl:max-w-[400px]">
+          <div className="flex size-20 items-center justify-center rounded-[20px] bg-nevo-cream-elevated text-nevo-violet shadow-elevation-1 xl:size-[88px]">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-10">
               <circle cx="9" cy="8" r="3" />
               <path d="M2.5 20a6.5 6.5 0 0 1 13 0" />
               <path d="M17 6.5a3 3 0 0 1 0 6" />
               <path d="M18.5 20a6.5 6.5 0 0 0-3.2-5.6" />
             </svg>
           </div>
-          <h1 className="mt-[26px] text-[22px] font-semibold tracking-[-0.01em] text-nevo-near-black">
+          <h1 className="mt-6 text-[21px] font-semibold tracking-[-0.01em] text-nevo-near-black xl:mt-[26px] xl:text-[22px]">
             Your classes will appear here once assigned
           </h1>
-          <p className="mt-3 text-base leading-[1.6] text-nevo-near-black/66">
+          <p className="mt-[11px] text-[15.5px] leading-[1.6] text-nevo-near-black/66 xl:mt-3 xl:text-base">
             This usually happens before your first sign-in. If it&rsquo;s
             taking a while, your school admin can set it up.
           </p>

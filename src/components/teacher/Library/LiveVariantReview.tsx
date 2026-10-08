@@ -502,7 +502,7 @@ export function LiveVariantReview({
               type="button"
               onClick={approve}
               disabled={busy}
-              className="inline-flex h-11 cursor-pointer items-center rounded-[10px] bg-nevo-navy px-5 text-sm font-semibold text-nevo-cream transition-[filter] hover:brightness-93 disabled:cursor-default disabled:opacity-60"
+              className="inline-flex h-[42px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[18px] text-[13.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93 disabled:cursor-default disabled:opacity-60 xl:h-11 xl:px-5 xl:text-sm"
             >
               {busy ? "Approving…" : "Approve this section"}
             </button>
@@ -528,7 +528,7 @@ export function LiveVariantReview({
           <div className="mt-3 flex justify-end">
             <Link
               href={`/teacher/lessons/assign?lesson=${lessonId}`}
-              className="inline-flex h-11 cursor-pointer items-center rounded-[10px] bg-nevo-navy px-5 text-sm font-semibold text-nevo-cream transition-[filter] hover:brightness-93"
+              className="inline-flex h-[42px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[18px] text-[13.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93 xl:h-11 xl:px-5 xl:text-sm"
             >
               Assign to classes
             </Link>
@@ -551,14 +551,14 @@ export function LiveVariantReview({
           screen says everywhere else, where the frame says "Segment".
         */}
         {segmentCount !== undefined && segmentCount > 1 && (
-          <nav aria-label="Sections" className="mt-4 flex flex-wrap gap-2">
+          <nav aria-label="Sections" className="mt-4 flex flex-wrap gap-1.5 xl:gap-2">
             {Array.from({ length: segmentCount }, (_, i) => i + 1).map((n) => (
               <Link
                 key={n}
                 href={`/teacher/lessons/${lessonId}/variants?section=${n}`}
                 aria-current={n === sectionIndex ? "page" : undefined}
                 className={cn(
-                  "inline-flex h-8 cursor-pointer items-center rounded-full px-3.5 text-[12px] transition-[filter]",
+                  "inline-flex h-[30px] cursor-pointer items-center rounded-full px-3 text-[11.5px] transition-[filter] xl:h-8 xl:px-3.5 xl:text-[12px]",
                   n === sectionIndex
                     ? "bg-nevo-navy font-semibold text-nevo-cream"
                     : n < sectionIndex

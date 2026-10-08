@@ -400,7 +400,7 @@ export function LiveStructureTree({
        to this pane (C07d). Without it the sheet took the nearest positioned
        ancestor up the tree instead. */
     <div className="relative flex min-h-0 flex-1 flex-col">
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-[22px] xl:px-8 xl:py-7">
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-[18px] xl:px-8 xl:py-7">
         {banner}
         <div className="mb-3 flex justify-end">
           <button
@@ -667,7 +667,7 @@ export function LiveStructureTree({
           onClick={() => void addToLibrary()}
           disabled={phase === "committing" || saving === "saving"}
           className={cn(
-            "flex h-[46px] items-center rounded-[10px] px-[26px] text-[15px] font-semibold",
+            "flex items-center rounded-[10px] px-[18px] py-[11px] text-[13.5px] font-semibold xl:h-[46px] xl:px-[26px] xl:py-0 xl:text-[15px]",
             phase === "committing" || saving === "saving"
               ? "cursor-not-allowed bg-nevo-navy/18 text-nevo-near-black/40"
               : "cursor-pointer bg-nevo-navy text-nevo-cream transition-[filter] hover:brightness-93",

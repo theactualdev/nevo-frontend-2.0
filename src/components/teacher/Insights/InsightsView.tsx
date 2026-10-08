@@ -137,7 +137,7 @@ export function InsightsView() {
           {heading}
           {sampleNotice}
         </div>
-        <div className="flex flex-1 flex-col items-center justify-center px-12 pb-10 text-center">
+        <div className="flex flex-1 flex-col items-center justify-center px-10 pb-9 text-center xl:px-12 xl:pb-10">
           <IllustrationWrapper
             src="/illustrations/empty-insights-select.png"
             alt="Two overlapping circles"
@@ -155,7 +155,7 @@ export function InsightsView() {
               <h3 className="mt-[22px] text-xl font-semibold tracking-[-0.01em] text-nevo-near-black xl:mt-6 xl:text-[21px]">
                 Your classes will appear here once assigned
               </h3>
-              <p className="mt-2 max-w-[360px] text-[15px] leading-[1.55] text-nevo-near-black/62 xl:text-[15.5px]">
+              <p className="mt-2.5 max-w-[360px] text-[15px] leading-[1.55] text-nevo-near-black/62 xl:mt-2 xl:text-[15.5px]">
                 This usually happens before your first sign-in. If it&rsquo;s
                 taking a while, your school admin can set it up.
               </p>
@@ -165,7 +165,7 @@ export function InsightsView() {
           <h3 className="mt-[22px] text-xl font-semibold tracking-[-0.01em] text-nevo-near-black xl:mt-6 xl:text-[21px]">
             Select a class to see insights
           </h3>
-          <p className="mt-2 max-w-[340px] text-[15px] leading-[1.55] text-nevo-near-black/62 xl:max-w-[360px] xl:text-[15.5px]">
+          <p className="mt-2.5 max-w-[340px] text-[15px] leading-[1.55] text-nevo-near-black/62 xl:mt-2 xl:max-w-[360px] xl:text-[15.5px]">
             <span className="xl:hidden">
               Pick one of your classes above to see how the week is going.
             </span>
@@ -200,7 +200,7 @@ export function InsightsView() {
         {data && (
         <SampleRegion kind="teacher:insights">
         {(data.sparse ? (
-          <div className="mt-8 flex max-w-[640px] items-start gap-4 rounded-[12px] bg-nevo-cream-elevated p-7 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+          <div className="mt-[26px] flex items-start gap-3.5 rounded-[12px] bg-nevo-cream-elevated p-6 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-8 xl:max-w-[640px] xl:gap-4 xl:p-7">
             <span className="mt-px size-[22px] shrink-0 text-nevo-violet xl:size-6">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="size-full">
                 <circle cx="12" cy="12" r="9" />
@@ -287,7 +287,7 @@ export function InsightsView() {
             {data.flags && data.flags.length > 0 && (
               <>
                 <h3 className={SECTION_H3}>Flags</h3>
-                <div className="mt-3.5 flex flex-col gap-3 xl:mt-4">
+                <div className="mt-3.5 flex flex-col gap-[11px] xl:mt-4 xl:gap-3">
                   {data.flags.map((f) => (
                     <Link
                       key={f.name}
@@ -301,9 +301,9 @@ export function InsightsView() {
                         )}
                       />
                       <span className="min-w-0 flex-1">
-                        <span className="flex items-center gap-[9px]">
+                        <span className="flex items-center gap-2 xl:gap-[9px]">
                           {f.isSudden && (
-                            <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-nevo-navy text-nevo-cream">
+                            <span className="inline-flex size-[18px] shrink-0 items-center justify-center rounded-full bg-nevo-navy text-nevo-cream xl:size-5">
                               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                                 <path d="M12 5v9" />
                                 <path d="M8 11l4 4 4-4" />
@@ -332,16 +332,11 @@ export function InsightsView() {
             {data.concepts && data.concepts.length > 0 && (
               <>
                 <h3 className={SECTION_H3}>Where the class stands</h3>
-                <p className="mt-2 text-[13.5px] leading-[1.5] text-nevo-near-black/60 xl:max-w-[660px] xl:text-sm xl:leading-[1.55]">
-                  <span className="xl:hidden">
-                    Class average per concept, on two tracks. A gap points to
-                    the text, not the maths.
-                  </span>
-                  <span className="hidden xl:inline">
-                    Class average for each concept, on two tracks:
-                    understanding, and the reading load underneath it. When the
-                    two pull apart, it&apos;s usually the text, not the maths.
-                  </span>
+                {/* Desktop only: C09's tablet artboard draws no description here. */}
+                <p className="mt-2 hidden max-w-[660px] text-sm leading-[1.55] text-nevo-near-black/60 xl:block">
+                  Class average for each concept, on two tracks: understanding,
+                  and the reading load underneath it. When the two pull apart,
+                  it&apos;s usually the text, not the maths.
                 </p>
                 <div className="mt-3.5 flex flex-col gap-5 rounded-[12px] bg-nevo-cream-elevated px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-4 xl:gap-[22px] xl:px-[26px] xl:py-6">
                   {data.concepts.map((c) => (

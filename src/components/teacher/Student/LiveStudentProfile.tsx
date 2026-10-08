@@ -211,12 +211,12 @@ export function LiveStudentProfile({
 
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
-      <div className="mx-auto max-w-[860px]">
+      <div className="mx-auto xl:max-w-[860px]">
         <Link
           href={classHref ?? "/teacher/classes"}
-          className="inline-flex cursor-pointer items-center gap-[7px] text-sm text-nevo-near-black/60 transition-transform active:scale-[0.99]"
+          className="inline-flex cursor-pointer items-center gap-[7px] text-[13.5px] text-nevo-near-black/60 transition-transform active:scale-[0.99] xl:text-sm"
         >
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-[17px]">
             <path d="M15 6l-6 6 6 6" />
           </svg>
           {className ? `${className} · Roster` : "My Classes"}
@@ -258,7 +258,7 @@ export function LiveStudentProfile({
                   ruled on 15 Sep that Nevo copy carries no dashes anywhere, so
                   it reads straight. It appears only after a stored escalation. */}
               {shared && (
-                <span className="mt-[3px] block text-sm text-nevo-near-black/60 xl:text-[14.5px]">
+                <span className="mt-1 block text-xs text-nevo-near-black/60 xl:mt-[3px] xl:text-[14.5px]">
                   Shared with Learning Support today
                 </span>
               )}
@@ -302,7 +302,7 @@ export function LiveStudentProfile({
             fixture has a single flag, and dropping the rest would hide the
             thing this banner exists to show. */}
         {noticed.length > 0 && (
-          <div className="mt-6 max-w-[660px] rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4 xl:px-5 xl:py-[18px]">
+          <div className="mt-6 rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4 xl:max-w-[660px] xl:px-5 xl:py-[18px]">
             <span className="block text-sm font-semibold text-nevo-near-black xl:text-[15px]">
               What Nevo noticed
             </span>
@@ -363,15 +363,15 @@ export function LiveStudentProfile({
             under "What Nevo has noticed", further down.
         */}
         {early && noticed.length === 0 && !tooEarly && !sessionsLoading && (
-          <div className="mt-[26px] flex max-w-[660px] items-start gap-[13px] rounded-[12px] bg-nevo-violet/16 px-5 py-[18px]">
+          <div className="mt-5 flex items-start gap-3 rounded-[12px] bg-nevo-violet/16 px-[18px] py-4 xl:mt-[26px] xl:max-w-[660px] xl:gap-[13px] xl:px-5 xl:py-[18px]">
             <span className="mt-px shrink-0 text-nevo-navy">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-5">
                 <circle cx="12" cy="12" r="9" />
                 <path d="M12 16v-4" />
                 <path d="M12 8h.01" />
               </svg>
             </span>
-            <p className="text-[15px] leading-[1.55] text-nevo-near-black/78">
+            <p className="text-sm leading-[1.55] text-nevo-near-black/78 xl:text-[15px]">
               {`Still getting a picture of ${first}${"’"}s work. A few more sessions and this will fill in - for now, here${"’"}s the early picture.`}
             </p>
           </div>
@@ -387,7 +387,7 @@ export function LiveStudentProfile({
         {early && noticed.length === 0 && tooEarly && (
           <>
             <h3 className={cn(SECTION_H, "mt-8")}>What Nevo has noticed</h3>
-            <p className="mt-3 max-w-[560px] text-[14.5px] leading-[1.55] text-nevo-near-black/68">
+            <p className="mt-3.5 text-[13px] leading-[1.6] text-nevo-near-black/68 xl:mt-3 xl:max-w-[560px] xl:text-[14.5px] xl:leading-[1.55]">
               {`Nevo has not seen enough of ${first}${"’"}s work yet to say anything useful.`}
             </p>
           </>
@@ -395,14 +395,14 @@ export function LiveStudentProfile({
 
         {observations.length > 0 && (
           <>
-            <h3 className={cn(SECTION_H, "mt-8")}>What Nevo has noticed</h3>
-            <div className="mt-3.5 flex flex-col gap-3.5 xl:mt-4 xl:grid xl:grid-cols-2">
+            <h3 className={cn(SECTION_H, "mt-[26px] xl:mt-8")}>What Nevo has noticed</h3>
+            <div className="mt-3.5 flex flex-col gap-3 xl:mt-4 xl:grid xl:grid-cols-2 xl:gap-3.5">
               {observations.map((o) => {
                 const chip = observationCount(o.pattern, o.count);
                 return (
                   <div
                     key={o.pattern}
-                    className="flex items-start justify-between gap-4 rounded-[12px] bg-nevo-cream-elevated p-[22px] shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
+                    className="flex items-start justify-between gap-3.5 rounded-[12px] bg-nevo-cream-elevated px-5 py-[18px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:gap-4 xl:p-[22px]"
                   >
                     <p className="text-[15.5px] leading-[1.45] font-medium text-pretty text-nevo-near-black xl:text-[16.5px]">
                       {OBSERVATION_COPY[o.pattern].body(
@@ -423,7 +423,7 @@ export function LiveStudentProfile({
 
         {concepts.length === 0 && read("mastery") === "failed" && (
           <>
-            <h3 className={cn(SECTION_H, "mt-8")}>Concept mastery</h3>
+            <h3 className={cn(SECTION_H, "mt-[26px] xl:mt-8")}>Concept mastery</h3>
             <p className="mt-3 text-[14px] leading-[1.55] text-nevo-near-black/68">
               {failedLine}
             </p>
@@ -432,12 +432,12 @@ export function LiveStudentProfile({
 
         {concepts.length > 0 && (
           <>
-            <h3 className={cn(SECTION_H, "mt-8")}>Concept mastery</h3>
-            <p className="mt-2 max-w-[62ch] text-[13px] leading-[1.5] text-nevo-near-black/60">
+            <h3 className={cn(SECTION_H, "mt-[26px] xl:mt-8")}>Concept mastery</h3>
+            <p className="mt-2 text-[13.5px] leading-[1.5] text-nevo-near-black/60 xl:max-w-[62ch] xl:text-[13px]">
               How well each idea has landed, and how much the reading itself is
               shaping that.
             </p>
-            <div className="mt-4 flex flex-col gap-5 rounded-[12px] bg-nevo-cream-elevated px-[22px] py-6 shadow-elevation-1 xl:px-[26px]">
+            <div className="mt-3.5 flex flex-col gap-5 rounded-[12px] bg-nevo-cream-elevated px-[22px] py-5 shadow-elevation-1 xl:mt-4 xl:px-[26px] xl:py-6">
               {concepts.map((c) => (
                 <MasteryDualTrack
                   key={c.conceptId}
@@ -452,7 +452,7 @@ export function LiveStudentProfile({
 
         {accommodations && accommodations.activeAccommodations.length > 0 && (
           <>
-            <h3 className={cn(SECTION_H, "mt-8")}>What Nevo is offering</h3>
+            <h3 className={cn(SECTION_H, "mt-[26px] xl:mt-8")}>What Nevo is offering</h3>
             <p className="mt-2 max-w-[62ch] text-[13px] leading-[1.5] text-nevo-near-black/60">
               Support Nevo has turned on, and what it saw that led there.
             </p>
@@ -481,7 +481,7 @@ export function LiveStudentProfile({
 
         {read("accommodations") === "failed" && (
           <>
-            <h3 className={cn(SECTION_H, "mt-8")}>What Nevo is offering</h3>
+            <h3 className={cn(SECTION_H, "mt-[26px] xl:mt-8")}>What Nevo is offering</h3>
             <p className="mt-3 text-[14px] leading-[1.55] text-nevo-near-black/68">
               {failedLine}
             </p>
@@ -490,7 +490,7 @@ export function LiveStudentProfile({
 
         {recommendations.length === 0 && read("recommendations") === "failed" && (
           <>
-            <h3 className={cn(SECTION_H, "mt-8")}>What might help</h3>
+            <h3 className={cn(SECTION_H, "mt-[26px] xl:mt-8")}>What might help</h3>
             <p className="mt-3 text-[14px] leading-[1.55] text-nevo-near-black/68">
               {failedLine}
             </p>
@@ -499,7 +499,7 @@ export function LiveStudentProfile({
 
         {recommendations.length > 0 && (
           <>
-            <h3 className={cn(SECTION_H, "mt-8")}>What might help</h3>
+            <h3 className={cn(SECTION_H, "mt-[26px] xl:mt-8")}>What might help</h3>
             <div className="mt-3.5 divide-y divide-nevo-near-black/7 overflow-hidden rounded-[12px] bg-nevo-cream-elevated shadow-elevation-1">
               {recommendations.map((r) => (
                 <p
@@ -528,7 +528,7 @@ export function LiveStudentProfile({
         */}
         {realSessions.length > 0 && (
           <>
-            <h3 className={cn(SECTION_H, "mt-8")}>Recent sessions</h3>
+            <h3 className={cn(SECTION_H, "mt-[26px] xl:mt-8")}>Recent sessions</h3>
             <div className="mt-3.5 divide-y divide-nevo-near-black/7 overflow-hidden rounded-[12px] bg-nevo-cream-elevated shadow-elevation-1">
               {realSessions.map((sn) => (
                 <button
@@ -571,7 +571,7 @@ export function LiveStudentProfile({
         {realSessions.length === 0 && !sessionsLoading && !sessionsFailed && (
           <>
             <h3 className={cn(SECTION_H, "mt-8")}>Recent sessions</h3>
-            <p className="mt-3 max-w-[560px] text-[13px] leading-[1.6] text-nevo-near-black/50">
+            <p className="mt-3.5 text-[13px] leading-[1.6] text-nevo-near-black/50 xl:mt-3 xl:max-w-[560px]">
               {student.firstName
                 ? `No sessions yet - ${student.firstName} hasn${"’"}t started a lesson.`
                 : "No sessions yet."}
@@ -581,7 +581,7 @@ export function LiveStudentProfile({
 
         {realSessions.length === 0 && sessionsFailed && (
           <>
-            <h3 className={cn(SECTION_H, "mt-8")}>Recent sessions</h3>
+            <h3 className={cn(SECTION_H, "mt-[26px] xl:mt-8")}>Recent sessions</h3>
             <p className="mt-3 text-[14px] leading-[1.55] text-nevo-near-black/68">
               {`We couldn${"’"}t load these just now. Nothing has changed for ${student.firstName ?? "them"}, so you can try again in a moment.`}
             </p>

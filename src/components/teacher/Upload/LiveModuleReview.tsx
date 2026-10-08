@@ -356,7 +356,7 @@ export function LiveModuleReview({
 
   return (
     <>
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-[22px] xl:px-8 xl:py-7">
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-[18px] xl:px-8 xl:py-7">
         {banner}
 
         {flat && (

@@ -203,7 +203,7 @@ export function SectionReview({
 
   return (
     <>
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-[22px] xl:px-8 xl:py-7">
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-[18px] xl:px-8 xl:py-7">
         {flat && (
           <div className="flex max-w-[720px] flex-col gap-2.5">
             <div className="flex items-center gap-3 rounded-[12px] bg-nevo-violet/14 px-4 py-3.5">

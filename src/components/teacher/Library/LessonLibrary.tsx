@@ -170,23 +170,23 @@ export function LessonLibrary() {
   // Empty shelf - real for a live teacher with nothing uploaded yet.
   if (lessons.length === 0) {
     return (
-      <div className="flex flex-1 items-center justify-center p-12">
-        <div className="flex max-w-[420px] flex-col items-center text-center">
-          <div className="flex size-[88px] items-center justify-center rounded-[20px] bg-nevo-cream-elevated text-nevo-violet shadow-elevation-1">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <div className="flex flex-1 items-center justify-center p-10 xl:p-12">
+        <div className="flex max-w-[400px] flex-col items-center text-center xl:max-w-[420px]">
+          <div className="flex size-20 items-center justify-center rounded-[20px] bg-nevo-cream-elevated text-nevo-violet shadow-elevation-1 xl:size-[88px]">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-10">
               <path d="M4 5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2z" />
               <path d="M4 19a2 2 0 0 1 2-2h12" />
               <path d="M9 7h6" />
             </svg>
           </div>
-          <h1 className="mt-[26px] text-[22px] font-semibold tracking-[-0.01em] text-nevo-near-black">
+          <h1 className="mt-6 text-[21px] font-semibold tracking-[-0.01em] text-nevo-near-black xl:mt-[26px] xl:text-[22px]">
             Nothing here yet
           </h1>
-          <p className="mt-3 text-base leading-[1.6] text-nevo-near-black/66">
+          <p className="mt-[11px] text-[15.5px] leading-[1.6] text-nevo-near-black/66 xl:mt-3 xl:text-base">
             Upload your first lesson and Nevo will get it ready for your
             students. A PDF, Word doc or slides all work.
           </p>
-          <UploadButton className="mt-6 h-[52px] px-[26px] text-[15.5px]" />
+          <UploadButton className="mt-[22px] h-12 px-6 text-[15px] xl:mt-6 xl:h-[52px] xl:px-[26px] xl:text-[15.5px]" />
         </div>
       </div>
     );
@@ -288,11 +288,11 @@ export function LessonLibrary() {
       {/* Not over the signed-in fallback: a count of sample lessons would be
           a claim about this teacher's library. */}
       {resultLine && !sample && (
-        <p className="mt-[18px] text-sm text-nevo-near-black/60">{resultLine}</p>
+        <p className="mt-3.5 text-[13.5px] text-nevo-near-black/60 xl:mt-[18px] xl:text-sm">{resultLine}</p>
       )}
 
       {shown.length > 0 ? (
-        <div className="mt-[18px] grid max-w-[1000px] grid-cols-2 gap-3.5 xl:grid-cols-3 xl:gap-4">
+        <div className="mt-3 grid max-w-[1000px] grid-cols-2 gap-3.5 xl:mt-[18px] xl:grid-cols-3 xl:gap-4">
           {/*
             MARKED WHEN THEY ARE NOT THIS TEACHER'S. Every other teacher
             fallback carries `data-nevo-sample`; this grid did not, so a
@@ -312,20 +312,20 @@ export function LessonLibrary() {
               return (
                 <div
                   key={lesson.id}
-                  className="flex min-h-[158px] cursor-default flex-col rounded-[12px] bg-nevo-cream-elevated p-5 shadow-elevation-1"
+                  className="flex min-h-[132px] cursor-default flex-col rounded-[12px] bg-nevo-cream-elevated p-[18px] shadow-elevation-1 xl:min-h-[158px] xl:p-5"
                 >
-                  <div className="flex items-center gap-3">
-                    <span className="size-[34px] shrink-0 rounded-full border-[3px] border-nevo-navy/16 border-t-nevo-navy motion-safe:animate-spin motion-safe:[animation-duration:900ms]" />
-                    <span className="text-[15.5px] leading-[1.3] font-semibold text-nevo-near-black">
+                  <div className="flex items-center gap-[11px] xl:gap-3">
+                    <span className="size-[30px] shrink-0 rounded-full border-[3px] border-nevo-navy/16 border-t-nevo-navy motion-safe:animate-spin motion-safe:[animation-duration:900ms] xl:size-[34px]" />
+                    <span className="text-[14.5px] leading-[1.3] font-semibold text-nevo-near-black xl:text-[15.5px]">
                       Processing your lesson&hellip;
                     </span>
                   </div>
-                  <p className="mt-[13px] text-[13.5px] leading-[1.5] text-nevo-near-black/62">
+                  <p className="mt-[11px] text-[13px] leading-[1.5] text-nevo-near-black/62 xl:mt-[13px] xl:text-[13.5px]">
                     Nevo is getting this ready. It will appear here when
                     it&rsquo;s done.
                   </p>
                   <div className="flex-1" />
-                  <div className="mt-3.5 border-t border-nevo-near-black/8 pt-3 text-[13px] text-nevo-near-black/45">
+                  <div className="mt-3 border-t border-nevo-near-black/8 pt-2.5 text-[12.5px] text-nevo-near-black/45 xl:mt-3.5 xl:pt-3 xl:text-[13px]">
                     {lesson.footer}
                   </div>
                 </div>
@@ -336,19 +336,19 @@ export function LessonLibrary() {
               return (
                 <div
                   key={lesson.id}
-                  className="flex min-h-[158px] cursor-default flex-col rounded-[12px] bg-nevo-cream-elevated p-5 shadow-elevation-1"
+                  className="flex min-h-[132px] cursor-default flex-col rounded-[12px] bg-nevo-cream-elevated p-[18px] shadow-elevation-1 xl:min-h-[158px] xl:p-5"
                 >
-                  <div className="flex items-start gap-3">
+                  <div className="flex items-start gap-[11px] xl:gap-3">
                     {/* Violet, never red - the frame is explicit. */}
-                    <span className="flex size-[34px] shrink-0 items-center justify-center rounded-[10px] bg-nevo-violet/22 text-nevo-navy">
-                      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <span className="flex size-[30px] shrink-0 items-center justify-center rounded-[10px] bg-nevo-violet/22 text-nevo-navy xl:size-[34px]">
+                      <svg width="17" height="17" className="xl:size-[19px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                         <path d="M6 3h9l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
                         <path d="M14 3v6h6" />
                         <path d="M9.5 13.5l5 5M14.5 13.5l-5 5" />
                       </svg>
                     </span>
                     <div className="min-w-0">
-                      <div className="text-[15.5px] leading-[1.35] font-semibold text-nevo-near-black">
+                      <div className="text-[14.5px] leading-[1.35] font-semibold text-nevo-near-black xl:text-[15.5px]">
                         This lesson couldn&rsquo;t be processed.
                       </div>
                       {/* THE REASON, WHERE THE SERVER GAVE ONE. Until 25 Sep
@@ -357,7 +357,7 @@ export function LessonLibrary() {
                           happened. Ours still stands where there is none - an
                           older deployment, or a failure with no recognised
                           cause. */}
-                      <p className="mt-1 text-[13.5px] leading-[1.5] text-nevo-near-black/62">
+                      <p className="mt-1 text-[13px] leading-[1.5] text-nevo-near-black/62 xl:text-[13.5px]">
                         {lesson.failureReason ?? "Nothing you did is lost."}
                       </p>
                       {lesson.incidentId && (
@@ -374,9 +374,9 @@ export function LessonLibrary() {
                   <div className="flex-1" />
                   <Link
                     href="/teacher/lessons/upload"
-                    className="mt-3.5 inline-flex cursor-pointer items-center gap-[7px] border-t border-nevo-near-black/8 pt-3 text-sm font-semibold text-nevo-navy"
+                    className="mt-3 inline-flex cursor-pointer items-center gap-1.5 border-t border-nevo-near-black/8 pt-2.5 text-[13.5px] font-semibold text-nevo-navy xl:mt-3.5 xl:gap-[7px] xl:pt-3 xl:text-sm"
                   >
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <svg width="14" height="14" className="xl:size-[15px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                       <path d="M12 16V4M7 9l5-5 5 5" />
                       <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
                     </svg>
@@ -390,15 +390,15 @@ export function LessonLibrary() {
               <Link
                 key={lesson.id}
                 href={`/teacher/lessons/${lesson.id}`}
-                className="flex min-h-[158px] cursor-pointer flex-col rounded-[12px] bg-nevo-cream-elevated p-5 shadow-elevation-1 transition-[filter,transform] hover:brightness-[0.985] active:scale-[0.99]"
+                className="flex min-h-[132px] cursor-pointer flex-col rounded-[12px] bg-nevo-cream-elevated p-[18px] shadow-elevation-1 transition-[filter,transform] hover:brightness-[0.985] active:scale-[0.99] xl:min-h-[158px] xl:p-5"
               >
                 <div className="flex items-start justify-between gap-2.5">
-                  <span className="text-[16.5px] leading-[1.3] font-semibold tracking-[-0.01em] text-nevo-near-black">
+                  <span className="text-[15.5px] leading-[1.3] font-semibold tracking-normal text-nevo-near-black xl:text-[16.5px] xl:tracking-[-0.01em]">
                     {lesson.title}
                   </span>
                   {lesson.needsReview ? (
-                    <span className="inline-flex shrink-0 items-center gap-[5px] rounded-full bg-nevo-violet/34 py-[3px] pr-[11px] pl-2 text-[11.5px] font-semibold whitespace-nowrap text-nevo-navy">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-nevo-violet/34 py-[3px] pr-2.5 pl-[7px] text-[11px] font-semibold whitespace-nowrap text-nevo-navy xl:gap-[5px] xl:pr-[11px] xl:pl-2 xl:text-[11.5px]">
+                      <svg width="11" height="11" className="xl:size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                         <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
                         <circle cx="12" cy="12" r="2.6" />
                       </svg>
@@ -410,11 +410,11 @@ export function LessonLibrary() {
                     </span>
                   )}
                 </div>
-                <span className="mt-2 text-[13.5px] text-nevo-near-black/60">
+                <span className="mt-[7px] text-[13px] text-nevo-near-black/60 xl:mt-2 xl:text-[13.5px]">
                   {lesson.meta}
                 </span>
                 <div className="flex-1" />
-                <div className="mt-3.5 border-t border-nevo-near-black/8 pt-3 text-[13px] text-nevo-near-black/55">
+                <div className="mt-3 border-t border-nevo-near-black/8 pt-2.5 text-[12.5px] text-nevo-near-black/55 xl:mt-3.5 xl:pt-3 xl:text-[13px]">
                   {lesson.footer}
                 </div>
               </Link>
@@ -424,7 +424,7 @@ export function LessonLibrary() {
         </div>
       ) : (
         // C06's own no-match card, naming what found nothing.
-        <div className="mt-4 max-w-[520px] rounded-[12px] bg-nevo-cream-elevated p-7 text-[15px] leading-[1.55] text-nevo-near-black/68 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+        <div className="mt-3.5 max-w-none rounded-[12px] bg-nevo-cream-elevated p-[22px] text-sm leading-[1.5] text-nevo-near-black/68 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-4 xl:max-w-[520px] xl:p-7 xl:text-[15px] xl:leading-[1.55]">
           {`No lessons match ${noMatchWhat}. Try another subject or clear the search.`}
         </div>
       )}
