@@ -21,7 +21,7 @@ import {
   type SignalEventType,
 } from "@/lib/constants";
 import { useLesson, useSignals } from "@/hooks";
-import type { SessionOutcome } from "@/hooks/useSignals";
+import { formFactor, type SessionOutcome } from "@/hooks/useSignals";
 import {
   useRuntimeAdaptation,
   type AppliedAdaptations,
@@ -103,7 +103,7 @@ import {
   saveReviewAnswers,
 } from "./reviewStore";
 import { TeacherNote } from "./TeacherNote";
-import { TextSegment } from "./TextSegment";
+import { TextSegment, type OnChunkSeen } from "./TextSegment";
 import { VisualSegment } from "./VisualSegment";
 import type { MediaFailReason } from "./useMediaSource";
 
@@ -1423,7 +1423,7 @@ export function LessonPlayer({
   const densitySegments: ToggleSegment[] = DENSITIES.filter(({ id }) =>
     id === DENSITY.SLOWER
       ? segment.text?.body[id] !== undefined ||
-        isChunkable(segment.text?.body.default)
+        isChunkable(segment.text?.body.default, segment.text?.readingChunks)
       : segment.text?.body[id] !== undefined,
   ).map(({ id, label }) => ({
     id,
@@ -2183,6 +2183,14 @@ export function LessonPlayer({
               reading={readingOn}
               attention={attentionOn}
               onReadProgress={noteReadProgress}
+              onChunkSeen={(chunkId, action) =>
+                trackEvent(SIGNAL_EVENT_TYPES.READING_CHUNK_VIEWED, {
+                  segmentId: segment.id,
+                  chunkId,
+                  action,
+                  formFactor: formFactor(),
+                })
+              }
               onReplay={() => {
                 trackEvent(SIGNAL_EVENT_TYPES.REPLAY, { segmentId: segment.id });
                 setObserved((o) => ({ ...o, replays: o.replays + 1 }));
@@ -2379,6 +2387,7 @@ function SegmentBody({
   reading,
   attention,
   onReadProgress,
+  onChunkSeen,
   onReplay,
   onNarrationPlayed,
   onAudioBusy,
@@ -2394,6 +2403,7 @@ function SegmentBody({
   reading: boolean;
   attention: boolean;
   onReadProgress: (pct: number) => void;
+  onChunkSeen: OnChunkSeen;
   onReplay: () => void;
   onNarrationPlayed: () => void;
   onAudioBusy: (phase: BusyPhase) => void;
@@ -2413,6 +2423,7 @@ function SegmentBody({
         reading={reading}
         attention={attention}
         onReadProgress={onReadProgress}
+        onChunkSeen={onChunkSeen}
       />
     );
   if (modality === MODALITY.VISUAL && segment.visual)

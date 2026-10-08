@@ -13,11 +13,19 @@ interface CatalogueEntry {
   payload: string[];
 }
 
-/** "[depthRatio]" is optional; the brackets are not part of the key. */
+/**
+ * "[depthRatio]" is optional; the brackets are not part of the key. Nor is
+ * what follows a colon: "action: entered|passed" is the key `action` and the
+ * values it takes.
+ */
 const DECLARED = new Map(
   (catalogue as CatalogueEntry[]).map((e) => [
     e.eventType,
-    new Set(e.payload.map((key) => key.replace(/^\[(.*)\]$/, "$1"))),
+    new Set(
+      e.payload.map((key) =>
+        key.replace(/^\[(.*)\]$/, "$1").replace(/:.*$/, "").trim(),
+      ),
+    ),
   ]),
 );
 
