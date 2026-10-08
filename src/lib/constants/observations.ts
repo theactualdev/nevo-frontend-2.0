@@ -89,6 +89,10 @@ export const OBSERVATION_COPY: Record<ObservationPattern, ObservationCopy> = {
  *    unambiguous and is good news.
  *
  * Absent still means we were not told how many, which is not zero.
+ *
+ * IN LESSONS, NOT TIMES (Lydia, 7 Oct): "12 lessons", not "12 times". The
+ * pattern is completed lessons, and "times" on a chip beside a child reads as
+ * a tally of something they did - the unit says what was counted.
  */
 export function observationCount(
   pattern: ObservationPattern,
@@ -96,5 +100,5 @@ export function observationCount(
 ): string | null {
   if (pattern !== "completed_lessons") return null;
   if (typeof count !== "number") return null;
-  return count === 1 ? "Once" : `${count} times`;
+  return count === 1 ? "1 lesson" : `${count} lessons`;
 }

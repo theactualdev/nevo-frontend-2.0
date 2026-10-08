@@ -87,14 +87,14 @@ describe("what Nevo has noticed", () => {
     expect(screen.getByText(OBSERVATION_COPY.revisited_content.body("Amara"))).toBeInTheDocument();
     expect(classStudents).toHaveBeenCalledWith("c-1");
     // The count that would turn "went back over it" into a finding is never shown.
-    expect(screen.queryByText(/7 times/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/7 (times|lessons)/)).not.toBeInTheDocument();
   });
 
   it("puts the count beside finished lessons, the one place it may go", async () => {
     classStudents.mockResolvedValue([row("s-1", [{ pattern: "completed_lessons", count: 12 }])]);
     render(<LiveStudentProfile studentId="s-1" classId="c-1" state={STATE} />);
 
-    expect(await screen.findByText("12 times")).toBeInTheDocument();
+    expect(await screen.findByText("12 lessons")).toBeInTheDocument();
   });
 
   it("reads only this child's row from the roster", async () => {
