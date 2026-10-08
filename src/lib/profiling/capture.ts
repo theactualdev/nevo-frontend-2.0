@@ -173,8 +173,7 @@ export function tapPoint(e?: {
  *
  * The flanker notes whether a trial was congruent, the reading act whether it
  * was read or heard, the pattern act whether the pair matched, the dot act how
- * close the two counts were, the probe which subject it asked about. An
- * interference measure without its congruent/incongruent split is not an
+ * close the two counts were. An interference measure without its congruent/incongruent split is not an
  * interference measure, so each trial carries its own.
  */
 function conditionOf(p: CaptureEvent): string | null {
@@ -183,7 +182,6 @@ function conditionOf(p: CaptureEvent): string | null {
   if (typeof x.pair === "string") return x.pair;
   if (typeof x.ratio === "number") return `ratio_${x.ratio}`;
   if (typeof x.mode === "string") return x.mode;
-  if (typeof x.subject === "string") return x.subject;
   return null;
 }
 
@@ -192,16 +190,16 @@ function conditionOf(p: CaptureEvent): string | null {
  *
  * The onboarding modules name their activities (Module 2's pattern match is
  * processing speed and its flanker attention, Module 3's reading is reading
- * and its dots number sense, Module 4's probe subject knowledge). The warm-up
- * records `act` as the dimension itself, the six names the recalibrate prompt
- * uses, so those map to themselves.
+ * and its dots number sense). The warm-up records `act` as the dimension
+ * itself, the six names the recalibrate prompt uses, so those map to
+ * themselves. Module 4's probe is not presented (SCRUM-175/176): its bank
+ * lived on the device, and nothing can serve one to the onboarding run.
  */
 const DIMENSION_OF_ACT: Record<string, BaselineDimension> = {
   pattern: "ps",
   flanker: "attention",
   reading: "reading",
   dots: "ans",
-  probe: "domain",
   wmc: "wmc",
   ps: "ps",
   ans: "ans",
@@ -247,7 +245,7 @@ const text = (value: unknown): string | null =>
  *
  * What each trial is:
  *
- *  - A PICK (`trial_pick`, Modules 2-4 and the warm-up): its dimension, its
+ *  - A PICK (`trial_pick`, Modules 2-3 and the warm-up): its dimension, its
  *    condition, the choice, `correct` where the activity held the stimulus
  *    (the device drew the dots, the server never saw them), and `rtMs` as
  *    the trial runner measured it. A served question names its item in

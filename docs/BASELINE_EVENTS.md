@@ -32,7 +32,7 @@ stream is timing anchors, the run's context (section 3), or stays on the device.
 |---|---|---|---|---|---|
 | a tile recall (Module 1, warm-up `wmc`): its `tap`s, ended by a wrong tap or `round_complete` | `wmc` | `length_N` | the cells tapped, in order, comma-separated | `false` if a wrong tap ended it, `true` at `round_complete` | from the grid being handed over to the tap that ended it |
 | `check_answer`, the SS dual task (Module 1, and the SS warm-up's tile round) | `wmc` | `dual_check` | `"true"` / `"false"` | whether the answer was right | from the check appearing |
-| `trial_pick` (Modules 2-4, warm-up) | from the `act`: `pattern` is `ps`, `flanker` `attention`, `reading` `reading`, `dots` `ans`, `probe` `domain`; the warm-up's acts are already dimensions | `congruency`, `pair`, `ratio_N`, the reading `mode`, or the probe's `subject` | the choice's index, or a served option's `value`; `not_sure` for a decline | where the activity holds the answer, else `null` | from the moment the child could answer (the dot mask, the end of a heard sentence) |
+| `trial_pick` (Modules 2-3, warm-up) | from the `act`: `pattern` is `ps`, `flanker` `attention`, `reading` `reading`, `dots` `ans`; the warm-up's acts are already dimensions | `congruency`, `pair`, `ratio_N`, or the reading `mode` | the choice's index, or a served option's `value`; `not_sure` for a decline | where the activity holds the answer, else `null` | from the moment the child could answer (the dot mask, the end of a heard sentence) |
 | `motor_tap`, the motor-speed step | `motor_speed` | `practice`, or `null` | the target | `null` | the latency the step measured |
 | `motor_end` with reason `idle`, the target left untapped for ten seconds | `motor_speed` | `practice`, or `null` | `null` | `null` | `null`, and `skipped: true` |
 
@@ -41,6 +41,13 @@ UUID, as the contract requires, and `null` otherwise. The server marks a served
 pick against its own key. A served item is a probe-bank UUID; a device-task
 day's id is in the `device:*` namespace with `served: false` (B79, B81), and is
 never shown as a question or sent as a probe item.
+
+**No domain trials from onboarding (SCRUM-175/176, 8 Oct).** Module 4, the
+Domain Probe, asked from a bank on the device and marked it against a key on
+the device. Backend owns the probe bank now and marks what it serves. Nothing
+can serve the onboarding run from it (no account yet, no subject id), so the
+module is not presented and no `domain` trial or `domain_probe` marker is
+sent. The warm-up's served question is the one source of domain trials.
 
 **One trial per completed recall (B80, 8 Oct).** A recall's taps are one
 answer, not one each. A recall the child never finished (the stream ends part
@@ -54,7 +61,7 @@ present (P1-3's heard reading with no voice) was never in front of anyone.
 Anchors only: `input_start`, `check_shown`. Read for the
 run's context (section 3): `run_start`, `warmup_start`, `motor_end`,
 `motor_skipped`. Never sent: `trial_shown`, `response_open`, `playback_start`,
-`module_end`, `replay`, `probe_subject`.
+`module_end`, `replay`.
 
 ### Properties the trials keep
 
@@ -116,7 +123,7 @@ capture, and a key the run did not record is left out.
 
 | Event | Payload |
 |---|---|
-| `baseline_module_start` | `{ moduleId }`: `grid_span`, `pattern_flanker`, `sentence_dot`, `domain_probe` |
+| `baseline_module_start` | `{ moduleId }`: `grid_span`, `pattern_flanker`, `sentence_dot` |
 | `baseline_module_complete` | `{ moduleId }` |
 | `baseline_submitted` | `{}` |
 
