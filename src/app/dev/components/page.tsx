@@ -170,7 +170,7 @@ export default function ComponentsPage() {
 
         <Section
           title="Adaptive toggle bar"
-          note="Lesson pacing. Navy = the student set it; violet + sparkle + pulse = Nevo adjusted it."
+          note="Lesson pacing. Navy = the student set it; violet = Nevo's density, in force."
         >
           <Card>
             <AdaptiveToggleBar

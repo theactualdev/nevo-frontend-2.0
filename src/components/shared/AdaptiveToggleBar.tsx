@@ -1,7 +1,5 @@
 "use client";
 
-import { Sparkles } from "lucide-react";
-
 import { cn } from "@/lib/utils";
 
 export type ToggleState = "default" | "manual" | "system";
@@ -15,9 +13,14 @@ export type ToggleSegment = {
 /**
  * Adaptive Toggle Bar (Lesson Player frame; Design System v2 §6). Compact pacing
  * control on a quiet near-black track. Two active looks: manual (navy fill — the
- * student chose it) and system (violet, pulsing — Nevo's recommendation, waiting).
- * While a system recommendation sits unfollowed, a violet sparkle glints on the
- * control's top-right corner.
+ * student chose it) and system (violet fill — Nevo's density, in force).
+ *
+ * NO GLOW AND NO SPARKLE ON THE SYSTEM CHIP (design D144, 8 Oct). The frame
+ * still draws a one-shot ring on it and a violet glint on the control's corner
+ * while it sits unfollowed. Design: "Everything that reacts visibly to a
+ * child's input is coming out, and leaving one instance behind means it
+ * survives into the build as an exception nobody remembers deciding." The
+ * violet fill stays: it is the state, not a reaction.
  */
 export function AdaptiveToggleBar({
   segments,
@@ -28,8 +31,6 @@ export function AdaptiveToggleBar({
   onSelect?: (id: string) => void;
   className?: string;
 }) {
-  const sparkle = segments.some((seg) => seg.state === "system");
-
   return (
     <div
       role="group"
@@ -49,8 +50,7 @@ export function AdaptiveToggleBar({
           className={cn(
             "flex h-11 cursor-pointer items-center justify-center rounded-full px-4 text-[13px] font-medium whitespace-nowrap transition-colors",
             seg.state === "manual" && "bg-nevo-navy text-nevo-cream",
-            seg.state === "system" &&
-              "bg-nevo-violet/80 text-nevo-near-black motion-safe:animate-nevo-glow",
+            seg.state === "system" && "bg-nevo-violet/80 text-nevo-near-black",
             seg.state === "default" &&
               "bg-transparent text-nevo-near-black hover:bg-nevo-navy/6",
           )}
@@ -58,14 +58,6 @@ export function AdaptiveToggleBar({
           {seg.label}
         </button>
       ))}
-      {sparkle && (
-        <Sparkles
-          aria-hidden
-          className="pointer-events-none absolute -top-2 -right-[7px] size-[15px] text-nevo-violet motion-safe:animate-nevo-sparkle"
-          fill="currentColor"
-          strokeWidth={0}
-        />
-      )}
     </div>
   );
 }
