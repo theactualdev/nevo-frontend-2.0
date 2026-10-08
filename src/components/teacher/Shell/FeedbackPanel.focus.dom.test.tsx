@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 const { submit } = vi.hoisted(() => ({ submit: vi.fn() }));
 vi.mock("next/navigation", () => ({ usePathname: () => "/teacher/dashboard" }));
@@ -34,6 +34,9 @@ describe("the feedback panel's focus", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send Feedback" }));
 
     const thanks = await screen.findByRole("dialog", { name: "Feedback sent" });
-    expect(document.activeElement).toBe(thanks);
+    // Focus moves in an effect after the render that draws the thank-you, and
+    // the send resolves outside act, so on a busy runner that tick can be
+    // seen first (#696). Wait for it.
+    await waitFor(() => expect(document.activeElement).toBe(thanks));
   });
 });
