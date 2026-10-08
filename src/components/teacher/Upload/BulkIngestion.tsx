@@ -94,6 +94,33 @@ type Outcome = {
    *  500 for a reference to ride on; it is a field on the job instead. */
   incidentId?: string | null;
 };
+/**
+ * The results line, from what each file's reading actually came to (T95).
+ *
+ * "All N came through cleanly" was said from `acceptedCount` - files TAKEN,
+ * before a page of any was read - and the file's own comment says accepted is
+ * not parsed. While any is still being read this says what is known, in the
+ * parsing screen's own words; once all have settled, C07h's sentences, counted
+ * from the readings that finished. A reading that stopped needs a look, like a
+ * refused file.
+ */
+function resultsLine(
+  batch: { acceptedCount: number; rejectedCount: number },
+  accepted: { uploadId: string | null }[],
+  outcomes: Record<string, Outcome>,
+): string {
+  const reading = accepted.filter((u) => readingOf(u.uploadId, outcomes)).length;
+  const refused = batch.rejectedCount;
+  const needs = (n: number) => `${n} ${n === 1 ? "needs" : "need"} a quick look.`;
+  if (reading > 0) {
+    const sent = `${accepted.length} ${accepted.length === 1 ? "file" : "files"} sent for reading.`;
+    return refused > 0 ? `${sent} ${needs(refused)}` : sent;
+  }
+  const ready = accepted.filter((u) => readyOf(u.uploadId, outcomes)).length;
+  const look = refused + accepted.filter((u) => diedOf(u.uploadId, outcomes)).length;
+  return look === 0 ? `All ${ready} came through cleanly.` : `${ready} came through cleanly. ${needs(look)}`;
+}
+
 /** An upload that has stopped moving has whatever title it is ever getting. */
 const FINISHED: ReadonlySet<string> = new Set([
   "ready",
@@ -128,6 +155,29 @@ function titleOf(
   outcomes: Record<string, Outcome>,
 ): string | undefined {
   return uploadId ? outcomes[uploadId]?.title : undefined;
+}
+
+/**
+ * STILL BEING READ (T95): taken, and the parse has said nothing final. The
+ * row drew the navy tick the moment the batch was accepted, for a file whose
+ * reading had not started - "came through cleanly" before anything had.
+ */
+function readingOf(
+  uploadId: string | null,
+  outcomes: Record<string, Outcome>,
+): boolean {
+  if (!uploadId) return false;
+  const s = outcomes[uploadId]?.status;
+  return !s || !FINISHED.has(s);
+}
+
+/** Read and ready to go into the library - the only state a confirm is for. */
+function readyOf(
+  uploadId: string | null,
+  outcomes: Record<string, Outcome>,
+): boolean {
+  const s = uploadId ? outcomes[uploadId]?.status : undefined;
+  return s === "ready" || s === "confirmed";
 }
 
 /**
@@ -290,6 +340,8 @@ export function BulkIngestion() {
   /** How many files the teacher actually submitted. Known; the rest is not. */
   const [submitted, setSubmitted] = useState(0);
   const [committing, setCommitting] = useState(false);
+  /** Uploads already added this visit, so asking again adds only the rest. */
+  const [added, setAdded] = useState<ReadonlySet<string>>(new Set());
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
     () => () => {
@@ -408,29 +460,46 @@ export function BulkIngestion() {
    * name what did land.
    */
   const addAll = async () => {
-    const accepted = (batch?.uploads ?? []).filter((u) => u.accepted && u.uploadId);
-    if (accepted.length === 0) return;
+    /*
+     * ONLY WHAT IS READY (T96). This confirmed every accepted upload - one
+     * still being read, and one whose reading had died - from the first
+     * render. The tree and module screens gate on `ready`; so does this.
+     */
+    const toAdd = (batch?.uploads ?? []).filter(
+      (u) =>
+        u.accepted &&
+        u.uploadId &&
+        readyOf(u.uploadId, outcomes) &&
+        !added.has(u.uploadId),
+    );
+    if (toAdd.length === 0) return;
     setCommitting(true);
     setBatchError("");
     const results = await Promise.allSettled(
-      accepted.map((u) => uploadsApi.confirm(u.uploadId as string)),
+      toAdd.map((u) => uploadsApi.confirm(u.uploadId as string)),
     );
     setCommitting(false);
-    const failed = results.filter((r) => r.status === "rejected").length;
+    const landed = toAdd
+      .filter((_, i) => results[i].status === "fulfilled")
+      .map((u) => u.uploadId as string);
+    setAdded((prev) => new Set([...prev, ...landed]));
+    const failed = toAdd.length - landed.length;
     if (failed === 0) {
       // C07d's own line, in the shared bar, before the Library arrives.
       say.show({ kind: "confirm", message: "Added to your library." });
       close();
       return;
     }
-    if (failed === accepted.length) {
+    if (landed.length === 0) {
       setBatchError(
         "We couldn’t add those to your library just now. Nothing has changed - try again in a moment.",
       );
       return;
     }
+    // Pressing Add again adds only the rest: "reopen this" started an empty
+    // screen, which was no way back to them at all.
     setBatchError(
-      `Added ${accepted.length - failed} of ${accepted.length}. The rest didn’t go through - reopen this to try them again.`,
+      `Added ${landed.length} of ${toAdd.length}. The rest didn’t go through - try again in a moment.`,
     );
   };
 
@@ -441,7 +510,15 @@ export function BulkIngestion() {
    * "Add all" was disabled and the close control lived only on the drop zone -
    * on a full-screen takeover, so the only exit was the browser's back button.
    */
-  const nothingToAdd = batch !== null && batch.acceptedCount === 0;
+  const accepted = (batch?.uploads ?? []).filter((u) => u.accepted && u.uploadId);
+  /** Still asking the parse about some of them, so the batch is not settled. */
+  const stillReading = awaitingTitles.length > 0;
+  const readyToAdd = accepted.filter(
+    (u) => readyOf(u.uploadId, outcomes) && !added.has(u.uploadId as string),
+  ).length;
+  // Every file refused, or every reading stopped: the same dead end.
+  const nothingToAdd = batch !== null && !stillReading && readyToAdd === 0;
+  const addDisabled = committing || (batch !== null && (stillReading || readyToAdd === 0));
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-nevo-cream text-nevo-near-black">
@@ -467,10 +544,10 @@ export function BulkIngestion() {
             <button
               type="button"
               onClick={() => (batch ? void addAll() : close())}
-              disabled={committing || (batch !== null && batch.acceptedCount === 0)}
+              disabled={addDisabled}
               className={cn(
                 "flex h-[42px] items-center rounded-[10px] px-5 text-sm font-semibold xl:h-11 xl:px-[22px] xl:text-[14.5px]",
-                committing || (batch !== null && batch.acceptedCount === 0)
+                addDisabled
                   ? "cursor-not-allowed bg-nevo-navy/18 text-nevo-near-black/40"
                   : "cursor-pointer bg-nevo-navy text-nevo-cream transition-[filter] hover:brightness-93",
               )}
@@ -622,17 +699,17 @@ export function BulkIngestion() {
               here in the first place.
             */}
             {demo ? (
-              <>
+              <SampleRegion kind="teacher:bulk-demo-progress">
                 <div className="mt-[22px] h-1.5 w-[300px] overflow-hidden rounded-full bg-nevo-navy/14 xl:mt-6 xl:w-[320px]">
                   <span
                     className="block h-full rounded-full bg-nevo-navy transition-[width] duration-[300ms] ease-out"
                     style={{ width: `${Math.round((sorted / TOTAL) * 100)}%` }}
                   />
                 </div>
-                <span className="mt-[11px] text-[13px] text-nevo-near-black/55 xl:mt-3 xl:text-[13.5px]">
+                <span className="mt-[11px] block text-[13px] text-nevo-near-black/55 xl:mt-3 xl:text-[13.5px]">
                   {sorted} of {TOTAL} lessons sorted
                 </span>
-              </>
+              </SampleRegion>
             ) : (
               submitted > 0 && (
                 <span className="mt-[22px] text-[13px] text-nevo-near-black/55 xl:mt-6 xl:text-[13.5px]">
@@ -653,9 +730,7 @@ export function BulkIngestion() {
             {batch ? (
               <>
                 <p className="mt-[9px] text-[14.5px] leading-[1.55] text-nevo-near-black/66 xl:mt-2.5 xl:text-[15.5px]">
-                  {batch.rejectedCount === 0
-                    ? `All ${batch.acceptedCount} came through cleanly.`
-                    : `${batch.acceptedCount} came through cleanly. ${batch.rejectedCount} ${batch.rejectedCount === 1 ? "needs" : "need"} a quick look.`}
+                  {resultsLine(batch, accepted, outcomes)}
                 </p>
 
                 {batchError && (
@@ -685,7 +760,14 @@ export function BulkIngestion() {
                             : "text-nevo-violet",
                         )}
                       >
-                        {u.accepted && !diedOf(u.uploadId, outcomes) ? (
+                        {u.accepted && readingOf(u.uploadId, outcomes) ? (
+                          /* Still being read: the waiting mark, never the
+                             tick - the tick is for a reading that finished. */
+                          <span
+                            data-reading
+                            className="mt-px block size-[15px] rounded-full border-2 border-nevo-navy/20 border-t-nevo-navy motion-safe:animate-spin motion-safe:[animation-duration:1s]"
+                          />
+                        ) : u.accepted && !diedOf(u.uploadId, outcomes) ? (
                           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                             <path d="M20 6L9 17l-5-5" />
                           </svg>
@@ -777,6 +859,7 @@ export function BulkIngestion() {
                 </div>
               </>
             ) : (
+            <SampleRegion kind="teacher:bulk-demo-summary">
             <p className="mt-[9px] text-[14.5px] leading-[1.55] text-nevo-near-black/66 xl:mt-2.5 xl:text-[15.5px]">
               <span className="xl:hidden">
                 Eleven came through cleanly. Two need a quick look.
@@ -786,6 +869,7 @@ export function BulkIngestion() {
                 from you before they&rsquo;re ready.
               </span>
             </p>
+            </SampleRegion>
             )}
 
             {/* The frame's 13 lessons back the signed-out demo only - a

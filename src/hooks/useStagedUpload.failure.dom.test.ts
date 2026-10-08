@@ -38,7 +38,7 @@ const signIn = () =>
 
 const upload = async () => {
   const { result } = renderHook(() => useStagedUpload());
-  act(() => result.current.start(new File(["x"], "lesson.pdf"), "lesson"));
+  act(() => void result.current.start(new File(["x"], "lesson.pdf"), "lesson"));
   await waitFor(() => expect(result.current.failed).toBe(true));
   return result;
 };
@@ -116,11 +116,11 @@ describe("the reference for a failure nobody planned for", () => {
       }),
     );
     const { result } = renderHook(() => useStagedUpload());
-    act(() => result.current.start(new File(["x"], "one.pdf"), "lesson"));
+    act(() => void result.current.start(new File(["x"], "one.pdf"), "lesson"));
     await waitFor(() => expect(result.current.incident).toBe("9f2c4a7b1d3e"));
 
     create.mockResolvedValue({ uploadId: "u-2", status: "processing", stage: "lessons" });
-    act(() => result.current.start(new File(["x"], "two.pdf"), "lesson"));
+    act(() => void result.current.start(new File(["x"], "two.pdf"), "lesson"));
 
     await waitFor(() => expect(result.current.incident).toBeNull());
   });
@@ -170,7 +170,7 @@ describe("a parse that failed behind the response", () => {
       ...over,
     });
     const { result } = renderHook(() => useStagedUpload());
-    act(() => result.current.start(new File(["x"], "lesson.pdf"), "lesson"));
+    act(() => void result.current.start(new File(["x"], "lesson.pdf"), "lesson"));
     // Past one poll interval: this failure arrives in a 200, not a rejection,
     // so it cannot appear until the first poll has actually gone out. The
     // rejection cases above resolve immediately and need no wait at all.

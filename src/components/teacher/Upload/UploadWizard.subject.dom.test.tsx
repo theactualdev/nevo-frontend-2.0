@@ -4,7 +4,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 const { detail, useCurrentUser, start } = vi.hoisted(() => ({
   detail: vi.fn(),
   useCurrentUser: vi.fn(),
-  start: vi.fn(),
+  start: vi.fn().mockResolvedValue("staged"),
 }));
 vi.mock("@/lib/api/lessons", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/lessons")>();
