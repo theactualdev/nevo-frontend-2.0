@@ -62,6 +62,7 @@ import { isChunkable } from "@/lib/lessons/chunk";
 import {
   LESSON_STATUS,
   lessonsApi,
+  type LessonQuestionAttempt,
   type LessonQuestionAttemptWrite,
 } from "@/lib/api/lessons";
 import { schedulerApi } from "@/lib/api/scheduler";
@@ -399,6 +400,25 @@ export function LessonPlayer({
     () => new Set(),
   );
   const [checkOpen, setCheckOpen] = useState(false);
+  /*
+   * B94 / SCRUM-241: THE SERVER HANDING A CHILD OFF FROM A QUICK CHECK to the
+   * Socratic panel (38a), with the prompts it sent. `run` remounts the panel
+   * for each hand-off, so a second one arrives open as the first did.
+   * `answeredRight` is read where the reply lands, which state is not: a
+   * hand-off for an earlier miss arriving after a right answer is moot.
+   * `handedOff` is the checks the server moved the child past
+   * (`advanceAfterHandoff`) - never counted as passed.
+   */
+  const [handoff, setHandoff] = useState<{
+    segmentId: string;
+    run: number;
+    prompts: PanelPrompt[];
+    advance: boolean;
+  } | null>(null);
+  const [handedOff, setHandedOff] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const answeredRight = useRef<Set<string>>(new Set());
   // Segments are the lesson itself; the assessment takes over the screen once
   // the last segment is done (growth framing — never a score), then completion.
   // Review sessions open on their entry screen first (37d).
@@ -1374,12 +1394,56 @@ export function LessonPlayer({
 
   /** Next chevron — an unpassed Quick Check intercepts the advance. */
   const handleNext = () => {
-    if (segment.quickCheck && !passedChecks.has(segment.id)) {
+    if (
+      segment.quickCheck &&
+      !passedChecks.has(segment.id) &&
+      !handedOff.has(segment.id)
+    ) {
       setCheckOpen(true);
       return;
     }
     advancePastSegment();
   };
+
+  /*
+   * B94: THE SERVER SAID HAND OFF. The answer to a quick check came back with
+   * `handoffTo: "socratic_panel"` - after three misses the server marked, not
+   * any count kept here - so the check gives way to the panel (38a): the sheet
+   * closes, and the panel arrives open with the server's prompts and nothing
+   * to accept or decline. Prompts with no id or no words are not drawn; a
+   * hand-off with none left draws nothing (rule 5), and the check stays.
+   */
+  const handOffFrom = (segmentId: string, stored: LessonQuestionAttempt) => {
+    if (stored.handoffTo !== "socratic_panel") return;
+    if (answeredRight.current.has(segmentId)) return;
+    const prompts = (stored.guidedPrompts ?? []).flatMap((p) =>
+      p?.id && p.prompt?.trim() ? [{ id: p.id, prompt: p.prompt }] : [],
+    );
+    if (prompts.length === 0) return;
+    setCheckOpen(false);
+    setHandoff((prev) => ({
+      segmentId,
+      run: (prev?.run ?? 0) + 1,
+      prompts,
+      advance: stored.advanceAfterHandoff === true,
+    }));
+  };
+
+  /*
+   * 38a's return: "forward, never back to the question". Only when the server
+   * said to move on after it (`advanceAfterHandoff`); otherwise the panel has
+   * no ending and the check is still the way on. Moving on is not passing:
+   * the check is never marked passed, its misses stand for the review, and
+   * the panel on screen already made a right answer later `after_hint` - so
+   * nothing records this as known first time.
+   */
+  const keepGoingAfterHandoff = () => {
+    setHandedOff((prev) => new Set(prev).add(segment.id));
+    setHandoff(null);
+    advancePastSegment();
+  };
+  // The hand-off on this segment, if one arrived for it.
+  const handoffHere = handoff?.segmentId === segment.id ? handoff : null;
 
   const pickDensity = (id: string) => {
     const d = id as Density;
@@ -1561,9 +1625,14 @@ export function LessonPlayer({
    * its completion waits for it (`pendingProgress`). One the server refused
    * is not held, as before. `clientAttemptId` is the answer's own, kept with
    * it, so one whose reply was lost is not filed twice when it is sent again.
+   *
+   * `onStored` hears the server's answer to it - the stored row, marked -
+   * which is where a hand-off arrives (B94). An answer held for later has no
+   * answer yet, and none is waited for.
    */
   const saveAttempt = (
     answer: Omit<LessonQuestionAttemptWrite, "sessionId"> | null,
+    onStored?: (stored: LessonQuestionAttempt) => void,
   ) => {
     if (!live || !answer) return;
     const body = { ...answer, clientAttemptId: randomId() };
@@ -1579,13 +1648,16 @@ export function LessonPlayer({
       return;
     }
     attemptWrites.current.push(
-      lessonsApi
-        .saveAttempt(lesson.id, { sessionId: id, ...body })
-        .catch((cause: unknown) => {
+      lessonsApi.saveAttempt(lesson.id, { sessionId: id, ...body }).then(
+        // Beside the failure, not before it: what the answer leads to is no
+        // reason to hold the answer again.
+        (stored) => onStored?.(stored),
+        (cause: unknown) => {
           if (retryable(cause)) {
             holdAnswer(lesson.id, { sessionId: id, body }, owner);
           }
-        }),
+        },
+      ),
     );
   };
 
@@ -2146,25 +2218,36 @@ export function LessonPlayer({
             />
           )}
           {feedback && <FeedbackStrip message={feedback} />}
-          {contentHere &&
-            action === ADJUSTMENT_ACTIONS.SHOW_SOCRATIC_PANEL &&
-            guidedPrompts.length > 0 && (
+          {(handoffHere ||
+            (contentHere &&
+              action === ADJUSTMENT_ACTIONS.SHOW_SOCRATIC_PANEL &&
+              guidedPrompts.length > 0)) && (
               <SocraticPanel
-                key={`socratic-${segment.id}`}
-                prompts={guidedPrompts}
+                key={
+                  handoffHere
+                    ? `handoff-${segment.id}-${handoffHere.run}`
+                    : `socratic-${segment.id}`
+                }
+                prompts={handoffHere ? handoffHere.prompts : guidedPrompts}
                 /*
-                 * SCRUM-241: ONLY THE CHILD'S OWN WAY IN IS WIRED. The panel
-                 * opens here from the confusion prompt, so it ends on the way
-                 * back to the question - the check, while it is still to
-                 * pass. The hand-off ending is built and waits on a trigger:
-                 * nothing on the contract says "hand this child off", and
-                 * `show_socratic_panel` is this confusion prompt, not that.
+                 * SCRUM-241: TWO WAYS IN, AND THE PANEL IS TOLD WHICH. The
+                 * server's hand-off (B94, `handOffFrom`) arrives open and ends
+                 * on Keep going, on into the next segment. Otherwise it is
+                 * the engine's `show_socratic_panel`, opened by the child from
+                 * the confusion prompt, and ends on the way back to the
+                 * question - the check, while it is still to pass. One panel
+                 * at a time: a hand-off is the one on screen.
                  */
-                entry="self"
+                entry={handoffHere ? "handoff" : "self"}
                 onTryAgain={
-                  segment.quickCheck && !passedChecks.has(segment.id)
+                  !handoffHere &&
+                  segment.quickCheck &&
+                  !passedChecks.has(segment.id)
                     ? () => setCheckOpen(true)
                     : undefined
+                }
+                onKeepGoing={
+                  handoffHere?.advance ? keepGoingAfterHandoff : undefined
                 }
                 onShown={(promptIds) => {
                   // Reached through the panel is not reached first time: a
@@ -2335,7 +2418,10 @@ export function LessonPlayer({
                   (o) => o.id === answered.selectedId,
                 ),
               }),
+              // B94: the server's answer may hand this child off.
+              (stored) => handOffFrom(segment.id, stored),
             );
+            if (correct) answeredRight.current.add(segment.id);
             noteAnswer(correct);
             // Which pick first got it, for the scheduler - a miss re-opens the
             // check until it is passed, so "passed" is true of everyone.
