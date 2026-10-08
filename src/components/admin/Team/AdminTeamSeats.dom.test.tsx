@@ -75,7 +75,7 @@ describe("at the seat allowance", () => {
     team.mockResolvedValue([1, 2, 3, 4, 5].map(member));
     const { container } = render(<AdminTeamView />);
     await waitFor(() =>
-      expect(visibleText(container)).toMatch(/All 5 admin accounts are in use/),
+      expect(visibleText(container)).toMatch(/All five admin accounts are in use/),
     );
     expect(inviteButton(container)).toBeTruthy();
   });
@@ -87,6 +87,38 @@ describe("at the seat allowance", () => {
       expect(visibleText(container)).toMatch(/at no charge/),
     );
     expect(inviteButton(container)).toBeTruthy();
+  });
+});
+
+describe("the allowance (Lydia, 7 Oct)", () => {
+  it("is five for every school - a bigger band, or none at all", async () => {
+    for (const profile of [{ onboarding: { band: "enterprise" } }, {}]) {
+      school.mockResolvedValue({
+        id: "s1",
+        name: "Brightgate",
+        code: null,
+        slug: null,
+        profile,
+        academicConfig: {},
+        retentionPolicy: "contract",
+        retentionDays: 365,
+      });
+      team.mockResolvedValue([1, 2, 3, 4, 5].map(member));
+      const { container, unmount } = render(<AdminTeamView />);
+      await waitFor(() =>
+        expect(visibleText(container)).toMatch(/All five admin accounts are in use/),
+      );
+      expect(visibleText(container)).toMatch(/5 of 5 admin accounts/);
+      expect(visibleText(container)).toMatch(/Brightgate includes five admin accounts as standard/);
+      unmount();
+    }
+  });
+
+  it("states the cap even when the school record cannot be read", async () => {
+    school.mockRejectedValue(new Error("down"));
+    team.mockResolvedValue([1, 2, 3].map(member));
+    const { container } = render(<AdminTeamView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/3 of 5 admin accounts/));
   });
 });
 
@@ -126,6 +158,6 @@ describe("a deactivated admin", () => {
     const text = visibleText(container);
     expect(text).not.toMatch(/Invited/);
     expect(text).toMatch(/4 of 5 admin accounts/);
-    expect(text).not.toMatch(/All 5 admin accounts are in use/);
+    expect(text).not.toMatch(/All five admin accounts are in use/);
   });
 });

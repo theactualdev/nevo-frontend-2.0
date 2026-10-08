@@ -1,5 +1,6 @@
 import type { Invitation } from "@/lib/api/invites";
-import type { EnrolmentBand, SchoolRosterCounts } from "@/lib/api/school";
+import type { SchoolRosterCounts } from "@/lib/api/school";
+import { longDate } from "@/lib/dates";
 import { normaliseStatus } from "../Invitations/inviteStatus";
 
 /**
@@ -20,19 +21,26 @@ import { normaliseStatus } from "../Invitations/inviteStatus";
  *    COMPLIANCE zero must stay at full weight navy for ever, because that one
  *    is the intended reading and must never look like missing data. That card
  *    is not built from this file, and must not be.
- *  - A DENOMINATOR COMES FROM THE BAND, NEVER FROM A ROW COUNT. SCRUM-39:
- *    "Denominators come from the band seat ceiling, not from a count of rows."
- *    Counting rows would make "287 of 287" on every screen, which says nothing.
+ *
+ * NO DENOMINATORS (Lydia, 7 Oct). "Students enrolled" used to read "of 250",
+ * from the band's seat ceiling. Pricing is flat and billed on the roster count,
+ * so there is no allowance to count against: the roster is the number.
+ *
+ * "ADAPTATIONS MADE" IS THIS TERM'S, AND SAYS WHICH (Lydia, 7 Oct). A total
+ * since setup is meaningless by the second year. The caller reads the term
+ * the school set in Settings and passes the count and its name; with no term
+ * to name, the live tile is absent rather than an all-time figure.
  *
  * WHAT THE PERIOD WORDS COST. The frame heads this section "Activity this week"
  * and describes the adaptation figure as "across all students this half-term".
  * Both come from SCRUM-39's data line, which asks for a period-scoped
  * `GET overview { period, classes_active/total, ... }`. No such endpoint is
- * deployed: `studentsProfiled`, `adaptationEventsLogged` and every
- * `SchoolRosterCounts` field are all-time or point-in-time, with no date filter
- * between them. So a period word in the heading would be a false statement
- * about all five figures beneath it, and the headings here are period-neutral
- * instead. See the TODO(api) on `OverviewView`.
+ * deployed: `studentsProfiled` and every `SchoolRosterCounts` field are
+ * all-time or point-in-time. Only the adaptation count can be asked for by date
+ * (the log's `dateFrom`), so only that tile names a period, in its own line. A
+ * period word in the heading would be a false statement about the other
+ * figures, and the headings stay period-neutral. See the TODO(api) on
+ * `OverviewView`.
  */
 
 /** Populated. Deliberately not "this week" - see the note above. */
@@ -44,8 +52,6 @@ export const SNAPSHOT_HEADING_EARLY = "Where things stand";
 export interface SnapshotTile {
   key: string;
   value: number;
-  /** "of 250", or null when nothing entitles us to a denominator. */
-  of: string | null;
   label: string;
   desc: string;
   /** D04's early-life zero treatment. Never true outside the early variant. */
@@ -55,39 +61,21 @@ export interface SnapshotTile {
   cta?: string;
 }
 
-/**
- * Band -> student ceiling, the commercial fact the denominators come from.
- *
- * SCRUM-39, verbatim: "Band -> student cutoff: boutique <=250, mid_market
- * 251-500, premium 501-800, enterprise 801+". Which makes ENTERPRISE UNCAPPED.
- * "801+" is a floor, not a ceiling, and there is no honest number to put after
- * "of" for it - so it gets none, exactly as `adminSeatAllowance` returns null
- * for a band it cannot read rather than guessing.
- *
- * TODO(api): a seat ceiling on the school record. This is the client's second
- * copy of a commercial table it does not own (see `SEATS_BY_BAND` in
- * `Team/adminScopes.ts`), and it is only right for as long as the two agree.
- */
-export const STUDENT_CEILING_BY_BAND: Record<EnrolmentBand, number | null> = {
-  boutique: 250,
-  mid_market: 500,
-  premium: 800,
-  enterprise: null,
-};
-
-/** The school's student ceiling, or null when we cannot say. */
-export function studentCeiling(band: EnrolmentBand | undefined): number | null {
-  if (!band) return null;
-  return STUDENT_CEILING_BY_BAND[band] ?? null;
-}
-
 export interface SnapshotInput {
   /** `audit.studentsProfiled`, or null when the audit could not be read. */
   studentsProfiled: number | null;
-  /** The adaptation total, or null when we have not got one. */
+  /**
+   * The adaptation figure, or null when we have not got one: the all-time
+   * total in the early state (it is zero there), this term's count otherwise.
+   */
   adaptations: number | null;
+  /**
+   * The period a live school's count covers - "in First term", "since 8
+   * September". Null when the school has no term to name, and then the live
+   * tile is absent: an unnamed total is the "since setup" figure ruled out.
+   */
+  adaptationPeriod?: string | null;
   counts: SchoolRosterCounts | null;
-  band: EnrolmentBand | undefined;
   /** The early-life variant, decided by the caller from the adaptation log. */
   early: boolean;
   /**
@@ -96,6 +84,14 @@ export interface SnapshotInput {
    * about invitations rather than implying there are none.
    */
   pendingTeacherInvites?: number | null;
+}
+
+/**
+ * How the adaptations tile names its period: the school's own term name, or
+ * the day the term began when the row has no name.
+ */
+export function termPeriod(term: { name: string; from: string }): string {
+  return term.name ? `in ${term.name}` : `since ${longDate(term.from) ?? term.from}`;
 }
 
 /**
@@ -117,8 +113,8 @@ export function pendingTeacherInvites(invites: readonly Invitation[], now: numbe
 export function snapshotTiles({
   studentsProfiled,
   adaptations,
+  adaptationPeriod = null,
   counts,
-  band,
   early,
   pendingTeacherInvites: pendingTeachers = null,
 }: SnapshotInput): SnapshotTile[] {
@@ -129,23 +125,20 @@ export function snapshotTiles({
     tiles.push({
       key: "profiled",
       value: studentsProfiled,
-      of: null,
       label: "Students learning",
       desc: "have a live learning profile",
       muted: mute(studentsProfiled),
     });
   }
 
-  if (typeof adaptations === "number") {
+  if (typeof adaptations === "number" && (early || adaptationPeriod)) {
     tiles.push({
       key: "adaptations",
       value: adaptations,
-      of: null,
       label: "Adaptations made",
-      // The frame's early descriptor. A school that has not begun is not told
-      // "across all students so far", which reads as a total that should be
-      // higher; it is told when the figure will start moving.
-      desc: early ? "once lessons begin" : "across all students so far",
+      // The frame's early descriptor. A school that has not begun is told when
+      // the figure will start moving; a live one is told which term it covers.
+      desc: early ? "once lessons begin" : `across all students ${adaptationPeriod}`,
       muted: mute(adaptations),
       href: "/admin/adaptations",
       cta: "See the log",
@@ -156,7 +149,6 @@ export function snapshotTiles({
     tiles.push({
       key: "classes",
       value: counts.classes,
-      of: null,
       label: "Classes",
       desc: "on your roster",
       muted: mute(counts.classes),
@@ -167,7 +159,6 @@ export function snapshotTiles({
     tiles.push({
       key: "teachers",
       value: counts.teachers,
-      of: null,
       label: "Teachers",
       /*
        * "N invitations pending", the frame's words - NOT "N more invited".
@@ -184,21 +175,9 @@ export function snapshotTiles({
   }
 
   if (typeof counts?.activeStudents === "number") {
-    const ceiling = studentCeiling(band);
     tiles.push({
       key: "enrolled",
       value: counts.activeStudents,
-      /*
-       * The only tile with a source for a denominator. Classes and teachers
-       * have no band ceiling anywhere in the contract, so the frame's "of 14"
-       * and "of 20" stay unbuilt rather than invented.
-       *
-       * A school OVER its band renders "312 of 250", plainly and in the same
-       * treatment as any other. SCRUM-39 leaves "what does the Overview show
-       * when active students exceed the band" open; until it is answered, the
-       * true numbers with no alarm treatment is the answer that cannot mislead.
-       */
-      of: ceiling === null ? null : `of ${ceiling}`,
       label: "Students enrolled",
       desc:
         typeof counts.invitedStudents === "number" && counts.invitedStudents > 0

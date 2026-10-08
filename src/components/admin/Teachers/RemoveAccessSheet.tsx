@@ -248,7 +248,6 @@ export function RemoveAccessSheet({
       title="Remove admin-side access"
       subtitle={teacher.name}
       onClose={close}
-      widthClass="max-w-[472px]"
       footer={
         phase === "working" ? (
           <div className="flex flex-1 items-center justify-center gap-2.5 py-3">

@@ -21,9 +21,9 @@ import { SetupPausedBanner } from "../SetupPausedBanner";
 import { SchoolCodeCard } from "./SchoolCodeCard";
 import { useSetupGate } from "@/hooks/useSetupGate";
 import {
+  readAcademic,
   readOnboarding,
   schoolApi,
-  type EnrolmentBand,
   type SchoolNarrative,
   type SchoolRosterCounts,
 } from "@/lib/api/school";
@@ -36,7 +36,9 @@ import {
   pendingTeacherInvites,
   snapshotColumns,
   snapshotTiles,
+  termPeriod,
 } from "./snapshotTiles";
+import { currentTerm, startOfDay } from "../Adaptations/logWindow";
 import { intelligenceApi, type AttentionFlag } from "@/lib/api/intelligence";
 import { invitesApi } from "@/lib/api/invites";
 import { studentsApi, type AdminStudentRow } from "@/lib/api/students";
@@ -196,8 +198,15 @@ export function OverviewView() {
   const [auditPhase, setAuditPhase] = useState<CardPhase>("loading");
   const mayOpen = useCanOpen();
   const [adaptationTotal, setAdaptationTotal] = useState<number | null>(null);
-  /** The commercial band, for the one denominator that has a source. */
-  const [band, setBand] = useState<EnrolmentBand | undefined>(undefined);
+  /**
+   * This term's adaptation count and the period it names, for the live tile.
+   * Null until read, and null for good when the school has no current term in
+   * Settings - then the tile is absent rather than an all-time total.
+   */
+  const [termAdaptations, setTermAdaptations] = useState<{
+    count: number;
+    period: string;
+  } | null>(null);
   /** The school's own name, from its record - see `school` below. */
   const [schoolName, setSchoolName] = useState<string | null>(null);
   /** When the school finished setting up - D04's early-life "Set up 3 days ago". */
@@ -261,16 +270,23 @@ export function OverviewView() {
       setPhase("ready");
     });
 
-    // The band is a fact on the school record rather than a dashboard read,
-    // and feeds one denominator. Its own call, so it can never hold the page.
+    // The school record is its own call, so it can never hold the page. It
+    // names the school, dates the setup, and holds the terms that decide what
+    // "this term" means on the adaptations tile (Lydia, 7 Oct).
     schoolApi
       .get()
       .then((sc) => {
-        setBand(readOnboarding(sc).band);
         setSchoolName(sc.name?.trim() || null);
         setSetUp(setUpAgo(readOnboarding(sc).completedAt, Date.now()));
+        const term = currentTerm(readAcademic(sc).terms ?? [], Date.now());
+        const from = term ? startOfDay(term.from) : null;
+        if (!term || !from) return;
+        schoolIntelligenceApi
+          .adaptationLog({ limit: 1, dateFrom: from.toISOString() })
+          .then((log) => setTermAdaptations({ count: log.total, period: termPeriod(term) }))
+          .catch(() => setTermAdaptations(null));
       })
-      .catch(() => setBand(undefined));
+      .catch(() => setSchoolName(null));
 
     // D04's "N invitations pending" on the teachers tile. Its own read and its
     // own failure: an admin without the invitations surface still gets the
@@ -415,9 +431,11 @@ export function OverviewView() {
 
   const tiles = snapshotTiles({
     studentsProfiled: audit ? audit.studentsProfiled : null,
-    adaptations: adaptationTotal,
+    // Early, the all-time total is the zero that picked the variant. Live, it
+    // is this term's count, named - never the total since setup.
+    adaptations: early ? adaptationTotal : (termAdaptations?.count ?? null),
+    adaptationPeriod: termAdaptations?.period ?? null,
     counts,
-    band,
     early,
     pendingTeacherInvites: pendingTeachers,
   });
@@ -436,16 +454,11 @@ export function OverviewView() {
               {phase === "ready" ? school : "Overview"}
             </h2>
           </div>
-          {/* The period pill, STATING a scope rather than offering to change
-              one. The frame draws a caret and D04's own handler does nothing
-              with it; there is no period-scoped read to put behind it, and
-              "This half-term" would be untrue of every figure below. This is
-              the scope the figures genuinely have. See the TODO(api) above. */}
-          {phase === "ready" && (
-            <span className="mt-1 hidden shrink-0 rounded-full border-[1.5px] border-nevo-near-black/16 px-3.5 py-2 text-[13.5px] font-medium text-nevo-near-black/60 sm:block">
-              Since setup
-            </span>
-          )}
+          {/* NO PERIOD PILL. It read "Since setup" for the whole page, which
+              stopped being true when "Adaptations made" became this term's
+              (Lydia, 7 Oct) - and "since setup" is the scope she ruled
+              meaningless. The figures are not one period, so each says its
+              own: the adaptations tile names its term, the rest are counts. */}
         </div>
 
         {/* D01b AC-05. Renders only while the address is unconfirmed, and
@@ -684,11 +697,6 @@ export function OverviewView() {
                       >
                         {t.value.toLocaleString("en-GB")}
                       </span>
-                      {t.of && (
-                        <span className="text-[15px] font-medium text-nevo-near-black/40">
-                          {t.of}
-                        </span>
-                      )}
                     </div>
                     <p className="mt-2 text-[14.5px] font-semibold text-nevo-near-black">
                       {t.label}
