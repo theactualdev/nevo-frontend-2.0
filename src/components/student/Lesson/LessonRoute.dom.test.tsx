@@ -50,6 +50,7 @@ const state = (over: Record<string, unknown>) => {
     failed: false,
     empty: false,
     resumeAt: null,
+    progressRow: null,
     lastWorkedAt: null,
     adaptSegments: undefined,
     unavailable: null,
@@ -145,6 +146,21 @@ describe("a lesson the teacher called off", () => {
 
     expect(screen.getByText("Your teacher took it off.")).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/saved/i);
+  });
+});
+
+describe("where the child left the lesson's check (B82)", () => {
+  // The player opens straight into a check left part way, off this row.
+  it("hands the player the dashboard's row for this lesson", () => {
+    const row = {
+      status: "exited",
+      checkPosition: 1,
+      checkResumableUntil: "2026-10-08T23:59:59Z",
+    };
+    state({ lesson: LESSON, progressRow: row });
+    render(<LessonRoute lessonId="les-1" />);
+
+    expect(playerProps.value).toMatchObject({ progressRow: row });
   });
 });
 

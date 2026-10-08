@@ -324,6 +324,54 @@ describe("useStudentLesson", () => {
 });
 
 /**
+ * The child's progress row goes to the player and the summary as the
+ * dashboard gave it: where a check was left (B82) and how it went (B84).
+ * Never another lesson's, an older one, or one made up when there is none.
+ */
+describe("the progress row this lesson's screens read", () => {
+  const row = (over: Record<string, unknown>) => ({
+    lessonId: FIRST_LESSON_ID,
+    status: "exited",
+    segmentPosition: 0,
+    updatedAt: "2026-10-08T09:00:00Z",
+    ...over,
+  });
+
+  it("is the newest row for this lesson", async () => {
+    signIn();
+    detail.mockResolvedValue(LIVE_LESSON);
+    dashboard.mockReturnValue({
+      data: {
+        assignments: [],
+        recentProgress: [
+          row({ checkPosition: 0, updatedAt: "2026-10-07T09:00:00Z" }),
+          row({ checkPosition: 1 }),
+          row({ lessonId: "another", checkPosition: 3 }),
+        ],
+      },
+      loading: false,
+      failed: false,
+    });
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.progressRow).toMatchObject({ checkPosition: 1 });
+  });
+
+  it("is none when the dashboard did not answer", async () => {
+    signIn();
+    detail.mockResolvedValue(LIVE_LESSON);
+    dashboard.mockReturnValue({ data: null, loading: false, failed: true });
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.lesson).not.toBeNull());
+    expect(result.current.progressRow).toBeNull();
+  });
+});
+
+/**
  * A lesson a teacher had called off played exactly like a live one.
  *
  * This is the "opens it, completes it" half of the defect, and the galling part

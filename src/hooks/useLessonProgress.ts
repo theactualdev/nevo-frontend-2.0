@@ -5,6 +5,7 @@ import {
   LESSON_STATUS,
   lessonsApi,
   type LessonProgressResponse,
+  type LessonSessionResponse,
   type LessonStatus,
 } from "@/lib/api/lessons";
 import { getSession, getToken } from "@/lib/auth/session";
@@ -81,6 +82,11 @@ export interface LessonProgressState {
    * Null until a write lands; never an older write's answer.
    */
   saved: LessonProgressResponse | null;
+  /**
+   * What `POST /session` answered, which says where this lesson's check was
+   * left (B82). Null until the session opens.
+   */
+  opened: LessonSessionResponse | null;
 }
 
 type Position = { segment?: number; module?: number; check?: number };
@@ -91,6 +97,7 @@ const IDLE: LessonProgressState = {
   completionSaved: false,
   sessionId: null,
   saved: null,
+  opened: null,
 };
 
 export function useLessonProgress(
@@ -137,6 +144,7 @@ export function useLessonProgress(
   const [completionFailed, setCompletionFailed] = useState(false);
   const [completionSaved, setCompletionSaved] = useState(false);
   const [saved, setSaved] = useState<LessonProgressResponse | null>(null);
+  const [opened, setOpened] = useState<LessonSessionResponse | null>(null);
   /**
    * This player's own slot for a position held before any session exists.
    * Claimed while mounted, so the shell's flush leaves it to us.
@@ -244,6 +252,7 @@ export function useLessonProgress(
           sessionId.current = res.sessionId;
           sessionFailed.current = false;
           setIssued(res.sessionId);
+          setOpened(res);
           // What was held without a session is ours to send now, under it.
           clearProgress(lessonId, localId);
           // Anything reported while the session was opening.
@@ -342,5 +351,6 @@ export function useLessonProgress(
     completionSaved,
     sessionId: issued,
     saved,
+    opened,
   };
 }

@@ -425,6 +425,13 @@ export interface LessonClassProgress {
 export interface LessonSessionResponse {
   sessionId: string;
   resumed: boolean;
+  /**
+   * Where this lesson's after-lesson check was left, and when it stops being
+   * resumable (B82, 8 Oct) - the same pair the progress row carries (B49).
+   * Neither is required; absent or null is no check to pick up.
+   */
+  checkPosition?: number | null;
+  checkResumableUntil?: string | null;
 }
 
 /**

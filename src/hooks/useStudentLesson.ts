@@ -10,6 +10,7 @@ import {
   savedLesson,
 } from "@/lib/offline/savedLessons";
 import type { AdaptSegment } from "@/lib/api/intelligence";
+import type { DashboardProgressRow } from "@/lib/api/students";
 import { adaptSegmentsFor } from "@/lib/lessons/adaptation";
 import { lessonFromContent } from "@/lib/lessons/fromContent";
 import { getMockAdaptation, getMockLesson } from "@/lib/mocks";
@@ -101,6 +102,13 @@ export interface StudentLessonState {
    * there is none, or when the lesson is a mock (whose ids nothing records).
    */
   resumeAt: number | null;
+  /**
+   * The child's newest progress row for this lesson, as the dashboard gave
+   * it: where the check was left (B82) and, once completed, the check-in's
+   * outcome (B84). Null for a mock, when there is none, and when the
+   * dashboard did not answer - never a row made up to stand in for one.
+   */
+  progressRow: DashboardProgressRow | null;
   /** ISO timestamp of their last activity on this lesson, when we know it. */
   lastWorkedAt: string | null;
   /**
@@ -407,6 +415,7 @@ export function useStudentLesson(
     lesson,
     live: Boolean(live),
     resumeAt,
+    progressRow: live ? (saved ?? null) : null,
     lastWorkedAt: saved?.updatedAt ?? null,
     adaptSegments: live ? state.adaptSegments : undefined,
     unavailable,

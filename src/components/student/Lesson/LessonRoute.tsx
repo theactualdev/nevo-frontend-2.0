@@ -71,6 +71,7 @@ export function LessonRoute({
     failed,
     empty,
     resumeAt,
+    progressRow,
     lastWorkedAt,
     adaptSegments,
     unavailable,
@@ -162,6 +163,7 @@ export function LessonRoute({
         reviewConceptId={reviewConceptId}
         startAt={resumeAt ?? 0}
         placeUnknown={placeUnknown}
+        progressRow={progressRow}
         lastWorkedAt={lastWorkedAt}
         adaptSegments={adaptSegments}
       />

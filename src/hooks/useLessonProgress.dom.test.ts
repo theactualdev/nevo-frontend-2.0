@@ -277,4 +277,17 @@ describe("useLessonProgress - the after-lesson check (B49, B26)", () => {
 
     expect(result.current.saved).toMatchObject({ status: "completed" });
   });
+
+  it("gives back where the session says the check was left (B82)", async () => {
+    const session = {
+      sessionId: "sess-1",
+      resumed: true,
+      checkPosition: 2,
+      checkResumableUntil: "2026-10-08T23:59:59Z",
+    };
+    vi.spyOn(lessonsApi, "startSession").mockResolvedValue(session);
+    const { result } = renderHook(() => useLessonProgress(LESSON, true));
+
+    await waitFor(() => expect(result.current.opened).toEqual(session));
+  });
 });

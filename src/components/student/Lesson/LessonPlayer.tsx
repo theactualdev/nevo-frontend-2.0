@@ -66,7 +66,11 @@ import {
 } from "@/lib/api/lessons";
 import { schedulerApi } from "@/lib/api/scheduler";
 import { attemptFor } from "@/lib/lessons/attempts";
-import { answersBefore, checkResumeAt } from "@/lib/lessons/checkResume";
+import {
+  answersBefore,
+  checkResumeAt,
+  type CheckLeft,
+} from "@/lib/lessons/checkResume";
 import { checkOutcomeFrom } from "@/lib/lessons/checkOutcome";
 import {
   REVIEW_COPY,
@@ -186,6 +190,7 @@ export function LessonPlayer({
   assignmentId,
   startAt = 0,
   placeUnknown = false,
+  progressRow = null,
   lastWorkedAt = null,
   adaptSegments,
 }: {
@@ -232,6 +237,12 @@ export function LessonPlayer({
    * not their place. The opening segment is then not written until they move.
    */
   placeUnknown?: boolean;
+  /**
+   * The child's newest progress row for this lesson, from the dashboard read
+   * before the first frame: where the after-lesson check was left, and until
+   * when (B82). Null when there is none or it could not be read.
+   */
+  progressRow?: CheckLeft | null;
   /** Passed to the review entry screen so its recency line is a fact. */
   lastWorkedAt?: string | null;
   /**
@@ -307,6 +318,21 @@ export function LessonPlayer({
     !review && startAt > 0 && startAt < lesson.segments.length ? startAt : 0;
   const [index, setIndex] = useState(opening);
 
+  /*
+   * B82: A CHECK LEFT PART WAY OPENS STRAIGHT BACK INTO IT, on the question it
+   * was left at, while the server still says it can be picked up. Read off the
+   * dashboard's row, which is in hand before this first frame - so the child
+   * is never shown the last segment first, or moved under. Past the server's
+   * deadline this is null and the check starts fresh when they reach it. Not
+   * for a review, a finished lesson or the walkthrough, which resume no check.
+   */
+  const [checkOpensAt] = useState<number | null>(() => {
+    const count = lesson.assessment?.questions.length ?? 0;
+    return live && !review && !finished && count > 0
+      ? checkResumeAt(progressRow, count)
+      : null;
+  });
+
   const first = lesson.segments[opening];
   const firstPlan = planFor(first.id);
 
@@ -371,7 +397,13 @@ export function LessonPlayer({
   // Review sessions open on their entry screen first (37d).
   const [phase, setPhase] = useState<
     "review-entry" | "segments" | "assessment" | "complete"
-  >(review ? "review-entry" : "segments");
+  >(
+    review
+      ? "review-entry"
+      : checkOpensAt !== null
+        ? "assessment"
+        : "segments",
+  );
   // Exiting mid-lesson goes through the leave dialog, not straight out.
   const [leaveOpen, setLeaveOpen] = useState(false);
 
@@ -471,15 +503,20 @@ export function LessonPlayer({
 
   /*
    * B49: A CHECK LEFT PART WAY REOPENS WHERE IT WAS LEFT, the same day.
-   * Decided once, as the child moves into the check - see `beginCheck`.
-   * `landed` is how many of the answers from before landed, once read back;
-   * `reading` while that read is out.
+   * Decided once: as the lesson opens (B82, `checkOpensAt`), or as the child
+   * moves into the check - see `beginCheck`. `landed` is how many of the
+   * answers from before landed, once read back; `reading` until that read
+   * has answered.
    */
   const [checkResume, setCheckResume] = useState<{
     at: number;
     landed: number | null;
     reading: boolean;
-  } | null>(null);
+  } | null>(() =>
+    checkOpensAt === null
+      ? null
+      : { at: checkOpensAt, landed: null, reading: true },
+  );
   // The answers still on their way, which the completion waits for.
   const attemptWrites = useRef<Promise<unknown>[]>([]);
 
@@ -680,7 +717,9 @@ export function LessonPlayer({
   const runtime = useRuntimeAdaptation(
     lesson.id,
     adaptSegments,
-    live && !review,
+    // Not for a visit that opened in the check (B82): the child never sees a
+    // segment, and the engine must not be told they arrived on one.
+    live && !review && checkOpensAt === null,
     {
       currentSegmentId: segment.id,
       currentModality: modality,
@@ -1501,46 +1540,57 @@ export function LessonPlayer({
   };
 
   /*
-   * B49: INTO THE CHECK, OR BACK INTO IT.
+   * The answers given before the exit, read back from the account for Review
+   * Answers and so the result knows what landed before.
+   */
+  const readAnswersBefore = useCallback(
+    (at: number, asked: string) => {
+      const questions = lesson.assessment?.questions ?? [];
+      lessonsApi
+        .attempts(lesson.id, asked)
+        .then((rows) => {
+          const before = answersBefore(rows, questions, at);
+          reviewAnswers.current = [
+            ...before.picks.filter(
+              (p) =>
+                !reviewAnswers.current.some(
+                  (a) => a.questionIndex === p.questionIndex,
+                ),
+            ),
+            ...reviewAnswers.current,
+          ];
+          saveReviewAnswers(lesson.id, reviewAnswers.current);
+          setCheckResume({ at, landed: before.landed, reading: false });
+        })
+        // Unread, what landed before stays unknown and the result claims
+        // nothing about it.
+        .catch(() => setCheckResume({ at, landed: null, reading: false }));
+    },
+    [lesson],
+  );
+
+  /*
+   * B49: INTO THE CHECK, OR BACK INTO IT, for a child who reaches it from the
+   * last segment - one the lesson did not open into (`checkOpensAt`).
    *
-   * Where it was left comes off the progress row - the answer to the write
-   * this visit opened with, which is the only read of that row the contract
-   * has. So a child who moves on before that write answers starts the check
-   * fresh, as every check started before this. Decided here, once, and never
-   * moved under a child who is already answering.
-   *
-   * The answers given before the exit are read back from the account, for
-   * Review Answers and so the result knows what landed before.
+   * Where it was left comes off the newest read of it this visit has: the
+   * answer to the newest progress write, else the session's own (B82). So a
+   * child who moves on before either answers starts the check fresh, as every
+   * check started before this. Decided here, once, and never moved under a
+   * child who is already answering.
    */
   const beginCheck = () => {
     // A new run of the check; the last run's outcome is not this one's.
     saveCheckOutcome(lesson.id, null);
     const questions = lesson.assessment?.questions ?? [];
-    const at = live ? checkResumeAt(progress.saved, questions.length) : null;
+    const at = live
+      ? checkResumeAt(progress.saved ?? progress.opened, questions.length)
+      : null;
     if (at === null) return;
     const asked = progress.sessionId;
     setCheckResume({ at, landed: null, reading: Boolean(asked) });
     if (at >= questions.length) finishCheck();
-    if (!asked) return;
-    lessonsApi
-      .attempts(lesson.id, asked)
-      .then((rows) => {
-        const before = answersBefore(rows, questions, at);
-        reviewAnswers.current = [
-          ...before.picks.filter(
-            (p) =>
-              !reviewAnswers.current.some(
-                (a) => a.questionIndex === p.questionIndex,
-              ),
-          ),
-          ...reviewAnswers.current,
-        ];
-        saveReviewAnswers(lesson.id, reviewAnswers.current);
-        setCheckResume({ at, landed: before.landed, reading: false });
-      })
-      // Unread, what landed before stays unknown and the result claims
-      // nothing about it.
-      .catch(() => setCheckResume({ at, landed: null, reading: false }));
+    if (asked) readAnswersBefore(at, asked);
   };
 
   /*
@@ -1555,6 +1605,38 @@ export function LessonPlayer({
   const finishCheck = () => {
     void Promise.allSettled(attemptWrites.current).then(() => markComplete());
   };
+
+  /*
+   * B82: A LESSON OPENED STRAIGHT INTO ITS CHECK starts that run of it as
+   * `beginCheck` would: the last run's outcome cleared, and - left with every
+   * question answered and its result unseen - the lesson completed, as the
+   * result appears. Nothing is waiting to be stored this early. Once.
+   */
+  const checkOpened = useRef(false);
+  useEffect(() => {
+    if (checkOpensAt === null || checkOpened.current) return;
+    checkOpened.current = true;
+    saveCheckOutcome(lesson.id, null);
+    if (checkOpensAt >= (lesson.assessment?.questions.length ?? 0)) {
+      markComplete();
+    }
+  }, [checkOpensAt, lesson, markComplete]);
+
+  /*
+   * And its answers from before are read back once there is a session to
+   * read them under - which this early there seldom is yet. If the session
+   * cannot be opened at all, there is nothing to read them with, so what
+   * landed before is unknown rather than held (`landedPending`).
+   */
+  const answersAsked = useRef(false);
+  const checkSession = progress.sessionId;
+  useEffect(() => {
+    if (checkOpensAt === null || answersAsked.current || !checkSession) return;
+    answersAsked.current = true;
+    readAnswersBefore(checkOpensAt, checkSession);
+  }, [checkOpensAt, checkSession, readAnswersBefore]);
+  const noSessionComing = !checkSession && progress.completionFailed;
+  const landedPending = (checkResume?.reading ?? false) && !noSessionComing;
 
   const requestExit = () => {
     trackEvent(SIGNAL_EVENT_TYPES.EXIT_ATTEMPT, { segmentId: segment.id });
@@ -1618,7 +1700,7 @@ export function LessonPlayer({
         onAudioBusy={(phase) => trackBusy(BUSY_REASON.MEDIA_PLAYING, phase)}
         resumeAt={checkResume?.at}
         landedBefore={checkResume ? checkResume.landed : 0}
-        landedPending={checkResume?.reading ?? false}
+        landedPending={landedPending}
         outcome={live ? checkOutcomeFrom(progress.saved) : null}
         onComplete={finishCheck}
         onLeave={(checkPosition) => {

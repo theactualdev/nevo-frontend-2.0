@@ -24,6 +24,7 @@ import { loadCheckOutcome, loadReviewAnswers } from "./reviewStore";
  * B28  The review reports what happened (`outcome`), not a verdict.
  * D30  The reading accommodation reaches the checks, not only the segments.
  * B49  A check left part way reopens where it was left, the same day.
+ * B82  ...and the lesson opens straight into it, off the dashboard's row.
  * B26  "From the check-in" is the server's, from the completion write.
  */
 
@@ -38,6 +39,8 @@ const progress = vi.hoisted(() => ({
   completionFailed: false,
   /** The newest progress write's answer - see `useLessonProgress.saved`. */
   saved: null as unknown,
+  /** What `POST /session` answered - see `useLessonProgress.opened`. */
+  opened: null as unknown,
 }));
 vi.mock("@/hooks/useLessonProgress", () => ({
   useLessonProgress: () => ({ ...progress }),
@@ -63,8 +66,12 @@ vi.mock("@/hooks", () => ({
     return { trackEvent };
   },
 }));
+const runtimeAsked = vi.hoisted(() => ({ enabled: [] as unknown[] }));
 vi.mock("@/hooks/useRuntimeAdaptation", () => ({
-  useRuntimeAdaptation: () => ({ offeredBreak: null, reason: null, plan: null }),
+  useRuntimeAdaptation: (...args: unknown[]) => {
+    runtimeAsked.enabled.push(args[2]);
+    return { offeredBreak: null, reason: null, plan: null };
+  },
 }));
 vi.mock("@/hooks/useScaffoldLevel", () => ({ useScaffoldLevel: () => null }));
 vi.mock("@/hooks/useAssignmentNote", () => ({
@@ -170,6 +177,8 @@ beforeEach(() => {
   progress.completionSaved = false;
   progress.completionFailed = false;
   progress.saved = null;
+  progress.opened = null;
+  runtimeAsked.enabled.length = 0;
   attempts.mockReset().mockResolvedValue([]);
   window.sessionStorage.clear();
   push.mockReset();
@@ -608,6 +617,130 @@ describe("picking a check back up (B49)", () => {
     await intoCheck();
 
     expect(screen.getByRole("button", { name: "Start" })).toBeTruthy();
+  });
+
+  it("reads where it was left off the session too, before any write answers (B82)", async () => {
+    progress.opened = {
+      sessionId: SESSION,
+      resumed: true,
+      checkPosition: 1,
+      checkResumableUntil: inAnHour(),
+    };
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+
+    await intoCheck();
+
+    expect(screen.getByRole("heading", { name: "Question 2?" })).toBeTruthy();
+  });
+});
+
+describe("opening a lesson straight into a check left part way (B82)", () => {
+  /** The dashboard's row: left at the last segment, in the check. */
+  const left = (over: Record<string, unknown> = {}) => ({
+    status: "exited",
+    checkPosition: 1,
+    checkResumableUntil: inAnHour(),
+    ...over,
+  });
+  const open = (props: Record<string, unknown> = {}) =>
+    render(
+      <LessonPlayer
+        lesson={LESSON}
+        plan={null}
+        live
+        startAt={1}
+        progressRow={left()}
+        {...props}
+      />,
+    );
+
+  it("opens on the question it was left at, with no segment and no intro first", () => {
+    open();
+
+    expect(screen.getByRole("heading", { name: "Question 2?" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Start" })).toBeNull();
+    expect(screen.queryByText("Body of Denominators.")).toBeNull();
+  });
+
+  it("asks the engine nothing about a segment the child never sees", () => {
+    open();
+
+    expect(runtimeAsked.enabled.every((e) => e === false)).toBe(true);
+  });
+
+  it("reads back the answers from before once the session exists", async () => {
+    progress.sessionId = null;
+    attempts.mockResolvedValue([
+      {
+        questionId: "cp-1",
+        source: "assessment",
+        attemptNumber: 1,
+        answer: 2,
+        correct: true,
+      },
+    ]);
+    const { rerender } = open();
+    expect(attempts).not.toHaveBeenCalled();
+
+    progress.sessionId = SESSION;
+    rerender(
+      <LessonPlayer
+        lesson={LESSON}
+        plan={null}
+        live
+        startAt={1}
+        progressRow={left()}
+      />,
+    );
+
+    expect(attempts).toHaveBeenCalledWith("lesson-1", SESSION);
+    await waitFor(() =>
+      expect(loadReviewAnswers("lesson-1")).toEqual([
+        { questionIndex: 0, selectedId: "2" },
+      ]),
+    );
+  });
+
+  it("opens on the result, and completes, when every question was answered", async () => {
+    open({ progressRow: left({ checkPosition: 2 }) });
+
+    expect(screen.getByRole("button", { name: "Continue" })).toBeTruthy();
+    await waitFor(() =>
+      expect(statuses()).toContain(LESSON_STATUS.COMPLETED),
+    );
+  });
+
+  it("holds the result's heading only while the answers can still be read", () => {
+    // The session is still opening: what landed before is on its way.
+    progress.sessionId = null;
+    const { unmount } = open({ progressRow: left({ checkPosition: 2 }) });
+    expect(document.querySelector(".invisible")).not.toBeNull();
+    unmount();
+
+    // It could not open: nothing to read them with, so nothing is held.
+    progress.completionFailed = true;
+    open({ progressRow: left({ checkPosition: 2 }) });
+    expect(document.querySelector(".invisible")).toBeNull();
+  });
+
+  it("starts on the lesson once the server's day for the check is over", () => {
+    open({
+      progressRow: left({
+        checkResumableUntil: new Date(Date.now() - 1000).toISOString(),
+      }),
+    });
+
+    expect(screen.getByText("Body of Denominators.")).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Question 2?" })).toBeNull();
+  });
+
+  it.each([
+    ["a finished lesson", { finished: true }],
+    ["the walkthrough", { live: false }],
+  ])("never opens %s into it", (_, props) => {
+    open(props);
+
+    expect(screen.queryByRole("heading", { name: "Question 2?" })).toBeNull();
   });
 });
 
