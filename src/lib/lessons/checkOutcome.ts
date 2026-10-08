@@ -19,7 +19,9 @@ export interface CheckOutcome {
 }
 
 /**
- * The check-in's outcome from a progress write's answer, or null.
+ * The check-in's outcome from a progress row, or null: the completion
+ * write's answer, or the dashboard's row for the lesson (B84, 8 Oct), which
+ * carries the same three fields.
  *
  * ONLY FROM A COMPLETED ROW. The outcome is the server's reading of a whole
  * check, and the completion write is the one that ends it - an earlier
@@ -30,7 +32,13 @@ export interface CheckOutcome {
  * The client marks nothing and moves no concept between the lists.
  */
 export function checkOutcomeFrom(
-  row: LessonProgressResponse | null | undefined,
+  row:
+    | Pick<
+        LessonProgressResponse,
+        "status" | "masteredConcepts" | "revisitConcepts" | "resultNote"
+      >
+    | null
+    | undefined,
 ): CheckOutcome | null {
   if (!row || row.status !== LESSON_STATUS.COMPLETED) return null;
   return {

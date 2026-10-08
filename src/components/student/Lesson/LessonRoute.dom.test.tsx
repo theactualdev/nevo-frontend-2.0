@@ -50,13 +50,14 @@ const state = (over: Record<string, unknown>) => {
     failed: false,
     empty: false,
     resumeAt: null,
+    progressRow: null,
     lastWorkedAt: null,
     adaptSegments: undefined,
     unavailable: null,
     opensAt: null,
     placeUnknown: false,
     fromShelf: false,
-    fromPackage: false,
+    partial: false,
     ...over,
   };
 };
@@ -148,18 +149,33 @@ describe("a lesson the teacher called off", () => {
   });
 });
 
-describe("a lesson opened from the offline package's copy", () => {
+describe("where the child left the lesson's check (B82)", () => {
+  // The player opens straight into a check left part way, off this row.
+  it("hands the player the dashboard's row for this lesson", () => {
+    const row = {
+      status: "exited",
+      checkPosition: 1,
+      checkResumableUntil: "2026-10-08T23:59:59Z",
+    };
+    state({ lesson: LESSON, progressRow: row });
+    render(<LessonRoute lessonId="les-1" />);
+
+    expect(playerProps.value).toMatchObject({ progressRow: row });
+  });
+});
+
+describe("a lesson opened from a partial saved copy", () => {
   // Lydia, 6 Oct: played without its modules, recap and check, it is not
   // recorded completed. The player is told, because the player writes it.
   it("tells the player it is the partial copy", () => {
-    state({ lesson: LESSON, fromShelf: true, fromPackage: true });
+    state({ lesson: LESSON, fromShelf: true, partial: true });
     render(<LessonRoute lessonId="les-1" />);
 
     expect(playerProps.value).toMatchObject({ partial: true });
   });
 
   it("does not for the whole lesson", () => {
-    state({ lesson: LESSON, fromShelf: true, fromPackage: false });
+    state({ lesson: LESSON, fromShelf: true, partial: false });
     render(<LessonRoute lessonId="les-1" />);
 
     expect(playerProps.value).toMatchObject({ partial: false });

@@ -71,13 +71,14 @@ export function LessonRoute({
     failed,
     empty,
     resumeAt,
+    progressRow,
     lastWorkedAt,
     adaptSegments,
     unavailable,
     opensAt,
     placeUnknown,
     fromShelf,
-    fromPackage,
+    partial,
     finished,
   } = useStudentLesson(lessonId);
   const hydrated = useHydrated();
@@ -157,11 +158,12 @@ export function LessonRoute({
         plan={plan}
         live={live}
         finished={finished}
-        partial={fromPackage}
+        partial={partial}
         review={review}
         reviewConceptId={reviewConceptId}
         startAt={resumeAt ?? 0}
         placeUnknown={placeUnknown}
+        progressRow={progressRow}
         lastWorkedAt={lastWorkedAt}
         adaptSegments={adaptSegments}
       />

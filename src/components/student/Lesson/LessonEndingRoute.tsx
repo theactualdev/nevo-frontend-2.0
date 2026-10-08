@@ -41,9 +41,8 @@ export function LessonEndingRoute({
   screen: "summary" | "review";
 }) {
   const router = useRouter();
-  const { lesson, live, loading, failed, empty } = useStudentLesson(lessonId, {
-    adapt: false,
-  });
+  const { lesson, live, loading, failed, empty, progressRow } =
+    useStudentLesson(lessonId, { adapt: false });
   const hydrated = useHydrated();
 
   // The server cannot read the token, so it cannot know whether this lesson
@@ -78,7 +77,9 @@ export function LessonEndingRoute({
   if (lesson) {
     const view =
       screen === "summary" ? (
-        <LessonSummaryScreen lesson={lesson} />
+        // The row carries the check-in's outcome for a lesson finished on
+        // another visit (B84) - see the screen.
+        <LessonSummaryScreen lesson={lesson} progressRow={progressRow} />
       ) : (
         <ReviewAnswersScreen lesson={lesson} live={live} />
       );

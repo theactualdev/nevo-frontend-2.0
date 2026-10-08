@@ -59,6 +59,13 @@ describe("where the check reopens", () => {
     expect(checkResumeAt(row({ checkPosition: 5 }), 4, BEFORE)).toBeNull();
   });
 
+  it("is read off the lesson session too, which has no status (B82)", () => {
+    const session = { checkPosition: 2, checkResumableUntil: UNTIL };
+
+    expect(checkResumeAt(session, 4, BEFORE)).toBe(2);
+    expect(checkResumeAt(session, 4, AFTER)).toBeNull();
+  });
+
   it("is nowhere for a lesson already completed", () => {
     expect(checkResumeAt(row({ status: "completed" }), 4, BEFORE)).toBeNull();
   });

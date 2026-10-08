@@ -1,6 +1,5 @@
 import {
   LESSON_STATUS,
-  type LessonProgressResponse,
   type LessonQuestionAttempt,
 } from "@/lib/api/lessons";
 import type { AssessmentQuestion } from "@/lib/types";
@@ -13,11 +12,23 @@ import type { AssessmentQuestion } from "@/lib/types";
  * position is the place in the list, which attempts cannot tell you because a
  * skipped question leaves no attempt behind."
  *
- *   - WHERE: `checkPosition` on the progress row, written by the exit.
+ *   - WHERE: `checkPosition`, written by the exit. Read back on the dashboard's
+ *     progress row, on the session the player opens (both B82, 8 Oct), and on
+ *     a progress write's answer.
  *   - WHAT WAS ANSWERED: the stored `assessment` attempts for the session.
  *
  * Same day only. "A check finished a week later is measuring something else."
  */
+
+/**
+ * Anything that says where a check was left: a progress row (the dashboard's
+ * or a write's answer), or the lesson session. A session has no `status`.
+ */
+export interface CheckLeft {
+  status?: string;
+  checkPosition?: number | null;
+  checkResumableUntil?: string | null;
+}
 
 /**
  * The question to reopen the check on, or null to start it fresh.
@@ -34,13 +45,7 @@ import type { AssessmentQuestion } from "@/lib/types";
  * end is a check re-authored since it was left, and starts fresh.
  */
 export function checkResumeAt(
-  row:
-    | Pick<
-        LessonProgressResponse,
-        "status" | "checkPosition" | "checkResumableUntil"
-      >
-    | null
-    | undefined,
+  row: CheckLeft | null | undefined,
   questionCount: number,
   now: number = Date.now(),
 ): number | null {

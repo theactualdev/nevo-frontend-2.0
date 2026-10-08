@@ -4,7 +4,11 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check } from "lucide-react";
 import { Button } from "@/components/shared";
-import type { CheckOutcome } from "@/lib/lessons/checkOutcome";
+import type { DashboardProgressRow } from "@/lib/api/students";
+import {
+  checkOutcomeFrom,
+  type CheckOutcome,
+} from "@/lib/lessons/checkOutcome";
 import type { Lesson } from "@/lib/types";
 import { loadCheckOutcome } from "./reviewStore";
 
@@ -20,23 +24,36 @@ const LESSONS_HREF = "/student/lessons";
  * card — no score, no percentile.
  *
  * "FROM THE CHECK-IN" IS THE SERVER'S (B26): the outcome the completion write
- * brought back, kept by the player for this route. A lesson finished on
- * another visit, or whose completion never answered, has none here, and the
- * section is not drawn. The signed-out walkthrough keeps its authored lists.
+ * brought back, kept by the player on this device. Where the device has no
+ * copy - the lesson was finished on another visit or another tablet - it is
+ * read off the child's progress row for the lesson (B84, 8 Oct), and only a
+ * completed one (`checkOutcomeFrom`). With neither, or a dashboard read that
+ * failed, the section is not drawn. The signed-out walkthrough keeps its
+ * authored lists.
  *
  * A concept to revisit is its name and the revisit mark, without the frame's
  * "· we'll revisit soon": design D96 (6 Oct) renders that promise only where
  * the engine scheduled the return, and nothing this screen reads carries one.
  */
-export function LessonSummaryScreen({ lesson }: { lesson: Lesson }) {
+export function LessonSummaryScreen({
+  lesson,
+  progressRow = null,
+}: {
+  lesson: Lesson;
+  /** The child's newest progress row for this lesson; null when unread. */
+  progressRow?: DashboardProgressRow | null;
+}) {
   const router = useRouter();
   const summary = lesson.summary;
-  // Kept in sessionStorage (client-only) - read after mount.
-  const [outcome, setOutcome] = useState<CheckOutcome | null>(null);
+  // Kept in sessionStorage (client-only) - read after mount. Undefined until
+  // it has been, so the row's copy is never drawn and then swapped for it.
+  const [kept, setKept] = useState<CheckOutcome | null | undefined>(undefined);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setOutcome(loadCheckOutcome(lesson.id));
+    setKept(loadCheckOutcome(lesson.id));
   }, [lesson.id]);
+  const outcome =
+    kept === undefined ? null : (kept ?? checkOutcomeFrom(progressRow));
   const mastered =
     outcome?.mastered ?? lesson.assessment?.masteredConcepts ?? [];
   const revisit = outcome?.revisit ?? lesson.assessment?.revisitConcepts ?? [];
