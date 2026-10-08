@@ -141,10 +141,11 @@ export type CalculationScaffoldKind =
 
 /**
  * "A calculation drawing described as data, never as a generated image" -
- * the spec's own description, and the whole of it. `rows`, `marks` and
- * `labels` carry no description on the wire; SCRUM-177's worked example is
- * `3/5 + 1/5` as `{kind: "bar", parts: 5, rows: 1, marks: [3, 1], labels:
- * ["3/5", "1/5"]}`, which is what `fromContent` reads them by.
+ * the spec's own description. Backend defined the rest on 8 Oct (B100):
+ * `rows` is the physical row count, `marks` are ordered renderer positions or
+ * values, and `labels` are the visible labels paired with marks or parts, in
+ * renderer order. `fromContent` reads them by that, and draws only the
+ * pairings a frame draws.
  *
  * ABSENT IS AN INSTRUCTION: no `kind`, no drawing, and the front end infers
  * none.
@@ -153,10 +154,21 @@ export interface CalculationScaffold {
   kind: CalculationScaffoldKind;
   /** 1-100. */
   parts: number;
-  /** 1-20, default 1. */
+  /** The physical row count. 1-20, default 1. */
   rows?: number;
   marks?: CheckpointScalar[];
   labels?: string[];
+}
+
+/**
+ * One thing a step's scaffold choreography names (B107): 17b's denominators
+ * ringed, numerators to navy, and the result row filling, as data. `target`
+ * carries no description or vocabulary on the wire. `role` defaults to
+ * `active`.
+ */
+export interface CalculationHighlight {
+  target: string;
+  role?: "active" | "source" | "result";
 }
 
 export interface CalculationStep {
@@ -213,12 +225,23 @@ export interface CalculationStep {
   input?: CalculationStepEntry;
   targets?: CheckpointScalar[];
   assembles?: string;
+  /**
+   * How many pieces a `tap` step builds: a positive whole number (B102).
+   * Null on the other two inputs, and on content stored before it.
+   */
+  tapCount?: number | null;
+  /** What this step's scaffold choreography names (B107). */
+  highlights?: CalculationHighlight[];
 }
 
 export interface CalculationVariant {
   type: string;
   /** The concept this calculation teaches, when the pipeline named one. */
   conceptId?: string | null;
+  /**
+   * "The complete solved equation revealed when all co-construction steps
+   * finish" (spec; B101). The answer, so it is never the problem's stand-in.
+   */
   fullEquation: string;
   /** The problem's notation, "3/5 + 1/5". Required in the spec (SCRUM-177). */
   expression?: string;

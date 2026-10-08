@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, Pause, Play } from "lucide-react";
-import { Button } from "@/components/shared";
+import { Check, Delete, Pause, Play } from "lucide-react";
+import { Button, NevoKeyboard } from "@/components/shared";
 import type {
+  CalcHighlight,
   CalcNarration,
   CalcNumberStep,
   CalcScaffold,
   CalculationSegment,
+  CalculationStep,
   ScaffoldQuantity,
 } from "@/lib/types";
 import { isStoredAnswer } from "@/lib/lessons/storedAnswer";
@@ -28,8 +30,10 @@ import { useMediaSource, type MediaFailReason } from "./useMediaSource";
  * itself - it summed the bars, wrote the result row and drew the fraction from
  * numbers it had added - which is why it only ever handled two like
  * fractions. Now:
- *   - the drawing is the payload's `scaffold`, drawn with the values given;
- *   - the equation is the payload's own `assembles` and `equationState`;
+ *   - the drawing is the payload's `scaffold`, drawn with the values given,
+ *     and what each answered step does to it is that step's `highlights`;
+ *   - the equation is the payload's own `assembles` and `equationState`, and
+ *     its `fullEquation` once every step is done;
  *   - a step is right when the child's entry is one of the answers the
  *     pipeline stored for it (`isStoredAnswer`), and never otherwise;
  *   - each step takes the input it names: a choice, a number, or a tap.
@@ -119,7 +123,9 @@ export function CalculationSolver({
   /** A line of the child's reading that is not coloured to mean anything. */
   const readable = reading && [READING_BODY, READING_INK];
   const asking = phase === "ask";
-  const line = equationAt(calculation, index, !asking);
+  const line = equationAt(calculation, index, !asking, done);
+  // The step whose answer the drawing is showing: the one just settled.
+  const emphasis = emphasisAt(steps, asking ? index - 1 : index);
 
   const advance = () => {
     if (index === lastIndex) {
@@ -191,7 +197,7 @@ export function CalculationSolver({
       {calculation.scaffold && (
         <ScaffoldCard
           scaffold={calculation.scaffold}
-          done={done}
+          emphasis={emphasis}
           reading={reading}
         />
       )}
@@ -343,6 +349,15 @@ export function CalculationSolver({
             )}
 
             {!hintOpen && step.hint && <HintLink onClick={openHint} />}
+
+            {/* D150: the Nevo pad, last, as the keypad frame docks it. */}
+            {step.input === "number" && step.entry === "numeric" && (
+              <NevoKeyboard
+                layout="calc"
+                onKey={(c) => setTyped((t) => t + c)}
+                className="mt-6"
+              />
+            )}
           </>
         )}
       </div>
@@ -355,12 +370,18 @@ export function CalculationSolver({
  * `assembles` while it is asked and its `equationState` once it is done, up
  * to where the child is - the latest of those the payload actually wrote.
  * `settled` is a step answered (confirmed, or the last one done).
+ *
+ * Once every step is done it is `fullEquation`, "the complete solved equation
+ * revealed after all construction steps finish" (B101) - 17b's equation
+ * assembling to its answer - and it is read at no other point.
  */
 function equationAt(
   calculation: CalculationSegment,
   index: number,
   settled: boolean,
+  done: boolean,
 ): string {
+  if (done && calculation.fullEquation) return calculation.fullEquation;
   let line = calculation.expression;
   for (let i = 0; i <= index; i++) {
     const step = calculation.steps[i];
@@ -369,6 +390,66 @@ function equationAt(
   }
   return line;
 }
+
+/** What the drawing shows, by the labels it draws. See `emphasisAt`. */
+interface ScaffoldEmphasis {
+  /** 17b's violet ring: the answered step's `active` targets. */
+  ring: ReadonlySet<string>;
+  /** 17b's navy fill: the answered step's `source` targets. */
+  navy: ReadonlySet<string>;
+  /** 17b's result row: a `result` target an answered step has named. */
+  result: ReadonlySet<string>;
+  /** A `result` target no answered step has named yet: not drawn. */
+  withheld: ReadonlySet<string>;
+}
+
+/**
+ * 17b's per-step choreography - denominators ringed, numerators to navy, the
+ * result row filling - as each step's `highlights` name it (B107), with
+ * nothing inferred.
+ *
+ * A HIGHLIGHT IS WHAT A STEP'S ANSWER DOES TO THE DRAWING. 17b's table puts it
+ * in the "system response / scaffold change" column, on the right answer, and
+ * its frame rings the bars once step 1 is confirmed and drops the ring when
+ * step 2's answer turns them navy. So the drawing shows the latest answered
+ * step's highlights (`settled`, -1 before any), and only those.
+ *
+ * A RESULT IS NEVER SHOWN EARLY. A quantity a `result` highlight names
+ * anywhere is the answer, so it is withheld until a step that names it is
+ * answered, and stays once it has been - the same rule as `fullEquation`.
+ *
+ * A TARGET IS MATCHED AGAINST THE DRAWING'S OWN LABELS, exactly. The wire
+ * gives `target` no vocabulary; a label is the one thing on screen a string
+ * can name without being interpreted, so a target that is not a label names
+ * nothing here (asked of backend).
+ */
+function emphasisAt(
+  steps: CalculationStep[],
+  settled: number,
+): ScaffoldEmphasis {
+  const named = (
+    step: CalculationStep | undefined,
+    role: CalcHighlight["role"],
+  ) =>
+    (step?.highlights ?? [])
+      .filter((h) => h.role === role)
+      .map((h) => h.target);
+  const result = new Set(
+    steps.slice(0, settled + 1).flatMap((s) => named(s, "result")),
+  );
+  return {
+    ring: new Set(named(steps[settled], "active")),
+    navy: new Set(named(steps[settled], "source")),
+    result,
+    withheld: new Set(
+      steps.flatMap((s) => named(s, "result")).filter((t) => !result.has(t)),
+    ),
+  };
+}
+
+/** Is this quantity drawn yet - not a result still kept back? */
+const drawnNow = (emphasis: ScaffoldEmphasis) => (q: ScaffoldQuantity) =>
+  !q.label || !emphasis.withheld.has(q.label);
 
 /**
  * The "not that one" ring pulse (SCRUM-94: the displacing shake is retired),
@@ -401,13 +482,17 @@ function Nudged({
 /**
  * A typed step.
  *
- * WHICH KEYBOARD IS THE STEP'S CALL, and the frame's. The solver frame draws
- * this field as `inputmode="numeric"` and 17b §10 asks for the device's
- * on-screen numeric keyboard - not the Nevo pad, whose 0-9 grid has no minus
- * sign and no decimal point, so "-3" or "2.5" could not be typed on a tablet
- * and the forward chevron stayed held (audit 51). `decimal` is that keyboard
- * with its point. An expression ("3x - 4") needs letters and an operator, and
- * takes the device's full keyboard. A hardware keyboard needs neither.
+ * A NUMBER TAKES THE NEVO PAD (D150), with its minus sign and point - "the
+ * device's own keyboard cannot be relied on". The device's numeric keyboard
+ * stood in here before; an iPhone's has no minus key, so a child doing
+ * subtraction on one was simply stuck. The field suppresses the device's
+ * keyboard (`inputMode="none"`), the solver docks the pad under the step, and
+ * a laptop's own keys still type straight into the field. Delete sits at the
+ * field, as the keypad frame draws it.
+ *
+ * AN EXPRESSION ("3x - 4") STILL TAKES THE DEVICE'S FULL KEYBOARD. It needs
+ * letters and operators, D150 draws a number pad only, and the Nevo qwerty has
+ * no "+" or "=" - so it is unchanged until design says which (asked).
  */
 function NumberEntry({
   step,
@@ -424,17 +509,23 @@ function NumberEntry({
   onChange: (value: string) => void;
   onCommit: () => void;
 }) {
-  const text = step.entry === "text";
+  if (step.entry === "numeric") {
+    return (
+      <PadEntry
+        step={step}
+        reading={reading}
+        nudge={nudge}
+        value={value}
+        onChange={onChange}
+        onCommit={onCommit}
+      />
+    );
+  }
   return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (value.trim()) onCommit();
-      }}
-    >
+    <EntryForm value={value} onCommit={onCommit}>
       <Nudged nudge={nudge} className="mt-[18px] flex justify-center">
         <input
-          inputMode={text ? "text" : "decimal"}
+          inputMode="text"
           autoCapitalize="none"
           autoCorrect="off"
           spellCheck={false}
@@ -442,24 +533,32 @@ function NumberEntry({
           onChange={(e) => onChange(e.target.value)}
           placeholder="-"
           aria-label={step.prompt}
-          className={cn(
-            "h-[52px] rounded-[10px] border-2 border-nevo-near-black/18 bg-nevo-cream-elevated text-center font-semibold text-nevo-navy shadow-elevation-1 outline-none transition-colors focus:border-nevo-navy",
-            text ? "w-[220px] text-[22px]" : "w-[120px] text-[26px]",
-          )}
+          className="h-[52px] w-[220px] rounded-[10px] border-2 border-nevo-near-black/18 bg-nevo-cream-elevated text-center text-[22px] font-semibold text-nevo-navy shadow-elevation-1 outline-none transition-colors focus:border-nevo-navy"
         />
-        {step.unit ? (
-          // Beside the field, not inside it: a child types the number, not
-          // the noun.
-          <span
-            className={cn(
-              "ml-2.5 self-center text-[15px] text-nevo-near-black/60",
-              reading && [READING_BODY, READING_INK],
-            )}
-          >
-            {step.unit}
-          </span>
-        ) : null}
+        <Unit unit={step.unit} reading={reading} />
       </Nudged>
+    </EntryForm>
+  );
+}
+
+/** The step's form: Enter or "Check my answer" commits what is typed. */
+function EntryForm({
+  value,
+  onCommit,
+  children,
+}: {
+  value: string;
+  onCommit: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (value.trim()) onCommit();
+      }}
+    >
+      {children}
       {value.trim().length > 0 && (
         <Button type="submit" className="mt-[18px] w-full">
           Check my answer
@@ -469,16 +568,110 @@ function NumberEntry({
   );
 }
 
+/**
+ * Beside the field, not inside it: a child types the number, not the noun.
+ */
+function Unit({ unit, reading }: { unit?: string; reading: boolean }) {
+  if (!unit) return null;
+  return (
+    <span
+      className={cn(
+        "ml-2.5 shrink-0 self-center text-[15px] text-nevo-near-black/60",
+        reading && [READING_BODY, READING_INK],
+      )}
+    >
+      {unit}
+    </span>
+  );
+}
+
+/**
+ * The minus sign as the keypad frame draws it in the field. What is kept, and
+ * matched against the stored answers, is the hyphen they are written with.
+ */
+const MINUS = "\u2212";
+const drawn = (value: string) => value.replace(/-/g, MINUS);
+const kept = (shown: string) => shown.replace(/\u2212/g, "-");
+
+/**
+ * The number field, as D150's keypad frame draws it: "YOUR ANSWER", the field
+ * with delete at its end once something is typed, and the line under it.
+ * The pad itself is docked below the step by the solver.
+ */
+function PadEntry({
+  step,
+  reading,
+  nudge,
+  value,
+  onChange,
+  onCommit,
+}: {
+  step: CalcNumberStep;
+  reading: boolean;
+  nudge: number;
+  value: string;
+  onChange: (value: string) => void;
+  onCommit: () => void;
+}) {
+  return (
+    <EntryForm value={value} onCommit={onCommit}>
+      <div className="mt-[18px] flex flex-col items-center gap-4">
+        <span className="font-mono text-[11px] font-bold tracking-[0.12em] text-nevo-near-black/50 uppercase sm:text-[11.5px]">
+          Your answer
+        </span>
+        <Nudged
+          nudge={nudge}
+          className="flex w-full items-center sm:max-w-[440px]"
+        >
+          <div className="flex min-h-[72px] min-w-0 flex-1 items-center gap-1 rounded-[10px] border-[1.5px] border-nevo-navy/40 bg-nevo-cream-elevated px-[18px] py-2.5 transition-colors focus-within:border-nevo-navy sm:min-h-[82px] lg:min-h-[80px]">
+            <input
+              // The pad below is this field's keyboard (D150).
+              inputMode="none"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              value={drawn(value)}
+              onChange={(e) => onChange(kept(e.target.value))}
+              aria-label={step.prompt}
+              className="min-w-0 flex-1 bg-transparent text-[38px] leading-[1.1] font-semibold text-nevo-navy caret-nevo-navy outline-none sm:text-[48px] lg:text-[46px]"
+            />
+            {value.length > 0 && (
+              <button
+                type="button"
+                aria-label="Delete"
+                onClick={() => onChange(value.slice(0, -1))}
+                className="flex size-11 shrink-0 cursor-pointer items-center justify-center text-nevo-near-black"
+              >
+                <Delete className="size-[22px] sm:size-6" strokeWidth={1.9} />
+              </button>
+            )}
+          </div>
+          <Unit unit={step.unit} reading={reading} />
+        </Nudged>
+        <p
+          className={cn(
+            "max-w-[360px] text-center text-[13.5px] leading-[1.5] text-pretty text-nevo-near-black/60 sm:text-[15px]",
+            reading && [READING_BODY, READING_INK],
+          )}
+        >
+          Type the number you worked out. You can use a minus sign or a point.
+        </p>
+      </div>
+    </EntryForm>
+  );
+}
+
 /** The drawing, in 17b's "Picture it" card. Decorative-with-labels (17b §11). */
 function ScaffoldCard({
   scaffold,
-  done,
+  emphasis,
   reading,
 }: {
   scaffold: CalcScaffold;
-  done: boolean;
+  emphasis: ScaffoldEmphasis;
   reading: boolean;
 }) {
+  const shown = drawnNow(emphasis);
   return (
     <div className="rounded-[12px] bg-nevo-cream-elevated p-[18px] shadow-elevation-1 sm:p-6">
       <span className="font-mono text-[10px] tracking-[0.06em] text-nevo-near-black/50 uppercase">
@@ -488,18 +681,25 @@ function ScaffoldCard({
         {scaffold.kind === "bar" && (
           <BarRows
             parts={scaffold.parts}
-            quantities={scaffold.quantities}
-            strong={done}
+            quantities={scaffold.quantities.filter(shown)}
+            emphasis={emphasis}
             reading={reading}
           />
         )}
+        {/*
+          37c draws no choreography on dots or a line, so neither takes one.
+          A result is still kept back until its step is answered.
+        */}
         {scaffold.kind === "dots" && (
-          <DotGroups quantities={scaffold.quantities} reading={reading} />
+          <DotGroups
+            quantities={scaffold.quantities.filter(shown)}
+            reading={reading}
+          />
         )}
         {scaffold.kind === "number_line" && (
           <NumberLine
             parts={scaffold.parts}
-            points={scaffold.points}
+            points={scaffold.points.filter(shown)}
             reading={reading}
           />
         )}
@@ -510,59 +710,76 @@ function ScaffoldCard({
 
 /**
  * 17b's fraction bars: one row per quantity, `parts` cells, `count` of them
- * filled. Navy once the solution has assembled (17b's complete state). No
- * result row: 17b fills one on completion, but its count would be this
- * screen's sum, and nothing in the payload carries it.
+ * filled. What an answered step's highlights name changes in place (17b
+ * §3): a ring in violet, cells strengthened to navy, and a result row that
+ * fills below a rule. A row nothing names stays as it was drawn - nothing
+ * here turns navy because the solve finished.
  */
 function BarRows({
   parts,
   quantities,
-  strong,
+  emphasis,
   reading,
 }: {
   parts: number;
   quantities: ScaffoldQuantity[];
-  strong: boolean;
+  emphasis: ScaffoldEmphasis;
   reading: boolean;
 }) {
   const labelled = quantities.some((q) => q.label);
   return (
     <div className="flex flex-col gap-3">
-      {quantities.map((q, row) => (
-        <div key={row} className="flex items-center gap-3">
-          {labelled && (
-            <span
-              className={cn(
-                "min-w-[34px] shrink-0 text-sm transition-colors sm:text-[15px]",
-                strong
-                  ? "font-semibold text-nevo-navy"
-                  : "text-nevo-near-black/60",
-                // Navy says the solution has assembled, so it keeps its ink.
-                reading && READING_BODY,
-                reading && !strong && READING_INK,
-              )}
-            >
-              {q.label}
-            </span>
-          )}
-          <div aria-hidden className="flex flex-1 gap-[5px]">
-            {Array.from({ length: parts }).map((_, cell) => (
+      {quantities.map((q, row) => {
+        const named = (set: ReadonlySet<string>) =>
+          q.label != null && set.has(q.label);
+        const result = named(emphasis.result);
+        // The frame's result row takes no ring, only its navy.
+        const ring = !result && named(emphasis.ring);
+        const strong = result || named(emphasis.navy);
+        return (
+          <div
+            key={row}
+            className={cn(
+              "flex items-center gap-3",
+              result &&
+                "border-t border-nevo-near-black/10 pt-3 motion-safe:animate-nevo-reveal",
+            )}
+          >
+            {labelled && (
               <span
-                key={cell}
                 className={cn(
-                  // Frame cell heights per variant: 28 / 34 / 30.
-                  "h-7 flex-1 rounded-[5px] transition-colors duration-200 sm:h-[34px] lg:h-[30px]",
-                  cell < q.count
-                    ? strong
-                      ? "bg-nevo-navy"
-                      : "bg-nevo-violet"
-                    : "border border-nevo-near-black/12 bg-nevo-near-black/[0.08]",
+                  "min-w-[34px] shrink-0 text-sm transition-colors sm:text-[15px]",
+                  strong
+                    ? "font-semibold text-nevo-navy"
+                    : "text-nevo-near-black/60",
+                  // Navy is what the step's answer did, so it keeps its ink.
+                  reading && READING_BODY,
+                  reading && !strong && READING_INK,
                 )}
-              />
-            ))}
+              >
+                {q.label}
+              </span>
+            )}
+            <div aria-hidden className="flex flex-1 gap-[5px]">
+              {Array.from({ length: parts }).map((_, cell) => (
+                <span
+                  key={cell}
+                  className={cn(
+                    // Frame cell heights per variant: 28 / 34 / 30.
+                    "h-7 flex-1 rounded-[5px] transition-colors duration-200 sm:h-[34px] lg:h-[30px]",
+                    cell < q.count
+                      ? strong
+                        ? "bg-nevo-navy"
+                        : "bg-nevo-violet"
+                      : "border border-nevo-near-black/12 bg-nevo-near-black/[0.08]",
+                    ring && "outline-2 outline-offset-2 outline-nevo-violet",
+                  )}
+                />
+              ))}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

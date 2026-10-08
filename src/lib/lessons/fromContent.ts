@@ -25,6 +25,7 @@ import { isStoredAnswer } from "./storedAnswer";
 import { MODALITY, type Modality } from "@/lib/constants";
 import type {
   Assessment,
+  CalcHighlight,
   CalcNarration,
   CalcScaffold,
   CalculationSegment,
@@ -360,15 +361,13 @@ export function calculationFromVariant(
     ...(conceptId ? { conceptId } : {}),
     /*
      * `expression` is the problem as notation, required since SCRUM-177.
-     * Content stored before it has only `fullEquation`, which on that content
-     * IS the problem ("5x - 4 = 2x + 11"), so it stands in there and nowhere
-     * else - on new content `fullEquation` may be the worked result, and the
-     * full worked example is never rendered.
+     * `fullEquation` used to stand in for it on content stored before, when
+     * nobody had said what it was. Backend has now (B101): it is the solved
+     * equation, so standing it in would show the answer before the first
+     * step. A problem with no notation shows none until a step assembles one.
      */
-    expression: (typeof variant.expression === "string"
-      ? variant.expression
-      : variant.fullEquation
-    ).trim(),
+    expression: variant.expression?.trim() ?? "",
+    fullEquation: variant.fullEquation?.trim() ?? "",
     ...(scaffold ? { scaffold } : {}),
     ...(manipulative ? { manipulative } : {}),
     steps,
@@ -393,8 +392,9 @@ function storedAnswers(step: WireCalculationStep): string[] {
  * `expectedInput`, which says what kind of answer it is, not what the child
  * does to give it.
  *
- * Every kind refuses a step nobody can be right about: no stored answer at
- * all, or a choice whose stored answers name none of its own options.
+ * A choice or a number refuses a step nobody can be right about: no stored
+ * answer at all, or a choice whose stored answers name none of its own
+ * options. A tap step is right when its `tapCount` is built.
  */
 function calcStepFor(
   step: WireCalculationStep,
@@ -408,6 +408,7 @@ function calcStepFor(
     hint: step.hint?.trim() ?? "",
     assembles: step.assembles?.trim() ?? "",
     equationState: step.equationState?.trim() ?? "",
+    highlights: highlightsFor(step),
     ...(narration ? { narration } : {}),
   };
 
@@ -454,8 +455,17 @@ function calcStepFor(
      * wearing the right prompt.
      */
     if (!manipulative) return undefined;
-    const target = pieceCount(accepted, manipulative.parts);
-    if (target === undefined) return undefined;
+    /*
+     * HOW MANY PIECES IS `tapCount`, a positive whole number (B102). It used
+     * to be read out of the step's stored answers, which said what the answer
+     * was rather than how many taps build it. A count the bar cannot hold is
+     * refused, never clamped.
+     */
+    const target = step.tapCount;
+    if (typeof target !== "number" || !Number.isInteger(target)) {
+      return undefined;
+    }
+    if (target < 1 || target > manipulative.parts) return undefined;
     return { ...base, input: "tap", target };
   }
 
@@ -463,19 +473,20 @@ function calcStepFor(
 }
 
 /**
- * How many pieces a tap step builds: the first stored answer written as a
- * whole number the bar can hold. "3" is three pieces. "3/4" is a fraction,
- * and reading three out of it would be this app doing the pipeline's
- * arithmetic, so it is not read; a step stored only that way has nothing to
- * build and is refused.
+ * What a step's answer does to the drawing (B107), as written. A role the
+ * spec does not name is dropped rather than read as one it does, and a
+ * highlight with no target names nothing.
  */
-function pieceCount(accepted: string[], parts: number): number | undefined {
-  for (const answer of accepted) {
-    if (!/^\d+$/.test(answer)) continue;
-    const count = Number(answer);
-    if (count >= 1 && count <= parts) return count;
+function highlightsFor(step: WireCalculationStep): CalcHighlight[] {
+  const out: CalcHighlight[] = [];
+  for (const h of step.highlights ?? []) {
+    const target = h.target?.trim();
+    const role = h.role ?? "active";
+    if (!target) continue;
+    if (role !== "active" && role !== "source" && role !== "result") continue;
+    out.push({ target, role });
   }
-  return undefined;
+  return out;
 }
 
 /**
@@ -506,22 +517,26 @@ function countOf(mark: CheckpointScalar): number | undefined {
 }
 
 /**
- * The drawing beside the notation, read as the payload gives it.
+ * The drawing beside the notation, read as the payload gives it (B100).
  *
- * `marks[i]` is a quantity and `labels[i]` names it. That is SCRUM-177's own
- * worked example - `3/5 + 1/5` as `parts: 5, marks: [3, 1], labels: ["3/5",
- * "1/5"]` - and 17b's bars draw exactly it, one row per quantity. It is the
- * only reading made. Anything that does not fit is not drawn rather than drawn
- * some other way:
+ * `rows` is the physical row count, `marks` are values or positions in
+ * renderer order, and `labels` pair with the marks. 17b's bars draw one row
+ * per mark - `1/4 + 2/4` as `rows: 2, marks: [1, 2], labels: ["1/4", "2/4"]`
+ * - and 37c draws grouped dots and a number line on one row each. Those are
+ * the only readings made. Anything that does not fit is not drawn rather than
+ * drawn some other way:
+ *  - a bar whose `rows` is not its number of marks. SCRUM-177's own example
+ *    was `rows: 1` beside two marks: two quantities on one bar, which no
+ *    frame draws, and laying them end to end would be this app deciding
+ *    what the picture means;
+ *  - dots or a line on more than one row, which no frame draws either;
  *  - a mark that is not a whole number, or more than a bar or a line of
- *    `parts` can hold: drawing 2.5 cells, or clamping 7 down to 5, would be
- *    this app deciding what the picture means;
- *  - labels that do not pair one-to-one with the marks: they could be a
- *    line's tick labels, and nothing says which tick each one belongs to;
+ *    `parts` can hold: drawing 2.5 cells, or clamping 7 down to 5;
+ *  - labels that do not pair one-to-one with the marks. B100 says labels may
+ *    pair with a scaffold's parts instead, but no frame labels a bar's cells,
+ *    and a line of four parts has five ticks, so nothing says which tick a
+ *    fourth label belongs to;
  *  - `array` and `place_value`, which no frame draws yet.
- *
- * `rows` is not read. The example sets it to 1 beside two marks, so it is not
- * the number of bars 17b draws, and the spec does not say what else it is.
  */
 function scaffoldFor(
   scaffold: WireCalculationScaffold | null | undefined,
@@ -529,6 +544,7 @@ function scaffoldFor(
   if (!scaffold) return undefined;
   const marks = scaffold.marks ?? [];
   const labels = (scaffold.labels ?? []).map((l) => l.trim());
+  const rows = scaffold.rows ?? 1;
   if (marks.length === 0) return undefined;
   if (labels.length > 0 && labels.length !== marks.length) return undefined;
 
@@ -544,13 +560,14 @@ function scaffoldFor(
   }));
 
   const { kind, parts } = scaffold;
-  if (kind === "dots") return { kind, quantities };
+  if (kind === "dots") return rows === 1 ? { kind, quantities } : undefined;
   if (kind !== "bar" && kind !== "number_line") return undefined;
   if (!Number.isInteger(parts) || parts < 1) return undefined;
   if (counts.some((count) => count > parts)) return undefined;
-  return kind === "bar"
-    ? { kind, parts, quantities }
-    : { kind, parts, points: quantities };
+  if (kind === "bar") {
+    return rows === marks.length ? { kind, parts, quantities } : undefined;
+  }
+  return rows === 1 ? { kind, parts, points: quantities } : undefined;
 }
 
 /**

@@ -47,7 +47,8 @@ const QUARTERS = {
   scaffold: {
     kind: "bar",
     parts: 4,
-    rows: 1,
+    // B100: the physical row count, one bar for each mark.
+    rows: 2,
     marks: [1, 2],
     labels: ["1/4", "2/4"],
   },
@@ -156,6 +157,36 @@ describe("one step at a time", () => {
 
     expect(equation()).toBe("1/4 + 2/4");
   });
+
+  it("shows the solved equation once every step is done, and never before", () => {
+    // B101. The last step leaves the equation one way; `fullEquation` is the
+    // complete solved one, and it is the screen's last line.
+    const calc = build({
+      fullEquation: "1/4 + 2/4 = 3/4, so three quarters",
+      steps: [
+        step({ confirmationText: "" }),
+        QUARTERS.steps[2],
+      ],
+    });
+    show(calc);
+    const seen = [equation()];
+
+    pick("4 and 4");
+    seen.push(equation());
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "3" } });
+    tap("Check my answer");
+
+    expect(seen).not.toContain("1/4 + 2/4 = 3/4, so three quarters");
+    expect(equation()).toBe("1/4 + 2/4 = 3/4, so three quarters");
+  });
+
+  it("never stands the solved equation in for a missing problem", () => {
+    // It used to, on content stored before `expression`: the answer, shown
+    // before the first step.
+    show(build({ expression: undefined, steps: [step({ assembles: "" })] }));
+
+    expect(equation()).toBe("");
+  });
 });
 
 describe("judging a step", () => {
@@ -229,19 +260,42 @@ describe("the hint", () => {
   });
 });
 
-describe("entering a number", () => {
-  it("opens the device's numeric keyboard, which has a minus and a point", () => {
-    show(build({ steps: [step({ input: "number", expectedInput: "numeric", answer: "-2.5" })] }));
+describe("entering a number (D150)", () => {
+  const NEGATIVE = () =>
+    build({
+      steps: [step({ input: "number", expectedInput: "numeric", answer: "-2.5" })],
+    });
+  const pad = () => screen.queryByRole("group", { name: "On-screen keyboard" });
 
-    expect(screen.getByRole("textbox")).toHaveAttribute("inputmode", "decimal");
-    // The 0-9 pad had neither key, so "-2.5" could not be typed on a tablet.
-    expect(screen.queryByRole("group", { name: "On-screen keyboard" })).toBeNull();
+  it("takes the Nevo pad, with a minus sign and a point, in place of the device's", () => {
+    show(NEGATIVE());
+
+    // The device's own keyboard is suppressed: an iPhone's has no minus.
+    expect(screen.getByRole("textbox")).toHaveAttribute("inputmode", "none");
+    expect(pad()).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Minus sign" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Point" })).toBeInTheDocument();
+    expect(screen.getByText("Your answer")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Type the number you worked out. You can use a minus sign or a point.",
+      ),
+    ).toBeInTheDocument();
   });
 
-  it("takes a negative decimal and matches it", () => {
-    const props = show(
-      build({ steps: [step({ input: "number", expectedInput: "numeric", answer: "-2.5" })] }),
-    );
+  it("types a negative decimal on the pad and matches it", () => {
+    const props = show(NEGATIVE());
+
+    for (const key of ["Minus sign", "2", "Point", "5"]) tap(key);
+
+    // Drawn with the minus sign, kept as the hyphen the answer is stored with.
+    expect(screen.getByRole("textbox")).toHaveValue("\u22122.5");
+    tap("Check my answer");
+    expect(props.onStepAnswered).toHaveBeenCalledWith("s1", true);
+  });
+
+  it("keeps a laptop's own typing", () => {
+    const props = show(NEGATIVE());
 
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "-2.5" } });
     fireEvent.submit(screen.getByRole("textbox").closest("form")!);
@@ -249,10 +303,38 @@ describe("entering a number", () => {
     expect(props.onStepAnswered).toHaveBeenCalledWith("s1", true);
   });
 
-  it("gives an expression the full keyboard", () => {
+  it("keeps the hyphen when a laptop types on after the pad's minus sign", () => {
+    const props = show(NEGATIVE());
+    tap("Minus sign");
+    tap("2");
+
+    // The field now reads "−2"; typing ".5" after it hands back "−2.5".
+    fireEvent.change(screen.getByRole("textbox"), {
+      target: { value: "\u22122.5" },
+    });
+    tap("Check my answer");
+
+    expect(props.onStepAnswered).toHaveBeenCalledWith("s1", true);
+  });
+
+  it("deletes at the field, and only once there is something to delete", () => {
+    show(NEGATIVE());
+    expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
+
+    tap("2");
+    tap("5");
+    tap("Delete");
+
+    expect(screen.getByRole("textbox")).toHaveValue("2");
+    // The pad itself has no delete key.
+    expect(pad()?.querySelector('[aria-label="Delete"]')).toBeNull();
+  });
+
+  it("gives an expression the full keyboard, and no pad", () => {
     show(build({ steps: [step({ input: "number", expectedInput: "text", answer: "3x - 4" })] }));
 
     expect(screen.getByRole("textbox")).toHaveAttribute("inputmode", "text");
+    expect(pad()).toBeNull();
   });
 });
 
@@ -263,7 +345,9 @@ describe("building with pieces", () => {
     expectedInput: "drag",
     input: "tap",
     options: [],
-    answer: "3",
+    // B102: how many pieces is `tapCount`, never read out of the answer.
+    answer: "3/4",
+    tapCount: 3,
   });
 
   it("offers the stored count of pieces and says each one placed", () => {
@@ -314,7 +398,7 @@ describe("the drawing", () => {
     expect(equation()).toBe("1/4 + 2/4 = ?");
   });
 
-  it("adds no result row on completion - its count would be the screen's sum", () => {
+  it("adds no result row the payload did not write - its count would be the screen's sum", () => {
     show(build({ steps: [QUARTERS.steps[2]] }));
 
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "3" } });
@@ -322,6 +406,128 @@ describe("the drawing", () => {
 
     expect(document.querySelectorAll("[aria-hidden].flex.flex-1")).toHaveLength(2);
     expect(screen.queryByText("3/4")).toBeNull();
+  });
+});
+
+describe("what each answered step does to the drawing (B107)", () => {
+  /**
+   * 17b's choreography as the payload names it: step 1's answer rings both
+   * bars, step 2's turns them navy, and step 3's fills the result row the
+   * scaffold carries as its third mark.
+   */
+  const CHOREOGRAPHED = () =>
+    build({
+      scaffold: {
+        kind: "bar",
+        parts: 4,
+        rows: 3,
+        marks: [1, 2, 3],
+        labels: ["1/4", "2/4", "3/4"],
+      },
+      steps: [
+        step({
+          highlights: [{ target: "1/4" }, { target: "2/4", role: "active" }],
+        }),
+        step({
+          ...QUARTERS.steps[1],
+          highlights: [
+            { target: "1/4", role: "source" },
+            { target: "2/4", role: "source" },
+          ],
+        }),
+        step({
+          ...QUARTERS.steps[2],
+          highlights: [
+            { target: "1/4", role: "source" },
+            { target: "2/4", role: "source" },
+            { target: "3/4", role: "result" },
+          ],
+        }),
+      ],
+    });
+  const bars = () => [
+    ...document.querySelectorAll<HTMLElement>("[aria-hidden].flex.flex-1"),
+  ];
+  const ringed = () =>
+    bars().map((b) => b.querySelectorAll(".outline-nevo-violet").length > 0);
+  const navy = () => bars().map((b) => b.querySelectorAll(".bg-nevo-navy").length);
+
+  it("draws nothing of a step's highlights while it is still being asked", () => {
+    show(CHOREOGRAPHED());
+
+    expect(ringed()).toEqual([false, false]);
+    expect(navy()).toEqual([0, 0]);
+  });
+
+  it("rings what the answered step's active highlights name", () => {
+    show(CHOREOGRAPHED());
+
+    pick("4 and 4");
+    expect(ringed()).toEqual([true, true]);
+
+    // Still ringed while the next step is asked: step 1 is the last answered.
+    tap("Next step");
+    expect(ringed()).toEqual([true, true]);
+  });
+
+  it("turns what a source highlight names navy, and the ring goes", () => {
+    show(CHOREOGRAPHED());
+    pick("4 and 4");
+    tap("Next step");
+
+    pick("The numerators: 1 and 2");
+
+    expect(ringed()).toEqual([false, false]);
+    expect(navy()).toEqual([1, 2]);
+  });
+
+  it("keeps the result back until the step that names it is answered", () => {
+    show(CHOREOGRAPHED());
+    pick("4 and 4");
+    tap("Next step");
+    pick("The numerators: 1 and 2");
+
+    // On the last step, the answer is not on screen yet.
+    expect(screen.queryByText("3/4")).toBeNull();
+    expect(bars()).toHaveLength(2);
+
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "3" } });
+    tap("Check my answer");
+
+    expect(screen.getByText("3/4")).toHaveClass("text-nevo-navy");
+    expect(bars()).toHaveLength(3);
+    expect(navy()).toEqual([1, 2, 3]);
+  });
+
+  it("names nothing that is not one of the drawing's own labels", () => {
+    show(
+      build({
+        steps: [
+          step({
+            confirmationText: "",
+            highlights: [{ target: "denominators" }, { target: "1/4 " }],
+          }),
+          QUARTERS.steps[2],
+        ],
+      }),
+    );
+
+    pick("4 and 4");
+
+    // "1/4 " is trimmed to a label; "denominators" names nothing drawn.
+    expect(ringed()).toEqual([true, false]);
+  });
+
+  it("turns nothing navy just because the solve finished", () => {
+    // 17b's complete state is navy because step 2 made it so; a payload with
+    // no highlights says nothing changed, and nothing does.
+    show(build({ steps: [QUARTERS.steps[2]] }));
+
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "3" } });
+    tap("Check my answer");
+
+    expect(navy()).toEqual([0, 0]);
+    expect(ringed()).toEqual([false, false]);
   });
 });
 
@@ -457,6 +663,11 @@ describe("reading support (D30)", () => {
     show(DONE_WITH_UNIT, true);
 
     expect(screen.getByText("quarters")).toHaveClass(...BODY);
+    expect(
+      screen.getByText(
+        "Type the number you worked out. You can use a minus sign or a point.",
+      ),
+    ).toHaveClass(...BODY);
     expect(screen.getByRole("textbox")).not.toHaveClass("leading-[2]");
 
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "3" } });

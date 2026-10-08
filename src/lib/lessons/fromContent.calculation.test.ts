@@ -159,7 +159,7 @@ describe("a calculation from the payload", () => {
     ]);
   });
 
-  it("gives an expression the device keyboard and a number the numeric one", () => {
+  it("gives an expression the device keyboard and a number the Nevo pad", () => {
     const calc = calcOf(algebra());
 
     expect(
@@ -243,6 +243,60 @@ describe("a calculation from the payload", () => {
     expect(calc).toEqual(calculationFromVariant(ADD_FIFTHS));
     expect(calc?.steps.map((s) => s.input)).toEqual(["choice", "choice", "number"]);
     expect(calc?.scaffold?.kind).toBe("bar");
+    // Its result row is written down and revealed by its last step.
+    expect(calc?.steps[2].highlights).toContainEqual({
+      target: "3/5",
+      role: "result",
+    });
+  });
+
+  it("carries the solved equation apart from the problem, never in its place", () => {
+    // B101: `fullEquation` is the complete solved equation, for the end.
+    expect(calcOf(algebra({ fullEquation: "x = 5" }))).toMatchObject({
+      expression: "5x - 4 = 2x + 11",
+      fullEquation: "x = 5",
+    });
+    // A problem with no notation shows none - not the answer.
+    expect(
+      calcOf(algebra({ expression: undefined, fullEquation: "x = 5" })),
+    ).toMatchObject({ expression: "", fullEquation: "x = 5" });
+  });
+
+  it("carries each step's highlights, a role left out reading as active", () => {
+    const calc = calcOf(
+      algebra({
+        steps: [
+          step({
+            highlights: [
+              { target: " 3x " },
+              { target: "11", role: "source" },
+              { target: "x = 5", role: "result" },
+            ],
+          }),
+        ],
+      }),
+    );
+
+    expect(calc?.steps[0].highlights).toEqual([
+      { target: "3x", role: "active" },
+      { target: "11", role: "source" },
+      { target: "x = 5", role: "result" },
+    ]);
+  });
+
+  it("drops a highlight that names nothing or plays a role the spec does not name", () => {
+    const calc = calcOf(
+      algebra({
+        steps: [
+          step({
+            highlights: [{ target: "  " }, { target: "3x", role: "glow" }],
+          }),
+          step({ stepId: "st-2", highlights: undefined }),
+        ],
+      }),
+    );
+
+    expect(calc?.steps.map((s) => s.highlights)).toEqual([[], []]);
   });
 });
 
@@ -328,7 +382,8 @@ describe("a tap step and what it builds on", () => {
           prompt: "Build the total.",
           expectedInput: "drag",
           input: "tap",
-          answer: "3",
+          answer: "3/4",
+          tapCount: 3,
           assembles: "1/4 + 2/4 = ?",
           equationState: "1/4 + 2/4 = 3/4",
         }),
@@ -336,38 +391,42 @@ describe("a tap step and what it builds on", () => {
       ...over,
     });
 
-  it("builds the stored count of pieces on the bar", () => {
+  it("builds the step's tapCount of pieces on the bar", () => {
     const calc = calcOf(quarters());
 
     expect(calc?.manipulative).toEqual({ kind: "fraction_bar", parts: 4 });
     expect(calc?.steps[0]).toMatchObject({ input: "tap", target: 3 });
   });
 
-  it("takes the count from a target when the answer is not a count", () => {
+  it("takes the count from tapCount, never from the answer", () => {
+    // B102. The answer says what the total is, not how many taps build it.
     const calc = calcOf(
       quarters({
-        steps: [step({ input: "tap", answer: "3/4", targets: [3] })],
+        steps: [step({ input: "tap", answer: "2", targets: [2], tapCount: 3 })],
       }),
     );
 
     expect(calc?.steps[0]).toMatchObject({ input: "tap", target: 3 });
   });
 
-  it("never reads a count out of a fraction", () => {
+  it("refuses a tap step with no tapCount, whatever its answer says", () => {
     /*
-     * Rule 3. "3/4" is three pieces of four only after someone does the
-     * reading, and this app is not who does it - the step has to store "3".
+     * Rule 3, and B102. A count read out of "3" or "3/4" would be this app
+     * deciding how many pieces the answer means.
      */
-    expect(
-      calcOf(quarters({ steps: [step({ input: "tap", answer: "3/4" })] })),
-    ).toBeUndefined();
-  });
-
-  it("refuses a count the bar cannot hold, rather than clamping it", () => {
-    for (const answer of ["5", "0", "-1", "three", "3.5"]) {
+    for (const answer of ["3", "3/4"]) {
       expect(
         calcOf(quarters({ steps: [step({ input: "tap", answer })] })),
         answer,
+      ).toBeUndefined();
+    }
+  });
+
+  it("refuses a count the bar cannot hold, rather than clamping it", () => {
+    for (const tapCount of [5, 0, -1, 3.5, null, "3"]) {
+      expect(
+        calcOf(quarters({ steps: [step({ input: "tap", tapCount })] })),
+        String(tapCount),
       ).toBeUndefined();
     }
   });
@@ -395,12 +454,12 @@ describe("a tap step and what it builds on", () => {
 describe("the scaffold drawing", () => {
   const drawn = (scaffold: unknown) => calcOf(algebra({ scaffold }))?.scaffold;
 
-  it("draws SCRUM-177's own example as one bar per quantity", () => {
+  it("draws a bar for each physical row, a mark to each (B100)", () => {
     expect(
       drawn({
         kind: "bar",
         parts: 5,
-        rows: 1,
+        rows: 2,
         marks: [3, 1],
         labels: ["3/5", "1/5"],
       }),
@@ -412,6 +471,27 @@ describe("the scaffold drawing", () => {
         { count: 1, label: "1/5" },
       ],
     });
+  });
+
+  it("does not lay two quantities on one bar, which no frame draws", () => {
+    /*
+     * SCRUM-177's own example, `rows: 1` beside two marks. `rows` is the
+     * physical row count (B100), so this is one bar holding 3 and 1 - and
+     * drawing them as two bars is what #697 did by not reading `rows`.
+     */
+    expect(
+      drawn({ kind: "bar", parts: 5, rows: 1, marks: [3, 1], labels: ["3/5", "1/5"] }),
+    ).toBeUndefined();
+    // Left out, `rows` is 1, as the spec defaults it.
+    expect(drawn({ kind: "bar", parts: 5, marks: [3, 1] })).toBeUndefined();
+    expect(drawn({ kind: "bar", parts: 5, rows: 3, marks: [3, 1] })).toBeUndefined();
+  });
+
+  it("draws dots and a line on one row only, as 37c does", () => {
+    expect(drawn({ kind: "dots", parts: 1, rows: 2, marks: [3, 4] })).toBeUndefined();
+    expect(
+      drawn({ kind: "number_line", parts: 4, rows: 2, marks: [3] }),
+    ).toBeUndefined();
   });
 
   it("draws nothing when the payload carries no scaffold", () => {
@@ -441,11 +521,19 @@ describe("the scaffold drawing", () => {
       "a fractional mark": { kind: "bar", parts: 4, marks: [2.5] },
       "more than the bar holds": { kind: "bar", parts: 4, marks: [7] },
       "a mark that is not a count": { kind: "bar", parts: 4, marks: ["3/4"] },
-      "labels that do not pair": {
+      // B100 lets labels pair with parts, but a line of four parts has five
+      // ticks, and nothing says which tick a label belongs to.
+      "labels that do not pair with the marks": {
         kind: "number_line",
         parts: 4,
         marks: [3],
         labels: ["0", "1", "2", "3", "4"],
+      },
+      "labels paired with a bar's cells, which no frame labels": {
+        kind: "bar",
+        parts: 4,
+        marks: [3],
+        labels: ["1", "2", "3", "4"],
       },
       "no marks at all": { kind: "bar", parts: 4, marks: [] },
     };

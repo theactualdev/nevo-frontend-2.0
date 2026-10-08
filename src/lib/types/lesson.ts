@@ -162,10 +162,11 @@ export interface ScaffoldQuantity {
 /**
  * The drawing beside the notation, as the payload describes it (SCRUM-177).
  *
- * Only the kinds a frame draws are here: `bar` is 17b's fraction bars, `dots`
- * and `number_line` are 37c's grouped dots and number line. `array` and
- * `place_value` have no frame yet, so a calculation carrying one draws
- * nothing beside its notation rather than an invented picture.
+ * Only the kinds a frame draws are here: `bar` is 17b's fraction bars, one
+ * physical row per quantity, `dots` and `number_line` are 37c's grouped dots
+ * and number line, each on one row. `array` and `place_value` have no frame
+ * yet, so a calculation carrying one draws nothing beside its notation rather
+ * than an invented picture.
  */
 export type CalcScaffold =
   | { kind: "bar"; parts: number; quantities: ScaffoldQuantity[] }
@@ -178,6 +179,17 @@ export interface CalcNarration {
   storagePath?: string;
 }
 
+/**
+ * One thing a step's answer does to the drawing (B107), as the wire names it:
+ * `active` is 17b's violet ring, `source` its navy fill, `result` the result
+ * row filling. `target` is matched against the drawing's own labels and
+ * nothing else.
+ */
+export interface CalcHighlight {
+  target: string;
+  role: "active" | "source" | "result";
+}
+
 interface CalcStepBase {
   /** The wire's `stepId` - what `calculation_step_response` names. */
   stepId: string;
@@ -188,6 +200,8 @@ interface CalcStepBase {
   assembles: string;
   /** How the equation reads once this step is done. May be empty. */
   equationState: string;
+  /** What this step's answer does to the drawing. Empty means nothing. */
+  highlights: CalcHighlight[];
   narration?: CalcNarration;
 }
 
@@ -221,8 +235,8 @@ export interface CalcNumberStep extends CalcStepBase {
 
 /**
  * A step the child builds by tapping pieces into the manipulative (17b §6).
- * `target` is the stored answer as written - a whole number of pieces the bar
- * holds - never derived from a fraction.
+ * `target` is the wire's `tapCount` (B102), a whole number of pieces the bar
+ * holds - never read out of an answer.
  */
 export interface CalcTapStep extends CalcStepBase {
   input: "tap";
@@ -237,6 +251,11 @@ export interface CalculationSegment {
   conceptId?: string;
   /** The problem's notation, shown before any step has assembled anything. */
   expression: string;
+  /**
+   * The complete solved equation (B101), shown once every step is done and
+   * never before. Empty means the last step's `equationState` stands.
+   */
+  fullEquation: string;
   /** The drawing. Absent means the payload carries none this app can draw. */
   scaffold?: CalcScaffold;
   /** What a `tap` step builds on. Only the fraction bar has a frame (17b). */

@@ -15,21 +15,23 @@ import type { AdaptationPlan, Lesson } from "@/lib/types";
  * cannot show a solver the payload path does not.
  *
  * Every value the solver shows is one written here: the drawing's marks and
- * labels, each step's stored answer, and the equation as it assembles. Nothing
- * is worked out on screen - not even 2 + 1.
+ * labels, each step's stored answer, the equation as it assembles, and what
+ * each answer does to the drawing (17b's choreography, as `highlights`).
+ * Nothing is worked out on screen - not even 2 + 1, whose bar is written
+ * down as the result row its last step reveals.
  */
 export const ADD_FIFTHS: WireCalculationVariant = {
   type: "co_construction",
   conceptId: null,
-  fullEquation: "2/5 + 1/5",
+  fullEquation: "2/5 + 1/5 = 3/5",
   expression: "2/5 + 1/5",
   answer: "3/5",
   scaffold: {
     kind: "bar",
     parts: 5,
-    rows: 1,
-    marks: [2, 1],
-    labels: ["2/5", "1/5"],
+    rows: 3,
+    marks: [2, 1, 3],
+    labels: ["2/5", "1/5", "3/5"],
   },
   manipulative: null,
   steps: [
@@ -53,6 +55,11 @@ export const ADD_FIFTHS: WireCalculationVariant = {
       equationState: "2/5 + 1/5 = ?/5",
       unit: null,
       narrationAudio: null,
+      // The bottom numbers match: both bars ring.
+      highlights: [
+        { target: "2/5", role: "active" },
+        { target: "1/5", role: "active" },
+      ],
     },
     {
       stepId: "fifths-2",
@@ -73,6 +80,11 @@ export const ADD_FIFTHS: WireCalculationVariant = {
       equationState: "2/5 + 1/5 = ?/5",
       unit: null,
       narrationAudio: null,
+      // The top numbers are what we add: both bars turn navy.
+      highlights: [
+        { target: "2/5", role: "source" },
+        { target: "1/5", role: "source" },
+      ],
     },
     {
       stepId: "fifths-3",
@@ -90,6 +102,12 @@ export const ADD_FIFTHS: WireCalculationVariant = {
       equationState: "2/5 + 1/5 = 3/5",
       unit: null,
       narrationAudio: null,
+      // Solved: the result row fills beneath them.
+      highlights: [
+        { target: "2/5", role: "source" },
+        { target: "1/5", role: "source" },
+        { target: "3/5", role: "result" },
+      ],
     },
   ],
   completionStatement:
