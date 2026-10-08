@@ -23,28 +23,27 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * key or decide whether they were correct; the local marking only drives what
  * the sheet shows.
  *
- * NULL WITHOUT A SESSION. `sessionId` is required, and until `POST /session`
- * answers there is no id to file the answer under.
+ * WITHOUT ITS SESSION. `sessionId` is required on the wire, and the player
+ * adds it - or, with none open yet or no connection, holds the answer on the
+ * device until there is one (`holdAnswer` in `pendingProgress`). It was null
+ * here without a session, so an answer given offline was never kept at all.
  */
-export function attemptFor({
-  sessionId,
+export function answerFor({
   questionId,
   segmentId,
   source,
   choice,
 }: {
-  sessionId: string | null | undefined;
   /** The checkpoint's own id. */
   questionId: string | undefined;
   /** The segment an inline check sits on; absent for the after-lesson check. */
   segmentId?: string;
   source: "checkpoint" | "assessment";
   choice: AnswerChoice | undefined;
-}): LessonQuestionAttemptWrite | null {
-  if (!sessionId || !questionId) return null;
+}): Omit<LessonQuestionAttemptWrite, "sessionId"> | null {
+  if (!questionId) return null;
   if (choice?.value === undefined) return null;
   return {
-    sessionId,
     problemId: questionId,
     source,
     answer: choice.value,

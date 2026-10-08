@@ -17,7 +17,7 @@ export interface ReviewPick {
  * (B49) spans two. The newest answer to a question speaks for it - by when the
  * server took it, then by its attempt number within a session.
  *
- * Matched on the option's own value, which is what was stored (`attemptFor`).
+ * Matched on the option's own value, which is what was stored (`answerFor`).
  * A question with no id, or an answer that matches no option the lesson still
  * has, has no pick: nothing here can say what was chosen.
  */

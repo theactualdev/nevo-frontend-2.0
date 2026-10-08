@@ -8,6 +8,7 @@ import {
 } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
 import { LESSON_STATUS } from "@/lib/api/lessons";
+import { ApiError } from "@/lib/api/client";
 import { clearSession, setSession } from "@/lib/auth/session";
 import type { AdaptationPlan, Lesson } from "@/lib/types";
 import { loadCheckOutcome, loadReviewAnswers } from "./reviewStore";
@@ -41,6 +42,7 @@ const progress = vi.hoisted(() => ({
   saved: null as unknown,
   /** What `POST /session` answered - see `useLessonProgress.opened`. */
   opened: null as unknown,
+  localId: "local-1",
 }));
 vi.mock("@/hooks/useLessonProgress", () => ({
   useLessonProgress: () => ({ ...progress }),
@@ -171,7 +173,19 @@ const signIn = () =>
     role: "student",
   });
 
+/** What this device holds of stu-1's answers - see `pendingProgress`. */
+const heldAnswers = () =>
+  Object.values(
+    JSON.parse(
+      window.localStorage.getItem("nevo.lesson.pendingAnswers.stu-1") ?? "{}",
+    ),
+  ) as {
+    sessionId: string | null;
+    body: { clientAttemptId: string };
+  }[];
+
 beforeEach(() => {
+  window.localStorage.clear();
   progress.report.mockReset();
   progress.sessionId = SESSION;
   progress.completionSaved = false;
@@ -236,6 +250,8 @@ describe("leaving the after-lesson check (D36)", () => {
       source: "assessment",
       // The option's own value - a number, as the checkpoint has it.
       answer: 2,
+      // Its own, so it is never filed twice if it has to go again.
+      clientAttemptId: expect.any(String),
     });
   });
 
@@ -310,6 +326,7 @@ describe("every answer to a check is stored as it is given", () => {
           segmentId: SEG_1,
           source: "checkpoint",
           answer: "b",
+          clientAttemptId: expect.any(String),
         },
       ],
       [
@@ -320,6 +337,7 @@ describe("every answer to a check is stored as it is given", () => {
           segmentId: SEG_1,
           source: "checkpoint",
           answer: "a",
+          clientAttemptId: expect.any(String),
         },
       ],
     ]);
@@ -334,7 +352,10 @@ describe("every answer to a check is stored as it is given", () => {
     expect(saveAttempt).not.toHaveBeenCalled();
   });
 
-  it("stores nothing before the session exists", async () => {
+  it("sends nothing before the session exists, and holds it on the device", async () => {
+    // Offline from the start - a lesson from Downloads - no session ever
+    // opens here; the answer waits for one (Lydia, 6 Oct).
+    signIn();
     progress.sessionId = null;
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
     next();
@@ -342,6 +363,43 @@ describe("every answer to a check is stored as it is given", () => {
     fireEvent.click(await screen.findByRole("button", { name: /The numerator/ }));
 
     expect(saveAttempt).not.toHaveBeenCalled();
+    expect(heldAnswers()).toEqual([
+      expect.objectContaining({
+        sessionId: null,
+        localId: "local-1",
+        body: expect.objectContaining({ problemId: "cp-inline", answer: "a" }),
+      }),
+    ]);
+  });
+
+  it("holds an answer that could not be sent for want of a connection", async () => {
+    signIn();
+    saveAttempt.mockRejectedValue(new ApiError(0, "offline"));
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    await toAssessment();
+
+    answer("Two");
+
+    await waitFor(() => expect(heldAnswers()).toHaveLength(1));
+    const [held] = heldAnswers();
+    expect(held).toMatchObject({ sessionId: SESSION });
+    // The id it was first sent with, so it cannot land twice.
+    expect(held.body.clientAttemptId).toBe(
+      saveAttempt.mock.calls[0][1].clientAttemptId,
+    );
+  });
+
+  it("does not hold one the server refused", async () => {
+    signIn();
+    saveAttempt.mockRejectedValue(new ApiError(422, "refused"));
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    await toAssessment();
+
+    answer("Two");
+
+    await waitFor(() => expect(saveAttempt).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 0));
+    expect(heldAnswers()).toEqual([]);
   });
 });
 

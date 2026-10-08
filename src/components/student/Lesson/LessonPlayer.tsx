@@ -65,7 +65,8 @@ import {
   type LessonQuestionAttemptWrite,
 } from "@/lib/api/lessons";
 import { schedulerApi } from "@/lib/api/scheduler";
-import { attemptFor } from "@/lib/lessons/attempts";
+import { answerFor } from "@/lib/lessons/attempts";
+import { holdAnswer, retryable } from "@/lib/lessons/pendingProgress";
 import {
   answersBefore,
   checkResumeAt,
@@ -1529,14 +1530,39 @@ export function LessonPlayer({
   /*
    * D36: EVERY ANSWER TO A CHECK IS STORED ON THE ACCOUNT AS IT IS GIVEN, so a
    * check left part way keeps the answers already given. Marked server-side.
-   * Fire and forget: a failed write costs the record of one answer, never the
-   * child's place in the check. Not for the authored mocks, whose question ids
-   * are not real.
+   * Never in the child's way: a write that fails costs them nothing in the
+   * check. Not for the authored mocks, whose question ids are not real.
+   *
+   * HELD ON THE DEVICE WHEN IT CANNOT GO NOW (Lydia, 6 Oct) - no session yet,
+   * or a failure worth retrying, such as no connection - under this visit, so
+   * its completion waits for it (`pendingProgress`). One the server refused
+   * is not held, as before. `clientAttemptId` is the answer's own, kept with
+   * it, so one whose reply was lost is not filed twice when it is sent again.
    */
-  const saveAttempt = (body: LessonQuestionAttemptWrite | null) => {
-    if (!live || !body) return;
+  const saveAttempt = (
+    answer: Omit<LessonQuestionAttemptWrite, "sessionId"> | null,
+  ) => {
+    if (!live || !answer) return;
+    const body = { ...answer, clientAttemptId: randomId() };
+    const id = progress.sessionId;
+    // Taken now: a 401 clears the session before its failure arrives.
+    const owner = getSession()?.userId ?? null;
+    if (!id) {
+      holdAnswer(
+        lesson.id,
+        { sessionId: null, localId: progress.localId, body },
+        owner,
+      );
+      return;
+    }
     attemptWrites.current.push(
-      lessonsApi.saveAttempt(lesson.id, body).catch(() => {}),
+      lessonsApi
+        .saveAttempt(lesson.id, { sessionId: id, ...body })
+        .catch((cause: unknown) => {
+          if (retryable(cause)) {
+            holdAnswer(lesson.id, { sessionId: id, body }, owner);
+          }
+        }),
     );
   };
 
@@ -1741,8 +1767,7 @@ export function LessonPlayer({
           // The pick goes up on the attempt, where the server marks it.
           const checkpointId = lesson.assessment?.questions[questionIndex]?.id;
           saveAttempt(
-            attemptFor({
-              sessionId: progress.sessionId,
+            answerFor({
               questionId: checkpointId,
               source: "assessment",
               choice: lesson.assessment?.questions[questionIndex]?.options.find(
@@ -2253,8 +2278,7 @@ export function LessonPlayer({
               ...(checkpointId ? { questionId: checkpointId } : {}),
             });
             saveAttempt(
-              attemptFor({
-                sessionId: progress.sessionId,
+              answerFor({
                 questionId: checkpointId,
                 segmentId: segment.id,
                 source: "checkpoint",

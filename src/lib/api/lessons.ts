@@ -574,7 +574,7 @@ export const lessonsApi = {
    *
    * The player writes every answer to a quick check and to the after-lesson
    * check here, so a child who leaves a check part way keeps the answers they
-   * gave (D36). The body is built by `attemptFor`, which sends the option's
+   * gave (D36). The body is built by `answerFor`, which sends the option's
    * own value rather than its stringified id. Review answers reads them back
    * through `attempts` below, as a resumed check does (B49).
    */
