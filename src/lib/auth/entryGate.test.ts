@@ -245,9 +245,34 @@ describe("entryRoute", () => {
   });
 
   it("takes a consented child with no PIN into the first run", () => {
-    // New, or cleared by an adult (SCRUM-216): the lookup cannot tell them
-    // apart, so neither is guessed to be the other.
     expect(entryRoute(state())).toBe("first-run");
+    expect(entryRoute(state({ pinCleared: false }))).toBe("first-run");
+  });
+
+  it("sends a child whose PIN a teacher cleared to choose a new one (B67)", () => {
+    // Not 00c, which 401s on the PIN they remember, and not the first run,
+    // which would sit them through the baseline again.
+    expect(entryRoute(state({ pinCleared: true }))).toBe("new-pin");
+  });
+
+  it("holds a cleared child exactly as it holds any other", () => {
+    // Consent first, then the age check, whatever `pinCleared` says.
+    expect(
+      entryRoute(state({ pinCleared: true, consentState: "pending" })),
+    ).toBe("waiting");
+    expect(
+      entryRoute(state({ pinCleared: true, consentState: "withdrawn" })),
+    ).toBe("withdrawn");
+    expect(
+      entryRoute(state({ pinCleared: true, ageCheckPending: true })),
+    ).toBe("age-check");
+  });
+
+  it("signs in a child the server says has a PIN, even with pinCleared set", () => {
+    // `accountReady` is "has a PIN and can sign in normally" (B64).
+    expect(
+      entryRoute(state({ pinCleared: true, accountReady: true })),
+    ).toBe("sign-in");
   });
 
   it("holds a child whose consent is pending at 00d, and one whose consent was withdrawn at 00e", () => {

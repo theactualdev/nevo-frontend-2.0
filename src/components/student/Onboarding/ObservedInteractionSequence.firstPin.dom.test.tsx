@@ -10,9 +10,18 @@ import { ObservedInteractionSequence } from "./ObservedInteractionSequence";
 import { PIN_SAVE_FAILED_COPY } from "./PinCreationScreen";
 import { ApiError } from "@/lib/api/client";
 import {
+  clearEntryHandBack,
+  peekEntryHandBack,
+} from "@/lib/auth/entryHandBack";
+import {
   clearOnboardingDraft,
+  getOnboardingDraft,
   startOnboardingDraft,
 } from "@/lib/auth/onboarding";
+import {
+  clearSignInHandoff,
+  peekSignInHandoff,
+} from "@/lib/auth/signInHandoff";
 import {
   clearSession,
   getRememberedProfile,
@@ -36,14 +45,15 @@ import { STUDENT_PIN_LENGTH } from "@/lib/constants";
 
 vi.setConfig({ testTimeout: 30_000 });
 
-const { setPin, entrySetPin, flushPendingBaseline } = vi.hoisted(() => ({
+const { setPin, entrySetPin, flushPendingBaseline, push } = vi.hoisted(() => ({
   setPin: vi.fn(),
   entrySetPin: vi.fn(),
   flushPendingBaseline: vi.fn(async () => true),
+  push: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
+  useRouter: () => ({ push, replace: vi.fn(), back: vi.fn() }),
 }));
 vi.mock("@/hooks", () => ({
   useAuth: () => ({ user: null }),
@@ -118,6 +128,9 @@ beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   setPin.mockReset();
   entrySetPin.mockReset();
+  push.mockReset();
+  clearSignInHandoff();
+  clearEntryHandBack();
   flushPendingBaseline.mockClear();
   clearSession();
   window.localStorage.clear();
@@ -189,17 +202,16 @@ describe("a first PIN the server stores", () => {
 
 describe("a first PIN the server refuses", () => {
   /*
-   * The spec declares only the 200 and a 422. Backend describes more - a
-   * child who already has a PIN, consent, the age check, the throttle - with
-   * no declared status or code, so every refusal has to land the same honest
-   * way. A dropped network is in the list because it is not a save either.
+   * A refusal that does not name itself - no code, or a status the PIN route
+   * does not declare one for - says nothing about the child, so it lands the
+   * one honest way. A dropped network is in the list because it is not a save
+   * either. The named refusals are below (B68).
    */
   it.each([
-    ["a 422, the one refusal the spec declares", 422],
+    ["a 422", 422],
     ["a 401", 401],
-    ["a 403", 403],
-    ["a 409", 409],
-    ["a 429", 429],
+    ["a 403 with no code", 403],
+    ["a 409 with no code", 409],
     ["a 500", 500],
     ["a dropped network", 0],
   ])("shows the not-saved line for %s, not a celebration", async (_, status) => {
@@ -248,6 +260,69 @@ describe("a first PIN the server refuses", () => {
     expect(entrySetPin.mock.calls[1][0]).toEqual(entrySetPin.mock.calls[0][0]);
     expect(screen.getByText("You're all set")).toBeInTheDocument();
     expect(getSession()).toMatchObject({ userId: "student-9" });
+  });
+});
+
+describe("a first PIN the server refuses, and says why (B68)", () => {
+  const refused = (status: number, code: string) =>
+    new ApiError(status, "refused", { detail: { code, message: "said" } });
+
+  it("asks a throttled child to wait, in D68's words, keeping the PIN", async () => {
+    entrySetPin.mockRejectedValue(refused(429, "too_many_attempts"));
+
+    await choosePin();
+
+    expect(alertText()).toContain("Let's wait a moment before trying again.");
+    expect(alertText()).not.toContain(PIN_SAVE_FAILED_COPY);
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it.each(["pin_not_cleared", "pin_already_set"])(
+    "sends a child who already has a PIN (%s) to sign in, with what they typed on 05",
+    async (code) => {
+      entrySetPin.mockRejectedValue(refused(409, code));
+
+      await choosePin();
+
+      expect(push).toHaveBeenCalledWith("/auth/sign-in");
+      expect(peekSignInHandoff()).toEqual({
+        schoolCode: "K7DQ",
+        identifier: "BGA/2031",
+      });
+      expect(getSession()).toBeNull();
+      expect(getOnboardingDraft()).toEqual({});
+    },
+  );
+
+  it("sends a pair that names nobody now back to 05's miss", async () => {
+    entrySetPin.mockRejectedValue(refused(404, "entry_not_found"));
+
+    await choosePin();
+
+    expect(push).toHaveBeenCalledWith("/student/onboarding/school");
+    expect(peekEntryHandBack()).toEqual({
+      schoolCode: "K7DQ",
+      admissionNumber: "BGA/2031",
+    });
+    expect(getSession()).toBeNull();
+    expect(getOnboardingDraft()).toEqual({});
+  });
+
+  it.each([
+    ["consent_pending", "Nevo isn't quite ready for you yet"],
+    ["age_check_pending", "Nevo is sorting something out with your school"],
+  ])("holds them in place for %s, as 05 would", async (code, heading) => {
+    entrySetPin.mockRejectedValue(refused(403, code));
+
+    await choosePin();
+
+    expect(screen.getByRole("heading", { name: heading })).toBeInTheDocument();
+    expect(alertText()).not.toContain(PIN_SAVE_FAILED_COPY);
+    expect(push).not.toHaveBeenCalled();
+    expect(getSession()).toBeNull();
+    expect(getRememberedProfile()).toBeNull();
+    expect(flushPendingBaseline).not.toHaveBeenCalled();
   });
 });
 

@@ -14,14 +14,25 @@ import {
 } from "./StudentEntryStep";
 import { ApiError } from "@/lib/api/client";
 import {
+  clearEntryHandBack,
+  handEntryBack,
+  peekEntryHandBack,
+} from "@/lib/auth/entryHandBack";
+import {
   clearOnboardingDraft,
   getOnboardingDraft,
   startOnboardingDraft,
 } from "@/lib/auth/onboarding";
 import {
+  clearSession,
+  getRememberedProfile,
+  getSession,
+} from "@/lib/auth/session";
+import {
   clearSignInHandoff,
   peekSignInHandoff,
 } from "@/lib/auth/signInHandoff";
+import { STUDENT_PIN_LENGTH } from "@/lib/constants";
 
 /**
  * 05 Entry - the one screen that says which child has arrived (SCRUM-208).
@@ -38,10 +49,15 @@ import {
 
 vi.setConfig({ testTimeout: 30_000 });
 
-const { push, lookup } = vi.hoisted(() => ({
-  push: vi.fn(),
-  lookup: vi.fn(),
-}));
+const { push, lookup, entrySetPin, authSetPin, myConsentGate } = vi.hoisted(
+  () => ({
+    push: vi.fn(),
+    lookup: vi.fn(),
+    entrySetPin: vi.fn(),
+    authSetPin: vi.fn(),
+    myConsentGate: vi.fn(),
+  }),
+);
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, replace: vi.fn(), back: vi.fn() }),
@@ -49,7 +65,12 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/hooks", () => ({
   useSignals: () => ({ trackEvent: vi.fn(), flush: vi.fn() }),
 }));
-vi.mock("@/lib/api/studentEntry", () => ({ studentEntryApi: { lookup } }));
+vi.mock("@/lib/api/studentEntry", () => ({
+  studentEntryApi: { lookup, setPin: entrySetPin },
+}));
+// The signed-in store, which a cleared child must never reach.
+vi.mock("@/lib/api", () => ({ authApi: { setPin: authSetPin } }));
+vi.mock("@/lib/api/consents", () => ({ consentsApi: { myConsentGate } }));
 
 /** The frame's beat on "Found you" before moving on. */
 const MATCH_BEAT_MS = 900;
@@ -513,5 +534,233 @@ describe("the two doors", () => {
     expect(cells()).toHaveLength(4);
     // No class code and no QR scan: both were retired on 30 Sep.
     expect(document.body.textContent).not.toMatch(/class code|QR/i);
+  });
+});
+
+/**
+ * B67: a child whose PIN a teacher cleared. The lookup says so with
+ * `pinCleared`, and they choose a new PIN here - not 00c, which 401s on the
+ * PIN they remember, and not the first run, which would re-run the baseline.
+ */
+describe("a child whose PIN a teacher cleared (B67)", () => {
+  const PIN = "1234567".slice(0, STUDENT_PIN_LENGTH);
+
+  const SESSION = {
+    userId: "student-9",
+    loginIdentifier: "NV-A1B2C3",
+    session: {
+      accessToken: "tok-s",
+      tokenType: "bearer",
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      userId: "student-9",
+      role: "student",
+    },
+  };
+
+  const refused = (status: number, code: string) =>
+    new ApiError(status, "refused", { detail: { code, message: "said" } });
+
+  /** Match a cleared child, and wait out the "Found you" beat. */
+  async function matchCleared() {
+    lookup.mockResolvedValue(matched({ pinCleared: true }));
+    render(<StudentEntryStep framing="school" />);
+    await enterAndSubmit();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(MATCH_BEAT_MS + 50);
+    });
+  }
+
+  /** Type the new PIN twice, and wait past the beat before it is written. */
+  async function chooseNewPin() {
+    for (const digit of [...PIN, ...PIN]) {
+      fireEvent.click(screen.getByRole("button", { name: digit }));
+    }
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400);
+    });
+  }
+
+  beforeEach(() => {
+    entrySetPin.mockReset();
+    authSetPin.mockReset();
+    myConsentGate.mockReset();
+    myConsentGate.mockResolvedValue({ blocked: false, status: "confirmed" });
+    clearSession();
+    window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    clearSession();
+    window.localStorage.clear();
+  });
+
+  it("opens on choosing a new PIN, in place - not sign-in, not the first run", async () => {
+    await matchCleared();
+
+    expect(
+      screen.getByRole("heading", { name: "Choose a new PIN" }),
+    ).toBeInTheDocument();
+    expect(push).not.toHaveBeenCalled();
+    expect(peekSignInHandoff()).toBeNull();
+  });
+
+  it("stores it through the entry PIN route with the pair they typed, never the signed-in setPin", async () => {
+    entrySetPin.mockResolvedValue(SESSION);
+    await matchCleared();
+    await chooseNewPin();
+
+    expect(entrySetPin).toHaveBeenCalledTimes(1);
+    expect(entrySetPin).toHaveBeenCalledWith({
+      schoolCode: "K7DQ",
+      admissionNumber: "BGA/2031",
+      pin: PIN,
+    });
+    expect(authSetPin).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("heading", { name: "You're all set" }),
+    ).toBeInTheDocument();
+    expect(getSession()).toMatchObject({
+      token: "tok-s",
+      userId: "student-9",
+      role: "student",
+    });
+  });
+
+  it("remembers them on the device and goes Home through the consent gate, not to You're In", async () => {
+    entrySetPin.mockResolvedValue(SESSION);
+    await matchCleared();
+    await chooseNewPin();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1300);
+    });
+
+    expect(myConsentGate).toHaveBeenCalled();
+    expect(push).toHaveBeenCalledWith("/student/dashboard");
+    expect(push).not.toHaveBeenCalledWith("/student/onboarding/sequence");
+    expect(getRememberedProfile()).toMatchObject({
+      schoolCode: "K7DQ",
+      loginIdentifier: "NV-A1B2C3",
+      displayName: "Amara",
+    });
+  });
+
+  it("holds them instead of Home when the server holds them once they are in", async () => {
+    entrySetPin.mockResolvedValue(SESSION);
+    myConsentGate.mockResolvedValue({ blocked: true, status: "pending" });
+    await matchCleared();
+    await chooseNewPin();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1300);
+    });
+
+    expect(push).toHaveBeenCalledWith("/student/waiting");
+    expect(push).not.toHaveBeenCalledWith("/student/dashboard");
+  });
+
+  it("is held for consent before the PIN screen, whatever pinCleared says", async () => {
+    lookup.mockResolvedValue(
+      matched({ pinCleared: true, consentState: "pending" }),
+    );
+    render(<StudentEntryStep framing="school" />);
+    await enterAndSubmit();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(MATCH_BEAT_MS + 50);
+    });
+
+    expect(
+      screen.queryByRole("heading", { name: "Choose a new PIN" }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("heading", { name: "Nevo isn't quite ready for you yet" }),
+    ).toBeInTheDocument();
+  });
+
+  describe("when the PIN route refuses (B68)", () => {
+    it("sends a child who has a PIN after all to sign in, with what they typed", async () => {
+      entrySetPin.mockRejectedValue(refused(409, "pin_not_cleared"));
+      await matchCleared();
+      await chooseNewPin();
+
+      expect(push).toHaveBeenCalledWith("/auth/sign-in");
+      expect(peekSignInHandoff()).toEqual({
+        schoolCode: "K7DQ",
+        identifier: "BGA/2031",
+      });
+      expect(getOnboardingDraft()).toEqual({});
+      expect(getSession()).toBeNull();
+    });
+
+    it("goes back to 05's miss, with both values as typed, for a pair that names nobody", async () => {
+      entrySetPin.mockRejectedValue(refused(404, "entry_not_found"));
+      await matchCleared();
+      await chooseNewPin();
+
+      expect(message()).toBe(ENTRY_NO_MATCH_COPY);
+      expect(cells().map((c) => c.value).join("")).toBe("K7DQ");
+      expect(idField().value).toBe("BGA/2031");
+      expect(continueButton()).toHaveTextContent("Try again");
+      expect(push).not.toHaveBeenCalled();
+      expect(getOnboardingDraft()).toEqual({});
+    });
+
+    it.each([
+      ["consent_pending", "Nevo isn't quite ready for you yet"],
+      ["age_check_pending", "Nevo is sorting something out with your school"],
+    ])("holds them in place for %s", async (code, heading) => {
+      entrySetPin.mockRejectedValue(refused(403, code));
+      await matchCleared();
+      await chooseNewPin();
+
+      expect(screen.getByRole("heading", { name: heading })).toBeInTheDocument();
+      expect(push).not.toHaveBeenCalled();
+      expect(getSession()).toBeNull();
+    });
+
+    it("asks a throttled child to wait, on the PIN screen", async () => {
+      entrySetPin.mockRejectedValue(refused(429, "too_many_attempts"));
+      await matchCleared();
+      await chooseNewPin();
+
+      expect(
+        screen.getByText("Let's wait a moment before trying again."),
+      ).toBeInTheDocument();
+      expect(push).not.toHaveBeenCalled();
+    });
+
+    it("keeps the PIN and says it did not save, for anything else", async () => {
+      entrySetPin.mockRejectedValue(new ApiError(500, "down"));
+      await matchCleared();
+      await chooseNewPin();
+
+      expect(
+        screen.getByText("Your PIN is kept. That's on us - try again."),
+      ).toBeInTheDocument();
+      expect(push).not.toHaveBeenCalled();
+      expect(getSession()).toBeNull();
+    });
+  });
+});
+
+describe("a pair handed back from the end of a first run (B68)", () => {
+  afterEach(() => clearEntryHandBack());
+
+  it("opens on 05's miss with the pair as typed, once", () => {
+    handEntryBack({ schoolCode: "K7DQ", admissionNumber: "BGA/2031" });
+    render(<StudentEntryStep framing="school" />);
+
+    expect(message()).toBe(ENTRY_NO_MATCH_COPY);
+    expect(cells().map((c) => c.value).join("")).toBe("K7DQ");
+    expect(idField().value).toBe("BGA/2031");
+    expect(continueButton()).toHaveTextContent("Try again");
+    // Spent: the next visit to 05 starts empty.
+    expect(peekEntryHandBack()).toBeNull();
+  });
+
+  it("opens empty when nothing was handed back", () => {
+    render(<StudentEntryStep framing="school" />);
+
+    expect(message()).toBe("");
+    expect(idField().value).toBe("");
+    expect(continueButton()).toHaveTextContent("Continue");
   });
 });
