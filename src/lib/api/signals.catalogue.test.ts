@@ -4,7 +4,15 @@ import { join, relative } from "node:path";
 import ts from "typescript";
 import catalogue from "./signals.catalogue.json";
 import { ONBOARDING_SIGNAL_TYPES, SIGNAL_EVENT_TYPES } from "@/lib/constants";
-import { KNOWN_UNDECLARED, undeclaredKeys } from "@/test/signalCatalogue";
+import {
+  KNOWN_UNDECLARED,
+  declaredKeys,
+  declaredValues,
+  parseDeclared,
+  requiredKeys,
+  undeclaredKeys,
+  undeclaredValues,
+} from "@/test/signalCatalogue";
 
 /**
  * EVERY TYPE THIS CLIENT CAN EMIT, PINNED AGAINST BACKEND'S OWN CATALOGUE
@@ -58,6 +66,53 @@ describe("the catalogue snapshot", () => {
       expect(entry.eventType).toEqual(expect.any(String));
       expect(entry.payload).toEqual(expect.any(Array));
     }
+  });
+});
+
+/*
+ * HOW AN ENTRY IS READ. Since 8 Oct the catalogue writes a closed set beside
+ * its key - `breakType: micro|movement|consolidation|full` - and the guard
+ * read that whole string as the key's name, which no payload could ever
+ * carry: every break event would have failed it, and so would a correct one.
+ */
+describe("a catalogue entry", () => {
+  it("is a required key, an optional one, or a key with its closed set", () => {
+    expect(parseDeclared("segmentId")).toEqual([
+      "segmentId",
+      { required: true, values: null },
+    ]);
+    expect(parseDeclared("[depthRatio]")).toEqual([
+      "depthRatio",
+      { required: false, values: null },
+    ]);
+    expect(parseDeclared("source: checkpoint|assessment")).toEqual([
+      "source",
+      { required: true, values: new Set(["checkpoint", "assessment"]) },
+    ]);
+    expect(parseDeclared("[outcome: better|worse|no_change]")).toEqual([
+      "outcome",
+      { required: false, values: new Set(["better", "worse", "no_change"]) },
+    ]);
+  });
+
+  it("names the keys the live catalogue declares, values apart", () => {
+    expect([...(declaredKeys("break_end") ?? [])]).toEqual([
+      "breakType",
+      "trigger",
+      "durationMs",
+    ]);
+    expect(requiredKeys("time_on_segment")).toEqual([
+      "segmentId",
+      "durationMs",
+      "depthShown",
+    ]);
+    expect(declaredValues("comprehension_response", "source")).toEqual(
+      new Set(["checkpoint", "assessment"]),
+    );
+    expect(undeclaredValues("break_taken", { breakType: "stretch" })).toEqual([
+      "breakType=stretch",
+    ]);
+    expect(undeclaredValues("break_taken", { breakType: "movement" })).toEqual([]);
   });
 });
 
@@ -141,11 +196,34 @@ function keysOf(node: ts.Expression | undefined): string[] | null {
   return keys;
 }
 
+/**
+ * The values an inline payload writes as string literals, by key - all a
+ * source read can know of a value. `source: "assessment"` is read; a value
+ * held in a variable is the player's tests' to check (`offendingCalls`).
+ */
+function literalsOf(node: ts.Expression | undefined): [string, string][] {
+  if (!node) return [];
+  if (ts.isParenthesizedExpression(node)) return literalsOf(node.expression);
+  if (ts.isConditionalExpression(node))
+    return [...literalsOf(node.whenTrue), ...literalsOf(node.whenFalse)];
+  if (!ts.isObjectLiteralExpression(node)) return [];
+  return node.properties.flatMap((prop): [string, string][] => {
+    if (ts.isSpreadAssignment(prop)) return literalsOf(prop.expression);
+    return ts.isPropertyAssignment(prop) &&
+      (ts.isIdentifier(prop.name) || ts.isStringLiteral(prop.name)) &&
+      ts.isStringLiteralLike(prop.initializer)
+      ? [[prop.name.text, prop.initializer.text]]
+      : [];
+  });
+}
+
 interface Site {
   where: string;
   type: string;
   /** Null when the payload is not written inline. */
   keys: string[] | null;
+  /** The values it writes as literals, by key. */
+  literals: [string, string][];
 }
 
 const SITES: Site[] = sourceFiles(SRC).flatMap((file) => {
@@ -166,7 +244,13 @@ const SITES: Site[] = sourceFiles(SRC).flatMap((file) => {
   const visit = (node: ts.Node) => {
     if (ts.isCallExpression(node) && node.arguments.length > 0) {
       const type = typeNamed(node.arguments[0]);
-      if (type) found.push({ where: at(node), type, keys: keysOf(node.arguments[1]) });
+      if (type)
+        found.push({
+          where: at(node),
+          type,
+          keys: keysOf(node.arguments[1]),
+          literals: literalsOf(node.arguments[1]),
+        });
     }
     if (ts.isObjectLiteralExpression(node)) {
       const prop = (name: string) =>
@@ -180,7 +264,12 @@ const SITES: Site[] = sourceFiles(SRC).flatMap((file) => {
       const payload = prop("payload");
       const named = type ? typeNamed(type.initializer) : null;
       if (named && payload)
-        found.push({ where: at(node), type: named, keys: keysOf(payload.initializer) });
+        found.push({
+          where: at(node),
+          type: named,
+          keys: keysOf(payload.initializer),
+          literals: literalsOf(payload.initializer),
+        });
     }
     ts.forEachChild(node, visit);
   };
@@ -209,6 +298,19 @@ describe("every payload the client writes", () => {
       ),
     );
     expect(offences).toEqual([]);
+  });
+
+  it("writes no literal value outside the set the catalogue names for its key", () => {
+    // `source: checkpoint|assessment`, `breakType: micro|...`: a literal the
+    // set does not hold is a reading the engine cannot place.
+    const offences = SITES.flatMap((s) =>
+      undeclaredValues(s.type, Object.fromEntries(s.literals)).map(
+        (value) => `${s.where} ${s.type}: ${value}`,
+      ),
+    );
+    expect(offences).toEqual([]);
+    // And it read some, so it cannot pass by reading none.
+    expect(SITES.some((s) => s.literals.length > 0)).toBe(true);
   });
 
   it("still sends every key KNOWN_UNDECLARED excuses, or it comes off the list", () => {
