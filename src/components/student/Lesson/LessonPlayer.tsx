@@ -444,6 +444,8 @@ export function LessonPlayer({
     () => new Set(),
   );
   const answeredRight = useRef<Set<string>>(new Set());
+  // Segments whose hand-off panel has been counted as applied (B74).
+  const handoffsApplied = useRef<Set<string>>(new Set());
   // Segments are the lesson itself; the assessment takes over the screen once
   // the last segment is done (growth framing — never a score), then completion.
   // Review sessions open on their entry screen first (37d).
@@ -2305,6 +2307,17 @@ export function LessonPlayer({
                       segmentId: segment.id,
                       promptId,
                     });
+                  /*
+                   * B74: A RENDERED SOCRATIC PANEL IS AN ADAPTATION APPLIED.
+                   * The hand-off's is counted here, once per segment - a
+                   * second hand-off on the same segment is the same panel
+                   * arriving again. The engine's own panel is counted with
+                   * the other applied adaptations, not here.
+                   */
+                  if (handoffHere && !handoffsApplied.current.has(segment.id)) {
+                    handoffsApplied.current.add(segment.id);
+                    noteApplied();
+                  }
                 }}
                 onAnswer={(promptId, reply, outcome) =>
                   answerGuided(promptId, outcome, reply)

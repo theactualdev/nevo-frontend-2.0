@@ -38,20 +38,24 @@ vi.mock("@/hooks/useLessonProgress", () => ({
   useLessonProgress: () => ({ ...progress }),
 }));
 
-const { trackEvent, recordReview, saveAttempt, answerGuided } = vi.hoisted(
-  () => ({
+const { trackEvent, recordReview, saveAttempt, answerGuided, applied } =
+  vi.hoisted(() => ({
     trackEvent: vi.fn(),
     recordReview: vi.fn(),
     saveAttempt: vi.fn(),
     answerGuided: vi.fn(),
-  }),
-);
+    /** The player's applied-adaptation count, as handed to the signals. */
+    applied: { ref: null as { current: { count: number; lastAt: number | null } } | null },
+  }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
 }));
 vi.mock("@/hooks", () => ({
   useLesson: () => ({ setActiveLesson: vi.fn() }),
-  useSignals: () => ({ trackEvent }),
+  useSignals: (...args: unknown[]) => {
+    applied.ref = args[4] as typeof applied.ref;
+    return { trackEvent };
+  },
 }));
 vi.mock("@/hooks/useRuntimeAdaptation", () => ({
   useRuntimeAdaptation: () => ({ offeredBreak: null, reason: null, plan: null }),
@@ -364,5 +368,49 @@ describe("what a hand-off records (38a)", () => {
         outcome: "not_recalled",
       }),
     );
+  });
+});
+
+describe("a hand-off panel is an adaptation applied (B74)", () => {
+  it("counts once when it renders", async () => {
+    saveAttempt.mockResolvedValue(reply(HANDOFF));
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    next();
+    expect(applied.ref?.current.count).toBe(0);
+
+    await miss();
+    await screen.findByText(PROMPT);
+
+    expect(applied.ref?.current.count).toBe(1);
+    expect(applied.ref?.current.lastAt).toEqual(expect.any(Number));
+  });
+
+  it("counts once per segment, however often it arrives there", async () => {
+    saveAttempt.mockResolvedValue(
+      reply({ ...HANDOFF, advanceAfterHandoff: false }),
+    );
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    next();
+    await miss();
+    await screen.findByText(PROMPT);
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    // Back into the check, another miss, and the server hands off again.
+    next();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await miss();
+    await waitFor(() => expect(checkOnScreen()).toBeNull());
+    expect(await screen.findByText(PROMPT)).toBeTruthy();
+
+    expect(applied.ref?.current.count).toBe(1);
+  });
+
+  it("counts nothing where no hand-off came", async () => {
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    next();
+    await miss();
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(applied.ref?.current.count).toBe(0);
   });
 });
