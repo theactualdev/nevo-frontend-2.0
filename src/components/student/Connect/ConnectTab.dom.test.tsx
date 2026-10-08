@@ -290,3 +290,104 @@ describe("[79] a child nobody has written to", () => {
     expect(within(rowFor("Ms Okafor")).queryByText("No messages yet")).toBeNull();
   });
 });
+
+/*
+ * B95 / D109: "Message my teacher" opens Connect ON the teacher's conversation.
+ * Ask Nevo's answer names no teacher, so the thread list's own `teacherId`
+ * marks it - only on a conversation with the child, and only when exactly one
+ * qualifies. Anything else opens Connect as it always has.
+ */
+describe("[D109] Message my teacher", () => {
+  const routed = (
+    id: string,
+    title: string,
+    over: Record<string, unknown> = {},
+  ) => ({ ...row(id, title), teacherId: "teacher-9", ...over });
+
+  it("opens the teacher's conversation on a phone, not the list", async () => {
+    viewport(false);
+    api.threads.mockResolvedValue({
+      threads: [
+        row("t-1", "Ms Okafor"),
+        routed("t-2", "Mr Bell", { unread: true, unreadCount: 1 }),
+      ],
+      total: 2,
+    });
+    render(<ConnectTab toTeacher />);
+
+    await waitFor(() => expect(api.thread).toHaveBeenCalledWith("t-2"));
+    expect(api.markThreadRead).toHaveBeenCalledWith("t-2");
+    expect(api.thread).not.toHaveBeenCalledWith("t-1");
+    expect(screen.getByLabelText("Message Mr Bell")).toBeTruthy();
+  });
+
+  it("opens it beside the list on a tablet, over the first thread", async () => {
+    viewport(true);
+    api.threads.mockResolvedValue({
+      threads: [row("t-1", "Ms Okafor"), routed("t-2", "Mr Bell")],
+      total: 2,
+    });
+    render(<ConnectTab toTeacher />);
+
+    await waitFor(() => expect(api.thread).toHaveBeenCalledWith("t-2"));
+    expect(rowFor("Mr Bell")).toHaveAttribute("aria-current", "true");
+    expect(api.thread).not.toHaveBeenCalledWith("t-1");
+  });
+
+  it("never picks a class thread, where a reply reaches the whole class", async () => {
+    viewport(false);
+    api.threads.mockResolvedValue({
+      threads: [routed("t-1", "Year 5 Blue", { recipientType: "class" })],
+      total: 1,
+    });
+    render(<ConnectTab toTeacher />);
+
+    await listed("Year 5 Blue");
+    // Let the open-thread effect run, so a wrong pick has its chance to fetch.
+    await act(async () => {});
+    expect(api.thread).not.toHaveBeenCalled();
+  });
+
+  it("does not choose between two teachers' conversations", async () => {
+    viewport(false);
+    api.threads.mockResolvedValue({
+      threads: [
+        routed("t-1", "Ms Okafor"),
+        routed("t-2", "Mr Bell", { teacherId: "teacher-2" }),
+      ],
+      total: 2,
+    });
+    render(<ConnectTab toTeacher />);
+
+    await listed("Ms Okafor");
+    // Let the open-thread effect run, so a wrong pick has its chance to fetch.
+    await act(async () => {});
+    expect(api.thread).not.toHaveBeenCalled();
+  });
+
+  it("opens as it always has when no thread names a teacher", async () => {
+    viewport(false);
+    render(<ConnectTab toTeacher />);
+
+    await listed("Ms Okafor");
+    // Let the open-thread effect run, so a wrong pick has its chance to fetch.
+    await act(async () => {});
+    expect(api.thread).not.toHaveBeenCalled();
+  });
+
+  it("still lets the child open another conversation", async () => {
+    viewport(false);
+    api.threads.mockResolvedValue({
+      threads: [row("t-1", "Ms Okafor"), routed("t-2", "Mr Bell")],
+      total: 2,
+    });
+    render(<ConnectTab toTeacher />);
+
+    await screen.findByLabelText("Message Mr Bell");
+    fireEvent.click(screen.getByRole("button", { name: "Back to messages" }));
+    fireEvent.click(rowFor("Ms Okafor"));
+
+    await waitFor(() => expect(api.thread).toHaveBeenCalledWith("t-1"));
+    expect(screen.getByLabelText("Message Ms Okafor")).toBeTruthy();
+  });
+});

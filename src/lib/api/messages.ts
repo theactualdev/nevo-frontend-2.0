@@ -17,6 +17,12 @@ export interface MessageThread {
   threadId: string;
   recipientType: RecipientType | (string & {});
   recipientId: string | null;
+  /**
+   * The active teacher this student conversation routes to (backend B95,
+   * 8 Oct). Null when the school has assigned no teacher to the student's
+   * class. Optional as well: it is not in the schema's `required` list.
+   */
+  teacherId?: string | null;
   title: string;
   /** The class this thread belongs to. Shipped 31 Aug. */
   className: string | null;
@@ -72,16 +78,23 @@ export const messagesApi = {
    *
    * This is the STUDENT's way into a conversation, and the reason it is not
    * `send`: `send` addresses a recipient and creates a thread, which a student
-   * cannot do. Access is the thread itself - a student may reply only where
-   * they can already read - so there is no recipient to name and no way to
-   * start a conversation with someone who has not started one with them.
+   * could not do before B95 and still has no documented recipient for (see
+   * `send`). Access is the thread itself - a student may reply only where
+   * they can already read - so there is no recipient to name.
    *
    * `content` is capped at 5000 characters by the contract.
    */
   reply: (threadId: string, content: string) =>
     api.post<ChatMessage>(`/api/messages/threads/${threadId}/reply`, { content }),
 
-  /** Send, creating the thread if this is the first message. */
+  /**
+   * Send, creating the thread if this is the first message.
+   *
+   * Teacher-side only. Backend B95 (8 Oct) says a student's first send creates
+   * their conversation and routes it to a teacher of their class, but the
+   * contract does not say what a student names as `recipientId` - so the
+   * child's Connect does not call this yet, and asks.
+   */
   send: (payload: {
     recipientId: string;
     recipientType: RecipientType;

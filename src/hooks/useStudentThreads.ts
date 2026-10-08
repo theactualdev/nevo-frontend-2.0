@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { messagesApi } from "@/lib/api/messages";
+import { messagesApi, type MessageThread } from "@/lib/api/messages";
 import { getSession, getToken } from "@/lib/auth/session";
 import { THREADS, type Message, type Thread } from "@/components/student/Connect/connectData";
 import { useHasSession } from "./useHasSession";
@@ -15,7 +15,8 @@ import { useHasSession } from "./useHasSession";
  * their teacher through the contract at all. `POST /messages/threads/{id}/reply`
  * (3 Sep) is the way in, and it is a different shape on purpose - there is no
  * recipient to name. Access IS the thread: a child may write only where they
- * can already read, and still cannot start a conversation with anyone.
+ * can already read. Backend B95 (8 Oct) lets a student's first send start a
+ * conversation, but the contract names no recipient for it, so that waits.
  *
  * As on the teacher side, the thread list carries no message bodies, so a
  * thread is fetched when first opened and kept. What the list DOES carry, and
@@ -35,6 +36,12 @@ export interface StudentThreads {
    * shown the empty state and told their teacher had never written to them.
    */
   failed: boolean;
+  /**
+   * The child's conversation with their teacher, for "Message my teacher" -
+   * see `teacherThreadId`. Null when there is none, when it cannot be told
+   * apart, and for the signed-out walkthrough.
+   */
+  teacherThread: string | null;
   openThread: (threadId: string) => void;
   /**
    * Mark a thread read. Opening it is reading it, and this is the deliberate
@@ -60,6 +67,27 @@ export interface StudentThreads {
 /** The contract's cap on `content`. */
 export const MESSAGE_MAX_LENGTH = 5000;
 
+/**
+ * WHICH CONVERSATION IS THE CHILD'S TEACHER (backend B95, design D109).
+ *
+ * "Message my teacher" opens Connect on that conversation (design, 6 Oct). The
+ * child is never told a teacher id anywhere else - not on Ask Nevo's answer,
+ * not on the dashboard - so the thread list's own `teacherId`, "the active
+ * teacher this student conversation routes to", is what marks it.
+ *
+ * Only a `student` thread: a `class` thread is the teacher writing to the whole
+ * class, and a child's reply to their teacher does not belong there. And only
+ * when exactly one thread qualifies. With none there is nothing to open, and
+ * with more the list cannot say which one is "my teacher" - both leave Connect
+ * opening as it always has, rather than picking a conversation for the child.
+ */
+export function teacherThreadId(threads: MessageThread[]): string | null {
+  const routed = threads.filter(
+    (t) => t.recipientType === "student" && t.teacherId,
+  );
+  return routed.length === 1 ? routed[0].threadId : null;
+}
+
 function initialsOf(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
@@ -70,6 +98,7 @@ export function useStudentThreads(): StudentThreads {
   const signedIn = useHasSession();
   const [live, setLive] = useState<Thread[] | null>(null);
   const [failed, setFailed] = useState(false);
+  const [teacherThread, setTeacherThread] = useState<string | null>(null);
   const requested = useRef<Set<string>>(new Set());
   const selfId = getSession()?.userId;
   // `retry` needs the message's text, and reading it from `live` through the
@@ -89,6 +118,7 @@ export function useStudentThreads(): StudentThreads {
       .threads()
       .then((res) => {
         if (cancelled) return;
+        setTeacherThread(teacherThreadId(res.threads));
         setLive(
           res.threads.map((t, i) => ({
             id: t.threadId,
@@ -300,6 +330,7 @@ export function useStudentThreads(): StudentThreads {
       live: false,
       loading: false,
       failed: false,
+      teacherThread: null,
       openThread,
       // Nothing behind the fixtures to mark, and the designed screens keep
       // their own local clear.
@@ -313,6 +344,7 @@ export function useStudentThreads(): StudentThreads {
     live: true,
     loading: live === null && !failed,
     failed,
+    teacherThread,
     openThread,
     markThreadRead,
     reply,

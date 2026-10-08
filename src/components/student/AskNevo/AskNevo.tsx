@@ -559,7 +559,10 @@ export function AskNevo() {
                             redirectTarget: target,
                           });
                           setOpen(false);
-                          router.push(target);
+                          // On the teacher's conversation, not just the tab
+                          // (design D109). The answer names no teacher, so
+                          // Connect finds it - see `teacherThreadId`.
+                          router.push(`${target}?to=teacher`);
                         }}
                         className="inline-flex h-11 cursor-pointer items-center gap-2 self-start rounded-[10px] bg-nevo-navy px-4 text-sm font-medium text-nevo-cream transition-[filter] hover:brightness-108 active:scale-[0.98]"
                       >

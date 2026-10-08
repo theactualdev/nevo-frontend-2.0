@@ -48,15 +48,21 @@ const twoPaneOnServer = () => false;
  */
 export function ConnectTab({
   threadId,
+  toTeacher = false,
 }: {
   /**
    * `?thread=`, read by the page: open this conversation rather than the
-   * first one. For a message notification or an Ask Nevo hand-off - neither
-   * has a live caller yet; backend has no message notifications. An id that
-   * is not in the list falls back to the list, never to someone else's
-   * conversation on a phone.
+   * first one. An id that is not in the list falls back to the list, never to
+   * someone else's conversation on a phone.
    */
   threadId?: string;
+  /**
+   * `?to=teacher`, from Ask Nevo's "Message my teacher": open the child's
+   * conversation with their teacher (design D109). Ask Nevo cannot name the
+   * thread, so it is found in the list once the list arrives - see
+   * `teacherThreadId`. With no such thread, Connect opens as it always has.
+   */
+  toTeacher?: boolean;
 } = {}) {
   // Live threads read from the API; the fixtures back the designed screens
   // and keep their simulated send.
@@ -65,6 +71,7 @@ export function ConnectTab({
     live,
     loading,
     failed,
+    teacherThread,
     openThread: fetchThread,
     markThreadRead,
     reply: sendLive,
@@ -79,7 +86,7 @@ export function ConnectTab({
   const [activeId, setActiveId] = useState<string>(threadId ?? "");
   // Mobile only: which pane is showing. A deep link opens the conversation.
   const [mobileView, setMobileView] = useState<"list" | "thread">(
-    threadId ? "thread" : "list",
+    threadId || toTeacher ? "thread" : "list",
   );
   const twoPane = useSyncExternalStore(
     subscribeTwoPane,
@@ -104,7 +111,10 @@ export function ConnectTab({
 
   // Derived, not assigned: the live list arrives after mount, and setting a
   // default from an effect is the setState-in-effect the codebase rules out.
-  const picked = threads.find((t) => t.id === activeId);
+  // The teacher's conversation is derived the same way, and a thread the
+  // child taps (or a `?thread=`) still wins over it.
+  const wantedId = activeId || (toTeacher ? (teacherThread ?? "") : "");
+  const picked = threads.find((t) => t.id === wantedId);
   const active = picked ?? threads[0];
   // A phone shows a conversation only once one was actually chosen.
   const view = mobileView === "thread" && picked ? "thread" : "list";
