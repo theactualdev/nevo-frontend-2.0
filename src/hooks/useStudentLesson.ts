@@ -5,11 +5,12 @@ import { ApiError } from "@/lib/api/client";
 import { lessonsApi } from "@/lib/api/lessons";
 import { getSession, getToken } from "@/lib/auth/session";
 import {
-  isPackageCopy,
+  isPartialCopy,
   refreshSavedLesson,
   savedLesson,
 } from "@/lib/offline/savedLessons";
 import type { AdaptSegment } from "@/lib/api/intelligence";
+import type { DashboardProgressRow } from "@/lib/api/students";
 import { adaptSegmentsFor } from "@/lib/lessons/adaptation";
 import { lessonFromContent } from "@/lib/lessons/fromContent";
 import { getMockAdaptation, getMockLesson } from "@/lib/mocks";
@@ -70,8 +71,8 @@ interface Resolution {
   empty?: boolean;
   /** Built from the child's offline shelf because the read could not be made. */
   fromShelf?: boolean;
-  /** That shelf copy is the offline package's - see `isPackageCopy`. */
-  fromPackage?: boolean;
+  /** That shelf copy lacks what completion needs - see `isPartialCopy`. */
+  partial?: boolean;
 }
 
 export interface StudentLessonState {
@@ -101,6 +102,13 @@ export interface StudentLessonState {
    * there is none, or when the lesson is a mock (whose ids nothing records).
    */
   resumeAt: number | null;
+  /**
+   * The child's newest progress row for this lesson, as the dashboard gave
+   * it: where the check was left (B82) and, once completed, the check-in's
+   * outcome (B84). Null for a mock, when there is none, and when the
+   * dashboard did not answer - never a row made up to stand in for one.
+   */
+  progressRow: DashboardProgressRow | null;
   /** ISO timestamp of their last activity on this lesson, when we know it. */
   lastWorkedAt: string | null;
   /**
@@ -138,10 +146,12 @@ export interface StudentLessonState {
   /** Opened from the child's offline shelf, not from a live read. */
   fromShelf: boolean;
   /**
-   * Opened from the shelf's copy of the offline PACKAGE: no modules, recap or
-   * after-lesson check. The player never records it completed (Lydia, 6 Oct).
+   * Opened from a shelf copy missing its modules, recap or after-lesson check
+   * - a package saved before backend B85 (8 Oct), or one that left any out.
+   * The player never records it completed (Lydia, 6 Oct). A package copy that
+   * carries all three is not partial, and completes as it would online.
    */
-  fromPackage: boolean;
+  partial: boolean;
   /**
    * The child has already finished this lesson: their newest progress row
    * says `completed`, or the assignment does (the feed is recent activity, so
@@ -296,7 +306,7 @@ export function useStudentLesson(
             lesson: fromShelf,
             adaptSegments: adaptSegmentsFor(kept.detail.segments),
             fromShelf: true,
-            fromPackage: isPackageCopy(kept.detail),
+            partial: isPartialCopy(kept.detail),
           });
         } else {
           setResolved({ id: lessonId, failed: true });
@@ -405,14 +415,15 @@ export function useStudentLesson(
     lesson,
     live: Boolean(live),
     resumeAt,
+    progressRow: live ? (saved ?? null) : null,
     lastWorkedAt: saved?.updatedAt ?? null,
     adaptSegments: live ? state.adaptSegments : undefined,
     unavailable,
     opensAt: assignment?.availableFrom ?? null,
     placeUnknown: Boolean(live) && !dashboard && dashboardFailed,
     fromShelf: Boolean(live) && state.fromShelf === true,
-    fromPackage:
-      Boolean(live) && state.fromShelf === true && state.fromPackage === true,
+    partial:
+      Boolean(live) && state.fromShelf === true && state.partial === true,
     // A live lesson gets the engine's plan; a mock keeps its authored one.
     // Never crossed: a mock must not borrow a live plan, and a live lesson
     // must not borrow another lesson's authored one.

@@ -24,8 +24,8 @@ import type { AdaptationPlan, Lesson } from "@/lib/types";
  *
  * Since 6 Oct: the leave dialog never says the latest place is saved, only
  * that the child picks up from the last point that was (D88); a module
- * boundary offers no break (D91); and a lesson played from the offline
- * package's copy is never written completed (Lydia).
+ * boundary offers no break (D91); and a lesson played from a saved copy
+ * missing its modules, recap or check is never written completed (Lydia).
  */
 
 const progress = vi.hoisted(() => ({
@@ -189,11 +189,11 @@ describe("finishing", () => {
   });
 });
 
-describe("a lesson played from the offline package's copy", () => {
+describe("a lesson played from a partial saved copy", () => {
   /*
    * Lydia, 6 Oct: a lesson played without its modules, recap and after-lesson
    * check "is not recorded as completed, and it comes back when the child is
-   * next online". The package carries none of the three.
+   * next online". A copy saved before B85 (8 Oct) carries none of the three.
    */
   const playThrough = (over: Record<string, unknown> = {}) => {
     render(<LessonPlayer lesson={LESSON} plan={null} live {...over} />);
@@ -221,7 +221,7 @@ describe("a lesson played from the offline package's copy", () => {
   });
 
   it("writes nothing at all for a finished lesson reopened from it", () => {
-    // Finished stays finished; the package cannot complete it again either.
+    // Finished stays finished; a partial copy cannot complete it again either.
     playThrough({ partial: true, finished: true });
 
     expect(writes()).toEqual([]);

@@ -7,7 +7,7 @@ import {
   lessonFromPackage,
 } from "./lessonPackage";
 import { lessonFromContent } from "@/lib/lessons/fromContent";
-import { isPackageCopy } from "./savedLessons";
+import { isPartialCopy } from "./savedLessons";
 import { buildZip } from "./testZip";
 import { ZipError } from "./zip";
 
@@ -69,6 +69,38 @@ const lesson = (over: Record<string, unknown> = {}) => ({
   version: "3",
   segments: [segment()],
   ...over,
+});
+
+/** An after-lesson question, `ComprehensionCheckpoint` as the spec has it. */
+const checkpoint = () => ({
+  id: "cp-1",
+  conceptId: null,
+  conceptName: "Halves",
+  prompt: "How many halves make a whole?",
+  answerType: "single_choice",
+  options: [
+    { value: 2, label: "Two" },
+    { value: 3, label: "Three" },
+  ],
+  answerKey: 2,
+  explanation: null,
+  position: "after_lesson",
+});
+
+/** What a package carries since backend B85 (8 Oct). */
+const ending = () => ({
+  modules: [
+    {
+      id: "m1",
+      title: "Parts of a whole",
+      recap: null,
+      preview: "Splitting things fairly.",
+      sequenceOrder: 0,
+      segmentIds: ["s1"],
+    },
+  ],
+  recap: "You split a whole into two equal halves.",
+  assessment: [checkpoint()],
 });
 
 /** A lesson DETAIL - what the detail read returns, and what a package is not. */
@@ -164,7 +196,39 @@ describe("the lesson inside a package", () => {
     expect(seg).not.toHaveProperty("approved");
     expect(seg).not.toHaveProperty("needsReview");
     expect(detail).not.toHaveProperty("status");
+    // Nor an ending it left out: absent is not "none".
     expect(detail).not.toHaveProperty("modules");
+    expect(detail).not.toHaveProperty("recap");
+    expect(detail).not.toHaveProperty("assessment");
+  });
+
+  it("keeps the modules, recap and check it carries (B85)", async () => {
+    const kept = await lessonFromPackage(
+      pkg(JSON.stringify(lesson(ending()))),
+      ID,
+    );
+
+    expect(kept).toMatchObject(ending());
+    // And they play as the detail read's do: grouped, recapped and checked.
+    const built = lessonFromContent(kept!, kept!.modules ?? []);
+    expect(built?.modules?.[0]).toMatchObject({
+      title: "Parts of a whole",
+      segmentIds: ["s1"],
+    });
+    expect(built?.summary?.recap).toBe(
+      "You split a whole into two equal halves.",
+    );
+    expect(built?.assessment?.questions[0].prompt).toBe(
+      "How many halves make a whole?",
+    );
+  });
+
+  it("keeps a null recap as sent, the lesson saying it has none", () => {
+    const detail = detailFromPackage(
+      lesson({ ...ending(), recap: null }) as never,
+    );
+
+    expect(detail).toHaveProperty("recap", null);
   });
 
   it("fills a segment's missing lists and variants as the detail says none", async () => {
@@ -233,9 +297,22 @@ describe("the lesson inside a package", () => {
   it("accepts the published shape and refuses a lesson detail's", () => {
     expect(isOfflinePackage(lesson(), ID)).toBe(true);
     expect(isOfflinePackage(lesson({ version: null }), ID)).toBe(true);
+    expect(isOfflinePackage(lesson(ending()), ID)).toBe(true);
     // A detail's segment has `segmentKey`, not `key`.
     expect(isOfflinePackage(detailShaped(), ID)).toBe(false);
     expect(isOfflinePackage(lesson({ id: "another" }), ID)).toBe(false);
+  });
+
+  it("refuses an ending that is not the published shape", () => {
+    const [mod] = ending().modules;
+    const noSegmentIds = { ...mod, segmentIds: undefined };
+
+    expect(isOfflinePackage(lesson({ recap: ["a"] }), ID)).toBe(false);
+    expect(isOfflinePackage(lesson({ assessment: {} }), ID)).toBe(false);
+    expect(isOfflinePackage(lesson({ modules: [noSegmentIds] }), ID)).toBe(
+      false,
+    );
+    expect(isOfflinePackage(lesson({ modules: ["m1"] }), ID)).toBe(false);
   });
 });
 
@@ -299,19 +376,58 @@ describe("saving a lesson through its package", () => {
   });
 });
 
-describe("telling the package's copy from the full lesson", () => {
-  // Lydia, 6 Oct: the package's copy is never recorded completed, because it
-  // has no modules, recap or after-lesson check. The player has to know.
-  it("knows the copy saved out of a package", async () => {
+describe("telling a partial copy from the whole lesson", () => {
+  // Lydia, 6 Oct: a copy without its modules, recap and after-lesson check is
+  // never recorded completed. Since B85 the package can carry all three, so
+  // partial is what a copy is MISSING, not where it came from.
+  it("knows a package copy without them, as every copy before 8 Oct is", async () => {
     const kept = await lessonFromPackage(pkg(JSON.stringify(lesson())), ID);
 
-    expect(isPackageCopy(kept!)).toBe(true);
+    expect(isPartialCopy(kept!)).toBe(true);
   });
 
-  it("knows the detail read, which always carries modules", () => {
-    expect(isPackageCopy({ ...detailShaped(), modules: [] } as never)).toBe(
-      false,
+  it("knows a package copy that carries all three is whole", async () => {
+    const kept = await lessonFromPackage(
+      pkg(JSON.stringify(lesson(ending()))),
+      ID,
     );
+
+    expect(isPartialCopy(kept!)).toBe(false);
+  });
+
+  it("takes an empty list and a null recap as sent, not missing", async () => {
+    // A lesson with no modules, no recap and no check says so.
+    const none = { modules: [], recap: null, assessment: [] };
+    const kept = await lessonFromPackage(
+      pkg(JSON.stringify(lesson(none))),
+      ID,
+    );
+
+    expect(isPartialCopy(kept!)).toBe(false);
+  });
+
+  it.each(["modules", "recap", "assessment"])(
+    "is partial when only %s is missing",
+    async (missing) => {
+      const sent: Record<string, unknown> = ending();
+      delete sent[missing];
+      const kept = await lessonFromPackage(
+        pkg(JSON.stringify(lesson(sent))),
+        ID,
+      );
+
+      expect(isPartialCopy(kept!)).toBe(true);
+    },
+  );
+
+  it("knows the detail read, which carries all three", () => {
+    expect(
+      isPartialCopy({
+        ...detailShaped(),
+        recap: null,
+        assessment: [],
+      } as never),
+    ).toBe(false);
   });
 });
 

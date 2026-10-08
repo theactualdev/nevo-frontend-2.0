@@ -4,6 +4,7 @@ import { useLessonProgress } from "./useLessonProgress";
 import { lessonsApi } from "@/lib/api/lessons";
 import { ApiError } from "@/lib/api/client";
 import {
+  holdAnswer,
   holdProgress,
   pendingProgressFor,
 } from "@/lib/lessons/pendingProgress";
@@ -276,5 +277,108 @@ describe("useLessonProgress - the after-lesson check (B49, B26)", () => {
     });
 
     expect(result.current.saved).toMatchObject({ status: "completed" });
+  });
+
+  it("gives back where the session says the check was left (B82)", async () => {
+    const session = {
+      sessionId: "sess-1",
+      resumed: true,
+      checkPosition: 2,
+      checkResumableUntil: "2026-10-08T23:59:59Z",
+    };
+    vi.spyOn(lessonsApi, "startSession").mockResolvedValue(session);
+    const { result } = renderHook(() => useLessonProgress(LESSON, true));
+
+    await waitFor(() => expect(result.current.opened).toEqual(session));
+  });
+});
+
+/**
+ * A completion never goes ahead of the answers its visit holds on the device
+ * (Lydia, 6 Oct): the check data has to be behind it. With nothing held -
+ * every online visit - it goes at once, as it always has.
+ */
+describe("useLessonProgress - a completion and the answers held for it", () => {
+  const answer = {
+    problemId: "cp-1",
+    source: "assessment" as const,
+    answer: 2,
+    clientAttemptId: "00000001-0000-4000-8000-000000000000",
+  };
+  const order: string[] = [];
+  const spyWrites = (attempt: () => Promise<unknown>) => {
+    order.length = 0;
+    vi.spyOn(lessonsApi, "saveAttempt").mockImplementation(() => {
+      order.push("attempt");
+      return attempt() as never;
+    });
+    return vi.spyOn(lessonsApi, "saveProgress").mockImplementation((_, b) => {
+      order.push(`progress ${b.status}`);
+      return Promise.resolve({ status: b.status }) as never;
+    });
+  };
+
+  it("sends the held answers first, then the completion", async () => {
+    spyWrites(() => Promise.resolve({}));
+    const { result } = renderHook(() => useLessonProgress(LESSON, true));
+    await waitFor(() => expect(result.current.sessionId).toBe("sess-1"));
+    holdAnswer(LESSON, { sessionId: "sess-1", body: answer });
+
+    act(() => result.current.report("completed", { segment: 4 }));
+
+    await waitFor(() => expect(result.current.completionSaved).toBe(true));
+    expect(order).toEqual(["attempt", "progress completed"]);
+  });
+
+  it("holds the completion back while an answer still cannot be sent", async () => {
+    const save = spyWrites(() => Promise.reject(new ApiError(0, "offline")));
+    const { result } = renderHook(() => useLessonProgress(LESSON, true));
+    await waitFor(() => expect(result.current.sessionId).toBe("sess-1"));
+    holdAnswer(LESSON, { sessionId: "sess-1", body: answer });
+
+    act(() => result.current.report("completed", { segment: 4 }));
+
+    await waitFor(() => expect(result.current.completionFailed).toBe(true));
+    expect(save).not.toHaveBeenCalled();
+    expect(pendingProgressFor(LESSON)?.status).toBe("completed");
+  });
+
+  it("writes exited, never completed, when an answer was refused for good", async () => {
+    spyWrites(() => Promise.reject(new ApiError(422, "refused")));
+    const { result } = renderHook(() => useLessonProgress(LESSON, true));
+    await waitFor(() => expect(result.current.sessionId).toBe("sess-1"));
+    holdAnswer(LESSON, { sessionId: "sess-1", body: answer });
+
+    act(() => result.current.report("completed", { segment: 4 }));
+
+    await waitFor(() => expect(order).toContain("progress exited"));
+    expect(order).not.toContain("progress completed");
+    expect(result.current.completionSaved).toBe(false);
+    await waitFor(() => expect(result.current.completionFailed).toBe(true));
+  });
+
+  it("makes an answer given before the session opened that session's", async () => {
+    let open: (v: unknown) => void = () => {};
+    vi.spyOn(lessonsApi, "startSession").mockImplementation(
+      () => new Promise((resolve) => (open = resolve as never)),
+    );
+    const attempt = vi
+      .spyOn(lessonsApi, "saveAttempt")
+      .mockResolvedValue({} as never);
+    const { result } = renderHook(() => useLessonProgress(LESSON, true));
+    holdAnswer(LESSON, {
+      sessionId: null,
+      localId: result.current.localId,
+      body: answer,
+    });
+
+    await act(async () => open({ sessionId: "sess-1", resumed: false }));
+
+    await waitFor(() =>
+      expect(attempt).toHaveBeenCalledWith(LESSON, {
+        sessionId: "sess-1",
+        ...answer,
+      }),
+    );
   });
 });

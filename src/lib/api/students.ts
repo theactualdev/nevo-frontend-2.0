@@ -1,5 +1,6 @@
 import { api } from "./client";
 import type { ConsentStatus } from "./consents";
+import type { ConceptOutcome } from "./lessons";
 
 /**
  * What a teacher can read about one student.
@@ -201,6 +202,21 @@ export interface DashboardProgressRow {
    * Defaults to 0, which no playable lesson has: 0 is "not said".
    */
   segmentCount?: number;
+  /**
+   * Where the after-lesson check was left and until when it can be picked up
+   * (B82, 8 Oct), as on the progress write's answer (B49) - see
+   * `lib/lessons/checkResume`. Absent or null is no check to pick up.
+   */
+  checkPosition?: number | null;
+  checkResumableUntil?: string | null;
+  /**
+   * The check-in's outcome (B84, 8 Oct), as the completion write brings it
+   * back (B26) - see `lib/lessons/checkOutcome`, which reads it only off a
+   * completed row. Not required: absent and empty both draw nothing.
+   */
+  masteredConcepts?: ConceptOutcome[];
+  revisitConcepts?: ConceptOutcome[];
+  resultNote?: string;
 }
 
 /**

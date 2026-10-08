@@ -53,15 +53,14 @@ export function loadReviewAnswers(lessonId: string): ReviewAnswer[] {
 /**
  * THE CHECK-IN'S OUTCOME, CARRIED TO THE SUMMARY (B26).
  *
- * It arrives on the completion write's answer and on nothing else: no read in
- * the contract returns it, and the summary is its own route. So the player
- * keeps the server's answer here, the same way it keeps the picks, and the
- * summary's "From the check-in" reads it back. Per child, for the same reason
- * the picks are.
+ * It arrives on the completion write's answer, and the summary is its own
+ * route. So the player keeps the server's answer here, the same way it keeps
+ * the picks, and the summary's "From the check-in" reads it back first. Per
+ * child, for the same reason the picks are.
  *
  * Opened anywhere else - another tablet, another day - there is nothing here,
- * and the section is simply not drawn (rule 5). A read that carried it would
- * let the summary say it everywhere; that is raised with backend.
+ * and the summary reads the same three fields off the child's progress row
+ * instead (B84, 8 Oct). See `LessonSummaryScreen`.
  */
 const outcomeKey = (lessonId: string) =>
   `nevo:check-outcome:${getSession()?.userId ?? "signed-out"}:${lessonId}`;
