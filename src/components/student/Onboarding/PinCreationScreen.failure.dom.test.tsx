@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { PinCreationScreen } from "./PinCreationScreen";
+import { ApiError } from "@/lib/api/client";
 import { STUDENT_PIN_LENGTH } from "@/lib/constants";
 
 /**
@@ -25,6 +26,10 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/lib/api", () => ({ authApi: { setPin: vi.fn() } }));
 vi.mock("@/lib/auth/session", () => ({ getSession: () => null }));
+
+// The first render pays for the keypad's import; under a loaded worker that
+// alone outran the 5s default, and the timeout took the file down with it.
+vi.setConfig({ testTimeout: 30_000 });
 
 /** The screen waits this long before it writes. */
 const SAVE_DELAY_MS = 1200;
@@ -101,5 +106,73 @@ describe("when the two entries do not match", () => {
 
     expect(alertText()).toMatch(/didn.t match/i);
     expect(alertText()).not.toMatch(/on us|didn.t save/i);
+  });
+});
+
+/** A refusal as the PIN route sends it: `{detail: {code, message}}`. */
+const refused = (status: number, code?: string) =>
+  new ApiError(
+    status,
+    "refused",
+    code ? { detail: { code, message: "said by the server" } } : undefined,
+  );
+
+describe("when the PIN route says why (B68)", () => {
+  const renderRefused = async (
+    cause: unknown,
+    onRefused?: (refusal: string) => void,
+  ) => {
+    const storePin = vi.fn().mockRejectedValue(cause);
+    render(
+      <PinCreationScreen
+        storePin={storePin}
+        onRefused={onRefused}
+        onComplete={vi.fn()}
+      />,
+    );
+    enter(SIX);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SAVE_DELAY_MS + 50);
+    });
+    return storePin;
+  };
+
+  it("asks a throttled child to wait, in D68's words, not to try again now", async () => {
+    await renderRefused(refused(429, "too_many_attempts"));
+
+    expect(alertText()).toContain("That didn't save");
+    expect(alertText()).toContain("Let's wait a moment before trying again.");
+    expect(alertText()).not.toContain("That's on us - try again.");
+    // The PIN is still kept: the button sends it again once they have waited.
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+  });
+
+  it.each([
+    ["a child who has a PIN", refused(409, "pin_already_set"), "has-pin"],
+    ["a pair that names nobody", refused(404, "entry_not_found"), "not-found"],
+    ["consent that has not come", refused(403, "consent_pending"), "consent"],
+    ["the age check", refused(403, "age_check_pending"), "age-check"],
+  ])("hands %s to the caller, and shows no failure of its own", async (_, cause, expected) => {
+    const onRefused = vi.fn();
+    await renderRefused(cause, onRefused);
+
+    expect(onRefused).toHaveBeenCalledTimes(1);
+    expect(onRefused).toHaveBeenCalledWith(expected);
+    expect(alertText()).not.toContain("That didn't save");
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("is the not-saved state for those refusals when no caller takes them", async () => {
+    await renderRefused(refused(409, "pin_already_set"));
+
+    expect(alertText()).toContain("Your PIN is kept. That's on us - try again.");
+  });
+
+  it("is the not-saved state for a refusal that does not name itself", async () => {
+    const onRefused = vi.fn();
+    await renderRefused(refused(409), onRefused);
+
+    expect(onRefused).not.toHaveBeenCalled();
+    expect(alertText()).toContain("Your PIN is kept. That's on us - try again.");
   });
 });

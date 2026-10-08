@@ -22,6 +22,11 @@ import {
 } from "@/lib/api/studentEntry";
 import { entryRoute } from "@/lib/auth/entryGate";
 import {
+  clearEntryHandBack,
+  peekEntryHandBack,
+} from "@/lib/auth/entryHandBack";
+import type { EntryIdentity, EntryPinElsewhere } from "@/lib/auth/firstPin";
+import {
   clearOnboardingDraft,
   startOnboardingDraft,
 } from "@/lib/auth/onboarding";
@@ -30,6 +35,7 @@ import { handSignInOver } from "@/lib/auth/signInHandoff";
 import { BUSY_REASON } from "@/lib/constants";
 import { openBusyWindow } from "@/lib/signals/busy";
 import { cn, randomId } from "@/lib/utils";
+import { NewPinAfterClear } from "./NewPinAfterClear";
 import { OnboardingShell } from "./OnboardingShell";
 
 /** The Welcome, where both doors into this screen live. */
@@ -119,9 +125,11 @@ function answeredAboutThePair(err: unknown): boolean {
  *
  * ON A MATCH it shows the frame's "Found you" beat, then routes on the child's
  * state, decided in one place (`entryRoute`): held at 00d, 00e or the age check,
- * sent to sign back in, or on into the first run. A held child is held HERE,
- * in place: they have no session, so `/student/waiting` would bounce them to
- * the PIN door, and the address they are on says nothing about why.
+ * sent to sign back in, to choose a new PIN after a teacher's clear, or on into
+ * the first run. A held child is held HERE, in place: they have no session, so
+ * `/student/waiting` would bounce them to the PIN door, and the address they
+ * are on says nothing about why. A cleared child chooses their new PIN here
+ * too, for the same reason.
  *
  * A MISS keeps both values as typed and turns Continue into "Try again". It
  * never says which field was wrong. A lookup we could not run is not a miss:
@@ -132,11 +140,22 @@ function answeredAboutThePair(err: unknown): boolean {
  */
 export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
   const router = useRouter();
-  const [code, setCode] = useState<string[]>(() =>
-    Array.from({ length: SCHOOL_CODE_LENGTH }, () => ""),
+  /*
+   * Empty, or 05's miss with the pair as typed: handed back from the end of a
+   * first run whose pair the PIN route no longer found (B68). See
+   * `entryHandBack`.
+   */
+  const [code, setCode] = useState<string[]>(() => {
+    const back = peekEntryHandBack()?.schoolCode ?? "";
+    return Array.from({ length: SCHOOL_CODE_LENGTH }, (_, i) => back[i] ?? "");
+  });
+  const [admissionNumber, setAdmissionNumber] = useState(
+    () => peekEntryHandBack()?.admissionNumber ?? "",
   );
-  const [admissionNumber, setAdmissionNumber] = useState("");
-  const [status, setStatus] = useState<Status>("idle");
+  const [status, setStatus] = useState<Status>(() =>
+    peekEntryHandBack() ? "error" : "idle",
+  );
+  useEffect(() => clearEntryHandBack(), []);
   /**
    * A lookup we could not run, versus a pair that matched nobody. A child must
    * never be told to re-check what they typed because our request failed.
@@ -147,6 +166,8 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
    * gone (00e, D117), or by the age check - drawn in place.
    */
   const [held, setHeld] = useState<WaitingHold | "withdrawn" | null>(null);
+  /** Matched with `pinCleared`: choosing a new PIN, in place (B67). */
+  const [clearedChild, setClearedChild] = useState<EntryIdentity | null>(null);
 
   const cellRefs = useRef<(HTMLInputElement | null)[]>([]);
   const idRef = useRef<HTMLInputElement>(null);
@@ -238,7 +259,8 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
     matchedCode: string,
     matchedNumber: string,
   ) => {
-    switch (entryRoute(state)) {
+    const route = entryRoute(state);
+    switch (route) {
       case "waiting":
         // Nothing of theirs is kept: a held child is not onboarding.
         clearOnboardingDraft();
@@ -257,16 +279,58 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
         handSignInOver({ schoolCode: matchedCode, identifier: matchedNumber });
         router.push(SIGN_BACK_IN);
         return;
+      case "new-pin":
       case "first-run":
         // A NEW DRAFT, not a merge: nothing an earlier child left in this tab
-        // comes with them.
+        // comes with them. A cleared child's is what remembers them on the
+        // device once their new PIN is stored, as a first PIN's does.
         startOnboardingDraft({
           schoolCode: matchedCode,
           admissionNumber: matchedNumber,
           name: state.firstName,
           ...(typeof state.age === "number" ? { age: state.age } : {}),
         });
-        router.push(FIRST_RUN);
+        if (route === "first-run") {
+          router.push(FIRST_RUN);
+          return;
+        }
+        // In place, like a hold: they have no session, and the pair they
+        // typed is what the PIN is stored against.
+        setClearedChild({
+          schoolCode: matchedCode,
+          admissionNumber: matchedNumber,
+        });
+    }
+  };
+
+  /**
+   * The PIN route refused a cleared child's new PIN with something that is
+   * not 15's to show (B68).
+   */
+  const refusedNewPin = (refusal: EntryPinElsewhere) => {
+    const child = clearedChild;
+    if (!child) return;
+    clearOnboardingDraft();
+    switch (refusal) {
+      case "has-pin":
+        // They have a PIN after all, so 00c, with what they typed - as for
+        // `accountReady`. 15 stays up while the route changes.
+        handSignInOver({
+          schoolCode: child.schoolCode,
+          identifier: child.admissionNumber,
+        });
+        router.push(SIGN_BACK_IN);
+        return;
+      case "not-found":
+        // The pair names nobody now: 05's miss, with both values as typed.
+        setClearedChild(null);
+        setTrouble(false);
+        setStatus("error");
+        return;
+      case "consent":
+      case "age-check":
+        setClearedChild(null);
+        setHeld(refusal);
     }
   };
 
@@ -304,6 +368,9 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
 
   if (held === "withdrawn") return <ConsentWithdrawn />;
   if (held) return <WaitingOnConsent hold={held} />;
+  if (clearedChild) {
+    return <NewPinAfterClear entry={clearedChild} onRefused={refusedNewPin} />;
+  }
 
   const { heading, sub } = FRAMING[framing];
   // The frame takes the tray down once the child has been found.

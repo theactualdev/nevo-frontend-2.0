@@ -121,6 +121,10 @@ export async function enterFirstLesson(
  *   never what, and never asked to sort it out.
  * - `sign-in`: 00c, because they already have a PIN (B64). A first run would
  *   try to make them a second account.
+ * - `new-pin`: 15's "Choose a new PIN" (D3, D115), because a teacher cleared
+ *   their PIN (SCRUM-216). Not 00c, where the PIN they remember is gone and
+ *   every try 401s, and not the first run, which would sit them through the
+ *   baseline again for an account they already have.
  * - `first-run`: the transition into 08 Profiling Intro, the baseline, the
  *   learning notice and 15 PIN Creation.
  *
@@ -139,25 +143,34 @@ export async function enterFirstLesson(
  * a day or two", which promised a timeframe nobody controls. See
  * `WaitingOnConsent`.
  *
- * A CLEARED CHILD LOOKS NEW. `accountReady` is false for a child whose PIN an
- * adult cleared (SCRUM-216) as well as for a new one - neither has a PIN, and
- * nothing else on the lookup tells them apart. So both take `first-run`, and
- * a cleared child sits the baseline again before 15. Which of the two has
- * arrived is asked of backend rather than guessed.
+ * A CLEARED CHILD NO LONGER LOOKS NEW (B67, 8 Oct). `accountReady` is false
+ * for a new child and for one whose PIN a teacher cleared alike - neither has
+ * a PIN - and until `pinCleared` arrived nothing told them apart, so a cleared
+ * child sat the baseline again. The spec gives `pinCleared` no description;
+ * it is read as its name says, a PIN a teacher cleared that the child has not
+ * yet replaced. It comes AFTER `accountReady`: a child the server says can
+ * sign in normally has a PIN, whatever else is set, and the PIN route would
+ * refuse them anyway (409).
  */
 export type EntryRoute =
-  "waiting" | "withdrawn" | "age-check" | "sign-in" | "first-run";
+  | "waiting"
+  | "withdrawn"
+  | "age-check"
+  | "sign-in"
+  | "new-pin"
+  | "first-run";
 
 export function entryRoute(
   state: Pick<
     StudentEntryState,
-    "consentState" | "accountReady" | "ageCheckPending"
+    "consentState" | "accountReady" | "ageCheckPending" | "pinCleared"
   >,
 ): EntryRoute {
   if (state.consentState === "withdrawn") return "withdrawn";
   if (state.consentState !== "given") return "waiting";
   if (state.ageCheckPending === true) return "age-check";
-  return state.accountReady ? "sign-in" : "first-run";
+  if (state.accountReady) return "sign-in";
+  return state.pinCleared === true ? "new-pin" : "first-run";
 }
 
 /** The Observed Interaction Sequence - where an SSO child's first use starts. */
