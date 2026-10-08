@@ -349,6 +349,19 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
       ? LESSONS
       : [];
 
+  /*
+   * ONLY WHAT IS OFFERED IS CHOSEN (T106). `?lesson=` seeds the choice before
+   * the library has said anything, and was never checked against it - so a
+   * lesson still parsing, one whose parse died, or one past the first page
+   * had no card to show it was chosen or to un-choose it, Continue went, step
+   * 4 named nobody, and Confirm sent its id. A choice counts only while its
+   * card is on screen.
+   */
+  const offered = new Set(lessons.map((l) => l.id));
+  /** The fixtures stand in for the walkthrough only, never a failed read. */
+  const offeredClasses = signedIn && classesSample ? [] : myClasses;
+  const picked = [...chosen].filter((id) => offered.has(id));
+
   /** Tomorrow in `YYYY-MM-DD`, local. Called from a handler, never render. */
   const tomorrow = () => {
     const d = new Date();
@@ -384,7 +397,7 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
 
   const canContinue =
     step === 1
-      ? chosen.size > 0
+      ? picked.length > 0
       : step === 2
         ? who === "left"
           ? classes.size > 0
@@ -462,7 +475,7 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
     setSubmitting(true);
     setError("");
     setErrorHref("");
-    const lessonIds = [...chosen];
+    const lessonIds = picked;
     /*
      * ONE REQUEST FOR A STUDENT PICK, one per class otherwise.
      *
@@ -812,6 +825,15 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
                     Upload a lesson and it will appear here.
                   </p>
                 )}
+                {/* A LIBRARY WITH NOTHING READY (T105). Lessons still being
+                    read, or whose reading stopped, are left off this list - so
+                    "is the library empty" was the wrong question, and a
+                    library of only those drew the heading over nothing. */}
+                {live && cards.length > 0 && lessons.length === 0 && (
+                  <p className="text-[14px] leading-[1.55] text-nevo-near-black/68">
+                    Nothing in your library is ready to assign yet.
+                  </p>
+                )}
                 <MaybeSample showing={!live} kind="teacher:assign-lessons">
                 {lessons.map((l) => (
                   <CheckCard
@@ -837,11 +859,14 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
                 {classesSample && (
                   /* A signed-in teacher whose class list failed was shown
                      fixture classes, fixture headcounts and sixteen invented
-                     children by name - on the screen that assigns work, with
-                     nothing saying they were not real. */
-                  <p className="mt-3 max-w-[560px] text-[13px] leading-[1.5] text-nevo-near-black/60 italic">
-                    We couldn&rsquo;t reach your school just now, so these are
-                    sample classes. Nothing you pick here will be assigned.
+                     children by name - on the screen that assigns work. Then
+                     marked and noticed, but still pickable, and refused only
+                     at Confirm (T102). Now none are offered, and this says
+                     why in the sentence Confirm already used for it. */
+                  <p className="mt-3 max-w-[560px] text-[14px] leading-[1.55] text-nevo-near-black/68">
+                    We couldn&rsquo;t reach your school, so we can&rsquo;t
+                    assign to your classes. Nothing has been sent - try again
+                    in a moment.
                   </p>
                 )}
                 {who === "left" ? (
@@ -868,7 +893,7 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
                             over nothing. Only reachable once the read has
                             answered - loading draws skeletons above, and a
                             failure or no session serves the fixtures. */}
-                        {myClasses.length === 0 && (
+                        {myClasses.length === 0 && !classesSample && (
                           <p className="text-[14px] leading-[1.55] text-nevo-near-black/68">
                             You don&rsquo;t have any classes yet. When your
                             school adds you to one, it will appear here.
@@ -878,7 +903,7 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
                           showing={classesSample || !signedIn}
                           kind="teacher:assign-classes"
                         >
-                        {myClasses.map((c) => (
+                        {offeredClasses.map((c) => (
                           <CheckCard
                             key={c.id}
                             on={classes.has(c.id)}
