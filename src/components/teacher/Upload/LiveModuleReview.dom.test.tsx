@@ -453,3 +453,18 @@ describe("reset", () => {
     expect(screen.getByRole("button", { name: "Reset structure" })).toBeDisabled();
   });
 });
+
+/**
+ * DESIGN, 8 OCT: body content in the module review caps at 820px, centred -
+ * the console's reading column, now a design-system value. It was 720px and
+ * pinned to the left.
+ */
+describe("its reading column", () => {
+  it("is 820px and centred, with no narrower cap inside it", () => {
+    show();
+    const column = document.querySelector("[class*='max-w-[820px]']")!;
+
+    expect(column).toHaveClass("mx-auto");
+    expect(document.querySelector("[class*='max-w-[720px]']")).toBeNull();
+  });
+});

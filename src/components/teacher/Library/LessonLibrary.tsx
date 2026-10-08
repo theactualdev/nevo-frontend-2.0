@@ -186,7 +186,7 @@ export function LessonLibrary() {
             Upload your first lesson and Nevo will get it ready for your
             students. A PDF, Word doc or slides all work.
           </p>
-          <UploadButton className="mt-[22px] h-12 px-6 text-[15px] xl:mt-6 xl:h-[52px] xl:px-[26px] xl:text-[15.5px]" />
+          <UploadButton className="mt-[22px] h-12 px-6 text-[15px] xl:mt-6 xl:h-[50px] xl:px-[22px]" />
         </div>
       </div>
     );
