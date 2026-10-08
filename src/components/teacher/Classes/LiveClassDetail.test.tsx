@@ -101,7 +101,7 @@ describe("observation chips", () => {
 
     render(<LiveClassDetail klass={klass} />);
 
-    expect(screen.getByText(/3 times/)).toBeInTheDocument();
+    expect(screen.getByText(/3 lessons/)).toBeInTheDocument();
   });
 
   it("says nothing about a count it was not given", () => {

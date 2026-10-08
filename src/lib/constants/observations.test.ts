@@ -74,12 +74,12 @@ describe("observationCount", () => {
   });
 
   it("reads naturally at one and above", () => {
-    expect(observationCount("completed_lessons", 1)).toBe("Once");
-    expect(observationCount("completed_lessons", 4)).toBe("4 times");
+    expect(observationCount("completed_lessons", 1)).toBe("1 lesson");
+    expect(observationCount("completed_lessons", 4)).toBe("4 lessons");
   });
 
   it("renders a zero it was actually given", () => {
-    expect(observationCount("completed_lessons", 0)).toBe("0 times");
+    expect(observationCount("completed_lessons", 0)).toBe("0 lessons");
   });
 
   it("refuses to count how often a child went back over something", () => {

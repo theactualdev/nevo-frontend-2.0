@@ -27,7 +27,7 @@ describe("the sample profile's What Nevo has noticed", () => {
   it("puts the count beside finished lessons, as its own chip", () => {
     render(<StudentProfile student={amara!} />);
 
-    expect(screen.getByText("12 times")).toBeInTheDocument();
+    expect(screen.getByText("12 lessons")).toBeInTheDocument();
   });
 
   it("draws no eyebrow over the sentence", () => {
