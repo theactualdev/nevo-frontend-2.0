@@ -363,26 +363,31 @@ export function ConnectTab({
         </header>
 
         <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto p-5">
-          {/* Loading and failed are not "no messages". Our own messages in
-              flight or failed still show below either, with their retry. */}
+          {/* D104 (8 Oct): one conversation loading, or failed to load. Not
+              "no messages", and drawn in place of the conversation - its
+              messages and the composer come back only once it has loaded,
+              so a child cannot write into a thread nobody has read yet. */}
           {history === "loading" && (
-            <div aria-label="Loading messages" className="space-y-2.5">
-              <div className="h-10 w-3/5 animate-pulse rounded-2xl bg-nevo-cream-elevated" />
-              <div className="ml-auto h-10 w-2/5 animate-pulse rounded-2xl bg-nevo-cream-elevated" />
+            <div
+              role="status"
+              className="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-[420ms] motion-safe:ease-nevo-slide"
+            >
+              <span className="block size-7 rounded-full border-[2.5px] border-nevo-navy/20 border-t-nevo-navy motion-safe:animate-spin motion-safe:[animation-duration:750ms]" />
+              <span className="text-[15px] text-nevo-near-black/70">
+                Loading your messages…
+              </span>
             </div>
           )}
           {history === "failed" && (
-            <div className="m-auto flex flex-col items-center px-6 text-center">
-              <p className="text-[15px] font-medium text-nevo-near-black">
-                We couldn&rsquo;t load these messages
-              </p>
-              <p className="mt-1.5 max-w-[280px] text-sm leading-[1.5] text-nevo-near-black/62">
-                Nothing is lost. Give it a moment and try again.
-              </p>
+            <div className="flex flex-1 flex-col items-center justify-center gap-2.5 p-6 text-center motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-[420ms] motion-safe:ease-nevo-slide">
+              <h3 className="text-[18px] font-semibold text-nevo-near-black">
+                We couldn&apos;t load this conversation
+              </h3>
+              {/* Re-reads this conversation, and only this one. */}
               <button
                 type="button"
                 onClick={() => fetchThread(active.id)}
-                className="mt-4 h-11 cursor-pointer rounded-[10px] bg-nevo-navy px-5 text-[15px] font-medium text-nevo-cream"
+                className="mt-[18px] h-[46px] cursor-pointer rounded-[10px] bg-nevo-navy px-[26px] text-[15px] font-semibold text-nevo-cream transition-transform active:scale-[0.98]"
               >
                 Try again
               </button>
@@ -394,55 +399,58 @@ export function ConnectTab({
               Message your teacher here
             </p>
           )}
-          {active.messages.map((message) => (
-            <MessageBubble
-              key={message.id}
-              message={message}
-              onRetry={() => retry(message.id)}
-            />
-          ))}
+          {history === "loaded" &&
+            active.messages.map((message) => (
+              <MessageBubble
+                key={message.id}
+                message={message}
+                onRetry={() => retry(message.id)}
+              />
+            ))}
         </div>
 
-        <div className="flex shrink-0 items-center gap-2.5 border-t border-nevo-near-black/8 px-4 py-3">
-          <input
-            value={draft}
-            onChange={(e) =>
-              setDraft(e.target.value.slice(0, MESSAGE_MAX_LENGTH))
-            }
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                send();
+        {history === "loaded" && (
+          <div className="flex shrink-0 items-center gap-2.5 border-t border-nevo-near-black/8 px-4 py-3">
+            <input
+              value={draft}
+              onChange={(e) =>
+                setDraft(e.target.value.slice(0, MESSAGE_MAX_LENGTH))
               }
-            }}
-            onFocus={kb.onFocus}
-            onBlur={kb.onBlur}
-            // The contract caps `content` at 5000. Held at the input rather
-            // than rejected on send: a child should not lose a long message
-            // to a limit nothing told them about.
-            maxLength={MESSAGE_MAX_LENGTH}
-            // A.12: Nevo Keyboard on touch; hardware keyboard on desktop.
-            inputMode="none"
-            placeholder="Type a message"
-            aria-label={`Message ${active.name}`}
-            className="h-11 flex-1 rounded-full border-[1.5px] border-nevo-near-black/16 bg-nevo-cream px-4 text-[15px] text-nevo-near-black outline-none transition-colors focus:border-nevo-navy"
-          />
-          <button
-            type="button"
-            aria-label="Send"
-            onClick={send}
-            className="flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full bg-nevo-navy text-nevo-cream transition-transform active:scale-[0.98]"
-          >
-            <Send className="size-5" strokeWidth={2} />
-          </button>
-        </div>
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  send();
+                }
+              }}
+              onFocus={kb.onFocus}
+              onBlur={kb.onBlur}
+              // The contract caps `content` at 5000. Held at the input rather
+              // than rejected on send: a child should not lose a long message
+              // to a limit nothing told them about.
+              maxLength={MESSAGE_MAX_LENGTH}
+              // A.12: Nevo Keyboard on touch; hardware keyboard on desktop.
+              inputMode="none"
+              placeholder="Type a message"
+              aria-label={`Message ${active.name}`}
+              className="h-11 flex-1 rounded-full border-[1.5px] border-nevo-near-black/16 bg-nevo-cream px-4 text-[15px] text-nevo-near-black outline-none transition-colors focus:border-nevo-navy"
+            />
+            <button
+              type="button"
+              aria-label="Send"
+              onClick={send}
+              className="flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full bg-nevo-navy text-nevo-cream transition-transform active:scale-[0.98]"
+            >
+              <Send className="size-5" strokeWidth={2} />
+            </button>
+          </div>
+        )}
 
         {/* Message entry on touch - docked below the composer so it stays
             visible. `data-nevo-hide-nav` takes the bottom nav down while it
             is up (StudentShell), as the frame draws it and as Lessons'
             overlaid keyboard already does: two stacked trays left the
             conversation a sliver on a phone. */}
-        {kb.open && (
+        {kb.open && history === "loaded" && (
           <div data-nevo-hide-nav className="contents">
             <NevoKeyboard
               layout="qwerty"

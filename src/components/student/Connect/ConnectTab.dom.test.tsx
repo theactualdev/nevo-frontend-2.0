@@ -160,14 +160,18 @@ describe("[184] on a phone, the list", () => {
   });
 });
 
-describe("[185] a conversation's own read", () => {
+describe("[185] [D104] a conversation's own read", () => {
   it("says it is loading rather than that it is empty", async () => {
     viewport(true);
     api.thread.mockReturnValue(new Promise(() => {}));
     render(<ConnectTab />);
 
-    expect(await screen.findByLabelText("Loading messages")).toBeTruthy();
+    // D104, 8 Oct: the frame's spinner line, in place of the conversation.
+    const loading = await screen.findByRole("status");
+    expect(loading.textContent).toBe("Loading your messages…");
     expect(screen.queryByText("Message your teacher here")).toBeNull();
+    // Nothing to write into until it has loaded.
+    expect(screen.queryByLabelText("Message Ms Okafor")).toBeNull();
   });
 
   it("says it failed, and tries again on request", async () => {
@@ -176,9 +180,12 @@ describe("[185] a conversation's own read", () => {
     render(<ConnectTab />);
 
     expect(
-      await screen.findByText(/We couldn.t load these messages/),
+      await screen.findByText("We couldn't load this conversation"),
     ).toBeTruthy();
+    // D104 draws the heading and Try again, and nothing else.
+    expect(screen.queryByText(/Nothing is lost/)).toBeNull();
     expect(screen.queryByText("Message your teacher here")).toBeNull();
+    expect(screen.queryByLabelText("Message Ms Okafor")).toBeNull();
 
     api.thread.mockResolvedValueOnce({
       threadId: "t-1",
@@ -186,9 +193,12 @@ describe("[185] a conversation's own read", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
 
+    // It re-reads THIS conversation.
+    expect(api.thread).toHaveBeenLastCalledWith("t-1");
     await waitFor(() =>
       expect(within(conversation()).getByText("Lovely work today")).toBeTruthy(),
     );
+    expect(screen.getByLabelText("Message Ms Okafor")).toBeTruthy();
   });
 
   it("uses the frame's line only once it is known to be empty", async () => {
@@ -198,7 +208,7 @@ describe("[185] a conversation's own read", () => {
     expect(await screen.findByText("Message your teacher here")).toBeTruthy();
   });
 
-  it("keeps a message sent before the history landed, and its failure", async () => {
+  it("offers the composer once it has loaded, and a failed send says so", async () => {
     viewport(true);
     const history = deferred<{ threadId: string; messages: unknown[] }>();
     const post = deferred<unknown>();
@@ -206,18 +216,19 @@ describe("[185] a conversation's own read", () => {
     api.reply.mockReturnValue(post.promise);
     render(<ConnectTab />);
 
-    const input = await screen.findByLabelText("Message Ms Okafor");
-    fireEvent.change(input, { target: { value: "Can we do more?" } });
-    fireEvent.click(screen.getByRole("button", { name: "Send" }));
-    expect(within(conversation()).getByText("Can we do more?")).toBeTruthy();
+    // D104: no composer while the conversation is still being read.
+    await screen.findByRole("status");
+    expect(screen.queryByLabelText("Message Ms Okafor")).toBeNull();
 
-    // The history lands AFTER the send. It used to replace the thread.
     await act(async () =>
       history.resolve({
         threadId: "t-1",
         messages: [message("m-1", "Lovely work today")],
       }),
     );
+    const input = screen.getByLabelText("Message Ms Okafor");
+    fireEvent.change(input, { target: { value: "Can we do more?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
     expect(within(conversation()).getByText("Lovely work today")).toBeTruthy();
     expect(within(conversation()).getByText("Can we do more?")).toBeTruthy();
 
@@ -248,7 +259,7 @@ describe("[187] a link to one thread", () => {
 
     await waitFor(() => expect(api.thread).toHaveBeenCalledWith("t-2"));
     expect(api.thread).not.toHaveBeenCalledWith("t-1");
-    expect(screen.getByLabelText("Message Mr Bell")).toBeTruthy();
+    expect(await screen.findByLabelText("Message Mr Bell")).toBeTruthy();
   });
 
   it("falls back to the list for a thread that is not there", async () => {
@@ -318,7 +329,7 @@ describe("[D109] Message my teacher", () => {
     await waitFor(() => expect(api.thread).toHaveBeenCalledWith("t-2"));
     expect(api.markThreadRead).toHaveBeenCalledWith("t-2");
     expect(api.thread).not.toHaveBeenCalledWith("t-1");
-    expect(screen.getByLabelText("Message Mr Bell")).toBeTruthy();
+    expect(await screen.findByLabelText("Message Mr Bell")).toBeTruthy();
   });
 
   it("opens it beside the list on a tablet, over the first thread", async () => {
@@ -388,6 +399,6 @@ describe("[D109] Message my teacher", () => {
     fireEvent.click(rowFor("Ms Okafor"));
 
     await waitFor(() => expect(api.thread).toHaveBeenCalledWith("t-1"));
-    expect(screen.getByLabelText("Message Ms Okafor")).toBeTruthy();
+    expect(await screen.findByLabelText("Message Ms Okafor")).toBeTruthy();
   });
 });
