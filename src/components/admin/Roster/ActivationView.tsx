@@ -107,6 +107,28 @@ export function ActivationView() {
     load();
   }, [load]);
 
+  /*
+   * "THIS PAGE UPDATES AS SOON AS YOURS CLEARS" (Lydia, 7 Oct) has to be true
+   * of a tab left open overnight. Still no polling and no countdown: the setup
+   * read is simply taken again when the page comes back into view. A re-read
+   * that fails here changes nothing on screen - the last answer stands, and
+   * "Check again" below is where a failed check is said out loud.
+   */
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      onboardingApi
+        .get()
+        .then((s) => {
+          setState(s);
+          refreshGate();
+        })
+        .catch(() => {});
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [refreshGate]);
+
   const recheck = () => {
     setRechecking(true);
     setRecheckFailed(false);
@@ -332,19 +354,19 @@ function Waiting({
         Pay for the year
       </h2>
       <p className="mt-2 max-w-[64ch] text-[15px] leading-[1.55] text-nevo-near-black/68">
-        Transfer the total to Nevo&rsquo;s account using your reference. You
-        don&rsquo;t have to wait here &ndash; we&rsquo;ll email you when it
-        lands.
+        Transfer the total to Nevo&rsquo;s account using your reference.
       </p>
 
       <div className={cn(CARD, "mt-6 px-[26px] py-[22px]")}>
         <h3 className="m-0 text-[17px] font-semibold text-nevo-near-black">
           Waiting for your transfer to arrive
         </h3>
+        {/* Lydia's words, 7 Oct. No email and no timeframe: a transfer is
+            confirmed by a person reading a statement, and nothing is sent
+            when it clears, so a school waiting for an email would pay twice. */}
         <p className="mt-2 max-w-[62ch] text-[14.5px] leading-[1.55] text-nevo-near-black/68">
-          You can close this and come back tomorrow &ndash; it stays right here.
-          Bank transfers usually confirm within a few hours, sometimes
-          overnight, and we&rsquo;ll email you the moment yours clears.
+          We check for transfers through the day. This page updates as soon as
+          yours clears, and there is nothing else for you to do.
         </p>
       </div>
 
@@ -359,10 +381,12 @@ function Waiting({
           Transferred it already?
         </h3>
         <p className="mt-2 max-w-[62ch] text-[14.5px] leading-[1.55] text-nevo-near-black/68">
-          If you&rsquo;ve just made the transfer, it can take a few hours to
-          show &ndash; your place is saved and nothing is lost. If it&rsquo;s
-          been longer than a day, send us your reference and we&rsquo;ll track
-          it down.
+          {/* "It can take a few hours to show" came out with the 7 Oct
+              ruling: no timeframe is promised. When to ask is not a promise
+              about when it lands, so the day stays. */}
+          If you&rsquo;ve just made the transfer, your place is saved and
+          nothing is lost. If it&rsquo;s been longer than a day, send us your
+          reference and we&rsquo;ll track it down.
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <button

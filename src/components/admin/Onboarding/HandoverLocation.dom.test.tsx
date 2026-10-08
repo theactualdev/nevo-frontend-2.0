@@ -29,7 +29,6 @@ const STATE: WizardState = {
   location: "Lagos, Nigeria",
   adminName: "Folake Adebayo",
   email: "f@brightgate.edu.ng",
-  authMethod: null,
   band: null,
   registration: null,
 };
@@ -47,7 +46,7 @@ describe("the handover, about the sign-up location", () => {
   it("says so when the location did not reach the school's record", async () => {
     get.mockResolvedValue(school({}));
     const { container } = render(<HandoverStep state={STATE} />);
-    await waitFor(() => expect(visibleText(container)).toMatch(/You're all set up/));
+    await waitFor(() => expect(visibleText(container)).toMatch(/Brightgate Academy isn.t active yet/));
     expect(visibleText(container)).toMatch(/couldn.t save your school.s location/);
     expect(screen.getByRole("link", { name: "Settings" }).getAttribute("href")).toBe(
       "/admin/settings#settings-school",
@@ -57,13 +56,35 @@ describe("the handover, about the sign-up location", () => {
   it("says nothing when it landed, or when none was given", async () => {
     get.mockResolvedValue(school({ location: "Lagos, Nigeria" }));
     const first = render(<HandoverStep state={STATE} />);
-    await waitFor(() => expect(visibleText(first.container)).toMatch(/You're all set up/));
+    await waitFor(() => expect(visibleText(first.container)).toMatch(/Brightgate Academy isn.t active yet/));
     expect(visibleText(first.container)).not.toMatch(/location/);
     first.unmount();
 
     get.mockResolvedValue(school({}));
     const second = render(<HandoverStep state={{ ...STATE, location: "  " }} />);
-    await waitFor(() => expect(visibleText(second.container)).toMatch(/You're all set up/));
+    await waitFor(() => expect(visibleText(second.container)).toMatch(/Brightgate Academy isn.t active yet/));
     expect(visibleText(second.container)).not.toMatch(/location/);
+  });
+});
+
+describe("the handover to a school that has not paid (Lydia, 7 Oct)", () => {
+  it("says what has not happened, and that the transfer is what starts it", async () => {
+    get.mockResolvedValue(school({ location: "Lagos, Nigeria" }));
+    const { container } = render(<HandoverStep state={STATE} />);
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/Brightgate Academy isn.t active yet/),
+    );
+    const text = visibleText(container);
+    expect(text).toMatch(/No accounts have been created, no invitations have gone out and no consent requests have been sent\./);
+    expect(text).toMatch(/All of it happens when your transfer clears\./);
+    expect(text).not.toMatch(/all set up/i);
+    expect(text).not.toMatch(/share your school code/i);
+  });
+
+  it("asks nothing about a sign-in provider - that is cut from onboarding", async () => {
+    get.mockResolvedValue(school({ location: "Lagos, Nigeria" }));
+    const { container } = render(<HandoverStep state={STATE} />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/isn.t active yet/));
+    expect(visibleText(container)).not.toMatch(/Microsoft|Google|Connect/);
   });
 });

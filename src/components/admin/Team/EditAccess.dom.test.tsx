@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { setSession } from "@/lib/auth/session";
 import type { TeamMember } from "@/lib/api/team";
 import { AdminTeamView } from "./AdminTeamView";
+import { ScopeChecklist } from "./EditAccess";
 
 /**
  * SCRUM-39 D3 "Editing an admin": "Same sheet, pre-filled, titled to the
@@ -108,5 +109,32 @@ describe("editing an admin's access", () => {
     await screen.findByText("Bukola Adebayo");
     const buttons = screen.getAllByRole("button", { name: "Edit access" });
     expect(buttons).toHaveLength(1);
+  });
+});
+
+describe("the Curriculum scope, no longer granted (Lydia, 7 Oct)", () => {
+  it("is not offered when inviting someone new", () => {
+    render(<ScopeChecklist on={new Set(["oversight", "roster"])} setOn={() => {}} disabled={false} />);
+    expect(screen.queryByRole("checkbox", { name: /Curriculum/ })).toBeNull();
+    expect(screen.getByRole("checkbox", { name: /SENCo/ })).toBeInTheDocument();
+  });
+
+  it("is not offered to an admin who does not hold it", async () => {
+    render(<AdminTeamView />);
+    const sheet = await openBukola();
+    expect(within(sheet).queryByRole("checkbox", { name: /Curriculum/ })).toBeNull();
+  });
+
+  it("shows to an admin who holds it, so it can be taken away - and stays put once unticked", async () => {
+    list.mockResolvedValue([ME, member("u-2", "Bukola", ["roster", "curriculum"])]);
+    render(<AdminTeamView />);
+    const sheet = await openBukola();
+    const curriculum = within(sheet).getByRole("checkbox", { name: /Curriculum/ });
+    expect(curriculum).toBeChecked();
+    fireEvent.click(curriculum);
+    expect(within(sheet).getByRole("checkbox", { name: /Curriculum/ })).not.toBeChecked();
+
+    fireEvent.click(within(sheet).getByRole("button", { name: "Save access" }));
+    await waitFor(() => expect(updateScopes).toHaveBeenCalledWith("u-2", ["roster"]));
   });
 });

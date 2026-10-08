@@ -223,7 +223,6 @@ export function BulkClassSheet({
             : "Nothing was created"
         }
         onClose={onCreated}
-        widthClass="max-w-[472px]"
         footer={
           <button
             type="button"
@@ -284,7 +283,6 @@ export function BulkClassSheet({
       title="Add several at once"
       subtitle="Pick a year group and tick the sections you run. Nevo composes the names."
       onClose={onClose}
-      widthClass="max-w-[472px]"
       footer={
         phase === "saving" ? (
           <div className="flex flex-1 items-center justify-center gap-2.5 py-3">

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { SchoolTerm } from "@/lib/api/school";
 import {
   currentHalfTerm,
+  currentTerm,
   customProblem,
   rangeWords,
   startOfDay,
@@ -18,6 +19,19 @@ const TERM: SchoolTerm = {
 };
 
 const on = (ymd: string, hour = 12) => startOfDay(ymd)!.getTime() + hour * 3600e3;
+
+describe("currentTerm (the Overview's \"this term\", Lydia 7 Oct)", () => {
+  it("is the school's own term, by name, from its first day", () => {
+    expect(currentTerm([TERM], on("2026-09-14", 0))).toEqual({ name: "First term", from: "2026-09-14" });
+    expect(currentTerm([TERM], on("2026-12-18", 23))).toEqual({ name: "First term", from: "2026-09-14" });
+  });
+
+  it("is nothing between terms - never the term just gone, never a third of the year", () => {
+    expect(currentTerm([TERM], on("2026-12-20"))).toBeNull();
+    expect(currentTerm([TERM], on("2026-09-13"))).toBeNull();
+    expect(currentTerm([], on("2026-10-05"))).toBeNull();
+  });
+});
 
 describe("currentHalfTerm", () => {
   it("is the first half, from the term's start, before the break", () => {

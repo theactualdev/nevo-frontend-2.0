@@ -20,6 +20,7 @@ import { OverviewView } from "./OverviewView";
 const audit = vi.fn();
 const adaptationLog = vi.fn();
 const narrative = vi.fn();
+let academicConfig: Record<string, unknown> = {};
 const overview = vi.fn();
 
 vi.mock("@/lib/api/schoolIntelligence", async (importOriginal) => {
@@ -30,7 +31,7 @@ vi.mock("@/lib/api/schoolIntelligence", async (importOriginal) => {
     schoolIntelligenceApi: {
       ...actual.schoolIntelligenceApi,
       complianceAudit: () => audit(),
-      adaptationLog: () => adaptationLog(),
+      adaptationLog: (q: unknown) => adaptationLog(q),
     },
   };
 });
@@ -50,7 +51,7 @@ vi.mock("@/lib/api/school", async (importOriginal) => {
           code: null,
           slug: null,
           profile: { onboarding: { band: "mid_market" } },
-          academicConfig: {},
+          academicConfig,
           retentionPolicy: "contract",
           retentionDays: 365,
         }),
@@ -91,6 +92,7 @@ const NARRATIVE = {
 };
 
 beforeEach(() => {
+  academicConfig = {};
   audit.mockReset();
   adaptationLog.mockReset();
   narrative.mockReset();
@@ -225,20 +227,51 @@ describe("the early-life variant", () => {
 });
 
 describe("the snapshot header", () => {
-  it("claims a scope the figures actually have", async () => {
+  it("claims no period for the page - not 'since setup', not 'this week'", async () => {
     const { container } = render(<OverviewView />);
     await waitFor(() => expect(visibleText(container)).toMatch(/Activity so far/));
     const text = visibleText(container);
-    expect(text).toMatch(/Since setup/);
-    // Not one figure on this page is scoped to a half-term or a week.
+    expect(text).not.toMatch(/Since setup/);
     expect(text).not.toMatch(/Activity this (week|half-term)/);
   });
 
-  it("carries the band's denominator on the enrolled tile", async () => {
+  it("puts no denominator on the enrolled tile, even for a school with a band", async () => {
     const { container } = render(<OverviewView />);
     await waitFor(() => expect(visibleText(container)).toMatch(/Students enrolled/));
-    // mid_market: 251-500.
-    expect(visibleText(container)).toMatch(/of 500/);
+    expect(visibleText(container)).not.toMatch(/of 500/);
+  });
+});
+
+describe("adaptations made, this term (Lydia, 7 Oct)", () => {
+  const now = Date.now();
+  const ymd = (offsetDays: number) =>
+    new Date(now + offsetDays * 864e5).toISOString().slice(0, 10);
+
+  it("asks the log for this term's count and names the term", async () => {
+    academicConfig = {
+      terms: [{ id: "t1", name: "First term", start: ymd(-20), end: ymd(40) }],
+    };
+    adaptationLog.mockImplementation((q?: { dateFrom?: string }) =>
+      Promise.resolve({ events: [], total: q?.dateFrom ? 312 : 1240, limit: 1, offset: 0 }),
+    );
+    const { container } = render(<OverviewView />);
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/across all students in First term/),
+    );
+    expect(visibleText(container)).toMatch(/312/);
+    expect(visibleText(container)).not.toMatch(/1,240/);
+    const asked = adaptationLog.mock.calls.map(([q]) => q as { dateFrom?: string } | undefined);
+    expect(asked.some((q) => q?.dateFrom)).toBe(true);
+  });
+
+  it("leaves the tile off between terms rather than showing a total since setup", async () => {
+    academicConfig = {
+      terms: [{ id: "t1", name: "First term", start: ymd(-90), end: ymd(-30) }],
+    };
+    const { container } = render(<OverviewView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/Students enrolled/));
+    expect(visibleText(container)).not.toMatch(/Adaptations made/);
+    expect(visibleText(container)).not.toMatch(/across all students so far/);
   });
 });
 

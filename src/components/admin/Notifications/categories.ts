@@ -84,7 +84,7 @@ export const CATEGORY_META: Record<AdminCategory, CategoryMeta> = {
   },
   account: {
     key: "account",
-    name: "Platform and account",
+    name: "Platform", // SCRUM-100's name (Lydia, 7 Oct: the names people read are ours)
     description: "Maintenance, changes to screens you use, and policy updates",
     scope: null,
     fixedEmail: true,
