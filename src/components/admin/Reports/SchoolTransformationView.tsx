@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { ReportsViews } from "./ReportsViews";
 import { useCallback, useEffect, useState } from "react";
 import { analyticsApi, type CohortIndicator, type CohortTransformation } from "@/lib/api/analytics";
 import { schoolApi } from "@/lib/api/school";
@@ -72,13 +72,8 @@ export function SchoolTransformationView() {
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
       <div className="mx-auto max-w-[880px]">
-        <Link
-          href="/admin/reports"
-          className="text-[13.5px] text-nevo-near-black/55 hover:text-nevo-navy"
-        >
-          Reports
-        </Link>
-        <h2 className="m-0 mt-2 text-[27px] font-semibold tracking-[-0.018em] text-nevo-near-black">
+        <ReportsViews current="transformation" />
+        <h2 className="m-0 mt-6 text-[27px] font-semibold tracking-[-0.018em] text-nevo-near-black">
           School transformation
         </h2>
         <p className="mt-2 max-w-[640px] text-[15px] leading-[1.55] text-nevo-near-black/62">

@@ -77,7 +77,8 @@ export function financeHomeRows(
       // "is due", never "issues on": `UpcomingCharge` carries a due date and no
       // issue date, and the frame's "issues on" would name a different event.
       title: `${label} is due ${due}`,
-      sub: `${formatMoney(upcoming.amount, subscription.pricing.currency)}. We'll email your billing contact, and it'll appear in Billing.`,
+      // No email promised (Lydia, 7 Oct): nothing is sent when a transfer clears.
+      sub: `${formatMoney(upcoming.amount, subscription.pricing.currency)}. Your billing page updates once a transfer clears.`,
       action: "View in Billing",
       href: BILLING,
     });

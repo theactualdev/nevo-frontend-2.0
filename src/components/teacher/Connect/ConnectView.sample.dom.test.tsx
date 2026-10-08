@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 
 const { threads, useStudentDirectory, useTeacherClasses, useHasSession } =
   vi.hoisted(() => ({
@@ -75,5 +75,41 @@ describe("the conversations", () => {
 
     expect(screen.getAllByText("Amara Okafor").length).toBeGreaterThan(0);
     expect(sampleRegions()).toEqual([]);
+  });
+});
+
+/**
+ * T236. A sample conversation has nobody to send to, and neither does a
+ * compose row with no student id. Both used to be one quiet no-op away from
+ * a "Message sent".
+ */
+describe("writing to someone who is not there", () => {
+  it("offers no composer on a sample conversation, and says why", () => {
+    threadsState({ live: false, sample: true });
+    render(<ConnectView />);
+
+    expect(screen.getByText(/This is a sample conversation/)).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("Write a message…")).not.toBeInTheDocument();
+  });
+
+  it("will not send from a compose row with no student behind it", async () => {
+    const send = vi.fn();
+    threadsState({ send });
+    useStudentDirectory.mockReturnValue({
+      students: [{ name: "Ada Obi", className: "JSS 2A", initials: "AO" }],
+      loading: false,
+      failed: false,
+    });
+    window.HTMLElement.prototype.scrollIntoView = vi.fn();
+    render(<ConnectView />);
+    fireEvent.click(screen.getAllByRole("button", { name: /new message/i })[0]);
+    fireEvent.click(screen.getByRole("button", { name: /Ada Obi/ }));
+    fireEvent.change(screen.getAllByPlaceholderText("Write your message…").at(-1)!, {
+      target: { value: "Hello" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+
+    expect(await screen.findByText(/couldn.t send that just now/)).toBeInTheDocument();
+    expect(send).not.toHaveBeenCalled();
   });
 });

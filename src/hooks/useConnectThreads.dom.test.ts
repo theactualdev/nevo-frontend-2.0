@@ -1,14 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
 
-const { threads, thread, send } = vi.hoisted(() => ({
+const { threads, thread, send, markThreadRead } = vi.hoisted(() => ({
   threads: vi.fn(),
   thread: vi.fn(),
   send: vi.fn(),
+  markThreadRead: vi.fn(),
 }));
 vi.mock("@/lib/api/messages", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/messages")>();
-  return { ...actual, messagesApi: { ...actual.messagesApi, threads, thread, send } };
+  return {
+    ...actual,
+    messagesApi: { ...actual.messagesApi, threads, thread, send, markThreadRead },
+  };
 });
 
 import { useConnectThreads } from "./useConnectThreads";
@@ -35,6 +39,7 @@ const THREAD = {
 };
 
 beforeEach(() => {
+  markThreadRead.mockReset();
   clearSession();
   window.localStorage.clear();
   setSession({
@@ -120,5 +125,59 @@ describe("a thread the teacher starts", () => {
     const started = result.current.threads.find((t) => t.id === "t-new");
     expect(started?.studentName).not.toBe("Ms Adeyemi");
     expect(started?.studentName).toBe("New conversation");
+  });
+});
+
+/**
+ * T236. Opening a thread is reading it - a deliberate write, so the GET that
+ * fetches its messages cannot clear a badge on its own.
+ */
+describe("marking a thread read", () => {
+  const UNREAD = { ...THREAD, unread: true, unreadCount: 2 };
+
+  it("clears the badge at once, and tells the server", async () => {
+    threads.mockResolvedValue({ threads: [UNREAD] });
+    markThreadRead.mockReturnValue(new Promise(() => {}));
+    const { result } = renderHook(() => useConnectThreads());
+    await waitFor(() => expect(result.current.threads[0]?.unreadCount).toBe(2));
+
+    act(() => result.current.markThreadRead("t-1"));
+
+    expect(result.current.threads[0].unread).toBe(false);
+    expect(result.current.threads[0].unreadCount).toBe(0);
+    expect(markThreadRead).toHaveBeenCalledWith("t-1");
+  });
+
+  it("takes the server's count once it answers", async () => {
+    threads.mockResolvedValue({ threads: [UNREAD] });
+    markThreadRead.mockResolvedValue({ unread: true, unreadCount: 1 });
+    const { result } = renderHook(() => useConnectThreads());
+    await waitFor(() => expect(result.current.threads[0]?.unreadCount).toBe(2));
+
+    act(() => result.current.markThreadRead("t-1"));
+
+    await waitFor(() => expect(result.current.threads[0].unreadCount).toBe(1));
+  });
+
+  it("leaves other threads alone", async () => {
+    threads.mockResolvedValue({ threads: [UNREAD, { ...UNREAD, threadId: "t-2" }] });
+    markThreadRead.mockReturnValue(new Promise(() => {}));
+    const { result } = renderHook(() => useConnectThreads());
+    await waitFor(() => expect(result.current.threads).toHaveLength(2));
+
+    act(() => result.current.markThreadRead("t-1"));
+
+    expect(result.current.threads.find((t) => t.id === "t-2")?.unreadCount).toBe(2);
+  });
+
+  it("asks the server nothing without a session", async () => {
+    threads.mockResolvedValue({ threads: [UNREAD] });
+    const { result } = renderHook(() => useConnectThreads());
+    await waitFor(() => expect(result.current.threads[0]?.id).toBe("t-1"));
+    clearSession();
+
+    act(() => result.current.markThreadRead("t-1"));
+
+    expect(markThreadRead).not.toHaveBeenCalled();
   });
 });

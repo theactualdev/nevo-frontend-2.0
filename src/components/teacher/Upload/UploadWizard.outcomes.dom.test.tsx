@@ -758,3 +758,30 @@ describe("a file the step itself would refuse", () => {
     expect(screen.queryByText(/That file didn’t come through/)).not.toBeInTheDocument();
   });
 });
+
+/** T244: the wizard tests stopped short of the tree they lead to. */
+describe("a unit that has been read", () => {
+  it("opens its structure to steer, in the wizard", () => {
+    stagedState({
+      uploadId: "u-1",
+      status: "ready",
+      structure: {
+        lessonId: "l-1",
+        modules: [],
+        lessons: [
+          {
+            lessonId: "l-1",
+            title: "Rivers",
+            sequenceOrder: 1,
+            modules: [{ title: "Where rivers start", sequenceOrder: 1, segmentIds: [], recap: null, preview: null }],
+          },
+        ],
+      },
+      segments: [],
+    });
+    startUnitUpload();
+
+    expect(screen.getByDisplayValue("Rivers")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Looks right - add to my library/ })).toBeInTheDocument();
+  });
+});

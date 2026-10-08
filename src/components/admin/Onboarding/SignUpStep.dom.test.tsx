@@ -56,7 +56,6 @@ const INITIAL: WizardState = {
   location: "",
   adminName: "Folake Adebayo",
   email: "f.adebayo@brightgate.edu.ng",
-  authMethod: null,
   band: null,
   registration: null,
 };

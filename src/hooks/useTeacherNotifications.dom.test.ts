@@ -119,3 +119,45 @@ describe("asking again", () => {
     expect(result.current.failed).toBe(false);
   });
 });
+
+/**
+ * T240. The feed used to race the read against a cap and drop an answer that
+ * came after it - so a slow backend left the bell empty even though the rows
+ * had arrived. A late answer is an answer.
+ */
+describe("a slow feed", () => {
+  it("still lands when it answers late", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      list.mockImplementation(
+        () =>
+          new Promise((resolve) =>
+            setTimeout(() => resolve({ notifications: [row("n-1")], unreadCount: 1 }), 30_000),
+          ),
+      );
+      const { result } = renderHook(() => useTeacherNotifications());
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30_000);
+      });
+
+      expect(result.current.notes).toHaveLength(1);
+      expect(result.current.failed).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps the rows it had when a re-read fails, and says the re-read failed", async () => {
+    list
+      .mockResolvedValueOnce({ notifications: [row("n-1")], unreadCount: 1 })
+      .mockRejectedValueOnce(new Error("network"));
+    const { result } = renderHook(() => useTeacherNotifications());
+    await waitFor(() => expect(result.current.notes).toHaveLength(1));
+
+    act(() => result.current.refresh());
+
+    await waitFor(() => expect(result.current.failed).toBe(true));
+    expect(result.current.notes).toHaveLength(1);
+  });
+});

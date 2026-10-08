@@ -18,6 +18,7 @@ import {
   CloseIcon,
   GHOST_BTN,
   Modal,
+  AssignTeacherButton,
   NoTeacherYet,
   PausedNote,
   PRIMARY_BTN,
@@ -296,7 +297,9 @@ export function ClassDetailView({ classId }: { classId: string }) {
       {/* TEACHERS */}
       <div className="mt-[30px] flex items-center justify-between gap-4">
         <SectionHeading>Teachers for this class</SectionHeading>
-        {!archived && !ssoSourced ? (
+        {/* With nobody teaching, the card below carries the one "Assign a
+            teacher" control, so the page never shows two. */}
+        {!archived && !ssoSourced && teachers.length > 0 ? (
           <button
             type="button"
             onClick={() => setAssigning(true)}
@@ -312,7 +315,11 @@ export function ClassDetailView({ classId }: { classId: string }) {
       <div className={cn(CARD, "mt-3.5")}>
         {teachers.length === 0 ? (
           <div className="px-[22px] py-6">
-            <NoTeacherYet />
+            {!archived && !ssoSourced ? (
+              <AssignTeacherButton disabled={writesPaused} onClick={() => setAssigning(true)} />
+            ) : (
+              <NoTeacherYet />
+            )}
             <p className="mt-2 text-[13px] leading-[1.5] text-nevo-near-black/58">
               Nobody teaches this class at the moment. Students keep their
               progress either way.

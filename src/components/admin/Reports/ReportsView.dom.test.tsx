@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
 import type { OutcomePeriod, SchoolHealth, SchoolConceptMastery } from "@/lib/api/analytics";
 import { ReportsView } from "./ReportsView";
@@ -139,12 +139,21 @@ describe("ReportsView section failures", () => {
   });
 });
 
-describe("the way to D26", () => {
-  it("links to the school transformation page from the header", () => {
+describe("Reports, one place with views inside (Lydia, 7 Oct)", () => {
+  it("shows both views, with this one current", () => {
     render(<ReportsView />);
-    expect(screen.getByRole("link", { name: /School transformation/ })).toHaveAttribute(
-      "href",
-      "/admin/reports/transformation",
-    );
+    const views = screen.getByRole("navigation", { name: "Reports" });
+    const cohort = within(views).getByRole("link", { name: "Cohort analytics" });
+    const d26 = within(views).getByRole("link", { name: "School transformation" });
+    expect(cohort).toHaveAttribute("href", "/admin/reports");
+    expect(cohort).toHaveAttribute("aria-current", "page");
+    expect(d26).toHaveAttribute("href", "/admin/reports/transformation");
+    expect(d26).not.toHaveAttribute("aria-current");
+  });
+
+  it("offers no view that opens onto nothing - D09's report list has no endpoint yet", () => {
+    render(<ReportsView />);
+    const views = screen.getByRole("navigation", { name: "Reports" });
+    expect(within(views).getAllByRole("link")).toHaveLength(2);
   });
 });

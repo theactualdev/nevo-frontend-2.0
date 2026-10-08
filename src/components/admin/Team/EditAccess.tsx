@@ -10,6 +10,10 @@ import { SCOPE_CATALOGUE } from "./adminScopes";
  * The areas an admin can hold, one checkbox each. Shared by the invite sheet
  * and the edit sheet, because SCRUM-39 says editing is "the same sheet": two
  * copies of this list would disagree the first time a scope was added.
+ *
+ * A scope no longer granted shows only to someone who held it when the sheet
+ * opened, so it can be taken away and never given. Fixed at open, so unticking
+ * it does not make the row vanish under the pointer.
  */
 export function ScopeChecklist({
   on,
@@ -20,9 +24,10 @@ export function ScopeChecklist({
   setOn: Dispatch<SetStateAction<Set<PermissionScope>>>;
   disabled: boolean;
 }) {
+  const [heldAtOpen] = useState(() => new Set(on));
   return (
     <div className="mt-2.5 flex flex-col gap-2">
-      {SCOPE_CATALOGUE.map((s) => {
+      {SCOPE_CATALOGUE.filter((s) => s.grantable !== false || heldAtOpen.has(s.scope)).map((s) => {
         const checked = on.has(s.scope);
         return (
           <label
