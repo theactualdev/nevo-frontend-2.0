@@ -146,6 +146,24 @@ describe("a child asking for less at a time, on a live lesson", () => {
     expect(scrolls()).toEqual([]);
   });
 
+  it("says how far down it was seen by the parts shown, not one part's fit (B90)", () => {
+    // The same trap on `time_on_segment`'s `depthRatio`: Part 1 of 3 fits on
+    // screen, and measured as a segment it would read as all of it.
+    const { container, unmount } = render(
+      <LessonPlayer lesson={LIVE} plan={PLAN} />,
+    );
+    const page = pageScrolledColumn(container, { height: 300 });
+    fireEvent.click(slowerChip()!);
+    page.scrollPageTo(2_000);
+
+    unmount();
+
+    const time = trackEvent.mock.calls.find(
+      (c) => c[0] === SIGNAL_EVENT_TYPES.TIME_ON_SEGMENT,
+    )?.[1] as Record<string, unknown>;
+    expect(time.depthRatio).toBe(0.33);
+  });
+
   it("does not offer a control that would do nothing", () => {
     // One sentence chunks to itself. Asking for less at a time and getting the
     // same screen teaches the child the control is a lie.

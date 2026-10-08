@@ -11,7 +11,8 @@ import type { AdaptationPlan, Lesson } from "@/lib/types";
  * - B41: `hint_used` when the child moves on with the whole hint on screen,
  *   and never for a hint they closed.
  * - B42: the adaptations the child saw applied, counted where they reach the
- *   screen, with the moment the last one did.
+ *   screen, with the moment the last one did - and, since B74 (8 Oct), a
+ *   rendered Socratic panel and a density spacing changed mid-session.
  */
 
 const { trackEvent, signalArgs, runtimeArgs } = vi.hoisted(() => ({
@@ -300,5 +301,87 @@ describe("adaptations the child saw applied (B42)", () => {
     });
 
     expect(applied()).toEqual({ count: 1, lastAt: 7_000 });
+  });
+
+  /*
+   * B74, 8 Oct: "A rendered Socratic panel counts as an applied adaptation.
+   * Initial density does not; a density change applied mid-session does."
+   */
+  describe("the engine's Socratic panel", () => {
+    const panel: AdaptationPlan = {
+      ...instructed("show_socratic_panel"),
+      guidedQuestions: ["Which number is the whole?"],
+    };
+
+    it("counts once it is rendered, on the monotonic clock", () => {
+      render(<LessonPlayer lesson={TWO} plan={panel} />);
+
+      expect(screen.getByText("Which part is unclear?")).toBeInTheDocument();
+      expect(applied()).toEqual({ count: 1, lastAt: 4_000 });
+    });
+
+    it("does not count again as the child opens it, which is theirs", () => {
+      render(<LessonPlayer lesson={TWO} plan={panel} />);
+
+      now = 6_000;
+      fireEvent.click(screen.getByText("Which part is unclear?"));
+
+      expect(applied()).toEqual({ count: 1, lastAt: 4_000 });
+    });
+
+    it("does not count again on a return to its segment", () => {
+      render(<LessonPlayer lesson={TWO} plan={panel} />);
+
+      next();
+      now = 9_000;
+      prev();
+
+      expect(screen.getByText("Which part is unclear?")).toBeInTheDocument();
+      expect(applied().count).toBe(1);
+    });
+
+    it("counts nothing where there are no questions to render it with", () => {
+      render(<LessonPlayer lesson={TWO} plan={instructed("show_socratic_panel")} />);
+
+      expect(applied()).toEqual({ count: 0, lastAt: null });
+    });
+  });
+
+  describe("the engine's density spacing", () => {
+    const spaced = (
+      first: "low" | "medium" | "high" | undefined,
+      second: "low" | "medium" | "high" | undefined,
+    ): AdaptationPlan => ({
+      lessonId: "l-1",
+      segments: [
+        { segmentId: "seg-1", startModality: "text", densityLevel: first },
+        { segmentId: "seg-2", startModality: "text", densityLevel: second },
+      ],
+    });
+
+    it("does not count the spacing the lesson opened on", () => {
+      render(<LessonPlayer lesson={TWO} plan={spaced("low", "low")} />);
+
+      next();
+
+      expect(applied()).toEqual({ count: 0, lastAt: null });
+    });
+
+    it("counts a different spacing reaching a later segment", () => {
+      render(<LessonPlayer lesson={TWO} plan={spaced("low", "high")} />);
+
+      now = 9_000;
+      next();
+
+      expect(applied()).toEqual({ count: 1, lastAt: 9_000 });
+    });
+
+    it("counts nothing for a medium after none, which draws the same", () => {
+      render(<LessonPlayer lesson={TWO} plan={spaced(undefined, "medium")} />);
+
+      next();
+
+      expect(applied()).toEqual({ count: 0, lastAt: null });
+    });
   });
 });

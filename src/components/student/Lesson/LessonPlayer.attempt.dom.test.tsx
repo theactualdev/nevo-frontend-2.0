@@ -265,10 +265,11 @@ describe("what an answer tells the engine", () => {
      * Correctness is decided on the server against the stored answer, and the
      * pick goes up on the attempt the server marks - so `correct`, the pick
      * and its timing, which rode here under keys the catalogue does not take,
-     * are not sent.
+     * are not sent. `source` tells it from a quick check's (B90/B92, 8 Oct).
      */
     expect(trackEvent).toHaveBeenCalledWith("comprehension_response", {
       questionId: "cp-7",
+      source: "assessment",
     });
   });
 });

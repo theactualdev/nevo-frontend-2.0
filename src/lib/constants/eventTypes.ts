@@ -63,7 +63,8 @@ export const SIGNAL_EVENT_TYPES = {
   SESSION_CONTEXT: "session_context",
   /**
    * Break module (frame 18) — brackets the student's pause so time inside it is
-   * break time, not hesitation. Payload { trigger } / { trigger, durationMs }.
+   * break time, not hesitation. Payload { breakType, trigger } /
+   * { breakType, trigger, durationMs } - the type back since B89, 8 Oct.
    */
   BREAK_START: "break_start",
   BREAK_END: "break_end",
@@ -77,7 +78,8 @@ export const SIGNAL_EVENT_TYPES = {
    * What happened to an offer the engine made. Each is in the ingest enum,
    * and at first none was sent, so a "Not now" left no trace and the engine
    * could not tell an offer a child turned down from one it never saw.
-   * Payload { segmentId, suggested } / { trigger } for the three break ones.
+   * Payload { segmentId, suggested } / { breakType, trigger } for the three
+   * break ones.
    *
    * `ignored` is the pill still on screen when the child left the segment -
    * neither taken nor turned down. A break offer left on screen has no type:
@@ -87,18 +89,27 @@ export const SIGNAL_EVENT_TYPES = {
   MODALITY_SUGGESTION_ACCEPTED: "modality_suggestion_accepted",
   MODALITY_SUGGESTION_DECLINED: "modality_suggestion_declined",
   MODALITY_SUGGESTION_IGNORED: "modality_suggestion_ignored",
+  /**
+   * What became of a switch the child took (B73/B104, 8 Oct): sent once, as
+   * the segment shown in the new modality is left - in this player, the one
+   * the switch was taken on. Payload { segmentId, from, to, timeOnSegment },
+   * the time in ms from the switch to the way out. Its optional `outcome`
+   * (better, worse, no change) and its two scores are judgements the client
+   * may not make (rule 3), so they are never sent.
+   */
+  MODALITY_SWITCH_OUTCOME: "modality_switch_outcome",
   /*
-   * DECLARED IN THE CATALOGUE AND DELIBERATELY NOT SENT (audit 38, 7 Oct):
-   * - `modality_switch_outcome`. Its trigger is the next segment ENTERED in
-   *   the new modality, and this player applies a switch to the segment on
-   *   screen only: the next one opens in the modality the plan names. Which
-   *   exit sends it is asked of backend. Its `outcome` (better, worse, no
-   *   change) and its two scores are judgements the client may not make
-   *   (rule 3).
+   * DECLARED IN THE CATALOGUE AND DELIBERATELY NOT SENT:
    * - `modality_manual_switch`. A child has no way to change modality
    *   themselves; the frames draw only the engine's offer (17 §C).
-   * - `engagement_signal`. Its `indicator` has no vocabulary, and every
-   *   reading this client takes has a named type of its own.
+   * - `engagement_signal` (B105, 8 Oct). Its `indicator` has a vocabulary now
+   *   - focus_drop, task_switch, navigation_fragmentation, rapid_guessing,
+   *   steady_progress, return_after_pause - and the catalogue still says
+   *   neither what observation each one is nor what its `value` carries.
+   *   Four are judgements of a child (rule 3) whatever they turn out to be;
+   *   `task_switch` and `return_after_pause` could be the page hidden and
+   *   shown again, but nothing says so, and a value made up for them would
+   *   be counted as if the engine had asked for it. Asked of backend.
    */
   BREAK_SUGGESTED: "break_suggested",
   BREAK_TAKEN: "break_taken",
@@ -133,8 +144,9 @@ export const SIGNAL_EVENT_TYPES = {
    * Ask Nevo, on its own `ask_nevo` session (design D29: a child's use of Ask
    * Nevo is signal in its own right). A question asked, an answer that could
    * not help, and the hand-over to the teacher taken. The payload is the
-   * server's own `interactionId` where there is one and nothing else - never
-   * the child's words.
+   * server's own `interactionId` where there is one, and for the question
+   * its `questionCategory` (B93, 8 Oct) - the question's event goes up as the
+   * answer lands, so it has both. Never the child's words.
    */
   ASK_NEVO_QUESTION_STUDENT: "ask_nevo_question_student",
   ASK_NEVO_CANNOT_HELP: "ask_nevo_cannot_help",

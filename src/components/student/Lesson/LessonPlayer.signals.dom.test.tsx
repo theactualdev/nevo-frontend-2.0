@@ -2,8 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
 import type { AdaptationPlan, Lesson } from "@/lib/types";
-import { offendingCalls } from "@/test/signalCatalogue";
-import catalogue from "@/lib/api/signals.catalogue.json";
+import {
+  declaredKeys,
+  offendingCalls,
+  requiredKeys,
+  undeclaredValues,
+} from "@/test/signalCatalogue";
 
 /**
  * What the player tells the engine, and what it no longer decides for it.
@@ -161,16 +165,22 @@ describe("breaks are the engine's to offer", () => {
     beat();
 
     expect(screen.getByText("Want a break?")).toBeInTheDocument();
-    expect(sent("break_suggested")).toEqual([{ trigger: "engine_offer" }]);
+    expect(sent("break_suggested")).toEqual([
+      { breakType: "movement", trigger: "engine_offer" },
+    ]);
 
     fireEvent.click(screen.getByRole("button", { name: "Take a break" }));
-    expect(sent("break_taken")).toEqual([{ trigger: "engine_offer" }]);
+    expect(sent("break_taken")).toEqual([
+      { breakType: "movement", trigger: "engine_offer" },
+    ]);
     // The break it led to says who asked, start and end.
-    expect(sent("break_start")).toEqual([{ trigger: "engine_offer" }]);
+    expect(sent("break_start")).toEqual([
+      { breakType: "movement", trigger: "engine_offer" },
+    ]);
     now = 42_000;
     fireEvent.click(screen.getByRole("button", { name: "I'm done" }));
     expect(sent("break_end")).toEqual([
-      { trigger: "engine_offer", durationMs: 42_000 },
+      { breakType: "movement", trigger: "engine_offer", durationMs: 42_000 },
     ]);
   });
 
@@ -181,7 +191,9 @@ describe("breaks are the engine's to offer", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Not now" }));
 
-    expect(sent("break_declined")).toEqual([{ trigger: "engine_offer" }]);
+    expect(sent("break_declined")).toEqual([
+      { breakType: "movement", trigger: "engine_offer" },
+    ]);
     expect(sent("break_taken")).toEqual([]);
     expect(screen.queryByText("Want a break?")).toBeNull();
   });
@@ -207,9 +219,13 @@ describe("breaks are the engine's to offer", () => {
     render(<LessonPlayer lesson={THREE} plan={plan} />);
     beat();
 
-    expect(sent("break_suggested")).toEqual([{ trigger: "affect_offer" }]);
+    expect(sent("break_suggested")).toEqual([
+      { breakType: "movement", trigger: "affect_offer" },
+    ]);
     fireEvent.click(screen.getByRole("button", { name: "Not now" }));
-    expect(sent("break_declined")).toEqual([{ trigger: "affect_offer" }]);
+    expect(sent("break_declined")).toEqual([
+      { breakType: "movement", trigger: "affect_offer" },
+    ]);
   });
 
   it("asks at the foot of the lesson, Not now before Take a break", () => {
@@ -266,17 +282,24 @@ describe("every break event, against the catalogue", () => {
   /*
    * THE CATALOGUE'S KEYS AND NO OTHERS (B37). `break_suggested` and
    * `break_taken` carried `{ segmentId, breakType }` where the catalogue
-   * declares `{ trigger }`, `break_start` added the type and the segment, and
-   * `break_end` had no `trigger` at all. This walks every break event a
-   * lesson can send - offered, turned down, taken, started, ended - and holds
-   * each to exactly what `GET /api/signals/catalogue` says it carries.
+   * declared `{ trigger }`, `break_start` added the type and the segment, and
+   * `break_end` had no `trigger` at all. The type is back since 8 Oct (B89),
+   * declared now with its closed set: `micro|movement|consolidation|full`.
+   * This walks every break event a lesson can send - offered, turned down,
+   * taken, started, ended, and one the plan puts in on the way out - and
+   * holds each to exactly what `GET /api/signals/catalogue` says it carries.
    */
-  const declared = new Map(
-    (catalogue as { eventType: string; payload: string[] }[]).map((e) => [
-      e.eventType,
-      e.payload,
-    ]),
-  );
+  const conforms = (calls: unknown[][]) => {
+    for (const [type, payload] of calls) {
+      const sentKeys = Object.keys(payload as object);
+      const t = String(type);
+      expect(sentKeys.filter((k) => !declaredKeys(t)?.has(k)), t).toEqual([]);
+      expect(requiredKeys(t).filter((k) => !sentKeys.includes(k)), t).toEqual([]);
+      expect(undeclaredValues(t, payload as Record<string, unknown>), t).toEqual([]);
+    }
+  };
+  const breakEvents = () =>
+    trackEvent.mock.calls.filter(([t]) => String(t).startsWith("break_"));
 
   it("sends exactly the declared keys, each of them", () => {
     runtime.value = { ...runtime.value, offeredBreak: "movement", forSegmentId: "seg-1" };
@@ -284,32 +307,43 @@ describe("every break event, against the catalogue", () => {
     beat();
     fireEvent.click(screen.getByRole("button", { name: "Not now" }));
     next();
-    runtime.value = { ...runtime.value, offeredBreak: "movement", forSegmentId: "seg-2" };
+    runtime.value = { ...runtime.value, offeredBreak: "full", forSegmentId: "seg-2" };
     rerender(<LessonPlayer lesson={THREE} plan={null} live />);
     beat();
     fireEvent.click(screen.getByRole("button", { name: "Take a break" }));
-    fireEvent.click(screen.getByRole("button", { name: "I'm done" }));
+    fireEvent.click(screen.getByRole("button", { name: "I'm back" }));
 
-    const breakEvents = trackEvent.mock.calls.filter(([t]) =>
-      String(t).startsWith("break_"),
-    );
-    expect(breakEvents.map(([t]) => t)).toEqual([
-      "break_suggested",
-      "break_declined",
-      "break_suggested",
-      "break_taken",
-      "break_start",
-      "break_end",
+    expect(breakEvents().map(([t, p]) => [t, (p as { breakType: string }).breakType])).toEqual([
+      ["break_suggested", "movement"],
+      ["break_declined", "movement"],
+      ["break_suggested", "full"],
+      ["break_taken", "full"],
+      ["break_start", "full"],
+      ["break_end", "full"],
     ]);
-    for (const [type, payload] of breakEvents) {
-      // `[key]` in the catalogue is an optional key.
-      const keys = declared.get(type) ?? [];
-      const required = keys.filter((k) => !k.startsWith("["));
-      const allowed = keys.map((k) => k.replace(/^\[|\]$/g, ""));
-      const sentKeys = Object.keys(payload as object);
-      expect(sentKeys.filter((k) => !allowed.includes(k)), type).toEqual([]);
-      expect(required.filter((k) => !sentKeys.includes(k)), type).toEqual([]);
-    }
+    conforms(breakEvents());
+  });
+
+  it("names the plan's own break by its type, start and end", () => {
+    const plan: AdaptationPlan = {
+      lessonId: "l-1",
+      segments: [
+        { segmentId: "seg-1", startModality: "text", breakAfter: "consolidation" },
+      ],
+    };
+    render(<LessonPlayer lesson={THREE} plan={plan} />);
+
+    next(); // the planned break takes over on the way out
+    now = 30_000;
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(sent("break_start")).toEqual([
+      { breakType: "consolidation", trigger: "adaptation_plan" },
+    ]);
+    expect(sent("break_end")).toEqual([
+      { breakType: "consolidation", trigger: "adaptation_plan", durationMs: 30_000 },
+    ]);
+    conforms(breakEvents());
   });
 });
 
@@ -388,6 +422,77 @@ describe("what became of a modality offer", () => {
   });
 });
 
+describe("what became of a switch the child took (B73/B104)", () => {
+  /** Takes the engine's offer of audio on seg-1 at `at` ms, and lets it land. */
+  const takeSwitch = (at: number) => {
+    runtime.value = {
+      offeredBreak: null,
+      reason: null,
+      forSegmentId: "seg-1",
+      plan: { lessonId: "l-1", segments: [], suggestModality: "audio" },
+    };
+    const view = render(<LessonPlayer lesson={THREE} plan={null} live />);
+    beat();
+    now = at;
+    fireEvent.click(screen.getByRole("button", { name: "Yes, try it" }));
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    return view;
+  };
+
+  it("goes up as the segment switched on is left, with the time measured in the new modality", () => {
+    takeSwitch(5_000);
+    expect(sent("modality_switch_outcome")).toEqual([]);
+
+    now = 12_000;
+    next();
+
+    // From, to, and seven seconds on screen since the switch. No `outcome`
+    // and no score: those are judgements of the child (rule 3).
+    expect(sent("modality_switch_outcome")).toEqual([
+      { segmentId: "seg-1", from: "text", to: "audio", timeOnSegment: 7_000 },
+    ]);
+  });
+
+  it("goes up once per switch, not on every pass through the segment", () => {
+    takeSwitch(5_000);
+    now = 12_000;
+    next();
+    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+    next();
+
+    expect(sent("modality_switch_outcome")).toHaveLength(1);
+  });
+
+  it("goes up when the lesson ends on that segment", () => {
+    const { unmount } = takeSwitch(2_000);
+    now = 3_500;
+
+    unmount();
+
+    expect(sent("modality_switch_outcome")).toEqual([
+      { segmentId: "seg-1", from: "text", to: "audio", timeOnSegment: 1_500 },
+    ]);
+  });
+
+  it("is not sent for an offer turned down or never answered", () => {
+    runtime.value = {
+      offeredBreak: null,
+      reason: null,
+      forSegmentId: "seg-1",
+      plan: { lessonId: "l-1", segments: [], suggestModality: "audio" },
+    };
+    const { unmount } = render(<LessonPlayer lesson={THREE} plan={null} live />);
+    beat();
+    fireEvent.click(screen.getByRole("button", { name: "Not now" }));
+    next();
+    unmount();
+
+    expect(sent("modality_switch_outcome")).toEqual([]);
+  });
+});
+
 describe("an answer, as the engine receives it", () => {
   it("names the segment and the checkpoint, and not the pick or whether it was right", () => {
     /*
@@ -419,7 +524,7 @@ describe("an answer, as the engine receives it", () => {
     fireEvent.click(screen.getByRole("button", { name: "One third" }));
 
     expect(sent("comprehension_response")).toEqual([
-      { segmentId: "seg-1", questionId: "cp-1" },
+      { segmentId: "seg-1", questionId: "cp-1", source: "checkpoint" },
     ]);
     // The miss is still the player's own reading for the adapt request.
     const state = runtimeArgs.at(-1)![3] as Record<string, unknown>;
