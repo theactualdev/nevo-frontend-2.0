@@ -4,9 +4,9 @@ import type { BaselineRunContext } from "@/lib/api/baseline";
  * Age-band resolution for the Baseline Cognitive Profiling module (SCRUM-104).
  * Four tiers drive content, grid sizes and tap-target sizes; the component
  * shells are shared. Band comes from the roster when a signed-in child's
- * dashboard carries one (`bandForRoster`), otherwise from the age the child
- * gives - onboarding Step 1, or the intro screen when that is missing too (see
- * `ProfilingFlow`).
+ * dashboard carries one (`bandForRoster`), otherwise from the age the entry
+ * lookup read off the roster, otherwise Primary 4-6. The child is never asked
+ * (D153; see `ProfilingFlow`).
  */
 
 export const AGE_BANDS = {
@@ -54,7 +54,7 @@ export function bandForAge(age: number): AgeBand {
  * two secondary stages are JSS and SS.
  *
  * Null for anything else, including null itself: a roster row with no date of
- * birth has no band, and the caller asks rather than assumes one.
+ * birth has no band, and the caller falls back rather than asking (D153).
  */
 export function bandForRoster(ageBand: string | null | undefined): AgeBand | null {
   switch (ageBand) {

@@ -12,7 +12,7 @@ export interface RosterBand {
   /**
    * The read has answered, failed, or was never going to be made. Until then
    * a caller knows neither the band nor that there is none, so it must not
-   * ask for an age yet, and must not start anything sized by one.
+   * start anything sized by one.
    */
   settled: boolean;
 }

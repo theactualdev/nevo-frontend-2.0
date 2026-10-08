@@ -24,7 +24,7 @@ export interface OnboardingDraft {
   name?: string;
   /**
    * From the roster's date of birth, computed server-side. Absent when the
-   * roster has none, and then the baseline asks rather than guesses.
+   * roster has none, and the child is never asked for it (D153).
    */
   age?: number;
   /** The four-character code the child typed on 05, which the lookup matched. */

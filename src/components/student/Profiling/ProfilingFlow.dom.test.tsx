@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { ProfilingFlow } from "./ProfilingFlow";
 import {
   clearOnboardingDraft,
@@ -20,7 +20,10 @@ import {
  * re-run from Profile) and missed the one that ships.
  *
  * The roster's band now decides first where there is one to read (see
- * ProfilingFlow.band). When nothing says, we ask.
+ * ProfilingFlow.band). When nothing says, it asked "How old are you?" - and
+ * since 8 Oct it never asks (D153): "we do not ask the child". It runs Primary
+ * 4-6, the band the warm-up runs without one (D139), until the class band
+ * that design says drives content reaches the client.
  */
 
 beforeEach(() => {
@@ -33,18 +36,15 @@ afterEach(() => {
 });
 
 describe("ProfilingFlow — how the band is decided", () => {
-  it("asks a child with no age on record, rather than assuming one", () => {
+  it("never asks a child with no age on record for one (D153)", () => {
     // No onboarding draft, and no roster band to read.
     render(<ProfilingFlow onDone={vi.fn()} />);
 
-    expect(screen.getByText(/how old are you/i)).toBeTruthy();
-  });
-
-  it("will not start the run until it has a real answer", () => {
-    render(<ProfilingFlow onDone={vi.fn()} />);
-
-    // Starting without one is what produced the fixture-banded run.
-    expect(screen.getByRole("button", { name: /let's go/i })).toBeDisabled();
+    expect(screen.queryByText(/how old are you/i)).toBeNull();
+    expect(screen.queryByLabelText("Age")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: /let's go/i }),
+    ).not.toBeDisabled();
   });
 
   it("does not ask a child who already told us in Step 1", () => {
@@ -58,15 +58,4 @@ describe("ProfilingFlow — how the band is decided", () => {
     ).not.toBeDisabled();
   });
 
-  it("starts once the child answers", () => {
-    render(<ProfilingFlow onDone={vi.fn()} />);
-    // Exact: the stepper also has "Decrease age" / "Increase age" buttons.
-    const field = screen.getByLabelText("Age");
-
-    fireEvent.change(field, { target: { value: "7" } });
-
-    expect(
-      screen.getByRole("button", { name: /let's go/i }),
-    ).not.toBeDisabled();
-  });
 });
