@@ -521,8 +521,9 @@ export function LessonPlayer({
   const attemptWrites = useRef<Promise<unknown>[]>([]);
 
   /*
-   * B26: THE CHECK-IN'S OUTCOME comes back on the completion write and on no
-   * read, so it is kept here for the summary, which is its own route.
+   * B26: THE CHECK-IN'S OUTCOME comes back on the completion write, so it is
+   * kept here for the summary, which is its own route and reads this copy
+   * before the dashboard row's (B84).
    */
   const savedRow = progress.saved;
   useEffect(() => {
