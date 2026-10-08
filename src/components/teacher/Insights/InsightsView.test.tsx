@@ -168,6 +168,14 @@ describe("the class pills on the landing", () => {
     expect(regions()).toEqual(["teacher:insights-classes"]);
   });
 
+  it("carry no mark while the read is still in flight, when there are none to mark", () => {
+    useTeacherClasses.mockReturnValue(state({ loading: true }));
+    render(<InsightsView />);
+
+    expect(screen.queryByRole("button", { name: FIXTURE_CLASS })).not.toBeInTheDocument();
+    expect(regions()).toEqual([]);
+  });
+
   it("carry no mark when they are the teacher's own", () => {
     useTeacherClasses.mockReturnValue(
       state({ live: true, options: [{ id: "c-1", name: "Year 7 Blue", joinCode: null }] as never }),

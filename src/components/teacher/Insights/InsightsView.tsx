@@ -68,8 +68,14 @@ export function InsightsView() {
   const pills = (
     <div className="flex gap-2">
       {/* The fixture three are marked where they are offered, not only once
-          one is picked: the landing is where the wrong choice gets made. */}
-      <MaybeSample showing={!live} kind="teacher:insights-classes">
+          one is picked: the landing is where the wrong choice gets made.
+
+          NOT WHILE THE READ IS IN FLIGHT. `!live` is already true then, so
+          an empty row of pills was marked as sample data - nothing invented
+          on screen, and the mark said otherwise. This page draws no skeleton
+          while it waits, so the signed-in sweep checked straight away and,
+          whenever the backend was slow, failed every lane's run (8 Oct). */}
+      <MaybeSample showing={!live && !loading} kind="teacher:insights-classes">
       {selectable.map((c) => {
         const on = c.id === classId;
         return (
