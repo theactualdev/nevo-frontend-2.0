@@ -10,6 +10,7 @@ const { useLessonDetail, notFound } = vi.hoisted(() => ({
 vi.mock("@/hooks/useLessonDetail", () => ({ useLessonDetail }));
 vi.mock("@/hooks/useHydrated", () => ({ useHydrated: () => true }));
 vi.mock("next/navigation", () => ({ notFound }));
+vi.mock("./LessonDetail", () => ({ LessonDetail: () => <p>sample lesson</p> }));
 vi.mock("./LiveLessonDetail", () => ({
   LiveLessonDetail: ({ assignmentsFailed }: { assignmentsFailed?: boolean }) => (
     <p>{assignmentsFailed ? "live page: who has it unknown" : "live page"}</p>
@@ -87,5 +88,46 @@ describe("a lesson that did not", () => {
 
     expect(screen.getByText(/couldn’t load this lesson/)).toBeInTheDocument();
     expect(notFound).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * T243. The designed lesson is the walkthrough's, and only ever its: a
+ * signed-in teacher's lesson that is loading, failed or missing is never
+ * answered with it.
+ */
+describe("the designed lesson", () => {
+  const FIXTURE = { id: "photosynthesis", title: "Photosynthesis" } as never;
+
+  it("is the walkthrough's, marked as a sample", () => {
+    clearSession();
+    const { container } = render(<LessonRoute fixture={FIXTURE} lessonId="photosynthesis" />);
+
+    expect(screen.getByText("sample lesson")).toBeInTheDocument();
+    expect(container.querySelector("[data-nevo-sample]")).not.toBeNull();
+  });
+
+  it("is not shown while a signed-in teacher's lesson loads", () => {
+    state({ loading: true });
+    render(<LessonRoute fixture={FIXTURE} lessonId="photosynthesis" />);
+
+    expect(screen.queryByText("sample lesson")).not.toBeInTheDocument();
+  });
+
+  it("is not shown in place of a lesson that failed to load", () => {
+    state({ failed: true });
+    render(<LessonRoute fixture={FIXTURE} lessonId="photosynthesis" />);
+
+    expect(screen.queryByText("sample lesson")).not.toBeInTheDocument();
+    expect(screen.getByText(/couldn’t load this lesson/)).toBeInTheDocument();
+  });
+
+  it("is not shown in place of a lesson that does not exist", () => {
+    state({ missing: true });
+
+    expect(() => render(<LessonRoute fixture={FIXTURE} lessonId="photosynthesis" />)).toThrow(
+      "NEXT_NOT_FOUND",
+    );
+    expect(screen.queryByText("sample lesson")).not.toBeInTheDocument();
   });
 });
