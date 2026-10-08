@@ -667,12 +667,6 @@ export const lessonsApi = {
     api.del<LessonReview>(
       `/api/v1/lessons/${lessonId}/key-points/${keyPointId}`,
     ),
-  /** The module grouping, which only the v1 alias returns. */
-  modules: (lessonId: string) =>
-    api
-      .get<{ modules?: LessonModule[] }>(`/api/v1/lessons/${lessonId}`)
-      .then((r) => r.modules ?? []),
-
   /**
    * Open (or re-open) a play session. POST /api/v1/lessons/{id}/session
    * Takes no body.
