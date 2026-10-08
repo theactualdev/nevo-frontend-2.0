@@ -95,9 +95,9 @@ export function InsightsView() {
 
   const heading = (
     <div className="flex flex-wrap items-center justify-between gap-4 xl:gap-5">
-      <h2 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
+      <h1 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
         Insights
-      </h2>
+      </h1>
       {pills}
     </div>
   );

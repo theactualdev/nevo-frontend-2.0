@@ -67,9 +67,9 @@ export function LessonDetail({
         <div className="mt-3.5 flex flex-wrap items-start justify-between gap-4 xl:mt-4 xl:gap-6">
           <div>
             <div className="flex items-center gap-2.5">
-              <h2 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[27px]">
+              <h1 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[27px]">
                 {lesson.title}
-              </h2>
+              </h1>
               {!assigned && statusPill(lesson.status)}
             </div>
             <span className="mt-[5px] block text-sm text-nevo-near-black/60 xl:mt-1.5 xl:text-[14.5px]">

@@ -256,7 +256,14 @@ export function TeacherSignIn() {
 
       <div className="w-full max-w-[432px]">
         {isForm && (
-          <div className="flex flex-col items-start">
+          <form
+            noValidate
+            onSubmit={(e) => {
+              e.preventDefault();
+              submit();
+            }}
+            className="flex flex-col items-start"
+          >
             {/*
               NO SCHOOL EYEBROW. The frame draws "Corona Secondary School ·
               Lagos" here and this shipped it as a literal, so every teacher at
@@ -272,9 +279,9 @@ export function TeacherSignIn() {
               door made for the same reason (`AdminSignIn.tsx`). When a pre-auth
               lookup exists, both doors get it together.
             */}
-            <h2 className="text-[34px] leading-[1.15] font-semibold tracking-[-0.02em]">
+            <h1 className="text-[34px] leading-[1.15] font-semibold tracking-[-0.02em]">
               Welcome back
-            </h2>
+            </h1>
             <p className="mt-3 text-[16px] leading-[1.55] text-nevo-near-black/70">
               Sign in to your teacher console.
             </p>
@@ -337,9 +344,6 @@ export function TeacherSignIn() {
                   setPw(e.target.value);
                   clearError();
                 }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") submit();
-                }}
                 placeholder="Enter your password"
                 className="h-full min-w-0 flex-1 border-none bg-transparent text-[16px] text-nevo-near-black outline-none"
               />
@@ -390,8 +394,7 @@ export function TeacherSignIn() {
             )}
 
             <button
-              type="button"
-              onClick={submit}
+              type="submit"
               disabled={!canSubmit}
               className={cn(
                 "mt-[30px] flex h-[54px] w-full items-center justify-center rounded-[10px] text-[16px] font-semibold tracking-[-0.005em] transition-[filter] duration-150",
@@ -431,7 +434,7 @@ export function TeacherSignIn() {
                 </>
               )}
             </button>
-          </div>
+          </form>
         )}
 
         {isSuccess && (
@@ -441,9 +444,9 @@ export function TeacherSignIn() {
                 <path d="M5 12.5l4.5 4.5L19 7.5" />
               </svg>
             </span>
-            <h2 className="mt-[26px] text-[30px] font-semibold tracking-[-0.02em]">
+            <h1 className="mt-[26px] text-[30px] font-semibold tracking-[-0.02em]">
               {"You're in"}
-            </h2>
+            </h1>
             <p className="mt-3 text-[16px] leading-[1.55] text-nevo-near-black/70">
               Taking you to your console.
             </p>

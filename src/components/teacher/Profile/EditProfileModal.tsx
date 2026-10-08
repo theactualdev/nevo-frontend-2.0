@@ -169,6 +169,13 @@ export function EditProfileModal({
           </p>
         )}
 
+        <form
+          noValidate
+          onSubmit={(e) => {
+            e.preventDefault();
+            void submit();
+          }}
+        >
         <div className="mt-5 flex flex-col gap-4">
           <label className="block">
             <span className={label}>Full name</span>
@@ -206,10 +213,7 @@ export function EditProfileModal({
 
         <div className="mt-6 flex gap-3">
           <button
-            type="button"
-            onClick={() =>
-              void submit()
-            }
+            type="submit"
             className="h-12 flex-1 cursor-pointer rounded-[10px] bg-nevo-navy text-[15px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93"
           >
             {saving ? "Saving…" : failed ? "Try again" : "Save changes"}
@@ -222,6 +226,7 @@ export function EditProfileModal({
             Cancel
           </button>
         </div>
+        </form>
       </div>
     </div>
   );

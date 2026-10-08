@@ -510,9 +510,9 @@ export function BulkIngestion() {
       {phase === "idle" && (
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-7 py-6 xl:px-8">
           <div className="w-full max-w-[560px] xl:max-w-[620px]">
-            <h2 className="mb-1.5 text-[23px] font-semibold tracking-[-0.015em] xl:text-[26px]">
+            <h1 className="mb-1.5 text-[23px] font-semibold tracking-[-0.015em] xl:text-[26px]">
               Upload your term&rsquo;s material
-            </h2>
+            </h1>
             <p className="mb-5 text-[14.5px] leading-[1.55] text-nevo-near-black/66 xl:mb-[22px] xl:text-[15.5px]">
               Drop the whole scheme of work in - Nevo will sort it into
               individual lessons for you.
@@ -600,9 +600,9 @@ export function BulkIngestion() {
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-7 py-6 xl:px-8">
           <div className="flex flex-col items-center text-center">
             <span className="block size-[42px] rounded-full border-[3px] border-nevo-navy/20 border-t-nevo-navy motion-safe:animate-spin motion-safe:[animation-duration:1s] xl:size-11" />
-            <h2 className="mt-[22px] text-[21px] font-semibold tracking-[-0.01em] xl:mt-6 xl:text-[23px]">
+            <h1 className="mt-[22px] text-[21px] font-semibold tracking-[-0.01em] xl:mt-6 xl:text-[23px]">
               Working through your material&hellip;
-            </h2>
+            </h1>
             <p className="mt-[9px] max-w-[360px] text-[14.5px] leading-[1.55] text-nevo-near-black/66 xl:mt-2.5 xl:max-w-[380px] xl:text-[15.5px]">
               This one&rsquo;s a bigger read - a term&rsquo;s worth. Feel free
               to carry on elsewhere; we&rsquo;ll have it ready shortly.
@@ -647,9 +647,9 @@ export function BulkIngestion() {
       {phase === "results" && (
         <div className="flex min-h-0 flex-1 justify-center overflow-y-auto px-7 pt-6 pb-7 xl:px-8 xl:pb-8">
           <div className="w-full max-w-[600px] xl:max-w-[660px]">
-            <h2 className="text-[23px] font-semibold tracking-[-0.015em] xl:mt-2 xl:text-[26px]">
+            <h1 className="text-[23px] font-semibold tracking-[-0.015em] xl:mt-2 xl:text-[26px]">
               Here&rsquo;s what we found
-            </h2>
+            </h1>
             {batch ? (
               <>
                 <p className="mt-[9px] text-[14.5px] leading-[1.55] text-nevo-near-black/66 xl:mt-2.5 xl:text-[15.5px]">

@@ -750,9 +750,9 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
                 <path d="M20 6L9 17l-5-5" />
               </svg>
             </div>
-            <h2 className="mt-[18px] text-[23px] font-semibold tracking-[-0.015em] xl:mt-5 xl:text-[26px]">
+            <h1 className="mt-[18px] text-[23px] font-semibold tracking-[-0.015em] xl:mt-5 xl:text-[26px]">
               All set
-            </h2>
+            </h1>
             <p className="mt-3.5 text-base leading-[1.6] text-nevo-near-black/78 xl:mt-4 xl:text-[17px]">
               <strong className="font-semibold text-nevo-near-black">
                 {lessonsText}
@@ -780,9 +780,9 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
       ) : (
         <div className="flex min-h-0 flex-1 justify-center overflow-y-auto px-7 pt-4 pb-7 xl:px-8 xl:pt-5 xl:pb-8">
           <div className="w-full max-w-[540px] xl:max-w-[560px]">
-            <h2 className="mt-2 text-[23px] font-semibold tracking-[-0.015em] xl:mt-3.5 xl:text-[26px]">
+            <h1 className="mt-2 text-[23px] font-semibold tracking-[-0.015em] xl:mt-3.5 xl:text-[26px]">
               {heading}
-            </h2>
+            </h1>
 
             {step === 1 && (
               <div className="mt-[18px] flex flex-col gap-2.5 xl:mt-5 xl:gap-[11px]">

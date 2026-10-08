@@ -135,3 +135,17 @@ describe("the search box (C10)", () => {
     expect(screen.getByLabelText("Search lessons").className).toMatch(/\bfocus:border-nevo-navy\b/);
   });
 });
+
+describe("its title (C20)", () => {
+  it("is the screen's one h1, loaded or not", () => {
+    state({ loading: true });
+    const { unmount } = render(<LessonLibrary />);
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    unmount();
+
+    state();
+    render(<LessonLibrary />);
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Lesson Library");
+  });
+});
