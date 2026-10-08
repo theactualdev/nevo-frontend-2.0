@@ -276,6 +276,25 @@ export function UploadWizard() {
     (staged.status === "ready" || staged.status === "confirmed");
 
   /**
+   * The unit's tree is ready - the block path's twin of `singleReview`.
+   *
+   * IT TAKES THE PANE, as the module review and the fallback do. It used to
+   * render inside the body: in a 760px column, inside a scroll, inside the
+   * body's own padding. `LiveStructureTree` is built as a pane - its own
+   * scroll, its commit bar pinned at the foot, its confirm sheet over its own
+   * area - and in there the padding doubled, the bar scrolled away with the
+   * tree, and the sheet anchored to whatever was positioned further up (C07d).
+   */
+  const liveTree =
+    isBlock &&
+    phase === "processing" &&
+    staged.uploadId !== null &&
+    staged.structure !== null &&
+    (staged.status === "ready" || staged.status === "confirmed")
+      ? { uploadId: staged.uploadId, structure: staged.structure }
+      : null;
+
+  /**
    * The fallback screen, and which failure it is about, from either source.
    *
    * The demo beats set a phase; a staged parse reports its failure through a
@@ -587,6 +606,64 @@ export function UploadWizard() {
         />
       )}
 
+      {/* The designed structure tree, in place of the route it used to live
+          at. Signed-out only by construction: `blockParsed` is reached from
+          the mocked beats. A pane, like the live tree below - it was inside
+          the body's 860px column, so its commit bar scrolled with it. */}
+      {phase === "demoStructure" && (
+        <SampleRegion kind="teacher:upload-demo-structure">
+          <StructureTree />
+        </SampleRegion>
+      )}
+
+      {/* THE UNIT'S OWN TREE - C07d, live, as a pane (see `liveTree`). */}
+      {liveTree && (
+        <LiveStructureTree
+          uploadId={liveTree.uploadId}
+          structure={liveTree.structure}
+          segments={staged.segments}
+          blockName={blockName}
+          banner={
+            /*
+              FAINT PAGES, SAID OUT LOUD.
+
+              `failedPages` is on the status response and was missing
+              from the client type, so until 18 Sep a teacher whose
+              PDF was partly unreadable got this tree with those pages
+              silently absent from it - a unit that looks complete and
+              is not. The retry endpoint was wrapped the whole time
+              and had nothing to ask for, because the page numbers
+              only exist in the field nobody was reading.
+
+              NOT DRAWN BY DESIGN. C07f covers a parse that failed
+              outright, not one that came back with holes in it, so
+              this is the honest minimum - what is missing, and the
+              one action that fixes it - and it is raised rather than
+              invented further.
+            */
+            staged.failedPages.length > 0 ? (
+              <div className="mb-5 w-full rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4">
+                <p className="text-[14.5px] leading-[1.55] text-nevo-near-black/82">
+                  {faintPagesLine(staged.failedPages)}
+                </p>
+                <button
+                  type="button"
+                  onClick={staged.retryFailedPages}
+                  disabled={staged.retrying}
+                  className="mt-3 inline-flex h-[42px] cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 bg-nevo-cream-elevated px-[18px] text-[14px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6 disabled:cursor-default disabled:opacity-55"
+                >
+                  {staged.retrying
+                    ? "Reading them again…"
+                    : staged.failedPages.length === 1
+                      ? "Read that page again"
+                      : "Read those pages again"}
+                </button>
+              </div>
+            ) : null
+          }
+        />
+      )}
+
       {fallback && (
         <MaybeSample showing={sample} kind="teacher:upload-demo-fallback">
         <ParseFallback
@@ -616,7 +693,7 @@ export function UploadWizard() {
         760 (a wide row of options is harder to compare, not easier), and the
         steps where they are READING what Nevo produced get 860.
       */}
-      {phase !== "review" && !fallback && !singleReview && (
+      {phase !== "review" && !fallback && !singleReview && !liveTree && phase !== "demoStructure" && (
         <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-6 py-[22px] xl:px-8 xl:py-7">
           <div
             className={cn(
@@ -861,17 +938,6 @@ export function UploadWizard() {
             </div>
           )}
 
-          {/* The designed structure tree, in place of the route it used to
-              live at. Signed-out only by construction: `blockParsed` is
-              reached from the mocked beats. */}
-          {phase === "demoStructure" && (
-            <SampleRegion kind="teacher:upload-demo-structure">
-              <div className="w-full">
-                <StructureTree />
-              </div>
-            </SampleRegion>
-          )}
-
           {/* A REAL staged upload takes over the block path. `ParseProgress`
               keeps driving the signed-out demo, which still walks its beats.
 
@@ -880,55 +946,12 @@ export function UploadWizard() {
               ladder below - stuck on its first rung for ever, over a failure
               nobody was told about. */}
           {phase === "processing" && isBlock && (staged.uploadId || staged.failed) && (
-            <div className="w-full">
-              {staged.uploadId &&
-              staged.structure &&
-              (staged.status === "ready" || staged.status === "confirmed") ? (
-                <>
-                  {/*
-                    FAINT PAGES, SAID OUT LOUD.
-
-                    `failedPages` is on the status response and was missing
-                    from the client type, so until 18 Sep a teacher whose
-                    PDF was partly unreadable got this tree with those pages
-                    silently absent from it - a unit that looks complete and
-                    is not. The retry endpoint was wrapped the whole time
-                    and had nothing to ask for, because the page numbers
-                    only exist in the field nobody was reading.
-
-                    NOT DRAWN BY DESIGN. C07f covers a parse that failed
-                    outright, not one that came back with holes in it, so
-                    this is the honest minimum - what is missing, and the
-                    one action that fixes it - and it is raised rather than
-                    invented further.
-                  */}
-                  {staged.failedPages.length > 0 && (
-                    <div className="mb-5 w-full rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4">
-                      <p className="text-[14.5px] leading-[1.55] text-nevo-near-black/82">
-                        {faintPagesLine(staged.failedPages)}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={staged.retryFailedPages}
-                        disabled={staged.retrying}
-                        className="mt-3 inline-flex h-[42px] cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 bg-nevo-cream-elevated px-[18px] text-[14px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6 disabled:cursor-default disabled:opacity-55"
-                      >
-                        {staged.retrying
-                          ? "Reading them again…"
-                          : staged.failedPages.length === 1
-                            ? "Read that page again"
-                            : "Read those pages again"}
-                      </button>
-                    </div>
-                  )}
-                  <LiveStructureTree
-                    uploadId={staged.uploadId}
-                    structure={staged.structure}
-                    segments={staged.segments}
-                    blockName={blockName}
-                  />
-                </>
-              ) : staged.failed ? (
+            /* A flex column at full height, so the ladder - `flex-1` inside -
+               centres both ways as C07e draws it. A plain block here collapsed
+               to the ladder's own height, and only the signed-out demo (one
+               level up, no wrapper) was ever centred. */
+            <div className="flex min-h-full w-full flex-col">
+              {staged.failed ? (
                 /*
                   TWO FAILURES, TWO SENTENCES.
 

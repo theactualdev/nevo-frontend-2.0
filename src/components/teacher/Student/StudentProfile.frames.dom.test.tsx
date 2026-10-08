@@ -36,3 +36,22 @@ describe("the sample profile's What Nevo has noticed", () => {
     expect(screen.queryByText(OBSERVATION_COPY.steadier_pace.title)).not.toBeInTheDocument();
   });
 });
+
+/**
+ * C08 tablet: "actions wrap" - into a row of their own under the name. The
+ * header stayed a row below 1280px, so on a tablet the actions squeezed in
+ * beside the name, carrying the `mt-4` that was meant to put them under it.
+ */
+describe("the header at tablet width", () => {
+  const amara = getStudentProfile("amara-okafor");
+
+  it("stacks the actions under the name, and sets them beside it from 1280px", () => {
+    render(<StudentProfile student={amara!} />);
+    const header = screen
+      .getByRole("heading", { level: 1, name: amara!.name })
+      .closest("[class*='xl:justify-between']")!;
+
+    expect(header).toHaveClass("flex-col", "items-start", "xl:flex-row");
+    expect(header).toContainElement(screen.getByRole("link", { name: "Recommend a lesson" }));
+  });
+});
