@@ -83,11 +83,18 @@ const BELL_ICON = (
   </svg>
 );
 
-/** Row shell shared by tabs, the bell and the collapse control. */
-function rowClass(expanded: boolean, extra?: string) {
+/**
+ * Row shell shared by tabs, the bell and the collapse control. `null` is the
+ * rail before the client has measured: the breakpoint decides, in CSS.
+ */
+function rowClass(expanded: boolean | null, extra?: string) {
   return cn(
     "relative flex h-[46px] shrink-0 cursor-pointer items-center gap-3.5 rounded-[10px] transition-colors duration-[130ms]",
-    expanded ? "px-3.5" : "justify-center px-0",
+    expanded === null
+      ? "justify-center px-0 xl:justify-start xl:px-3.5"
+      : expanded
+        ? "px-3.5"
+        : "justify-center px-0",
     extra,
   );
 }
@@ -203,7 +210,17 @@ export function TeacherSidebar() {
   const identity = useCurrentUser();
   /** The designed walkthrough's persona - only once we know nobody is here. */
   const showingFixtureIdentity = hydrated && !signedIn;
-  const [expanded, setExpanded] = useState(true);
+  /*
+   * NULL UNTIL THE CLIENT CAN MEASURE. This started at `true`, so the server
+   * markup and every hard load at tablet width drew the 240px desktop rail,
+   * then collapsed it to 64px with the width transition once the effect ran -
+   * the page lurched sideways on every refresh and every sign-in. The server
+   * cannot know the width, so it doesn't guess: until the effect answers, the
+   * `xl:` breakpoint decides in CSS, and the first frame is already the right
+   * rail at either size. The effect then takes over with the same answer, so
+   * nothing moves.
+   */
+  const [expanded, setExpanded] = useState<boolean | null>(null);
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 1280px)");
     const sync = () => setExpanded(mq.matches);
@@ -212,7 +229,20 @@ export function TeacherSidebar() {
     return () => mq.removeEventListener("change", sync);
   }, []);
 
-  const collapsed = !expanded;
+  /** The breakpoint is still deciding (see above). */
+  const auto = expanded === null;
+  const collapsed = expanded === false;
+  /** Classes for what only the wide rail shows: hidden below 1280px until measured. */
+  const wideOnly = auto ? "hidden xl:inline" : undefined;
+
+  /** Who the account menu's header names - the teacher, the walkthrough's persona, or nobody. */
+  const menuName = signedIn ? identity?.name : showingFixtureIdentity ? MOCK_TEACHER.name : null;
+  const menuSchool = signedIn ? identity?.school : showingFixtureIdentity ? MOCK_TEACHER.school : null;
+  const menuInitials = signedIn
+    ? identity?.initials
+    : showingFixtureIdentity
+      ? MOCK_TEACHER.initials
+      : null;
 
   /*
    * THE ACCOUNT MENU ANSWERED ONLY A MOUSE (C08). It said `role="menu"` and
@@ -247,18 +277,23 @@ export function TeacherSidebar() {
     <aside
       className={cn(
         "flex h-full shrink-0 flex-col overflow-hidden border-r border-nevo-near-black/6 bg-nevo-cream-elevated py-6 transition-[width] duration-200 ease-in-out",
-        collapsed ? "w-16 px-3" : "w-60 px-4",
+        auto ? "w-16 px-3 xl:w-60 xl:px-4" : collapsed ? "w-16 px-3" : "w-60 px-4",
       )}
     >
       {/* Logo - wordmark crop expanded, icon crop collapsed (padded 1080² files) */}
       <div
         className={cn(
           "flex items-center",
-          expanded ? "px-2" : "justify-center",
+          auto ? "justify-center xl:justify-start xl:px-2" : expanded ? "px-2" : "justify-center",
         )}
       >
-        {expanded ? (
-          <span className="relative block h-[17px] w-[58px] overflow-hidden">
+        {!collapsed && (
+          <span
+            className={cn(
+              "relative block h-[17px] w-[58px] overflow-hidden",
+              auto && "hidden xl:block",
+            )}
+          >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/brand/logo-wordmark-purple.png"
@@ -266,8 +301,9 @@ export function TeacherSidebar() {
               className="absolute block h-[169px] w-[169px] max-w-none -translate-x-[61px] -translate-y-[81px]"
             />
           </span>
-        ) : (
-          <span className="relative block size-[22px] overflow-hidden">
+        )}
+        {expanded !== true && (
+          <span className={cn("relative block size-[22px] overflow-hidden", auto && "xl:hidden")}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/brand/logo-icon-purple.png"
@@ -306,10 +342,11 @@ export function TeacherSidebar() {
               >
                 {ICONS[item.name]}
               </span>
-              {expanded && (
+              {!collapsed && (
                 <span
                   className={cn(
                     "text-[15px] tracking-[-0.005em]",
+                    wideOnly,
                     on
                       ? "font-semibold text-nevo-near-black"
                       : "font-medium text-nevo-near-black/78",
@@ -346,13 +383,13 @@ export function TeacherSidebar() {
             <span
               className={cn(
                 "absolute top-[9px] size-2 rounded-full border-2 border-nevo-cream-elevated bg-nevo-violet",
-                expanded ? "left-9" : "left-1/2",
+                auto ? "left-1/2 xl:left-9" : expanded ? "left-9" : "left-1/2",
               )}
             />
           )}
         </span>
-        {expanded && (
-          <span className="text-[15px] font-medium text-nevo-near-black/78">
+        {!collapsed && (
+          <span className={cn("text-[15px] font-medium text-nevo-near-black/78", wideOnly)}>
             Notifications
           </span>
         )}
@@ -378,7 +415,7 @@ export function TeacherSidebar() {
           onArchive={archiveNote}
           onUndoArchive={undoArchive}
           lastArchived={lastArchived}
-          railExpanded={expanded}
+          railExpanded={expanded === true}
           onClose={() => setNotifOpen(false)}
         />
       )}
@@ -387,17 +424,18 @@ export function TeacherSidebar() {
       <button
         type="button"
         onClick={() => setExpanded((e) => !e)}
-        aria-expanded={expanded}
+        aria-expanded={expanded ?? undefined}
         aria-label={expanded ? "Collapse sidebar" : "Expand sidebar"}
         className={cn(rowClass(expanded), "hover:bg-nevo-navy/6")}
       >
         <span className="flex size-10 shrink-0 items-center justify-center rounded-[10px] text-nevo-near-black/55">
           <svg {...STROKE} strokeWidth={2} aria-hidden>
-            {expanded ? <path d="M15 6l-6 6 6 6" /> : <path d="M9 6l6 6-6 6" />}
+            {!collapsed && <path className={auto ? "hidden xl:inline" : undefined} d="M15 6l-6 6 6 6" />}
+            {expanded !== true && <path className={auto ? "xl:hidden" : undefined} d="M9 6l6 6-6 6" />}
           </svg>
         </span>
-        {expanded && (
-          <span className="text-[15px] font-medium text-nevo-near-black/68">
+        {!collapsed && (
+          <span className={cn("text-[15px] font-medium text-nevo-near-black/68", wideOnly)}>
             Collapse
           </span>
         )}
@@ -413,12 +451,16 @@ export function TeacherSidebar() {
           aria-expanded={menuOpen}
           // Collapsed, all the trigger shows is a disc of initials, and that
           // was its whole name: "AO, button". Its own title says what it is.
-          aria-label={collapsed ? "Account menu" : undefined}
+          aria-label={expanded !== true ? "Account menu" : undefined}
           title="Account menu"
           onClick={() => setMenuOpen((v) => !v)}
           className={cn(
             "flex w-full cursor-pointer items-center gap-3 rounded-[10px] py-2 transition-colors duration-[130ms] hover:bg-nevo-navy/5",
-            expanded ? "px-2.5" : "justify-center px-0",
+            auto
+              ? "justify-center px-0 xl:justify-start xl:px-2.5"
+              : expanded
+                ? "px-2.5"
+                : "justify-center px-0",
             menuOpen && "bg-nevo-navy/5",
           )}
         >
@@ -452,8 +494,8 @@ export function TeacherSidebar() {
               MOCK_TEACHER.initials
             )}
           </AvatarDisc>
-          {expanded && (
-            <span className="flex min-w-0 flex-col text-left">
+          {!collapsed && (
+            <span className={cn("flex min-w-0 flex-col text-left", auto && "hidden xl:flex")}>
               {(showingFixtureIdentity || (signedIn && identity?.name)) && (
                 <span className="truncate text-sm font-semibold text-nevo-near-black">
                   {signedIn ? identity?.name : MOCK_TEACHER.name}
@@ -498,55 +540,106 @@ export function TeacherSidebar() {
               className="fixed inset-0 z-30"
               onClick={() => setMenuOpen(false)}
             />
+            {/*
+              BESIDE THE RAIL, NOT INSIDE IT (C11). This was absolute inside
+              an `overflow-hidden` rail, so on a tablet - where the rail is
+              64px - the menu was cut to a strip of icons and every label was
+              lost. Fixed at the frame's own coordinates instead, as the bell's
+              panel already is: beside the 240px rail on desktop, beside the
+              collapsed one on tablet.
+            */}
             <div
               ref={menuRef}
               role="menu"
               aria-label="Account menu"
               onKeyDown={onMenuKey}
-              className="absolute bottom-[calc(100%+8px)] left-0 z-40 w-[232px] rounded-[12px] bg-nevo-cream p-1.5 shadow-[0_8px_32px_rgba(0,0,0,0.16)] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 motion-safe:duration-150"
+              className={cn(
+                "fixed z-40 overflow-hidden rounded-[14px] bg-nevo-cream shadow-[0_8px_32px_rgba(0,0,0,0.16)] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 motion-safe:duration-150",
+                expanded ? "bottom-[88px] left-[196px] w-[248px]" : "bottom-[76px] left-[84px] w-[240px]",
+              )}
             >
-              {ACCOUNT_MENU.map((m) => {
-                const body = (
-                  <>
-                    <span className="shrink-0 text-nevo-near-black/70">
-                      {m.icon}
-                    </span>
-                    <span className="text-sm text-nevo-near-black/80">
-                      {m.label}
-                    </span>
-                  </>
-                );
-                const rowCls = cn(
-                  "flex w-full cursor-pointer items-center gap-3 rounded-[9px] px-3 py-[11px] text-left transition-colors hover:bg-nevo-navy/8",
-                  m.divider &&
-                    "mt-1 border-t border-nevo-near-black/8 pt-[13px]",
-                );
-                return m.href ? (
-                  <Link
-                    key={m.label}
-                    role="menuitem"
-                    href={m.href}
-                    onClick={() => setMenuOpen(false)}
-                    className={rowCls}
-                  >
-                    {body}
-                  </Link>
-                ) : (
-                  <button
-                    key={m.label}
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      if (m.opens === "feedback") setFeedbackOpen(true);
-                      if (m.opens === "signout") setSignOutOpen(true);
-                    }}
-                    className={rowCls}
-                  >
-                    {body}
-                  </button>
-                );
-              })}
+              {/* Who this is, as the frame heads the menu - only what is known. */}
+              {(menuName || menuSchool) && (
+                <MaybeSample showing={!signedIn} kind="teacher:menu-identity">
+                  <div className="flex items-center gap-3 border-b border-nevo-near-black/8 px-[18px] py-4">
+                    <AvatarDisc
+                      photoUrl={signedIn ? identity?.photoUrl : null}
+                      className={cn(
+                        "shrink-0 font-semibold",
+                        expanded ? "size-10 text-sm" : "size-[38px] text-[13px]",
+                      )}
+                    >
+                      {menuInitials ?? ""}
+                    </AvatarDisc>
+                    <div className="min-w-0">
+                      {menuName && (
+                        <p
+                          className={cn(
+                            "truncate font-semibold text-nevo-near-black",
+                            expanded ? "text-[14.5px]" : "text-sm",
+                          )}
+                        >
+                          {menuName}
+                        </p>
+                      )}
+                      {menuSchool && (
+                        <p
+                          className={cn(
+                            "mt-px truncate text-nevo-near-black/55",
+                            expanded ? "text-xs" : "text-[11.5px]",
+                          )}
+                        >
+                          {menuSchool}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </MaybeSample>
+              )}
+              <div className="p-1.5">
+                {ACCOUNT_MENU.map((m) => {
+                  const body = (
+                    <>
+                      <span className="shrink-0 text-nevo-near-black/70">
+                        {m.icon}
+                      </span>
+                      <span className="text-sm text-nevo-near-black/80">
+                        {m.label}
+                      </span>
+                    </>
+                  );
+                  const rowCls = cn(
+                    "flex w-full cursor-pointer items-center gap-3 rounded-[9px] px-3 py-[11px] text-left transition-colors hover:bg-nevo-navy/8",
+                    m.divider &&
+                      "mt-1 border-t border-nevo-near-black/8 pt-[13px]",
+                  );
+                  return m.href ? (
+                    <Link
+                      key={m.label}
+                      role="menuitem"
+                      href={m.href}
+                      onClick={() => setMenuOpen(false)}
+                      className={rowCls}
+                    >
+                      {body}
+                    </Link>
+                  ) : (
+                    <button
+                      key={m.label}
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        if (m.opens === "feedback") setFeedbackOpen(true);
+                        if (m.opens === "signout") setSignOutOpen(true);
+                      }}
+                      className={rowCls}
+                    >
+                      {body}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </>
         )}
