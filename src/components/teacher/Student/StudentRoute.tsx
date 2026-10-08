@@ -83,9 +83,9 @@ export function StudentRoute({
     return (
       <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
         <div className="mx-auto max-w-[660px] rounded-[12px] bg-nevo-cream-elevated px-[26px] py-7 shadow-elevation-1">
-          <h2 className="text-[17px] font-semibold text-nevo-near-black">
+          <h1 className="text-[17px] font-semibold text-nevo-near-black">
             We couldn&rsquo;t load this student
-          </h2>
+          </h1>
           <p className="mt-2 text-sm leading-[1.55] text-nevo-near-black/62">
             Nothing has changed for them. Try again in a moment.
           </p>

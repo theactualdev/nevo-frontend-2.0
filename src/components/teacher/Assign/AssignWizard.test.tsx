@@ -1009,3 +1009,116 @@ describe("choices made in the wizard", () => {
     expect(leavingAsks()).toBe(true);
   });
 });
+
+/**
+ * T106. `?lesson=` seeded the choice unchecked, so a lesson with no card on
+ * step 1 - still parsing, failed, or past the first page - could not be seen
+ * or un-chosen, and its id went to Confirm.
+ */
+describe("a lesson handed in on the address", () => {
+  it("counts only when its card is on offer", () => {
+    render(<AssignWizard preselect="l-not-offered" />);
+
+    expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
+  });
+
+  it("is never sent alongside one the teacher did choose", async () => {
+    render(<AssignWizard preselect="l-not-offered" />);
+    fireEvent.click(screen.getByRole("button", { name: /Fractions 3/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: /JSS 2A/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm assignment" }));
+
+    await vi.waitFor(() => expect(create).toHaveBeenCalled());
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ lessonIds: ["l-1"] }));
+  });
+
+  it("is chosen, and lets the teacher go on, when it is", () => {
+    render(<AssignWizard preselect="l-1" />);
+
+    expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
+  });
+
+  it("does not count while it is still being read", () => {
+    useLessonLibrary.mockReturnValue({
+      cards: [{ id: "l-1", title: "Fractions 3", meta: "Mathematics", kind: "parsing" }],
+      live: true,
+      sample: false,
+      loading: false,
+      slow: false,
+    });
+    render(<AssignWizard preselect="l-1" />);
+
+    expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
+  });
+});
+
+/** T105. "Is the library empty" was the wrong question for this list. */
+describe("a library with nothing ready to assign", () => {
+  it("says so, rather than drawing the heading over nothing", () => {
+    useLessonLibrary.mockReturnValue({
+      cards: [
+        { id: "l-1", title: "Fractions 3", meta: "Mathematics", kind: "parsing" },
+        { id: "l-2", title: "Angles", meta: "Mathematics", kind: "failed" },
+      ],
+      live: true,
+      sample: false,
+      loading: false,
+      slow: false,
+    });
+    render(<AssignWizard />);
+
+    expect(screen.getByText("Nothing in your library is ready to assign yet.")).toBeInTheDocument();
+    expect(screen.queryByText(/Your library is empty/)).not.toBeInTheDocument();
+  });
+
+  it("still calls an empty library empty", () => {
+    useLessonLibrary.mockReturnValue({ cards: [], live: true, sample: false, loading: false, slow: false });
+    render(<AssignWizard />);
+
+    expect(screen.getByText(/Your library is empty/)).toBeInTheDocument();
+    expect(screen.queryByText(/Nothing in your library is ready/)).not.toBeInTheDocument();
+  });
+
+  it("says neither when there is something to choose", () => {
+    render(<AssignWizard />);
+
+    expect(screen.queryByText(/Nothing in your library is ready/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Your library is empty/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * T102. A signed-in teacher whose class list failed was offered the fixture
+ * classes - marked, noticed, and still pickable until Confirm refused them.
+ */
+describe("a class list that could not be read", () => {
+  const failedClasses = () =>
+    useTeacherClasses.mockReturnValue({
+      options: CLASSES,
+      classes: [],
+      liveClasses: [],
+      live: false,
+      loading: false,
+      sample: true,
+    });
+
+  it("offers a signed-in teacher no classes at all", () => {
+    failedClasses();
+    render(<AssignWizard preselect="l-1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(screen.queryByText("JSS 2A")).not.toBeInTheDocument();
+    expect(screen.getByText(/so we can.t assign to your classes/)).toBeInTheDocument();
+  });
+
+  it("does not tell them they have no classes", () => {
+    failedClasses();
+    render(<AssignWizard preselect="l-1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(screen.queryByText(/You don.t have any classes yet/)).not.toBeInTheDocument();
+  });
+});

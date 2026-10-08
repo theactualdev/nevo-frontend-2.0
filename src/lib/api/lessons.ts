@@ -97,6 +97,9 @@ export interface LessonSummary {
    */
   unapprovedSegmentCount?: number;
   createdAt: string;
+  /** Who uploaded it - on the response since the library listed by school. */
+  createdById?: string | null;
+  createdByName?: string | null;
 }
 
 /**
@@ -560,8 +563,8 @@ export const lessonsApi = {
    * The player writes every answer to a quick check and to the after-lesson
    * check here, so a child who leaves a check part way keeps the answers they
    * gave (D36). The body is built by `attemptFor`, which sends the option's
-   * own value rather than its stringified id. Review answers still reads the
-   * device copy, which a resumed check refills from `attempts` below (B49).
+   * own value rather than its stringified id. Review answers reads them back
+   * through `attempts` below, as a resumed check does (B49).
    */
   saveAttempt: (lessonId: string, body: LessonQuestionAttemptWrite) =>
     api.post<LessonQuestionAttempt>(
@@ -667,12 +670,6 @@ export const lessonsApi = {
     api.del<LessonReview>(
       `/api/v1/lessons/${lessonId}/key-points/${keyPointId}`,
     ),
-  /** The module grouping, which only the v1 alias returns. */
-  modules: (lessonId: string) =>
-    api
-      .get<{ modules?: LessonModule[] }>(`/api/v1/lessons/${lessonId}`)
-      .then((r) => r.modules ?? []),
-
   /**
    * Open (or re-open) a play session. POST /api/v1/lessons/{id}/session
    * Takes no body.

@@ -548,27 +548,126 @@ describe("the end of a batch", () => {
     render(<BulkIngestion />);
     drop(1);
 
-    await screen.findByText(/came through cleanly/);
+    await screen.findByText(/sent for reading/);
     expect(screen.queryByRole("button", { name: "Close" })).not.toBeInTheDocument();
   });
 });
 
 describe("a batch that went in", () => {
-  it("says it was added, in the shared bar, as C07d draws it", async () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  /** The batch is taken, then one poll round says how each reading ended. */
+  const settled = async (rows: { id: string; status: string }[], result = ONE_ACCEPTED) => {
     getToken.mockReturnValue("tok");
-    batch.mockResolvedValue(ONE_ACCEPTED);
-    status.mockReturnValue(new Promise(() => {}));
+    batch.mockResolvedValue(result);
+    list.mockResolvedValue(rows);
     confirm.mockReset().mockResolvedValue({});
     render(
       <SystemMessagesProvider>
         <BulkIngestion />
       </SystemMessagesProvider>,
     );
-    drop(1);
-    await screen.findByText(/came through cleanly/);
+    drop(result.uploads.length);
+    await act(async () => {});
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+  };
+
+  it("says it was added, in the shared bar, as C07d draws it", async () => {
+    await settled([{ id: "u-1", status: "ready" }]);
+    expect(screen.getByText(/came through cleanly/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Add all/ }));
+    await act(async () => {});
 
-    expect(await screen.findByText("Added to your library.")).toBeInTheDocument();
+    expect(screen.getByText("Added to your library.")).toBeInTheDocument();
+  });
+
+  it("says nothing came through cleanly while it is still being read (T95)", async () => {
+    await settled([{ id: "u-1", status: "processing" }]);
+
+    expect(screen.queryByText(/came through cleanly/)).not.toBeInTheDocument();
+    expect(screen.getByText("1 file sent for reading.")).toBeInTheDocument();
+  });
+
+  it("marks a row still being read as waiting, not with the tick (T95)", async () => {
+    await settled([{ id: "u-1", status: "processing" }]);
+
+    expect(document.querySelector("[data-reading]")).not.toBeNull();
+  });
+
+  it("will not add what is still being read (T96)", async () => {
+    await settled([{ id: "u-1", status: "processing" }]);
+
+    expect(screen.getByRole("button", { name: /Add all/ })).toBeDisabled();
+  });
+
+  it("counts a reading that stopped as one that needs a look, not as clean (T95)", async () => {
+    await settled([{ id: "u-1", status: "failed" }]);
+
+    expect(screen.getByText("0 came through cleanly. 1 needs a quick look.")).toBeInTheDocument();
+  });
+
+  it("adds only what is ready, never a reading that stopped (T96)", async () => {
+    const TWO = {
+      acceptedCount: 2,
+      rejectedCount: 0,
+      uploads: [
+        { ...ONE_ACCEPTED.uploads[0], uploadId: "u-1", filename: "a.docx" },
+        { ...ONE_ACCEPTED.uploads[0], uploadId: "u-2", filename: "b.docx" },
+      ],
+    };
+    await settled(
+      [
+        { id: "u-1", status: "ready" },
+        { id: "u-2", status: "failed" },
+      ],
+      TWO,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Add all/ }));
+    await act(async () => {});
+
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(confirm).toHaveBeenCalledWith("u-1");
+  });
+
+  it("adds only the rest when asked again after some did not go (T96)", async () => {
+    const TWO = {
+      acceptedCount: 2,
+      rejectedCount: 0,
+      uploads: [
+        { ...ONE_ACCEPTED.uploads[0], uploadId: "u-1", filename: "a.docx" },
+        { ...ONE_ACCEPTED.uploads[0], uploadId: "u-2", filename: "b.docx" },
+      ],
+    };
+    await settled(
+      [
+        { id: "u-1", status: "ready" },
+        { id: "u-2", status: "ready" },
+      ],
+      TWO,
+    );
+    confirm.mockImplementation((id: string) =>
+      id === "u-2" ? Promise.reject(new Error("x")) : Promise.resolve({}),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Add all/ }));
+    await act(async () => {});
+    expect(screen.getByText(/Added 1 of 2\. The rest didn’t go through - try again in a moment\./)).toBeInTheDocument();
+
+    confirm.mockClear().mockResolvedValue({});
+    fireEvent.click(screen.getByRole("button", { name: /Add all/ }));
+    await act(async () => {});
+
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(confirm).toHaveBeenCalledWith("u-2");
+  });
+
+  it("offers a way out when every reading stopped", async () => {
+    await settled([{ id: "u-1", status: "failed" }]);
+
+    expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
   });
 });

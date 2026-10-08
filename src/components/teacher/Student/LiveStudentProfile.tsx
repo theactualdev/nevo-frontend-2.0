@@ -227,9 +227,9 @@ export function LiveStudentProfile({
             {initialsOf(student.firstName, student.lastName)}
           </span>
           <div className="min-w-0">
-            <h2 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
+            <h1 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
               {name || "This student"}
-            </h2>
+            </h1>
             <span className="mt-[3px] block text-[14.5px] text-nevo-near-black/60">
               {[
                 student.ageBand,

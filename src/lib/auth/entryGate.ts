@@ -22,12 +22,14 @@ import { withNext } from "./nextPath";
  * ## What this is NOT
  *
  * **It is not a guard, and it deliberately does not run on every mount.**
- * Design ruled ENTRY. Whether a child already inside the app is stopped from
- * opening a lesson is a different question, still unruled, and it is the one
- * `consent-gate`'s `blocked`, `admin/D25` PC-03 and the 7 Sep SCRUM-80 ruling
- * disagree about. Running this on every mount would answer it by accident. See
- * `docs/RULINGS_23_SEP.md` §2b. A WITHDRAWN child inside the app is the server's
- * to stop, with a 403 on the thing they tried - see `withdrawnDoor` (B7).
+ * Design ruled ENTRY (`docs/RULINGS_23_SEP.md` §2b): every door resolves
+ * consent before anything mounts, so a child reaches the app with consent
+ * given. What can change after that is a withdrawal, and the server stops
+ * it: starting a lesson, recording progress, taking one offline and asking
+ * Nevo (B7), and the signal stream (B44), all refuse a withdrawn child with
+ * 403 `consent_withdrawn`, and the first refusal takes them to 00e - see
+ * `withdrawnDoor`. Running this on every mount would add a second answer, the
+ * client's, to a question the server already answers.
  *
  * ## Why `blocked` and not `granted`
  *

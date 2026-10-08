@@ -205,6 +205,8 @@ const SCOPE_CHIP: Record<ScopeId, string> = {
 const PROCESS_MS = 2400;
 const BLOCK_STAGE_MS = 1150;
 const ACCEPTED = /\.(pdf|docx?|pptx?)$/i;
+/** The file step's own promise: "PDF, Word, or PowerPoint · up to 25 MB". */
+const MAX_BYTES = 25 * 1024 * 1024;
 
 /** Mock outcome of the block parse, read from the file (see header note). */
 function mockBlockOutcome(name: string): FallbackKind | "parsed" {
@@ -228,6 +230,13 @@ export function UploadWizard() {
   const [parseStage, setParseStage] = useState(0);
   const [fallbackKind, setFallbackKind] = useState<FallbackKind>("unreadable");
   const [dragOver, setDragOver] = useState(false);
+  /**
+   * C07's "That file didn't come through" (T65), on the file step where the
+   * frame draws it. A refused file used to land on the could-not-read screen,
+   * which says it "looks like a scan saved in a format we can't open" - a
+   * cause asserted for a proxy's 413 and our own 422 alike.
+   */
+  const [refused, setRefused] = useState(false);
   /** The screen is showing fixture content, never the teacher's own file. */
   const [sample, setSample] = useState(false);
   const staged = useStagedUpload();
@@ -281,14 +290,14 @@ export function UploadWizard() {
   const fallback: { kind: FallbackKind } | null =
     phase === "fallback"
       ? { kind: fallbackKind }
-      : !isBlock && phase === "processing" && staged.failed
+      : !isBlock &&
+          phase === "processing" &&
+          staged.failed &&
+          // A refused file goes back to the file step (T65), not here.
+          staged.failureKind !== "file"
         ? {
             kind:
-              staged.failureKind === "request"
-                ? "unreachable"
-                : staged.failureKind === "file"
-                  ? "unreadable"
-                  : "parseFailed",
+              staged.failureKind === "request" ? "unreachable" : "parseFailed",
           }
         : null;
   const stepTotal = scope === null ? "N" : scope === "single" ? 3 : 5;
@@ -344,6 +353,18 @@ export function UploadWizard() {
     setFileName(file.name);
     setSample(false);
     setParsed(null);
+    setRefused(false);
+    /*
+     * CHECKED HERE FIRST (T65). The step promises PDF, Word or PowerPoint up
+     * to 25 MB, and nothing held it to that: a 40 MB file uploaded in full to
+     * be refused, and a drag-and-drop skipped the picker's `accept` entirely.
+     * Signed in only - the walkthrough's beats are driven by the file's name.
+     */
+    if (getToken() && (file.size > MAX_BYTES || !ACCEPTED.test(file.name))) {
+      setRefused(true);
+      setPhase("file");
+      return;
+    }
     setPhase("processing");
 
     // A signed-out visitor has no token, so the designed demo beat stands.
@@ -371,7 +392,16 @@ export function UploadWizard() {
      * upload, which is the step the frame draws as "Looks right, continue".
      */
     if (scope) {
-      staged.start(file, scope === "single" ? "lesson" : scope, subject || undefined);
+      void staged
+        .start(file, scope === "single" ? "lesson" : scope, subject || undefined)
+        .then((outcome) => {
+          // The server's answer about the file belongs where the file was
+          // chosen, as C07 draws it - not on the could-not-read screen.
+          if (outcome !== "refused" || isBlock) return;
+          staged.reset();
+          setRefused(true);
+          setPhase("file");
+        });
       return;
     }
 
@@ -432,6 +462,7 @@ export function UploadWizard() {
   const reset = () => {
     stopTimer();
     staged.reset();
+    setRefused(false);
     setPhase("scope");
     setScope(null);
     setSubject("");
@@ -454,9 +485,9 @@ export function UploadWizard() {
             />
           </div>
         </div>
-        <h2 className="mt-3 text-[21px] font-semibold tracking-[-0.014em] text-nevo-near-black xl:text-2xl">
+        <h1 className="mt-3 text-[21px] font-semibold tracking-[-0.014em] text-nevo-near-black xl:text-2xl">
           {heading}
-        </h2>
+        </h1>
         {phase === "scope" && (
           <p className="mt-1.5 max-w-[560px] text-sm leading-[1.55] text-nevo-near-black/62">
             This just tells us how deeply to break it up. You can change any of
@@ -715,7 +746,10 @@ export function UploadWizard() {
                 </span>
                 <button
                   type="button"
-                  onClick={() => setPhase("scope")}
+                  onClick={() => {
+                    setRefused(false);
+                    setPhase("scope");
+                  }}
                   className="cursor-pointer text-xs text-nevo-navy underline underline-offset-2"
                 >
                   change
@@ -736,6 +770,48 @@ export function UploadWizard() {
                   if (f) startFile(f);
                 }}
               />
+              {refused ? (
+                <>
+                  {/* C07 step 2, "File didn't come through (gentle recovery)". */}
+                  <div
+                    role="alert"
+                    className="mt-[22px] flex gap-4 rounded-[12px] border border-nevo-violet/50 bg-nevo-violet/16 px-6 py-[22px]"
+                  >
+                    <span className="flex size-[42px] shrink-0 items-center justify-center rounded-[11px] bg-nevo-violet/20 text-nevo-navy">
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                        <path d="M6 2h9l5 5v15H6z" />
+                        <path d="M14 2v6h6" />
+                      </svg>
+                    </span>
+                    <div>
+                      <p className="text-base font-semibold text-nevo-near-black">
+                        That file didn&rsquo;t come through.
+                      </p>
+                      <p className="mt-2 text-[14.5px] leading-[1.55] text-nevo-near-black/70">
+                        It looks larger than 25 MB, or it isn&rsquo;t a format
+                        we read yet (PDF, Word or PowerPoint). Nothing&rsquo;s
+                        lost - try that one again, or pick another.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-[18px] flex justify-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => fileInput.current?.click()}
+                      className="inline-flex h-12 cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/30 px-5 text-[15px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
+                    >
+                      Choose another file
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => lastFile.current && startFile(lastFile.current)}
+                      className="inline-flex h-12 cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[22px] text-[15px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93"
+                    >
+                      Try again
+                    </button>
+                  </div>
+                </>
+              ) : (
               <button
                 type="button"
                 onClick={() => fileInput.current?.click()}
@@ -781,6 +857,7 @@ export function UploadWizard() {
                     : "PDF, Word, or PowerPoint · up to 25 MB"}
                 </p>
               </button>
+              )}
             </div>
           )}
 
@@ -1026,12 +1103,23 @@ export function UploadWizard() {
                   </svg>
                 </span>
                 <div>
+                  {/*
+                    A REAL LESSON REACHES THIS SCREEN ONLY WHEN IT COULD NOT BE
+                    READ BACK (T82) - the confirm landed, the detail read did
+                    not. It said the lesson was ready and that "read, listen
+                    and watch versions are all built": nothing was known about
+                    any version, and it may still need review. So for a real
+                    lesson, its name and the one thing that is known.
+                  */}
                   <h3 className="text-[19px] font-semibold text-nevo-near-black">
-                    {`"${fileName.replace(/\.[^.]+$/, "")}" is ready`}
+                    {sample
+                      ? `"${fileName.replace(/\.[^.]+$/, "")}" is ready`
+                      : `"${fileName.replace(/\.[^.]+$/, "")}"`}
                   </h3>
                   <p className="mt-1 text-[14.5px] text-nevo-near-black/66">
-                    Read, listen and watch versions are all built. It&rsquo;s in
-                    your library now.
+                    {sample
+                      ? "Read, listen and watch versions are all built. It’s in your library now."
+                      : "It’s in your library now."}
                   </p>
                 </div>
               </div>

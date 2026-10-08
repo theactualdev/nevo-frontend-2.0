@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 const { ask, getToken, path, signedIn } = vi.hoisted(() => ({
@@ -20,6 +20,7 @@ vi.mock("@/hooks/useCurrentUser", () => ({
 }));
 
 import { AskNevo } from "./AskNevo";
+import { setAskNevoClass } from "./askNevoScope";
 import { ASK_NEVO_CONTEXTS, CANNOT_HELP_LINE } from "@/lib/mocks/teacherAskNevo";
 
 /**
@@ -230,5 +231,44 @@ describe("the walkthrough's own sentences", () => {
       .flatMap((c) => [c.strip, c.lead, c.sub, c.answer, ...c.chips])
       .join(" ");
     expect(all).not.toMatch(/listen-first|audio-led/i);
+  });
+});
+
+/**
+ * T182. Insights chooses its class in place - the address stays
+ * /teacher/insights - so the drawer asked about nothing in particular beside a
+ * page about one class.
+ */
+describe("a class chosen in place on the screen", () => {
+  afterEach(() => setAskNevoClass(null));
+
+  it("is the class the assistant is told about", async () => {
+    ask.mockResolvedValue(answer());
+    setAskNevoClass(CLASS);
+    openOn("/teacher/insights");
+    askQuestion("Who needs me?");
+
+    await waitFor(() => expect(ask).toHaveBeenCalled(), { timeout: 3000 });
+    expect(ask.mock.calls[0][0].contextIds).toEqual(expect.objectContaining({ classId: CLASS }));
+  });
+
+  it("gives way to the class the address names", async () => {
+    ask.mockResolvedValue(answer());
+    setAskNevoClass("9f8e7d6c-5b4a-4f3e-8d2c-1b0a99887766");
+    openOn(`/teacher/classes/${CLASS}`);
+    askQuestion("Who needs me?");
+
+    await waitFor(() => expect(ask).toHaveBeenCalled(), { timeout: 3000 });
+    expect(ask.mock.calls[0][0].contextIds.classId).toBe(CLASS);
+  });
+
+  it("sends no class that is not a real id", async () => {
+    ask.mockResolvedValue(answer());
+    setAskNevoClass("jss-2a");
+    openOn("/teacher/insights");
+    askQuestion("Who needs me?");
+
+    await waitFor(() => expect(ask).toHaveBeenCalled(), { timeout: 3000 });
+    expect(ask.mock.calls[0][0].contextIds.classId).toBeUndefined();
   });
 });

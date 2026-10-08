@@ -315,3 +315,58 @@ describe("the breathing pause", () => {
     }
   });
 });
+
+describe("the reading accommodation beyond the text segment (D30, audit 46)", () => {
+  /*
+   * "Typographic support applies everywhere, with no exceptions." It reached
+   * the text segment and the checks, and a child with reading support met
+   * every picture's caption at 13px and every transcript at the size it was
+   * drawn for everyone else.
+   */
+  const MEDIA = {
+    id: "frac-3",
+    title: "Fractions Lesson 3",
+    segments: [
+      {
+        id: "seg-1",
+        modalities: ["visual"],
+        visual: {
+          heading: "Look closely",
+          art: { id: "not-shipped", alt: "", caption: "A leaf in the sun." },
+        },
+      },
+      {
+        id: "seg-2",
+        modalities: ["audio"],
+        audio: { title: "Listen", transcript: "Listen to this." },
+      },
+    ],
+  } as unknown as Lesson;
+
+  const typeOf = (text: string) => screen.getByText(text).className;
+
+  it("sets a picture's caption in the accommodation's type", () => {
+    render(<LessonPlayer lesson={MEDIA} plan={planWith({ reading: true })} />);
+
+    expect(typeOf("A leaf in the sun.")).toContain("leading-[2]");
+    expect(typeOf("A leaf in the sun.")).toContain("text-[18px]");
+  });
+
+  it("sets a recording's transcript in it", () => {
+    render(<LessonPlayer lesson={MEDIA} plan={planWith({ reading: true })} />);
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Show transcript" }));
+
+    expect(typeOf("Listen to this.")).toContain("leading-[2]");
+    expect(typeOf("Listen to this.")).toContain("text-[18px]");
+  });
+
+  it("leaves both as drawn when it is off", () => {
+    render(<LessonPlayer lesson={MEDIA} plan={planWith({ reading: false })} />);
+
+    expect(typeOf("A leaf in the sun.")).toContain("text-[13px]");
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Show transcript" }));
+    expect(typeOf("Listen to this.")).not.toContain("leading-[2]");
+  });
+});

@@ -29,11 +29,12 @@ import { cn } from "@/lib/utils";
  * (the code screen) were deleted from the design that day; the button, its
  * dialog and the `/code` route went with them.
  *
- * What it still does not have is the intelligence layer. The fixture-backed
- * `ClassDetail` shows per-student chips, seats and "worth a glance" dots;
- * none of that has an endpoint, so these rows carry only what is real:
- * who is on the roster, whether Nevo has observed them yet, and when they
- * were last here.
+ * The fixture-backed `ClassDetail` shows per-student chips, seats and "worth
+ * a glance" dots, and these rows now draw all three from the backend: the
+ * roster read carries `observations` and `seatContext`, and "worth a
+ * glance" is the teacher's own flags from `useTeacherFlags`. Alongside
+ * them, who is on the roster, whether Nevo has observed them yet, and when
+ * they were last here.
  *
  * Rows link to the student's profile, which reads live since the student
  * endpoints were wired.
@@ -120,9 +121,9 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
 
         <div className="mt-4 flex flex-wrap items-end justify-between gap-5">
           <div>
-            <h2 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
+            <h1 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
               {klass.className}
-            </h2>
+            </h1>
             <span className="mt-[5px] block text-[14.5px] text-nevo-near-black/60">
               {students.length > 0
                 ? `${role} · ${students.length} ${students.length === 1 ? "student" : "students"}`

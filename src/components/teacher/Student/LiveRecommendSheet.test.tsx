@@ -484,3 +484,21 @@ describe("the note's placeholder", () => {
     expect(screen.getByPlaceholderText("Try this one - I think it’ll click…")).toBeInTheDocument();
   });
 });
+
+describe("focus (C07)", () => {
+  it("moves into the sheet when it opens", () => {
+    show();
+
+    expect(
+      screen.getByRole("dialog", { name: "Recommend a lesson" }).contains(document.activeElement),
+    ).toBe(true);
+  });
+
+  it("closes on Escape, which it never did", () => {
+    const onClose = vi.fn();
+    show({ onClose });
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});

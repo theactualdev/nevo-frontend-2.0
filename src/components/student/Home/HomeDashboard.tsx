@@ -627,17 +627,9 @@ function PickUpMark() {
 }
 
 /** 29 Empty States: the Home illustration and one line, nothing more. */
-function EmptyState({
-  line,
-  className = "pt-12 pb-6",
-}: {
-  line: string;
-  className?: string;
-}) {
+function EmptyState({ line }: { line: string }) {
   return (
-    <div
-      className={`flex flex-col items-center px-6 text-center ${className}`}
-    >
+    <div className="flex flex-col items-center px-6 pt-12 pb-6 text-center">
       <IllustrationWrapper
         src="/illustrations/welcome-settling.png"
         alt=""

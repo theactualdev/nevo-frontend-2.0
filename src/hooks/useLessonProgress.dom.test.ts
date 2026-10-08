@@ -112,37 +112,6 @@ describe("useLessonProgress", () => {
   });
 });
 
-describe("useLessonProgress - what it may say was saved", () => {
-  it("says a position is saved only once the newest one has landed", async () => {
-    let land: () => void = () => {};
-    vi.spyOn(lessonsApi, "saveProgress").mockImplementation(
-      () => new Promise((resolve) => (land = () => resolve({} as never))),
-    );
-    const { result } = renderHook(() => useLessonProgress(LESSON, true));
-    await waitFor(() => expect(result.current.sessionId).toBe("sess-1"));
-
-    act(() => result.current.report("in_progress", { segment: 2 }));
-    // In flight is not saved - the leave dialog reads this.
-    expect(result.current.positionSaved).toBe(false);
-
-    await act(async () => land());
-    expect(result.current.positionSaved).toBe(true);
-  });
-
-  it("never says so when the write failed", async () => {
-    vi.spyOn(lessonsApi, "saveProgress").mockRejectedValue(
-      new ApiError(0, "offline"),
-    );
-    const { result } = renderHook(() => useLessonProgress(LESSON, true));
-    await waitFor(() => expect(result.current.sessionId).toBe("sess-1"));
-
-    act(() => result.current.report("in_progress", { segment: 2 }));
-    await waitFor(() => expect(pendingProgressFor(LESSON)).not.toBeNull());
-
-    expect(result.current.positionSaved).toBe(false);
-  });
-});
-
 describe("useLessonProgress - when the session will not open", () => {
   it("holds the position past the player closing, with no session", async () => {
     vi.spyOn(lessonsApi, "startSession").mockRejectedValue(
@@ -228,7 +197,7 @@ describe("useLessonProgress - an earlier visit's finish", () => {
     await waitFor(() => expect(result.current.sessionId).toBe("sess-1"));
 
     act(() => result.current.report("in_progress", { segment: 0 }));
-    await waitFor(() => expect(result.current.positionSaved).toBe(true));
+    await waitFor(() => expect(result.current.saved).not.toBeNull());
 
     expect(pendingProgressFor(LESSON)).toMatchObject({
       sessionId: "sess-old",

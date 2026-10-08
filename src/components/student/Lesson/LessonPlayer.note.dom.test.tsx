@@ -151,3 +151,19 @@ describe("who it is from", () => {
     expect(screen.getByText("— Your teacher")).toBeInTheDocument();
   });
 });
+
+describe("under the reading accommodation (D30, audit 46)", () => {
+  it("takes the accommodation's type, and only its type", () => {
+    // "The teacher's note takes typographic support only."
+    render(
+      <LessonPlayer
+        lesson={LESSON}
+        plan={{ ...PLAN, accommodations: { reading: true } }}
+        assignmentId="a-1"
+      />,
+    );
+
+    expect(noteOnScreen()?.className).toContain("leading-[2]");
+    expect(noteOnScreen()?.textContent).toBe(NOTE);
+  });
+});

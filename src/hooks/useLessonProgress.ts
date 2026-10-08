@@ -69,12 +69,6 @@ export interface LessonProgressState {
   /** True once a completion write has landed. */
   completionSaved: boolean;
   /**
-   * True only while the NEWEST position reported has landed. False while it
-   * is in flight, waiting on a session, or held for a reconnect - and always
-   * false when nothing is written at all. What a screen may say "saved" on.
-   */
-  positionSaved: boolean;
-  /**
    * The session id the backend issued. Signals need the SAME id - the ingest
    * contract wants a UUID and `PUT /progress` wants this one, which is the
    * backend saying progress and signals are one session, not two.
@@ -95,7 +89,6 @@ const IDLE: LessonProgressState = {
   report: () => {},
   completionFailed: false,
   completionSaved: false,
-  positionSaved: false,
   sessionId: null,
   saved: null,
 };
@@ -143,7 +136,6 @@ export function useLessonProgress(
   } | null>(null);
   const [completionFailed, setCompletionFailed] = useState(false);
   const [completionSaved, setCompletionSaved] = useState(false);
-  const [positionSaved, setPositionSaved] = useState(false);
   const [saved, setSaved] = useState<LessonProgressResponse | null>(null);
   /**
    * This player's own slot for a position held before any session exists.
@@ -194,7 +186,6 @@ export function useLessonProgress(
           // made untrue by today's first segment, and wiping it here is how
           // a finished lesson went back to being unfinished.
           clearProgress(lessonId, id);
-          setPositionSaved(ticket === seq.current);
           if (completing) {
             setCompletionSaved(true);
             setCompletionFailed(false);
@@ -323,7 +314,6 @@ export function useLessonProgress(
   const report = useCallback<LessonProgressState["report"]>(
     (status, position) => {
       if (!enabled || !getToken()) return;
-      setPositionSaved(false);
       if (!sessionId.current) {
         // Hold the latest only - an older position is never worth sending.
         pending.current = { status, ...position };
@@ -350,7 +340,6 @@ export function useLessonProgress(
     report,
     completionFailed,
     completionSaved,
-    positionSaved,
     sessionId: issued,
     saved,
   };

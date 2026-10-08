@@ -16,15 +16,11 @@ import { cn } from "@/lib/utils";
  * WHY THE COPY IS HERE RATHER THAN FROM `sessionEndCopy`. That module is the
  * shared ruling on which of the five codes collapse into which screen, and
  * this file uses it for exactly that - `SessionEndReason` comes from there and
- * the mapping is not duplicated. What it does NOT take is the wording. The
- * `learner` audience there adapts the staff screens down a register; board 28
- * drew the child's screens directly, and they are gentler: a child is told
- * they have been away for a while, not that sessions expire after a period of
- * inactivity for their security.
- *
- * Two sets of learner copy now exist for the same states. Raised for design
- * rather than resolved here, because picking one silently is how the console
- * and the child's app drift apart in the first place.
+ * the mapping is not duplicated. What it does NOT take is the wording, which
+ * is the staff screen's: board 28 drew the child's screens directly, and they
+ * are gentler - a child is told they have been away for a while, not that
+ * sessions expire after a period of inactivity for their security. These are
+ * the only learner words for these states.
  *
  * THE LOGO AND THE ART ARE THE FRAMES', not stand-ins. These were lucide icons
  * on cream tiles - board 28's own caption calls its tiles "placeholder art",

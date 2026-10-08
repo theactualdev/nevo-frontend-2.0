@@ -21,6 +21,7 @@ vi.mock("@/components/shared/IllustrationWrapper", () => ({
 }));
 
 import { InsightsView } from "./InsightsView";
+import { useAskNevoClass } from "@/components/teacher/Shell/askNevoScope";
 import { TEACHER_CLASSES } from "@/lib/mocks/teacherClasses";
 import { visibleText } from "@/test/visibleText";
 
@@ -168,6 +169,14 @@ describe("the class pills on the landing", () => {
     expect(regions()).toEqual(["teacher:insights-classes"]);
   });
 
+  it("carry no mark while the read is still in flight, when there are none to mark", () => {
+    useTeacherClasses.mockReturnValue(state({ loading: true }));
+    render(<InsightsView />);
+
+    expect(screen.queryByRole("button", { name: FIXTURE_CLASS })).not.toBeInTheDocument();
+    expect(regions()).toEqual([]);
+  });
+
   it("carry no mark when they are the teacher's own", () => {
     useTeacherClasses.mockReturnValue(
       state({ live: true, options: [{ id: "c-1", name: "Year 7 Blue", joinCode: null }] as never }),
@@ -207,5 +216,30 @@ describe("the landing with no classes to pick", () => {
     render(<InsightsView />);
 
     expect(screen.getByText("Select a class to see insights")).toBeInTheDocument();
+  });
+});
+
+/** T182: the class picked here is the class Ask Nevo is asked about. */
+describe("telling Ask Nevo which class this is", () => {
+  function Probe() {
+    return <span data-testid="scope">{useAskNevoClass() ?? "none"}</span>;
+  }
+
+  it("names the class a teacher picks, and forgets it when the page goes", () => {
+    useTeacherClasses.mockReturnValue(
+      state({ live: true, options: [{ id: "c-1", name: "Year 7 Blue", joinCode: null }] as never }),
+    );
+    const { unmount } = render(
+      <>
+        <InsightsView />
+        <Probe />
+      </>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Year 7 Blue" }));
+    expect(screen.getByTestId("scope")).toHaveTextContent("c-1");
+
+    unmount();
+    render(<Probe />);
+    expect(screen.getByTestId("scope")).toHaveTextContent("none");
   });
 });

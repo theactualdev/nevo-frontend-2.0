@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { escalationsApi } from "@/lib/api/escalations";
 import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
 
@@ -93,12 +94,16 @@ export function LiveShareSheet({
     }
   }
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogRef);
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-nevo-near-black/28 backdrop-blur-[1.5px] p-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
       onClick={onCancel}
     >
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label={`Share ${firstName} with Learning Support`}

@@ -19,9 +19,9 @@ const UUID_RE =
  * one. The console is built on human-readable slugs ("amara-okafor",
  * "jss-2a"), so a value only travels when it genuinely is a UUID.
  *
- * TODO(api): flagged to backend - the console holds no UUID for students or
- * lessons, so that context cannot be sent at all until an endpoint surfaces
- * one. `currentPage` carries the route in the meantime.
+ * The console's routes are UUID-keyed now, so `contextIdsFor` sends the
+ * student, class or lesson a page is about; this guard keeps a fixture slug
+ * on the signed-out walkthrough from becoming a 422.
  */
 export function asUuid(value: string | null | undefined): string | null {
   return value && UUID_RE.test(value) ? value : null;

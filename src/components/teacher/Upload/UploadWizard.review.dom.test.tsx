@@ -148,7 +148,7 @@ const uploadOneLesson = () => {
 beforeEach(() => {
   stagedState();
   detail.mockReset().mockResolvedValue(LESSON);
-  start.mockReset();
+  start.mockReset().mockResolvedValue("staged");
   confirm.mockReset().mockResolvedValue({ lessonId: "l-1", status: "confirmed" });
   updateStructure.mockReset();
   useCurrentUser.mockReset().mockReturnValue(null);
@@ -188,6 +188,17 @@ describe("a teacher's own lesson reaches the review", () => {
     expect(
       screen.queryByText(/What plants need to live/),
     ).not.toBeInTheDocument();
+  });
+
+  it("makes the wizard header the one h1, over whatever step it hosts (C20)", () => {
+    ready();
+
+    uploadOneLesson();
+
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      "How should this lesson be split up?",
+    );
   });
 
   it("asks the question the frame asks", () => {
@@ -264,7 +275,7 @@ describe("committing it", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("says the lesson is ready even when reading it back failed", async () => {
+  it("says the lesson is in the library even when reading it back failed", async () => {
     // Confirm answered: the lesson exists and is in the library. Failing to
     // re-read it is not a failure to create it, and saying so would send a
     // teacher to upload the same file twice.
@@ -274,7 +285,21 @@ describe("committing it", () => {
     uploadOneLesson();
     fireEvent.click(screen.getByRole("button", { name: "Looks right, continue" }));
 
-    expect(await screen.findByText(/is ready/)).toBeInTheDocument();
+    expect(await screen.findByText("It’s in your library now.")).toBeInTheDocument();
+  });
+
+  it("claims nothing it could not read back about the lesson (T82)", async () => {
+    // Nothing was known about any version, and the lesson may still need a
+    // review - "is ready" and "versions are all built" were both guesses.
+    detail.mockRejectedValue(new Error("network"));
+    ready();
+
+    uploadOneLesson();
+    fireEvent.click(screen.getByRole("button", { name: "Looks right, continue" }));
+
+    await screen.findByText("It’s in your library now.");
+    expect(screen.queryByText(/is ready/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/versions are all built/)).not.toBeInTheDocument();
   });
 });
 
@@ -302,5 +327,25 @@ describe("the signed-out walkthrough", () => {
     expect(
       document.querySelector('[data-nevo-sample="teacher:upload-demo-review"]'),
     ).not.toBeNull();
+  });
+});
+
+describe("a refusal, once a file that fits has gone (T65)", () => {
+  it("is not waiting on the file step when the teacher comes back to it", () => {
+    ready();
+    render(<UploadWizard />);
+    fireEvent.click(screen.getByRole("button", { name: /one lesson/i }));
+    fireEvent.click(screen.getByRole("button", { name: /continue/i }));
+    const input = document.querySelector('input[type="file"]')!;
+    const big = new File(["x"], "term.pdf", { type: "application/pdf" });
+    Object.defineProperty(big, "size", { value: 26 * 1024 * 1024 });
+    fireEvent.change(input, { target: { files: [big] } });
+    expect(screen.getByText(/That file didn’t come through/)).toBeInTheDocument();
+
+    dropFile();
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+
+    expect(screen.queryByText(/That file didn’t come through/)).not.toBeInTheDocument();
+    expect(screen.getByText("Choose a file or drag it here")).toBeInTheDocument();
   });
 });

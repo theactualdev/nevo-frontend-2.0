@@ -38,7 +38,13 @@ export interface Assignment {
   lesson: LessonSummary;
   studentId: string;
   classId: string | null;
-  status: string;
+  /**
+   * The spec's enum (T253) - a bare `string` is how "completed" went unhandled.
+   * Open, as `NotificationType` is: the student screens deliberately treat a
+   * status the backend adds tomorrow as nothing in particular, and a closed
+   * union would make that case untestable rather than handled.
+   */
+  status: AssignmentStatus | (string & {});
   /** When it OPENS. Shipped 31 Aug; required on the read. */
   availableFrom: string | null;
   /** When it is DUE - a different thing. */

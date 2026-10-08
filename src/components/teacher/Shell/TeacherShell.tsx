@@ -1,8 +1,9 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { TEXT_ZOOM, useAccessibility } from "@/context/AccessibilityContext";
 import { useSessionLapse } from "@/hooks/useSessionLapse";
+import { useSessionRefresh } from "@/hooks/useSessionRefresh";
+import { useSessionElsewhere } from "./sessionElsewhere";
 import { AskNevo } from "./AskNevo";
 import { SystemMessagesProvider } from "@/components/shared/SystemMessages";
 import { TeacherSidebar } from "./TeacherSidebar";
@@ -15,7 +16,6 @@ import { TeacherSidebar } from "./TeacherSidebar";
  */
 export function TeacherShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? "";
-  const { textSize } = useAccessibility();
 
   /*
    * Notice when a teacher's session runs out under them.
@@ -36,6 +36,16 @@ export function TeacherShell({ children }: { children: React.ReactNode }) {
    * ABOVE THE EARLY RETURN, deliberately: hooks cannot run conditionally.
    */
   useSessionLapse();
+  /*
+   * AND RENEW IT BEFORE IT RUNS OUT (T219). Only the student shell mounted
+   * this, so a teacher's session was never renewed: one working steadily -
+   * mid-upload, mid-message - was sent to the session-expired screen at the
+   * token's deadline however active they had been. The endpoint is not
+   * role-specific; the hook never was either.
+   */
+  useSessionRefresh();
+  // And leave when another tab signs this teacher out (C02).
+  useSessionElsewhere();
 
   if (pathname.startsWith("/teacher/onboarding")) return <>{children}</>;
 
@@ -57,13 +67,21 @@ export function TeacherShell({ children }: { children: React.ReactNode }) {
     <SystemMessagesProvider>
     <div className="flex h-dvh flex-row overflow-hidden bg-nevo-cream text-nevo-near-black">
       <TeacherSidebar />
-      {/* "Larger text" is a console-wide preference, so the zoom lives on
-          the shell, not one page. The rail keeps its own scale, as in the
-          student app. `zoom: var(...)` is unsupported, hence the map. */}
-      <main
-        className="flex min-w-0 flex-1 flex-col overflow-y-auto"
-        style={{ zoom: TEXT_ZOOM[textSize] }}
-      >
+      {/*
+        "Larger text" is a console-wide preference, so the zoom lives on the
+        shell, not one page. The rail keeps its own scale, as in the student
+        app - but not what the rail OPENS (C12).
+
+        THIS WAS AN INLINE `zoom` ON <main> ONLY. Everything drawn outside it
+        ignored the setting: Ask Nevo's drawer, the bell's popover, the
+        feedback and sign-out sheets the rail opens, and the message bar. A
+        teacher who needed larger text got it on the page and lost it on every
+        overlay. It is now the student app's `.nevo-text-zoom` class, which
+        globals.css keys off `html[data-text-size]` - set by the boot script
+        before the first paint (rule 6), where the inline style waited for
+        React - and each of those overlays carries it too.
+      */}
+      <main className="nevo-text-zoom flex min-w-0 flex-1 flex-col overflow-y-auto">
         {children}
       </main>
       {/* C15: Ask Nevo floats on every console surface except upload. */}

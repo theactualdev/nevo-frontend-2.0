@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import type { StudentProfileData } from "@/lib/mocks/teacherStudents";
 import { cn } from "@/lib/utils";
 
@@ -69,12 +70,16 @@ export function RecommendSheet({
   // The desktop reason bolds the lesson-and-version run, per the frame.
   const [before, after] = rec.suggestDesktop.split(rec.suggestStrong);
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogRef);
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-nevo-near-black/28 backdrop-blur-[1.5px] p-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
       onClick={() => !sent && onClose()}
     >
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label={`Recommend a lesson to ${firstName}`}

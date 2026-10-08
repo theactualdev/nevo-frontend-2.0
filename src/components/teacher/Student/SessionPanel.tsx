@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import type { SessionRow } from "@/lib/mocks/teacherStudents";
 
 /**
@@ -55,15 +56,20 @@ export function SessionPanel({
 
   const firstName = studentName.split(" ")[0];
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogRef);
   return (
     <>
       <div
         aria-hidden
         onClick={onClose}
-        className="fixed inset-0 z-40 bg-nevo-near-black/28 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
+        className="fixed inset-0 z-40 bg-nevo-near-black/28 backdrop-blur-[1.5px] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
       />
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
+        aria-modal="true"
         aria-label={`${session.lesson} - session detail`}
         className="fixed inset-y-0 right-0 z-50 flex w-[440px] max-w-full flex-col bg-nevo-cream shadow-[-8px_0_32px_rgba(0,0,0,0.16)] motion-safe:animate-in motion-safe:slide-in-from-right motion-safe:duration-300 xl:w-[460px]"
       >

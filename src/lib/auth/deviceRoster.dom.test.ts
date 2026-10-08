@@ -287,25 +287,25 @@ describe("a name we once had", () => {
   });
 });
 
-describe("the length of a child's PIN", () => {
-  it("is kept when a later write for the same child does not carry it", () => {
-    /*
-     * The full sign-in remembers the child WITH the length, then remembers
-     * them again once their name arrives - without it. Dropping it there would
-     * send every child back to the legacy six the morning after they signed
-     * in with four.
-     */
+describe("the length of a child's PIN (D58)", () => {
+  /*
+   * Four digits, four boxes, for every child: no PIN door reads a remembered
+   * length any more, so nothing writes one or carries one over.
+   */
+  it("is not written, whatever a sign-in hands over", () => {
     rememberChild({ ...child("ada.o"), pinLength: 4 });
-    rememberChild(child("ada.o", "Ada"));
 
-    expect(childById(pickerEntries()[0].id)?.pinLength).toBe(4);
+    expect(childById(pickerEntries()[0].id)).not.toHaveProperty("pinLength");
   });
 
-  it("is replaced when a sign-in records a different one", () => {
-    rememberChild({ ...child("ada.o"), pinLength: 4 });
-    rememberChild({ ...child("ada.o"), pinLength: 6 });
+  it("is shed by an entry stored with one, at its next sign-in", () => {
+    // Stored before 6 Oct, it still reads; the next write leaves it behind.
+    seed([{ ...entry("e-1", "ada.o", daysAgo(1), "Ada"), pinLength: 6 }]);
+    expect(childById("e-1")?.pinLength).toBe(6);
 
-    expect(childById(pickerEntries()[0].id)?.pinLength).toBe(6);
+    rememberChild(child("ada.o", "Ada"));
+
+    expect(childById("e-1")).not.toHaveProperty("pinLength");
   });
 
   it("never reaches the picker", () => {

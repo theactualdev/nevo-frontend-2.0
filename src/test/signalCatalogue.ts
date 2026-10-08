@@ -31,14 +31,12 @@ export function declaredKeys(type: string): ReadonlySet<string> | null {
  * This list only shrinks: the guards fail on a key not named here, and on a
  * key named here that nothing sends any more, so it cannot outlive its reason.
  *
- * Only the solver's two are left, frozen with it (SCRUM-181/177). The break
- * events and the baseline markers came off when they were brought to the
- * catalogue.
+ * EMPTY since the solver was rebuilt on SCRUM-177's payload: its two events
+ * send the catalogue's keys now, `stepId` included. It stays as the place an
+ * exception would have to be argued for, and the guard still fails on a key
+ * listed here that nothing sends.
  */
-export const KNOWN_UNDECLARED: Readonly<Record<string, readonly string[]>> = {
-  calculation_step_response: ["correct"],
-  manipulative_piece_placed: ["placed", "needed"],
-};
+export const KNOWN_UNDECLARED: Readonly<Record<string, readonly string[]>> = {};
 
 /**
  * Those of `keys` the catalogue does not declare for `type`, less the ones

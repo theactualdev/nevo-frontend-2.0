@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { IllustrationWrapper } from "@/components/shared/IllustrationWrapper";
 import { MasteryDualTrack } from "@/components/teacher/Student/MasteryDualTrack";
 import { useTeacherClasses } from "@/hooks/useTeacherClasses";
 import { getClassInsights, hasGap } from "@/lib/mocks/teacherInsights";
 import { MaybeSample, SampleRegion } from "@/components/shared/SampleRegion";
 import { LiveClassInsights } from "./LiveClassInsights";
+import { setAskNevoClass } from "@/components/teacher/Shell/askNevoScope";
 import { cn } from "@/lib/utils";
 
 /**
@@ -39,6 +40,8 @@ const CHEVRON = (
 export function InsightsView() {
   // C14 A3: nothing is selected on arrival, so this is nullable by contract.
   const [classId, setClassId] = useState<string | null>(null);
+  // Ask Nevo hears which class this page is about (T182), until it leaves.
+  useEffect(() => () => setAskNevoClass(null), []);
   // The selector offers the teacher's real classes, not the fixture three.
   const { options: classes, live, sample, loading } = useTeacherClasses();
   // A live class reads from the intelligence endpoints (see
@@ -68,8 +71,14 @@ export function InsightsView() {
   const pills = (
     <div className="flex gap-2">
       {/* The fixture three are marked where they are offered, not only once
-          one is picked: the landing is where the wrong choice gets made. */}
-      <MaybeSample showing={!live} kind="teacher:insights-classes">
+          one is picked: the landing is where the wrong choice gets made.
+
+          NOT WHILE THE READ IS IN FLIGHT. `!live` is already true then, so
+          an empty row of pills was marked as sample data - nothing invented
+          on screen, and the mark said otherwise. This page draws no skeleton
+          while it waits, so the signed-in sweep checked straight away and,
+          whenever the backend was slow, failed every lane's run (8 Oct). */}
+      <MaybeSample showing={!live && !loading} kind="teacher:insights-classes">
       {selectable.map((c) => {
         const on = c.id === classId;
         return (
@@ -77,7 +86,10 @@ export function InsightsView() {
             key={c.id}
             type="button"
             aria-pressed={on}
-            onClick={() => setClassId(c.id)}
+            onClick={() => {
+              setClassId(c.id);
+              setAskNevoClass(c.id);
+            }}
             className={cn(
               "cursor-pointer rounded-full px-[13px] py-[7px] text-[12.5px] font-medium transition-[filter,background-color] xl:px-[15px] xl:py-2 xl:text-[13.5px]",
               on
@@ -95,9 +107,9 @@ export function InsightsView() {
 
   const heading = (
     <div className="flex flex-wrap items-center justify-between gap-4 xl:gap-5">
-      <h2 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
+      <h1 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
         Insights
-      </h2>
+      </h1>
       {pills}
     </div>
   );

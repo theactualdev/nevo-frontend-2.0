@@ -5,6 +5,7 @@ import { ArrowRight, Leaf } from "lucide-react";
 import { IllustrationWrapper } from "@/components/shared";
 import type { VisualContent } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { READING_BODY, READING_HEADING, READING_INK } from "./readingSupport";
 import { type MediaFailReason, useMediaSource } from "./useMediaSource";
 
 /**
@@ -32,9 +33,15 @@ import { type MediaFailReason, useMediaSource } from "./useMediaSource";
  */
 export function VisualSegment({
   content,
+  reading = false,
   onMediaFailed,
 }: {
   content: VisualContent;
+  /**
+   * The reading accommodation's typographic half (D30) - see
+   * `readingSupport`. The caption keeps its quieter ink.
+   */
+  reading?: boolean;
   /** The picture would not load, after its one fresh link. */
   onMediaFailed?: (reason: MediaFailReason) => void;
 }) {
@@ -58,11 +65,23 @@ export function VisualSegment({
 
   return (
     <article>
-      <h2 className="text-[22px] font-semibold leading-[1.3] tracking-[-0.01em] text-nevo-near-black sm:text-[26px] lg:text-[28px]">
+      <h2
+        className={cn(
+          "text-[22px] font-semibold leading-[1.3] tracking-[-0.01em] text-nevo-near-black sm:text-[26px] lg:text-[28px]",
+          reading && READING_HEADING,
+        )}
+      >
         {content.heading}
       </h2>
       {content.intro && (
-        <p className="mt-4 text-base leading-[1.6] text-nevo-near-black/82 sm:text-[18px] lg:text-[19px]">
+        <p
+          className={cn(
+            "mt-4",
+            reading
+              ? [READING_BODY, READING_INK]
+              : "text-base leading-[1.6] text-nevo-near-black/82 sm:text-[18px] lg:text-[19px]",
+          )}
+        >
           {content.intro}
         </p>
       )}
@@ -112,7 +131,12 @@ export function VisualSegment({
           </div>
         )}
         {caption && (
-          <figcaption className="mx-0.5 mt-2.5 text-[13px] leading-[1.5] text-nevo-near-black/60">
+          <figcaption
+            className={cn(
+              "mx-0.5 mt-2.5 text-nevo-near-black/60",
+              reading ? READING_BODY : "text-[13px] leading-[1.5]",
+            )}
+          >
             {caption}
           </figcaption>
         )}
