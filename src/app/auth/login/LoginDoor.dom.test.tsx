@@ -595,3 +595,60 @@ describe("a closed account at the door", () => {
     expect(signIn).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * THE THIRTY-DAY CLOCK (28c: "entries age out after thirty days of non-use").
+ * A child leaves the picker thirty days after their last SUCCESSFUL sign-in on
+ * this device, because only a success restamps them (`rememberChild`). That is
+ * what retires a closed account's face (product, 7 Oct): a closed child can
+ * never sign in again, so their clock stops at their last real visit. If a
+ * refused attempt restamped them, tapping a closed child's face would keep it
+ * on a shared tablet for ever - which nothing else would catch.
+ */
+describe("the thirty-day clock", () => {
+  it("restarts on a successful unlock", async () => {
+    loginPin.mockResolvedValue(SESSION);
+    await chooseAda();
+
+    await tap("1234");
+
+    await waitFor(() =>
+      expect(roster.rememberChild).toHaveBeenCalledWith(
+        expect.objectContaining({ loginIdentifier: "ada.o", userId: "student-1" }),
+      ),
+    );
+  });
+
+  it("is not restarted by a closed account, there or on the way back to the picker", async () => {
+    loginPin.mockRejectedValue(
+      new ApiError(401, "Unauthorized", {
+        detail: { code: "account_closed", message: "closed" },
+      }),
+    );
+    await chooseAda();
+    await tap("1234");
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Someone else using this device?",
+      }),
+    );
+    await screen.findByText("Who's learning?");
+
+    expect(roster.rememberChild).not.toHaveBeenCalled();
+  });
+
+  it("is not restarted by a PIN that did not match", async () => {
+    loginPin.mockRejectedValue(
+      new ApiError(401, "Unauthorized", {
+        detail: { code: "authentication_failed", message: "no" },
+      }),
+    );
+    await chooseAda();
+
+    await tap("1234");
+
+    await screen.findByText("That PIN didn't match. Have another go.");
+    expect(roster.rememberChild).not.toHaveBeenCalled();
+  });
+});
