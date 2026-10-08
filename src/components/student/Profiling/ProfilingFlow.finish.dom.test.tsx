@@ -197,7 +197,7 @@ describe("ProfilingFlow — what it tells the signal stream", () => {
 
   it("marks them with exactly the catalogue's keys", () => {
     // The catalogue declares `moduleId` for both. They sent `module`, and the
-    // start an undeclared `band`, which has no declared home (B76).
+    // start an undeclared `band`, which goes beside the trials now (B76).
     const track = vi.fn();
     render(<ProfilingFlow onDone={vi.fn()} track={track} />);
 

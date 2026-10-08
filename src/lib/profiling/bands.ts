@@ -1,3 +1,5 @@
+import type { BaselineRunContext } from "@/lib/api/baseline";
+
 /**
  * Age-band resolution for the Baseline Cognitive Profiling module (SCRUM-104).
  * Four tiers drive content, grid sizes and tap-target sizes; the component
@@ -64,6 +66,28 @@ export function bandForRoster(ageBand: string | null | undefined): AgeBand | nul
       return AGE_BANDS.JSS;
     case "senior_secondary":
       return AGE_BANDS.SS;
+    default:
+      return null;
+  }
+}
+
+/**
+ * The other way: a run's band as the spec's `AgeBand`, which is how the
+ * trials request takes it (B76, 8 Oct). The same one-to-one mapping as
+ * `bandForRoster`, and null for anything that is not one of the four.
+ */
+export function contractAgeBand(
+  band: unknown,
+): NonNullable<BaselineRunContext["ageBand"]> | null {
+  switch (band) {
+    case AGE_BANDS.P13:
+      return "early_primary";
+    case AGE_BANDS.P46:
+      return "upper_primary";
+    case AGE_BANDS.JSS:
+      return "junior_secondary";
+    case AGE_BANDS.SS:
+      return "senior_secondary";
     default:
       return null;
   }

@@ -78,7 +78,7 @@ describe("a baseline waiting for its account", () => {
     // `sess-1` is the run that parked it, which is what makes it this child's.
     await expect(flushPendingBaseline("child-a", "sess-1")).resolves.toBe(true);
 
-    expect(submit).toHaveBeenCalledWith("sess-1", TRIALS);
+    expect(submit).toHaveBeenCalledWith("sess-1", TRIALS, {});
     expect(readPendingBaseline()).toBeNull();
   });
 
@@ -139,7 +139,7 @@ describe("a baseline waiting for its account", () => {
 
     await expect(flushPendingBaseline("child-a")).resolves.toBe(true);
 
-    expect(submit).toHaveBeenCalledWith("sess-a", TRIALS);
+    expect(submit).toHaveBeenCalledWith("sess-a", TRIALS, {});
   });
 
   it("does not send a parked vector once consent has been withdrawn", async () => {
@@ -295,7 +295,44 @@ describe("a baseline waiting for its account", () => {
 
     await flushPendingBaseline("child-a");
 
-    expect(submit).toHaveBeenCalledWith("sess-1", TRIALS);
+    expect(submit).toHaveBeenCalledWith("sess-1", TRIALS, {});
+  });
+
+  it("parks the run's context with its trials, and sends them together (B76)", async () => {
+    // The band, the device and the motor step's skip are the run's, not the
+    // trials', and they leave in the same request as the trials they explain.
+    const submit = vi.spyOn(baselineApi, "submitTrials").mockResolvedValue(true);
+    const context = {
+      ageBand: "upper_primary",
+      formFactor: "tablet_touch",
+      motorStepSkipped: false,
+    } as const;
+    holdBaseline("sess-1", TRIALS, null, context);
+    signInAs("child-a");
+
+    await flushPendingBaseline("child-a", "sess-1");
+
+    expect(submit).toHaveBeenCalledWith("sess-1", TRIALS, context);
+  });
+
+  it("sends a run parked before B76 without a context, rather than guessing one", async () => {
+    // Parked on 7 Oct, before the request had anywhere to put it. Nothing on
+    // the device knows its band or device now, so nothing is told.
+    const submit = vi.spyOn(baselineApi, "submitTrials").mockResolvedValue(true);
+    window.localStorage.setItem(
+      "nevo.baseline.pending",
+      JSON.stringify({
+        sessionId: "sess-1",
+        trials: TRIALS,
+        capturedAt: Date.now(),
+        ownerUserId: "child-a",
+      }),
+    );
+    signInAs("child-a");
+
+    await expect(flushPendingBaseline("child-a")).resolves.toBe(true);
+
+    expect(submit).toHaveBeenCalledWith("sess-1", TRIALS, {});
   });
 
   it("drops a vector parked before B9 rather than sending it anywhere", async () => {

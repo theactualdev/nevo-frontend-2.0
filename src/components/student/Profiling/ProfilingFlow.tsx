@@ -8,7 +8,11 @@ import { holdBaseline } from "@/lib/profiling/pendingBaseline";
 import { ONBOARDING_SIGNAL_TYPES } from "@/lib/constants";
 import { bandForAge, gridSpanConfig } from "@/lib/profiling/bands";
 import { getOnboardingDraft } from "@/lib/auth/onboarding";
-import { BaselineCapture, baselineTrials } from "@/lib/profiling/capture";
+import {
+  BaselineCapture,
+  baselineRunContext,
+  baselineTrials,
+} from "@/lib/profiling/capture";
 import { randomId } from "@/lib/utils";
 import type { TrackEvent } from "@/hooks";
 import { DomainProbeModule } from "./DomainProbeModule";
@@ -200,11 +204,13 @@ export function ProfilingFlow({
        * computing a measure of a child (frontend §3, rule 3). Each answer now
        * goes up as it happened and the server does the arithmetic.
        *
-       * The band the run was built for has no field on a trial, so it is no
-       * longer beside the numbers; it is with backend as an ask (B76). Nor
-       * does it ride `baseline_module_start` any more: see `startGridSpan`.
+       * THE RUN'S CONTEXT GOES BESIDE THEM (B76, 8 Oct): the band it was
+       * built for, the device, and whether the motor step was skipped, as
+       * `run_start` and the step recorded them (`baselineRunContext`). The
+       * band no longer rides `baseline_module_start`: see `startGridSpan`.
        */
       const trials = baselineTrials(capture);
+      const context = baselineRunContext(capture);
       const c = capture;
       /*
        * PARKED, NOT SENT. The baseline's write is Bearer, and this run is
@@ -223,7 +229,7 @@ export function ProfilingFlow({
        * shown to be this child's. The rest of the raw capture never leaves the
        * device and is purged the moment the trials are taken.
        */
-      holdBaseline(c.sessionId, trials, ownerUserId);
+      holdBaseline(c.sessionId, trials, ownerUserId, context);
       // Remembered so the account this run goes on to create can prove the
       // trials are its own. Nothing else may send them.
       parkedRunRef.current = c.sessionId;
@@ -249,8 +255,7 @@ export function ProfilingFlow({
    * `baseline_module_complete` declare one payload key, `moduleId`
    * (`GET /api/signals/catalogue`). Both sent `module`, which it does not
    * name, and the start an undeclared `band` too. The band has no declared
-   * home on either event, nor on a trial, so it is not sent; where it goes is
-   * asked (B76).
+   * home on either event; it goes beside the trials (B76, `finishRun`).
    */
   const startGridSpan = () => {
     track?.(ONBOARDING_SIGNAL_TYPES.BASELINE_MODULE_START, {
@@ -268,7 +273,9 @@ export function ProfilingFlow({
         onAgeChange={setAskedAge}
         mode="intro"
         onContinue={() => {
-          capture.record("run_start", { band });
+          // The device, read once here, goes beside the trials (B76).
+          const on = formFactor();
+          capture.record("run_start", { band, formFactor: on });
           /*
            * THE MOTOR STEP COMES FIRST, on every path into the baseline (08a,
            * D12): after this intro and before the first timed activity. A
@@ -276,7 +283,6 @@ export function ProfilingFlow({
            * does not draw one - the skip and its reason are recorded, so the
            * engine is told rather than left to find no samples.
            */
-          const on = formFactor();
           if (motorStepRuns(on)) {
             setDevice(on);
             setPhase("motor");

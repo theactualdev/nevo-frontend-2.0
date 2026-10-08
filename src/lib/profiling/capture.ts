@@ -1,5 +1,5 @@
-import type { BaselineTrial } from "@/lib/api/baseline";
-import type { BaselineDimension } from "./bands";
+import type { BaselineRunContext, BaselineTrial } from "@/lib/api/baseline";
+import { contractAgeBand, type BaselineDimension } from "./bands";
 
 /**
  * Micro-behavioural capture for baseline profiling (SCRUM-104 frontend
@@ -263,10 +263,17 @@ const text = (value: unknown): string | null =>
  *    taken, its latency as the step measured it, practice taps marked as
  *    such. The median is the server's to take. This is where the step's
  *    samples leave, rather than in a feature of their own.
+ *  - A MOTOR TARGET LEFT UNTAPPED (`motor_end` with reason `idle`): the step
+ *    ended itself after ten seconds on a painted target. That target is the
+ *    one trial the capture records as put in front of the child and not
+ *    answered, so it goes as `skipped` (B76, 8 Oct), with no response and no
+ *    time. Nothing else is marked skipped: a "Not sure" is an answer, and an
+ *    activity the device could not present was never in front of anyone.
  *
  * Not carried, because `BaselineTrial` has no field for them: coordinates
- * (B14, above), the run's age band, and a recall's full timing beyond the one
- * interval per tap.
+ * (B14, above) and a recall's full timing beyond the one interval per tap.
+ * The run's band and device go beside the trials, not on them
+ * (`baselineRunContext`).
  */
 export function baselineTrials(capture: BaselineCapture): BaselineTrial[] {
   const trials: BaselineTrial[] = [];
@@ -354,7 +361,65 @@ export function baselineTrials(capture: BaselineCapture): BaselineTrial[] {
           probeItemId: null,
         });
         break;
+      case "motor_end":
+        if (p.reason !== "idle") break;
+        trials.push({
+          dimension: "motor_speed",
+          condition: p.practice === true ? "practice" : null,
+          response: null,
+          correct: null,
+          responseTimeMs: null,
+          probeItemId: null,
+          skipped: true,
+        });
+        break;
     }
   }
   return trials;
+}
+
+/** `formFactor()`'s three, as the trials request names them: touch or cursor. */
+const CONTRACT_FORM_FACTOR: Record<
+  string,
+  NonNullable<BaselineRunContext["formFactor"]>
+> = {
+  mobile: "mobile_touch",
+  tablet: "tablet_touch",
+  desktop: "desktop_cursor",
+};
+
+/**
+ * What the run was built for and sat on, for `BaselineTrialsRequest` beside
+ * its trials (B76, 8 Oct). Read from the capture, so it says only what the
+ * run recorded:
+ *
+ *  - `ageBand`: the band on `run_start` (onboarding) or `warmup_start`. The
+ *    warm-up records one only when the roster gave it; with none it runs the
+ *    frame's Primary 4-6 version as a default, and that default is not sent
+ *    as the child's age band.
+ *  - `formFactor`: the device `formFactor()` read when the run started. Its
+ *    "desktop" is a pointer that is not coarse, so it is the contract's
+ *    cursor, and the other two are touch.
+ *  - `motorStepSkipped`: true where `motor_skipped` was recorded (a cursor
+ *    device, 08a), false where the step ran to its end. A run with neither,
+ *    which is the warm-up, has no motor step and leaves the key out.
+ */
+export function baselineRunContext(
+  capture: BaselineCapture,
+): BaselineRunContext {
+  const start = (
+    capture.ofKind("run_start").at(-1) ?? capture.ofKind("warmup_start").at(-1)
+  )?.payload;
+  const ageBand = contractAgeBand(start?.band);
+  const formFactor =
+    typeof start?.formFactor === "string"
+      ? CONTRACT_FORM_FACTOR[start.formFactor]
+      : undefined;
+  const skippedStep = capture.ofKind("motor_skipped").length > 0;
+  const ranStep = capture.ofKind("motor_end").length > 0;
+  return {
+    ...(ageBand ? { ageBand } : {}),
+    ...(formFactor ? { formFactor } : {}),
+    ...(skippedStep || ranStep ? { motorStepSkipped: skippedStep } : {}),
+  };
 }
