@@ -74,9 +74,14 @@ function typeLabel(t: string): string {
 }
 
 /** `needs_media_review` -> "needs media review". */
-function TypeTag({ children }: { children: React.ReactNode }) {
+function TypeTag({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <span className="shrink-0 rounded-full bg-nevo-navy/9 px-[9px] py-0.5 text-[11px] font-semibold whitespace-nowrap text-nevo-near-black/55">
+    <span
+      className={cn(
+        "shrink-0 rounded-full bg-nevo-navy/9 px-[9px] py-0.5 text-[11px] font-semibold whitespace-nowrap text-nevo-near-black/55",
+        className,
+      )}
+    >
       {children}
     </span>
   );
@@ -140,19 +145,23 @@ function SegmentRow({
   return (
     <div
       className={cn(
-        "flex flex-col gap-2 px-[22px] py-4 xl:flex-row xl:items-start xl:gap-4",
+        // C06b tablet: one line - number, title, how many finished - at
+        // 13/18 padding. It was a column below 1280px, so on a tablet the
+        // number sat on a line of its own above every section.
+        "flex items-start gap-3 px-[18px] py-[13px] xl:gap-4 xl:px-[22px] xl:py-4",
         outstanding && "border-l-[3px] border-nevo-violet",
       )}
     >
-      <span className="w-6 shrink-0 text-[13px] text-nevo-near-black/40 tabular-nums">
+      <span className="w-[22px] shrink-0 text-[12.5px] text-nevo-near-black/40 tabular-nums xl:w-6 xl:text-[13px]">
         {index + 1}
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2.5">
-          <span className="text-[15px] font-semibold text-nevo-near-black">
+          <span className="text-sm font-semibold text-nevo-near-black xl:text-[15px]">
             {segment.title ?? `Section ${index + 1}`}
           </span>
-          <TypeTag>{typeLabel(segment.contentType)}</TypeTag>
+          {/* The tablet row draws no type tag. */}
+          <TypeTag className="hidden xl:inline">{typeLabel(segment.contentType)}</TypeTag>
           <Link
             href={`/teacher/lessons/${lessonId}/variants?section=${index + 1}`}
             className="cursor-pointer text-[12.5px] font-medium text-nevo-navy underline-offset-2 transition-[filter] hover:underline"
@@ -200,7 +209,8 @@ function SegmentRow({
       </div>
       {progress ? (
         <div className="flex shrink-0 items-center gap-3.5">
-          <div className="h-1.5 w-[130px] overflow-hidden rounded-full bg-nevo-navy/14">
+          {/* The tablet row carries the count without the bar. */}
+          <div className="hidden h-1.5 w-[130px] overflow-hidden rounded-full bg-nevo-navy/14 xl:block">
             <span
               /* Violet where the class slowed - C06b's rule is that a dip is
                  never red, and never reads as a scoreboard. */
@@ -213,7 +223,7 @@ function SegmentRow({
               }}
             />
           </div>
-          <span className="w-[120px] text-right text-sm text-nevo-near-black/68">
+          <span className="text-right text-[13px] text-nevo-near-black/68 xl:w-[120px] xl:text-sm">
             {`${progress.completionCount} of ${progress.assignedStudentCount} done`}
           </span>
         </div>
@@ -448,7 +458,9 @@ export function LiveLessonDetail({
             actions squeezed against each other instead of stacking - which
             is the likeliest thing behind QA's "Assign is off-centre",
             reported twice and not reproducible at desktop width. */}
-        <div className="mt-4 flex flex-wrap items-start justify-between gap-6">
+        {/* And at tablet width C06b stacks them outright: the actions sit
+            16px under the meta, not beside the title. */}
+        <div className="mt-3.5 flex flex-col gap-4 xl:mt-4 xl:flex-row xl:flex-wrap xl:items-start xl:justify-between xl:gap-6">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2.5">
               <h1 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">

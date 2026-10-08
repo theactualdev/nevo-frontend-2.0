@@ -315,7 +315,9 @@ export function StructureTree() {
   };
 
   return (
-    <div className="relative flex min-h-full flex-1 flex-col">
+    // A pane of the wizard: `min-h-0` so the tree scrolls inside it and the
+    // commit bar stays pinned at its foot.
+    <div className="relative flex min-h-0 flex-1 flex-col">
       {/* Page header */}
       <div className="shrink-0 border-b border-nevo-near-black/9 px-6 pt-4 pb-3.5 xl:px-8 xl:pt-5 xl:pb-[18px]">
         <div className="flex flex-wrap items-start gap-4">

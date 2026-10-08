@@ -89,7 +89,8 @@ export function ParseProgress({
   onSteer?: () => void;
 }) {
   return (
-    <div className="flex min-h-full flex-col items-center justify-center">
+    // `flex-1` for the live path, where it is a flex item (see UploadWizard).
+    <div className="flex min-h-full flex-1 flex-col items-center justify-center">
       <div className="flex w-full max-w-[460px] flex-col items-center">
         <div className="flex flex-col items-center gap-[18px]">
           <span className="size-[52px] shrink-0 rounded-full border-4 border-nevo-navy/16 border-t-nevo-navy motion-safe:animate-spin motion-safe:[animation-duration:950ms]" />

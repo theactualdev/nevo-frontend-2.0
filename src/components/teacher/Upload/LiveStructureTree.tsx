@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Fragment, useState } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import {
   lessonsOf,
   namedSegments,
@@ -67,12 +67,15 @@ export function LiveStructureTree({
   structure,
   segments,
   blockName,
+  banner,
 }: {
   uploadId: string;
   structure: UploadStructure;
   /** Named rows for the third level. Absent on an older upload. */
   segments?: UploadSegment[];
   blockName: string;
+  /** Above the tree, inside its scroll - the faint-pages card, as on the module review. */
+  banner?: ReactNode;
 }) {
   const router = useRouter();
   const say = useSystemMessages();
@@ -393,8 +396,12 @@ export function LiveStructureTree({
   );
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    /* `relative`: the confirm sheet below is `absolute inset-0` and belongs
+       to this pane (C07d). Without it the sheet took the nearest positioned
+       ancestor up the tree instead. */
+    <div className="relative flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-[22px] xl:px-8 xl:py-7">
+        {banner}
         <div className="mb-3 flex justify-end">
           <button
             type="button"
