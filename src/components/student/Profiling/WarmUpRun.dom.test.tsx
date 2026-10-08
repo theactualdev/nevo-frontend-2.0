@@ -283,7 +283,8 @@ describe("WarmUpRun — the done state claims no save", () => {
     await settle();
 
     expect(screen.getByText("That's it for today")).toBeTruthy();
-    expect(document.body.textContent).not.toMatch(/saved|couldn't save/i);
+    expect(document.body.textContent).not.toMatch(/saved|didn't save|couldn't save/i);
+    expect(screen.queryByTestId("warmup-save-failed-mark")).toBeNull();
   });
 
   it("is the title and Go on once the write lands, with no body line (D80, D97)", async () => {
@@ -294,7 +295,8 @@ describe("WarmUpRun — the done state claims no save", () => {
     await settle();
 
     expect(screen.getByText("That's it for today")).toBeTruthy();
-    expect(document.body.textContent).not.toMatch(/saved|tuned|couldn't/i);
+    expect(document.body.textContent).not.toMatch(/saved|tuned|didn't|couldn't/i);
+    expect(screen.queryByTestId("warmup-save-failed-mark")).toBeNull();
     expect(screen.getByRole("button", { name: "Go on" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Home" })).toBeNull();
   });
@@ -314,11 +316,57 @@ describe("WarmUpRun — the done state claims no save", () => {
     expect(badge.className).toContain("sm:size-20");
   });
 
-  it("still says so when the write failed (kept while D126 is asked)", async () => {
+});
+
+describe("WarmUpRun — the write failed (D126, 8 Oct)", () => {
+  const failed = async () => {
     submit.mockResolvedValue(false);
     await sitTheTileTask();
     await settle();
+  };
 
-    expect(screen.getByText(/couldn't save it just now/)).toBeTruthy();
+  it("says it didn't save in the frame's one line, under the same title and Go on", async () => {
+    // It read "Thanks for doing that. We couldn't save it just now - that's
+    // on us, not you." D126: no apology, no reason, no retry.
+    await failed();
+
+    expect(screen.getByText("That's it for today")).toBeInTheDocument();
+    expect(
+      screen.getByText("Today's warm-up didn't save. It won't change your lessons."),
+    ).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/couldn't|on us|sorry|try again/i);
+    // Go on, and nothing else to press: no retry.
+    expect(
+      screen.getAllByRole("button").map((b) => b.textContent),
+    ).toEqual(["Go on"]);
+  });
+
+  it("draws the line at the frame's sizes and its quieter colour", async () => {
+    await failed();
+
+    const line = screen.getByText(/Today's warm-up didn't save/);
+    expect(line.className).toContain("text-[14.5px]");
+    expect(line.className).toContain("sm:text-[15.5px]");
+    expect(line.className).toContain("text-nevo-near-black/70");
+    expect(line.className).toContain("max-w-[300px]");
+    expect(line.className).toContain("mt-3");
+  });
+
+  it("shows a quiet neutral mark, not the success check, at the badge's sizes", async () => {
+    await failed();
+
+    const mark = screen.getByTestId("warmup-save-failed-mark");
+    const title = screen.getByText("That's it for today");
+    expect(title.parentElement!.previousElementSibling).toBe(mark);
+    expect(mark.querySelector("svg")).toBeNull();
+    expect(mark.className).toMatch(/(^| )size-16( |$)/);
+    expect(mark.className).toContain("sm:size-20");
+    expect(mark.className).toContain("bg-nevo-violet/22");
+    expect(mark.className).not.toMatch(/animate/);
+    const bar = mark.firstElementChild!;
+    expect(bar.className).toContain("w-[26px]");
+    expect(bar.className).toContain("sm:w-8");
+    expect(bar.className).toContain("h-[3px]");
+    expect(bar.className).toContain("bg-nevo-navy");
   });
 });
