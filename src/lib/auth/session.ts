@@ -263,6 +263,29 @@ function announceSessionChange(): void {
  * listener re-reads `getSession()` and compares the user id itself: a token
  * refresh fires this too, and is the same child.
  */
+/**
+ * Who ANOTHER tab says is signed in now, from a `storage` event.
+ *
+ * This tab cannot answer that from `getSession()`: the session is read from
+ * storage once per page load and held in memory, so a sign-out in the next tab
+ * leaves this one holding the old account until something reloads it.
+ *
+ * `undefined` when the event is not about the session at all; `null` when
+ * nobody is signed in any more - removed, cleared, or unreadable.
+ */
+export function sessionUserIdFromStorage(event: {
+  key: string | null;
+  newValue: string | null;
+}): string | null | undefined {
+  if (event.key !== null && event.key !== SESSION_KEY) return undefined;
+  if (!event.newValue) return null;
+  try {
+    return (JSON.parse(event.newValue) as StoredSession).userId ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function onSessionChange(listener: () => void): () => void {
   if (typeof window === "undefined") return () => {};
   const handler = () => listener();
