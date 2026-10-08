@@ -27,6 +27,10 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/api", () => ({ authApi: { setPin: vi.fn() } }));
 vi.mock("@/lib/auth/session", () => ({ getSession: () => null }));
 
+// The first render pays for the keypad's import; under a loaded worker that
+// alone outran the 5s default, and the timeout took the file down with it.
+vi.setConfig({ testTimeout: 30_000 });
+
 /** The screen waits this long before it writes. */
 const SAVE_DELAY_MS = 1200;
 

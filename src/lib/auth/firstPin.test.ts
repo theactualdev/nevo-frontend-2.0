@@ -115,14 +115,14 @@ const refusal = (status: number, code?: string) =>
 
 describe("entryPinRefusal (B68)", () => {
   it.each([
-    ["a 429 with its code", refusal(429, "too_many_attempts"), "throttled"],
-    ["a 429 with no code, which is still a rate limit", refusal(429), "throttled"],
-    ["pin_not_cleared", refusal(409, "pin_not_cleared"), "has-pin"],
-    ["pin_already_set", refusal(409, "pin_already_set"), "has-pin"],
-    ["entry_not_found", refusal(404, "entry_not_found"), "not-found"],
-    ["consent_pending", refusal(403, "consent_pending"), "consent"],
-    ["age_check_pending", refusal(403, "age_check_pending"), "age-check"],
-  ] as const)("reads %s as %s", (_, cause, expected) => {
+    ["a 429 with its code", "throttled", refusal(429, "too_many_attempts")],
+    ["a 429 with no code, which is still a rate limit", "throttled", refusal(429)],
+    ["pin_not_cleared", "has-pin", refusal(409, "pin_not_cleared")],
+    ["pin_already_set", "has-pin", refusal(409, "pin_already_set")],
+    ["entry_not_found", "not-found", refusal(404, "entry_not_found")],
+    ["consent_pending", "consent", refusal(403, "consent_pending")],
+    ["age_check_pending", "age-check", refusal(403, "age_check_pending")],
+  ] as const)("reads %s as %s", (_, expected, cause) => {
     expect(entryPinRefusal(cause)).toBe(expected);
   });
 
