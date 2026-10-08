@@ -12,6 +12,7 @@ import type {
 } from "@/lib/types";
 import { isStoredAnswer } from "@/lib/lessons/storedAnswer";
 import { cn } from "@/lib/utils";
+import { READING_BODY, READING_HEADING, READING_INK } from "./readingSupport";
 import { useMediaSource, type MediaFailReason } from "./useMediaSource";
 
 /**
@@ -41,9 +42,17 @@ import { useMediaSource, type MediaFailReason } from "./useMediaSource";
  *
  * No evaluative colour ever - never red or green, never a cross. A miss is a
  * soft violet ring pulse and nothing else. No score, percentage or counter.
+ *
+ * READING SUPPORT'S TYPOGRAPHY REACHES EVERY WORD A CHILD READS HERE (D30):
+ * the prompt, the options, the confirmation and completion lines, the hint,
+ * the scaffold's labels and the unit. The notation takes the heading's
+ * spacing only - "notation is never simplified away, because the notation is
+ * the content". The drawing's geometry, the field a child types into and the
+ * controls are left as they are, as they are on the checks.
  */
 export function CalculationSolver({
   calculation,
+  reading = false,
   onSolved,
   onStepAnswered,
   onPiecePlaced,
@@ -54,6 +63,11 @@ export function CalculationSolver({
   onNarrationFailed,
 }: {
   calculation: CalculationSegment;
+  /**
+   * The reading accommodation's typographic half (D30), from the same plan
+   * the text segment and the checks read - see `readingSupport`.
+   */
+  reading?: boolean;
   /** Fired once the solution assembles - the player opens the forward chevron. */
   onSolved: () => void;
   /**
@@ -102,6 +116,8 @@ export function CalculationSolver({
 
   const step = steps[index];
   const done = phase === "done";
+  /** A line of the child's reading that is not coloured to mean anything. */
+  const readable = reading && [READING_BODY, READING_INK];
   const asking = phase === "ask";
   const line = equationAt(calculation, index, !asking);
 
@@ -173,7 +189,11 @@ export function CalculationSolver({
 
       {/* SCAFFOLD - persistent; the payload's drawing, with its values */}
       {calculation.scaffold && (
-        <ScaffoldCard scaffold={calculation.scaffold} done={done} />
+        <ScaffoldCard
+          scaffold={calculation.scaffold}
+          done={done}
+          reading={reading}
+        />
       )}
 
       {/*
@@ -188,7 +208,10 @@ export function CalculationSolver({
         {line && (
           <div
             key={line}
-            className="text-center text-[26px] font-medium tracking-[-0.01em] text-nevo-navy sm:text-[34px] motion-safe:animate-nevo-reveal"
+            className={cn(
+              "text-center text-[26px] font-medium tracking-[-0.01em] text-nevo-navy sm:text-[34px] motion-safe:animate-nevo-reveal",
+              reading && READING_HEADING,
+            )}
           >
             {line}
           </div>
@@ -200,7 +223,9 @@ export function CalculationSolver({
         {phase === "confirmed" && step.input === "choice" && (
           <div className="flex flex-col gap-3.5 motion-safe:animate-nevo-reveal">
             <div className="flex items-center justify-between rounded-[12px] border-2 border-nevo-navy bg-nevo-cream-elevated px-[18px] py-4 text-base font-semibold text-nevo-near-black shadow-elevation-1 sm:text-[18px]">
-              <span>{chosen != null ? step.options[chosen]?.label : null}</span>
+              <span className={cn(readable)}>
+                {chosen != null ? step.options[chosen]?.label : null}
+              </span>
               <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-nevo-navy">
                 <Check
                   className="size-[13px] text-nevo-cream"
@@ -208,7 +233,12 @@ export function CalculationSolver({
                 />
               </span>
             </div>
-            <p className="text-center text-sm leading-[1.6] text-nevo-near-black/70 sm:text-[15px]">
+            <p
+              className={cn(
+                "text-center text-sm leading-[1.6] text-nevo-near-black/70 sm:text-[15px]",
+                readable,
+              )}
+            >
               {step.confirm}
             </p>
             <Button className="w-full" onClick={advance}>
@@ -218,17 +248,29 @@ export function CalculationSolver({
         )}
 
         {done && calculation.completion && (
-          <p className="text-center text-sm leading-[1.6] text-nevo-near-black/70 motion-safe:animate-nevo-reveal sm:text-[15px]">
+          <p
+            className={cn(
+              "text-center text-sm leading-[1.6] text-nevo-near-black/70 motion-safe:animate-nevo-reveal sm:text-[15px]",
+              readable,
+            )}
+          >
             {calculation.completion}
           </p>
         )}
 
         {asking && (
           <>
-            <p className="text-center text-[19px] font-semibold leading-[1.35] text-nevo-near-black sm:text-[22px]">
+            <p
+              className={cn(
+                "text-center text-[19px] font-semibold leading-[1.35] text-nevo-near-black sm:text-[22px]",
+                reading && READING_HEADING,
+              )}
+            >
               {step.prompt}
             </p>
-            {hintOpen && step.hint && <HintPill text={step.hint} />}
+            {hintOpen && step.hint && (
+              <HintPill text={step.hint} reading={reading} />
+            )}
 
             {step.input === "choice" && (
               <>
@@ -245,6 +287,7 @@ export function CalculationSolver({
                         chosen === i
                           ? "border-nevo-navy ring-2 ring-nevo-navy"
                           : "border-transparent",
+                        readable,
                       )}
                     >
                       {option.label}
@@ -272,6 +315,7 @@ export function CalculationSolver({
             {step.input === "number" && (
               <NumberEntry
                 step={step}
+                reading={reading}
                 nudge={nudge}
                 value={typed}
                 onChange={setTyped}
@@ -367,12 +411,14 @@ function Nudged({
  */
 function NumberEntry({
   step,
+  reading,
   nudge,
   value,
   onChange,
   onCommit,
 }: {
   step: CalcNumberStep;
+  reading: boolean;
   nudge: number;
   value: string;
   onChange: (value: string) => void;
@@ -404,7 +450,12 @@ function NumberEntry({
         {step.unit ? (
           // Beside the field, not inside it: a child types the number, not
           // the noun.
-          <span className="ml-2.5 self-center text-[15px] text-nevo-near-black/60">
+          <span
+            className={cn(
+              "ml-2.5 self-center text-[15px] text-nevo-near-black/60",
+              reading && [READING_BODY, READING_INK],
+            )}
+          >
             {step.unit}
           </span>
         ) : null}
@@ -422,9 +473,11 @@ function NumberEntry({
 function ScaffoldCard({
   scaffold,
   done,
+  reading,
 }: {
   scaffold: CalcScaffold;
   done: boolean;
+  reading: boolean;
 }) {
   return (
     <div className="rounded-[12px] bg-nevo-cream-elevated p-[18px] shadow-elevation-1 sm:p-6">
@@ -437,11 +490,18 @@ function ScaffoldCard({
             parts={scaffold.parts}
             quantities={scaffold.quantities}
             strong={done}
+            reading={reading}
           />
         )}
-        {scaffold.kind === "dots" && <DotGroups quantities={scaffold.quantities} />}
+        {scaffold.kind === "dots" && (
+          <DotGroups quantities={scaffold.quantities} reading={reading} />
+        )}
         {scaffold.kind === "number_line" && (
-          <NumberLine parts={scaffold.parts} points={scaffold.points} />
+          <NumberLine
+            parts={scaffold.parts}
+            points={scaffold.points}
+            reading={reading}
+          />
         )}
       </div>
     </div>
@@ -458,10 +518,12 @@ function BarRows({
   parts,
   quantities,
   strong,
+  reading,
 }: {
   parts: number;
   quantities: ScaffoldQuantity[];
   strong: boolean;
+  reading: boolean;
 }) {
   const labelled = quantities.some((q) => q.label);
   return (
@@ -475,6 +537,9 @@ function BarRows({
                 strong
                   ? "font-semibold text-nevo-navy"
                   : "text-nevo-near-black/60",
+                // Navy says the solution has assembled, so it keeps its ink.
+                reading && READING_BODY,
+                reading && !strong && READING_INK,
               )}
             >
               {q.label}
@@ -509,8 +574,10 @@ function BarRows({
  */
 function DotGroups({
   quantities,
+  reading,
 }: {
   quantities: ScaffoldQuantity[];
+  reading: boolean;
 }) {
   return (
     <div className="flex flex-wrap items-start justify-center gap-4">
@@ -528,7 +595,14 @@ function DotGroups({
             ))}
           </div>
           {q.label && (
-            <span className="text-xs text-nevo-near-black/60">{q.label}</span>
+            <span
+              className={cn(
+                "text-xs text-nevo-near-black/60",
+                reading && [READING_BODY, READING_INK],
+              )}
+            >
+              {q.label}
+            </span>
           )}
         </div>
       ))}
@@ -545,9 +619,11 @@ function DotGroups({
 function NumberLine({
   parts,
   points,
+  reading,
 }: {
   parts: number;
   points: ScaffoldQuantity[];
+  reading: boolean;
 }) {
   return (
     <div className="mx-1.5 mt-[18px] mb-7">
@@ -571,7 +647,10 @@ function NumberLine({
                 p.label ? (
                   <span
                     key={i}
-                    className="mt-1 text-[10px] whitespace-nowrap text-nevo-near-black/60"
+                    className={cn(
+                      "mt-1 text-[10px] whitespace-nowrap text-nevo-near-black/60",
+                      reading && [READING_BODY, READING_INK],
+                    )}
                   >
                     {p.label}
                   </span>
@@ -586,11 +665,18 @@ function NumberLine({
 }
 
 /** The hint the child opened - a calm pill above the response, no dismiss. */
-function HintPill({ text }: { text: string }) {
+function HintPill({ text, reading }: { text: string; reading: boolean }) {
   return (
     <div className="mx-auto mt-4 flex w-max max-w-full items-center gap-2.5 rounded-full bg-nevo-cream-elevated px-[18px] py-2.5 shadow-elevation-1 motion-safe:animate-nevo-reveal">
       <span className="size-[7px] shrink-0 rounded-full bg-nevo-violet" />
-      <span className="text-sm leading-[1.4] text-nevo-near-black">{text}</span>
+      <span
+        className={cn(
+          "text-sm leading-[1.4] text-nevo-near-black",
+          reading && [READING_BODY, READING_INK],
+        )}
+      >
+        {text}
+      </span>
     </div>
   );
 }

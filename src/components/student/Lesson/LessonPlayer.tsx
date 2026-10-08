@@ -2322,6 +2322,8 @@ function SegmentBody({
       return (
         <CalculationSolver
           calculation={segment.calculation}
+          // D30: the same accommodation the text segment and the checks take.
+          reading={reading}
           onSolved={onCalcSolved}
           onStepAnswered={onCalcStep}
           onPiecePlaced={onPiecePlaced}

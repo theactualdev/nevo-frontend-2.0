@@ -92,14 +92,16 @@ const build = (over: Record<string, unknown> = {}): CalculationSegment => {
   return calc;
 };
 
-const show = (calc: CalculationSegment = build()) => {
+const show = (calc: CalculationSegment = build(), reading = false) => {
   const props = {
     onSolved: vi.fn(),
     onStepAnswered: vi.fn(),
     onPiecePlaced: vi.fn(),
     onHintOpened: vi.fn(),
   };
-  render(<CalculationSolver calculation={calc} {...props} />);
+  render(
+    <CalculationSolver calculation={calc} reading={reading} {...props} />,
+  );
   return props;
 };
 
@@ -410,5 +412,100 @@ describe("the narration layer", () => {
     expect(onNarrationPlayed).toHaveBeenCalledTimes(1);
     expect(onReplay).toHaveBeenCalledTimes(1);
     expect(onAudioBusy.mock.calls).toEqual([["start"], ["end"], ["start"]]);
+  });
+});
+
+describe("reading support (D30)", () => {
+  /** `READING_BODY` and `READING_HEADING`, as the checks carry them. */
+  const BODY = ["text-[18px]", "leading-[2]", "tracking-[0.02em]"];
+  const HEADING = "tracking-[0.01em]";
+  const notation = () => document.querySelector('[aria-live="polite"] > div');
+  const DONE_WITH_UNIT = build({
+    steps: [
+      step({
+        input: "number",
+        expectedInput: "numeric",
+        options: [],
+        answer: "3",
+        unit: "quarters",
+      }),
+    ],
+  });
+
+  it("reaches every line the child reads, with the accommodation on", () => {
+    show(build(), true);
+
+    expect(screen.getByText("What are the denominators?")).toHaveClass(HEADING);
+    // The notation keeps its size and takes the heading's spacing only.
+    expect(notation()).toHaveClass(HEADING);
+    expect(notation()).not.toHaveClass("leading-[2]");
+    expect(screen.getByRole("button", { name: "4 and 4" })).toHaveClass(...BODY);
+    expect(screen.getByText("1/4")).toHaveClass(...BODY);
+
+    tap("Need a hint?");
+    expect(
+      screen.getByText("Look at the bottom number of each fraction."),
+    ).toHaveClass(...BODY);
+
+    pick("4 and 4");
+    expect(screen.getByText("Both denominators are 4.")).toHaveClass(...BODY);
+    // The confirmed pick, in its card.
+    expect(screen.getByText("4 and 4")).toHaveClass(...BODY);
+  });
+
+  it("reaches the unit and the completion line, and not the field itself", () => {
+    show(DONE_WITH_UNIT, true);
+
+    expect(screen.getByText("quarters")).toHaveClass(...BODY);
+    expect(screen.getByRole("textbox")).not.toHaveClass("leading-[2]");
+
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "3" } });
+    tap("Check my answer");
+
+    expect(
+      screen.getByText("When fractions share a denominator, add the numerators."),
+    ).toHaveClass(...BODY);
+  });
+
+  it("reaches the labels of grouped dots and a number line", () => {
+    show(
+      build({
+        scaffold: { kind: "dots", parts: 1, marks: [3, 4], labels: ["three", "four"] },
+      }),
+      true,
+    );
+    expect(screen.getByText("three")).toHaveClass(...BODY);
+    cleanup();
+
+    show(
+      build({
+        scaffold: { kind: "number_line", parts: 4, marks: [3], labels: ["three"] },
+      }),
+      true,
+    );
+    expect(screen.getByText("three")).toHaveClass(...BODY);
+  });
+
+  it("changes nothing with the accommodation off", () => {
+    show(DONE_WITH_UNIT, false);
+    tap("Need a hint?");
+    expect(screen.getByText("quarters")).not.toHaveClass("leading-[2]");
+    cleanup();
+
+    show(build(), false);
+    tap("Need a hint?");
+    const read = [
+      screen.getByText("What are the denominators?"),
+      notation(),
+      screen.getByRole("button", { name: "4 and 4" }),
+      screen.getByText("1/4"),
+      screen.getByText("Look at the bottom number of each fraction."),
+    ];
+    for (const el of read) {
+      expect(el).not.toHaveClass("leading-[2]");
+      expect(el).not.toHaveClass(HEADING);
+    }
+    pick("4 and 4");
+    expect(screen.getByText("Both denominators are 4.")).not.toHaveClass("leading-[2]");
   });
 });

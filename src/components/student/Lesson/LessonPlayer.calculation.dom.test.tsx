@@ -211,6 +211,33 @@ describe("a calculation's signals", () => {
     ]);
   });
 
+  it("takes reading support from the plan the other segments read (D30)", () => {
+    render(
+      <LessonPlayer
+        lesson={lessonWith([step()])}
+        plan={{ ...PLAN, accommodations: { reading: true } }}
+      />,
+    );
+
+    expect(screen.getByText("What are the denominators?")).toHaveClass(
+      "tracking-[0.01em]",
+    );
+    expect(screen.getByRole("button", { name: "4 and 4" })).toHaveClass(
+      "leading-[2]",
+    );
+  });
+
+  it("leaves the calculation as drawn without it", () => {
+    render(<LessonPlayer lesson={lessonWith([step()])} plan={PLAN} />);
+
+    expect(screen.getByText("What are the denominators?")).not.toHaveClass(
+      "tracking-[0.01em]",
+    );
+    expect(screen.getByRole("button", { name: "4 and 4" })).not.toHaveClass(
+      "leading-[2]",
+    );
+  });
+
   it("holds the forward chevron until the solution has assembled", () => {
     render(<LessonPlayer lesson={lessonWith([step()])} plan={PLAN} />);
     expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
