@@ -30,12 +30,15 @@ import { WriteFailed } from "../WriteFailed";
  * an admin never loses their place. It appends, and the scroll position is
  * therefore preserved for free.
  *
- * TODO(api): `GET /api/notifications` takes `archived`, `limit` and `offset`
- * and nothing else, and `NotificationResponse` carries no CATEGORY. So D13b's
- * category filter pill, its per-row category label and its category-scoped
- * "Mark these as read" have no source. Search is client-side over the loaded
- * page for the same reason - there is no `q` parameter. All three become real
- * the moment a category lands on the row.
+ * EACH ROW CARRIES ITS CATEGORY NOW (backend B34, 1 Oct), and `NotificationRow`
+ * labels it - see `categoryLabel`.
+ *
+ * TODO(api): `GET /api/notifications` still takes only `archived`, `limit` and
+ * `offset`, so D13b's category filter pill and its category-scoped "Mark these
+ * as read" have no server route, and search is client-side over the loaded
+ * page - there is no `q` parameter. Three of SCRUM-100's six admin categories
+ * (roster, SSO, teacher) have no enum value either, so this needs a design and
+ * backend answer together.
  *
  * THE ADMIN EVENTS ARRIVE NOW (backend, 7 Sep): admin_welcome,
  * consent_action_required, roster_sync_completed, roster_sync_needs_attention,
@@ -47,12 +50,6 @@ import { WriteFailed } from "../WriteFailed";
  * (soft violet for unread, navy for the rest) and no urgency glyphs anywhere in
  * the set; picking six new icons would be inventing design rather than applying
  * it.
- *
- * TODO(api): a `category` ON THE ROW. `NotificationCategory` exists for
- * preferences, but `NotificationResponse` carries only `type` - so the category
- * filter, the per-category label and "mark these as read" still have no source.
- * Three of SCRUM-100's six admin categories (roster, SSO, teacher) have no enum
- * value either, so this needs a design and backend answer together.
  */
 
 type Phase = "loading" | "ready" | "failed" | "denied";

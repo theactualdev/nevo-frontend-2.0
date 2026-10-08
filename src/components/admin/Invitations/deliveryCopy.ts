@@ -29,12 +29,6 @@ import type { ConsentStatus } from "@/lib/api/consents";
  *        CALLER anywhere." It has callers now: the roster row and the
  *        student's own record, via `useConsentRequests`.
  *
- *    TODO (client, not api): thread `consentStatus` onto `Invitation` in
- *    `lib/api/invites.ts` and branch `parentConsentLine` on it - nobody asked
- *    yet / asked and no reply / recorded - falling back to today's no-claim
- *    sentence on null, exactly as `deliveryLine` already handles a null
- *    `deliveryStatus`.
- *
  * THE STATE IS REPORTED NOW. `InvitationResponse.consentStatus` is threaded
  * onto `Invitation` and read by `consentNote` and `parentConsentLine` below, so
  * a screen can finally say where a consent request has got to.

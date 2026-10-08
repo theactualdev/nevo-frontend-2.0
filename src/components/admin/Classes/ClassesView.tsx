@@ -40,14 +40,10 @@ import { NoAccess, failureKind } from "../NoAccess";
  * adaptation reasoning - the spec calls that boundary structural rather than a
  * matter of taste, and the roster routes honour it.
  *
- * TODO(api): `GET /api/v1/classes` returns no teachers. SCRUM-40's data note
- * asks for `teachers:[{id,name,role}]` on each row and the whole screen is
- * built around it, so until that lands each row resolves its own teachers
- * through `GET /api/v1/classes/{id}/teachers`. That is N+1 requests, fired in
- * parallel after the list paints, with the column showing a quiet placeholder
- * until they land - the list itself never waits on them. Fine at fourteen
- * classes, wrong at four hundred. Folding teachers into the list response
- * deletes this entire mechanism.
+ * `GET /api/v1/classes` CARRIES ITS TEACHERS NOW (24 Sep) - SCRUM-40's
+ * `teachers:[{id,name,role}]` on each row - so the page is one request. It
+ * used to resolve each row's teachers with its own `classes/{id}/teachers`
+ * call after the list painted; see `teacherLabel` below.
  *
  * DONE, AND IT WAS NEVER BACKEND'S. This note read "no endpoint reports when
  * the SSO roster last synced", then was corrected to "the gap is only that
@@ -90,9 +86,9 @@ function SearchIcon() {
   );
 }
 
-/** "Ms. Adeyemi +1" - the primary leads the label, the rest are a count. */
 /**
- * Who teaches this class, primary first.
+ * Who teaches this class: "Ms. Adeyemi +1" - the primary leads the label, the
+ * rest are a count.
  *
  * TAKES THE ROW'S OWN `teachers` NOW. It used to take the result of a
  * per-class `classTeachers` request - one per row, fired after the list

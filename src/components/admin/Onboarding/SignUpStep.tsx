@@ -33,10 +33,9 @@ import {
  *
  * A duplicate email is not a dead end: it offers a way to sign in.
  *
- * NOTE: `POST /api/v1/auth/school-code/verify` already RETURNS an `authMethod`
- * for a school, so the backend holds the concept - there is simply no way to
- * set it at onboarding. That makes the D1.2 gap a missing write, not a missing
- * model, which should be the easier half to close.
+ * The sign-in method is not asked here or anywhere in onboarding: it is
+ * deferred with SSO. Why the server's `authMethod` cannot simply be written
+ * to - a missing write AND a vocabulary mismatch - is in `AuthMethodStep`.
  *
  * TWO ROUND TRIPS, AND THEY FAIL DIFFERENTLY. `POST /schools/register` answers
  * `{schoolId, adminId, schoolCode}` and NO session, so the wizard signs in

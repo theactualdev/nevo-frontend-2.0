@@ -54,24 +54,18 @@
  * the retention position from `GET /api/v1/school` - and carry real figures
  * under the `school` verification rather than a mechanism with no number.
  *
- * TODO(api): erasure requests in progress, and a subprocessor count - the two
- * states this screen genuinely cannot verify.
- * The requests ARE read back now - `GET /api/v1/consents/rights-log`, "what
- * parents have asked of this school, newest first" - but the `ParentRightType`
- * they carry is `request_data | object | withdraw_consent`, with no erasure
- * value at all, so the log cannot count erasure requests either. (This said
- * nothing read one back, after the log had shipped. Wiring the log to a screen
- * waits on counsel with the rest of the consent surface.) "Subprocessor" does
- * not appear in the contract.
+ * TODO(api): a subprocessor list - the one row on this screen that cannot be
+ * verified; "Subprocessor" does not appear in the contract. An erasure-request
+ * count would be a second, and has no row: the rights log
+ * (`GET /api/v1/consents/rights-log`) carries `request_data | object |
+ * withdraw_consent`, with no erasure value, so it cannot count them. (Wiring
+ * the log to a screen waits on counsel with the rest of the consent surface.)
  *
- * TWO MORE WERE ON THIS LIST AND SHOULD NOT HAVE BEEN. Consent coverage is
- * derivable from `studentsApi.list()` with `blockedByConsent` - the same pair
- * StudentsView already renders - and a retention position is
- * `retentionPolicy` + `retentionDays`, both REQUIRED on `GET /api/v1/school`
- * and both already read by Settings. Those two claim rows should move off
- * `unverified` and carry real figures; leaving them unverified now understates
- * what this school can be told about itself, on the one screen where that
- * matters most.
+ * CONSENT COVERAGE AND RETENTION CARRY REAL FIGURES. Both were once listed as
+ * unverifiable and never were: coverage comes from `studentsApi.list()` with
+ * `blockedByConsent`, the same pair StudentsView renders, and retention from
+ * `retentionPolicy` + `retentionDays` on `GET /api/v1/school`. Each falls back
+ * to `unverified` only when its read fails.
  * TODO(design): the non-zero rendering is drawn nowhere school-facing. Wording
  * below is built to the ops breach tone; design and counsel both to confirm.
  */

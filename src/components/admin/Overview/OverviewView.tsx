@@ -56,9 +56,10 @@ import { useCanOpen } from "../Shell/useCanOpen";
  * whole NDPA claim is that Nevo holds no diagnostic label about any child, and
  * this is the number that proves it.
  *
- * WHAT IS NOT. The "worth a glance" roll-up has no endpoint behind it, and
- * renders the frame's copy marked as a sample rather than passing for this
- * school's own position.
+ * THE "WORTH A GLANCE" ROLL-UP IS THIS SCHOOL'S TOO. It once rendered the
+ * frame's copy marked as a sample; two of D04's three rows are now counted
+ * from the roster and the attention flags (`overviewGlance.ts`), and the third
+ * is not drawn - see the TODO below.
  *
  * THE NARRATIVE USED TO BE NAMED HERE TOO, and stopped being true on 7 Sep
  * without this sentence noticing. `GET /api/v1/school/narrative` exists and is
@@ -80,7 +81,7 @@ import { useCanOpen } from "../Shell/useCanOpen";
  * are waiting on parent consent" and "2 classes haven't run a lesson yet" -
  * three invented counts, under a note admitting they were invented. D04 draws
  * a different roll-up for that school ("Getting started"), and now so does
- * this: the sample roll-up is live-school only, and the early school gets the
+ * this: the roll-up is live-school only, and the early school gets the
  * checklist. See `overviewGettingStarted.ts` for what a tick is allowed to
  * claim.
  *
