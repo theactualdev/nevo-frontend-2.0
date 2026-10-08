@@ -126,7 +126,12 @@ export interface StagedUpload {
   incident: string | null;
   /** Still going, and long enough that a teacher deserves telling. */
   slow: boolean;
-  start: (file: File, scope: string, subject?: string) => void;
+  /**
+   * Resolves with what happened to the file: `refused` is the server's 4xx
+   * answer about the file itself, `failed` is ours. The caller decides where
+   * a refusal belongs on screen - C07 draws it on the file step.
+   */
+  start: (file: File, scope: string, subject?: string) => Promise<StartOutcome>;
   /**
    * Ask for the faint pages again. Sends whatever is outstanding, adopts the
    * status the server answers with, and lets the poll take over from there -
@@ -146,6 +151,8 @@ export interface StagedUpload {
   resume: () => void;
   reset: () => void;
 }
+
+export type StartOutcome = "staged" | "refused" | "failed" | "skipped";
 
 export function useStagedUpload(): StagedUpload {
   const [uploadId, setUploadId] = useState<string | null>(null);
@@ -198,16 +205,17 @@ export function useStagedUpload(): StagedUpload {
   }, []);
 
   const start = useCallback(
-    (file: File, scope: string, subject?: string) => {
-      if (!getToken()) return;
+    (file: File, scope: string, subject?: string): Promise<StartOutcome> => {
+      if (!getToken()) return Promise.resolve("skipped");
       reset();
       startedAt.current = Date.now();
-      void uploadsApi
+      return uploadsApi
         .create(file, scope, subject)
-        .then((res) => {
+        .then((res): StartOutcome => {
           setUploadId(res.uploadId);
           setStatus(res.status);
           setStage(res.stage);
+          return "staged";
         })
         .catch((err: unknown) => {
           setFailed(true);
@@ -216,9 +224,9 @@ export function useStagedUpload(): StagedUpload {
           // request and rejected it. Only a 5xx, or no status at all - the
           // call never arrived - is ours.
           const status = err instanceof ApiError ? err.status : undefined;
-          setFailureKind(
-            status !== undefined && status < 500 ? "file" : "request",
-          );
+          const refused = status !== undefined && status < 500;
+          setFailureKind(refused ? "file" : "request");
+          return refused ? "refused" : "failed";
         });
     },
     [reset],

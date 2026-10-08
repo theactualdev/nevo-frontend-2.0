@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 
 const { detail, useCurrentUser, start, staged } = vi.hoisted(() => ({
   detail: vi.fn(),
@@ -128,7 +128,7 @@ const startUnitUpload = () => {
 beforeEach(() => {
   stagedState();
   detail.mockReset().mockResolvedValue(LESSON);
-  start.mockReset();
+  start.mockReset().mockResolvedValue("staged");
   useCurrentUser.mockReset().mockReturnValue(null);
   clearSession();
   window.localStorage.clear();
@@ -261,7 +261,7 @@ describe("a request that failed", () => {
 });
 
 describe("a file the server refused", () => {
-  it("blames the file only when the server answered about the file", () => {
+  it("blames the file only when the server answered about the file", async () => {
     /*
      * The third outcome, and the one the move onto the staged hook would
      * have quietly dropped: `start` reported every rejection as `request`,
@@ -269,12 +269,15 @@ describe("a file the server refused", () => {
      * with "nothing is wrong with your file" written over a file the server
      * had just refused.
      */
-    stagedState({ uploadId: "u-1", failed: true, failureKind: "file" });
+    start.mockResolvedValue("refused");
+    stagedState();
 
     startSingleUpload();
 
-    expect(screen.getByText(/couldn’t read this file/i)).toBeInTheDocument();
+    // C07's own state, on the file step (T65) - and still never our outage.
+    expect(await screen.findByText(/That file didn’t come through/)).toBeInTheDocument();
     expect(screen.queryByText(/couldn’t reach Nevo/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/a scan saved in a format/i)).not.toBeInTheDocument();
   });
 });
 
@@ -307,15 +310,16 @@ describe("a failure nobody planned for", () => {
     expect(screen.queryByText(/quote/i)).not.toBeInTheDocument();
   });
 
-  it("offers no reference for a file the server explained", () => {
+  it("offers no reference for a file the server explained", async () => {
     // A refused file has a REASON, and a reason beats a reference. The
     // incident line must not follow a teacher onto a screen that already
     // told them what to do about it.
-    stagedState({ uploadId: "u-1", failed: true, failureKind: "file" });
+    start.mockResolvedValue("refused");
+    stagedState({ incident: "inc-123" });
 
     startSingleUpload();
 
-    expect(screen.getByText(/couldn’t read this file/i)).toBeInTheDocument();
+    expect(await screen.findByText(/That file didn’t come through/)).toBeInTheDocument();
     expect(screen.queryByText(/quote/i)).not.toBeInTheDocument();
   });
 
@@ -678,5 +682,79 @@ describe("a unit whose file never landed", () => {
 
     expect(screen.getByText(/couldn’t reach Nevo/i)).toBeInTheDocument();
     expect(screen.queryByText("Reading the document")).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * T65. C07 draws a refused file on the file step - "That file didn't come
+ * through", with Choose another file and Try again - and nothing held a file
+ * to the step's own "up to 25 MB" before uploading all of it.
+ */
+describe("a file the step itself would refuse", () => {
+  const dropThis = (file: File) => {
+    const input = document.querySelector('input[type="file"]');
+    if (!input) throw new Error("no file input");
+    fireEvent.change(input, { target: { files: [file] } });
+  };
+  const toFileStep = () => {
+    render(<UploadWizard />);
+    fireEvent.click(screen.getByRole("button", { name: /one lesson/i }));
+    fireEvent.click(screen.getByRole("button", { name: /continue/i }));
+  };
+  const big = () => {
+    const f = new File(["x"], "term.pdf", { type: "application/pdf" });
+    Object.defineProperty(f, "size", { value: 26 * 1024 * 1024 });
+    return f;
+  };
+
+  it("is refused before a byte is sent when it is over 25 MB", () => {
+    stagedState();
+    toFileStep();
+    dropThis(big());
+
+    expect(screen.getByText(/That file didn’t come through/)).toBeInTheDocument();
+    expect(start).not.toHaveBeenCalled();
+  });
+
+  it("is refused when it is not a format the step reads, dropped past the picker", () => {
+    stagedState();
+    toFileStep();
+    dropThis(new File(["x"], "notes.zip", { type: "application/zip" }));
+
+    expect(screen.getByText(/That file didn’t come through/)).toBeInTheDocument();
+    expect(start).not.toHaveBeenCalled();
+  });
+
+  it("offers the frame's two ways on, and Try again sends the same file", async () => {
+    start.mockResolvedValueOnce("refused").mockResolvedValue("staged");
+    stagedState();
+    startSingleUpload();
+    await screen.findByText(/That file didn’t come through/);
+    const sent = start.mock.calls[0][0] as File;
+
+    expect(screen.getByRole("button", { name: "Choose another file" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(start).toHaveBeenCalledTimes(2);
+    expect(start.mock.calls[1][0]).toBe(sent);
+  });
+
+  it("goes when a file that fits is picked", () => {
+    stagedState();
+    toFileStep();
+    dropThis(big());
+    dropThis(new File(["x"], "lesson.pdf", { type: "application/pdf" }));
+
+    expect(screen.queryByText(/That file didn’t come through/)).not.toBeInTheDocument();
+    expect(start).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not send a file the server has not refused back to the step", async () => {
+    start.mockResolvedValue("failed");
+    stagedState();
+    startSingleUpload();
+    await act(async () => {});
+
+    expect(screen.queryByText(/That file didn’t come through/)).not.toBeInTheDocument();
   });
 });
