@@ -13,7 +13,7 @@ import {
   doorForRole,
   knownRole,
 } from "@/lib/auth/consoleDoor";
-import { clearSession } from "@/lib/auth/session";
+import { clearSession, setSession } from "@/lib/auth/session";
 import { AuthWordmark, ContactFooter } from "./AuthChrome";
 
 /**
@@ -199,6 +199,26 @@ export function SetPasswordForm({
   const inviteEmail = params.get("email") ?? email ?? "";
   /** Set by the join landing: this token belongs to the product-access flow. */
   const viaJoin = params.get("via") === "join";
+  /*
+   * The school a join link is from, for the eyebrow the screen already draws
+   * (T209). The landing knew it and passed nothing on; the link is public and
+   * says it again.
+   */
+  const [joinSchool, setJoinSchool] = useState<string | null>(null);
+  useEffect(() => {
+    if (!viaJoin || !token || school) return;
+    let current = true;
+    invitesApi
+      .lookupJoin(token)
+      .then((found) => {
+        if (current) setJoinSchool(found.schoolName ?? null);
+      })
+      .catch(() => {});
+    return () => {
+      current = false;
+    };
+  }, [viaJoin, token, school]);
+  const shownSchool = school ?? joinSchool;
   const activation = mode === "activation";
   const met = REQUIREMENTS.map((r) => r.test(password));
   const allMet = met.every(Boolean);
@@ -286,9 +306,11 @@ export function SetPasswordForm({
      *
      * `?via=join` is set by the join landing and says which this is.
      */
+    /** A join link answers with a session of its own (16 Sep); an invitation does not. */
+    let joined: Awaited<ReturnType<typeof invitesApi.acceptJoin>>["session"] = null;
     try {
       if (viaJoin) {
-        await invitesApi.acceptJoin(token, { password });
+        joined = (await invitesApi.acceptJoin(token, { password })).session ?? null;
       } else {
         await teamApi.acceptInvitation({
           invitationToken: token,
@@ -314,6 +336,28 @@ export function SetPasswordForm({
      * student hand-over ends the session the same way, and for the same reason.
      */
     clearSession();
+
+    /*
+     * THE JOIN LINK ALREADY SIGNED THEM IN (T209). `JoinAcceptedResponse`
+     * carries a session, and it was thrown away - so every teacher who joined
+     * by link was then signed in a second time with the address on the URL,
+     * and sent to the door when the link carried none. Kept, it is the
+     * console straight away, whatever the link carries.
+     */
+    if (joined) {
+      const role = knownRole(joined.role);
+      const as = doorForRole(role);
+      if (role && (as === "teacher" || as === "admin")) {
+        setSession({
+          token: joined.accessToken,
+          expiresAt: joined.expiresAt,
+          userId: joined.userId,
+          role,
+        });
+        finish("console", as);
+        return;
+      }
+    }
 
     // The account is active from here on. Accepting returns no session
     // (AcceptInvitationResponse is role/schoolId/userId), so sign in to
@@ -387,9 +431,9 @@ export function SetPasswordForm({
       className="flex w-full max-w-[440px] flex-col items-stretch px-6"
     >
       <AuthWordmark />
-      {school && (
+      {shownSchool && (
         <span className="text-center text-[12.5px] font-semibold tracking-[0.14em] text-nevo-violet uppercase">
-          {school}
+          {shownSchool}
         </span>
       )}
       <h1 className="mt-3.5 text-center text-[34px] leading-[1.15] font-semibold tracking-[-0.02em] text-nevo-near-black">

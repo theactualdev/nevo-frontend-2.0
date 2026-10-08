@@ -14,6 +14,12 @@ import {
 import { classifyLoginFailure } from "@/lib/auth/loginFailure";
 import { useAuth } from "@/hooks";
 import { cn } from "@/lib/utils";
+import { SystemMessage } from "@/components/shared/SystemMessage";
+import {
+  SIGNED_OUT_HOLD_MS,
+  SIGNED_OUT_LINE,
+  SIGNED_OUT_PARAM,
+} from "./signedOut";
 
 /**
  * C02 Teacher Sign-In - the returning teacher's door. Email + password or
@@ -126,6 +132,23 @@ export function TeacherSignIn() {
     nextParam && nextParam.startsWith("/teacher/")
       ? nextParam
       : "/teacher/dashboard";
+  /** Arrived from signing out, so the door says so for a moment (T228). */
+  const signedOut = searchParams.get(SIGNED_OUT_PARAM) === "1";
+  const [signedOutSaid, setSignedOutSaid] = useState(false);
+  useEffect(() => {
+    if (!signedOut) return;
+    const t = setTimeout(() => {
+      setSignedOutSaid(true);
+      // Off the address too, or a reload would say it again.
+      const rest = new URLSearchParams(searchParams.toString());
+      rest.delete(SIGNED_OUT_PARAM);
+      const q = rest.toString();
+      router.replace(q ? `/auth/teacher?${q}` : "/auth/teacher");
+    }, SIGNED_OUT_HOLD_MS);
+    return () => clearTimeout(t);
+  }, [signedOut, searchParams, router]);
+  /** Which attempt is current, so a late answer to an abandoned one can be told apart. */
+  const attempt = useRef(0);
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -157,6 +180,7 @@ export function TeacherSignIn() {
     if (!canSubmit || phase === "signing" || phase === "success") return;
     setPhase("signing");
     setWrongDoor(null);
+    const mine = ++attempt.current;
     const live = authApi.loginPassword({ email: email.trim(), password: pw });
     const cap = new Promise<never>((_, reject) =>
       timers.current.push(
@@ -198,6 +222,21 @@ export function TeacherSignIn() {
         );
       })
       .catch((err: unknown) => {
+        /*
+         * GAVE UP, BUT THE LOGIN MAY STILL LAND (T206). After the cap the
+         * teacher is told Nevo could not be reached - and the request is still
+         * out. `loginPassword` stores the session it gets, so a late answer
+         * left them signed in behind a screen saying they were not, and the
+         * door's next load bounced them into the console. If it lands, end it;
+         * unless they have since tried again, in which case it is theirs.
+         */
+        if (err instanceof Error && err.message === "timeout") {
+          live
+            .then(() => {
+              if (attempt.current === mine) void authApi.logout().catch(() => {});
+            })
+            .catch(() => {});
+        }
         const failure = classifyLoginFailure(err);
         setErrMsg(
           failure === "paused"
@@ -242,6 +281,8 @@ export function TeacherSignIn() {
 
   const isSuccess = phase === "success";
   const isForm = !isSuccess;
+  /** The one failure that is about the password typed. */
+  const mismatch = phase === "error" && errMsg === MISMATCH_MSG;
 
   return (
     <div className="relative flex min-h-full w-full flex-1 items-center justify-center px-6 py-[88px]">
@@ -330,7 +371,9 @@ export function TeacherSignIn() {
                 "mt-2 flex h-[52px] w-full items-center rounded-[10px] border-[1.5px] bg-nevo-cream-elevated pr-3.5 pl-4 transition-[border-color] duration-150",
                 // The violet mismatch border owns the field until typing
                 // clears it - even while focused (the frame's error state).
-                phase === "error"
+                // A MISMATCH only (T207): paused, throttled, unreachable and
+                // SSO all marked the password as the thing that was wrong.
+                mismatch
                   ? "border-nevo-violet focus-within:border-nevo-violet"
                   : "border-nevo-near-black/16 focus-within:border-nevo-navy",
               )}
@@ -345,6 +388,7 @@ export function TeacherSignIn() {
                   clearError();
                 }}
                 placeholder="Enter your password"
+                aria-invalid={mismatch || undefined}
                 className="h-full min-w-0 flex-1 border-none bg-transparent text-[16px] text-nevo-near-black outline-none"
               />
               <button
@@ -455,6 +499,17 @@ export function TeacherSignIn() {
               {"One moment…"}
             </span>
           </div>
+        )}
+      </div>
+
+      {/* SCRUM-88 step 3, bottom-centre for the teacher console. The region is
+          always here, so the words arriving in it are announced. */}
+      <div
+        role="status"
+        className="pointer-events-none fixed inset-x-0 bottom-6 z-[60] flex justify-center px-4"
+      >
+        {signedOut && !signedOutSaid && (
+          <SystemMessage message={{ kind: "confirm", message: SIGNED_OUT_LINE }} />
         )}
       </div>
     </div>

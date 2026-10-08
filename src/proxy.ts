@@ -100,8 +100,9 @@ export function proxy(request: NextRequest) {
     }
     if (!isTeacher) {
       const url = new URL(SIGN_IN, request.url);
-      // So the door can send them back where they were headed.
-      url.searchParams.set("next", pathname);
+      // So the door can send them back where they were headed - query and all
+      // (T217): a class's tab or a lesson's section lives there.
+      url.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
       return NextResponse.redirect(url);
     }
     return NextResponse.next();

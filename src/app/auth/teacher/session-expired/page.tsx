@@ -10,15 +10,20 @@ export const metadata: Metadata = {
 export default async function TeacherSessionExpiredPage({
   searchParams,
 }: {
-  searchParams: Promise<{ reason?: string }>;
+  searchParams: Promise<{ reason?: string; next?: string }>;
 }) {
   // `client.ts` puts the backend's own code here on its way out. Anything
   // unrecognised resolves to the ordinary screen, so a hand-typed or stale
   // value can only under-claim. Next.js 16: `searchParams` is a Promise.
-  const { reason } = await searchParams;
+  const { reason, next } = await searchParams;
+  // Where they were, handed on to the door so signing back in returns them
+  // there (T217). A console route only - the door applies the same rule.
+  const back = next?.startsWith("/teacher/")
+    ? `/auth/teacher?next=${encodeURIComponent(next)}`
+    : "/auth/teacher";
   return (
     <ConsoleSessionExpired
-      signInHref="/auth/teacher"
+      signInHref={back}
       reason={sessionEndReason(reason)}
     />
   );

@@ -2,6 +2,8 @@
 
 import { usePathname } from "next/navigation";
 import { useSessionLapse } from "@/hooks/useSessionLapse";
+import { useSessionRefresh } from "@/hooks/useSessionRefresh";
+import { useSessionElsewhere } from "./sessionElsewhere";
 import { AskNevo } from "./AskNevo";
 import { SystemMessagesProvider } from "@/components/shared/SystemMessages";
 import { TeacherSidebar } from "./TeacherSidebar";
@@ -34,6 +36,16 @@ export function TeacherShell({ children }: { children: React.ReactNode }) {
    * ABOVE THE EARLY RETURN, deliberately: hooks cannot run conditionally.
    */
   useSessionLapse();
+  /*
+   * AND RENEW IT BEFORE IT RUNS OUT (T219). Only the student shell mounted
+   * this, so a teacher's session was never renewed: one working steadily -
+   * mid-upload, mid-message - was sent to the session-expired screen at the
+   * token's deadline however active they had been. The endpoint is not
+   * role-specific; the hook never was either.
+   */
+  useSessionRefresh();
+  // And leave when another tab signs this teacher out (C02).
+  useSessionElsewhere();
 
   if (pathname.startsWith("/teacher/onboarding")) return <>{children}</>;
 

@@ -154,6 +154,13 @@ describe("the teacher console's guard", () => {
     expect(to.searchParams.get("next")).toBe("/teacher/classes/c-1");
   });
 
+  it("remembers the query too, where a tab or a section lives (T217)", () => {
+    const res = proxy(request("/teacher/lessons/l-1/review?section=3"));
+    const to = new URL(res.headers.get("location")!);
+
+    expect(to.searchParams.get("next")).toBe("/teacher/lessons/l-1/review?section=3");
+  });
+
   it("does not take a child's or an admin's cookie as a teacher's", () => {
     expect(destination("/teacher/dashboard", USER_ROLES.STUDENT)).toBe("/auth/teacher");
     // There is no plain "admin": these are the two the backend sends.

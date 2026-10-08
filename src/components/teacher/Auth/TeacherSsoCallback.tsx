@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/hooks";
 import { authApi } from "@/lib/api";
 import { setSession } from "@/lib/auth/session";
+import { ssoLanding } from "@/lib/auth/entryGate";
 import { type UserRole } from "@/lib/constants";
 
 /**
@@ -92,6 +93,18 @@ export function TeacherSsoCallback() {
       .ssoCallback({ provider, code, state })
       .then((res) => {
         const role = res.role as UserRole;
+        /*
+         * `destination` IS AN ENUM, NOT A ROUTE (T225): "home_dashboard" or
+         * "observed_interaction". Handed to `router.replace` it was a relative
+         * path that 404s. `ssoLanding` is the student callback's own answer:
+         * the enum only decides a child's route, and a staff member goes to
+         * their console's home. A role no console serves gets no session.
+         */
+        const landing = ssoLanding(role, res.destination);
+        if (!landing) {
+          setPhase("error");
+          return;
+        }
         setSession({
           token: res.accessToken,
           expiresAt: res.expiresAt,
@@ -106,7 +119,7 @@ export function TeacherSsoCallback() {
         setPhase("success");
         timers.current.push(
           setTimeout(
-            () => router.replace(res.destination || "/teacher/dashboard"),
+            () => router.replace(landing),
             SUCCESS_HOLD_MS,
           ),
         );
