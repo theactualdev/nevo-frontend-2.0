@@ -141,9 +141,16 @@ export function ConnectView() {
   const active = threads.find((t) => t.id === activeId) ?? threads[0] ?? null;
 
   // The list endpoint carries no message bodies, so opening one fetches it.
+  //
+  // AND THE ONE ON SCREEN IS BEING READ (T167). With nothing chosen yet the
+  // first thread opens by itself - and was never marked read, so its badge
+  // and the bell's dot stayed lit over a conversation the teacher was looking
+  // at. Showing it is reading it, the same as choosing it.
   useEffect(() => {
-    if (active) openThread(active.id);
-  }, [active, openThread]);
+    if (!active) return;
+    openThread(active.id);
+    if (active.unread) markThreadRead(active.id);
+  }, [active, openThread, markThreadRead]);
 
   const selectThread = (id: string) => {
     setActiveId(id);
@@ -165,8 +172,9 @@ export function ConnectView() {
     to: { recipientId: string; recipientType: "student" | "class" },
     text: string,
     toast = true,
+    about?: { name: string; className?: string },
   ) => {
-    const threadId = await sendLive(to, text);
+    const threadId = await sendLive(to, text, about);
     if (!threadId) {
       if (toast) say.show({ kind: "failed", message: "That didn’t send. Try again" });
       // THROW, do not return. Callers cannot tell success from failure if this
@@ -219,6 +227,7 @@ export function ConnectView() {
       { recipientId: student.studentId, recipientType: "student" },
       text,
       false,
+      { name: student.name, className: student.className },
     );
   };
 
@@ -314,10 +323,12 @@ export function ConnectView() {
                 key={t.id}
                 type="button"
                 onClick={() => selectThread(t.id)}
-                aria-current={t.id === activeId}
+                // The thread SHOWN, chosen or not (T167): the first one
+                // opens by itself and was never marked as the open one.
+                aria-current={t.id === active?.id}
                 className={cn(
                   "mb-0.5 flex w-full cursor-pointer items-center gap-2.5 rounded-[10px] px-3 py-2.5 text-left transition-colors xl:gap-3 xl:px-3.5 xl:py-3",
-                  t.id === activeId
+                  t.id === active?.id
                     ? "bg-nevo-navy/9"
                     : "hover:bg-nevo-navy/5",
                 )}

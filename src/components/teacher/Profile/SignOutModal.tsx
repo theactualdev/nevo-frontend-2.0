@@ -44,7 +44,7 @@ export function SignOutModal({ onStay }: { onStay: () => void }) {
   useDialogFocus(dialogRef);
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-nevo-near-black/50 p-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-nevo-near-black/50 backdrop-blur-[1.5px] p-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
       onClick={() => !busy && onStay()}
     >
       <div

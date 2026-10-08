@@ -1,13 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
 
-const { threads, thread } = vi.hoisted(() => ({
+const { threads, thread, send } = vi.hoisted(() => ({
   threads: vi.fn(),
   thread: vi.fn(),
+  send: vi.fn(),
 }));
 vi.mock("@/lib/api/messages", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/messages")>();
-  return { ...actual, messagesApi: { ...actual.messagesApi, threads, thread } };
+  return { ...actual, messagesApi: { ...actual.messagesApi, threads, thread, send } };
 });
 
 import { useConnectThreads } from "./useConnectThreads";
@@ -70,5 +71,54 @@ describe("opening a thread", () => {
 
     await waitFor(() => expect(result.current.threads[0].loaded).toBe(true));
     expect(result.current.threads[0].loadFailed).toBe(false);
+  });
+});
+
+/**
+ * T162. The send response names the message's AUTHOR. A thread the teacher
+ * started from compose was titled with their own name - and initials - until
+ * the list was read again.
+ */
+describe("a thread the teacher starts", () => {
+  const SAVED = {
+    id: "m-1",
+    threadId: "t-new",
+    senderId: "t-9",
+    senderName: "Ms Adeyemi",
+    content: "Well done on the quiz.",
+    createdAt: "2026-10-08T09:00:00Z",
+  };
+
+  it("is titled with the child it is to, and their class", async () => {
+    send.mockResolvedValue(SAVED);
+    const { result } = renderHook(() => useConnectThreads());
+    await waitFor(() => expect(result.current.threads[0]?.id).toBe("t-1"));
+
+    await act(async () => {
+      await result.current.send(
+        { recipientId: "s-2", recipientType: "student" },
+        "Well done on the quiz.",
+        { name: "Tunde Bello", className: "Year 7 Blue" },
+      );
+    });
+
+    const started = result.current.threads.find((t) => t.id === "t-new");
+    expect(started?.studentName).toBe("Tunde Bello");
+    expect(started?.initials).toBe("TB");
+    expect(started?.className).toBe("Year 7 Blue");
+  });
+
+  it("is never titled with the teacher's own name", async () => {
+    send.mockResolvedValue(SAVED);
+    const { result } = renderHook(() => useConnectThreads());
+    await waitFor(() => expect(result.current.threads[0]?.id).toBe("t-1"));
+
+    await act(async () => {
+      await result.current.send({ recipientId: "s-2", recipientType: "student" }, "Hi");
+    });
+
+    const started = result.current.threads.find((t) => t.id === "t-new");
+    expect(started?.studentName).not.toBe("Ms Adeyemi");
+    expect(started?.studentName).toBe("New conversation");
   });
 });

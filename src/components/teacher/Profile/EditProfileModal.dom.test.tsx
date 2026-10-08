@@ -172,3 +172,25 @@ describe("saving (C20)", () => {
     expect((screen.getByRole("button", { name: "Cancel" }) as HTMLButtonElement).type).toBe("button");
   });
 });
+
+describe("a blank name (T194)", () => {
+  it("cannot be saved", () => {
+    const onSave = vi.fn().mockResolvedValue(true);
+    render(<EditProfileModal profile={PROFILE} onCancel={vi.fn()} onSave={onSave} />);
+    const name = screen.getByLabelText("Full name") as HTMLInputElement;
+    fireEvent.change(name, { target: { value: "   " } });
+
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
+    fireEvent.submit(name.form!);
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("can be saved again once there is a name", () => {
+    render(<EditProfileModal profile={PROFILE} onCancel={vi.fn()} onSave={vi.fn()} />);
+    const name = screen.getByLabelText("Full name");
+    fireEvent.change(name, { target: { value: "" } });
+    fireEvent.change(name, { target: { value: "Amina Bello" } });
+
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled();
+  });
+});

@@ -97,6 +97,9 @@ export interface LessonSummary {
    */
   unapprovedSegmentCount?: number;
   createdAt: string;
+  /** Who uploaded it - on the response since the library listed by school. */
+  createdById?: string | null;
+  createdByName?: string | null;
 }
 
 /**
