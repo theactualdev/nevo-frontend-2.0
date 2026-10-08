@@ -73,7 +73,11 @@ import {
   checkResumeAt,
   type CheckLeft,
 } from "@/lib/lessons/checkResume";
-import { checkOutcomeFrom } from "@/lib/lessons/checkOutcome";
+import {
+  checkOutcomeFrom,
+  rerouteFrom,
+  resultStateFrom,
+} from "@/lib/lessons/checkOutcome";
 import {
   REVIEW_COPY,
   reviewCompletionCopy,
@@ -92,6 +96,7 @@ import { FeedbackStrip } from "./FeedbackStrip";
 import { InteractiveSegment } from "./InteractiveSegment";
 import { LeaveLessonDialog } from "./LeaveLessonDialog";
 import { LessonComplete } from "./LessonComplete";
+import { LessonMessage } from "./LessonMessage";
 import { ModalitySuggestionPill } from "./ModalitySuggestionPill";
 import { ModuleBoundaryScreen } from "./ModuleBoundaryScreen";
 import { OfflineBanner } from "./OfflineBanner";
@@ -137,6 +142,13 @@ const FEEDBACK_MS = 3500;
 
 /** One object, so the signal session is not told the same ending twice. */
 const COMPLETED: SessionOutcome = { completionStatus: "completed" };
+
+/** SCRUM-181's nothing-landed screen (design D35), verbatim. */
+const REROUTED = {
+  title: "That version didn't work.",
+  body: "Nevo is taking you through this lesson again, a simpler way.",
+  action: "Start again",
+} as const;
 
 /** Design's ending for a partial offline copy (D142, 8 Oct), verbatim. */
 const PARTIAL_ENDING = {
@@ -201,6 +213,7 @@ export function LessonPlayer({
   progressRow = null,
   lastWorkedAt = null,
   adaptSegments,
+  onStartAgain,
 }: {
   lesson: Lesson;
   plan: AdaptationPlan | null;
@@ -262,6 +275,11 @@ export function LessonPlayer({
   review?: boolean;
   /** The concept a review session is for; absent on an ordinary lesson. */
   reviewConceptId?: string;
+  /**
+   * SCRUM-181's Start again: open the lesson afresh from this zero-based
+   * segment, the server's reroute's place. Absent, the screen is not offered.
+   */
+  onStartAgain?: (segmentPosition: number) => void;
 }) {
   // Every exit from the lesson - see `useLessonExit`.
   const exitTo = useLessonExit();
@@ -284,6 +302,13 @@ export function LessonPlayer({
   // ids are invented and a 404 would be ours, not the network's.
   const progress = useLessonProgress(lesson.id, live, assignmentId);
   const { report: reportProgress } = progress;
+  /*
+   * The server's reroute (SCRUM-178), off the completion write's answer: it
+   * only ever comes back on a completed row, so the session it closes ended
+   * completed - and says so even if the child starts again from the result,
+   * before Continue would have said it. See the SCRUM-181 screen below.
+   */
+  const reroute = live ? rerouteFrom(progress.saved) : null;
 
   // Signals ride the BACKEND's session id, not the local one above - see
   // `useSignals`. Null until `POST /session` answers, which the hook holds for.
@@ -305,7 +330,7 @@ export function LessonPlayer({
     progress.sessionId,
     lesson.id,
     "lesson",
-    ending,
+    ending ?? (reroute ? COMPLETED : null),
     applied,
   );
   const { setActiveLesson } = useLesson();
@@ -531,18 +556,11 @@ export function LessonPlayer({
   /*
    * B49: A CHECK LEFT PART WAY REOPENS WHERE IT WAS LEFT, the same day.
    * Decided once: as the lesson opens (B82, `checkOpensAt`), or as the child
-   * moves into the check - see `beginCheck`. `landed` is how many of the
-   * answers from before landed, once read back; `reading` until that read
-   * has answered.
+   * moves into the check - see `beginCheck`. Nothing about what landed before
+   * rides with it: how the check went is the server's `resultState` (B98).
    */
-  const [checkResume, setCheckResume] = useState<{
-    at: number;
-    landed: number | null;
-    reading: boolean;
-  } | null>(() =>
-    checkOpensAt === null
-      ? null
-      : { at: checkOpensAt, landed: null, reading: true },
+  const [checkResume, setCheckResume] = useState<{ at: number } | null>(() =>
+    checkOpensAt === null ? null : { at: checkOpensAt },
   );
   // The answers still on their way, which the completion waits for.
   const attemptWrites = useRef<Promise<unknown>[]>([]);
@@ -1663,7 +1681,8 @@ export function LessonPlayer({
 
   /*
    * The answers given before the exit, read back from the account for Review
-   * Answers and so the result knows what landed before.
+   * Answers. Read for the picks only: whether anything landed is the
+   * server's verdict (B98), not a count made here.
    */
   const readAnswersBefore = useCallback(
     (at: number, asked: string) => {
@@ -1682,11 +1701,9 @@ export function LessonPlayer({
             ...reviewAnswers.current,
           ];
           saveReviewAnswers(lesson.id, reviewAnswers.current);
-          setCheckResume({ at, landed: before.landed, reading: false });
         })
-        // Unread, what landed before stays unknown and the result claims
-        // nothing about it.
-        .catch(() => setCheckResume({ at, landed: null, reading: false }));
+        // Unread, Review Answers simply has fewer picks to show.
+        .catch(() => {});
     },
     [lesson],
   );
@@ -1710,7 +1727,7 @@ export function LessonPlayer({
       : null;
     if (at === null) return;
     const asked = progress.sessionId;
-    setCheckResume({ at, landed: null, reading: Boolean(asked) });
+    setCheckResume({ at });
     if (at >= questions.length) finishCheck();
     if (asked) readAnswersBefore(at, asked);
   };
@@ -1746,9 +1763,7 @@ export function LessonPlayer({
 
   /*
    * And its answers from before are read back once there is a session to
-   * read them under - which this early there seldom is yet. If the session
-   * cannot be opened at all, there is nothing to read them with, so what
-   * landed before is unknown rather than held (`landedPending`).
+   * read them under - which this early there seldom is yet.
    */
   const answersAsked = useRef(false);
   const checkSession = progress.sessionId;
@@ -1757,8 +1772,15 @@ export function LessonPlayer({
     answersAsked.current = true;
     readAnswersBefore(checkOpensAt, checkSession);
   }, [checkOpensAt, checkSession, readAnswersBefore]);
-  const noSessionComing = !checkSession && progress.completionFailed;
-  const landedPending = (checkResume?.reading ?? false) && !noSessionComing;
+
+  /*
+   * B98: HOW THE CHECK WENT IS THE SERVER'S VERDICT, and it comes back on the
+   * completion write. Until that write answers the result keeps its place
+   * unseen; if it fails - or no session ever opens - there is no verdict, and
+   * the result claims none. The walkthrough has no server to give one.
+   */
+  const verdictPending =
+    live && !progress.completionSaved && !progress.completionFailed;
 
   const requestExit = () => {
     trackEvent(SIGNAL_EVENT_TYPES.EXIT_ATTEMPT, { segmentId: segment.id });
@@ -1795,6 +1817,31 @@ export function LessonPlayer({
   const partsLeft =
     attentionOn && modality === MODALITY.TEXT && partsLeftOn === segment.id;
 
+  /*
+   * SCRUM-181: "THAT VERSION DIDN'T WORK." - when the completion write comes
+   * back saying nothing landed and the server has rerouted the lesson (B98,
+   * SCRUM-178). It replaces the check's result, or the completion screen if
+   * the child moved on before the write answered. Design's words verbatim,
+   * and no score, count or percentage. Start again follows the server's
+   * reroute: the lesson opens again from its `segmentPosition`, and its
+   * session is the one `POST /session` then hands back - see `LessonRoute`.
+   * A lesson nobody attempted is never sent here; it resumes from Home.
+   */
+  if (
+    reroute &&
+    onStartAgain &&
+    (phase === "assessment" || phase === "complete")
+  ) {
+    return (
+      <LessonMessage
+        title={REROUTED.title}
+        body={REROUTED.body}
+        actionLabel={REROUTED.action}
+        onAction={() => onStartAgain(reroute.segmentPosition)}
+      />
+    );
+  }
+
   // The entry, assessment and completion screens each take over the full
   // screen — their own layout, no player chrome.
   if (phase === "review-entry") {
@@ -1821,8 +1868,8 @@ export function LessonPlayer({
         reading={readingOn}
         onAudioBusy={(phase) => trackBusy(BUSY_REASON.MEDIA_PLAYING, phase)}
         resumeAt={checkResume?.at}
-        landedBefore={checkResume ? checkResume.landed : 0}
-        landedPending={landedPending}
+        result={live ? resultStateFrom(progress.saved) : undefined}
+        resultPending={verdictPending}
         outcome={live ? checkOutcomeFrom(progress.saved) : null}
         onComplete={finishCheck}
         onLeave={(checkPosition) => {
@@ -1831,10 +1878,10 @@ export function LessonPlayer({
            *
            * `exited` at the last segment, the same record the leave dialog
            * makes - so the lesson stays unfinished and comes back on Home to
-           * pick up. No `resultState`: its `not_attempted` and
-           * `nothing_landed` send the child down a depth, which is a verdict,
-           * and an unfinished check has none to give. The answers already
-           * given were stored one by one as they were confirmed.
+           * pick up. No `resultState`, on this write or any: it is the
+           * server's to derive from its own marks since B98, and the write's
+           * field is deprecated. The answers already given were stored one by
+           * one as they were confirmed.
            *
            * B49: and WHERE in the check, so it reopens there the same day.
            * None from the intro - a check not begun has no place to keep.

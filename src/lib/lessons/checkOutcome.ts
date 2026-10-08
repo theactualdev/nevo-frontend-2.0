@@ -2,6 +2,8 @@ import {
   LESSON_STATUS,
   type ConceptOutcome,
   type LessonProgressResponse,
+  type LessonReroute,
+  type ResultState,
 } from "@/lib/api/lessons";
 
 /**
@@ -46,6 +48,49 @@ export function checkOutcomeFrom(
     revisit: namesOf(row.revisitConcepts),
     note: row.resultNote?.trim() ?? "",
   };
+}
+
+type CompletedRow = Pick<
+  LessonProgressResponse,
+  "status" | "resultState" | "reroute"
+>;
+
+const RESULT_STATES: readonly ResultState[] = [
+  "landed",
+  "partly_landed",
+  "nothing_landed",
+  "not_attempted",
+];
+
+/**
+ * How the lesson went, as the SERVER says it (B98, 8 Oct): derived from the
+ * newest marked attempt per problem, and returned on the completion write.
+ * The client used to decide "nothing landed" from its own count of right
+ * answers; it counts nothing now. Only from a completed row, for the reason
+ * `checkOutcomeFrom` gives, and null for a value it does not know.
+ */
+export function resultStateFrom(
+  row: CompletedRow | null | undefined,
+): ResultState | null {
+  if (!row || row.status !== LESSON_STATUS.COMPLETED) return null;
+  const state = row.resultState;
+  return state && RESULT_STATES.includes(state) ? state : null;
+}
+
+/**
+ * The reroute to follow (SCRUM-178), when the server says nothing landed and
+ * has opened the way back through: SCRUM-181's "That version didn't work."
+ * and its Start again. Never for `not_attempted` - "a lesson the child never
+ * attempted resumes instead" - and never without a place to start from.
+ */
+export function rerouteFrom(
+  row: CompletedRow | null | undefined,
+): LessonReroute | null {
+  if (resultStateFrom(row) !== "nothing_landed") return null;
+  const reroute = row?.reroute;
+  if (!reroute || reroute.reason !== "nothing_landed") return null;
+  const at = reroute.segmentPosition;
+  return Number.isInteger(at) && at >= 0 ? reroute : null;
 }
 
 /** Each concept once, in the server's order; a blank name is no concept. */

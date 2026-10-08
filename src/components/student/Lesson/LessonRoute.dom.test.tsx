@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 import { LessonRoute } from "./LessonRoute";
 import { LessonLoadingSkeleton } from "./LessonLoadingSkeleton";
 
@@ -31,12 +37,18 @@ vi.mock("@/hooks/useStudentLesson", () => ({
 }));
 
 const playerProps = vi.hoisted(() => ({ value: null as unknown }));
-vi.mock("./LessonPlayer", () => ({
-  LessonPlayer: (props: unknown) => {
-    playerProps.value = props;
-    return <div data-testid="player" />;
-  },
-}));
+/** How many players have been built - a remount is a new one. */
+const mounts = vi.hoisted(() => ({ count: 0 }));
+vi.mock("./LessonPlayer", async () => {
+  const { useState } = await vi.importActual<typeof import("react")>("react");
+  return {
+    LessonPlayer: (props: unknown) => {
+      useState(() => ++mounts.count);
+      playerProps.value = props;
+      return <div data-testid="player" />;
+    },
+  };
+});
 
 const LESSON = { id: "les-1", title: "Fractions", segments: [{ id: "s1" }] };
 
@@ -214,5 +226,51 @@ describe("the loading skeleton", () => {
 
     const bar = screen.getByRole("progressbar");
     expect(bar.getAttribute("aria-valuetext")).toBe("Loading lesson");
+  });
+});
+
+describe("starting again after the server rerouted the lesson (SCRUM-178)", () => {
+  const startAgain = (at: number) =>
+    act(() =>
+      (playerProps.value as { onStartAgain: (at: number) => void })
+        .onStartAgain(at),
+    );
+
+  it("builds a new player at the reroute's place, not the dashboard's", () => {
+    state({
+      lesson: LESSON,
+      resumeAt: 3,
+      progressRow: { status: "exited", checkPosition: 1 },
+    });
+    render(<LessonRoute lessonId="les-1" />);
+    const built = mounts.count;
+
+    startAgain(0);
+
+    // Nothing of the run that did not land carries into the new one.
+    expect(mounts.count).toBe(built + 1);
+    expect(playerProps.value).toMatchObject({
+      startAt: 0,
+      progressRow: null,
+      placeUnknown: false,
+    });
+  });
+
+  it("builds another each time it is asked", () => {
+    state({ lesson: LESSON });
+    render(<LessonRoute lessonId="les-1" />);
+    const built = mounts.count;
+
+    startAgain(0);
+    startAgain(0);
+
+    expect(mounts.count).toBe(built + 2);
+  });
+
+  it("is offered nowhere a server never marked the lesson", () => {
+    state({ lesson: LESSON, live: false });
+    render(<LessonRoute lessonId="les-1" />);
+
+    expect(playerProps.value).toMatchObject({ onStartAgain: undefined });
   });
 });

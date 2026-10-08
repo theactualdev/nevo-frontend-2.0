@@ -122,7 +122,13 @@ describe("the recovery note (D40)", () => {
   });
 
   it("makes none on the result either, when nothing landed", () => {
-    render(<AfterLessonAssessment assessment={ASSESSMENT} onFinish={() => {}} />);
+    render(
+      <AfterLessonAssessment
+        assessment={ASSESSMENT}
+        onFinish={() => {}}
+        result="nothing_landed"
+      />,
+    );
     start();
     for (let i = 0; i < 4; i++) {
       pick("B");
@@ -140,6 +146,7 @@ describe("the recovery note (D40)", () => {
       <AfterLessonAssessment
         assessment={{ ...ASSESSMENT, revisitConcepts: ["Halves"] }}
         onFinish={() => {}}
+        result="nothing_landed"
       />,
     );
     start();
@@ -304,55 +311,88 @@ describe("picking the check back up (B49)", () => {
 
     expect(screen.getByRole("button", { name: "Continue" })).toBeTruthy();
   });
+});
 
-  it("counts what landed before the exit", () => {
-    // Two right before leaving, two wrong after: something landed.
+describe("whether anything landed is the server's word (B98)", () => {
+  /** Answer all four questions with one option. */
+  const answerAll = (label: string) => {
+    start();
+    for (let i = 0; i < 4; i++) {
+      pick(label);
+      if (label === "B")
+        fireEvent.click(screen.getByRole("button", { name: "Next question" }));
+    }
+  };
+  const HEADING = "You’re getting the hang of this";
+
+  it("draws the frame's screen where the server says something landed", () => {
+    // Every answer here was wrong: the client's own count would have said
+    // nothing landed. It is not asked any more.
     render(
       <AfterLessonAssessment
         assessment={ASSESSMENT}
         onFinish={() => {}}
-        resumeAt={2}
-        landedBefore={2}
+        result="partly_landed"
       />,
     );
-    for (let i = 0; i < 2; i++) {
-      pick("B");
-      fireEvent.click(screen.getByRole("button", { name: "Next question" }));
-    }
+    answerAll("B");
 
-    expect(
-      screen.getByRole("heading", { name: "You’re getting the hang of this" }),
-    ).toBeTruthy();
+    expect(screen.getByRole("heading", { name: HEADING })).toBeTruthy();
+    expect(screen.queryByText(/didn.t land yet/)).toBeNull();
   });
 
-  it("claims nothing landed only when it knows", () => {
-    // What landed before could not be read back, so "nothing" is unknown.
+  it("says nothing landed where the server says so, with no heading (D143)", () => {
+    // Every answer here was right on this device; the server's verdict wins.
+    render(
+      <AfterLessonAssessment
+        assessment={ASSESSMENT}
+        onFinish={() => {}}
+        result="nothing_landed"
+      />,
+    );
+    answerAll("A");
+
+    expect(screen.getByText(/didn.t land yet/)).toBeTruthy();
+    expect(screen.queryByRole("heading")).toBeNull();
+  });
+
+  it("claims nothing either way when a live lesson's verdict is not known", () => {
+    // The completion write failed: no verdict came back.
     render(
       <AfterLessonAssessment
         assessment={ASSESSMENT}
         onFinish={() => {}}
         resumeAt={4}
-        landedBefore={null}
+        result={null}
       />,
     );
 
     expect(screen.queryByText(/didn.t land yet/)).toBeNull();
+    expect(screen.queryByRole("heading")).toBeNull();
+    expect(screen.getByRole("button", { name: "Continue" })).toBeTruthy();
   });
 
-  it("holds the heading while that is still being read", () => {
+  it("holds the mark and heading while the verdict is on its way", () => {
     render(
       <AfterLessonAssessment
         assessment={ASSESSMENT}
         onFinish={() => {}}
         resumeAt={4}
-        landedBefore={null}
-        landedPending
+        result={null}
+        resultPending
       />,
     );
 
     // Kept in place, unseen, so one heading is not swapped for another.
     expect(screen.queryByRole("heading")).toBeNull();
     expect(document.querySelector("h2")?.closest(".invisible")).toBeTruthy();
+  });
+
+  it("shows the walkthrough, which no server marks, as the frame draws it", () => {
+    render(<AfterLessonAssessment assessment={ASSESSMENT} onFinish={() => {}} />);
+    answerAll("B");
+
+    expect(screen.getByRole("heading", { name: HEADING })).toBeTruthy();
   });
 });
 
