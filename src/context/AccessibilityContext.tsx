@@ -6,10 +6,13 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
+import { personalSettingsApi } from "@/lib/api/settings";
 import { getSession, onSessionChange } from "@/lib/auth/session";
+import { USER_ROLES } from "@/lib/constants/permissions";
 import { A11Y_STORAGE_KEY } from "./accessibilityBoot";
 
 export type TextSize = "s" | "m" | "l" | "xl";
@@ -20,10 +23,16 @@ export interface AccessibilityPrefs {
   textSize: TextSize;
 }
 
+/**
+ * Each setter applies the choice at once and resolves TRUE ONLY ONCE IT IS
+ * KEPT: on a child's account, once the account's write has landed (D112, a
+ * failed write is not "Saved"); with no account to hold it, once this device
+ * has it.
+ */
 export interface AccessibilityValue extends AccessibilityPrefs {
-  setReducedMotion: (v: boolean) => void;
-  setHighContrast: (v: boolean) => void;
-  setTextSize: (v: TextSize) => void;
+  setReducedMotion: (v: boolean) => Promise<boolean>;
+  setHighContrast: (v: boolean) => Promise<boolean>;
+  setTextSize: (v: TextSize) => Promise<boolean>;
 }
 
 const DEFAULTS: AccessibilityPrefs = {
@@ -38,6 +47,53 @@ const STORAGE_KEY = A11Y_STORAGE_KEY;
 function prefsKey(): string {
   const userId = getSession()?.userId;
   return userId ? `${STORAGE_KEY}:${userId}` : STORAGE_KEY;
+}
+
+/**
+ * The key a child's preferences live under in their account's `preferences`
+ * (`GET/PUT /api/v1/settings/me`). The contract names no keys, so this one is
+ * ours; all three ride under it, so the PUT's merge cannot leave a stale one
+ * beside a fresh one.
+ */
+export const ACCOUNT_PREFS_KEY = "accessibility";
+
+const TEXT_SIZES: readonly TextSize[] = ["s", "m", "l", "xl"];
+
+/**
+ * The account the preferences are kept on: a signed-in STUDENT's. SCRUM-226
+ * puts the child's preferences on their account; the staff consoles keep
+ * theirs on the device, as they did.
+ */
+function syncedAccount(): string | null {
+  const session = getSession();
+  return session?.token && session.role === USER_ROLES.STUDENT
+    ? session.userId
+    : null;
+}
+
+/**
+ * What the account holds, field by field, keeping only the three and only
+ * when well-formed. Anything else is no preference at all.
+ */
+export function accountPrefs(
+  preferences: unknown,
+): Partial<AccessibilityPrefs> {
+  const held =
+    preferences && typeof preferences === "object"
+      ? (preferences as Record<string, unknown>)[ACCOUNT_PREFS_KEY]
+      : undefined;
+  if (!held || typeof held !== "object") return {};
+  const { reducedMotion, highContrast, textSize } = held as Record<
+    string,
+    unknown
+  >;
+  const out: Partial<AccessibilityPrefs> = {};
+  if (typeof reducedMotion === "boolean") out.reducedMotion = reducedMotion;
+  if (typeof highContrast === "boolean") out.highContrast = highContrast;
+  if (TEXT_SIZES.includes(textSize as TextSize)) {
+    out.textSize = textSize as TextSize;
+  }
+  return out;
 }
 
 function readPrefs(key: string): AccessibilityPrefs {
@@ -101,6 +157,22 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
     prefs: AccessibilityPrefs;
   }>({ key: null, prefs: DEFAULTS });
   const { prefs } = state;
+  /**
+   * The same pair, readable from a callback without a stale closure, and set
+   * only beside `setState` - so the next state is worked out before React
+   * sees it, never inside an updater.
+   */
+  const current = useRef(state);
+  const commit = useCallback((next: typeof state) => {
+    current.current = next;
+    setState(next);
+  }, []);
+  /** The key the account has been asked about, so one sign-in asks once. */
+  const askedFor = useRef<string | null>(null);
+  /** The child has chosen since the account was asked: its answer is older. */
+  const chosenSince = useRef(false);
+  /** Account writes, one at a time, so the last choice is the one kept. */
+  const writes = useRef<Promise<unknown>>(Promise.resolve());
 
   /*
    * ONE CHILD'S SETTINGS, NOT THE TABLET'S.
@@ -114,17 +186,48 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
    *
    * No migration from the old shared key: it cannot say which child set it,
    * and handing it to whichever child signs in first is the bug again.
+   *
+   * THEN THE ACCOUNT'S, WHICH WIN (SCRUM-226, 8 Oct): "Preferences are
+   * account-level ... They are not tablet-local." The device's copy paints
+   * first - before React, through the boot script (rule 6) - and the account's
+   * values replace it once read, and are kept on the device in turn so the
+   * next load paints them. A read that fails changes nothing: the device's
+   * copy is the child's last known choice, not a guess. And a choice made
+   * while the read is out is not undone by its older answer.
    */
   useEffect(() => {
     const load = () => {
       const key = prefsKey();
-      setState((s) => (s.key === key ? s : { key, prefs: readPrefs(key) }));
+      if (current.current.key !== key) {
+        commit({ key, prefs: readPrefs(key) });
+      }
+      if (!syncedAccount()) {
+        // Signed out: the next sign-in, the same child's included, asks again.
+        askedFor.current = null;
+        return;
+      }
+      if (askedFor.current === key) return;
+      askedFor.current = key;
+      chosenSince.current = false;
+      personalSettingsApi.get().then(
+        (res) => {
+          if (current.current.key !== key || chosenSince.current) return;
+          const held = accountPrefs(res?.preferences);
+          if (Object.keys(held).length === 0) return;
+          commit({ key, prefs: { ...current.current.prefs, ...held } });
+        },
+        () => {
+          // Unread is not a preference. Asked again on the next change of
+          // session, rather than never.
+          if (askedFor.current === key) askedFor.current = null;
+        },
+      );
     };
     // Post-mount read of an external store - it cannot run during render
     // without a hydration mismatch.
     load();
     return onSessionChange(load);
-  }, []);
+  }, [commit]);
 
   // Apply to the document root + persist on any change.
   useEffect(() => {
@@ -147,10 +250,31 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
     }
   }, [state]);
 
+  /*
+   * Applied at once, kept on the device by the effect above, and WRITTEN
+   * THROUGH TO A CHILD'S ACCOUNT - all three, under one key. What it resolves
+   * is whether the choice is kept, which is all "Saved" may say.
+   */
   const update = useCallback(
-    (patch: Partial<AccessibilityPrefs>) =>
-      setState((s) => ({ ...s, prefs: { ...s.prefs, ...patch } })),
-    [],
+    (patch: Partial<AccessibilityPrefs>): Promise<boolean> => {
+      const was = current.current;
+      if (!was.key) return Promise.resolve(false);
+      const next = { key: was.key, prefs: { ...was.prefs, ...patch } };
+      commit(next);
+      if (!syncedAccount() || next.key !== prefsKey()) {
+        return Promise.resolve(true);
+      }
+      chosenSince.current = true;
+      const write = writes.current.then(() =>
+        personalSettingsApi.update({ [ACCOUNT_PREFS_KEY]: next.prefs }),
+      );
+      writes.current = write.catch(() => {});
+      return write.then(
+        () => true,
+        () => false,
+      );
+    },
+    [commit],
   );
   const setReducedMotion = useCallback(
     (v: boolean) => update({ reducedMotion: v }),

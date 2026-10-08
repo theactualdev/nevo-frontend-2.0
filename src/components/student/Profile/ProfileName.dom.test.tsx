@@ -47,9 +47,14 @@ vi.mock("@/lib/api/users", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/users")>();
   return { ...actual, usersApi: { ...actual.usersApi, me, updateMe } };
 });
-const { settingsUpdate } = vi.hoisted(() => ({ settingsUpdate: vi.fn() }));
+const { settingsUpdate, personalGet, personalUpdate } = vi.hoisted(() => ({
+  settingsUpdate: vi.fn(),
+  personalGet: vi.fn(),
+  personalUpdate: vi.fn(),
+}));
 vi.mock("@/lib/api/settings", () => ({
   settingsApi: { get: vi.fn().mockResolvedValue({ settings: {} }), update: settingsUpdate },
+  personalSettingsApi: { get: personalGet, update: personalUpdate },
 }));
 
 /** `users/me` caches per account, so each test is a different child. */
@@ -103,6 +108,10 @@ beforeEach(() => {
   me.mockReset();
   updateMe.mockReset();
   settingsUpdate.mockReset();
+  personalGet.mockReset();
+  personalGet.mockResolvedValue({ userId: "u", preferences: {} });
+  personalUpdate.mockReset();
+  personalUpdate.mockResolvedValue({ userId: "u", preferences: {} });
   auth.user = null;
   window.localStorage.clear();
   clearSession();
@@ -241,5 +250,55 @@ describe("an SSO child's account rows (D9)", () => {
       await screen.findByText("You can come back anytime with your PIN."),
     ).toBeInTheDocument();
     expect(screen.queryByText(/progress is saved/i)).toBeNull();
+  });
+});
+
+/**
+ * SCRUM-226 (8 Oct): a child's accessibility choices are kept on their
+ * account, and "Saved" says so only once the account holds them (D112). It
+ * flashed on the tap, before anything was written anywhere but this device.
+ */
+describe("an accessibility choice", () => {
+  it("is written to the account, and says Saved only once it lands", async () => {
+    me.mockResolvedValue(account(null));
+    let land: () => void = () => {};
+    personalUpdate.mockReturnValue(
+      new Promise((resolve) => {
+        land = () => resolve({ userId, preferences: {} });
+      }),
+    );
+    renderProfile();
+    await screen.findByText("Tobi");
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("switch", { name: "High contrast" }));
+    });
+
+    // All three, under the one key the account keeps them in.
+    expect(personalUpdate).toHaveBeenCalledWith({
+      accessibility: { reducedMotion: false, highContrast: true, textSize: "m" },
+    });
+    expect(savedShown()).toBe(false);
+
+    await act(async () => land());
+
+    expect(savedShown()).toBe(true);
+  });
+
+  it("does not say Saved when the account refuses it, and keeps the choice on screen", async () => {
+    me.mockResolvedValue(account(null));
+    personalUpdate.mockRejectedValue(new Error("503"));
+    renderProfile();
+    await screen.findByText("Tobi");
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "XL" }));
+    });
+
+    expect(savedShown()).toBe(false);
+    expect(screen.getByRole("button", { name: "XL" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
   });
 });
