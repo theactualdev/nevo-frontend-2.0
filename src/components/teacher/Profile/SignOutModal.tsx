@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { useAuth } from "@/hooks";
+import { SIGNED_OUT_DOOR } from "@/components/teacher/Auth/signedOut";
 
 /**
  * C11 sign-out confirm. The violet glyph and the reassurance line keep it a
@@ -33,16 +35,21 @@ export function SignOutModal({ onStay }: { onStay: () => void }) {
     // saw a teacher, bounced them off /auth/teacher back into the console, and
     // the token then dropped underneath them - so signing out landed you back
     // where you started and quietly logged you out a moment later.
-    // Teachers land on their own door, not the student PIN unlock.
-    window.location.assign("/auth/teacher");
+    // Teachers land on their own door, not the student PIN unlock - which
+    // says "Signed out" as they arrive (SCRUM-88, T228).
+    window.location.assign(SIGNED_OUT_DOOR);
   };
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogRef);
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-nevo-near-black/50 p-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
       onClick={() => !busy && onStay()}
     >
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label="Sign out of Nevo?"

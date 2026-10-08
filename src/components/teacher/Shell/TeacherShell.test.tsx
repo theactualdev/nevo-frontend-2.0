@@ -1,17 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render } from "@testing-library/react";
 
-const { useSessionLapse, usePathname } = vi.hoisted(() => ({
-  useSessionLapse: vi.fn(),
-  usePathname: vi.fn(),
-}));
+const { useSessionLapse, useSessionRefresh, useSessionElsewhere, usePathname } = vi.hoisted(
+  () => ({
+    useSessionLapse: vi.fn(),
+    useSessionRefresh: vi.fn(),
+    useSessionElsewhere: vi.fn(),
+    usePathname: vi.fn(),
+  }),
+);
 
 vi.mock("@/hooks/useSessionLapse", () => ({ useSessionLapse }));
+vi.mock("@/hooks/useSessionRefresh", () => ({ useSessionRefresh }));
+vi.mock("./sessionElsewhere", () => ({ useSessionElsewhere }));
 vi.mock("next/navigation", () => ({ usePathname }));
-vi.mock("@/context/AccessibilityContext", () => ({
-  TEXT_ZOOM: { normal: "", large: "" },
-  useAccessibility: () => ({ textSize: "normal" }),
-}));
 vi.mock("./AskNevo", () => ({ AskNevo: () => null }));
 vi.mock("./TeacherSidebar", () => ({ TeacherSidebar: () => null }));
 
@@ -36,6 +38,8 @@ import { TeacherShell } from "./TeacherShell";
  */
 
 beforeEach(() => {
+  useSessionRefresh.mockReset();
+  useSessionElsewhere.mockReset();
   useSessionLapse.mockReset();
   usePathname.mockReset();
   usePathname.mockReturnValue("/teacher/dashboard");
@@ -65,6 +69,50 @@ describe("the teacher console shell", () => {
     );
 
     expect(useSessionLapse).toHaveBeenCalled();
+  });
+
+  it("zooms the page by the class the boot script keys, not an inline style (C12)", () => {
+    const { container } = render(
+      <TeacherShell>
+        <div>console</div>
+      </TeacherShell>,
+    );
+    const main = container.querySelector("main");
+
+    expect(main).toHaveClass("nevo-text-zoom");
+    expect(main?.style.zoom).toBe("");
+  });
+
+  it("renews the teacher's session, which only the student shell ever did (T219)", () => {
+    render(
+      <TeacherShell>
+        <div>console</div>
+      </TeacherShell>,
+    );
+
+    expect(useSessionRefresh).toHaveBeenCalled();
+  });
+
+  it("leaves when another tab signs the teacher out (C02)", () => {
+    render(
+      <TeacherShell>
+        <div>console</div>
+      </TeacherShell>,
+    );
+
+    expect(useSessionElsewhere).toHaveBeenCalled();
+  });
+
+  it("does both on the full-screen flows too, above the early return", () => {
+    usePathname.mockReturnValue("/teacher/onboarding");
+    render(
+      <TeacherShell>
+        <div>bare</div>
+      </TeacherShell>,
+    );
+
+    expect(useSessionRefresh).toHaveBeenCalled();
+    expect(useSessionElsewhere).toHaveBeenCalled();
   });
 
   it("still renders what it was given", () => {

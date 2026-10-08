@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/hooks";
 import { authApi } from "@/lib/api";
 import { setSession } from "@/lib/auth/session";
+import { ssoLanding } from "@/lib/auth/entryGate";
 import { type UserRole } from "@/lib/constants";
 
 /**
@@ -92,6 +93,18 @@ export function TeacherSsoCallback() {
       .ssoCallback({ provider, code, state })
       .then((res) => {
         const role = res.role as UserRole;
+        /*
+         * `destination` IS AN ENUM, NOT A ROUTE (T225): "home_dashboard" or
+         * "observed_interaction". Handed to `router.replace` it was a relative
+         * path that 404s. `ssoLanding` is the student callback's own answer:
+         * the enum only decides a child's route, and a staff member goes to
+         * their console's home. A role no console serves gets no session.
+         */
+        const landing = ssoLanding(role, res.destination);
+        if (!landing) {
+          setPhase("error");
+          return;
+        }
         setSession({
           token: res.accessToken,
           expiresAt: res.expiresAt,
@@ -106,7 +119,7 @@ export function TeacherSsoCallback() {
         setPhase("success");
         timers.current.push(
           setTimeout(
-            () => router.replace(res.destination || "/teacher/dashboard"),
+            () => router.replace(landing),
             SUCCESS_HOLD_MS,
           ),
         );
@@ -167,9 +180,9 @@ export function TeacherSsoCallback() {
               <path d="M5 12.5l4.5 4.5L19 7.5" />
             </svg>
           </span>
-          <h2 className="mt-6 text-[24px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:mt-[26px] xl:text-[26px]">
+          <h1 className="mt-6 text-[24px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:mt-[26px] xl:text-[26px]">
             {"You're in"}
-          </h2>
+          </h1>
           <p className="mt-[11px] max-w-[380px] text-[16px] leading-[1.55] text-nevo-near-black/65 xl:mt-3 xl:max-w-[420px] xl:text-[16.5px]">
             {"Taking you to your dashboard…"}
           </p>
@@ -189,9 +202,9 @@ export function TeacherSsoCallback() {
               <circle cx="12" cy="12" r="9" />
             </svg>
           </span>
-          <h2 className="mt-6 text-[24px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:mt-[26px] xl:text-[26px]">
+          <h1 className="mt-6 text-[24px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:mt-[26px] xl:text-[26px]">
             {"We couldn't sign you in"}
-          </h2>
+          </h1>
           <p className="mt-[11px] max-w-[400px] text-[16px] leading-[1.55] text-nevo-near-black/65 xl:mt-3 xl:max-w-[440px] xl:text-[16.5px]">
             {"Something went wrong between Nevo and your school's sign-in. Nothing on your end - let's try once more, or your school's IT admin can check the connection."}
           </p>

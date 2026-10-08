@@ -146,9 +146,9 @@ export function LessonLibrary() {
   if (loading) {
     return (
       <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
-        <h2 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
+        <h1 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
           Lesson Library
-        </h2>
+        </h1>
         {slow && (
           <p className="mt-2 max-w-[560px] text-[13px] leading-[1.5] text-nevo-near-black/55">
             Still fetching your lessons. The server is taking a moment.
@@ -179,9 +179,9 @@ export function LessonLibrary() {
               <path d="M9 7h6" />
             </svg>
           </div>
-          <h2 className="mt-[26px] text-[22px] font-semibold tracking-[-0.01em] text-nevo-near-black">
+          <h1 className="mt-[26px] text-[22px] font-semibold tracking-[-0.01em] text-nevo-near-black">
             Nothing here yet
-          </h2>
+          </h1>
           <p className="mt-3 text-base leading-[1.6] text-nevo-near-black/66">
             Upload your first lesson and Nevo will get it ready for your
             students. A PDF, Word doc or slides all work.
@@ -194,9 +194,9 @@ export function LessonLibrary() {
 
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
-      <h2 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
+      <h1 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
         Lesson Library
-      </h2>
+      </h1>
       {sample && (
         <p className="mt-2 max-w-[560px] text-[13px] leading-[1.5] text-nevo-near-black/55 italic">
           We couldn&rsquo;t reach your lessons just now, so these are samples.
@@ -228,7 +228,7 @@ export function LessonLibrary() {
             placeholder="Search lessons"
             aria-label="Search lessons"
             className={cn(
-              "h-12 w-full rounded-[10px] border-[1.5px] bg-nevo-cream-elevated px-11 text-[15px] text-nevo-near-black outline-none placeholder:text-nevo-near-black/45 xl:h-[50px] xl:text-[15.5px]",
+              "h-12 w-full rounded-[10px] border-[1.5px] bg-nevo-cream-elevated px-11 text-[15px] text-nevo-near-black outline-none transition-colors placeholder:text-nevo-near-black/45 focus:border-nevo-navy xl:h-[50px] xl:text-[15.5px]",
               hasQuery ? "border-nevo-navy" : "border-nevo-near-black/14",
             )}
           />

@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
 import { assignmentsApi } from "@/lib/api/assignments";
 import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
@@ -354,12 +355,16 @@ function Shell({
   children: React.ReactNode;
   onClose: () => void;
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogRef, { onEscape: onClose });
   return (
     <div
       onClick={onClose}
       className="fixed inset-0 z-50 flex items-end justify-center bg-nevo-near-black/28 backdrop-blur-[1.5px] sm:items-center"
     >
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label="Recommend a lesson"

@@ -148,9 +148,9 @@ export function HelpAndSupport() {
           </svg>
           Settings
         </Link>
-        <h2 className="mt-[18px] text-[26px] font-semibold tracking-[-0.018em] text-nevo-near-black xl:mt-5 xl:text-[30px]">
+        <h1 className="mt-[18px] text-[26px] font-semibold tracking-[-0.018em] text-nevo-near-black xl:mt-5 xl:text-[30px]">
           Help &amp; support
-        </h2>
+        </h1>
         <p className="mt-2.5 text-[15px] leading-[1.6] text-pretty text-nevo-near-black/66 xl:mt-3 xl:text-base">
           Reach a real person on the Nevo team whenever you need a hand.
           We&rsquo;re glad to help.

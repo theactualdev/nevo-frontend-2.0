@@ -102,3 +102,15 @@ describe("a new message not yet sent", () => {
     expect(leavingAsks()).toBe(true);
   });
 });
+
+describe("the student search (C10)", () => {
+  it("is named, not only placeholdered", () => {
+    classes({ live: true, options: [] });
+    render(<ComposeModal onClose={vi.fn()} onSend={vi.fn()} />);
+
+    expect(screen.getByLabelText("Search your students")).toHaveAttribute(
+      "placeholder",
+      "Search your students",
+    );
+  });
+});

@@ -120,9 +120,9 @@ export function StudentProfile({
             </span>
             <div>
               <div className="flex items-center gap-[9px] xl:gap-2.5">
-                <h2 className="text-[22px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[27px]">
+                <h1 className="text-[22px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[27px]">
                   {student.name}
-                </h2>
+                </h1>
                 {student.chip && (
                   <span className="rounded-full bg-nevo-violet/24 px-[9px] py-0.5 text-[11px] font-semibold text-nevo-navy xl:px-[11px] xl:py-[3px] xl:text-xs">
                     {student.chip}

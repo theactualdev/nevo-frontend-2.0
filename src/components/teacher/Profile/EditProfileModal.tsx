@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { AvatarDisc } from "@/components/shared/AvatarDisc";
 import type { TeacherProfile } from "@/lib/mocks/teacherProfile";
 
@@ -86,12 +87,16 @@ export function EditProfileModal({
   const label =
     "text-xs font-semibold tracking-[0.03em] text-nevo-near-black/55 uppercase";
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogRef);
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-nevo-near-black/50 p-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
       onClick={onCancel}
     >
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label="Edit profile"
@@ -164,6 +169,13 @@ export function EditProfileModal({
           </p>
         )}
 
+        <form
+          noValidate
+          onSubmit={(e) => {
+            e.preventDefault();
+            void submit();
+          }}
+        >
         <div className="mt-5 flex flex-col gap-4">
           <label className="block">
             <span className={label}>Full name</span>
@@ -201,10 +213,7 @@ export function EditProfileModal({
 
         <div className="mt-6 flex gap-3">
           <button
-            type="button"
-            onClick={() =>
-              void submit()
-            }
+            type="submit"
             className="h-12 flex-1 cursor-pointer rounded-[10px] bg-nevo-navy text-[15px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93"
           >
             {saving ? "Saving…" : failed ? "Try again" : "Save changes"}
@@ -217,6 +226,7 @@ export function EditProfileModal({
             Cancel
           </button>
         </div>
+        </form>
       </div>
     </div>
   );

@@ -402,9 +402,9 @@ export function LiveVariantReview({
           Lesson Library · Variant review
         </Link>
 
-        <h2 className="mt-0.5 text-[22px] font-semibold tracking-[-0.018em] text-nevo-near-black xl:text-[26px]">
+        <h1 className="mt-0.5 text-[22px] font-semibold tracking-[-0.018em] text-nevo-near-black xl:text-[26px]">
           {`${lessonTitle} · Section ${sectionIndex}`}
-        </h2>
+        </h1>
         {segment.title && (
           <p className="mt-1 text-[14px] text-nevo-near-black/60">
             {segment.title}

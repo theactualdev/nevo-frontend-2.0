@@ -142,9 +142,9 @@ export function ProfileSettings() {
     <div className="relative mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
       <div className="mx-auto max-w-[680px]">
         <div className="flex items-center justify-between gap-4">
-          <h2 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
+          <h1 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
             Profile &amp; account
-          </h2>
+          </h1>
           {/* C14 B6: disabled until something is actually dirty. */}
           <button
             type="button"

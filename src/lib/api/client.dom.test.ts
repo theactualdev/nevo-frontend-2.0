@@ -463,3 +463,30 @@ describe("a withdrawn child refused mid-use", () => {
     expect(clearSession).toHaveBeenCalledTimes(1);
   });
 });
+
+/**
+ * T217. The teacher's expired screen promises "continue where you left off",
+ * and the place was dropped here - only the learner door was given it.
+ */
+describe("sessionExpiredDoor, carrying a teacher's place", () => {
+  it("hands the teacher door where they were, query and all", () => {
+    expect(sessionExpiredDoor("teacher", null, "/teacher/classes/c-1?tab=roster")).toBe(
+      `/auth/teacher/session-expired?next=${encodeURIComponent("/teacher/classes/c-1?tab=roster")}`,
+    );
+  });
+
+  it("keeps the reason beside it", () => {
+    expect(sessionExpiredDoor("teacher", "session_replaced", "/teacher/insights")).toBe(
+      `/auth/teacher/session-expired?reason=session_replaced&next=${encodeURIComponent("/teacher/insights")}`,
+    );
+  });
+
+  it("carries no route that is not the teacher console's", () => {
+    expect(sessionExpiredDoor("teacher", null, "/student/home")).toBe("/auth/teacher/session-expired");
+    expect(sessionExpiredDoor("teacher", null, "/teacher")).toBe("/auth/teacher/session-expired");
+  });
+
+  it("gives the admin door none, whose sign-in reads none", () => {
+    expect(sessionExpiredDoor("senco_admin", null, "/admin/classes")).toBe("/auth/admin/session-expired");
+  });
+});
