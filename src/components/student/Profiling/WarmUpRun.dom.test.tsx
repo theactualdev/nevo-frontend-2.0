@@ -158,38 +158,31 @@ describe("WarmUpRun — what actually reaches Nevo", () => {
     expect(submitted()).toMatchObject({ response: "not_sure", correct: null });
   });
 
-  it("sends a completed working-memory recall as three right taps of three", async () => {
+  it("sends a completed working-memory recall as one answer, its three taps in order (B80)", async () => {
     // A child who did it perfectly once reduced to maxSpan 0 -
-    // indistinguishable from never finishing.
+    // indistinguishable from never finishing. Then it went up as three
+    // trials, one per tap; backend's contract is one per completed recall.
     await sitTheTileTask();
     await settle();
 
-    expect(trials()).toHaveLength(3);
-    expect(trials().map((t: { response: string }) => t.response)).toEqual([
-      "2",
-      "1",
-      "0",
-    ]);
-    for (const trial of trials()) {
-      expect(trial).toMatchObject({
-        dimension: "wmc",
-        condition: "length_3",
-        correct: true,
-      });
-    }
+    expect(trials()).toHaveLength(1);
+    expect(submitted()).toMatchObject({
+      dimension: "wmc",
+      condition: "length_3",
+      response: "2,1,0",
+      correct: true,
+    });
   });
 
-  it("times every tap, the first from when the grid was handed over", async () => {
+  it("times the recall from when the grid was handed over to its last tap", async () => {
     // The first tap had nothing to be timed from: the warm-up never recorded
-    // when its grid was handed over.
+    // when its grid was handed over. The two 50ms gaps after the first tap
+    // are inside the recall, so they are inside its time.
     await sitTheTileTask();
     await settle();
 
-    const times = trials().map(
-      (t: { responseTimeMs: number | null }) => t.responseTimeMs,
-    );
-    expect(times[0]).toEqual(expect.any(Number));
-    expect(times.slice(1)).toEqual([50, 50]);
+    expect(submitted().responseTimeMs).toEqual(expect.any(Number));
+    expect(submitted().responseTimeMs).toBeGreaterThanOrEqual(100);
   });
 });
 

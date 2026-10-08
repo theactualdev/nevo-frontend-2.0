@@ -1114,10 +1114,10 @@ function WarmUpGrid({
       act: "wmc",
       cell,
       correct,
-      // Each tap is timed from the one before it IN THE SAME RECALL, which
-      // `posInSeq` says (`baselineTrials`). Neither it nor `round_complete`
-      // was recorded here once, and a child who did it perfectly looked like
-      // one who never finished.
+      // The recall goes up as ONE trial, ended by a wrong tap or by
+      // `round_complete` (`baselineTrials`, B80). Neither `posInSeq` nor
+      // `round_complete` was recorded here once, and a child who did it
+      // perfectly looked like one who never finished.
       posInSeq: pos.current,
       length: seq.length,
       ...tapPoint(e),
