@@ -181,7 +181,14 @@ describe("a child who stops", () => {
     act(() => vi.advanceTimersByTime(1));
     expect(onComplete).toHaveBeenCalledTimes(1);
     expect(capture.ofKind("motor_tap")).toHaveLength(2);
-    expect(capture.ofKind("motor_end")[0].payload?.reason).toBe("idle");
+    // It names the target left on screen, which leaves as a skipped trial.
+    expect(capture.ofKind("motor_end")[0].payload).toEqual({
+      reason: "idle",
+      grid: 4,
+      formFactor: "tablet",
+      target: 2,
+      practice: false,
+    });
     expect(target()).toBeNull();
   });
 
