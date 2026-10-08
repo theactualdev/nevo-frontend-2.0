@@ -25,6 +25,7 @@ import {
 import { useHasSession } from "@/hooks/useHasSession";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { MOCK_TEACHER } from "./teacherNav";
+import { useAskNevoClass } from "./askNevoScope";
 
 /**
  * Ask Nevo (`Nevo Teacher Ask`) - a reusable overlay dropped onto every
@@ -97,6 +98,8 @@ const SPARKLE = (size: number) => (
 
 export function AskNevo() {
   const pathname = usePathname() ?? "";
+  /** A class chosen in place on the open screen - Insights' pills (T182). */
+  const screenClass = useAskNevoClass();
   /**
    * THE SERVER'S thread id, not one we made up.
    *
@@ -253,6 +256,9 @@ export function AskNevo() {
         // or lesson. The routes have carried real ids all along; the drawer
         // sent only the thread.
         contextIds: {
+          // The route names the record when it can; a class picked in place
+          // fills in only where the route names no class of its own.
+          classId: asUuid(screenClass) ?? undefined,
           ...contextIdsFor(pathname),
           threadId: asUuid(threadId.current),
         },

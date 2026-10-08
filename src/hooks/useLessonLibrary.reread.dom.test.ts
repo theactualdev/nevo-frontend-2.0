@@ -84,13 +84,16 @@ describe("the library while a lesson is still being read", () => {
 
   it("looks again as soon as the tab is looked at again", async () => {
     list.mockResolvedValue([lesson("l-1", "processing")]);
-    renderHook(() => useLessonLibrary());
-    await waitFor(() => expect(list).toHaveBeenCalledTimes(1));
+    const { result } = renderHook(() => useLessonLibrary());
+    // The ANSWER has to have landed - the library only listens once it knows a
+    // lesson is being read. Waiting on the call alone raced it under load.
+    await waitFor(() => expect(result.current.cards[0]?.kind).toBe("parsing"));
+    const before = list.mock.calls.length;
 
     await act(async () => {
       document.dispatchEvent(new Event("visibilitychange"));
     });
 
-    await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(list.mock.calls.length).toBeGreaterThan(before));
   });
 });
