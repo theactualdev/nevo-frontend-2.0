@@ -10,7 +10,13 @@ const { applyToAssignments, useTeacherClasses } = vi.hoisted(() => ({
 vi.mock("@/lib/api/assignments", () => ({ applyToAssignments }));
 vi.mock("@/hooks/useTeacherClasses", () => ({ useTeacherClasses }));
 
-import { AssignmentSchedule, describeWindow, groupByClass } from "./AssignmentSchedule";
+import {
+  AssignmentSchedule,
+  describeWindow,
+  groupByClass,
+  onDay,
+  toDateInput,
+} from "./AssignmentSchedule";
 
 /**
  * Editing and cancelling an assignment (C06b).
@@ -561,5 +567,64 @@ describe("naming the class a group belongs to", () => {
     render(<AssignmentSchedule assignments={CLASS_OF_THREE} />);
 
     expect(screen.queryByText(/JSS 2A/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * C03. The editor read dates in UTC, wrote every date back as midnight UTC,
+ * and sent both fields whichever one moved - so changing a due date moved an
+ * 08:00 opening to 01:00 as well, and a lesson opening just after midnight in
+ * Lagos showed the day before.
+ *
+ * Built from local times, so these hold in whatever zone the run is in.
+ */
+describe("dates in the teacher's own day (C03)", () => {
+  const local = (y: number, m: number, d: number, h = 0, min = 0) =>
+    new Date(y, m - 1, d, h, min).toISOString();
+
+  it("reads the date as the teacher's day, not UTC's", () => {
+    expect(toDateInput(local(2026, 10, 10, 0, 30))).toBe("2026-10-10");
+    expect(toDateInput(local(2026, 10, 10, 23, 30))).toBe("2026-10-10");
+  });
+
+  it("keeps the time a date had when the day moves", () => {
+    const moved = new Date(onDay("2026-10-05", local(2026, 10, 3, 8, 0), "start")!);
+
+    expect([moved.getDate(), moved.getHours(), moved.getMinutes()]).toEqual([5, 8, 0]);
+  });
+
+  it("opens a date that had no time at the start of its day", () => {
+    const opens = new Date(onDay("2026-10-05", null, "start")!);
+
+    expect([opens.getDate(), opens.getHours(), opens.getMinutes()]).toEqual([5, 0, 0]);
+  });
+
+  it("makes a new due date due by the end of its day, not before it starts", () => {
+    const due = new Date(onDay("2026-10-05", null, "end")!);
+
+    expect([due.getDate(), due.getHours(), due.getMinutes()]).toEqual([5, 23, 59]);
+  });
+
+  it("keeps an emptied box as no date", () => {
+    expect(onDay("", local(2026, 10, 3, 8, 0), "start")).toBeNull();
+  });
+
+  it("sends only the date that moved", async () => {
+    applyToAssignments.mockResolvedValue({ ok: ["a-1"], failed: [] });
+    render(<AssignmentSchedule assignments={[row({ availableFrom: local(2026, 10, 3, 8, 0) })]} />);
+    fireEvent.click(screen.getByRole("button", { name: /Change dates/i }));
+    fireEvent.change(screen.getByLabelText(/Due/i), { target: { value: "2026-11-01" } });
+    fireEvent.click(screen.getByRole("button", { name: /Save dates/i }));
+
+    const sent = applyToAssignments.mock.calls[0][1];
+    expect(Object.keys(sent)).toEqual(["dueAt"]);
+    expect(await screen.findByText(/Dates updated/)).toBeInTheDocument();
+  });
+
+  it("offers no Save until something has moved", () => {
+    render(<AssignmentSchedule assignments={[row()]} />);
+    fireEvent.click(screen.getByRole("button", { name: /Change dates/i }));
+
+    expect(screen.getByRole("button", { name: /Save dates/i })).toBeDisabled();
   });
 });
