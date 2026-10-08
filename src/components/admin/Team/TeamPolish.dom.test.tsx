@@ -20,7 +20,12 @@ vi.mock("@/lib/api/team", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/team")>();
   return {
     ...actual,
-    teamApi: { ...actual.teamApi, list: () => list(), invite: (p: unknown) => invite(p) },
+    teamApi: {
+      ...actual.teamApi,
+      // Members as a bare list; the real reader turns it into the team shape.
+      list: async () => actual.toAdminTeam(await list()),
+      invite: (p: unknown) => invite(p),
+    },
   };
 });
 vi.mock("@/lib/api/school", async (importOriginal) => {
