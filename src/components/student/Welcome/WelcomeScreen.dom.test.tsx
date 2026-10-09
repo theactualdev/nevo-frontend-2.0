@@ -66,7 +66,11 @@ describe("the Welcome's two doors", () => {
 
 describe("a new child at the door", () => {
   it("starts with an empty draft, not the last child's", () => {
-    mergeOnboardingDraft({ name: "Someone Else", age: 7, schoolCode: "K7DQ" });
+    mergeOnboardingDraft({
+      name: "Someone Else",
+      ageBand: "early_primary",
+      schoolCode: "K7DQ",
+    });
 
     render(<WelcomeScreen />);
 

@@ -8,7 +8,7 @@ import { holdBaseline } from "@/lib/profiling/pendingBaseline";
 import { ONBOARDING_SIGNAL_TYPES } from "@/lib/constants";
 import {
   AGE_BANDS,
-  bandForAge,
+  bandForRoster,
   gridSpanConfig,
   type AgeBand,
 } from "@/lib/profiling/bands";
@@ -29,8 +29,8 @@ import { SentenceDotModule } from "./SentenceDotModule";
 import { StretchInterstitial } from "./StretchInterstitial";
 
 /**
- * The band a child with none runs: Primary 4-6, the band the warm-up runs
- * without one (D139). See `band` below for why it is not asked.
+ * The band for a child the server gives none: Primary 4-6, the band the
+ * warm-up runs without one (D139). See `band` below for why it is not asked.
  */
 const NO_BAND: AgeBand = AGE_BANDS.P46;
 
@@ -42,10 +42,10 @@ const NO_BAND: AgeBand = AGE_BANDS.P46;
  * trial per answer, the motor step's taps included, parked to be sent raw for
  * the server to reduce (B9), and the rest of the stream is purged.
  *
- * The age band comes from the roster for a child already signed in, else from
- * the age the entry lookup read off the roster, else Primary 4-6 - never from
- * a question to the child (D153); it drives grid sizes, content and targets,
- * and the shells are shared.
+ * The age band is the server's: the roster's for a child already signed in,
+ * else the entry lookup's, else Primary 4-6 - never from a question to the
+ * child (D153); it drives grid sizes, content and targets, and the shells are
+ * shared.
  */
 export function ProfilingFlow({
   track,
@@ -130,25 +130,26 @@ export function ProfilingFlow({
    * only one who never saw Step 1: everyone else's account is created at the
    * PIN step, after this, and any session the device holds before then may be
    * the previous child's - so nothing is read for them (`useRosterBand` takes
-   * no owner) and their Step 1 age decides.
+   * no owner) and the entry lookup's band decides.
    *
-   * WHEN NEITHER SAYS, PRIMARY 4-6, AND THE CHILD IS NEVER ASKED (D153, 8
-   * Oct). The intro asked "How old are you?" here. Design: "There is no
-   * stepper, and we do not ask the child... A child with no date of birth
-   * proceeds normally on their class band." No contract carries a band for a
-   * class - `yearGroup` is free text on staff-side class reads, and none of the
-   * student's own (the dashboard, `users/me`, `session/state`, the entry
-   * lookup) names one - so none is guessed from a class name. A child with no
-   * date of birth runs the band the warm-up already runs when it has none
-   * (D139, `WarmUpRun`), until the class band reaches them.
+   * THE SERVER'S BAND, NEVER AN AGE WORKED INTO ONE HERE (backend, 9 Oct).
+   * Design: "A child with no date of birth proceeds normally on their class
+   * band" (D153). The entry lookup and the dashboard both carry `ageBand`,
+   * derived from the date of birth or, with none, from the enrolled class
+   * year. This used to band the lookup's `age` on the device, which
+   * a child with no date of birth never had. `yearGroup` is not read: the
+   * server has already turned it into the band.
+   *
+   * PRIMARY 4-6 ONLY WHEN THE SERVER GIVES NO BAND AT ALL, and the child is
+   * never asked (D153, 8 Oct). The intro asked "How old are you?" here. It is
+   * the band the warm-up runs when it has none (D139, `WarmUpRun`).
    */
-  const draftAge = getOnboardingDraft().age;
+  const entryBand = bandForRoster(getOnboardingDraft().ageBand);
   const roster = useRosterBand(ownerUserId);
-  const band: AgeBand =
-    roster.band ?? (draftAge ? bandForAge(draftAge) : NO_BAND);
+  const band: AgeBand = roster.band ?? entryBand ?? NO_BAND;
   /**
    * The roster has not answered, so the band is not known: nothing to start -
-   * not even on a Step 1 age, which the roster outranks.
+   * not even on the entry lookup's band, which the roster outranks.
    */
   const bandPending = !roster.settled;
   const [capture] = useState(

@@ -80,6 +80,8 @@ const matched = (over: Record<string, unknown> = {}) => ({
   className: "JSS 1B",
   consentState: "given",
   age: 11,
+  ageBand: "junior_secondary",
+  yearGroup: "JSS 1",
   accountReady: false,
   ageCheckPending: false,
   ...over,
@@ -362,30 +364,44 @@ describe("where a match goes", () => {
       schoolCode: "K7DQ",
       admissionNumber: "BGA/2031",
       name: "Amara",
-      age: 11,
+      // The server's band (9 Oct), not the age or the year group: the
+      // device bands nothing itself.
+      ageBand: "junior_secondary",
     });
   });
 
-  it("asks nothing the roster could not say: no age is carried when none came", async () => {
-    lookup.mockResolvedValue(matched({ age: null }));
+  it("carries the server's band for a child with no date of birth, from their class", async () => {
+    // No age to band, but the server banded them by their class year.
+    lookup.mockResolvedValue(matched({ age: null, ageBand: "upper_primary" }));
     render(<StudentEntryStep framing="school" />);
 
     await enterAndSubmit();
     await afterTheBeat();
 
+    expect(getOnboardingDraft().ageBand).toBe("upper_primary");
+  });
+
+  it("asks nothing the roster could not say: no band is carried when none came", async () => {
+    lookup.mockResolvedValue(matched({ age: null, ageBand: null }));
+    render(<StudentEntryStep framing="school" />);
+
+    await enterAndSubmit();
+    await afterTheBeat();
+
+    expect(getOnboardingDraft()).not.toHaveProperty("ageBand");
     expect(getOnboardingDraft()).not.toHaveProperty("age");
   });
 
   it("starts a fresh draft, not one an earlier child left", async () => {
-    startOnboardingDraft({ name: "Someone Else", age: 7 });
-    lookup.mockResolvedValue(matched({ age: null }));
+    startOnboardingDraft({ name: "Someone Else", ageBand: "early_primary" });
+    lookup.mockResolvedValue(matched({ age: null, ageBand: null }));
     render(<StudentEntryStep framing="school" />);
 
     await enterAndSubmit();
     await afterTheBeat();
 
     expect(getOnboardingDraft().name).toBe("Amara");
-    expect(getOnboardingDraft()).not.toHaveProperty("age");
+    expect(getOnboardingDraft()).not.toHaveProperty("ageBand");
   });
 
   it.each([

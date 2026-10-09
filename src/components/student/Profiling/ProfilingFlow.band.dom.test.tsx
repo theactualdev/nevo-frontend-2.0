@@ -91,13 +91,13 @@ describe("a signed-in child the roster has a band for", () => {
     expect(screen.getByText("grid 5")).toBeInTheDocument();
   });
 
-  it("is banded by the roster over a stale Step 1 age", async () => {
+  it("is banded by the roster over a stale entry band", async () => {
     signIn("child-1");
-    mergeOnboardingDraft({ age: 7 });
+    mergeOnboardingDraft({ ageBand: "early_primary" });
     myDashboard.mockResolvedValue(dashboardFor("child-1", "junior_secondary"));
 
     render(<ProfilingFlow onDone={vi.fn()} ownerUserId="child-1" />);
-    // Held until the roster answers, even with an age in hand.
+    // Held until the roster answers, even with a band in hand.
     expect(letsGo()).toBeDisabled();
     await waitFor(() => expect(letsGo()).not.toBeDisabled());
     fireEvent.click(letsGo());
@@ -171,14 +171,42 @@ describe("a child with no account yet, on a tablet still holding a session", () 
     myDashboard.mockResolvedValue(
       dashboardFor("previous-child", "senior_secondary"),
     );
-    mergeOnboardingDraft({ name: "Amara", age: 7 });
+    mergeOnboardingDraft({ name: "Amara", ageBand: "early_primary" });
 
     render(<ProfilingFlow onDone={vi.fn()} />);
     fireEvent.click(letsGo());
 
     expect(myDashboard).not.toHaveBeenCalled();
-    // The age the entry lookup read off their roster row: seven is Primary
-    // 1-3, the 3x3 band - not the 4x4 a child with no band runs.
+    // The entry lookup's own band: Primary 1-3, the 3x3 band - not the 4x4
+    // a child with no band runs.
     expect(screen.getByText("grid 3")).toBeInTheDocument();
+  });
+});
+
+/*
+ * BACKEND, 9 OCT: the entry lookup and the dashboard carry `ageBand` from the
+ * date of birth or, with none, from the enrolled class year. The band is the
+ * server's, and the device works out none of its own.
+ */
+describe("the entry lookup's band (9 Oct)", () => {
+  it("is what a child with no account yet runs, class-derived or not", () => {
+    // A child with no date of birth: the server banded them by their class.
+    mergeOnboardingDraft({ name: "Amara", ageBand: "senior_secondary" });
+
+    render(<ProfilingFlow onDone={vi.fn()} />);
+    fireEvent.click(letsGo());
+
+    // SS is tile memory's 5x5 band, not the 4x4 fallback.
+    expect(screen.getByText("grid 5")).toBeInTheDocument();
+  });
+
+  it("falls back to Primary 4-6 only for a band the server did not give", () => {
+    // Not one of the spec's four: no band, so the fallback, never a guess.
+    mergeOnboardingDraft({ name: "Amara", ageBand: "year_9" });
+
+    render(<ProfilingFlow onDone={vi.fn()} />);
+    fireEvent.click(letsGo());
+
+    expect(screen.getByText("grid 4")).toBeInTheDocument();
   });
 });

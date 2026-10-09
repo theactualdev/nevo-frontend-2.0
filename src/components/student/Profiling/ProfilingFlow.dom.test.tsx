@@ -47,8 +47,8 @@ describe("ProfilingFlow — how the band is decided", () => {
     ).not.toBeDisabled();
   });
 
-  it("does not ask a child who already told us in Step 1", () => {
-    mergeOnboardingDraft({ name: "Amara", age: 9 });
+  it("does not ask a child the entry lookup gave a band", () => {
+    mergeOnboardingDraft({ name: "Amara", ageBand: "upper_primary" });
 
     render(<ProfilingFlow onDone={vi.fn()} />);
 

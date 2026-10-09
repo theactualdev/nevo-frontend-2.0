@@ -23,10 +23,13 @@ export interface OnboardingDraft {
    */
   name?: string;
   /**
-   * From the roster's date of birth, computed server-side. Absent when the
-   * roster has none, and the child is never asked for it (D153).
+   * The entry lookup's `ageBand`, the spec's closed `AgeBand`: from the
+   * roster's date of birth or, with none, from the enrolled class year
+   * (backend, 9 Oct). Absent only when the server gives none, and the child is
+   * never asked (D153). It replaced the lookup's `age`, which this side used
+   * to band itself.
    */
-  age?: number;
+  ageBand?: string;
   /** The four-character code the child typed on 05, which the lookup matched. */
   schoolCode?: string;
   /**
