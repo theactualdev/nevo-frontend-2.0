@@ -432,6 +432,8 @@ describe("the topics on a subject card", () => {
       "open",
     ]);
     expect(maths.textContent).not.toMatch(/3 of 8|topics done/);
+    // 33a's slot, redrawn on 8 Oct (851d58f) in words with no count.
+    expect(within(maths).getByText("More topics to come")).toBeInTheDocument();
     // D120: the note no longer gives way to "Working on" - it has its own
     // place at the foot.
     expect(footNote(maths)).toHaveTextContent("A note about maths");
@@ -455,7 +457,9 @@ describe("the topics on a subject card", () => {
       const maths = card("Mathematics");
       expect(maths.querySelector("[data-topic-marks]")).not.toBeNull();
       expect(maths.textContent).not.toMatch(/\d/);
-      expect(maths.textContent).not.toMatch(/topics/i);
+      // A count in words is still a count. "More topics to come" (8 Oct)
+      // says none.
+      expect(maths.textContent).not.toMatch(/topics (done|set|met)|of the topics/i);
     },
   );
 
@@ -505,7 +509,9 @@ describe("the topics on a subject card", () => {
 
     const maths = card("Mathematics");
     expect(within(maths).getByText("Working on Halves")).toBeInTheDocument();
-    expect(maths.textContent).not.toMatch(/Nothing started|ready when you are/);
+    expect(maths.textContent).not.toMatch(/Nothing started|ready when you are/i);
+    // A topic named as being worked on is 33a's progress state.
+    expect(within(maths).getByText("More topics to come")).toBeInTheDocument();
     expect(marks(maths)).toEqual(["current", "open", "open", "open"]);
   });
 
@@ -518,9 +524,26 @@ describe("the topics on a subject card", () => {
     render(<ProgressTab />);
 
     const english = card("English");
-    expect(english.textContent).not.toMatch(/Everything set|teacher adds/);
+    expect(english.textContent).not.toMatch(
+      /Everything set|teacher adds|More topics to come/,
+    );
     expect(marks(english)).toEqual(["done", "done", "done", "done", "done"]);
     expect(footNote(english)).toHaveTextContent("A note about English");
+  });
+
+  it("says nothing under the squares when nothing is done and nothing is named", () => {
+    // 33a's "none" state: its "Ready when you are" sits under "Nothing
+    // started yet", which speaks of topics set. Still asked; and it is not
+    // the progress state, so "More topics to come" is not its line either.
+    state({ subjects: [subject("Mathematics", ["Fractions"])] });
+    narrowed.bySubject = {
+      Mathematics: { note: null, topics: { done: 0, total: 4 }, currentTopic: null },
+    };
+
+    render(<ProgressTab />);
+
+    const maths = card("Mathematics");
+    expect(maths.textContent).not.toMatch(/More topics to come|ready when you are/i);
   });
 
   it("holds the topics with the line while the subject is still being read", () => {

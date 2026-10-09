@@ -289,6 +289,18 @@ function NothingYet() {
 }
 
 /**
+ * The subject card's line under the squares while a subject is under way:
+ * 33a's "progress" state, redrawn on 8 Oct (851d58f) from "3 of 7 topics
+ * done" to words with no count in them (D119).
+ *
+ * ONLY THAT STATE. A subject with nothing done and nothing named is 33a's
+ * "none" ("Ready when you are", under "Nothing started yet"), and one with
+ * every topic done is its "done" - both speak of topics SET, and the wire
+ * counts topics MET (see `cardLine`), so neither is drawn; still asked.
+ */
+const MORE_TOPICS_COPY = "More topics to come";
+
+/**
  * One column on a phone, two on a tablet, three on a desktop (Nevo Progress
  * Frame). It was a sideways scroller on phones: a horizontal scroll nested in
  * the vertical page, which the Touch Signal Contract rules out (SCRUM-94 G5) -
@@ -339,6 +351,13 @@ function SubjectCard({
           {line ?? " "}
         </p>
         {topics && <TopicMarks topics={topics} working={working} />}
+        {topics &&
+          topics.done < topics.total &&
+          (topics.done > 0 || working) && (
+            <p className="mt-2 text-[13px] text-nevo-near-black/55">
+              {MORE_TOPICS_COPY}
+            </p>
+          )}
         {/* 33a, D120: the note at the foot, below a hairline, behind a soft
             violet dot - Nevo's voice, kept apart from the facts above. */}
         {said && (
@@ -371,7 +390,8 @@ function SubjectCard({
  * NO COUNT LINE, AT ANY STATE (design D119, 6 Oct). 33a printed "3 of 8
  * topics done" under the squares; "No counts on a child's card, in any form",
  * because "0 of 4" and "5 of 5" both read as a grade. Nothing reads the
- * squares out as a number either - a count spoken is still a count.
+ * squares out as a number either - a count spoken is still a count. The slot
+ * carries WORDS since 8 Oct (851d58f) - see `MORE_TOPICS_COPY`.
  *
  * The current square needs the backend to have named a current topic: one
  * marked "being worked on" with nothing named would be a claim nobody made.
