@@ -732,13 +732,13 @@ describe("a child whose PIN a teacher cleared (B67)", () => {
       expect(getSession()).toBeNull();
     });
 
-    it("asks a throttled child to wait, on the PIN screen", async () => {
+    it("pauses a throttled child, on the PIN screen (D154)", async () => {
       entrySetPin.mockRejectedValue(refused(429, "too_many_attempts"));
       await matchCleared();
       await chooseNewPin();
 
       expect(
-        screen.getByText("Let's wait a moment before trying again."),
+        screen.getByText("Try your PIN again in a moment. No rush."),
       ).toBeInTheDocument();
       expect(push).not.toHaveBeenCalled();
     });

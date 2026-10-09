@@ -404,18 +404,32 @@ describe("ReturningSignInScreen — when it does not work", () => {
     ).toBeVisible();
   });
 
-  it("does not tell a rate-limited child they typed it wrong", async () => {
+  it("pauses a rate-limited child's PIN, never saying they typed it wrong (D154)", async () => {
     loginPin.mockRejectedValue(refusal("too_many_attempts"));
     render(<ReturningSignInScreen />);
     fill();
 
     await signInNow();
 
-    // 28c-7 (D68).
+    // D154 (9 Oct) "holds everywhere a child enters a PIN"; it replaced
+    // 28c-7's wait line in this box.
     expect(
-      screen.getByText("Let's wait a moment before trying again."),
+      screen.getByRole("heading", { name: "Let's take a moment" }),
     ).toBeVisible();
-    expect(screen.queryByText(/didn.t match/)).toBeNull();
+    expect(
+      screen.getByText("Try your PIN again in a moment. No rush."),
+    ).toBeVisible();
+    expect(screen.queryByText(/didn.t match|wait a moment before/)).toBeNull();
+    // The PIN boxes held, the fields as typed, and no button to press again.
+    expect(document.querySelector("[data-held-pin]")).not.toBeNull();
+    expect(screen.queryByLabelText("Your PIN")).toBeNull();
+    expect(screen.queryByRole("button", { name: /That's me|Try again/ })).toBeNull();
+    expect(screen.getAllByRole("textbox")[1]).toHaveValue("amara.k");
+    // Forgot PIN, raised, says who clears a PIN and leads back to a door.
+    expect(screen.getByRole("link", { name: "Forgot PIN?" })).toHaveAttribute(
+      "href",
+      "/auth/forgot-pin",
+    );
   });
 });
 

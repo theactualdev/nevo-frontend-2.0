@@ -506,7 +506,12 @@ describe("the door lines 28c draws", () => {
     ).toBeInTheDocument();
   });
 
-  it("asks a rate-limited child to wait, never that the PIN was wrong (28c-7)", async () => {
+  /*
+   * D154 (9 Oct): "a pause, not a lockout: no count of attempts shown, no
+   * countdown, no how-long, no blame, no red, no error." It replaced 28c-7's
+   * "Let's wait a moment before trying again." in the tinted box.
+   */
+  it("pauses a rate-limited child's PIN entry, and raises Forgot PIN as the way out (D154)", async () => {
     loginPin.mockRejectedValue(
       new ApiError(401, "Unauthorized", {
         detail: { code: "too_many_attempts", message: "slow" },
@@ -517,9 +522,45 @@ describe("the door lines 28c draws", () => {
     await tap("1234");
 
     expect(
-      await screen.findByText("Let's wait a moment before trying again."),
+      await screen.findByRole("heading", { name: "Let's take a moment" }),
     ).toBeInTheDocument();
-    expect(screen.queryByText(/didn.t match/)).toBeNull();
+    expect(
+      screen.getByText("Try your PIN again in a moment. No rush."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/didn.t match|wait a moment before/)).toBeNull();
+    // The boxes held, and no pad to type into them.
+    expect(document.querySelector("[data-held-pin]")).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "1" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Not you? Go back" })).toBeVisible();
+
+    // A key cannot quietly reopen it, and nothing is sent.
+    fireEvent.change(screen.getByLabelText("PIN"), { target: { value: "5" } });
+    expect(screen.getByText("Let's take a moment")).toBeInTheDocument();
+    expect(loginPin).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Forgot PIN?" }));
+    expect(router.push).toHaveBeenCalledWith(
+      expect.stringContaining("/auth/forgot-pin?"),
+    );
+  });
+
+  it("opens the PIN again for a child who comes back from the picker", async () => {
+    loginPin.mockRejectedValue(
+      new ApiError(401, "Unauthorized", {
+        detail: { code: "too_many_attempts", message: "slow" },
+      }),
+    );
+    await chooseAda();
+    await tap("1234");
+    await screen.findByText("Let's take a moment");
+
+    fireEvent.click(screen.getByRole("button", { name: "Not you? Go back" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Ada" }));
+
+    expect(
+      await screen.findByText("Enter your PIN to keep going"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "1" })).toBeInTheDocument();
   });
 
   it("tells a staff account to sign in with an email address, with no link (28c-8)", async () => {

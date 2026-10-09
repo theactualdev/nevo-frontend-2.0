@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check } from "lucide-react";
 import { NevoKeyboard, useNevoKeyboardDock } from "@/components/shared";
@@ -18,6 +19,7 @@ import {
   type LearnerLoginFailure,
 } from "@/lib/auth/loginFailure";
 import { doorForRole, knownRole } from "@/lib/auth/consoleDoor";
+import { withNext } from "@/lib/auth/nextPath";
 import { rememberProfile } from "@/lib/auth/session";
 import {
   clearSignInHandoff,
@@ -32,9 +34,14 @@ import { AccountOnPauseScreen } from "./AccountOnPauseScreen";
 import { SignedInHereScreen } from "./SignedInHereScreen";
 import {
   SIGN_IN_OURS_COPY,
-  SIGN_IN_THROTTLED_COPY,
   skipsWelcomeBeat,
 } from "./signInMoments";
+import {
+  HeldPinBoxes,
+  RAISED_FORGOT,
+  THROTTLED_PAUSE_COPY,
+  ThrottleNote,
+} from "./ThrottledPause";
 import {
   WrongDoorNote,
   studentDoorRefusal,
@@ -388,6 +395,14 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
    * limit: pressing again is the one thing that cannot help there.
    */
   const retry = error === "credentials" || error === "ours";
+  /**
+   * D154's pause, which "holds everywhere a child enters a PIN": the PIN
+   * boxes held, the note in the error box's place, and "Forgot PIN?" raised
+   * where the button was. 00c draws no Forgot PIN of its own; on a device
+   * that remembers nobody it explains who clears a PIN and leads back to a
+   * door, which is where the pause ends. The fields stay as typed.
+   */
+  const throttled = error === "throttled";
 
   return (
     <main className="flex min-h-[100dvh] w-full flex-col bg-nevo-cream text-nevo-near-black">
@@ -404,11 +419,13 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
         {/* 00c's words. It read "Sign back in", with the help folded into a
             line under the heading. */}
         <h1 className="mt-[26px] text-2xl leading-[1.25] font-medium tracking-[-0.01em] sm:text-[28px]">
-          Welcome back
+          {throttled ? THROTTLED_PAUSE_COPY.heading : "Welcome back"}
         </h1>
-        <p className="mt-2.5 text-[15px] leading-[1.4] text-nevo-near-black/60 sm:text-base">
-          Let&apos;s get you back into your lessons.
-        </p>
+        {!throttled && (
+          <p className="mt-2.5 text-[15px] leading-[1.4] text-nevo-near-black/60 sm:text-base">
+            Let&apos;s get you back into your lessons.
+          </p>
+        )}
 
         <div className="mt-7 flex w-full max-w-[336px] flex-col gap-[18px] text-left sm:gap-5">
           <div className="flex flex-col gap-2">
@@ -520,6 +537,9 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
               Nevo pad is the designed way in - and focusing this field is
               what brings it up.
             */}
+            {throttled ? (
+              <HeldPinBoxes boxClassName="size-[58px] sm:size-[66px]" />
+            ) : (
             <div className="relative">
               <input
                 ref={pinRef}
@@ -573,13 +593,16 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
                 })}
               </div>
             </div>
+            )}
           </div>
+
+          {throttled && <ThrottleNote className="mt-0 max-w-none" />}
 
           {/*
             00c's error: a soft violet box with an info mark, the fields kept
             filled. It was a plain violet line with nothing to anchor it.
           */}
-          {error && (
+          {error && !throttled && (
             <div
               role="status"
               className="flex items-start gap-2.5 rounded-[10px] bg-nevo-violet/18 px-[15px] py-[13px]"
@@ -603,14 +626,22 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
               <span className="text-sm leading-[1.5] text-nevo-near-black">
                 {error === "credentials" &&
                   "Hmm, that didn't match. Check your school code and Student ID / Admission Number with your teacher and try again."}
-                {/* 28c's door lines (D68), the same on every PIN door. */}
-                {error === "throttled" && SIGN_IN_THROTTLED_COPY}
+                {/* 28c's door lines (D68), the same on every PIN door. A
+                    rate limit is D154's pause, never a line here. */}
                 {error === "ours" && SIGN_IN_OURS_COPY}
                 {error === "wrong_door" && <WrongDoorNote />}
               </span>
             </div>
           )}
 
+          {throttled ? (
+            <Link
+              href={withNext("/auth/forgot-pin", next)}
+              className={cn(RAISED_FORGOT, "mt-1 w-full")}
+            >
+              {THROTTLED_PAUSE_COPY.forgot}
+            </Link>
+          ) : (
           <button
             type="button"
             disabled={!ready || checking}
@@ -624,6 +655,7 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
           >
             {retry ? "Try again" : "That's me"}
           </button>
+          )}
 
           {/* 00c's own row for the help, not folded into the heading's line.
               Text, not a link: there is nothing on this device to open. */}
@@ -651,7 +683,7 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
         </button>
       </div>
 
-      {pad.open && (
+      {pad.open && !throttled && (
         <NevoKeyboard
           layout="pad"
           onKey={(char) => {
