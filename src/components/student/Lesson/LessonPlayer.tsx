@@ -1672,10 +1672,9 @@ export function LessonPlayer({
 
   // A calculation being co-constructed holds the forward chevron until it's
   // solved (17b: forward disabled until the segment completes).
-  const calcBlocking =
-    modality === MODALITY.INTERACTIVE &&
-    isCalculation(segment) &&
-    !solvedCalcs.has(segment.id);
+  const calcShowing =
+    modality === MODALITY.INTERACTIVE && isCalculation(segment);
+  const calcBlocking = calcShowing && !solvedCalcs.has(segment.id);
 
   /*
    * ONLY AN UNSOLVED CALCULATION HOLDS THE FORWARD CHEVRON.
@@ -2011,10 +2010,21 @@ export function LessonPlayer({
             or a value we do not know, this drew two circles and "Nevo sets it
             for you" about support nobody had set, then changed when a plan
             landed.
+
+            THE STARTING LEVEL, LAST, AND ONLY ON THE SOLVER (B103, 9 Oct).
+            `initialScaffold` is the engine config's "starting level for
+            calculation scaffolds", which the client applies - so it shows
+            while a calculation is being worked and nothing more specific has
+            been said for the segment, and on no other screen.
           */}
           <ScaffoldIndicator
             key={`scaf-${segment.id}`}
-            level={conceptScaffold ?? segPlan?.scaffold ?? null}
+            level={
+              conceptScaffold ??
+              segPlan?.scaffold ??
+              (calcShowing ? plan?.initialScaffold : undefined) ??
+              null
+            }
           />
         </div>
         {/* Frame: the density toggle sits alone on its own right-aligned row.

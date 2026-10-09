@@ -11,7 +11,7 @@ import {
 } from "@/lib/offline/savedLessons";
 import type { AdaptSegment } from "@/lib/api/intelligence";
 import type { DashboardProgressRow } from "@/lib/api/students";
-import { adaptSegmentsFor } from "@/lib/lessons/adaptation";
+import { adaptSegmentsFor, indicatorLevel } from "@/lib/lessons/adaptation";
 import { lessonFromContent } from "@/lib/lessons/fromContent";
 import { getMockAdaptation, getMockLesson } from "@/lib/mocks";
 import type { AdaptationPlan, Lesson } from "@/lib/types";
@@ -336,8 +336,13 @@ export function useStudentLesson(
   // Cross-session and slow-moving, so it does not belong on the per-lesson
   // adapt call - and could not ride on it anyway, since that route carries no
   // accommodation field.
-  const { active: accommodations, settled: accommodationsSettled } =
-    useAccommodationsState();
+  const {
+    active: accommodations,
+    settled: accommodationsSettled,
+    support: engineSupport,
+  } = useAccommodationsState();
+  // B103, 9 Oct: where calculation support starts, from the same read.
+  const initialScaffold = indicatorLevel(engineSupport?.initialScaffoldLevel);
 
   /*
    * THE FIRST FRAME WAITS FOR WHAT SHAPES IT.
@@ -437,7 +442,7 @@ export function useStudentLesson(
     // the authored flags it was written with - the walkthrough is a designed
     // demonstration, not a claim about anybody.
     plan: live
-      ? accommodations
+      ? accommodations || initialScaffold
         ? /*
            * NOT DROPPED WHEN THE ADAPT CALL FAILS. They merged only onto a
            * non-null plan, so an engine that did not answer took a delivered
@@ -445,7 +450,11 @@ export function useStudentLesson(
            * screen showed it active. They come from a different route; the
            * plan they ride on can be empty.
            */
-          { ...(adaptation.plan ?? { lessonId, segments: [] }), accommodations }
+          {
+            ...(adaptation.plan ?? { lessonId, segments: [] }),
+            ...(accommodations ? { accommodations } : {}),
+            ...(initialScaffold ? { initialScaffold } : {}),
+          }
         : adaptation.plan
       : mock
         ? (getMockAdaptation(lessonId) ?? null)

@@ -526,4 +526,12 @@ export interface AdaptationPlan {
     reading?: boolean;
     numerical?: boolean;
   };
+  /**
+   * Where calculation support starts for this child, as the indicator draws
+   * it: `engineConfig.support.initialScaffoldLevel` from the session-start
+   * read, "Client-applied starting level for calculation scaffolds" (B103,
+   * 9 Oct). Shown only while the solver is on screen and nothing more
+   * specific has been said for the segment. Absent is no level.
+   */
+  initialScaffold?: ScaffoldLevel;
 }
