@@ -15,8 +15,9 @@ import { useHasSession } from "./useHasSession";
  * their teacher through the contract at all. `POST /messages/threads/{id}/reply`
  * (3 Sep) is the way in, and it is a different shape on purpose - there is no
  * recipient to name. Access IS the thread: a child may write only where they
- * can already read. Backend B95 (8 Oct) lets a student's first send start a
- * conversation, but the contract names no recipient for it, so that waits.
+ * can already read. That now covers the FIRST message too: since 9 Oct (B95)
+ * a child with a teacher assigned has their teacher thread in the list before
+ * anything is in it.
  *
  * As on the teacher side, the thread list carries no message bodies, so a
  * thread is fetched when first opened and kept. What the list DOES carry, and
@@ -73,7 +74,9 @@ export const MESSAGE_MAX_LENGTH = 5000;
  * "Message my teacher" opens Connect on that conversation (design, 6 Oct). The
  * child is never told a teacher id anywhere else - not on Ask Nevo's answer,
  * not on the dashboard - so the thread list's own `teacherId`, "the active
- * teacher this student conversation routes to", is what marks it.
+ * teacher this student conversation routes to", is what marks it. Empty or
+ * not: since 9 Oct the thread is listed before its first message, and that
+ * one is opened the same way.
  *
  * Only a `student` thread: a `class` thread is the teacher writing to the whole
  * class, and a child's reply to their teacher does not belong there. And only

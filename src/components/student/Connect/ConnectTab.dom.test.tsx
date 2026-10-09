@@ -33,6 +33,7 @@ const api = vi.hoisted(() => ({
   thread: vi.fn(),
   markThreadRead: vi.fn(),
   reply: vi.fn(),
+  send: vi.fn(),
 }));
 vi.mock("@/lib/api/messages", () => ({ messagesApi: api }));
 
@@ -400,5 +401,53 @@ describe("[D109] Message my teacher", () => {
 
     await waitFor(() => expect(api.thread).toHaveBeenCalledWith("t-1"));
     expect(await screen.findByLabelText("Message Ms Okafor")).toBeTruthy();
+  });
+});
+
+/*
+ * B95, 9 Oct: a child with a teacher assigned has their teacher thread in the
+ * list BEFORE its first message - empty, carrying its threadId and teacherId.
+ * It is frame 29's "Connect (No messages)" for that teacher, and the child's
+ * first message goes through the same reply route as every other.
+ */
+describe("[B95] the teacher thread before its first message", () => {
+  const empty = {
+    ...row("t-9", "Mr Bell"),
+    recipientId: "student-1",
+    teacherId: "teacher-9",
+  };
+
+  it("opens from Message my teacher, and takes the first message by reply", async () => {
+    viewport(false);
+    api.threads.mockResolvedValue({ threads: [empty], total: 1 });
+    api.thread.mockResolvedValue({ threadId: "t-9", messages: [] });
+    api.reply.mockResolvedValue({ ...message("m-1", "Hello"), threadId: "t-9" });
+    render(<ConnectTab toTeacher />);
+
+    // The frame: the teacher's name over the line and the composer.
+    const input = await screen.findByLabelText("Message Mr Bell");
+    expect(within(conversation()).getByText("Message your teacher here")).toBeTruthy();
+    expect(within(conversation()).getByText("Mr Bell")).toBeTruthy();
+    expect(
+      screen.queryByText("Your teacher will be able to message you here soon"),
+    ).toBeNull();
+
+    fireEvent.change(input, { target: { value: "Hello" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(api.reply).toHaveBeenCalledWith("t-9", "Hello");
+    expect(api.send).not.toHaveBeenCalled();
+    expect(await screen.findByText("Delivered")).toBeTruthy();
+  });
+
+  it("keeps the no-teacher line for a list with no thread at all", async () => {
+    viewport(false);
+    api.threads.mockResolvedValue({ threads: [], total: 0 });
+    render(<ConnectTab toTeacher />);
+
+    expect(
+      await screen.findByText("Your teacher will be able to message you here soon"),
+    ).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Send" })).toBeNull();
   });
 });

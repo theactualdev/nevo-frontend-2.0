@@ -258,7 +258,13 @@ export function ConnectTab({
             </button>
           </div>
         ) : (
-          // 29 Empty States, "Connect (No relationship)": one line.
+          /* 29 Empty States, "Connect (No relationship)": one line. Since
+             9 Oct (B95) a child with a teacher assigned always has their
+             teacher thread listed, empty until the first message, so an empty
+             list means no teacher is assigned and nobody would read a message
+             written here. Design's 9 Oct redraw of this state (a composer and
+             "Write the first message") is held and asked about for that
+             reason. */
           <div className="flex flex-1 flex-col items-center justify-center px-10 pb-10 text-center">
             <h2 className="max-w-[280px] text-[19px] font-medium leading-[1.35] text-nevo-near-black">
               Your teacher will be able to message you here soon
@@ -394,8 +400,10 @@ export function ConnectTab({
             </div>
           )}
           {history === "loaded" && active.messages.length === 0 && (
-            // 29 Empty States, "Connect (No messages)".
-            <p className="m-auto text-[15px] text-nevo-near-black/55">
+            // 29 Empty States, "Connect (No messages)" - which is how the
+            // child's teacher thread arrives before its first message (B95,
+            // 9 Oct). The composer below writes that first message.
+            <p className="m-auto px-5 text-center text-[15px] text-nevo-near-black/55 md:px-7 md:text-base">
               Message your teacher here
             </p>
           )}

@@ -21,6 +21,10 @@ export interface MessageThread {
    * The active teacher this student conversation routes to (backend B95,
    * 8 Oct). Null when the school has assigned no teacher to the student's
    * class. Optional as well: it is not in the schema's `required` list.
+   *
+   * Since 9 Oct a student with a teacher assigned always has this thread in
+   * their list, EMPTY until the first message - so the child's first message
+   * goes through `reply` like every other.
    */
   teacherId?: string | null;
   title: string;
@@ -76,11 +80,10 @@ export const messagesApi = {
   /**
    * Reply into a thread the caller can already read.
    *
-   * This is the STUDENT's way into a conversation, and the reason it is not
-   * `send`: `send` addresses a recipient and creates a thread, which a student
-   * could not do before B95 and still has no documented recipient for (see
-   * `send`). Access is the thread itself - a student may reply only where
-   * they can already read - so there is no recipient to name.
+   * This is the STUDENT's way into a conversation, including the first
+   * message: since 9 Oct (B95) the list carries the child's teacher thread
+   * before anything is in it. Access is the thread itself - a student may
+   * reply only where they can already read - so there is no recipient to name.
    *
    * `content` is capped at 5000 characters by the contract.
    */
@@ -90,10 +93,11 @@ export const messagesApi = {
   /**
    * Send, creating the thread if this is the first message.
    *
-   * Teacher-side only. Backend B95 (8 Oct) says a student's first send creates
-   * their conversation and routes it to a teacher of their class, but the
-   * contract does not say what a student names as `recipientId` - so the
-   * child's Connect does not call this yet, and asks.
+   * A student may call it too (backend B95, 9 Oct): `recipientType:
+   * "student"` and `recipientId` the child's OWN user id, and the server
+   * routes it to a teacher of their class. The child's Connect does not need
+   * to - its only composer sits inside a thread, and the teacher thread is in
+   * the list before its first message, so `reply` carries that one as well.
    */
   send: (payload: {
     recipientId: string;
