@@ -591,9 +591,12 @@ function Nudged({
  * a laptop's own keys still type straight into the field. Delete sits at the
  * field, as the keypad frame draws it.
  *
- * AN EXPRESSION ("3x - 4") STILL TAKES THE DEVICE'S FULL KEYBOARD. It needs
- * letters and operators, D150 draws a number pad only, and the Nevo qwerty has
- * no "+" or "=" - so it is unchanged until design says which (asked).
+ * AN EXPRESSION ("3x - 4") STILL TAKES THE DEVICE'S FULL KEYBOARD, for now.
+ * Design ruled on 9 Oct: "The Nevo pad, extended by the step ... the step
+ * says which characters it needs and the pad carries those." No step says so
+ * yet - the wire's `expectedInput` is only "text" - and reading the
+ * characters off the stored answer would be this screen deciding what the
+ * child may type. So it waits on that field (asked of backend).
  */
 function NumberEntry({
   step,
@@ -1339,8 +1342,11 @@ function HintLink({ onClick }: { onClick: () => void }) {
 
 /**
  * A tap step (17b §6): tap pieces into the empty bar until it holds the
- * stored count. The pieces offered are the ones still to place, as drawn.
- * A piece the asked step names by its label is ringed.
+ * stored count. The tray offers ONE piece, as D149 draws it for every kind -
+ * design, 9 Oct: "the fraction bar's tray becomes D149's single piece. One
+ * scaffold, one interaction, everywhere." 17b drew a tile per piece still to
+ * place, which also told the child how many were left. A piece the asked
+ * step names by its label is ringed.
  */
 function BuildTray({
   parts,
@@ -1355,7 +1361,6 @@ function BuildTray({
   onPlace: () => void;
   ringed: ReadonlySet<number>;
 }) {
-  const remaining = Math.max(0, target - placed);
   return (
     <>
       <div className="mt-[18px] rounded-[12px] bg-nevo-cream-elevated p-[18px] shadow-elevation-1 sm:p-6">
@@ -1379,19 +1384,17 @@ function BuildTray({
           ))}
         </div>
       </div>
-      {remaining > 0 && (
-        <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
-          {Array.from({ length: remaining }).map((_, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={onPlace}
-              className="h-[52px] min-w-[72px] cursor-pointer rounded-[12px] border-2 border-nevo-violet bg-nevo-violet/14 text-base font-semibold text-nevo-navy shadow-elevation-1 transition-transform active:scale-[0.98]"
-            >
-              + 1/{parts}
-            </button>
-          ))}
-        </div>
+      {placed < target && (
+        <TapToAdd>
+          {/* D149's fraction tile: 44px tall, at least 72 wide. */}
+          <button
+            type="button"
+            onClick={onPlace}
+            className="flex h-11 min-w-[72px] cursor-pointer items-center justify-center rounded-[12px] border-2 border-nevo-violet bg-nevo-violet/14 px-3.5 text-base font-semibold text-nevo-navy shadow-elevation-1"
+          >
+            + 1/{parts}
+          </button>
+        </TapToAdd>
       )}
     </>
   );

@@ -113,9 +113,8 @@ const pick = (label: string) => {
   tap(label);
   tap("Check my answer");
 };
-/** One piece off the tray - they are all the same piece. */
-const placeOne = () =>
-  fireEvent.click(screen.getAllByRole("button", { name: "+ 1/4" })[0]);
+/** One piece off the tray - D149's single piece. */
+const placeOne = () => tap("+ 1/4");
 const equation = () =>
   document.querySelector('[aria-live="polite"]')?.textContent ?? "";
 
@@ -388,14 +387,20 @@ describe("building with pieces", () => {
     tapCount: 3,
   });
 
-  it("offers the stored count of pieces and says each one placed", () => {
+  it("offers one piece to tap, as D149 does for every kind, and says each one placed", () => {
+    // Design, 9 Oct: "One scaffold, one interaction, everywhere." A tile per
+    // piece still to place told the child how many were left.
     const props = show(build({ steps: [BUILD] }));
 
-    expect(screen.getAllByRole("button", { name: "+ 1/4" })).toHaveLength(3);
+    expect(screen.getAllByRole("button", { name: "+ 1/4" })).toHaveLength(1);
+    expect(screen.getByText("Tap to add")).toBeInTheDocument();
     placeOne();
 
     expect(props.onPiecePlaced).toHaveBeenCalledWith("b1");
-    expect(screen.getAllByRole("button", { name: "+ 1/4" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "+ 1/4" })).toHaveLength(1);
+    expect(
+      document.querySelectorAll("[data-build-place].bg-nevo-navy"),
+    ).toHaveLength(1);
     expect(screen.queryByRole("button", { name: "That's the total" })).toBeNull();
   });
 
@@ -403,6 +408,8 @@ describe("building with pieces", () => {
     const props = show(build({ steps: [BUILD] }));
 
     for (let i = 0; i < 3; i++) placeOne();
+    // The piece goes once the stored count is placed.
+    expect(screen.queryByRole("button", { name: "+ 1/4" })).toBeNull();
     tap("That's the total");
 
     expect(props.onPiecePlaced).toHaveBeenCalledTimes(3);
