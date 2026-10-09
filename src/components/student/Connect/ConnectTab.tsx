@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import Image from "next/image";
 import { ChevronLeft, Send } from "lucide-react";
 import { NevoKeyboard, useNevoKeyboardDock } from "@/components/shared";
 import { SampleRegion } from "@/components/shared/SampleRegion";
@@ -40,7 +41,8 @@ const twoPaneOnServer = () => false;
  * switched off here for a real reason - `POST /api/messages` has no `teacher`
  * recipient type, so a child could not address their teacher at all - and
  * `POST /messages/threads/{id}/reply` (3 Sep) is what opened it: a child writes
- * into a thread they can already read, and still cannot start one.
+ * into a thread they can already read. Since B95 (9 Oct) a child with no
+ * thread at all starts one, from the empty list, by direct creation.
  *
  * The signed-out walkthrough keeps its SIMULATED send. That is deliberate:
  * those threads are fixtures with no backend behind them, so a composer that
@@ -76,6 +78,9 @@ export function ConnectTab({
     markThreadRead,
     reply: sendLive,
     retry: retryLive,
+    firstMessages,
+    start: startLive,
+    retryFirst: retryFirstLive,
   } = useStudentThreads();
   // Seeded from the fixtures themselves, not from whatever the hook returned
   // on the first render: for a signed-in child that is the still-empty live
@@ -216,8 +221,113 @@ export function ConnectTab({
     setMobileView("thread");
   };
 
-  // A live student can genuinely have no threads, which the fixtures never
-  // could - and every pane below assumes an active one.
+  // The first message from the empty list goes by direct creation, and once
+  // the list carries the thread it made, that conversation opens.
+  const opened = (id: string | null) => {
+    if (!id) return;
+    setActiveId(id);
+    setMobileView("thread");
+  };
+  const sendFirst = () => {
+    const text = draft.trim();
+    if (!text) return;
+    setDraft("");
+    void startLive(text).then(opened);
+  };
+
+  /*
+   * A LIVE CHILD WITH NO CONVERSATION AT ALL - 29 Empty States, "Connect (No
+   * relationship)", as design redrew it on 9 Oct. "Your teacher will be able
+   * to message you here soon" told a child to wait for something they can now
+   * start themselves (B95), so the state says what this place is and offers
+   * the one thing they can do: write the first message.
+   *
+   * There is no thread to reply into, so it goes by direct creation (see
+   * `start`), and its bubble has a reply's life: Sending, Delivered, or
+   * "Didn't send - tap to try again" with the words kept. Neither of those
+   * bubbles is drawn on this state; they are the conversation's own.
+   */
+  if (hydrated && live && !loading && !failed && !active) {
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <h1 className="mx-5 mt-2 text-2xl font-semibold tracking-[-0.01em] text-nevo-near-black sm:mx-11 sm:mt-11 sm:text-[30px] lg:mx-[52px] lg:mt-[52px] lg:text-[32px]">
+          Connect
+        </h1>
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-10 text-center sm:px-12">
+          <Image
+            src="/illustrations/empty-connect.png"
+            alt="Two figures standing side by side"
+            width={1021}
+            height={812}
+            sizes="300px"
+            className="h-auto w-[220px] shrink-0 sm:w-[280px] lg:w-[300px]"
+          />
+          <h2 className="mt-[26px] max-w-[290px] text-[19px] font-medium leading-[1.35] text-nevo-near-black sm:mt-[30px] sm:max-w-[400px] sm:text-[22px] lg:mt-8 lg:max-w-[440px] lg:text-2xl">
+            This is where you and your teacher talk
+          </h2>
+          <p className="mt-3 max-w-[290px] text-[15px] leading-[1.5] text-nevo-near-black/60 sm:mt-3.5 sm:max-w-[400px] sm:text-base lg:max-w-[440px]">
+            Say hello, ask about a lesson, or tell them how it went. Write the
+            first message whenever you&apos;re ready.
+          </p>
+        </div>
+        {firstMessages.length > 0 && (
+          <div className="flex shrink-0 flex-col gap-2.5 px-5 pb-3 sm:px-11">
+            {firstMessages.map((message) => (
+              <MessageBubble
+                key={message.id}
+                message={message}
+                onRetry={() => void retryFirstLive(message.id).then(opened)}
+              />
+            ))}
+          </div>
+        )}
+        <div className="flex shrink-0 items-center gap-2.5 border-t border-nevo-near-black/8 px-4 py-3 sm:gap-3 sm:border-t-0 sm:px-11 sm:pt-4 sm:pb-7 lg:w-full lg:max-w-[760px] lg:self-center lg:px-[52px]">
+          <input
+            value={draft}
+            onChange={(e) =>
+              setDraft(e.target.value.slice(0, MESSAGE_MAX_LENGTH))
+            }
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                sendFirst();
+              }
+            }}
+            onFocus={kb.onFocus}
+            onBlur={kb.onBlur}
+            maxLength={MESSAGE_MAX_LENGTH}
+            // A.12: Nevo Keyboard on touch; hardware keyboard on desktop.
+            inputMode="none"
+            placeholder="Write a message"
+            aria-label="Write a message"
+            className="h-11 min-w-0 flex-1 rounded-full border-[1.5px] border-nevo-near-black/16 bg-nevo-cream px-4 text-[15px] text-nevo-near-black outline-none transition-colors placeholder:text-nevo-near-black/40 focus:border-nevo-navy sm:h-12 sm:px-[18px] sm:text-base"
+          />
+          <button
+            type="button"
+            aria-label="Send"
+            onClick={sendFirst}
+            className="flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full bg-nevo-navy text-nevo-cream transition-transform active:scale-[0.98] sm:size-12"
+          >
+            <Send className="size-5" strokeWidth={2} />
+          </button>
+        </div>
+        {kb.open && (
+          <div data-nevo-hide-nav className="contents">
+            <NevoKeyboard
+              layout="qwerty"
+              onKey={(c) => setDraft((d) => (d + c).slice(0, MESSAGE_MAX_LENGTH))}
+              onBackspace={() => setDraft((d) => d.slice(0, -1))}
+              onReturn={sendFirst}
+              className="shrink-0"
+            />
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Not yet hydrated, the list still loading, or its read failed - every
+  // pane below assumes an active thread.
   if (!hydrated || (live && (loading || failed || !active))) {
     return (
       <div className="flex h-full min-h-0 flex-col">
@@ -238,7 +348,7 @@ export function ConnectTab({
               />
             ))}
           </div>
-        ) : failed ? (
+        ) : (
           /* A failed read is NOT an empty inbox. Saying "no messages yet" here
              tells a child their teacher never wrote to them, which we do not
              know and which is the crueller of the two guesses. */
@@ -256,19 +366,6 @@ export function ConnectTab({
             >
               Try again
             </button>
-          </div>
-        ) : (
-          /* 29 Empty States, "Connect (No relationship)": one line. Since
-             9 Oct (B95) a child with a teacher assigned always has their
-             teacher thread listed, empty until the first message, so an empty
-             list means no teacher is assigned and nobody would read a message
-             written here. Design's 9 Oct redraw of this state (a composer and
-             "Write the first message") is held and asked about for that
-             reason. */
-          <div className="flex flex-1 flex-col items-center justify-center px-10 pb-10 text-center">
-            <h2 className="max-w-[280px] text-[19px] font-medium leading-[1.35] text-nevo-near-black">
-              Your teacher will be able to message you here soon
-            </h2>
           </div>
         )}
       </div>

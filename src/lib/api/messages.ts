@@ -95,9 +95,10 @@ export const messagesApi = {
    *
    * A student may call it too (backend B95, 9 Oct): `recipientType:
    * "student"` and `recipientId` the child's OWN user id, and the server
-   * routes it to a teacher of their class. The child's Connect does not need
-   * to - its only composer sits inside a thread, and the teacher thread is in
-   * the list before its first message, so `reply` carries that one as well.
+   * routes it to a teacher of their class. The child's Connect uses it only
+   * from the EMPTY list (design, 9 Oct), where there is no thread to reply
+   * into; a teacher thread that is listed empty takes its first message by
+   * `reply` like any other.
    */
   send: (payload: {
     recipientId: string;

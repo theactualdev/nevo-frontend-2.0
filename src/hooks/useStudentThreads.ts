@@ -17,7 +17,8 @@ import { useHasSession } from "./useHasSession";
  * recipient to name. Access IS the thread: a child may write only where they
  * can already read. That now covers the FIRST message too: since 9 Oct (B95)
  * a child with a teacher assigned has their teacher thread in the list before
- * anything is in it.
+ * anything is in it. A child whose list is EMPTY writes the first message by
+ * direct creation instead (`start`, design 9 Oct).
  *
  * As on the teacher side, the thread list carries no message bodies, so a
  * thread is fetched when first opened and kept. What the list DOES carry, and
@@ -63,6 +64,18 @@ export interface StudentThreads {
   reply: (threadId: string, content: string) => Promise<boolean>;
   /** Re-send a message that failed, by its id. */
   retry: (threadId: string, messageId: string) => Promise<boolean>;
+  /**
+   * The child's first message, written from the EMPTY list (design, 9 Oct):
+   * "This is where you and your teacher talk", with a composer. There is no
+   * thread to reply into, so it goes by direct creation - see `sendFirst`.
+   * Held here, with the same sending / delivered / failed life as a reply,
+   * until the list carries the thread it created.
+   */
+  firstMessages: Message[];
+  /** Send a first message. Resolves to the new thread's id, or null. */
+  start: (content: string) => Promise<string | null>;
+  /** Re-send a first message that failed, by its id. */
+  retryFirst: (messageId: string) => Promise<string | null>;
 }
 
 /** The contract's cap on `content`. */
@@ -97,11 +110,33 @@ function initialsOf(name: string): string {
   return (parts[0] ?? "?").slice(0, 2).toUpperCase();
 }
 
+/** The list as Connect draws it. */
+function toThreads(threads: MessageThread[]): Thread[] {
+  return threads.map((t, i) => ({
+    id: t.threadId,
+    name: t.title,
+    initials: initialsOf(t.title),
+    // No accent in the contract; the frame alternates, so we do too.
+    accent: i % 2 === 0 ? ("navy" as const) : ("violet" as const),
+    unread: t.unread,
+    // Required on the wire but nullable: a thread with no messages yet
+    // has no preview, and an empty row is correct there.
+    preview: t.latestPreview ?? undefined,
+    messages: [],
+  }));
+}
+
 export function useStudentThreads(): StudentThreads {
   const signedIn = useHasSession();
   const [live, setLive] = useState<Thread[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [teacherThread, setTeacherThread] = useState<string | null>(null);
+  const [firstMessages, setFirstMessages] = useState<Message[]>([]);
+  // Mirrored for `retryFirst`, for the same reason as `liveRef` below.
+  const firstRef = useRef<Message[]>(firstMessages);
+  useEffect(() => {
+    firstRef.current = firstMessages;
+  }, [firstMessages]);
   const requested = useRef<Set<string>>(new Set());
   const selfId = getSession()?.userId;
   // `retry` needs the message's text, and reading it from `live` through the
@@ -122,20 +157,7 @@ export function useStudentThreads(): StudentThreads {
       .then((res) => {
         if (cancelled) return;
         setTeacherThread(teacherThreadId(res.threads));
-        setLive(
-          res.threads.map((t, i) => ({
-            id: t.threadId,
-            name: t.title,
-            initials: initialsOf(t.title),
-            // No accent in the contract; the frame alternates, so we do too.
-            accent: i % 2 === 0 ? ("navy" as const) : ("violet" as const),
-            unread: t.unread,
-            // Required on the wire but nullable: a thread with no messages yet
-            // has no preview, and an empty row is correct there.
-            preview: t.latestPreview ?? undefined,
-            messages: [],
-          })),
-        );
+        setLive(toThreads(res.threads));
       })
       .catch(() => {
         if (!cancelled) setFailed(true);
@@ -327,6 +349,80 @@ export function useStudentThreads(): StudentThreads {
     [post, setStatus],
   );
 
+  /** Mark one of the first messages, by id. */
+  const setFirstStatus = useCallback(
+    (messageId: string, next: Message["status"]) =>
+      setFirstMessages((cur) =>
+        cur.map((m) => (m.id === messageId ? { ...m, status: next } : m)),
+      ),
+    [],
+  );
+
+  /**
+   * POST a first message by direct creation, then read the list again.
+   *
+   * Backend B95, 9 Oct: `recipientType: "student"` with the child's OWN user
+   * id, and the server routes it to a teacher of their class. Delivered only
+   * once the write returns, failed when it is refused - the same life as a
+   * reply. The bubble leaves this list only when the re-read list carries the
+   * new thread, which then holds the message; if that read fails, the bubble
+   * stays where it is, delivered, which is true.
+   */
+  const sendFirst = useCallback(
+    async (localId: string, content: string): Promise<string | null> => {
+      const self = getSession()?.userId;
+      try {
+        if (!self) throw new Error("no user id");
+        const saved = await messagesApi.send({
+          recipientType: "student",
+          recipientId: self,
+          content,
+        });
+        setFirstStatus(localId, "delivered");
+        try {
+          const res = await messagesApi.threads();
+          setTeacherThread(teacherThreadId(res.threads));
+          setLive(toThreads(res.threads));
+          if (res.threads.some((t) => t.threadId === saved.threadId)) {
+            setFirstMessages((cur) => cur.filter((m) => m.id !== localId));
+          }
+        } catch {
+          // Sent, and the list did not answer: the bubble says delivered.
+        }
+        return saved.threadId;
+      } catch {
+        setFirstStatus(localId, "failed");
+        return null;
+      }
+    },
+    [setFirstStatus],
+  );
+
+  const start = useCallback(
+    async (content: string) => {
+      const text = content.trim();
+      if (!getToken() || !text) return null;
+      const localId = `pending-${nextLocalId.current++}`;
+      setFirstMessages((cur) => [
+        ...cur,
+        { id: localId, who: "me", text, status: "sending" },
+      ]);
+      return sendFirst(localId, text);
+    },
+    [sendFirst],
+  );
+
+  const retryFirst = useCallback(
+    async (messageId: string) => {
+      if (!getToken()) return null;
+      const message = firstRef.current.find((m) => m.id === messageId);
+      if (!message) return null;
+      setFirstStatus(messageId, "sending");
+      return sendFirst(messageId, message.text);
+    },
+    [sendFirst, setFirstStatus],
+  );
+
   if (!signedIn) {
     return {
       threads: THREADS,
@@ -340,6 +436,10 @@ export function useStudentThreads(): StudentThreads {
       markThreadRead: () => {},
       reply,
       retry,
+      // The walkthrough always has threads, so it never shows the empty list.
+      firstMessages: [],
+      start,
+      retryFirst,
     };
   }
   return {
@@ -352,5 +452,8 @@ export function useStudentThreads(): StudentThreads {
     markThreadRead,
     reply,
     retry,
+    firstMessages,
+    start,
+    retryFirst,
   };
 }

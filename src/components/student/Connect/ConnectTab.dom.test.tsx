@@ -274,17 +274,27 @@ describe("[187] a link to one thread", () => {
 });
 
 describe("[79] a child nobody has written to", () => {
-  it("is told so in the frame's words", async () => {
+  it("is told what this place is and offered the first message (9 Oct)", async () => {
+    // Design, 9 Oct: the old line told a child to wait for something they can
+    // now start themselves.
     viewport(false);
     api.threads.mockResolvedValue({ threads: [], total: 0 });
 
     render(<ConnectTab />);
 
     expect(
-      await screen.findByText(
-        "Your teacher will be able to message you here soon",
+      await screen.findByRole("heading", {
+        name: "This is where you and your teacher talk",
+      }),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Say hello, ask about a lesson, or tell them how it went. Write the first message whenever you're ready.",
       ),
     ).toBeTruthy();
+    expect(screen.getByPlaceholderText("Write a message")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Send" })).toBeTruthy();
+    expect(screen.queryByText(/will be able to message you/)).toBeNull();
   });
 
   it("sees an empty thread's row say there are no messages yet", async () => {
@@ -428,8 +438,9 @@ describe("[B95] the teacher thread before its first message", () => {
     const input = await screen.findByLabelText("Message Mr Bell");
     expect(within(conversation()).getByText("Message your teacher here")).toBeTruthy();
     expect(within(conversation()).getByText("Mr Bell")).toBeTruthy();
+    // Not the empty-list state: there IS a thread to write into.
     expect(
-      screen.queryByText("Your teacher will be able to message you here soon"),
+      screen.queryByText("This is where you and your teacher talk"),
     ).toBeNull();
 
     fireEvent.change(input, { target: { value: "Hello" } });
@@ -440,14 +451,101 @@ describe("[B95] the teacher thread before its first message", () => {
     expect(await screen.findByText("Delivered")).toBeTruthy();
   });
 
-  it("keeps the no-teacher line for a list with no thread at all", async () => {
+});
+
+/*
+ * Design, 9 Oct: a child with no thread at all writes the first message from
+ * the empty list. There is nothing to reply into, so it goes by direct
+ * creation (B95, 9 Oct: `recipientType: "student"`, the child's OWN user id);
+ * on success the list is read again and the thread it made opens. A failed
+ * send keeps the words and offers the conversation's own retry.
+ */
+describe("[B95] the first message from an empty list", () => {
+  const created = {
+    ...row("t-new", "Mr Bell"),
+    recipientId: "student-1",
+    teacherId: "teacher-9",
+    latestPreview: "Hello",
+  };
+  // `clearAllMocks` keeps unconsumed `...Once` answers, which would leak a
+  // queued list into the next test whenever one of these fails early.
+  afterEach(() => {
+    api.threads.mockReset();
+    api.send.mockReset();
+  });
+  const write = async (text: string) => {
+    const input = await screen.findByPlaceholderText("Write a message");
+    fireEvent.change(input, { target: { value: text } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+  };
+
+  it("goes by direct creation, then opens the thread it made", async () => {
     viewport(false);
-    api.threads.mockResolvedValue({ threads: [], total: 0 });
+    api.threads
+      .mockResolvedValueOnce({ threads: [], total: 0 })
+      .mockResolvedValueOnce({ threads: [created], total: 1 });
+    api.send.mockResolvedValue({ ...message("m-1", "Hello"), threadId: "t-new" });
+    api.thread.mockResolvedValue({
+      threadId: "t-new",
+      messages: [{ ...message("m-1", "Hello"), senderId: "student-1" }],
+    });
     render(<ConnectTab toTeacher />);
 
-    expect(
-      await screen.findByText("Your teacher will be able to message you here soon"),
-    ).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Send" })).toBeNull();
+    await write("Hello");
+
+    expect(api.send).toHaveBeenCalledWith({
+      recipientType: "student",
+      recipientId: "student-1",
+      content: "Hello",
+    });
+    expect(api.reply).not.toHaveBeenCalled();
+    // The list is read again, and the new conversation opens on a phone.
+    await waitFor(() => expect(api.thread).toHaveBeenCalledWith("t-new"));
+    expect(api.threads).toHaveBeenCalledTimes(2);
+    expect(await screen.findByLabelText("Message Mr Bell")).toBeTruthy();
+    expect(within(conversation()).getByText("Hello")).toBeTruthy();
+  });
+
+  it("keeps the words when it fails, and the retry sends them again", async () => {
+    viewport(false);
+    api.threads
+      .mockResolvedValueOnce({ threads: [], total: 0 })
+      .mockResolvedValueOnce({ threads: [created], total: 1 });
+    api.send
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce({ ...message("m-1", "Hello"), threadId: "t-new" });
+    render(<ConnectTab />);
+
+    await write("Hello");
+
+    const retry = await screen.findByText(/Didn.t send - tap to try again/);
+    expect(screen.getByText("Hello")).toBeTruthy();
+    // Nothing was made, so nothing is read again or opened.
+    expect(api.threads).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(retry);
+
+    await waitFor(() => expect(api.send).toHaveBeenCalledTimes(2));
+    expect(api.send).toHaveBeenLastCalledWith({
+      recipientType: "student",
+      recipientId: "student-1",
+      content: "Hello",
+    });
+    expect(await screen.findByLabelText("Message Mr Bell")).toBeTruthy();
+  });
+
+  it("says delivered, and stays put, when the list does not answer after", async () => {
+    viewport(false);
+    api.threads
+      .mockResolvedValueOnce({ threads: [], total: 0 })
+      .mockRejectedValueOnce(new Error("offline"));
+    api.send.mockResolvedValue({ ...message("m-1", "Hello"), threadId: "t-new" });
+    render(<ConnectTab />);
+
+    await write("Hello");
+
+    expect(await screen.findByText("Delivered")).toBeTruthy();
+    expect(screen.getByText("Hello")).toBeTruthy();
+    expect(screen.queryByText(/Didn.t send/)).toBeNull();
   });
 });
