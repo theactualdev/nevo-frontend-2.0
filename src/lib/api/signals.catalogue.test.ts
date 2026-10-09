@@ -313,6 +313,23 @@ describe("every payload the client writes", () => {
     expect(SITES.some((s) => s.literals.length > 0)).toBe(true);
   });
 
+  it("sends only the engagement indicators the client sees without a cutoff (B105)", () => {
+    /*
+     * `focus_drop` is "below the local focus pattern", `rapid_guessing` is
+     * "rapid", `steady_progress` is "sustained": each needs a baseline or a
+     * threshold this client would have to invent (rule 3). The three it
+     * sends are things that happened - the page hidden, for how long, a move
+     * back - counted or timed and nothing more.
+     */
+    const indicators = SITES.filter((s) => s.type === "engagement_signal")
+      .flatMap((s) => s.literals)
+      .filter(([key]) => key === "indicator")
+      .map(([, value]) => value);
+    expect(new Set(indicators)).toEqual(
+      new Set(["task_switch", "return_after_pause", "navigation_fragmentation"]),
+    );
+  });
+
   it("still sends every key KNOWN_UNDECLARED excuses, or it comes off the list", () => {
     const stale = Object.entries(KNOWN_UNDECLARED).flatMap(([type, keys]) =>
       keys

@@ -493,6 +493,93 @@ describe("what became of a switch the child took (B73/B104)", () => {
   });
 });
 
+/*
+ * ENGAGEMENT_SIGNAL, ONLY WHAT THE CLIENT SEES AS IT IS (B105, 9 Oct). Three
+ * of the six indicators: the page going hidden, how long it stayed hidden,
+ * and a move back to an earlier segment. The other three need a baseline or
+ * a cutoff this client would have to invent, and are never sent.
+ */
+describe("engagement_signal (B105)", () => {
+  const setVisibility = (state: "hidden" | "visible") => {
+    Object.defineProperty(document, "visibilityState", {
+      value: state,
+      configurable: true,
+    });
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+  };
+  afterEach(() => {
+    // Back to jsdom's own getter on the prototype.
+    delete (document as { visibilityState?: unknown }).visibilityState;
+  });
+
+  it("says the page went hidden mid-lesson, and how long for as it comes back", () => {
+    render(<LessonPlayer lesson={THREE} plan={null} />);
+
+    now = 10_000;
+    setVisibility("hidden");
+    expect(sent("engagement_signal")).toEqual([
+      { indicator: "task_switch", value: 1 },
+    ]);
+
+    now = 52_000;
+    setVisibility("visible");
+    expect(sent("engagement_signal")).toEqual([
+      { indicator: "task_switch", value: 1 },
+      { indicator: "return_after_pause", value: 42_000 },
+    ]);
+  });
+
+  it("says each time it happens, once", () => {
+    render(<LessonPlayer lesson={THREE} plan={null} />);
+
+    setVisibility("hidden");
+    setVisibility("hidden"); // the same hiding, said twice by the browser
+    setVisibility("visible");
+    setVisibility("hidden");
+    setVisibility("visible");
+
+    expect(sent("engagement_signal").map((e) => e.indicator)).toEqual([
+      "task_switch",
+      "return_after_pause",
+      "task_switch",
+      "return_after_pause",
+    ]);
+  });
+
+  it("says nothing of a return it did not see go", () => {
+    render(<LessonPlayer lesson={THREE} plan={null} />);
+
+    setVisibility("visible");
+
+    expect(sent("engagement_signal")).toEqual([]);
+  });
+
+  it("says nothing before a review has begun", () => {
+    render(<LessonPlayer lesson={THREE} plan={null} review />);
+
+    setVisibility("hidden");
+    setVisibility("visible");
+
+    expect(sent("engagement_signal")).toEqual([]);
+  });
+
+  it("counts a move back to an earlier segment, and not a move on", () => {
+    render(<LessonPlayer lesson={THREE} plan={null} />);
+
+    next();
+    next();
+    expect(sent("engagement_signal")).toEqual([]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+
+    expect(sent("engagement_signal")).toEqual([
+      { indicator: "navigation_fragmentation", value: 1 },
+    ]);
+  });
+});
+
 describe("an answer, as the engine receives it", () => {
   it("names the segment and the checkpoint, and not the pick or whether it was right", () => {
     /*

@@ -93,23 +93,33 @@ export const SIGNAL_EVENT_TYPES = {
    * What became of a switch the child took (B73/B104, 8 Oct): sent once, as
    * the segment shown in the new modality is left - in this player, the one
    * the switch was taken on. Payload { segmentId, from, to, timeOnSegment },
-   * the time in ms from the switch to the way out. Its optional `outcome`
-   * (better, worse, no change) and its two scores are judgements the client
-   * may not make (rule 3), so they are never sent.
+   * the time in ms from the switch to the way out (ms confirmed, 9 Oct). Its
+   * optional `outcome` (better, worse, no change) and its two scores are
+   * never sent. The server takes the scores as supplied aggregates and works
+   * none out itself yet (9 Oct) - and an aggregate of a child's comprehension
+   * or engagement is a judgement the client may not make (rule 3).
    */
   MODALITY_SWITCH_OUTCOME: "modality_switch_outcome",
+  /**
+   * The type of last resort, for a reading no named type covers (B105). Its
+   * `value` is a non-negative number, in the unit the catalogue gives each
+   * indicator. Sent for the three the client observes with no threshold of
+   * its own:
+   * - `task_switch`, value 1: the page went hidden mid-lesson - another app,
+   *   another tab, the screen locked. One per time it happened.
+   * - `return_after_pause`, value in ms: how long it stayed hidden, sent as it
+   *   comes back.
+   * - `navigation_fragmentation`, value 1: back to an earlier segment, the
+   *   one non-linear move the player has.
+   * NEVER `focus_drop`, `rapid_guessing` or `steady_progress`: "below the
+   * local focus pattern", "rapid" and "sustained" each need a baseline or a
+   * cutoff the client would have to invent (rule 3). The engine's to read.
+   */
+  ENGAGEMENT_SIGNAL: "engagement_signal",
   /*
    * DECLARED IN THE CATALOGUE AND DELIBERATELY NOT SENT:
    * - `modality_manual_switch`. A child has no way to change modality
    *   themselves; the frames draw only the engine's offer (17 §C).
-   * - `engagement_signal` (B105, 8 Oct). Its `indicator` has a vocabulary now
-   *   - focus_drop, task_switch, navigation_fragmentation, rapid_guessing,
-   *   steady_progress, return_after_pause - and the catalogue still says
-   *   neither what observation each one is nor what its `value` carries.
-   *   Four are judgements of a child (rule 3) whatever they turn out to be;
-   *   `task_switch` and `return_after_pause` could be the page hidden and
-   *   shown again, but nothing says so, and a value made up for them would
-   *   be counted as if the engine had asked for it. Asked of backend.
    */
   BREAK_SUGGESTED: "break_suggested",
   BREAK_TAKEN: "break_taken",

@@ -921,10 +921,12 @@ export function LessonPlayer({
        * WHAT BECAME OF A SWITCH (B73/B104, 8 Oct): sent once, as the segment
        * shown in the new modality is left or the lesson ends on it. In this
        * player that is the segment the switch was taken on - the next opens
-       * in whatever the plan names. Its time is what was measured: the
-       * segment on screen from the switch to the way out. No `outcome` and no
-       * score - better, worse, comprehension and engagement are judgements
-       * of the child, the engine's to make from what it is sent (rule 3).
+       * in whatever the plan names. Its time is what was measured, in ms
+       * (confirmed 9 Oct): the segment on screen from the switch to the way
+       * out. No `outcome` and no score - better, worse, comprehension and
+       * engagement are judgements of the child (rule 3). The server takes
+       * the scores as supplied aggregates and derives none yet; an aggregate
+       * worked out here would still be this client judging the child.
        */
       const taken = switched.current;
       if (taken?.segmentId === segId) {
@@ -1039,6 +1041,49 @@ export function LessonPlayer({
     return () =>
       window.removeEventListener("scroll", onScroll, { capture: true });
   }, [handleScroll]);
+
+  /*
+   * B105 (9 Oct): THE PAGE GOING HIDDEN MID-LESSON, AND FOR HOW LONG - two of
+   * `engagement_signal`'s indicators, and two the client sees as they are,
+   * with no cutoff of its own. `task_switch` (a count, 1) as it goes, and
+   * `return_after_pause` (the ms it stayed hidden) as it comes back. Hidden
+   * covers another app, another tab and a locked screen alike; which of
+   * those it was, and whether it matters, is the engine's to read.
+   *
+   * Only while the lesson is under way - not before a review begins, and
+   * not on the finished screen. A page that opened hidden was not switched
+   * away from, so nothing goes up until it has been seen to go.
+   *
+   * CAPTURED, so this runs before `useSignals`' own listener on the same
+   * event, which sends the queue as the page hides: the switch goes in that
+   * send rather than waiting for the page to come back.
+   */
+  const lessonUnderWay = phase === "segments" || phase === "assessment";
+  useEffect(() => {
+    if (!lessonUnderWay) return;
+    let hiddenAt: number | null = null;
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        if (hiddenAt !== null) return;
+        hiddenAt = performance.now();
+        trackEvent(SIGNAL_EVENT_TYPES.ENGAGEMENT_SIGNAL, {
+          indicator: "task_switch",
+          value: 1,
+        });
+        return;
+      }
+      if (hiddenAt === null) return;
+      const away = performance.now() - hiddenAt;
+      hiddenAt = null;
+      trackEvent(SIGNAL_EVENT_TYPES.ENGAGEMENT_SIGNAL, {
+        indicator: "return_after_pause",
+        value: Math.max(0, Math.round(away)),
+      });
+    };
+    document.addEventListener("visibilitychange", onVisibility, true);
+    return () =>
+      document.removeEventListener("visibilitychange", onVisibility, true);
+  }, [lessonUnderWay, trackEvent]);
 
   // Auto-clear the feedback note.
   useEffect(() => {
@@ -1446,6 +1491,21 @@ export function LessonPlayer({
       return;
     }
     advancePastSegment();
+  };
+
+  /*
+   * Previous chevron. B105 (9 Oct): BACK TO AN EARLIER SEGMENT IS THE ONE
+   * NON-LINEAR MOVE THIS PLAYER HAS - Next goes on by one, and the check has
+   * no way back - so each is one `navigation_fragmentation`. Whether the
+   * moves add up to fragmentation is the engine's reading, not this one's.
+   */
+  const handlePrev = () => {
+    if (index === 0) return;
+    trackEvent(SIGNAL_EVENT_TYPES.ENGAGEMENT_SIGNAL, {
+      indicator: "navigation_fragmentation",
+      value: 1,
+    });
+    go(index - 1);
   };
 
   const pickDensity = (id: string) => {
@@ -1926,7 +1986,8 @@ export function LessonPlayer({
            * stored answer, so `correct` - and the pick and its timing beside it
            * - are not sent here. NO `segmentId`: an after-lesson question
            * belongs to the lesson, not to any one segment, and naming the last
-           * one would put the answer on a segment it was never about.
+           * one would put the answer on a segment it was never about - and
+           * the catalogue makes it optional for exactly this (9 Oct).
            * `source` says it is the after-lesson check's (B90/B92, 8 Oct).
            */
           trackEvent(SIGNAL_EVENT_TYPES.COMPREHENSION_RESPONSE, {
@@ -2511,7 +2572,7 @@ export function LessonPlayer({
         <ChevronButton
           dir="prev"
           disabled={index === 0}
-          onClick={() => go(index - 1)}
+          onClick={handlePrev}
         />
         <ChevronButton
           dir="next"
