@@ -24,6 +24,7 @@ import type {
 } from "@/lib/api/variants";
 import type { CheckpointScalar } from "@/lib/api/checkpoints";
 import { isStoredAnswer } from "./storedAnswer";
+import { chunksForBody } from "./chunk";
 import { MODALITY, type Modality } from "@/lib/constants";
 import type {
   Assessment,
@@ -215,7 +216,8 @@ function equationsOf(
  * of `body`, so a set that drops, adds or changes a word would put text on
  * screen that is not the approved lesson. A set that does not carry exactly
  * the body's words, or a chunk with no id or no text, falls back to the body
- * itself: nothing is lost, the passage is simply one block.
+ * itself: nothing is lost, the passage is simply one block. The segment asks
+ * the same question again of the text it actually shows - `chunksForBody`.
  */
 function chunksOf(
   chunks: readonly ReadingChunk[] | null | undefined,
@@ -230,10 +232,7 @@ function chunksOf(
       text: typeof c?.text === "string" ? c.text.trim() : "",
     }));
   if (ordered.some((c) => !c.id || !c.text)) return undefined;
-  const words = (s: string) => s.split(/\s+/).filter(Boolean).join(" ");
-  if (words(ordered.map((c) => c.text).join(" ")) !== words(body))
-    return undefined;
-  return ordered;
+  return chunksForBody(body, ordered) ? ordered : undefined;
 }
 
 /**

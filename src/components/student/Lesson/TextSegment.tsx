@@ -9,7 +9,7 @@ import {
   type RefObject,
 } from "react";
 import { DENSITY, type Density } from "@/lib/constants";
-import { bodyParts } from "@/lib/lessons/chunk";
+import { bodyParts, chunksForBody } from "@/lib/lessons/chunk";
 import {
   chunkCrossing,
   sightingOf,
@@ -112,9 +112,13 @@ export function TextSegment({
     expand || body === content.body.default ? content.equations : undefined;
   const keyPoints =
     !expand && density !== DENSITY.SLOWER ? content.keyPoints : undefined;
-  // The server's chunks are of the default body; a reshape reads whole.
-  const chunks =
-    body === content.body.default ? content.readingChunks : undefined;
+  /*
+   * The server's chunks are of the standard body, so they are asked of the
+   * text actually shown. A reshape, or any other text standing in for the
+   * standard body, reads as it always has - one block, or the on-device
+   * parts - and reports no chunk it is not showing.
+   */
+  const chunks = chunksForBody(body, content.readingChunks);
   /*
    * The authored numbered cards are the richer Slower and win where they
    * exist; chunking is the form that needs no content. Never both, or the
@@ -265,7 +269,7 @@ function ChunkedPassage({
   reading,
   onChunkSeen,
 }: {
-  chunks: { id: string; text: string }[];
+  chunks: readonly { id: string; text: string }[];
   className: string;
   reading: boolean;
   onChunkSeen?: OnChunkSeen;
@@ -370,7 +374,7 @@ function ChunkedBody({
   onChunkSeen,
 }: {
   body: string;
-  chunks?: { id: string; text: string }[];
+  chunks?: readonly { id: string; text: string }[];
   className: string;
   reading: boolean;
   onReadProgress?: (pct: number) => void;

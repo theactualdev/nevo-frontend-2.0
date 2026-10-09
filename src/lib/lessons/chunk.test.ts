@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bodyParts, chunkBody, isChunkable } from "./chunk";
+import { bodyParts, chunkBody, chunksForBody, isChunkable } from "./chunk";
 
 /**
  * SLOWER, ON CONTENT NOBODY AUTHORED A RESHAPE FOR.
@@ -95,5 +95,19 @@ describe("the server's reading chunks, where it sent them (SCRUM-234)", () => {
     // Three sentences would split on the device. The server says one block,
     // so a Slower that splits it anyway would be the client overruling it.
     expect(isChunkable(three, [{ text: three }])).toBe(false);
+  });
+
+  it("are not this body's when they carry other words, and the device splits it", () => {
+    // The text on screen is not the one they were cut from - a simpler
+    // version standing in for it, say. They describe nothing here.
+    const other = "Light feeds a plant. It makes sugar. It gives out air.";
+
+    expect(chunksForBody(other, server)).toBeUndefined();
+    expect(bodyParts(other, server)).toEqual(chunkBody(other));
+    expect(isChunkable(other, [{ text: three }])).toBe(true);
+  });
+
+  it("are this body's whatever the spacing between them", () => {
+    expect(chunksForBody(`  ${three}\n`, server)).toBe(server);
   });
 });

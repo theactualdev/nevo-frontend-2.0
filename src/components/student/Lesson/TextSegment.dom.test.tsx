@@ -139,6 +139,48 @@ describe("a body the server sent in chunks (frame 17c)", () => {
   });
 });
 
+describe("text on screen that is not the body the chunks were cut from", () => {
+  /*
+   * The chunks describe the STANDARD body. A session can show a segment's
+   * simpler text in that body's place, and then the chunks are someone else's
+   * words: drawn, they would put the standard text back on screen; driving
+   * the parts or the stream, they would report reading nobody did. So they
+   * are asked of what is actually rendered, not of what was adapted.
+   */
+  const SHOWN =
+    "Plants feed themselves on light. They breathe out oxygen. That is all.";
+  const standIn = content({ body: { default: SHOWN }, readingChunks: CHUNKS });
+
+  it("draws the text shown as one body, with no chunk in it", () => {
+    const { container } = render(<TextSegment content={standIn} density={null} />);
+
+    expect(screen.getByText(SHOWN).tagName).toBe("P");
+    expect(screen.queryByText(CHUNKS[0].text)).toBeNull();
+    expect(container.querySelectorAll("div.h-px")).toHaveLength(0);
+    expect(container.querySelector("[data-chunk-id]")).toBeNull();
+  });
+
+  it("parts it on the device, as before chunks existed", () => {
+    const { container } = render(
+      <TextSegment content={standIn} density={null} attention />,
+    );
+
+    expect(screen.getByText("Plants feed themselves on light.")).toBeInTheDocument();
+    expect(screen.getByText("Part 1 of 3")).toBeInTheDocument();
+    expect(container.querySelector("[data-chunk-id]")).toBeNull();
+  });
+
+  it("reports no chunk it is not showing", () => {
+    const onChunkSeen = vi.fn();
+    render(
+      <TextSegment content={standIn} density={null} onChunkSeen={onChunkSeen} />,
+    );
+
+    expect(watchers.every((w) => w.targets.length === 0)).toBe(true);
+    expect(onChunkSeen).not.toHaveBeenCalled();
+  });
+});
+
 describe("reporting where the child has read (reading_chunk_viewed)", () => {
   const renderWatched = () => {
     const onChunkSeen = vi.fn();

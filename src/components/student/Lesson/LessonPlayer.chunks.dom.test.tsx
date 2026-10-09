@@ -144,4 +144,20 @@ describe("reading through the server's chunks", () => {
 
     expect(screen.queryByRole("button", { name: "Slower" })).toBeNull();
   });
+
+  it("leaves chunks that are not the text shown out of the gate and the stream", () => {
+    // A simpler text standing in for the standard body: the server's one
+    // chunk is of words not on screen, so Slower is the device's three parts
+    // and no chunk is ever watched.
+    render(
+      <LessonPlayer
+        lesson={lessonWith([{ id: "c1", text: "Some other words entirely." }])}
+        plan={PLAN}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Slower" })).toBeInTheDocument();
+    expect(watchers.every((w) => w.targets.length === 0)).toBe(true);
+    expect(viewed()).toEqual([]);
+  });
 });
