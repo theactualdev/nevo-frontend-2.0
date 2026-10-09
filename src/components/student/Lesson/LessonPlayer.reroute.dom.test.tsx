@@ -194,7 +194,7 @@ describe("the server says nothing landed and reroutes (SCRUM-181)", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Start again" }));
 
-    expect(onStartAgain).toHaveBeenCalledWith(0);
+    expect(onStartAgain).toHaveBeenCalledWith(0, "lower");
     // The run that did not land ended completed, as the server wrote it.
     expect(endings.at(-1)).toEqual({ completionStatus: "completed" });
   });

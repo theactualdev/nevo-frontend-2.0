@@ -434,8 +434,9 @@ export interface LessonSessionResponse {
   checkResumableUntil?: string | null;
   /**
    * The depth this session runs at, and the session a reroute came from
-   * (SCRUM-178). Typed and NOT RENDERED: nothing on the contract says what a
-   * `lower` session shows, so the player does not guess - asked of backend.
+   * (SCRUM-178). A `lower` session reads each segment's simplified version,
+   * falling back to its body (backend, 9 Oct) - see `atLowerDepth`. After a
+   * reroute this route resumes and returns that same lower-depth session.
    */
   depth?: "standard" | "lower";
   reroutedFromSessionId?: string | null;

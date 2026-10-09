@@ -230,10 +230,13 @@ describe("the loading skeleton", () => {
 });
 
 describe("starting again after the server rerouted the lesson (SCRUM-178)", () => {
-  const startAgain = (at: number) =>
+  const startAgain = (at: number, depth: "standard" | "lower" = "lower") =>
     act(() =>
-      (playerProps.value as { onStartAgain: (at: number) => void })
-        .onStartAgain(at),
+      (
+        playerProps.value as {
+          onStartAgain: (at: number, depth: "standard" | "lower") => void;
+        }
+      ).onStartAgain(at, depth),
     );
 
   it("builds a new player at the reroute's place, not the dashboard's", () => {
@@ -244,6 +247,8 @@ describe("starting again after the server rerouted the lesson (SCRUM-178)", () =
     });
     render(<LessonRoute lessonId="les-1" />);
     const built = mounts.count;
+    // An ordinary open says no depth: the session it opens will.
+    expect(playerProps.value).toMatchObject({ depth: undefined });
 
     startAgain(0);
 
@@ -253,6 +258,8 @@ describe("starting again after the server rerouted the lesson (SCRUM-178)", () =
       startAt: 0,
       progressRow: null,
       placeUnknown: false,
+      // At the reroute's depth from its first frame (SCRUM-178).
+      depth: "lower",
     });
   });
 

@@ -87,13 +87,17 @@ export function LessonRoute({
    * SCRUM-178: START AGAIN, AFTER THE SERVER REROUTED THE LESSON. A new
    * player, so nothing of the run that did not land carries into the next -
    * its answers, its checks passed, its signal session - and the new one asks
-   * `POST /session` for its session, which after a reroute is the server's
-   * rerouted one. It opens on the reroute's place rather than the dashboard's
-   * row, which was read before this run and says nothing about it.
+   * `POST /session` for its session, which after a reroute resumes and
+   * returns the server's rerouted one (backend, 9 Oct). It opens on the
+   * reroute's place rather than the dashboard's row, which was read before
+   * this run and says nothing about it - and at the reroute's depth from its
+   * first frame, rather than when that session answers.
    */
-  const [rerun, setRerun] = useState<{ run: number; at: number } | null>(
-    null,
-  );
+  const [rerun, setRerun] = useState<{
+    run: number;
+    at: number;
+    depth: "standard" | "lower";
+  } | null>(null);
 
   // The server cannot read the token, so it cannot yet know whether this
   // lesson resolves. Draw the skeleton rather than deciding wrongly.
@@ -179,9 +183,11 @@ export function LessonRoute({
         progressRow={rerun ? null : progressRow}
         lastWorkedAt={lastWorkedAt}
         adaptSegments={adaptSegments}
+        depth={rerun?.depth}
         onStartAgain={
           live
-            ? (at) => setRerun((prev) => ({ run: (prev?.run ?? 0) + 1, at }))
+            ? (at, depth) =>
+                setRerun((prev) => ({ run: (prev?.run ?? 0) + 1, at, depth }))
             : undefined
         }
       />

@@ -55,6 +55,7 @@ import { ADJUSTMENT_ACTIONS } from "@/lib/constants/affect";
 import { densityForAction } from "@/lib/lessons/densityForAction";
 import { densitySpacing } from "@/lib/lessons/densitySpacing";
 import { depthShown, type DepthShown } from "@/lib/lessons/depthShown";
+import { atLowerDepth, NOTHING_SIMPLIFIED } from "@/lib/lessons/lowerDepth";
 import { scaffoldAttemptFor } from "@/lib/lessons/scaffoldAttempt";
 import { scaffoldsApi } from "@/lib/api/scaffolds";
 import { useAssignmentNote } from "@/hooks/useAssignmentNote";
@@ -200,7 +201,7 @@ function openingModality(
  * interaction and publishes the session into `LessonContext`.
  */
 export function LessonPlayer({
-  lesson,
+  lesson: given,
   plan,
   review = false,
   reviewConceptId,
@@ -213,6 +214,7 @@ export function LessonPlayer({
   progressRow = null,
   lastWorkedAt = null,
   adaptSegments,
+  depth,
   onStartAgain,
 }: {
   lesson: Lesson;
@@ -276,11 +278,38 @@ export function LessonPlayer({
   /** The concept a review session is for; absent on an ordinary lesson. */
   reviewConceptId?: string;
   /**
-   * SCRUM-181's Start again: open the lesson afresh from this zero-based
-   * segment, the server's reroute's place. Absent, the screen is not offered.
+   * The depth this session runs at, where it is known before it opens: the
+   * server's reroute that Start again follows. Otherwise the session says so
+   * itself when it opens - see `lowerDepth`.
    */
-  onStartAgain?: (segmentPosition: number) => void;
+  depth?: "standard" | "lower";
+  /**
+   * SCRUM-181's Start again: open the lesson afresh from this zero-based
+   * segment, the server's reroute's place, at the reroute's depth. Absent,
+   * the screen is not offered.
+   */
+  onStartAgain?: (
+    segmentPosition: number,
+    depth: "standard" | "lower",
+  ) => void;
 }) {
+  /*
+   * SCRUM-178: A LOWER-DEPTH SESSION READS EACH SEGMENT'S SIMPLER VERSION, and
+   * the normal body where there is none (backend, 9 Oct) - see `atLowerDepth`.
+   * From the first frame when the reroute already said so (Start again).
+   * When it is the session's own answer, it lands after the first segment is
+   * on screen, so it applies from the next segment entered - rewording the
+   * text a child has started reading is the snap rule 7 forbids (the same
+   * rule as `entryDensity`). Lower stays lower for the rest of the session.
+   */
+  const [lowerDepth, setLowerDepth] = useState(depth === "lower");
+  const { lesson, simplified } = useMemo(
+    () =>
+      lowerDepth
+        ? atLowerDepth(given)
+        : { lesson: given, simplified: NOTHING_SIMPLIFIED },
+    [given, lowerDepth],
+  );
   // Every exit from the lesson - see `useLessonExit`.
   const exitTo = useLessonExit();
   const total = lesson.segments.length;
@@ -1314,6 +1343,10 @@ export function LessonPlayer({
     setIndex(next);
     // Opening a segment names it, a return visit included (D148).
     setPositionSaidOn(null);
+    // A session that opened lower reads lower from here on (SCRUM-178). Only
+    // ever with a move, so the text changes as a segment opens, never under
+    // one being read.
+    if (progress.opened?.depth === "lower") setLowerDepth(true);
     setEntryDensity({
       segmentId: nextSegment.id,
       level: nextPlan?.densityLevel ?? null,
@@ -1543,7 +1576,12 @@ export function LessonPlayer({
    * cleanup reads the segment being left before the next one's version
    * lands here - and the segment id it is stamped with says so either way.
    */
-  const depthNow = depthShown(segment, modality, effectiveDensity);
+  const depthNow = depthShown(
+    segment,
+    modality,
+    effectiveDensity,
+    simplified.has(segment.id),
+  );
   useEffect(() => {
     textShown.current = { segmentId: segment.id, depth: depthNow };
   }, [segment.id, depthNow]);
@@ -1825,8 +1863,9 @@ export function LessonPlayer({
    * SCRUM-178). It replaces the check's result, or the completion screen if
    * the child moved on before the write answered. Design's words verbatim,
    * and no score, count or percentage. Start again follows the server's
-   * reroute: the lesson opens again from its `segmentPosition`, and its
-   * session is the one `POST /session` then hands back - see `LessonRoute`.
+   * reroute: the lesson opens again from its `segmentPosition`, at its
+   * `depth`, and its session is the one `POST /session` then hands back -
+   * the same rerouted session (backend, 9 Oct). See `LessonRoute`.
    * A lesson nobody attempted is never sent here; it resumes from Home.
    */
   if (
@@ -1839,7 +1878,7 @@ export function LessonPlayer({
         title={REROUTED.title}
         body={REROUTED.body}
         actionLabel={REROUTED.action}
-        onAction={() => onStartAgain(reroute.segmentPosition)}
+        onAction={() => onStartAgain(reroute.segmentPosition, reroute.depth)}
       />
     );
   }
