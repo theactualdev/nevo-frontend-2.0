@@ -160,21 +160,54 @@ export interface ScaffoldQuantity {
 }
 
 /**
- * The drawing beside the notation, as the payload describes it (SCRUM-177).
+ * The drawing beside the notation, as the payload describes it (SCRUM-177,
+ * read by backend's 9 Oct definitions - see `scaffoldFor`).
  *
  * Only the kinds a frame draws are here, each named as the wire names it:
- * `bar` is 17b's fraction bars (D149's "fraction_bars"), one physical row per
- * quantity; `dots` and `number_line` are 37c's grouped dots and number line,
- * each on one row; `array` is D149's rows of square places, one physical row
- * per quantity; `place_value` is D149's three columns of flats, rods and
- * units, largest first.
+ *  - `bar` is 17b's fraction bars (D149's "fraction_bars"): `rows` bars of
+ *    `parts` cells. Its quantities are one to a bar where there are as many
+ *    as bars, and otherwise all on its one bar, end to end;
+ *  - `array` is D149's `rows` rows of `parts` square places, its
+ *    quantities filling them end to end in reading order;
+ *  - `dots` is D149's `rows` rows of `parts` round places, its quantities
+ *    filling them end to end in reading order, as the array does;
+ *  - `place_value` is D149's three columns of flats, rods and units, a
+ *    quantity to each, largest first;
+ *  - `number_line` is D149's line of `parts` positions ("cells or
+ *    positions in one row"), a marker at each quantity's position.
+ *
+ * `partLabels` name the parts of a scaffold with no marks: "label[i] belongs
+ * to mark[i] when marks are present, otherwise to scaffold part i".
  */
 export type CalcScaffold =
-  | { kind: "bar"; parts: number; quantities: ScaffoldQuantity[] }
-  | { kind: "array"; parts: number; quantities: ScaffoldQuantity[] }
+  | {
+      kind: "bar";
+      parts: number;
+      rows: number;
+      quantities: ScaffoldQuantity[];
+      partLabels: string[];
+    }
+  | {
+      kind: "array";
+      parts: number;
+      rows: number;
+      quantities: ScaffoldQuantity[];
+      partLabels: string[];
+    }
+  | {
+      kind: "dots";
+      parts: number;
+      rows: number;
+      quantities: ScaffoldQuantity[];
+      partLabels: string[];
+    }
   | { kind: "place_value"; places: ScaffoldQuantity[] }
-  | { kind: "dots"; quantities: ScaffoldQuantity[] }
-  | { kind: "number_line"; parts: number; points: ScaffoldQuantity[] };
+  | {
+      kind: "number_line";
+      parts: number;
+      points: ScaffoldQuantity[];
+      partLabels: string[];
+    };
 
 /** Narration for one step: the clip, and how to re-issue its link. */
 export interface CalcNarration {
@@ -183,10 +216,10 @@ export interface CalcNarration {
 }
 
 /**
- * One thing a step's answer does to the drawing (B107), as the wire names it:
- * `active` is 17b's violet ring, `source` its navy fill, `result` the result
- * row filling. `target` is matched against the drawing's own labels and
- * nothing else.
+ * One thing a step does to the screen while it is asked (B107), as the wire
+ * names it: `active` is 17b's violet ring, `source` its navy, `result` the
+ * result. `target` is "an opaque renderer target", matched only to an
+ * element the same calculation carries - see `emphasisAt`.
  */
 export interface CalcHighlight {
   target: string;
@@ -239,7 +272,8 @@ export interface CalcNumberStep extends CalcStepBase {
 /**
  * A step the child builds by tapping pieces into the manipulative (17b §6).
  * `target` is the wire's `tapCount` (B102), a whole number of pieces the bar
- * holds - never read out of an answer.
+ * or the array holds - never read out of an answer. A place-value build is
+ * done when each column holds its own count instead, and nothing sums them.
  */
 export interface CalcTapStep extends CalcStepBase {
   input: "tap";
@@ -262,12 +296,17 @@ export interface CalculationSegment {
   /** The drawing. Absent means the payload carries none this app can draw. */
   scaffold?: CalcScaffold;
   /**
-   * What a `tap` step builds on: 17b's fraction bar, one row of `parts`, or
-   * D149's array, `rows` rows of `parts` square places each.
+   * What a `tap` step builds on: 17b's fraction bar, one row of `parts`;
+   * D149's array, `rows` rows of `parts` square places; D149's number
+   * line, `parts` positions to hop along; or D149's place value, its
+   * columns and their piece counts taken from the scaffold.
+   * `pieceLabels[i]` names piece i, for a highlight to find; none is drawn.
    */
   manipulative?:
-    | { kind: "fraction_bar"; parts: number }
-    | { kind: "array"; parts: number; rows: number };
+    | { kind: "fraction_bar"; parts: number; pieceLabels: string[] }
+    | { kind: "array"; parts: number; rows: number; pieceLabels: string[] }
+    | { kind: "number_line"; parts: number; pieceLabels: string[] }
+    | { kind: "place_value"; columns: ScaffoldQuantity[] };
   steps: CalculationStep[];
   /** Shown once the solution has assembled. Empty means nothing is said. */
   completion: string;

@@ -344,8 +344,10 @@ export function calculationFromVariant(
   if (variant.steps.length === 0) return undefined;
 
   // Resolved once: a tap step needs something to build on, and that is a
-  // property of the variant rather than of the step.
-  const manipulative = manipulativeFor(variant.manipulative);
+  // property of the variant rather than of the step. A place-value build
+  // takes its columns from the scaffold, so the scaffold is read first.
+  const scaffold = scaffoldFor(variant.scaffold);
+  const manipulative = manipulativeFor(variant.manipulative, scaffold);
 
   const steps: CalculationStep[] = [];
   for (const step of variant.steps) {
@@ -354,7 +356,6 @@ export function calculationFromVariant(
     steps.push(built);
   }
 
-  const scaffold = scaffoldFor(variant.scaffold);
   const conceptId = variant.conceptId?.trim();
   return {
     variant: variant.type?.trim() || "co_construction",
@@ -465,7 +466,10 @@ function calcStepFor(
     if (typeof target !== "number" || !Number.isInteger(target)) {
       return undefined;
     }
-    if (target < 1 || target > placesIn(manipulative)) return undefined;
+    const places = placesIn(manipulative);
+    if (target < 1 || (places !== undefined && target > places)) {
+      return undefined;
+    }
     return { ...base, input: "tap", target };
   }
 
@@ -492,39 +496,72 @@ function highlightsFor(step: WireCalculationStep): CalcHighlight[] {
 /**
  * What a tap step builds on, where a frame draws it.
  *
- * `fraction_bar` and `array`. The wire names five kinds; design has drawn
- * 17b's tap-a-piece-into-the-bar, and D149 the same tap into an array's
- * empty places. The other three refuse rather than approximate. §4: the
- * interaction IS the mechanism, and a wrong one is a different task rather
- * than a lesser version of the right one:
- *  - `place_value` is drawn by D149, but a build of 123 is one flat, two rods
- *    and three units, and the wire carries only one `tapCount` - nothing
- *    says how many of each, and reading it out of "123" would be this app
- *    doing the arithmetic;
- *  - `number_line` and `counters` have no frame.
+ * `fraction_bar`, `array`, `number_line` and `place_value`. The wire names
+ * five kinds; design has drawn 17b's tap-a-piece-into-the-bar, and D149 the
+ * same tap into an array's places, a hop along a number line and a place
+ * value's columns. `counters` refuses: D149 says backend normalises it to
+ * dots, which the wire's kinds do not name (asked). §4: the interaction IS
+ * the mechanism, and a wrong one is a different task rather than a lesser
+ * version of the right one.
  *
- * `rows` is the physical row count (B100): one bar, as 17b draws, and an
- * array of `rows` rows of `parts` places - the only reading that needs no
- * arithmetic to lay out.
+ * A NUMBER LINE IS HOPPED ALONG FROM ITS FIRST POSITION, as a bar fills from
+ * its first cell: the wire carries no starting point for one, so a line that
+ * starts anywhere else cannot be built (asked).
+ *
+ * `rows` is the rendered row count (B100): one bar, as 17b draws, and an
+ * array of `rows` rows of `parts` places - "parts is the number of columns in
+ * one row" (backend, 9 Oct).
+ *
+ * A PLACE-VALUE BUILD TAKES ITS COUNTS FROM THE SCAFFOLD. Building 123 is one
+ * flat, two rods and three units, and one `tapCount` cannot say how many of
+ * each. The place-value scaffold can: "marks are the piece counts for the
+ * columns named by labels". So it builds only beside a place-value scaffold
+ * this app draws, into those columns, and is done when each column holds its
+ * own count - nothing here adds them up.
+ *
+ * `labels` name pieces, for a highlight to find (`pieceLabels`); no frame
+ * draws them on a build.
  */
 function manipulativeFor(
   m: Manipulative | null | undefined,
+  scaffold: CalcScaffold | undefined,
 ): CalculationSegment["manipulative"] {
   if (!m) return undefined;
   if (!Number.isInteger(m.parts) || m.parts < 1) return undefined;
   const rows = m.rows ?? 1;
+  const pieceLabels = (m.labels ?? []).map((l) => l.trim());
   if (m.kind === "fraction_bar") {
-    return rows === 1 ? { kind: "fraction_bar", parts: m.parts } : undefined;
+    return rows === 1
+      ? { kind: "fraction_bar", parts: m.parts, pieceLabels }
+      : undefined;
   }
   if (m.kind === "array" && Number.isInteger(rows) && rows >= 1) {
-    return { kind: "array", parts: m.parts, rows };
+    return { kind: "array", parts: m.parts, rows, pieceLabels };
+  }
+  if (m.kind === "number_line") {
+    return rows === 1
+      ? { kind: "number_line", parts: m.parts, pieceLabels }
+      : undefined;
+  }
+  if (m.kind === "place_value" && scaffold?.kind === "place_value") {
+    // A build with nothing to place could only be finished by doing nothing.
+    if (!scaffold.places.some((p) => p.count > 0)) return undefined;
+    return { kind: "place_value", columns: scaffold.places };
   }
   return undefined;
 }
 
-/** How many places the manipulative draws to build into. */
-function placesIn(m: NonNullable<CalculationSegment["manipulative"]>): number {
-  return m.kind === "array" ? m.rows * m.parts : m.parts;
+/**
+ * How many pieces a bar or an array has places for, or how many hops a line
+ * of `parts` positions has room for. A place-value build has no one number
+ * to hold: each column holds its own.
+ */
+function placesIn(
+  m: NonNullable<CalculationSegment["manipulative"]>,
+): number | undefined {
+  if (m.kind === "array") return m.rows * m.parts;
+  if (m.kind === "number_line") return m.parts - 1;
+  return m.kind === "fraction_bar" ? m.parts : undefined;
 }
 
 /** A mark as a count: a whole number, or a whole number written as text. */
@@ -538,40 +575,45 @@ function countOf(mark: CheckpointScalar): number | undefined {
 }
 
 /**
- * The drawing beside the notation, read as the payload gives it (B100).
- *
- * `rows` is the physical row count, `marks` are values or positions in
- * renderer order, and `labels` pair with the marks. 17b's bars draw one row
- * per mark - `1/4 + 2/4` as `rows: 2, marks: [1, 2], labels: ["1/4", "2/4"]`
- * - and 37c draws grouped dots and a number line on one row each. D149 draws
- * the other two kinds the same way:
- *  - `array`: rows of `parts` square places, one row per mark, the mark
- *    the places filled - the bar's reading, in squares. `parts` is the
- *    places in a row because reading it as the whole array would mean
- *    dividing it by `rows` to lay the rows out;
+ * The drawing beside the notation, read by backend's definitions (B100, and
+ * 9 Oct): "rows controls rendered rows; marks are overlays/values and do not
+ * create rows. A bar may therefore have more marks than rows. label[i]
+ * belongs to mark[i] when marks exist; otherwise it belongs to scaffold part
+ * i." Each kind is drawn as its frame draws it, with the payload's values:
+ *  - `bar`: `rows` bars of `parts` cells (17b). Where there are as many marks
+ *    as bars, a mark fills its own bar from the start, its label at the
+ *    bar's start, as 17b draws `1/4 + 2/4`. Where one bar carries several
+ *    marks - SCRUM-177's own `3/5 + 1/5` as `rows: 1, marks: [3, 1]` - they
+ *    fill it one after another, in renderer order, each label under its own
+ *    cells. No marks: empty bars, a part's label under its cell;
+ *  - `array`: `rows` rows of `parts` places - "parts is the number of columns
+ *    in one row" - the marks filling them one after another in reading order
+ *    (D149);
  *  - `place_value`: D149's three columns on one row, flats then rods then
- *    units, a mark to each in renderer order - how many pieces stand in
- *    that column. Ten to one each step is what the shapes say, so they hold
- *    for any three neighbouring places, and which places they are is the
- *    payload's labels to say: D149's "Hundreds", "Tens" and "Ones" are
- *    not drawn for a payload that names none. `parts` is not read; nothing
- *    says what it is for a place-value drawing.
+ *    units - "marks are the piece counts for the columns named by labels".
+ *    Ten to one each step is what the shapes say, so they hold for any three
+ *    neighbouring places; which places is the labels' to say, and D149's
+ *    "Hundreds", "Tens" and "Ones" are not drawn for a payload naming none;
+ *  - `dots`: D149's `rows` rows of `parts` round places, filled as the
+ *    array's are - D149 replaced 37c's groups of two, which read neither
+ *    `rows` nor `parts`;
+ *  - `number_line`: D149's line of `parts` positions - "cells or positions
+ *    in one row" - a marker at each mark's position, its label beneath; or,
+ *    with no marks, a part's label beneath its position.
  *
  * Those are the only readings made. Anything that does not fit is not drawn
  * rather than drawn some other way:
- *  - a bar whose `rows` is not its number of marks. SCRUM-177's own example
- *    was `rows: 1` beside two marks: two quantities on one bar, which no
- *    frame draws, and laying them end to end would be this app deciding
- *    what the picture means;
- *  - dots or a line on more than one row, which no frame draws either;
- *  - a mark that is not a whole number, or more than a bar or a line of
- *    `parts` can hold: drawing 2.5 cells, or clamping 7 down to 5;
- *  - labels that do not pair one-to-one with the marks. B100 says labels may
- *    pair with a scaffold's parts instead, but no frame labels a bar's cells,
- *    and a line of four parts has five ticks, so nothing says which tick a
- *    fourth label belongs to;
- *  - place value with other than three marks: D149 draws three places, and
- *    which three two marks would be is not the payload's to leave open.
+ *  - more labels than marks: a label with no mark of its own belongs nowhere;
+ *  - several marks over several bars, but not one to a bar: which bar each
+ *    belongs on is not said;
+ *  - marks that do not fit: one bar or line holding more than `parts`, or
+ *    an array more than its places - never clamped;
+ *  - a mark that is not a whole number: drawing 2.5 cells is not a reading;
+ *  - an array's or dots' marks with labels: no frame says where a label for
+ *    a run that wraps a row would go;
+ *  - place value with other than three marks, or on more than one row: D149
+ *    draws three columns, and which three two marks would be is not said;
+ *  - a line on more than one row, or a mark past its last position.
  */
 function scaffoldFor(
   scaffold: WireCalculationScaffold | null | undefined,
@@ -580,8 +622,9 @@ function scaffoldFor(
   const marks = scaffold.marks ?? [];
   const labels = (scaffold.labels ?? []).map((l) => l.trim());
   const rows = scaffold.rows ?? 1;
-  if (marks.length === 0) return undefined;
-  if (labels.length > 0 && labels.length !== marks.length) return undefined;
+  const { kind, parts } = scaffold;
+  if (!Number.isInteger(rows) || rows < 1) return undefined;
+  if (marks.length > 0 && labels.length > marks.length) return undefined;
 
   const counts: number[] = [];
   for (const mark of marks) {
@@ -593,23 +636,41 @@ function scaffoldFor(
     count,
     ...(labels[i] ? { label: labels[i] } : {}),
   }));
+  /** What the marks fill, one after another - a layout, not an answer. */
+  const filled = counts.reduce((a, b) => a + b, 0);
 
-  const { kind, parts } = scaffold;
-  if (kind === "dots") return rows === 1 ? { kind, quantities } : undefined;
   if (kind === "place_value") {
     return rows === 1 && marks.length === PLACE_VALUE_COLUMNS
       ? { kind, places: quantities }
       : undefined;
   }
   if (!Number.isInteger(parts) || parts < 1) return undefined;
-  if (counts.some((count) => count > parts)) return undefined;
-  if (kind === "bar" || kind === "array") {
-    return rows === marks.length ? { kind, parts, quantities } : undefined;
-  }
   if (kind === "number_line") {
-    return rows === 1 ? { kind, parts, points: quantities } : undefined;
+    if (rows !== 1) return undefined;
+    if (marks.length === 0) {
+      return labels.length <= parts
+        ? { kind, parts, points: [], partLabels: labels }
+        : undefined;
+    }
+    return counts.every((c) => c < parts)
+      ? { kind, parts, points: quantities, partLabels: [] }
+      : undefined;
   }
-  return undefined;
+  if (kind !== "bar" && kind !== "array" && kind !== "dots") return undefined;
+  if (marks.length === 0) {
+    return labels.length <= parts
+      ? { kind, parts, rows, quantities: [], partLabels: labels }
+      : undefined;
+  }
+  if (kind === "array" || kind === "dots") {
+    if (labels.length > 0) return undefined;
+    return filled <= rows * parts
+      ? { kind, parts, rows, quantities, partLabels: [] }
+      : undefined;
+  }
+  if (counts.some((c) => c > parts)) return undefined;
+  const fits = marks.length === rows || (rows === 1 && filled <= parts);
+  return fits ? { kind, parts, rows, quantities, partLabels: [] } : undefined;
 }
 
 /** D149's place-value columns: a flat, a rod and a unit. */

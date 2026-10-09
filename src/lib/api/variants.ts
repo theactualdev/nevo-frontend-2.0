@@ -36,9 +36,10 @@ import {
  * switch"* could not happen outside the authored demo.
  *
  * `rows` is how many rows of pieces to lay out (1-20, default 1) - the
- * physical row count, as on `CalculationScaffold` (B100). `fromContent`
- * builds the kinds a frame draws: `fraction_bar` (17b, one row) and `array`
- * (D149, `rows` rows of `parts` places).
+ * rendered row count, as on `CalculationScaffold` (B100). `fromContent`
+ * builds the kinds a frame draws: `fraction_bar` (17b, one row), `array`
+ * (D149, `rows` rows of `parts` columns) and `place_value` (D149, its
+ * piece counts per column read from the place-value scaffold).
  */
 export type ManipulativeKind =
   | "fraction_bar"
@@ -140,11 +141,13 @@ export type CalculationScaffoldKind =
 
 /**
  * "A calculation drawing described as data, never as a generated image" -
- * the spec's own description. Backend defined the rest on 8 Oct (B100):
- * `rows` is the physical row count, `marks` are ordered renderer positions or
- * values, and `labels` are the visible labels paired with marks or parts, in
- * renderer order. `fromContent` reads them by that, and draws only the
- * pairings a frame draws.
+ * the spec's own description. Backend defined the rest (B100, 8 and 9 Oct):
+ * `rows` is the rendered row count, and `marks` are "overlays/values and do
+ * not create rows", so a bar may carry more marks than rows; `parts` is the
+ * cells in one row, an array's columns; `labels[i]` belongs to `marks[i]`,
+ * or to part i where there are no marks; and place value's marks are "the
+ * piece counts for the columns named by labels". `fromContent` reads them by
+ * that, and draws only what a frame draws.
  *
  * ABSENT IS AN INSTRUCTION: no `kind`, no drawing, and the front end infers
  * none.
@@ -160,10 +163,12 @@ export interface CalculationScaffold {
 }
 
 /**
- * One thing a step's scaffold choreography names (B107): 17b's denominators
- * ringed, numerators to navy, and the result row filling, as data. `target`
- * carries no description or vocabulary on the wire. `role` defaults to
- * `active`.
+ * One thing a step's choreography names (B107): 17b's denominators ringed,
+ * numerators to navy, and the result, as data. `target` is "an opaque
+ * renderer target ... such as an equation token, scaffold mark or
+ * manipulative piece id. Match it only to an id carried by the same
+ * calculation; an unknown target is ignored rather than guessed." `role`
+ * defaults to `active`. A step's highlights apply while it is asked.
  */
 export interface CalculationHighlight {
   target: string;

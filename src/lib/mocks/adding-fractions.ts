@@ -15,10 +15,10 @@ import type { AdaptationPlan, Lesson } from "@/lib/types";
  * cannot show a solver the payload path does not.
  *
  * Every value the solver shows is one written here: the drawing's marks and
- * labels, each step's stored answer, the equation as it assembles, and what
- * each answer does to the drawing (17b's choreography, as `highlights`).
- * Nothing is worked out on screen - not even 2 + 1, whose bar is written
- * down as the result row its last step reveals.
+ * labels, each step's stored answer, the equation each accepted step
+ * assembles, and what each step names while it is asked (17b's choreography,
+ * as `highlights`). Nothing is worked out on screen - not even 2 + 1, whose
+ * bar is written down as the result its last step reveals once accepted.
  */
 export const ADD_FIFTHS: WireCalculationVariant = {
   type: "co_construction",
@@ -51,15 +51,12 @@ export const ADD_FIFTHS: WireCalculationVariant = {
       confirmationText:
         "Both are 5 - the pieces are the same size, so we can add.",
       visualUpdate: "",
-      assembles: "2/5 + 1/5 = ?",
+      // Accepted: the bottom numbers match, so the bottom stays 5.
+      assembles: "2/5 + 1/5 = ?/5",
       equationState: "2/5 + 1/5 = ?/5",
       unit: null,
       narrationAudio: null,
-      // The bottom numbers match: both bars ring.
-      highlights: [
-        { target: "2/5", role: "active" },
-        { target: "1/5", role: "active" },
-      ],
+      highlights: [],
     },
     {
       stepId: "fifths-2",
@@ -76,14 +73,15 @@ export const ADD_FIFTHS: WireCalculationVariant = {
       hint: "We add the numbers above the line.",
       confirmationText: "",
       visualUpdate: "",
-      assembles: "2/5 + 1/5 = ?/5",
-      equationState: "2/5 + 1/5 = ?/5",
+      // Accepted: what is left is to add the top numbers.
+      assembles: "2 + 1 = ?",
+      equationState: "2 + 1 = ?",
       unit: null,
       narrationAudio: null,
-      // The top numbers are what we add: both bars turn navy.
+      // While asked, and beside step 1's confirmation: both bars ring.
       highlights: [
-        { target: "2/5", role: "source" },
-        { target: "1/5", role: "source" },
+        { target: "2/5", role: "active" },
+        { target: "1/5", role: "active" },
       ],
     },
     {
@@ -98,14 +96,16 @@ export const ADD_FIFTHS: WireCalculationVariant = {
       hint: "Just add the two top numbers: 2 + 1.",
       confirmationText: "",
       visualUpdate: "",
-      assembles: "2 + 1 = ?",
+      assembles: "2/5 + 1/5 = 3/5",
       equationState: "2/5 + 1/5 = 3/5",
       unit: null,
       narrationAudio: null,
-      // Solved: the result row fills beneath them.
+      // While asked: the bars turn navy, and the "?" is where the answer
+      // goes. The 3/5 bar is the result, kept back until this is accepted.
       highlights: [
         { target: "2/5", role: "source" },
         { target: "1/5", role: "source" },
+        { target: "?", role: "result" },
         { target: "3/5", role: "result" },
       ],
     },
