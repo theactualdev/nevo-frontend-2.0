@@ -99,8 +99,17 @@ export function TextSegment({
    * frame draws them, by density: Expand is "more depth + key terms + equation
    * callout", and every other view but Slower is the body with "IN SHORT"
    * under it - the key points. Slower draws neither.
+   *
+   * EXCEPT THE EQUATIONS, WHICH ALSO SIT BESIDE THE STANDARD BODY. Backend, 9
+   * Oct: an equation callout "is not guaranteed to be repeated in body", so
+   * drawn under Expand alone, a child reading the standard text - in one
+   * block or in parts - could lose an equation outright. The box is Expand's
+   * own. This placement is INTERIM, pending design's answer on whether key
+   * terms sit beside the standard text too; a reshape (Simplify) still draws
+   * the frame's view, and that is part of the same question.
    */
-  const equations = expand ? content.equations : undefined;
+  const equations =
+    expand || body === content.body.default ? content.equations : undefined;
   const keyPoints =
     !expand && density !== DENSITY.SLOWER ? content.keyPoints : undefined;
   // The server's chunks are of the default body; a reshape reads whole.

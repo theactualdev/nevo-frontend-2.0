@@ -243,7 +243,11 @@ describe("the tap-to-continue flow, on the server's chunks", () => {
 
 describe("the payload's boxes, where the frame draws them (SCRUM-224, D24)", () => {
   const boxes = content({
-    body: { default: BODY, [DENSITY.EXPAND]: `${BODY} Much more here.` },
+    body: {
+      default: BODY,
+      [DENSITY.EXPAND]: `${BODY} Much more here.`,
+      [DENSITY.SIMPLIFY]: "Plants feed themselves on light.",
+    },
     keyPoints: ["Plants feed themselves.", "Light is the fuel."],
     keyTerms: ["chlorophyll", "glucose"],
     equations: [
@@ -259,6 +263,27 @@ describe("the payload's boxes, where the frame draws them (SCRUM-224, D24)", () 
     expect(visibleText(box)).toBe("IN SHORT Plants feed themselves. Light is the fuel.");
     // Expand's own, not here.
     expect(screen.queryByText("chlorophyll")).toBeNull();
+  });
+
+  it("keeps the equations beside the standard body, which may not repeat them", () => {
+    // Backend, 9 Oct: an equation callout "is not guaranteed to be repeated
+    // in body". Under Expand alone, a child on the standard text lost it.
+    render(<TextSegment content={boxes} density={null} />);
+
+    expect(screen.getByText("Word equation")).toBeInTheDocument();
+    expect(screen.getByText("6CO2 + 6H2O → C6H12O6 + 6O2")).toBeInTheDocument();
+  });
+
+  it("keeps them when the standard body arrives in parts", () => {
+    render(<TextSegment content={boxes} density={null} attention />);
+
+    expect(screen.getByText("6CO2 + 6H2O → C6H12O6 + 6O2")).toBeInTheDocument();
+  });
+
+  it("draws the frame's Simplify view over a simpler text: IN SHORT, no equation", () => {
+    render(<TextSegment content={boxes} density={DENSITY.SIMPLIFY} />);
+
+    expect(screen.getByText("IN SHORT")).toBeInTheDocument();
     expect(screen.queryByText(/6CO2/)).toBeNull();
   });
 
@@ -279,12 +304,14 @@ describe("the payload's boxes, where the frame draws them (SCRUM-224, D24)", () 
     expect(visibleText(unlabelled)).toBe("6CO2 + 6H2O → C6H12O6 + 6O2");
   });
 
-  it("draws none of them under Slower", () => {
+  it("draws no key points or key terms under Slower, and keeps the equations", () => {
+    // Slower on a lesson with no authored steps is the standard body in
+    // parts, so its equations stay with it.
     render(<TextSegment content={boxes} density={DENSITY.SLOWER} />);
 
     expect(screen.queryByText("IN SHORT")).toBeNull();
     expect(screen.queryByText("chlorophyll")).toBeNull();
-    expect(screen.queryByText(/6CO2/)).toBeNull();
+    expect(screen.getByText("6CO2 + 6H2O → C6H12O6 + 6O2")).toBeInTheDocument();
   });
 
   it("draws no box at all where the payload sent nothing", () => {
