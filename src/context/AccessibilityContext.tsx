@@ -51,9 +51,11 @@ function prefsKey(): string {
 
 /**
  * The key a child's preferences live under in their account's `preferences`
- * (`GET/PUT /api/v1/settings/me`). The contract names no keys, so this one is
- * ours; all three ride under it, so the PUT's merge cannot leave a stale one
- * beside a fresh one.
+ * (`GET/PUT /api/v1/settings/me`). The contract names no keys; backend
+ * confirmed this one and its shape on 9 Oct - `accessibility: { reducedMotion,
+ * highContrast, textSize }`, with "textSize values s | m | l | xl". Those are
+ * `TextSize`'s own four, so nothing is mapped either way. All three ride under
+ * the one key, so the PUT's merge cannot leave a stale one beside a fresh one.
  */
 export const ACCOUNT_PREFS_KEY = "accessibility";
 

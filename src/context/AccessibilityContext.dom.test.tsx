@@ -252,6 +252,28 @@ describe("a child's settings, kept on their account", () => {
     expect(accountPrefs(null)).toEqual({});
   });
 
+  it("reads exactly the four text sizes backend confirmed, and no others", () => {
+    // 9 Oct: "textSize values are s | m | l | xl".
+    for (const textSize of ["s", "m", "l", "xl"]) {
+      expect(accountPrefs({ accessibility: { textSize } })).toEqual({ textSize });
+    }
+    for (const textSize of ["S", "medium", "large", "xxl", 1.2]) {
+      expect(accountPrefs({ accessibility: { textSize } })).toEqual({});
+    }
+  });
+
+  it("sends each text size as backend's own value, unmapped", async () => {
+    signInAs("ada");
+    renderProbe();
+    await settle();
+
+    await act(async () => screen.getByText("bigger").click());
+
+    const sent = personalUpdate.mock.calls[0][0].accessibility.textSize;
+    expect(["s", "m", "l", "xl"]).toContain(sent);
+    expect(sent).toBe("xl");
+  });
+
   it("writes a change through to the account, all three under one key", async () => {
     signInAs("ada");
     renderProbe();
