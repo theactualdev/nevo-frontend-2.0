@@ -1,11 +1,13 @@
 "use client";
 
+import { useContext } from "react";
 import { IllustrationWrapper } from "@/components/shared";
 import {
   AgeStepper,
   isAgeInRange,
 } from "@/components/student/Onboarding/AgeStepper";
 import { ProfilingShell } from "./ProfilingShell";
+import { QuestSegments } from "./QuestMap";
 
 /**
  * Profiling intro + complete (BP-01 / BP-DONE) - the bookends of the baseline
@@ -85,10 +87,12 @@ export function ProfilingIntro({
   saved?: boolean | null;
 }) {
   const complete = mode === "complete";
+  // Every segment the run had, filled: never a count of its own.
+  const segments = useContext(QuestSegments) ?? 0;
   const blocked =
     !complete && (waiting || (askAge && !isAgeInRange(age)));
   return (
-    <ProfilingShell filled={complete ? 4 : 0} active={complete ? -1 : 0}>
+    <ProfilingShell filled={complete ? segments : 0} active={complete ? -1 : 0}>
       <div className="flex min-h-0 w-full max-w-[300px] flex-1 flex-col items-center justify-center text-center sm:max-w-[480px]">
         <IllustrationWrapper
           src={
@@ -119,8 +123,11 @@ export function ProfilingIntro({
             : // The frame's line less "No tests, no scores.": words the
               // architecture keeps from a child, and design ruled the line
               // reworded on 1 Oct (D13) without giving words. Removed, not
-              // replaced.
-              "You'll do four quick activities. This just helps Nevo work better for you."}
+              // replaced. AND LESS ITS NUMBER (design, 9 Oct): "The intro
+              // drops the number entirely ... nothing states a quantity the
+              // backend did not give it." The frame still says "four"; only
+              // the number is gone.
+              "You'll do quick activities. This just helps Nevo work better for you."}
         </p>
         {askAge && !complete && !waiting && (
           <div className="mt-6 w-full">

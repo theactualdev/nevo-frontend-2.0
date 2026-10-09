@@ -19,8 +19,17 @@ import { GridSpanModule } from "./GridSpanModule";
 import { MotorStep, motorStepRuns, type FormFactor } from "./MotorStep";
 import { PatternFlankerModule } from "./PatternFlankerModule";
 import { ProfilingIntro } from "./ProfilingIntro";
+import { QuestSegments } from "./QuestMap";
 import { SentenceDotModule } from "./SentenceDotModule";
 import { StretchInterstitial } from "./StretchInterstitial";
+
+/**
+ * THE MODULES THIS RUN PRESENTS, in order - and so the quest map's segments
+ * (design, 9 Oct): "The quest map shows the number of modules that child will
+ * actually do ... A child who will do three sees three segments." Module 4,
+ * `domain_probe`, is not in it while nothing can serve the probe (see `m3`).
+ */
+const RUN_MODULES = ["grid_span", "pattern_flanker", "sentence_dot"] as const;
 
 /**
  * The Baseline Cognitive Profiling flow (SCRUM-104) - onboarding Phase C.
@@ -35,7 +44,16 @@ import { StretchInterstitial } from "./StretchInterstitial";
  * the age the child gave at onboarding, else from the intro's age question; it
  * drives grid sizes, content and targets, and the shells are shared.
  */
-export function ProfilingFlow({
+export function ProfilingFlow(props: Parameters<typeof ProfilingRun>[0]) {
+  return (
+    <QuestSegments.Provider value={RUN_MODULES.length}>
+      <ProfilingRun {...props} />
+    </QuestSegments.Provider>
+  );
+}
+
+/** The run itself, inside its quest map's count of modules. */
+function ProfilingRun({
   track,
   onDone,
   ownerUserId = null,

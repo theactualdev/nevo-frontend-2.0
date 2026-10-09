@@ -242,6 +242,21 @@ describe("ProfilingFlow — the domain probe has nothing to ask (SCRUM-175/176)"
     expect(holdBaseline).toHaveBeenCalledTimes(1);
   });
 
+  it("maps the three modules it presents, and fills all three at the end (design, 9 Oct)", () => {
+    // "A child who will do three sees three segments." It was four whatever
+    // the run held, the fourth filling at the end for a module never shown.
+    render(<ProfilingFlow onDone={vi.fn()} />);
+    const map = () => screen.getByRole("progressbar");
+
+    expect(map()).toHaveAttribute("aria-valuemax", "3");
+    expect(map().lastElementChild!.children).toHaveLength(3);
+
+    sitTheWholeRun();
+
+    expect(map()).toHaveAttribute("aria-valuemax", "3");
+    expect(map()).toHaveAttribute("aria-valuenow", "3");
+  });
+
   it("marks no start or end for a module it never presented", () => {
     const track = vi.fn();
     render(<ProfilingFlow onDone={vi.fn()} track={track} />);
