@@ -208,12 +208,10 @@ function LiveSubjectCard({
  * value. The signed-out walkthrough reads its line through this too, so it
  * cannot drift from what a real card says.
  *
- * NOT 33a'S OTHER TWO LINES. "Nothing started yet" and "Everything set so far
- * is done" (and the count slot's "N topics set, ready when you are" and "New
- * topics appear here when your teacher adds them") speak of topics SET, and
- * the wire counts topics MET. D119 says to fix that by describing what is
- * counted, but gives no words, and a sentence about how far a child has got
- * is the backend's to send or nobody's (D19). So neither is drawn; asked.
+ * NOT 33a'S OTHER TWO LINES HERE. "Nothing started yet" and "Everything set
+ * so far is done" speak of topics SET, and the wire counts topics MET, so
+ * neither takes this slot. Design answered D119 in the slot UNDER the
+ * squares instead, in words with no count (851d58f): see `TOPICS_LINE`.
  */
 function cardLine(currentTopic: string | null | undefined, otherwise: string) {
   return currentTopic ? `Working on ${currentTopic}` : otherwise;
@@ -289,16 +287,26 @@ function NothingYet() {
 }
 
 /**
- * The subject card's line under the squares while a subject is under way:
- * 33a's "progress" state, redrawn on 8 Oct (851d58f) from "3 of 7 topics
- * done" to words with no count in them (D119).
- *
- * ONLY THAT STATE. A subject with nothing done and nothing named is 33a's
- * "none" ("Ready when you are", under "Nothing started yet"), and one with
- * every topic done is its "done" - both speak of topics SET, and the wire
- * counts topics MET (see `cardLine`), so neither is drawn; still asked.
+ * The subject card's line under the squares, by 33a's three states, verbatim.
+ * Redrawn on 8 Oct (851d58f) from "7 topics set, ready when you are" and "3
+ * of 7 topics done": design's answer to D119 - plain words, no count, nothing
+ * about topics set.
  */
-const MORE_TOPICS_COPY = "More topics to come";
+const TOPICS_LINE = {
+  /** Nothing done and nothing named as being worked on. */
+  none: "Ready when you are",
+  /** Some done, or a topic named, and not all done. */
+  underWay: "More topics to come",
+  /** Every topic met is done. */
+  done: "New topics appear here when your teacher adds them",
+} as const;
+
+/** Which of 33a's states the squares are in, read from the same counts. */
+function topicsLine(topics: SubjectTopics, working: boolean): string {
+  if (topics.done >= topics.total) return TOPICS_LINE.done;
+  if (topics.done === 0 && !working) return TOPICS_LINE.none;
+  return TOPICS_LINE.underWay;
+}
 
 /**
  * One column on a phone, two on a tablet, three on a desktop (Nevo Progress
@@ -351,13 +359,11 @@ function SubjectCard({
           {line ?? " "}
         </p>
         {topics && <TopicMarks topics={topics} working={working} />}
-        {topics &&
-          topics.done < topics.total &&
-          (topics.done > 0 || working) && (
-            <p className="mt-2 text-[13px] text-nevo-near-black/55">
-              {MORE_TOPICS_COPY}
-            </p>
-          )}
+        {topics && (
+          <p className="mt-2 text-[13px] text-nevo-near-black/55">
+            {topicsLine(topics, working)}
+          </p>
+        )}
         {/* 33a, D120: the note at the foot, below a hairline, behind a soft
             violet dot - Nevo's voice, kept apart from the facts above. */}
         {said && (
@@ -391,7 +397,7 @@ function SubjectCard({
  * topics done" under the squares; "No counts on a child's card, in any form",
  * because "0 of 4" and "5 of 5" both read as a grade. Nothing reads the
  * squares out as a number either - a count spoken is still a count. The slot
- * carries WORDS since 8 Oct (851d58f) - see `MORE_TOPICS_COPY`.
+ * carries WORDS since 8 Oct (851d58f) - see `TOPICS_LINE`.
  *
  * The current square needs the backend to have named a current topic: one
  * marked "being worked on" with nothing named would be a claim nobody made.

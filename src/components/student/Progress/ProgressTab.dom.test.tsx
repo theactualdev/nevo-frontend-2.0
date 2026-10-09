@@ -204,6 +204,13 @@ describe("the signed-out walkthrough's subject cards", () => {
     ]);
     // D119: no "3 of 8 topics done", or any count, on the card.
     expect(maths.textContent).not.toMatch(/\d|topics done/);
+    // The walkthrough's cards take 33a's lines under the squares too.
+    expect(within(maths).getByText("More topics to come")).toBeInTheDocument();
+    expect(
+      within(card("English")).getByText(
+        "New topics appear here when your teacher adds them",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("puts the frame's note at the foot of the card, beside a named topic", () => {
@@ -524,17 +531,21 @@ describe("the topics on a subject card", () => {
     render(<ProgressTab />);
 
     const english = card("English");
-    expect(english.textContent).not.toMatch(
-      /Everything set|teacher adds|More topics to come/,
-    );
+    // 33a's done line under the squares (851d58f), not its "Everything set
+    // so far is done", which speaks of topics set.
+    expect(
+      within(english).getByText(
+        "New topics appear here when your teacher adds them",
+      ),
+    ).toBeInTheDocument();
+    expect(english.textContent).not.toMatch(/Everything set|More topics to come/);
     expect(marks(english)).toEqual(["done", "done", "done", "done", "done"]);
     expect(footNote(english)).toHaveTextContent("A note about English");
   });
 
-  it("says nothing under the squares when nothing is done and nothing is named", () => {
-    // 33a's "none" state: its "Ready when you are" sits under "Nothing
-    // started yet", which speaks of topics set. Still asked; and it is not
-    // the progress state, so "More topics to come" is not its line either.
+  it("says Ready when you are under the squares when nothing is done and nothing is named", () => {
+    // 33a's "none" state (851d58f). Not its "Nothing started yet", which
+    // speaks of topics set; the line above stays the concept names.
     state({ subjects: [subject("Mathematics", ["Fractions"])] });
     narrowed.bySubject = {
       Mathematics: { note: null, topics: { done: 0, total: 4 }, currentTopic: null },
@@ -543,7 +554,8 @@ describe("the topics on a subject card", () => {
     render(<ProgressTab />);
 
     const maths = card("Mathematics");
-    expect(maths.textContent).not.toMatch(/More topics to come|ready when you are/i);
+    expect(within(maths).getByText("Ready when you are")).toBeInTheDocument();
+    expect(maths.textContent).not.toMatch(/More topics to come|Nothing started/);
   });
 
   it("holds the topics with the line while the subject is still being read", () => {
