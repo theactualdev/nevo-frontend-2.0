@@ -55,6 +55,8 @@ vi.mock("@/context/PermissionContext", async (importOriginal) => {
 const list = vi.fn();
 const parentLinks = vi.fn();
 const requestParentConsent = vi.fn();
+/** The bulk route (backend, 8 Oct): one call, an outcome per child. */
+const bulk = vi.fn();
 
 vi.mock("@/lib/api/students", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/students")>();
@@ -76,6 +78,7 @@ vi.mock("@/lib/api/consents", async (importOriginal) => {
       ...actual.consentsApi,
       requestParentConsent: (id: string, body: unknown) =>
         requestParentConsent(id, body),
+      requestParentConsentBulk: (requests: { studentId: string }[]) => bulk(requests),
     },
   };
 });
@@ -131,16 +134,34 @@ const roster = () => [
   student({ id: "s4", name: "Ngozi Uche" }),
 ];
 
+/** Every child queued, with the receipt the single route would give. */
+const queuedAll = (delivery = "sent") => async (requests: { studentId: string }[]) =>
+  requests.map((r) => ({
+    studentId: r.studentId,
+    queued: true,
+    request: { ...receipt(delivery), studentId: r.studentId },
+    errorCode: null,
+    errorMessage: null,
+  }));
+
+const sentTo = () =>
+  bulk.mock.calls.flatMap(([requests]) => (requests as { studentId: string }[]).map((r) => r.studentId));
+
 beforeEach(() => {
   vi.clearAllMocks();
   list.mockResolvedValue(roster());
   parentLinks.mockImplementation(async (id: string) =>
     id === "s4" ? [link({ parentContact: "08031234567" })] : [link({ studentId: id })],
   );
-  requestParentConsent.mockResolvedValue(receipt("sent"));
+  bulk.mockImplementation(queuedAll());
 });
 
 const box = (name: string) => screen.getByRole("checkbox", { name: `Select ${name}` });
+
+const sendSelection = () => {
+  fireEvent.click(screen.getByRole("button", { name: "Send consent invitations" }));
+  fireEvent.click(screen.getByRole("button", { name: "Send" }));
+};
 
 describe("selecting who to send to", () => {
   it("lets a responded row be seen but never ticked", async () => {
@@ -179,26 +200,34 @@ describe("sending to the selection", () => {
       /Each parent will receive a secure link to review and confirm consent for their child\./,
     );
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(requestParentConsent).not.toHaveBeenCalled();
+    expect(bulk).not.toHaveBeenCalled();
   });
 
-  it("sends one request per ticked child and accounts for every one", async () => {
-    requestParentConsent.mockImplementation(async (id: string) =>
-      receipt(id === "s2" ? "queued" : "sent"),
+  it("sends the askable children in one bulk call and accounts for every one", async () => {
+    bulk.mockImplementation(async (requests: { studentId: string }[]) =>
+      (await queuedAll()(requests)).map((r) =>
+        r.studentId === "s2" ? { ...r, request: { ...r.request, deliveryStatus: "queued" } } : r,
+      ),
     );
     const { container } = render(<StudentsView />);
     await screen.findByText("Chisom Eze");
     fireEvent.click(screen.getByRole("checkbox", { name: /Select every student/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Send consent invitations" }));
-    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    sendSelection();
 
     await waitFor(() => expect(visibleText(container)).toMatch(/1 invitation sent\./));
     const text = visibleText(container);
     expect(text).toMatch(/1 invitation is queued and goes out shortly\./);
-    // D07's own words for a child with no parent email on file.
+    // D07's own words for a child with no parent email on file - settled from
+    // the record, never sent to the bulk route.
     expect(text).toMatch(/1 could not be sent: that student does not have a parent email address on file yet\./);
-    expect(requestParentConsent).toHaveBeenCalledTimes(2);
-    expect(requestParentConsent.mock.calls.map(([id]) => id).sort()).toEqual(["s1", "s2"]);
+    expect(bulk).toHaveBeenCalledTimes(1);
+    expect(sentTo().sort()).toEqual(["s1", "s2"]);
+    expect(requestParentConsent).not.toHaveBeenCalled();
+    // Each request carries the parent's contact from the record, by email.
+    expect(bulk.mock.calls[0][0][0]).toMatchObject({
+      parentContact: "mrs.eze@email.com",
+      contactMethod: "email",
+    });
     // The selection is spent.
     expect(screen.queryByText(/selected$/)).toBeNull();
   });
@@ -212,25 +241,49 @@ describe("sending to the selection", () => {
       target: { value: "Tunde" },
     });
     expect(screen.getByText("1 selected")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Send consent invitations" }));
-    fireEvent.click(screen.getByRole("button", { name: "Send" }));
-    await waitFor(() => expect(requestParentConsent).toHaveBeenCalledTimes(1));
-    expect(requestParentConsent.mock.calls[0][0]).toBe("s2");
+    sendSelection();
+    await waitFor(() => expect(bulk).toHaveBeenCalledTimes(1));
+    expect(sentTo()).toEqual(["s2"]);
   });
 
-  it("counts a failure as one, says nothing changed for it, and keeps going", async () => {
-    requestParentConsent.mockImplementation(async (id: string) => {
-      if (id === "s1") throw new Error("500");
-      return receipt("sent");
-    });
+  it("keeps each child's own outcome - a refusal in the server's words, a failure counted", async () => {
+    bulk.mockImplementation(async (requests: { studentId: string }[]) =>
+      requests.map((r) =>
+        r.studentId === "s1"
+          ? {
+              studentId: "s1",
+              queued: false,
+              request: null,
+              errorCode: "parent_already_refused",
+              errorMessage: "This parent said no. Nevo will not ask them again.",
+            }
+          : { studentId: r.studentId, queued: false, request: null, errorCode: "student_not_found", errorMessage: null },
+      ),
+    );
     const { container } = render(<StudentsView />);
     await screen.findByText("Chisom Eze");
     fireEvent.click(box("Chisom Eze"));
     fireEvent.click(box("Tunde Bello"));
-    fireEvent.click(screen.getByRole("button", { name: "Send consent invitations" }));
-    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    sendSelection();
 
-    await waitFor(() => expect(visibleText(container)).toMatch(/1 invitation sent\./));
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/1 parent was already asked and did not consent/),
+    );
     expect(visibleText(container)).toMatch(/1 didn.t send, and nothing changed for those\./);
+    expect(visibleText(container)).toMatch(/This parent said no\. Nevo will not ask them again\./);
+  });
+
+  it("counts a whole call that failed as not sent - never as sent", async () => {
+    bulk.mockRejectedValue(new Error("500"));
+    const { container } = render(<StudentsView />);
+    await screen.findByText("Chisom Eze");
+    fireEvent.click(box("Chisom Eze"));
+    fireEvent.click(box("Tunde Bello"));
+    sendSelection();
+
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/2 didn.t send, and nothing changed for those\./),
+    );
+    expect(visibleText(container)).not.toMatch(/invitations? sent/);
   });
 });
