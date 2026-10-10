@@ -25,7 +25,7 @@ vi.mock("@/lib/api/team", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/team")>();
   return {
     ...actual,
-    teamApi: { ...actual.teamApi, list: () => team() },
+    teamApi: { ...actual.teamApi, list: async () => actual.toAdminTeam(await team()) },
   };
 });
 
@@ -47,6 +47,12 @@ const member = (i: number): TeamMember => ({
   status: "active",
   scopes: ["oversight"],
 });
+
+/** The team as the server answers since 8 Oct: members and its seat figures. */
+const withSeats = (members: TeamMember[], limit = 5) => {
+  const used = members.filter((m) => m.status !== "deactivated").length;
+  return { members, seatLimit: limit, seatsUsed: used, seatsRemaining: limit - used };
+};
 
 beforeEach(() => {
   team.mockReset();
@@ -72,7 +78,7 @@ function inviteButton(container: HTMLElement) {
 
 describe("at the seat allowance", () => {
   it("still offers a way to add someone", async () => {
-    team.mockResolvedValue([1, 2, 3, 4, 5].map(member));
+    team.mockResolvedValue(withSeats([1, 2, 3, 4, 5].map(member)));
     const { container } = render(<AdminTeamView />);
     await waitFor(() =>
       expect(visibleText(container)).toMatch(/All five admin accounts are in use/),
@@ -81,7 +87,7 @@ describe("at the seat allowance", () => {
   });
 
   it("keeps the explanation alongside it, not instead of it", async () => {
-    team.mockResolvedValue([1, 2, 3, 4, 5].map(member));
+    team.mockResolvedValue(withSeats([1, 2, 3, 4, 5].map(member)));
     const { container } = render(<AdminTeamView />);
     await waitFor(() =>
       expect(visibleText(container)).toMatch(/at no charge/),
@@ -103,7 +109,7 @@ describe("the allowance (Lydia, 7 Oct)", () => {
         retentionPolicy: "contract",
         retentionDays: 365,
       });
-      team.mockResolvedValue([1, 2, 3, 4, 5].map(member));
+      team.mockResolvedValue(withSeats([1, 2, 3, 4, 5].map(member)));
       const { container, unmount } = render(<AdminTeamView />);
       await waitFor(() =>
         expect(visibleText(container)).toMatch(/All five admin accounts are in use/),
@@ -116,7 +122,7 @@ describe("the allowance (Lydia, 7 Oct)", () => {
 
   it("states the cap even when the school record cannot be read", async () => {
     school.mockRejectedValue(new Error("down"));
-    team.mockResolvedValue([1, 2, 3].map(member));
+    team.mockResolvedValue(withSeats([1, 2, 3].map(member)));
     const { container } = render(<AdminTeamView />);
     await waitFor(() => expect(visibleText(container)).toMatch(/3 of 5 admin accounts/));
   });
@@ -124,7 +130,7 @@ describe("the allowance (Lydia, 7 Oct)", () => {
 
 describe("the invite sheet", () => {
   it("opens over the team rather than in place of it", async () => {
-    team.mockResolvedValue([1, 2, 3].map(member));
+    team.mockResolvedValue(withSeats([1, 2, 3].map(member)));
     const { container } = render(<AdminTeamView />);
     await waitFor(() => expect(visibleText(container)).toMatch(/Number1/));
 
@@ -145,13 +151,13 @@ describe("a deactivated admin", () => {
      * admin looked like someone on their way in - and was counted against the
      * allowance, telling a school its seats were full.
      */
-    team.mockResolvedValue([
+    team.mockResolvedValue(withSeats([
       member(1),
       member(2),
       member(3),
       member(4),
       { ...member(5), status: "deactivated" },
-    ]);
+    ]));
     const { container } = render(<AdminTeamView />);
 
     await waitFor(() => expect(visibleText(container)).toMatch(/Deactivated/));
@@ -159,5 +165,21 @@ describe("a deactivated admin", () => {
     expect(text).not.toMatch(/Invited/);
     expect(text).toMatch(/4 of 5 admin accounts/);
     expect(text).not.toMatch(/All five admin accounts are in use/);
+  });
+});
+
+describe("the server's seat figures (8 Oct)", () => {
+  it("follow an override - five of six is not at the limit", async () => {
+    team.mockResolvedValue(withSeats([1, 2, 3, 4, 5].map(member), 6));
+    const { container } = render(<AdminTeamView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/5 of 6 admin accounts/));
+    expect(visibleText(container)).not.toMatch(/are in use/);
+  });
+
+  it("assert nothing about seats when the answer carries none", async () => {
+    team.mockResolvedValue([1, 2, 3, 4, 5].map(member));
+    const { container } = render(<AdminTeamView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/5 admin accounts/));
+    expect(visibleText(container)).not.toMatch(/of 5|are in use/);
   });
 });

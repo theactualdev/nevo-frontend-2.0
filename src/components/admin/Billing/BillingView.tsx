@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import { ReadFailed } from "../ReadFailed";
 import { BillingContactSheet } from "./BillingContactSheet";
 import { CostSheet } from "./CostSheet";
+import { PlanOptions } from "./PlanOptions";
 import { HowToPayPanel } from "./HowToPayPanel";
 import { InvoicePdfLink } from "./InvoicePdfLink";
 import { NoAccess, failureKind } from "../NoAccess";
@@ -492,13 +493,13 @@ export function BillingView() {
           />
           ) : null}
 
-          {/* Name the hole, rather than letting it read as unfinished. It
-              used to end "(D11d)" - an internal design-frame code, shown to
-              a school. */}
-          <p className="mt-8 text-[13px] leading-[1.6] text-nevo-near-black/55 italic">
-            Plan options and switching aren&rsquo;t here yet. Your cost above
-            is the model your school is billed on.
-          </p>
+          {/* D11d's plans (Lydia, 7 Oct: "D11d wins. The plan choice
+              exists."). This was a line naming the hole: "Plan options and
+              switching aren't here yet." */}
+          <PlanOptions
+            current={subscription.pricing.pricingPlan}
+            vatRate={subscription.pricing.vatRate}
+          />
         </>
       )}
 

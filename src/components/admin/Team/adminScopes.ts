@@ -100,20 +100,16 @@ export function orderScopes(scopes: PermissionScope[]): PermissionScope[] {
  * follow the onboarding band (5 / 10 / 15 / 25); the band went with flat
  * pricing, and a school onboarded since then was shown no cap at all.
  *
- * ENFORCEMENT IS THE SERVER'S. A school granted a sixth seat on request is
- * still told five here, because nothing tells this console otherwise - so
- * the console states the cap and offers the request, and never closes the
- * invite path on its own count. The refusal of an invite past the allowance,
- * and the allowance itself, belong on the backend.
- *
- * TODO(api): the school's admin allowance on the team response, and a refused
- * invite past it with its own error code.
+ * THE ALLOWANCE IS THE SERVER'S NOW (8 Oct). `GET /admin/team` carries
+ * `seatLimit`, `seatsUsed` and `seatsRemaining`, overrides included, and a
+ * sixth invitation past the limit is refused with `admin_seat_limit_reached`.
+ * Five is only the standard the copy names when the server's limit is five.
  */
 export const ADMIN_SEATS_STANDARD = 5;
 
-/** The school's allowance: the standard five, until the server says more. */
-export function adminSeatAllowance(): number {
-  return ADMIN_SEATS_STANDARD;
+/** "five" for the standard allowance, the figure for any other. */
+export function seatWords(limit: number): string {
+  return limit === ADMIN_SEATS_STANDARD ? "five" : String(limit);
 }
 
 /** "Mrs. F. Adebayo" -> "FA"; falls back to the email's first letter. */
