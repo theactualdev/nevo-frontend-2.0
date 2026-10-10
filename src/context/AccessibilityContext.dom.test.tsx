@@ -1,7 +1,19 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
-import { AccessibilityProvider, useAccessibility } from "./AccessibilityContext";
+import {
+  AccessibilityProvider,
+  accountPrefs,
+  useAccessibility,
+} from "./AccessibilityContext";
 import { clearSession, setSession } from "@/lib/auth/session";
+
+const { personalGet, personalUpdate } = vi.hoisted(() => ({
+  personalGet: vi.fn(),
+  personalUpdate: vi.fn(),
+}));
+vi.mock("@/lib/api/settings", () => ({
+  personalSettingsApi: { get: personalGet, update: personalUpdate },
+}));
 
 /**
  * ONE CHILD'S SETTINGS, NOT THE TABLET'S.
@@ -12,12 +24,12 @@ import { clearSession, setSession } from "@/lib/auth/session";
  * without a reload.
  */
 
-const signInAs = (userId: string) =>
+const signInAs = (userId: string, role = "student") =>
   setSession({
     token: `tok-${userId}`,
     expiresAt: new Date(Date.now() + 3600_000).toISOString(),
     userId,
-    role: "student",
+    role,
   });
 
 function Probe() {
@@ -32,10 +44,22 @@ function Probe() {
       <button type="button" onClick={() => a11y.setHighContrast(true)}>
         contrast
       </button>
+      <button
+        type="button"
+        onClick={() =>
+          void a11y.setReducedMotion(true).then((ok) => {
+            kept.push(ok);
+          })
+        }
+      >
+        calm
+      </button>
     </div>
   );
 }
 
+/** What each `setReducedMotion` from the probe resolved: kept, or not. */
+let kept: boolean[] = [];
 const size = () => screen.getByTestId("size").textContent;
 const contrast = () => screen.getByTestId("contrast").textContent;
 
@@ -45,6 +69,12 @@ const settle = () => act(async () => {});
 beforeEach(() => {
   window.localStorage.clear();
   clearSession();
+  kept = [];
+  personalGet.mockReset();
+  // No account preferences by default: these cases are about the device.
+  personalGet.mockResolvedValue({ userId: "x", preferences: {} });
+  personalUpdate.mockReset();
+  personalUpdate.mockResolvedValue({ userId: "x", preferences: {} });
 });
 
 afterEach(() => {
@@ -149,5 +179,164 @@ describe("the break preference, removed (D87)", () => {
       highContrast: false,
       textSize: "l",
     });
+  });
+});
+
+/**
+ * SCRUM-226 (8 Oct): "Preferences are account-level and persist through
+ * GET/PUT /api/v1/settings/me. They are not tablet-local."
+ *
+ * The device's copy still paints first (rule 6, the boot script); the
+ * account's values win once read, and every change is written through.
+ */
+describe("a child's settings, kept on their account", () => {
+  const renderProbe = () =>
+    render(
+      <AccessibilityProvider>
+        <Probe />
+      </AccessibilityProvider>,
+    );
+  const held = (accessibility: Record<string, unknown>) => ({
+    userId: "ada",
+    preferences: { accessibility },
+  });
+
+  it("paints the device's copy, then takes the account's once read", async () => {
+    window.localStorage.setItem(
+      "nevo:a11y:ada",
+      JSON.stringify({ reducedMotion: false, highContrast: false, textSize: "l" }),
+    );
+    let answer: (v: unknown) => void = () => {};
+    personalGet.mockReturnValue(new Promise((r) => (answer = r)));
+    signInAs("ada");
+    renderProbe();
+    await settle();
+
+    // The device's copy first, before the account has answered.
+    expect(size()).toBe("l");
+
+    await act(async () =>
+      answer(held({ textSize: "xl", highContrast: true, reducedMotion: false })),
+    );
+
+    expect(size()).toBe("xl");
+    expect(contrast()).toBe("true");
+    expect(document.documentElement.dataset.textSize).toBe("xl");
+    // Kept on the device too, so the next load paints it before React runs.
+    expect(
+      JSON.parse(window.localStorage.getItem("nevo:a11y:ada")!).textSize,
+    ).toBe("xl");
+  });
+
+  it("keeps the device's copy when the account cannot be read", async () => {
+    window.localStorage.setItem(
+      "nevo:a11y:ada",
+      JSON.stringify({ textSize: "l" }),
+    );
+    personalGet.mockRejectedValue(new Error("503"));
+    signInAs("ada");
+    renderProbe();
+    await settle();
+    await settle();
+
+    expect(size()).toBe("l");
+  });
+
+  it("takes only the well-formed fields the account holds", () => {
+    expect(
+      accountPrefs({
+        accessibility: { textSize: "huge", highContrast: "yes", reducedMotion: true },
+      }),
+    ).toEqual({ reducedMotion: true });
+    expect(accountPrefs({ somethingElse: 1 })).toEqual({});
+    expect(accountPrefs(null)).toEqual({});
+  });
+
+  it("reads exactly the four text sizes backend confirmed, and no others", () => {
+    // 9 Oct: "textSize values are s | m | l | xl".
+    for (const textSize of ["s", "m", "l", "xl"]) {
+      expect(accountPrefs({ accessibility: { textSize } })).toEqual({ textSize });
+    }
+    for (const textSize of ["S", "medium", "large", "xxl", 1.2]) {
+      expect(accountPrefs({ accessibility: { textSize } })).toEqual({});
+    }
+  });
+
+  it("sends each text size as backend's own value, unmapped", async () => {
+    signInAs("ada");
+    renderProbe();
+    await settle();
+
+    await act(async () => screen.getByText("bigger").click());
+
+    const sent = personalUpdate.mock.calls[0][0].accessibility.textSize;
+    expect(["s", "m", "l", "xl"]).toContain(sent);
+    expect(sent).toBe("xl");
+  });
+
+  it("writes a change through to the account, all three under one key", async () => {
+    signInAs("ada");
+    renderProbe();
+    await settle();
+
+    await act(async () => screen.getByText("bigger").click());
+
+    expect(personalUpdate).toHaveBeenCalledWith({
+      accessibility: { reducedMotion: false, highContrast: false, textSize: "xl" },
+    });
+  });
+
+  it("resolves kept only once the account's write lands, and not kept when it fails", async () => {
+    signInAs("ada");
+    renderProbe();
+    await settle();
+
+    personalUpdate.mockRejectedValueOnce(new Error("503"));
+    await act(async () => screen.getByText("calm").click());
+    await act(async () => screen.getByText("calm").click());
+
+    expect(kept).toEqual([false, true]);
+  });
+
+  it("does not let the account's older answer undo a choice made while it was out", async () => {
+    let answer: (v: unknown) => void = () => {};
+    personalGet.mockReturnValue(new Promise((r) => (answer = r)));
+    signInAs("ada");
+    renderProbe();
+    await settle();
+
+    await act(async () => screen.getByText("bigger").click());
+    await act(async () => answer(held({ textSize: "s" })));
+
+    expect(size()).toBe("xl");
+  });
+
+  it("asks the account again when the child signs in again", async () => {
+    signInAs("ada");
+    renderProbe();
+    await settle();
+    expect(personalGet).toHaveBeenCalledTimes(1);
+
+    clearSession();
+    await settle();
+    personalGet.mockResolvedValue(held({ textSize: "l" }));
+    signInAs("ada");
+    await settle();
+    await settle();
+
+    expect(personalGet).toHaveBeenCalledTimes(2);
+    expect(size()).toBe("l");
+  });
+
+  it("leaves a staff account's settings on the device", async () => {
+    signInAs("teacher-1", "teacher");
+    renderProbe();
+    await settle();
+
+    await act(async () => screen.getByText("calm").click());
+
+    expect(personalGet).not.toHaveBeenCalled();
+    expect(personalUpdate).not.toHaveBeenCalled();
+    expect(kept).toEqual([true]);
   });
 });

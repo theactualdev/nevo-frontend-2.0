@@ -176,6 +176,18 @@ export type SegmentReviewReason =
   | "calculation_segment_has_no_interactive_delivery"
   | "model_flagged_for_review";
 
+/**
+ * "A stable, ordered reading boundary generated from approved lesson text."
+ * The offsets are into the segment's `body`.
+ */
+export interface ReadingChunk {
+  id: string;
+  sequenceOrder: number;
+  text: string;
+  startOffset: number;
+  endOffset: number;
+}
+
 export interface LessonSegment extends SegmentVariants {
   id: string;
   /** Shipped 1 Sep. 0 or absent means no estimate - see `LessonSummary`. */
@@ -185,6 +197,11 @@ export interface LessonSegment extends SegmentVariants {
   sequenceOrder: number;
   title: string | null;
   body: string;
+  /**
+   * Where the server breaks `body` for reading (SCRUM-234/236, B87). Absent
+   * or empty is one body, which is a normal state.
+   */
+  readingChunks?: ReadingChunk[];
   availableModalities: ContentModality[];
   /**
    * Typed as of 3 Sep. `answerKey` is NULLABLE for lessons parsed before the
@@ -432,6 +449,14 @@ export interface LessonSessionResponse {
    */
   checkPosition?: number | null;
   checkResumableUntil?: string | null;
+  /**
+   * The depth this session runs at, and the session a reroute came from
+   * (SCRUM-178). A `lower` session reads each segment's simplified version,
+   * falling back to its body (backend, 9 Oct) - see `atLowerDepth`. After a
+   * reroute this route resumes and returns that same lower-depth session.
+   */
+  depth?: "standard" | "lower";
+  reroutedFromSessionId?: string | null;
 }
 
 /**
@@ -524,6 +549,34 @@ export interface LessonProgressResponse {
    */
   checkPosition?: number | null;
   checkResumableUntil?: string | null;
+  /**
+   * How the lesson went, decided by the server from its own marks (B98).
+   * The write no longer sends one - `ProgressWrite.resultState` is deprecated
+   * and never controlled rerouting - and nothing here works one out.
+   */
+  resultState?: ResultState | null;
+  /**
+   * The server sending the child back through the lesson (SCRUM-178): a new
+   * session at another depth, and the place to start it from.
+   */
+  reroute?: LessonReroute | null;
+}
+
+/** `resultState`'s four values, on the attempt and the progress row alike. */
+export type ResultState =
+  | "landed"
+  | "partly_landed"
+  | "nothing_landed"
+  | "not_attempted";
+
+/** `LessonRerouteResponse` (SCRUM-178). */
+export interface LessonReroute {
+  sessionId: string;
+  lessonId: string;
+  depth: "standard" | "lower";
+  /** Zero-based, like every segment position on the wire. */
+  segmentPosition: number;
+  reason: "nothing_landed" | "not_attempted";
 }
 
 /**
@@ -566,6 +619,28 @@ export interface LessonQuestionAttempt {
   /** NULL MEANS UNMARKABLE, never wrong - see `api/checkpoints.ts`. */
   correct: boolean | null;
   submittedAt: string;
+  /**
+   * How the lesson stands, derived by the server from the newest marked
+   * attempt per problem (B98, 8 Oct). Required on the contract; optional here
+   * because a stored row read back from before 8 Oct carries none.
+   */
+  resultState?: ResultState;
+  /**
+   * THE HAND-OFF (B94, SCRUM-241). After three server-marked misses on the
+   * same problem the answer comes back with `handoffTo: "socratic_panel"`,
+   * the prompts to open it with and whether to move on once they are worked
+   * through. The client counts no misses and decides none of it.
+   */
+  handoffTo?: "socratic_panel" | null;
+  guidedPrompts?: SocraticHandoffPrompt[];
+  /** Default false on the contract. */
+  advanceAfterHandoff?: boolean;
+}
+
+/** `SocraticHandoffPrompt` - one guided question a hand-off opens with. */
+export interface SocraticHandoffPrompt {
+  id: string;
+  prompt: string;
 }
 
 export const lessonsApi = {

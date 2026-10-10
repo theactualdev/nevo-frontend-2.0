@@ -562,12 +562,31 @@ describe("what a child's bell carries", () => {
     expect(screen.getByTestId("none").textContent).toBe("no-link");
   });
 
-  it("takes each of backend's four destinations to a screen this app has", async () => {
+  it("follows backend's four destinations as sent (B86, 8 Oct)", async () => {
+    // Backend now sends our own routes for every student type.
+    await mount4(
+      [
+        row("a", "lesson_assigned", { navigatesTo: "/student/lessons" }),
+        row("b", "review_due", { navigatesTo: "/student/progress" }),
+        row("c", "teacher_replied", { navigatesTo: "/student/connect" }),
+        row("d", "sign_in_changed", { navigatesTo: "/student/profile" }),
+      ],
+      4,
+    );
+
+    await waitFor(() => expect(screen.queryByTestId("d")).not.toBeNull());
+    expect(screen.getByTestId("a").textContent).toBe("/student/lessons");
+    expect(screen.getByTestId("b").textContent).toBe("/student/progress");
+    expect(screen.getByTestId("c").textContent).toBe("/student/connect");
+    expect(screen.getByTestId("d").textContent).toBe("/student/profile");
+  });
+
+  it("still takes rows delivered before B86 to a screen this app has", async () => {
     /*
-     * Backend B62, 5 Oct fixed `navigatesTo` per type as data. Two of the
-     * four are not our routes: /student/messages is Connect, and
-     * /student/review has no screen - reviews due live on a subject's page,
-     * which Progress leads to. Mapped in one place, `childHref`.
+     * Backend B62, 5 Oct: rows written then carry /student/review and
+     * /student/messages, which are not our routes, and a child's feed keeps
+     * them. /student/messages is Connect; /student/review has no screen -
+     * reviews due live on a subject's page, which Progress leads to.
      */
     await mount4(
       [
@@ -612,9 +631,12 @@ describe("where a row's link may go", () => {
     // Every destination a child's row can carry today, after mapping.
     for (const path of [
       "/student/lessons",
+      "/student/progress",
+      "/student/connect",
+      "/student/profile",
+      // Rows delivered before B86.
       "/student/review",
       "/student/messages",
-      "/student/profile",
     ]) {
       const href = childHref(path)!;
       const page = resolve(process.cwd(), `src/app${href}/page.tsx`);

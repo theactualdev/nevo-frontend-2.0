@@ -88,7 +88,7 @@ beforeEach(() => {
   holdBaseline.mockReset();
   consent.withdrawn = false;
   clearOnboardingDraft();
-  mergeOnboardingDraft({ name: "Amara", age: 9 });
+  mergeOnboardingDraft({ name: "Amara", ageBand: "upper_primary" });
 });
 
 afterEach(() => {

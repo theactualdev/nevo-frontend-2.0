@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import Image from "next/image";
 import { ChevronLeft, Send } from "lucide-react";
 import { NevoKeyboard, useNevoKeyboardDock } from "@/components/shared";
 import { SampleRegion } from "@/components/shared/SampleRegion";
@@ -40,7 +41,8 @@ const twoPaneOnServer = () => false;
  * switched off here for a real reason - `POST /api/messages` has no `teacher`
  * recipient type, so a child could not address their teacher at all - and
  * `POST /messages/threads/{id}/reply` (3 Sep) is what opened it: a child writes
- * into a thread they can already read, and still cannot start one.
+ * into a thread they can already read. Since B95 (9 Oct) a child with no
+ * thread at all starts one, from the empty list, by direct creation.
  *
  * The signed-out walkthrough keeps its SIMULATED send. That is deliberate:
  * those threads are fixtures with no backend behind them, so a composer that
@@ -48,15 +50,21 @@ const twoPaneOnServer = () => false;
  */
 export function ConnectTab({
   threadId,
+  toTeacher = false,
 }: {
   /**
    * `?thread=`, read by the page: open this conversation rather than the
-   * first one. For a message notification or an Ask Nevo hand-off - neither
-   * has a live caller yet; backend has no message notifications. An id that
-   * is not in the list falls back to the list, never to someone else's
-   * conversation on a phone.
+   * first one. An id that is not in the list falls back to the list, never to
+   * someone else's conversation on a phone.
    */
   threadId?: string;
+  /**
+   * `?to=teacher`, from Ask Nevo's "Message my teacher": open the child's
+   * conversation with their teacher (design D109). Ask Nevo cannot name the
+   * thread, so it is found in the list once the list arrives - see
+   * `teacherThreadId`. With no such thread, Connect opens as it always has.
+   */
+  toTeacher?: boolean;
 } = {}) {
   // Live threads read from the API; the fixtures back the designed screens
   // and keep their simulated send.
@@ -65,10 +73,14 @@ export function ConnectTab({
     live,
     loading,
     failed,
+    teacherThread,
     openThread: fetchThread,
     markThreadRead,
     reply: sendLive,
     retry: retryLive,
+    firstMessages,
+    start: startLive,
+    retryFirst: retryFirstLive,
   } = useStudentThreads();
   // Seeded from the fixtures themselves, not from whatever the hook returned
   // on the first render: for a signed-in child that is the still-empty live
@@ -79,7 +91,7 @@ export function ConnectTab({
   const [activeId, setActiveId] = useState<string>(threadId ?? "");
   // Mobile only: which pane is showing. A deep link opens the conversation.
   const [mobileView, setMobileView] = useState<"list" | "thread">(
-    threadId ? "thread" : "list",
+    threadId || toTeacher ? "thread" : "list",
   );
   const twoPane = useSyncExternalStore(
     subscribeTwoPane,
@@ -104,7 +116,10 @@ export function ConnectTab({
 
   // Derived, not assigned: the live list arrives after mount, and setting a
   // default from an effect is the setState-in-effect the codebase rules out.
-  const picked = threads.find((t) => t.id === activeId);
+  // The teacher's conversation is derived the same way, and a thread the
+  // child taps (or a `?thread=`) still wins over it.
+  const wantedId = activeId || (toTeacher ? (teacherThread ?? "") : "");
+  const picked = threads.find((t) => t.id === wantedId);
   const active = picked ?? threads[0];
   // A phone shows a conversation only once one was actually chosen.
   const view = mobileView === "thread" && picked ? "thread" : "list";
@@ -206,8 +221,113 @@ export function ConnectTab({
     setMobileView("thread");
   };
 
-  // A live student can genuinely have no threads, which the fixtures never
-  // could - and every pane below assumes an active one.
+  // The first message from the empty list goes by direct creation, and once
+  // the list carries the thread it made, that conversation opens.
+  const opened = (id: string | null) => {
+    if (!id) return;
+    setActiveId(id);
+    setMobileView("thread");
+  };
+  const sendFirst = () => {
+    const text = draft.trim();
+    if (!text) return;
+    setDraft("");
+    void startLive(text).then(opened);
+  };
+
+  /*
+   * A LIVE CHILD WITH NO CONVERSATION AT ALL - 29 Empty States, "Connect (No
+   * relationship)", as design redrew it on 9 Oct. "Your teacher will be able
+   * to message you here soon" told a child to wait for something they can now
+   * start themselves (B95), so the state says what this place is and offers
+   * the one thing they can do: write the first message.
+   *
+   * There is no thread to reply into, so it goes by direct creation (see
+   * `start`), and its bubble has a reply's life: Sending, Delivered, or
+   * "Didn't send - tap to try again" with the words kept. Neither of those
+   * bubbles is drawn on this state; they are the conversation's own.
+   */
+  if (hydrated && live && !loading && !failed && !active) {
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <h1 className="mx-5 mt-2 text-2xl font-semibold tracking-[-0.01em] text-nevo-near-black sm:mx-11 sm:mt-11 sm:text-[30px] lg:mx-[52px] lg:mt-[52px] lg:text-[32px]">
+          Connect
+        </h1>
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-10 text-center sm:px-12">
+          <Image
+            src="/illustrations/empty-connect.png"
+            alt="Two figures standing side by side"
+            width={1021}
+            height={812}
+            sizes="300px"
+            className="h-auto w-[220px] shrink-0 sm:w-[280px] lg:w-[300px]"
+          />
+          <h2 className="mt-[26px] max-w-[290px] text-[19px] font-medium leading-[1.35] text-nevo-near-black sm:mt-[30px] sm:max-w-[400px] sm:text-[22px] lg:mt-8 lg:max-w-[440px] lg:text-2xl">
+            This is where you and your teacher talk
+          </h2>
+          <p className="mt-3 max-w-[290px] text-[15px] leading-[1.5] text-nevo-near-black/60 sm:mt-3.5 sm:max-w-[400px] sm:text-base lg:max-w-[440px]">
+            Say hello, ask about a lesson, or tell them how it went. Write the
+            first message whenever you&apos;re ready.
+          </p>
+        </div>
+        {firstMessages.length > 0 && (
+          <div className="flex shrink-0 flex-col gap-2.5 px-5 pb-3 sm:px-11">
+            {firstMessages.map((message) => (
+              <MessageBubble
+                key={message.id}
+                message={message}
+                onRetry={() => void retryFirstLive(message.id).then(opened)}
+              />
+            ))}
+          </div>
+        )}
+        <div className="flex shrink-0 items-center gap-2.5 border-t border-nevo-near-black/8 px-4 py-3 sm:gap-3 sm:border-t-0 sm:px-11 sm:pt-4 sm:pb-7 lg:w-full lg:max-w-[760px] lg:self-center lg:px-[52px]">
+          <input
+            value={draft}
+            onChange={(e) =>
+              setDraft(e.target.value.slice(0, MESSAGE_MAX_LENGTH))
+            }
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                sendFirst();
+              }
+            }}
+            onFocus={kb.onFocus}
+            onBlur={kb.onBlur}
+            maxLength={MESSAGE_MAX_LENGTH}
+            // A.12: Nevo Keyboard on touch; hardware keyboard on desktop.
+            inputMode="none"
+            placeholder="Write a message"
+            aria-label="Write a message"
+            className="h-11 min-w-0 flex-1 rounded-full border-[1.5px] border-nevo-near-black/16 bg-nevo-cream px-4 text-[15px] text-nevo-near-black outline-none transition-colors placeholder:text-nevo-near-black/40 focus:border-nevo-navy sm:h-12 sm:px-[18px] sm:text-base"
+          />
+          <button
+            type="button"
+            aria-label="Send"
+            onClick={sendFirst}
+            className="flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full bg-nevo-navy text-nevo-cream transition-transform active:scale-[0.98] sm:size-12"
+          >
+            <Send className="size-5" strokeWidth={2} />
+          </button>
+        </div>
+        {kb.open && (
+          <div data-nevo-hide-nav className="contents">
+            <NevoKeyboard
+              layout="qwerty"
+              onKey={(c) => setDraft((d) => (d + c).slice(0, MESSAGE_MAX_LENGTH))}
+              onBackspace={() => setDraft((d) => d.slice(0, -1))}
+              onReturn={sendFirst}
+              className="shrink-0"
+            />
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Not yet hydrated, the list still loading, or its read failed - every
+  // pane below assumes an active thread.
   if (!hydrated || (live && (loading || failed || !active))) {
     return (
       <div className="flex h-full min-h-0 flex-col">
@@ -228,7 +348,7 @@ export function ConnectTab({
               />
             ))}
           </div>
-        ) : failed ? (
+        ) : (
           /* A failed read is NOT an empty inbox. Saying "no messages yet" here
              tells a child their teacher never wrote to them, which we do not
              know and which is the crueller of the two guesses. */
@@ -246,13 +366,6 @@ export function ConnectTab({
             >
               Try again
             </button>
-          </div>
-        ) : (
-          // 29 Empty States, "Connect (No relationship)": one line.
-          <div className="flex flex-1 flex-col items-center justify-center px-10 pb-10 text-center">
-            <h2 className="max-w-[280px] text-[19px] font-medium leading-[1.35] text-nevo-near-black">
-              Your teacher will be able to message you here soon
-            </h2>
           </div>
         )}
       </div>
@@ -353,86 +466,96 @@ export function ConnectTab({
         </header>
 
         <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto p-5">
-          {/* Loading and failed are not "no messages". Our own messages in
-              flight or failed still show below either, with their retry. */}
+          {/* D104 (8 Oct): one conversation loading, or failed to load. Not
+              "no messages", and drawn in place of the conversation - its
+              messages and the composer come back only once it has loaded,
+              so a child cannot write into a thread nobody has read yet. */}
           {history === "loading" && (
-            <div aria-label="Loading messages" className="space-y-2.5">
-              <div className="h-10 w-3/5 animate-pulse rounded-2xl bg-nevo-cream-elevated" />
-              <div className="ml-auto h-10 w-2/5 animate-pulse rounded-2xl bg-nevo-cream-elevated" />
+            <div
+              role="status"
+              className="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-[420ms] motion-safe:ease-nevo-slide"
+            >
+              <span className="block size-7 rounded-full border-[2.5px] border-nevo-navy/20 border-t-nevo-navy motion-safe:animate-spin motion-safe:[animation-duration:750ms]" />
+              <span className="text-[15px] text-nevo-near-black/70">
+                Loading your messages…
+              </span>
             </div>
           )}
           {history === "failed" && (
-            <div className="m-auto flex flex-col items-center px-6 text-center">
-              <p className="text-[15px] font-medium text-nevo-near-black">
-                We couldn&rsquo;t load these messages
-              </p>
-              <p className="mt-1.5 max-w-[280px] text-sm leading-[1.5] text-nevo-near-black/62">
-                Nothing is lost. Give it a moment and try again.
-              </p>
+            <div className="flex flex-1 flex-col items-center justify-center gap-2.5 p-6 text-center motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-[420ms] motion-safe:ease-nevo-slide">
+              <h3 className="text-[18px] font-semibold text-nevo-near-black">
+                We couldn&apos;t load this conversation
+              </h3>
+              {/* Re-reads this conversation, and only this one. */}
               <button
                 type="button"
                 onClick={() => fetchThread(active.id)}
-                className="mt-4 h-11 cursor-pointer rounded-[10px] bg-nevo-navy px-5 text-[15px] font-medium text-nevo-cream"
+                className="mt-[18px] h-[46px] cursor-pointer rounded-[10px] bg-nevo-navy px-[26px] text-[15px] font-semibold text-nevo-cream transition-transform active:scale-[0.98]"
               >
                 Try again
               </button>
             </div>
           )}
           {history === "loaded" && active.messages.length === 0 && (
-            // 29 Empty States, "Connect (No messages)".
-            <p className="m-auto text-[15px] text-nevo-near-black/55">
+            // 29 Empty States, "Connect (No messages)" - which is how the
+            // child's teacher thread arrives before its first message (B95,
+            // 9 Oct). The composer below writes that first message.
+            <p className="m-auto px-5 text-center text-[15px] text-nevo-near-black/55 md:px-7 md:text-base">
               Message your teacher here
             </p>
           )}
-          {active.messages.map((message) => (
-            <MessageBubble
-              key={message.id}
-              message={message}
-              onRetry={() => retry(message.id)}
-            />
-          ))}
+          {history === "loaded" &&
+            active.messages.map((message) => (
+              <MessageBubble
+                key={message.id}
+                message={message}
+                onRetry={() => retry(message.id)}
+              />
+            ))}
         </div>
 
-        <div className="flex shrink-0 items-center gap-2.5 border-t border-nevo-near-black/8 px-4 py-3">
-          <input
-            value={draft}
-            onChange={(e) =>
-              setDraft(e.target.value.slice(0, MESSAGE_MAX_LENGTH))
-            }
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                send();
+        {history === "loaded" && (
+          <div className="flex shrink-0 items-center gap-2.5 border-t border-nevo-near-black/8 px-4 py-3">
+            <input
+              value={draft}
+              onChange={(e) =>
+                setDraft(e.target.value.slice(0, MESSAGE_MAX_LENGTH))
               }
-            }}
-            onFocus={kb.onFocus}
-            onBlur={kb.onBlur}
-            // The contract caps `content` at 5000. Held at the input rather
-            // than rejected on send: a child should not lose a long message
-            // to a limit nothing told them about.
-            maxLength={MESSAGE_MAX_LENGTH}
-            // A.12: Nevo Keyboard on touch; hardware keyboard on desktop.
-            inputMode="none"
-            placeholder="Type a message"
-            aria-label={`Message ${active.name}`}
-            className="h-11 flex-1 rounded-full border-[1.5px] border-nevo-near-black/16 bg-nevo-cream px-4 text-[15px] text-nevo-near-black outline-none transition-colors focus:border-nevo-navy"
-          />
-          <button
-            type="button"
-            aria-label="Send"
-            onClick={send}
-            className="flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full bg-nevo-navy text-nevo-cream transition-transform active:scale-[0.98]"
-          >
-            <Send className="size-5" strokeWidth={2} />
-          </button>
-        </div>
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  send();
+                }
+              }}
+              onFocus={kb.onFocus}
+              onBlur={kb.onBlur}
+              // The contract caps `content` at 5000. Held at the input rather
+              // than rejected on send: a child should not lose a long message
+              // to a limit nothing told them about.
+              maxLength={MESSAGE_MAX_LENGTH}
+              // A.12: Nevo Keyboard on touch; hardware keyboard on desktop.
+              inputMode="none"
+              placeholder="Type a message"
+              aria-label={`Message ${active.name}`}
+              className="h-11 flex-1 rounded-full border-[1.5px] border-nevo-near-black/16 bg-nevo-cream px-4 text-[15px] text-nevo-near-black outline-none transition-colors focus:border-nevo-navy"
+            />
+            <button
+              type="button"
+              aria-label="Send"
+              onClick={send}
+              className="flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full bg-nevo-navy text-nevo-cream transition-transform active:scale-[0.98]"
+            >
+              <Send className="size-5" strokeWidth={2} />
+            </button>
+          </div>
+        )}
 
         {/* Message entry on touch - docked below the composer so it stays
             visible. `data-nevo-hide-nav` takes the bottom nav down while it
             is up (StudentShell), as the frame draws it and as Lessons'
             overlaid keyboard already does: two stacked trays left the
             conversation a sliver on a phone. */}
-        {kb.open && (
+        {kb.open && history === "loaded" && (
           <div data-nevo-hide-nav className="contents">
             <NevoKeyboard
               layout="qwerty"

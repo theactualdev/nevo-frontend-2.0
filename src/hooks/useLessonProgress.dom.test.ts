@@ -227,6 +227,26 @@ describe("useLessonProgress - the after-lesson check (B49, B26)", () => {
     );
   });
 
+  it("sends no result state with the completion: the server derives it (B98)", async () => {
+    // `ProgressWrite.resultState` is deprecated and never controlled the
+    // reroute; the server reads its own marks.
+    const save = vi
+      .spyOn(lessonsApi, "saveProgress")
+      .mockResolvedValue({} as never);
+    const { result } = renderHook(() => useLessonProgress(LESSON, true));
+    await waitFor(() => expect(result.current.sessionId).toBe("sess-1"));
+
+    act(() => result.current.report("completed", { segment: 3 }));
+
+    await waitFor(() =>
+      expect(save).toHaveBeenCalledWith(LESSON, {
+        sessionId: "sess-1",
+        status: "completed",
+        segmentPosition: 3,
+      }),
+    );
+  });
+
   it("sends no place in a check on any other write", async () => {
     const save = vi
       .spyOn(lessonsApi, "saveProgress")

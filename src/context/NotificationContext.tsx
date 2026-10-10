@@ -122,22 +122,25 @@ const FOR_A_CHILD = new Map<string, NotificationKind>([
 ]);
 
 /**
- * BACKEND'S PATHS THAT ARE NOT OUR ROUTES, AND THE ONE PLACE THEY ARE MAPPED.
+ * THE OLD PATHS ROWS ALREADY DELIVERED STILL CARRY, AND ONLY THOSE.
  *
- * Backend fixed each student type's `navigatesTo` as data on 5 Oct (B62):
- * `lesson_assigned` to /student/lessons, `review_due` to /student/review,
- * `teacher_replied` to /student/messages and `sign_in_changed` to
- * /student/profile. Two of those name screens this app does not have:
+ * Backend now sends our own routes (B86, 8 Oct): `review_due` navigates to
+ * /student/progress and `teacher_replied` to /student/connect, alongside
+ * /student/lessons and /student/profile, which were always ours. Those pass
+ * through `childHref` untouched.
+ *
+ * What stays is the fallback for rows written before that. On 5 Oct (B62)
+ * backend's paths for the same two types were /student/review and
+ * /student/messages, which name screens this app does not have, and a child's
+ * feed keeps those rows. Without these entries their links would go nowhere:
  *
  * - /student/messages is our Connect tab, /student/connect.
  * - /student/review has no screen of its own. Reviews due are offered on a
- *   subject's page ("Ready for another look"), which Progress leads to, and
- *   the row names no subject or concept to go further than that.
+ *   subject's page ("Ready for another look"), which Progress leads to.
  *
- * Mapped here rather than with redirect pages, so a wrong path is fixed in
- * one line and nothing else in the app learns backend's spelling. Asked of
- * backend: send our routes, and these entries go. The path is matched
- * exactly; whatever follows it (`?thread=`) rides along.
+ * Mapped here rather than with redirect pages, so nothing else in the app
+ * learns the old spelling. The path is matched exactly; whatever follows it
+ * (`?thread=`) rides along.
  */
 const CHILD_ROUTE: Record<string, string> = {
   "/student/messages": "/student/connect",

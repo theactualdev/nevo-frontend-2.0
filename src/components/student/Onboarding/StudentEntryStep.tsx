@@ -288,7 +288,7 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
           schoolCode: matchedCode,
           admissionNumber: matchedNumber,
           name: state.firstName,
-          ...(typeof state.age === "number" ? { age: state.age } : {}),
+          ...(state.ageBand ? { ageBand: state.ageBand } : {}),
         });
         if (route === "first-run") {
           router.push(FIRST_RUN);
