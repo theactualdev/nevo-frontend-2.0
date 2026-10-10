@@ -36,14 +36,13 @@ export const REPLACED_ELSEWHERE_COPY =
   "You were signed in on another device, so that one signed out.";
 
 /**
- * The PIN doors' lines for a failure that is not the child's PIN - 28c-6 and
- * 28c-7 (D68), drawn in 28c-5's tinted box. One copy for every door that
- * shares the box, so the remembered-device unlock and the full sign-in cannot
- * say different things about the same refusal.
+ * The PIN doors' line for a failure that is not the child's PIN - 28c-6
+ * (D68), drawn in 28c-5's tinted box. One copy for every door that shares the
+ * box, so the remembered-device unlock and the full sign-in cannot say
+ * different things about the same refusal.
  *
- * The rate limit is said as a wait, never as a wrong PIN: the child may have
- * typed the right one too quickly, and "try again" is the instruction that
- * extends the lockout.
+ * A RATE LIMIT IS NOT A LINE HERE ANY MORE. 28c-7's "Let's wait a moment
+ * before trying again." gave way to D154's pause (9 Oct), which "holds
+ * everywhere a child enters a PIN": see `ThrottledPause`.
  */
 export const SIGN_IN_OURS_COPY = "Something went wrong on our side. Try again.";
-export const SIGN_IN_THROTTLED_COPY = "Let's wait a moment before trying again.";

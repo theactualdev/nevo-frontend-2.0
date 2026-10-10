@@ -176,6 +176,18 @@ export type SegmentReviewReason =
   | "calculation_segment_has_no_interactive_delivery"
   | "model_flagged_for_review";
 
+/**
+ * "A stable, ordered reading boundary generated from approved lesson text."
+ * The offsets are into the segment's `body`.
+ */
+export interface ReadingChunk {
+  id: string;
+  sequenceOrder: number;
+  text: string;
+  startOffset: number;
+  endOffset: number;
+}
+
 export interface LessonSegment extends SegmentVariants {
   id: string;
   /** Shipped 1 Sep. 0 or absent means no estimate - see `LessonSummary`. */
@@ -185,6 +197,11 @@ export interface LessonSegment extends SegmentVariants {
   sequenceOrder: number;
   title: string | null;
   body: string;
+  /**
+   * Where the server breaks `body` for reading (SCRUM-234/236, B87). Absent
+   * or empty is one body, which is a normal state.
+   */
+  readingChunks?: ReadingChunk[];
   availableModalities: ContentModality[];
   /**
    * Typed as of 3 Sep. `answerKey` is NULLABLE for lessons parsed before the

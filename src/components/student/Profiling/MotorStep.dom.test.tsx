@@ -347,6 +347,53 @@ describe("Primary 1-3", () => {
     expect(taps[0]).toMatchObject({ target: 0, cell: 4 });
   });
 
+  describe("the demonstration finishes before measurement begins (D138)", () => {
+    it("is gone, hand and all, before the first real target is painted", () => {
+      step("p13");
+      act(() => spoken[0].onend?.());
+
+      // Up to its last beat there is no real target to time.
+      act(() => vi.advanceTimersByTime(1_949));
+      expect(target()).toBeNull();
+      expect(frames.filter(Boolean)).toHaveLength(0);
+
+      act(() => vi.advanceTimersByTime(1));
+      expect(target()).not.toBeNull();
+      expect(demo()).toBeNull();
+      expect(document.querySelector("svg")).toBeNull();
+    });
+
+    it("times the first sample from its own target, not from the demonstration", () => {
+      const { capture } = step("p13");
+      act(() => spoken[0].onend?.());
+      now += 1_950;
+      watchTheDemonstration();
+
+      // The first real target is painted at 5000 and tapped 450ms later.
+      now = 5_000;
+      paint();
+      now = 5_450;
+      fireEvent.pointerDown(target()!);
+
+      expect(capture.ofKind("motor_tap")[0].payload).toMatchObject({
+        target: 0,
+        latencyMs: 450,
+      });
+    });
+
+    it("silences a voice that never said it was done, before the step goes on", () => {
+      const cancel = vi.mocked(window.speechSynthesis.cancel);
+      step("p13");
+      // Once before speaking, to clear anything queued.
+      expect(cancel).toHaveBeenCalledTimes(1);
+
+      act(() => vi.advanceTimersByTime(8_000));
+
+      expect(cancel).toHaveBeenCalledTimes(2);
+      expect(target()).toBeNull();
+    });
+  });
+
   it("is only for Primary 1-3: the other bands begin at once", () => {
     step("p46");
 

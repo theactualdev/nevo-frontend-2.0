@@ -102,7 +102,7 @@ const future = () => new Date(Date.now() + 60 * 60 * 1000).toISOString();
 /** What 05 left behind for a matched child. */
 const MATCHED = {
   name: "Amara",
-  age: 11,
+  ageBand: "upper_primary",
   schoolCode: "K7DQ",
   admissionNumber: "BGA/2031",
 };

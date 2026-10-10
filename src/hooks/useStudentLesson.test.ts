@@ -407,6 +407,39 @@ describe("a lesson the child is not meant to be doing", () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.unavailable).toBe("cancelled");
+    // Nothing said the reviews went with it (SCRUM-225: default false).
+    expect(result.current.recallWithdrawn).toBe(false);
+  });
+
+  it("says when cancelling it also withdrew its reviews (SCRUM-225)", async () => {
+    signIn();
+    withAssignment({
+      status: "cancelled",
+      availableFrom: null,
+      cancellationReason: "wrong_content",
+      recallWithdrawn: true,
+    });
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.recallWithdrawn).toBe(true);
+  });
+
+  it("keeps the reviews of a housekeeping cancellation (SCRUM-225)", async () => {
+    signIn();
+    withAssignment({
+      status: "cancelled",
+      availableFrom: null,
+      cancellationReason: "housekeeping",
+      recallWithdrawn: false,
+    });
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.unavailable).toBe("cancelled");
+    expect(result.current.recallWithdrawn).toBe(false);
   });
 
   it("says a lesson that opens on Friday is not yet open, and when", async () => {
@@ -635,6 +668,43 @@ describe("an accommodation when the engine does not answer", () => {
 
     await waitFor(() => expect(result.current.lesson).not.toBeNull());
     expect(result.current.plan?.accommodations?.reading).toBe(true);
+  });
+});
+
+describe("where calculation support starts (B103, 9 Oct)", () => {
+  it("rides on the live plan as the indicator draws it", async () => {
+    signIn();
+    detail.mockResolvedValue(LIVE_LESSON);
+    adaptation.mockReturnValue({ plan: null, error: "unreachable" });
+    accommodations.mockReturnValue({
+      active: null,
+      settled: true,
+      support: { initialScaffoldLevel: "strong" },
+    });
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.lesson).not.toBeNull());
+    expect(result.current.plan?.initialScaffold).toBe("full");
+    // Nothing else is invented beside it.
+    expect(result.current.plan).not.toHaveProperty("accommodations");
+  });
+
+  it("is no level when the read gave none, or one this client does not know", async () => {
+    signIn();
+    detail.mockResolvedValue(LIVE_LESSON);
+    adaptation.mockReturnValue({ plan: null, error: "unreachable" });
+    for (const support of [null, {}, { initialScaffoldLevel: "medium" }]) {
+      accommodations.mockReturnValue({ active: null, settled: true, support });
+
+      const { result, unmount } = renderHook(() =>
+        useStudentLesson(FIRST_LESSON_ID),
+      );
+
+      await waitFor(() => expect(result.current.lesson).not.toBeNull());
+      expect(result.current.plan?.initialScaffold).toBeUndefined();
+      unmount();
+    }
   });
 });
 

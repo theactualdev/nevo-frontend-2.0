@@ -389,7 +389,14 @@ export function CheckButton({
   );
 }
 
-/** "That's it. Saved." - the module's quiet settle, no score, no celebration. */
+/**
+ * "That's it." - the module's quiet settle, no score, no celebration.
+ *
+ * IT CLAIMS NO SAVE (D136, 8 Oct). It read "That's it. Saved.", and nothing
+ * had been saved: the trials are taken at the end of the run and parked, and
+ * the device that sends raw answers has no way of knowing a send landed.
+ * Design: "'That's it.' on its own is fine and claims nothing."
+ */
 export function SettleBadge() {
   return (
     <div className="flex flex-col items-center gap-3.5">
@@ -397,7 +404,7 @@ export function SettleBadge() {
         <Check className="size-8 text-nevo-cream" strokeWidth={2.6} />
       </span>
       <span className="text-[17px] font-semibold text-nevo-navy">
-        That&apos;s it. Saved.
+        That&apos;s it.
       </span>
     </div>
   );

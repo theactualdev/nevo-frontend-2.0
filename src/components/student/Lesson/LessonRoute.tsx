@@ -75,6 +75,7 @@ export function LessonRoute({
     lastWorkedAt,
     adaptSegments,
     unavailable,
+    recallWithdrawn,
     opensAt,
     placeUnknown,
     fromShelf,
@@ -105,8 +106,14 @@ export function LessonRoute({
    * theirs. The summary and review screens are deliberately NOT gated for the
    * same reason. "Anything you already did on it is still saved" went for
    * D89's reason (6 Oct): this screen confirms no save, so it claims none.
+   *
+   * A DUE REVIEW IS REFUSED ONLY WHEN ITS REVIEWS WERE WITHDRAWN (SCRUM-225,
+   * D39, 8 Oct). A housekeeping cancellation keeps the lesson's review
+   * schedule, so the scheduler still says the review is due, and refusing it
+   * here turned that into a dead end. Only a genuine retraction withdraws the
+   * reviews, and the server says which it was with `recallWithdrawn`.
    */
-  if (unavailable === "cancelled") {
+  if (review ? recallWithdrawn : unavailable === "cancelled") {
     return (
       <LessonMessage
         title="This one isn’t on your list any more"

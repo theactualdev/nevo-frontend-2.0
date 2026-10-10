@@ -83,8 +83,24 @@ describe("AccountOnPauseScreen", () => {
     // interrupted." The wordmark above is the page's, and stays.
     render(<AccountOnPauseScreen />);
 
-    const bars = document.querySelectorAll("span.rounded-full svg rect");
+    // The frame's own bars since 8 Oct (D147): two solid, fully rounded navy
+    // bars, 15 x 54 on a phone, 18 x 66 on a tablet, 19 x 70 on a desktop.
+    const bars = document.querySelectorAll("[data-pause-bar]");
     expect(bars).toHaveLength(2);
+    for (const bar of bars) {
+      for (const size of [
+        "w-[15px]",
+        "h-[54px]",
+        "sm:w-[18px]",
+        "sm:h-[66px]",
+        "lg:w-[19px]",
+        "lg:h-[70px]",
+        "rounded-full",
+        "bg-nevo-navy",
+      ]) {
+        expect(bar.className).toContain(size);
+      }
+    }
     expect(document.querySelector("img[src*=\"logo-icon\"]")).toBeNull();
     expect(screen.getByAltText("Nevo")).toHaveAttribute(
       "src",

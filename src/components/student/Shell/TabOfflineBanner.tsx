@@ -49,8 +49,13 @@ export function TabOfflineBanner() {
       >
         <path d="M1 1l22 22M8.5 8.5A5 5 0 0 0 7 18h10M16.7 11.3A5.5 5.5 0 0 0 12 9" />
       </svg>
+      {/*
+        THE FRAME'S LINE LESS ITS SAVE CLAIM (D136, 8 Oct): "nothing claims a
+        save that has not been confirmed". It read "- your progress is saved",
+        and a banner that shows on any drop cannot know that.
+      */}
       <span className="min-w-0 flex-1 text-[13px] text-nevo-near-black md:text-sm">
-        No internet connection - your progress is saved
+        No internet connection
       </span>
       {/* 44px to tap, though the frame draws only the cross. */}
       <button

@@ -223,6 +223,33 @@ describe("the lesson inside a package", () => {
     );
   });
 
+  it("keeps the reading chunks it carries, as a live open does (B87)", async () => {
+    const chunks = [
+      {
+        id: "c1",
+        sequenceOrder: 1,
+        text: "A half is one of two equal parts.",
+        startOffset: 0,
+        endOffset: 33,
+      },
+    ];
+    const saved = lesson({ segments: [segment({ readingChunks: chunks })] });
+    const kept = await lessonFromPackage(pkg(JSON.stringify(saved)), ID);
+
+    expect(kept?.segments[0].readingChunks).toEqual(chunks);
+    expect(lessonFromContent(kept!)?.segments[0].text?.readingChunks).toEqual([
+      { id: "c1", text: "A half is one of two equal parts." },
+    ]);
+  });
+
+  it("refuses chunks that are not a list", async () => {
+    const odd = JSON.stringify(
+      lesson({ segments: [segment({ readingChunks: "c1" })] }),
+    );
+
+    expect(await lessonFromPackage(pkg(odd), ID)).toBeNull();
+  });
+
   it("keeps a null recap as sent, the lesson saying it has none", () => {
     const detail = detailFromPackage(
       lesson({ ...ending(), recap: null }) as never,
@@ -246,6 +273,7 @@ describe("the lesson inside a package", () => {
 
     expect(kept?.segments[0]).toMatchObject({
       title: null,
+      readingChunks: [],
       availableModalities: [],
       comprehensionCheckpoints: [],
       visualVariant: null,

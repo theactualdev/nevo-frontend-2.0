@@ -184,7 +184,9 @@ describe("Message my teacher", () => {
       await vi.advanceTimersByTimeAsync(500);
     });
 
-    expect(push).toHaveBeenCalledWith("/student/connect");
+    // On the teacher's conversation, not just the tab (design D109): the
+    // answer names no teacher, so Connect finds the thread from `?to=teacher`.
+    expect(push).toHaveBeenCalledWith("/student/connect?to=teacher");
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 });

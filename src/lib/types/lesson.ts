@@ -31,12 +31,32 @@ export interface TextContent {
    * the density's `body` string becomes the lead line above them.
    */
   slowerSteps?: string[];
-  /** Expand surfaces key terms as violet chips under the fuller prose. */
-  keyTerms?: string[];
+  /**
+   * Key terms, as violet chips beside the standard text and under Expand.
+   * A term with a `definition` opens it in place when tapped (design, 9 Oct);
+   * the authored demo's terms carry none and stay plain chips.
+   */
+  keyTerms?: { term: string; definition?: string }[];
   /** Per-density callout (e.g. Simplify "IN SHORT", Expand "WORD EQUATION"). */
   callouts?: Partial<
     Record<Density | "default", { label: string; text: string; sub?: string }>
   >;
+  /**
+   * The payload's key points (`TextVariant.keyPoints`, SCRUM-224): the frame's
+   * "IN SHORT" box. Design, D24: "The boxes stay. They are key points."
+   */
+  keyPoints?: string[];
+  /**
+   * The payload's equation callouts (`TextVariant.equationCallouts`): the
+   * frame's "WORD EQUATION" box, one per equation, under Expand.
+   */
+  equations?: { equation: string; label?: string }[];
+  /**
+   * Where the server breaks `body.default` for reading (SCRUM-234), in order.
+   * Absent is one body. They describe the default body only, so a reshape
+   * never reads through them.
+   */
+  readingChunks?: { id: string; text: string }[];
 }
 
 /** Visual modality — an illustration and/or a simple input→output diagram. */
@@ -510,4 +530,12 @@ export interface AdaptationPlan {
     reading?: boolean;
     numerical?: boolean;
   };
+  /**
+   * Where calculation support starts for this child, as the indicator draws
+   * it: `engineConfig.support.initialScaffoldLevel` from the session-start
+   * read, "Client-applied starting level for calculation scaffolds" (B103,
+   * 9 Oct). Shown only while the solver is on screen and nothing more
+   * specific has been said for the segment. Absent is no level.
+   */
+  initialScaffold?: ScaffoldLevel;
 }

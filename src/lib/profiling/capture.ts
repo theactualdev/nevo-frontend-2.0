@@ -209,7 +209,11 @@ const DIMENSION_OF_ACT: Record<string, BaselineDimension> = {
   domain: "domain",
 };
 
-/** The contract's id shape for `probeItemId`; anything else would 422 the run. */
+/**
+ * The contract's id shape for `probeItemId`; anything else would 422 the run.
+ * A served item is a probe-bank UUID (B79); a device day's `device:*` id is
+ * not one, and goes as null.
+ */
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -251,12 +255,14 @@ const text = (value: unknown): string | null =>
  *    ignores whatever `correct` says.
  *  - "NOT SURE" is a decline, never a wrong answer: `response: "not_sure"` and
  *    `correct: null`, so it can never enter an accuracy as a miss.
- *  - A TILE TAP (`tap`, working memory): one trial per tap, `condition` the
- *    sequence length, `response` the cell. Its time is from the grid being
- *    handed over, or from the previous tap of the SAME recall - never across
- *    a round, which once swallowed the between-round beat and the whole next
- *    playback into a "gap". A recall ends at a wrong tap or at its length, so
- *    the order alone says where each recall starts and stops.
+ *  - A TILE RECALL (working memory): ONE trial per completed recall, not one
+ *    per tap (B80, 8 Oct). `condition` is the sequence length, `response` the
+ *    cells tapped, in the order tapped, and `correct` as the module recorded
+ *    it: a recall ends at a wrong tap (false) or at `round_complete` (true).
+ *    Its time runs from the grid being handed over (`input_start`) to the
+ *    tap that ended it - never across a round, which once swallowed the
+ *    between-round beat and the whole next playback into a "gap". A recall
+ *    still open when the stream ends was never completed, and sends nothing.
  *  - A DUAL-TASK CHECK (`check_answer`, SS): `condition: "dual_check"`, timed
  *    from the check appearing.
  *  - A MOTOR SAMPLE (`motor_tap`, the motor-speed step, PR #645): every tap as
@@ -271,27 +277,52 @@ const text = (value: unknown): string | null =>
  *    activity the device could not present was never in front of anyone.
  *
  * Not carried, because `BaselineTrial` has no field for them: coordinates
- * (B14, above) and a recall's full timing beyond the one interval per tap.
+ * (B14, above) and the intervals between the taps inside a recall.
  * The run's band and device go beside the trials, not on them
  * (`baselineRunContext`).
  */
 export function baselineTrials(capture: BaselineCapture): BaselineTrial[] {
   const trials: BaselineTrial[] = [];
-  /** When the grid was handed to the child for the recall in progress. */
-  let recallOpenedAt: number | null = null;
-  /** The last right tap of the recall in progress. */
-  let lastTap: { t: number; pos: number } | null = null;
+  /**
+   * The recall in progress: when the grid was handed over (null if nothing
+   * said), its length, the cells tapped so far and when the last one landed.
+   */
+  let recall: {
+    openedAt: number | null;
+    length: number | null;
+    cells: string[];
+    lastAt: number;
+  } | null = null;
+  /** One trial for the recall in progress, which `correct` has just ended. */
+  const endRecall = (correct: boolean) => {
+    if (!recall || recall.cells.length === 0) return;
+    trials.push({
+      dimension: "wmc",
+      condition: recall.length === null ? null : `length_${recall.length}`,
+      response: text(recall.cells.join(",")),
+      correct,
+      responseTimeMs:
+        recall.openedAt === null ? null : ms(recall.lastAt - recall.openedAt),
+      probeItemId: null,
+    });
+  };
   let checkShownAt: number | null = null;
 
   for (const e of capture.stream) {
     const p = e.payload ?? {};
     switch (e.kind) {
       case "input_start":
-        recallOpenedAt = e.t;
-        lastTap = null;
+        recall = {
+          openedAt: e.t,
+          length: typeof p.length === "number" ? p.length : null,
+          cells: [],
+          lastAt: e.t,
+        };
         break;
       case "round_complete":
-        lastTap = null;
+        // Every tap of it was right: the module records this at the last.
+        endRecall(true);
+        recall = null;
         break;
       case "check_shown":
         checkShownAt = e.t;
@@ -309,25 +340,16 @@ export function baselineTrials(capture: BaselineCapture): BaselineTrial[] {
         checkShownAt = null;
         break;
       case "tap": {
-        const pos = Number(p.posInSeq);
-        const from =
-          pos === 0
-            ? recallOpenedAt
-            : lastTap && lastTap.pos === pos - 1
-              ? lastTap.t
-              : null;
-        trials.push({
-          dimension: "wmc",
-          condition:
-            typeof p.length === "number" ? `length_${p.length}` : null,
-          response: text(p.cell),
-          correct: typeof p.correct === "boolean" ? p.correct : null,
-          responseTimeMs: from === null ? null : ms(e.t - from),
-          probeItemId: null,
-        });
-        recallOpenedAt = null;
-        // A wrong tap ends the recall: the pattern plays again from the top.
-        lastTap = p.correct === true ? { t: e.t, pos } : null;
+        recall ??= { openedAt: null, length: null, cells: [], lastAt: e.t };
+        recall.length ??= typeof p.length === "number" ? p.length : null;
+        recall.cells.push(String(p.cell));
+        recall.lastAt = e.t;
+        // A wrong tap ends the recall: the pattern plays again from the top,
+        // and the grid is handed over afresh.
+        if (p.correct === false) {
+          endRecall(false);
+          recall = null;
+        }
         break;
       }
       case "trial_pick": {

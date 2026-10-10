@@ -18,6 +18,13 @@ export const SIGNAL_EVENT_TYPES = {
    */
   REPLAY: "replay",
   SCROLL: "scroll",
+  /**
+   * A server reading chunk (SCRUM-234) came into view or was read past -
+   * payload { segmentId, chunkId, action: "entered" | "passed", formFactor }.
+   * A later `entered` after `passed` is a reread, and that is the server's
+   * reading: this client counts none.
+   */
+  READING_CHUNK_VIEWED: "reading_chunk_viewed",
   SIMPLIFY_TRIGGER: "simplify_trigger",
   /** Density triggers are distinct event types in the backend contract. */
   EXPAND_TRIGGER: "expand_trigger",

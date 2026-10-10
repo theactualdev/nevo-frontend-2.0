@@ -189,6 +189,29 @@ describe("GridSpanModule — after a miss (D74)", () => {
   );
 });
 
+describe("GridSpanModule — the settle (D136)", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("says \"That's it.\" and claims no save", () => {
+    // It read "That's it. Saved." after every module, and nothing had been
+    // saved: the trials are parked at the end of the run, and the device that
+    // sends raw answers cannot know a send landed.
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    render(
+      <GridSpanModule config={gridSpanConfig("p46")} onComplete={() => {}} />,
+    );
+    // Three misses at a length end the module, which settles.
+    for (let miss = 0; miss < 3; miss++) {
+      watchItPlay();
+      fireEvent.click(screen.getAllByRole("button", { hidden: true })[0]);
+      act(() => void vi.advanceTimersByTime(1_600));
+    }
+
+    expect(screen.getByText("That's it.")).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/saved/i);
+  });
+});
+
 describe("GridSpanModule — where a tap landed", () => {
   it("records the coordinates of a tile tap", () => {
     const capture = new BaselineCapture("coords");

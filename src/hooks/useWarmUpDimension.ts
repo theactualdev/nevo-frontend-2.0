@@ -10,6 +10,9 @@ import {
 import { useHasSession } from "./useHasSession";
 import { useHydrated } from "./useHydrated";
 
+/** The namespace of a device-task day's `itemId` (B79): never a probe item. */
+const DEVICE_TASK_ID = "device:";
+
 /** A question the engine served with the day's dimension. No answer key. */
 export interface WarmUpItem {
   itemId: string;
@@ -97,6 +100,12 @@ export function useWarmUpPrompt(visitor: BaselineDimension): WarmUpPrompt {
  * five look like served questions with nothing in them. So the flag decides,
  * not the dimension and not whatever text happens to be present; an absent
  * flag is a deployment that does not say, and is not read as served.
+ *
+ * A DEVICE DAY'S ID IS NEVER A SERVED ITEM (B79, B81, 8 Oct). A served item's
+ * `itemId` is a probe-bank UUID; a device-task day's sits in the explicit
+ * `device:*` namespace and always comes with `served: false`. Should the two
+ * ever disagree, the namespace wins: an id that names a device task is run as
+ * that task, and is never shown as a question or sent as a probe item.
  */
 export function toPrompt(res: Partial<RecalibratePrompt>): WarmUpPrompt {
   const dimension = res.dimension;
@@ -122,6 +131,7 @@ export function toPrompt(res: Partial<RecalibratePrompt>): WarmUpPrompt {
     served &&
     typeof res.itemId === "string" &&
     res.itemId !== "" &&
+    !res.itemId.startsWith(DEVICE_TASK_ID) &&
     typeof res.question === "string" &&
     res.question.trim() !== "" &&
     options.length >= 2
