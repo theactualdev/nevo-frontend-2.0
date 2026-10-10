@@ -128,6 +128,22 @@ export type PricingPlan = "annual" | "per_term";
  */
 export type AccessWindow = "year_round" | "school_session";
 
+/**
+ * One of Nevo's published plans (`GET /api/billing/plan-options`, 8 Oct).
+ * PUBLISHED rates, not this school's - a founding-partner school pays its own
+ * rate, which the cost sheet shows. `switchMethod` is always
+ * `relationship_manager`: there is no self-service switch, deliberately.
+ */
+export interface PlanOption {
+  plan: PricingPlan;
+  name: string;
+  perStudentRate: string;
+  billingPeriod: "year" | "term";
+  accessWindow: AccessWindow;
+  currency: PricingCurrency;
+  switchMethod: string;
+}
+
 /** Which rate card a school is held to. */
 export type RateType = "founding_partner" | "standard";
 
@@ -291,6 +307,9 @@ export const billingApi = {
    * Still resolves to null on an incomplete account rather than rendering a
    * partial one, for the reason on the interface above.
    */
+  /** GET /api/billing/plan-options - D11d's two plans, at published rates. */
+  planOptions: () => api.get<PlanOption[]>("/api/billing/plan-options"),
+
   receivingAccount: () =>
     api
       .get<Partial<ReceivingAccount>>("/api/billing/bank-transfer-details")

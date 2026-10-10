@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { classesApi, type AdminClass } from "@/lib/api/classes";
 import { studentsApi, type AdminStudentRow } from "@/lib/api/students";
+import { ageChecksApi } from "@/lib/api/ageChecks";
 import { yearGroupLabel } from "@/lib/constants/yearGroups";
 import { cn } from "@/lib/utils";
 import {
@@ -176,6 +177,25 @@ export function StudentsView() {
   useEffect(() => {
     load(classId, includeInactive);
   }, [load, classId, includeInactive]);
+
+  /*
+   * THE AGE-CHECK NOTE (Lydia, 7 Oct; backend, 8 Oct). A date of birth the
+   * parent gave that disagrees with the school's is a note against that child
+   * here, and nothing more: no hold, nothing to the child, and no verdict on
+   * which date is right. Its own read and its own absence - a list we could
+   * not read leaves the roster without notes, never with invented ones.
+   */
+  const [dobNotes, setDobNotes] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    ageChecksApi
+      .mismatches()
+      .then((rows) =>
+        setDobNotes(
+          new Set((Array.isArray(rows) ? rows : []).filter((r) => r.state === "mismatch").map((r) => r.studentId)),
+        ),
+      )
+      .catch(() => setDobNotes(new Set()));
+  }, []);
 
   /** Everyone on the roster who is not deactivated - what the header counts. */
   const enrolled = useMemo(
@@ -560,6 +580,11 @@ export function StudentsView() {
                             {s.loginIdentifier ? (
                               <span className="block truncate text-[13px] text-nevo-near-black/60">
                                 {s.loginIdentifier}
+                              </span>
+                            ) : null}
+                            {dobNotes.has(s.id) ? (
+                              <span className="mt-0.5 block text-[12.5px] leading-[1.45] text-nevo-navy">
+                                The parent gave a different date of birth. Check your record.
                               </span>
                             ) : null}
                           </span>
