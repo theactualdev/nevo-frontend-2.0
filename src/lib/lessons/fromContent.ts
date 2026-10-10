@@ -25,6 +25,7 @@ import { isStoredAnswer } from "./storedAnswer";
 import { MODALITY, type Modality } from "@/lib/constants";
 import type {
   Assessment,
+  CalcHighlight,
   CalcNarration,
   CalcScaffold,
   CalculationSegment,
@@ -343,8 +344,10 @@ export function calculationFromVariant(
   if (variant.steps.length === 0) return undefined;
 
   // Resolved once: a tap step needs something to build on, and that is a
-  // property of the variant rather than of the step.
-  const manipulative = manipulativeFor(variant.manipulative);
+  // property of the variant rather than of the step. A place-value build
+  // takes its columns from the scaffold, so the scaffold is read first.
+  const scaffold = scaffoldFor(variant.scaffold);
+  const manipulative = manipulativeFor(variant.manipulative, scaffold);
 
   const steps: CalculationStep[] = [];
   for (const step of variant.steps) {
@@ -353,22 +356,19 @@ export function calculationFromVariant(
     steps.push(built);
   }
 
-  const scaffold = scaffoldFor(variant.scaffold);
   const conceptId = variant.conceptId?.trim();
   return {
     variant: variant.type?.trim() || "co_construction",
     ...(conceptId ? { conceptId } : {}),
     /*
      * `expression` is the problem as notation, required since SCRUM-177.
-     * Content stored before it has only `fullEquation`, which on that content
-     * IS the problem ("5x - 4 = 2x + 11"), so it stands in there and nowhere
-     * else - on new content `fullEquation` may be the worked result, and the
-     * full worked example is never rendered.
+     * `fullEquation` used to stand in for it on content stored before, when
+     * nobody had said what it was. Backend has now (B101): it is the solved
+     * equation, so standing it in would show the answer before the first
+     * step. A problem with no notation shows none until a step assembles one.
      */
-    expression: (typeof variant.expression === "string"
-      ? variant.expression
-      : variant.fullEquation
-    ).trim(),
+    expression: variant.expression?.trim() ?? "",
+    fullEquation: variant.fullEquation?.trim() ?? "",
     ...(scaffold ? { scaffold } : {}),
     ...(manipulative ? { manipulative } : {}),
     steps,
@@ -393,8 +393,9 @@ function storedAnswers(step: WireCalculationStep): string[] {
  * `expectedInput`, which says what kind of answer it is, not what the child
  * does to give it.
  *
- * Every kind refuses a step nobody can be right about: no stored answer at
- * all, or a choice whose stored answers name none of its own options.
+ * A choice or a number refuses a step nobody can be right about: no stored
+ * answer at all, or a choice whose stored answers name none of its own
+ * options. A tap step is right when its `tapCount` is built.
  */
 function calcStepFor(
   step: WireCalculationStep,
@@ -408,6 +409,7 @@ function calcStepFor(
     hint: step.hint?.trim() ?? "",
     assembles: step.assembles?.trim() ?? "",
     equationState: step.equationState?.trim() ?? "",
+    highlights: highlightsFor(step),
     ...(narration ? { narration } : {}),
   };
 
@@ -454,8 +456,20 @@ function calcStepFor(
      * wearing the right prompt.
      */
     if (!manipulative) return undefined;
-    const target = pieceCount(accepted, manipulative.parts);
-    if (target === undefined) return undefined;
+    /*
+     * HOW MANY PIECES IS `tapCount`, a positive whole number (B102). It used
+     * to be read out of the step's stored answers, which said what the answer
+     * was rather than how many taps build it. A count the bar or the array
+     * cannot hold is refused, never clamped.
+     */
+    const target = step.tapCount;
+    if (typeof target !== "number" || !Number.isInteger(target)) {
+      return undefined;
+    }
+    const places = placesIn(manipulative);
+    if (target < 1 || (places !== undefined && target > places)) {
+      return undefined;
+    }
     return { ...base, input: "tap", target };
   }
 
@@ -463,36 +477,91 @@ function calcStepFor(
 }
 
 /**
- * How many pieces a tap step builds: the first stored answer written as a
- * whole number the bar can hold. "3" is three pieces. "3/4" is a fraction,
- * and reading three out of it would be this app doing the pipeline's
- * arithmetic, so it is not read; a step stored only that way has nothing to
- * build and is refused.
+ * What a step's answer does to the drawing (B107), as written. A role the
+ * spec does not name is dropped rather than read as one it does, and a
+ * highlight with no target names nothing.
  */
-function pieceCount(accepted: string[], parts: number): number | undefined {
-  for (const answer of accepted) {
-    if (!/^\d+$/.test(answer)) continue;
-    const count = Number(answer);
-    if (count >= 1 && count <= parts) return count;
+function highlightsFor(step: WireCalculationStep): CalcHighlight[] {
+  const out: CalcHighlight[] = [];
+  for (const h of step.highlights ?? []) {
+    const target = h.target?.trim();
+    const role = h.role ?? "active";
+    if (!target) continue;
+    if (role !== "active" && role !== "source" && role !== "result") continue;
+    out.push({ target, role });
   }
-  return undefined;
+  return out;
 }
 
 /**
  * What a tap step builds on, where a frame draws it.
  *
- * ONLY `fraction_bar`. The wire names five kinds and design has drawn one,
- * 17b's tap-a-piece-into-the-bar. Design ruled on 23 Sep that the other four
- * are drawn "once as a shared set", and that set has not arrived - so they
- * refuse rather than approximate. §4: the interaction IS the mechanism, and a
- * wrong one is a different task rather than a lesser version of the right one.
+ * `fraction_bar`, `array`, `number_line` and `place_value`. The wire names
+ * five kinds; design has drawn 17b's tap-a-piece-into-the-bar, and D149 the
+ * same tap into an array's places, a hop along a number line and a place
+ * value's columns. `counters` refuses: D149 says backend normalises it to
+ * dots, which the wire's kinds do not name (asked). §4: the interaction IS
+ * the mechanism, and a wrong one is a different task rather than a lesser
+ * version of the right one.
+ *
+ * A NUMBER LINE IS HOPPED ALONG FROM ITS FIRST POSITION, as a bar fills from
+ * its first cell: the wire carries no starting point for one, so a line that
+ * starts anywhere else cannot be built (asked).
+ *
+ * `rows` is the rendered row count (B100): one bar, as 17b draws, and an
+ * array of `rows` rows of `parts` places - "parts is the number of columns in
+ * one row" (backend, 9 Oct).
+ *
+ * A PLACE-VALUE BUILD TAKES ITS COUNTS FROM THE SCAFFOLD. Building 123 is one
+ * flat, two rods and three units, and one `tapCount` cannot say how many of
+ * each. The place-value scaffold can: "marks are the piece counts for the
+ * columns named by labels". So it builds only beside a place-value scaffold
+ * this app draws, into those columns, and is done when each column holds its
+ * own count - nothing here adds them up.
+ *
+ * `labels` name pieces, for a highlight to find (`pieceLabels`); no frame
+ * draws them on a build.
  */
 function manipulativeFor(
   m: Manipulative | null | undefined,
+  scaffold: CalcScaffold | undefined,
 ): CalculationSegment["manipulative"] {
-  if (!m || m.kind !== "fraction_bar") return undefined;
+  if (!m) return undefined;
   if (!Number.isInteger(m.parts) || m.parts < 1) return undefined;
-  return { kind: "fraction_bar", parts: m.parts };
+  const rows = m.rows ?? 1;
+  const pieceLabels = (m.labels ?? []).map((l) => l.trim());
+  if (m.kind === "fraction_bar") {
+    return rows === 1
+      ? { kind: "fraction_bar", parts: m.parts, pieceLabels }
+      : undefined;
+  }
+  if (m.kind === "array" && Number.isInteger(rows) && rows >= 1) {
+    return { kind: "array", parts: m.parts, rows, pieceLabels };
+  }
+  if (m.kind === "number_line") {
+    return rows === 1
+      ? { kind: "number_line", parts: m.parts, pieceLabels }
+      : undefined;
+  }
+  if (m.kind === "place_value" && scaffold?.kind === "place_value") {
+    // A build with nothing to place could only be finished by doing nothing.
+    if (!scaffold.places.some((p) => p.count > 0)) return undefined;
+    return { kind: "place_value", columns: scaffold.places };
+  }
+  return undefined;
+}
+
+/**
+ * How many pieces a bar or an array has places for, or how many hops a line
+ * of `parts` positions has room for. A place-value build has no one number
+ * to hold: each column holds its own.
+ */
+function placesIn(
+  m: NonNullable<CalculationSegment["manipulative"]>,
+): number | undefined {
+  if (m.kind === "array") return m.rows * m.parts;
+  if (m.kind === "number_line") return m.parts - 1;
+  return m.kind === "fraction_bar" ? m.parts : undefined;
 }
 
 /** A mark as a count: a whole number, or a whole number written as text. */
@@ -506,22 +575,45 @@ function countOf(mark: CheckpointScalar): number | undefined {
 }
 
 /**
- * The drawing beside the notation, read as the payload gives it.
+ * The drawing beside the notation, read by backend's definitions (B100, and
+ * 9 Oct): "rows controls rendered rows; marks are overlays/values and do not
+ * create rows. A bar may therefore have more marks than rows. label[i]
+ * belongs to mark[i] when marks exist; otherwise it belongs to scaffold part
+ * i." Each kind is drawn as its frame draws it, with the payload's values:
+ *  - `bar`: `rows` bars of `parts` cells (17b). Where there are as many marks
+ *    as bars, a mark fills its own bar from the start, its label at the
+ *    bar's start, as 17b draws `1/4 + 2/4`. Where one bar carries several
+ *    marks - SCRUM-177's own `3/5 + 1/5` as `rows: 1, marks: [3, 1]` - they
+ *    fill it one after another, in renderer order, each label under its own
+ *    cells. No marks: empty bars, a part's label under its cell;
+ *  - `array`: `rows` rows of `parts` places - "parts is the number of columns
+ *    in one row" - the marks filling them one after another in reading order
+ *    (D149);
+ *  - `place_value`: D149's three columns on one row, flats then rods then
+ *    units - "marks are the piece counts for the columns named by labels".
+ *    Ten to one each step is what the shapes say, so they hold for any three
+ *    neighbouring places; which places is the labels' to say, and D149's
+ *    "Hundreds", "Tens" and "Ones" are not drawn for a payload naming none;
+ *  - `dots`: D149's `rows` rows of `parts` round places, filled as the
+ *    array's are - D149 replaced 37c's groups of two, which read neither
+ *    `rows` nor `parts`;
+ *  - `number_line`: D149's line of `parts` positions - "cells or positions
+ *    in one row" - a marker at each mark's position, its label beneath; or,
+ *    with no marks, a part's label beneath its position.
  *
- * `marks[i]` is a quantity and `labels[i]` names it. That is SCRUM-177's own
- * worked example - `3/5 + 1/5` as `parts: 5, marks: [3, 1], labels: ["3/5",
- * "1/5"]` - and 17b's bars draw exactly it, one row per quantity. It is the
- * only reading made. Anything that does not fit is not drawn rather than drawn
- * some other way:
- *  - a mark that is not a whole number, or more than a bar or a line of
- *    `parts` can hold: drawing 2.5 cells, or clamping 7 down to 5, would be
- *    this app deciding what the picture means;
- *  - labels that do not pair one-to-one with the marks: they could be a
- *    line's tick labels, and nothing says which tick each one belongs to;
- *  - `array` and `place_value`, which no frame draws yet.
- *
- * `rows` is not read. The example sets it to 1 beside two marks, so it is not
- * the number of bars 17b draws, and the spec does not say what else it is.
+ * Those are the only readings made. Anything that does not fit is not drawn
+ * rather than drawn some other way:
+ *  - more labels than marks: a label with no mark of its own belongs nowhere;
+ *  - several marks over several bars, but not one to a bar: which bar each
+ *    belongs on is not said;
+ *  - marks that do not fit: one bar or line holding more than `parts`, or
+ *    an array more than its places - never clamped;
+ *  - a mark that is not a whole number: drawing 2.5 cells is not a reading;
+ *  - an array's or dots' marks with labels: no frame says where a label for
+ *    a run that wraps a row would go;
+ *  - place value with other than three marks, or on more than one row: D149
+ *    draws three columns, and which three two marks would be is not said;
+ *  - a line on more than one row, or a mark past its last position.
  */
 function scaffoldFor(
   scaffold: WireCalculationScaffold | null | undefined,
@@ -529,8 +621,10 @@ function scaffoldFor(
   if (!scaffold) return undefined;
   const marks = scaffold.marks ?? [];
   const labels = (scaffold.labels ?? []).map((l) => l.trim());
-  if (marks.length === 0) return undefined;
-  if (labels.length > 0 && labels.length !== marks.length) return undefined;
+  const rows = scaffold.rows ?? 1;
+  const { kind, parts } = scaffold;
+  if (!Number.isInteger(rows) || rows < 1) return undefined;
+  if (marks.length > 0 && labels.length > marks.length) return undefined;
 
   const counts: number[] = [];
   for (const mark of marks) {
@@ -542,16 +636,45 @@ function scaffoldFor(
     count,
     ...(labels[i] ? { label: labels[i] } : {}),
   }));
+  /** What the marks fill, one after another - a layout, not an answer. */
+  const filled = counts.reduce((a, b) => a + b, 0);
 
-  const { kind, parts } = scaffold;
-  if (kind === "dots") return { kind, quantities };
-  if (kind !== "bar" && kind !== "number_line") return undefined;
+  if (kind === "place_value") {
+    return rows === 1 && marks.length === PLACE_VALUE_COLUMNS
+      ? { kind, places: quantities }
+      : undefined;
+  }
   if (!Number.isInteger(parts) || parts < 1) return undefined;
-  if (counts.some((count) => count > parts)) return undefined;
-  return kind === "bar"
-    ? { kind, parts, quantities }
-    : { kind, parts, points: quantities };
+  if (kind === "number_line") {
+    if (rows !== 1) return undefined;
+    if (marks.length === 0) {
+      return labels.length <= parts
+        ? { kind, parts, points: [], partLabels: labels }
+        : undefined;
+    }
+    return counts.every((c) => c < parts)
+      ? { kind, parts, points: quantities, partLabels: [] }
+      : undefined;
+  }
+  if (kind !== "bar" && kind !== "array" && kind !== "dots") return undefined;
+  if (marks.length === 0) {
+    return labels.length <= parts
+      ? { kind, parts, rows, quantities: [], partLabels: labels }
+      : undefined;
+  }
+  if (kind === "array" || kind === "dots") {
+    if (labels.length > 0) return undefined;
+    return filled <= rows * parts
+      ? { kind, parts, rows, quantities, partLabels: [] }
+      : undefined;
+  }
+  if (counts.some((c) => c > parts)) return undefined;
+  const fits = marks.length === rows || (rows === 1 && filled <= parts);
+  return fits ? { kind, parts, rows, quantities, partLabels: [] } : undefined;
 }
+
+/** D149's place-value columns: a flat, a rod and a unit. */
+const PLACE_VALUE_COLUMNS = 3;
 
 /**
  * A step's narration (17b §5), where it has a clip. No transcript is needed

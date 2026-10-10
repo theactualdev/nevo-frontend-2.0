@@ -69,7 +69,7 @@ const variant = (steps: ReturnType<typeof step>[]) =>
   ({
     type: "co_construction",
     conceptId: "c-1",
-    fullEquation: "1/4 + 2/4",
+    fullEquation: "1/4 + 2/4 = 3/4",
     expression: "1/4 + 2/4",
     answer: "3/4",
     scaffold: null,
@@ -147,6 +147,7 @@ describe("a calculation's signals", () => {
             input: "tap",
             options: [],
             answer: "2",
+            tapCount: 2,
           }),
         ])}
         plan={PLAN}

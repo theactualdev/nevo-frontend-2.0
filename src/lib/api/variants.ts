@@ -35,11 +35,11 @@ import {
  * generated content, so §4's *"the one place modalities layer rather than
  * switch"* could not happen outside the authored demo.
  *
- * `rows` IS NOT THE PLAYER'S `rows`, and the collision is worth naming: here it
- * is how many rows of pieces to lay out (1-20, default 1); on the player's
- * authored `CalculationSegment.scaffold` it is `number[]`, the numerators of
- * the fractions being added. Mapping one onto the other would draw a bar with
- * as many divisions as there are addends.
+ * `rows` is how many rows of pieces to lay out (1-20, default 1) - the
+ * rendered row count, as on `CalculationScaffold` (B100). `fromContent`
+ * builds the kinds a frame draws: `fraction_bar` (17b, one row), `array`
+ * (D149, `rows` rows of `parts` columns) and `place_value` (D149, its
+ * piece counts per column read from the place-value scaffold).
  */
 export type ManipulativeKind =
   | "fraction_bar"
@@ -141,10 +141,13 @@ export type CalculationScaffoldKind =
 
 /**
  * "A calculation drawing described as data, never as a generated image" -
- * the spec's own description, and the whole of it. `rows`, `marks` and
- * `labels` carry no description on the wire; SCRUM-177's worked example is
- * `3/5 + 1/5` as `{kind: "bar", parts: 5, rows: 1, marks: [3, 1], labels:
- * ["3/5", "1/5"]}`, which is what `fromContent` reads them by.
+ * the spec's own description. Backend defined the rest (B100, 8 and 9 Oct):
+ * `rows` is the rendered row count, and `marks` are "overlays/values and do
+ * not create rows", so a bar may carry more marks than rows; `parts` is the
+ * cells in one row, an array's columns; `labels[i]` belongs to `marks[i]`,
+ * or to part i where there are no marks; and place value's marks are "the
+ * piece counts for the columns named by labels". `fromContent` reads them by
+ * that, and draws only what a frame draws.
  *
  * ABSENT IS AN INSTRUCTION: no `kind`, no drawing, and the front end infers
  * none.
@@ -153,10 +156,23 @@ export interface CalculationScaffold {
   kind: CalculationScaffoldKind;
   /** 1-100. */
   parts: number;
-  /** 1-20, default 1. */
+  /** The physical row count. 1-20, default 1. */
   rows?: number;
   marks?: CheckpointScalar[];
   labels?: string[];
+}
+
+/**
+ * One thing a step's choreography names (B107): 17b's denominators ringed,
+ * numerators to navy, and the result, as data. `target` is "an opaque
+ * renderer target ... such as an equation token, scaffold mark or
+ * manipulative piece id. Match it only to an id carried by the same
+ * calculation; an unknown target is ignored rather than guessed." `role`
+ * defaults to `active`. A step's highlights apply while it is asked.
+ */
+export interface CalculationHighlight {
+  target: string;
+  role?: "active" | "source" | "result";
 }
 
 export interface CalculationStep {
@@ -213,12 +229,23 @@ export interface CalculationStep {
   input?: CalculationStepEntry;
   targets?: CheckpointScalar[];
   assembles?: string;
+  /**
+   * How many pieces a `tap` step builds: a positive whole number (B102).
+   * Null on the other two inputs, and on content stored before it.
+   */
+  tapCount?: number | null;
+  /** What this step's scaffold choreography names (B107). */
+  highlights?: CalculationHighlight[];
 }
 
 export interface CalculationVariant {
   type: string;
   /** The concept this calculation teaches, when the pipeline named one. */
   conceptId?: string | null;
+  /**
+   * "The complete solved equation revealed when all co-construction steps
+   * finish" (spec; B101). The answer, so it is never the problem's stand-in.
+   */
   fullEquation: string;
   /** The problem's notation, "3/5 + 1/5". Required in the spec (SCRUM-177). */
   expression?: string;
