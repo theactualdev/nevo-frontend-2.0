@@ -1795,6 +1795,7 @@ a frame.
 **Others**
 
 - SCRUM-223: the tap sound asset.
+- SCRUM-182: the avatar redraw (and backend B63, avatar shapes, which waits on it).
 - Counsel, B30: the session timeline and narrative. Subject detail's session
   markers stay sample-only until then.
 - The "how you learn" wording. Never raised.

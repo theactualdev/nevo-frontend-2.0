@@ -901,7 +901,7 @@ reading and asked, never guessed.
 | Lesson errors — missing, failed, cancelled, couldn't open | LIVE | — (#619, #654) | NONE | — |
 | Quick check | LIVE | — (cannot be dismissed, #620; spoken, #635; Try again only, D93, #687; answers posted with `problemId`, #710) | NONE | — |
 | After-lesson check | LIVE | — (left and resumed the same day, #661, #719; the result from the server's `resultState`, #727) | BACKEND (does `POST /session` resume the check's session; does a write without `checkPosition` keep it) | — |
-| "That version didn't work." | LIVE | Shown on the server's `nothing_landed` reroute, in design's words. "Start again" reopens at the reroute's position, on the same content until backend says what a lower-depth session shows (#727) | DESIGN + LYDIA (the wording, against SCRUM-181's single "Start again") | S |
+| "That version didn't work." | LIVE | Shown on the server's `nothing_landed` reroute, in design's words. "Start again" reopens at the reroute's position, and the lower-depth session reads each segment's simplified version, falling back to its body (#727, backend 9 Oct) | DESIGN + LYDIA (the wording, against SCRUM-181's single "Start again") | S |
 | Lesson complete, summary, review answers, review session | LIVE | — (the summary's outcome from the account, #719; review answers from the account, #698; review copy from the server's outcome, #635; a housekeeping cancel keeps a review, #722) | NONE | — |
 
 ## S-A. Buildable today — priority order
