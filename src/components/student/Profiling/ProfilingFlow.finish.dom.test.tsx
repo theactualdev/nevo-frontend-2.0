@@ -20,8 +20,8 @@ import {
  *  - A withdrawn guardian's run purged once and kept recording. The capture is
  *    STOPPED now, and nothing is parked.
  *
- * The four modules and the pauses are stubbed: this is about the flow's ends,
- * not about any one activity.
+ * The three modules and the pauses are stubbed: this is about the flow's
+ * ends, not about any one activity.
  */
 
 const { holdBaseline } = vi.hoisted(() => ({ holdBaseline: vi.fn() }));
@@ -72,7 +72,6 @@ vi.mock("./PatternFlankerModule", () => ({
   PatternFlankerModule: next("m2"),
 }));
 vi.mock("./SentenceDotModule", () => ({ SentenceDotModule: next("m3") }));
-vi.mock("./DomainProbeModule", () => ({ DomainProbeModule: next("m4") }));
 vi.mock("./StretchInterstitial", () => ({
   StretchInterstitial: next("pause"),
 }));
@@ -80,7 +79,7 @@ vi.mock("./StretchInterstitial", () => ({
 /** Every screen from the intro to the completion. */
 function sitTheWholeRun() {
   fireEvent.click(screen.getByRole("button", { name: /let's go/i }));
-  for (const step of ["m1", "pause", "m2", "pause", "m3", "pause", "m4"]) {
+  for (const step of ["m1", "pause", "m2", "pause", "m3"]) {
     fireEvent.click(screen.getByRole("button", { name: step }));
   }
 }
@@ -137,7 +136,7 @@ describe("ProfilingFlow — what it parks (B9)", () => {
     sitTheWholeRun();
 
     const trials = holdBaseline.mock.calls[0][1];
-    expect(trials).toHaveLength(4);
+    expect(trials).toHaveLength(3);
     for (const trial of trials) {
       expect(Object.keys(trial).sort()).toEqual([
         "condition",
@@ -189,9 +188,9 @@ describe("ProfilingFlow — what it tells the signal stream", () => {
     sitTheWholeRun();
 
     const types = track.mock.calls.map(([type]) => type);
-    expect(types.filter((t) => t === "baseline_module_start")).toHaveLength(4);
+    expect(types.filter((t) => t === "baseline_module_start")).toHaveLength(3);
     expect(types.filter((t) => t === "baseline_module_complete")).toHaveLength(
-      4,
+      3,
     );
   });
 
@@ -208,7 +207,7 @@ describe("ProfilingFlow — what it tells the signal stream", () => {
     const marks = track.mock.calls.filter(([type]) =>
       String(type).startsWith("baseline_module_"),
     );
-    expect(marks).toHaveLength(8);
+    expect(marks).toHaveLength(6);
     for (const [type, payload] of marks) {
       expect(Object.keys(payload).sort()).toEqual(declared(type));
     }
@@ -216,7 +215,55 @@ describe("ProfilingFlow — what it tells the signal stream", () => {
       marks
         .filter(([type]) => type === "baseline_module_start")
         .map(([, payload]) => payload.moduleId),
-    ).toEqual(["grid_span", "pattern_flanker", "sentence_dot", "domain_probe"]);
+    ).toEqual(["grid_span", "pattern_flanker", "sentence_dot"]);
+  });
+});
+
+describe("ProfilingFlow — the domain probe has nothing to ask (SCRUM-175/176)", () => {
+  /*
+   * It asked questions from a bank on this device and marked them against a
+   * key on this device. Backend owns the probe bank now, and nothing can
+   * serve this run from it: the child has no account yet, and no subject id.
+   * So the module is not presented, rather than mimed.
+   */
+  it("goes from Module 3 straight to the end, with no pause and no probe", () => {
+    render(<ProfilingFlow onDone={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /let's go/i }));
+    for (const step of ["m1", "pause", "m2", "pause"]) {
+      fireEvent.click(screen.getByRole("button", { name: step }));
+    }
+
+    fireEvent.click(screen.getByRole("button", { name: "m3" }));
+
+    expect(screen.queryByRole("button", { name: "pause" })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: /first lesson/i }),
+    ).toBeInTheDocument();
+    expect(holdBaseline).toHaveBeenCalledTimes(1);
+  });
+
+  it("maps the three modules it presents, and fills all three at the end (design, 9 Oct)", () => {
+    // "A child who will do three sees three segments." It was four whatever
+    // the run held, the fourth filling at the end for a module never shown.
+    render(<ProfilingFlow onDone={vi.fn()} />);
+    const map = () => screen.getByRole("progressbar");
+
+    expect(map()).toHaveAttribute("aria-valuemax", "3");
+    expect(map().lastElementChild!.children).toHaveLength(3);
+
+    sitTheWholeRun();
+
+    expect(map()).toHaveAttribute("aria-valuemax", "3");
+    expect(map()).toHaveAttribute("aria-valuenow", "3");
+  });
+
+  it("marks no start or end for a module it never presented", () => {
+    const track = vi.fn();
+    render(<ProfilingFlow onDone={vi.fn()} track={track} />);
+
+    sitTheWholeRun();
+
+    expect(JSON.stringify(track.mock.calls)).not.toMatch(/domain_probe/);
   });
 });
 

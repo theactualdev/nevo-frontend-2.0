@@ -76,10 +76,8 @@ function aWholeRun() {
   // Module 3.
   pick(c, "reading", { choice: 2, rtMs: 2100, mode: "sentence", notSure: true });
   pick(c, "dots", { choice: 0, rtMs: 700, a: 9, b: 6, ratio: 1.5, correct: true });
-  // Module 4.
-  c.record("probe_subject", { subject: "mathematics" });
-  c.record("trial_pick", { module: "domain_probe", act: "probe", choice: 1, rtMs: 3300, subject: "mathematics", correct: true });
-  c.record("module_end", { module: "domain_probe" });
+  c.record("module_end", { module: "sentence_dot" });
+  // Module 4, the domain probe, is not presented (SCRUM-175/176).
   return c;
 }
 
@@ -87,8 +85,8 @@ describe("baselineTrials - nothing on the wire is a summary", () => {
   it("is one trial per answer, in the order they were given", () => {
     const trials = baselineTrials(aWholeRun());
 
-    // One check, one recall (its three taps are one answer, B80), five picks.
-    expect(trials).toHaveLength(7);
+    // One check, one recall (its three taps are one answer, B80), four picks.
+    expect(trials).toHaveLength(6);
     expect(trials.map((t) => t.dimension)).toEqual([
       "wmc",
       "wmc",
@@ -96,7 +94,6 @@ describe("baselineTrials - nothing on the wire is a summary", () => {
       "attention",
       "reading",
       "ans",
-      "domain",
     ]);
   });
 
@@ -149,7 +146,7 @@ describe("baselineTrials - nothing on the wire is a summary", () => {
 
 describe("baselineTrials - a pick", () => {
   it("names the condition each trial ran under", () => {
-    const [, , pattern, flanker, reading, dots, probe] = baselineTrials(
+    const [, , pattern, flanker, reading, dots] = baselineTrials(
       aWholeRun(),
     );
 
@@ -157,7 +154,6 @@ describe("baselineTrials - a pick", () => {
     expect(flanker.condition).toBe("incongruent");
     expect(reading.condition).toBe("sentence");
     expect(dots.condition).toBe("ratio_1.5");
-    expect(probe.condition).toBe("mathematics");
   });
 
   it("sends 'Not sure' as a decline, never as a wrong answer", () => {

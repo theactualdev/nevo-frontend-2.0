@@ -46,7 +46,6 @@ vi.mock("./PatternFlankerModule", () => ({
   PatternFlankerModule: next("m2"),
 }));
 vi.mock("./SentenceDotModule", () => ({ SentenceDotModule: next("m3") }));
-vi.mock("./DomainProbeModule", () => ({ DomainProbeModule: next("m4") }));
 vi.mock("./StretchInterstitial", () => ({
   StretchInterstitial: next("pause"),
 }));
@@ -114,7 +113,7 @@ const press = (name: string) =>
 
 /** Everything from Module 1 to the completion. */
 const sitTheModules = () => {
-  for (const s of ["m1", "pause", "m2", "pause", "m3", "pause", "m4"]) press(s);
+  for (const s of ["m1", "pause", "m2", "pause", "m3"]) press(s);
 };
 
 const motorTrials = () =>
