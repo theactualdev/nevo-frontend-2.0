@@ -147,6 +147,35 @@ describe("a lesson the teacher called off", () => {
     expect(screen.getByText("Your teacher took it off.")).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/saved/i);
   });
+
+  /*
+   * SCRUM-225 / D39, 8 Oct. A housekeeping cancellation keeps the lesson's
+   * reviews and a genuine retraction withdraws them; the server says which
+   * with `recallWithdrawn`. A due review was refused on any cancellation.
+   */
+  it("still opens a due review when the cancellation kept its reviews", () => {
+    state({ lesson: LESSON, unavailable: "cancelled", recallWithdrawn: false });
+    render(<LessonRoute lessonId="les-1" review reviewConceptId="c-1" />);
+
+    expect(screen.getByTestId("player")).toBeTruthy();
+    expect(screen.queryByText("Your teacher took it off.")).toBeNull();
+  });
+
+  it("refuses a due review whose reviews were withdrawn", () => {
+    state({ lesson: LESSON, unavailable: "cancelled", recallWithdrawn: true });
+    render(<LessonRoute lessonId="les-1" review reviewConceptId="c-1" />);
+
+    expect(screen.getByText("Your teacher took it off.")).toBeTruthy();
+    expect(screen.queryByTestId("player")).toBeNull();
+  });
+
+  it("still refuses the lesson itself, whatever happened to its reviews", () => {
+    state({ lesson: LESSON, unavailable: "cancelled", recallWithdrawn: false });
+    render(<LessonRoute lessonId="les-1" />);
+
+    expect(screen.getByText("Your teacher took it off.")).toBeTruthy();
+    expect(screen.queryByTestId("player")).toBeNull();
+  });
 });
 
 describe("where the child left the lesson's check (B82)", () => {
