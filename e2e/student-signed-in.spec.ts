@@ -721,7 +721,7 @@ test.describe("a signed-in student", () => {
             .locator("main button[aria-current]")
             .or(
               page.getByRole("heading", {
-                name: "Your teacher will be able to message you here soon",
+                name: "This is where you and your teacher talk",
               }),
             ),
           page.getByText(/We couldn.t load your messages/),

@@ -53,7 +53,11 @@ export const PHOTOSYNTHESIS: Lesson = {
           "It draws up water from the roots and takes in carbon dioxide from the air.",
           "Together these make glucose, the plant's food - and oxygen is given out.",
         ],
-        keyTerms: ["chlorophyll", "chloroplast", "glucose"],
+        keyTerms: [
+          { term: "chlorophyll" },
+          { term: "chloroplast" },
+          { term: "glucose" },
+        ],
         callouts: {
           [DENSITY.SIMPLIFY]: {
             label: "IN SHORT",
@@ -125,7 +129,7 @@ export const PHOTOSYNTHESIS: Lesson = {
           "They catch sunlight and turn water and air into sugar.",
           "That sugar is the plant's energy - it grows without ever eating a meal.",
         ],
-        keyTerms: ["chloroplast", "chlorophyll"],
+        keyTerms: [{ term: "chloroplast" }, { term: "chlorophyll" }],
       },
       audio: {
         heading: "Listen to this one",

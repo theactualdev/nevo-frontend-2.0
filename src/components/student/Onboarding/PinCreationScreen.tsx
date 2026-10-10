@@ -4,7 +4,11 @@ import Image from "next/image";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { Check } from "lucide-react";
 import { NevoKeyboard, useNevoKeyboardDock } from "@/components/shared";
-import { SIGN_IN_THROTTLED_COPY } from "@/components/student/Auth/signInMoments";
+import {
+  HeldPinBoxes,
+  THROTTLED_PAUSE_COPY,
+  ThrottleNote,
+} from "@/components/student/Auth/ThrottledPause";
 import { authApi } from "@/lib/api";
 import { STUDENT_PIN_LENGTH } from "@/lib/constants";
 import { USER_ROLES } from "@/lib/constants/permissions";
@@ -118,11 +122,17 @@ export const PIN_SAVE_FAILED_COPY =
  * again" under them.
  *
  * A REFUSAL IS NOT ALWAYS OURS (B68). The PIN route names its refusals now,
- * and `entryPinRefusal` reads them. A rate limit keeps this state with D68's
- * wait line under the heading instead of "That's on us - try again": frame 15
- * draws no throttled state, and that line is the one design ruled for a
- * throttled PIN door. The rest - a child who has a PIN, a pair that names
- * nobody, a held child - are other screens', and go to `onRefused`.
+ * and `entryPinRefusal` reads them. The rest - a child who has a PIN, a pair
+ * that names nobody, a held child - are other screens', and go to `onRefused`.
+ *
+ * A RATE LIMIT IS D154's PAUSE, not "That didn't save" (9 Oct: it "holds
+ * everywhere a child enters a PIN"). It was the not-saved state with D68's
+ * wait line under it. Now: "Let's take a moment", the rows HELD - dimmed,
+ * empty, inert - and the note under them; no refresh mark, no failure. The
+ * frame raises "Forgot PIN?" as its way out, which means nothing to a child
+ * choosing one, so this keeps frame 15's "Try again", which sends the kept
+ * PIN once more: with no timer to end the pause, it is the only way on.
+ * Asked of design.
  */
 type SavePhase = "entry" | "saving" | "saved" | "failed" | "throttled";
 
@@ -324,9 +334,9 @@ export function PinCreationScreen({
 
   const saved = phase === "saved";
   const saving = phase === "saving";
+  // D154's pause, not the not-saved state.
   const throttled = phase === "throttled";
-  // A rate limit is the not-saved state with D68's line under it (B68).
-  const failed = phase === "failed" || throttled;
+  const failed = phase === "failed";
   // The rows are hidden while it saves and if it does not (D61).
   const showEntry = !sso && phase === "entry";
   const showConfirmation = sso || saved;
@@ -387,26 +397,37 @@ export function PinCreationScreen({
               ? "You're signed in"
               : saved
                 ? "You're all set"
-                : failed
-                  ? PIN_SAVE_FAILED_HEADING
-                  : reset
-                    ? "Choose a new PIN"
-                    : "Create a PIN"}
-          </h2>
-          <p className="mt-3 text-[15px] text-nevo-near-black/60">
-            {sso
-              ? "We'll remember you next time"
-              : saving
-                ? PIN_SAVING_COPY
                 : throttled
-                  ? SIGN_IN_THROTTLED_COPY
+                  ? THROTTLED_PAUSE_COPY.heading
+                  : failed
+                    ? PIN_SAVE_FAILED_HEADING
+                    : reset
+                      ? "Choose a new PIN"
+                      : "Create a PIN"}
+          </h2>
+          {!throttled && (
+            <p className="mt-3 text-[15px] text-nevo-near-black/60">
+              {sso
+                ? "We'll remember you next time"
+                : saving
+                  ? PIN_SAVING_COPY
                   : failed
                     ? PIN_SAVE_FAILED_COPY
                     : "You'll use this to log in next time"}
-          </p>
+            </p>
+          )}
         </div>
 
-        {failed && (
+        {throttled && (
+          <>
+            {/* Both rows, as this screen draws them, held. */}
+            <HeldPinBoxes boxClassName="size-12" className="mt-10 gap-3" />
+            <HeldPinBoxes boxClassName="size-12" className="mt-[60px] gap-3" />
+            <ThrottleNote />
+          </>
+        )}
+
+        {(failed || throttled) && (
           <button
             type="button"
             onClick={() => {
@@ -531,7 +552,12 @@ export function PinRow({
             key={idx}
             className={cn(
               "flex size-12 items-center justify-center rounded-[10px] border-[1.5px] bg-nevo-cream shadow-[0_2px_8px_rgba(0,0,0,0.05)]",
-              isActive
+              /*
+               * A FILLED BOX KEEPS THE NAVY BORDER, as frame 27's Change PIN
+               * draws it - on PIN creation too (D132, 8 Oct): "the same
+               * component doing the same job". Only the caret's box was navy.
+               */
+              isActive || isFilled
                 ? "border-nevo-navy"
                 : error
                   ? "border-nevo-violet"

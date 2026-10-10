@@ -242,13 +242,26 @@ export interface GuidedAnswerRequest {
 /**
  * `EngineConfig` - the engine's settings for one child, typed since B24.
  *
- * THE ENGINE'S OWN INPUTS. Every value here is a parameter or a threshold the
- * engine decides with (rule 3): a reading speed, a word target, how long a
- * pause is, where support starts. None of them is an instruction to draw
- * something, and the contract does not say what any of them changes on
- * screen, so nothing reads them yet - asked of backend. Typed so a reader can
- * see what is here, and never rendered: a number about a child's reading or
- * attention is the kind of measurement Zero-Tag keeps off every surface.
+ * TWO HALVES, as backend split them on 9 Oct (B103). `reading` and `pacing`
+ * are the server's own inference parameters, "returned for transparency
+ * rather than direct UI control": a reading speed, a word target, how long a
+ * pause is. The client reports timing and applies none of them, and a number
+ * about a child's reading or attention is never rendered (Zero-Tag).
+ *
+ * `support` is the client's to apply, and each field is acted on only as far
+ * as the spec says what it does:
+ * - `initialScaffoldLevel`, "Client-applied starting level for calculation
+ *   scaffolds": the scaffold indicator's level while the solver is on screen,
+ *   until something more specific is said (`AdaptationPlan.initialScaffold`).
+ * - `comprehensionCheckInterval`, "Client-applied maximum segments between
+ *   available comprehension checks": NOT ACTED ON. The player already offers
+ *   every check a lesson carries and holds none back; it cannot close a gap
+ *   the content leaves without inventing a check. Asked.
+ * - `numberProblemsStepByStep` and `shorterTextBlocks`: no description in
+ *   the spec, so NOT ACTED ON. The solver already gives one step at a time
+ *   whatever the flag says (17b), and where a passage breaks is the
+ *   backend's (SCRUM-236), so choosing a split from a bare flag would be the
+ *   client deciding it. Asked.
  */
 export interface EngineConfig {
   version?: number;

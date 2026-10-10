@@ -267,13 +267,18 @@ describe("a first PIN the server refuses, and says why (B68)", () => {
   const refused = (status: number, code: string) =>
     new ApiError(status, "refused", { detail: { code, message: "said" } });
 
-  it("asks a throttled child to wait, in D68's words, keeping the PIN", async () => {
+  it("pauses a throttled child (D154), keeping the PIN", async () => {
     entrySetPin.mockRejectedValue(refused(429, "too_many_attempts"));
 
     await choosePin();
 
-    expect(alertText()).toContain("Let's wait a moment before trying again.");
-    expect(alertText()).not.toContain(PIN_SAVE_FAILED_COPY);
+    expect(
+      screen.getByRole("heading", { name: "Let's take a moment" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Try your PIN again in a moment. No rush."),
+    ).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain(PIN_SAVE_FAILED_COPY);
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();
   });

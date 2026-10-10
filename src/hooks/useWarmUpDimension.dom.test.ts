@@ -196,3 +196,37 @@ describe("toPrompt - the served flag decides (B65)", () => {
     ).toMatchObject({ state: "ready", dimension: "wmc", item: null });
   });
 });
+
+describe("toPrompt - a device day's id is never a probe item (B79, B81)", () => {
+  it("runs a device:* day as the device task it names", () => {
+    expect(
+      toPrompt({ dimension: "wmc", itemId: "device:wmc", served: false }),
+    ).toMatchObject({ state: "ready", dimension: "wmc", item: null });
+  });
+
+  it("does not turn a device:* id into a question, even if it came marked served", () => {
+    // Backend: device days always return `served: false`. Should a reply ever
+    // say otherwise, the namespace decides, and the device task runs.
+    const deviceDay = { ...served, dimension: "attention", itemId: "device:attention" };
+
+    expect(toPrompt(deviceDay)).toMatchObject({
+      state: "ready",
+      dimension: "attention",
+      item: null,
+    });
+    // The question task has no device version, so there is nothing to run.
+    expect(toPrompt({ ...served, itemId: "device:domain" })).toEqual({
+      state: "none",
+    });
+  });
+
+  it("still serves a probe-bank question by its UUID", () => {
+    const bank = "6f1c2b0e-8a7d-4e57-9b8e-2c4d5f6a7b8c";
+
+    expect(toPrompt({ ...served, itemId: bank })).toMatchObject({
+      state: "ready",
+      dimension: "domain",
+      item: { itemId: bank },
+    });
+  });
+});

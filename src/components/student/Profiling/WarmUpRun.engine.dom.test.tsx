@@ -203,7 +203,7 @@ describe("WarmUpRun — the question the engine served", () => {
     await settle();
 
     expect(screen.queryByText(/Your progress is saved/)).toBeNull();
-    expect(screen.getByText(/couldn't save it just now/)).toBeInTheDocument();
+    expect(screen.getByText(/Today's warm-up didn't save./)).toBeInTheDocument();
   });
 
   it("does not also send a device-task completion on a served day", async () => {
@@ -278,7 +278,7 @@ describe("WarmUpRun - a device-task day tells the account (B54)", () => {
     await settle();
 
     expect(screen.getByText("That's it for today")).toBeInTheDocument();
-    expect(screen.queryByText(/couldn't save/)).toBeNull();
+    expect(screen.queryByText(/didn't save/)).toBeNull();
   });
 
   it("goes Home from the done screen's Go on (D97)", async () => {
@@ -405,7 +405,7 @@ describe("WarmUpRun — a withdrawn guardian", () => {
 
     expect(submit).not.toHaveBeenCalled();
     expect(holdBaseline).not.toHaveBeenCalled();
-    expect(document.body.textContent).not.toMatch(/saved|couldn't save/i);
+    expect(document.body.textContent).not.toMatch(/saved|didn't save|couldn't save/i);
   });
 });
 

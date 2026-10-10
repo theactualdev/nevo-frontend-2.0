@@ -25,10 +25,10 @@ import { api } from "./client";
  * console persists lives under one top-level key, so that a shallow merge
  * cannot have the student app's preferences overwrite the teacher's.
  *
- * Accessibility preferences are deliberately NOT here: reduced motion and
- * larger text are properties of the device someone is sitting at, not of
- * their account, and they already apply instantly through the accessibility
- * context.
+ * A CHILD'S ACCESSIBILITY PREFERENCES ARE ON THEIR ACCOUNT since 8 Oct
+ * (SCRUM-226: "account-level ... not tablet-local"), through
+ * `personalSettingsApi` below and `AccessibilityContext`. They were kept off
+ * it as properties of the device; backend ruled otherwise.
  */
 
 export interface TeacherNotificationSettings {
@@ -112,4 +112,25 @@ export const settingsApi = {
   /** Merged server-side, so only the keys sent are touched. */
   update: (patch: SettingsBag) =>
     api.put<{ settings: SettingsBag }>("/api/settings/me", patch),
+};
+
+/**
+ * The account's own preferences, `GET/PUT /api/v1/settings/me` - the pair that
+ * supersedes the bag above and reads the same column (`PersonalSettingsResponse`,
+ * `PersonalSettingsWrite`).
+ *
+ * `preferences` is an open object: the contract names no keys, so the keys
+ * inside it are ours to keep stable. A PUT MERGES what it is sent into what is
+ * stored, so a write touches only the keys it carries.
+ */
+export interface PersonalSettings {
+  userId: string;
+  preferences: Record<string, unknown>;
+}
+
+export const personalSettingsApi = {
+  get: () => api.get<PersonalSettings>("/api/v1/settings/me"),
+
+  update: (preferences: Record<string, unknown>) =>
+    api.put<PersonalSettings>("/api/v1/settings/me", { preferences }),
 };

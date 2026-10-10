@@ -109,8 +109,9 @@ export function dimensionForToday(now = new Date()): BaselineDimension {
  *
  * The done state is the title and "Go on", and claims no save (D80, D97, 6
  * Oct). It said "Your progress is saved" once the write landed, and design
- * dropped that line. It still says when the write failed (D126 is asking
- * whether to keep that). (This note used to say the screen "is not wired to"
+ * dropped that line. When the write failed it is D126's save-failed state
+ * (8 Oct): a neutral mark and one line, see `SaveFailedMark`. (This note used
+ * to say the screen "is not wired to"
  * `POST /api/baseline/submit`. It was wired for some time; the note went
  * stale and was the reason nobody checked WHAT it was submitting, which for
  * longer still was the task name and a duration, and none of the measurement.
@@ -165,8 +166,8 @@ export function WarmUpRun({
   const [saved, setSaved] = useState<boolean | null>(null);
   /*
    * Nothing was kept, by choice: the guardian withdrew. The done state then
-   * says nothing about saving - not "we couldn't save it", which would blame a
-   * failure that did not happen.
+   * says nothing about saving - not "Today's warm-up didn't save", which would
+   * report a failure that did not happen.
    */
   const [withheld, setWithheld] = useState(false);
   /** The served question's pick, sent to the prompt's own endpoint (B8). */
@@ -263,6 +264,8 @@ export function WarmUpRun({
     (hydrated &&
       prompt.state !== "waiting" &&
       warmUpDoneFor(doneToday, getSession()?.userId));
+  /** The write settled and failed. A withdrawal is not a failure. */
+  const unsaved = !withheld && saved === false;
 
   const finish = useCallback(() => {
     if (!submitted.current) {
@@ -277,10 +280,10 @@ export function WarmUpRun({
          * Nothing is derived, nothing is parked, nothing is sent, and the raw
          * stream goes the same way it always does.
          *
-         * `saved` is left null rather than set false. False renders "we
-         * couldn't save it just now - that's on us, not you", and that is not
-         * what happened: we chose not to. A child is not told their work
-         * failed when it did not.
+         * `saved` is left null rather than set false. False renders D126's
+         * "Today's warm-up didn't save.", and that is not what happened: we
+         * chose not to. A child is not told their work failed when it did
+         * not.
          *
          * AND THEN THE DONE STATE, which this used to return before reaching.
          * The route is full-screen with no other way out, so a withdrawn
@@ -440,9 +443,13 @@ export function WarmUpRun({
             The frame's phone sizes below `sm`: a 64px badge with a 32px
             check and a 19px title. Tablet and desktop draw 80px and 22px.
           */}
-          <span className="flex size-16 items-center justify-center rounded-full bg-nevo-navy motion-safe:animate-nevo-pop sm:size-20">
-            <Check className="size-8 text-nevo-cream sm:size-9" strokeWidth={2.4} />
-          </span>
+          {unsaved ? (
+            <SaveFailedMark />
+          ) : (
+            <span className="flex size-16 items-center justify-center rounded-full bg-nevo-navy motion-safe:animate-nevo-pop sm:size-20">
+              <Check className="size-8 text-nevo-cream sm:size-9" strokeWidth={2.4} />
+            </span>
+          )}
           <div>
             <h3 className="text-[19px] font-semibold tracking-[-0.01em] text-nevo-navy sm:text-[22px]">
               That&apos;s it for today
@@ -452,13 +459,14 @@ export function WarmUpRun({
               and the button. "Nevo is tuned to how you're doing today. Your
               progress is saved." is gone from it.
 
-              KEPT WHEN IT DID NOT, until D126 answers. The frame draws no
-              failed state; this says so only once the write has settled and
-              failed, never while it is in flight.
+              D126's ONE LINE WHEN IT DID NOT (8 Oct), in the frame's words:
+              no apology, no reason, no retry - the warm-up is 45 seconds
+              and the child cannot fix it. Only once the write has settled
+              and failed, never while it is in flight.
             */}
-            {!withheld && saved === false && (
-              <p className="mt-2.5 max-w-[320px] text-[15.5px] leading-[1.55] text-nevo-near-black">
-                Thanks for doing that. We couldn&apos;t save it just now - that&apos;s on us, not you.
+            {unsaved && (
+              <p className="mt-3 max-w-[300px] text-[14.5px] leading-[1.55] text-pretty text-nevo-near-black/70 sm:text-[15.5px]">
+                Today&apos;s warm-up didn&apos;t save. It won&apos;t change your lessons.
               </p>
             )}
           </div>
@@ -483,6 +491,23 @@ export function WarmUpRun({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * D126's quiet neutral mark, "not the success check": a pale violet disc the
+ * badge's size, with a short navy bar across it - 40% of the disc, so 26px on
+ * a phone and 32px from tablet up. It does not pop in.
+ */
+function SaveFailedMark() {
+  return (
+    <span
+      data-testid="warmup-save-failed-mark"
+      aria-hidden
+      className="flex size-16 items-center justify-center rounded-full bg-nevo-violet/22 sm:size-20"
+    >
+      <span className="h-[3px] w-[26px] rounded-full bg-nevo-navy sm:w-8" />
+    </span>
   );
 }
 
@@ -1114,10 +1139,10 @@ function WarmUpGrid({
       act: "wmc",
       cell,
       correct,
-      // Each tap is timed from the one before it IN THE SAME RECALL, which
-      // `posInSeq` says (`baselineTrials`). Neither it nor `round_complete`
-      // was recorded here once, and a child who did it perfectly looked like
-      // one who never finished.
+      // The recall goes up as ONE trial, ended by a wrong tap or by
+      // `round_complete` (`baselineTrials`, B80). Neither `posInSeq` nor
+      // `round_complete` was recorded here once, and a child who did it
+      // perfectly looked like one who never finished.
       posInSeq: pos.current,
       length: seq.length,
       ...tapPoint(e),

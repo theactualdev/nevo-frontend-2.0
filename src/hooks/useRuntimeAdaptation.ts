@@ -109,7 +109,8 @@ export interface RuntimeAdaptation {
 /**
  * THE ADAPTATIONS A CHILD SAW APPLIED, kept by the player because only the
  * player knows when something reached the screen (B42): a reshape of the text
- * the system chose, a modality change from an offer taken, a hint. Not
+ * the system chose, a modality change from an offer taken, a hint, a
+ * Socratic panel rendered, a density spacing changed mid-session (B74). Not
  * offers, and not instructions the screen could not show.
  *
  * `lastAt` is `performance.now()` at that moment (rule 4). Held in a ref and
