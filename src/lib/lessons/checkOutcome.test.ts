@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LessonProgressResponse } from "@/lib/api/lessons";
-import { checkOutcomeFrom } from "./checkOutcome";
+import { checkOutcomeFrom, rerouteFrom, resultStateFrom } from "./checkOutcome";
 
 /**
  * "From the check-in" is the server's (B26). These fields were never set, so
@@ -69,5 +69,80 @@ describe("the check-in's outcome", () => {
       }),
     );
     expect(out?.mastered).toEqual(["Halves"]);
+  });
+});
+
+describe("how the lesson went, as the server says (B98)", () => {
+  const REROUTE = {
+    sessionId: "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d",
+    lessonId: "lesson-1",
+    depth: "lower" as const,
+    segmentPosition: 0,
+    reason: "nothing_landed" as const,
+  };
+
+  it("is the server's word, from the completed row", () => {
+    expect(resultStateFrom(row({ resultState: "partly_landed" }))).toBe(
+      "partly_landed",
+    );
+    expect(resultStateFrom(row({ resultState: "nothing_landed" }))).toBe(
+      "nothing_landed",
+    );
+  });
+
+  it("is nothing from a row that is not the completion, or says nothing", () => {
+    expect(
+      resultStateFrom(row({ status: "exited", resultState: "nothing_landed" })),
+    ).toBeNull();
+    expect(resultStateFrom(row({ resultState: null }))).toBeNull();
+    expect(resultStateFrom(row())).toBeNull();
+    expect(resultStateFrom(null)).toBeNull();
+  });
+
+  it("is nothing for a value it does not know", () => {
+    expect(
+      resultStateFrom(row({ resultState: "mastered" as never })),
+    ).toBeNull();
+  });
+
+  it("follows a reroute only when nothing landed", () => {
+    expect(
+      rerouteFrom(row({ resultState: "nothing_landed", reroute: REROUTE })),
+    ).toEqual(REROUTE);
+    expect(
+      rerouteFrom(row({ resultState: "partly_landed", reroute: REROUTE })),
+    ).toBeNull();
+  });
+
+  it("never sends an unattempted lesson down this way - it resumes", () => {
+    expect(
+      rerouteFrom(
+        row({
+          resultState: "not_attempted",
+          reroute: { ...REROUTE, reason: "not_attempted" },
+        }),
+      ),
+    ).toBeNull();
+    // Nor by a reroute the server gave for that reason, whatever the state.
+    expect(
+      rerouteFrom(
+        row({
+          resultState: "nothing_landed",
+          reroute: { ...REROUTE, reason: "not_attempted" },
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it("has nothing to follow without the server's reroute, or a place in it", () => {
+    expect(rerouteFrom(row({ resultState: "nothing_landed" }))).toBeNull();
+    expect(
+      rerouteFrom(
+        row({
+          resultState: "nothing_landed",
+          reroute: { ...REROUTE, segmentPosition: -1 },
+        }),
+      ),
+    ).toBeNull();
   });
 });

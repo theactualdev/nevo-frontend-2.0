@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, ClipboardCheck } from "lucide-react";
 import { Button } from "@/components/shared";
+import type { ResultState } from "@/lib/api/lessons";
 import type { CheckOutcome } from "@/lib/lessons/checkOutcome";
 import type { Assessment } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -53,8 +54,8 @@ export function AfterLessonAssessment({
   onLeave,
   onComplete,
   resumeAt,
-  landedBefore = 0,
-  landedPending = false,
+  result,
+  resultPending = false,
   outcome,
   reading = false,
   onAudioBusy,
@@ -75,13 +76,13 @@ export function AfterLessonAssessment({
    */
   resumeAt?: number;
   /**
-   * How many of the questions answered before a resume landed, as the server
-   * marked them. Null while that is not known, and then the result claims
-   * nothing about it. Zero for a check that was not resumed.
+   * How the lesson went, as the SERVER says it (B98) - see `GrowthResult`.
+   * Null when a live lesson's verdict is not known; absent where no server
+   * will ever give one, the signed-out walkthrough.
    */
-  landedBefore?: number | null;
-  /** Those answers are still being read back. */
-  landedPending?: boolean;
+  result?: ResultState | null;
+  /** The verdict is still on its way, with the completion write. */
+  resultPending?: boolean;
   /**
    * The server's outcome of the check-in (B26), once the completion write has
    * brought it back. Absent, the result draws only what the lesson itself
@@ -118,16 +119,6 @@ export function AfterLessonAssessment({
   const [selected, setSelected] = useState<string | null>(null);
   // A wrong confirm flips the question into its recovery state (violet, locked).
   const [revealed, setRevealed] = useState(false);
-  /*
-   * How many landed first time.
-   *
-   * `confirm` computed this and threw it away, so the result screen showed the
-   * navy success mark, "You're getting the hang of this", and every
-   * `masteredConcepts` entry ticked - to a child who had just got every
-   * question wrong. The two concepts they had failed were the two ticked as
-   * mastered.
-   */
-  const [gotRight, setGotRight] = useState(0);
   // When the current question was put in front of the child.
   const shownAt = useRef<number | null>(null);
   useEffect(() => {
@@ -147,17 +138,9 @@ export function AfterLessonAssessment({
   if (stage === "result") {
     return (
       <GrowthResult
-        // Right answers from before a resume count too. Unknown before it,
-        // a right answer since still means something landed.
-        landed={
-          landedBefore === null
-            ? gotRight > 0
-              ? gotRight
-              : null
-            : gotRight + landedBefore
-        }
-        // Which heading is true waits on them, unless one landed since.
-        held={landedPending && gotRight === 0}
+        verdict={result}
+        // Which mark and heading are true waits on the server's verdict.
+        held={resultPending}
         outcome={outcome ?? undefined}
         assessment={assessment}
         onFinish={onFinish}
@@ -192,7 +175,6 @@ export function AfterLessonAssessment({
         ? {}
         : { responseTimeMs: Math.max(0, Math.round(performance.now() - asked)) }),
     });
-    if (correct) setGotRight((n) => n + 1);
     if (correct) advance();
     else setRevealed(true);
   };
@@ -392,10 +374,19 @@ function Intro({
  * who got nothing right, so that state used to render the success mark and
  * tick the very concepts they had just missed.
  *
- * So when NOTHING landed, the concepts move to the revisit treatment the frame
- * already draws, and the mark and heading stop claiming progress. Every other
- * outcome renders exactly as drawn - a child who got one of two right still
- * sees design's screen, which is what its copy was written for.
+ * So when NOTHING landed, the mark is the frame's revisit mark and the heading
+ * is not drawn (D143, confirmed 8 Oct). Every other outcome renders exactly as
+ * drawn - a child who got one of two right still sees design's screen, which
+ * is what its copy was written for.
+ *
+ * WHETHER ANYTHING LANDED IS THE SERVER'S WORD (B98, 8 Oct): `resultState`,
+ * derived from its own marks. This screen counted the child's right answers
+ * and called zero "nothing landed"; it counts nothing now. Where a live
+ * lesson's verdict cannot be known - the completion write failed - the mark,
+ * heading and note claim nothing either way. The signed-out walkthrough, which
+ * no server marks, shows the frame as drawn. When the server says nothing
+ * landed AND sends the child back through, the player shows SCRUM-181's
+ * screen instead of this one - see `rerouteFrom`.
  *
  * No score either way: still concepts, never numbers.
  *
@@ -409,8 +400,7 @@ function Intro({
  * nothing landed, and a concept to revisit is its name and the revisit mark.
  *
  * WHICH CONCEPT LANDED IS THE SERVER'S ANSWER NOW (B26). It marks the stored
- * answers and sends the two lists and the note; they are drawn as sent, and
- * the move above applies only to the authored walkthrough's own lists. A
+ * answers and sends the two lists and the note; they are drawn as sent. A
  * concept the server counts as landed is not ours to move.
  *
  * The nothing-landed note no longer says "Nevo will bring it back when you're
@@ -419,7 +409,7 @@ function Intro({
  * a next-review signal behind it.
  */
 function GrowthResult({
-  landed,
+  verdict,
   held,
   outcome,
   assessment,
@@ -427,12 +417,15 @@ function GrowthResult({
   onReviewAnswers,
   reading,
 }: {
-  /** How many questions landed first time. Null when that is not known. */
-  landed: number | null;
   /**
-   * Whether anything landed is still being read back. The mark and heading
-   * keep their place unseen until it is, rather than one heading being
-   * swapped for the other in front of the child.
+   * The server's `resultState`. Null: a live lesson whose verdict is not
+   * known. Undefined: no server marks this lesson (the walkthrough).
+   */
+  verdict: ResultState | null | undefined;
+  /**
+   * The verdict is still on its way. The mark and heading keep their place
+   * unseen until it lands, rather than one being swapped for the other in
+   * front of the child.
    */
   held: boolean;
   /** The server's outcome (B26); absent, the lesson's own lists. */
@@ -450,22 +443,27 @@ function GrowthResult({
     "text-[15px] font-medium",
     reading && [READING_BODY, READING_INK],
   );
-  const nothingLanded = landed === 0 && assessment.questions.length > 0;
+  const nothingLanded = verdict === "nothing_landed";
+  // The frame's screen: where the server says something landed, and in the
+  // walkthrough. While the verdict is on its way it holds that place, unseen.
+  const asDrawn =
+    !nothingLanded &&
+    (held ||
+      verdict === undefined ||
+      verdict === "landed" ||
+      verdict === "partly_landed");
   /*
    * B26: THE SERVER'S LISTS WHERE IT SENT THEM. A live lesson carries none of
    * its own, so before the completion write answers - or when it fails - the
    * section is simply not drawn. The authored walkthrough keeps its own.
    */
-  const masteredIn = outcome
+  const mastered = outcome
     ? outcome.mastered
     : (assessment.masteredConcepts ?? []);
-  const revisitIn = outcome
+  const revisit = outcome
     ? outcome.revisit
     : (assessment.revisitConcepts ?? []);
   const resultNote = outcome ? outcome.note : assessment.resultNote;
-  const moved = nothingLanded && !outcome;
-  const mastered = moved ? [] : masteredIn;
-  const revisit = moved ? [...masteredIn, ...revisitIn] : revisitIn;
 
   return (
     <div className="flex min-h-[100dvh] flex-col justify-center bg-nevo-cream px-6 text-nevo-near-black">
@@ -481,11 +479,16 @@ function GrowthResult({
               <span className="size-[18px] rounded-full bg-nevo-violet" />
             </span>
           ) : (
-            <span className="mx-auto flex size-20 items-center justify-center rounded-full bg-nevo-navy motion-safe:animate-nevo-pop">
-              <Check className="size-[38px] text-nevo-cream" strokeWidth={2.6} />
-            </span>
+            asDrawn && (
+              <span className="mx-auto flex size-20 items-center justify-center rounded-full bg-nevo-navy motion-safe:animate-nevo-pop">
+                <Check
+                  className="size-[38px] text-nevo-cream"
+                  strokeWidth={2.6}
+                />
+              </span>
+            )
           )}
-          {!nothingLanded && (
+          {asDrawn && (
             <h2
               className={cn(
                 "mt-[26px] text-center text-[23px] font-semibold tracking-[-0.01em] sm:text-[26px]",

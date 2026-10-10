@@ -26,8 +26,9 @@ function msSince(start: number | null): number | null {
  * NO "SEE IT EXPLAINED" (design D93, confirmed 6 Oct). The frame's recovery
  * state draws "Try again" alone. It went back to the segment and explained
  * nothing - no field carries an explanation. A child who cannot reach the
- * answer is the Socratic hand-off's to move on (SCRUM-241), which the backend
- * triggers and which waits on that trigger - see `SocraticPanel`.
+ * answer is the Socratic hand-off's to move on (SCRUM-241): the server says
+ * so on the reply to a miss, and the player closes this sheet for the panel -
+ * see `handOffFrom` in `LessonPlayer`, and `SocraticPanel`.
  *
  * Mount keyed on the segment id so the chosen answer resets per segment.
  *

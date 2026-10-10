@@ -55,6 +55,7 @@ import { ADJUSTMENT_ACTIONS } from "@/lib/constants/affect";
 import { densityForAction } from "@/lib/lessons/densityForAction";
 import { densitySpacing } from "@/lib/lessons/densitySpacing";
 import { depthShown, type DepthShown } from "@/lib/lessons/depthShown";
+import { atLowerDepth, NOTHING_SIMPLIFIED } from "@/lib/lessons/lowerDepth";
 import { scaffoldAttemptFor } from "@/lib/lessons/scaffoldAttempt";
 import { scaffoldsApi } from "@/lib/api/scaffolds";
 import { useAssignmentNote } from "@/hooks/useAssignmentNote";
@@ -62,6 +63,7 @@ import { isChunkable } from "@/lib/lessons/chunk";
 import {
   LESSON_STATUS,
   lessonsApi,
+  type LessonQuestionAttempt,
   type LessonQuestionAttemptWrite,
 } from "@/lib/api/lessons";
 import { schedulerApi } from "@/lib/api/scheduler";
@@ -72,7 +74,11 @@ import {
   checkResumeAt,
   type CheckLeft,
 } from "@/lib/lessons/checkResume";
-import { checkOutcomeFrom } from "@/lib/lessons/checkOutcome";
+import {
+  checkOutcomeFrom,
+  rerouteFrom,
+  resultStateFrom,
+} from "@/lib/lessons/checkOutcome";
 import {
   REVIEW_COPY,
   reviewCompletionCopy,
@@ -91,6 +97,7 @@ import { FeedbackStrip } from "./FeedbackStrip";
 import { InteractiveSegment } from "./InteractiveSegment";
 import { LeaveLessonDialog } from "./LeaveLessonDialog";
 import { LessonComplete } from "./LessonComplete";
+import { LessonMessage } from "./LessonMessage";
 import { ModalitySuggestionPill } from "./ModalitySuggestionPill";
 import { ModuleBoundaryScreen } from "./ModuleBoundaryScreen";
 import { OfflineBanner } from "./OfflineBanner";
@@ -137,6 +144,19 @@ const FEEDBACK_MS = 3500;
 /** One object, so the signal session is not told the same ending twice. */
 const COMPLETED: SessionOutcome = { completionStatus: "completed" };
 
+/** SCRUM-181's nothing-landed screen (design D35), verbatim. */
+const REROUTED = {
+  title: "That version didn't work.",
+  body: "Nevo is taking you through this lesson again, a simpler way.",
+  action: "Start again",
+} as const;
+
+/** Design's ending for a partial offline copy (D142, 8 Oct), verbatim. */
+const PARTIAL_ENDING = {
+  heading: "That's as far as this one goes for now.",
+  note: "We'll pick up the rest when you're back online.",
+} as const;
+
 /** A calculation segment whose Interactive modality routes to the solver (§8). */
 function isCalculation(segment: LessonSegment): boolean {
   return Boolean(segment.calculationVariant) && Boolean(segment.calculation);
@@ -181,7 +201,7 @@ function openingModality(
  * interaction and publishes the session into `LessonContext`.
  */
 export function LessonPlayer({
-  lesson,
+  lesson: given,
   plan,
   review = false,
   reviewConceptId,
@@ -194,6 +214,8 @@ export function LessonPlayer({
   progressRow = null,
   lastWorkedAt = null,
   adaptSegments,
+  depth,
+  onStartAgain,
 }: {
   lesson: Lesson;
   plan: AdaptationPlan | null;
@@ -255,7 +277,39 @@ export function LessonPlayer({
   review?: boolean;
   /** The concept a review session is for; absent on an ordinary lesson. */
   reviewConceptId?: string;
+  /**
+   * The depth this session runs at, where it is known before it opens: the
+   * server's reroute that Start again follows. Otherwise the session says so
+   * itself when it opens - see `lowerDepth`.
+   */
+  depth?: "standard" | "lower";
+  /**
+   * SCRUM-181's Start again: open the lesson afresh from this zero-based
+   * segment, the server's reroute's place, at the reroute's depth. Absent,
+   * the screen is not offered.
+   */
+  onStartAgain?: (
+    segmentPosition: number,
+    depth: "standard" | "lower",
+  ) => void;
 }) {
+  /*
+   * SCRUM-178: A LOWER-DEPTH SESSION READS EACH SEGMENT'S SIMPLER VERSION, and
+   * the normal body where there is none (backend, 9 Oct) - see `atLowerDepth`.
+   * From the first frame when the reroute already said so (Start again).
+   * When it is the session's own answer, it lands after the first segment is
+   * on screen, so it applies from the next segment entered - rewording the
+   * text a child has started reading is the snap rule 7 forbids (the same
+   * rule as `entryDensity`). Lower stays lower for the rest of the session.
+   */
+  const [lowerDepth, setLowerDepth] = useState(depth === "lower");
+  const { lesson, simplified } = useMemo(
+    () =>
+      lowerDepth
+        ? atLowerDepth(given)
+        : { lesson: given, simplified: NOTHING_SIMPLIFIED },
+    [given, lowerDepth],
+  );
   // Every exit from the lesson - see `useLessonExit`.
   const exitTo = useLessonExit();
   const total = lesson.segments.length;
@@ -277,6 +331,13 @@ export function LessonPlayer({
   // ids are invented and a 404 would be ours, not the network's.
   const progress = useLessonProgress(lesson.id, live, assignmentId);
   const { report: reportProgress } = progress;
+  /*
+   * The server's reroute (SCRUM-178), off the completion write's answer: it
+   * only ever comes back on a completed row, so the session it closes ended
+   * completed - and says so even if the child starts again from the result,
+   * before Continue would have said it. See the SCRUM-181 screen below.
+   */
+  const reroute = live ? rerouteFrom(progress.saved) : null;
 
   // Signals ride the BACKEND's session id, not the local one above - see
   // `useSignals`. Null until `POST /session` answers, which the hook holds for.
@@ -298,7 +359,7 @@ export function LessonPlayer({
     progress.sessionId,
     lesson.id,
     "lesson",
-    ending,
+    ending ?? (reroute ? COMPLETED : null),
     applied,
   );
   const { setActiveLesson } = useLesson();
@@ -393,6 +454,27 @@ export function LessonPlayer({
     () => new Set(),
   );
   const [checkOpen, setCheckOpen] = useState(false);
+  /*
+   * B94 / SCRUM-241: THE SERVER HANDING A CHILD OFF FROM A QUICK CHECK to the
+   * Socratic panel (38a), with the prompts it sent. `run` remounts the panel
+   * for each hand-off, so a second one arrives open as the first did.
+   * `answeredRight` is read where the reply lands, which state is not: a
+   * hand-off for an earlier miss arriving after a right answer is moot.
+   * `handedOff` is the checks the server moved the child past
+   * (`advanceAfterHandoff`) - never counted as passed.
+   */
+  const [handoff, setHandoff] = useState<{
+    segmentId: string;
+    run: number;
+    prompts: PanelPrompt[];
+    advance: boolean;
+  } | null>(null);
+  const [handedOff, setHandedOff] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const answeredRight = useRef<Set<string>>(new Set());
+  // Segments whose hand-off panel has been counted as applied (B74).
+  const handoffsApplied = useRef<Set<string>>(new Set());
   // Segments are the lesson itself; the assessment takes over the screen once
   // the last segment is done (growth framing — never a score), then completion.
   // Review sessions open on their entry screen first (37d).
@@ -505,18 +587,11 @@ export function LessonPlayer({
   /*
    * B49: A CHECK LEFT PART WAY REOPENS WHERE IT WAS LEFT, the same day.
    * Decided once: as the lesson opens (B82, `checkOpensAt`), or as the child
-   * moves into the check - see `beginCheck`. `landed` is how many of the
-   * answers from before landed, once read back; `reading` until that read
-   * has answered.
+   * moves into the check - see `beginCheck`. Nothing about what landed before
+   * rides with it: how the check went is the server's `resultState` (B98).
    */
-  const [checkResume, setCheckResume] = useState<{
-    at: number;
-    landed: number | null;
-    reading: boolean;
-  } | null>(() =>
-    checkOpensAt === null
-      ? null
-      : { at: checkOpensAt, landed: null, reading: true },
+  const [checkResume, setCheckResume] = useState<{ at: number } | null>(() =>
+    checkOpensAt === null ? null : { at: checkOpensAt },
   );
   // The answers still on their way, which the completion waits for.
   const attemptWrites = useRef<Promise<unknown>[]>([]);
@@ -819,6 +894,19 @@ export function LessonPlayer({
     }
     bodyRef.current?.focus();
   }, [segment.id, modality]);
+  /*
+   * D148: "SEGMENT 3 OF 10" IS SAID ONCE, WHEN THE SEGMENT OPENS - "not on
+   * every interaction inside it" (design, 8 Oct). It is the group's name, so a
+   * screen reader says it whenever focus lands on the group or comes back
+   * into it. Two things inside a segment did that: a modality taken from the
+   * suggestion rebuilds the body and focus lands on it again, and a child who
+   * stepped out to the chips or the hint and came back walked into it again.
+   * So the name is dropped for the rest of the visit once focus has left the
+   * group, and a rebuild for a new modality comes up without it. A new
+   * segment - or the same one opened again - is named afresh. The line above
+   * the progress bar still shows it throughout.
+   */
+  const [positionSaidOn, setPositionSaidOn] = useState<string | null>(null);
 
   // time_on_segment: one event per segment, emitted when it's left (index
   // change, or the segments phase ending) or on unmount. Keyed on `index` so
@@ -1253,6 +1341,12 @@ export function LessonPlayer({
     const nextSegment = lesson.segments[next];
     const nextPlan = livePlanFor(nextSegment.id);
     setIndex(next);
+    // Opening a segment names it, a return visit included (D148).
+    setPositionSaidOn(null);
+    // A session that opened lower reads lower from here on (SCRUM-178). Only
+    // ever with a move, so the text changes as a segment opens, never under
+    // one being read.
+    if (progress.opened?.depth === "lower") setLowerDepth(true);
     setEntryDensity({
       segmentId: nextSegment.id,
       level: nextPlan?.densityLevel ?? null,
@@ -1353,12 +1447,56 @@ export function LessonPlayer({
 
   /** Next chevron — an unpassed Quick Check intercepts the advance. */
   const handleNext = () => {
-    if (segment.quickCheck && !passedChecks.has(segment.id)) {
+    if (
+      segment.quickCheck &&
+      !passedChecks.has(segment.id) &&
+      !handedOff.has(segment.id)
+    ) {
       setCheckOpen(true);
       return;
     }
     advancePastSegment();
   };
+
+  /*
+   * B94: THE SERVER SAID HAND OFF. The answer to a quick check came back with
+   * `handoffTo: "socratic_panel"` - after three misses the server marked, not
+   * any count kept here - so the check gives way to the panel (38a): the sheet
+   * closes, and the panel arrives open with the server's prompts and nothing
+   * to accept or decline. Prompts with no id or no words are not drawn; a
+   * hand-off with none left draws nothing (rule 5), and the check stays.
+   */
+  const handOffFrom = (segmentId: string, stored: LessonQuestionAttempt) => {
+    if (stored.handoffTo !== "socratic_panel") return;
+    if (answeredRight.current.has(segmentId)) return;
+    const prompts = (stored.guidedPrompts ?? []).flatMap((p) =>
+      p?.id && p.prompt?.trim() ? [{ id: p.id, prompt: p.prompt }] : [],
+    );
+    if (prompts.length === 0) return;
+    setCheckOpen(false);
+    setHandoff((prev) => ({
+      segmentId,
+      run: (prev?.run ?? 0) + 1,
+      prompts,
+      advance: stored.advanceAfterHandoff === true,
+    }));
+  };
+
+  /*
+   * 38a's return: "forward, never back to the question". Only when the server
+   * said to move on after it (`advanceAfterHandoff`); otherwise the panel has
+   * no ending and the check is still the way on. Moving on is not passing:
+   * the check is never marked passed, its misses stand for the review, and
+   * the panel on screen already made a right answer later `after_hint` - so
+   * nothing records this as known first time.
+   */
+  const keepGoingAfterHandoff = () => {
+    setHandedOff((prev) => new Set(prev).add(segment.id));
+    setHandoff(null);
+    advancePastSegment();
+  };
+  // The hand-off on this segment, if one arrived for it.
+  const handoffHere = handoff?.segmentId === segment.id ? handoff : null;
 
   const pickDensity = (id: string) => {
     const d = id as Density;
@@ -1372,8 +1510,8 @@ export function LessonPlayer({
   };
 
   // Frame contract: the manual pick is navy; the system's standing density is
-  // violet (glow-once) and KEEPS showing beside a different manual pick. The
-  // sparkle rides the unfollowed system chip (AdaptiveToggleBar).
+  // violet and KEEPS showing beside a different manual pick. No glow and no
+  // sparkle on it since D144 - see `AdaptiveToggleBar`.
   /*
    * ONE PATH, TWO CALLERS - design, 23 Sep. The engine's `simplify`, `slower`
    * and `expand` are the same operation as the child's own chips, so they
@@ -1438,7 +1576,12 @@ export function LessonPlayer({
    * cleanup reads the segment being left before the next one's version
    * lands here - and the segment id it is stamped with says so either way.
    */
-  const depthNow = depthShown(segment, modality, effectiveDensity);
+  const depthNow = depthShown(
+    segment,
+    modality,
+    effectiveDensity,
+    simplified.has(segment.id),
+  );
   useEffect(() => {
     textShown.current = { segmentId: segment.id, depth: depthNow };
   }, [segment.id, depthNow]);
@@ -1478,6 +1621,8 @@ export function LessonPlayer({
 
   const acceptSuggestion = useCallback(() => {
     if (suggested) setModality(suggested);
+    // The body comes back in the new modality without its position (D148).
+    setPositionSaidOn(segment.id);
     setLastSuggestedIndex(index);
     setSuggestionSpent(true);
     settleSuggestion(SIGNAL_EVENT_TYPES.MODALITY_SUGGESTION_ACCEPTED);
@@ -1485,7 +1630,7 @@ export function LessonPlayer({
     trackBusy(BUSY_REASON.MODALITY_SWITCH, BUSY_PHASE.END);
     // A modality change, applied (B42).
     if (suggested) noteApplied();
-  }, [suggested, index, trackBusy, settleSuggestion, noteApplied]);
+  }, [suggested, index, segment.id, trackBusy, settleSuggestion, noteApplied]);
 
   const dismissSuggestion = useCallback(() => {
     setLastSuggestedIndex(index);
@@ -1538,9 +1683,14 @@ export function LessonPlayer({
    * its completion waits for it (`pendingProgress`). One the server refused
    * is not held, as before. `clientAttemptId` is the answer's own, kept with
    * it, so one whose reply was lost is not filed twice when it is sent again.
+   *
+   * `onStored` hears the server's answer to it - the stored row, marked -
+   * which is where a hand-off arrives (B94). An answer held for later has no
+   * answer yet, and none is waited for.
    */
   const saveAttempt = (
     answer: Omit<LessonQuestionAttemptWrite, "sessionId"> | null,
+    onStored?: (stored: LessonQuestionAttempt) => void,
   ) => {
     if (!live || !answer) return;
     const body = { ...answer, clientAttemptId: randomId() };
@@ -1556,19 +1706,23 @@ export function LessonPlayer({
       return;
     }
     attemptWrites.current.push(
-      lessonsApi
-        .saveAttempt(lesson.id, { sessionId: id, ...body })
-        .catch((cause: unknown) => {
+      lessonsApi.saveAttempt(lesson.id, { sessionId: id, ...body }).then(
+        // Beside the failure, not before it: what the answer leads to is no
+        // reason to hold the answer again.
+        (stored) => onStored?.(stored),
+        (cause: unknown) => {
           if (retryable(cause)) {
             holdAnswer(lesson.id, { sessionId: id, body }, owner);
           }
-        }),
+        },
+      ),
     );
   };
 
   /*
    * The answers given before the exit, read back from the account for Review
-   * Answers and so the result knows what landed before.
+   * Answers. Read for the picks only: whether anything landed is the
+   * server's verdict (B98), not a count made here.
    */
   const readAnswersBefore = useCallback(
     (at: number, asked: string) => {
@@ -1587,11 +1741,9 @@ export function LessonPlayer({
             ...reviewAnswers.current,
           ];
           saveReviewAnswers(lesson.id, reviewAnswers.current);
-          setCheckResume({ at, landed: before.landed, reading: false });
         })
-        // Unread, what landed before stays unknown and the result claims
-        // nothing about it.
-        .catch(() => setCheckResume({ at, landed: null, reading: false }));
+        // Unread, Review Answers simply has fewer picks to show.
+        .catch(() => {});
     },
     [lesson],
   );
@@ -1615,7 +1767,7 @@ export function LessonPlayer({
       : null;
     if (at === null) return;
     const asked = progress.sessionId;
-    setCheckResume({ at, landed: null, reading: Boolean(asked) });
+    setCheckResume({ at });
     if (at >= questions.length) finishCheck();
     if (asked) readAnswersBefore(at, asked);
   };
@@ -1651,9 +1803,7 @@ export function LessonPlayer({
 
   /*
    * And its answers from before are read back once there is a session to
-   * read them under - which this early there seldom is yet. If the session
-   * cannot be opened at all, there is nothing to read them with, so what
-   * landed before is unknown rather than held (`landedPending`).
+   * read them under - which this early there seldom is yet.
    */
   const answersAsked = useRef(false);
   const checkSession = progress.sessionId;
@@ -1662,8 +1812,15 @@ export function LessonPlayer({
     answersAsked.current = true;
     readAnswersBefore(checkOpensAt, checkSession);
   }, [checkOpensAt, checkSession, readAnswersBefore]);
-  const noSessionComing = !checkSession && progress.completionFailed;
-  const landedPending = (checkResume?.reading ?? false) && !noSessionComing;
+
+  /*
+   * B98: HOW THE CHECK WENT IS THE SERVER'S VERDICT, and it comes back on the
+   * completion write. Until that write answers the result keeps its place
+   * unseen; if it fails - or no session ever opens - there is no verdict, and
+   * the result claims none. The walkthrough has no server to give one.
+   */
+  const verdictPending =
+    live && !progress.completionSaved && !progress.completionFailed;
 
   const requestExit = () => {
     trackEvent(SIGNAL_EVENT_TYPES.EXIT_ATTEMPT, { segmentId: segment.id });
@@ -1700,6 +1857,32 @@ export function LessonPlayer({
   const partsLeft =
     attentionOn && modality === MODALITY.TEXT && partsLeftOn === segment.id;
 
+  /*
+   * SCRUM-181: "THAT VERSION DIDN'T WORK." - when the completion write comes
+   * back saying nothing landed and the server has rerouted the lesson (B98,
+   * SCRUM-178). It replaces the check's result, or the completion screen if
+   * the child moved on before the write answered. Design's words verbatim,
+   * and no score, count or percentage. Start again follows the server's
+   * reroute: the lesson opens again from its `segmentPosition`, at its
+   * `depth`, and its session is the one `POST /session` then hands back -
+   * the same rerouted session (backend, 9 Oct). See `LessonRoute`.
+   * A lesson nobody attempted is never sent here; it resumes from Home.
+   */
+  if (
+    reroute &&
+    onStartAgain &&
+    (phase === "assessment" || phase === "complete")
+  ) {
+    return (
+      <LessonMessage
+        title={REROUTED.title}
+        body={REROUTED.body}
+        actionLabel={REROUTED.action}
+        onAction={() => onStartAgain(reroute.segmentPosition, reroute.depth)}
+      />
+    );
+  }
+
   // The entry, assessment and completion screens each take over the full
   // screen — their own layout, no player chrome.
   if (phase === "review-entry") {
@@ -1726,8 +1909,8 @@ export function LessonPlayer({
         reading={readingOn}
         onAudioBusy={(phase) => trackBusy(BUSY_REASON.MEDIA_PLAYING, phase)}
         resumeAt={checkResume?.at}
-        landedBefore={checkResume ? checkResume.landed : 0}
-        landedPending={landedPending}
+        result={live ? resultStateFrom(progress.saved) : undefined}
+        resultPending={verdictPending}
         outcome={live ? checkOutcomeFrom(progress.saved) : null}
         onComplete={finishCheck}
         onLeave={(checkPosition) => {
@@ -1736,10 +1919,10 @@ export function LessonPlayer({
            *
            * `exited` at the last segment, the same record the leave dialog
            * makes - so the lesson stays unfinished and comes back on Home to
-           * pick up. No `resultState`: its `not_attempted` and
-           * `nothing_landed` send the child down a depth, which is a verdict,
-           * and an unfinished check has none to give. The answers already
-           * given were stored one by one as they were confirmed.
+           * pick up. No `resultState`, on this write or any: it is the
+           * server's to derive from its own marks since B98, and the write's
+           * field is deprecated. The answers already given were stored one by
+           * one as they were confirmed.
            *
            * B49: and WHERE in the check, so it reopens there the same day.
            * None from the intro - a check not begun has no place to keep.
@@ -1879,6 +2062,22 @@ export function LessonPlayer({
               : savedNote
           }
           doneLabel="Done"
+        />
+      );
+    }
+    /*
+     * D142: A PARTIAL COPY'S END IS NOT THE LESSON DONE. It stopped short of
+     * its modules, recap and check and is written `exited`, not completed (see
+     * `markComplete`), so "That's the lesson done." was untrue. Design's words,
+     * 8 Oct, and nothing else: no saved line, since nothing here was completed
+     * to save, and no summary, which is the recap this copy lacks.
+     */
+    if (partial) {
+      return (
+        <LessonComplete
+          onDone={() => exitTo(LESSONS_HREF)}
+          heading={PARTIAL_ENDING.heading}
+          note={PARTIAL_ENDING.note}
         />
       );
     }
@@ -2107,25 +2306,36 @@ export function LessonPlayer({
             />
           )}
           {feedback && <FeedbackStrip message={feedback} />}
-          {contentHere &&
-            action === ADJUSTMENT_ACTIONS.SHOW_SOCRATIC_PANEL &&
-            guidedPrompts.length > 0 && (
+          {(handoffHere ||
+            (contentHere &&
+              action === ADJUSTMENT_ACTIONS.SHOW_SOCRATIC_PANEL &&
+              guidedPrompts.length > 0)) && (
               <SocraticPanel
-                key={`socratic-${segment.id}`}
-                prompts={guidedPrompts}
+                key={
+                  handoffHere
+                    ? `handoff-${segment.id}-${handoffHere.run}`
+                    : `socratic-${segment.id}`
+                }
+                prompts={handoffHere ? handoffHere.prompts : guidedPrompts}
                 /*
-                 * SCRUM-241: ONLY THE CHILD'S OWN WAY IN IS WIRED. The panel
-                 * opens here from the confusion prompt, so it ends on the way
-                 * back to the question - the check, while it is still to
-                 * pass. The hand-off ending is built and waits on a trigger:
-                 * nothing on the contract says "hand this child off", and
-                 * `show_socratic_panel` is this confusion prompt, not that.
+                 * SCRUM-241: TWO WAYS IN, AND THE PANEL IS TOLD WHICH. The
+                 * server's hand-off (B94, `handOffFrom`) arrives open and ends
+                 * on Keep going, on into the next segment. Otherwise it is
+                 * the engine's `show_socratic_panel`, opened by the child from
+                 * the confusion prompt, and ends on the way back to the
+                 * question - the check, while it is still to pass. One panel
+                 * at a time: a hand-off is the one on screen.
                  */
-                entry="self"
+                entry={handoffHere ? "handoff" : "self"}
                 onTryAgain={
-                  segment.quickCheck && !passedChecks.has(segment.id)
+                  !handoffHere &&
+                  segment.quickCheck &&
+                  !passedChecks.has(segment.id)
                     ? () => setCheckOpen(true)
                     : undefined
+                }
+                onKeepGoing={
+                  handoffHere?.advance ? keepGoingAfterHandoff : undefined
                 }
                 onShown={(promptIds) => {
                   // Reached through the panel is not reached first time: a
@@ -2136,6 +2346,17 @@ export function LessonPlayer({
                       segmentId: segment.id,
                       promptId,
                     });
+                  /*
+                   * B74: A RENDERED SOCRATIC PANEL IS AN ADAPTATION APPLIED.
+                   * The hand-off's is counted here, once per segment - a
+                   * second hand-off on the same segment is the same panel
+                   * arriving again. The engine's own panel is counted with
+                   * the other applied adaptations, not here.
+                   */
+                  if (handoffHere && !handoffsApplied.current.has(segment.id)) {
+                    handoffsApplied.current.add(segment.id);
+                    noteApplied();
+                  }
                 }}
                 onAnswer={(promptId, reply, outcome) =>
                   answerGuided(promptId, outcome, reply)
@@ -2161,11 +2382,21 @@ export function LessonPlayer({
              * `role="group"` with the position as its name so that landing here
              * announces "Module 2 of 3 · Segment 1 of 4 in this module" before
              * the content - the orientation a sighted child gets for free from
-             * the line above the progress bar.
+             * the line above the progress bar. Once per opening (D148): see
+             * `positionSaidOn`.
              */
             tabIndex={-1}
             role="group"
-            aria-label={positionLine(lesson, index)}
+            aria-label={
+              positionSaidOn === segment.id
+                ? undefined
+                : positionLine(lesson, index)
+            }
+            onBlur={(e) => {
+              // Focus leaving the group, not moving inside it.
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null))
+                setPositionSaidOn(segment.id);
+            }}
             className={cn(
               "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-300 motion-safe:ease-nevo-slide focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-nevo-navy",
               // D25: the engine's density, as spacing and nothing else.
@@ -2286,7 +2517,10 @@ export function LessonPlayer({
                   (o) => o.id === answered.selectedId,
                 ),
               }),
+              // B94: the server's answer may hand this child off.
+              (stored) => handOffFrom(segment.id, stored),
             );
+            if (correct) answeredRight.current.add(segment.id);
             noteAnswer(correct);
             // Which pick first got it, for the scheduler - a miss re-opens the
             // check until it is passed, so "passed" is true of everyone.

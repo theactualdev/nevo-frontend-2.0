@@ -780,14 +780,14 @@ describe("opening a lesson straight into a check left part way (B82)", () => {
     );
   });
 
-  it("holds the result's heading only while the answers can still be read", () => {
-    // The session is still opening: what landed before is on its way.
+  it("holds the result's heading only while the server's verdict can still come (B98)", () => {
+    // The session is still opening: the completion, and its verdict, wait.
     progress.sessionId = null;
     const { unmount } = open({ progressRow: left({ checkPosition: 2 }) });
     expect(document.querySelector(".invisible")).not.toBeNull();
     unmount();
 
-    // It could not open: nothing to read them with, so nothing is held.
+    // It could not open: no completion, so no verdict, and nothing is held.
     progress.completionFailed = true;
     open({ progressRow: left({ checkPosition: 2 }) });
     expect(document.querySelector(".invisible")).toBeNull();

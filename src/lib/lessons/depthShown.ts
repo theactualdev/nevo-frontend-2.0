@@ -22,11 +22,16 @@ export type DepthShown = "standard" | "simplified" | "expanded";
  * ANY OTHER MODALITY IS STANDARD TOO. A picture, a recording or an activity
  * has one version only, so nothing simplified or expanded was on screen -
  * which is the fact this field exists to carry (D23), not an absence of one.
+ *
+ * A LOWER-DEPTH SESSION'S OWN TEXT IS THE SIMPLER ONE (SCRUM-178): where
+ * `atLowerDepth` made the simplified version the segment's text, that text on
+ * screen is `simplified`, though no density asked for it.
  */
 export function depthShown(
   segment: LessonSegment,
   modality: Modality,
   density: Density | null,
+  ownTextSimplified = false,
 ): DepthShown {
   const body = modality === MODALITY.TEXT ? segment.text?.body : undefined;
   if (!body) return "standard";
@@ -34,5 +39,5 @@ export function depthShown(
     return "simplified";
   if (density === DENSITY.EXPAND && body.expand !== undefined)
     return "expanded";
-  return "standard";
+  return ownTextSimplified ? "simplified" : "standard";
 }

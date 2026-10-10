@@ -175,7 +175,7 @@ describe("no instruction is the standard text (D23)", () => {
 
     for (const name of ["Simplify", "Expand"]) {
       expect(chip(name)).toHaveAttribute("aria-pressed", "false");
-      expect(chip(name)!.className).not.toMatch(/animate-nevo-glow/);
+      expect(chip(name)!.className).not.toMatch(/bg-nevo-violet/);
     }
   });
 
@@ -184,7 +184,16 @@ describe("no instruction is the standard text (D23)", () => {
 
     expect(body()).toContain(SHORT);
     expect(chip("Simplify")).toHaveAttribute("aria-pressed", "true");
-    expect(chip("Simplify")!.className).toMatch(/animate-nevo-glow/);
+    expect(chip("Simplify")!.className).toMatch(/bg-nevo-violet/);
+  });
+
+  it("lights it without a glow or a sparkle (D144)", () => {
+    // "Everything that reacts visibly to a child's input is coming out."
+    render(<LessonPlayer lesson={AUTHORED} plan={planWith("simplify")} />);
+
+    const bar = screen.getByRole("group", { name: "Lesson pacing" });
+    expect(bar.innerHTML).not.toMatch(/animate-/);
+    expect(bar.querySelector("svg")).toBeNull();
   });
 
   it("claims no density trigger on the way into a segment", () => {
