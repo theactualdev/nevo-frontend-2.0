@@ -31,8 +31,12 @@ export interface TextContent {
    * the density's `body` string becomes the lead line above them.
    */
   slowerSteps?: string[];
-  /** Expand surfaces key terms as violet chips under the fuller prose. */
-  keyTerms?: string[];
+  /**
+   * Key terms, as violet chips beside the standard text and under Expand.
+   * A term with a `definition` opens it in place when tapped (design, 9 Oct);
+   * the authored demo's terms carry none and stay plain chips.
+   */
+  keyTerms?: { term: string; definition?: string }[];
   /** Per-density callout (e.g. Simplify "IN SHORT", Expand "WORD EQUATION"). */
   callouts?: Partial<
     Record<Density | "default", { label: string; text: string; sub?: string }>

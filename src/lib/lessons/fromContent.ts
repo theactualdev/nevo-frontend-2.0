@@ -20,6 +20,7 @@ import type {
   CalculationVariant as WireCalculationVariant,
   CalculationStep as WireCalculationStep,
   EquationCallout,
+  KeyTerm,
   Manipulative,
 } from "@/lib/api/variants";
 import type { CheckpointScalar } from "@/lib/api/checkpoints";
@@ -158,7 +159,7 @@ function textFor(segment: ContentSegment, lessonTitle: string): TextContent {
    */
   const variant = segment.textVariant;
   const keyPoints = textsOf(variant?.keyPoints);
-  const keyTerms = textsOf(variant?.keyTerms?.map((t) => t?.term));
+  const keyTerms = keyTermsOf(variant?.keyTerms);
   const equations = equationsOf(variant?.equationCallouts);
   const readingChunks = chunksOf(segment.readingChunks, base);
   return {
@@ -173,9 +174,8 @@ function textFor(segment: ContentSegment, lessonTitle: string): TextContent {
      * them - and `keyTerms` and `equationCallouts` are typed as of 8 Oct.
      * Omitted rather than empty: the segment draws a box only for what came.
      *
-     * A KEY TERM'S `definition` IS NOT CARRIED. The contract says a child
-     * "can inspect" it; the frames draw the term as a chip and nothing that
-     * opens. How it is inspected is asked of design rather than drawn here.
+     * A KEY TERM'S `definition` comes with it: design, 9 Oct, "A definition
+     * appears in place when the child taps the term."
      */
     ...(keyPoints ? { keyPoints } : {}),
     ...(keyTerms ? { keyTerms } : {}),
@@ -192,6 +192,20 @@ function textsOf(
     .filter((s): s is string => typeof s === "string")
     .map((s) => s.trim())
     .filter(Boolean);
+  return out.length > 0 ? out : undefined;
+}
+
+/** Each term with words in it, and its definition only where it has one. */
+function keyTermsOf(
+  terms: readonly KeyTerm[] | null | undefined,
+): TextContent["keyTerms"] {
+  const out = (terms ?? []).flatMap((t) => {
+    const term = typeof t?.term === "string" ? t.term.trim() : "";
+    if (!term) return [];
+    const definition =
+      typeof t.definition === "string" ? t.definition.trim() : "";
+    return [definition ? { term, definition } : { term }];
+  });
   return out.length > 0 ? out : undefined;
 }
 

@@ -135,7 +135,7 @@ describe("an accommodation the plan carries reaches the child", () => {
       <LessonPlayer lesson={LESSON} plan={planWith({ attention: true })} />,
     );
 
-    expect(screen.getByText("Part 1 of 3")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tap to continue" })).toBeInTheDocument();
     expect(screen.getByText("One idea here.")).toBeInTheDocument();
     expect(screen.queryByText(/A third idea here/)).not.toBeInTheDocument();
   });
@@ -147,7 +147,7 @@ describe("an accommodation the plan carries reaches the child", () => {
       <LessonPlayer lesson={LESSON} plan={planWith({ attention: false })} />,
     );
 
-    expect(screen.queryByText("Part 1 of 3")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Tap to continue" })).toBeNull();
     expect(screen.getByText(THREE)).toBeInTheDocument();
   });
 
@@ -155,7 +155,7 @@ describe("an accommodation the plan carries reaches the child", () => {
     // The state every signed-in child was actually in.
     render(<LessonPlayer lesson={LESSON} plan={planWith(undefined)} />);
 
-    expect(screen.queryByText("Part 1 of 3")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Tap to continue" })).toBeNull();
   });
 });
 

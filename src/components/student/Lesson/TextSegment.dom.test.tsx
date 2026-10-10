@@ -165,8 +165,9 @@ describe("text on screen that is not the body the chunks were cut from", () => {
       <TextSegment content={standIn} density={null} attention />,
     );
 
+    // The first of the device's three parts, alone.
     expect(screen.getByText("Plants feed themselves on light.")).toBeInTheDocument();
-    expect(screen.getByText("Part 1 of 3")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tap to continue" })).toBeInTheDocument();
     expect(container.querySelector("[data-chunk-id]")).toBeNull();
   });
 
@@ -258,8 +259,23 @@ describe("the tap-to-continue flow, on the server's chunks", () => {
       <TextSegment content={content({ readingChunks: two })} density={null} attention />,
     );
 
+    // On the device the first part would be its first sentence alone.
     expect(screen.getByText(two[0].text)).toBeInTheDocument();
-    expect(screen.getByText("Part 1 of 2")).toBeInTheDocument();
+    expect(screen.queryByText(two[1].text)).toBeNull();
+  });
+
+  it("counts nothing: no part number and no total", () => {
+    // Design, 9 Oct: "Drop it. It counts the server's chunks, and nothing
+    // about chunking is ever surfaced to a child." Nor does it count the
+    // device's parts in its place.
+    for (const over of [{ readingChunks: CHUNKS }, {}]) {
+      const { container, unmount } = render(
+        <TextSegment content={content(over)} density={null} attention />,
+      );
+
+      expect(visibleText(container)).not.toMatch(/\bpart\b|\d+ of \d+/i);
+      unmount();
+    }
   });
 
   it("reports the part on screen, and passes it when the child taps on", () => {
@@ -291,7 +307,10 @@ describe("the payload's boxes, where the frame draws them (SCRUM-224, D24)", () 
       [DENSITY.SIMPLIFY]: "Plants feed themselves on light.",
     },
     keyPoints: ["Plants feed themselves.", "Light is the fuel."],
-    keyTerms: ["chlorophyll", "glucose"],
+    keyTerms: [
+      { term: "chlorophyll", definition: "The green colour in a leaf." },
+      { term: "glucose", definition: "The sugar a plant makes." },
+    ],
     equations: [
       { equation: "Carbon dioxide + Water → Glucose + Oxygen", label: "Word equation" },
       { equation: "6CO2 + 6H2O → C6H12O6 + 6O2" },
@@ -303,8 +322,15 @@ describe("the payload's boxes, where the frame draws them (SCRUM-224, D24)", () 
 
     const box = screen.getByText("IN SHORT").parentElement!;
     expect(visibleText(box)).toBe("IN SHORT Plants feed themselves. Light is the fuel.");
-    // Expand's own, not here.
-    expect(screen.queryByText("chlorophyll")).toBeNull();
+  });
+
+  it("keeps the key terms beside the standard body: they are part of the segment", () => {
+    // Design, 9 Oct: "key terms and equations sit beside standard text. They
+    // are part of the segment rather than a form of support."
+    render(<TextSegment content={boxes} density={null} />);
+
+    expect(screen.getByRole("button", { name: "chlorophyll" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "glucose" })).toBeInTheDocument();
   });
 
   it("keeps the equations beside the standard body, which may not repeat them", () => {
@@ -327,6 +353,7 @@ describe("the payload's boxes, where the frame draws them (SCRUM-224, D24)", () 
 
     expect(screen.getByText("IN SHORT")).toBeInTheDocument();
     expect(screen.queryByText(/6CO2/)).toBeNull();
+    expect(screen.queryByText("chlorophyll")).toBeNull();
   });
 
   it("puts the key terms and the equations under Expand, and not IN SHORT", () => {
@@ -346,13 +373,13 @@ describe("the payload's boxes, where the frame draws them (SCRUM-224, D24)", () 
     expect(visibleText(unlabelled)).toBe("6CO2 + 6H2O → C6H12O6 + 6O2");
   });
 
-  it("draws no key points or key terms under Slower, and keeps the equations", () => {
+  it("draws no key points under Slower, and keeps the terms and equations", () => {
     // Slower on a lesson with no authored steps is the standard body in
-    // parts, so its equations stay with it.
+    // parts, so what is part of the segment stays with it.
     render(<TextSegment content={boxes} density={DENSITY.SLOWER} />);
 
     expect(screen.queryByText("IN SHORT")).toBeNull();
-    expect(screen.queryByText("chlorophyll")).toBeNull();
+    expect(screen.getByText("chlorophyll")).toBeInTheDocument();
     expect(screen.getByText("6CO2 + 6H2O → C6H12O6 + 6O2")).toBeInTheDocument();
   });
 
@@ -360,5 +387,83 @@ describe("the payload's boxes, where the frame draws them (SCRUM-224, D24)", () 
     render(<TextSegment content={content()} density={null} />);
 
     expect(screen.queryByText("IN SHORT")).toBeNull();
+  });
+});
+
+describe("a key term's definition, in place when tapped (design, 9 Oct)", () => {
+  /*
+   * "A definition appears in place when the child taps the term. Not a
+   * glossary, not a separate screen, and not permanently expanded."
+   */
+  const terms = content({
+    keyTerms: [
+      { term: "chlorophyll", definition: "The green colour in a leaf." },
+      { term: "glucose", definition: "The sugar a plant makes." },
+      { term: "leaf" },
+    ],
+  });
+  const chip = (name: string) => screen.getByRole("button", { name });
+
+  it("is closed until the child taps the term", () => {
+    render(<TextSegment content={terms} density={null} />);
+
+    expect(screen.queryByText("The green colour in a leaf.")).toBeNull();
+    expect(chip("chlorophyll")).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("opens under the terms on a tap, and says which term opened it", () => {
+    render(<TextSegment content={terms} density={null} />);
+
+    fireEvent.click(chip("chlorophyll"));
+
+    const definition = screen.getByText("The green colour in a leaf.");
+    expect(chip("chlorophyll")).toHaveAttribute("aria-expanded", "true");
+    expect(chip("chlorophyll")).toHaveAttribute("aria-controls", definition.id);
+    // The segment's own body type, not a caption or a tooltip.
+    expect(definition.className).toMatch(/leading-\[1\.75\]/);
+  });
+
+  it("closes on a second tap", () => {
+    render(<TextSegment content={terms} density={null} />);
+
+    fireEvent.click(chip("chlorophyll"));
+    fireEvent.click(chip("chlorophyll"));
+
+    expect(screen.queryByText("The green colour in a leaf.")).toBeNull();
+    expect(chip("chlorophyll")).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("shows one at a time", () => {
+    render(<TextSegment content={terms} density={null} />);
+
+    fireEvent.click(chip("chlorophyll"));
+    fireEvent.click(chip("glucose"));
+
+    expect(screen.queryByText("The green colour in a leaf.")).toBeNull();
+    expect(screen.getByText("The sugar a plant makes.")).toBeInTheDocument();
+    expect(chip("chlorophyll")).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("takes reading support's type and card where it applies", () => {
+    render(<TextSegment content={terms} density={null} reading />);
+
+    fireEvent.click(chip("glucose"));
+
+    const definition = screen.getByText("The sugar a plant makes.");
+    expect(definition.className).toMatch(/text-\[18px\] leading-\[2\]/);
+    expect(definition.className).toMatch(/bg-\[#e5dfd3\]/);
+  });
+
+  it("leaves a term with no definition a plain chip, with nothing to open", () => {
+    render(<TextSegment content={terms} density={null} />);
+
+    expect(screen.getByText("leaf").closest("button")).toBeNull();
+  });
+
+  it("is touched at 44px though drawn at the frame's size", () => {
+    render(<TextSegment content={terms} density={null} />);
+
+    expect(chip("glucose").className).toMatch(/\bh-11\b/);
+    expect(chip("glucose").className).toMatch(/cursor-pointer/);
   });
 });

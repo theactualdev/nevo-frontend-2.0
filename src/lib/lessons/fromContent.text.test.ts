@@ -64,20 +64,22 @@ describe("the text variant's boxes (SCRUM-224)", () => {
     ]);
   });
 
-  it("carries each key term's term, and not its definition", () => {
-    // How a child inspects a definition is asked of design; the frames draw a
-    // chip with the term and nothing that opens.
+  it("carries each key term with its definition, which the child can open", () => {
+    // Design, 9 Oct: "A definition appears in place when the child taps the
+    // term." A blank definition is no definition, and the chip opens nothing.
     const text = textOf(
       variant({
         keyTerms: [
           { term: "chlorophyll", definition: "The green colour in a leaf." },
-          { term: "glucose", definition: "The sugar a plant makes." },
+          { term: " glucose ", definition: "  " },
         ],
       }),
     );
 
-    expect(text.keyTerms).toEqual(["chlorophyll", "glucose"]);
-    expect(JSON.stringify(text)).not.toMatch(/green colour in a leaf/);
+    expect(text.keyTerms).toEqual([
+      { term: "chlorophyll", definition: "The green colour in a leaf." },
+      { term: "glucose" },
+    ]);
   });
 
   it("carries each equation, with its label only where it has one", () => {

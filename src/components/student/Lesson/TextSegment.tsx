@@ -4,6 +4,7 @@ import {
   Fragment,
   useCallback,
   useEffect,
+  useId,
   useRef,
   useState,
   type RefObject,
@@ -93,23 +94,22 @@ export function TextSegment({
   const callout = content.callouts?.[density ?? "default"];
   const steps = density === DENSITY.SLOWER ? content.slowerSteps : undefined;
   const expand = density === DENSITY.EXPAND;
-  const keyTerms = expand ? content.keyTerms : undefined;
   /*
-   * WHERE THE PAYLOAD'S BOXES GO (SCRUM-224, D24) is where the Lesson Player
-   * frame draws them, by density: Expand is "more depth + key terms + equation
-   * callout", and every other view but Slower is the body with "IN SHORT"
-   * under it - the key points. Slower draws neither.
+   * WHERE THE PAYLOAD'S BOXES GO (SCRUM-224, D24).
    *
-   * EXCEPT THE EQUATIONS, WHICH ALSO SIT BESIDE THE STANDARD BODY. Backend, 9
-   * Oct: an equation callout "is not guaranteed to be repeated in body", so
-   * drawn under Expand alone, a child reading the standard text - in one
-   * block or in parts - could lose an equation outright. The box is Expand's
-   * own. This placement is INTERIM, pending design's answer on whether key
-   * terms sit beside the standard text too; a reshape (Simplify) still draws
-   * the frame's view, and that is part of the same question.
+   * KEY TERMS AND EQUATIONS ARE PART OF THE SEGMENT, "rather than a form of
+   * support" (design, 9 Oct), so they sit beside the standard text - in one
+   * block or in parts - as well as under Expand, where the Lesson Player
+   * frame draws them. A reshape (Simplify) draws the frame's own view. For
+   * the equations it is not only placement: backend, 9 Oct, an equation
+   * callout "is not guaranteed to be repeated in body".
+   *
+   * Key points are the frame's "IN SHORT", under every view but Expand and
+   * Slower.
    */
-  const equations =
-    expand || body === content.body.default ? content.equations : undefined;
+  const besideText = expand || body === content.body.default;
+  const keyTerms = besideText ? content.keyTerms : undefined;
+  const equations = besideText ? content.equations : undefined;
   const keyPoints =
     !expand && density !== DENSITY.SLOWER ? content.keyPoints : undefined;
   /*
@@ -188,16 +188,7 @@ export function TextSegment({
       )}
 
       {keyTerms && keyTerms.length > 0 && (
-        <div className="mt-5 flex flex-wrap gap-2">
-          {keyTerms.map((term) => (
-            <span
-              key={term}
-              className="rounded-full bg-nevo-violet/18 px-3 py-1.5 text-[13px] font-medium text-nevo-navy"
-            >
-              {term}
-            </span>
-          ))}
-        </div>
+        <KeyTerms terms={keyTerms} className={bodyType} reading={reading} />
       )}
 
       {equations && equations.length > 0 && (
@@ -252,6 +243,74 @@ export function TextSegment({
         </div>
       )}
     </article>
+  );
+}
+
+/** The frame's key-term chip: violet, navy text, fully round. */
+const CHIP =
+  "rounded-full bg-nevo-violet/18 px-3 py-1.5 text-[13px] font-medium text-nevo-navy";
+
+/**
+ * The segment's key terms as the frame's chips. Design, 9 Oct: "A definition
+ * appears in place when the child taps the term. Not a glossary, not a
+ * separate screen, and not permanently expanded."
+ *
+ * So a term with a definition is a button that opens it right under the
+ * chips, in the segment's own body type - reading support's included - and
+ * closes it on a second tap. One at a time: opening another closes the first.
+ * A term with no definition stays a plain chip with nothing to open.
+ *
+ * Drawn at the frame's size and touched at 44px: the button is the hit area,
+ * the inner span is the chip, and the negative margin keeps the row the
+ * frame draws (the affective pill does the same).
+ */
+function KeyTerms({
+  terms,
+  className,
+  reading,
+}: {
+  terms: { term: string; definition?: string }[];
+  className: string;
+  reading: boolean;
+}) {
+  const [open, setOpen] = useState<number | null>(null);
+  const definitionId = useId();
+  const definition = open === null ? undefined : terms[open]?.definition;
+  return (
+    <div className="mt-5">
+      <div className="flex flex-wrap gap-2">
+        {terms.map(({ term, definition: has }, i) =>
+          has ? (
+            <button
+              key={i}
+              type="button"
+              aria-expanded={open === i}
+              aria-controls={open === i ? definitionId : undefined}
+              onClick={() => setOpen(open === i ? null : i)}
+              className="-my-1.5 inline-flex h-11 cursor-pointer items-center"
+            >
+              <span className={CHIP}>{term}</span>
+            </button>
+          ) : (
+            <span key={i} className={CHIP}>
+              {term}
+            </span>
+          ),
+        )}
+      </div>
+      {definition && (
+        <p
+          id={definitionId}
+          className={cn(
+            "mt-3",
+            className,
+            reading && "rounded-[12px] bg-[#e5dfd3] px-5 py-4",
+          )}
+        >
+          {definition}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -364,6 +423,11 @@ function useChunkViews(
  * (SCRUM-234), and B23's on-device split only where it did not. Each part
  * that is a server chunk reports as one: `entered` as it shows, `passed` when
  * the child taps on from it.
+ *
+ * NO COUNT OF THE PARTS. It read "Part 1 of 3", and with the server's chunks
+ * that counted chunks. Design, 9 Oct: "Drop it... nothing about chunking is
+ * ever surfaced to a child." "Tap to continue" alone says there is more,
+ * and the last part simply has none.
  */
 function ChunkedBody({
   body,
@@ -398,16 +462,16 @@ function ChunkedBody({
    * Without this the attention accommodation fabricates a reading signal. A
    * chunk is a third of the body and so always fits: any scroll of the column
    * reads as its bottom, and the player would send that as the whole segment
-   * read. A child who stopped at Part 1 of 3 would be reported to the
-   * adaptation engine as having read all of it, and the engine learns from
-   * that.
+   * read. A child who stopped at the first of three parts would be reported
+   * to the adaptation engine as having read all of it, and the engine learns
+   * from that.
    *
    * Worse, it would have been wrong for precisely the children this
    * accommodation exists to help: only a child WITH the attention
    * accommodation is ever chunked, so only their signal would be corrupted.
    *
-   * Reported on mount as well as on change, because Part 1 of 3 is already a
-   * claim - "a third", not "all of it".
+   * Reported on mount as well as on change, because the first of three parts
+   * is already a claim - "a third", not "all of it".
    */
   const total = parts.length;
   useEffect(() => {
@@ -473,14 +537,10 @@ function ChunkedBody({
   const last = part === parts.length - 1;
   return (
     <div ref={shown as RefObject<HTMLDivElement | null>} className="mt-4">
-      <span className="font-mono text-[10px] font-semibold tracking-[0.08em] text-nevo-near-black/40 uppercase">
-        Part {part + 1} of {parts.length}
-      </span>
       <p
         key={part}
         data-chunk-id={chunkId}
         className={cn(
-          "mt-2",
           className,
           reading && "rounded-[12px] bg-[#e5dfd3] px-5 py-4",
           "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300",
