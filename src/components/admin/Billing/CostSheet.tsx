@@ -56,7 +56,7 @@ const CADENCE: Record<Pricing["pricingPlan"], string> = {
  * SCRUM-98's access window, which the schema itself calls "a fact the cost
  * sheet has to state" - a per-term school is not buying the holidays.
  */
-const WINDOW: Record<Pricing["accessWindow"], string> = {
+export const WINDOW: Record<Pricing["accessWindow"], string> = {
   year_round:
     "Covers the whole calendar year, including the breaks between terms.",
   school_session:
