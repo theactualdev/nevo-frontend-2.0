@@ -4,11 +4,17 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, useSignals, type TrackEvent } from "@/hooks";
 import {
+  clearOnboardingDraft,
   entryIdentityFromDraft,
   rememberOnboardedStudent,
 } from "@/lib/auth/onboarding";
-import { bindFirstPin } from "@/lib/auth/firstPin";
-import { setSession } from "@/lib/auth/session";
+import {
+  bindFirstPin,
+  startEntrySession,
+  type EntryPinElsewhere,
+} from "@/lib/auth/firstPin";
+import { handEntryBack } from "@/lib/auth/entryHandBack";
+import { handSignInOver } from "@/lib/auth/signInHandoff";
 import { enterFirstLesson } from "@/lib/auth/entryGate";
 import { useNextLessonHref } from "@/hooks/useNextLessonHref";
 import {
@@ -18,10 +24,19 @@ import {
 import { ONBOARDING_SIGNAL_TYPES } from "@/lib/constants";
 import { randomId } from "@/lib/utils";
 import { ProfilingFlow } from "@/components/student/Profiling/ProfilingFlow";
+import {
+  WaitingOnConsent,
+  type WaitingHold,
+} from "@/components/student/Entry/WaitingOnConsent";
 import { TransitionScreen } from "./TransitionScreen";
 import { LearningNotice } from "./LearningNotice";
 import { PinCreationScreen } from "./PinCreationScreen";
 import { YoureInScreen } from "./YoureInScreen";
+
+/** 00c, for a child the PIN route says already has a PIN. */
+const SIGN_BACK_IN = "/auth/sign-in";
+/** 05 Entry, for a pair the PIN route no longer finds. */
+const ENTRY = "/student/onboarding/school";
 
 /**
  * Onboarding Phase C — one continuous experience: a calm transition, the
@@ -88,6 +103,8 @@ export function ObservedInteractionSequence() {
   const profiling = useSignals(profilingSessionId, undefined, "profiling");
   const [phase, setPhase] = useState<"transition" | "activities">("transition");
   const [index, setIndex] = useState(0);
+  /** Held by the PIN route at the end of the run (B68), in place as 05 holds. */
+  const [held, setHeld] = useState<WaitingHold | null>(null);
   /**
    * The capture session the profiling run parked its trials under.
    *
@@ -130,6 +147,39 @@ export function ObservedInteractionSequence() {
       profiling.trackEvent(ONBOARDING_SIGNAL_TYPES.BASELINE_SUBMITTED);
     }
   };
+
+  /*
+   * The PIN route refused the first PIN with something that is not 15's to
+   * show (B68). Nothing is signed in or remembered, and the draft goes: the
+   * child is not finishing this run. The baseline stays parked, and only an
+   * account it belongs to can deliver it.
+   */
+  const refused = (refusal: EntryPinElsewhere) => {
+    const entry = entryIdentityFromDraft();
+    clearOnboardingDraft();
+    switch (refusal) {
+      case "has-pin":
+        // 00c, with what they typed on 05 - as 05 does for `accountReady`.
+        if (entry) {
+          handSignInOver({
+            schoolCode: entry.schoolCode,
+            identifier: entry.admissionNumber,
+          });
+        }
+        router.push(SIGN_BACK_IN);
+        return;
+      case "not-found":
+        // 05's miss, with the pair as typed: what they would meet now.
+        if (entry) handEntryBack(entry);
+        router.push(ENTRY);
+        return;
+      case "consent":
+      case "age-check":
+        setHeld(refusal);
+    }
+  };
+
+  if (held) return <WaitingOnConsent hold={held} />;
 
   if (phase === "transition") {
     return (
@@ -185,20 +235,17 @@ export function ObservedInteractionSequence() {
          * `bindFirstPin` sends the pair 05 matched with the PIN (B64). Any
          * refusal rejects out of here before anything below runs, so nothing
          * is signed in, delivered or remembered, and the PIN screen shows its
-         * not-saved line rather than celebrating a PIN nobody stored.
+         * not-saved or throttled state rather than celebrating a PIN nobody
+         * stored - or hands the refusal to `refused`, above.
          */
+        onRefused={refused}
         storePin={async (pin) => {
           const entry = entryIdentityFromDraft();
           // A run that did not start on 05 has nobody to attach a PIN to.
           if (!entry) throw new Error("no entry identity");
           const res = await bindFirstPin(entry, pin);
           identifierRef.current = res.loginIdentifier;
-          setSession({
-            token: res.session.accessToken,
-            expiresAt: res.session.expiresAt,
-            userId: res.session.userId,
-            role: res.session.role,
-          });
+          startEntrySession(res);
           /*
            * The baseline this child sat in phase 0 can now reach them.
            *

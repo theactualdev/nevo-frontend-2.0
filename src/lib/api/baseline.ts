@@ -64,6 +64,28 @@ export interface BaselineTrial {
   /** Integer milliseconds, 0 to 600000 in the contract. */
   responseTimeMs: number | null;
   probeItemId: string | null;
+  /**
+   * A trial put in front of the child that they did not answer (8 Oct, B76).
+   * Sent only where the capture recorded one; absent is the contract's false.
+   */
+  skipped?: boolean;
+}
+
+/**
+ * What a run was built for and sat on, which goes beside its trials
+ * (`BaselineTrialsRequest`, 8 Oct, B76). Each is left out when the run did
+ * not record it, and the contract reads a missing one as not told.
+ */
+export interface BaselineRunContext {
+  /** The spec's closed `AgeBand`, the set the roster already sends. */
+  ageBand?:
+    | "early_primary"
+    | "upper_primary"
+    | "junior_secondary"
+    | "senior_secondary";
+  formFactor?: "tablet_touch" | "desktop_cursor" | "mobile_touch";
+  /** Onboarding only: the warm-up has no motor step to run or skip. */
+  motorStepSkipped?: boolean;
 }
 
 /**
@@ -140,7 +162,10 @@ export const baselineApi = {
    * The run's trials, raw, for the server to reduce (B9, 5 Oct).
    *
    * `POST /api/baseline/trials`, body `BaselineTrialsRequest`
-   * `{sessionId, trials}`. It replaced `POST /api/baseline/submit`, which took
+   * `{sessionId, ageBand, formFactor, motorStepSkipped, trials}`. The three in
+   * the middle are the run's context (B76, 8 Oct); whichever the run did not
+   * record is undefined, so it never reaches the wire.
+   * It replaced `POST /api/baseline/submit`, which took
    * a vector the device had already reduced - accuracy, mean response time,
    * spans - and which the spec now describes as the thing the architecture
    * forbids. Nothing here calls it any more.
@@ -154,8 +179,20 @@ export const baselineApi = {
    * The contract takes one to 600 trials. An empty run has nothing to send,
    * so nothing is sent, and that is not a delivery.
    */
-  submitTrials: (sessionId: string, trials: BaselineTrial[]): Promise<boolean> =>
+  submitTrials: (
+    sessionId: string,
+    trials: BaselineTrial[],
+    context: BaselineRunContext = {},
+  ): Promise<boolean> =>
     trials.length === 0
       ? Promise.resolve(false)
-      : withRetry(() => api.post("/api/baseline/trials", { sessionId, trials })),
+      : withRetry(() =>
+          api.post("/api/baseline/trials", {
+            sessionId,
+            ageBand: context.ageBand,
+            formFactor: context.formFactor,
+            motorStepSkipped: context.motorStepSkipped,
+            trials,
+          }),
+        ),
 };

@@ -123,10 +123,12 @@ describe("useSessionRefresh", () => {
   });
 
   it("goes quiet at a session's absolute end rather than asking forever (B57)", async () => {
-    // Since 5 Oct a session has an absolute lifetime from sign-in - ten hours
-    // for a child - and a refresh near it reports the SAME deadline every
-    // time: it reports one, it does not move one. That is now the ordinary
-    // end of every long session, not a misbehaving backend.
+    // Since 5 Oct a session has an absolute lifetime from sign-in - the
+    // server's number, stated since 8 Oct as `absoluteLifetimeHours`, and held
+    // nowhere in this client (B72) - and a refresh near it reports the SAME
+    // deadline every time: it reports one, it does not move one. That is now
+    // the ordinary end of every long session, not a misbehaving backend. The
+    // hook needs no lifetime to get this right: it reads only `expiresAt`.
     const cap = new Date(Date.now() + MARGIN_MS).toISOString();
     const capped = () =>
       setSession({

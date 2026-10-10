@@ -3,7 +3,8 @@ import { api } from "./client";
 /**
  * `POST /api/v1/student-entry/lookup` - 05 Entry's one screen (SCRUM-208) -
  * and `POST /api/v1/student-entry/pin`, which stores the first PIN at the end
- * of the run the lookup starts (SCRUM-216).
+ * of the run the lookup starts, or a new one after a teacher's clear
+ * (SCRUM-216).
  *
  * **PUBLIC, and that is the point.** The child has no account yet, and the
  * school's code plus their own Student ID / Admission Number is what says who
@@ -56,10 +57,16 @@ export interface StudentEntryState {
    * sends them to sign back in rather than through a first run.
    *
    * FALSE FOR TWO DIFFERENT CHILDREN: a new one, and one whose PIN an adult
-   * cleared (SCRUM-216). Both have no PIN, and nothing on this response tells
-   * them apart - see `entryRoute`.
+   * cleared (SCRUM-216). Both have no PIN; `pinCleared` tells them apart.
    */
   accountReady: boolean;
+  /**
+   * A teacher cleared this child's PIN (SCRUM-216, B67), so they choose a new
+   * one rather than sitting a first run. No description in the spec: read as
+   * its name says. Optional because the contract defaults it to false rather
+   * than requiring it. See `entryRoute`.
+   */
+  pinCleared?: boolean;
   /**
    * The school and the parent disagree about the child's date of birth
    * (backend, B64). NOT a missing consent: the child cannot start, and there
@@ -121,13 +128,14 @@ export const studentEntryApi = {
     api.post<StudentEntryState>("/api/v1/student-entry/lookup", payload),
 
   /**
-   * PUBLIC. Store a first PIN for the child the lookup found, and start their
-   * session (SCRUM-216, B64). The only caller is `bindFirstPin`.
+   * PUBLIC. Store a PIN for the child the lookup found - their first, or the
+   * one after a teacher's clear - and start their session (SCRUM-216, B64,
+   * B67). The only caller is `bindFirstPin`.
    *
    * IT OPENS ONLY WHILE THE CHILD HAS NO PIN, so it cannot overwrite a
    * classmate's credential, and it is gated on consent and the age check like
-   * every other door a child can reach. The spec declares only the 200 and a
-   * 422; the refusals backend describes carry no declared status or code.
+   * every other door a child can reach. Since 8 Oct the spec names each
+   * refusal; what a child is shown for each is `entryPinRefusal`'s.
    *
    * The body is spelled out rather than passed through, so the contract check
    * can compare its keys against `StudentPinSetup`.

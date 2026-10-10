@@ -16,6 +16,7 @@ import { getSession } from "@/lib/auth/session";
 import { useConsentGate } from "@/hooks/useConsentGate";
 import { useHydrated } from "@/hooks/useHydrated";
 import { useRosterBand } from "@/hooks/useRosterBand";
+import { formFactor } from "@/hooks/useSignals";
 import {
   AGE_BANDS,
   BASELINE_DIMENSIONS,
@@ -26,6 +27,7 @@ import {
 } from "@/lib/profiling/bands";
 import {
   BaselineCapture,
+  baselineRunContext,
   baselineTrials,
   tapPoint,
 } from "@/lib/profiling/capture";
@@ -234,6 +236,8 @@ export function WarmUpRun({
     capture.record("warmup_start", {
       dimension,
       ...(band ? { band } : {}),
+      // The device, read once here, goes beside the trials (B76).
+      formFactor: formFactor(),
       ...(item ? { itemId: item.itemId } : {}),
     });
   }, [capture, dimension, item, doneToday, band, bandSettled, unheard]);
@@ -313,15 +317,18 @@ export function WarmUpRun({
        * the device computes none of those. Each answer now goes up as one
        * trial carrying its own dimension, and the server reduces them.
        *
-       * Two things the vector carried have no field on a trial and are not
-       * sent: the run's length, and the band the task was sized for (D17).
-       * The band is with backend as an ask; nothing is invented to carry it.
+       * The run's length had no field on a trial and is not sent. The band the
+       * task was sized for (D17) and the device go beside the trials now
+       * (B76, 8 Oct, `baselineRunContext`); there is no motor step here, so
+       * no `motorStepSkipped`. With no roster band, no band is claimed: the
+       * Primary 4-6 default is the task's size, not the child's age band.
        *
        * The served question's pick goes to the prompt's own endpoint as well
        * (B8, below); here it is a trial naming its item, which the server
        * marks against its own key.
        */
       const trials = baselineTrials(capture);
+      const context = baselineRunContext(capture);
       /*
        * A FAILED WRITE PARKS THE MEASUREMENT; IT DOES NOT DESTROY IT.
        *
@@ -374,13 +381,13 @@ export function WarmUpRun({
        */
       if (!pick && owner && live) void baselineApi.deviceTaskDone(owner);
       const submittedOk = baselineApi
-        .submitTrials(capture.sessionId, trials)
+        .submitTrials(capture.sessionId, trials, context)
         .then((ok) => {
-          if (!ok) holdBaseline(capture.sessionId, trials, owner);
+          if (!ok) holdBaseline(capture.sessionId, trials, owner, context);
           return ok;
         })
         .catch(() => {
-          holdBaseline(capture.sessionId, trials, owner);
+          holdBaseline(capture.sessionId, trials, owner, context);
           return false;
         })
         // The RAW stream is purged either way - only the trials ever travel,

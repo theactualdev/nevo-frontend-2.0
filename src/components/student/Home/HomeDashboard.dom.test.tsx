@@ -518,6 +518,29 @@ describe("Home's two lists", () => {
     ).toBe("/student/lessons/mid?assignment=as-mid");
   });
 
+  it("takes a lesson left in its check straight back in, and says nothing about it (B82)", async () => {
+    // The player opens it straight into the check; no label for that is drawn.
+    signIn();
+    live(
+      [assignment("chk", "Ratio Basics")],
+      [
+        row("chk", "exited", 5, 3, {
+          checkPosition: 1,
+          checkResumableUntil: at(-60),
+        }),
+      ],
+    );
+
+    const { container } = render(<HomeDashboard />);
+    await settled(container);
+
+    const pickup = section(/Pick up where you left off/);
+    expect(within(pickup).getByRole("link").getAttribute("href")).toBe(
+      "/student/lessons/chk?assignment=as-chk",
+    );
+    expect(pickup.textContent).not.toMatch(/check|question|quiz/i);
+  });
+
   it("says nothing about how far in - no phrase, no number, no date", async () => {
     /*
      * Design D19, 1 Oct. The card cut the fraction at one third and two thirds

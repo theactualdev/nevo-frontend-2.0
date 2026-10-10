@@ -3,6 +3,7 @@ import {
   lessonsApi,
   type LessonContentType,
   type LessonDetailResponse,
+  type LessonModule,
   type LessonSegment,
 } from "@/lib/api/lessons";
 import type { SegmentVariants } from "@/lib/api/variants";
@@ -32,13 +33,13 @@ import { readZipFile, ZipUnsupported } from "./zip";
  * mapped onto the detail's field names - see `detailFromPackage` - so the
  * player builds it exactly as it builds a live open.
  *
- * WHAT A PACKAGE DOES NOT CARRY. No modules, no closing recap and no
- * after-lesson check: `OfflinePackage` has none of them. A lesson opened from
- * a fresh package therefore plays its segments ungrouped and ends without
- * either, until the child opens it online once and the shelf takes the full
- * detail read (`refreshSavedLesson`). Asked of backend; never filled in here.
- * Played that way it is never recorded complete - see `isPackageCopy` in
- * `savedLessons.ts`.
+ * MODULES, RECAP AND AFTER-LESSON CHECK (backend B85, 8 Oct). The package
+ * carries all three now, under the detail's own names, and they are kept as
+ * sent - so a lesson opened from it is grouped, ends with its recap and its
+ * check, and completes exactly as it would online. A package that leaves any
+ * of them out, and every copy saved before 8 Oct, is still played without
+ * them and never recorded complete - see `isPartialCopy` in
+ * `savedLessons.ts`. Nothing missing is filled in here.
  *
  * If `lesson.json` is not that shape, belongs to another lesson or will not
  * build, the lesson is kept from the detail read instead, as before. The size
@@ -118,7 +119,7 @@ export async function lessonFromPackage(
     // The same builder a saved lesson is opened with, run once now so a
     // package it cannot build - or one with nothing in it to play - is caught
     // at save time, not when the child is offline and has nothing else.
-    if (!lessonFromContent(detail)) return null;
+    if (!lessonFromContent(detail, detail.modules ?? [])) return null;
   } catch {
     return null;
   }
@@ -129,11 +130,18 @@ export async function lessonFromPackage(
  * `OfflinePackage`, the published schema of `lesson.json` (backend B60). Only
  * `id` and `title` are required of the package, and `id`, `key`, `body`,
  * `contentType` and `sequenceOrder` of a segment; the rest may be absent.
+ *
+ * `modules`, `recap` and `assessment` (B85, 8 Oct) are the detail read's own
+ * types - `LessonModuleResponse`, a nullable string and
+ * `ComprehensionCheckpoint[]` - so they need no mapping, only keeping.
  */
 export interface OfflinePackage {
   id: string;
   title: string;
   version?: string | null;
+  modules?: LessonModule[];
+  recap?: string | null;
+  assessment?: ComprehensionCheckpoint[];
   segments?: OfflinePackageSegment[];
 }
 
@@ -175,7 +183,26 @@ export function isOfflinePackage(
   if (!isObj(value)) return false;
   if (value.id !== lessonId) return false;
   if (typeof value.title !== "string") return false;
+  if (!(value.recap == null || typeof value.recap === "string")) return false;
+  if (!listOrAbsent(value.assessment)) return false;
+  if (!(value.modules == null || listOf(value.modules, isModule))) return false;
   return Array.isArray(value.segments) && value.segments.every(isSegment);
+}
+
+const listOf = (v: unknown, each: (item: unknown) => boolean) =>
+  Array.isArray(v) && v.every(each);
+
+/** `LessonModuleResponse`, whose fields are all required. */
+function isModule(m: unknown): boolean {
+  return (
+    isObj(m) &&
+    typeof m.id === "string" &&
+    typeof m.title === "string" &&
+    typeof m.sequenceOrder === "number" &&
+    listOf(m.segmentIds, (id) => typeof id === "string") &&
+    (m.recap == null || typeof m.recap === "string") &&
+    (m.preview == null || typeof m.preview === "string")
+  );
 }
 
 function isSegment(s: unknown): boolean {
@@ -207,6 +234,12 @@ function isSegment(s: unknown): boolean {
  * `visualVariant` and the rest. Absent lists are empty and absent variants
  * null, which is how the detail read says "none".
  *
+ * EXCEPT THE LESSON'S `modules`, `recap` AND `assessment`, which stay absent
+ * when the package left them out. Absent is "not sent", not "none": a lesson
+ * with no check sends `assessment: []`, and an absent one may have had a check
+ * the copy does not hold. `isPartialCopy` reads exactly that difference, so
+ * filling them in here would book a check nobody took.
+ *
  * NOTHING IS ADDED. The package has no review flags (`needsReview`,
  * `approved`), no authorship and no library fields (`status`, `segmentCount`,
  * `createdAt`), and they stay absent rather than being given values - an
@@ -218,7 +251,10 @@ function isSegment(s: unknown): boolean {
 export function detailFromPackage(
   pkg: OfflinePackage & { segments: OfflinePackageSegment[] },
 ): LessonDetailResponse {
-  type Packaged = Pick<LessonDetailResponse, "id" | "title"> & {
+  type Packaged = Pick<
+    LessonDetailResponse,
+    "id" | "title" | "modules" | "recap" | "assessment"
+  > & {
     segments: Omit<
       LessonSegment,
       "needsReview" | "reviewReasons" | "approved" | "approvedAt"
@@ -227,6 +263,10 @@ export function detailFromPackage(
   const packaged: Packaged = {
     id: pkg.id,
     title: pkg.title,
+    ...(Array.isArray(pkg.modules) ? { modules: pkg.modules } : {}),
+    // Null is sent and kept: it is the lesson saying it has no recap.
+    ...(pkg.recap !== undefined ? { recap: pkg.recap } : {}),
+    ...(Array.isArray(pkg.assessment) ? { assessment: pkg.assessment } : {}),
     segments: pkg.segments.map((s) => {
       const v = s.modalityVariants;
       return {

@@ -4,9 +4,11 @@ import Image from "next/image";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { Check } from "lucide-react";
 import { NevoKeyboard, useNevoKeyboardDock } from "@/components/shared";
+import { SIGN_IN_THROTTLED_COPY } from "@/components/student/Auth/signInMoments";
 import { authApi } from "@/lib/api";
 import { STUDENT_PIN_LENGTH } from "@/lib/constants";
 import { USER_ROLES } from "@/lib/constants/permissions";
+import { entryPinRefusal, type EntryPinElsewhere } from "@/lib/auth/firstPin";
 import { getSession } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 
@@ -23,7 +25,7 @@ import { cn } from "@/lib/utils";
  *   - with no session yet, `storePin` is supplied by the caller and binds the
  *     PIN to the child 05 Entry found - `bindFirstPin`, `POST
  *     /student-entry/pin` (B64). A refusal there is this screen's not-saved
- *     state.
+ *     or throttled state, or another screen's (`onRefused`).
  *
  * A path with neither is the one that cannot honestly promise anything, and
  * it no longer pretends: see `onboarding.ts`.
@@ -114,8 +116,15 @@ export const PIN_SAVE_FAILED_COPY =
  * "the child presses Try again without entering four digits a second time".
  * It was the rows left as typed, with the not-saved line and a ghost "Try
  * again" under them.
+ *
+ * A REFUSAL IS NOT ALWAYS OURS (B68). The PIN route names its refusals now,
+ * and `entryPinRefusal` reads them. A rate limit keeps this state with D68's
+ * wait line under the heading instead of "That's on us - try again": frame 15
+ * draws no throttled state, and that line is the one design ruled for a
+ * throttled PIN door. The rest - a child who has a PIN, a pair that names
+ * nobody, a held child - are other screens', and go to `onRefused`.
  */
-type SavePhase = "entry" | "saving" | "saved" | "failed";
+type SavePhase = "entry" | "saving" | "saved" | "failed" | "throttled";
 
 /** A beat for the last box to fill before the write goes - and one write, not two, under StrictMode. */
 const WRITE_BEAT_MS = 300;
@@ -126,6 +135,7 @@ export function PinCreationScreen({
   sso = false,
   reset = false,
   storePin,
+  onRefused,
   onComplete,
 }: {
   sso?: boolean;
@@ -136,7 +146,7 @@ export function PinCreationScreen({
    * than starting again. Where it goes on done is the caller's - Home, not
    * You're In. A cleared child has no session, so the caller stores the PIN
    * through `POST /student-entry/pin` (school code + Student ID, SCRUM-216)
-   * via `storePin`; that caller is the entry flow, not wired yet.
+   * via `storePin` - 05 Entry, when the lookup says `pinCleared` (B67).
    */
   reset?: boolean;
   /**
@@ -146,6 +156,12 @@ export function PinCreationScreen({
    * sign-in.
    */
   storePin?: (pin: string) => Promise<void>;
+  /**
+   * A refusal that belongs to another screen: sign-in, 05's miss, or a hold.
+   * The caller takes the child there; this screen says nothing more. Without
+   * it, those refusals are the not-saved state.
+   */
+  onRefused?: (refusal: EntryPinElsewhere) => void;
   onComplete: () => void;
 }) {
   const [{ digits, error, done }, dispatch] = useReducer(pinReducer, {
@@ -179,6 +195,10 @@ export function PinCreationScreen({
   useEffect(() => {
     storePinRef.current = storePin;
   }, [storePin]);
+  const onRefusedRef = useRef(onRefused);
+  useEffect(() => {
+    onRefusedRef.current = onRefused;
+  }, [onRefused]);
 
   // Stable handlers — dispatch never goes stale, so rapid input folds correctly.
   const pressDigit = useCallback((d: string) => {
@@ -271,8 +291,18 @@ export function PinCreationScreen({
           () => {
             if (!cancelled) setPhase("saved");
           },
-          () => {
-            if (!cancelled) setPhase("failed");
+          (cause: unknown) => {
+            if (cancelled) return;
+            const refusal = entryPinRefusal(cause);
+            if (refusal === "throttled" || refusal === "failed") {
+              setPhase(refusal);
+              return;
+            }
+            // Another screen's to show. The ring stays up while the caller
+            // takes the child there, rather than flashing a failure first.
+            const elsewhere = onRefusedRef.current;
+            if (elsewhere) elsewhere(refusal);
+            else setPhase("failed");
           },
         );
       },
@@ -294,7 +324,9 @@ export function PinCreationScreen({
 
   const saved = phase === "saved";
   const saving = phase === "saving";
-  const failed = phase === "failed";
+  const throttled = phase === "throttled";
+  // A rate limit is the not-saved state with D68's line under it (B68).
+  const failed = phase === "failed" || throttled;
   // The rows are hidden while it saves and if it does not (D61).
   const showEntry = !sso && phase === "entry";
   const showConfirmation = sso || saved;
@@ -366,9 +398,11 @@ export function PinCreationScreen({
               ? "We'll remember you next time"
               : saving
                 ? PIN_SAVING_COPY
-                : failed
-                  ? PIN_SAVE_FAILED_COPY
-                  : "You'll use this to log in next time"}
+                : throttled
+                  ? SIGN_IN_THROTTLED_COPY
+                  : failed
+                    ? PIN_SAVE_FAILED_COPY
+                    : "You'll use this to log in next time"}
           </p>
         </div>
 

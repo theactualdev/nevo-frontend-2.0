@@ -23,6 +23,41 @@ export interface TeamMember {
   scopes: PermissionScope[];
 }
 
+/**
+ * `GET /admin/team`, as it answers since 8 Oct: the members AND the school's
+ * admin allowance, which the server owns. "Default allowance is five, with
+ * school-specific overrides supported" (Teslim) - so a school granted a sixth
+ * seat on request is told six here, which no client-side constant could know.
+ *
+ * The seat figures are null only when an older answer - a bare array of
+ * members - comes back, and then nothing about seats is asserted.
+ */
+export interface AdminTeam {
+  members: TeamMember[];
+  seatLimit: number | null;
+  seatsUsed: number | null;
+  seatsRemaining: number | null;
+}
+
+const count = (n: unknown): number | null => (typeof n === "number" ? n : null);
+
+/** The response, whichever shape the deployed server sent. */
+export function toAdminTeam(raw: unknown): AdminTeam {
+  if (Array.isArray(raw)) {
+    return { members: raw as TeamMember[], seatLimit: null, seatsUsed: null, seatsRemaining: null };
+  }
+  const r = (raw ?? {}) as Partial<Record<keyof AdminTeam, unknown>>;
+  return {
+    members: Array.isArray(r.members) ? (r.members as TeamMember[]) : [],
+    seatLimit: count(r.seatLimit),
+    seatsUsed: count(r.seatsUsed),
+    seatsRemaining: count(r.seatsRemaining),
+  };
+}
+
+/** The 409 a sixth invitation gets past the allowance. */
+export const SEAT_LIMIT_REACHED = "admin_seat_limit_reached";
+
 export interface InviteTeamMemberRequest {
   email: string;
   role: UserRole;
@@ -84,8 +119,12 @@ export function adminActivationLink(invited: InvitedTeamMember): string {
 }
 
 export const teamApi = {
-  /** GET /api/v1/admin/team - everyone who can administer the school. */
-  list: () => api.get<TeamMember[]>("/api/v1/admin/team"),
+  /**
+   * GET /api/v1/admin/team - everyone who can administer the school, and the
+   * seats. It was a bare array until 8 Oct; read as one, the new object would
+   * have been an empty team.
+   */
+  list: () => api.get<unknown>("/api/v1/admin/team").then(toAdminTeam),
 
   /** POST /api/v1/admin/team/invitations - returns the activation token. */
   invite: (payload: InviteTeamMemberRequest) =>
