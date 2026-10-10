@@ -17,7 +17,7 @@ const SETTLE_MS = 1700;
 type TapEvent = { clientX: number; clientY: number; detail: number };
 
 /**
- * Shared trial engine for Modules 2-4: a fixed list of trials across one or two
+ * Shared trial engine for Modules 2-3: a fixed list of trials across one or two
  * activities, tap-to-answer with a brief pressed beat, no feedback of any kind,
  * a settle at the end. Each pick is captured with its response time
  * (`performance.now()` from trial presentation to tap) and where the tap

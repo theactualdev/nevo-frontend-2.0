@@ -15,19 +15,28 @@ import {
 } from "@/lib/profiling/capture";
 import { randomId } from "@/lib/utils";
 import type { TrackEvent } from "@/hooks";
-import { DomainProbeModule } from "./DomainProbeModule";
 import { GridSpanModule } from "./GridSpanModule";
 import { MotorStep, motorStepRuns, type FormFactor } from "./MotorStep";
 import { PatternFlankerModule } from "./PatternFlankerModule";
 import { ProfilingIntro } from "./ProfilingIntro";
+import { QuestSegments } from "./QuestMap";
 import { SentenceDotModule } from "./SentenceDotModule";
 import { StretchInterstitial } from "./StretchInterstitial";
 
 /**
+ * THE MODULES THIS RUN PRESENTS, in order - and so the quest map's segments
+ * (design, 9 Oct): "The quest map shows the number of modules that child will
+ * actually do ... A child who will do three sees three segments." Module 4,
+ * `domain_probe`, is not in it while nothing can serve the probe (see `m3`).
+ */
+const RUN_MODULES = ["grid_span", "pattern_flanker", "sentence_dot"] as const;
+
+/**
  * The Baseline Cognitive Profiling flow (SCRUM-104) - onboarding Phase C.
  * Intro → motor-speed step (08a) → M1 Grid Span → stretch → M2
- * Pattern/Flanker → stretch → M3 Sentence/Dot → stretch → M4 Domain Probe →
- * Complete. One BaselineCapture spans the run; on completion it becomes one
+ * Pattern/Flanker → stretch → M3 Sentence/Dot → Complete. M4, the Domain
+ * Probe, is not presented: nothing can serve it here (see `m3`, below).
+ * One BaselineCapture spans the run; on completion it becomes one
  * trial per answer, the motor step's taps included, parked to be sent raw for
  * the server to reduce (B9), and the rest of the stream is purged.
  *
@@ -35,7 +44,16 @@ import { StretchInterstitial } from "./StretchInterstitial";
  * the age the child gave at onboarding, else from the intro's age question; it
  * drives grid sizes, content and targets, and the shells are shared.
  */
-export function ProfilingFlow({
+export function ProfilingFlow(props: Parameters<typeof ProfilingRun>[0]) {
+  return (
+    <QuestSegments.Provider value={RUN_MODULES.length}>
+      <ProfilingRun {...props} />
+    </QuestSegments.Provider>
+  );
+}
+
+/** The run itself, inside its quest map's count of modules. */
+function ProfilingRun({
   track,
   onDone,
   ownerUserId = null,
@@ -92,8 +110,6 @@ export function ProfilingFlow({
     | "m2"
     | "stretch2"
     | "m3"
-    | "stretch3"
-    | "m4"
     | "complete"
   >("intro");
   /*
@@ -365,6 +381,24 @@ export function ProfilingFlow({
     );
   }
 
+  /*
+   * MODULE 3 ENDS THE RUN. MODULE 4 HAS NOTHING TO ASK (SCRUM-175/176, 8 Oct).
+   *
+   * The Domain Probe asked questions from a bank on this device and marked
+   * them against an answer key on this device - a measure of a child's
+   * knowledge decided on the child's own tablet. Backend now owns a
+   * subject-aware probe bank and marks what it serves, and the frontend's
+   * bank is gone, key and all.
+   *
+   * The spec's one route that serves a child probe items is
+   * `GET /api/v1/probe/{subject_id}/next`, and this run cannot call it: it is
+   * Bearer, and a school-code child has no account until the PIN step, after
+   * this; and nothing a student can read names a subject's id to ask about.
+   * Absence is an instruction (rule 5), so the module is not presented - no
+   * stretch before it, no subject question, no question, no trial and no
+   * `domain_probe` markers - rather than mimed with questions nobody served.
+   * Asked of backend.
+   */
   if (phase === "m3") {
     return (
       <SentenceDotModule
@@ -372,32 +406,6 @@ export function ProfilingFlow({
         capture={capture}
         onComplete={() => {
           completeSignal("sentence_dot");
-          setPhase("stretch3");
-        }}
-      />
-    );
-  }
-
-  if (phase === "stretch3") {
-    return (
-      <StretchInterstitial
-        filled={3}
-        active={3}
-        onDone={() => {
-          startSignal("domain_probe");
-          setPhase("m4");
-        }}
-      />
-    );
-  }
-
-  if (phase === "m4") {
-    return (
-      <DomainProbeModule
-        band={band}
-        capture={capture}
-        onComplete={() => {
-          completeSignal("domain_probe");
           finishRun();
         }}
       />

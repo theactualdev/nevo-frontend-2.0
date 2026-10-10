@@ -80,9 +80,19 @@ describe("the intro's words (D13, 1 Oct)", () => {
     expect(document.body.textContent).not.toMatch(/test|score|ability/i);
     expect(
       screen.getByText(
-        "You'll do four quick activities. This just helps Nevo work better for you.",
+        "You'll do quick activities. This just helps Nevo work better for you.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("states no number of activities (design, 9 Oct)", () => {
+    // "Four quick activities" stopped being true when the probe went, and a
+    // count has to be kept in step with every change to the run.
+    render(<ProfilingIntro mode="intro" onContinue={() => {}} />);
+
+    expect(document.body.textContent).not.toMatch(
+      /\b(one|two|three|four|five|six|\d+)\b/i,
+    );
   });
 });
 
