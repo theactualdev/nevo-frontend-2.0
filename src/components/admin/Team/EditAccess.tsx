@@ -4,7 +4,7 @@ import { useState, type Dispatch, type SetStateAction } from "react";
 import { teamApi, type TeamMember } from "@/lib/api/team";
 import type { PermissionScope } from "@/lib/constants/permissions";
 import { cn } from "@/lib/utils";
-import { SCOPE_CATALOGUE } from "./adminScopes";
+import { FOUNDING_LOCK_LINE, SCOPE_CATALOGUE } from "./adminScopes";
 
 /**
  * The areas an admin can hold, one checkbox each. Shared by the invite sheet
@@ -14,21 +14,30 @@ import { SCOPE_CATALOGUE } from "./adminScopes";
  * A scope no longer granted shows only to someone who held it when the sheet
  * opened, so it can be taken away and never given. Fixed at open, so unticking
  * it does not make the row vanish under the pointer.
+ *
+ * A LOCKED scope stays ticked and cannot be changed, with its reason under it -
+ * the founder's General Oversight (SCRUM-39: "Founder cannot remove their own
+ * Oversight through any path, and the lock states why").
  */
 export function ScopeChecklist({
   on,
   setOn,
   disabled,
+  locked = [],
+  lockedReason,
 }: {
   on: Set<PermissionScope>;
   setOn: Dispatch<SetStateAction<Set<PermissionScope>>>;
   disabled: boolean;
+  locked?: PermissionScope[];
+  lockedReason?: string;
 }) {
   const [heldAtOpen] = useState(() => new Set(on));
   return (
     <div className="mt-2.5 flex flex-col gap-2">
       {SCOPE_CATALOGUE.filter((s) => s.grantable !== false || heldAtOpen.has(s.scope)).map((s) => {
-        const checked = on.has(s.scope);
+        const isLocked = locked.includes(s.scope);
+        const checked = isLocked || on.has(s.scope);
         return (
           <label
             key={s.scope}
@@ -37,7 +46,7 @@ export function ScopeChecklist({
             <input
               type="checkbox"
               checked={checked}
-              disabled={disabled}
+              disabled={disabled || isLocked}
               onChange={() =>
                 setOn((prev) => {
                   const next = new Set(prev);
@@ -64,6 +73,9 @@ export function ScopeChecklist({
             <span className="flex min-w-0 flex-col">
               <span className="text-[14.5px] font-semibold text-nevo-near-black">{s.name}</span>
               <span className="mt-px text-[13px] text-nevo-near-black/58">{s.desc}</span>
+              {isLocked && lockedReason ? (
+                <span className="mt-1 text-[12.5px] leading-[1.45] text-nevo-navy">{lockedReason}</span>
+              ) : null}
             </span>
           </label>
         );
@@ -82,10 +94,10 @@ export function ScopeChecklist({
  * code's own note said D03 draws no affordance; the spec does, and the spec
  * beats the frame.
  *
- * NOT FOR YOUR OWN ROW (see `canEdit` in the view). The founder's locked
- * Oversight needs a founding flag the team response does not carry, and an
- * admin editing themselves could take their own Oversight away and lose the
- * page they are standing on.
+ * NOT FOR YOUR OWN ROW (see `canEdit` in the view): an admin editing
+ * themselves could take their own Oversight away and lose the page they are
+ * standing on. The FOUNDER'S Oversight is locked here, with D03's reason, now
+ * the team response carries `founding` (8 Oct).
  */
 export function EditAccessPanel({
   member,
@@ -141,7 +153,13 @@ export function EditAccessPanel({
         <span className="mt-7 block text-[13px] font-semibold text-nevo-near-black/70">
           What can they access?
         </span>
-        <ScopeChecklist on={on} setOn={setOn} disabled={saving} />
+        <ScopeChecklist
+          on={on}
+          setOn={setOn}
+          disabled={saving}
+          locked={member.founding ? ["oversight"] : []}
+          lockedReason={FOUNDING_LOCK_LINE}
+        />
 
         {none ? (
           // SCRUM-39's plain line - not a modal, not an error colour.

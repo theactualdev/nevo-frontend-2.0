@@ -10,7 +10,8 @@ import {
   type InvitedTeamMember,
   type TeamMember,
 } from "@/lib/api/team";
-import { ApiError, apiErrorCode } from "@/lib/api/client";
+import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
+import { activeLine } from "./teamLines";
 import type { PermissionScope } from "@/lib/constants/permissions";
 import { cn } from "@/lib/utils";
 import { feedbackApi } from "@/lib/api/feedback";
@@ -22,6 +23,7 @@ import { getSession } from "@/lib/auth/session";
 import { EditAccessPanel, ScopeChecklist } from "./EditAccess";
 import { useSupportEmail } from "../SupportEmail";
 import {
+  FOUNDING_LOCK_LINE,
   seatWords,
   SCOPE_CATALOGUE,
   initialsFor,
@@ -41,12 +43,17 @@ import {
  * fetch-failure state are NOT drawn anywhere in the admin set - those two are
  * ours, and deliberately quiet.
  *
- * WHAT THE API DOES NOT CARRY, so the frame cannot be met in full:
- * - no founding flag, so the "Founding" badge and the locked General Oversight
- *   pill (with the note about a school never locking itself out) cannot render
- * - no last-active timestamp, so the frame's "Active today" / "2 days ago"
- *   column has nothing behind it
- * Both are raised with backend rather than invented here.
+ * THE FOUNDING FLAG AND LAST-ACTIVE ARRIVED (backend, 8 Oct), and both used
+ * to be listed here as missing. The founding admin wears D03's "Founding"
+ * badge, their General Oversight renders locked with its reason, and every
+ * row says when its admin was last seen in SCRUM-39's neutral words.
+ *
+ * REMOVING ACCESS IS REAL NOW. `POST /admin/team/{id}/deactivate` and
+ * `/restore` landed with it - there was no way to take access away from an
+ * admin who had left. SCRUM-39: "Calm confirm card. Language is about access
+ * ending, not the person." The server refuses yourself, the last Oversight
+ * admin, an SSO-managed team, and a restore past the seats - each with its
+ * own message, which is shown as it stands.
  *
  * (Two more used to be listed. The SCHOOL NAME was never missing - the school
  * record this screen already reads for the band carries it - and the seat
@@ -70,10 +77,17 @@ function longDate(iso: string): string {
 
 type SendPhase = "idle" | "sending" | "sent";
 
-function ScopePill({ label }: { label: string }) {
+function ScopePill({ label, locked = false }: { label: string; locked?: boolean }) {
   return (
-    <span className="inline-flex items-center rounded-full bg-nevo-violet/24 px-[11px] py-1 text-[11.5px] font-semibold text-nevo-navy">
+    <span className="inline-flex items-center gap-1 rounded-full bg-nevo-violet/24 px-[11px] py-1 text-[11.5px] font-semibold text-nevo-navy">
+      {locked ? (
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <rect x="5" y="11" width="14" height="10" rx="2" />
+          <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+        </svg>
+      ) : null}
       {label}
+      {locked ? <span className="sr-only"> (locked)</span> : null}
     </span>
   );
 }
@@ -176,6 +190,7 @@ export function AdminTeamView() {
             school={school}
             onInvite={() => setInviting(true)}
             onEdit={setEditing}
+            onChanged={fetchTeam}
           />
         )}
       </div>
@@ -277,6 +292,7 @@ function MemberRow({
   last,
   you = false,
   onEdit,
+  onChanged,
 }: {
   m: TeamMember;
   last: boolean;
@@ -284,9 +300,33 @@ function MemberRow({
   you?: boolean;
   /** Absent where this admin's access cannot be edited from here. */
   onEdit?: () => void;
+  /** Access was removed or restored: the team is read again. */
+  onChanged?: () => void;
 }) {
   const name = displayName(m);
   const { writesPaused } = useSetupGate();
+  const [confirming, setConfirming] = useState(false);
+  const [working, setWorking] = useState(false);
+  const [refusal, setRefusal] = useState<string | null>(null);
+  const [now] = useState(() => Date.now());
+  const seen = activeLine(m.lastActiveAt, now);
+
+  const change = (write: (id: string) => Promise<unknown>) => {
+    setWorking(true);
+    setRefusal(null);
+    write(m.userId)
+      .then(() => {
+        setConfirming(false);
+        onChanged?.();
+      })
+      .catch((err: unknown) =>
+        setRefusal(
+          (err instanceof ApiError && apiErrorMessage(err.detail)) ||
+            "That didn't go through, and nothing has changed. Try again in a moment.",
+        ),
+      )
+      .finally(() => setWorking(false));
+  };
   /*
    * THE SPEC'S THREE STATES, NOT "ACTIVE OR NOT". This read anything other
    * than `active` as still-pending, so a DEACTIVATED admin wore the violet
@@ -298,12 +338,8 @@ function MemberRow({
   const pending = status === "invited";
   const deactivated = status === "deactivated";
   return (
-    <div
-      className={cn(
-        "flex items-center gap-[13px] px-[22px] py-[18px]",
-        !last && "border-b border-nevo-near-black/7",
-      )}
-    >
+    <div className={cn(!last && "border-b border-nevo-near-black/7")}>
+    <div className="flex items-center gap-[13px] px-[22px] py-[18px]">
       <span className="flex size-[38px] shrink-0 items-center justify-center rounded-full bg-nevo-navy/10 text-[12.5px] font-semibold text-nevo-navy">
         {initialsFor(name, m.email)}
       </span>
@@ -317,6 +353,11 @@ function MemberRow({
               You
             </span>
           ) : null}
+          {m.founding ? (
+            <span className="shrink-0 rounded-full bg-nevo-navy/12 px-2 py-0.5 text-[10.5px] font-semibold text-nevo-navy">
+              Founding
+            </span>
+          ) : null}
         </span>
         {m.email && (
           <span className="truncate text-[13px] text-nevo-near-black/55">
@@ -325,7 +366,7 @@ function MemberRow({
         )}
         <span className="mt-0.5 flex flex-wrap gap-[6px]">
           {orderScopes(m.scopes).map((s) => (
-            <ScopePill key={s} label={scopeName(s)} />
+            <ScopePill key={s} label={scopeName(s)} locked={Boolean(m.founding) && s === "oversight"} />
           ))}
           {m.scopes.length === 0 && (
             <span className="text-[12.5px] text-nevo-near-black/45">
@@ -344,6 +385,9 @@ function MemberRow({
           Deactivated
         </span>
       )}
+      {seen && !pending && !deactivated ? (
+        <span className="shrink-0 text-[12.5px] text-nevo-near-black/50">{seen}</span>
+      ) : null}
       {onEdit && !deactivated ? (
         <button
           type="button"
@@ -353,6 +397,67 @@ function MemberRow({
         >
           Edit access
         </button>
+      ) : null}
+      {/* Never on your own row, and never the founder's: their Oversight is
+          the school's guarantee it cannot lock itself out. */}
+      {onChanged && !you && !m.founding && !deactivated ? (
+        <button
+          type="button"
+          onClick={() => {
+            setRefusal(null);
+            setConfirming((c) => !c);
+          }}
+          disabled={writesPaused || working}
+          className="shrink-0 cursor-pointer text-[13.5px] font-semibold text-nevo-near-black/60 hover:underline disabled:cursor-not-allowed disabled:opacity-50 disabled:no-underline"
+        >
+          Remove access
+        </button>
+      ) : null}
+      {onChanged && deactivated ? (
+        <button
+          type="button"
+          onClick={() => change(teamApi.restore)}
+          disabled={writesPaused || working}
+          className="shrink-0 cursor-pointer text-[13.5px] font-semibold text-nevo-navy hover:underline disabled:cursor-not-allowed disabled:opacity-50 disabled:no-underline"
+        >
+          {working ? "Restoring…" : "Restore access"}
+        </button>
+      ) : null}
+    </div>
+      {m.founding ? (
+        <p className="m-0 -mt-2 px-[22px] pb-4 pl-[73px] text-[12.5px] leading-[1.5] text-nevo-near-black/55">
+          {FOUNDING_LOCK_LINE}
+        </p>
+      ) : null}
+      {/* SCRUM-39's calm confirm card: about access ending, not the person. */}
+      {confirming ? (
+        <div className="mx-[22px] mb-4 rounded-[10px] bg-nevo-violet/[0.18] px-4 py-3">
+          <p className="m-0 text-[13.5px] leading-[1.5] text-nevo-navy">
+            {`${name} will no longer be able to open the admin areas. Their account stays, and nothing they set up is lost.`}
+          </p>
+          <div className="mt-3 flex gap-2.5">
+            <button
+              type="button"
+              onClick={() => change(teamApi.deactivate)}
+              disabled={working}
+              className="cursor-pointer rounded-lg bg-nevo-navy px-4 py-2 text-[13.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-110 disabled:opacity-60"
+            >
+              {working ? "Removing…" : "Remove access"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirming(false)}
+              className="cursor-pointer rounded-lg px-4 py-2 text-[13.5px] font-semibold text-nevo-near-black/70 transition-colors hover:bg-nevo-near-black/[0.06]"
+            >
+              Keep
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {refusal ? (
+        <p role="status" className="m-0 mx-[22px] mb-4 text-[13px] leading-[1.5] text-nevo-near-black/70">
+          {refusal}
+        </p>
       ) : null}
     </div>
   );
@@ -364,6 +469,7 @@ function TeamList({
   school,
   onInvite,
   onEdit,
+  onChanged,
 }: {
   team: TeamMember[];
   /** The school's name, or null when its record could not be read. */
@@ -372,6 +478,7 @@ function TeamList({
   seats: Omit<AdminTeam, "members">;
   onInvite: () => void;
   onEdit: (m: TeamMember) => void;
+  onChanged: () => void;
 }) {
   /*
    * WHO CAN ADMINISTER, AND WHO USES A SEAT: everyone not deactivated. A
@@ -505,9 +612,10 @@ function TeamList({
             last={i === team.length - 1}
             you={m.userId === me}
             // Not your own row: taking your own Oversight away would lose the
-            // page you are standing on, and the founder's lock needs a
-            // founding flag the team response does not carry.
+            // page you are standing on. The founder's Oversight is locked in
+            // the sheet itself - see `EditAccessPanel`.
             onEdit={m.userId === me ? undefined : () => onEdit(m)}
+            onChanged={onChanged}
           />
         ))}
       </div>

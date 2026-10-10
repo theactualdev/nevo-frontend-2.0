@@ -268,6 +268,12 @@ export interface AdminStudentRow {
   name: string;
   /** The student's sign-in name. Belongs on the detail page; do not drop it. */
   loginIdentifier: string | null;
+  /**
+   * The Student ID / Admission Number the school typed at enrolment - the one
+   * a child signs back in with after a PIN clear. On the reads since 8 Oct;
+   * null for a child enrolled without one.
+   */
+  admissionNumber?: string | null;
   /** "active" | "deactivated" in practice; the schema does not narrow it. */
   status: string;
   ageBand: string | null;
@@ -297,6 +303,8 @@ export interface AdminStudentDetail {
   firstName: string | null;
   lastName: string | null;
   loginIdentifier: string | null;
+  /** See `AdminStudentRow.admissionNumber`. */
+  admissionNumber?: string | null;
   email: string | null;
   status: string;
   ageBand: string | null;

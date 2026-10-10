@@ -228,7 +228,8 @@ export function StudentsView() {
       .filter((s) =>
         needle
           ? s.name.toLowerCase().includes(needle) ||
-            (s.loginIdentifier ?? "").toLowerCase().includes(needle)
+            (s.loginIdentifier ?? "").toLowerCase().includes(needle) ||
+            (s.admissionNumber ?? "").toLowerCase().includes(needle)
           : true,
       );
   }, [students, search, consent]);
@@ -472,8 +473,8 @@ export function StudentsView() {
                 className={cn(
                   "grid gap-4 border-b border-nevo-near-black/8 bg-nevo-near-black/[0.03] px-6 py-[13px] text-[11.5px] font-semibold uppercase tracking-[0.05em] text-nevo-near-black/50",
                   maySend
-                    ? "grid-cols-[20px_1.5fr_1fr_112px_112px_136px]"
-                    : "grid-cols-[1.5fr_1fr_112px_112px_136px]",
+                    ? "grid-cols-[20px_1.5fr_0.9fr_1fr_112px_112px_136px]"
+                    : "grid-cols-[1.5fr_0.9fr_1fr_112px_112px_136px]",
                 )}
               >
                 {maySend ? (
@@ -496,6 +497,8 @@ export function StudentsView() {
                   </span>
                 ) : null}
                 <span>Student</span>
+                {/* D07's column, on the read since 8 Oct. */}
+                <span>Student ID</span>
                 <span>Class</span>
                 <span>Consent</span>
                 <span>Status</span>
@@ -546,8 +549,8 @@ export function StudentsView() {
                       className={cn(
                         "grid items-center gap-4 transition-colors hover:bg-nevo-navy/[0.03]",
                         maySend
-                          ? "grid-cols-[20px_1.5fr_1fr_112px_112px_136px] pl-6"
-                          : "grid-cols-[1.5fr_1fr_112px_112px_136px]",
+                          ? "grid-cols-[20px_1.5fr_0.9fr_1fr_112px_112px_136px] pl-6"
+                          : "grid-cols-[1.5fr_0.9fr_1fr_112px_112px_136px]",
                         i < visible.length - 1 && ROW_DIVIDER,
                       )}
                     >
@@ -567,7 +570,7 @@ export function StudentsView() {
                         type="button"
                         onClick={() => router.push(`/admin/students/${s.id}`)}
                         className={cn(
-                          "col-span-4 grid cursor-pointer grid-cols-subgrid items-center gap-4 py-[15px] text-left",
+                          "col-span-5 grid cursor-pointer grid-cols-subgrid items-center gap-4 py-[15px] text-left",
                           !maySend && "pl-6",
                         )}
                       >
@@ -588,6 +591,9 @@ export function StudentsView() {
                               </span>
                             ) : null}
                           </span>
+                        </span>
+                        <span className="min-w-0 truncate text-sm text-nevo-near-black/72 tabular-nums">
+                          {s.admissionNumber?.trim() ?? ""}
                         </span>
                         <span className="min-w-0 truncate text-sm text-nevo-near-black/66">
                           {cls ? (

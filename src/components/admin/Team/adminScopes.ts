@@ -107,6 +107,10 @@ export function orderScopes(scopes: PermissionScope[]): PermissionScope[] {
  */
 export const ADMIN_SEATS_STANDARD = 5;
 
+/** D03's reason beside the founder's locked General Oversight. */
+export const FOUNDING_LOCK_LINE =
+  "General Oversight stays with the founding admin, so the school can never lock itself out.";
+
 /** "five" for the standard allowance, the figure for any other. */
 export function seatWords(limit: number): string {
   return limit === ADMIN_SEATS_STANDARD ? "five" : String(limit);

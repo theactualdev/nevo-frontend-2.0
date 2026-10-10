@@ -21,6 +21,13 @@ export interface TeamMember {
   role: string;
   status: string;
   scopes: PermissionScope[];
+  /**
+   * The admin who founded the school (since 8 Oct). Their General Oversight is
+   * locked - "so the school can never lock itself out" (D03).
+   */
+  founding?: boolean;
+  /** When they were last seen, for the row's neutral "Active today". */
+  lastActiveAt?: string | null;
 }
 
 /**
@@ -125,6 +132,21 @@ export const teamApi = {
    * have been an empty team.
    */
   list: () => api.get<unknown>("/api/v1/admin/team").then(toAdminTeam),
+
+  /**
+   * POST /api/v1/admin/team/{id}/deactivate - their access ends; the account
+   * and everything they set up stay. Refused (409) for yourself, the last
+   * General Oversight admin, or a team an SSO provider manages.
+   */
+  deactivate: (targetUserId: string) =>
+    api.post<TeamMember>(`/api/v1/admin/team/${targetUserId}/deactivate`),
+
+  /**
+   * POST /api/v1/admin/team/{id}/restore - their access returns. Refused (409)
+   * past the seat allowance, like an invitation.
+   */
+  restore: (targetUserId: string) =>
+    api.post<TeamMember>(`/api/v1/admin/team/${targetUserId}/restore`),
 
   /** POST /api/v1/admin/team/invitations - returns the activation token. */
   invite: (payload: InviteTeamMemberRequest) =>
