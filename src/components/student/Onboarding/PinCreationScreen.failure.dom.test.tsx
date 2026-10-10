@@ -137,12 +137,28 @@ describe("when the PIN route says why (B68)", () => {
     return storePin;
   };
 
-  it("asks a throttled child to wait, in D68's words, not to try again now", async () => {
+  /*
+   * D154 (9 Oct), which "holds everywhere a child enters a PIN": "a pause,
+   * not a lockout ... no blame, no red, no error". It was "That didn't save"
+   * with D68's wait line under it.
+   */
+  it("pauses a throttled child, with the rows held and no failure said (D154)", async () => {
     await renderRefused(refused(429, "too_many_attempts"));
 
-    expect(alertText()).toContain("That didn't save");
-    expect(alertText()).toContain("Let's wait a moment before trying again.");
-    expect(alertText()).not.toContain("That's on us - try again.");
+    expect(
+      screen.getByRole("heading", { name: "Let's take a moment" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Try your PIN again in a moment. No rush."),
+    ).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(
+      /didn.t save|on us|wait a moment before/,
+    );
+    // Not an error: nothing is announced as one.
+    expect(screen.queryByRole("alert")).toBeNull();
+    // Both rows, held: dimmed, empty, inert.
+    expect(document.querySelectorAll("[data-held-pin]")).toHaveLength(2);
+    expect(screen.queryByLabelText("Your PIN")).toBeNull();
     // The PIN is still kept: the button sends it again once they have waited.
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });

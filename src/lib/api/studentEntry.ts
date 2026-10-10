@@ -53,6 +53,12 @@ export interface StudentEntryState {
   /** Computed server-side from the roster's date of birth. Null is possible. */
   age: number | null;
   /**
+   * The spec's closed `AgeBand` (backend, 9 Oct): from the date of birth or,
+   * when there is none, from the enrolled class year. It is what the baseline
+   * runs on. Optional because the contract does not require it.
+   */
+  ageBand?: string | null;
+  /**
    * "This child has a PIN and can sign in normally" (backend, B64), which
    * sends them to sign back in rather than through a first run.
    *

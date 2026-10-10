@@ -26,6 +26,10 @@ vi.mock("@/lib/api/settings", () => ({
     get: vi.fn().mockResolvedValue({ settings: {} }),
     update: vi.fn().mockResolvedValue({}),
   },
+  personalSettingsApi: {
+    get: vi.fn().mockResolvedValue({ userId: "u", preferences: {} }),
+    update: vi.fn().mockResolvedValue({ userId: "u", preferences: {} }),
+  },
 }));
 
 const renderProfile = () =>

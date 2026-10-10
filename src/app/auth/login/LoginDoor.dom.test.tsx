@@ -250,16 +250,56 @@ describe("an account that is not a student's", () => {
     expect(router.push).not.toHaveBeenCalled();
   });
 
-  it("is refused when the role is one this build has never heard of", async () => {
+  /*
+   * D128 (8 Oct), drawn as a screen of its own. These read "Those details are
+   * right, but this account can't be used to sign in here", which told
+   * whoever typed them that the account exists.
+   */
+  it("shows a parent the student door and their own, and goes back to the picker", async () => {
     loginPin.mockResolvedValue({ ...SESSION, role: "parent_guardian" });
     await chooseAda();
 
     await tap("1234");
 
     expect(
-      await screen.findByText(/can.t be used to sign in here/),
+      await screen.findByText(
+        "This is where students sign in. Parents have their own door.",
+      ),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "This is the student door" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Go to the parent portal" }),
+    ).toHaveAttribute("href", "/parent-sign-in");
+    expect(screen.queryByText(/can.t be used to sign in here/)).toBeNull();
     expect(signIn).not.toHaveBeenCalled();
+    expect(logout).toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Back to sign in" }));
+
+    expect(await screen.findByRole("button", { name: "Kofi" })).toBeVisible();
+  });
+
+  it("tells an account it does not recognise nothing about it, and offers no other door", async () => {
+    loginPin.mockResolvedValue({ ...SESSION, role: "superuser" });
+    await chooseAda();
+
+    await tap("1234");
+
+    expect(
+      await screen.findByText("We couldn't sign you in with those details."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("link")).toBeNull();
+    expect(screen.queryByText(/parent|staff|email/i)).toBeNull();
+    expect(signIn).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    // Back at this child's PIN, not the picker.
+    expect(
+      await screen.findByText("Enter your PIN to keep going"),
+    ).toBeInTheDocument();
   });
 
   it("lets a student through", async () => {
@@ -466,7 +506,12 @@ describe("the door lines 28c draws", () => {
     ).toBeInTheDocument();
   });
 
-  it("asks a rate-limited child to wait, never that the PIN was wrong (28c-7)", async () => {
+  /*
+   * D154 (9 Oct): "a pause, not a lockout: no count of attempts shown, no
+   * countdown, no how-long, no blame, no red, no error." It replaced 28c-7's
+   * "Let's wait a moment before trying again." in the tinted box.
+   */
+  it("pauses a rate-limited child's PIN entry, and raises Forgot PIN as the way out (D154)", async () => {
     loginPin.mockRejectedValue(
       new ApiError(401, "Unauthorized", {
         detail: { code: "too_many_attempts", message: "slow" },
@@ -477,9 +522,45 @@ describe("the door lines 28c draws", () => {
     await tap("1234");
 
     expect(
-      await screen.findByText("Let's wait a moment before trying again."),
+      await screen.findByRole("heading", { name: "Let's take a moment" }),
     ).toBeInTheDocument();
-    expect(screen.queryByText(/didn.t match/)).toBeNull();
+    expect(
+      screen.getByText("Try your PIN again in a moment. No rush."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/didn.t match|wait a moment before/)).toBeNull();
+    // The boxes held, and no pad to type into them.
+    expect(document.querySelector("[data-held-pin]")).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "1" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Not you? Go back" })).toBeVisible();
+
+    // A key cannot quietly reopen it, and nothing is sent.
+    fireEvent.change(screen.getByLabelText("PIN"), { target: { value: "5" } });
+    expect(screen.getByText("Let's take a moment")).toBeInTheDocument();
+    expect(loginPin).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Forgot PIN?" }));
+    expect(router.push).toHaveBeenCalledWith(
+      expect.stringContaining("/auth/forgot-pin?"),
+    );
+  });
+
+  it("opens the PIN again for a child who comes back from the picker", async () => {
+    loginPin.mockRejectedValue(
+      new ApiError(401, "Unauthorized", {
+        detail: { code: "too_many_attempts", message: "slow" },
+      }),
+    );
+    await chooseAda();
+    await tap("1234");
+    await screen.findByText("Let's take a moment");
+
+    fireEvent.click(screen.getByRole("button", { name: "Not you? Go back" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Ada" }));
+
+    expect(
+      await screen.findByText("Enter your PIN to keep going"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "1" })).toBeInTheDocument();
   });
 
   it("tells a staff account to sign in with an email address, with no link (28c-8)", async () => {

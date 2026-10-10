@@ -23,6 +23,10 @@ import { clearSession, setSession } from "@/lib/auth/session";
  * so a signed-in child with a band is never asked, and the question is left
  * for the case that really has none.
  *
+ * AND NOW NOT EVEN THEN (D153, 8 Oct): "There is no stepper, and we do not ask
+ * the child." A child with no band runs Primary 4-6, the band the warm-up runs
+ * without one (D139), until a class band reaches the client.
+ *
  * The one thing that must not happen is reading it for the wrong child. Only
  * the SSO path is signed in during this run; anyone else's session on the
  * device may be the previous child's, so nothing is read for them.
@@ -87,13 +91,13 @@ describe("a signed-in child the roster has a band for", () => {
     expect(screen.getByText("grid 5")).toBeInTheDocument();
   });
 
-  it("is banded by the roster over a stale Step 1 age", async () => {
+  it("is banded by the roster over a stale entry band", async () => {
     signIn("child-1");
-    mergeOnboardingDraft({ age: 7 });
+    mergeOnboardingDraft({ ageBand: "early_primary" });
     myDashboard.mockResolvedValue(dashboardFor("child-1", "junior_secondary"));
 
     render(<ProfilingFlow onDone={vi.fn()} ownerUserId="child-1" />);
-    // Held until the roster answers, even with an age in hand.
+    // Held until the roster answers, even with a band in hand.
     expect(letsGo()).toBeDisabled();
     await waitFor(() => expect(letsGo()).not.toBeDisabled());
     fireEvent.click(letsGo());
@@ -115,24 +119,33 @@ describe("before the roster answers", () => {
   });
 });
 
-describe("when the roster has no band to give", () => {
-  it("asks, when the row has no date of birth", async () => {
+describe("when the roster has no band to give (D153)", () => {
+  it("is never asked their age, and runs Primary 4-6 when the row has no date of birth", async () => {
     signIn("child-1");
     myDashboard.mockResolvedValue(dashboardFor("child-1", null));
 
     render(<ProfilingFlow onDone={vi.fn()} ownerUserId="child-1" />);
 
-    expect(await screen.findByText(/how old are you/i)).toBeInTheDocument();
-    expect(letsGo()).toBeDisabled();
+    await waitFor(() => expect(letsGo()).not.toBeDisabled());
+    expect(screen.queryByText(/how old are you/i)).toBeNull();
+    expect(screen.queryByRole("spinbutton")).toBeNull();
+    fireEvent.click(letsGo());
+
+    // Primary 4-6 is tile memory's 4x4 band.
+    expect(screen.getByText("grid 4")).toBeInTheDocument();
   });
 
-  it("asks, when the read fails - a flaky network is not a band", async () => {
+  it("runs Primary 4-6 when the read fails - a flaky network is not a band", async () => {
     signIn("child-1");
     myDashboard.mockRejectedValue(new Error("503"));
 
     render(<ProfilingFlow onDone={vi.fn()} ownerUserId="child-1" />);
 
-    expect(await screen.findByText(/how old are you/i)).toBeInTheDocument();
+    await waitFor(() => expect(letsGo()).not.toBeDisabled());
+    expect(screen.queryByText(/how old are you/i)).toBeNull();
+    fireEvent.click(letsGo());
+
+    expect(screen.getByText("grid 4")).toBeInTheDocument();
   });
 
   it("does not take another child's band", async () => {
@@ -142,8 +155,11 @@ describe("when the roster has no band to give", () => {
     myDashboard.mockResolvedValue(dashboardFor("child-2", "senior_secondary"));
 
     render(<ProfilingFlow onDone={vi.fn()} ownerUserId="child-1" />);
+    await waitFor(() => expect(letsGo()).not.toBeDisabled());
+    fireEvent.click(letsGo());
 
-    expect(await screen.findByText(/how old are you/i)).toBeInTheDocument();
+    // Primary 4-6, not the other child's SS 5x5.
+    expect(screen.getByText("grid 4")).toBeInTheDocument();
   });
 });
 
@@ -155,13 +171,42 @@ describe("a child with no account yet, on a tablet still holding a session", () 
     myDashboard.mockResolvedValue(
       dashboardFor("previous-child", "senior_secondary"),
     );
-    mergeOnboardingDraft({ name: "Amara", age: 9 });
+    mergeOnboardingDraft({ name: "Amara", ageBand: "early_primary" });
 
     render(<ProfilingFlow onDone={vi.fn()} />);
     fireEvent.click(letsGo());
 
     expect(myDashboard).not.toHaveBeenCalled();
-    // Their own Step 1 age: nine is Primary 4-6, the 4x4 band.
+    // The entry lookup's own band: Primary 1-3, the 3x3 band - not the 4x4
+    // a child with no band runs.
+    expect(screen.getByText("grid 3")).toBeInTheDocument();
+  });
+});
+
+/*
+ * BACKEND, 9 OCT: the entry lookup and the dashboard carry `ageBand` from the
+ * date of birth or, with none, from the enrolled class year. The band is the
+ * server's, and the device works out none of its own.
+ */
+describe("the entry lookup's band (9 Oct)", () => {
+  it("is what a child with no account yet runs, class-derived or not", () => {
+    // A child with no date of birth: the server banded them by their class.
+    mergeOnboardingDraft({ name: "Amara", ageBand: "senior_secondary" });
+
+    render(<ProfilingFlow onDone={vi.fn()} />);
+    fireEvent.click(letsGo());
+
+    // SS is tile memory's 5x5 band, not the 4x4 fallback.
+    expect(screen.getByText("grid 5")).toBeInTheDocument();
+  });
+
+  it("falls back to Primary 4-6 only for a band the server did not give", () => {
+    // Not one of the spec's four: no band, so the fallback, never a guess.
+    mergeOnboardingDraft({ name: "Amara", ageBand: "year_9" });
+
+    render(<ProfilingFlow onDone={vi.fn()} />);
+    fireEvent.click(letsGo());
+
     expect(screen.getByText("grid 4")).toBeInTheDocument();
   });
 });
