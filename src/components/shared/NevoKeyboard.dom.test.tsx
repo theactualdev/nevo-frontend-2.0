@@ -82,6 +82,69 @@ describe("NevoKeyboard qwerty case", () => {
   });
 });
 
+/**
+ * D150: "The Nevo pad, with minus and decimal point." The calculation's number
+ * entry took the device's numeric keyboard, and an iPhone's has no minus key.
+ */
+describe("NevoKeyboard calc pad", () => {
+  const press = (name: string) =>
+    fireEvent.click(screen.getByRole("button", { name }));
+
+  it("types digits, a minus sign and a point", () => {
+    const onKey = vi.fn();
+    render(<NevoKeyboard layout="calc" onKey={onKey} />);
+
+    for (const key of ["Minus sign", "1", "2", "Point", "0", "5"]) press(key);
+
+    // The hyphen and full stop a stored answer is written with.
+    expect(onKey.mock.calls.map(([c]) => c).join("")).toBe("-12.05");
+    expect(screen.getByRole("button", { name: "Minus sign" })).toHaveTextContent(
+      "\u2212",
+    );
+  });
+
+  it("is an input surface, not a calculator: no operators, no delete", () => {
+    render(<NevoKeyboard layout="calc" onKey={noop} />);
+
+    const keys = screen.getAllByRole("button").map((b) => b.textContent);
+    expect(keys).toEqual([
+      ...["1", "2", "3", "4", "5", "6", "7", "8", "9"],
+      "\u2212",
+      "0",
+      ".",
+    ]);
+    // "Delete sits at the field."
+    expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
+  });
+
+  it("is shown whatever the pointer, as D150 draws it at desktop", () => {
+    render(<NevoKeyboard layout="calc" onKey={noop} />);
+
+    const kb = screen.getByRole("group", { name: "On-screen keyboard" });
+    expect(kb.className).not.toContain("[@media(pointer:fine)]:hidden");
+  });
+
+  it("never reaches the PIN pad, docked or in the screen", () => {
+    for (const presentation of ["docked", "block"] as const) {
+      render(
+        <NevoKeyboard
+          layout="pad"
+          presentation={presentation}
+          onKey={noop}
+          onBackspace={noop}
+        />,
+      );
+
+      expect(screen.queryByRole("button", { name: "Minus sign" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Point" })).toBeNull();
+      expect(screen.queryByText("\u2212")).toBeNull();
+      expect(screen.queryByText("-")).toBeNull();
+      expect(screen.queryByText(".")).toBeNull();
+      cleanup();
+    }
+  });
+});
+
 describe("NevoKeyboard visibility", () => {
   it("hides itself where a real keyboard exists", () => {
     render(<NevoKeyboard layout="pad" onKey={noop} onBackspace={noop} />);
