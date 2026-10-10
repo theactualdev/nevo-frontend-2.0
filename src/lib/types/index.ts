@@ -11,6 +11,7 @@ export type {
   CalcTapStep,
   CalcScaffold,
   CalcNarration,
+  CalcHighlight,
   ScaffoldQuantity,
   CalculationStep,
   CalculationSegment,

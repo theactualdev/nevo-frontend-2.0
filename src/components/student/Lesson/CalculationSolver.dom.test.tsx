@@ -31,7 +31,8 @@ const step = (over: Record<string, unknown> = {}) => ({
   hint: "Look at the bottom number of each fraction.",
   confirmationText: "Both denominators are 4.",
   visualUpdate: "",
-  assembles: "1/4 + 2/4 = ?",
+  // Backend, 9 Oct: rendered once the step is accepted.
+  assembles: "1/4 + 2/4 = ?/4",
   equationState: "1/4 + 2/4 = ?/4",
   unit: null,
   narrationAudio: null,
@@ -42,12 +43,13 @@ const QUARTERS = {
   type: "co_construction",
   conceptId: "c-1",
   fullEquation: "1/4 + 2/4 = 3/4",
-  expression: "1/4 + 2/4",
+  expression: "1/4 + 2/4 = ?",
   answer: "3/4",
   scaffold: {
     kind: "bar",
     parts: 4,
-    rows: 1,
+    // B100: the physical row count, one bar for each mark.
+    rows: 2,
     marks: [1, 2],
     labels: ["1/4", "2/4"],
   },
@@ -64,8 +66,8 @@ const QUARTERS = {
       answer: "tops",
       confirmationText: "",
       hint: "",
-      assembles: "1/4 + 2/4 = ?/4",
-      equationState: "1/4 + 2/4 = ?/4",
+      assembles: "1 + 2 = ?",
+      equationState: "1 + 2 = ?",
     }),
     step({
       stepId: "s3",
@@ -76,7 +78,7 @@ const QUARTERS = {
       answer: "3",
       targets: ["3.0"],
       hint: "Just add the two top numbers.",
-      assembles: "1 + 2 = ?",
+      assembles: "1/4 + 2/4 = 3/4",
       equationState: "1/4 + 2/4 = 3/4",
     }),
   ],
@@ -111,9 +113,8 @@ const pick = (label: string) => {
   tap(label);
   tap("Check my answer");
 };
-/** One piece off the tray - they are all the same piece. */
-const placeOne = () =>
-  fireEvent.click(screen.getAllByRole("button", { name: "+ 1/4" })[0]);
+/** One piece off the tray - D149's single piece. */
+const placeOne = () => tap("+ 1/4");
 const equation = () =>
   document.querySelector('[aria-live="polite"]')?.textContent ?? "";
 
@@ -126,18 +127,21 @@ describe("one step at a time", () => {
     expect(screen.queryByText("So what is 1 + 2?")).toBeNull();
   });
 
-  it("assembles the equation from the payload's own strings as the child goes", () => {
+  it("renders each step's assembles once it is accepted, never while it is asked", () => {
+    // Backend, 9 Oct: "Once accepted, render assembles".
     const props = show();
     expect(equation()).toBe("1/4 + 2/4 = ?");
 
     pick("4 and 4");
-    // Confirmed: where step 1 leaves the equation.
+    // Accepted: what step 1 assembles.
     expect(equation()).toBe("1/4 + 2/4 = ?/4");
     expect(screen.getByText("Both denominators are 4.")).toBeInTheDocument();
 
     tap("Next step");
+    // Step 2 is asked: its own assembles waits for its acceptance.
+    expect(equation()).toBe("1/4 + 2/4 = ?/4");
     pick("The numerators: 1 and 2");
-    // Step 3 is asked in its own assembling form, as 17b draws it.
+    // Step 3 is asked on what step 2 assembled, as 17b draws it.
     expect(equation()).toBe("1 + 2 = ?");
 
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "3" } });
@@ -151,10 +155,74 @@ describe("one step at a time", () => {
     expect(props.onSolved).toHaveBeenCalledTimes(1);
   });
 
-  it("falls back to the problem's notation, never to the worked equation", () => {
+  it("takes equationState only where an accepted step assembles nothing", () => {
+    show(
+      build({
+        steps: [
+          step({ confirmationText: "", assembles: "", equationState: "4 and 4 match" }),
+          QUARTERS.steps[2],
+        ],
+      }),
+    );
+
+    pick("4 and 4");
+
+    expect(equation()).toBe("4 and 4 match");
+  });
+
+  it("prefers an accepted step's assembles to its equationState", () => {
+    show(
+      build({
+        steps: [
+          step({
+            confirmationText: "",
+            assembles: "1/4 + 2/4 = ?/4",
+            equationState: "the denominators match",
+          }),
+          QUARTERS.steps[2],
+        ],
+      }),
+    );
+
+    pick("4 and 4");
+
+    expect(equation()).toBe("1/4 + 2/4 = ?/4");
+  });
+
+  it("shows the problem's notation until a step is accepted, never the worked equation", () => {
     show(build({ steps: [step({ assembles: "" })] }));
 
-    expect(equation()).toBe("1/4 + 2/4");
+    expect(equation()).toBe("1/4 + 2/4 = ?");
+  });
+
+  it("shows the solved equation once every step is done, and never before", () => {
+    // B101. The last step leaves the equation one way; `fullEquation` is the
+    // complete solved one, and it is the screen's last line.
+    const calc = build({
+      fullEquation: "1/4 + 2/4 = 3/4, so three quarters",
+      steps: [
+        step({ confirmationText: "" }),
+        QUARTERS.steps[2],
+      ],
+    });
+    show(calc);
+    const seen = [equation()];
+
+    pick("4 and 4");
+    seen.push(equation());
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "3" } });
+    tap("Check my answer");
+
+    expect(seen).not.toContain("1/4 + 2/4 = 3/4, so three quarters");
+    expect(equation()).toBe("1/4 + 2/4 = 3/4, so three quarters");
+  });
+
+  it("never stands the solved equation in for a missing problem", () => {
+    // It used to, on content stored before `expression`: the answer, shown
+    // before the first step.
+    show(build({ expression: undefined, steps: [step({ assembles: "" })] }));
+
+    expect(equation()).toBe("");
   });
 });
 
@@ -229,19 +297,42 @@ describe("the hint", () => {
   });
 });
 
-describe("entering a number", () => {
-  it("opens the device's numeric keyboard, which has a minus and a point", () => {
-    show(build({ steps: [step({ input: "number", expectedInput: "numeric", answer: "-2.5" })] }));
+describe("entering a number (D150)", () => {
+  const NEGATIVE = () =>
+    build({
+      steps: [step({ input: "number", expectedInput: "numeric", answer: "-2.5" })],
+    });
+  const pad = () => screen.queryByRole("group", { name: "On-screen keyboard" });
 
-    expect(screen.getByRole("textbox")).toHaveAttribute("inputmode", "decimal");
-    // The 0-9 pad had neither key, so "-2.5" could not be typed on a tablet.
-    expect(screen.queryByRole("group", { name: "On-screen keyboard" })).toBeNull();
+  it("takes the Nevo pad, with a minus sign and a point, in place of the device's", () => {
+    show(NEGATIVE());
+
+    // The device's own keyboard is suppressed: an iPhone's has no minus.
+    expect(screen.getByRole("textbox")).toHaveAttribute("inputmode", "none");
+    expect(pad()).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Minus sign" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Point" })).toBeInTheDocument();
+    expect(screen.getByText("Your answer")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Type the number you worked out. You can use a minus sign or a point.",
+      ),
+    ).toBeInTheDocument();
   });
 
-  it("takes a negative decimal and matches it", () => {
-    const props = show(
-      build({ steps: [step({ input: "number", expectedInput: "numeric", answer: "-2.5" })] }),
-    );
+  it("types a negative decimal on the pad and matches it", () => {
+    const props = show(NEGATIVE());
+
+    for (const key of ["Minus sign", "2", "Point", "5"]) tap(key);
+
+    // Drawn with the minus sign, kept as the hyphen the answer is stored with.
+    expect(screen.getByRole("textbox")).toHaveValue("\u22122.5");
+    tap("Check my answer");
+    expect(props.onStepAnswered).toHaveBeenCalledWith("s1", true);
+  });
+
+  it("keeps a laptop's own typing", () => {
+    const props = show(NEGATIVE());
 
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "-2.5" } });
     fireEvent.submit(screen.getByRole("textbox").closest("form")!);
@@ -249,10 +340,38 @@ describe("entering a number", () => {
     expect(props.onStepAnswered).toHaveBeenCalledWith("s1", true);
   });
 
-  it("gives an expression the full keyboard", () => {
+  it("keeps the hyphen when a laptop types on after the pad's minus sign", () => {
+    const props = show(NEGATIVE());
+    tap("Minus sign");
+    tap("2");
+
+    // The field now reads "−2"; typing ".5" after it hands back "−2.5".
+    fireEvent.change(screen.getByRole("textbox"), {
+      target: { value: "\u22122.5" },
+    });
+    tap("Check my answer");
+
+    expect(props.onStepAnswered).toHaveBeenCalledWith("s1", true);
+  });
+
+  it("deletes at the field, and only once there is something to delete", () => {
+    show(NEGATIVE());
+    expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
+
+    tap("2");
+    tap("5");
+    tap("Delete");
+
+    expect(screen.getByRole("textbox")).toHaveValue("2");
+    // The pad itself has no delete key.
+    expect(pad()?.querySelector('[aria-label="Delete"]')).toBeNull();
+  });
+
+  it("gives an expression the full keyboard, and no pad", () => {
     show(build({ steps: [step({ input: "number", expectedInput: "text", answer: "3x - 4" })] }));
 
     expect(screen.getByRole("textbox")).toHaveAttribute("inputmode", "text");
+    expect(pad()).toBeNull();
   });
 });
 
@@ -263,17 +382,25 @@ describe("building with pieces", () => {
     expectedInput: "drag",
     input: "tap",
     options: [],
-    answer: "3",
+    // B102: how many pieces is `tapCount`, never read out of the answer.
+    answer: "3/4",
+    tapCount: 3,
   });
 
-  it("offers the stored count of pieces and says each one placed", () => {
+  it("offers one piece to tap, as D149 does for every kind, and says each one placed", () => {
+    // Design, 9 Oct: "One scaffold, one interaction, everywhere." A tile per
+    // piece still to place told the child how many were left.
     const props = show(build({ steps: [BUILD] }));
 
-    expect(screen.getAllByRole("button", { name: "+ 1/4" })).toHaveLength(3);
+    expect(screen.getAllByRole("button", { name: "+ 1/4" })).toHaveLength(1);
+    expect(screen.getByText("Tap to add")).toBeInTheDocument();
     placeOne();
 
     expect(props.onPiecePlaced).toHaveBeenCalledWith("b1");
-    expect(screen.getAllByRole("button", { name: "+ 1/4" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "+ 1/4" })).toHaveLength(1);
+    expect(
+      document.querySelectorAll("[data-build-place].bg-nevo-navy"),
+    ).toHaveLength(1);
     expect(screen.queryByRole("button", { name: "That's the total" })).toBeNull();
   });
 
@@ -281,6 +408,8 @@ describe("building with pieces", () => {
     const props = show(build({ steps: [BUILD] }));
 
     for (let i = 0; i < 3; i++) placeOne();
+    // The piece goes once the stored count is placed.
+    expect(screen.queryByRole("button", { name: "+ 1/4" })).toBeNull();
     tap("That's the total");
 
     expect(props.onPiecePlaced).toHaveBeenCalledTimes(3);
@@ -289,6 +418,13 @@ describe("building with pieces", () => {
   });
 });
 
+/** The drawing's rows, bar or array, as rendered. */
+const scaffoldRows = () => [
+  ...document.querySelectorAll<HTMLElement>("[data-scaffold-row]"),
+];
+const countIn = (selector: string) => () =>
+  scaffoldRows().map((r) => r.querySelectorAll(selector).length);
+
 describe("the drawing", () => {
   it("draws the payload's bars with the values it was given", () => {
     show();
@@ -296,12 +432,9 @@ describe("the drawing", () => {
     expect(screen.getByText("Picture it")).toBeInTheDocument();
     expect(screen.getByText("1/4")).toBeInTheDocument();
     expect(screen.getByText("2/4")).toBeInTheDocument();
-    const rows = document.querySelectorAll("[aria-hidden].flex.flex-1");
+    const rows = scaffoldRows();
     expect(rows).toHaveLength(2);
-    const filled = [...rows].map(
-      (r) => r.querySelectorAll(".bg-nevo-violet").length,
-    );
-    expect(filled).toEqual([1, 2]);
+    expect(countIn(".bg-nevo-violet")()).toEqual([1, 2]);
     // Four cells a row: `parts`, as given.
     expect(rows[0].children).toHaveLength(4);
   });
@@ -314,14 +447,378 @@ describe("the drawing", () => {
     expect(equation()).toBe("1/4 + 2/4 = ?");
   });
 
-  it("adds no result row on completion - its count would be the screen's sum", () => {
+  it("adds no result row the payload did not write - its count would be the screen's sum", () => {
     show(build({ steps: [QUARTERS.steps[2]] }));
 
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "3" } });
     tap("Check my answer");
 
-    expect(document.querySelectorAll("[aria-hidden].flex.flex-1")).toHaveLength(2);
+    expect(scaffoldRows()).toHaveLength(2);
     expect(screen.queryByText("3/4")).toBeNull();
+  });
+
+  it("lays several marks along one bar, one after another, each label under its own cells", () => {
+    // SCRUM-177's own example. Backend, 9 Oct: "A bar may therefore have
+    // more marks than rows."
+    show(
+      build({
+        scaffold: { kind: "bar", parts: 5, rows: 1, marks: [3, 1], labels: ["3/5", "1/5"] },
+      }),
+    );
+
+    const [bar] = scaffoldRows();
+    expect(scaffoldRows()).toHaveLength(1);
+    expect([...bar.children].map((c) => c.className.match(/bg-nevo-violet(\/55)?\b/)?.[0] ?? "")).toEqual([
+      "bg-nevo-violet",
+      "bg-nevo-violet",
+      "bg-nevo-violet",
+      "bg-nevo-violet/55",
+      "",
+    ]);
+    expect(screen.getByText("3/5").style.gridColumn).toBe("1 / span 3");
+    expect(screen.getByText("1/5").style.gridColumn).toBe("4 / span 1");
+  });
+
+  it("draws empty bars with a part's label under it where there are no marks", () => {
+    // "label[i] belongs to ... scaffold part i" when there are no marks.
+    show(
+      build({
+        scaffold: { kind: "bar", parts: 3, rows: 2, labels: ["a", "b", "c"] },
+      }),
+    );
+
+    expect(scaffoldRows()).toHaveLength(2);
+    expect(countIn(".bg-nevo-violet")()).toEqual([0, 0]);
+    expect(["a", "b", "c"].map((l) => screen.getByText(l))).toHaveLength(3);
+  });
+});
+
+describe("D149's array and place value", () => {
+  const pieces = (piece: string, within: ParentNode = document) =>
+    within.querySelectorAll(`[data-piece="${piece}"]`).length;
+  const zones = (piece: string, within: ParentNode = document) =>
+    within.querySelectorAll(`[data-zone="${piece}"]`).length;
+
+  it("draws an array as rows of parts columns, its marks filling them in reading order", () => {
+    // Backend, 9 Oct: "parts is the number of columns in one row".
+    show(build({ scaffold: { kind: "array", parts: 4, rows: 3, marks: [6] } }));
+
+    expect(screen.getByText("Picture it")).toBeInTheDocument();
+    expect(scaffoldRows().map((r) => r.children.length)).toEqual([4, 4, 4]);
+    expect(countIn(".bg-nevo-navy")()).toEqual([4, 2, 0]);
+    // The rest are D149's empty places.
+    expect(scaffoldRows()[2].querySelectorAll(".border-dashed")).toHaveLength(4);
+  });
+
+  it("tells an array's marks apart, navy then violet", () => {
+    show(build({ scaffold: { kind: "array", parts: 4, rows: 2, marks: [5, 2] } }));
+
+    expect(countIn(".bg-nevo-navy")()).toEqual([4, 1]);
+    expect(countIn(".bg-nevo-violet")()).toEqual([0, 2]);
+  });
+
+  it("draws place value as flats, rods and units, a mark to each column", () => {
+    show(
+      build({
+        scaffold: {
+          kind: "place_value",
+          parts: 1,
+          marks: [1, 2, 3],
+          labels: ["Hundreds", "Tens", "Ones"],
+        },
+      }),
+    );
+
+    expect([pieces("flat"), pieces("rod"), pieces("unit")]).toEqual([1, 2, 3]);
+    expect(screen.getByText("Hundreds")).toBeInTheDocument();
+    expect(screen.getByText("Ones")).toBeInTheDocument();
+  });
+
+  it("names no column the payload did not name", () => {
+    show(build({ scaffold: { kind: "place_value", parts: 1, marks: [0, 4, 7] } }));
+
+    expect([pieces("flat"), pieces("rod"), pieces("unit")]).toEqual([0, 4, 7]);
+    for (const name of ["Hundreds", "Tens", "Ones"]) {
+      expect(screen.queryByText(name)).toBeNull();
+    }
+  });
+
+  it("draws dots as D149's rows of round places, filled in reading order", () => {
+    // D149 replaced 37c's groups of two, which read neither rows nor parts.
+    show(build({ scaffold: { kind: "dots", parts: 5, rows: 2, marks: [6] } }));
+
+    expect(scaffoldRows().map((r) => r.children.length)).toEqual([5, 5]);
+    expect(countIn(".rounded-full.bg-nevo-navy")()).toEqual([5, 1]);
+    expect(scaffoldRows()[1].querySelectorAll(".border-dashed")).toHaveLength(4);
+  });
+
+  const beads = () => [...document.querySelectorAll<HTMLElement>("[data-bead]")];
+
+  it("draws a number line of parts positions, a part's label under its own", () => {
+    // "Cells or positions in one row": D149's 0 to 10 is eleven positions.
+    const labels = ["0", "", "", "", "", "5", "", "", "", "", "10"];
+    show(build({ scaffold: { kind: "number_line", parts: 11, labels } }));
+
+    expect(document.querySelectorAll("[data-tick]")).toHaveLength(11);
+    expect(screen.getByText("5").style.left).toBe("50%");
+    expect(screen.getByText("10").style.left).toBe("100%");
+    expect(beads()).toHaveLength(0);
+  });
+
+  it("puts the marker at each mark's position on the line", () => {
+    show(build({ scaffold: { kind: "number_line", parts: 11, marks: [4] } }));
+
+    expect(beads().map((b) => b.style.left)).toEqual(["40%"]);
+  });
+
+  const TAP = (tapCount: number) =>
+    step({
+      stepId: "a1",
+      prompt: "Build the total.",
+      expectedInput: "drag",
+      input: "tap",
+      options: [],
+      tapCount,
+    });
+
+  it("builds into an array's empty places in reading order, from one piece", () => {
+    const props = show(
+      build({ manipulative: { kind: "array", parts: 3, rows: 2 }, steps: [TAP(4)] }),
+    );
+    const buildRows = () => [
+      ...document.querySelectorAll<HTMLElement>("[data-build-row]"),
+    ];
+    const filled = () =>
+      buildRows().map((r) => r.querySelectorAll(".bg-nevo-navy").length);
+    expect(buildRows()).toHaveLength(2);
+    expect(filled()).toEqual([0, 0]);
+    // D149 offers one piece to tap, not one per piece still to place.
+    expect(screen.getAllByRole("button", { name: "Tap to add" })).toHaveLength(1);
+
+    for (let i = 0; i < 4; i++) tap("Tap to add");
+
+    expect(filled()).toEqual([3, 1]);
+    expect(props.onPiecePlaced).toHaveBeenCalledTimes(4);
+    expect(screen.queryByRole("button", { name: "Tap to add" })).toBeNull();
+    tap("That's the total");
+    expect(props.onStepAnswered).toHaveBeenCalledWith("a1", true);
+    expect(props.onSolved).toHaveBeenCalled();
+  });
+
+  it("hops along a number line from its first position, one a tap", () => {
+    const props = show(
+      build({ manipulative: { kind: "number_line", parts: 5 }, steps: [TAP(3)] }),
+    );
+    // QUARTERS draws bars, so the only marker is the build's.
+    expect(beads().map((b) => b.style.left)).toEqual(["0%"]);
+
+    for (let i = 0; i < 3; i++) tap("+1");
+
+    expect(beads().map((b) => b.style.left)).toEqual(["75%"]);
+    expect(props.onPiecePlaced).toHaveBeenCalledTimes(3);
+    expect(screen.queryByRole("button", { name: "+1" })).toBeNull();
+    tap("That's the total");
+    expect(props.onStepAnswered).toHaveBeenCalledWith("a1", true);
+  });
+
+  it("builds place value column by column, each to the scaffold's count for it", () => {
+    // "marks are the piece counts for the columns named by labels".
+    const props = show(
+      build({
+        scaffold: {
+          kind: "place_value",
+          parts: 1,
+          marks: [1, 2, 0],
+          labels: ["Hundreds", "Tens", "Ones"],
+        },
+        manipulative: { kind: "place_value", parts: 1 },
+        steps: [TAP(3)],
+      }),
+    );
+    const build_ = () => [
+      ...document.querySelectorAll<HTMLElement>("[data-build-column]"),
+    ];
+    expect(build_().map((c) => [zones("flat", c), zones("rod", c), zones("unit", c)])).toEqual([
+      [1, 0, 0],
+      [0, 2, 0],
+      [0, 0, 0],
+    ]);
+    // A tray piece for each column with places to fill; Ones has none.
+    expect(
+      screen.getAllByRole("button", { name: /^Tap to add/ }).map((b) => b.getAttribute("aria-label")),
+    ).toEqual(["Tap to add, Hundreds", "Tap to add, Tens"]);
+
+    tap("Tap to add, Tens");
+    tap("Tap to add, Tens");
+    expect(screen.queryByRole("button", { name: "Tap to add, Tens" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "That's the total" })).toBeNull();
+
+    tap("Tap to add, Hundreds");
+    expect(build_().map((c) => [pieces("flat", c), pieces("rod", c)])).toEqual([
+      [1, 0],
+      [0, 2],
+      [0, 0],
+    ]);
+    expect(props.onPiecePlaced).toHaveBeenCalledTimes(3);
+    tap("That's the total");
+    expect(props.onStepAnswered).toHaveBeenCalledWith("a1", true);
+  });
+});
+
+describe("what the asked step names (B107)", () => {
+  /**
+   * 17b's choreography as backend's 9 Oct timing names it: "Highlights apply
+   * while the step is being asked. Once accepted, render assembles and move
+   * to the next step's highlights."
+   */
+  const CHOREOGRAPHED = () =>
+    build({
+      scaffold: {
+        kind: "bar",
+        parts: 4,
+        rows: 3,
+        marks: [1, 2, 3],
+        labels: ["1/4", "2/4", "3/4"],
+      },
+      steps: [
+        step({
+          highlights: [{ target: "1/4" }, { target: "2/4", role: "active" }],
+        }),
+        step({
+          ...QUARTERS.steps[1],
+          highlights: [
+            { target: "1/4", role: "source" },
+            { target: "2/4", role: "source" },
+          ],
+        }),
+        step({
+          ...QUARTERS.steps[2],
+          highlights: [
+            { target: "?", role: "result" },
+            { target: "3/4", role: "result" },
+          ],
+        }),
+      ],
+    });
+  const ringed = () =>
+    scaffoldRows().map((b) => b.querySelectorAll(".outline-nevo-violet").length > 0);
+  const navy = countIn(".bg-nevo-navy");
+  const token = (text: string) =>
+    [...document.querySelectorAll('[aria-live="polite"] span')].find(
+      (s) => s.textContent === text,
+    );
+
+  it("applies a step's highlights from the moment it is asked", () => {
+    show(CHOREOGRAPHED());
+
+    expect(ringed()).toEqual([true, true, false]);
+    expect(navy()).toEqual([0, 0, 0]);
+  });
+
+  it("moves to the next step's highlights once a step is accepted", () => {
+    show(CHOREOGRAPHED());
+
+    // Accepted, its confirmation still showing: step 2's highlights now.
+    pick("4 and 4");
+    expect(ringed()).toEqual([false, false, false]);
+    expect(navy()).toEqual([1, 2, 0]);
+
+    tap("Next step");
+    expect(navy()).toEqual([1, 2, 0]);
+  });
+
+  it("keeps the result back until the step naming it is accepted", () => {
+    show(CHOREOGRAPHED());
+    pick("4 and 4");
+    tap("Next step");
+    pick("The numerators: 1 and 2");
+
+    // The last step is asked: its row is rendered, empty, unnamed.
+    expect(scaffoldRows()).toHaveLength(3);
+    expect(navy()).toEqual([0, 0, 0]);
+    expect(screen.queryByText("3/4")).toBeNull();
+    // The "?" it names is where the answer goes: the frame's dashed box.
+    expect(token("?")).toHaveClass("border-dashed");
+
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "3" } });
+    tap("Check my answer");
+
+    expect(screen.getByText("3/4")).toHaveClass("text-nevo-navy");
+    expect(navy()).toEqual([0, 0, 3]);
+  });
+
+  it("finds a target among the equation's tokens as well as the drawing's labels", () => {
+    show(build({ steps: [step({ highlights: [{ target: "+" }, { target: "2/4", role: "source" }] })] }));
+
+    expect(token("+")).toHaveClass("outline-nevo-violet");
+    // The same name rings, or strengthens, wherever the calculation draws it.
+    expect(token("2/4")).toHaveClass("font-bold");
+    expect(navy()).toEqual([0, 2]);
+  });
+
+  it("ignores a target that names nothing the calculation carries", () => {
+    show(
+      build({
+        steps: [
+          step({
+            highlights: [
+              { target: "denominators" },
+              // An index, a value: the second bar's mark is 2.
+              { target: "1" },
+              { target: "2" },
+              { target: "mark:1" },
+              { target: "1/4 " },
+            ],
+          }),
+        ],
+      }),
+    );
+
+    // "1/4 " is trimmed to a label; nothing else is guessed at - not an
+    // index, not a value.
+    expect(ringed()).toEqual([true, false]);
+  });
+
+  it("rings a build's piece the asked step names by its label", () => {
+    show(
+      build({
+        manipulative: {
+          kind: "fraction_bar",
+          parts: 4,
+          labels: ["q1", "q2", "q3", "q4"],
+        },
+        steps: [
+          step({
+            stepId: "b1",
+            prompt: "Build the total.",
+            expectedInput: "drag",
+            input: "tap",
+            options: [],
+            tapCount: 3,
+            highlights: [{ target: "q2" }],
+          }),
+        ],
+      }),
+    );
+
+    const places = [...document.querySelectorAll("[data-build-place]")];
+    expect(places.map((p) => p.classList.contains("outline-nevo-violet"))).toEqual([
+      false,
+      true,
+      false,
+      false,
+    ]);
+  });
+
+  it("turns nothing navy just because the solve finished", () => {
+    // A payload with no highlights says nothing changed, and nothing does.
+    show(build({ steps: [QUARTERS.steps[2]] }));
+
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "3" } });
+    tap("Check my answer");
+
+    expect(navy()).toEqual([0, 0]);
+    expect(ringed()).toEqual([false, false]);
   });
 });
 
@@ -457,6 +954,11 @@ describe("reading support (D30)", () => {
     show(DONE_WITH_UNIT, true);
 
     expect(screen.getByText("quarters")).toHaveClass(...BODY);
+    expect(
+      screen.getByText(
+        "Type the number you worked out. You can use a minus sign or a point.",
+      ),
+    ).toHaveClass(...BODY);
     expect(screen.getByRole("textbox")).not.toHaveClass("leading-[2]");
 
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "3" } });
@@ -467,10 +969,10 @@ describe("reading support (D30)", () => {
     ).toHaveClass(...BODY);
   });
 
-  it("reaches the labels of grouped dots and a number line", () => {
+  it("reaches the labels of dots' parts and a number line", () => {
     show(
       build({
-        scaffold: { kind: "dots", parts: 1, marks: [3, 4], labels: ["three", "four"] },
+        scaffold: { kind: "dots", parts: 2, labels: ["three", "four"] },
       }),
       true,
     );
