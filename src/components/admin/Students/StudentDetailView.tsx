@@ -244,6 +244,12 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
             }
           />
           <Field label="Username" value={student.loginIdentifier ?? "Not set"} />
+          {/* On the read since 8 Oct. The one a child signs back in with
+              after a PIN clear, so the school needs to be able to find it. */}
+          <Field
+            label="Student ID / Admission Number"
+            value={student.admissionNumber?.trim() || "Not set"}
+          />
           <Field
             label="Status"
             value={

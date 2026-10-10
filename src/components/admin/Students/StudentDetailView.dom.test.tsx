@@ -19,6 +19,7 @@ import { StudentDetailView } from "./StudentDetailView";
  */
 
 const parentLinks = vi.fn();
+let admission: string | null = "BGA/2026/014";
 
 vi.mock("@/lib/api/students", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/students")>();
@@ -31,6 +32,7 @@ vi.mock("@/lib/api/students", async (importOriginal) => {
         firstName: "Amara",
         lastName: "Okafor",
         loginIdentifier: "amara.o",
+        admissionNumber: admission,
         email: null,
         status: "active",
         ageBand: "11-14",
@@ -74,5 +76,22 @@ describe("StudentDetailView guardians", () => {
       expect(visibleText(container)).toMatch(/No guardian on the record/),
     );
     expect(visibleText(container)).not.toMatch(/couldn't read/i);
+  });
+});
+
+describe("StudentDetailView's Student ID (on the read since 8 Oct)", () => {
+  it("shows the admission number the school typed at enrolment", async () => {
+    admission = "BGA/2026/014";
+    parentLinks.mockResolvedValue([]);
+    const { container } = render(<StudentDetailView studentId="s1" />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/Student ID \/ Admission Number/));
+    expect(visibleText(container)).toMatch(/BGA\/2026\/014/);
+  });
+
+  it("says Not set for a child enrolled without one", async () => {
+    admission = null;
+    parentLinks.mockResolvedValue([]);
+    const { container } = render(<StudentDetailView studentId="s1" />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/Student ID \/ Admission Number Not set/));
   });
 });

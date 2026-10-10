@@ -138,3 +138,17 @@ describe("the Curriculum scope, no longer granted (Lydia, 7 Oct)", () => {
     await waitFor(() => expect(updateScopes).toHaveBeenCalledWith("u-2", ["roster"]));
   });
 });
+
+describe("the founder's General Oversight (8 Oct)", () => {
+  it("stays ticked and cannot be changed, and the sheet says why", async () => {
+    list.mockResolvedValue([ME, member("u-2", "Bukola", ["oversight", "billing"])].map((m) =>
+      m.userId === "u-2" ? { ...m, founding: true } : m,
+    ));
+    render(<AdminTeamView />);
+    const sheet = await openBukola();
+    const oversight = within(sheet).getByRole("checkbox", { name: /General Oversight/ });
+    expect(oversight).toBeChecked();
+    expect(oversight).toBeDisabled();
+    expect(within(sheet).getByText(/so the school can never lock itself out/)).toBeInTheDocument();
+  });
+});
