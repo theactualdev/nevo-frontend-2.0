@@ -198,7 +198,7 @@ export function LiveRecommendSheet({
   if (sent) {
     return (
       <Shell onClose={onClose}>
-        <h2 className="text-[19px] font-semibold text-nevo-near-black">
+        <h2 className="text-[20px] font-semibold text-nevo-near-black xl:text-[19px]">
           {`That${"’"}s sent to ${firstName}`}
         </h2>
         <p className="mt-3 text-[14.5px] leading-[1.6] text-nevo-near-black/72">
@@ -219,16 +219,16 @@ export function LiveRecommendSheet({
 
   return (
     <Shell onClose={onClose}>
-      <h2 className="text-[19px] font-semibold text-nevo-near-black">
+      <h2 className="text-[20px] font-semibold text-nevo-near-black xl:text-[19px]">
         {`Recommend a lesson to ${firstName}`}
       </h2>
 
       {suggestion && (
         <div className="mt-4 rounded-[12px] bg-nevo-violet/12 px-4 py-3.5">
-          <p className="text-[12.5px] font-semibold tracking-[0.04em] text-nevo-navy uppercase">
+          <p className="text-[11.5px] font-semibold tracking-[0.04em] text-nevo-navy uppercase xl:text-[12.5px]">
             Nevo suggests
           </p>
-          <p className="mt-1.5 text-[14px] leading-[1.55] text-nevo-near-black/78">
+          <p className="mt-[7px] text-[14px] leading-[1.55] text-nevo-near-black/78 xl:mt-1.5">
             {suggestion}
           </p>
         </div>
@@ -259,7 +259,7 @@ export function LiveRecommendSheet({
             : `We couldn${"’"}t reach your library just now. Nothing has changed, so you can try again.`}
         </p>
       ) : (
-        <div className="mt-3 flex max-h-[280px] flex-col gap-2 overflow-y-auto">
+        <div className="mt-3 flex max-h-[280px] flex-col gap-[9px] overflow-y-auto xl:gap-2">
           {cards.map((c) => (
             <button
               key={c.id}
@@ -267,7 +267,7 @@ export function LiveRecommendSheet({
               aria-pressed={choice === c.id}
               onClick={() => setChoice(c.id)}
               className={cn(
-                "cursor-pointer rounded-[10px] border px-3.5 py-3 text-left transition-colors",
+                "cursor-pointer rounded-[10px] border px-4 py-3.5 text-left transition-colors xl:px-3.5 xl:py-3",
                 choice === c.id
                   ? "border-nevo-navy bg-nevo-navy/6"
                   : "border-nevo-near-black/12 hover:border-nevo-navy/35",
@@ -309,7 +309,7 @@ export function LiveRecommendSheet({
         </label>
       )}
 
-      <div className="mt-6 flex gap-3">
+      <div className="mt-[18px] flex gap-3 xl:mt-6">
         <button
           type="button"
           onClick={onClose}
@@ -369,7 +369,7 @@ function Shell({
         aria-modal="true"
         aria-label="Recommend a lesson"
         onClick={(e) => e.stopPropagation()}
-        className="max-h-[90dvh] w-full max-w-[460px] overflow-y-auto rounded-t-[18px] bg-nevo-cream px-6 py-7 sm:rounded-[18px]"
+        className="max-h-[90dvh] w-full max-w-[520px] overflow-y-auto rounded-t-[18px] bg-nevo-cream p-7 sm:rounded-[16px] xl:max-w-[460px] xl:rounded-[18px] xl:px-6"
       >
         {children}
       </div>

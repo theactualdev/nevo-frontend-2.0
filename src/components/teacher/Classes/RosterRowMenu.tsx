@@ -188,20 +188,20 @@ export function PinClearedDialog({
         aria-modal="true"
         aria-label={`${firstName}${"’"}s PIN is cleared`}
         onClick={(e) => e.stopPropagation()}
-        className="w-[460px] max-w-full rounded-[16px] bg-nevo-cream-elevated p-8 text-center shadow-[0_8px_32px_rgba(0,0,0,0.16)]"
+        className="w-[440px] max-w-full rounded-[16px] bg-nevo-cream-elevated p-[30px] text-center shadow-[0_8px_32px_rgba(0,0,0,0.16)] xl:w-[460px] xl:p-8"
       >
-        <span className="mx-auto flex size-[52px] items-center justify-center rounded-full bg-nevo-navy motion-safe:animate-nevo-pop">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden>
+        <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-nevo-navy motion-safe:animate-nevo-pop xl:size-[52px]">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden className="xl:size-[26px]">
             <path d="M5 12.5l4.2 4.2L19 7" stroke="#f7f1e6" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </span>
-        <h3 className="mt-[22px] text-[21px] font-semibold tracking-[-0.01em] text-nevo-near-black">
+        <h3 className="mt-5 text-[20px] font-semibold tracking-[-0.01em] text-nevo-near-black xl:mt-[22px] xl:text-[21px]">
           {`${firstName}${"’"}s PIN is cleared`}
         </h3>
-        <p className="mt-3 text-[15px] leading-[1.6] text-pretty text-nevo-near-black/72">
+        <p className="mt-[11px] text-[15px] leading-[1.6] text-pretty text-nevo-near-black/72 xl:mt-3">
           {`${firstName} chooses a new PIN at the next sign-in.`}
         </p>
-        <div className="mt-[18px] flex items-start justify-center gap-[11px] rounded-[10px] bg-nevo-violet/14 px-[15px] py-3.5 text-left">
+        <div className="mt-4 flex items-start justify-center gap-[11px] rounded-[10px] bg-nevo-violet/14 px-[15px] py-[13px] text-left xl:mt-[18px] xl:py-3.5">
           <span className="mt-px inline-flex shrink-0 text-nevo-navy">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <path d="M3 3l18 18" />
@@ -214,7 +214,7 @@ export function PinClearedDialog({
             {`You won${"’"}t be able to see the new PIN. Only ${firstName} will know it.`}
           </span>
         </div>
-        <div className="mt-6 flex justify-center">
+        <div className="mt-[22px] flex justify-center xl:mt-6">
           <button
             type="button"
             onClick={onDone}

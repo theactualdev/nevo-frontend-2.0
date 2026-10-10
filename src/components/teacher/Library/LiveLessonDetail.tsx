@@ -572,14 +572,14 @@ export function LiveLessonDetail({
         <SplitSourceNotice segments={segments} />
 
         {waiting > 0 ? (
-          <div className="mt-6 flex max-w-[660px] items-start gap-3.5 rounded-[12px] bg-nevo-violet/14 px-[18px] py-4">
+          <div className="mt-[18px] flex max-w-none items-start gap-3 rounded-[12px] bg-nevo-violet/14 px-[17px] py-[15px] xl:mt-6 xl:max-w-[660px] xl:gap-3.5 xl:px-[18px] xl:py-4">
             <span className="mt-px shrink-0 text-nevo-navy">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 <circle cx="12" cy="12" r="9" />
                 <path d="M12 8h.01M11 12h1v4h1" />
               </svg>
             </span>
-            <p className="text-[14.5px] leading-[1.55] text-nevo-near-black/78">
+            <p className="text-sm leading-[1.55] text-nevo-near-black/78 xl:text-[14.5px]">
               <strong className="font-semibold text-nevo-near-black">
                 {`${waitingLine} waiting for you:`}
               </strong>{" "}
@@ -610,11 +610,11 @@ export function LiveLessonDetail({
              * is built: `useLessonReview` raises it, above, at the moment the
              * last thing holding the lesson is settled.
              */
-            <div className="mt-6 max-w-[660px] rounded-[12px] bg-nevo-navy/6 px-[18px] py-4">
-              <p className="text-[15px] font-semibold text-nevo-near-black">
+            <div className="mt-5 max-w-none rounded-[12px] bg-nevo-navy/6 px-5 py-[18px] xl:mt-6 xl:max-w-[660px] xl:px-[18px] xl:py-4">
+              <p className="text-[15.5px] font-semibold text-nevo-near-black xl:text-[15px]">
                 Ready when you are
               </p>
-              <p className="mt-1 text-[14.5px] leading-[1.55] text-nevo-near-black/70">
+              <p className="mt-[5px] text-sm leading-[1.55] text-nevo-near-black/70 xl:mt-1 xl:text-[14.5px]">
                 {`Nevo has prepared this lesson into ${plural(lesson.segmentCount, "section", "sections")}. Assign it to a class and it'll open for students at the time you choose.`}
               </p>
             </div>
@@ -627,10 +627,10 @@ export function LiveLessonDetail({
             ordinary case; a flagged section is the rarer second reason a
             lesson is held. */}
         {review.keyPoints.length > 0 && (
-          <h3 className={cn(SECTION_H, "mt-7")}>Key points Nevo found</h3>
+          <h3 className={cn(SECTION_H, "mt-[26px] xl:mt-7")}>Key points Nevo found</h3>
         )}
         {review.keyPoints.length > 0 && (
-          <div className="mt-3 flex max-w-[860px] flex-col gap-2.5">
+          <div className="mt-3.5 flex max-w-[860px] flex-col gap-[9px] xl:mt-3 xl:gap-2.5">
             {review.keyPoints.map((kp) => (
               <KeyPointCard
                 key={kp.id}

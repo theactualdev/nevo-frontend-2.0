@@ -119,12 +119,12 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
           My Classes
         </Link>
 
-        <div className="mt-4 flex flex-wrap items-end justify-between gap-5">
+        <div className="mt-3.5 flex flex-wrap items-end justify-between gap-5 xl:mt-4">
           <div>
             <h1 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
               {klass.className}
             </h1>
-            <span className="mt-[5px] block text-[14.5px] text-nevo-near-black/60">
+            <span className="mt-1 block text-sm text-nevo-near-black/60 xl:mt-[5px] xl:text-[14.5px]">
               {students.length > 0
                 ? `${role} · ${students.length} ${students.length === 1 ? "student" : "students"}`
                 : `${role} · Synced from your school`}
@@ -199,7 +199,7 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
                 : `Nevo has a learning profile for ${observed} of ${students.length}. The rest build as they work.`}
             </p>
             {/* C05's line, over the rows that now carry Clear PIN. */}
-            <p className="mt-1.5 max-w-[640px] text-[13px] leading-[1.5] text-nevo-near-black/60">
+            <p className="mt-1.5 max-w-[560px] text-[13px] leading-[1.5] text-nevo-near-black/60 xl:max-w-[640px]">
               If a child forgets their PIN, you can clear it and they choose a
               new one themselves. A deactivated learner can&rsquo;t sign in;
               your admin manages access.

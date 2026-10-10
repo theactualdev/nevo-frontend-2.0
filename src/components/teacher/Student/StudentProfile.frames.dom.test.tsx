@@ -55,3 +55,20 @@ describe("the header at tablet width", () => {
     expect(header).toContainElement(screen.getByRole("link", { name: "Recommend a lesson" }));
   });
 });
+
+/**
+ * DESIGN, 8 OCT: the tablet profile has its Recent sessions back, so C08d's
+ * session panel is reachable on a tablet again. They were desktop-only.
+ */
+describe("Recent sessions at tablet width", () => {
+  const amara = getStudentProfile("amara-okafor");
+
+  it("are drawn below 1280px as well", () => {
+    render(<StudentProfile student={amara!} />);
+    const heading = screen.getByRole("heading", { name: "Recent sessions" });
+
+    for (let el: Element | null = heading; el && el !== document.body; el = el.parentElement) {
+      expect(el.className.split(" ")).not.toContain("hidden");
+    }
+  });
+});

@@ -414,3 +414,28 @@ describe("the section pills", () => {
     expect(screen.queryByRole("navigation", { name: "Sections" })).not.toBeInTheDocument();
   });
 });
+
+/**
+ * DESIGN, 8 OCT: at tablet the review note conforms to its host - no cap of
+ * its own (it was 680px), and the screen's tab row: equal widths, 38px,
+ * 12.5px. Desktop keeps the 820px reading column and its own tabs.
+ */
+describe("at tablet width", () => {
+  it("takes the host's width, capping only from 1280px", () => {
+    show();
+    const column = screen.getByRole("tablist").closest("[class*='xl:max-w-[820px]']")!;
+
+    expect(column).not.toBeNull();
+    expect(column.className).not.toMatch(/(^| )max-w-/);
+  });
+
+  it("lays its tabs out as the screen's row: equal widths, one line", () => {
+    show();
+    const row = screen.getByRole("tablist");
+
+    expect(row.className.split(" ")).not.toContain("flex-wrap");
+    for (const tab of screen.getAllByRole("tab")) {
+      expect(tab).toHaveClass("flex-1", "basis-0", "h-[38px]", "text-[12.5px]", "xl:flex-none");
+    }
+  });
+});

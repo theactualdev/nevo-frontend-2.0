@@ -793,7 +793,7 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
       ) : (
         <div className="flex min-h-0 flex-1 justify-center overflow-y-auto px-7 pt-4 pb-7 xl:px-8 xl:pt-5 xl:pb-8">
           <div className="w-full max-w-[540px] xl:max-w-[560px]">
-            <h1 className="mt-2 text-[23px] font-semibold tracking-[-0.015em] xl:mt-3.5 xl:text-[26px]">
+            <h1 className="mt-0 text-[23px] font-semibold tracking-[-0.015em] xl:mt-3.5 xl:text-[26px]">
               {heading}
             </h1>
 

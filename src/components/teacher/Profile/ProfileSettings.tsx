@@ -45,10 +45,10 @@ import { SignOutModal } from "./SignOutModal";
  */
 
 const SECTION_H3 =
-  "mt-7 text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase xl:mt-8 xl:text-sm";
+  "mt-[26px] text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase xl:mt-8 xl:text-sm";
 
 const CARD =
-  "mt-3.5 overflow-hidden rounded-[12px] bg-nevo-cream-elevated shadow-[0_2px_8px_rgba(0,0,0,0.06)]";
+  "mt-3 overflow-hidden rounded-[12px] bg-nevo-cream-elevated shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-3.5";
 
 
 export function ProfileSettings() {
@@ -123,10 +123,10 @@ export function ProfileSettings() {
         )}
       >
         <div className="min-w-0">
-          <span className="text-[15px] font-medium text-nevo-near-black">
+          <span className="text-[14.5px] font-medium text-nevo-near-black xl:text-[15px]">
             {r.label}
           </span>
-          <div className="mt-0.5 text-[13px] text-nevo-near-black/58">
+          <div className="mt-0.5 text-[12.5px] text-nevo-near-black/58 xl:text-[13px]">
             {r.sub}
           </div>
         </div>
@@ -140,7 +140,7 @@ export function ProfileSettings() {
 
   return (
     <div className="relative mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
-      <div className="mx-auto max-w-[680px]">
+      <div className="mx-auto max-w-[600px] xl:max-w-[680px]">
         <div className="flex items-center justify-between gap-4">
           <h1 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
             Profile &amp; account
@@ -200,7 +200,7 @@ export function ProfileSettings() {
             {signedIn && identityStatus !== "ready" ? null : signedIn ? (
               <>
                 {(identity?.subjects.length || identity?.school) && (
-                  <div className="mt-[3px] text-sm text-nevo-near-black/60">
+                  <div className="mt-[3px] text-[13.5px] text-nevo-near-black/60 xl:text-sm">
                     <span className="xl:hidden">
                       {identity.subjects.join(" & ") || identity.school}
                     </span>
@@ -212,7 +212,7 @@ export function ProfileSettings() {
                   </div>
                 )}
                 {identity?.email && (
-                  <div className="mt-[3px] truncate text-[13.5px] text-nevo-near-black/50">
+                  <div className="mt-[3px] truncate text-[13px] text-nevo-near-black/50 xl:text-[13.5px]">
                     {identity.email}
                   </div>
                 )}
@@ -225,13 +225,13 @@ export function ProfileSettings() {
               </>
             ) : (
               <>
-                <div className="mt-[3px] text-sm text-nevo-near-black/60">
+                <div className="mt-[3px] text-[13.5px] text-nevo-near-black/60 xl:text-sm">
                   <span className="xl:hidden">{profile.subjects}</span>
                   <span className="hidden xl:inline">
                     {`${profile.subjects} · ${profile.school}`}
                   </span>
                 </div>
-                <div className="mt-0.5 truncate text-[13.5px] text-nevo-near-black/50">
+                <div className="mt-0.5 truncate text-[13px] text-nevo-near-black/50 xl:text-[13.5px]">
                   {profile.email}
                 </div>
               </>
@@ -246,7 +246,7 @@ export function ProfileSettings() {
             <button
               type="button"
               onClick={() => setEditOpen(true)}
-              className="inline-flex h-10 shrink-0 cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 px-4 text-sm font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
+              className="inline-flex h-[38px] shrink-0 cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 px-[15px] text-[13.5px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6 xl:h-10 xl:px-4 xl:text-sm"
             >
               Edit
             </button>
@@ -298,7 +298,7 @@ export function ProfileSettings() {
         <button
           type="button"
           onClick={() => setSignOutOpen(true)}
-          className="mt-7 inline-flex cursor-pointer items-center gap-2.5 text-[15px] font-medium text-nevo-navy transition-colors hover:text-nevo-navy/80 xl:mt-8"
+          className="mt-6 inline-flex cursor-pointer items-center gap-2.5 text-[14.5px] font-medium text-nevo-navy transition-colors hover:text-nevo-navy/80 xl:mt-8 xl:text-[15px]"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />

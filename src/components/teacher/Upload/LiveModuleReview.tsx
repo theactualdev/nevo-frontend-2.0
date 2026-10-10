@@ -356,256 +356,259 @@ export function LiveModuleReview({
 
   return (
     <>
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-[22px] xl:px-8 xl:py-7">
-        {banner}
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-[18px] xl:px-8 xl:py-7">
+        {/* The console's reading column: 820px, centred (design system, 8 Oct). */}
+        <div className="mx-auto max-w-[820px]">
+          {banner}
 
-        {flat && (
-          <div className="flex max-w-[720px] flex-col gap-2.5">
-            <div className="flex items-center gap-3 rounded-[12px] bg-nevo-violet/14 px-4 py-3.5">
-              <span className="shrink-0 text-nevo-navy" aria-hidden>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M4 7h16M4 12h16M4 17h16" />
-                </svg>
-              </span>
-              <span className="min-w-0 flex-1 text-[13.5px] leading-[1.5] text-nevo-near-black/78">
-                {`This lesson will play as one continuous flow, with no section breaks. ${plural(rows.length, "segment", "segments")}.`}
-              </span>
-              <button type="button" onClick={addSectionsBack} className={ghostBtn}>
-                Add sections back
-              </button>
-            </div>
-            {flatRows}
-          </div>
-        )}
-
-        {noSuggestion && (
-          <div className="flex max-w-[720px] flex-col gap-2.5">
-            <div className="rounded-[12px] bg-nevo-cream-elevated px-5 py-[18px]">
-              <div className="text-[15px] font-semibold text-nevo-near-black">
-                {/* The frame says "this lesson is short - 5 segments or fewer".
-                    We are not told why Nevo proposed nothing, so we do not say
-                    why. */}
-                Nevo didn&rsquo;t propose any sections for this lesson.
-              </div>
-              <p className="mt-1.5 text-[13.5px] leading-[1.55] text-nevo-near-black/66">
-                It will play as one continuous flow. You can add sections
-                yourself if you&rsquo;d like to give it named parts.
-              </p>
-              <button
-                type="button"
-                onClick={addModulesMyself}
-                disabled={rows.length === 0}
-                className="mt-3.5 inline-flex cursor-pointer items-center gap-[7px] rounded-[10px] bg-nevo-navy px-[15px] py-[9px] text-[13.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93 disabled:cursor-default disabled:opacity-45"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                  <path d="M12 5v14M5 12h14" />
-                </svg>
-                Add sections myself
-              </button>
-            </div>
-            {flatRows}
-          </div>
-        )}
-
-        {modules.length > 0 && (
-          <div className="flex max-w-[720px] flex-col gap-3.5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <span className="text-[13px] text-nevo-near-black/60">
-                {[
-                  plural(modules.length, "section", "sections"),
-                  plural(rows.length, "segment", "segments"),
-                  // Estimated minutes default to 0 in the contract, so a parse
-                  // that measured nothing says nothing rather than "0 minutes".
-                  ...(minutes > 0 ? [`about ${minutes} minutes`] : []),
-                ].join(" · ")}
-              </span>
-              <div className="flex flex-col items-end gap-1">
-                <button type="button" onClick={keepAsOneFlow} className={ghostBtn}>
-                  Keep as one flow
-                </button>
-                <span className="max-w-[280px] text-right text-[11.5px] leading-[1.4] text-nevo-near-black/50">
-                  A deliberate opt-out: students will see one continuous lesson,
-                  with no section breaks.
+          {flat && (
+            <div className="flex flex-col gap-2.5">
+              <div className="flex items-center gap-3 rounded-[12px] bg-nevo-violet/14 px-4 py-3.5">
+                <span className="shrink-0 text-nevo-navy" aria-hidden>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 7h16M4 12h16M4 17h16" />
+                  </svg>
                 </span>
+                <span className="min-w-0 flex-1 text-[13.5px] leading-[1.5] text-nevo-near-black/78">
+                  {`This lesson will play as one continuous flow, with no section breaks. ${plural(rows.length, "segment", "segments")}.`}
+                </span>
+                <button type="button" onClick={addSectionsBack} className={ghostBtn}>
+                  Add sections back
+                </button>
               </div>
+              {flatRows}
             </div>
+          )}
 
-            {modules.map((m, mi) => {
-              const segs = namedSegments(m.segmentIds, segments);
-              return (
-                <div
-                  key={`${mi}-${m.segmentIds[0] ?? "empty"}`}
-                  className="overflow-hidden rounded-[14px] bg-nevo-cream-elevated shadow-[0_2px_10px_rgba(0,0,0,0.05)]"
+          {noSuggestion && (
+            <div className="flex flex-col gap-2.5">
+              <div className="rounded-[12px] bg-nevo-cream-elevated px-5 py-[18px]">
+                <div className="text-[15px] font-semibold text-nevo-near-black">
+                  {/* The frame says "this lesson is short - 5 segments or fewer".
+                      We are not told why Nevo proposed nothing, so we do not say
+                      why. */}
+                  Nevo didn&rsquo;t propose any sections for this lesson.
+                </div>
+                <p className="mt-1.5 text-[13.5px] leading-[1.55] text-nevo-near-black/66">
+                  It will play as one continuous flow. You can add sections
+                  yourself if you&rsquo;d like to give it named parts.
+                </p>
+                <button
+                  type="button"
+                  onClick={addModulesMyself}
+                  disabled={rows.length === 0}
+                  className="mt-3.5 inline-flex cursor-pointer items-center gap-[7px] rounded-[10px] bg-nevo-navy px-[15px] py-[9px] text-[13.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93 disabled:cursor-default disabled:opacity-45"
                 >
-                  <div className="border-b border-nevo-near-black/8 px-[18px] pt-4 pb-3.5">
-                    <div className="flex items-center gap-3">
-                      <span className="font-mono text-[10.5px] font-bold tracking-[0.1em] whitespace-nowrap text-nevo-violet">
-                        {`SECTION ${mi + 1}`}
-                      </span>
-                      <input
-                        value={m.title}
-                        onChange={(e) => update(mi, { title: e.target.value })}
-                        aria-label={`Section ${mi + 1} title`}
-                        placeholder={`Section ${mi + 1}`}
-                        className={cn(
-                          inputBase,
-                          "min-w-0 flex-1 px-3 py-[9px] text-[15.5px] font-semibold",
-                        )}
-                      />
-                      <span className="text-xs whitespace-nowrap text-nevo-near-black/50">
-                        {plural(segs.length, "segment", "segments")}
-                      </span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  Add sections myself
+                </button>
+              </div>
+              {flatRows}
+            </div>
+          )}
+
+          {modules.length > 0 && (
+            <div className="flex flex-col gap-3.5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <span className="text-[13px] text-nevo-near-black/60">
+                  {[
+                    plural(modules.length, "section", "sections"),
+                    plural(rows.length, "segment", "segments"),
+                    // Estimated minutes default to 0 in the contract, so a parse
+                    // that measured nothing says nothing rather than "0 minutes".
+                    ...(minutes > 0 ? [`about ${minutes} minutes`] : []),
+                  ].join(" · ")}
+                </span>
+                <div className="flex flex-col items-end gap-1">
+                  <button type="button" onClick={keepAsOneFlow} className={ghostBtn}>
+                    Keep as one flow
+                  </button>
+                  <span className="max-w-[280px] text-right text-[11.5px] leading-[1.4] text-nevo-near-black/50">
+                    A deliberate opt-out: students will see one continuous lesson,
+                    with no section breaks.
+                  </span>
+                </div>
+              </div>
+
+              {modules.map((m, mi) => {
+                const segs = namedSegments(m.segmentIds, segments);
+                return (
+                  <div
+                    key={`${mi}-${m.segmentIds[0] ?? "empty"}`}
+                    className="overflow-hidden rounded-[14px] bg-nevo-cream-elevated shadow-[0_2px_10px_rgba(0,0,0,0.05)]"
+                  >
+                    <div className="border-b border-nevo-near-black/8 px-[18px] pt-4 pb-3.5">
+                      <div className="flex items-center gap-3">
+                        <span className="font-mono text-[10.5px] font-bold tracking-[0.1em] whitespace-nowrap text-nevo-violet">
+                          {`SECTION ${mi + 1}`}
+                        </span>
+                        <input
+                          value={m.title}
+                          onChange={(e) => update(mi, { title: e.target.value })}
+                          aria-label={`Section ${mi + 1} title`}
+                          placeholder={`Section ${mi + 1}`}
+                          className={cn(
+                            inputBase,
+                            "min-w-0 flex-1 px-3 py-[9px] text-[15.5px] font-semibold",
+                          )}
+                        />
+                        <span className="text-xs whitespace-nowrap text-nevo-near-black/50">
+                          {plural(segs.length, "segment", "segments")}
+                        </span>
+                      </div>
+                      {segs.length === 1 && (
+                        <div className="mt-[11px] flex items-center gap-2.5 rounded-[9px] bg-nevo-violet/14 px-[13px] py-2.5">
+                          <span className="shrink-0 text-nevo-navy" aria-hidden>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="12" cy="12" r="9" />
+                              <path d="M12 11v5" />
+                              <circle cx="12" cy="7.6" r="0.6" fill="currentColor" />
+                            </svg>
+                          </span>
+                          <span className="min-w-0 flex-1 text-[12.5px] leading-[1.45] text-nevo-near-black/72">
+                            A section with just one segment usually reads better
+                            merged into the next. You can leave it if it&rsquo;s a
+                            deliberate wrap-up.
+                          </span>
+                        </div>
+                      )}
                     </div>
-                    {segs.length === 1 && (
-                      <div className="mt-[11px] flex items-center gap-2.5 rounded-[9px] bg-nevo-violet/14 px-[13px] py-2.5">
-                        <span className="shrink-0 text-nevo-navy" aria-hidden>
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="12" cy="12" r="9" />
-                            <path d="M12 11v5" />
-                            <circle cx="12" cy="7.6" r="0.6" fill="currentColor" />
+
+                    <div className="flex flex-col gap-[7px] px-3.5 py-2.5">
+                      {segs.map((r, pi) => {
+                        const counter = firstIn(mi) + pi + 1;
+                        return (
+                          <div key={r.key}>
+                            <div className="flex items-center gap-[11px] rounded-[9px] bg-nevo-cream/55 px-[13px] py-[11px]">
+                              {segmentRow(r, counter)}
+                              <span className="flex shrink-0 items-center">
+                                <button
+                                  type="button"
+                                  onClick={() => moveSegment(mi, pi, -1)}
+                                  disabled={pi === 0}
+                                  aria-label={`Move ${r.title ?? `segment ${counter}`} up`}
+                                  title="Move up"
+                                  className={iconBtn}
+                                >
+                                  <Arrow up />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => moveSegment(mi, pi, 1)}
+                                  disabled={pi === segs.length - 1}
+                                  aria-label={`Move ${r.title ?? `segment ${counter}`} down`}
+                                  title="Move down"
+                                  className={iconBtn}
+                                >
+                                  <Arrow up={false} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => moveSegmentAcross(mi, pi, -1)}
+                                  disabled={mi === 0}
+                                  aria-label={`Move ${r.title ?? `segment ${counter}`} to the section above`}
+                                  title="Move to the section above"
+                                  className={iconBtn}
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                                    <path d="M9 14l-4-4 4-4M5 10h9a5 5 0 0 1 5 5v4" />
+                                  </svg>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => moveSegmentAcross(mi, pi, 1)}
+                                  disabled={mi === modules.length - 1}
+                                  aria-label={`Move ${r.title ?? `segment ${counter}`} to the section below`}
+                                  title="Move to the section below"
+                                  className={iconBtn}
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                                    <path d="M9 10l-4 4 4 4M5 14h9a5 5 0 0 0 5-5V5" />
+                                  </svg>
+                                </button>
+                              </span>
+                            </div>
+                            {pi < segs.length - 1 && (
+                              <div className="flex items-center gap-2 py-[5px] pl-[46px]">
+                                <button
+                                  type="button"
+                                  onClick={() => split(mi, pi)}
+                                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border-[1.5px] border-nevo-navy/35 px-[11px] py-1.5 text-xs font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/6"
+                                >
+                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                                    <path d="M8 3v18M3 8h10M3 16h10M21 8l-3 4 3 4" />
+                                  </svg>
+                                  Split here
+                                </button>
+                                <span className="text-[11.5px] text-nevo-near-black/40">
+                                  start a new section after this segment
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="flex flex-col gap-2.5 px-[18px] pt-1 pb-4">
+                      {(
+                        [
+                          {
+                            key: "recap" as const,
+                            label: "What you just did - shown at the boundary",
+                          },
+                          { key: "preview" as const, label: "What's coming next" },
+                        ]
+                      ).map((f) => (
+                        <div key={f.key}>
+                          <label className="mb-[5px] block text-[11px] font-semibold tracking-[0.05em] text-nevo-near-black/48 uppercase">
+                            {f.label}
+                            <textarea
+                              // Nullable in the contract, and an empty box is
+                              // how a teacher removes one.
+                              value={m[f.key] ?? ""}
+                              onChange={(e) =>
+                                update(mi, { [f.key]: e.target.value || null })
+                              }
+                              rows={2}
+                              className={cn(
+                                inputBase,
+                                "mt-[5px] w-full resize-none px-3 py-[9px] text-[13.5px] leading-[1.5] font-normal tracking-normal normal-case",
+                              )}
+                            />
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+
+                    {mi > 0 && (
+                      <div className="px-[18px] pb-4">
+                        <button
+                          type="button"
+                          onClick={() => merge(mi)}
+                          className="inline-flex cursor-pointer items-center gap-[7px] rounded-[9px] border-[1.5px] border-dashed border-nevo-navy/35 px-[13px] py-2 text-[12.5px] font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/6"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                            <path d="M7 4l5 5 5-5M12 9v11" />
                           </svg>
-                        </span>
-                        <span className="min-w-0 flex-1 text-[12.5px] leading-[1.45] text-nevo-near-black/72">
-                          A section with just one segment usually reads better
-                          merged into the next. You can leave it if it&rsquo;s a
-                          deliberate wrap-up.
-                        </span>
+                          {`Merge into Section ${mi}`}
+                        </button>
                       </div>
                     )}
                   </div>
+                );
+              })}
+            </div>
+          )}
 
-                  <div className="flex flex-col gap-[7px] px-3.5 py-2.5">
-                    {segs.map((r, pi) => {
-                      const counter = firstIn(mi) + pi + 1;
-                      return (
-                        <div key={r.key}>
-                          <div className="flex items-center gap-[11px] rounded-[9px] bg-nevo-cream/55 px-[13px] py-[11px]">
-                            {segmentRow(r, counter)}
-                            <span className="flex shrink-0 items-center">
-                              <button
-                                type="button"
-                                onClick={() => moveSegment(mi, pi, -1)}
-                                disabled={pi === 0}
-                                aria-label={`Move ${r.title ?? `segment ${counter}`} up`}
-                                title="Move up"
-                                className={iconBtn}
-                              >
-                                <Arrow up />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => moveSegment(mi, pi, 1)}
-                                disabled={pi === segs.length - 1}
-                                aria-label={`Move ${r.title ?? `segment ${counter}`} down`}
-                                title="Move down"
-                                className={iconBtn}
-                              >
-                                <Arrow up={false} />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => moveSegmentAcross(mi, pi, -1)}
-                                disabled={mi === 0}
-                                aria-label={`Move ${r.title ?? `segment ${counter}`} to the section above`}
-                                title="Move to the section above"
-                                className={iconBtn}
-                              >
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                                  <path d="M9 14l-4-4 4-4M5 10h9a5 5 0 0 1 5 5v4" />
-                                </svg>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => moveSegmentAcross(mi, pi, 1)}
-                                disabled={mi === modules.length - 1}
-                                aria-label={`Move ${r.title ?? `segment ${counter}`} to the section below`}
-                                title="Move to the section below"
-                                className={iconBtn}
-                              >
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                                  <path d="M9 10l-4 4 4 4M5 14h9a5 5 0 0 0 5-5V5" />
-                                </svg>
-                              </button>
-                            </span>
-                          </div>
-                          {pi < segs.length - 1 && (
-                            <div className="flex items-center gap-2 py-[5px] pl-[46px]">
-                              <button
-                                type="button"
-                                onClick={() => split(mi, pi)}
-                                className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border-[1.5px] border-nevo-navy/35 px-[11px] py-1.5 text-xs font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/6"
-                              >
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                                  <path d="M8 3v18M3 8h10M3 16h10M21 8l-3 4 3 4" />
-                                </svg>
-                                Split here
-                              </button>
-                              <span className="text-[11.5px] text-nevo-near-black/40">
-                                start a new section after this segment
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <div className="flex flex-col gap-2.5 px-[18px] pt-1 pb-4">
-                    {(
-                      [
-                        {
-                          key: "recap" as const,
-                          label: "What you just did - shown at the boundary",
-                        },
-                        { key: "preview" as const, label: "What's coming next" },
-                      ]
-                    ).map((f) => (
-                      <div key={f.key}>
-                        <label className="mb-[5px] block text-[11px] font-semibold tracking-[0.05em] text-nevo-near-black/48 uppercase">
-                          {f.label}
-                          <textarea
-                            // Nullable in the contract, and an empty box is
-                            // how a teacher removes one.
-                            value={m[f.key] ?? ""}
-                            onChange={(e) =>
-                              update(mi, { [f.key]: e.target.value || null })
-                            }
-                            rows={2}
-                            className={cn(
-                              inputBase,
-                              "mt-[5px] w-full resize-none px-3 py-[9px] text-[13.5px] leading-[1.5] font-normal tracking-normal normal-case",
-                            )}
-                          />
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-
-                  {mi > 0 && (
-                    <div className="px-[18px] pb-4">
-                      <button
-                        type="button"
-                        onClick={() => merge(mi)}
-                        className="inline-flex cursor-pointer items-center gap-[7px] rounded-[9px] border-[1.5px] border-dashed border-nevo-navy/35 px-[13px] py-2 text-[12.5px] font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/6"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                          <path d="M7 4l5 5 5-5M12 9v11" />
-                        </svg>
-                        {`Merge into Section ${mi}`}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {error && (
-          <p className="mt-4 max-w-[600px] rounded-[10px] bg-nevo-violet/14 px-[15px] py-3 text-[13px] leading-[1.5] text-nevo-near-black/78">
-            {error}
-          </p>
-        )}
+          {error && (
+            <p className="mt-4 max-w-[600px] rounded-[10px] bg-nevo-violet/14 px-[15px] py-3 text-[13px] leading-[1.5] text-nevo-near-black/78">
+              {error}
+            </p>
+          )}
+        </div>
       </div>
 
       {/* The step's own C07c foot. The wizard suppresses its generic one. */}
