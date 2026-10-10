@@ -123,8 +123,8 @@ function canSpeak(): boolean {
  * WHAT IS KEPT is every tap as it happened: which target, its cell, the
  * latency, whether it was practice, and the form factor. The engine takes the
  * median of taps three to eight; the device takes none (rule 3). Each tap
- * leaves as one trial in `baselineTrials`; a trial has no field for the form
- * factor yet, which is with backend.
+ * leaves as one trial in `baselineTrials`, and the form factor goes beside
+ * the trials on the request (`baselineRunContext`, B76).
  *
  * NO KEYBOARD PATH, deliberately. A key press is not a reach, so it would put
  * the wrong motion in the baseline. A child who cannot tap is not stranded:
@@ -174,11 +174,23 @@ export function MotorStep({
   }, [onComplete]);
 
   const finish = useCallback(
-    (reason: "complete" | "idle") => {
+    (reason: "complete" | "idle", untapped?: number) => {
       if (over.current) return;
       over.current = true;
       if (idle.current) clearTimeout(idle.current);
-      capture?.record("motor_end", { reason, grid: n, formFactor });
+      /*
+       * An idle end names the target left on screen, which leaves as a
+       * skipped trial (`baselineTrials`, B76): the engine is told how the
+       * step ended, not left to count the samples.
+       */
+      capture?.record("motor_end", {
+        reason,
+        grid: n,
+        formFactor,
+        ...(untapped === undefined
+          ? {}
+          : { target: untapped, practice: untapped < MOTOR_PRACTICE_TAPS }),
+      });
       void capture?.persist();
       setEnded(true);
       onCompleteRef.current();
@@ -239,7 +251,7 @@ export function MotorStep({
     visibleAt.current = null;
     const frame = requestAnimationFrame(() => {
       visibleAt.current = performance.now();
-      idle.current = setTimeout(() => finish("idle"), IDLE_END_MS);
+      idle.current = setTimeout(() => finish("idle", step), IDLE_END_MS);
     });
     return () => {
       cancelAnimationFrame(frame);

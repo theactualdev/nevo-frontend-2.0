@@ -104,6 +104,62 @@ describe("submitTrials (B9)", () => {
     });
   });
 
+  /*
+   * THE RUN'S CONTEXT, B76 (8 Oct). `BaselineTrialsRequest` is
+   * `{sessionId, ageBand, formFactor, motorStepSkipped, trials}` in the live
+   * spec. Asserted on the body as it goes over the wire - `JSON.stringify`, as
+   * the client sends it - because a key the run did not record must not be
+   * there at all, and `toHaveBeenCalledWith` cannot tell missing from
+   * undefined.
+   */
+  const CONTRACT = [
+    "ageBand",
+    "formFactor",
+    "motorStepSkipped",
+    "sessionId",
+    "trials",
+  ];
+  const wire = () =>
+    JSON.parse(JSON.stringify(post.mock.calls[0][1])) as Record<
+      string,
+      unknown
+    >;
+
+  it("sends the onboarding run's band, device and motor skip beside its trials", async () => {
+    await baselineApi.submitTrials("run-1", [trial], {
+      ageBand: "senior_secondary",
+      formFactor: "desktop_cursor",
+      motorStepSkipped: true,
+    });
+
+    expect(Object.keys(wire()).sort()).toEqual(CONTRACT);
+    expect(wire()).toEqual({
+      sessionId: "run-1",
+      ageBand: "senior_secondary",
+      formFactor: "desktop_cursor",
+      motorStepSkipped: true,
+      trials: [trial],
+    });
+  });
+
+  it("leaves out the motor skip for a warm-up, which has no motor step", async () => {
+    await baselineApi.submitTrials("warmup-1", [trial], {
+      ageBand: "early_primary",
+      formFactor: "mobile_touch",
+    });
+
+    expect(Object.keys(wire()).sort()).toEqual(
+      CONTRACT.filter((k) => k !== "motorStepSkipped"),
+    );
+  });
+
+  it("sends only the session and the trials when the run recorded no context", async () => {
+    // A run parked before B76: not told, never a guessed band or device.
+    await baselineApi.submitTrials("run-1", [trial]);
+
+    expect(wire()).toEqual({ sessionId: "run-1", trials: [trial] });
+  });
+
   it("no longer sends a reduced vector to /submit", async () => {
     await baselineApi.submitTrials("run-1", [trial]);
 

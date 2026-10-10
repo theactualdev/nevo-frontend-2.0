@@ -17,10 +17,11 @@ import type { RosterBand } from "@/hooks/useRosterBand";
  * first round for the band; with no band, Primary 4-6's, which is the version
  * the frame draws.
  *
- * THE BAND NO LONGER TRAVELS WITH THE MEASUREMENT. It rode on the reduced
+ * THE BAND TRAVELS BESIDE THE TRIALS, NOT ON THEM. It rode on the reduced
  * vector; since B9 the warm-up sends raw trials, which have no field for it,
- * and it is with backend as an ask. So these assert the trials the band's
- * task produced, and that no band is invented onto them.
+ * and since B76 (8 Oct) the request carries it as `ageBand`. So these assert
+ * the trials the band's task produced, that no band is put onto them, and
+ * that the request names the roster's band and no other.
  */
 
 const { submit } = vi.hoisted(() => ({ submit: vi.fn() }));
@@ -47,6 +48,8 @@ type Trial = {
   responseTimeMs: number | null;
 };
 const trials = (): Trial[] => submit.mock.calls[0][1];
+/** What went beside the trials (B76). */
+const context = () => submit.mock.calls[0][2];
 const submitted = () => trials()[0];
 const wait = async (ms: number) => {
   await act(async () => {
@@ -149,6 +152,18 @@ describe("the tile task, by band", () => {
     expect(JSON.stringify(trials())).not.toMatch(/band|"ss"/);
   });
 
+  it("names the roster's band and the device beside the trials, and no motor step (B76)", async () => {
+    // jsdom's pointer is not coarse, so a cursor. The warm-up has no motor
+    // step to run or skip, so that key is not there at all.
+    roster.value = { band: "ss", settled: true };
+    await sitTheTileTask(4, "False");
+
+    expect(context()).toEqual({
+      ageBand: "senior_secondary",
+      formFactor: "desktop_cursor",
+    });
+  });
+
   it("runs no check for the bands that do not have one", async () => {
     roster.value = { band: "jss", settled: true };
     render(<WarmUpRun dimension="wmc" />);
@@ -199,6 +214,8 @@ describe("the tile task, by band", () => {
       true,
     );
     expect(JSON.stringify(trials())).not.toMatch(/band/);
+    // The Primary 4-6 default is the task's size, not the child's age band.
+    expect(context()).toEqual({ formFactor: "desktop_cursor" });
   });
 
   it("lights them for Primary 4-6's 700ms then, not the prototype's 660", () => {

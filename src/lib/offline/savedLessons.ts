@@ -47,24 +47,32 @@ export interface SavedPackage {
 }
 
 /**
- * Whether a saved copy is the package's rather than a detail read's - the
- * copy with no modules, closing recap or after-lesson check.
+ * Whether a saved copy is missing what completing the lesson needs: its
+ * modules, its closing recap or its after-lesson check.
  *
  * WHY IT MATTERS (Lydia, 6 Oct): "A lesson played offline without its
  * modules, recap and after-lesson check is not recorded as completed, and it
  * comes back when the child is next online." Booked complete, the engine
  * would teach that child from a check that never happened.
  *
- * TOLD BY THE SHAPE, because the shape is the difference. `modules` is
- * required on `LessonDetailResponse` and `OfflinePackage` has none, so a detail
- * read always carries the key and `detailFromPackage` never writes it - which
- * also covers copies saved before this was asked. A copy is a detail read
- * once `refreshSavedLesson` below has replaced it on an online open. Should
- * a detail read ever come without `modules`, it is taken for a package copy:
- * the lesson then comes back online rather than counting a check nobody took.
+ * NOT "CAME FROM A PACKAGE" ANY MORE. The package carries all three since
+ * backend B85 (8 Oct), and a package copy that has them plays and completes
+ * like the detail read. What this asks is whether each one was SENT: an
+ * `assessment` list and a `modules` list, empty or not, and a `recap` key,
+ * null or not - null and `[]` are the lesson saying it has none, and absent
+ * is the copy not saying. `detailFromPackage` keeps that difference, and a
+ * copy saved before 8 Oct has none of the three, so it stays partial until
+ * `refreshSavedLesson` below replaces it on an online open. Should a detail
+ * read ever come without one of them, it is partial too: the lesson then
+ * comes back online rather than counting a check nobody took.
  */
-export function isPackageCopy(detail: LessonDetailResponse): boolean {
-  return !Array.isArray((detail as Partial<LessonDetailResponse>).modules);
+export function isPartialCopy(detail: LessonDetailResponse): boolean {
+  const copy = detail as Partial<LessonDetailResponse>;
+  return (
+    !Array.isArray(copy.modules) ||
+    !Array.isArray(copy.assessment) ||
+    copy.recap === undefined
+  );
 }
 
 /** A shelf, not an archive - device storage is small and shared. */

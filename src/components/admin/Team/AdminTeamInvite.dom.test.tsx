@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
+import { ApiError } from "@/lib/api/client";
 import { AdminTeamView } from "./AdminTeamView";
 
 /**
@@ -24,7 +25,12 @@ vi.mock("@/lib/api/team", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/team")>();
   return {
     ...actual,
-    teamApi: { ...actual.teamApi, list: () => list(), invite: (p: unknown) => invite(p) },
+    teamApi: {
+      ...actual.teamApi,
+      // Members as a bare list; the real reader turns it into the team shape.
+      list: async () => actual.toAdminTeam(await list()),
+      invite: (p: unknown) => invite(p),
+    },
   };
 });
 vi.mock("@/lib/api/school", async (importOriginal) => {
@@ -133,5 +139,51 @@ describe("inviting an admin", () => {
     );
     expect(screen.queryByRole("button", { name: /Resend/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /Revoke/i })).toBeNull();
+  });
+});
+
+describe("at the seat allowance (the server's, 8 Oct)", () => {
+  const admin = (i: number) => ({
+    userId: `u${i}`,
+    adminId: `a${i}`,
+    email: `admin${i}@brightgate.edu.ng`,
+    firstName: "Folake",
+    lastName: `Number${i}`,
+    role: "other_admin",
+    status: "active",
+    scopes: ["oversight"],
+  });
+
+  it("says so in the sheet before anything is typed, and sends nothing", async () => {
+    list.mockResolvedValue({
+      members: [1, 2, 3, 4, 5].map(admin),
+      seatLimit: 5,
+      seatsUsed: 5,
+      seatsRemaining: 0,
+    });
+    const { container } = render(<AdminTeamView />);
+    await sendInvite(container);
+
+    expect(visibleText(container)).toMatch(
+      /All five admin accounts are in use, so this invitation can.t be sent yet\./,
+    );
+    expect(invite).not.toHaveBeenCalled();
+  });
+
+  it("explains the server's refusal past the limit rather than calling it a fault", async () => {
+    list.mockResolvedValue({ members: [], seatLimit: 5, seatsUsed: 4, seatsRemaining: 1 });
+    invite.mockRejectedValue(
+      new ApiError(409, "conflict", {
+        detail: { code: "admin_seat_limit_reached", message: "No seats left." },
+      }),
+    );
+    const { container } = render(<AdminTeamView />);
+    await sendInvite(container);
+
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/All five admin accounts are in use/),
+    );
+    expect(visibleText(container)).toMatch(/added at no charge/);
+    expect(visibleText(container)).not.toMatch(/we.re on it/);
   });
 });
