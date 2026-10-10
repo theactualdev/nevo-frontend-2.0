@@ -10,7 +10,7 @@ import { tapPoint, type BaselineCapture } from "@/lib/profiling/capture";
  * 1 Oct (D14).
  */
 const PICK_BEAT_MS = 440;
-/** Every module ends on the shared "That's it. Saved." settle. */
+/** Every module ends on the shared "That's it." settle (D136). */
 const SETTLE_MS = 1700;
 
 /** What a tap handler hands over so the pick knows where the finger was. */

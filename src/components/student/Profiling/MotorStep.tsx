@@ -214,7 +214,16 @@ export function MotorStep({
     line.onerror = go;
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(line);
-    const failsafe = setTimeout(go, VOICE_FAILSAFE_MS);
+    /*
+     * A voice that never reported its end is SILENCED before the step goes
+     * on, not left talking over it (D138, 8 Oct): "the demonstration finishes
+     * before measurement begins. Nothing of it continues into the step
+     * itself." Where it had in fact finished, this silences nothing.
+     */
+    const failsafe = setTimeout(() => {
+      window.speechSynthesis.cancel();
+      go();
+    }, VOICE_FAILSAFE_MS);
     return () => {
       done = true;
       clearTimeout(failsafe);
@@ -333,6 +342,12 @@ export function MotorStep({
  *
  * Under reduced motion the hand does not travel; it is simply there on the
  * target when it reaches it.
+ *
+ * IT ENDS BEFORE MEASUREMENT BEGINS (D138, 8 Oct): "Nothing of it continues
+ * into the step itself." It is unmounted at `gone`, the ground stands empty
+ * for a beat, and only then is the first real target painted - which is
+ * where the clock and the ten seconds start. The voice before it has ended,
+ * or been silenced, by then.
  */
 function Demonstration({ beat, target }: { beat: DemoBeat; target: string }) {
   if (beat === "gone") return null;

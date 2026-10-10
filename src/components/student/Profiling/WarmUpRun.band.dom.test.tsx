@@ -137,18 +137,19 @@ describe("the tile task, by band", () => {
     // "7 + 5 = 13" is the first check, and it is false.
     await sitTheTileTask(4, "False");
 
-    expect(trials()).toHaveLength(5);
+    // The check, then the recall as one answer (B80).
+    expect(trials()).toHaveLength(2);
     expect(trials()[0]).toMatchObject({
       dimension: "wmc",
       condition: "dual_check",
       response: "false",
       correct: true,
     });
-    expect(
-      trials()
-        .slice(1)
-        .every((t) => t.condition === "length_4" && t.correct),
-    ).toBe(true);
+    expect(trials()[1]).toMatchObject({
+      dimension: "wmc",
+      condition: "length_4",
+      correct: true,
+    });
     expect(JSON.stringify(trials())).not.toMatch(/band|"ss"/);
   });
 
@@ -187,10 +188,7 @@ describe("the tile task, by band", () => {
     roster.value = { band: "p13", settled: true };
     await sitTheTileTask(2);
 
-    expect(trials().map((t) => t.condition)).toEqual([
-      "length_2",
-      "length_2",
-    ]);
+    expect(trials().map((t) => t.condition)).toEqual(["length_2"]);
   });
 
   it("lights the youngest band's tiles for its own 800ms", () => {
@@ -209,10 +207,8 @@ describe("the tile task, by band", () => {
   it("runs Primary 4-6's version when the roster gives no band, and claims none", async () => {
     await sitTheTileTask(3);
 
-    expect(trials()).toHaveLength(3);
-    expect(trials().every((t) => t.condition === "length_3" && t.correct)).toBe(
-      true,
-    );
+    expect(trials()).toHaveLength(1);
+    expect(trials()[0]).toMatchObject({ condition: "length_3", correct: true });
     expect(JSON.stringify(trials())).not.toMatch(/band/);
     // The Primary 4-6 default is the task's size, not the child's age band.
     expect(context()).toEqual({ formFactor: "desktop_cursor" });
