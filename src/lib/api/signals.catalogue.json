@@ -5,7 +5,8 @@
     "payload": [
       "segmentId",
       "durationMs",
-      "depthShown"
+      "depthShown",
+      "[depthRatio]"
     ],
     "serverWritten": false
   },
@@ -53,10 +54,11 @@
   },
   {
     "eventType": "comprehension_response",
-    "trigger": "The child answers a comprehension checkpoint. Correctness is not sent: it is decided on the server against the stored answer.",
+    "trigger": "The child answers a comprehension checkpoint. Correctness is not sent: it is decided on the server against the stored answer. segmentId is omitted for an after-lesson assessment item that is not owned by one segment.",
     "payload": [
-      "segmentId",
-      "questionId"
+      "[segmentId]",
+      "questionId",
+      "source: checkpoint|assessment"
     ],
     "serverWritten": false
   },
@@ -72,6 +74,7 @@
     "eventType": "break_suggested",
     "trigger": "Nevo offered a break.",
     "payload": [
+      "breakType: micro|movement|consolidation|full",
       "trigger"
     ],
     "serverWritten": false
@@ -80,6 +83,7 @@
     "eventType": "break_taken",
     "trigger": "The child accepted an offered break.",
     "payload": [
+      "breakType: micro|movement|consolidation|full",
       "trigger"
     ],
     "serverWritten": false
@@ -88,6 +92,7 @@
     "eventType": "break_declined",
     "trigger": "The child refused an offered break. Without this the engine cannot tell \"not now\" from no answer and may offer again a minute later.",
     "payload": [
+      "breakType: micro|movement|consolidation|full",
       "trigger"
     ],
     "serverWritten": false
@@ -96,6 +101,7 @@
     "eventType": "break_start",
     "trigger": "A break actually began.",
     "payload": [
+      "breakType: micro|movement|consolidation|full",
       "trigger"
     ],
     "serverWritten": false
@@ -104,6 +110,7 @@
     "eventType": "break_end",
     "trigger": "A break ended. With break_start this is how long it lasted, which is the part that says whether it helped.",
     "payload": [
+      "breakType: micro|movement|consolidation|full",
       "trigger",
       "durationMs"
     ],
@@ -136,9 +143,9 @@
   },
   {
     "eventType": "engagement_signal",
-    "trigger": "A reading the named types do not already cover. The type of last resort: the engine can reason about a named type and can only count these.",
+    "trigger": "A reading the named types do not already cover. value is a non-negative number: focus_drop and steady_progress use milliseconds; task_switch, navigation_fragmentation and rapid_guessing use a count; return_after_pause uses the pause duration in milliseconds. The type is a last resort: use a named event where one exists.",
     "payload": [
-      "indicator",
+      "indicator: focus_drop|task_switch|navigation_fragmentation|rapid_guessing|steady_progress|return_after_pause",
       "value"
     ],
     "serverWritten": false
@@ -181,7 +188,7 @@
   },
   {
     "eventType": "modality_switch_outcome",
-    "trigger": "Sent once when the next segment entered in the new modality is left or completed. That entry-to-exit interval is a full segment; it has no minimum number of seconds. One per switch. Ask B38.",
+    "trigger": "Sent once when the next segment entered in the new modality is left or completed. That entry-to-exit interval is a full segment; it has no minimum number of seconds. timeOnSegment is milliseconds. The comprehension and engagement scores are supplied aggregates: either 0-1 ratios or 0-100 scores, normalised on the server; raw interaction data is never sent. One per switch. Ask B38.",
     "payload": [
       "segmentId",
       "[from]",
@@ -332,6 +339,17 @@
     "payload": [
       "formFactor",
       "reducedMotion"
+    ],
+    "serverWritten": false
+  },
+  {
+    "eventType": "reading_chunk_viewed",
+    "trigger": "A stable reading chunk entered view or was passed. A later entered event after passed is a reread; formFactor keeps scrolling patterns comparable.",
+    "payload": [
+      "segmentId",
+      "chunkId",
+      "action: entered|passed",
+      "formFactor"
     ],
     "serverWritten": false
   },

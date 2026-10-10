@@ -63,7 +63,8 @@ export const SIGNAL_EVENT_TYPES = {
   SESSION_CONTEXT: "session_context",
   /**
    * Break module (frame 18) — brackets the student's pause so time inside it is
-   * break time, not hesitation. Payload { trigger } / { trigger, durationMs }.
+   * break time, not hesitation. Payload { breakType, trigger } /
+   * { breakType, trigger, durationMs } - the type back since B89, 8 Oct.
    */
   BREAK_START: "break_start",
   BREAK_END: "break_end",
@@ -77,7 +78,8 @@ export const SIGNAL_EVENT_TYPES = {
    * What happened to an offer the engine made. Each is in the ingest enum,
    * and at first none was sent, so a "Not now" left no trace and the engine
    * could not tell an offer a child turned down from one it never saw.
-   * Payload { segmentId, suggested } / { trigger } for the three break ones.
+   * Payload { segmentId, suggested } / { breakType, trigger } for the three
+   * break ones.
    *
    * `ignored` is the pill still on screen when the child left the segment -
    * neither taken nor turned down. A break offer left on screen has no type:
@@ -87,18 +89,37 @@ export const SIGNAL_EVENT_TYPES = {
   MODALITY_SUGGESTION_ACCEPTED: "modality_suggestion_accepted",
   MODALITY_SUGGESTION_DECLINED: "modality_suggestion_declined",
   MODALITY_SUGGESTION_IGNORED: "modality_suggestion_ignored",
+  /**
+   * What became of a switch the child took (B73/B104, 8 Oct): sent once, as
+   * the segment shown in the new modality is left - in this player, the one
+   * the switch was taken on. Payload { segmentId, from, to, timeOnSegment },
+   * the time in ms from the switch to the way out (ms confirmed, 9 Oct). Its
+   * optional `outcome` (better, worse, no change) and its two scores are
+   * never sent. The server takes the scores as supplied aggregates and works
+   * none out itself yet (9 Oct) - and an aggregate of a child's comprehension
+   * or engagement is a judgement the client may not make (rule 3).
+   */
+  MODALITY_SWITCH_OUTCOME: "modality_switch_outcome",
+  /**
+   * The type of last resort, for a reading no named type covers (B105). Its
+   * `value` is a non-negative number, in the unit the catalogue gives each
+   * indicator. Sent for the three the client observes with no threshold of
+   * its own:
+   * - `task_switch`, value 1: the page went hidden mid-lesson - another app,
+   *   another tab, the screen locked. One per time it happened.
+   * - `return_after_pause`, value in ms: how long it stayed hidden, sent as it
+   *   comes back.
+   * - `navigation_fragmentation`, value 1: back to an earlier segment, the
+   *   one non-linear move the player has.
+   * NEVER `focus_drop`, `rapid_guessing` or `steady_progress`: "below the
+   * local focus pattern", "rapid" and "sustained" each need a baseline or a
+   * cutoff the client would have to invent (rule 3). The engine's to read.
+   */
+  ENGAGEMENT_SIGNAL: "engagement_signal",
   /*
-   * DECLARED IN THE CATALOGUE AND DELIBERATELY NOT SENT (audit 38, 7 Oct):
-   * - `modality_switch_outcome`. Its trigger is the next segment ENTERED in
-   *   the new modality, and this player applies a switch to the segment on
-   *   screen only: the next one opens in the modality the plan names. Which
-   *   exit sends it is asked of backend. Its `outcome` (better, worse, no
-   *   change) and its two scores are judgements the client may not make
-   *   (rule 3).
+   * DECLARED IN THE CATALOGUE AND DELIBERATELY NOT SENT:
    * - `modality_manual_switch`. A child has no way to change modality
    *   themselves; the frames draw only the engine's offer (17 §C).
-   * - `engagement_signal`. Its `indicator` has no vocabulary, and every
-   *   reading this client takes has a named type of its own.
    */
   BREAK_SUGGESTED: "break_suggested",
   BREAK_TAKEN: "break_taken",
@@ -133,8 +154,9 @@ export const SIGNAL_EVENT_TYPES = {
    * Ask Nevo, on its own `ask_nevo` session (design D29: a child's use of Ask
    * Nevo is signal in its own right). A question asked, an answer that could
    * not help, and the hand-over to the teacher taken. The payload is the
-   * server's own `interactionId` where there is one and nothing else - never
-   * the child's words.
+   * server's own `interactionId` where there is one, and for the question
+   * its `questionCategory` (B93, 8 Oct) - the question's event goes up as the
+   * answer lands, so it has both. Never the child's words.
    */
   ASK_NEVO_QUESTION_STUDENT: "ask_nevo_question_student",
   ASK_NEVO_CANNOT_HELP: "ask_nevo_cannot_help",

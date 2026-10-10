@@ -285,8 +285,10 @@ export function LessonPlayer({
   /*
    * WHAT THE CHILD SAW APPLIED (B42), counted where it reaches the screen:
    * the system's reshape of the text, a modality change from an offer taken,
-   * a hint. Not offers, not instructions the screen could not show, and not
-   * the child's own picks. The count rides the session envelope and the
+   * a hint, and since B74 (8 Oct) a Socratic panel rendered and a density
+   * spacing changed mid-session - not the one the lesson opened on. Not
+   * offers, not instructions the screen could not show, and not the child's
+   * own picks. The count rides the session envelope and the
    * moment feeds the engine's cooldown - see `AppliedAdaptations`.
    */
   const applied = useRef<AppliedAdaptations>({ count: 0, lastAt: null });
@@ -774,6 +776,22 @@ export function LessonPlayer({
    * segment being asked about or it does not.
    */
   const chunkRead = useRef<{ segmentId: string } | null>(null);
+  /**
+   * HOW FAR DOWN THE SEGMENT THE CHILD SAW, 0 to 1, for `time_on_segment`'s
+   * `depthRatio` (B90, 8 Oct). The furthest it has been, never where it is
+   * now: scrolling back up unreads nothing. Measured where the column is -
+   * see `columnReach` - so a segment that fits on one screen is 1, and a
+   * chunked body by the parts it has shown. Stamped like `chunkRead`.
+   */
+  const deepest = useRef<{ segmentId: string; ratio: number } | null>(null);
+  const noteDepth = useCallback((segmentId: string, ratio: number) => {
+    const before =
+      deepest.current?.segmentId === segmentId ? deepest.current.ratio : 0;
+    deepest.current = {
+      segmentId,
+      ratio: Math.min(1, Math.max(before, ratio)),
+    };
+  }, []);
   /** The text version on screen, for `time_on_segment` - see `depthShown`. */
   const textShown = useRef<{ segmentId: string; depth: DepthShown } | null>(
     null,
@@ -788,8 +806,10 @@ export function LessonPlayer({
     (pct: number) => {
       chunkRead.current = { segmentId: lesson.segments[index].id };
       setPartsLeftOn(pct < 100 ? lesson.segments[index].id : null);
+      // The parts shown so far are how far down it the child has seen.
+      noteDepth(lesson.segments[index].id, pct / 100);
     },
-    [lesson.segments, index],
+    [lesson.segments, index, noteDepth],
   );
 
   /**
@@ -837,6 +857,25 @@ export function LessonPlayer({
   const segmentClock = useRef<{ shownMs: number; since: number | null } | null>(
     null,
   );
+  /** How long the segment has been on screen so far, on the clock above. */
+  const shownSoFar = useCallback(() => {
+    const clock = segmentClock.current;
+    if (!clock) return 0;
+    return (
+      clock.shownMs +
+      (clock.since === null ? 0 : performance.now() - clock.since)
+    );
+  }, []);
+  /**
+   * The switch taken on this segment, for `modality_switch_outcome` as it is
+   * left: from and to, and how long the segment had been on screen by then.
+   */
+  const switched = useRef<{
+    segmentId: string;
+    from: Modality;
+    to: Modality;
+    atShownMs: number;
+  } | null>(null);
   useEffect(() => {
     if (!inSegments) return;
     const clock = { shownMs: 0, since: null as number | null };
@@ -865,17 +904,40 @@ export function LessonPlayer({
       const depth =
         textShown.current?.segmentId === segId ? textShown.current.depth : null;
       /*
-       * THE CATALOGUE'S THREE KEYS AND NO OTHER. This also carried a
-       * `scrollDepthPct` - how much of the segment was on screen, counting a
-       * segment that fits as all of it and a chunked body by its parts - which
-       * the catalogue does not declare for this type. Whether it should is
-       * asked of backend; `scroll` carries depth only where the child scrolled.
+       * HOW FAR DOWN IT THE CHILD SAW, as the catalogue's `depthRatio` (B90,
+       * 8 Oct) - see `deepest`. It was a `scrollDepthPct` the catalogue did
+       * not declare, and then nothing until it did. A column never laid out
+       * measured nothing, and nothing is sent rather than a 0 it did not see.
        */
+      const seen =
+        deepest.current?.segmentId === segId ? deepest.current.ratio : null;
       trackEvent(SIGNAL_EVENT_TYPES.TIME_ON_SEGMENT, {
         segmentId: segId,
         durationMs: Math.max(0, Math.round(shownMs)),
         ...(depth ? { depthShown: depth } : {}),
+        ...(seen !== null ? { depthRatio: seen } : {}),
       });
+      /*
+       * WHAT BECAME OF A SWITCH (B73/B104, 8 Oct): sent once, as the segment
+       * shown in the new modality is left or the lesson ends on it. In this
+       * player that is the segment the switch was taken on - the next opens
+       * in whatever the plan names. Its time is what was measured, in ms
+       * (confirmed 9 Oct): the segment on screen from the switch to the way
+       * out. No `outcome` and no score - better, worse, comprehension and
+       * engagement are judgements of the child (rule 3). The server takes
+       * the scores as supplied aggregates and derives none yet; an aggregate
+       * worked out here would still be this client judging the child.
+       */
+      const taken = switched.current;
+      if (taken?.segmentId === segId) {
+        switched.current = null;
+        trackEvent(SIGNAL_EVENT_TYPES.MODALITY_SWITCH_OUTCOME, {
+          segmentId: segId,
+          from: taken.from,
+          to: taken.to,
+          timeOnSegment: Math.max(0, Math.round(shownMs - taken.atShownMs)),
+        });
+      }
     };
   }, [index, inSegments, lesson.segments, trackEvent]);
 
@@ -946,15 +1008,18 @@ export function LessonPlayer({
     // Every mark already sent: nothing to measure, so no layout read per frame.
     if (scrollMarks.current.size === SCROLL_MILESTONES.length) return;
     const at = columnReach();
-    if (!at || at.reach <= reachAtEntry.current) return;
-    const seen = at.reach / at.height;
+    if (!at) return;
     /*
      * A milestone describes the SEGMENT, so a chunked body cannot raise one.
      * Scrolling to the foot of Part 1 of 3 is the bottom of a third, and
      * emitting `depthRatio: 1` for it would tell the engine the child had read
-     * the whole segment. This stays quiet rather than overstating.
+     * the whole segment. This stays quiet rather than overstating - and so
+     * does `deepest`, which takes a chunked body's own count.
      */
     if (chunkRead.current?.segmentId === segment.id) return;
+    noteDepth(segment.id, at.reach / at.height);
+    if (at.reach <= reachAtEntry.current) return;
+    const seen = at.reach / at.height;
     for (const mark of SCROLL_MILESTONES) {
       if (seen * 100 >= mark && !scrollMarks.current.has(mark)) {
         scrollMarks.current.add(mark);
@@ -964,7 +1029,7 @@ export function LessonPlayer({
         });
       }
     }
-  }, [columnReach, segment.id, trackEvent]);
+  }, [columnReach, segment.id, trackEvent, noteDepth]);
   useEffect(() => {
     const onScroll = (e: Event) => {
       const target = e.target;
@@ -976,6 +1041,49 @@ export function LessonPlayer({
     return () =>
       window.removeEventListener("scroll", onScroll, { capture: true });
   }, [handleScroll]);
+
+  /*
+   * B105 (9 Oct): THE PAGE GOING HIDDEN MID-LESSON, AND FOR HOW LONG - two of
+   * `engagement_signal`'s indicators, and two the client sees as they are,
+   * with no cutoff of its own. `task_switch` (a count, 1) as it goes, and
+   * `return_after_pause` (the ms it stayed hidden) as it comes back. Hidden
+   * covers another app, another tab and a locked screen alike; which of
+   * those it was, and whether it matters, is the engine's to read.
+   *
+   * Only while the lesson is under way - not before a review begins, and
+   * not on the finished screen. A page that opened hidden was not switched
+   * away from, so nothing goes up until it has been seen to go.
+   *
+   * CAPTURED, so this runs before `useSignals`' own listener on the same
+   * event, which sends the queue as the page hides: the switch goes in that
+   * send rather than waiting for the page to come back.
+   */
+  const lessonUnderWay = phase === "segments" || phase === "assessment";
+  useEffect(() => {
+    if (!lessonUnderWay) return;
+    let hiddenAt: number | null = null;
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        if (hiddenAt !== null) return;
+        hiddenAt = performance.now();
+        trackEvent(SIGNAL_EVENT_TYPES.ENGAGEMENT_SIGNAL, {
+          indicator: "task_switch",
+          value: 1,
+        });
+        return;
+      }
+      if (hiddenAt === null) return;
+      const away = performance.now() - hiddenAt;
+      hiddenAt = null;
+      trackEvent(SIGNAL_EVENT_TYPES.ENGAGEMENT_SIGNAL, {
+        indicator: "return_after_pause",
+        value: Math.max(0, Math.round(away)),
+      });
+    };
+    document.addEventListener("visibilitychange", onVisibility, true);
+    return () =>
+      document.removeEventListener("visibilitychange", onVisibility, true);
+  }, [lessonUnderWay, trackEvent]);
 
   // Auto-clear the feedback note.
   useEffect(() => {
@@ -1130,6 +1238,25 @@ export function LessonPlayer({
     // An unrequested hint on screen is an adaptation applied (B42).
     noteApplied();
   }, [hintOnScreen, hintKey, segment.id, trackEvent, noteApplied]);
+
+  /*
+   * B74 (8 Oct): A RENDERED SOCRATIC PANEL IS AN ADAPTATION APPLIED, counted
+   * as the engine's panel goes on screen under the segment - the same
+   * condition that draws it below - and not again as the child opens it,
+   * which is theirs. Once per segment, like a hint: a return visit or a
+   * re-render is not the engine applying it again.
+   */
+  const panelOnScreen =
+    segmentShowing &&
+    contentHere &&
+    action === ADJUSTMENT_ACTIONS.SHOW_SOCRATIC_PANEL &&
+    guidedPrompts.length > 0;
+  const countedPanels = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!panelOnScreen || countedPanels.current.has(segment.id)) return;
+    countedPanels.current.add(segment.id);
+    noteApplied();
+  }, [panelOnScreen, segment.id, noteApplied]);
 
   /*
    * A REPLY TO A GUIDED PROMPT (B19) goes to its own route, which puts it on
@@ -1332,7 +1459,10 @@ export function LessonPlayer({
   const acceptBreakOffer = () => {
     if (!breakOffered) return;
     setSpentBreakOffers((prev) => new Set(prev).add(segment.id));
-    trackEvent(SIGNAL_EVENT_TYPES.BREAK_TAKEN, { trigger: offerTrigger });
+    trackEvent(SIGNAL_EVENT_TYPES.BREAK_TAKEN, {
+      breakType: breakOffered,
+      trigger: offerTrigger,
+    });
     breakTrigger.current = offerTrigger;
     breakOrigin.current = "offer";
     // The type is whoever asked's: nothing here picks one.
@@ -1348,7 +1478,10 @@ export function LessonPlayer({
   const dismissBreakOffer = () => {
     if (!breakOffered) return;
     setSpentBreakOffers((prev) => new Set(prev).add(segment.id));
-    trackEvent(SIGNAL_EVENT_TYPES.BREAK_DECLINED, { trigger: offerTrigger });
+    trackEvent(SIGNAL_EVENT_TYPES.BREAK_DECLINED, {
+      breakType: breakOffered,
+      trigger: offerTrigger,
+    });
   };
 
   /** Next chevron — an unpassed Quick Check intercepts the advance. */
@@ -1358,6 +1491,21 @@ export function LessonPlayer({
       return;
     }
     advancePastSegment();
+  };
+
+  /*
+   * Previous chevron. B105 (9 Oct): BACK TO AN EARLIER SEGMENT IS THE ONE
+   * NON-LINEAR MOVE THIS PLAYER HAS - Next goes on by one, and the check has
+   * no way back - so each is one `navigation_fragmentation`. Whether the
+   * moves add up to fragmentation is the engine's reading, not this one's.
+   */
+  const handlePrev = () => {
+    if (index === 0) return;
+    trackEvent(SIGNAL_EVENT_TYPES.ENGAGEMENT_SIGNAL, {
+      indicator: "navigation_fragmentation",
+      value: 1,
+    });
+    go(index - 1);
   };
 
   const pickDensity = (id: string) => {
@@ -1444,6 +1592,26 @@ export function LessonPlayer({
   }, [segment.id, depthNow]);
 
   /*
+   * B90: WHAT WAS ON SCREEN AS THE SEGMENT OPENED, OR AS ITS TEXT CHANGED, IS
+   * SEEN - all of a segment that fits, without a scroll. A chunked body
+   * reports its own parts instead, so its column, one part, is not measured.
+   * After the focus move, so it measures where that move left the page; and
+   * again as anything covering the segment lifts.
+   */
+  useEffect(() => {
+    if (!segmentShowing || chunkRead.current?.segmentId === segment.id) return;
+    const at = columnReach();
+    if (at) noteDepth(segment.id, at.reach / at.height);
+  }, [
+    segmentShowing,
+    segment.id,
+    modality,
+    effectiveDensity,
+    columnReach,
+    noteDepth,
+  ]);
+
+  /*
    * B42: THE SYSTEM'S RESHAPE, APPLIED. Its density on a text segment that
    * can deliver it, with no pick of the child's over it - the violet chip in
    * force. Counted once per instruction: a standing Simplify carried on to
@@ -1466,6 +1634,26 @@ export function LessonPlayer({
     noteApplied();
   }, [systemDensity, systemReshapeShown, noteApplied]);
 
+  /*
+   * B74 (8 Oct): THE ENGINE'S DENSITY SPACING, COUNTED WHEN IT CHANGES ON
+   * SCREEN MID-SESSION. The spacing the lesson opened on is not an adaptation
+   * applied; a different one reaching a later segment is. Compared as the
+   * spacing drawn, so a medium level after none - the segment as it has
+   * always been drawn, both - changes nothing a child could see.
+   */
+  const spacingOnScreen = segmentShowing
+    ? densitySpacing(
+        entryDensity.segmentId === segment.id ? entryDensity.level : null,
+      )
+    : null;
+  const spacingShown = useRef<string | null>(null);
+  useEffect(() => {
+    if (spacingOnScreen === null) return;
+    const before = spacingShown.current;
+    if (before !== null && before !== spacingOnScreen) noteApplied();
+    spacingShown.current = spacingOnScreen;
+  }, [spacingOnScreen, noteApplied]);
+
   /** What became of the offer: said to the engine, and the offer spent. */
   const settleSuggestion = useCallback(
     (outcome: SignalEventType) => {
@@ -1485,7 +1673,24 @@ export function LessonPlayer({
     trackBusy(BUSY_REASON.MODALITY_SWITCH, BUSY_PHASE.END);
     // A modality change, applied (B42).
     if (suggested) noteApplied();
-  }, [suggested, index, trackBusy, settleSuggestion, noteApplied]);
+    // Its outcome goes up as this segment is left (B73/B104).
+    if (suggested && suggested !== modality)
+      switched.current = {
+        segmentId: segment.id,
+        from: modality,
+        to: suggested,
+        atShownMs: shownSoFar(),
+      };
+  }, [
+    suggested,
+    index,
+    trackBusy,
+    settleSuggestion,
+    noteApplied,
+    modality,
+    segment.id,
+    shownSoFar,
+  ]);
 
   const dismissSuggestion = useCallback(() => {
     setLastSuggestedIndex(index);
@@ -1781,10 +1986,13 @@ export function LessonPlayer({
            * stored answer, so `correct` - and the pick and its timing beside it
            * - are not sent here. NO `segmentId`: an after-lesson question
            * belongs to the lesson, not to any one segment, and naming the last
-           * one would put the answer on a segment it was never about.
+           * one would put the answer on a segment it was never about - and
+           * the catalogue makes it optional for exactly this (9 Oct).
+           * `source` says it is the after-lesson check's (B90/B92, 8 Oct).
            */
           trackEvent(SIGNAL_EVENT_TYPES.COMPREHENSION_RESPONSE, {
             ...(checkpointId ? { questionId: checkpointId } : {}),
+            source: "assessment",
           });
           // The first answer to each question, for the scheduler. `Map.set` is
           // guarded so a re-answer cannot overwrite what they knew first time.
@@ -1902,15 +2110,17 @@ export function LessonPlayer({
     return (
       <BreakScreen
         type={breakActive}
-        // The catalogue's keys and no others: `trigger`, and how long it
-        // lasted. The type and the segment are not among them.
+        // The catalogue's keys and no others: the break's type (B89, 8 Oct),
+        // `trigger`, and how long it lasted. The segment is not among them.
         onStart={() =>
           trackEvent(SIGNAL_EVENT_TYPES.BREAK_START, {
+            breakType: breakActive,
             trigger: breakTrigger.current,
           })
         }
         onEnd={(durationMs) =>
           trackEvent(SIGNAL_EVENT_TYPES.BREAK_END, {
+            breakType: breakActive,
             trigger: breakTrigger.current,
             durationMs,
           })
@@ -2271,11 +2481,13 @@ export function LessonPlayer({
           onAudioBusy={(phase) => trackBusy(BUSY_REASON.MEDIA_PLAYING, phase)}
           onAnswered={(correct, answered) => {
             const checkpointId = segment.quickCheck?.id;
-            // The catalogue's two keys; the pick goes up on the attempt below,
-            // where the server marks it - see the after-lesson check's.
+            // The catalogue's keys, `source` naming a quick check's answer
+            // from the after-lesson check's; the pick goes up on the attempt
+            // below, where the server marks it.
             trackEvent(SIGNAL_EVENT_TYPES.COMPREHENSION_RESPONSE, {
               segmentId: segment.id,
               ...(checkpointId ? { questionId: checkpointId } : {}),
+              source: "checkpoint",
             });
             saveAttempt(
               answerFor({
@@ -2335,6 +2547,7 @@ export function LessonPlayer({
           key={`break-offer-${segment.id}`}
           onShown={() =>
             trackEvent(SIGNAL_EVENT_TYPES.BREAK_SUGGESTED, {
+              breakType: breakOffered,
               trigger: offerTrigger,
             })
           }
@@ -2359,7 +2572,7 @@ export function LessonPlayer({
         <ChevronButton
           dir="prev"
           disabled={index === 0}
-          onClick={() => go(index - 1)}
+          onClick={handlePrev}
         />
         <ChevronButton
           dir="next"

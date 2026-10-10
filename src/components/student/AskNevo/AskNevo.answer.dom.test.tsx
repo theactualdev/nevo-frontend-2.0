@@ -217,8 +217,37 @@ describe("what the drawer tells the engine", () => {
 
     expect(types()).toEqual(["ask_nevo_question_student"]);
     expect(JSON.stringify(trackEvent.mock.calls)).not.toMatch(/leaves/);
-    // Where it was asked - the catalogue's `currentPage`. Not the question's
-    // id or category: those are the server's, and do not exist yet.
+    // Where it was asked - the catalogue's `currentPage` - with the server's
+    // own id and category for it, which arrive with the answer (B93).
+    expect(trackEvent).toHaveBeenCalledWith("ask_nevo_question_student", {
+      interactionId: "11111111-1111-4111-8111-111111111111",
+      currentPage: "/student/dashboard",
+      questionCategory: "lesson_help",
+    });
+  });
+
+  it("goes up as the answer lands, not after the thinking beat", async () => {
+    open();
+    fireEvent.change(screen.getByLabelText("Ask a question"), {
+      target: { value: "Why do leaves need light?" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    // Nothing yet: the id and the category do not exist until it answers.
+    expect(types()).toEqual([]);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(types()).toEqual(["ask_nevo_question_student"]);
+  });
+
+  it("says only what is known of a question that got no answer", async () => {
+    ask.mockRejectedValue(new Error("offline"));
+    open();
+    await send("Why do leaves need light?");
+
+    // Asked, and where - never an id or a category the server never gave.
     expect(trackEvent).toHaveBeenCalledWith("ask_nevo_question_student", {
       currentPage: "/student/dashboard",
     });
@@ -230,8 +259,10 @@ describe("what the drawer tells the engine", () => {
     await send("Why do leaves need light?");
 
     expect(trackEvent).toHaveBeenCalledWith("ask_nevo_question_student", {
+      interactionId: "11111111-1111-4111-8111-111111111111",
       studentId: "33333333-3333-4333-8333-333333333333",
       currentPage: "/student/dashboard",
+      questionCategory: "lesson_help",
     });
   });
 
