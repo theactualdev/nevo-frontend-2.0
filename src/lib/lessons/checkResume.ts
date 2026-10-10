@@ -68,12 +68,10 @@ export function checkResumeAt(
  * answers given before the exit were given on another visit, maybe another
  * tablet. Matched on the option's own value, which is what was stored.
  *
- * `landed` is how many of those the SERVER marked right, so the result does
- * not tell a child who got the first two right before leaving that nothing
- * landed. NULL WHEN IT CANNOT BE KNOWN: a question with no stored verdict
- * (the write failed, or it could not be marked) might have been right, so a
- * zero would be a claim. Any right answer is known for certain, though, so a
- * count above zero stands whatever else is missing.
+ * NO COUNT OF WHAT LANDED any more. This also counted how many the server
+ * marked right, so the result could say whether anything landed; whether
+ * anything landed is the server's own `resultState` since B98 (8 Oct), so
+ * nothing here adds the marks up.
  *
  * The newest attempt per question speaks for it: that is the answer given in
  * this run of the check.
@@ -84,20 +82,12 @@ export function answersBefore(
   at: number,
 ): {
   picks: { questionIndex: number; selectedId: string }[];
-  landed: number | null;
 } {
   const picks: { questionIndex: number; selectedId: string }[] = [];
-  let landed = 0;
-  let unknown = false;
   questions.slice(0, at).forEach((question, questionIndex) => {
     const newest = attempts
       .filter((a) => a.source === "assessment" && a.questionId === question.id)
       .sort((a, b) => b.attemptNumber - a.attemptNumber)[0];
-    if (!question.id || !newest || typeof newest.correct !== "boolean") {
-      unknown = true;
-    } else if (newest.correct) {
-      landed += 1;
-    }
     const option = newest
       ? question.options.find(
           (o) => o.value !== undefined && o.value === newest.answer,
@@ -105,5 +95,5 @@ export function answersBefore(
       : undefined;
     if (option) picks.push({ questionIndex, selectedId: option.id });
   });
-  return { picks, landed: landed > 0 || !unknown ? landed : null };
+  return { picks };
 }

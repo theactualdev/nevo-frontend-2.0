@@ -43,3 +43,22 @@ describe("the text version on screen", () => {
     expect(depthShown(BOTH, "visual", "expand")).toBe("standard");
   });
 });
+
+describe("in a lower-depth session (SCRUM-178)", () => {
+  // The segment's own text is its simpler version there - see `atLowerDepth`.
+  const LOWER = segment({ expand: "Longer, with more." });
+
+  it("is simplified where the segment's own text is the simpler version", () => {
+    expect(depthShown(LOWER, "text", null, true)).toBe("simplified");
+    expect(depthShown(LOWER, "text", "slower", true)).toBe("simplified");
+  });
+
+  it("is still what the child asked for when they asked for more", () => {
+    expect(depthShown(LOWER, "text", "expand", true)).toBe("expanded");
+  });
+
+  it("is standard where there was no simpler version, or nothing to read", () => {
+    expect(depthShown(LOWER, "text", null, false)).toBe("standard");
+    expect(depthShown(LOWER, "audio", null, true)).toBe("standard");
+  });
+});
