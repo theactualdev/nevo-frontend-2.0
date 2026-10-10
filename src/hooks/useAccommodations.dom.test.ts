@@ -251,6 +251,39 @@ describe("useAccommodations", () => {
     expect(result.current.active?.reading).toBe(true);
   });
 
+  it("hands on the engine's support settings from the same read (B103)", async () => {
+    // Backend, 9 Oct: the client applies `support`; `reading` and `pacing`
+    // are the server's inference parameters and are not handed on.
+    signIn();
+    sessionState.mockResolvedValue({
+      ...answer(["reading"]),
+      engineConfig: {
+        reading: { targetWordsPerMinute: 90 },
+        support: { initialScaffoldLevel: "strong", shorterTextBlocks: true },
+      },
+    });
+
+    const { result } = renderHook(() => useAccommodationsState());
+
+    await waitFor(() => expect(result.current.settled).toBe(true));
+    expect(result.current.support).toEqual({
+      initialScaffoldLevel: "strong",
+      shorterTextBlocks: true,
+    });
+  });
+
+  it("has no support settings from the fallback route, which carries none", async () => {
+    signIn();
+    sessionState.mockRejectedValue(new ApiError(403, "Forbidden"));
+    accommodations.mockResolvedValue(fallback(["reading"]));
+
+    const { result } = renderHook(() => useAccommodationsState());
+
+    await waitFor(() => expect(result.current.settled).toBe(true));
+    expect(result.current.active?.reading).toBe(true);
+    expect(result.current.support).toBeNull();
+  });
+
   it("does not ask on behalf of a signed-out visitor", async () => {
     // The walkthrough has no child to hold an accommodation, and the route is
     // Bearer-only — asking would be a guaranteed 401 on every lesson open.

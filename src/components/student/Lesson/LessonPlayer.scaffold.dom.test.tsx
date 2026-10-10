@@ -137,6 +137,91 @@ describe("the dots and nothing else (D27)", () => {
   });
 });
 
+describe("where calculation support starts (B103, 9 Oct)", () => {
+  /*
+   * `engineConfig.support.initialScaffoldLevel`: "Client-applied starting
+   * level for calculation scaffolds." So it is the dots' level while the
+   * solver is on screen and nothing more specific has been said - and it
+   * says nothing anywhere else, because it is not about anywhere else.
+   */
+  const CALC = {
+    id: "frac-3",
+    title: "Fractions Lesson 3",
+    segments: [
+      {
+        id: "seg-1",
+        modalities: ["text", "interactive"],
+        text: { heading: "Adding", body: { default: "Add them." } },
+        calculationVariant: "co_construction",
+        calculation: {
+          variant: "co_construction",
+          expression: "1/4 + 2/4",
+          steps: [
+            {
+              stepId: "s1",
+              prompt: "How many quarters altogether?",
+              hint: "",
+              assembles: "",
+              equationState: "",
+              input: "number",
+              entry: "numeric",
+              accepted: ["3"],
+            },
+          ],
+          completion: "",
+        },
+      },
+    ],
+  } as unknown as Lesson;
+  const opensOn = (
+    startModality: "text" | "interactive",
+    over: Partial<AdaptationPlan> = {},
+    scaffold?: ScaffoldLevel,
+  ): AdaptationPlan => ({
+    lessonId: "frac-3",
+    segments: [
+      { segmentId: "seg-1", startModality, ...(scaffold ? { scaffold } : {}) },
+    ],
+    initialScaffold: SCAFFOLD_LEVELS.FULL,
+    ...over,
+  });
+
+  it("shows the starting level while a calculation is being worked", () => {
+    render(<LessonPlayer lesson={CALC} plan={opensOn("interactive")} />);
+
+    expect(screen.getByText("How many quarters altogether?")).toBeInTheDocument();
+    expect(filledDots()).toBe(4);
+  });
+
+  it("says nothing on the same segment's text, where no calculation is", () => {
+    render(<LessonPlayer lesson={CALC} plan={opensOn("text")} />);
+
+    expect(indicator()).toBeNull();
+  });
+
+  it("says nothing on a lesson with no calculation", () => {
+    render(
+      <LessonPlayer
+        lesson={LESSON}
+        plan={{ lessonId: "frac-3", segments: [], initialScaffold: SCAFFOLD_LEVELS.FULL }}
+      />,
+    );
+
+    expect(indicator()).toBeNull();
+  });
+
+  it("gives way to a level the plan gives for the segment", () => {
+    render(
+      <LessonPlayer
+        lesson={CALC}
+        plan={opensOn("interactive", {}, SCAFFOLD_LEVELS.LIGHT)}
+      />,
+    );
+
+    expect(filledDots()).toBe(2);
+  });
+});
+
 describe("the affective pill", () => {
   it("is 44px to touch, though drawn at 36", () => {
     render(<SocraticPanel prompts={[{ prompt: "What does the leaf do?" }]} />);

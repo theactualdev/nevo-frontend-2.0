@@ -671,6 +671,43 @@ describe("an accommodation when the engine does not answer", () => {
   });
 });
 
+describe("where calculation support starts (B103, 9 Oct)", () => {
+  it("rides on the live plan as the indicator draws it", async () => {
+    signIn();
+    detail.mockResolvedValue(LIVE_LESSON);
+    adaptation.mockReturnValue({ plan: null, error: "unreachable" });
+    accommodations.mockReturnValue({
+      active: null,
+      settled: true,
+      support: { initialScaffoldLevel: "strong" },
+    });
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.lesson).not.toBeNull());
+    expect(result.current.plan?.initialScaffold).toBe("full");
+    // Nothing else is invented beside it.
+    expect(result.current.plan).not.toHaveProperty("accommodations");
+  });
+
+  it("is no level when the read gave none, or one this client does not know", async () => {
+    signIn();
+    detail.mockResolvedValue(LIVE_LESSON);
+    adaptation.mockReturnValue({ plan: null, error: "unreachable" });
+    for (const support of [null, {}, { initialScaffoldLevel: "medium" }]) {
+      accommodations.mockReturnValue({ active: null, settled: true, support });
+
+      const { result, unmount } = renderHook(() =>
+        useStudentLesson(FIRST_LESSON_ID),
+      );
+
+      await waitFor(() => expect(result.current.lesson).not.toBeNull());
+      expect(result.current.plan?.initialScaffold).toBeUndefined();
+      unmount();
+    }
+  });
+});
+
 describe("a lesson the child saved for offline", () => {
   /*
    * With no connection the lesson read fails, and a child who saved the lesson

@@ -1,10 +1,28 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import { DENSITY, type Density } from "@/lib/constants";
-import { chunkBody } from "@/lib/lessons/chunk";
+import { bodyParts, chunksForBody } from "@/lib/lessons/chunk";
+import {
+  chunkCrossing,
+  sightingOf,
+  type ChunkAction,
+  type ChunkSighting,
+  type ChunkState,
+} from "@/lib/lessons/chunkViews";
 import type { TextContent } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+/** A server reading chunk came on screen or was read past (SCRUM-234). */
+export type OnChunkSeen = (chunkId: string, action: ChunkAction) => void;
 
 /** Attention pause: the continue control surfaces after this hold - no countdown. */
 const PAUSE_REVEAL_MS = 4_000;
@@ -35,6 +53,14 @@ const PAUSE_REVEAL_MS = 4_000;
  * density. This is the child asking, which is the whole point of the control - the one place a learner
  * has any agency in a system that deliberately tells them nothing about what
  * it is doing, and asking is not a disclosure about themselves.
+ *
+ * THE SERVER'S READING CHUNKS (SCRUM-234, frame 17c). Where a segment carries
+ * them, the standard body is drawn as those chunks with a quiet 1px rule
+ * between, and nothing else: "Nothing on screen tells a child the chunking
+ * exists - no chunk numbers... no marker that follows where they have read."
+ * The rule is decorative to a screen reader too. The tap-to-continue flow
+ * above takes its parts from them as well. With none, everything is as it
+ * was.
  */
 export function TextSegment({
   content,
@@ -42,6 +68,7 @@ export function TextSegment({
   reading = false,
   attention = false,
   onReadProgress,
+  onChunkSeen,
 }: {
   content: TextContent;
   density: Density | null;
@@ -57,11 +84,41 @@ export function TextSegment({
    * left (37c).
    */
   onReadProgress?: (pct: number) => void;
+  /**
+   * For `reading_chunk_viewed`: a server chunk entered view or was passed.
+   * Only server chunks report - the on-device split has no ids to name.
+   */
+  onChunkSeen?: OnChunkSeen;
 }) {
   const body = (density && content.body[density]) ?? content.body.default;
   const callout = content.callouts?.[density ?? "default"];
   const steps = density === DENSITY.SLOWER ? content.slowerSteps : undefined;
-  const keyTerms = density === DENSITY.EXPAND ? content.keyTerms : undefined;
+  const expand = density === DENSITY.EXPAND;
+  /*
+   * WHERE THE PAYLOAD'S BOXES GO (SCRUM-224, D24).
+   *
+   * KEY TERMS AND EQUATIONS ARE PART OF THE SEGMENT, "rather than a form of
+   * support" (design, 9 Oct), so they sit beside the standard text - in one
+   * block or in parts - as well as under Expand, where the Lesson Player
+   * frame draws them. A reshape (Simplify) draws the frame's own view. For
+   * the equations it is not only placement: backend, 9 Oct, an equation
+   * callout "is not guaranteed to be repeated in body".
+   *
+   * Key points are the frame's "IN SHORT", under every view but Expand and
+   * Slower.
+   */
+  const besideText = expand || body === content.body.default;
+  const keyTerms = besideText ? content.keyTerms : undefined;
+  const equations = besideText ? content.equations : undefined;
+  const keyPoints =
+    !expand && density !== DENSITY.SLOWER ? content.keyPoints : undefined;
+  /*
+   * The server's chunks are of the standard body, so they are asked of the
+   * text actually shown. A reshape, or any other text standing in for the
+   * standard body, reads as it always has - one block, or the on-device
+   * parts - and reports no chunk it is not showing.
+   */
+  const chunks = chunksForBody(body, content.readingChunks);
   /*
    * The authored numbered cards are the richer Slower and win where they
    * exist; chunking is the form that needs no content. Never both, or the
@@ -79,9 +136,18 @@ export function TextSegment({
     <ChunkedBody
       key={body}
       body={body}
+      chunks={chunks}
       className={bodyType}
       reading={reading}
       onReadProgress={onReadProgress}
+      onChunkSeen={onChunkSeen}
+    />
+  ) : chunks ? (
+    <ChunkedPassage
+      chunks={chunks}
+      className={bodyType}
+      reading={reading}
+      onChunkSeen={onChunkSeen}
     />
   ) : (
     <p
@@ -122,14 +188,23 @@ export function TextSegment({
       )}
 
       {keyTerms && keyTerms.length > 0 && (
-        <div className="mt-5 flex flex-wrap gap-2">
-          {keyTerms.map((term) => (
-            <span
-              key={term}
-              className="rounded-full bg-nevo-violet/18 px-3 py-1.5 text-[13px] font-medium text-nevo-navy"
-            >
-              {term}
-            </span>
+        <KeyTerms terms={keyTerms} className={bodyType} reading={reading} />
+      )}
+
+      {equations && equations.length > 0 && (
+        <div className="mt-5 flex flex-col gap-3">
+          {equations.map(({ equation, label }, i) => (
+            <div key={i} className="rounded-[12px] bg-nevo-violet/8 p-5">
+              {/* No label is no heading: not every equation is a word equation. */}
+              {label && (
+                <p className="mb-2.5 font-mono text-[11px] tracking-[0.06em] text-nevo-navy uppercase">
+                  {label}
+                </p>
+              )}
+              <p className="text-base leading-[1.7] font-medium text-nevo-near-black sm:text-[18px] lg:text-[19px]">
+                {equation}
+              </p>
+            </div>
           ))}
         </div>
       )}
@@ -149,8 +224,189 @@ export function TextSegment({
           )}
         </div>
       )}
+
+      {keyPoints && keyPoints.length > 0 && (
+        <div className="mt-[22px] rounded-[12px] bg-nevo-violet/8 p-5">
+          <p className="font-mono text-[11px] tracking-[0.06em] text-nevo-navy uppercase">
+            IN SHORT
+          </p>
+          <ul className="mt-2.5 flex flex-col gap-2">
+            {keyPoints.map((point, i) => (
+              <li
+                key={i}
+                className="text-base leading-[1.7] text-nevo-near-black/82 sm:text-[18px] lg:text-[19px]"
+              >
+                {point}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </article>
   );
+}
+
+/** The frame's key-term chip: violet, navy text, fully round. */
+const CHIP =
+  "rounded-full bg-nevo-violet/18 px-3 py-1.5 text-[13px] font-medium text-nevo-navy";
+
+/**
+ * The segment's key terms as the frame's chips. Design, 9 Oct: "A definition
+ * appears in place when the child taps the term. Not a glossary, not a
+ * separate screen, and not permanently expanded."
+ *
+ * So a term with a definition is a button that opens it right under the
+ * chips, in the segment's own body type - reading support's included - and
+ * closes it on a second tap. One at a time: opening another closes the first.
+ * A term with no definition stays a plain chip with nothing to open.
+ *
+ * Drawn at the frame's size and touched at 44px: the button is the hit area,
+ * the inner span is the chip, and the negative margin keeps the row the
+ * frame draws (the affective pill does the same).
+ */
+function KeyTerms({
+  terms,
+  className,
+  reading,
+}: {
+  terms: { term: string; definition?: string }[];
+  className: string;
+  reading: boolean;
+}) {
+  const [open, setOpen] = useState<number | null>(null);
+  const definitionId = useId();
+  const definition = open === null ? undefined : terms[open]?.definition;
+  return (
+    <div className="mt-5">
+      <div className="flex flex-wrap gap-2">
+        {terms.map(({ term, definition: has }, i) =>
+          has ? (
+            <button
+              key={i}
+              type="button"
+              aria-expanded={open === i}
+              aria-controls={open === i ? definitionId : undefined}
+              onClick={() => setOpen(open === i ? null : i)}
+              className="-my-1.5 inline-flex h-11 cursor-pointer items-center"
+            >
+              <span className={CHIP}>{term}</span>
+            </button>
+          ) : (
+            <span key={i} className={CHIP}>
+              {term}
+            </span>
+          ),
+        )}
+      </div>
+      {definition && (
+        <p
+          id={definitionId}
+          className={cn(
+            "mt-3",
+            className,
+            reading && "rounded-[12px] bg-[#e5dfd3] px-5 py-4",
+          )}
+        >
+          {definition}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The standard body as the server's chunks, frame 17c: each chunk's text, a
+ * quiet 1px rule between two, and nothing more. No animation on the rule and
+ * nothing reacts to crossing one - the crossing is reported, never shown.
+ *
+ * Under typographic support the whole passage sits on the softer card, and
+ * the rule darkens and spaces out to still read at the loosest setting.
+ */
+function ChunkedPassage({
+  chunks,
+  className,
+  reading,
+  onChunkSeen,
+}: {
+  chunks: readonly { id: string; text: string }[];
+  className: string;
+  reading: boolean;
+  onChunkSeen?: OnChunkSeen;
+}) {
+  const passage = useRef<HTMLDivElement>(null);
+  useChunkViews(passage, onChunkSeen, chunks.map((c) => c.id).join(" "));
+  return (
+    <div
+      ref={passage}
+      className={cn("mt-4", reading && "rounded-[12px] bg-[#e5dfd3] px-5 py-4")}
+    >
+      {chunks.map((chunk, i) => (
+        <Fragment key={chunk.id}>
+          {i > 0 && (
+            <div
+              aria-hidden="true"
+              className={cn(
+                "h-px",
+                reading
+                  ? "my-[30px] bg-nevo-near-black/16"
+                  : "my-[26px] bg-nevo-near-black/10",
+              )}
+            />
+          )}
+          <p data-chunk-id={chunk.id} className={className}>
+            {chunk.text}
+          </p>
+        </Fragment>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Watches the server chunks inside `watched` - and `watched` itself, when it
+ * is one - and reports each crossing once, as `chunkCrossing` reads it.
+ * Returns a way to mark one passed by hand: the tap-to-continue flow moves on
+ * from a part without it ever scrolling away.
+ *
+ * `showing` names what is on screen, so the watch is re-laid when it changes.
+ * Nothing is watched where the browser has no IntersectionObserver: no
+ * reading is sent rather than a guessed one.
+ */
+function useChunkViews(
+  watched: RefObject<HTMLElement | null>,
+  onChunkSeen: OnChunkSeen | undefined,
+  showing: string,
+): (chunkId: string) => void {
+  const states = useRef(new Map<string, ChunkState>());
+  const report = useRef(onChunkSeen);
+  useEffect(() => {
+    report.current = onChunkSeen;
+  });
+  const note = useCallback((id: string, seen: ChunkSighting) => {
+    const next = chunkCrossing(states.current.get(id), seen);
+    states.current.set(id, next.state);
+    if (next.action) report.current?.(id, next.action);
+  }, []);
+  useEffect(() => {
+    const root = watched.current;
+    if (!root || typeof IntersectionObserver === "undefined") return;
+    const targets = [
+      root,
+      ...root.querySelectorAll<HTMLElement>("[data-chunk-id]"),
+    ].filter((el) => el.dataset.chunkId);
+    if (targets.length === 0) return;
+    const watcher = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        const id = (entry.target as HTMLElement).dataset.chunkId;
+        // A part the flow has already replaced is gone, not read past.
+        if (!id || !entry.target.isConnected) continue;
+        note(id, sightingOf(entry, window.innerHeight));
+      }
+    });
+    targets.forEach((el) => watcher.observe(el));
+    return () => watcher.disconnect();
+  }, [watched, note, showing]);
+  return useCallback((id: string) => note(id, "above"), [note]);
 }
 
 /**
@@ -162,22 +418,43 @@ export function TextSegment({
  * TWO CALLERS, so it is not named for either: the `attention` accommodation
  * (37c), which the engine owns, and the child picking Slower, which the child
  * owns. The flow on screen is the same; what differs is who asked.
+ *
+ * THE PARTS ARE THE SERVER'S CHUNKS where the body came with them
+ * (SCRUM-234), and B23's on-device split only where it did not. Each part
+ * that is a server chunk reports as one: `entered` as it shows, `passed` when
+ * the child taps on from it.
+ *
+ * NO COUNT OF THE PARTS. It read "Part 1 of 3", and with the server's chunks
+ * that counted chunks. Design, 9 Oct: "Drop it... nothing about chunking is
+ * ever surfaced to a child." "Tap to continue" alone says there is more,
+ * and the last part simply has none.
  */
 function ChunkedBody({
   body,
+  chunks,
   className,
   reading,
   onReadProgress,
+  onChunkSeen,
 }: {
   body: string;
+  chunks?: readonly { id: string; text: string }[];
   className: string;
   reading: boolean;
   onReadProgress?: (pct: number) => void;
+  onChunkSeen?: OnChunkSeen;
 }) {
-  const parts = chunkBody(body);
+  const parts = bodyParts(body, chunks);
   const [part, setPart] = useState(0);
   const [pausing, setPausing] = useState(false);
   const [pauseReady, setPauseReady] = useState(false);
+  const shown = useRef<HTMLElement>(null);
+  const chunkId = chunks?.[part]?.id;
+  const markPassed = useChunkViews(
+    shown,
+    onChunkSeen,
+    pausing ? "" : (chunkId ?? ""),
+  );
 
   /*
    * TELL THE PLAYER HOW MUCH OF THE BODY THE CHILD HAS ACTUALLY SEEN.
@@ -185,16 +462,16 @@ function ChunkedBody({
    * Without this the attention accommodation fabricates a reading signal. A
    * chunk is a third of the body and so always fits: any scroll of the column
    * reads as its bottom, and the player would send that as the whole segment
-   * read. A child who stopped at Part 1 of 3 would be reported to the
-   * adaptation engine as having read all of it, and the engine learns from
-   * that.
+   * read. A child who stopped at the first of three parts would be reported
+   * to the adaptation engine as having read all of it, and the engine learns
+   * from that.
    *
    * Worse, it would have been wrong for precisely the children this
    * accommodation exists to help: only a child WITH the attention
    * accommodation is ever chunked, so only their signal would be corrupted.
    *
-   * Reported on mount as well as on change, because Part 1 of 3 is already a
-   * claim - "a third", not "all of it".
+   * Reported on mount as well as on change, because the first of three parts
+   * is already a claim - "a third", not "all of it".
    */
   const total = parts.length;
   useEffect(() => {
@@ -210,6 +487,8 @@ function ChunkedBody({
   if (parts.length === 1) {
     return (
       <p
+        ref={shown as RefObject<HTMLParagraphElement | null>}
+        data-chunk-id={chunkId}
         className={cn(
           "mt-4",
           className,
@@ -257,14 +536,11 @@ function ChunkedBody({
 
   const last = part === parts.length - 1;
   return (
-    <div className="mt-4">
-      <span className="font-mono text-[10px] font-semibold tracking-[0.08em] text-nevo-near-black/40 uppercase">
-        Part {part + 1} of {parts.length}
-      </span>
+    <div ref={shown as RefObject<HTMLDivElement | null>} className="mt-4">
       <p
         key={part}
+        data-chunk-id={chunkId}
         className={cn(
-          "mt-2",
           className,
           reading && "rounded-[12px] bg-[#e5dfd3] px-5 py-4",
           "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300",
@@ -275,7 +551,10 @@ function ChunkedBody({
       {!last && (
         <button
           type="button"
-          onClick={() => setPausing(true)}
+          onClick={() => {
+            if (chunkId) markPassed(chunkId);
+            setPausing(true);
+          }}
           className="mt-5 flex h-11 w-full cursor-pointer items-center justify-center rounded-[10px] bg-nevo-navy/8 px-5 text-[14px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/12 active:scale-[0.99]"
         >
           Tap to continue

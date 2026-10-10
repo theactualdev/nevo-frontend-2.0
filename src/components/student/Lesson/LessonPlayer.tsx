@@ -21,7 +21,7 @@ import {
   type SignalEventType,
 } from "@/lib/constants";
 import { useLesson, useSignals } from "@/hooks";
-import type { SessionOutcome } from "@/hooks/useSignals";
+import { formFactor, type SessionOutcome } from "@/hooks/useSignals";
 import {
   useRuntimeAdaptation,
   type AppliedAdaptations,
@@ -103,7 +103,7 @@ import {
   saveReviewAnswers,
 } from "./reviewStore";
 import { TeacherNote } from "./TeacherNote";
-import { TextSegment } from "./TextSegment";
+import { TextSegment, type OnChunkSeen } from "./TextSegment";
 import { VisualSegment } from "./VisualSegment";
 import type { MediaFailReason } from "./useMediaSource";
 
@@ -1423,7 +1423,7 @@ export function LessonPlayer({
   const densitySegments: ToggleSegment[] = DENSITIES.filter(({ id }) =>
     id === DENSITY.SLOWER
       ? segment.text?.body[id] !== undefined ||
-        isChunkable(segment.text?.body.default)
+        isChunkable(segment.text?.body.default, segment.text?.readingChunks)
       : segment.text?.body[id] !== undefined,
   ).map(({ id, label }) => ({
     id,
@@ -1672,10 +1672,9 @@ export function LessonPlayer({
 
   // A calculation being co-constructed holds the forward chevron until it's
   // solved (17b: forward disabled until the segment completes).
-  const calcBlocking =
-    modality === MODALITY.INTERACTIVE &&
-    isCalculation(segment) &&
-    !solvedCalcs.has(segment.id);
+  const calcShowing =
+    modality === MODALITY.INTERACTIVE && isCalculation(segment);
+  const calcBlocking = calcShowing && !solvedCalcs.has(segment.id);
 
   /*
    * ONLY AN UNSOLVED CALCULATION HOLDS THE FORWARD CHEVRON.
@@ -2011,10 +2010,21 @@ export function LessonPlayer({
             or a value we do not know, this drew two circles and "Nevo sets it
             for you" about support nobody had set, then changed when a plan
             landed.
+
+            THE STARTING LEVEL, LAST, AND ONLY ON THE SOLVER (B103, 9 Oct).
+            `initialScaffold` is the engine config's "starting level for
+            calculation scaffolds", which the client applies - so it shows
+            while a calculation is being worked and nothing more specific has
+            been said for the segment, and on no other screen.
           */}
           <ScaffoldIndicator
             key={`scaf-${segment.id}`}
-            level={conceptScaffold ?? segPlan?.scaffold ?? null}
+            level={
+              conceptScaffold ??
+              segPlan?.scaffold ??
+              (calcShowing ? plan?.initialScaffold : undefined) ??
+              null
+            }
           />
         </div>
         {/* Frame: the density toggle sits alone on its own right-aligned row.
@@ -2183,6 +2193,14 @@ export function LessonPlayer({
               reading={readingOn}
               attention={attentionOn}
               onReadProgress={noteReadProgress}
+              onChunkSeen={(chunkId, action) =>
+                trackEvent(SIGNAL_EVENT_TYPES.READING_CHUNK_VIEWED, {
+                  segmentId: segment.id,
+                  chunkId,
+                  action,
+                  formFactor: formFactor(),
+                })
+              }
               onReplay={() => {
                 trackEvent(SIGNAL_EVENT_TYPES.REPLAY, { segmentId: segment.id });
                 setObserved((o) => ({ ...o, replays: o.replays + 1 }));
@@ -2379,6 +2397,7 @@ function SegmentBody({
   reading,
   attention,
   onReadProgress,
+  onChunkSeen,
   onReplay,
   onNarrationPlayed,
   onAudioBusy,
@@ -2394,6 +2413,7 @@ function SegmentBody({
   reading: boolean;
   attention: boolean;
   onReadProgress: (pct: number) => void;
+  onChunkSeen: OnChunkSeen;
   onReplay: () => void;
   onNarrationPlayed: () => void;
   onAudioBusy: (phase: BusyPhase) => void;
@@ -2413,6 +2433,7 @@ function SegmentBody({
         reading={reading}
         attention={attention}
         onReadProgress={onReadProgress}
+        onChunkSeen={onChunkSeen}
       />
     );
   if (modality === MODALITY.VISUAL && segment.visual)

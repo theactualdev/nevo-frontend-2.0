@@ -60,6 +60,22 @@ export interface Manipulative {
 export interface TextVariant {
   body: string;
   keyPoints: string[];
+  /** SCRUM-224, 8 Oct. Up to 12. */
+  keyTerms?: KeyTerm[];
+  /** SCRUM-224, 8 Oct. Up to 8. */
+  equationCallouts?: EquationCallout[];
+}
+
+/** "A term the child can inspect without leaving the segment." */
+export interface KeyTerm {
+  term: string;
+  definition: string;
+}
+
+/** "An equation kept separate from prose so it can be rendered accessibly." */
+export interface EquationCallout {
+  equation: string;
+  label?: string | null;
 }
 
 export interface VisualVariant {

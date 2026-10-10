@@ -76,6 +76,16 @@ const SCAFFOLD: Record<string, ScaffoldLevel> = {
   strong: SCAFFOLD_LEVELS.FULL,
 };
 
+/**
+ * One engine `ScaffoldingLevel` as the indicator draws it, by the same map as
+ * a plan row's - or nothing, for a value it does not know.
+ */
+export function indicatorLevel(
+  level: string | null | undefined,
+): ScaffoldLevel | undefined {
+  return level && Object.hasOwn(SCAFFOLD, level) ? SCAFFOLD[level] : undefined;
+}
+
 const MODALITIES: readonly string[] = Object.values(MODALITY);
 
 function asModality(value: string | null | undefined): Modality | null {

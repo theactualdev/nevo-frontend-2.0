@@ -150,6 +150,8 @@ export interface OfflinePackageSegment {
   key: string;
   title?: string | null;
   body: string;
+  /** The same chunks a live open carries (B87). */
+  readingChunks?: LessonSegment["readingChunks"];
   contentType: LessonContentType;
   sequenceOrder: number;
   availableModalities?: LessonSegment["availableModalities"];
@@ -215,6 +217,7 @@ function isSegment(s: unknown): boolean {
     typeof s.contentType === "string" &&
     typeof s.sequenceOrder === "number" &&
     (s.title == null || typeof s.title === "string") &&
+    listOrAbsent(s.readingChunks) &&
     listOrAbsent(s.availableModalities) &&
     listOrAbsent(s.comprehensionCheckpoints) &&
     objOrAbsent(s.depthVariants) &&
@@ -276,6 +279,7 @@ export function detailFromPackage(
         sequenceOrder: s.sequenceOrder,
         title: s.title ?? null,
         body: s.body,
+        readingChunks: s.readingChunks ?? [],
         availableModalities: s.availableModalities ?? [],
         comprehensionCheckpoints: s.comprehensionCheckpoints ?? [],
         textVariant: v?.text ?? null,

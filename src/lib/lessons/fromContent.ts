@@ -2,6 +2,7 @@ import type {
   LessonDetailResponse,
   LessonModule as ContentModule,
   LessonSegment as ContentSegment,
+  ReadingChunk,
 } from "@/lib/api/lessons";
 import { toQuickCheck } from "@/lib/api/checkpoints";
 /*
@@ -18,10 +19,13 @@ import type {
   CalculationScaffold as WireCalculationScaffold,
   CalculationVariant as WireCalculationVariant,
   CalculationStep as WireCalculationStep,
+  EquationCallout,
+  KeyTerm,
   Manipulative,
 } from "@/lib/api/variants";
 import type { CheckpointScalar } from "@/lib/api/checkpoints";
 import { isStoredAnswer } from "./storedAnswer";
+import { chunksForBody } from "./chunk";
 import { MODALITY, type Modality } from "@/lib/constants";
 import type {
   Assessment,
@@ -153,6 +157,11 @@ function textFor(segment: ContentSegment, lessonTitle: string): TextContent {
    * Simplify was blocked on `textVariant` for a week. It was never
    * `textVariant`; it was this field, which did not exist yet.
    */
+  const variant = segment.textVariant;
+  const keyPoints = textsOf(variant?.keyPoints);
+  const keyTerms = keyTermsOf(variant?.keyTerms);
+  const equations = equationsOf(variant?.equationCallouts);
+  const readingChunks = chunksOf(segment.readingChunks, base);
   return {
     heading: segment.title ?? lessonTitle,
     body: {
@@ -160,7 +169,84 @@ function textFor(segment: ContentSegment, lessonTitle: string): TextContent {
       ...reshape("simplify", segment.depthVariants?.simplified?.body, base),
       ...reshape("expand", segment.depthVariants?.expanded?.body, base),
     },
+    /*
+     * SCRUM-224. `keyPoints` were never removed from the wire - this dropped
+     * them - and `keyTerms` and `equationCallouts` are typed as of 8 Oct.
+     * Omitted rather than empty: the segment draws a box only for what came.
+     *
+     * A KEY TERM'S `definition` comes with it: design, 9 Oct, "A definition
+     * appears in place when the child taps the term."
+     */
+    ...(keyPoints ? { keyPoints } : {}),
+    ...(keyTerms ? { keyTerms } : {}),
+    ...(equations ? { equations } : {}),
+    ...(readingChunks ? { readingChunks } : {}),
   };
+}
+
+/** The non-blank strings of a list, trimmed, or nothing when none are left. */
+function textsOf(
+  list: readonly unknown[] | null | undefined,
+): string[] | undefined {
+  const out = (list ?? [])
+    .filter((s): s is string => typeof s === "string")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return out.length > 0 ? out : undefined;
+}
+
+/** Each term with words in it, and its definition only where it has one. */
+function keyTermsOf(
+  terms: readonly KeyTerm[] | null | undefined,
+): TextContent["keyTerms"] {
+  const out = (terms ?? []).flatMap((t) => {
+    const term = typeof t?.term === "string" ? t.term.trim() : "";
+    if (!term) return [];
+    const definition =
+      typeof t.definition === "string" ? t.definition.trim() : "";
+    return [definition ? { term, definition } : { term }];
+  });
+  return out.length > 0 ? out : undefined;
+}
+
+/** Each equation with words in it, and its label only where it has one. */
+function equationsOf(
+  callouts: readonly EquationCallout[] | null | undefined,
+): TextContent["equations"] {
+  const out = (callouts ?? []).flatMap((c) => {
+    const equation = typeof c?.equation === "string" ? c.equation.trim() : "";
+    if (!equation) return [];
+    const label = typeof c.label === "string" ? c.label.trim() : "";
+    return [label ? { equation, label } : { equation }];
+  });
+  return out.length > 0 ? out : undefined;
+}
+
+/**
+ * The server's reading chunks for this body, in order - or nothing, and the
+ * body reads as one.
+ *
+ * REFUSED WHOLE WHEN THEY ARE NOT THIS BODY'S WORDS. They are drawn in place
+ * of `body`, so a set that drops, adds or changes a word would put text on
+ * screen that is not the approved lesson. A set that does not carry exactly
+ * the body's words, or a chunk with no id or no text, falls back to the body
+ * itself: nothing is lost, the passage is simply one block. The segment asks
+ * the same question again of the text it actually shows - `chunksForBody`.
+ */
+function chunksOf(
+  chunks: readonly ReadingChunk[] | null | undefined,
+  body: string,
+): TextContent["readingChunks"] {
+  if (!Array.isArray(chunks) || chunks.length === 0) return undefined;
+  const ordered = chunks
+    .slice()
+    .sort((a, b) => a.sequenceOrder - b.sequenceOrder)
+    .map((c) => ({
+      id: typeof c?.id === "string" ? c.id : "",
+      text: typeof c?.text === "string" ? c.text.trim() : "",
+    }));
+  if (ordered.some((c) => !c.id || !c.text)) return undefined;
+  return chunksForBody(body, ordered) ? ordered : undefined;
 }
 
 /**

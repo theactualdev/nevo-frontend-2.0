@@ -119,7 +119,11 @@ export const ADDING_FRACTIONS: Lesson = {
           "Add the top numbers together.",
           "Keep the bottom number the same.",
         ],
-        keyTerms: ["numerator", "denominator", "whole"],
+        keyTerms: [
+          { term: "numerator" },
+          { term: "denominator" },
+          { term: "whole" },
+        ],
         callouts: {
           [DENSITY.SIMPLIFY]: {
             label: "IN SHORT",

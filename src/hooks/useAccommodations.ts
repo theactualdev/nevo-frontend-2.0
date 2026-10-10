@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/api/client";
-import { intelligenceApi } from "@/lib/api/intelligence";
+import { intelligenceApi, type EngineConfig } from "@/lib/api/intelligence";
 import { studentsApi, type AccommodationType } from "@/lib/api/students";
 import { getSession } from "@/lib/auth/session";
 import { useHasSession } from "./useHasSession";
@@ -40,11 +40,14 @@ export interface ActiveAccommodations {
  * newer route turned them away. A 401 is the client's to handle
  * (`handleAuthFailure`), and there is no child left to read for.
  *
- * ONLY THE ACCOMMODATIONS ARE APPLIED. The engine configuration it carries is
- * the engine's own parameters, and the contract does not say what any of them
- * changes on screen - see `EngineConfig`. The consent state is already acted
- * on where a lesson opens: a withdrawn child is refused it (B7) and taken to
- * 00e (`withdrawnDoor`).
+ * THE ACCOMMODATIONS, AND THE ENGINE'S SUPPORT SETTINGS. Backend, 9 Oct: the
+ * client applies `engineConfig.support`, while `reading` and `pacing` are the
+ * server's own inference parameters. So `support` is handed on as read, from
+ * this read only - the fallback route carries none, and none is what a
+ * failed read means. Which of them change anything on screen, and how, is
+ * in `EngineConfig`. The consent state is already acted on where a lesson
+ * opens: a withdrawn child is refused it (B7) and taken to 00e
+ * (`withdrawnDoor`).
  *
  * DEFAULTS TO NONE, and note this points the OPPOSITE way to `useConsentGate`,
  * which defaults to allowed. The asymmetry is the point: there, silence must
@@ -72,9 +75,16 @@ export function useAccommodations(): ActiveAccommodations | null {
 export function useAccommodationsState(): {
   active: ActiveAccommodations | null;
   settled: boolean;
+  /** `engineConfig.support` from the session-start read; null without one. */
+  support: EngineConfig["support"] | null;
 } {
   const signedIn = useHasSession();
   const [active, setActive] = useState<ActiveAccommodations | null>(null);
+  /** Keyed by child, like `settledFor`, so one child's never reaches another. */
+  const [support, setSupport] = useState<{
+    for: string;
+    value: EngineConfig["support"] | null;
+  } | null>(null);
   /** Whose read settled, so a different child's answer never counts. */
   const [settledFor, setSettledFor] = useState<string | null>(null);
 
@@ -110,7 +120,11 @@ export function useAccommodationsState(): {
     };
     void intelligenceApi
       .sessionState(studentId)
-      .then((res) => apply(res.accommodations))
+      .then((res) => {
+        if (!cancelled)
+          setSupport({ for: studentId, value: res.engineConfig?.support ?? null });
+        apply(res.accommodations);
+      })
       .catch((err: unknown) => {
         if (err instanceof ApiError && err.status === 401) return none();
         return studentsApi
@@ -128,5 +142,6 @@ export function useAccommodationsState(): {
     active,
     // Nobody signed in has nothing to wait for.
     settled: !studentId || settledFor === studentId,
+    support: studentId && support?.for === studentId ? support.value : null,
   };
 }
