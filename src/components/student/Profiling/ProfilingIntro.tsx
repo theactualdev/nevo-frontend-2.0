@@ -1,10 +1,6 @@
 "use client";
 
 import { IllustrationWrapper } from "@/components/shared";
-import {
-  AgeStepper,
-  isAgeInRange,
-} from "@/components/student/Onboarding/AgeStepper";
 import { ProfilingShell } from "./ProfilingShell";
 
 /**
@@ -27,36 +23,20 @@ export function ProfilingIntro({
   mode,
   onContinue,
   saved = null,
-  askAge = false,
   waiting = false,
-  age = "",
-  onAgeChange,
 }: {
   mode: "intro" | "complete";
   onContinue: () => void;
   /**
-   * Ask before starting, because we do not know.
+   * The roster has not answered yet, so the band is not known. No start: a
+   * run begun now would be sized by a guess.
    *
-   * The band decides the grid size, the span ceiling, whether the dual task
-   * runs and which domain questions a child sees. It comes from the roster
-   * when the child is signed in and it has one, or from the age given in
-   * onboarding Step 1 - but a child arriving by SSO never sees that step, and
-   * the code fell back to a FIXTURE's "Year 4". Every SSO child therefore sat
-   * the Primary 4-6 baseline: a sixteen-year-old on a 4x4 grid with no dual
-   * task, a seven-year-old asked "What is 15% of 200?".
-   *
-   * So only when neither says. One question is cheaper than mis-pitching four
-   * modules. NOT DRAWN: design asked on 1 Oct (D13) which case still reaches
-   * this before drawing it; see `ProfilingFlow`.
-   */
-  askAge?: boolean;
-  /**
-   * The roster has not answered yet, so it is not known whether to ask. No
-   * question, and no start: a run begun now would be sized by a guess.
+   * NO AGE QUESTION, EVER (D153, 8 Oct). It asked "How old are you?" when
+   * nothing gave a band. Design: "Name, age and class come from the roster,
+   * and a child is never asked for their own details." See `ProfilingFlow`
+   * for what a child with no band runs instead.
    */
   waiting?: boolean;
-  age?: string;
-  onAgeChange?: (value: string) => void;
   /**
    * Whether the baseline reached Nevo. Null while it is still resolving, which
    * reads as the settled copy - the child did their part either way and the
@@ -85,8 +65,7 @@ export function ProfilingIntro({
   saved?: boolean | null;
 }) {
   const complete = mode === "complete";
-  const blocked =
-    !complete && (waiting || (askAge && !isAgeInRange(age)));
+  const blocked = !complete && waiting;
   return (
     <ProfilingShell filled={complete ? 4 : 0} active={complete ? -1 : 0}>
       <div className="flex min-h-0 w-full max-w-[300px] flex-1 flex-col items-center justify-center text-center sm:max-w-[480px]">
@@ -122,15 +101,6 @@ export function ProfilingIntro({
               // replaced.
               "You'll do four quick activities. This just helps Nevo work better for you."}
         </p>
-        {askAge && !complete && !waiting && (
-          <div className="mt-6 w-full">
-            <p className="mb-2 text-[15px] font-medium text-nevo-near-black">
-              How old are you?
-            </p>
-            <AgeStepper value={age} onChange={(v) => onAgeChange?.(v)} />
-          </div>
-        )}
-
         <button
           type="button"
           disabled={blocked}

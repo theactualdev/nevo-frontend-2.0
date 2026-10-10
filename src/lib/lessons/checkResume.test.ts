@@ -109,41 +109,14 @@ describe("what had been answered before", () => {
     ]);
   });
 
-  it("counts what the server marked right", () => {
+  it("counts nothing: whether anything landed is the server's word (B98)", () => {
     const out = answersBefore(
-      [attempt("cp-1", 2, true), attempt("cp-2", 2, true)],
+      [attempt("cp-1", 2, true), attempt("cp-2", 3, false)],
       QUESTIONS,
       2,
     );
 
-    expect(out.landed).toBe(2);
-  });
-
-  it("says zero only when every answer before is known", () => {
-    expect(
-      answersBefore(
-        [attempt("cp-1", 3, false), attempt("cp-2", 3, false)],
-        QUESTIONS,
-        2,
-      ).landed,
-    ).toBe(0);
-  });
-
-  it("does not claim nothing landed when an answer is missing", () => {
-    // The write for cp-2 never landed. It may have been right.
-    expect(answersBefore([attempt("cp-1", 3, false)], QUESTIONS, 2).landed).toBeNull();
-    // Nor when the server could not mark one.
-    expect(
-      answersBefore(
-        [attempt("cp-1", 3, false), attempt("cp-2", 2, null)],
-        QUESTIONS,
-        2,
-      ).landed,
-    ).toBeNull();
-  });
-
-  it("still knows something landed when another answer is missing", () => {
-    expect(answersBefore([attempt("cp-1", 2, true)], QUESTIONS, 2).landed).toBe(1);
+    expect(Object.keys(out)).toEqual(["picks"]);
   });
 
   it("takes the newest answer to a question", () => {
@@ -154,7 +127,6 @@ describe("what had been answered before", () => {
     );
 
     expect(out.picks).toEqual([{ questionIndex: 0, selectedId: "2" }]);
-    expect(out.landed).toBe(1);
   });
 
   it("reads only the after-lesson check's answers, and only before the point", () => {
@@ -170,13 +142,11 @@ describe("what had been answered before", () => {
     );
 
     expect(out.picks).toEqual([]);
-    expect(out.landed).toBeNull();
   });
 
   it("reads nothing before the first question", () => {
     expect(answersBefore([attempt("cp-1", 2, true)], QUESTIONS, 0)).toEqual({
       picks: [],
-      landed: 0,
     });
   });
 });

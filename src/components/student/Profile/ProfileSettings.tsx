@@ -29,11 +29,12 @@ const TEXT_SIZES = [
 /**
  * Profile & Settings (screen 27). Read-only learning preferences (observed, not
  * self-reported), accessibility controls, and account. Every change is
- * acknowledged with a quiet "Saved" pill.
+ * acknowledged with a quiet "Saved" pill, once it is kept.
  *
  * The accessibility controls (Reduced Motion / Text Size / High Contrast) are the
  * global, persisted preferences from `AccessibilityContext` — changing one here
- * takes effect across the whole app immediately.
+ * takes effect across the whole app immediately, and is kept on the child's
+ * account (SCRUM-226).
  */
 export function ProfileSettings() {
   const router = useRouter();
@@ -94,6 +95,15 @@ export function ProfileSettings() {
     if (savedTimer.current) clearTimeout(savedTimer.current);
     savedTimer.current = setTimeout(() => setSaved(false), 1700);
   }, []);
+  /*
+   * "Saved" for an accessibility choice only once it is KEPT - on the child's
+   * account, since SCRUM-226 - and not on the tap (D112). The choice itself
+   * applies at once either way; a write that fails just says nothing.
+   */
+  const savedOnceKept = (kept: Promise<boolean>) =>
+    void kept.then((ok) => {
+      if (ok) flashSaved();
+    });
 
   return (
     <div className="mx-auto w-full max-w-[600px] px-5 py-2 pb-8 sm:px-8 sm:py-6">
@@ -116,8 +126,7 @@ export function ProfileSettings() {
         <Switch
           checked={reducedMotion}
           onCheckedChange={(v) => {
-            setReducedMotion(v);
-            flashSaved();
+            savedOnceKept(setReducedMotion(v));
           }}
           aria-label="Reduced motion"
         />
@@ -133,8 +142,7 @@ export function ProfileSettings() {
                 type="button"
                 aria-pressed={textSize === size.id}
                 onClick={() => {
-                  setTextSize(size.id);
-                  flashSaved();
+                  savedOnceKept(setTextSize(size.id));
                 }}
                 className={cn(
                   "min-w-8 cursor-pointer rounded-full px-2.5 py-1.5 text-[13px] font-medium transition-colors",
@@ -158,8 +166,7 @@ export function ProfileSettings() {
         <Switch
           checked={highContrast}
           onCheckedChange={(v) => {
-            setHighContrast(v);
-            flashSaved();
+            savedOnceKept(setHighContrast(v));
           }}
           aria-label="High contrast"
         />

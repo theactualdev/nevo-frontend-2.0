@@ -110,11 +110,9 @@
   --animate-nevo-pop: nevo-pop 300ms ease-out;
   --animate-nevo-kb-up: nevo-kb-up 220ms cubic-bezier(0.33, 1, 0.68, 1) both;
   --animate-nevo-kb-caret: nevo-kb-caret 1000ms step-end infinite;
-  /* One-shot (SCRUM-94: no perpetual motion inside measured windows). */
-  --animate-nevo-glow: nevo-glow 2s ease-in-out both;
-  --animate-nevo-sparkle: nevo-sparkle 2600ms ease-in-out both;
   /* No glow guide: the forward control's glow under a hint went with design's
-     D124 (6 Oct). Nothing reacts visibly to a child's difficulty. */
+     D124 (6 Oct). Nothing reacts visibly to a child's difficulty. Nor the
+     system density chip's glow and sparkle, with D144 (8 Oct). */
   /* Ask Nevo (26): thinking dots + listening mic - state-bound, end with the state. */
   --animate-nevo-dot: nevo-dot 1200ms ease-in-out infinite;
   --animate-nevo-mic-pulse: nevo-mic-pulse 2000ms ease-in-out infinite;
@@ -276,35 +274,6 @@
   }
   50% {
     opacity: 0;
-  }
-}
-
-/* System-triggered adaptive toggle (Lesson Player) — a steady 3px ring that
- * pulses in and out ("Nevo adjusted this"). */
-@keyframes nevo-glow {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgba(154, 156, 203, 0);
-  }
-  50% {
-    box-shadow: 0 0 0 3px rgba(154, 156, 203, 0.4);
-  }
-}
-
-/* Toggle-group sparkle (Lesson Player frame) — a violet glint on the control's
- * corner while a system recommendation waits, unfollowed. */
-@keyframes nevo-sparkle {
-  0% {
-    opacity: 0;
-    transform: scale(0.5) rotate(-8deg);
-  }
-  35% {
-    opacity: 1;
-    transform: scale(1) rotate(0deg);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(0.85) rotate(6deg);
   }
 }
 

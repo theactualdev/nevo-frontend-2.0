@@ -87,11 +87,9 @@ describe("baselineTrials - nothing on the wire is a summary", () => {
   it("is one trial per answer, in the order they were given", () => {
     const trials = baselineTrials(aWholeRun());
 
-    // One check, three taps, five picks.
-    expect(trials).toHaveLength(9);
+    // One check, one recall (its three taps are one answer, B80), five picks.
+    expect(trials).toHaveLength(7);
     expect(trials.map((t) => t.dimension)).toEqual([
-      "wmc",
-      "wmc",
       "wmc",
       "wmc",
       "ps",
@@ -151,7 +149,7 @@ describe("baselineTrials - nothing on the wire is a summary", () => {
 
 describe("baselineTrials - a pick", () => {
   it("names the condition each trial ran under", () => {
-    const [, , , , pattern, flanker, reading, dots, probe] = baselineTrials(
+    const [, , pattern, flanker, reading, dots, probe] = baselineTrials(
       aWholeRun(),
     );
 
@@ -209,6 +207,18 @@ describe("baselineTrials - a pick", () => {
     expect(baselineTrials(c)[0].probeItemId).toBeNull();
   });
 
+  it("never sends a device day's id as a probe item (B79)", () => {
+    // Device-task ids live in the `device:*` namespace; only a probe-bank
+    // UUID is a probe item.
+    const c = new BaselineCapture("w4");
+    c.record("trial_pick", { module: "warmup", act: "ans", choice: 0, rtMs: 900, itemId: "device:ans", correct: true });
+
+    expect(baselineTrials(c)[0]).toMatchObject({
+      dimension: "ans",
+      probeItemId: null,
+    });
+  });
+
   it("sends no time it could not have measured, rather than a clamped one", () => {
     // Over the contract's 600000 the whole run would be refused; under zero
     // is not a time. Neither is rounded into a number nobody measured.
@@ -225,30 +235,59 @@ describe("baselineTrials - a pick", () => {
   });
 });
 
-describe("baselineTrials - tile memory", () => {
-  /** A tap at `posInSeq`, stamped wherever the test clock now stands. */
-  const tap = (c: BaselineCapture, posInSeq: number, correct = true) =>
-    c.record("tap", { cell: posInSeq, correct, posInSeq, length: 3 });
+describe("baselineTrials - tile memory: one trial per recall (B80)", () => {
+  /** A tap on `cell`, stamped wherever the test clock now stands. */
+  const tap = (c: BaselineCapture, cell: number, posInSeq: number, correct = true) =>
+    c.record("tap", { cell, correct, posInSeq, length: 3, x: 4.5, y: 9.5 });
 
-  it("times each tap from the one before it in the same recall", () => {
+  it("sends a recall as one answer: the cells tapped, in order, timed from the hand-over", () => {
+    // It went up as one trial per tap - three answers for one recall, each
+    // with its own verdict and an interval from the tap before it.
     const c = new BaselineCapture("g1");
     c.record("input_start", { length: 3 });
     advance(500);
-    tap(c, 0);
+    tap(c, 7, 0);
     advance(300);
-    tap(c, 1);
+    tap(c, 2, 1);
     advance(320);
-    tap(c, 2);
+    tap(c, 5, 2);
+    c.record("round_complete", { length: 3 });
 
-    expect(baselineTrials(c).map((t) => t.responseTimeMs)).toEqual([
-      500, 300, 320,
+    expect(baselineTrials(c)).toEqual([
+      {
+        dimension: "wmc",
+        condition: "length_3",
+        response: "7,2,5",
+        correct: true,
+        responseTimeMs: 1120,
+        probeItemId: null,
+      },
     ]);
-    expect(baselineTrials(c)[0]).toMatchObject({
-      dimension: "wmc",
-      condition: "length_3",
-      response: "0",
-      correct: true,
-    });
+  });
+
+  it("ends a recall at a wrong tap, with the wrong cell as the last one tapped", () => {
+    const c = new BaselineCapture("g3");
+    c.record("input_start", { length: 3 });
+    advance(500);
+    tap(c, 7, 0);
+    advance(700);
+    tap(c, 9, 1, false);
+    // The pattern plays again and the grid is handed over afresh.
+    advance(3000);
+    c.record("input_start", { length: 3 });
+    advance(400);
+    tap(c, 7, 0);
+    advance(300);
+    tap(c, 2, 1);
+    advance(300);
+    tap(c, 5, 2);
+    c.record("round_complete", { length: 3 });
+
+    const trials = baselineTrials(c);
+    expect(trials.map((t) => [t.response, t.correct, t.responseTimeMs])).toEqual([
+      ["7,9", false, 1200],
+      ["7,2,5", true, 1000],
+    ]);
   });
 
   it("never times the pause between rounds as recall", () => {
@@ -257,42 +296,60 @@ describe("baselineTrials - tile memory", () => {
     const c = new BaselineCapture("g2");
     c.record("input_start", { length: 3 });
     advance(450);
-    tap(c, 0);
+    tap(c, 0, 0);
     advance(300);
-    tap(c, 1);
+    tap(c, 1, 1);
+    advance(200);
+    tap(c, 2, 2);
     c.record("round_complete", { length: 3 });
     advance(4000);
-    c.record("input_start", { length: 3 });
+    c.record("input_start", { length: 4 });
     advance(600);
-    tap(c, 0);
+    c.record("tap", { cell: 3, correct: false, posInSeq: 0, length: 4 });
 
-    expect(baselineTrials(c).map((t) => t.responseTimeMs)).toEqual([
-      450, 300, 600,
+    expect(
+      baselineTrials(c).map((t) => [t.condition, t.responseTimeMs]),
+    ).toEqual([
+      ["length_3", 950],
+      ["length_4", 600],
     ]);
   });
 
-  it("starts the recall again after a wrong tap, with the pattern replayed", () => {
-    const c = new BaselineCapture("g3");
+  it("sends nothing for a recall the child never finished", () => {
+    // "One trial per COMPLETED recall": two right taps of three is not one.
+    const c = new BaselineCapture("g6");
     c.record("input_start", { length: 3 });
     advance(500);
-    tap(c, 0);
-    advance(700);
-    tap(c, 1, false);
-    advance(3000);
-    c.record("input_start", { length: 3 });
-    advance(400);
-    tap(c, 0);
+    tap(c, 7, 0);
+    advance(300);
+    tap(c, 2, 1);
 
-    const trials = baselineTrials(c);
-    expect(trials.map((t) => t.correct)).toEqual([true, false, true]);
-    expect(trials.map((t) => t.responseTimeMs)).toEqual([500, 700, 400]);
+    expect(baselineTrials(c)).toEqual([]);
   });
 
-  it("leaves a tap untimed when nothing says when its recall began", () => {
+  it("leaves a recall untimed when nothing says when the grid was handed over", () => {
     const c = new BaselineCapture("g4");
-    tap(c, 0);
+    tap(c, 0, 0, false);
 
-    expect(baselineTrials(c)[0].responseTimeMs).toBeNull();
+    expect(baselineTrials(c)[0]).toMatchObject({
+      response: "0",
+      correct: false,
+      responseTimeMs: null,
+    });
+  });
+
+  it("carries no coordinates and no per-tap verdicts (B14)", () => {
+    const c = new BaselineCapture("g7");
+    c.record("input_start", { length: 3 });
+    for (const [cell, pos] of [[7, 0], [2, 1], [5, 2]]) {
+      advance(300);
+      tap(c, cell, pos);
+    }
+    c.record("round_complete", { length: 3 });
+
+    const [trial] = baselineTrials(c);
+    expect(Object.keys(trial).sort()).toEqual(CONTRACT_KEYS);
+    expect(JSON.stringify(trial)).not.toMatch(/"x"|"y"|posInSeq|4\.5|9\.5/);
   });
 
   it("sends the SS dual task's checks, timed from the check appearing", () => {

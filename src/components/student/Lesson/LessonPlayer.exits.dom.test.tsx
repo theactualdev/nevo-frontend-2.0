@@ -220,6 +220,34 @@ describe("a lesson played from a partial saved copy", () => {
     });
   });
 
+  it("does not say the lesson is done (D142)", () => {
+    // Nor that anything was saved, whatever the hook reports: nothing was
+    // completed to save.
+    progress.completionSaved = true;
+    playThrough({ partial: true });
+
+    expect(
+      screen.getByRole("heading", {
+        name: "That's as far as this one goes for now.",
+      }),
+    ).toBeTruthy();
+    expect(
+      screen.getByText("We'll pick up the rest when you're back online."),
+    ).toBeTruthy();
+    expect(screen.queryByText(/lesson done/i)).toBeNull();
+    expect(screen.queryByText(/saved/i)).toBeNull();
+  });
+
+  it("still says the whole lesson is done", () => {
+    // Without this, a screen that never said "done" passes the above.
+    playThrough();
+
+    expect(
+      screen.getByRole("heading", { name: "That's the lesson done." }),
+    ).toBeTruthy();
+    expect(screen.queryByText(/as far as this one goes/)).toBeNull();
+  });
+
   it("writes nothing at all for a finished lesson reopened from it", () => {
     // Finished stays finished; a partial copy cannot complete it again either.
     playThrough({ partial: true, finished: true });

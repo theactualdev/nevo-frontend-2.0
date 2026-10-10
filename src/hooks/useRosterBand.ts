@@ -12,7 +12,7 @@ export interface RosterBand {
   /**
    * The read has answered, failed, or was never going to be made. Until then
    * a caller knows neither the band nor that there is none, so it must not
-   * ask for an age yet, and must not start anything sized by one.
+   * start anything sized by one.
    */
   settled: boolean;
 }
@@ -20,7 +20,8 @@ export interface RosterBand {
 /**
  * The child's age band as the roster holds it - the dashboard's
  * `student.ageBand`, a closed set derived server-side from the date of birth
- * since 1 Oct (B5). See `bandForRoster` for the mapping.
+ * since 1 Oct (B5), or from the enrolled class year when there is none (9
+ * Oct). See `bandForRoster` for the mapping.
  *
  * ONLY FOR A NAMED OWNER, AND ONLY IF THE ANSWER IS THEIRS. `ownerUserId` is
  * the child sitting the activity; with none, nothing is read at all. That

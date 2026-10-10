@@ -11,8 +11,9 @@ import { SocraticPanel, type PanelPrompt } from "./AffectiveLayer";
  * the question is the loop the hand-off exists to break. The ending is set by
  * the way in, never worked out from what the child does inside the panel.
  *
- * The player wires only the child's own way in (see `LessonPlayer`); the
- * hand-off waits on a backend trigger. Both are pinned here.
+ * The player wires both: the child's own way in, and the server's hand-off on
+ * its reply to a quick check (B94, `LessonPlayer.handoff.dom.test.tsx`). Both
+ * endings are pinned here.
  */
 
 afterEach(() => cleanup());

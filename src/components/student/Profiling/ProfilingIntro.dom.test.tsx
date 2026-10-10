@@ -88,11 +88,9 @@ describe("the intro's words (D13, 1 Oct)", () => {
 
 describe("while the roster is still being read", () => {
   it("neither asks the age nor lets the run start", () => {
-    // Not known yet whether there is anything to ask, and a run begun now
-    // would be sized by a guess.
-    render(
-      <ProfilingIntro mode="intro" onContinue={() => {}} askAge waiting />,
-    );
+    // A run begun now would be sized by a guess. And no age question, then
+    // or ever (D153).
+    render(<ProfilingIntro mode="intro" onContinue={() => {}} waiting />);
 
     expect(screen.queryByText(/how old are you/i)).toBeNull();
     expect(screen.getByRole("button", { name: /let's go/i })).toBeDisabled();

@@ -25,12 +25,12 @@ field for them.
 ## 2. What becomes a trial
 
 `BaselineTrial` is `{ dimension, condition, response, correct, responseTimeMs,
-probeItemId, skipped }`. Five kinds of event become one; the rest of the stream
-is timing anchors, the run's context (section 3), or stays on the device.
+probeItemId, skipped }`. Five kinds of answer become one; the rest of the
+stream is timing anchors, the run's context (section 3), or stays on the device.
 
-| Event | `dimension` | `condition` | `response` | `correct` | `responseTimeMs` |
+| Answer | `dimension` | `condition` | `response` | `correct` | `responseTimeMs` |
 |---|---|---|---|---|---|
-| `tap`, a tile (Module 1, warm-up `wmc`) | `wmc` | `length_N` | the cell | whether it was the right tile | from the grid being handed over, or from the previous right tap of the same recall |
+| a tile recall (Module 1, warm-up `wmc`): its `tap`s, ended by a wrong tap or `round_complete` | `wmc` | `length_N` | the cells tapped, in order, comma-separated | `false` if a wrong tap ended it, `true` at `round_complete` | from the grid being handed over to the tap that ended it |
 | `check_answer`, the SS dual task (Module 1, and the SS warm-up's tile round) | `wmc` | `dual_check` | `"true"` / `"false"` | whether the answer was right | from the check appearing |
 | `trial_pick` (Modules 2-4, warm-up) | from the `act`: `pattern` is `ps`, `flanker` `attention`, `reading` `reading`, `dots` `ans`, `probe` `domain`; the warm-up's acts are already dimensions | `congruency`, `pair`, `ratio_N`, the reading `mode`, or the probe's `subject` | the choice's index, or a served option's `value`; `not_sure` for a decline | where the activity holds the answer, else `null` | from the moment the child could answer (the dot mask, the end of a heard sentence) |
 | `motor_tap`, the motor-speed step | `motor_speed` | `practice`, or `null` | the target | `null` | the latency the step measured |
@@ -38,22 +38,28 @@ is timing anchors, the run's context (section 3), or stays on the device.
 
 `probeItemId` is the served item's id when the engine served one and it is a
 UUID, as the contract requires, and `null` otherwise. The server marks a served
-pick against its own key.
+pick against its own key. A served item is a probe-bank UUID; a device-task
+day's id is in the `device:*` namespace with `served: false` (B79, B81), and is
+never shown as a question or sent as a probe item.
+
+**One trial per completed recall (B80, 8 Oct).** A recall's taps are one
+answer, not one each. A recall the child never finished (the stream ends part
+way through it) sends nothing.
 
 `skipped` is sent only on that last row: the one trial the capture records as
 put in front of the child and not answered. Absent is the contract's `false`.
 A "Not sure" is an answer, not a skip, and an activity the device could not
 present (P1-3's heard reading with no voice) was never in front of anyone.
 
-Anchors only: `input_start`, `round_complete`, `check_shown`. Read for the
+Anchors only: `input_start`, `check_shown`. Read for the
 run's context (section 3): `run_start`, `warmup_start`, `motor_end`,
 `motor_skipped`. Never sent: `trial_shown`, `response_open`, `playback_start`,
 `module_end`, `replay`, `probe_subject`.
 
 ### Properties the trials keep
 
-- **A recall's time is never measured across a round.** A tap is timed from
-  the previous right tap of the same recall, and a wrong tap ends the recall.
+- **A recall's time is never measured across a round.** It runs from its own
+  hand-over to the tap that ended it, and a wrong tap ends the recall.
   Pairing across rounds once swallowed the between-round beat and the whole
   next playback into one "gap".
 - **"Not sure" is a decline, not a miss**: `response: "not_sure"`,
@@ -88,7 +94,7 @@ capture, and a key the run did not record is left out.
 - **Coordinates.** Raw touch stays on the device (B14).
 - **The motor skip's reason.** There is one (`cursor`), and it is the form
   factor already.
-- **The run's length**, and a recall's full timing beyond one interval per tap.
+- **The run's length**, and the intervals between the taps inside a recall.
 - **Identity and wall-clock time.** The request carries the session; the
   trials carry interactions.
 
