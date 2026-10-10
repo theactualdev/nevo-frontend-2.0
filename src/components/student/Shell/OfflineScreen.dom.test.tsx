@@ -30,8 +30,7 @@ const lesson = (id: string) =>
   ({ id, title: "How a leaf makes food" }) as unknown as LessonDetailResponse;
 
 const fullScreen = () => screen.queryByRole("dialog");
-const banner = () =>
-  screen.queryByText("No internet connection - your progress is saved");
+const banner = () => screen.queryByText("No internet connection");
 
 beforeEach(() => {
   window.localStorage.clear();
@@ -102,9 +101,10 @@ describe("the full screen", () => {
     render(<OfflineNotice online={false} />);
     const dialog = await screen.findByRole("dialog");
 
-    expect(dialog).toHaveTextContent(
-      "No internet connection right now. Your progress is saved.",
-    );
+    expect(dialog).toHaveTextContent("No internet connection right now.");
+    // D136 (8 Oct): no save it cannot confirm. Nothing held for a position
+    // is not the same as everything having landed.
+    expect(dialog.textContent).not.toMatch(/progress is saved/i);
     // Nothing is downloaded, by definition of when this shows.
     expect(dialog.textContent).not.toMatch(/downloaded|saved lessons/i);
     // And no button that can only re-ask what the browser already answered.

@@ -6,7 +6,12 @@ import { useRosterBand } from "@/hooks/useRosterBand";
 import { formFactor } from "@/hooks/useSignals";
 import { holdBaseline } from "@/lib/profiling/pendingBaseline";
 import { ONBOARDING_SIGNAL_TYPES } from "@/lib/constants";
-import { bandForAge, gridSpanConfig } from "@/lib/profiling/bands";
+import {
+  AGE_BANDS,
+  bandForRoster,
+  gridSpanConfig,
+  type AgeBand,
+} from "@/lib/profiling/bands";
 import { getOnboardingDraft } from "@/lib/auth/onboarding";
 import {
   BaselineCapture,
@@ -24,6 +29,12 @@ import { SentenceDotModule } from "./SentenceDotModule";
 import { StretchInterstitial } from "./StretchInterstitial";
 
 /**
+ * The band for a child the server gives none: Primary 4-6, the band the
+ * warm-up runs without one (D139). See `band` below for why it is not asked.
+ */
+const NO_BAND: AgeBand = AGE_BANDS.P46;
+
+/**
  * The Baseline Cognitive Profiling flow (SCRUM-104) - onboarding Phase C.
  * Intro → motor-speed step (08a) → M1 Grid Span → stretch → M2
  * Pattern/Flanker → stretch → M3 Sentence/Dot → stretch → M4 Domain Probe →
@@ -31,9 +42,10 @@ import { StretchInterstitial } from "./StretchInterstitial";
  * trial per answer, the motor step's taps included, parked to be sent raw for
  * the server to reduce (B9), and the rest of the stream is purged.
  *
- * The age band comes from the roster for a child already signed in, else from
- * the age the child gave at onboarding, else from the intro's age question; it
- * drives grid sizes, content and targets, and the shells are shared.
+ * The age band is the server's: the roster's for a child already signed in,
+ * else the entry lookup's, else Primary 4-6 - never from a question to the
+ * child (D153); it drives grid sizes, content and targets, and the shells are
+ * shared.
  */
 export function ProfilingFlow({
   track,
@@ -118,25 +130,28 @@ export function ProfilingFlow({
    * only one who never saw Step 1: everyone else's account is created at the
    * PIN step, after this, and any session the device holds before then may be
    * the previous child's - so nothing is read for them (`useRosterBand` takes
-   * no owner) and their Step 1 age decides.
+   * no owner) and the entry lookup's band decides.
    *
-   * When neither says, we ask, on the intro screen that was already there. One
-   * question is cheaper than mis-pitching four modules, and far cheaper than a
-   * baseline that measures the wrong child. Asked only once the roster read
-   * has settled without a band, so a child with one never sees the question.
+   * THE SERVER'S BAND, NEVER AN AGE WORKED INTO ONE HERE (backend, 9 Oct).
+   * Design: "A child with no date of birth proceeds normally on their class
+   * band" (D153). The entry lookup and the dashboard both carry `ageBand`,
+   * derived from the date of birth or, with none, from the enrolled class
+   * year. This used to band the lookup's `age` on the device, which
+   * a child with no date of birth never had. `yearGroup` is not read: the
+   * server has already turned it into the band.
+   *
+   * PRIMARY 4-6 ONLY WHEN THE SERVER GIVES NO BAND AT ALL, and the child is
+   * never asked (D153, 8 Oct). The intro asked "How old are you?" here. It is
+   * the band the warm-up runs when it has none (D139, `WarmUpRun`).
    */
-  const [askedAge, setAskedAge] = useState("");
-  const draftAge = getOnboardingDraft().age;
+  const entryBand = bandForRoster(getOnboardingDraft().ageBand);
   const roster = useRosterBand(ownerUserId);
-  const band =
-    roster.band ??
-    (draftAge ? bandForAge(draftAge) : bandForAge(Number(askedAge)));
+  const band: AgeBand = roster.band ?? entryBand ?? NO_BAND;
   /**
-   * The roster has not answered, so the band is not known: nothing to ask and
-   * nothing to start - not even on a Step 1 age, which the roster outranks.
+   * The roster has not answered, so the band is not known: nothing to start -
+   * not even on the entry lookup's band, which the roster outranks.
    */
   const bandPending = !roster.settled;
-  const askAge = roster.settled && !roster.band && !draftAge;
   const [capture] = useState(
     () => new BaselineCapture(runId ?? `baseline-${randomId()}`),
   );
@@ -267,10 +282,7 @@ export function ProfilingFlow({
   if (phase === "intro") {
     return (
       <ProfilingIntro
-        askAge={askAge}
         waiting={bandPending}
-        age={askedAge}
-        onAgeChange={setAskedAge}
         mode="intro"
         onContinue={() => {
           // The device, read once here, goes beside the trials (B76).

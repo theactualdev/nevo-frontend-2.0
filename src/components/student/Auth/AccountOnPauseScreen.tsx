@@ -31,10 +31,12 @@ import { cn } from "@/lib/utils";
  * THE PAUSE BARS, NOT THE BRAND MARK (D64, 6 Oct): "The glyph is the pause
  * bars, not the brand mark. Our mark does not appear on a screen that is
  * telling someone their access has been interrupted." 28b draws the bars in its
- * card; the `Account On Pause` frame still has the Nevo icon in its circle, and
- * the ruling covers both, so both carry the bars - the circle as that frame
- * sizes it, the bars in it at the share of the circle 28b gives them. The
- * wordmark at the top is the page's, not the glyph, and stays.
+ * card. The `Account On Pause` frame draws its own since 8 Oct (D147,
+ * 851d58f): two solid navy bars, fully rounded, side by side in the circle -
+ * 15 x 54px 13px apart on a phone, 18 x 66 / 16 on a tablet, 19 x 70 / 17 on
+ * a desktop. They were 28b's glyph scaled up, which drew them thinner,
+ * shorter and closer. The wordmark at the top is the page's, not the glyph,
+ * and stays.
  *
  * A pause that lands mid-lesson gets 28b's card over the lesson first - see
  * `AccountPauseHost` - and settles into this same screen after "Okay", so a
@@ -76,6 +78,10 @@ export type PauseWayBack = { href: string } | { onBack: () => void };
  * using this device?" takes it too, so the two account screens' one way out
  * looks the same.
  */
+/** One of the frame's two bars, at its three sizes. */
+const PAUSE_BAR =
+  "block h-[54px] w-[15px] rounded-full bg-nevo-navy sm:h-[66px] sm:w-[18px] lg:h-[70px] lg:w-[19px]";
+
 export const WAY_BACK =
   "mt-9 inline-flex h-[46px] cursor-pointer items-center rounded-[10px] px-[18px] text-base font-medium text-nevo-navy transition-[background] hover:bg-nevo-navy/8 sm:mt-10";
 
@@ -98,8 +104,12 @@ export function AccountOnPauseView({
         className="absolute top-[34px] left-1/2 -translate-x-1/2 sm:top-10"
       />
 
-      <span className="flex size-[132px] shrink-0 items-center justify-center rounded-full bg-nevo-violet/16 text-nevo-navy sm:size-40 lg:size-[168px]">
-        <PauseBars className="size-[60px] sm:size-[72px] lg:size-[76px]" />
+      <span
+        aria-hidden="true"
+        className="flex size-[132px] shrink-0 items-center justify-center gap-[13px] rounded-full bg-nevo-violet/16 sm:size-40 sm:gap-4 lg:size-[168px] lg:gap-[17px]"
+      >
+        <span data-pause-bar className={PAUSE_BAR} />
+        <span data-pause-bar className={PAUSE_BAR} />
       </span>
 
       <h1 className="mt-10 text-[26px] leading-[1.25] font-semibold tracking-[-0.015em] text-nevo-navy sm:mt-11 sm:text-[32px] sm:leading-[1.22] lg:text-[34px] lg:leading-[1.2]">

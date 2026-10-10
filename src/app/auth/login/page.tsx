@@ -11,15 +11,16 @@ import {
   classifyLearnerLoginFailure,
   type LearnerLoginFailure,
 } from "@/lib/auth/loginFailure";
-import {
-  doorForRole,
-  knownRole,
-  type ConsoleDoor,
-} from "@/lib/auth/consoleDoor";
+import { doorForRole, knownRole } from "@/lib/auth/consoleDoor";
 import { safeNextPath, withNext } from "@/lib/auth/nextPath";
 import { AccountClosedScreen } from "@/components/student/Auth/AccountClosedScreen";
 import { AccountOnPauseScreen } from "@/components/student/Auth/AccountOnPauseScreen";
-import { WrongDoorNote } from "@/components/student/Auth/WrongDoorNote";
+import {
+  WrongDoorNote,
+  studentDoorRefusal,
+  type StudentDoorRefusal,
+} from "@/components/student/Auth/WrongDoorNote";
+import { WrongDoorScreen } from "@/components/student/Auth/WrongDoorScreen";
 import {
   childById,
   pickerEntries,
@@ -34,9 +35,14 @@ import { studentDestination } from "@/lib/auth/entryGate";
 import { SignedInHereScreen } from "@/components/student/Auth/SignedInHereScreen";
 import {
   SIGN_IN_OURS_COPY,
-  SIGN_IN_THROTTLED_COPY,
   skipsWelcomeBeat,
 } from "@/components/student/Auth/signInMoments";
+import {
+  HeldPinBoxes,
+  RAISED_FORGOT,
+  THROTTLED_PAUSE_COPY,
+  ThrottleNote,
+} from "@/components/student/Auth/ThrottledPause";
 import { STUDENT_PIN_LENGTH } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 /** The frame's done beat before navigating home. */
@@ -157,8 +163,8 @@ export default function LoginPage() {
    * session elsewhere (D59, `SignedInHereScreen`). Null when it ended nothing.
    */
   const [releasedTo, setReleasedTo] = useState<string | null>(null);
-  /** Whose door a non-student account belongs at; see `WrongDoorNote`. */
-  const [wrongDoor, setWrongDoor] = useState<ConsoleDoor | null>(null);
+  /** Whose account a non-student one is; see `studentDoorRefusal`. */
+  const [wrongDoor, setWrongDoor] = useState<StudentDoorRefusal | null>(null);
   /**
    * Where the child was going, from the proxy's `?next=` - for every way out of
    * this screen, not only the empty-device one it used to be read for.
@@ -265,7 +271,7 @@ export default function LoginPage() {
         const door = doorForRole(role);
         if (door !== "student" || !role) {
           setDigits("");
-          setWrongDoor(door);
+          setWrongDoor(studentDoorRefusal(session.role));
           setError("wrong_door");
           void authApi.logout().catch(() => {});
           return;
@@ -331,7 +337,8 @@ export default function LoginPage() {
    */
   const addDigits = useCallback(
     (raw: string) => {
-      if (done || checking || !chosen) return;
+      // Held while D154's pause is up: a key must not quietly reopen it.
+      if (done || checking || !chosen || error === "throttled") return;
       const add = raw.replace(/[^0-9]/g, "");
       if (!add) return;
       setError(null);
@@ -341,13 +348,14 @@ export default function LoginPage() {
         return next;
       });
     },
-    [done, checking, chosen, submit],
+    [done, checking, chosen, submit, error],
   );
 
   const backspace = useCallback(() => {
+    if (error === "throttled") return;
     setError(null);
     setDigits((prev) => prev.slice(0, -1));
-  }, []);
+  }, [error]);
 
   // The client has not read the roster yet. The server cannot see localStorage,
   // so drawing anything here would flash it at whoever is holding the tablet.
@@ -417,8 +425,30 @@ export default function LoginPage() {
   };
   if (error === "closed") return <AccountClosedScreen toPicker={toPicker} />;
   if (error === "paused") return <AccountOnPauseScreen back={toPicker} />;
+  /*
+   * D128: a parent, or an account we do not recognise, gets a screen of its
+   * own, not a line under the PIN. A parent's "Back to sign in" is the picker,
+   * where every way in on this device starts; "Try again" is this child's PIN.
+   */
+  if (error === "wrong_door" && wrongDoor && wrongDoor !== "staff") {
+    return (
+      <WrongDoorScreen
+        kind={wrongDoor}
+        onBack={
+          wrongDoor === "parent"
+            ? toPicker.onBack
+            : () => {
+                setError(null);
+                setDigits("");
+              }
+        }
+      />
+    );
+  }
 
   const focusInput = () => inputRef.current?.focus();
+  /** D154's pause: `too_many_attempts` holds this child's PIN entry. */
+  const throttled = error === "throttled";
 
   if (done) {
     return (
@@ -472,8 +502,11 @@ export default function LoginPage() {
 
   return (
     <main
-      onClick={focusInput}
-      className="flex min-h-[100dvh] w-full cursor-text flex-col bg-nevo-cream"
+      onClick={throttled ? undefined : focusInput}
+      className={cn(
+        "flex min-h-[100dvh] w-full flex-col bg-nevo-cream",
+        !throttled && "cursor-text",
+      )}
     >
       {/* Hidden input - hardware keyboards type here; the pad drives touch. */}
       <input
@@ -521,11 +554,38 @@ export default function LoginPage() {
             className="size-[104px] sm:size-[120px] lg:landscape:size-[132px]"
           />
           <h2 className="mt-6 text-[24px] font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[28px] lg:landscape:mt-[22px] lg:landscape:text-[30px]">
-            {/* 28c-3 names ("Ada"). */}
-            {pinHeading(chosen.displayName)}
+            {/* 28c-3 names ("Ada"); D154's pause takes the slot. */}
+            {throttled
+              ? THROTTLED_PAUSE_COPY.heading
+              : pinHeading(chosen.displayName)}
           </h2>
         </div>
 
+        {throttled ? (
+          /*
+            D154: the same screen, paused. The boxes held, the note under
+            them, no pad, and "Forgot PIN?" raised as the way out. "Not you?
+            Go back" stays, and a child who comes back to their PIN from the
+            picker finds the boxes open again.
+          */
+          <div className="flex flex-col items-center lg:landscape:col-start-2 lg:landscape:row-span-4 lg:landscape:row-start-1 lg:landscape:self-center">
+            <HeldPinBoxes
+              boxClassName="size-12 sm:size-[58px]"
+              className="mt-8 sm:mt-[34px] sm:gap-4 lg:landscape:mt-0"
+            />
+            <ThrottleNote />
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                router.push(forgotPinHref(chosen.id, next));
+              }}
+              className={RAISED_FORGOT}
+            >
+              {THROTTLED_PAUSE_COPY.forgot}
+            </button>
+          </div>
+        ) : (
         <div className="flex flex-col items-center lg:landscape:col-start-2 lg:landscape:row-span-4 lg:landscape:row-start-1 lg:landscape:self-center">
           {/*
             28c-5 puts "That PIN didn't match" WHERE "Enter your PIN" was, in a
@@ -540,12 +600,10 @@ export default function LoginPage() {
               {/* 28c-5's own words. */}
               {error === "credentials" &&
                 "That PIN didn't match. Have another go."}
-              {/* 28c-6, 28c-7 and 28c-8 (D68), in the same box. The rate
-                  limit must never read as a wrong PIN: the child may have
-                  typed the right one too quickly. */}
+              {/* 28c-6 and 28c-8 (D68), in the same box. A rate limit is
+                  D154's pause above, never a line here. */}
               {error === "ours" && SIGN_IN_OURS_COPY}
-              {error === "throttled" && SIGN_IN_THROTTLED_COPY}
-              {error === "wrong_door" && <WrongDoorNote door={wrongDoor} />}
+              {error === "wrong_door" && <WrongDoorNote />}
             </div>
           ) : (
             <p
@@ -607,6 +665,7 @@ export default function LoginPage() {
             Forgot PIN?
           </button>
         </div>
+        )}
 
         {notYou}
       </div>

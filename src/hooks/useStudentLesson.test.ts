@@ -407,6 +407,39 @@ describe("a lesson the child is not meant to be doing", () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.unavailable).toBe("cancelled");
+    // Nothing said the reviews went with it (SCRUM-225: default false).
+    expect(result.current.recallWithdrawn).toBe(false);
+  });
+
+  it("says when cancelling it also withdrew its reviews (SCRUM-225)", async () => {
+    signIn();
+    withAssignment({
+      status: "cancelled",
+      availableFrom: null,
+      cancellationReason: "wrong_content",
+      recallWithdrawn: true,
+    });
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.recallWithdrawn).toBe(true);
+  });
+
+  it("keeps the reviews of a housekeeping cancellation (SCRUM-225)", async () => {
+    signIn();
+    withAssignment({
+      status: "cancelled",
+      availableFrom: null,
+      cancellationReason: "housekeeping",
+      recallWithdrawn: false,
+    });
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.unavailable).toBe("cancelled");
+    expect(result.current.recallWithdrawn).toBe(false);
   });
 
   it("says a lesson that opens on Friday is not yet open, and when", async () => {

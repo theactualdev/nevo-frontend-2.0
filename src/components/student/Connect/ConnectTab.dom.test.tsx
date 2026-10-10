@@ -33,6 +33,7 @@ const api = vi.hoisted(() => ({
   thread: vi.fn(),
   markThreadRead: vi.fn(),
   reply: vi.fn(),
+  send: vi.fn(),
 }));
 vi.mock("@/lib/api/messages", () => ({ messagesApi: api }));
 
@@ -160,14 +161,18 @@ describe("[184] on a phone, the list", () => {
   });
 });
 
-describe("[185] a conversation's own read", () => {
+describe("[185] [D104] a conversation's own read", () => {
   it("says it is loading rather than that it is empty", async () => {
     viewport(true);
     api.thread.mockReturnValue(new Promise(() => {}));
     render(<ConnectTab />);
 
-    expect(await screen.findByLabelText("Loading messages")).toBeTruthy();
+    // D104, 8 Oct: the frame's spinner line, in place of the conversation.
+    const loading = await screen.findByRole("status");
+    expect(loading.textContent).toBe("Loading your messages…");
     expect(screen.queryByText("Message your teacher here")).toBeNull();
+    // Nothing to write into until it has loaded.
+    expect(screen.queryByLabelText("Message Ms Okafor")).toBeNull();
   });
 
   it("says it failed, and tries again on request", async () => {
@@ -176,9 +181,12 @@ describe("[185] a conversation's own read", () => {
     render(<ConnectTab />);
 
     expect(
-      await screen.findByText(/We couldn.t load these messages/),
+      await screen.findByText("We couldn't load this conversation"),
     ).toBeTruthy();
+    // D104 draws the heading and Try again, and nothing else.
+    expect(screen.queryByText(/Nothing is lost/)).toBeNull();
     expect(screen.queryByText("Message your teacher here")).toBeNull();
+    expect(screen.queryByLabelText("Message Ms Okafor")).toBeNull();
 
     api.thread.mockResolvedValueOnce({
       threadId: "t-1",
@@ -186,9 +194,12 @@ describe("[185] a conversation's own read", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
 
+    // It re-reads THIS conversation.
+    expect(api.thread).toHaveBeenLastCalledWith("t-1");
     await waitFor(() =>
       expect(within(conversation()).getByText("Lovely work today")).toBeTruthy(),
     );
+    expect(screen.getByLabelText("Message Ms Okafor")).toBeTruthy();
   });
 
   it("uses the frame's line only once it is known to be empty", async () => {
@@ -198,7 +209,7 @@ describe("[185] a conversation's own read", () => {
     expect(await screen.findByText("Message your teacher here")).toBeTruthy();
   });
 
-  it("keeps a message sent before the history landed, and its failure", async () => {
+  it("offers the composer once it has loaded, and a failed send says so", async () => {
     viewport(true);
     const history = deferred<{ threadId: string; messages: unknown[] }>();
     const post = deferred<unknown>();
@@ -206,18 +217,19 @@ describe("[185] a conversation's own read", () => {
     api.reply.mockReturnValue(post.promise);
     render(<ConnectTab />);
 
-    const input = await screen.findByLabelText("Message Ms Okafor");
-    fireEvent.change(input, { target: { value: "Can we do more?" } });
-    fireEvent.click(screen.getByRole("button", { name: "Send" }));
-    expect(within(conversation()).getByText("Can we do more?")).toBeTruthy();
+    // D104: no composer while the conversation is still being read.
+    await screen.findByRole("status");
+    expect(screen.queryByLabelText("Message Ms Okafor")).toBeNull();
 
-    // The history lands AFTER the send. It used to replace the thread.
     await act(async () =>
       history.resolve({
         threadId: "t-1",
         messages: [message("m-1", "Lovely work today")],
       }),
     );
+    const input = screen.getByLabelText("Message Ms Okafor");
+    fireEvent.change(input, { target: { value: "Can we do more?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
     expect(within(conversation()).getByText("Lovely work today")).toBeTruthy();
     expect(within(conversation()).getByText("Can we do more?")).toBeTruthy();
 
@@ -248,7 +260,7 @@ describe("[187] a link to one thread", () => {
 
     await waitFor(() => expect(api.thread).toHaveBeenCalledWith("t-2"));
     expect(api.thread).not.toHaveBeenCalledWith("t-1");
-    expect(screen.getByLabelText("Message Mr Bell")).toBeTruthy();
+    expect(await screen.findByLabelText("Message Mr Bell")).toBeTruthy();
   });
 
   it("falls back to the list for a thread that is not there", async () => {
@@ -262,17 +274,27 @@ describe("[187] a link to one thread", () => {
 });
 
 describe("[79] a child nobody has written to", () => {
-  it("is told so in the frame's words", async () => {
+  it("is told what this place is and offered the first message (9 Oct)", async () => {
+    // Design, 9 Oct: the old line told a child to wait for something they can
+    // now start themselves.
     viewport(false);
     api.threads.mockResolvedValue({ threads: [], total: 0 });
 
     render(<ConnectTab />);
 
     expect(
-      await screen.findByText(
-        "Your teacher will be able to message you here soon",
+      await screen.findByRole("heading", {
+        name: "This is where you and your teacher talk",
+      }),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Say hello, ask about a lesson, or tell them how it went. Write the first message whenever you're ready.",
       ),
     ).toBeTruthy();
+    expect(screen.getByPlaceholderText("Write a message")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Send" })).toBeTruthy();
+    expect(screen.queryByText(/will be able to message you/)).toBeNull();
   });
 
   it("sees an empty thread's row say there are no messages yet", async () => {
@@ -288,5 +310,242 @@ describe("[79] a child nobody has written to", () => {
     await listed("Mrs Ade");
     expect(within(rowFor("Mrs Ade")).getByText("No messages yet")).toBeTruthy();
     expect(within(rowFor("Ms Okafor")).queryByText("No messages yet")).toBeNull();
+  });
+});
+
+/*
+ * B95 / D109: "Message my teacher" opens Connect ON the teacher's conversation.
+ * Ask Nevo's answer names no teacher, so the thread list's own `teacherId`
+ * marks it - only on a conversation with the child, and only when exactly one
+ * qualifies. Anything else opens Connect as it always has.
+ */
+describe("[D109] Message my teacher", () => {
+  const routed = (
+    id: string,
+    title: string,
+    over: Record<string, unknown> = {},
+  ) => ({ ...row(id, title), teacherId: "teacher-9", ...over });
+
+  it("opens the teacher's conversation on a phone, not the list", async () => {
+    viewport(false);
+    api.threads.mockResolvedValue({
+      threads: [
+        row("t-1", "Ms Okafor"),
+        routed("t-2", "Mr Bell", { unread: true, unreadCount: 1 }),
+      ],
+      total: 2,
+    });
+    render(<ConnectTab toTeacher />);
+
+    await waitFor(() => expect(api.thread).toHaveBeenCalledWith("t-2"));
+    expect(api.markThreadRead).toHaveBeenCalledWith("t-2");
+    expect(api.thread).not.toHaveBeenCalledWith("t-1");
+    expect(await screen.findByLabelText("Message Mr Bell")).toBeTruthy();
+  });
+
+  it("opens it beside the list on a tablet, over the first thread", async () => {
+    viewport(true);
+    api.threads.mockResolvedValue({
+      threads: [row("t-1", "Ms Okafor"), routed("t-2", "Mr Bell")],
+      total: 2,
+    });
+    render(<ConnectTab toTeacher />);
+
+    await waitFor(() => expect(api.thread).toHaveBeenCalledWith("t-2"));
+    expect(rowFor("Mr Bell")).toHaveAttribute("aria-current", "true");
+    expect(api.thread).not.toHaveBeenCalledWith("t-1");
+  });
+
+  it("never picks a class thread, where a reply reaches the whole class", async () => {
+    viewport(false);
+    api.threads.mockResolvedValue({
+      threads: [routed("t-1", "Year 5 Blue", { recipientType: "class" })],
+      total: 1,
+    });
+    render(<ConnectTab toTeacher />);
+
+    await listed("Year 5 Blue");
+    // Let the open-thread effect run, so a wrong pick has its chance to fetch.
+    await act(async () => {});
+    expect(api.thread).not.toHaveBeenCalled();
+  });
+
+  it("does not choose between two teachers' conversations", async () => {
+    viewport(false);
+    api.threads.mockResolvedValue({
+      threads: [
+        routed("t-1", "Ms Okafor"),
+        routed("t-2", "Mr Bell", { teacherId: "teacher-2" }),
+      ],
+      total: 2,
+    });
+    render(<ConnectTab toTeacher />);
+
+    await listed("Ms Okafor");
+    // Let the open-thread effect run, so a wrong pick has its chance to fetch.
+    await act(async () => {});
+    expect(api.thread).not.toHaveBeenCalled();
+  });
+
+  it("opens as it always has when no thread names a teacher", async () => {
+    viewport(false);
+    render(<ConnectTab toTeacher />);
+
+    await listed("Ms Okafor");
+    // Let the open-thread effect run, so a wrong pick has its chance to fetch.
+    await act(async () => {});
+    expect(api.thread).not.toHaveBeenCalled();
+  });
+
+  it("still lets the child open another conversation", async () => {
+    viewport(false);
+    api.threads.mockResolvedValue({
+      threads: [row("t-1", "Ms Okafor"), routed("t-2", "Mr Bell")],
+      total: 2,
+    });
+    render(<ConnectTab toTeacher />);
+
+    await screen.findByLabelText("Message Mr Bell");
+    fireEvent.click(screen.getByRole("button", { name: "Back to messages" }));
+    fireEvent.click(rowFor("Ms Okafor"));
+
+    await waitFor(() => expect(api.thread).toHaveBeenCalledWith("t-1"));
+    expect(await screen.findByLabelText("Message Ms Okafor")).toBeTruthy();
+  });
+});
+
+/*
+ * B95, 9 Oct: a child with a teacher assigned has their teacher thread in the
+ * list BEFORE its first message - empty, carrying its threadId and teacherId.
+ * It is frame 29's "Connect (No messages)" for that teacher, and the child's
+ * first message goes through the same reply route as every other.
+ */
+describe("[B95] the teacher thread before its first message", () => {
+  const empty = {
+    ...row("t-9", "Mr Bell"),
+    recipientId: "student-1",
+    teacherId: "teacher-9",
+  };
+
+  it("opens from Message my teacher, and takes the first message by reply", async () => {
+    viewport(false);
+    api.threads.mockResolvedValue({ threads: [empty], total: 1 });
+    api.thread.mockResolvedValue({ threadId: "t-9", messages: [] });
+    api.reply.mockResolvedValue({ ...message("m-1", "Hello"), threadId: "t-9" });
+    render(<ConnectTab toTeacher />);
+
+    // The frame: the teacher's name over the line and the composer.
+    const input = await screen.findByLabelText("Message Mr Bell");
+    expect(within(conversation()).getByText("Message your teacher here")).toBeTruthy();
+    expect(within(conversation()).getByText("Mr Bell")).toBeTruthy();
+    // Not the empty-list state: there IS a thread to write into.
+    expect(
+      screen.queryByText("This is where you and your teacher talk"),
+    ).toBeNull();
+
+    fireEvent.change(input, { target: { value: "Hello" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(api.reply).toHaveBeenCalledWith("t-9", "Hello");
+    expect(api.send).not.toHaveBeenCalled();
+    expect(await screen.findByText("Delivered")).toBeTruthy();
+  });
+
+});
+
+/*
+ * Design, 9 Oct: a child with no thread at all writes the first message from
+ * the empty list. There is nothing to reply into, so it goes by direct
+ * creation (B95, 9 Oct: `recipientType: "student"`, the child's OWN user id);
+ * on success the list is read again and the thread it made opens. A failed
+ * send keeps the words and offers the conversation's own retry.
+ */
+describe("[B95] the first message from an empty list", () => {
+  const created = {
+    ...row("t-new", "Mr Bell"),
+    recipientId: "student-1",
+    teacherId: "teacher-9",
+    latestPreview: "Hello",
+  };
+  // `clearAllMocks` keeps unconsumed `...Once` answers, which would leak a
+  // queued list into the next test whenever one of these fails early.
+  afterEach(() => {
+    api.threads.mockReset();
+    api.send.mockReset();
+  });
+  const write = async (text: string) => {
+    const input = await screen.findByPlaceholderText("Write a message");
+    fireEvent.change(input, { target: { value: text } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+  };
+
+  it("goes by direct creation, then opens the thread it made", async () => {
+    viewport(false);
+    api.threads
+      .mockResolvedValueOnce({ threads: [], total: 0 })
+      .mockResolvedValueOnce({ threads: [created], total: 1 });
+    api.send.mockResolvedValue({ ...message("m-1", "Hello"), threadId: "t-new" });
+    api.thread.mockResolvedValue({
+      threadId: "t-new",
+      messages: [{ ...message("m-1", "Hello"), senderId: "student-1" }],
+    });
+    render(<ConnectTab toTeacher />);
+
+    await write("Hello");
+
+    expect(api.send).toHaveBeenCalledWith({
+      recipientType: "student",
+      recipientId: "student-1",
+      content: "Hello",
+    });
+    expect(api.reply).not.toHaveBeenCalled();
+    // The list is read again, and the new conversation opens on a phone.
+    await waitFor(() => expect(api.thread).toHaveBeenCalledWith("t-new"));
+    expect(api.threads).toHaveBeenCalledTimes(2);
+    expect(await screen.findByLabelText("Message Mr Bell")).toBeTruthy();
+    expect(within(conversation()).getByText("Hello")).toBeTruthy();
+  });
+
+  it("keeps the words when it fails, and the retry sends them again", async () => {
+    viewport(false);
+    api.threads
+      .mockResolvedValueOnce({ threads: [], total: 0 })
+      .mockResolvedValueOnce({ threads: [created], total: 1 });
+    api.send
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce({ ...message("m-1", "Hello"), threadId: "t-new" });
+    render(<ConnectTab />);
+
+    await write("Hello");
+
+    const retry = await screen.findByText(/Didn.t send - tap to try again/);
+    expect(screen.getByText("Hello")).toBeTruthy();
+    // Nothing was made, so nothing is read again or opened.
+    expect(api.threads).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(retry);
+
+    await waitFor(() => expect(api.send).toHaveBeenCalledTimes(2));
+    expect(api.send).toHaveBeenLastCalledWith({
+      recipientType: "student",
+      recipientId: "student-1",
+      content: "Hello",
+    });
+    expect(await screen.findByLabelText("Message Mr Bell")).toBeTruthy();
+  });
+
+  it("says delivered, and stays put, when the list does not answer after", async () => {
+    viewport(false);
+    api.threads
+      .mockResolvedValueOnce({ threads: [], total: 0 })
+      .mockRejectedValueOnce(new Error("offline"));
+    api.send.mockResolvedValue({ ...message("m-1", "Hello"), threadId: "t-new" });
+    render(<ConnectTab />);
+
+    await write("Hello");
+
+    expect(await screen.findByText("Delivered")).toBeTruthy();
+    expect(screen.getByText("Hello")).toBeTruthy();
+    expect(screen.queryByText(/Didn.t send/)).toBeNull();
   });
 });

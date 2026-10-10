@@ -130,6 +130,12 @@ export interface StudentLessonState {
    * about it. See `isOpenToStudent`.
    */
   unavailable: Unavailable | null;
+  /**
+   * Cancelling this lesson's assignment also withdrew its reviews (SCRUM-225,
+   * 8 Oct) - a genuine retraction, not housekeeping. A due review is refused
+   * only on this; a cancelled lesson whose reviews were kept still reviews.
+   */
+  recallWithdrawn: boolean;
   /** When a `not_yet` lesson opens, for a screen that has to say so. */
   opensAt: string | null;
   /**
@@ -424,6 +430,7 @@ export function useStudentLesson(
     lastWorkedAt: saved?.updatedAt ?? null,
     adaptSegments: live ? state.adaptSegments : undefined,
     unavailable,
+    recallWithdrawn: assignment?.recallWithdrawn === true,
     opensAt: assignment?.availableFrom ?? null,
     placeUnknown: Boolean(live) && !dashboard && dashboardFailed,
     fromShelf: Boolean(live) && state.fromShelf === true,

@@ -3,10 +3,9 @@ import type { BaselineRunContext } from "@/lib/api/baseline";
 /**
  * Age-band resolution for the Baseline Cognitive Profiling module (SCRUM-104).
  * Four tiers drive content, grid sizes and tap-target sizes; the component
- * shells are shared. Band comes from the roster when a signed-in child's
- * dashboard carries one (`bandForRoster`), otherwise from the age the child
- * gives - onboarding Step 1, or the intro screen when that is missing too (see
- * `ProfilingFlow`).
+ * shells are shared. Band is the server's (`bandForRoster`): the signed-in
+ * child's dashboard, otherwise the entry lookup, otherwise Primary 4-6. The
+ * child is never asked (D153; see `ProfilingFlow`).
  */
 
 export const AGE_BANDS = {
@@ -23,38 +22,20 @@ export const AGE_BANDS = {
 export type AgeBand = (typeof AGE_BANDS)[keyof typeof AGE_BANDS];
 
 /**
- * The band for a stated age, which is what onboarding actually collects.
- *
- * Step 1 asks a child their age and wrote it to the onboarding draft, where
- * nothing ever read it. The band - which decides grid size, span ceiling and
- * whether the dual task runs - came from a FIXTURE year label instead, so a
- * six-year-old and a fifteen-year-old sat the identical Primary 4-6 baseline.
- * Calibrating the calibration run to a mock defeats the point of running it.
- *
- * Boundaries follow the Nigerian levels the year labels encode: P1-3 to about
- * eight, P4-6 to eleven, JSS to fourteen, SS beyond.
- */
-export function bandForAge(age: number): AgeBand {
-  if (!Number.isFinite(age)) return AGE_BANDS.P46;
-  if (age <= 8) return AGE_BANDS.P13;
-  if (age <= 11) return AGE_BANDS.P46;
-  if (age <= 14) return AGE_BANDS.JSS;
-  return AGE_BANDS.SS;
-}
-
-/**
  * The band the roster holds for a child, as one of the four here.
  *
  * `ageBand` on the dashboard's `student` was free text until 1 Oct. It is now
  * the spec's closed `AgeBand` (B5): `early_primary`, `upper_primary`,
  * `junior_secondary`, `senior_secondary` - "the closed set the engine already
- * reasons about" - derived server-side from the date of birth on every read.
+ * reasons about" - derived server-side from the date of birth on every read,
+ * or from the enrolled class year when there is none (9 Oct). The entry
+ * lookup carries the same field, and this reads both.
  * Each names the same school stage as one tier above, so the mapping is one
  * to one: early primary is Primary 1-3, upper primary is Primary 4-6, and the
  * two secondary stages are JSS and SS.
  *
- * Null for anything else, including null itself: a roster row with no date of
- * birth has no band, and the caller asks rather than assumes one.
+ * Null for anything else, including null itself: no band from the server,
+ * and the caller falls back rather than asking (D153).
  */
 export function bandForRoster(ageBand: string | null | undefined): AgeBand | null {
   switch (ageBand) {

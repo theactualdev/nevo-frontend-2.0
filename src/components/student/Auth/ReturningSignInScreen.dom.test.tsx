@@ -404,18 +404,32 @@ describe("ReturningSignInScreen — when it does not work", () => {
     ).toBeVisible();
   });
 
-  it("does not tell a rate-limited child they typed it wrong", async () => {
+  it("pauses a rate-limited child's PIN, never saying they typed it wrong (D154)", async () => {
     loginPin.mockRejectedValue(refusal("too_many_attempts"));
     render(<ReturningSignInScreen />);
     fill();
 
     await signInNow();
 
-    // 28c-7 (D68).
+    // D154 (9 Oct) "holds everywhere a child enters a PIN"; it replaced
+    // 28c-7's wait line in this box.
     expect(
-      screen.getByText("Let's wait a moment before trying again."),
+      screen.getByRole("heading", { name: "Let's take a moment" }),
     ).toBeVisible();
-    expect(screen.queryByText(/didn.t match/)).toBeNull();
+    expect(
+      screen.getByText("Try your PIN again in a moment. No rush."),
+    ).toBeVisible();
+    expect(screen.queryByText(/didn.t match|wait a moment before/)).toBeNull();
+    // The PIN boxes held, the fields as typed, and no button to press again.
+    expect(document.querySelector("[data-held-pin]")).not.toBeNull();
+    expect(screen.queryByLabelText("Your PIN")).toBeNull();
+    expect(screen.queryByRole("button", { name: /That's me|Try again/ })).toBeNull();
+    expect(screen.getAllByRole("textbox")[1]).toHaveValue("amara.k");
+    // Forgot PIN, raised, says who clears a PIN and leads back to a door.
+    expect(screen.getByRole("link", { name: "Forgot PIN?" })).toHaveAttribute(
+      "href",
+      "/auth/forgot-pin",
+    );
   });
 });
 
@@ -881,6 +895,53 @@ describe("an account that is not a student's", () => {
     expect(signIn).not.toHaveBeenCalled();
     expect(authApiModule.authApi.logout).toHaveBeenCalled();
     expect(push).not.toHaveBeenCalled();
+  });
+
+  // D128 (8 Oct): a screen of its own for each, never the old "Those details
+  // are right" line, which told whoever typed them the account exists.
+  it("shows a parent the student door and the way to their own", async () => {
+    loginPin.mockResolvedValue({ ...SESSION, role: "parent_guardian" });
+    render(<ReturningSignInScreen />);
+    fill();
+
+    await signInNow();
+
+    expect(
+      screen.getByText(
+        "This is where students sign in. Parents have their own door.",
+      ),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("link", { name: "Go to the parent portal" }),
+    ).toHaveAttribute("href", "/parent-sign-in");
+    expect(screen.queryByText(/can.t be used to sign in here/)).toBeNull();
+    expect(getRememberedProfile()).toBeNull();
+    expect(signIn).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Back to sign in" }));
+
+    // The form again, with what they typed kept.
+    expect(screen.getAllByRole("textbox")[1]).toHaveValue("amara.k");
+  });
+
+  it("tells an account it does not recognise nothing about it", async () => {
+    loginPin.mockResolvedValue({ ...SESSION, role: "superuser" });
+    render(<ReturningSignInScreen />);
+    fill();
+
+    await signInNow();
+
+    expect(
+      screen.getByText("We couldn't sign you in with those details."),
+    ).toBeVisible();
+    // No other door: "we do not know which one would be theirs".
+    expect(screen.queryByRole("link")).toBeNull();
+    expect(screen.queryByText(/parent|staff|email/i)).toBeNull();
+    expect(signIn).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(screen.getAllByRole("textbox")[0]).toHaveValue("751A1136");
   });
 });
 

@@ -36,7 +36,14 @@ vi.mock("@/hooks/useCurrentUser", () => ({ useCurrentUser: () => null }));
  * look fall back into it would pass while writing to the wrong place.
  */
 const { get, update } = vi.hoisted(() => ({ get: vi.fn(), update: vi.fn() }));
-vi.mock("@/lib/api/settings", () => ({ settingsApi: { get, update } }));
+vi.mock("@/lib/api/settings", () => ({
+  settingsApi: { get, update },
+  // The account's accessibility preferences (SCRUM-226): none held.
+  personalSettingsApi: {
+    get: vi.fn().mockResolvedValue({ userId: "u", preferences: {} }),
+    update: vi.fn().mockResolvedValue({ userId: "u", preferences: {} }),
+  },
+}));
 const { me, updateMe } = vi.hoisted(() => ({
   me: vi.fn(),
   updateMe: vi.fn(),
