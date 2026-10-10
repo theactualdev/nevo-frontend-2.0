@@ -2,12 +2,15 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
+  SEAT_LIMIT_REACHED,
   adminActivationLink,
   teamApi,
   roleForScopes,
+  type AdminTeam,
   type InvitedTeamMember,
   type TeamMember,
 } from "@/lib/api/team";
+import { ApiError, apiErrorCode } from "@/lib/api/client";
 import type { PermissionScope } from "@/lib/constants/permissions";
 import { cn } from "@/lib/utils";
 import { feedbackApi } from "@/lib/api/feedback";
@@ -19,8 +22,7 @@ import { getSession } from "@/lib/auth/session";
 import { EditAccessPanel, ScopeChecklist } from "./EditAccess";
 import { useSupportEmail } from "../SupportEmail";
 import {
-  ADMIN_SEATS_STANDARD,
-  adminSeatAllowance,
+  seatWords,
   SCOPE_CATALOGUE,
   initialsFor,
   orderScopes,
@@ -87,8 +89,16 @@ export function AdminTeamView() {
   const [inviting, setInviting] = useState(false);
   /** The admin whose access is being edited, if any. */
   const [editing, setEditing] = useState<TeamMember | null>(null);
-  /** Five for every school (Lydia, 7 Oct) - see `adminSeatAllowance`. */
-  const seats = adminSeatAllowance();
+  /**
+   * The allowance as the SERVER states it (8 Oct): limit, used, remaining,
+   * overrides included. Null fields mean an older answer carried none, and
+   * then nothing about seats is asserted.
+   */
+  const [seatInfo, setSeatInfo] = useState<Omit<AdminTeam, "members">>({
+    seatLimit: null,
+    seatsUsed: null,
+    seatsRemaining: null,
+  });
   /** D03 names the school - "can administer Brightgate Academy". */
   const [school, setSchool] = useState<string | null>(null);
 
@@ -104,8 +114,9 @@ export function AdminTeamView() {
   const fetchTeam = useCallback(() => {
     teamApi
       .list()
-      .then((rows) => {
-        setTeam(rows);
+      .then(({ members, ...seats }) => {
+        setTeam(members);
+        setSeatInfo(seats);
         setPhase("ready");
       })
       .catch((err: unknown) => setPhase(failureKind(err)));
@@ -161,7 +172,7 @@ export function AdminTeamView() {
         {phase === "ready" && team.length > 1 && (
           <TeamList
             team={team}
-            seats={seats}
+            seats={seatInfo}
             school={school}
             onInvite={() => setInviting(true)}
             onEdit={setEditing}
@@ -181,6 +192,8 @@ export function AdminTeamView() {
         */}
       {inviting && (
         <InvitePanel
+          atLimit={seatInfo.seatsRemaining !== null && seatInfo.seatsRemaining <= 0}
+          seatLimit={seatInfo.seatLimit}
           onCancel={() => setInviting(false)}
           onSent={() => {
             setInviting(false);
@@ -217,6 +230,14 @@ function Heading({ count, school = null }: { count: number | null; school?: stri
       )}
     </>
   );
+}
+
+/**
+ * At the allowance, in D03's terms: the seats are in use, and another is added
+ * at no charge on request - which is made from the Admin Team page.
+ */
+function limitLine(limit: number | null): string {
+  return `All ${limit === null ? "your" : seatWords(limit)} admin accounts are in use, so this invitation can't be sent yet. Request another account from the Admin Team page - it's added at no charge.`;
 }
 
 function SeatsLine({ used, seats }: { used: number; seats: number | null }) {
@@ -347,8 +368,8 @@ function TeamList({
   team: TeamMember[];
   /** The school's name, or null when its record could not be read. */
   school: string | null;
-  /** The school's allowance, or null when it could not be read. */
-  seats: number | null;
+  /** The server's seat figures; null fields assert nothing. */
+  seats: Omit<AdminTeam, "members">;
   onInvite: () => void;
   onEdit: (m: TeamMember) => void;
 }) {
@@ -362,7 +383,17 @@ function TeamList({
   /** The signed-in admin, whose own row is not editable here. */
   const [me] = useState(() => getSession()?.userId ?? null);
   const supportEmail = useSupportEmail();
-  const atAllowance = seats !== null && live.length >= seats;
+  /*
+   * The server's count decides, not ours: it knows the limit, overrides
+   * included, and who it counts against it. Our own count of live members is
+   * only the fallback for an answer that carried no seat figures.
+   */
+  const limit = seats.seatLimit;
+  const used = seats.seatsUsed ?? live.length;
+  const atAllowance =
+    seats.seatsRemaining !== null
+      ? seats.seatsRemaining <= 0
+      : limit !== null && used >= limit;
   const [requested, setRequested] = useState<
     "idle" | "sending" | "sent" | "failed"
   >("idle");
@@ -373,7 +404,7 @@ function TeamList({
     feedbackApi
       .submit({
         type: "account_request",
-        note: `Requesting an additional admin account. All ${seats ?? live.length} admin accounts are in use.`,
+        note: `Requesting an additional admin account. All ${limit ?? used} admin accounts are in use.`,
         // Ops' first question about any request is which screen it came from.
         context: "/admin/team",
       })
@@ -401,18 +432,18 @@ function TeamList({
       <PausedNote className="mt-3" />
 
       <div className="mt-5 flex items-center justify-between gap-4">
-        <SeatsLine used={live.length} seats={seats} />
+        <SeatsLine used={used} seats={limit} />
       </div>
 
       {atAllowance && (
         <div className={cn(CARD, "mt-3 px-[26px] py-6")}>
           <h3 className="text-[16px] font-semibold text-nevo-near-black">
-            {seats === ADMIN_SEATS_STANDARD
-              ? "All five admin accounts are in use"
-              : `All ${seats} admin accounts are in use`}
+            {`All ${limit === null ? used : seatWords(limit)} admin accounts are in use`}
           </h3>
           <p className="mt-2 max-w-[60ch] text-sm leading-[1.6] text-nevo-near-black/66">
-            {`${school ?? "This school"} includes ${seats === ADMIN_SEATS_STANDARD ? "five" : seats} admin accounts as standard.`}{" "}
+            {limit !== null
+              ? `${school ?? "This school"} includes ${seatWords(limit)} admin accounts as standard. `
+              : ""}
             Need another?
             We&rsquo;ll add it at no charge - just ask. Keeping the standing
             number small is a data-governance and security measure, not a
@@ -528,9 +559,14 @@ function JustYou({
 }
 
 function InvitePanel({
+  atLimit,
+  seatLimit,
   onCancel,
   onSent,
 }: {
+  /** The server says no seat is left: say so before anything is typed. */
+  atLimit: boolean;
+  seatLimit: number | null;
   onCancel: () => void;
   onSent: () => void;
 }) {
@@ -544,7 +580,7 @@ function InvitePanel({
   const [error, setError] = useState("");
 
   const count = on.size;
-  const valid = /.+@.+\..+/.test(email.trim()) && count > 0;
+  const valid = /.+@.+\..+/.test(email.trim()) && count > 0 && !atLimit;
 
   /*
    * ONE WAY OUT, THREE DOORS: the close button, the backdrop and Escape, as
@@ -589,8 +625,13 @@ function InvitePanel({
         setInvited(created);
         setPhase("sent");
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         setPhase("idle");
+        // The server's refusal past the allowance is not a fault to retry.
+        if (err instanceof ApiError && apiErrorCode(err.detail) === SEAT_LIMIT_REACHED) {
+          setError(limitLine(seatLimit));
+          return;
+        }
         /*
          * THE SYSTEM OWNS THE FAULT. "Check the address and try again" reads
          * as a correction to the admin, on a failure we have no reason to
@@ -665,6 +706,12 @@ function InvitePanel({
           What can they access?
         </span>
         <ScopeChecklist on={on} setOn={setOn} disabled={phase !== "idle"} />
+
+        {atLimit && !error ? (
+          <p className="mt-4 rounded-[10px] bg-nevo-violet/16 px-4 py-3 text-[13.5px] leading-[1.5] text-nevo-near-black/78">
+            {limitLine(seatLimit)}
+          </p>
+        ) : null}
 
         {error && (
           <p className="mt-4 rounded-[10px] bg-nevo-violet/16 px-4 py-3 text-[13.5px] leading-[1.5] text-nevo-near-black/78">

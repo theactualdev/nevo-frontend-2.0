@@ -21,7 +21,7 @@ vi.mock("@/lib/api/team", async (importOriginal) => {
     ...actual,
     teamApi: {
       ...actual.teamApi,
-      list: () => list(),
+      list: async () => actual.toAdminTeam(await list()),
       updateScopes: (id: string, s: unknown) => updateScopes(id, s),
     },
   };

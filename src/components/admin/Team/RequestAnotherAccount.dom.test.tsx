@@ -29,12 +29,6 @@ vi.mock("@/lib/api/school", () => ({
   schoolApi: { get: getSchool },
   readOnboarding: () => ({ band: "starter" }),
 }));
-vi.mock("./adminScopes", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./adminScopes")>();
-  // Two seats, so two members puts the school at its allowance and the
-  // at-allowance card — the only place this control exists — renders.
-  return { ...actual, adminSeatAllowance: () => 2 };
-});
 
 import { AdminTeamView } from "./AdminTeamView";
 import { teamApi } from "@/lib/api/team";
@@ -66,7 +60,15 @@ beforeEach(() => {
   submit.mockReset();
   submit.mockResolvedValue({});
   getSchool.mockResolvedValue({ id: "sch", name: "Brightgate" });
-  vi.spyOn(teamApi, "list").mockResolvedValue(MEMBERS as never);
+  // The server's two-seat limit, so two members puts the school at its
+  // allowance and the at-allowance card - the only place this control exists -
+  // renders.
+  vi.spyOn(teamApi, "list").mockResolvedValue({
+    members: MEMBERS,
+    seatLimit: 2,
+    seatsUsed: 2,
+    seatsRemaining: 0,
+  } as never);
 });
 
 const openAtAllowance = async () => {
