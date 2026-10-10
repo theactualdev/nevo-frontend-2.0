@@ -189,11 +189,11 @@ export function KeyPointCard({
         type="button"
         onClick={() => setOpen(!open)}
         aria-expanded={open}
-        className="flex w-full cursor-pointer items-center gap-[13px] px-[20px] py-[17px] text-left transition-[filter] hover:brightness-[0.985]"
+        className="flex w-full cursor-pointer items-center gap-[11px] px-[17px] py-[15px] text-left transition-[filter] hover:brightness-[0.985] xl:gap-[13px] xl:px-[20px] xl:py-[17px]"
       >
         <Mark kind={mark} />
         <span className="min-w-0 flex-1">
-          <span className="block text-[15.5px] leading-[1.5] text-nevo-near-black">
+          <span className="block text-sm leading-[1.45] text-nevo-near-black xl:text-[15.5px] xl:leading-[1.5]">
             {keyPoint.text}
           </span>
           {/*
@@ -228,14 +228,14 @@ export function KeyPointCard({
             open && "rotate-180 text-nevo-near-black/55",
           )}
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-[18px]">
             <path d="M6 9l6 6 6-6" />
           </svg>
         </span>
       </button>
 
       {open && (
-        <div className="border-t border-nevo-near-black/7 px-[20px] pt-0.5 pb-5 xl:pl-[55px]">
+        <div className="border-t border-nevo-near-black/7 pt-0.5 pr-[17px] pb-[18px] pl-[45px] xl:pr-[20px] xl:pb-5 xl:pl-[55px]">
           {keyPoint.outstanding && (
             <p className="mt-3 max-w-[68ch] text-[13.5px] leading-[1.55] text-nevo-near-black/72">
               {WHY[keyPoint.confidence]}

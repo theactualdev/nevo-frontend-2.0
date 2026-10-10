@@ -718,7 +718,7 @@ export function UploadWizard() {
                     onClick={() => setScope(s.id)}
                     aria-pressed={on}
                     className={cn(
-                      "flex w-full cursor-pointer items-start gap-[15px] rounded-[12px] border-2 bg-nevo-cream-elevated p-[18px] text-left transition-[border-color,box-shadow] xl:px-5",
+                      "flex w-full cursor-pointer items-start gap-[15px] rounded-[12px] border-2 bg-nevo-cream-elevated px-5 py-[18px] text-left transition-[border-color,box-shadow]",
                       on
                         ? "border-nevo-navy shadow-[0_4px_16px_rgba(0,0,0,0.1)]"
                         : "border-transparent",
@@ -852,26 +852,26 @@ export function UploadWizard() {
                   {/* C07 step 2, "File didn't come through (gentle recovery)". */}
                   <div
                     role="alert"
-                    className="mt-[22px] flex gap-4 rounded-[12px] border border-nevo-violet/50 bg-nevo-violet/16 px-6 py-[22px]"
+                    className="mt-5 flex gap-3.5 rounded-[12px] border border-nevo-violet/50 bg-nevo-violet/16 px-[22px] py-5 xl:mt-[22px] xl:gap-4 xl:px-6 xl:py-[22px]"
                   >
-                    <span className="flex size-[42px] shrink-0 items-center justify-center rounded-[11px] bg-nevo-violet/20 text-nevo-navy">
+                    <span className="flex size-[44px] shrink-0 items-center justify-center rounded-[11px] bg-nevo-violet/20 text-nevo-navy xl:size-[42px]">
                       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                         <path d="M6 2h9l5 5v15H6z" />
                         <path d="M14 2v6h6" />
                       </svg>
                     </span>
                     <div>
-                      <p className="text-base font-semibold text-nevo-near-black">
+                      <p className="text-[15.5px] font-semibold text-nevo-near-black xl:text-base">
                         That file didn&rsquo;t come through.
                       </p>
-                      <p className="mt-2 text-[14.5px] leading-[1.55] text-nevo-near-black/70">
+                      <p className="mt-[7px] text-[14px] leading-[1.55] text-nevo-near-black/70 xl:mt-2 xl:text-[14.5px]">
                         It looks larger than 25 MB, or it isn&rsquo;t a format
                         we read yet (PDF, Word or PowerPoint). Nothing&rsquo;s
                         lost - try that one again, or pick another.
                       </p>
                     </div>
                   </div>
-                  <div className="mt-[18px] flex justify-center gap-2.5">
+                  <div className="mt-4 flex justify-center gap-2.5 xl:mt-[18px]">
                     <button
                       type="button"
                       onClick={() => fileInput.current?.click()}
@@ -882,7 +882,7 @@ export function UploadWizard() {
                     <button
                       type="button"
                       onClick={() => lastFile.current && startFile(lastFile.current)}
-                      className="inline-flex h-12 cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[22px] text-[15px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93"
+                      className="inline-flex h-[46px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[22px] text-[15px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93 xl:h-12"
                     >
                       Try again
                     </button>
@@ -904,11 +904,11 @@ export function UploadWizard() {
                   if (f) startFile(f);
                 }}
                 className={cn(
-                  "mt-5 w-full cursor-pointer rounded-[16px] border-2 border-dashed bg-nevo-cream-elevated px-8 py-[52px] text-center transition-[filter,border-color] hover:brightness-[0.985]",
+                  "mt-5 w-full cursor-pointer rounded-[16px] border-2 border-dashed bg-nevo-cream-elevated px-8 py-12 text-center transition-[filter,border-color] hover:brightness-[0.985] xl:py-[52px]",
                   dragOver ? "border-nevo-navy" : "border-nevo-navy/35",
                 )}
               >
-                <span className="inline-flex size-16 items-center justify-center rounded-[16px] bg-nevo-navy/10 text-nevo-navy">
+                <span className="inline-flex size-[58px] items-center justify-center rounded-[16px] bg-nevo-navy/10 text-nevo-navy xl:size-16">
                   <svg
                     width="30"
                     height="30"
@@ -925,7 +925,7 @@ export function UploadWizard() {
                     <path d="M5 20h14" />
                   </svg>
                 </span>
-                <p className="mt-[18px] text-[17px] font-semibold text-nevo-near-black">
+                <p className="mt-4 text-base font-semibold text-nevo-near-black xl:mt-[18px] xl:text-[17px]">
                   Choose a file or drag it here
                 </p>
                 <p className="mt-1.5 text-[13.5px] text-nevo-near-black/55">

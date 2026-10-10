@@ -119,11 +119,11 @@ export function NotificationsPanel({
         <div className="nevo-text-zoom">
           <div
             className={cn(
-              "border-b border-nevo-near-black/8 px-5 pt-[18px] pb-3.5",
+              "border-b border-nevo-near-black/8 px-[18px] pt-4 pb-3 xl:px-5 xl:pt-[18px] xl:pb-3.5",
               !empty && "flex items-center justify-between",
             )}
           >
-            <h3 className="text-base font-semibold text-nevo-near-black">
+            <h3 className="text-[15px] font-semibold text-nevo-near-black xl:text-base">
               Notifications
             </h3>
             {/* The empty frame's head carries no action. */}
@@ -131,7 +131,7 @@ export function NotificationsPanel({
               <button
                 type="button"
                 onClick={onMarkAllRead}
-                className="cursor-pointer text-[13px] font-medium text-nevo-navy transition-colors hover:text-nevo-navy/80"
+                className="cursor-pointer text-[12.5px] font-medium text-nevo-navy transition-colors hover:text-nevo-navy/80 xl:text-[13px]"
               >
                 Mark all read
               </button>
@@ -173,19 +173,19 @@ export function NotificationsPanel({
               )}
             </div>
           ) : empty ? (
-            <div className="flex flex-col items-center px-6 py-11 text-center">
-              <div className="flex size-14 items-center justify-center rounded-[12px] bg-nevo-cream-elevated text-nevo-violet">
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <div className="flex flex-col items-center px-6 py-10 text-center xl:py-11">
+              <div className="flex size-[52px] items-center justify-center rounded-[12px] bg-nevo-cream-elevated text-nevo-violet xl:size-14">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-[26px]">
                   <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
                   <path d="M13.7 21a2 2 0 0 1-3.4 0" />
                 </svg>
               </div>
-              <p className="mt-4 text-[15px] text-nevo-near-black/62">
+              <p className="mt-[15px] text-[14.5px] text-nevo-near-black/62 xl:mt-4 xl:text-[15px]">
                 Nothing new right now.
               </p>
             </div>
           ) : (
-            <div className="max-h-[520px] overflow-y-auto">
+            <div className="max-h-[440px] overflow-y-auto xl:max-h-[520px]">
               {notes.map((n, i) => {
                 /* A row with `navigatesTo` is a link; one without is not
                    pretending to be. `navigatesTo` is nullable in the contract,
@@ -214,7 +214,7 @@ export function NotificationsPanel({
                         n.href && "cursor-pointer",
                       )}
                     >
-                      <p className="text-sm leading-[1.45] font-medium text-nevo-near-black">
+                      <p className="text-[13.5px] leading-[1.45] font-medium text-nevo-near-black xl:text-sm">
                         {n.text}
                       </p>
                       {n.detail && (
@@ -222,7 +222,7 @@ export function NotificationsPanel({
                           {n.detail}
                         </p>
                       )}
-                      <span className="mt-[3px] block text-xs text-nevo-near-black/50">
+                      <span className="mt-0.5 block text-[11.5px] text-nevo-near-black/50 xl:mt-[3px] xl:text-xs">
                         {n.time}
                       </span>
                     </Row>
@@ -235,7 +235,7 @@ export function NotificationsPanel({
                           onClick={() => onOpen?.(n.id)}
                           className="inline-flex size-[26px] cursor-pointer items-center justify-center rounded-lg text-nevo-violet transition-colors hover:bg-nevo-navy/8"
                         >
-                          <span className="size-2 rounded-full bg-nevo-violet" />
+                          <span className="size-[7px] rounded-full bg-nevo-violet xl:size-2" />
                         </button>
                       )}
                       <button

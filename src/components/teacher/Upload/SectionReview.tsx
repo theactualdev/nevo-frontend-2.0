@@ -203,352 +203,355 @@ export function SectionReview({
 
   return (
     <>
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-[22px] xl:px-8 xl:py-7">
-        {flat && (
-          <div className="flex max-w-[720px] flex-col gap-2.5">
-            <div className="flex items-center gap-3 rounded-[12px] bg-nevo-violet/14 px-4 py-3.5">
-              <span className="shrink-0 text-nevo-navy">
-                <svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.9"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden
-                >
-                  <path d="M4 7h16M4 12h16M4 17h16" />
-                </svg>
-              </span>
-              <span className="min-w-0 flex-1 text-[13.5px] leading-[1.5] text-nevo-near-black/78">
-                {`This lesson will play as one continuous flow, with no module boundaries. ${allSegments.length} segments, about ${totalMin} minutes.`}
-              </span>
-              <button
-                type="button"
-                onClick={() => setFlat(false)}
-                className={ghostBtn}
-              >
-                Add sections back
-              </button>
-            </div>
-            {flatRows}
-          </div>
-        )}
-
-        {noSuggestion && (
-          <div className="flex max-w-[720px] flex-col gap-2.5">
-            <div className="rounded-[12px] bg-nevo-cream-elevated px-5 py-[18px]">
-              <div className="text-[15px] font-semibold text-nevo-near-black">
-                This lesson is short - 5 segments or fewer - so it stays as one
-                flow.
-              </div>
-              <p className="mt-1.5 text-[13.5px] leading-[1.55] text-nevo-near-black/66">
-                Longer lessons are split into modules by default; short ones
-                like this would only gain ceremony from it. You can still add
-                modules if you&rsquo;d like to give it named sections.
-              </p>
-              <button
-                type="button"
-                onClick={() =>
-                  setModules([
-                    {
-                      title: "",
-                      recap: "",
-                      preview: "",
-                      segIds: allSegments.map((s) => s.id),
-                    },
-                  ])
-                }
-                className="mt-3.5 inline-flex cursor-pointer items-center gap-[7px] rounded-[10px] bg-nevo-navy px-[15px] py-[9px] text-[13.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93"
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden
-                >
-                  <path d="M12 5v14M5 12h14" />
-                </svg>
-                Add modules myself
-              </button>
-            </div>
-            {flatRows}
-          </div>
-        )}
-
-        {grouped && (
-          <div className="flex max-w-[720px] flex-col gap-3.5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <span className="text-[13px] text-nevo-near-black/60">
-                {`${modules.length} sections · ${allSegments.length} segments · about ${totalMin} minutes`}
-              </span>
-              <div className="flex flex-col items-end gap-1">
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-[18px] xl:px-8 xl:py-7">
+        {/* The console's reading column: 820px, centred (design system, 8 Oct). */}
+        <div className="mx-auto max-w-[820px]">
+          {flat && (
+            <div className="flex flex-col gap-2.5">
+              <div className="flex items-center gap-3 rounded-[12px] bg-nevo-violet/14 px-4 py-3.5">
+                <span className="shrink-0 text-nevo-navy">
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.9"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden
+                  >
+                    <path d="M4 7h16M4 12h16M4 17h16" />
+                  </svg>
+                </span>
+                <span className="min-w-0 flex-1 text-[13.5px] leading-[1.5] text-nevo-near-black/78">
+                  {`This lesson will play as one continuous flow, with no module boundaries. ${allSegments.length} segments, about ${totalMin} minutes.`}
+                </span>
                 <button
                   type="button"
-                  onClick={() => setFlat(true)}
+                  onClick={() => setFlat(false)}
                   className={ghostBtn}
                 >
-                  Keep as one flow
+                  Add sections back
                 </button>
-                <span className="max-w-[280px] text-right text-[11.5px] leading-[1.4] text-nevo-near-black/50">
-                  A deliberate opt-out: students will see one continuous lesson,
-                  with no module breaks.
-                </span>
               </div>
+              {flatRows}
             </div>
+          )}
 
-            {modules.map((m, mi) => {
-              const segs = m.segIds.map(seg);
-              return (
-                <div
-                  key={mi}
-                  className={cn(
-                    "overflow-hidden rounded-[14px] bg-nevo-cream-elevated shadow-[0_2px_10px_rgba(0,0,0,0.05)]",
-                    overCard === mi &&
-                      "outline-2 -outline-offset-2 outline-nevo-violet",
-                  )}
+          {noSuggestion && (
+            <div className="flex flex-col gap-2.5">
+              <div className="rounded-[12px] bg-nevo-cream-elevated px-5 py-[18px]">
+                <div className="text-[15px] font-semibold text-nevo-near-black">
+                  This lesson is short - 5 segments or fewer - so it stays as one
+                  flow.
+                </div>
+                <p className="mt-1.5 text-[13.5px] leading-[1.55] text-nevo-near-black/66">
+                  Longer lessons are split into modules by default; short ones
+                  like this would only gain ceremony from it. You can still add
+                  modules if you&rsquo;d like to give it named sections.
+                </p>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setModules([
+                      {
+                        title: "",
+                        recap: "",
+                        preview: "",
+                        segIds: allSegments.map((s) => s.id),
+                      },
+                    ])
+                  }
+                  className="mt-3.5 inline-flex cursor-pointer items-center gap-[7px] rounded-[10px] bg-nevo-navy px-[15px] py-[9px] text-[13.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93"
                 >
-                  <div className="border-b border-nevo-near-black/8 px-[18px] pt-4 pb-3.5">
-                    <div className="flex items-center gap-3">
-                      <span className="font-mono text-[10.5px] font-bold tracking-[0.1em] whitespace-nowrap text-nevo-violet">
-                        MODULE {mi + 1}
-                      </span>
-                      <input
-                        value={m.title}
-                        onChange={(e) => update(mi, { title: e.target.value })}
-                        placeholder={`Module ${mi + 1}`}
-                        className={cn(
-                          inputBase,
-                          "min-w-0 flex-1 px-3 py-[9px] text-[15.5px] font-semibold",
-                        )}
-                      />
-                      <span className="text-xs whitespace-nowrap text-nevo-near-black/50">
-                        {`${segs.length} ${segs.length === 1 ? "segment" : "segments"}`}
-                      </span>
-                    </div>
-                    {segs.length === 1 && (
-                      <div className="mt-[11px] flex items-center gap-2.5 rounded-[9px] bg-nevo-violet/14 px-[13px] py-2.5">
-                        <span className="shrink-0 text-nevo-navy">
-                          <svg
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.9"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            aria-hidden
-                          >
-                            <circle cx="12" cy="12" r="9" />
-                            <path d="M12 11v5" />
-                            <circle
-                              cx="12"
-                              cy="7.6"
-                              r="0.6"
-                              fill="currentColor"
-                            />
-                          </svg>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden
+                  >
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  Add modules myself
+                </button>
+              </div>
+              {flatRows}
+            </div>
+          )}
+
+          {grouped && (
+            <div className="flex flex-col gap-3.5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <span className="text-[13px] text-nevo-near-black/60">
+                  {`${modules.length} sections · ${allSegments.length} segments · about ${totalMin} minutes`}
+                </span>
+                <div className="flex flex-col items-end gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setFlat(true)}
+                    className={ghostBtn}
+                  >
+                    Keep as one flow
+                  </button>
+                  <span className="max-w-[280px] text-right text-[11.5px] leading-[1.4] text-nevo-near-black/50">
+                    A deliberate opt-out: students will see one continuous lesson,
+                    with no module breaks.
+                  </span>
+                </div>
+              </div>
+
+              {modules.map((m, mi) => {
+                const segs = m.segIds.map(seg);
+                return (
+                  <div
+                    key={mi}
+                    className={cn(
+                      "overflow-hidden rounded-[14px] bg-nevo-cream-elevated shadow-[0_2px_10px_rgba(0,0,0,0.05)]",
+                      overCard === mi &&
+                        "outline-2 -outline-offset-2 outline-nevo-violet",
+                    )}
+                  >
+                    <div className="border-b border-nevo-near-black/8 px-[18px] pt-4 pb-3.5">
+                      <div className="flex items-center gap-3">
+                        <span className="font-mono text-[10.5px] font-bold tracking-[0.1em] whitespace-nowrap text-nevo-violet">
+                          MODULE {mi + 1}
                         </span>
-                        <span className="min-w-0 flex-1 text-[12.5px] leading-[1.45] text-nevo-near-black/72">
-                          A section with just one segment usually reads better
-                          merged into the next. You can leave it if it&rsquo;s a
-                          deliberate wrap-up.
+                        <input
+                          value={m.title}
+                          onChange={(e) => update(mi, { title: e.target.value })}
+                          placeholder={`Module ${mi + 1}`}
+                          className={cn(
+                            inputBase,
+                            "min-w-0 flex-1 px-3 py-[9px] text-[15.5px] font-semibold",
+                          )}
+                        />
+                        <span className="text-xs whitespace-nowrap text-nevo-near-black/50">
+                          {`${segs.length} ${segs.length === 1 ? "segment" : "segments"}`}
                         </span>
                       </div>
-                    )}
-                  </div>
+                      {segs.length === 1 && (
+                        <div className="mt-[11px] flex items-center gap-2.5 rounded-[9px] bg-nevo-violet/14 px-[13px] py-2.5">
+                          <span className="shrink-0 text-nevo-navy">
+                            <svg
+                              width="16"
+                              height="16"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.9"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              aria-hidden
+                            >
+                              <circle cx="12" cy="12" r="9" />
+                              <path d="M12 11v5" />
+                              <circle
+                                cx="12"
+                                cy="7.6"
+                                r="0.6"
+                                fill="currentColor"
+                              />
+                            </svg>
+                          </span>
+                          <span className="min-w-0 flex-1 text-[12.5px] leading-[1.45] text-nevo-near-black/72">
+                            A section with just one segment usually reads better
+                            merged into the next. You can leave it if it&rsquo;s a
+                            deliberate wrap-up.
+                          </span>
+                        </div>
+                      )}
+                    </div>
 
-                  <div
-                    className="flex flex-col gap-[7px] px-3.5 py-2.5"
-                    onDragOver={(e) => e.preventDefault()}
-                    onDragEnter={() => setOverCard(mi)}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      moveSeg(mi, segs.length);
-                    }}
-                  >
-                    {segs.map((s, pi) => (
-                      <div
-                        key={s.id}
-                        draggable
-                        onDragStart={(e) => {
-                          drag.current = s.id;
-                          setOverCard(mi);
-                          try {
-                            e.dataTransfer.effectAllowed = "move";
-                          } catch {}
-                        }}
-                        onDragOver={(e) => e.preventDefault()}
-                        onDragEnter={() => {
-                          setOver(`${mi}:${pi}`);
-                          setOverCard(mi);
-                        }}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          moveSeg(mi, pi);
-                        }}
-                        onDragEnd={clearDrag}
-                      >
-                        {over === `${mi}:${pi}` && (
-                          <div className="mx-1 mb-1.5 h-[2.5px] rounded-full bg-nevo-violet" />
-                        )}
-                        <div className="flex items-center gap-[11px] rounded-[9px] bg-nevo-cream/55 px-[13px] py-[11px]">
-                          <span
-                            className="shrink-0 cursor-grab text-nevo-near-black/30"
-                            aria-hidden
-                          >
+                    <div
+                      className="flex flex-col gap-[7px] px-3.5 py-2.5"
+                      onDragOver={(e) => e.preventDefault()}
+                      onDragEnter={() => setOverCard(mi)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        moveSeg(mi, segs.length);
+                      }}
+                    >
+                      {segs.map((s, pi) => (
+                        <div
+                          key={s.id}
+                          draggable
+                          onDragStart={(e) => {
+                            drag.current = s.id;
+                            setOverCard(mi);
+                            try {
+                              e.dataTransfer.effectAllowed = "move";
+                            } catch {}
+                          }}
+                          onDragOver={(e) => e.preventDefault()}
+                          onDragEnter={() => {
+                            setOver(`${mi}:${pi}`);
+                            setOverCard(mi);
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            moveSeg(mi, pi);
+                          }}
+                          onDragEnd={clearDrag}
+                        >
+                          {over === `${mi}:${pi}` && (
+                            <div className="mx-1 mb-1.5 h-[2.5px] rounded-full bg-nevo-violet" />
+                          )}
+                          <div className="flex items-center gap-[11px] rounded-[9px] bg-nevo-cream/55 px-[13px] py-[11px]">
+                            <span
+                              className="shrink-0 cursor-grab text-nevo-near-black/30"
+                              aria-hidden
+                            >
+                              <svg
+                                width="14"
+                                height="14"
+                                viewBox="0 0 24 24"
+                                fill="currentColor"
+                              >
+                                <circle cx="9" cy="6" r="1.6" />
+                                <circle cx="15" cy="6" r="1.6" />
+                                <circle cx="9" cy="12" r="1.6" />
+                                <circle cx="15" cy="12" r="1.6" />
+                                <circle cx="9" cy="18" r="1.6" />
+                                <circle cx="15" cy="18" r="1.6" />
+                              </svg>
+                            </span>
+                            <SegRow s={s} />
+                          </div>
+                          {pi < segs.length - 1 && (
+                            <div className="flex items-center gap-2 py-[5px] pl-[46px]">
+                              <button
+                                type="button"
+                                onClick={() => split(mi, pi)}
+                                className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border-[1.5px] border-nevo-navy/35 px-[11px] py-1.5 text-xs font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/6"
+                              >
+                                <svg
+                                  width="13"
+                                  height="13"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  aria-hidden
+                                >
+                                  <path d="M8 3v18M3 8h10M3 16h10M21 8l-3 4 3 4" />
+                                </svg>
+                                Split here
+                              </button>
+                              <span className="text-[11.5px] text-nevo-near-black/40">
+                                start a new module after this segment
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex flex-col gap-2.5 px-[18px] pt-1 pb-4">
+                      {[
+                        {
+                          key: "recap" as const,
+                          label: "What you just did - shown at the boundary",
+                          glyph: (
                             <svg
                               width="14"
                               height="14"
                               viewBox="0 0 24 24"
-                              fill="currentColor"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              aria-hidden
                             >
-                              <circle cx="9" cy="6" r="1.6" />
-                              <circle cx="15" cy="6" r="1.6" />
-                              <circle cx="9" cy="12" r="1.6" />
-                              <circle cx="15" cy="12" r="1.6" />
-                              <circle cx="9" cy="18" r="1.6" />
-                              <circle cx="15" cy="18" r="1.6" />
+                              <path d="M9 11l3 3L22 4" />
+                              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
                             </svg>
-                          </span>
-                          <SegRow s={s} />
-                        </div>
-                        {pi < segs.length - 1 && (
-                          <div className="flex items-center gap-2 py-[5px] pl-[46px]">
-                            <button
-                              type="button"
-                              onClick={() => split(mi, pi)}
-                              className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border-[1.5px] border-nevo-navy/35 px-[11px] py-1.5 text-xs font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/6"
+                          ),
+                        },
+                        {
+                          key: "preview" as const,
+                          label: "What's coming next",
+                          glyph: (
+                            <svg
+                              width="14"
+                              height="14"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              aria-hidden
                             >
-                              <svg
-                                width="13"
-                                height="13"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                aria-hidden
-                              >
-                                <path d="M8 3v18M3 8h10M3 16h10M21 8l-3 4 3 4" />
-                              </svg>
-                              Split here
-                            </button>
-                            <span className="text-[11.5px] text-nevo-near-black/40">
-                              start a new module after this segment
+                              <circle cx="12" cy="12" r="9" />
+                              <path d="M10 8l4 4-4 4" />
+                            </svg>
+                          ),
+                        },
+                      ].map((f) => (
+                        <div key={f.key}>
+                          <div className="mb-[5px] flex items-center gap-[7px]">
+                            <span className="inline-flex text-nevo-violet">
+                              {f.glyph}
+                            </span>
+                            <span className="text-[11px] font-semibold tracking-[0.05em] text-nevo-near-black/48 uppercase">
+                              {f.label}
                             </span>
                           </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex flex-col gap-2.5 px-[18px] pt-1 pb-4">
-                    {[
-                      {
-                        key: "recap" as const,
-                        label: "What you just did - shown at the boundary",
-                        glyph: (
-                          <svg
-                            width="14"
-                            height="14"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            aria-hidden
-                          >
-                            <path d="M9 11l3 3L22 4" />
-                            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-                          </svg>
-                        ),
-                      },
-                      {
-                        key: "preview" as const,
-                        label: "What's coming next",
-                        glyph: (
-                          <svg
-                            width="14"
-                            height="14"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            aria-hidden
-                          >
-                            <circle cx="12" cy="12" r="9" />
-                            <path d="M10 8l4 4-4 4" />
-                          </svg>
-                        ),
-                      },
-                    ].map((f) => (
-                      <div key={f.key}>
-                        <div className="mb-[5px] flex items-center gap-[7px]">
-                          <span className="inline-flex text-nevo-violet">
-                            {f.glyph}
-                          </span>
-                          <span className="text-[11px] font-semibold tracking-[0.05em] text-nevo-near-black/48 uppercase">
-                            {f.label}
-                          </span>
+                          <textarea
+                            value={m[f.key]}
+                            onChange={(e) =>
+                              update(mi, { [f.key]: e.target.value })
+                            }
+                            rows={2}
+                            className={cn(
+                              inputBase,
+                              "w-full resize-none px-3 py-[9px] text-[13.5px] leading-[1.5]",
+                            )}
+                          />
                         </div>
-                        <textarea
-                          value={m[f.key]}
-                          onChange={(e) =>
-                            update(mi, { [f.key]: e.target.value })
-                          }
-                          rows={2}
-                          className={cn(
-                            inputBase,
-                            "w-full resize-none px-3 py-[9px] text-[13.5px] leading-[1.5]",
-                          )}
-                        />
-                      </div>
-                    ))}
-                  </div>
-
-                  {mi > 0 && (
-                    <div className="px-[18px] pb-4">
-                      <button
-                        type="button"
-                        onClick={() => merge(mi)}
-                        className="inline-flex cursor-pointer items-center gap-[7px] rounded-[9px] border-[1.5px] border-dashed border-nevo-navy/35 px-[13px] py-2 text-[12.5px] font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/6"
-                      >
-                        <svg
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          aria-hidden
-                        >
-                          <path d="M7 4l5 5 5-5M12 9v11" />
-                        </svg>
-                        Merge into Module {mi}
-                      </button>
+                      ))}
                     </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
+
+                    {mi > 0 && (
+                      <div className="px-[18px] pb-4">
+                        <button
+                          type="button"
+                          onClick={() => merge(mi)}
+                          className="inline-flex cursor-pointer items-center gap-[7px] rounded-[9px] border-[1.5px] border-dashed border-nevo-navy/35 px-[13px] py-2 text-[12.5px] font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/6"
+                        >
+                          <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden
+                          >
+                            <path d="M7 4l5 5 5-5M12 9v11" />
+                          </svg>
+                          Merge into Module {mi}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* The step's own C07c foot */}

@@ -109,10 +109,10 @@ export function TeacherPasswordReset({
             <path d="M12 7v5l3 2" />
           </svg>
         </Medallion>
-        <h1 className="mt-[22px] text-[28px] leading-[1.15] font-semibold tracking-[-0.02em] text-nevo-near-black">
+        <h1 className="mt-[22px] text-[26px] leading-[1.15] font-semibold tracking-[-0.02em] text-nevo-near-black xl:text-[28px]">
           This link has expired
         </h1>
-        <p className="mt-3 text-[16px] leading-[1.55] text-nevo-near-black/70">
+        <p className="mt-3 text-[15.5px] leading-[1.55] text-nevo-near-black/70 xl:text-[16px]">
           Reset links last 30 minutes, for your security. Nothing is wrong
           with your account - request a fresh link and we&rsquo;ll send it right
           over.
@@ -172,10 +172,10 @@ export function TeacherPasswordReset({
             <path d="M4 7l8 6 8-6" />
           </svg>
         </Medallion>
-        <h1 className="mt-[22px] text-[28px] leading-[1.15] font-semibold tracking-[-0.02em] text-nevo-near-black">
+        <h1 className="mt-[22px] text-[26px] leading-[1.15] font-semibold tracking-[-0.02em] text-nevo-near-black xl:text-[28px]">
           Check your inbox
         </h1>
-        <p className="mt-3 text-[16px] leading-[1.55] text-nevo-near-black/70">
+        <p className="mt-3 text-[15.5px] leading-[1.55] text-nevo-near-black/70 xl:text-[16px]">
           {"If an account exists for "}
           <b className="font-semibold text-nevo-near-black">
             {email.trim() || "that address"}
@@ -236,15 +236,15 @@ export function TeacherPasswordReset({
       <span className="text-[12.5px] font-semibold tracking-[0.14em] text-nevo-violet uppercase">
         Password reset
       </span>
-      <h1 className="mt-3.5 text-[34px] leading-[1.15] font-semibold tracking-[-0.02em] text-nevo-near-black">
+      <h1 className="mt-3.5 text-[30px] leading-[1.15] font-semibold tracking-[-0.02em] text-nevo-near-black xl:text-[34px]">
         Reset your password
       </h1>
-      <p className="mt-3 text-[16px] leading-[1.55] text-nevo-near-black/70">
+      <p className="mt-3 text-[15.5px] leading-[1.55] text-nevo-near-black/70 xl:text-[16px]">
         Enter the email you use for Nevo and we&rsquo;ll send you a link to set
         a new password.
       </p>
 
-      <label htmlFor="reset-email" className="mt-[30px] w-full text-left text-[13.5px] font-semibold text-nevo-near-black/70">
+      <label htmlFor="reset-email" className="mt-[26px] w-full text-left text-[13.5px] font-semibold text-nevo-near-black/70 xl:mt-[30px]">
         Email
       </label>
       <input

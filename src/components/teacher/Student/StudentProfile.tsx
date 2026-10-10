@@ -33,9 +33,10 @@ import { ShareSheet } from "./ShareSheet";
  * seen or Recent sessions sections (no empty cards for them).
  *
  * Desktop and tablet genuinely differ here, per the frame: tablet drops the
- * breadcrumb, stacks the actions into their own wrapping row with a "Share"
- * pill in place of the kebab, and drops Recent sessions entirely. Both
- * divergences are flagged to design rather than smoothed over.
+ * breadcrumb and stacks the actions into their own wrapping row with a "Share"
+ * pill in place of the kebab. Tablet used to drop Recent sessions too, which
+ * left C08d's tablet session panel with nothing to open from; design put the
+ * list back on 8 Oct.
  *
  * THE ESCALATION SHEET STILL CONFIRMS NOTHING HERE, AND THAT IS NOW CORRECT.
  * C14 B5 draws a toast and a quiet "Shared with Learning Support" note, and
@@ -355,13 +356,13 @@ export function StudentProfile({
           </>
         )}
 
-        {/* Recent sessions - desktop only, per the frame (flagged). */}
+        {/* Recent sessions - at both widths since design's 8 Oct ruling. */}
         {student.sessions.length > 0 && (
-          <div className="hidden xl:block">
-            <h3 className="mt-9 text-sm font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase">
+          <div>
+            <h3 className="mt-[26px] text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase xl:mt-9 xl:text-sm">
               Recent sessions
             </h3>
-            <div className="mt-4 overflow-hidden rounded-[12px] bg-nevo-cream-elevated shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+            <div className="mt-3.5 overflow-hidden rounded-[12px] bg-nevo-cream-elevated shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-4">
               {student.sessions.map((s, i) => (
                 <button
                   key={s.id}
@@ -373,19 +374,19 @@ export function StudentProfile({
                       "border-b border-nevo-near-black/7",
                   )}
                 >
-                  <span className="w-[70px] shrink-0 pt-0.5 text-[13.5px] text-nevo-near-black/55">
+                  <span className="w-[62px] shrink-0 pt-0.5 text-[13px] text-nevo-near-black/55 xl:w-[70px] xl:text-[13.5px]">
                     {s.date}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block text-[15.5px] font-semibold text-nevo-near-black">
+                    <span className="block text-[14.5px] font-semibold text-nevo-near-black xl:text-[15.5px]">
                       {s.lesson}
                     </span>
-                    <span className="mt-[5px] block text-[14.5px] leading-[1.5] text-nevo-near-black/72">
+                    <span className="mt-[5px] block text-sm leading-[1.5] text-nevo-near-black/72 xl:text-[14.5px]">
                       {s.note}
                     </span>
                   </span>
                   <span className="shrink-0 self-center text-nevo-near-black/40">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-[18px]">
                       <path d="M9 6l6 6-6 6" />
                     </svg>
                   </span>
