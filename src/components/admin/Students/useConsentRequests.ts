@@ -2,7 +2,11 @@
 
 import { useCallback, useState } from "react";
 import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
-import { consentsApi, type ConsentDeliveryStatus } from "@/lib/api/consents";
+import {
+  consentsApi,
+  type BulkParentConsentResult,
+  type ConsentDeliveryStatus,
+} from "@/lib/api/consents";
 import { studentsApi } from "@/lib/api/students";
 
 /**
@@ -61,8 +65,14 @@ export type ConsentRequestState =
 
 const IDLE: ConsentRequestState = { kind: "idle" };
 
-/** Requests in flight at once during a bulk send. */
+/** Parent-link reads in flight at once while a bulk send gathers contacts. */
 const BULK_AT_ONCE = 4;
+
+/**
+ * Children per bulk call. The route takes 500; a smaller batch keeps the
+ * progress moving on a large school and one slow call from holding them all.
+ */
+const BULK_BATCH = 100;
 
 /**
  * What a bulk send came to, by the receipt each request got. `sent` is only
@@ -246,12 +256,14 @@ export function useConsentRequests() {
   /**
    * D07's bulk send (Lydia, 7 Oct: "D07 wins. Bulk send exists.").
    *
-   * THE SAME REQUEST, MANY TIMES - not a bulk route, because the contract has
-   * none: `POST /students/{id}/parent-consent-requests` is per student. A few
-   * at a time rather than all at once, so three hundred children are not three
-   * hundred simultaneous requests, and each row reports its own outcome as it
-   * lands. Nothing is retried on the admin's behalf: a failure is counted and
-   * said, and the row keeps its own "Send request".
+   * THE BULK ROUTE NOW (backend, 8 Oct): `POST /consents/parent-consent-
+   * requests/bulk`, one call for up to 500 children, each answered with its
+   * own outcome. The route still needs each parent's contact, which lives on
+   * the child's parent links - so those are read first, a few at a time, and
+   * a child with no guardian or only a phone number is settled right there,
+   * exactly as the row's own "Send request" settles it. Everyone left goes in
+   * batches. Nothing is retried on the admin's behalf: a failure is counted
+   * and said, and the row keeps its own "Send request".
    */
   const sendMany = useCallback(
     async (
@@ -259,22 +271,69 @@ export function useConsentRequests() {
       onProgress?: (done: number) => void,
     ): Promise<BulkConsentTally> => {
       const tally: BulkConsentTally = { ...EMPTY_TALLY };
-      let next = 0;
       let done = 0;
-      const worker = async () => {
+      const settle = (id: string, outcome: ConsentRequestState) => {
+        set(id, outcome);
+        countInto(tally, outcome);
+        onProgress?.(++done);
+      };
+
+      // 1. Who each request goes to, from the record.
+      const ready: { studentId: string; who: string; parentName: string; parentContact: string }[] = [];
+      let next = 0;
+      const reader = async () => {
         while (next < studentIds.length) {
           const id = studentIds[next++];
-          const outcome = await run(id);
-          countInto(tally, outcome);
-          onProgress?.(++done);
+          set(id, { kind: "sending" });
+          try {
+            const links = await studentsApi.parentLinks(id);
+            const link =
+              links.find((l) => l.parentContact && l.parentName.trim()) ??
+              links.find((l) => l.parentContact);
+            if (!link) {
+              settle(id, { kind: "noContact" });
+              continue;
+            }
+            const who = link.parentName.trim() || link.parentContact;
+            if (!isEmail(link.parentContact)) {
+              settle(id, { kind: "needsEmail", parentName: who });
+              continue;
+            }
+            ready.push({ studentId: id, who, parentName: link.parentName, parentContact: link.parentContact });
+          } catch (err: unknown) {
+            settle(id, refusal(err) ?? { kind: "failed" });
+          }
         }
       };
       await Promise.all(
-        Array.from({ length: Math.min(BULK_AT_ONCE, studentIds.length) }, worker),
+        Array.from({ length: Math.min(BULK_AT_ONCE, studentIds.length) }, reader),
       );
+
+      // 2. The requests themselves, a batch per call.
+      for (let i = 0; i < ready.length; i += BULK_BATCH) {
+        const batch = ready.slice(i, i + BULK_BATCH);
+        let results: BulkParentConsentResult[] = [];
+        try {
+          results = await consentsApi.requestParentConsentBulk(
+            batch.map(({ studentId, parentName, parentContact }) => ({
+              studentId,
+              parentName,
+              parentContact,
+              contactMethod: CONTACT_METHOD,
+            })),
+          );
+        } catch {
+          // The whole call failed: none of this batch was queued.
+          results = [];
+        }
+        const byId = new Map(results.map((r) => [r.studentId, r]));
+        for (const item of batch) {
+          settle(item.studentId, bulkOutcome(byId.get(item.studentId), item.who));
+        }
+      }
       return tally;
     },
-    [run],
+    [set],
   );
 
   return { stateFor, send, sendMany };
@@ -311,6 +370,24 @@ export function consentRequestLine(
     default:
       return null;
   }
+}
+
+/**
+ * One child's state from the bulk route's answer. A child the answer does not
+ * mention was not queued - counted as a failure, never assumed sent.
+ */
+export function bulkOutcome(
+  result: BulkParentConsentResult | undefined,
+  parentName: string,
+): ConsentRequestState {
+  if (!result) return { kind: "failed" };
+  if (result.queued) {
+    return { kind: "done", parentName, delivery: result.request?.deliveryStatus ?? "queued" };
+  }
+  if (result.errorCode === "parent_already_refused") {
+    return { kind: "refused", message: result.errorMessage?.trim() || REFUSED_FALLBACK };
+  }
+  return { kind: "failed" };
 }
 
 /** The refusal's own words, when the server refused because this parent said no. */
