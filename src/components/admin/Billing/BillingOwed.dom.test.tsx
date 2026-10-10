@@ -94,7 +94,7 @@ describe("Billing's How to pay", () => {
     upcoming.mockResolvedValue(charge({ invoiceId: null, invoiceNumber: null, status: null }));
     const { container } = render(<BillingView />);
     await waitFor(() => expect(upcoming).toHaveBeenCalled());
-    await waitFor(() => expect(visibleText(container)).toMatch(/Plan options/));
+    await waitFor(() => expect(visibleText(container)).toMatch(/Billing contact/));
     expect(visibleText(container)).not.toMatch(/How to pay/);
     expect(screen.queryByRole("button", { name: /made this transfer/ })).toBeNull();
   });
@@ -102,7 +102,7 @@ describe("Billing's How to pay", () => {
   it("never shows a school an internal design code", async () => {
     upcoming.mockResolvedValue(charge({}));
     const { container } = render(<BillingView />);
-    await waitFor(() => expect(visibleText(container)).toMatch(/Plan options/));
+    await waitFor(() => expect(visibleText(container)).toMatch(/Billing contact/));
     expect(visibleText(container)).not.toMatch(/\bD\d{2}[a-z]?\b/);
   });
 });
