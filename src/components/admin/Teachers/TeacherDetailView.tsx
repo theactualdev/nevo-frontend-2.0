@@ -29,6 +29,8 @@ import { AssignTeachingSheet } from "../Classes/AssignTeachingSheet";
 import { RemoveAccessSheet } from "./RemoveAccessSheet";
 import { StatusPill, isInvited } from "./status";
 import { NoAccess, failureKind } from "../NoAccess";
+import { activeLine, lastActiveCard } from "../Team/teamLines";
+import { ApiError, apiErrorMessage } from "@/lib/api/client";
 
 /**
  * D6 teacher detail - oversight, not performance review.
@@ -44,14 +46,15 @@ import { NoAccess, failureKind } from "../NoAccess";
  * "students at risk", no averages, no engagement figure. If you find yourself
  * adding a second number to that card, stop.
  *
- * TODO(api): `GET /api/v1/teachers/{id}` returns `{id,name,email,status,classIds}`
- * and nothing more. Two things the frame draws therefore cannot be built:
- *   - the LAST ACTIVE stat card (no timestamp anywhere on the route), so the
- *     frame's three cards render as two rather than inventing a third
- *   - the header's "Active today" line, which is the same missing timestamp
- * Both re-verified against the deployed spec on 11 Sep: the only `lastSeenAt`
- * in the contract is on `GET /api/v1/auth/sessions`, which is the caller's own
- * device list and takes no teacher id.
+ * LAST ACTIVE IS ON THE READ NOW (8 Oct). `GET /api/v1/teachers/{id}` carries
+ * `lastActiveAt` (and `subjects`, `classCount`), so D06's third card - "Last
+ * active", "Today" over the time - and the header's "Active today" render.
+ * Both were held back while the route returned only `{id,name,email,status,
+ * classIds}`; with no timestamp the card is left off, never drawn empty.
+ *
+ * RESTORING ACCESS TOO. `POST /teachers/{id}/restore` landed with it, so a
+ * removed teacher's page offers it, and D06b's "you can restore their access
+ * whenever you need to" is back in the removal copy.
  *
  * THE DATES ARE ON THE ROWS NOW. A third bullet here used to read "ASSIGNMENT
  * HISTORY, which has no endpoint at all", and `GET /api/v1/teachers/{id}
@@ -79,6 +82,9 @@ export function TeacherDetailView({ teacherId }: { teacherId: string }) {
   const [assigning, setAssigning] = useState(false);
   /** D24 / D01b: assigning and removing access pause while setup is unfinished. */
   const { writesPaused } = useSetupGate();
+  const [restoring, setRestoring] = useState(false);
+  const [restoreFailed, setRestoreFailed] = useState<string | null>(null);
+  const [now] = useState(() => Date.now());
 
   const load = useCallback(() => {
     Promise.all([
@@ -175,6 +181,22 @@ export function TeacherDetailView({ teacherId }: { teacherId: string }) {
     ),
   );
   const firstName = teacher.name.split(" ").filter(Boolean).slice(-1)[0] ?? teacher.name;
+  const lastSeen = lastActiveCard(teacher.lastActiveAt, now);
+
+  const restoreAccess = () => {
+    setRestoring(true);
+    setRestoreFailed(null);
+    teachersApi
+      .restore(teacher.id)
+      .then(() => load())
+      .catch((err: unknown) =>
+        setRestoreFailed(
+          (err instanceof ApiError && apiErrorMessage(err.detail)) ||
+            "That didn't go through, and nothing has changed. Try again in a moment.",
+        ),
+      )
+      .finally(() => setRestoring(false));
+  };
   const invited = isInvited(teacher.status);
   /** A deactivated teacher cannot open a console to teach anything in. */
   const canAssign = teacher.status !== "deactivated";
@@ -195,7 +217,8 @@ export function TeacherDetailView({ teacherId }: { teacherId: string }) {
             {teacher.name}
           </h2>
           <div className="mt-[3px] truncate text-sm text-nevo-near-black/62">
-            {[teacher.email, "Teacher"].filter(Boolean).join(" · ")}
+            {/* D06's header line, now last-active is on the read (8 Oct). */}
+            {[teacher.email, "Teacher", activeLine(teacher.lastActiveAt, now)].filter(Boolean).join(" · ")}
           </div>
         </div>
         <StatusPill status={teacher.status} />
@@ -210,7 +233,8 @@ export function TeacherDetailView({ teacherId }: { teacherId: string }) {
         </p>
       ) : null}
 
-      {/* Two cards, not the frame's three - see the note at the top of the file. */}
+      {/* D06's three cards. Last active joined on 8 Oct; with no timestamp
+          it is left off rather than drawn empty. */}
       <div className="mt-7 flex gap-3.5 max-lg:flex-col">
         <StatCard
           value={String(activeHeld.length)}
@@ -230,6 +254,7 @@ export function TeacherDetailView({ teacherId }: { teacherId: string }) {
              rather than presenting a short number as the total. */
           sub={unknown ? "in the classes we could read" : "in their classes"}
         />
+        {lastSeen ? <StatCard value={lastSeen.value} label="Last active" sub={lastSeen.sub} /> : null}
       </div>
 
       <p className="mt-4 flex items-start gap-2 text-[13px] leading-[1.55] text-nevo-near-black/60">
@@ -276,6 +301,8 @@ export function TeacherDetailView({ teacherId }: { teacherId: string }) {
             const started = longDate(h.assignedAt);
             const meta = [
               info?.archivedAt ? "Archived" : null,
+              // The subject this assignment teaches (8 Oct), when it has one.
+              h.subject?.trim() || null,
               yearGroupLabel(info?.yearGroup),
               info ? `${info.studentCount} ${info.studentCount === 1 ? "student" : "students"}` : null,
               started ? `assigned ${started}` : null,
@@ -322,10 +349,28 @@ export function TeacherDetailView({ teacherId }: { teacherId: string }) {
         {teacher.status === "deactivated" ? (
           /* A deactivated teacher's page used to offer "Remove admin-side
              access" again - an action that had already happened. */
-          <p className="m-0 max-w-[520px] text-[13.5px] leading-[1.55] text-nevo-near-black/62">
-            {firstName}&rsquo;s console access has been removed. Their classes
-            and notes stay with the school.
-          </p>
+          <>
+            <p className="m-0 max-w-[520px] text-[13.5px] leading-[1.55] text-nevo-near-black/62">
+              {firstName}&rsquo;s console access has been removed. Their classes
+              and notes stay with the school.
+            </p>
+            {/* The undo that could not be offered until 8 Oct, when
+                `POST /teachers/{id}/restore` landed. Access comes back; any
+                classes handed over stay with whoever has them now. */}
+            <button
+              type="button"
+              onClick={restoreAccess}
+              disabled={writesPaused || restoring}
+              className={cn(TEXT_ACTION, "mt-3")}
+            >
+              {restoring ? "Restoring…" : "Restore access"}
+            </button>
+            {restoreFailed ? (
+              <p role="status" className="mt-1.5 max-w-[520px] text-[13px] leading-[1.5] text-nevo-near-black/62">
+                {restoreFailed}
+              </p>
+            ) : null}
+          </>
         ) : (
           <>
             {/* The paused note sits once, under Classes, as class detail's
@@ -338,11 +383,12 @@ export function TeacherDetailView({ teacherId }: { teacherId: string }) {
             >
               Remove admin-side access
             </button>
-            {/* "...and you can restore access later" was cut: nothing in the
-                contract undoes `POST /teachers/{id}/revoke`. */}
+            {/* D06b's promise is back: `POST /teachers/{id}/restore` landed
+                on 8 Oct, so the undo exists. */}
             <p className="mt-1.5 max-w-[520px] text-[13px] leading-[1.5] text-nevo-near-black/55">
               {firstName} will no longer be able to open their Nevo console.
-              Their classes and notes stay with the school.
+              Their classes and notes stay with the school, and you can restore
+              their access whenever you need to.
             </p>
           </>
         )}

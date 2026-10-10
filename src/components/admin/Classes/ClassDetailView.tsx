@@ -351,6 +351,13 @@ export function ClassDetailView({ classId }: { classId: string }) {
                         {t.email}
                       </div>
                     ) : null}
+                    {/* What this assignment teaches - on the read since 8 Oct;
+                        an older assignment carries none and says nothing. */}
+                    {t.subject?.trim() ? (
+                      <div className="truncate text-[13px] text-nevo-near-black/66">
+                        {`Teaches ${t.subject.trim()}`}
+                      </div>
+                    ) : null}
                     {longDate(t.assignedAt) ? (
                       <div className="truncate text-[12.5px] text-nevo-near-black/45">
                         {`Assigned ${longDate(t.assignedAt)}`}

@@ -53,10 +53,10 @@ import { NoAccess, failureKind } from "../NoAccess";
  * link in the row, exactly as D19 does, rather than toasting "Invite resent"
  * over a response that established nothing.
  *
- * TODO(api): `GET /api/v1/teachers` carries no `class_count`, so the Classes
- * column resolves per row through `GET /api/v1/teachers/{id}/classes` - N+1,
- * fired after the list paints, exactly as D5 does. Folding a count into the
- * list response removes it.
+ * THE CLASS COUNT IS ON THE LIST NOW (8 Oct, `classCount`), so the Classes
+ * column needs no read of its own. It used to resolve per row through
+ * `GET /api/v1/teachers/{id}/classes` - N+1, fired after the list painted -
+ * and still does for a row an older answer sent without the count.
  *
  * TODO(api): no `source` field either, so the SSO-sourced state (invite absent,
  * source line pointing at IT & SSO) cannot be detected and is not built.
@@ -186,7 +186,15 @@ export function TeachersView() {
             })
             .catch(() => setInvites({}));
         }
-        rows.forEach((t) => {
+        // The list's own count where it carries one; a read only for the rest.
+        const counted = rows.filter((t) => typeof t.classCount === "number");
+        if (counted.length > 0) {
+          setCounts((prev) => ({
+            ...prev,
+            ...Object.fromEntries(counted.map((t) => [t.id, t.classCount as number])),
+          }));
+        }
+        rows.filter((t) => typeof t.classCount !== "number").forEach((t) => {
           classesApi
             .teacherClasses(t.id)
             .then((list) => setCounts((prev) => ({ ...prev, [t.id]: list.length })))
