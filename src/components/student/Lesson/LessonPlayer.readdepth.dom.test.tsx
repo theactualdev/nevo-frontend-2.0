@@ -10,12 +10,12 @@ import { pageScrolledColumn, selfScrolledColumn } from "@/test/readingColumn";
  * How far into a segment a child is reported to have read, as the catalogue
  * takes it (6 Oct).
  *
- * Depth goes up on one type only: `scroll`, "the child scrolls within a
- * segment", carrying `[depthRatio]` - a ratio, so the bottom is 1, not 100.
- * It used to go up twice and in neither form: `depthPct` on each scroll mark,
- * and a `scrollDepthPct` on `time_on_segment` that the catalogue does not
- * declare. That second one also counted a segment that fits on one screen as
- * read in full, a reading with no declared home now - asked of backend.
+ * Depth goes up as `[depthRatio]` - a ratio, so the bottom is 1, not 100 - on
+ * two types: `scroll`, "the child scrolls within a segment", at each mark
+ * passed; and since 8 Oct (B90) `time_on_segment`, the furthest down it was
+ * seen, counting a segment that fits on one screen as seen whole. It used to
+ * go up twice and in neither form: `depthPct` on each scroll mark, and a
+ * `scrollDepthPct` on `time_on_segment` that the catalogue did not declare.
  *
  * AND THE MARKS NEVER WENT UP AT ALL. They were read from the column's own
  * scroll, and the column never scrolls: the player is `min-h-[100dvh]`, so it
@@ -180,13 +180,80 @@ describe("how far a child is reported to have read", () => {
     expect(marks()).toEqual([]);
   });
 
-  it("leaves depth off the time on a segment, where the catalogue has none", () => {
+});
+
+/*
+ * HOW FAR DOWN A SEGMENT THE CHILD SAW, ON THE TIME SPENT ON IT (B90, 8 Oct).
+ *
+ * `time_on_segment` takes `[depthRatio]` now: the furthest down the segment
+ * that was on screen, measured where the marks are. Unlike a `scroll` mark it
+ * needs no scroll - a segment that fits on one screen was seen whole, which is
+ * most of them, and is 1.
+ */
+describe("depthRatio on the time spent on a segment", () => {
+  const timeOn = (segmentId: string) =>
+    sent(SIGNAL_EVENT_TYPES.TIME_ON_SEGMENT).find(
+      (t) => t.segmentId === segmentId,
+    );
+
+  it("is all of a segment that fits on one screen, scrolled or not", () => {
+    const { container, unmount } = render(
+      <LessonPlayer lesson={LESSON} plan={null} />,
+    );
+    pageScrolledColumn(container, { height: 300 });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    unmount();
+
+    expect(timeOn("seg-2")?.depthRatio).toBe(1);
+  });
+
+  it("is the furthest down a long segment has been, not where it was left", () => {
+    const { container, unmount } = render(
+      <LessonPlayer lesson={LESSON} plan={null} />,
+    );
+    const page = pageScrolledColumn(container, LONG);
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    page.scrollPageTo(1400); // 2092 of 2665px has been on screen
+    page.scrollPageTo(0); // and back up, which unreads nothing
+
+    unmount();
+
+    expect(timeOn("seg-2")?.depthRatio).toBeCloseTo(2092 / 2665, 6);
+  });
+
+  it("is as much as opened on screen, for a long segment never scrolled", () => {
+    const { container, unmount } = render(
+      <LessonPlayer lesson={LESSON} plan={null} />,
+    );
+    pageScrolledColumn(container, LONG);
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    unmount();
+
+    // 812px of screen less the 120px above the column.
+    expect(timeOn("seg-2")?.depthRatio).toBeCloseTo(692 / 2665, 6);
+  });
+
+  it("belongs to the segment it was measured on", () => {
+    const { container } = render(<LessonPlayer lesson={LESSON} plan={null} />);
+    const page = pageScrolledColumn(container, LONG);
+    page.scrollPageTo(2100); // all of seg-1
+
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(timeOn("seg-1")?.depthRatio).toBe(1);
+  });
+
+  it("is left off where nothing was laid out to measure, rather than sent as 0", () => {
     const { unmount } = render(<LessonPlayer lesson={LESSON} plan={null} />);
 
     unmount();
 
     const [time] = sent(SIGNAL_EVENT_TYPES.TIME_ON_SEGMENT);
     expect(time.segmentId).toBe("seg-1");
+    expect(time).not.toHaveProperty("depthRatio");
     expect(offendingCalls(trackEvent.mock.calls)).toEqual([]);
   });
 });

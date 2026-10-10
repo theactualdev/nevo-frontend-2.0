@@ -264,14 +264,6 @@ export function AskNevo() {
     setView("chat");
     history.closeThread();
     setMessages((m) => [...m, { who: "user", text }]);
-    // That the child asked, where, and when. Never what: their words stay out.
-    // The catalogue's `interactionId` and `questionCategory` are the server's,
-    // and neither exists until it answers - so they are left out, not made up.
-    const asker = asUuid(user?.id);
-    trackEvent(SIGNAL_EVENT_TYPES.ASK_NEVO_QUESTION_STUDENT, {
-      ...(asker ? { studentId: asker } : {}),
-      currentPage: pathname,
-    });
     setThinking(true);
 
     // Live assistant first. When the backend can't answer, a signed-in child
@@ -305,6 +297,27 @@ export function AskNevo() {
         spent = allowanceSpent(cause);
         return null;
       });
+    /*
+     * That the child asked, and where. Never what: their words stay out.
+     *
+     * SENT AS THE ANSWER LANDS, not as the question goes (B93, 8 Oct). The
+     * catalogue's `interactionId` and `questionCategory` are the server's and
+     * arrive with its answer, so the event waits for them - and no longer
+     * than that, not for the thinking beat. A question that got no answer
+     * has neither, and says only what is known: they are left out, not made
+     * up.
+     */
+    const asker = asUuid(user?.id);
+    void answer.then((res) =>
+      trackEvent(SIGNAL_EVENT_TYPES.ASK_NEVO_QUESTION_STUDENT, {
+        ...(res?.interactionId ? { interactionId: res.interactionId } : {}),
+        ...(asker ? { studentId: asker } : {}),
+        currentPage: pathname,
+        ...(res?.questionCategory
+          ? { questionCategory: res.questionCategory }
+          : {}),
+      }),
+    );
     void Promise.all([answer, beat]).then(([res]) => {
       if (!alive.current) return;
       // Adopt the server's thread so the next turn continues this one. Only
