@@ -2483,6 +2483,15 @@ only and never `scope=student`, and nothing in the SENCo profile, the student
 record or the IEP export references them. The statement counsel is relying on
 holds. SCRUM-169 can close on the admin side.
 
+**CORRECTED 11 Oct: that check covered the admin console only, and the parent
+console was rendering exactly the struck thing.** `/parent-portal` drew D15d -
+the four dimensions, each with a trend ("Growing", "Not enough yet"), for a
+named child, read from `GET /parents/me/children/{id}/growth`. Design struck
+D15d on 20 Sep. It is gone now: the signed-in parent home is D02's portal home
+(one card per subject, covered and mastered this week, from
+`.../subject-progress`), and `ChildGrowth` is deleted. Counsel's statement
+holds from 11 Oct; it did not hold between 20 Sep and then.
+
 ---
 
 ---

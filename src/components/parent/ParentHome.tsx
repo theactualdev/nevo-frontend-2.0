@@ -1,17 +1,16 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/api/client";
 import { getSession } from "@/lib/auth/session";
-import {
-  parentApi,
-  type GrowthNarrative,
-  type ParentChild,
-} from "@/lib/api/parent";
-import { ChildGrowth } from "./ChildGrowth";
+import { parentApi, type ParentChild } from "@/lib/api/parent";
+import { ChildWeek } from "./ChildWeek";
 
 /**
- * The signed-in parent portal (D15d).
+ * The signed-in parent portal: D02's portal home, one subject card per subject.
+ * It was D15d "How Amara Is Growing" until 11 Oct, a month after design struck
+ * it - see `ChildWeek`.
  *
  * SEPARATE FROM `/parent/[token]`, which is public and stays that way: a
  * statutory data right must not sit behind a login. This surface is the other
@@ -24,10 +23,7 @@ import { ChildGrowth } from "./ChildGrowth";
  * here. A guard would add a second, weaker copy of a rule the server already
  * enforces.
  *
- * THERE IS NO PARENT SIGN-IN SCREEN, and none is invented here. Design has not
- * drawn one, and guessing at a door on a surface this sensitive is worse than
- * saying the true thing: the link the school sent still works, and it is how a
- * parent gets back in today. Flagged for a frame.
+ * A signed-out parent is offered D03's sign-in, which exists now.
  */
 
 type Phase = "loading" | "ready" | "signed-out" | "not-parent" | "failed";
@@ -153,6 +149,8 @@ export function ParentHome() {
     );
   }
 
+  const selectedChild = children.find((c) => c.studentId === selected) ?? null;
+
   return (
     <Shell>
       {children.length > 1 && (
@@ -178,8 +176,13 @@ export function ParentHome() {
         </div>
       )}
 
-      {selected ? (
-        <GrowthFor key={selected} studentId={selected} />
+      {selectedChild ? (
+        <ChildWeek
+          key={selectedChild.studentId}
+          studentId={selectedChild.studentId}
+          firstName={selectedChild.firstName}
+          schoolName={selectedChild.schoolName}
+        />
       ) : (
         <Card>
           <h1 className="text-[21px] font-semibold text-nevo-near-black">
@@ -194,63 +197,6 @@ export function ParentHome() {
   );
 }
 
-/**
- * Switching children must never leave one child's narrative sitting under
- * another child's name, even for the length of a request. On this screen that
- * is a serious thing to get wrong.
- *
- * KEYED BY `studentId` AT THE CALL SITE, so a switch remounts this with fresh
- * state rather than mutating it. The first version reset the phase and the
- * narrative at the top of the effect instead, which worked but is exactly what
- * `react-hooks/set-state-in-effect` exists to catch: a synchronous setState in
- * an effect body cascades an extra render. The remount gets the same property
- * for free, and there is no reset to forget.
- */
-function GrowthFor({ studentId }: { studentId: string }) {
-  const [growth, setGrowth] = useState<GrowthNarrative | null>(null);
-  const [phase, setPhase] = useState<"loading" | "ready" | "failed">("loading");
-
-  useEffect(() => {
-    let cancelled = false;
-    parentApi
-      .childGrowth(studentId)
-      .then((g) => {
-        if (cancelled) return;
-        setGrowth(g);
-        setPhase("ready");
-      })
-      .catch(() => {
-        if (!cancelled) setPhase("failed");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [studentId]);
-
-  if (phase === "loading") {
-    return (
-      <span
-        role="status"
-        aria-label="Loading"
-        className="mx-auto block size-[22px] rounded-full border-[2.5px] border-nevo-navy/20 border-t-nevo-navy motion-safe:animate-spin motion-safe:[animation-duration:800ms]"
-      />
-    );
-  }
-
-  if (phase === "failed" || !growth) {
-    return (
-      <Card>
-        <h1 className="text-[21px] font-semibold text-nevo-near-black">
-          We couldn’t load this just now
-        </h1>
-        <p className={BODY}>Please try again in a moment.</p>
-      </Card>
-    );
-  }
-
-  return <ChildGrowth growth={growth} />;
-}
-
 const BODY = "mt-3 text-[15px] leading-[1.6] text-nevo-near-black/68";
 
 function Card({ children }: { children: React.ReactNode }) {
@@ -261,10 +207,25 @@ function Card({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** D02's portal frame: the wordmark bar, then the page at its three widths. */
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <main className="min-h-dvh bg-nevo-cream px-6 py-9 text-nevo-near-black">
-      <div className="mx-auto w-full max-w-[720px]">{children}</div>
+    <main className="min-h-dvh bg-nevo-cream text-nevo-near-black">
+      <div className="flex h-14 items-center border-b border-nevo-near-black/8 px-5 md:h-16 md:px-10 lg:h-[66px] lg:px-12">
+        <Image
+          src="/brand/nevo-wordmark.png"
+          alt="Nevo"
+          width={344}
+          height={116}
+          priority
+          className="h-[15px] w-auto"
+        />
+      </div>
+      <div className="px-4 pt-[22px] pb-7 md:px-12 md:pt-9 md:pb-10 lg:py-10">
+        <div className="mx-auto w-full md:max-w-[640px] lg:max-w-[760px]">
+          {children}
+        </div>
+      </div>
     </main>
   );
 }
