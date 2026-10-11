@@ -30,6 +30,7 @@ import {
 } from "@/components/student/Entry/WaitingOnConsent";
 import { TransitionScreen } from "./TransitionScreen";
 import { LearningNotice } from "./LearningNotice";
+import { AgeCheckHold } from "./AgeCheckHold";
 import { PinCreationScreen } from "./PinCreationScreen";
 import { YoureInScreen } from "./YoureInScreen";
 
@@ -179,6 +180,8 @@ export function ObservedInteractionSequence() {
     }
   };
 
+  // 05's hold for the age check, with its Back, as 05 would show it.
+  if (held === "age-check") return <AgeCheckHold />;
   if (held) return <WaitingOnConsent hold={held} />;
 
   if (phase === "transition") {
