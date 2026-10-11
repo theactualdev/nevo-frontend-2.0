@@ -4,6 +4,7 @@ import { LessonPlayer } from "./LessonPlayer";
 import { calculationFromVariant } from "@/lib/lessons/fromContent";
 import type { CalculationVariant } from "@/lib/api/variants";
 import type { AdaptationPlan, Lesson } from "@/lib/types";
+import { ADJUSTMENT_ACTIONS } from "@/lib/constants";
 import { offendingCalls } from "@/test/signalCatalogue";
 
 /**
@@ -273,6 +274,45 @@ describe("a calculation's signals", () => {
     expect(player.className).toContain("h-[calc(100dvh/var(--nevo-text-zoom,1))]");
     expect(player.className).not.toContain("min-h-[100dvh]");
     expect(document.querySelector(".overflow-y-auto")).toHaveClass("min-h-0", "flex-1");
+  });
+
+  it("offers no pacing chips over the solver, so a tap can send no slower_trigger", () => {
+    // The segment's text could be chunked, but the solver is what is on
+    // screen, and 17a draws no density pill there.
+    const lesson = lessonWith([step()]);
+    lesson.segments[0].text = {
+      heading: "Adding",
+      body: { default: "One idea here. A second idea here. A third idea here." },
+    } as Lesson["segments"][number]["text"];
+    render(<LessonPlayer lesson={lesson} plan={PLAN} />);
+
+    expect(screen.getByText("What are the denominators?")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Slower" })).toBeNull();
+    expect(sent("slower_trigger")).toEqual([]);
+  });
+
+  it("shows the engine's hint in the step's hint place, with no second offer beside it", () => {
+    const HINT = "Look at the number under each line.";
+    render(
+      <LessonPlayer
+        lesson={lessonWith([step()])}
+        plan={{ ...PLAN, adjustment: ADJUSTMENT_ACTIONS.OFFER_HINT, hint: HINT }}
+      />,
+    );
+    const hint = screen.getByText(HINT);
+    const prompt = screen.getByText("What are the denominators?");
+    const firstOption = screen.getByRole("button", { name: "4 and 4" });
+
+    // 17a's "hint auto-shown": the pill between the prompt and the response.
+    expect(prompt.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(hint.compareDocumentPosition(firstOption) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Need a hint?" })).toBeNull();
+    expect(sent("hint_offered")).toEqual([{ segmentId: "calc-1" }]);
+
+    // D29: the child can close it, and their own hint is on offer again.
+    tap("Close hint");
+    expect(screen.queryByText(HINT)).toBeNull();
+    expect(screen.getByRole("button", { name: "Need a hint?" })).toBeInTheDocument();
   });
 
   it("holds the forward chevron until the solution has assembled", () => {

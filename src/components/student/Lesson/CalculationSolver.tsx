@@ -42,8 +42,8 @@ import { useMediaSource, type MediaFailReason } from "./useMediaSource";
  * NOT COUNTED HERE: misses. The hint used to surface itself after two missed
  * picks or one missed number, which is a threshold this screen has no
  * business setting (rule 3). The engine offers a hint after misses (B18), and
- * the player shows it. What stays is the child's own "Need a hint?", which
- * opens this step's hint because they asked.
+ * the player hands it here to show (`engineHint`). What stays is the child's
+ * own "Need a hint?", which opens this step's hint because they asked.
  *
  * No evaluative colour ever - never red or green, never a cross. A miss is a
  * soft violet ring pulse and nothing else. No score, percentage or counter.
@@ -67,8 +67,18 @@ export function CalculationSolver({
   onAudioBusy,
   onNarrationFailed,
   padDock,
+  engineHint,
+  onEngineHintClosed,
 }: {
   calculation: CalculationSegment;
+  /**
+   * The engine's unrequested hint (`offer_hint`), shown where 17a draws one -
+   * "Step 2 · hint auto-shown": the pill above the response. It sat under the
+   * whole solver before, below the pad and off the screen.
+   */
+  engineHint?: string;
+  /** The child closed it (D29: "the child can close it"). */
+  onEngineHintClosed?: () => void;
   /**
    * Where the host docks the number pad (D150): the foot of its screen,
    * below everything that scrolls. `null` while that place is not yet laid
@@ -319,6 +329,13 @@ export function CalculationSolver({
             >
               {step.prompt}
             </p>
+            {engineHint && (
+              <HintPill
+                text={engineHint}
+                reading={reading}
+                onClose={onEngineHintClosed}
+              />
+            )}
             {hintOpen && step.hint && (
               <HintPill text={step.hint} reading={reading} />
             )}
@@ -425,7 +442,10 @@ export function CalculationSolver({
               </>
             )}
 
-            {!hintOpen && step.hint && <HintLink onClick={openHint} />}
+            {/* 17a: no "Need a hint?" while a hint is showing. */}
+            {!hintOpen && !engineHint && step.hint && (
+              <HintLink onClick={openHint} />
+            )}
 
             {/* D150: the Nevo pad, docked at the foot of the screen. */}
             {step.input === "number" && step.entry === "numeric" && (
@@ -649,8 +669,8 @@ function Nudged({
  * stood in here before; an iPhone's has no minus key, so a child doing
  * subtraction on one was simply stuck. The field suppresses the device's
  * keyboard (`inputMode="none"`), the solver docks the pad at the foot of the
- * screen, and a laptop's own keys still type straight into the field. Delete sits at the
- * field, as the keypad frame draws it.
+ * screen, and a laptop's own keys still type straight into the field. Delete
+ * sits at the field, as the keypad frame draws it.
  *
  * AN EXPRESSION ("3x - 4") STILL TAKES THE DEVICE'S FULL KEYBOARD, for now.
  * Design ruled on 9 Oct: "The Nevo pad, extended by the step ... the step
@@ -1432,8 +1452,21 @@ function NumberLine({
   );
 }
 
-/** The hint the child opened - a calm pill above the response, no dismiss. */
-function HintPill({ text, reading }: { text: string; reading: boolean }) {
+/**
+ * A hint - a calm pill above the response. The one the child opened has no
+ * dismiss (17a): it stays until the step moves on. The engine's carries the
+ * hint card's "Close" (D29, D85), because "support a child cannot dismiss
+ * becomes an obstruction" - the one thing 17a's pill does not draw.
+ */
+function HintPill({
+  text,
+  reading,
+  onClose,
+}: {
+  text: string;
+  reading: boolean;
+  onClose?: () => void;
+}) {
   return (
     <div className="mx-auto mt-4 flex w-max max-w-full items-center gap-2.5 rounded-full bg-nevo-cream-elevated px-[18px] py-2.5 shadow-elevation-1 motion-safe:animate-nevo-reveal">
       <span className="size-[7px] shrink-0 rounded-full bg-nevo-violet" />
@@ -1445,6 +1478,17 @@ function HintPill({ text, reading }: { text: string; reading: boolean }) {
       >
         {text}
       </span>
+      {onClose && (
+        <button
+          type="button"
+          aria-label="Close hint"
+          onClick={onClose}
+          // A 44px target that does not make the pill any taller.
+          className="-my-3 -mr-2.5 flex h-11 shrink-0 cursor-pointer items-center rounded-full px-3 text-[13px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/8"
+        >
+          Close
+        </button>
+      )}
     </div>
   );
 }

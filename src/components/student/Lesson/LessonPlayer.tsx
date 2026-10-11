@@ -1315,8 +1315,20 @@ export function LessonPlayer({
    * again. `hint_used` (B41) is sent as the child moves on with this hint
    * still on screen - see `advancePastSegment`. The solver's "Need a hint?"
    * is the hint a child opens, and sends its own pair - see `onCalcHint`.
+   *
+   * ON A CALCULATION THE HINT IS THE SOLVER'S, in the step's hint place, and
+   * a solved calculation has no step left to show it beside - so from then it
+   * is not on screen, and neither offered nor used.
    */
-  const hintOnScreen = segmentShowing && hintHere && Boolean(hintText);
+  const hintOnScreen =
+    segmentShowing &&
+    hintHere &&
+    Boolean(hintText) &&
+    !(
+      modality === MODALITY.INTERACTIVE &&
+      isCalculation(segment) &&
+      solvedCalcs.has(segment.id)
+    );
   const offeredHints = useRef<Set<string>>(new Set());
   const usedHints = useRef<Set<string>>(new Set());
   useEffect(() => {
@@ -1381,9 +1393,8 @@ export function LessonPlayer({
   // A hint seen before the check is answered makes a right answer `after_hint`
   // rather than `first_time` (B28) - only the first lengthens the interval.
   useEffect(() => {
-    if (segmentShowing && hintHere && hintText)
-      hintedSegments.current.add(segment.id);
-  }, [segmentShowing, hintHere, hintText, segment.id]);
+    if (hintOnScreen) hintedSegments.current.add(segment.id);
+  }, [hintOnScreen, segment.id]);
 
   // Break OFFERS (B.7): the plan names a break type to OFFER on this segment,
   // or the engine suggests one mid-lesson. One ask on screen at a time - an
@@ -1705,8 +1716,16 @@ export function LessonPlayer({
    * already has, so it is available on live content, and the gate is whether
    * chunking would change anything - a one-sentence segment still offers
    * nothing rather than a control that does nothing.
+   *
+   * AND ONLY WHILE THE TEXT IS WHAT IS ON SCREEN. Each of the three reshapes
+   * the text and nothing else, so a lone "Slower" over a picture, a recording
+   * or the calculation solver changed nothing a child could see - and still
+   * told the engine they had asked (`slower_trigger`). 17a draws no density
+   * pill on the calculation player.
    */
-  const densitySegments: ToggleSegment[] = DENSITIES.filter(({ id }) =>
+  const densitySegments: ToggleSegment[] = (
+    modality === MODALITY.TEXT ? DENSITIES : []
+  ).filter(({ id }) =>
     id === DENSITY.SLOWER
       ? segment.text?.body[id] !== undefined ||
         isChunkable(segment.text?.body.default, segment.text?.readingChunks)
@@ -2383,7 +2402,7 @@ export function LessonPlayer({
      * scales `dvh` too - see globals.css.
      */
     <div className="flex h-[calc(100dvh/var(--nevo-text-zoom,1))] flex-col bg-nevo-cream text-nevo-near-black">
-      {/* Top bar: exit + title, then the density toggle (present in every modality).
+      {/* Top bar: exit + title, then the density toggle (while the text shows).
           Frame: 10/14/12 padding, whole bar carries the secondary dim. */}
       <header
         className={cn(
@@ -2639,6 +2658,10 @@ export function LessonPlayer({
               segment={segment}
               modality={modality}
               padDock={padDock}
+              engineHint={hintHere && hintText ? hintText : undefined}
+              onEngineHintClosed={() =>
+                setClosedHints((prev) => new Set(prev).add(hintKey))
+              }
               density={effectiveDensity}
               reading={readingOn}
               attention={attentionOn}
@@ -2717,8 +2740,9 @@ export function LessonPlayer({
               }}
             />
           </div>
-          {/* §4 `offer_hint`: the unrequested hint under the content. */}
-          {hintHere && hintText && (
+          {/* §4 `offer_hint`: the unrequested hint under the content - or,
+              on the solver, in its step's hint place (17a), passed in. */}
+          {hintHere && hintText && !calcShowing && (
             <HintOverlay
               hint={hintText}
               onClose={() =>
@@ -2856,6 +2880,8 @@ function SegmentBody({
   segment,
   modality,
   padDock,
+  engineHint,
+  onEngineHintClosed,
   density,
   reading,
   attention,
@@ -2874,6 +2900,9 @@ function SegmentBody({
   modality: Modality;
   /** Where the solver docks its number pad - see `CalculationSolver`. */
   padDock: HTMLElement | null;
+  /** The engine's `offer_hint` text, which the solver shows as its own. */
+  engineHint?: string;
+  onEngineHintClosed: () => void;
   density: Density | null;
   reading: boolean;
   attention: boolean;
@@ -2927,6 +2956,8 @@ function SegmentBody({
         <CalculationSolver
           calculation={segment.calculation}
           padDock={padDock}
+          engineHint={engineHint}
+          onEngineHintClosed={onEngineHintClosed}
           // D30: the same accommodation the text segment and the checks take.
           reading={reading}
           onSolved={onCalcSolved}
