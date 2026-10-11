@@ -467,3 +467,118 @@ describe("a key term's definition, in place when tapped (design, 9 Oct)", () => 
     expect(chip("glucose").className).toMatch(/cursor-pointer/);
   });
 });
+
+describe("a body written in paragraphs (frames 17 and 17c)", () => {
+  /*
+   * A body, or a depth variant, that leaves a blank line between paragraphs
+   * was drawn as one block: HTML folds the break away. Frame 17 draws Expand
+   * as two paragraphs, and 17c's "No boundaries" passage as paragraphs too.
+   */
+  const FIRST = "Plants make their own food.";
+  const SECOND = "They use sunlight to do it.";
+  const written = `${FIRST}\n\n${SECOND}`;
+
+  it("draws each paragraph of the standard body as its own, and counts none", () => {
+    const { container } = render(
+      <TextSegment content={content({ body: { default: written } })} density={null} />,
+    );
+
+    const first = screen.getByText(FIRST);
+    const second = screen.getByText(SECOND);
+    expect(first.tagName).toBe("P");
+    expect(second.tagName).toBe("P");
+    expect(first).not.toBe(second);
+    expect(second.className).toMatch(/\bmt-3\.5\b/);
+    expect(visibleText(container)).not.toMatch(/\d+ of \d+|\bparagraph\b/i);
+  });
+
+  it("does the same for a depth variant", () => {
+    render(
+      <TextSegment
+        content={content({ body: { default: BODY, [DENSITY.EXPAND]: written } })}
+        density={DENSITY.EXPAND}
+      />,
+    );
+
+    expect(screen.getByText(FIRST)).not.toBe(screen.getByText(SECOND));
+  });
+
+  it("keeps them on the one softer card under reading support", () => {
+    render(
+      <TextSegment content={content({ body: { default: written } })} density={null} reading />,
+    );
+
+    const card = screen.getByText(FIRST).parentElement!;
+    expect(card.className).toMatch(/bg-\[#e5dfd3\]/);
+    expect(screen.getByText(SECOND).parentElement).toBe(card);
+    expect(screen.getByText(SECOND).className).toMatch(/text-\[18px\] leading-\[2\]/);
+  });
+
+  it("does the same inside a server chunk", () => {
+    const chunks = [
+      { id: "c1", text: written },
+      { id: "c2", text: "Oxygen is what they give out." },
+    ];
+    render(
+      <TextSegment
+        content={content({ body: { default: `${written} Oxygen is what they give out.` }, readingChunks: chunks })}
+        density={null}
+      />,
+    );
+
+    expect(screen.getByText(FIRST)).not.toBe(screen.getByText(SECOND));
+    expect(screen.getByText(FIRST).closest("[data-chunk-id]")).toHaveAttribute(
+      "data-chunk-id",
+      "c1",
+    );
+  });
+});
+
+describe("reading support in the boxes (frame 17, UDL · reading)", () => {
+  const boxed = content({
+    keyPoints: ["Plants feed themselves."],
+    equations: [{ equation: "Carbon dioxide + Water → Glucose + Oxygen" }],
+    callouts: { default: { label: "Remember", text: "Light is the fuel." } },
+  });
+
+  it("sets IN SHORT, the equation and the callout at the reading size", () => {
+    render(<TextSegment content={boxed} density={null} reading />);
+
+    for (const words of [
+      "Plants feed themselves.",
+      "Carbon dioxide + Water → Glucose + Oxygen",
+      "Light is the fuel.",
+    ]) {
+      const line = screen.getByText(words);
+      expect(line.className).toMatch(/(^|\s)text-\[18px\]/);
+      expect(line.className).toMatch(/tracking-\[0\.02em\]/);
+      // The box's own line height, as the frame keeps it.
+      expect(line.className).toMatch(/leading-\[1\.7\]/);
+    }
+  });
+
+  it("leaves them at the standard size without it", () => {
+    render(<TextSegment content={boxed} density={null} />);
+
+    const line = screen.getByText("Plants feed themselves.");
+    expect(line.className).toMatch(/(^|\s)text-base\b/);
+    expect(line.className).not.toMatch(/tracking-\[0\.02em\]/);
+  });
+});
+
+describe("a lower-depth session's simpler text, in the standard's place", () => {
+  const lowered = content({
+    body: { default: "Plants feed themselves on light." },
+    keyPoints: ["Plants feed themselves."],
+    keyTerms: [{ term: "chlorophyll", definition: "The green colour in a leaf." }],
+    equations: [{ equation: "6CO2 + 6H2O → C6H12O6 + 6O2" }],
+  });
+
+  it("is drawn as Simplify draws it: IN SHORT, no key terms, no equation", () => {
+    render(<TextSegment content={lowered} density={null} simplified />);
+
+    expect(screen.getByText("IN SHORT")).toBeInTheDocument();
+    expect(screen.queryByText("chlorophyll")).toBeNull();
+    expect(screen.queryByText(/6CO2/)).toBeNull();
+  });
+});

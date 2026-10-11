@@ -11,6 +11,7 @@ import {
 } from "react";
 import { DENSITY, type Density } from "@/lib/constants";
 import { bodyParts, chunksForBody } from "@/lib/lessons/chunk";
+import { PARAGRAPH_GAP, paragraphsOf } from "@/lib/lessons/paragraphs";
 import {
   chunkCrossing,
   sightingOf,
@@ -69,6 +70,7 @@ export function TextSegment({
   attention = false,
   onReadProgress,
   onChunkSeen,
+  simplified = false,
 }: {
   content: TextContent;
   density: Density | null;
@@ -89,6 +91,11 @@ export function TextSegment({
    * Only server chunks report - the on-device split has no ids to name.
    */
   onChunkSeen?: OnChunkSeen;
+  /**
+   * The default text is the segment's simpler version, standing in the
+   * standard text's place for a lower-depth session (`atLowerDepth`).
+   */
+  simplified?: boolean;
 }) {
   const body = (density && content.body[density]) ?? content.body.default;
   const callout = content.callouts?.[density ?? "default"];
@@ -106,8 +113,13 @@ export function TextSegment({
    *
    * Key points are the frame's "IN SHORT", under every view but Expand and
    * Slower.
+   *
+   * A LOWER-DEPTH SESSION'S TEXT IS NOT THE STANDARD TEXT, though it stands
+   * in its place: it is the simpler version, so it is drawn as Simplify draws
+   * it, without the key terms and equations.
    */
-  const besideText = expand || body === content.body.default;
+  const besideText =
+    expand || (!simplified && body === content.body.default);
   const keyTerms = besideText ? content.keyTerms : undefined;
   const equations = besideText ? content.equations : undefined;
   const keyPoints =
@@ -150,15 +162,11 @@ export function TextSegment({
       onChunkSeen={onChunkSeen}
     />
   ) : (
-    <p
-      className={cn(
-        "mt-4",
-        bodyType,
-        reading && "rounded-[12px] bg-[#e5dfd3] px-5 py-4",
-      )}
+    <div
+      className={cn("mt-4", reading && "rounded-[12px] bg-[#e5dfd3] px-5 py-4")}
     >
-      {body}
-    </p>
+      <Paragraphs text={body} className={bodyType} />
+    </div>
   );
 
   return (
@@ -201,7 +209,12 @@ export function TextSegment({
                   {label}
                 </p>
               )}
-              <p className="text-base leading-[1.7] font-medium text-nevo-near-black sm:text-[18px] lg:text-[19px]">
+              <p
+                className={cn(
+                  "text-base leading-[1.7] font-medium text-nevo-near-black sm:text-[18px] lg:text-[19px]",
+                  reading && BOX_READING,
+                )}
+              >
                 {equation}
               </p>
             </div>
@@ -214,7 +227,12 @@ export function TextSegment({
           <p className="font-mono text-[11px] tracking-[0.06em] text-nevo-navy uppercase">
             {callout.label}
           </p>
-          <p className="mt-2.5 text-base leading-[1.7] font-medium text-nevo-near-black sm:text-[18px] lg:text-[19px]">
+          <p
+            className={cn(
+              "mt-2.5 text-base leading-[1.7] font-medium text-nevo-near-black sm:text-[18px] lg:text-[19px]",
+              reading && BOX_READING,
+            )}
+          >
             {callout.text}
           </p>
           {callout.sub && (
@@ -234,7 +252,10 @@ export function TextSegment({
             {keyPoints.map((point, i) => (
               <li
                 key={i}
-                className="text-base leading-[1.7] text-nevo-near-black/82 sm:text-[18px] lg:text-[19px]"
+                className={cn(
+                  "text-base leading-[1.7] text-nevo-near-black/82 sm:text-[18px] lg:text-[19px]",
+                  reading && BOX_READING,
+                )}
               >
                 {point}
               </li>
@@ -245,6 +266,32 @@ export function TextSegment({
     </article>
   );
 }
+
+/**
+ * A text as the paragraphs it was written in, each its own `<p>` in the given
+ * type (see `paragraphsOf`). One paragraph is one `<p>`, as before.
+ */
+function Paragraphs({ text, className }: { text: string; className: string }) {
+  return (
+    <>
+      {paragraphsOf(text).map((paragraph, i) => (
+        <p key={i} className={cn(className, i > 0 && PARAGRAPH_GAP)}>
+          {paragraph}
+        </p>
+      ))}
+    </>
+  );
+}
+
+/*
+ * READING SUPPORT IN THE BOXES. Frame 17's "UDL · reading" sets IN SHORT and
+ * the equation at the reading body size, under the column's +0.02em, and keeps
+ * each box's own 1.7 line height. They had stayed at 16px beside an 18px body.
+ * A definition is drawn in the body's own type, so it has all of it already.
+ * The line height is restated because `cn` drops a line height that comes
+ * before a later size.
+ */
+const BOX_READING = "text-[18px] sm:text-[18px] leading-[1.7] tracking-[0.02em]";
 
 /** The frame's key-term chip: violet, navy text, fully round. */
 const CHIP =
@@ -353,9 +400,9 @@ function ChunkedPassage({
               )}
             />
           )}
-          <p data-chunk-id={chunk.id} className={className}>
-            {chunk.text}
-          </p>
+          <div data-chunk-id={chunk.id}>
+            <Paragraphs text={chunk.text} className={className} />
+          </div>
         </Fragment>
       ))}
     </div>
@@ -486,17 +533,16 @@ function ChunkedBody({
 
   if (parts.length === 1) {
     return (
-      <p
-        ref={shown as RefObject<HTMLParagraphElement | null>}
+      <div
+        ref={shown as RefObject<HTMLDivElement | null>}
         data-chunk-id={chunkId}
         className={cn(
           "mt-4",
-          className,
           reading && "rounded-[12px] bg-[#e5dfd3] px-5 py-4",
         )}
       >
-        {body}
-      </p>
+        <Paragraphs text={body} className={className} />
+      </div>
     );
   }
 
@@ -537,17 +583,16 @@ function ChunkedBody({
   const last = part === parts.length - 1;
   return (
     <div ref={shown as RefObject<HTMLDivElement | null>} className="mt-4">
-      <p
+      <div
         key={part}
         data-chunk-id={chunkId}
         className={cn(
-          className,
           reading && "rounded-[12px] bg-[#e5dfd3] px-5 py-4",
           "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300",
         )}
       >
-        {parts[part]}
-      </p>
+        <Paragraphs text={parts[part]} className={className} />
+      </div>
       {!last && (
         <button
           type="button"

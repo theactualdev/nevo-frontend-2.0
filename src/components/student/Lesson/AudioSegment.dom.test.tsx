@@ -339,3 +339,19 @@ describe("AudioSegment - telling the engine a recording did not load", () => {
     expect(screen.getByText(CONTENT.transcript)).toBeTruthy();
   });
 });
+
+describe("a transcript written in paragraphs", () => {
+  it("is drawn in them, not folded into one block", () => {
+    const transcript =
+      "The number on top is the numerator.\n\nThe number underneath is the denominator.";
+    render(<AudioSegment content={{ ...CONTENT, transcript }} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /show transcript/i }));
+
+    const first = screen.getByText("The number on top is the numerator.");
+    const second = screen.getByText("The number underneath is the denominator.");
+    expect(first.tagName).toBe("P");
+    expect(second.tagName).toBe("P");
+    expect(first).not.toBe(second);
+  });
+});
