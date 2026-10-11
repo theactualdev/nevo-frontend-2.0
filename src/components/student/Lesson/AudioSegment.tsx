@@ -334,7 +334,7 @@ export function AudioSegment({
           role="status"
           className="mt-3 text-[14px] leading-[1.55] text-nevo-near-black/70"
         >
-          The recording didn&rsquo;t load. You can read the same words below.
+          The recording didn&apos;t load. You can read the same words below.
         </p>
       )}
 

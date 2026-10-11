@@ -495,14 +495,14 @@ function GrowthResult({
                 reading && READING_HEADING,
               )}
             >
-              You’re getting the hang of this
+              You&apos;re getting the hang of this
             </h2>
           )}
           {/* The authored note says what the child SHOWED, so it is held back
               when they showed none of it. */}
           {nothingLanded && (
             <p className={cn(note, "mt-[26px]")}>
-              This one didn&rsquo;t land yet, and that&rsquo;s completely fine.
+              This one didn&apos;t land yet, and that&apos;s completely fine.
             </p>
           )}
           {!nothingLanded && resultNote && (

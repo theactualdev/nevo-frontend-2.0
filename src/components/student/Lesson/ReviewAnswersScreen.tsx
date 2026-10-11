@@ -97,8 +97,8 @@ export function ReviewAnswersScreen({
   if (reads && answer && !answer.picks) {
     return (
       <LessonMessage
-        title="We couldn’t open this just now"
-        body="It hasn’t gone anywhere. Give it a moment and try again."
+        title="We couldn't open this just now"
+        body="It hasn't gone anywhere. Give it a moment and try again."
         actionLabel="Try again"
         onAction={() => setTries((n) => n + 1)}
         onBack={() => router.push(LESSONS_HREF)}

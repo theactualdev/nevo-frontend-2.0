@@ -66,8 +66,8 @@ export function LessonEndingRoute({
   if (lesson && screen === "summary" && !lesson.summary) {
     return (
       <LessonMessage
-        title="This lesson isn’t ready yet"
-        body="There’s no summary for it yet. Your teacher will know when there is."
+        title="This lesson isn't ready yet"
+        body="There's no summary for it yet. Your teacher will know when there is."
         actionLabel="Back to my lessons"
         onAction={() => router.push(LESSONS_HREF)}
       />
@@ -98,8 +98,8 @@ export function LessonEndingRoute({
   if (failed) {
     return (
       <LessonMessage
-        title="We couldn’t open this just now"
-        body="It hasn’t gone anywhere. Give it a moment and try again."
+        title="We couldn't open this just now"
+        body="It hasn't gone anywhere. Give it a moment and try again."
         actionLabel="Try again"
         onAction={() => window.location.reload()}
         onBack={() => router.push(LESSONS_HREF)}
@@ -119,8 +119,8 @@ export function LessonEndingRoute({
   }
   return (
     <LessonMessage
-      title="This lesson isn’t ready yet"
-      body="Nevo is still getting it set up. Your teacher will know when it’s ready."
+      title="This lesson isn't ready yet"
+      body="Nevo is still getting it set up. Your teacher will know when it's ready."
       actionLabel="Back to my lessons"
       onAction={() => router.push(LESSONS_HREF)}
     />

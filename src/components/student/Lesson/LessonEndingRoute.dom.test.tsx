@@ -112,7 +112,7 @@ describe("LessonEndingRoute", () => {
 
     render(<LessonEndingRoute lessonId="frac-3" screen="summary" />);
 
-    expect(screen.getByText(/isn’t ready yet/i)).toBeVisible();
+    expect(screen.getByText(/isn't ready yet/i)).toBeVisible();
   });
 
   it("offers a retry when the read failed, rather than blaming the lesson", () => {
@@ -131,8 +131,8 @@ describe("LessonEndingRoute", () => {
       <LessonEndingRoute lessonId="frac-3" screen="summary" />,
     );
 
-    expect(screen.queryByText(/couldn’t find/i)).toBeNull();
-    expect(container.textContent).not.toMatch(/isn’t ready/i);
+    expect(screen.queryByText(/couldn't find/i)).toBeNull();
+    expect(container.textContent).not.toMatch(/isn't ready/i);
   });
 
   it("marks the authored lesson as a sample, and a real one not at all", () => {

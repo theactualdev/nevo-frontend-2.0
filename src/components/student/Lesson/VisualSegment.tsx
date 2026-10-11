@@ -154,7 +154,7 @@ export function VisualSegment({
           role="status"
           className="mt-3 text-[14px] leading-[1.55] text-nevo-near-black/70"
         >
-          This picture didn&rsquo;t load. Nothing you did caused it.
+          This picture didn&apos;t load. Nothing you did caused it.
         </p>
       )}
 

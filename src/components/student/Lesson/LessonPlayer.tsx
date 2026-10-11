@@ -2271,7 +2271,7 @@ export function LessonPlayer({
     // screen's default and showed in all of those. When the write did not
     // reach Nevo the child is told, in the same words the daily warm-up uses.
     const savedNote = progress.completionFailed
-      ? "We couldn’t save that just now - that’s on us, not you. Your work is still yours."
+      ? "We couldn't save that just now - that's on us, not you. Your work is still yours."
       : progress.completionSaved
         ? "Your progress is saved."
         : undefined;

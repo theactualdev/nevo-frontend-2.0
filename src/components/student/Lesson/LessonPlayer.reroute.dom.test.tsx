@@ -227,7 +227,7 @@ describe("the server says nothing landed and reroutes (SCRUM-181)", () => {
 
     expect(screen.queryByText(HEADING)).toBeNull();
     expect(
-      screen.getByRole("heading", { name: "You’re getting the hang of this" }),
+      screen.getByRole("heading", { name: "You're getting the hang of this" }),
     ).toBeTruthy();
   });
 
