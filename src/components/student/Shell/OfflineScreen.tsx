@@ -8,6 +8,12 @@ import { getSession } from "@/lib/auth/session";
 import { holdsProgress } from "@/lib/lessons/pendingProgress";
 import { savedLessons } from "@/lib/offline/savedLessons";
 import { TabOfflineBanner } from "./TabOfflineBanner";
+import {
+  OFFLINE_ILLUSTRATION,
+  OFFLINE_MARK_SRC,
+  keepOfflineArt,
+  offlineArt,
+} from "./offlineArt";
 
 /**
  * Board 28's "Offline (full screen)", for the one child it is for (design,
@@ -39,6 +45,8 @@ export function OfflineNotice({ online }: { online: boolean }) {
     { online: true, stranded: false },
   );
   useEffect(() => {
+    // While there is a connection, take the full screen's pictures off it.
+    if (online) keepOfflineArt();
     // Device storage, read after mount and again on every drop - never during
     // a render the server also made.
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -74,8 +82,13 @@ export function OfflineNotice({ online }: { online: boolean }) {
  * OVER THE TAB, NOT IN PLACE OF IT. The tab stays mounted underneath, so
  * anything half-written is still there when the screen goes. Modal and not
  * dismissable, the way `AccountPauseHost` holds a screen over a page.
+ *
+ * ITS PICTURES ARE THE COPIES KEPT WHILE ONLINE (`offlineArt`). Fetched when
+ * the screen appeared, they were the two things on it that needed the
+ * connection it was there to say was gone.
  */
 export function OfflineScreen() {
+  const art = offlineArt();
   return (
     <DialogPrimitive.Root open>
       <DialogPrimitive.Portal>
@@ -85,12 +98,15 @@ export function OfflineScreen() {
           onInteractOutside={(e) => e.preventDefault()}
           className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-y-auto bg-nevo-cream px-10 text-center text-nevo-near-black outline-none motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300 sm:px-12"
         >
-          <CombinedMark className="mb-8 sm:mb-10" />
+          <CombinedMark
+            src={art.mark ?? OFFLINE_MARK_SRC}
+            className="mb-8 sm:mb-10"
+          />
           <Image
-            src="/illustrations/offline.png"
+            src={art.illustration ?? OFFLINE_ILLUSTRATION.src}
             alt=""
-            width={1024}
-            height={1024}
+            width={OFFLINE_ILLUSTRATION.width}
+            height={OFFLINE_ILLUSTRATION.height}
             sizes="220px"
             priority
             className="-my-3.5 size-[180px] object-contain sm:size-[220px]"
