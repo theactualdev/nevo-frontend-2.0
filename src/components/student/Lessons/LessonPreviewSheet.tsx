@@ -1,7 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { XIcon } from "lucide-react";
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Button, ProgressBar } from "@/components/shared";
 import { lessonHref } from "@/lib/lessons/lessonHref";
 import type { LessonSummary } from "./lessonCatalog";
@@ -45,15 +51,32 @@ export function LessonPreviewSheet({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
+        data-nevo-console="student"
         side="bottom"
         aria-describedby={undefined}
-        className="gap-0 rounded-t-[20px] border-0! bg-nevo-cream px-6 pt-5 pb-7 text-nevo-near-black shadow-[0_-8px_32px_rgba(0,0,0,0.16)] sm:inset-x-auto! sm:top-1/2 sm:bottom-auto! sm:left-1/2! sm:w-[480px] sm:max-w-[calc(100%-48px)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[20px] sm:p-8 sm:shadow-[0_8px_32px_rgba(0,0,0,0.16)]"
+        // 21 draws Close in a row of its own, so the sheet's stock corner
+        // button - which sat on the title row - is replaced by that row.
+        showCloseButton={false}
+        className="gap-0 rounded-t-[20px] border-0! bg-nevo-cream px-6 pt-3 pb-7 text-nevo-near-black shadow-[0_-8px_32px_rgba(0,0,0,0.16)] sm:inset-x-auto! sm:top-1/2 sm:bottom-auto! sm:left-1/2! sm:w-[480px] sm:max-w-[calc(100%-48px)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[20px] sm:px-8 sm:pt-5 sm:pb-8 sm:shadow-[0_8px_32px_rgba(0,0,0,0.16)]"
       >
-        <SheetTitle className="pr-12 text-[23px] font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-2xl">
+        {/* 21: the 44px Close at the right of its own row, above the title. */}
+        <div className="-mr-1.5 mb-1 flex shrink-0 justify-end">
+          <SheetClose asChild>
+            <button
+              type="button"
+              className="flex size-11 cursor-pointer items-center justify-center rounded-full bg-nevo-navy/8 text-nevo-navy transition-colors hover:bg-nevo-navy/14"
+            >
+              <XIcon className="size-4" strokeWidth={2.4} />
+              <span className="sr-only">Close</span>
+            </button>
+          </SheetClose>
+        </div>
+
+        <SheetTitle className="text-[23px] font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-2xl">
           {lesson.title}
         </SheetTitle>
 
-        <div className="mt-3.5 flex items-center gap-2.5">
+        <div className="mt-3 flex items-center gap-2.5 sm:mt-3.5">
           {/* A lesson with no subject drops the chip rather than drawing it
               empty, and never fills it with a guess. */}
           {lesson.subject && (
@@ -75,7 +98,7 @@ export function LessonPreviewSheet({
         )}
 
         {inProgress && (
-          <p className="mt-5 text-sm font-medium text-nevo-near-black">
+          <p className="mt-5 text-sm font-medium text-nevo-near-black sm:mt-[22px]">
             You&apos;re partway through this one
           </p>
         )}
@@ -114,8 +137,9 @@ export function LessonPreviewSheet({
           </p>
         )}
 
+        {/* 21's button: 16px, where the shared one is 15. */}
         <Button
-          className="mt-7 w-full"
+          className="mt-7 w-full text-base"
           onClick={() =>
             router.push(lessonHref(lesson.lessonId, lesson.assignmentId))
           }

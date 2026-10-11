@@ -153,3 +153,38 @@ describe("what the preview says about where a child is", () => {
     expect(screen.queryByRole("button", { name: "Look again" })).toBeNull();
   });
 });
+
+describe("the preview's Close (21)", () => {
+  /*
+   * 21 gives Close a row of its own above the title. It was the sheet's
+   * stock corner button, laid over the title row with the title padded
+   * clear of it.
+   */
+  it("sits on its own row above the title, and closes the preview", () => {
+    const onOpenChange = vi.fn();
+    render(
+      <LessonPreviewSheet lesson={LESSON} open onOpenChange={onOpenChange} />,
+    );
+
+    const close = screen.getByRole("button", { name: "Close" });
+    const title = screen.getByRole("heading", { name: "Adding Fractions" });
+    expect(close).not.toHaveClass("absolute");
+    expect(
+      close.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    // One Close, not the stock one as well.
+    expect(screen.getAllByRole("button", { name: "Close" })).toHaveLength(1);
+
+    fireEvent.click(close);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("starts the lesson from a 16px button, as 21 draws it", () => {
+    render(<LessonPreviewSheet lesson={LESSON} open onOpenChange={() => {}} />);
+
+    expect(screen.getByRole("button", { name: "Start" })).toHaveClass(
+      "text-base",
+    );
+  });
+});
+
