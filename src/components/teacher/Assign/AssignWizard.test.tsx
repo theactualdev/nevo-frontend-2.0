@@ -99,6 +99,21 @@ beforeEach(() => {
   useHasSession.mockReturnValue(true);
 });
 
+/**
+ * Leave EXACTLY these classes ticked on step 2. It opens with the first class
+ * alphabetically already ticked (the 14 Sep default), so a bare click on that
+ * one would un-tick it.
+ */
+const onlyClasses = (...names: RegExp[]) => {
+  for (const b of screen.queryAllByRole("button", { pressed: true })) {
+    if (!names.some((n) => n.test(b.textContent ?? ""))) fireEvent.click(b);
+  }
+  for (const n of names) {
+    const b = screen.getByRole("button", { name: n });
+    if (b.getAttribute("aria-pressed") !== "true") fireEvent.click(b);
+  }
+};
+
 /** Walk to step 2 with a lesson chosen, then switch to the student picker. */
 const toStudents = () => {
   render(<AssignWizard preselect="l-1" />);
@@ -186,8 +201,7 @@ describe("sending to specific students", () => {
   it("still sends one request per class for a whole-class pick", async () => {
     render(<AssignWizard preselect="l-1" />);
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    fireEvent.click(screen.getByRole("button", { name: /JSS 2A/ }));
-    fireEvent.click(screen.getByRole("button", { name: /JSS 2B/ }));
+    onlyClasses(/JSS 2A/, /JSS 2B/);
     send();
 
     await vi.waitFor(() => expect(create).toHaveBeenCalledTimes(2));
@@ -558,7 +572,7 @@ describe("when the students already have the lesson", () => {
   const sendToClass = () => {
     render(<AssignWizard preselect="l-1" />);
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    fireEvent.click(screen.getByRole("button", { name: /JSS 2A/ }));
+    onlyClasses(/JSS 2A/);
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm assignment" }));
@@ -625,7 +639,7 @@ describe("a 409 that names the lessons", () => {
   const sendOne = () => {
     render(<AssignWizard preselect="l-1" />);
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    fireEvent.click(screen.getByRole("button", { name: /JSS 2A/ }));
+    onlyClasses(/JSS 2A/);
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm assignment" }));
@@ -653,7 +667,7 @@ describe("a 409 that names the lessons", () => {
     fireEvent.click(screen.getByRole("button", { name: /Fractions 3/ }));
     fireEvent.click(screen.getByRole("button", { name: /Angles/ }));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    fireEvent.click(screen.getByRole("button", { name: /JSS 2A/ }));
+    onlyClasses(/JSS 2A/);
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm assignment" }));
@@ -761,7 +775,7 @@ describe("what a teacher is told once it is assigned", () => {
   const toClasses = (...names: RegExp[]) => {
     inShell();
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    for (const n of names) fireEvent.click(screen.getByRole("button", { name: n }));
+    onlyClasses(...names);
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm assignment" }));
@@ -1026,7 +1040,7 @@ describe("a lesson handed in on the address", () => {
     render(<AssignWizard preselect="l-not-offered" />);
     fireEvent.click(screen.getByRole("button", { name: /Fractions 3/ }));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    fireEvent.click(screen.getByRole("button", { name: /JSS 2A/ }));
+    onlyClasses(/JSS 2A/);
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm assignment" }));

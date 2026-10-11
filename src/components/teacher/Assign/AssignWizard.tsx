@@ -12,6 +12,7 @@ import { useSystemMessages } from "@/components/shared/SystemMessages";
 import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
 import { useTeacherClasses } from "@/hooks/useTeacherClasses";
 import { cn } from "@/lib/utils";
+import { dayOf, longDay, soonestOpening } from "./pastDate";
 import { MaybeSample } from "@/components/shared/SampleRegion";
 
 /**
@@ -226,14 +227,22 @@ function withNextStep(message: string): string {
   return `${stopped} Open them from your Library and check them.`;
 }
 
-export function AssignWizard({ preselect }: { preselect?: string }) {
+export function AssignWizard({
+  preselect,
+  preselectClass,
+}: {
+  preselect?: string;
+  /** `?class=` - the class the teacher came from, when they came from one. */
+  preselectClass?: string;
+}) {
   const router = useRouter();
   const [step, setStep] = useState<Step>(1);
   const [chosen, setChosen] = useState<Set<string>>(
     () => new Set(preselect ? [preselect] : []),
   );
   const [who, setWho] = useState<"left" | "right">("left"); // left = whole class
-  const [classes, setClasses] = useState<Set<string>>(new Set());
+  /** The teacher's own class choice - null until they touch the list (see `classes`). */
+  const [classChoice, setClassChoice] = useState<Set<string> | null>(null);
   // Recipients are the teacher's real assignments when a session has them.
   /*
    * `loading` WAS DROPPED HERE, and that was the hole.
@@ -281,6 +290,15 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
   // Empty until "Schedule for later" is chosen - see the note above.
   const [date, setDate] = useState("");
   const [time, setTime] = useState("08:00");
+  /**
+   * C07i's "Chosen date has passed": the day to offer instead, or null while
+   * the chosen moment is still ahead. Read in the handlers that change the
+   * date or time and again on the way out - never during render, for the same
+   * reason the default date is not (see the note above).
+   */
+  const [soonest, setSoonest] = useState<string | null>(null);
+  /** The earliest day the date picker offers - today, as of choosing "later". */
+  const [minDay, setMinDay] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const signedIn = useHasSession();
   const [error, setError] = useState("");
@@ -360,6 +378,20 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
   const offered = new Set(lessons.map((l) => l.id));
   /** The fixtures stand in for the walkthrough only, never a failed read. */
   const offeredClasses = signedIn && classesSample ? [] : myClasses;
+  /*
+   * THE CLASS SELECTOR'S DEFAULT (ruled 14 Sep, CONSOLE_INVENTORY item 9; C07i
+   * draws step 2 with its first class ticked): the class the teacher came from,
+   * else the first alphabetically. It holds only until they touch the list -
+   * from then on the choice is theirs, none included. Derived, not seeded, so
+   * a list that arrives after the first render gets its default too.
+   */
+  const firstClass =
+    preselectClass && offeredClasses.some((c) => c.id === preselectClass)
+      ? preselectClass
+      : [...offeredClasses].sort((a, b) =>
+          a.name.localeCompare(b.name, "en-GB", { numeric: true }),
+        )[0]?.id;
+  const classes = classChoice ?? new Set(firstClass ? [firstClass] : []);
   const picked = [...chosen].filter((id) => offered.has(id));
 
   /** Tomorrow in `YYYY-MM-DD`, local. Called from a handler, never render. */
@@ -379,13 +411,24 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
   const chooseWho = (v: "left" | "right") => {
     setWho(v);
     if (v === "left") setStudents(new Set());
-    else setClasses(new Set());
+    else setClassChoice(new Set());
   };
 
   const chooseWhen = (v: "left" | "right") => {
     setWhen(v);
     // A default only means anything once "later" is actually chosen.
-    if (v === "right" && !date) setDate(tomorrow());
+    const day = v === "right" ? date || tomorrow() : date;
+    if (v === "right" && !date) setDate(day);
+    setMinDay(dayOf(new Date()));
+    setSoonest(v === "right" ? soonestOpening(day, time, new Date()) : null);
+  };
+
+  /** The chosen moment again, now - a lesson can sit on step 4 while it passes. */
+  const stillAhead = () => {
+    if (when !== "right") return true;
+    const s = soonestOpening(date, time, new Date());
+    setSoonest(s);
+    return s === null;
   };
 
   const togIn = <T,>(set: Set<T>, v: T) => {
@@ -407,7 +450,7 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
           // - an Invalid Date that printed as "Invalid Date" on step 4 and
           // then threw out of `toISOString()`, leaving Confirm stuck on
           // "Assigning..." for ever with nothing sent and nothing said.
-          when === "left" || (Boolean(date) && Boolean(time));
+          when === "left" || (Boolean(date) && Boolean(time) && !soonest);
 
   const close = () => router.push("/teacher/lessons");
   const say = useSystemMessages();
@@ -460,6 +503,12 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
     // "Available now" sends nothing rather than now-as-a-timestamp: the
     // absence is what "open immediately" means, and a stamped `now` would
     // drift by however long the request takes.
+    // Back to the step that can fix it, rather than sending a past moment.
+    if (!stillAhead()) {
+      setStep(3);
+      return;
+    }
+
     let availableFrom: string | undefined;
     if (when === "right" && date && time) {
       const at = new Date(`${date}T${time}`);
@@ -907,7 +956,7 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
                           <CheckCard
                             key={c.id}
                             on={classes.has(c.id)}
-                            onClick={() => setClasses((s) => togIn(s, c.id))}
+                            onClick={() => setClassChoice(togIn(classes, c.id))}
                             title={c.name}
                             sub={
                               c.studentCount != null
@@ -994,8 +1043,16 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
                           <input
                             type="date"
                             value={date}
-                            onChange={(e) => setDate(e.target.value)}
-                            className="h-[52px] w-full cursor-pointer rounded-[10px] border-[1.5px] border-nevo-near-black/16 bg-nevo-cream-elevated px-4 pr-11 text-[15.5px] font-normal text-nevo-near-black outline-none focus:border-nevo-navy [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0"
+                            min={minDay || undefined}
+                            aria-invalid={soonest ? true : undefined}
+                            onChange={(e) => {
+                              setDate(e.target.value);
+                              setSoonest(soonestOpening(e.target.value, time, new Date()));
+                            }}
+                            className={cn(
+                              "h-[52px] w-full cursor-pointer rounded-[10px] border-[1.5px] border-nevo-near-black/16 bg-nevo-cream-elevated px-4 pr-11 text-[15.5px] font-normal text-nevo-near-black outline-none focus:border-nevo-navy [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0",
+                              soonest && "border-nevo-violet",
+                            )}
                           />
                           <svg
                             className="pointer-events-none absolute top-1/2 right-4 -translate-y-1/2"
@@ -1023,7 +1080,10 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
                           <input
                             type="time"
                             value={time}
-                            onChange={(e) => setTime(e.target.value)}
+                            onChange={(e) => {
+                              setTime(e.target.value);
+                              setSoonest(soonestOpening(date, e.target.value, new Date()));
+                            }}
                             className="h-[52px] w-full cursor-pointer rounded-[10px] border-[1.5px] border-nevo-near-black/16 bg-nevo-cream-elevated px-4 pr-11 text-[15.5px] font-normal text-nevo-near-black outline-none focus:border-nevo-navy [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0"
                           />
                           <svg
@@ -1044,6 +1104,33 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
                         </span>
                       </label>
                     </div>
+                  </div>
+                )}
+                {/* C07i, "Chosen date has passed": the refusal, and the soonest
+                    day that same time can open, one press away. */}
+                {when === "right" && soonest && (
+                  <div
+                    role="alert"
+                    className="mt-3.5 flex flex-wrap items-center justify-between gap-3.5 rounded-[10px] bg-nevo-violet/14 px-[15px] py-[13px] xl:mt-4 xl:gap-4 xl:px-4 xl:py-[15px]"
+                  >
+                    <p className="min-w-0 flex-[1_1_260px] text-[14.5px] leading-[1.55] text-nevo-near-black/82">
+                      That date has already passed. The soonest you can open
+                      this is{" "}
+                      <strong className="font-semibold text-nevo-near-black">
+                        {longDay(soonest)}
+                      </strong>
+                      .
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDate(soonest);
+                        setSoonest(soonestOpening(soonest, time, new Date()));
+                      }}
+                      className="inline-flex h-10 shrink-0 cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[18px] text-sm font-semibold text-nevo-cream transition-[filter] hover:brightness-93"
+                    >
+                      {`Use ${longDay(soonest)}`}
+                    </button>
                   </div>
                 )}
               </>
@@ -1093,6 +1180,7 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
           disabled={!canContinue}
           onClick={() => {
             if (!canContinue || submitting) return;
+            if (step === 3 && !stillAhead()) return;
             if (step < 4) setStep((s) => (s + 1) as Step);
             else void confirm();
           }}

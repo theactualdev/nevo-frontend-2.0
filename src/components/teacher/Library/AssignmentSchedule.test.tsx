@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { Assignment } from "@/lib/api/assignments";
 
@@ -51,6 +51,19 @@ const CLASS_OF_THREE = [
   row({ id: "a-2", studentId: "s-2" }),
   row({ id: "a-3", studentId: "s-3" }),
 ];
+
+/*
+ * A FIXED TODAY - 20 Sep 2026, before every date these rows carry. The editor
+ * refuses a date moved into the past (C04), so a suite on the real clock would
+ * start failing by itself the day its fixtures went by.
+ */
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(2026, 8, 20, 12, 0));
+});
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 beforeEach(() => {
   applyToAssignments.mockReset();
@@ -626,5 +639,75 @@ describe("dates in the teacher's own day (C03)", () => {
     fireEvent.click(screen.getByRole("button", { name: /Change dates/i }));
 
     expect(screen.getByRole("button", { name: /Save dates/i })).toBeDisabled();
+  });
+});
+
+/**
+ * C04: a date MOVED into the past is refused, with C07i's own sentence. A
+ * date that was already behind - a lesson that opened last week - is left
+ * alone, because nothing about it is being asked for.
+ */
+describe("moving a date into the past", () => {
+  /** Today is 5 Oct: these rows opened on the 3rd and are due on the 10th. */
+  beforeEach(() => {
+    vi.setSystemTime(new Date(2026, 9, 5, 12, 0));
+  });
+  const edit = () => {
+    render(<AssignmentSchedule assignments={CLASS_OF_THREE} />);
+    fireEvent.click(screen.getByRole("button", { name: /Change dates/i }));
+  };
+
+  it("refuses a due date moved behind today", () => {
+    edit();
+    fireEvent.change(screen.getByLabelText(/Due/i), { target: { value: "2026-10-04" } });
+
+    expect(screen.getByRole("alert")).toHaveTextContent("That date has already passed.");
+    expect(screen.getByRole("button", { name: /Save dates/i })).toBeDisabled();
+  });
+
+  it("refuses an opening date moved behind today", () => {
+    edit();
+    fireEvent.change(screen.getByLabelText(/Opens/i), { target: { value: "2026-10-01" } });
+
+    expect(screen.getByRole("alert")).toHaveTextContent("That date has already passed.");
+    expect(screen.getByRole("button", { name: /Save dates/i })).toBeDisabled();
+  });
+
+  it("takes today itself", () => {
+    edit();
+    fireEvent.change(screen.getByLabelText(/Due/i), { target: { value: "2026-10-05" } });
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Save dates/i })).toBeEnabled();
+  });
+
+  it("leaves an opening date that was already behind alone while the due date moves", async () => {
+    applyToAssignments.mockResolvedValue({ ok: ["a-1", "a-2", "a-3"], failed: [] });
+    edit();
+    fireEvent.change(screen.getByLabelText(/Due/i), { target: { value: "2026-10-20" } });
+    fireEvent.click(screen.getByRole("button", { name: /Save dates/i }));
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(applyToAssignments).toHaveBeenCalled();
+    expect(applyToAssignments.mock.calls[0][1]).not.toHaveProperty("availableFrom");
+    await vi.waitFor(() =>
+      expect(screen.queryByRole("button", { name: /Save dates/i })).not.toBeInTheDocument(),
+    );
+  });
+
+  it("offers no day before today in either picker", () => {
+    edit();
+
+    expect(screen.getByLabelText(/Opens/i)).toHaveAttribute("min", "2026-10-05");
+    expect(screen.getByLabelText(/Due/i)).toHaveAttribute("min", "2026-10-05");
+  });
+
+  it("puts the order of the dates first when both are wrong", () => {
+    edit();
+    fireEvent.change(screen.getByLabelText(/Due/i), { target: { value: "2026-10-01" } });
+    fireEvent.change(screen.getByLabelText(/Opens/i), { target: { value: "2026-10-04" } });
+
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    expect(screen.getByRole("alert")).toHaveTextContent(/cannot be due before it opens/i);
   });
 });

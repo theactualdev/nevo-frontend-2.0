@@ -6,6 +6,7 @@ import {
   applyToAssignments,
   type Assignment,
 } from "@/lib/api/assignments";
+import { dayOf } from "@/components/teacher/Assign/pastDate";
 
 /**
  * Who this lesson is set for, and the two ways to change it.
@@ -386,6 +387,12 @@ function DateForm({
 }) {
   const [opens, setOpens] = useState(toDateInput(availableFrom));
   const [due, setDue] = useState(toDateInput(dueAt));
+  /**
+   * Today, as of opening the editor (C04). A date the teacher MOVES behind it
+   * is refused; one that was already there - a lesson that opened last week -
+   * is left alone, because nothing about it is being asked for.
+   */
+  const [today] = useState(() => dayOf(new Date()));
   // `availableFrom` is when it OPENS and `dueAt` is when it is DUE - separate
   // fields that must not be mapped onto each other. A lesson that opens after
   // it is due is not a schedule, it is a mistake, so it is refused here rather
@@ -398,6 +405,9 @@ function DateForm({
   }
   if (due !== toDateInput(dueAt)) changes.dueAt = onDay(due, dueAt, "end");
   const unchanged = Object.keys(changes).length === 0;
+  const movedIntoPast =
+    (opens !== toDateInput(availableFrom) && Boolean(opens) && opens < today) ||
+    (due !== toDateInput(dueAt) && Boolean(due) && due < today);
 
   return (
     <div className="mt-3.5 rounded-[10px] bg-nevo-cream p-3.5">
@@ -407,6 +417,7 @@ function DateForm({
           <input
             type="date"
             value={opens}
+            min={today}
             onChange={(e) => setOpens(e.target.value)}
             className="mt-1 block rounded-[8px] border border-nevo-navy/20 bg-nevo-cream-elevated px-2.5 py-1.5 text-[14px] text-nevo-near-black"
           />
@@ -416,6 +427,7 @@ function DateForm({
           <input
             type="date"
             value={due}
+            min={today}
             onChange={(e) => setDue(e.target.value)}
             className="mt-1 block rounded-[8px] border border-nevo-navy/20 bg-nevo-cream-elevated px-2.5 py-1.5 text-[14px] text-nevo-near-black"
           />
@@ -427,11 +439,17 @@ function DateForm({
           A lesson cannot be due before it opens.
         </p>
       )}
+      {/* C07i's own first sentence for the same refusal. */}
+      {movedIntoPast && !backwards && (
+        <p role="alert" className="mt-2.5 text-[13px] text-nevo-navy">
+          That date has already passed.
+        </p>
+      )}
 
       <div className="mt-3 flex gap-2">
         <button
           type="button"
-          disabled={busy || backwards || unchanged}
+          disabled={busy || backwards || unchanged || movedIntoPast}
           onClick={() => onSave(changes)}
           className="cursor-pointer rounded-[9px] bg-nevo-navy px-3.5 py-1.5 text-[13.5px] font-semibold text-nevo-cream disabled:cursor-not-allowed disabled:opacity-45"
         >
