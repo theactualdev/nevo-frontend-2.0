@@ -114,6 +114,24 @@ export interface DpaAcceptance {
   acceptedAt: string;
 }
 
+/**
+ * The agreement as the SERVER states it (`GET /school/dpa-agreement`, 8 Oct):
+ * its current version, the parties, this school's address and contract
+ * dates, and a short summary. NOT the clause text - that is still counsel's
+ * to finish, and stays in `lib/mocks/dpa.ts` until it arrives.
+ */
+export interface DpaAgreement {
+  version: string;
+  schoolId: string;
+  schoolName: string;
+  schoolAddress: string | null;
+  contractStart: string | null;
+  contractEnd: string | null;
+  controller?: string;
+  processor?: string;
+  summary: string[];
+}
+
 /** What `POST /schools/register` answers with. */
 export interface SchoolRegistration {
   schoolId: string;
@@ -247,6 +265,8 @@ export const schoolApi = {
    */
   dpaAcceptance: () =>
     api.get<DpaAcceptance>("/api/v1/school/dpa-acceptance"),
+  /** GET /api/v1/school/dpa-agreement - the version a school accepts. */
+  dpaAgreement: () => api.get<DpaAgreement>("/api/v1/school/dpa-agreement"),
   acceptDpa: (version: string) =>
     api.post<DpaAcceptance>("/api/v1/school/dpa-acceptance", { version }),
   narrative: () => api.get<SchoolNarrative>("/api/v1/school/narrative"),

@@ -40,8 +40,24 @@ const acceptDpa = vi.fn(async (...args: unknown[]) => {
     acceptedAt: "2026-09-08T09:00:00Z",
   };
 });
+/** The agreement as the server states it (8 Oct) - its version is the one accepted. */
+const AGREEMENT = {
+  version: "2026-10",
+  schoolId: "s1",
+  schoolName: "Corona Secondary School",
+  schoolAddress: "12 Awolowo Road, Ikoyi, Lagos",
+  contractStart: "2026-09-01T00:00:00Z",
+  contractEnd: "2027-08-31T00:00:00Z",
+  controller: "The school",
+  processor: "Nevo Learning Limited",
+  summary: ["The school remains the data controller for its learners and staff."],
+};
+const dpaAgreement = vi.fn(async () => AGREEMENT);
 vi.mock("@/lib/api/school", () => ({
-  schoolApi: { acceptDpa: (...args: unknown[]) => acceptDpa(...args) },
+  schoolApi: {
+    acceptDpa: (...args: unknown[]) => acceptDpa(...args),
+    dpaAgreement: () => dpaAgreement(),
+  },
 }));
 
 const shown = (c: HTMLElement) => (c.textContent ?? "").replace(/\u2019/g, "'");
@@ -91,6 +107,8 @@ describe("DpaStep acceptance gate", () => {
     go.click();
     await waitFor(() => expect(acceptDpa).toHaveBeenCalledTimes(1));
     expect(acceptDpa.mock.calls[0]).toHaveLength(1);
+    // The server's version, never a local one the backend has not heard of.
+    expect(acceptDpa.mock.calls[0][0]).toBe("2026-10");
   });
 
   it("keeps Continue shut until the agreement has been read", () => {
@@ -99,5 +117,34 @@ describe("DpaStep acceptance gate", () => {
     // paint, before the "nothing to scroll" effect opens the gate.
     const { getByText } = renderStep();
     expect((getByText("Continue") as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+describe("the agreement as the server states it (8 Oct)", () => {
+  it("leads with the parties, this school's address and term, and the server's summary", async () => {
+    const { container } = renderStep();
+    await waitFor(() => expect(shown(container)).toMatch(/Nevo Learning Limited/));
+    const text = shown(container);
+    expect(text).toMatch(/Corona Secondary School, 12 Awolowo Road, Ikoyi, Lagos/);
+    expect(text).toMatch(/1 September 2026 to 31 August 2027/);
+    expect(text).toMatch(/The school remains the data controller for its learners and staff\./);
+    expect(text).toMatch(/Version 2026-10/);
+    expect(text).not.toMatch(/0\.9-draft/);
+  });
+
+  it("leaves off a term it was not given, rather than a blank", async () => {
+    dpaAgreement.mockResolvedValueOnce({ ...AGREEMENT, contractStart: null, contractEnd: null, schoolAddress: null });
+    const { container } = renderStep();
+    await waitFor(() => expect(shown(container)).toMatch(/Nevo Learning Limited/));
+    expect(shown(container)).not.toMatch(/Contract/);
+  });
+
+  it("accepts nothing while the version is unknown, and offers a retry", async () => {
+    dpaAgreement.mockRejectedValueOnce(new Error("500"));
+    const { container, getByText } = renderStep();
+    await waitFor(() => expect(shown(container)).toMatch(/the agreement's version and details/));
+    expect((getByText("Continue") as HTMLButtonElement).disabled).toBe(true);
+    getByText("Try again").click();
+    await waitFor(() => expect((getByText("Continue") as HTMLButtonElement).disabled).toBe(false));
   });
 });
