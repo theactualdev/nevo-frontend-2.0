@@ -4,12 +4,14 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
   billingApi,
+  latestReportByInvoice,
   type BillingContact,
   type Invoice,
   type InvoiceStatus,
-  type PaymentOutcome,
+  type InvoiceTransferDetails,
   type ReceivingAccount,
   type Subscription,
+  type TransferReport,
   type UpcomingCharge,
 } from "@/lib/api/billing";
 import { formatMoney } from "@/lib/money";
@@ -43,10 +45,12 @@ import { NoAccess, failureKind } from "../NoAccess";
  *    read carries `studentCount`, `perStudentRate`, the server's VAT figures
  *    and `currency`. See `CostSheet` - it shows the totals the server computed
  *    and does no arithmetic of its own.
- * 2. THE "HOW TO PAY" PANEL IS LIVE (D11c, design ruling 7 Sep). Its account
- *    comes from `GET /billing/bank-transfer-details`, served since 8 Sep; see
- *    `HowToPayPanel`. The frame's Kuda Bank account number is its
- *    illustration, not a value to hard-code.
+ * 2. THE "HOW TO PAY" PANEL IS LIVE (D11c, design ruling 7 Sep). The invoice
+ *    owed is read through `GET /billing/invoices/{id}/bank-transfer-details`,
+ *    which gives the account and that invoice's exact reference together
+ *    (9 Oct); the school-wide `GET /billing/bank-transfer-details` stands in
+ *    if that read fails. See `HowToPayPanel`. The frame's Kuda Bank account
+ *    number is its illustration, not a value to hard-code.
  * 3. PAYMENT METHOD AND CHECKOUT. `PUT /billing/payment-method` takes `card` or
  *    `direct_debit`, and `POST /payments/checkout` returns a Paystack
  *    `authorizationUrl`. D11: "no cards, no in-app checkout."
@@ -114,13 +118,19 @@ export function BillingView() {
   const [contact, setContact] = useState<BillingContact | null>(null);
   const [editing, setEditing] = useState(false);
   const [account, setAccount] = useState<ReceivingAccount | null>(null);
+  /** The owed invoice's own account and reference, when that read answers. */
+  const [payDetails, setPayDetails] = useState<InvoiceTransferDetails | null>(
+    null,
+  );
   /**
-   * Transfers the BACKEND has on file this session, keyed by invoice number.
-   * No longer optimistic: `manual-transfer` records it, and a repeat of the
-   * same bank reference comes back as the original transaction rather than
-   * paying twice.
+   * Transfers the school has reported, by invoice id, from
+   * `GET /billing/payments/transfer-reports`. This was session-only state
+   * keyed by invoice number, so "Pending verification" vanished on reload
+   * and the school was asked again for a transfer it had already reported.
+   * A failed read is an empty map: each invoice then shows its own status,
+   * which is never wrong, only less complete.
    */
-  const [recorded, setRecorded] = useState<Record<string, PaymentOutcome>>({});
+  const [reports, setReports] = useState<Record<string, TransferReport>>({});
 
   const load = useCallback(() => {
     // The subscription read owns the page - it carries the school name and the
@@ -160,12 +170,24 @@ export function BillingView() {
           .then(setAccount)
           .catch(() => setAccount(null));
 
+        billingApi
+          .transferReports()
+          .then((rows) => setReports(latestReportByInvoice(rows)))
+          .catch(() => setReports({}));
+
         setUpcomingFailed(false);
         billingApi
           .upcoming()
           .then((u) => {
             setUpcoming(u);
             setUpcomingFailed(false);
+            setPayDetails(null);
+            if (u.invoiceId && u.status !== "paid") {
+              billingApi
+                .invoiceTransferDetails(u.invoiceId)
+                .then(setPayDetails)
+                .catch(() => setPayDetails(null));
+            }
           })
           .catch(() => setUpcomingFailed(true));
       })
@@ -396,7 +418,7 @@ export function BillingView() {
                       {overdueLine(daysPastDue(inv.dueAt, now)!)}
                     </span>
                   ) : null}
-                  {recorded[inv.invoiceNumber] && inv.status !== "paid" ? (
+                  {reports[inv.id] && inv.status !== "paid" ? (
                     <span className="shrink-0 rounded-full bg-nevo-violet/25 px-3 py-1 text-[12.5px] font-semibold text-nevo-navy">
                       Pending verification
                     </span>
@@ -468,8 +490,11 @@ export function BillingView() {
             */}
           {upcoming?.invoiceId && upcoming.status !== "paid" ? (
           <HowToPayPanel
-            account={account}
-            reference={upcoming?.invoiceNumber ?? null}
+            account={payDetails ?? account}
+            /* The backend's reference for this invoice. Its own description
+               says that is the invoice number, so the number stands in when
+               the per-invoice read fails - still the server's value. */
+            reference={payDetails?.reference ?? upcoming?.invoiceNumber ?? null}
             amount={
               upcoming?.amount
                 ? formatMoney(upcoming.amount, subscription.pricing.currency)
@@ -477,19 +502,13 @@ export function BillingView() {
             }
             billedIn={subscription.pricing.currency}
             invoiceId={upcoming?.invoiceId ?? null}
-            recorded={
-              upcoming?.invoiceNumber
-                ? (recorded[upcoming.invoiceNumber] ?? null)
-                : null
+            recorded={reports[upcoming.invoiceId] ?? null}
+            onRecord={billingApi.reportTransfer}
+            // A report never settles an invoice, so there is nothing to
+            // re-read: the invoice is paid when finance confirms it.
+            onRecorded={(report) =>
+              setReports((prev) => ({ ...prev, [report.invoiceId]: report }))
             }
-            onRecord={billingApi.manualTransfer}
-            onRecorded={(outcome) => {
-              const ref = upcoming?.invoiceNumber;
-              if (ref) setRecorded((prev) => ({ ...prev, [ref]: outcome }));
-              // The backend may have settled it outright; re-read so the
-              // invoice list shows what it now says rather than our guess.
-              if (outcome.invoicePaid) load();
-            }}
           />
           ) : null}
 
