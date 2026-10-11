@@ -292,9 +292,16 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
             conversation collapsed to its messages: the composer floated under
             the last one, and on a long thread it was below the fold, with the
             header scrolling away and the thread opening at its oldest message.
-            Every other tab scrolls here, in `<main>`, and keeps doing so.
+            Every other tab scrolls here, in `<main>`, and keeps doing so - in
+            a column at least the screen's height, which a tab's empty state
+            grows into to centre itself (29 Empty States). A tab that does not
+            ask to grow keeps its own height.
           */}
-          <div className={cn(fillsScreen(pathname) && "h-full")}>
+          <div
+            className={
+              fillsScreen(pathname) ? "h-full" : "flex min-h-full flex-col"
+            }
+          >
             {children}
           </div>
         </main>

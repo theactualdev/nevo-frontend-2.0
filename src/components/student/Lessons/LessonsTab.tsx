@@ -2,17 +2,20 @@
 
 import { useMemo, useState } from "react";
 import { Check, Search } from "lucide-react";
-import {
-  IllustrationWrapper,
-  NevoKeyboard,
-  useNevoKeyboardDock,
-} from "@/components/shared";
+import { NevoKeyboard, useNevoKeyboardDock } from "@/components/shared";
 import { SampleRegion } from "@/components/shared/SampleRegion";
 import { useHydrated } from "@/hooks/useHydrated";
 import { useHasSession } from "@/hooks/useHasSession";
 import { useStudentLessons } from "@/hooks/useStudentLessons";
 import type { SegmentPlace } from "@/lib/lessons/segmentPlace";
 import { cn } from "@/lib/utils";
+import {
+  EmptyArt,
+  TAB_FILL,
+  TAB_PAGE,
+  TAB_TITLE,
+  TabEmpty,
+} from "@/components/student/Shell/TabPage";
 import {
   LESSON_CATALOG,
   SUBJECT_ICON,
@@ -129,11 +132,10 @@ export function LessonsTab() {
     setPreviewOpen(true);
   };
 
-  const shell = (children: React.ReactNode) => (
-    <div className="mx-auto w-full max-w-[900px] px-5 py-2 pb-6 sm:px-8 sm:py-6">
-      <h1 className="text-2xl font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[30px] lg:text-[32px]">
-        Lessons
-      </h1>
+  // `fill`: the page grows to the screen, for a state centred in it.
+  const shell = (children: React.ReactNode, fill = false) => (
+    <div className={cn(TAB_PAGE, fill && TAB_FILL)}>
+      <h1 className={TAB_TITLE}>Lessons</h1>
       {children}
     </div>
   );
@@ -177,20 +179,18 @@ export function LessonsTab() {
   }
 
   if (nothingAssigned) {
+    // 29 Empty States, "Lessons (No lessons)": one line, no more.
     return shell(
-      <div className="flex flex-col items-center px-6 pt-11 pb-6 text-center">
-        <IllustrationWrapper
-          src="/illustrations/empty-lessons.png"
-          alt=""
-          width={512}
-          height={512}
-          className="w-[170px]"
-        />
-        {/* 29 Empty States, "Lessons (No lessons)": one line, no more. */}
-        <h2 className="mt-5 max-w-[280px] text-lg font-medium leading-[1.35] text-nevo-near-black">
-          Your lessons will show up here soon
-        </h2>
-      </div>,
+      <TabEmpty
+        art={
+          <EmptyArt
+            src="/illustrations/empty-lessons.png"
+            className="h-[200px] md:h-[240px] lg:h-[250px]"
+          />
+        }
+        line="Your lessons will show up here soon"
+      />,
+      true,
     );
   }
 
@@ -198,11 +198,12 @@ export function LessonsTab() {
   // lessons AND the signed-out catalogue - only the latter is sample data, so
   // the mark is conditional. Marking both would make the end-to-end assertion
   // fire on a correct screen, which is the fastest way to get a mark deleted.
+  // A chip's empty list centres in the screen (29); a search's sits under
+  // the search, as the Lessons frame draws it.
+  const chipEmpty = noResults && !searching;
   const body = (
-    <div className="mx-auto w-full max-w-[900px] px-5 py-2 pb-6 sm:px-8 sm:py-6">
-      <h1 className="text-2xl font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[30px] lg:text-[32px]">
-        Lessons
-      </h1>
+    <div className={cn(TAB_PAGE, chipEmpty && TAB_FILL)}>
+      <h1 className={TAB_TITLE}>Lessons</h1>
 
       {/* Search */}
       <div className="relative mt-4">
@@ -257,33 +258,47 @@ export function LessonsTab() {
         })}
       </div>
 
-      {noResults ? (
-        <div className="flex flex-col items-center px-6 pt-11 pb-6 text-center">
-          <IllustrationWrapper
-            src="/illustrations/empty-lessons.png"
-            alt=""
-            width={512}
-            height={512}
-            className="w-[170px]"
-          />
-          <h2 className="mt-5 text-lg font-medium text-nevo-near-black">
-            {searching
-              ? "No lessons match your search"
-              : FILTERED_EMPTY[filter]}
-          </h2>
-          {/* Nevo Lessons Frame draws this line for a search only; the
-              chip's empty state (29 Empty States) is the heading alone. */}
-          {searching && (
-            <p className="mt-1.5 max-w-[280px] text-sm leading-[1.5] text-nevo-near-black/60">
-              Try a different word, or clear the search to see everything.
-            </p>
-          )}
+      {chipEmpty ? (
+        // 29 Empty States, a chip with nothing under it: the heading alone,
+        // and the way back to everything. The board's own figure for this is
+        // still to come (D127), so the art is the one these states had.
+        <TabEmpty
+          art={
+            <EmptyArt
+              src="/illustrations/empty-lessons.png"
+              className="h-[210px] md:h-[240px] lg:h-[250px]"
+            />
+          }
+          line={FILTERED_EMPTY[filter]}
+        >
           <button
             type="button"
-            onClick={() => (searching ? setQuery("") : setFilter("all"))}
+            onClick={() => setFilter("all")}
+            className="mt-5 h-11 cursor-pointer rounded-[10px] px-5 text-[15px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6 md:mt-[22px]"
+          >
+            Clear filter
+          </button>
+        </TabEmpty>
+      ) : noResults ? (
+        // Nevo Lessons Frame, a search that finds nothing: under the search,
+        // the figure in a 170 box, the heading and the line.
+        <div className="flex flex-col items-center px-6 pt-11 pb-6 text-center">
+          <EmptyArt
+            src="/illustrations/empty-lessons.png"
+            className="h-[170px]"
+          />
+          <h2 className="mt-5 text-lg font-medium text-nevo-near-black">
+            No lessons match your search
+          </h2>
+          <p className="mt-1.5 max-w-[280px] text-sm leading-[1.5] text-nevo-near-black/60">
+            Try a different word, or clear the search to see everything.
+          </p>
+          <button
+            type="button"
+            onClick={() => setQuery("")}
             className="mt-5 h-11 cursor-pointer rounded-[10px] px-[22px] text-[15px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
           >
-            {searching ? "Clear search" : "Clear filter"}
+            Clear search
           </button>
         </div>
       ) : (

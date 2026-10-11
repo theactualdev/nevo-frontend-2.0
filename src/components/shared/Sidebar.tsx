@@ -140,13 +140,35 @@ export function Sidebar({
 
       <div className="flex-1" />
 
+      {/*
+        `Nevo Sidebar Rail`'s chevron row: the rail's full width and 44 high,
+        the chevron in a 40 box, and "Collapse" beside it while expanded. It
+        was the chevron alone - 20 wide and 40 high on the collapsed rail.
+        Only the student console draws this rail; the teacher and admin
+        consoles have their own.
+      */}
       <button
         type="button"
         aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         onClick={toggle}
-        className="flex h-10 cursor-pointer items-center justify-center rounded-[10px] text-nevo-near-black transition-colors hover:bg-nevo-near-black/[0.04]"
+        className={cn(
+          "flex h-11 w-full shrink-0 cursor-pointer items-center rounded-[10px] transition-colors hover:bg-nevo-navy/6",
+          collapsed ? "justify-center" : "gap-3 px-1",
+        )}
       >
-        <Icon icon={collapsed ? ChevronRight : ChevronLeft} size="dense" />
+        <span
+          className={cn(
+            "flex size-10 items-center justify-center rounded-[10px] text-nevo-near-black/55",
+            !collapsed && "ml-1",
+          )}
+        >
+          <Icon icon={collapsed ? ChevronRight : ChevronLeft} size="dense" />
+        </span>
+        {!collapsed && (
+          <span className="text-sm font-medium whitespace-nowrap text-nevo-near-black/68">
+            Collapse
+          </span>
+        )}
       </button>
 
       {user && (

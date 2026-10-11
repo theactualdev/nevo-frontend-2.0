@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { StudentShell, fillsScreen, scalesWithTextSize } from "./StudentShell";
 import { clearSession, setSession } from "@/lib/auth/session";
 import { AccessibilityProvider } from "@/context/AccessibilityContext";
@@ -285,9 +285,11 @@ describe("Connect fills the screen between the chrome", () => {
       "/student/downloads",
     ]) {
       const { unmount } = at(path);
-      expect(screen.getByText("lesson body").parentElement).not.toHaveClass(
-        "h-full",
-      );
+      const box = screen.getByText("lesson body").parentElement;
+      expect(box).not.toHaveClass("h-full");
+      // A column at least the screen's height, for an empty state to centre
+      // in - which a tab that does not grow into it never notices.
+      expect(box).toHaveClass("flex", "min-h-full", "flex-col");
       unmount();
     }
   });
@@ -318,5 +320,27 @@ describe("a tab's docked keyboard", () => {
     expect(screen.getByRole("main")).toHaveClass(
       "not-pointer-fine:group-has-[[data-nevo-hide-nav]]/shell:pb-0",
     );
+  });
+});
+
+describe("the sidebar's collapse row (Nevo Sidebar Rail)", () => {
+  /*
+   * The rail draws a 44px row the rail's width, with "Collapse" beside the
+   * chevron while it is open. Ours was the chevron alone: 20 wide and 40 high
+   * on the collapsed rail. jsdom lays nothing out, so the classes are pinned.
+   */
+  it("is a full-width 44px row, labelled Collapse while open", () => {
+    at("/student/dashboard");
+
+    // jsdom has no wide screen, so the rail starts collapsed.
+    const expand = screen.getByRole("button", { name: "Expand sidebar" });
+    expect(expand).toHaveClass("h-11", "w-full");
+    expect(expand).not.toHaveTextContent("Collapse");
+
+    fireEvent.click(expand);
+
+    const collapse = screen.getByRole("button", { name: "Collapse sidebar" });
+    expect(collapse).toHaveClass("h-11", "w-full");
+    expect(collapse).toHaveTextContent("Collapse");
   });
 });
