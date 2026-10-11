@@ -2656,6 +2656,7 @@ export function LessonPlayer({
               segment={segment}
               modality={modality}
               density={effectiveDensity}
+              simplified={simplified.has(segment.id)}
               reading={readingOn}
               attention={attentionOn}
               onReadProgress={noteReadProgress}
@@ -2866,6 +2867,7 @@ function SegmentBody({
   segment,
   modality,
   density,
+  simplified,
   reading,
   attention,
   onReadProgress,
@@ -2882,6 +2884,8 @@ function SegmentBody({
   segment: LessonSegment;
   modality: Modality;
   density: Density | null;
+  /** A lower-depth session reads this segment's simpler version. */
+  simplified: boolean;
   reading: boolean;
   attention: boolean;
   onReadProgress: (pct: number) => void;
@@ -2906,6 +2910,7 @@ function SegmentBody({
         attention={attention}
         onReadProgress={onReadProgress}
         onChunkSeen={onChunkSeen}
+        simplified={simplified}
       />
     );
   if (modality === MODALITY.VISUAL && segment.visual)

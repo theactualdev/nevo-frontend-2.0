@@ -159,6 +159,46 @@ describe("a lower-depth session (SCRUM-178)", () => {
   });
 });
 
+describe("the boxes beside a lower-depth session's text", () => {
+  /*
+   * Design put the key terms and equations beside the STANDARD text, and the
+   * child's own Simplify already draws them away. Start again at the lower
+   * depth shows the simpler version in the standard's place, and drew them
+   * beside it.
+   */
+  const BOXED = {
+    ...LESSON,
+    segments: [
+      {
+        ...LESSON.segments[0],
+        text: {
+          ...LESSON.segments[0].text!,
+          keyTerms: [{ term: "numerator", definition: "The top number." }],
+          equations: [{ equation: "3/4 = three quarters" }],
+          keyPoints: ["The top number counts."],
+        },
+      },
+      ...LESSON.segments.slice(1),
+    ],
+  } as unknown as Lesson;
+
+  it("draws none of them, as Simplify does, and keeps IN SHORT", () => {
+    render(<LessonPlayer lesson={BOXED} plan={null} live depth="lower" />);
+
+    expect(text()).toContain(SIMPLER_1);
+    expect(screen.queryByText("numerator")).toBeNull();
+    expect(screen.queryByText("3/4 = three quarters")).toBeNull();
+    expect(screen.getByText("The top number counts.")).toBeTruthy();
+  });
+
+  it("still draws them beside the standard text", () => {
+    render(<LessonPlayer lesson={BOXED} plan={null} live />);
+
+    expect(screen.getByRole("button", { name: "numerator" })).toBeTruthy();
+    expect(screen.getByText("3/4 = three quarters")).toBeTruthy();
+  });
+});
+
 describe("a standard session", () => {
   it("reads the normal body, and Simplify is still the child's to ask for", () => {
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
