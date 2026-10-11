@@ -58,7 +58,22 @@ export function TeacherSubjects({
     fetchSubjects();
   };
   useEffect(() => {
-    fetchSubjects();
+    // Guarded: a list that lands after the section has gone must not set
+    // state on it (CI caught exactly that, after a test's page was torn down).
+    let alive = true;
+    subjectsApi
+      .list()
+      .then((s) => {
+        if (!alive) return;
+        setSubjects(s);
+        setRead("ready");
+      })
+      .catch(() => {
+        if (alive) setRead("failed");
+      });
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const dirty = draft.join("\u0000") !== held.join("\u0000");
