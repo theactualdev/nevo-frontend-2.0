@@ -8,12 +8,11 @@ import { api } from "./client";
  * must be on the class's list (its scheme of work) and on the teacher's, and
  * neither list is widened as a side effect - a 422 names which one is short.
  *
- * WHAT THE ADMIN CANNOT READ. A teacher's own subjects are on no admin read
- * (`TeacherDetailResponse` has none), so the console cannot mark which of the
- * school's subjects a teacher "Teaches", as D05 draws. A pick the teacher does
- * not hold is refused by the server with `subject_not_on_teacher`, and that
- * sentence is shown as it stands.
- * TODO(api): the teacher's subjects on `TeacherDetailResponse`.
+ * A teacher's own subjects are on `TeacherDetailResponse` (8 Oct), which is
+ * how D05 marks what a teacher "Teaches", and the admin sets them on the
+ * teacher's page (`teachersApi.setSubjects`, 9 Oct). A pick the teacher does
+ * not hold is still refused by the server with `subject_not_on_teacher`, and
+ * that sentence is shown as it stands.
  */
 export interface SchoolSubject {
   id: string;

@@ -1,4 +1,5 @@
 import { api } from "./client";
+import type { SchoolSubject } from "./subjects";
 
 /**
  * The deployed `UserStatus` enum - the lifecycle state of an account.
@@ -75,4 +76,12 @@ export const teachersApi = {
    */
   restore: (teacherId: string) =>
     api.post<void>(`/api/v1/teachers/${teacherId}/restore`),
+
+  /**
+   * Replace what this teacher teaches, by name (9 Oct). "What this person
+   * teaches. Not where they teach it." Removing one they are still assigned
+   * to is refused by the server, in its own words.
+   */
+  setSubjects: (teacherId: string, names: string[]) =>
+    api.put<SchoolSubject[]>(`/api/v1/teachers/${teacherId}/subjects`, names),
 };

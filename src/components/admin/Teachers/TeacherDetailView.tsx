@@ -27,6 +27,7 @@ import {
 import { useSetupGate } from "@/hooks";
 import { AssignTeachingSheet } from "../Classes/AssignTeachingSheet";
 import { RemoveAccessSheet } from "./RemoveAccessSheet";
+import { TeacherSubjects } from "./TeacherSubjects";
 import { StatusPill, isInvited } from "./status";
 import { NoAccess, failureKind } from "../NoAccess";
 import { activeLine, lastActiveCard } from "../Team/teamLines";
@@ -266,6 +267,21 @@ export function TeacherDetailView({ teacherId }: { teacherId: string }) {
           teacher.
         </span>
       </p>
+
+      {/* Before Classes, as class detail puts its subjects before its
+          teachers: an assignment needs a subject the teacher holds, so this
+          list is what makes "Assign to a class" possible. */}
+      <div className="mt-[30px]">
+        <SectionHeading>Subjects they teach</SectionHeading>
+      </div>
+      <div className={cn(CARD, "mt-3.5 px-[22px] py-5")}>
+        <TeacherSubjects
+          key={(teacher.subjects ?? []).join("\u0000")}
+          teacher={teacher}
+          editable={canAssign && !writesPaused}
+          onSaved={load}
+        />
+      </div>
 
       <div className="mt-[30px] flex items-center justify-between gap-4">
         <SectionHeading>Classes</SectionHeading>
