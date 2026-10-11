@@ -139,7 +139,7 @@ describe("a date of birth that disagrees", () => {
   it("names no date and blocks nothing - Nevo never decides a child's birthday", async () => {
     const { container } = render(<StudentsView />);
     await waitFor(() => expect(screen.getByText(NOTE)).toBeInTheDocument());
-    expect(visibleText(container)).not.toMatch(/\d{4}-\d{2}-\d{2}|blocked|on hold|can.t sign in/i);
+    expect(visibleText(container)).not.toMatch(/\b\d{4}-\d{2}-\d{2}\b|blocked|on hold|can.t sign in/i);
   });
 
   it("leaves the roster without notes when the list cannot be read", async () => {

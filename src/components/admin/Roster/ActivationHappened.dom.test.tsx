@@ -9,8 +9,9 @@ import { ActivationView } from "./ActivationView";
  * OB-05's "What just happened" was not rendered at all. It says what the
  * activate call that just returned established - accounts created, counted by
  * that response - and nothing the contract does not: no invitations "sent",
- * no consent requests, no sign-in sheets. On a later visit nothing just
- * happened, so there is no list.
+ * no consent requests. The sign-in details row is back since
+ * `GET /students/sign-in-details` landed (9 Oct), with its download. On a
+ * later visit nothing just happened, so there is no list.
  */
 
 const get = vi.fn();
@@ -93,7 +94,21 @@ describe("OB-05's What just happened", () => {
     const text = visibleText(container);
     expect(text).not.toMatch(/invitations? sent/i);
     expect(text).not.toMatch(/consent/i);
-    expect(text).not.toMatch(/sign-in details/i);
+  });
+
+  it("offers the sign-in details for the children it just created", async () => {
+    const { container } = await switchOn(state({ stage: "activated", canActivate: false }));
+    const text = visibleText(container);
+    expect(text).toMatch(/Student sign-in details ready/);
+    expect(text).toMatch(/Download or print them to hand out/);
+    expect(screen.getByRole("button", { name: "Download sign-in details" })).toBeInTheDocument();
+  });
+
+  it("has no sign-in row when no student accounts were created", async () => {
+    const { container } = await switchOn(
+      state({ stage: "activated", canActivate: false, studentCount: 0, classes: [] }),
+    );
+    expect(visibleText(container)).not.toMatch(/sign-in details/i);
   });
 
   it("leaves out a row with nothing in it, and says one in the singular", async () => {
