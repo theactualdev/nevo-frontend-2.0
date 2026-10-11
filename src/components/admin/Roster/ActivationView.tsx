@@ -21,6 +21,7 @@ import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { useSetupGate } from "@/hooks";
 import { billingCurrency, mayActivate, screenFor } from "./activation";
+import { SignInDetailsDownload } from "../Students/SignInDetailsDownload";
 
 /**
  * D24 OB-03 headcount and cost, OB-04 payment, OB-05 activation.
@@ -459,7 +460,7 @@ function Waiting({
  * classes, and teachers - are established by the call that just returned, and
  * the counts are the ones it returned. Nothing is counted here.
  *
- * THREE OF THE FRAME'S FOUR ROWS ARE LEFT OUT OR REDUCED, because nothing
+ * TWO OF THE FRAME'S FOUR ROWS ARE LEFT OUT OR REDUCED, because nothing
  * backs them:
  * - "18 teacher invitations sent · Each teacher gets a link to set their
  *   password". Activate says it creates accounts; it says nothing about
@@ -468,13 +469,18 @@ function Waiting({
  *   the contract does establish, and not that anything was sent.
  * - "Parent consent requests sent" - the response carries no consent field,
  *   and consent wording is with counsel.
- * - "Student sign-in details ready · Download or print them" - no endpoint
- *   produces them.
+ *
+ * "Student sign-in details ready · Download or print them to hand out" is
+ * back (9 Oct): `GET /students/sign-in-details` serves them, and the row
+ * carries the download. It shows only when activate created student
+ * accounts, because those are the children on the list.
  * TODO(api): counts and delivery state for anything activate sends, on the
  * activate response.
  */
-function happenedRows(s: OnboardingState): { label: string; sub: string | null }[] {
-  const rows: { label: string; sub: string | null }[] = [];
+type HappenedRow = { label: string; sub: string | null; signIn?: boolean };
+
+function happenedRows(s: OnboardingState): HappenedRow[] {
+  const rows: HappenedRow[] = [];
   const classes = s.classes.length;
   if (s.studentCount > 0) {
     rows.push({
@@ -486,6 +492,13 @@ function happenedRows(s: OnboardingState): { label: string; sub: string | null }
     rows.push({
       label: `${s.teacherCount} teacher ${s.teacherCount === 1 ? "account" : "accounts"} created`,
       sub: null,
+    });
+  }
+  if (s.studentCount > 0) {
+    rows.push({
+      label: "Student sign-in details ready",
+      sub: "Download or print them to hand out",
+      signIn: true,
     });
   }
   return rows;
@@ -541,6 +554,7 @@ function Active({
                     </span>
                   ) : null}
                 </span>
+                {row.signIn ? <SignInDetailsDownload /> : null}
               </li>
             ))}
           </ul>

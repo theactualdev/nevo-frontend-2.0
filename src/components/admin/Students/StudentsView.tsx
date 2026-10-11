@@ -36,6 +36,7 @@ import {
   ROW_DIVIDER,
 } from "../Roster/primitives";
 import { useSetupGate } from "@/hooks";
+import { SignInDetailsDownload } from "./SignInDetailsDownload";
 
 /**
  * D7 Students - the school roster.
@@ -313,15 +314,24 @@ export function StudentsView() {
             * place in the sidebar.
             */}
           {phase === "ready" && students.length > 0 ? (
-            <button
-              type="button"
-              onClick={() => setAdding(true)}
-              disabled={writesPaused}
-              className={PRIMARY_BTN}
-            >
-              <PlusIcon />
-              Enrol a student
-            </button>
+            <div className="flex flex-none items-start gap-5">
+              {/* D24 OB-05's "Download or print them to hand out", kept
+                  here too: that screen shows once, on the visit the school
+                  is switched on, and a class gets new children all year. A
+                  read, so the setup gate does not pause it. */}
+              <span className="pt-[11px]">
+                <SignInDetailsDownload />
+              </span>
+              <button
+                type="button"
+                onClick={() => setAdding(true)}
+                disabled={writesPaused}
+                className={PRIMARY_BTN}
+              >
+                <PlusIcon />
+                Enrol a student
+              </button>
+            </div>
           ) : null}
         </div>
 
