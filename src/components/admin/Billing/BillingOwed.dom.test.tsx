@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
-import type { Invoice, UpcomingCharge } from "@/lib/api/billing";
+import type {
+  Invoice,
+  InvoiceTransferDetails,
+  TransferReport,
+  UpcomingCharge,
+} from "@/lib/api/billing";
 import { BillingView } from "./BillingView";
 
 /**
@@ -12,6 +17,11 @@ import { BillingView } from "./BillingView";
  */
 
 const upcoming = vi.fn();
+const reportsRead = vi.fn<() => Promise<TransferReport[]>>(async () => []);
+const detailsRead = vi.fn<(id: string) => Promise<InvoiceTransferDetails | null>>(
+  async () => null,
+);
+const reportTransfer = vi.fn<(id: string, ref: string) => Promise<TransferReport>>();
 let rows: Invoice[] = [];
 let rateType = "standard";
 
@@ -53,6 +63,9 @@ vi.mock("@/lib/api/billing", async (importOriginal) => {
         currency: "NGN",
       }),
       upcoming: () => upcoming(),
+      transferReports: () => reportsRead(),
+      invoiceTransferDetails: (id: string) => detailsRead(id),
+      reportTransfer: (id: string, ref: string) => reportTransfer(id, ref),
     },
   };
 });
@@ -70,6 +83,9 @@ const charge = (over: Partial<UpcomingCharge>): UpcomingCharge => ({
 
 beforeEach(() => {
   upcoming.mockReset();
+  reportsRead.mockReset().mockResolvedValue([]);
+  detailsRead.mockReset().mockResolvedValue(null);
+  reportTransfer.mockReset();
   rows = [];
   rateType = "standard";
 });
@@ -162,5 +178,85 @@ describe("D11's subscription card", () => {
     upcoming.mockResolvedValue(charge({}));
     const { container } = render(<BillingView />);
     await waitFor(() => expect(visibleText(container)).toMatch(/Founding Partner/i));
+  });
+});
+
+const reported = (invoiceId: string): TransferReport => ({
+  transactionId: "t1",
+  invoiceId,
+  bankReference: "FBN-TRF-99183",
+  status: "awaiting_confirmation",
+  message: "Transfer reported. Nevo finance has not confirmed it yet.",
+});
+
+const unpaidRow = (id: string, invoiceNumber: string): Invoice => ({
+  id,
+  invoiceNumber,
+  issuedAt: "2026-09-01T00:00:00Z",
+  amount: "54825000.00",
+  status: "pending",
+  dueAt: "2026-10-30T00:00:00Z",
+  paidAt: null,
+  pdfUrl: "/api/v1/billing/invoices/sch1/x.pdf",
+  currency: "NGN",
+  periodLabel: null,
+  studentCount: null,
+  perStudentRate: null,
+  totalBeforeVat: null,
+  vatAmount: null,
+});
+
+describe("a reported transfer (9 Oct)", () => {
+  it("quotes the reference the per-invoice read serves", async () => {
+    upcoming.mockResolvedValue(charge({}));
+    detailsRead.mockResolvedValue({
+      bankName: "Kuda Bank",
+      accountNumber: "1234567890",
+      accountName: "Nevo Learning Ltd",
+      currency: "NGN",
+      invoiceId: "inv1",
+      reference: "NEV-2026-0003",
+    });
+    const { container } = render(<BillingView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/NEV-2026-0003/));
+    expect(detailsRead).toHaveBeenCalledWith("inv1");
+  });
+
+  it("is still pending after a reload, because the server keeps it", async () => {
+    upcoming.mockResolvedValue(charge({}));
+    rows = [unpaidRow("inv1", "NEV-003")];
+    reportsRead.mockResolvedValue([reported("inv1")]);
+    const { container } = render(<BillingView />);
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/Payment sent, pending verification/),
+    );
+    expect(visibleText(container)).toMatch(/Pending verification/);
+    expect(screen.queryByRole("button", { name: /made this transfer/ })).toBeNull();
+  });
+
+  it("files a report, never a confirmation, and marks the invoice pending", async () => {
+    upcoming.mockResolvedValue(charge({}));
+    rows = [unpaidRow("inv1", "NEV-003")];
+    reportTransfer.mockResolvedValue(reported("inv1"));
+    const { container } = render(<BillingView />);
+    const open = await screen.findByRole("button", { name: /made this transfer/ });
+    open.click();
+    const input = await waitFor(() => {
+      const el = container.querySelector("input");
+      expect(el).not.toBeNull();
+      return el as HTMLInputElement;
+    });
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")!.set!.call(
+      input,
+      "FBN-TRF-99183",
+    );
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    const record = await screen.findByRole("button", { name: "Record transfer" });
+    await waitFor(() => expect((record as HTMLButtonElement).disabled).toBe(false));
+    record.click();
+    await waitFor(() => expect(reportTransfer).toHaveBeenCalledWith("inv1", "FBN-TRF-99183"));
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/Payment sent, pending verification/),
+    );
   });
 });

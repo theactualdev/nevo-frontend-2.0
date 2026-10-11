@@ -4339,7 +4339,9 @@ split shipped in PR #267 matches how the backend actually behaves.
 **One correction worth keeping.** `POST /billing/payments/{reference}/verify` must
 NOT be wired for a bank transfer. It is a WRITE that asks Paystack about a
 transaction and settles the invoice off the answer, so a bank reference 404s
-there. Manual transfers go through `manual-transfer`.
+there. Manual transfers went through `manual-transfer` until 11 Oct; that route
+is now Nevo finance's own confirmation behind `X-Nevo-Finance-Key`, and a
+school's "I've made this transfer" posts to `transfer-report` instead.
 
 ---
 
