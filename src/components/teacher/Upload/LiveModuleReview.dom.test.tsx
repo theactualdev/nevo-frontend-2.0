@@ -468,3 +468,23 @@ describe("its reading column", () => {
     expect(document.querySelector("[class*='max-w-[720px]']")).toBeNull();
   });
 });
+
+/** Whether the browser would ask before leaving: the event was cancelled. */
+const leavingAsks = () => {
+  const e = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(e);
+  return e.defaultPrevented;
+};
+
+/** C17: the unit tree asked before a refresh threw its edits away; this did not. */
+describe("an edit not yet saved", () => {
+  it("makes the browser ask before leaving", () => {
+    show();
+    expect(leavingAsks()).toBe(false);
+
+    fireEvent.change(screen.getByLabelText("Section 1 title"), {
+      target: { value: "Getting started" },
+    });
+    expect(leavingAsks()).toBe(true);
+  });
+});

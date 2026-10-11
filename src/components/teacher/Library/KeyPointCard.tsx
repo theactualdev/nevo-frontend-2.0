@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { KeyPoint, KeyPointConfidence } from "@/lib/api/lessons";
 import { cn } from "@/lib/utils";
+import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
 import type { KeyPointAction } from "@/hooks/useLessonReview";
 
 /**
@@ -149,6 +150,8 @@ export function KeyPointCard({
 
   const open = openedAt === version;
   const editing = editingAt === version;
+  // C17: a rewording in progress is the teacher's own words, unsent.
+  useUnsavedGuard(editing && draft !== keyPoint.text);
   const confirmingRemove = removingAt === version;
   const setOpen = (next: boolean) => setOpenedAt(next ? version : null);
   const setEditing = (next: boolean) => setEditingAt(next ? version : null);

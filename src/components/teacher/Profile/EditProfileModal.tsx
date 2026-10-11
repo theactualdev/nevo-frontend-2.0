@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useDialogFocus } from "@/hooks/useDialogFocus";
+import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
 import { AvatarDisc } from "@/components/shared/AvatarDisc";
 import type { TeacherProfile } from "@/lib/mocks/teacherProfile";
 
@@ -42,6 +43,9 @@ export function EditProfileModal({
   const [subjects, setSubjects] = useState(profile.subjects);
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
+  // C17: a changed name or subjects line, not yet saved. The photo is not -
+  // it uploads the moment it is picked.
+  useUnsavedGuard(name !== profile.name || subjects !== profile.subjects);
   const fileInput = useRef<HTMLInputElement>(null);
   const [photo, setPhoto] = useState<string | null>(photoUrl ?? null);
   const [photoState, setPhotoState] = useState<"idle" | "sending" | "failed">(
