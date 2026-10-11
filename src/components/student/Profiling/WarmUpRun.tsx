@@ -465,7 +465,9 @@ export function WarmUpRun({
         <WarmUpNothing onHome={() => router.push(HOME)} />
       ) : (
         <div className="flex min-h-0 flex-1 items-center justify-center px-7 pb-10">
-          <div className="flex w-full max-w-[480px] flex-col items-center gap-[26px]">
+          {/* The frame's column (`cw`): the width on a phone, 440px on a
+              tablet and 480px on a desktop. It was 480px from tablet up. */}
+          <div className="flex w-full max-w-[440px] flex-col items-center gap-[26px] lg:max-w-[480px]">
             <WarmUpTask
               dimension={dimension}
               band={band}

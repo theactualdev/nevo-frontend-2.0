@@ -359,7 +359,8 @@ export function HeardPictures({
       </button>
       {/* From `sm` up each picture is a 160px square, or the square of a
           third of the row where that is narrower (the warm-up's column is
-          480px, three 160s and their gaps 512). */}
+          440px on a tablet and 480px on a desktop, three 160s and their gaps
+          512). */}
       <div className="flex w-full flex-col items-center gap-3.5 sm:flex-row sm:justify-center sm:gap-4">
         {AUDIO_PICS.map((p, i) => (
           <button
