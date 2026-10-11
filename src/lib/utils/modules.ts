@@ -68,13 +68,19 @@ export function opensLaterModule(lesson: Lesson, segmentIndex: number): boolean 
   return pos !== null && pos.moduleIndex > 0 && pos.segmentIndexInModule === 0;
 }
 
-/** A module's display name in running copy; position-based fallbacks. */
+/**
+ * A module's display name in running copy; position-based fallbacks.
+ *
+ * THE TITLE AS WRITTEN. It was lowercased to sit mid-sentence, which is right
+ * for the frame's "introduction" and wrong for any real title with a name in
+ * it: a teacher's "Lagos" or "Newton" is theirs, and is not rewritten.
+ */
 export function moduleName(
   module: LessonModule,
   kind: "done" | "next",
   isLast: boolean,
 ): string {
-  if (module.title) return `the ${module.title.toLowerCase()}${kind === "next" ? " section" : ""}`;
+  if (module.title) return `the ${module.title}${kind === "next" ? " section" : ""}`;
   if (kind === "done") return "this section";
   return isLast ? "the last section" : "the next section";
 }
