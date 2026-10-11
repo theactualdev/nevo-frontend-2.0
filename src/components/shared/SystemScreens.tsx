@@ -169,12 +169,15 @@ export function ErrorScreen({
       }
     >
       {mark && <Wordmark size="compact" className="mb-7 sm:mb-9" />}
+      {/* The screen's largest paint, so it is fetched up front (`preload`,
+          which Next 16 has in place of the deprecated `priority`). */}
       <Image
         src="/illustrations/error.png"
         alt=""
         width={1254}
         height={1254}
         sizes="220px"
+        preload
         className={ART}
       />
       <h1 className="mt-7 text-xl font-medium sm:mt-8 sm:text-2xl">

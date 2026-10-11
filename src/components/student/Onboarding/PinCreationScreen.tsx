@@ -1,9 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { Check } from "lucide-react";
 import { NevoKeyboard, useNevoKeyboardDock } from "@/components/shared";
+import { Wordmark } from "@/components/shared/BrandMarks";
 import {
   HeldPinBoxes,
   THROTTLED_PAUSE_COPY,
@@ -343,16 +343,10 @@ export function PinCreationScreen({
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-nevo-cream text-nevo-near-black">
-      {/* Top bar: wordmark only */}
-      <div className="flex h-[60px] shrink-0 items-center px-5 sm:px-8">
-        <Image
-          src="/brand/nevo-wordmark.png"
-          alt="Nevo"
-          width={344}
-          height={116}
-          priority
-          className="h-[18px] w-auto sm:h-5"
-        />
+      {/* Top bar: wordmark only, 44x14 and 20px in at every size, as frame
+          15 draws it. It was the wider file at 18-20px tall. */}
+      <div className="flex h-[60px] shrink-0 items-center px-5">
+        <Wordmark size="bar" />
       </div>
 
       <div className="flex flex-1 flex-col items-center justify-center px-10 pb-6 text-center">

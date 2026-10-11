@@ -94,12 +94,15 @@ export function RotatePrompt({
         Quiet rather than prominent: turning the tablet is still the better
         experience where turning it is possible, so this reads as the second
         option it is. It is a button and not a link because nothing navigates.
+        Quiet is not faint, though: it is the only way through for a mounted
+        tablet, and `nevo-violet` text read at 2.34:1, so it is the violet
+        made for text.
       */}
       {onContinue && (
         <button
           type="button"
           onClick={onContinue}
-          className="mt-7 shrink-0 cursor-pointer rounded-[10px] px-4 py-2.5 text-[15px] font-medium text-nevo-violet underline decoration-nevo-violet/40 underline-offset-4 transition hover:decoration-nevo-violet md:text-base [@media(max-height:460px)]:mt-4"
+          className="mt-7 shrink-0 cursor-pointer rounded-[10px] px-4 py-2.5 text-[15px] font-medium text-nevo-violet-text underline decoration-nevo-violet-text/40 underline-offset-4 transition hover:decoration-nevo-violet-text md:text-base [@media(max-height:460px)]:mt-4"
         >
           My device doesn&apos;t turn
         </button>
