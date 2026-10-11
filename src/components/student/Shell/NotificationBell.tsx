@@ -90,8 +90,6 @@ export function NotificationBell({ className }: { className?: string }) {
     return () => window.removeEventListener("pointerdown", onDown);
   }, [open]);
 
-  const empty = !failed && !loading && notifications.length === 0;
-
   return (
     // Not positioned on a phone, so the panel hangs from the top bar instead
     // of from the bell - see the panel.
@@ -135,11 +133,15 @@ export function NotificationBell({ className }: { className?: string }) {
           aria-label="Notifications"
           className="absolute inset-x-4 top-full z-40 overflow-hidden rounded-[12px] bg-nevo-cream-elevated shadow-[0_4px_16px_rgba(0,0,0,0.10)] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-1 motion-safe:duration-150 md:inset-x-auto md:top-12 md:right-0 md:w-[340px] md:shadow-[0_8px_32px_rgba(0,0,0,0.16)] lg:w-[360px]"
         >
-          {/* The phone's empty card is the tile and its line alone. */}
+          {/* The phone's card for an empty feed is the tile and its line
+              alone - board 28 draws it with no title. */}
           <p
             className={cn(
               "px-4 pt-4 pb-2 text-base font-medium text-nevo-near-black md:px-[18px] md:pt-[18px] md:pb-2.5",
-              empty && "max-md:hidden",
+              !failed &&
+                !loading &&
+                notifications.length === 0 &&
+                "max-md:hidden",
             )}
           >
             Notifications
@@ -156,7 +158,7 @@ export function NotificationBell({ className }: { className?: string }) {
                 className="block size-5 rounded-full border-[2.5px] border-nevo-navy/20 border-t-nevo-navy motion-safe:animate-spin motion-safe:[animation-duration:800ms]"
               />
             </div>
-          ) : empty ? (
+          ) : notifications.length === 0 ? (
             <PanelNote>Nothing new right now</PanelNote>
           ) : (
             <div className="flex flex-col">
