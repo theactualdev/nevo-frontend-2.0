@@ -88,3 +88,43 @@ describe("DoorRotateLock", () => {
     expect(screen.getByText("Teacher sign in")).toBeInTheDocument();
   });
 });
+
+/**
+ * The student console's own rules - the focus ring first - are scoped to
+ * `[data-nevo-console="student"]`, which `StudentShell` carries. A child's
+ * doors under `/auth` sit outside the shell, so they carry it here.
+ */
+describe("which console a door belongs to", () => {
+  it.each([
+    "/auth/login",
+    "/auth/sign-in",
+    "/auth/forgot-pin",
+    "/auth/session-expired",
+    "/auth/session-ended",
+  ])("marks %s as the student console's", (door) => {
+    path.current = door;
+    render(
+      <DoorRotateLock>
+        <main>door</main>
+      </DoorRotateLock>,
+    );
+
+    expect(
+      screen.getByText("door").closest('[data-nevo-console="student"]'),
+    ).not.toBeNull();
+  });
+
+  it.each(["/auth/teacher", "/auth/admin", "/auth/forgot-password"])(
+    "never marks a staff door, %s",
+    (door) => {
+      path.current = door;
+      render(
+        <DoorRotateLock>
+          <main>door</main>
+        </DoorRotateLock>,
+      );
+
+      expect(document.querySelector("[data-nevo-console]")).toBeNull();
+    },
+  );
+});

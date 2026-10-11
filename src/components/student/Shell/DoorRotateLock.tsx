@@ -37,9 +37,20 @@ export function isStudentDoor(pathname: string | null | undefined): boolean {
  * The prompt's own way through - "continue sideways", remembered per device -
  * comes with it, so a tray-mounted tablet that cannot turn is never walled
  * out of signing in, which was the 4 Oct answer's worry.
+ *
+ * AND THE DOOR IS MARKED AS THE STUDENT CONSOLE'S (`data-nevo-console`), as
+ * `StudentShell` marks the app, so a rule scoped to the student console - the
+ * focus ring - reaches the picker, the PIN, 00c, Forgot PIN and the session
+ * ends too, which sit outside the shell. Here because this is the one place
+ * that already knows which doors are a child's; a staff door is never marked.
+ * `contents`, like the lock's own wrapper, so it draws no box.
  */
 export function DoorRotateLock({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   if (!isStudentDoor(pathname)) return <>{children}</>;
-  return <RotateLock className="contents">{children}</RotateLock>;
+  return (
+    <div data-nevo-console="student" className="contents">
+      <RotateLock className="contents">{children}</RotateLock>
+    </div>
+  );
 }
