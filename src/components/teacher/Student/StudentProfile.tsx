@@ -240,7 +240,12 @@ export function StudentProfile({
             "How <name> learns" is the learning-styles framing rule 1 exists to
             keep out of the product, and it sat directly above the cards that
             used to carry the modality claims. The section says what Nevo saw. */}
-        <h3 className="mt-[26px] text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase xl:mt-8 xl:text-sm">
+        <h3
+          className={cn(
+            "mt-[26px] text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase xl:text-sm",
+            early ? "xl:mt-8" : "xl:mt-9",
+          )}
+        >
           What Nevo has noticed
         </h3>
         {/*

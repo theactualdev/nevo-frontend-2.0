@@ -42,7 +42,7 @@ const CHEVRON = (
 );
 
 const DROP_GLYPH = (
-  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-[13px]">
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
     <path d="M12 5v9" />
     <path d="M8 11l4 4 4-4" />
   </svg>
@@ -137,8 +137,8 @@ export function LiveClassInsights({
   return (
     <>
       {summary && (
-        <div className="mt-[18px] rounded-[12px] bg-nevo-cream-elevated px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-[22px] xl:max-w-[760px] xl:px-[26px] xl:py-6">
-          <div className="flex items-center gap-2">
+        <div className="mt-[18px] rounded-[12px] bg-nevo-cream-elevated px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-[22px] xl:px-[26px] xl:py-6">
+          <div className="flex items-center gap-2 xl:gap-[9px]">
             {/* The lightbulb is desktop-only in the frame. */}
             <span className="hidden text-nevo-navy xl:inline-flex">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -150,7 +150,7 @@ export function LiveClassInsights({
               {`This week in ${className}`}
             </h3>
           </div>
-          <p className="mt-3 text-[14.5px] leading-[1.6] text-nevo-near-black/82 xl:text-[15.5px]">
+          <p className="mt-3 text-[14.5px] leading-[1.6] text-nevo-near-black/82 xl:mt-3.5 xl:text-base xl:leading-[1.65]">
             {summary}
           </p>
         </div>
@@ -230,7 +230,7 @@ export function LiveClassInsights({
       {flags.length > 0 && (
         <>
           <h3 className={SECTION_H}>Flags</h3>
-          <div className="mt-3.5 flex flex-col gap-[11px] xl:gap-2">
+          <div className="mt-3.5 flex flex-col gap-[11px] xl:mt-4 xl:gap-3">
             {flags.map((f) => (
               /* C09's cards open the student - the frame draws them
                  cursor:pointer, and the fixture's have always been links. The
@@ -239,27 +239,27 @@ export function LiveClassInsights({
                 key={f.id}
                 href={`/teacher/students/${f.studentId}`}
                 className={cn(
-                  "relative flex cursor-pointer gap-3.5 rounded-[12px] bg-nevo-cream-elevated py-4 pr-[18px] pl-[22px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-[filter] hover:brightness-[0.985] xl:gap-4",
+                  "relative flex cursor-pointer gap-3.5 rounded-[12px] bg-nevo-cream-elevated py-4 pr-[18px] pl-[22px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-[filter] hover:brightness-[0.985] xl:gap-4 xl:py-5 xl:pr-[22px] xl:pl-[26px]",
                 )}
               >
                 <span
                   className={cn(
-                    "absolute inset-y-3.5 left-0 w-[3px] rounded-full xl:inset-y-4",
+                    "absolute inset-y-3.5 left-0 w-[3px] rounded-full",
                     f.isSudden ? "bg-nevo-navy" : "bg-nevo-violet",
                   )}
                 />
                 <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-2">
+                  <span className="flex items-center gap-2 xl:gap-[9px]">
                     {f.isSudden && (
                       <span className="flex size-[18px] shrink-0 items-center justify-center rounded-full bg-nevo-navy text-nevo-cream xl:size-5">
                         {DROP_GLYPH}
                       </span>
                     )}
-                    <span className="text-[15px] font-semibold text-nevo-near-black">
+                    <span className="text-[15px] font-semibold text-nevo-near-black xl:text-base">
                       {f.name ?? "One of your students"}
                     </span>
                   </span>
-                  <span className="mt-1.5 block text-sm leading-[1.5] text-nevo-near-black/78 xl:text-[14.5px]">
+                  <span className="mt-1.5 block text-sm leading-[1.5] text-nevo-near-black/78 xl:mt-[7px] xl:text-[15px]">
                     {f.note}
                   </span>
                 </span>
@@ -289,10 +289,10 @@ export function LiveClassInsights({
       {concepts.length > 0 && (
         <>
           <h3 className={SECTION_H}>Where the class stands</h3>
-          <p className="mt-2 hidden max-w-[62ch] text-[13px] leading-[1.5] text-nevo-near-black/60 xl:block">
+          <p className="mt-2 hidden max-w-[660px] text-sm leading-[1.55] text-nevo-near-black/60 xl:block">
             Each idea, and how much the reading itself is shaping the result.
           </p>
-          <div className="mt-3.5 flex flex-col gap-5 rounded-[12px] bg-nevo-cream-elevated px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-4 xl:px-[26px] xl:py-6">
+          <div className="mt-3.5 flex flex-col gap-5 rounded-[12px] bg-nevo-cream-elevated px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-4 xl:gap-[22px] xl:px-[26px] xl:py-6">
             {concepts.map((c) => (
               <MasteryDualTrack
                 key={c.conceptId}

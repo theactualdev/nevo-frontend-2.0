@@ -203,7 +203,7 @@ export function SectionReview({
 
   return (
     <>
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-[18px] xl:px-8 xl:py-7">
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-[18px] xl:px-8 xl:py-[22px]">
         {/* The console's reading column: 820px, centred (design system, 8 Oct). */}
         <div className="mx-auto max-w-[820px]">
           {flat && (
@@ -240,7 +240,7 @@ export function SectionReview({
           )}
 
           {noSuggestion && (
-            <div className="flex flex-col gap-2.5">
+            <div className="flex flex-col gap-3.5">
               <div className="rounded-[12px] bg-nevo-cream-elevated px-5 py-[18px]">
                 <div className="text-[15px] font-semibold text-nevo-near-black">
                   This lesson is short - 5 segments or fewer - so it stays as one

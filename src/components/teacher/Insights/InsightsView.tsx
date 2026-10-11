@@ -165,7 +165,7 @@ export function InsightsView() {
           <h3 className="mt-[22px] text-xl font-semibold tracking-[-0.01em] text-nevo-near-black xl:mt-6 xl:text-[21px]">
             Select a class to see insights
           </h3>
-          <p className="mt-2.5 max-w-[340px] text-[15px] leading-[1.55] text-nevo-near-black/62 xl:mt-2 xl:max-w-[360px] xl:text-[15.5px]">
+          <p className="mt-2.5 max-w-[340px] text-[15px] leading-[1.55] text-nevo-near-black/62 xl:mt-[11px] xl:max-w-[360px] xl:text-[15.5px]">
             <span className="xl:hidden">
               Pick one of your classes above to see how the week is going.
             </span>

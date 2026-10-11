@@ -53,7 +53,7 @@ export function VariantReview({
           {`${lesson.title} · Section ${sectionIndex}`}
         </h1>
 
-        <p className="mt-4 text-[13px] leading-[1.6] text-nevo-near-black/60 italic">
+        <p className="mt-4 text-[13px] leading-[1.6] text-nevo-near-black/60 italic xl:mt-[18px]">
           {VARIANT_ORIENTATION}
         </p>
 

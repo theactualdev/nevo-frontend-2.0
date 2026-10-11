@@ -82,7 +82,7 @@ function Mark({ kind }: { kind: "flag" | "done" | "ok" }) {
   if (kind === "done") {
     return (
       <span className="flex size-[22px] shrink-0 items-center justify-center rounded-full bg-nevo-navy">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#f7f1e6" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#f7f1e6" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-[13px]">
           <path d="M20 6L9 17l-5-5" />
         </svg>
       </span>

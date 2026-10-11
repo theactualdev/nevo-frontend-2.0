@@ -123,7 +123,7 @@ export function ParseFallback({
   const [formatsOpen, setFormatsOpen] = useState(false);
   return (
     <>
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-[22px] xl:px-8 xl:py-7">
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-[22px] xl:px-8 xl:py-[26px]">
         {kind === "noBoundary" && (
           <div className="max-w-[600px]">
             <div className="flex items-start gap-3 rounded-[12px] bg-nevo-violet/14 px-[17px] py-[15px]">

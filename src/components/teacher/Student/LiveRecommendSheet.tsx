@@ -197,11 +197,11 @@ export function LiveRecommendSheet({
 
   if (sent) {
     return (
-      <Shell onClose={onClose}>
-        <h2 className="text-[20px] font-semibold text-nevo-near-black xl:text-[19px]">
+      <Shell onClose={onClose} narrow>
+        <h2 className="text-[20px] font-semibold text-nevo-near-black xl:text-[21px]">
           {`That${"’"}s sent to ${firstName}`}
         </h2>
-        <p className="mt-3 text-[14.5px] leading-[1.6] text-nevo-near-black/72">
+        <p className="mt-3 text-[14.5px] leading-[1.6] text-nevo-near-black/72 xl:mt-2.5 xl:text-[15px] xl:leading-[1.55]">
           {sentWithNote
             ? `${"“"}${sent}${"”"} is now waiting in ${firstName}${"’"}s lessons. Your note goes with this lesson and only ${firstName} sees it.`
             : `${"“"}${sent}${"”"} is now waiting in ${firstName}${"’"}s lessons.`}
@@ -209,7 +209,7 @@ export function LiveRecommendSheet({
         <button
           type="button"
           onClick={onClose}
-          className="mt-6 h-12 w-full cursor-pointer rounded-[10px] bg-nevo-navy text-[14.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93"
+          className="mt-6 h-12 w-full cursor-pointer rounded-[10px] bg-nevo-navy text-[14.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93 xl:mt-[22px] xl:text-[15px]"
         >
           {`Back to ${firstName}${"’"}s profile`}
         </button>
@@ -219,16 +219,16 @@ export function LiveRecommendSheet({
 
   return (
     <Shell onClose={onClose}>
-      <h2 className="text-[20px] font-semibold text-nevo-near-black xl:text-[19px]">
+      <h2 className="text-[20px] font-semibold text-nevo-near-black xl:text-[22px]">
         {`Recommend a lesson to ${firstName}`}
       </h2>
 
       {suggestion && (
-        <div className="mt-4 rounded-[12px] bg-nevo-violet/12 px-4 py-3.5">
-          <p className="text-[11.5px] font-semibold tracking-[0.04em] text-nevo-navy uppercase xl:text-[12.5px]">
+        <div className="mt-4 rounded-[12px] bg-nevo-violet/12 px-4 py-3.5 xl:mt-[18px] xl:px-[18px] xl:py-4">
+          <p className="text-[11.5px] font-semibold tracking-[0.04em] text-nevo-navy uppercase xl:text-xs">
             Nevo suggests
           </p>
-          <p className="mt-[7px] text-[14px] leading-[1.55] text-nevo-near-black/78 xl:mt-1.5">
+          <p className="mt-[7px] text-[14px] leading-[1.55] text-nevo-near-black/78 xl:mt-2 xl:text-[15px]">
             {suggestion}
           </p>
         </div>
@@ -259,7 +259,7 @@ export function LiveRecommendSheet({
             : `We couldn${"’"}t reach your library just now. Nothing has changed, so you can try again.`}
         </p>
       ) : (
-        <div className="mt-3 flex max-h-[280px] flex-col gap-[9px] overflow-y-auto xl:gap-2">
+        <div className="mt-3 flex max-h-[280px] flex-col gap-[9px] overflow-y-auto xl:mt-2">
           {cards.map((c) => (
             <button
               key={c.id}
@@ -267,17 +267,17 @@ export function LiveRecommendSheet({
               aria-pressed={choice === c.id}
               onClick={() => setChoice(c.id)}
               className={cn(
-                "cursor-pointer rounded-[10px] border px-4 py-3.5 text-left transition-colors xl:px-3.5 xl:py-3",
+                "cursor-pointer rounded-[10px] border px-4 py-3.5 text-left transition-colors xl:rounded-[11px]",
                 choice === c.id
                   ? "border-nevo-navy bg-nevo-navy/6"
                   : "border-nevo-near-black/12 hover:border-nevo-navy/35",
               )}
             >
-              <span className="block text-[14.5px] font-medium text-nevo-near-black">
+              <span className="block text-[14.5px] font-medium text-nevo-near-black xl:text-[15px]">
                 {c.title}
               </span>
               {c.meta && (
-                <span className="mt-0.5 block text-[12.5px] text-nevo-near-black/55">
+                <span className="mt-0.5 block text-[12.5px] text-nevo-near-black/55 xl:text-[13px]">
                   {c.meta}
                 </span>
               )}
@@ -297,23 +297,23 @@ export function LiveRecommendSheet({
           false for the whole in-flight window as well as after a failure, so
           it is the one condition both cases need. */}
       {live && cards.length > 0 && (
-        <label className="mt-5 block text-[13px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase">
+        <label className="mt-5 block text-[13px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase xl:mt-[18px]">
           {`Add a note for ${firstName} (optional)`}
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
             // C08c's own placeholder: a teacher talking to the child.
             placeholder={`Try this one - I think it${"’"}ll click${"…"}`}
-            className="mt-2 h-[84px] w-full resize-none rounded-[10px] border border-nevo-near-black/15 px-3.5 py-3 text-[14.5px] leading-[1.5] font-normal tracking-normal text-nevo-near-black normal-case transition-colors focus:border-nevo-navy focus:outline-none"
+            className="mt-2 h-[84px] w-full resize-none rounded-[10px] border border-nevo-near-black/15 px-3.5 py-3 text-[14.5px] leading-[1.5] font-normal tracking-normal text-nevo-near-black normal-case transition-colors focus:border-nevo-navy focus:outline-none xl:h-[76px]"
           />
         </label>
       )}
 
-      <div className="mt-[18px] flex gap-3 xl:mt-6">
+      <div className="mt-[18px] flex gap-3 xl:mt-5">
         <button
           type="button"
           onClick={onClose}
-          className="h-12 flex-1 cursor-pointer rounded-[10px] border border-nevo-near-black/15 text-[14.5px] font-medium text-nevo-near-black/72"
+          className="h-12 flex-1 cursor-pointer rounded-[10px] border border-nevo-near-black/15 text-[14.5px] font-medium text-nevo-near-black/72 xl:h-[50px] xl:text-[15px]"
         >
           Cancel
         </button>
@@ -321,7 +321,7 @@ export function LiveRecommendSheet({
           type="button"
           disabled={!chosen || busy}
           onClick={() => void send()}
-          className="h-12 flex-[2] cursor-pointer rounded-[10px] bg-nevo-navy text-[14.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93 disabled:cursor-not-allowed disabled:opacity-55"
+          className="h-12 flex-[2] cursor-pointer rounded-[10px] bg-nevo-navy text-[14.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93 disabled:cursor-not-allowed disabled:opacity-55 xl:h-[50px] xl:text-[15px]"
         >
           {busy ? `Sending${"…"}` : "Recommend this lesson"}
         </button>
@@ -351,9 +351,11 @@ export function LiveRecommendSheet({
 function Shell({
   children,
   onClose,
+  narrow = false,
 }: {
   children: React.ReactNode;
   onClose: () => void;
+  narrow?: boolean;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   useDialogFocus(dialogRef, { onEscape: onClose });
@@ -369,7 +371,10 @@ function Shell({
         aria-modal="true"
         aria-label="Recommend a lesson"
         onClick={(e) => e.stopPropagation()}
-        className="max-h-[90dvh] w-full max-w-[520px] overflow-y-auto rounded-t-[18px] bg-nevo-cream p-7 sm:rounded-[16px] xl:max-w-[460px] xl:rounded-[18px] xl:px-6"
+        className={cn(
+          "max-h-[90dvh] w-full max-w-[520px] overflow-y-auto rounded-t-[18px] bg-nevo-cream p-7 sm:rounded-[16px]",
+          narrow ? "xl:max-w-[420px] xl:p-9" : "xl:max-w-[560px] xl:p-[30px]",
+        )}
       >
         {children}
       </div>

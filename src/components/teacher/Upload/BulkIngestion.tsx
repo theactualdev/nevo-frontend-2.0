@@ -747,7 +747,7 @@ export function BulkIngestion() {
                     <div
                       key={`${u.filename}-${i}`}
                       className={cn(
-                        "flex items-start gap-3 px-[18px] py-3.5",
+                        "flex items-start gap-3 px-[18px] py-3 xl:gap-3.5 xl:px-5 xl:py-3.5",
                         i < batch.uploads.length - 1 &&
                           "border-b border-nevo-near-black/7",
                       )}
@@ -792,7 +792,7 @@ export function BulkIngestion() {
                             filename kept beneath it - a teacher recognises
                             what they dragged in, and sees what Nevo made of
                             it. Filename alone until the title arrives. */}
-                        <div className="truncate text-[14.5px] font-medium text-nevo-near-black">
+                        <div className="truncate text-[14.5px] font-medium text-nevo-near-black xl:text-[15px]">
                           {titleOf(u.uploadId, outcomes) || u.filename}
                         </div>
                         {titleOf(u.uploadId, outcomes) && (

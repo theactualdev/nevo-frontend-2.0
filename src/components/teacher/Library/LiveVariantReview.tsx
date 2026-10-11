@@ -423,7 +423,7 @@ export function LiveVariantReview({
           </p>
         )}
 
-        <p className="mt-4 text-[13px] leading-[1.6] text-nevo-near-black/60 italic">
+        <p className="mt-4 text-[13px] leading-[1.6] text-nevo-near-black/60 italic xl:mt-[18px]">
           {VARIANT_ORIENTATION}
         </p>
 
@@ -503,7 +503,7 @@ export function LiveVariantReview({
               type="button"
               onClick={approve}
               disabled={busy}
-              className="inline-flex h-[42px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[18px] text-[13.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93 disabled:cursor-default disabled:opacity-60 xl:h-11 xl:px-5 xl:text-sm"
+              className="inline-flex h-[42px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[18px] text-[13.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93 disabled:cursor-default disabled:opacity-60 xl:h-[46px] xl:px-[22px] xl:text-[14.5px]"
             >
               {busy ? "Approving…" : "Approve this section"}
             </button>
@@ -529,7 +529,7 @@ export function LiveVariantReview({
           <div className="mt-3 flex justify-end">
             <Link
               href={`/teacher/lessons/assign?lesson=${lessonId}`}
-              className="inline-flex h-[42px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[18px] text-[13.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93 xl:h-11 xl:px-5 xl:text-sm"
+              className="inline-flex h-[42px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[18px] text-[13.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93 xl:h-[46px] xl:px-[22px] xl:text-[14.5px]"
             >
               Assign to classes
             </Link>

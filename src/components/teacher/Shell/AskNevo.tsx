@@ -582,7 +582,7 @@ export function AskNevo() {
                           <span
                             key={delay}
                             style={{ animationDelay: `${delay}ms` }}
-                            className="size-1.5 rounded-full bg-nevo-navy motion-safe:animate-nevo-dot"
+                            className="size-[7px] rounded-full bg-nevo-navy motion-safe:animate-nevo-dot"
                           />
                         ))}
                       </div>

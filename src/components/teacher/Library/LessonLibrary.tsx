@@ -228,7 +228,7 @@ export function LessonLibrary() {
             placeholder="Search lessons"
             aria-label="Search lessons"
             className={cn(
-              "h-12 w-full rounded-[10px] border-[1.5px] bg-nevo-cream-elevated px-11 text-[15px] text-nevo-near-black outline-none transition-colors placeholder:text-nevo-near-black/45 focus:border-nevo-navy xl:h-[50px] xl:text-[15.5px]",
+              "h-12 w-full rounded-[10px] border-[1.5px] bg-nevo-cream-elevated pr-10 pl-[42px] text-[15px] text-nevo-near-black outline-none transition-colors placeholder:text-nevo-near-black/45 focus:border-nevo-navy xl:h-[50px] xl:pr-[42px] xl:pl-11 xl:text-[15.5px]",
               hasQuery ? "border-nevo-navy" : "border-nevo-near-black/14",
             )}
           />
@@ -237,9 +237,9 @@ export function LessonLibrary() {
               type="button"
               aria-label="Clear search"
               onClick={() => setQuery("")}
-              className="absolute top-1/2 right-4 -translate-y-1/2 cursor-pointer text-nevo-near-black/40"
+              className="absolute top-1/2 right-3.5 -translate-y-1/2 cursor-pointer text-nevo-near-black/40 xl:right-[15px]"
             >
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-[17px]">
                 <path d="M6 6l12 12M18 6L6 18" />
               </svg>
             </button>
@@ -292,7 +292,7 @@ export function LessonLibrary() {
       )}
 
       {shown.length > 0 ? (
-        <div className="mt-3 grid max-w-[1000px] grid-cols-2 gap-3.5 xl:mt-[18px] xl:grid-cols-3 xl:gap-4">
+        <div className="mt-3 grid max-w-[1000px] grid-cols-2 gap-3.5 xl:mt-3.5 xl:grid-cols-3 xl:gap-4">
           {/*
             MARKED WHEN THEY ARE NOT THIS TEACHER'S. Every other teacher
             fallback carries `data-nevo-sample`; this grid did not, so a

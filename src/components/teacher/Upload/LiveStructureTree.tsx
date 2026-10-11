@@ -400,7 +400,7 @@ export function LiveStructureTree({
        to this pane (C07d). Without it the sheet took the nearest positioned
        ancestor up the tree instead. */
     <div className="relative flex min-h-0 flex-1 flex-col">
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-[18px] xl:px-8 xl:py-7">
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-[18px] xl:px-8 xl:py-[22px]">
         {banner}
         <div className="mb-3 flex justify-end">
           <button
@@ -421,14 +421,14 @@ export function LiveStructureTree({
             </svg>
           </span>
           <div className="min-w-0 flex-1">
-            <div className="font-mono text-[10.5px] font-bold tracking-[0.14em] text-nevo-violet/80">
+            <div className="font-mono text-[10px] font-bold tracking-[0.14em] text-nevo-violet/80">
               THE BLOCK YOU UPLOADED
             </div>
-            <div className="truncate text-[17px] font-semibold text-nevo-cream">
+            <div className="truncate text-base font-semibold text-nevo-cream">
               {blockName}
             </div>
           </div>
-          <span className="shrink-0 text-[13px] text-nevo-cream/70">
+          <span className="shrink-0 text-xs text-nevo-cream/70">
             {summary}
           </span>
         </div>
@@ -440,7 +440,7 @@ export function LiveStructureTree({
             /* A split lesson has no id until the server mints one, so the
                key falls back to position rather than going undefined. */
             key={lessonKey(lesson, li)}
-            className="mb-3 rounded-[12px] bg-nevo-cream-elevated px-[18px] py-4 shadow-elevation-1"
+            className="mb-[9px] rounded-[12px] bg-nevo-cream-elevated px-[18px] py-4 shadow-elevation-1"
           >
             <div className="flex items-center gap-2.5">
               <button
@@ -452,7 +452,7 @@ export function LiveStructureTree({
               >
                 <Caret />
               </button>
-              <span className="shrink-0 font-mono text-[10.5px] font-bold tracking-[0.12em] text-nevo-violet">
+              <span className="shrink-0 font-mono text-[10px] font-bold tracking-[0.12em] text-nevo-violet">
                 {`LESSON ${li + 1}`}
               </span>
               <input
@@ -462,10 +462,10 @@ export function LiveStructureTree({
                 placeholder="Untitled lesson"
                 className={cn(
                   titleInput,
-                  "text-[15.5px] font-semibold text-nevo-near-black",
+                  "text-[15px] font-semibold text-nevo-near-black",
                 )}
               />
-              <span className="shrink-0 text-[12.5px] text-nevo-near-black/55">
+              <span className="shrink-0 text-[11.5px] text-nevo-near-black/55">
                 {plural(lesson.modules.length, "section", "sections")}
               </span>
               <button type="button" onClick={() => moveLesson(li, -1)} disabled={li === 0} aria-label="Move lesson up" title="Move up" className={iconBtn}>
@@ -496,7 +496,7 @@ export function LiveStructureTree({
                 return (
                 <Fragment key={`${lesson.lessonId ?? "new"}-${li}-${mi}`}>
                 <div
-                  className="flex items-center gap-2.5 rounded-[10px] bg-nevo-cream-inset px-3.5 py-2.5"
+                  className="flex items-center gap-2.5 rounded-[10px] bg-nevo-cream-inset px-[13px] py-[11px]"
                 >
                   {named.length > 0 ? (
                     <button
@@ -511,7 +511,7 @@ export function LiveStructureTree({
                   ) : (
                     <span className="size-[22px] shrink-0" aria-hidden />
                   )}
-                  <span className="shrink-0 font-mono text-[10px] font-bold tracking-[0.1em] text-nevo-near-black/45">
+                  <span className="shrink-0 font-mono text-[9.5px] font-bold tracking-[0.1em] text-nevo-near-black/45">
                     {`SECTION ${mi + 1}`}
                   </span>
                   <input
@@ -519,11 +519,11 @@ export function LiveStructureTree({
                     onChange={(e) => renameModule(li, mi, e.target.value)}
                     aria-label={`Section ${mi + 1} title`}
                     placeholder="Untitled section"
-                    className={cn(titleInput, "text-[14px] text-nevo-near-black")}
+                    className={cn(titleInput, "text-[13.5px] text-nevo-near-black")}
                   />
                   {/* Named where the parse named them, counted where it did
                       not - never an invented title. */}
-                  <span className="shrink-0 text-[12.5px] text-nevo-near-black/55">
+                  <span className="shrink-0 text-[11px] text-nevo-near-black/55">
                     {plural(m.segmentIds.length, "segment", "segments")}
                   </span>
                   <button type="button" onClick={() => moveModule(li, mi, -1)} disabled={mi === 0} aria-label="Move section up" title="Move up" className={iconBtn}>
@@ -557,7 +557,7 @@ export function LiveStructureTree({
                         return (
                         <li
                           key={seg.key}
-                          className="flex items-center gap-2 rounded-lg bg-nevo-cream/55 px-[11px] py-2 text-[13px] leading-[1.45] text-nevo-near-black"
+                          className="flex items-center gap-[9px] rounded-lg bg-nevo-cream/55 px-[11px] py-2 text-[13px] leading-[1.45] text-nevo-near-black"
                         >
                           <span className="min-w-0 flex-1 truncate">{label}</span>
                           {seg.minutes > 0 && (
@@ -627,7 +627,7 @@ export function LiveStructureTree({
         )}
       </div>
 
-      <div className="flex shrink-0 items-center gap-3 border-t border-nevo-near-black/10 bg-nevo-cream px-6 py-3 xl:px-8 xl:py-3.5">
+      <div className="flex shrink-0 items-center gap-3.5 border-t border-nevo-near-black/10 bg-nevo-cream px-6 py-3 xl:px-8 xl:py-3.5">
         <button
           type="button"
           onClick={() => void save()}
@@ -667,7 +667,7 @@ export function LiveStructureTree({
           onClick={() => void addToLibrary()}
           disabled={phase === "committing" || saving === "saving"}
           className={cn(
-            "flex items-center rounded-[10px] px-[18px] py-[11px] text-[13.5px] font-semibold xl:h-[46px] xl:px-[26px] xl:py-0 xl:text-[15px]",
+            "flex items-center rounded-[10px] px-[18px] py-[11px] text-[13.5px] font-semibold",
             phase === "committing" || saving === "saving"
               ? "cursor-not-allowed bg-nevo-navy/18 text-nevo-near-black/40"
               : "cursor-pointer bg-nevo-navy text-nevo-cream transition-[filter] hover:brightness-93",
@@ -695,14 +695,14 @@ export function LiveStructureTree({
               <button
                 type="button"
                 onClick={() => void commit()}
-                className="flex h-[46px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-5 text-[15px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93"
+                className="flex cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[18px] py-[11px] text-[13.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93"
               >
                 Yes, add them
               </button>
               <button
                 type="button"
                 onClick={() => setPhase("idle")}
-                className="flex h-[46px] cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-near-black/18 px-5 text-[15px] font-semibold text-nevo-near-black transition-colors hover:bg-nevo-near-black/5"
+                className="flex cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-near-black/18 px-3.5 py-[9px] text-[13px] font-semibold text-nevo-near-black transition-colors hover:bg-nevo-near-black/5"
               >
                 Let me review first
               </button>
