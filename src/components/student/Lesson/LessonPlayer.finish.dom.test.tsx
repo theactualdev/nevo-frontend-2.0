@@ -14,7 +14,21 @@ import type { Lesson } from "@/lib/types";
  * its clock mid-lesson sent a negative duration.
  */
 
-const { trackEvent } = vi.hoisted(() => ({ trackEvent: vi.fn() }));
+const { trackEvent, preload } = vi.hoisted(() => ({
+  trackEvent: vi.fn(),
+  preload: vi.fn(),
+}));
+vi.mock("@/components/shared/SettlingCharacter", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/components/shared/SettlingCharacter")>();
+  return {
+    ...actual,
+    preloadSettlingCharacter: () => {
+      preload();
+      return actual.preloadSettlingCharacter();
+    },
+  };
+});
 vi.mock("@/hooks", () => ({
   useLesson: () => ({ setActiveLesson: vi.fn() }),
   useSignals: () => ({ trackEvent }),
@@ -69,6 +83,17 @@ describe("a lesson with no end-of-lesson questions", () => {
     expect(
       screen.getByRole("heading", { name: /That's the lesson done/ }),
     ).toBeVisible();
+  });
+});
+
+describe("the ending's picture", () => {
+  it("is fetched as the player opens, while there is still a connection", () => {
+    preload.mockReset();
+    render(<LessonPlayer lesson={LESSON} plan={null} />);
+
+    // Long before the ending, which may come after the connection drops.
+    expect(screen.queryByRole("heading", { name: /lesson done/ })).toBeNull();
+    expect(preload).toHaveBeenCalledTimes(1);
   });
 });
 

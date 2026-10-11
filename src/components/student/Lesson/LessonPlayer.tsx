@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import {
   AdaptiveToggleBar,
+  preloadSettlingCharacter,
   ProgressBar,
   type ToggleSegment,
 } from "@/components/shared";
@@ -491,6 +492,16 @@ export function LessonPlayer({
   );
   // Exiting mid-lesson goes through the leave dialog, not straight out.
   const [leaveOpen, setLeaveOpen] = useState(false);
+  /*
+   * THE ENDING'S PICTURE, FETCHED WHILE THERE IS A CONNECTION. The completion
+   * screen and the offline ending both draw it, and either can come after the
+   * connection has dropped. Held for the life of the player, which is what
+   * keeps it to hand.
+   */
+  const endingPicture = useRef<HTMLImageElement | null>(null);
+  useEffect(() => {
+    endingPicture.current ??= preloadSettlingCharacter();
+  }, []);
 
   // Position, on every move - including the ones that go through a module
   // boundary or a break, which is why this watches `index` rather than
