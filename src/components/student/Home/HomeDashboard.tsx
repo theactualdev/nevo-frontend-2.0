@@ -669,7 +669,9 @@ function TodayCard({
     <button
       type="button"
       onClick={onOpen}
-      className="cursor-pointer overflow-hidden rounded-[12px] bg-nevo-cream-elevated text-left shadow-elevation-1 transition-transform active:scale-[0.98] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-500"
+      // A column, not a button's centred box: in a row stretched to a taller
+      // neighbour, the tint band slid down off the top of a shorter card.
+      className="flex cursor-pointer flex-col overflow-hidden rounded-[12px] bg-nevo-cream-elevated text-left shadow-elevation-1 transition-transform active:scale-[0.98] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-500"
       style={{ animationDelay: `${180 + index * 60}ms` }}
     >
       <div

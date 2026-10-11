@@ -344,7 +344,9 @@ function LessonCard({
     <button
       type="button"
       onClick={onOpen}
-      className="relative cursor-pointer overflow-hidden rounded-[12px] bg-nevo-cream-elevated text-left shadow-elevation-1 transition-transform active:scale-[0.98]"
+      // A column, not a button's centred box: in a row stretched to a taller
+      // neighbour, the accent bar slid down off the top of a shorter card.
+      className="relative flex cursor-pointer flex-col overflow-hidden rounded-[12px] bg-nevo-cream-elevated text-left shadow-elevation-1 transition-transform active:scale-[0.98]"
     >
       {/* Accent bar (subject) */}
       <div className="h-[5px] bg-nevo-violet/70" />
