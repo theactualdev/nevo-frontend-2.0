@@ -157,6 +157,22 @@ export function ConnectTab({
     if (shownId && shownUnread) markThreadRead(shownId);
   }, [shownId, shownUnread, markThreadRead]);
 
+  /*
+   * A CONVERSATION OPENS AT ITS NEWEST MESSAGE, and stays there as messages
+   * arrive - the one a child came to read, or just sent. It opened at the
+   * oldest, so on a long thread the latest reply was a scroll away.
+   * `view` is here because a phone's conversation pane is not laid out until
+   * it is shown, and has nothing to scroll before then.
+   */
+  const messagesRef = useRef<HTMLDivElement>(null);
+  const activeKey = active?.id;
+  const messageCount = active?.messages.length ?? 0;
+  const historyState = active?.history;
+  useEffect(() => {
+    const el = messagesRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [activeKey, messageCount, historyState, view]);
+
   const setMessages = (threadId: string, fn: (m: Message[]) => Message[]) =>
     setThreads((ts) =>
       ts.map((t) =>
@@ -465,7 +481,10 @@ export function ConnectTab({
           </span>
         </header>
 
-        <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto p-5">
+        <div
+          ref={messagesRef}
+          className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto p-5"
+        >
           {/* D104 (8 Oct): one conversation loading, or failed to load. Not
               "no messages", and drawn in place of the conversation - its
               messages and the composer come back only once it has loaded,

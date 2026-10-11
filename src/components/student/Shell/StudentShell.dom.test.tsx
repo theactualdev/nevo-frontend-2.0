@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
-import { StudentShell, scalesWithTextSize } from "./StudentShell";
+import { StudentShell, fillsScreen, scalesWithTextSize } from "./StudentShell";
 import { clearSession, setSession } from "@/lib/auth/session";
 import { AccessibilityProvider } from "@/context/AccessibilityContext";
 
@@ -261,5 +261,62 @@ describe("scalesWithTextSize — Text Size on the full-screen routes", () => {
 
   it("still scales the lesson player, where the reading happens", () => {
     expect(scalesWithTextSize("/student/lessons/abc-123")).toBe(true);
+  });
+});
+
+describe("Connect fills the screen between the chrome", () => {
+  /*
+   * Connect's `h-full` resolved against an unsized wrapper, so the
+   * conversation collapsed to its messages: the composer floated under the
+   * last one, below the fold on a long thread, and the header scrolled away.
+   * jsdom lays nothing out, so this pins the sized box, and that every other
+   * tab still scrolls in `<main>` as it did.
+   */
+  it("gives Connect a sized box to fill", () => {
+    at("/student/connect");
+    expect(screen.getByText("lesson body").parentElement).toHaveClass("h-full");
+  });
+
+  it("leaves the other tabs to scroll in <main>", () => {
+    for (const path of [
+      "/student/dashboard",
+      "/student/lessons",
+      "/student/progress",
+      "/student/downloads",
+    ]) {
+      const { unmount } = at(path);
+      expect(screen.getByText("lesson body").parentElement).not.toHaveClass(
+        "h-full",
+      );
+      unmount();
+    }
+  });
+
+  it("is Connect and only Connect", () => {
+    expect(fillsScreen("/student/connect")).toBe(true);
+    expect(fillsScreen("/student/connections")).toBe(false);
+    expect(fillsScreen("/student/dashboard")).toBe(false);
+  });
+});
+
+describe("a tab's docked keyboard", () => {
+  /*
+   * The Ask Nevo launcher is `fixed` over the bottom of the screen, which is
+   * where a docked keyboard sits, so it covered the keys. It steps aside the
+   * way the bottom nav does, and the content region drops the padding that
+   * cleared it, so the keyboard reaches the floor.
+   */
+  it("takes the Ask Nevo launcher out of the way", () => {
+    at("/student/connect");
+    expect(screen.getByTestId("ask-nevo").parentElement).toHaveClass(
+      "not-pointer-fine:group-has-[[data-nevo-hide-nav]]/shell:invisible",
+    );
+  });
+
+  it("lets the content region reach the floor", () => {
+    at("/student/connect");
+    expect(screen.getByRole("main")).toHaveClass(
+      "not-pointer-fine:group-has-[[data-nevo-hide-nav]]/shell:pb-0",
+    );
   });
 });

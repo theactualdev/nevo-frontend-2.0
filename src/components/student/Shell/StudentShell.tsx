@@ -275,15 +275,27 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
           // viewport - intruding 61px into this region. Desktop has no nav, so
           // this region reaches the viewport floor and the 44px pill at
           // `bottom-6` intrudes 68px. A few px of margin on each.
-          className="nevo-text-zoom min-h-0 flex-1 overflow-y-auto pb-[68px] md:pb-[76px]"
+          //
+          // Not while a tab's keyboard is docked: the trigger steps aside then
+          // (below), and the keyboard belongs on the floor of the screen.
+          className="nevo-text-zoom min-h-0 flex-1 overflow-y-auto pb-[68px] md:pb-[76px] not-pointer-fine:group-has-[[data-nevo-hide-nav]]/shell:pb-0"
         >
           {/*
             THE TAB STAYS IN FRONT OF THE CHILD OFFLINE. It was first
             unmounted, then hidden, behind a full-screen takeover - and either
             way a child part-way through a message to their teacher could not
             see it. The banner above is the whole of the offline state now.
+
+            A TAB THAT FILLS THE SCREEN gets a sized box to fill. Connect's
+            `h-full` resolved against this unsized wrapper, so the
+            conversation collapsed to its messages: the composer floated under
+            the last one, and on a long thread it was below the fold, with the
+            header scrolling away and the thread opening at its oldest message.
+            Every other tab scrolls here, in `<main>`, and keeps doing so.
           */}
-          <div>{children}</div>
+          <div className={cn(fillsScreen(pathname) && "h-full")}>
+            {children}
+          </div>
         </main>
 
         {/* Bottom nav — mobile only. Down while a tab's on-screen keyboard is
@@ -297,13 +309,34 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
       {/* Ask Nevo (26) — always reachable from the tabs, never interruptive. */}
       {/* Except Profile: the app shell frame mounts the launcher on every tab
           `&& v !== "profile"`, a deliberate exclusion rather than an omission. */}
-      {pathname !== PROFILE_HREF && <AskNevo />}
+      {/* And it steps aside with the bottom nav while a tab's keyboard is
+          docked: the launcher is `fixed` over the bottom of the screen, which
+          is where that keyboard is, so it sat on the keys a child was typing
+          with. Its sheet portals out of here, so an open one is unaffected.
+          `invisible`, not `hidden`: the launcher keeps its box, so a resize
+          while it is away clamps a dragged one against where it really is. */}
+      {pathname !== PROFILE_HREF && (
+        <div className="not-pointer-fine:group-has-[[data-nevo-hide-nav]]/shell:invisible">
+          <AskNevo />
+        </div>
+      )}
     </div>
   );
 }
 
 /** The one tab the app shell frame draws without the Ask Nevo launcher. */
 const PROFILE_HREF = "/student/profile";
+
+/**
+ * The tabs that fill the content region rather than scroll in it: Connect,
+ * whose conversation scrolls inside itself between its header and its
+ * composer (Nevo Connect Frame: the messages `flex:1 1 auto; min-height:0;
+ * overflow-y:auto`, the composer `flex:0 0 auto` at the foot).
+ */
+export function fillsScreen(pathname: string): boolean {
+  return pathname === CONNECT_HREF || pathname.startsWith(`${CONNECT_HREF}/`);
+}
+const CONNECT_HREF = "/student/connect";
 
 /**
  * The immersive player, and the review session that reuses it wholesale (37d).

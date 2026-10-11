@@ -253,6 +253,36 @@ describe("[186] the docked keyboard on a phone", () => {
   });
 });
 
+describe("a long conversation", () => {
+  /*
+   * It opened at its OLDEST message, so the reply a child came to read was a
+   * long scroll away. jsdom lays nothing out, so the height is given here and
+   * what is pinned is where the message area is left scrolled.
+   */
+  it("opens at its newest message", async () => {
+    viewport(false);
+    vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(
+      1600,
+    );
+    api.thread.mockResolvedValue({
+      threadId: "t-1",
+      messages: [
+        message("m-1", "Lovely work today"),
+        message("m-2", "See you Thursday"),
+      ],
+    });
+    render(<ConnectTab threadId="t-1" />);
+
+    await waitFor(() =>
+      expect(within(conversation()).getByText("See you Thursday")).toBeTruthy(),
+    );
+    const messages = conversation().querySelector(
+      ".overflow-y-auto",
+    ) as HTMLElement;
+    expect(messages.scrollTop).toBe(1600);
+  });
+});
+
 describe("[187] a link to one thread", () => {
   it("opens that conversation on a phone, not the list", async () => {
     viewport(false);
