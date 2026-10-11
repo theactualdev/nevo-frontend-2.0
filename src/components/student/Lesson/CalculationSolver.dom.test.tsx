@@ -224,6 +224,27 @@ describe("one step at a time", () => {
 
     expect(equation()).toBe("");
   });
+
+  it("draws the equation's minus signs as the field and pad draw them", () => {
+    show(build({ expression: "2 - 5 = -3, on the x-axis" }));
+
+    // The payload's hyphens are the sign, but for a word's own hyphen.
+    expect(equation()).toBe("2 − 5 = −3, on the x-axis");
+  });
+
+  it("still finds a highlight by the token as the payload wrote it", () => {
+    show(
+      build({
+        expression: "2 - 5 = -3",
+        steps: [step({ highlights: [{ target: "-3" }] })],
+      }),
+    );
+
+    const ringed = [...document.querySelectorAll('[aria-live="polite"] span')]
+      .filter((s) => s.classList.contains("outline-nevo-violet"))
+      .map((s) => s.textContent);
+    expect(ringed).toEqual(["−3"]);
+  });
 });
 
 describe("judging a step", () => {
@@ -352,6 +373,22 @@ describe("entering a number (D150)", () => {
     tap("Check my answer");
 
     expect(props.onStepAnswered).toHaveBeenCalledWith("s1", true);
+  });
+
+  it("keeps the newest digit in view when the number outgrows the field", () => {
+    show(NEGATIVE());
+    const field = screen.getByRole("textbox");
+    const scrolledTo = vi.fn();
+    Object.defineProperty(field, "scrollWidth", { configurable: true, value: 640 });
+    Object.defineProperty(field, "scrollLeft", {
+      configurable: true,
+      get: () => 0,
+      set: scrolledTo,
+    });
+
+    tap("7");
+
+    expect(scrolledTo).toHaveBeenLastCalledWith(640);
   });
 
   it("deletes at the field, and only once there is something to delete", () => {
@@ -652,6 +689,14 @@ describe("D149's array and place value", () => {
     tap("Tap to add, Tens");
     expect(screen.queryByRole("button", { name: "Tap to add, Tens" })).toBeNull();
     expect(screen.queryByRole("button", { name: "That's the total" })).toBeNull();
+    // Tens' piece is gone and its place kept, so Hundreds' has not moved.
+    const tray = screen.getByRole("button", { name: "Tap to add, Hundreds" })
+      .parentElement!;
+    expect(
+      [...tray.children].slice(1).map((c) =>
+        c.hasAttribute("data-tray-place") ? "place" : c.getAttribute("aria-label"),
+      ),
+    ).toEqual(["Tap to add, Hundreds", "place"]);
 
     tap("Tap to add, Hundreds");
     expect(build_().map((c) => [pieces("flat", c), pieces("rod", c)])).toEqual([
@@ -711,8 +756,28 @@ describe("what the asked step names (B107)", () => {
   it("applies a step's highlights from the moment it is asked", () => {
     show(CHOREOGRAPHED());
 
-    expect(ringed()).toEqual([true, true, false]);
-    expect(navy()).toEqual([0, 0, 0]);
+    // The result's bar is kept back, so two bars, both ringed.
+    expect(ringed()).toEqual([true, true]);
+    expect(navy()).toEqual([0, 0]);
+  });
+
+  it("rings the whole of a bar its own mark names, empty cells too", () => {
+    // 17a's `mkBar`: the denominators' ring is round all four quarters of
+    // each bar, not the one or two the bar holds.
+    show(CHOREOGRAPHED());
+
+    expect(countIn(".outline-nevo-violet")()).toEqual([4, 4]);
+  });
+
+  it("keeps a ring on a shared bar to its own mark's cells", () => {
+    show(
+      build({
+        scaffold: { kind: "bar", parts: 5, rows: 1, marks: [3, 1], labels: ["3/5", "1/5"] },
+        steps: [step({ highlights: [{ target: "1/5" }] })],
+      }),
+    );
+
+    expect(countIn(".outline-nevo-violet")()).toEqual([1]);
   });
 
   it("moves to the next step's highlights once a step is accepted", () => {
@@ -720,11 +785,11 @@ describe("what the asked step names (B107)", () => {
 
     // Accepted, its confirmation still showing: step 2's highlights now.
     pick("4 and 4");
-    expect(ringed()).toEqual([false, false, false]);
-    expect(navy()).toEqual([1, 2, 0]);
+    expect(ringed()).toEqual([false, false]);
+    expect(navy()).toEqual([1, 2]);
 
     tap("Next step");
-    expect(navy()).toEqual([1, 2, 0]);
+    expect(navy()).toEqual([1, 2]);
   });
 
   it("keeps the result back until the step naming it is accepted", () => {
@@ -733,9 +798,10 @@ describe("what the asked step names (B107)", () => {
     tap("Next step");
     pick("The numerators: 1 and 2");
 
-    // The last step is asked: its row is rendered, empty, unnamed.
-    expect(scaffoldRows()).toHaveLength(3);
-    expect(navy()).toEqual([0, 0, 0]);
+    // The last step is asked: the result's bar is not drawn at all - no
+    // empty third bar saying where the answer will go (17a, `sc-if done`).
+    expect(scaffoldRows()).toHaveLength(2);
+    expect(navy()).toEqual([0, 0]);
     expect(screen.queryByText("3/4")).toBeNull();
     // The "?" it names is where the answer goes: the frame's dashed box.
     expect(token("?")).toHaveClass("border-dashed");
@@ -883,6 +949,23 @@ describe("the narration layer", () => {
 
     expect(audio()?.getAttribute("src")).toBe("https://cdn.example/step-2.mp3");
     expect(audio()?.autoplay).toBe(true);
+  });
+
+  it("keeps the bar's place once the solve is done, so the drawing does not move", () => {
+    // 17b §13: "Scaffold and equation never move or reflow between steps."
+    render(
+      <CalculationSolver
+        calculation={build({ steps: [step({ narrationAudio: clip(1) })] })}
+        onSolved={vi.fn()}
+      />,
+    );
+    expect(audio()).not.toBeNull();
+
+    pick("4 and 4");
+
+    // Nothing left to read: the recording goes, and its row stays.
+    expect(audio()).toBeNull();
+    expect(document.querySelector("[data-narration-place]")).toHaveClass("h-16", "mb-4");
   });
 
   it("draws no bar for a step with no recording", () => {

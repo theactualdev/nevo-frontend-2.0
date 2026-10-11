@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Check, Delete, Pause, Play } from "lucide-react";
 import { Button, NevoKeyboard } from "@/components/shared";
 import type {
@@ -207,18 +207,27 @@ export function CalculationSolver({
     // Frame: the calc column is narrower than the reading column (560/600 vs
     // the player's 620/680).
     <div className="mx-auto sm:max-w-[560px] lg:max-w-[600px]">
-      {step.narration && !done && (
-        <StepNarration
-          // One clip per step: a new step is a new recording, from the top.
-          key={step.stepId}
-          clip={step.narration}
-          autoPlay={listening}
-          onStarted={startedNarration}
-          onReplay={onReplay}
-          onBusy={onAudioBusy}
-          onFailed={onNarrationFailed}
-        />
-      )}
+      {/*
+        THE BAR'S PLACE IS KEPT ONCE THE SOLVE IS DONE. There is no step left
+        to read, so the recording goes - but taking its row with it lifted the
+        drawing and the equation 80px at the very moment they assemble, and
+        17b §13 holds that "the scaffold and equation never move".
+      */}
+      {step.narration &&
+        (done ? (
+          <div aria-hidden data-narration-place className="mb-4 h-16" />
+        ) : (
+          <StepNarration
+            // One clip per step: a new step is a new recording, from the top.
+            key={step.stepId}
+            clip={step.narration}
+            autoPlay={listening}
+            onStarted={startedNarration}
+            onReplay={onReplay}
+            onBusy={onAudioBusy}
+            onFailed={onNarrationFailed}
+          />
+        ))}
 
       {/* SCAFFOLD - persistent; the payload's drawing, with its values */}
       {calculation.scaffold && (
@@ -242,7 +251,8 @@ export function CalculationSolver({
           <div
             key={line}
             className={cn(
-              "text-center text-[26px] font-medium tracking-[-0.01em] text-nevo-navy sm:text-[34px] motion-safe:animate-nevo-reveal",
+              // 17a's `eq`: 30, and 40 from the tablet up.
+              "text-center text-[30px] font-medium tracking-[-0.01em] text-nevo-navy sm:text-[40px] motion-safe:animate-nevo-reveal",
               reading && READING_HEADING,
             )}
           >
@@ -523,17 +533,20 @@ const piecesRinged = (labels: string[], emphasis: Emphasis) =>
  * The equation, token by token as written - split at its spaces, nothing
  * parsed - so a highlight can name one. A ring is the drawing's violet ring,
  * `source` the weight the frame gives the assembled answer, and `result` the
- * frame's dashed box around the "?" still to find. The text is unchanged.
+ * frame's dashed box around the "?" still to find. The text is unchanged,
+ * but for its minus signs: see `minusSigns`.
  */
 function Notation({ line, emphasis }: { line: string; emphasis: Emphasis }) {
   return (
     <>
       {line.split(/(\s+)/).map((token, i) => {
+        // Named by the token as written; only its drawing changes.
         const ring = names(emphasis.ring, token);
         const bold = names(emphasis.navy, token);
         const box = names(emphasis.result, token);
+        const shown = minusSigns(token);
         // A token nothing names stays plain text.
-        if (!ring && !bold && !box) return token;
+        if (!ring && !bold && !box) return shown;
         return (
           <span
             key={i}
@@ -544,13 +557,29 @@ function Notation({ line, emphasis }: { line: string; emphasis: Emphasis }) {
                 "inline-block rounded-[10px] border-2 border-dashed border-nevo-navy/40 px-2",
             )}
           >
-            {token}
+            {shown}
           </span>
         );
       })}
     </>
   );
 }
+
+/**
+ * THE EQUATION'S MINUS SIGNS, DRAWN AS THE FIELD AND THE PAD DRAW THEM. The
+ * payload writes a minus as a hyphen ("2 - 5 = -3"), so the equation showed a
+ * hyphen beside a field and a key showing "−". Display only: the token is
+ * still what a highlight names, and nothing here is read as a number.
+ *
+ * Only a hyphen that is a minus sign changes. One between two letters is a
+ * word's hyphen and stays; any other - on its own, before a number, after
+ * one - is the sign.
+ */
+const isLetter = (c: string | undefined) => c != null && /\p{L}/u.test(c);
+const minusSigns = (token: string) =>
+  token.replace(/-/g, (hyphen, at: number) =>
+    isLetter(token[at - 1]) && isLetter(token[at + 1]) ? hyphen : MINUS,
+  );
 
 /**
  * The "not that one" ring pulse (SCRUM-94: the displacing shake is retired),
@@ -637,7 +666,9 @@ function NumberEntry({
           onChange={(e) => onChange(e.target.value)}
           placeholder="-"
           aria-label={step.prompt}
-          className="h-[52px] w-[220px] rounded-[10px] border-2 border-nevo-near-black/18 bg-nevo-cream-elevated text-center text-[22px] font-semibold text-nevo-navy shadow-elevation-1 outline-none transition-colors focus:border-nevo-navy"
+          // `outline-none` would hide the console's focus ring, so the field
+          // draws its own.
+          className="h-[52px] w-[220px] rounded-[10px] border-2 border-nevo-near-black/18 bg-nevo-cream-elevated text-center text-[22px] font-semibold text-nevo-navy shadow-elevation-1 outline-none transition-colors focus:border-nevo-navy focus-visible:ring-2 focus-visible:ring-nevo-navy focus-visible:ring-offset-2 focus-visible:ring-offset-nevo-cream"
         />
         <Unit unit={step.unit} reading={reading} />
       </Nudged>
@@ -717,6 +748,21 @@ function PadEntry({
   onChange: (value: string) => void;
   onCommit: () => void;
 }) {
+  const field = useRef<HTMLInputElement | null>(null);
+  /*
+   * THE NEWEST DIGIT STAYS IN VIEW. A number longer than the field ran on
+   * under the delete key while the field kept showing its start, so the
+   * digit just typed on the pad never appeared. A caret a laptop has put
+   * mid-number is left where it is.
+   */
+  useLayoutEffect(() => {
+    const el = field.current;
+    if (!el) return;
+    const editingWithin =
+      document.activeElement === el && el.selectionStart !== el.value.length;
+    if (!editingWithin) el.scrollLeft = el.scrollWidth;
+  }, [value]);
+
   return (
     <EntryForm value={value} onCommit={onCommit}>
       <div className="mt-[18px] flex flex-col items-center gap-4">
@@ -727,8 +773,10 @@ function PadEntry({
           nudge={nudge}
           className="flex w-full items-center sm:max-w-[440px]"
         >
-          <div className="flex min-h-[72px] min-w-0 flex-1 items-center gap-1 rounded-[10px] border-[1.5px] border-nevo-navy/40 bg-nevo-cream-elevated px-[18px] py-2.5 transition-colors focus-within:border-nevo-navy sm:min-h-[82px] lg:min-h-[80px]">
+          {/* The field is `outline-none`, so its box carries the focus ring. */}
+          <div className="flex min-h-[72px] min-w-0 flex-1 items-center gap-1 rounded-[10px] border-[1.5px] border-nevo-navy/40 bg-nevo-cream-elevated px-[18px] py-2.5 transition-colors focus-within:border-nevo-navy has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-nevo-navy has-[input:focus-visible]:ring-offset-2 has-[input:focus-visible]:ring-offset-nevo-cream sm:min-h-[82px] lg:min-h-[80px]">
             <input
+              ref={field}
               // The pad below is this field's keyboard (D150).
               inputMode="none"
               autoCapitalize="none"
@@ -939,7 +987,21 @@ function CellRows({
     <div className={cn("flex flex-col", bar ? "gap-3" : "gap-2.5")}>
       {grid.map((cells, row) => {
         const own = oneToABar ? quantities[row] : undefined;
+        /*
+         * A BAR THAT IS A RESULT STILL KEPT BACK IS NOT DRAWN AT ALL. Its row
+         * stood empty from the first step - a third bar under the two being
+         * added, saying an answer was coming and where. 17a draws the result
+         * row only once the solve is done (`sc-if done`).
+         */
+        if (own && hidden(row)) return null;
         const result = names(emphasis.revealed, own?.label);
+        /*
+         * A RING ON A BAR'S OWN MARK RINGS THE WHOLE BAR. 17a's `mkBar` rings
+         * every cell of the bar, filled or not: what the step points at is the
+         * bar - its four quarters - not the one quarter it holds. Where one
+         * bar carries several marks, a ring stays on its mark's own cells.
+         */
+        const wholeBar = names(emphasis.ring, own?.label);
         return (
           <div
             key={row}
@@ -956,7 +1018,7 @@ function CellRows({
                   labelClass(result || names(emphasis.navy, own?.label)),
                 )}
               >
-                {hidden(row) ? null : own?.label}
+                {own?.label}
               </span>
             )}
             <div
@@ -969,6 +1031,7 @@ function CellRows({
                 const label = labelOf(mark);
                 const filled = mark != null && !hidden(mark);
                 const ring =
+                  wholeBar ||
                   (filled && names(emphasis.ring, label)) ||
                   names(emphasis.ring, partLabels[col]);
                 const navy =
@@ -1522,9 +1585,9 @@ function PlaceValueBuild({
   onPlace: (column: number) => void;
   reading: boolean;
 }) {
-  const open = columns.flatMap((c, i) =>
-    PIECES[i] && (placed[i] ?? 0) < c.count ? [i] : [],
-  );
+  /** The columns the build asks pieces for, each with a slot in the tray. */
+  const needed = columns.flatMap((c, i) => (PIECES[i] && c.count > 0 ? [i] : []));
+  const isOpen = (i: number) => (placed[i] ?? 0) < columns[i].count;
   return (
     <>
       <div className="mt-[18px] rounded-[12px] bg-nevo-cream-elevated p-[18px] shadow-elevation-1 sm:p-6">
@@ -1552,20 +1615,34 @@ function PlaceValueBuild({
           })}
         </div>
       </div>
-      {open.length > 0 && (
+      {/*
+        A FULL COLUMN'S PIECE GOES, AND ITS PLACE STAYS. The tray re-centred
+        when a column filled, so the piece the child was about to tap again
+        moved out from under their finger.
+      */}
+      {needed.some(isOpen) && (
         <TapToAdd>
-          {open.map((i) => (
-            <TrayPiece
-              key={i}
-              shape={PIECES[i].tile}
-              label={
-                columns[i].label
-                  ? `Tap to add, ${columns[i].label}`
-                  : "Tap to add"
-              }
-              onPlace={() => onPlace(i)}
-            />
-          ))}
+          {needed.map((i) =>
+            isOpen(i) ? (
+              <TrayPiece
+                key={i}
+                shape={PIECES[i].tile}
+                label={
+                  columns[i].label
+                    ? `Tap to add, ${columns[i].label}`
+                    : "Tap to add"
+                }
+                onPlace={() => onPlace(i)}
+              />
+            ) : (
+              <span
+                key={i}
+                aria-hidden
+                data-tray-place
+                className="size-11 shrink-0"
+              />
+            ),
+          )}
         </TapToAdd>
       )}
     </>
