@@ -31,6 +31,10 @@ import { type MediaFailReason, useMediaSource } from "./useMediaSource";
  * still on its way: absent, or failing itself, it simply is not drawn, and it
  * never stands in for a picture that failed.
  */
+/** A picture on the frame's card: 82% of its height, within 94% of its width. */
+const PICTURE =
+  "h-[82%] w-auto max-w-[94%] object-contain [grid-area:1/1]";
+
 export function VisualSegment({
   content,
   reading = false,
@@ -96,8 +100,14 @@ export function VisualSegment({
             {inlineArt}
           </div>
         ) : content.illustration && media.src && !media.failed ? (
-          // One cell, so the full picture lands exactly over its small copy.
-          <div className="grid justify-items-center">
+          /*
+           * On the frame's card, as the inline art is: 12px corners on
+           * cream-elevated with the soft shadow, the column's width and 180
+           * high (220 from tablet), the picture centred at 82% of that and
+           * no wider than 94% of the card. One cell, so the full picture
+           * lands exactly over its small copy.
+           */
+          <div className="grid h-[180px] grid-rows-1 place-items-center overflow-hidden rounded-[12px] bg-nevo-cream-elevated shadow-elevation-1 sm:h-[220px]">
             {preview && (
               <IllustrationWrapper
                 src={preview}
@@ -106,7 +116,7 @@ export function VisualSegment({
                 width={content.illustration.width ?? 640}
                 height={content.illustration.height ?? 480}
                 onError={() => setPreviewFailed(true)}
-                className="w-full max-w-[420px] [grid-area:1/1]"
+                className={PICTURE}
               />
             )}
             <IllustrationWrapper
@@ -117,10 +127,7 @@ export function VisualSegment({
               height={content.illustration.height ?? 480}
               onError={media.onError}
               onLoad={() => setArrived(true)}
-              className={cn(
-                "w-full max-w-[420px] [grid-area:1/1]",
-                preview && "opacity-0",
-              )}
+              className={cn(PICTURE, preview && "opacity-0")}
             />
           </div>
         ) : (
