@@ -404,6 +404,64 @@ describe("entering a number (D150)", () => {
     expect(pad()?.querySelector('[aria-label="Delete"]')).toBeNull();
   });
 
+  it("keeps Check's place from the start, so the first key moves nothing", () => {
+    show(NEGATIVE());
+    const check = () =>
+      document.querySelector<HTMLButtonElement>('form button[type="submit"]');
+
+    // There before anything is typed - unseen, unreachable, holding its row.
+    expect(check()).toHaveClass("invisible");
+    expect(check()).toHaveAttribute("inert");
+    expect(screen.queryByRole("button", { name: "Check my answer" })).toBeNull();
+
+    tap("3");
+
+    expect(check()).not.toHaveClass("invisible");
+    expect(check()).not.toHaveAttribute("inert");
+    expect(screen.getByRole("button", { name: "Check my answer" })).toBe(check());
+  });
+
+  it("brings the step's form into view above the docked pad as the step opens", () => {
+    // jsdom lays nothing out, and scrolls nothing into view.
+    const before = Element.prototype.scrollIntoView;
+    const scrolled = vi.fn();
+    Element.prototype.scrollIntoView = scrolled;
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => {
+      cb(0);
+      return 0;
+    });
+    try {
+      show(NEGATIVE());
+
+      expect(scrolled).toHaveBeenCalledWith({ block: "nearest" });
+      expect(scrolled.mock.contexts[0]).toBe(screen.getByRole("textbox").closest("form"));
+    } finally {
+      vi.restoreAllMocks();
+      Element.prototype.scrollIntoView = before;
+    }
+  });
+
+  it("docks the pad where the host gives it a place, not under the step", () => {
+    const dock = document.createElement("div");
+    document.body.append(dock);
+    try {
+      render(<CalculationSolver calculation={NEGATIVE()} onSolved={vi.fn()} padDock={dock} />);
+
+      expect(dock).toContainElement(pad());
+      expect(screen.getByRole("textbox").closest("form")?.parentElement).not.toContainElement(pad());
+    } finally {
+      cleanup();
+      dock.remove();
+    }
+  });
+
+  it("waits for the host's place rather than drawing the pad twice", () => {
+    render(<CalculationSolver calculation={NEGATIVE()} onSolved={vi.fn()} padDock={null} />);
+
+    expect(pad()).toBeNull();
+    expect(screen.getByRole("textbox")).toBeInTheDocument();
+  });
+
   it("gives an expression the full keyboard, and no pad", () => {
     show(build({ steps: [step({ input: "number", expectedInput: "text", answer: "3x - 4" })] }));
 

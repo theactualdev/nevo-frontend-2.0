@@ -487,15 +487,23 @@ html[data-reduced-motion="true"] *::after {
  * the root attribute rather than set inline from React state, so the boot
  * script in <head> can apply it before the first paint (rule 6). The numbers
  * are `TEXT_ZOOM`'s (AccessibilityContext), and a test holds them together.
- * `m` is the unzoomed default and needs no rule. */
+ * `m` is the unzoomed default and needs no rule.
+ *
+ * `--nevo-text-zoom` repeats the factor for a screen that must fit the
+ * viewport: zoom scales `100dvh` too, so the lesson player's full-height
+ * column would otherwise outgrow the screen by the same factor and take its
+ * pinned arrows and docked pad below the fold. */
 html[data-text-size="s"] .nevo-text-zoom {
   zoom: 0.9;
+  --nevo-text-zoom: 0.9;
 }
 html[data-text-size="l"] .nevo-text-zoom {
   zoom: 1.1;
+  --nevo-text-zoom: 1.1;
 }
 html[data-text-size="xl"] .nevo-text-zoom {
   zoom: 1.2;
+  --nevo-text-zoom: 1.2;
 }
 
 /* High Contrast — a first pass: darken muted text and strengthen the faint

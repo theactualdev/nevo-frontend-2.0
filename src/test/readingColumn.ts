@@ -24,11 +24,12 @@ const columnIn = (container: HTMLElement) =>
   container.querySelector<HTMLElement>(".overflow-y-auto")!;
 
 /**
- * THE LAYOUT THE PLAYER ACTUALLY HAS. It is `min-h-[100dvh]`, so the column
- * grows to its segment's full `height` and the PAGE scrolls: the column's own
- * scroll room stays 0 however long the segment is. A scroll test that gave
- * the column room of its own tested a layout no phone ever showed - which is
- * how no `scroll` mark was ever sent without a test noticing.
+ * THE PAGE CARRYING THE COLUMN. Until 11 Oct the player was `min-h-[100dvh]`,
+ * so the column grew to its segment's full `height` and the PAGE scrolled:
+ * the column's own scroll room stayed 0 however long the segment was - which
+ * is how no `scroll` mark was ever sent without a test noticing. The player
+ * is one screen high now and its column scrolls (`selfScrolledColumn`), but
+ * the page still carries it where `dvh` is not honoured, so both are read.
  */
 export function pageScrolledColumn(
   container: HTMLElement,
@@ -58,7 +59,7 @@ export function pageScrolledColumn(
   };
 }
 
-/** The other layout: the column the scroller, `room` px taller than it shows. */
+/** The player's layout: the column the scroller, `room` px taller than it shows. */
 export function selfScrolledColumn(
   container: HTMLElement,
   { room, shown = 600 }: { room: number; shown?: number },

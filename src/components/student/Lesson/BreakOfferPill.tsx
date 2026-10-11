@@ -28,11 +28,13 @@ const COPY = "Want a break?";
  * self-dismissing offer is indistinguishable from a declined one in the signal
  * record. Declining spends it; the break itself is never forced.
  *
- * STICKY, NOT FIXED. It sits in the player's flow just above the chevrons, so
- * on a short segment it is the foot of the lesson, and on a long one it rides
- * the bottom of the screen over the text, as drawn, until the child reaches
- * the end and it settles above the chevrons. Fixed to the floor it would sit
- * on top of them, and moving on without answering is the child's to do.
+ * PINNED IN THE PLAYER'S COLUMN OF ROWS, JUST ABOVE THE CHEVRONS - frame 38
+ * §3 draws it as its own row under the content. The player is one screen
+ * high and only its reading column scrolls (11 Oct), so the pill is at the
+ * foot of the lesson however long the segment is, and the column ends above
+ * it rather than running on under it. It was sticky while the page scrolled;
+ * fixed to the floor it would sit on top of the chevrons, and moving on
+ * without answering is the child's to do.
  *
  * THE FRAME DRAWS A PHONE ONLY, gutter to gutter at 375. From `sm:` the pill
  * hugs its contents and centres rather than stretching across a tablet or a
@@ -70,7 +72,7 @@ export function BreakOfferPill({
     "flex h-11 shrink-0 cursor-pointer items-center justify-center rounded-full text-[14.5px] whitespace-nowrap transition-[filter] duration-200 active:scale-[0.98]";
 
   return (
-    <div className="pointer-events-none sticky bottom-0 z-10 flex shrink-0 justify-center px-4 pb-5">
+    <div className="pointer-events-none flex shrink-0 justify-center px-4 pb-5">
       <div
         role="status"
         className="pointer-events-auto flex w-full flex-wrap items-center gap-2.5 rounded-full border-[1.5px] border-nevo-violet/50 bg-nevo-cream py-2 pr-2 pl-[22px] shadow-[0_4px_16px_rgba(0,0,0,0.1)] sm:w-auto motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-[10px] motion-safe:duration-[460ms] motion-safe:ease-nevo-slide"

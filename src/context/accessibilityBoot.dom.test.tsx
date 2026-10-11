@@ -233,7 +233,8 @@ describe("the text-size zoom in CSS", () => {
     for (const [size, zoom] of Object.entries(TEXT_ZOOM)) {
       if (size === "m") continue;
       const rule = new RegExp(
-        `html\\[data-text-size="${size}"\\] \\.nevo-text-zoom \\{\\s*zoom: ${zoom};`,
+        // The factor again for a full-height screen to divide its height by.
+        `html\\[data-text-size="${size}"\\] \\.nevo-text-zoom \\{\\s*zoom: ${zoom};\\s*--nevo-text-zoom: ${zoom};`,
       );
       expect(css, `the rule for "${size}"`).toMatch(rule);
     }

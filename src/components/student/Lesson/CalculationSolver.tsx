@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Check, Delete, Pause, Play } from "lucide-react";
 import { Button, NevoKeyboard } from "@/components/shared";
 import type {
@@ -65,8 +66,15 @@ export function CalculationSolver({
   onNarrationPlayed,
   onAudioBusy,
   onNarrationFailed,
+  padDock,
 }: {
   calculation: CalculationSegment;
+  /**
+   * Where the host docks the number pad (D150): the foot of its screen,
+   * below everything that scrolls. `null` while that place is not yet laid
+   * out. Left out, the pad sits under the step - a solver hosted on its own.
+   */
+  padDock?: HTMLElement | null;
   /**
    * The reading accommodation's typographic half (D30), from the same plan
    * the text segment and the checks read - see `readingSupport`.
@@ -357,6 +365,8 @@ export function CalculationSolver({
 
             {step.input === "number" && (
               <NumberEntry
+                // A new step's form opens anew, and is brought into view.
+                key={step.stepId}
                 step={step}
                 reading={reading}
                 nudge={nudge}
@@ -417,12 +427,11 @@ export function CalculationSolver({
 
             {!hintOpen && step.hint && <HintLink onClick={openHint} />}
 
-            {/* D150: the Nevo pad, last, as the keypad frame docks it. */}
+            {/* D150: the Nevo pad, docked at the foot of the screen. */}
             {step.input === "number" && step.entry === "numeric" && (
-              <NevoKeyboard
-                layout="calc"
+              <DockedPad
+                dock={padDock}
                 onKey={(c) => setTyped((t) => t + c)}
-                className="mt-6"
               />
             )}
           </>
@@ -430,6 +439,29 @@ export function CalculationSolver({
       </div>
     </div>
   );
+}
+
+/**
+ * THE PAD IS DOCKED, AS D150 DRAWS IT: the tray last in the screen's column,
+ * on the bottom edge, with what scrolls above it - edge to edge on a phone,
+ * 460 and 420 wide with rounded top corners from the tablet up.
+ *
+ * It sat under the step, inline, before. On a phone it opened mostly below
+ * the fold, and the field takes no device keyboard (`inputMode="none"`), so
+ * the pad is the only way to type; and anything above it that grew - the
+ * "Check my answer" that arrives with the first key - pushed it down under
+ * the child's finger. Docked, nothing the step does can move it.
+ */
+function DockedPad({
+  dock,
+  onKey,
+}: {
+  dock: HTMLElement | null | undefined;
+  onKey: (c: string) => void;
+}) {
+  if (dock === undefined)
+    return <NevoKeyboard layout="calc" onKey={onKey} className="mt-6" />;
+  return dock && createPortal(<NevoKeyboard layout="calc" onKey={onKey} />, dock);
 }
 
 /**
@@ -616,8 +648,8 @@ function Nudged({
  * device's own keyboard cannot be relied on". The device's numeric keyboard
  * stood in here before; an iPhone's has no minus key, so a child doing
  * subtraction on one was simply stuck. The field suppresses the device's
- * keyboard (`inputMode="none"`), the solver docks the pad under the step, and
- * a laptop's own keys still type straight into the field. Delete sits at the
+ * keyboard (`inputMode="none"`), the solver docks the pad at the foot of the
+ * screen, and a laptop's own keys still type straight into the field. Delete sits at the
  * field, as the keypad frame draws it.
  *
  * AN EXPRESSION ("3x - 4") STILL TAKES THE DEVICE'S FULL KEYBOARD, for now.
@@ -676,26 +708,60 @@ function NumberEntry({
   );
 }
 
-/** The step's form: Enter or "Check my answer" commits what is typed. */
+/**
+ * The step's form: Enter or "Check my answer" commits what is typed.
+ *
+ * `docked`: the step types on the docked pad (D150). Then two things hold.
+ *
+ * NOTHING ABOVE THE PAD CHANGES HEIGHT AS THE CHILD TYPES. "Check my answer"
+ * sits where 17a draws it, under the field, and appears with the first key;
+ * its place is kept from the start, so that key moves nothing on screen.
+ *
+ * THE STEP, ITS FIELD AND CHECK ARE IN VIEW ABOVE THE PAD as the step opens.
+ * On a phone the tray takes the lower third of the screen, so the field
+ * could open under it. Brought into view the least distance that shows the
+ * whole form - after the player has moved focus onto a new segment, which
+ * scrolls too - the way a device's keyboard brings its field up.
+ */
 function EntryForm({
   value,
   onCommit,
+  docked = false,
   children,
 }: {
   value: string;
   onCommit: () => void;
+  docked?: boolean;
   children: React.ReactNode;
 }) {
+  const form = useRef<HTMLFormElement | null>(null);
+  useEffect(() => {
+    if (!docked) return;
+    const frame = window.requestAnimationFrame?.(() =>
+      form.current?.scrollIntoView?.({ block: "nearest" }),
+    );
+    return () => {
+      if (frame != null) window.cancelAnimationFrame?.(frame);
+    };
+  }, [docked]);
+
+  const typed = value.trim().length > 0;
   return (
     <form
+      ref={form}
       onSubmit={(e) => {
         e.preventDefault();
         if (value.trim()) onCommit();
       }}
     >
       {children}
-      {value.trim().length > 0 && (
-        <Button type="submit" className="mt-[18px] w-full">
+      {(typed || docked) && (
+        <Button
+          type="submit"
+          aria-hidden={!typed || undefined}
+          inert={!typed}
+          className={cn("mt-[18px] w-full", !typed && "invisible")}
+        >
           Check my answer
         </Button>
       )}
@@ -731,7 +797,7 @@ const kept = (shown: string) => shown.replace(/\u2212/g, "-");
 /**
  * The number field, as D150's keypad frame draws it: "YOUR ANSWER", the field
  * with delete at its end once something is typed, and the line under it.
- * The pad itself is docked below the step by the solver.
+ * The pad itself is docked at the foot of the screen - see `DockedPad`.
  */
 function PadEntry({
   step,
@@ -764,7 +830,7 @@ function PadEntry({
   }, [value]);
 
   return (
-    <EntryForm value={value} onCommit={onCommit}>
+    <EntryForm value={value} onCommit={onCommit} docked>
       <div className="mt-[18px] flex flex-col items-center gap-4">
         <span className="font-mono text-[11px] font-bold tracking-[0.12em] text-nevo-near-black/50 uppercase sm:text-[11.5px]">
           Your answer

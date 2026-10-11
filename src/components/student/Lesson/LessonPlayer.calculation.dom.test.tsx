@@ -239,6 +239,42 @@ describe("a calculation's signals", () => {
     );
   });
 
+  it("docks the number pad on the bottom edge, under the pinned arrows (D150)", () => {
+    render(
+      <LessonPlayer
+        lesson={lessonWith([
+          step({
+            prompt: "So what is 1 + 2?",
+            expectedInput: "numeric",
+            input: "number",
+            options: [],
+            answer: "3",
+          }),
+        ])}
+        plan={PLAN}
+      />,
+    );
+    const pad = screen.getByRole("group", { name: "On-screen keyboard" });
+    const nav = screen.getByRole("button", { name: "Next" }).closest("nav")!;
+    const column = document.querySelector(".overflow-y-auto")!;
+
+    // Out of the column that scrolls, last in the player, after the arrows.
+    expect(column).not.toContainElement(pad);
+    expect(pad.closest("[data-pad-dock]")).toBe(nav.parentElement!.lastElementChild);
+    expect(nav.compareDocumentPosition(pad) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("is one screen high, the column its only scroller", () => {
+    render(<LessonPlayer lesson={lessonWith([step()])} plan={PLAN} />);
+    const nav = screen.getByRole("button", { name: "Next" }).closest("nav")!;
+    const player = nav.parentElement!;
+
+    // The header and the arrows stay put; only the column moves.
+    expect(player.className).toContain("h-[calc(100dvh/var(--nevo-text-zoom,1))]");
+    expect(player.className).not.toContain("min-h-[100dvh]");
+    expect(document.querySelector(".overflow-y-auto")).toHaveClass("min-h-0", "flex-1");
+  });
+
   it("holds the forward chevron until the solution has assembled", () => {
     render(<LessonPlayer lesson={lessonWith([step()])} plan={PLAN} />);
     expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();

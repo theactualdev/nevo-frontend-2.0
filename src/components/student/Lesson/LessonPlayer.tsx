@@ -835,6 +835,8 @@ export function LessonPlayer({
   const scrollMarks = useRef<Set<number>>(new Set());
   /** The reading column, measured for `scroll` - see `handleScroll`. */
   const columnRef = useRef<HTMLDivElement | null>(null);
+  /** The foot of the screen, under the arrows, where the solver docks its pad. */
+  const [padDock, setPadDock] = useState<HTMLDivElement | null>(null);
   /**
    * The segment whose body is CHUNKED, reported by the body itself.
    *
@@ -1044,18 +1046,16 @@ export function LessonPlayer({
   /*
    * HOW FAR DOWN THE SEGMENT HAS BEEN ON SCREEN, MEASURED ON WHAT SCROLLS.
    *
-   * The column is `overflow-y-auto`, but the player is `min-h-[100dvh]`, so
-   * the column grows with its segment and the PAGE scrolls instead. Its own
-   * scroll room is always 0 - measured on a 30-paragraph segment at 375px,
-   * scrollHeight == clientHeight == 2665 - so a listener on the column never
-   * fired and no `scroll` mark was ever sent.
+   * The column is the scroller now: the player is one screen high, with the
+   * header and the arrows pinned. It was `min-h-[100dvh]` until 11 Oct, so
+   * the column grew with its segment and the PAGE scrolled instead - its own
+   * scroll room was always 0, a listener on the column never fired, and no
+   * `scroll` mark was ever sent.
    *
-   * Measured here rather than fixed by making the column the scroller: that
-   * is a layout change (the chevrons pinned, the break pill's sticky foot
-   * re-anchored), and under the larger text sizes' `zoom` a `100dvh` player
-   * outgrows the screen and the page scrolls again anyway. So whichever
-   * scrolls, this reads it: the column's own room when it has some, and the
-   * viewport's reach down the column when the page carries it.
+   * The page can still carry it - a browser that takes no `dvh`, or a zoom
+   * the height is not divided by - so whichever scrolls, this reads it: the
+   * column's own room when it has some, and the viewport's reach down the
+   * column when the page carries it.
    *
    * Only a scroll of the page or of the column counts. A sheet or a drawer
    * scrolling is not the child scrolling the segment.
@@ -2374,7 +2374,15 @@ export function LessonPlayer({
   }
 
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-nevo-cream text-nevo-near-black">
+    /*
+     * ONE SCREEN HIGH, AND ONLY THE COLUMN SCROLLS - the player frame's
+     * `flex:1 1 auto;min-height:0;overflow-y:auto` between a pinned top and a
+     * pinned arrow row (17c pins it on a chunk longer than the screen). The
+     * page scrolled before, so the header went off the top and Next sat below
+     * the fold on the first segment. Divided by the text-size zoom, which
+     * scales `dvh` too - see globals.css.
+     */
+    <div className="flex h-[calc(100dvh/var(--nevo-text-zoom,1))] flex-col bg-nevo-cream text-nevo-near-black">
       {/* Top bar: exit + title, then the density toggle (present in every modality).
           Frame: 10/14/12 padding, whole bar carries the secondary dim. */}
       <header
@@ -2495,7 +2503,7 @@ export function LessonPlayer({
 
       {/* Content — centered reading column. Its violet frame went with the
           step-up offer it accompanied (D28). */}
-      <div ref={columnRef} className="flex-1 overflow-y-auto">
+      <div ref={columnRef} className="min-h-0 flex-1 overflow-y-auto">
         <div
           className={cn(
             // The 88px bottom padding on mobile was sized to clear the Ask Nevo
@@ -2630,6 +2638,7 @@ export function LessonPlayer({
             <SegmentBody
               segment={segment}
               modality={modality}
+              padDock={padDock}
               density={effectiveDensity}
               reading={readingOn}
               attention={attentionOn}
@@ -2793,7 +2802,8 @@ export function LessonPlayer({
       />
 
       {/* The break offer (B.7), at the foot of the lesson and above the
-          chevrons (frame 38 §3). Sticky, so a long segment still shows it. */}
+          chevrons (frame 38 §3): a row of its own, below the column that
+          scrolls, so a long segment still shows it. */}
       {showBreakOffer && (
         <BreakOfferPill
           key={`break-offer-${segment.id}`}
@@ -2832,6 +2842,11 @@ export function LessonPlayer({
           onClick={handleNext}
         />
       </nav>
+
+      {/* D150: the calculation pad's tray, last and on the bottom edge, under
+          17a's arrows - the column shrinks above it, so nothing hides under
+          it. Empty, and no height, whenever no step is typing a number. */}
+      <div ref={setPadDock} data-pad-dock className="shrink-0" />
     </div>
   );
 }
@@ -2840,6 +2855,7 @@ export function LessonPlayer({
 function SegmentBody({
   segment,
   modality,
+  padDock,
   density,
   reading,
   attention,
@@ -2856,6 +2872,8 @@ function SegmentBody({
 }: {
   segment: LessonSegment;
   modality: Modality;
+  /** Where the solver docks its number pad - see `CalculationSolver`. */
+  padDock: HTMLElement | null;
   density: Density | null;
   reading: boolean;
   attention: boolean;
@@ -2908,6 +2926,7 @@ function SegmentBody({
       return (
         <CalculationSolver
           calculation={segment.calculation}
+          padDock={padDock}
           // D30: the same accommodation the text segment and the checks take.
           reading={reading}
           onSolved={onCalcSolved}
