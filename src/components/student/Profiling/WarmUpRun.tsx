@@ -38,6 +38,7 @@ import {
   TILE,
 } from "./GridSpanModule";
 import {
+  FlankerButtons,
   flankerTurns,
   warmUpFlanker,
   warmUpPattern,
@@ -75,6 +76,13 @@ const PICK_BEAT_MS = 440;
  */
 const NUDGE_MS = 1500;
 const MAX_MISSES = 3;
+
+/**
+ * The line above a task: the frame's `prompt`, 16px on a phone and 18px from
+ * tablet up. It was 17px at every size.
+ */
+const PROMPT =
+  "text-center text-[16px] leading-[1.5] font-medium text-nevo-near-black sm:text-[18px]";
 
 /** Monday 1 Jan 2024, from which school days are counted. */
 const ROTATION_EPOCH = Date.UTC(2024, 0, 1);
@@ -121,8 +129,13 @@ export function dimensionForToday(now = new Date()): BaselineDimension {
  * weekday rotation whenever the prompt failed, was unrecognised or was still
  * in flight - and then SUBMIT that run as a measurement the engine never asked
  * for, and swap the task if the answer came late. Now the task waits for the
- * engine, and without an answer the screen shows the nothing-state: the
- * header, no task, and the way back to Home (see `WarmUpNothing`).
+ * engine, and without an answer the screen shows the nothing-state: no task,
+ * and the way back to Home (see `WarmUpNothing`).
+ *
+ * THE HEADER IS THE RUNNING STATE'S. The frame draws "DAILY WARM-UP" and its
+ * ring above a task only: the done state (12) and the save-failed state
+ * (D126) have none, and the nothing-state, which no frame draws, has none
+ * either. All three kept it.
  * The rotation is for the signed-out walkthrough only.
  *
  * NOT CONDITIONAL ON LESSONS (D18, 1 Oct). Both of the screen's buttons went
@@ -266,6 +279,8 @@ export function WarmUpRun({
       warmUpDoneFor(doneToday, getSession()?.userId));
   /** The write settled and failed. A withdrawal is not a failure. */
   const unsaved = !withheld && saved === false;
+  /** A task is on screen: the only state the frame draws the header in. */
+  const running = !showDone && !!dimension && bandSettled && !unheard;
 
   const finish = useCallback(() => {
     if (!submitted.current) {
@@ -408,46 +423,20 @@ export function WarmUpRun({
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-nevo-cream text-nevo-near-black">
-      <div className="flex shrink-0 items-center justify-between px-7 py-7">
-        <span className="font-mono text-[11px] font-bold tracking-[0.14em] text-nevo-violet">
-          DAILY WARM-UP
-        </span>
-        <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden>
-          <circle
-            cx="17"
-            cy="17"
-            r="15"
-            fill="none"
-            stroke="rgba(154,156,203,0.25)"
-            strokeWidth="3"
-          />
-          <circle
-            cx="17"
-            cy="17"
-            r="15"
-            fill="none"
-            stroke="#9a9ccb"
-            strokeWidth="3"
-            strokeLinecap="round"
-            strokeDasharray="94"
-            strokeDashoffset={showDone ? 0 : 40}
-            transform="rotate(-90 17 17)"
-            className="transition-[stroke-dashoffset] duration-500"
-          />
-        </svg>
-      </div>
+      {running && <WarmUpHeader />}
 
       {showDone ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-[22px] px-9 text-center">
           {/*
             The frame's phone sizes below `sm`: a 64px badge with a 32px
-            check and a 19px title. Tablet and desktop draw 80px and 22px.
+            check and a 19px title. Tablet and desktop draw 80px, a 40px
+            check and 22px.
           */}
           {unsaved ? (
             <SaveFailedMark />
           ) : (
             <span className="flex size-16 items-center justify-center rounded-full bg-nevo-navy motion-safe:animate-nevo-pop sm:size-20">
-              <Check className="size-8 text-nevo-cream sm:size-9" strokeWidth={2.4} />
+              <Check className="size-8 text-nevo-cream sm:size-10" strokeWidth={2.4} />
             </span>
           )}
           <div>
@@ -490,6 +479,49 @@ export function WarmUpRun({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * The running state's quiet header (`runHead`): the label and a small ring,
+ * 30px on a phone and 34px from tablet up, its padding the frame's 22px by
+ * 24px there and 28px by 30px above. The ring stands at the frame's one
+ * offset.
+ */
+function WarmUpHeader() {
+  return (
+    <div className="flex shrink-0 items-center justify-between px-6 py-[22px] sm:px-[30px] sm:py-7">
+      <span className="font-mono text-[11px] font-bold tracking-[0.14em] text-nevo-violet">
+        DAILY WARM-UP
+      </span>
+      <svg
+        viewBox="0 0 34 34"
+        aria-hidden
+        data-testid="warmup-ring"
+        className="size-[30px] sm:size-[34px]"
+      >
+        <circle
+          cx="17"
+          cy="17"
+          r="15"
+          fill="none"
+          stroke="rgba(154,156,203,0.25)"
+          strokeWidth="3"
+        />
+        <circle
+          cx="17"
+          cy="17"
+          r="15"
+          fill="none"
+          stroke="#9a9ccb"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeDasharray="94"
+          strokeDashoffset="40"
+          transform="rotate(-90 17 17)"
+        />
+      </svg>
     </div>
   );
 }
@@ -707,7 +739,7 @@ function WarmUpTask({
         options={item.options.map((o) => o.label)}
         stimulus={
           <div className="w-full rounded-[12px] bg-nevo-cream-elevated px-5 py-[18px]">
-            <p className="text-[17px] leading-[1.5] font-medium text-nevo-near-black">
+            <p className="text-[16px] leading-[1.5] font-medium text-nevo-near-black sm:text-[18px]">
               {item.question}
             </p>
           </div>
@@ -813,7 +845,7 @@ function WarmUpTask({
           answer={reading.isTrue ? "True" : "False"}
           softLast
           stimulus={
-            <div className="w-full rounded-[12px] border-2 border-nevo-navy/50 bg-nevo-cream p-[18px] text-center text-[17px] leading-[1.5] text-nevo-near-black">
+            <div className="w-full rounded-[12px] border-2 border-nevo-navy/50 bg-nevo-cream p-[18px] text-center text-[16px] leading-[1.5] text-nevo-near-black sm:text-[18px]">
               {reading.text}
             </div>
           }
@@ -843,8 +875,10 @@ function WarmUpTask({
           onPick={(choice, detail) => pick(choice, { ...detail, ...congruency })}
           options={["Left", "Right"]}
           answer={trial.target === "left" ? "Left" : "Right"}
+          // The band's own arrow buttons, as its flanker answers (D81).
+          arrowsFor={sized}
           stimulus={
-            <div className="flex items-center gap-1.5">
+            <div data-testid="warmup-flanker" className="flex items-center gap-1.5">
               {(alone ? [2] : [0, 1, 2, 3, 4]).map((i) => (
                 <ArrowRight
                   key={i}
@@ -883,7 +917,7 @@ function WarmUpTask({
           answer="Two-thirds"
           stimulus={
             <div className="w-full rounded-[12px] bg-nevo-cream-elevated px-5 py-[18px]">
-              <p className="text-[17px] leading-[1.5] font-medium text-nevo-near-black">
+              <p className="text-[16px] leading-[1.5] font-medium text-nevo-near-black sm:text-[18px]">
                 Which is larger: two-thirds or three-fifths?
               </p>
             </div>
@@ -901,6 +935,7 @@ function SingleChoice({
   answer,
   stacked = false,
   softLast = false,
+  arrowsFor,
   onPick,
   onDone,
 }: {
@@ -908,6 +943,12 @@ function SingleChoice({
   prompt?: string;
   stimulus: React.ReactNode;
   options: string[];
+  /**
+   * Answers with this band's flanker arrows (`FlankerButtons`) rather than
+   * labelled buttons; `options` are then Left and Right, in that order, and
+   * are recorded as a labelled button's would be.
+   */
+  arrowsFor?: AgeBand;
   /**
    * The option that is correct, for the fixed tasks that carry their own key.
    * Absent for a served question: nothing is marked on the device then, and
@@ -961,41 +1002,51 @@ function SingleChoice({
   return (
     <>
       {prompt && (
-        <p className="text-center text-[17px] leading-[1.5] font-medium text-nevo-near-black">
+        <p className={PROMPT}>
           {prompt}
         </p>
       )}
       {stimulus}
-      <div
-        className={cn(
-          "flex w-full gap-3.5",
-          stacked ? "flex-col" : "justify-center",
-        )}
-      >
-        {options.map((o, i) => {
-          const soft = softLast && i === options.length - 1;
-          return (
-            <button
-              key={`${i}-${o}`}
-              type="button"
-              onClick={(e) => choose(i, e)}
-              className={cn(
-                // `min-h`, so a served option longer than one line still fits.
-                "min-h-12 cursor-pointer rounded-[10px] border-2 px-3 py-2 transition-[background-color,transform] active:scale-[0.97]",
-                stacked ? "w-full" : "min-w-[140px] flex-1 sm:flex-none",
-                soft ? "text-sm font-medium" : "text-base font-semibold",
-                picked === i
-                  ? "border-nevo-violet bg-nevo-violet text-nevo-near-black"
-                  : soft
-                    ? "border-nevo-violet bg-nevo-cream text-nevo-violet"
-                    : "border-nevo-navy bg-nevo-cream text-nevo-navy",
-              )}
-            >
-              {o}
-            </button>
-          );
-        })}
-      </div>
+      {/*
+        The frame's two rows (`btnRow`, `stackCol`): side by side, two
+        buttons share the width equally 14px apart (`btn`, flex 1); stacked,
+        each is full width 10px apart, and "Not sure" is 15px. The pair was
+        fixed 140px buttons centred, from tablet up.
+      */}
+      {arrowsFor ? (
+        <FlankerButtons band={arrowsFor} picked={picked} onPick={choose} />
+      ) : (
+        <div
+          className={cn(
+            "flex w-full",
+            stacked ? "flex-col gap-2.5" : "gap-3.5",
+          )}
+        >
+          {options.map((o, i) => {
+            const soft = softLast && i === options.length - 1;
+            return (
+              <button
+                key={`${i}-${o}`}
+                type="button"
+                onClick={(e) => choose(i, e)}
+                className={cn(
+                  // `min-h`, so a served option longer than one line still fits.
+                  "min-h-12 cursor-pointer rounded-[10px] border-2 transition-[background-color,transform] active:scale-[0.97]",
+                  stacked ? "w-full px-3 py-2" : "min-w-0 flex-1 basis-0 px-2",
+                  soft ? "text-[15px] font-medium" : "text-base font-semibold",
+                  picked === i
+                    ? "border-nevo-violet bg-nevo-violet text-nevo-near-black"
+                    : soft
+                      ? "border-nevo-violet bg-nevo-cream text-nevo-violet"
+                      : "border-nevo-navy bg-nevo-cream text-nevo-navy",
+                )}
+              >
+                {o}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </>
   );
 }
@@ -1181,7 +1232,7 @@ function WarmUpGrid({
   const tile = TILE[n] ?? TILE[4];
   return (
     <>
-      <p className="text-center text-[17px] leading-[1.5] font-medium text-nevo-near-black">
+      <p className={PROMPT}>
         {phase === "watch"
           ? "Watch the tiles"
           : checking
@@ -1290,18 +1341,6 @@ function WarmUpDots({
   }, [revealMs, onOpen]);
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
-  const scatter = (count: number, seed: number) => {
-    let s = seed >>> 0;
-    const rng = () => {
-      s = (s * 1664525 + 1013904223) >>> 0;
-      return s / 4294967296;
-    };
-    return Array.from({ length: count }, () => ({
-      x: 10 + rng() * 72,
-      y: 10 + rng() * 72,
-    }));
-  };
-
   /** How close the two counts are: the baseline's `ratio`, its condition. */
   const ratio = Math.round((pair.a / pair.b) * 100) / 100;
 
@@ -1320,20 +1359,32 @@ function WarmUpDots({
 
   return (
     <>
-      <p className="text-center text-[17px] leading-[1.5] font-medium text-nevo-near-black">
+      <p className={PROMPT}>
         {masked ? "Which side had more dots?" : "Watch the dots"}
       </p>
-      <div className="flex flex-col gap-4 sm:flex-row sm:gap-6">
+      {/*
+        SIDE BY SIDE AT EVERY SIZE, as the warm-up frame draws it: two 150px
+        boxes 18px apart on a phone, 200px and 28px from tablet up. They
+        stacked on a phone, under buttons reading Top and Bottom, which no
+        warm-up frame draws.
+
+        THE FRAME'S ARRANGEMENT, not the baseline's scatter: each box is
+        padded 14px and its dots wrap in rows 10px apart, centred (`dotBox`).
+        So no two dots can touch, and the count a child sees is the count
+        recorded. The frame's dots vary from 14 to 20px; each is the band's
+        own size here (D81).
+      */}
+      <div className="flex justify-center gap-[18px] sm:gap-7">
         {counts.map((count, side) => (
           <div
             key={side}
-            className="relative size-[150px] overflow-hidden rounded-[12px] border-2 border-nevo-navy bg-nevo-cream sm:size-[200px]"
+            data-testid="warmup-dot-box"
+            className="relative flex size-[150px] flex-wrap content-center justify-center gap-2.5 overflow-hidden rounded-[12px] border-2 border-nevo-navy bg-nevo-cream p-3.5 sm:size-[200px]"
           >
-            {scatter(count, 17 + side * 29).map((d, i) => (
+            {Array.from({ length: count }, (_, i) => (
               <span
                 key={i}
-                className={cn("absolute rounded-full bg-nevo-violet", dot)}
-                style={{ left: `${d.x}%`, top: `${d.y}%` }}
+                className={cn("shrink-0 rounded-full bg-nevo-violet", dot)}
               />
             ))}
             {masked && (
@@ -1342,14 +1393,14 @@ function WarmUpDots({
           </div>
         ))}
       </div>
-      <div className="flex w-full justify-center gap-3.5">
-        {SIDES.map(({ side, stacked }, i) => (
+      <div className="flex w-full gap-3.5">
+        {(["Left", "Right"] as const).map((side, i) => (
           <button
             key={side}
             type="button"
             onClick={(e) => choose(i, side, e)}
             className={cn(
-              "h-12 min-w-[140px] rounded-[10px] border-2 text-base font-semibold transition-[background-color,border-color]",
+              "h-12 min-w-0 flex-1 basis-0 rounded-[10px] border-2 px-2 text-base font-semibold",
               picked === i
                 ? "border-nevo-violet bg-nevo-violet text-nevo-near-black"
                 : masked
@@ -1357,12 +1408,7 @@ function WarmUpDots({
                   : "cursor-default border-nevo-navy/30 bg-nevo-cream text-nevo-navy/40",
             )}
           >
-            {/* The arrays are side by side from `sm` up and STACKED below it,
-                so on a phone "Left" and "Right" named nothing on screen - the
-                child was asked which side had more when one was above the
-                other. Same treatment as Module 3's `DotButton`. */}
-            <span className="sm:hidden">{stacked}</span>
-            <span className="hidden sm:inline">{side}</span>
+            {side}
           </button>
         ))}
       </div>
@@ -1416,7 +1462,7 @@ function WarmUpHeard({
 
   return (
     <>
-      <p className="text-center text-[17px] leading-[1.5] font-medium text-nevo-near-black">
+      <p className={PROMPT}>
         Listen, then tap the matching picture
       </p>
       <HeardPictures
@@ -1436,9 +1482,3 @@ function WarmUpHeard({
     </>
   );
 }
-
-/** What each dot array is called, depending on how the two are laid out. */
-const SIDES = [
-  { side: "Left", stacked: "Top" },
-  { side: "Right", stacked: "Bottom" },
-] as const;

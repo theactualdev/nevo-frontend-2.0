@@ -341,62 +341,82 @@ export function PatternFlankerModule({
                 );
               })}
             </div>
-            <div className="flex w-full max-w-[300px] flex-col gap-4 sm:w-auto sm:max-w-none sm:flex-row">
-              <TrialButton
-                icon={
-                  <ArrowRight
-                    className="size-[31px] rotate-180 text-nevo-navy sm:size-[38px]"
-                    strokeWidth={2.6}
-                  />
-                }
-                label="Left"
-                iconOnly
-                className={size.arrowButton}
-                pressed={picked === 0}
-                onClick={(e) =>
-                  pick(
-                    0,
-                    {
-                      ...congruency,
-                      // Known here and nowhere downstream. Without it the
-                      // vector said how FAST a child answered an interference
-                      // trial and never whether the flankers had captured
-                      // them - so a wrong fast tap scored better than a right
-                      // considered one, on the one measure where that inverts
-                      // the finding.
-                      correct: flankerTrial.target === "left",
-                    },
-                    e,
-                  )
-                }
-              />
-              <TrialButton
-                icon={
-                  <ArrowRight
-                    className="size-[31px] text-nevo-navy sm:size-[38px]"
-                    strokeWidth={2.6}
-                  />
-                }
-                label="Right"
-                iconOnly
-                className={size.arrowButton}
-                pressed={picked === 1}
-                onClick={(e) =>
-                  pick(
-                    1,
-                    {
-                      ...congruency,
-                      correct: flankerTrial.target === "right",
-                    },
-                    e,
-                  )
-                }
-              />
-            </div>
+            <FlankerButtons
+              band={band}
+              picked={picked}
+              onPick={(i, e) =>
+                pick(
+                  i,
+                  {
+                    ...congruency,
+                    // Known here and nowhere downstream. Without it the
+                    // vector said how FAST a child answered an interference
+                    // trial and never whether the flankers had captured
+                    // them - so a wrong fast tap scored better than a right
+                    // considered one, on the one measure where that inverts
+                    // the finding.
+                    correct: flankerTrial.target === (i === 0 ? "left" : "right"),
+                  },
+                  e,
+                )
+              }
+            />
           </>
         )}
       </div>
     </ProfilingShell>
+  );
+}
+
+/**
+ * 2B's answer: Left and Right as arrows, at the band's size (`SIZE`), stacked
+ * 300px wide on a phone and side by side from `sm` up (`Nevo Flanker Frame`).
+ *
+ * Shared with the daily warm-up's flanker round. It answered with the words
+ * "Left" and "Right" for every band, P1-3 included, where this module answers
+ * with arrows a child who cannot yet read can use; the warm-up follows each
+ * band's profiling behaviour exactly (D81).
+ */
+export function FlankerButtons({
+  band,
+  picked,
+  onPick,
+}: {
+  band: AgeBand;
+  /** The index already picked (Left 0, Right 1), or -1. */
+  picked: number;
+  onPick: (index: 0 | 1, e: React.MouseEvent) => void;
+}) {
+  const size = SIZE[band] ?? SIZE.p46;
+  return (
+    <div className="flex w-full max-w-[300px] flex-col gap-4 sm:w-auto sm:max-w-none sm:flex-row">
+      <TrialButton
+        icon={
+          <ArrowRight
+            className="size-[31px] rotate-180 text-nevo-navy sm:size-[38px]"
+            strokeWidth={2.6}
+          />
+        }
+        label="Left"
+        iconOnly
+        className={size.arrowButton}
+        pressed={picked === 0}
+        onClick={(e) => onPick(0, e)}
+      />
+      <TrialButton
+        icon={
+          <ArrowRight
+            className="size-[31px] text-nevo-navy sm:size-[38px]"
+            strokeWidth={2.6}
+          />
+        }
+        label="Right"
+        iconOnly
+        className={size.arrowButton}
+        pressed={picked === 1}
+        onClick={(e) => onPick(1, e)}
+      />
+    </div>
   );
 }
 

@@ -89,7 +89,7 @@ describe("WarmUpRun — what actually reaches Nevo", () => {
     render(<WarmUpRun dimension="attention" />);
 
     // Only the centre arrow points right; the four flankers are mirrored.
-    fireEvent.click(screen.getByText("Right"));
+    fireEvent.click(screen.getByRole("button", { name: "Right" }));
     await settle();
 
     expect(trials()).toHaveLength(1);
@@ -103,7 +103,7 @@ describe("WarmUpRun — what actually reaches Nevo", () => {
   it("sends a wrong answer as wrong", async () => {
     render(<WarmUpRun dimension="attention" />);
 
-    fireEvent.click(screen.getByText("Left"));
+    fireEvent.click(screen.getByRole("button", { name: "Left" }));
     await settle();
 
     expect(submitted().correct).toBe(false);
@@ -186,22 +186,46 @@ describe("WarmUpRun — what actually reaches Nevo", () => {
   });
 });
 
-describe("WarmUpRun — the dot arrays are not always side by side", () => {
-  it("calls them top and bottom when they are stacked", () => {
-    // They sit side by side from `sm` up and STACK below it, and the buttons
-    // said "Left" and "Right" regardless - so on a phone a child was asked
-    // which SIDE had more when one array was above the other.
+describe("WarmUpRun — the dot arrays, as the warm-up frame draws them", () => {
+  it("sits them side by side at every size, under Left and Right", () => {
+    // They stacked on a phone under buttons reading Top and Bottom. The
+    // Warm-Up Run frame draws two 150px boxes side by side at 375, 200px
+    // from tablet up, and Left / Right at every size.
     render(<WarmUpRun dimension="ans" />);
 
-    expect(screen.getByText("Top")).toBeInTheDocument();
-    expect(screen.getByText("Bottom")).toBeInTheDocument();
+    const [box] = screen.getAllByTestId("warmup-dot-box");
+    const row = box.parentElement!;
+    expect(row.className).not.toMatch(/flex-col/);
+    expect(row.className).toContain("gap-[18px]");
+    expect(row.className).toContain("sm:gap-7");
+    expect(box.className).toContain("size-[150px]");
+    expect(box.className).toContain("sm:size-[200px]");
+    expect(screen.queryByText("Top")).toBeNull();
+    expect(screen.queryByText("Bottom")).toBeNull();
+    expect(
+      screen.getAllByRole("button").map((b) => b.textContent),
+    ).toEqual(["Left", "Right"]);
   });
 
-  it("still calls them left and right for the wider layout", () => {
+  it("wraps each array's dots in rows, so none can sit on another", () => {
+    // A random scatter let dots land on each other, and a child counted
+    // fewer than were recorded. The frame wraps them 10px apart inside a
+    // 14px pad; P4-6's frame pair is 9 against 5, every one of them drawn.
     render(<WarmUpRun dimension="ans" />);
 
-    expect(screen.getByText("Left")).toBeInTheDocument();
-    expect(screen.getByText("Right")).toBeInTheDocument();
+    const boxes = screen.getAllByTestId("warmup-dot-box");
+    for (const box of boxes) {
+      expect(box.className).toMatch(/(^| )flex-wrap( |$)/);
+      expect(box.className).toContain("gap-2.5");
+      expect(box.className).toContain("p-3.5");
+      for (const dot of box.querySelectorAll("span")) {
+        expect(dot.className).not.toMatch(/absolute/);
+        expect(dot.getAttribute("style")).toBeNull();
+      }
+    }
+    expect(
+      boxes.map((b) => b.querySelectorAll("span").length).sort(),
+    ).toEqual([5, 9]);
   });
 
   it("parks the day's measurement when the write is refused", async () => {
@@ -215,7 +239,7 @@ describe("WarmUpRun — the dot arrays are not always side by side", () => {
     submit.mockResolvedValue(false);
     render(<WarmUpRun dimension="attention" />);
 
-    fireEvent.click(screen.getByText("Right"));
+    fireEvent.click(screen.getByRole("button", { name: "Right" }));
     await settle();
 
     expect(holdBaseline).toHaveBeenCalled();
@@ -225,7 +249,7 @@ describe("WarmUpRun — the dot arrays are not always side by side", () => {
     submit.mockRejectedValue(new Error("network"));
     render(<WarmUpRun dimension="attention" />);
 
-    fireEvent.click(screen.getByText("Right"));
+    fireEvent.click(screen.getByRole("button", { name: "Right" }));
     await settle();
 
     expect(holdBaseline).toHaveBeenCalled();
@@ -235,7 +259,7 @@ describe("WarmUpRun — the dot arrays are not always side by side", () => {
     submit.mockResolvedValue(true);
     render(<WarmUpRun dimension="attention" />);
 
-    fireEvent.click(screen.getByText("Right"));
+    fireEvent.click(screen.getByRole("button", { name: "Right" }));
     await settle();
 
     expect(holdBaseline).not.toHaveBeenCalled();
@@ -251,7 +275,7 @@ describe("WarmUpRun — the dot task has no fixed answer", () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2000);
     });
-    fireEvent.click(screen.getByText("Left"));
+    fireEvent.click(screen.getByRole("button", { name: "Left" }));
     await settle();
   };
 
@@ -314,8 +338,65 @@ describe("WarmUpRun — the done state claims no save", () => {
     expect(title.className).toContain("sm:text-[22px]");
     expect(badge.className).toMatch(/(^| )size-16( |$)/);
     expect(badge.className).toContain("sm:size-20");
+    // Its check is 32px on a phone and 40px from tablet up; it was 36px.
+    const check = badge.querySelector("svg")!.getAttribute("class")!;
+    expect(check).toMatch(/(^| )size-8( |$)/);
+    expect(check).toContain("sm:size-10");
   });
 
+});
+
+describe("WarmUpRun — the header is the running state's", () => {
+  const header = () => screen.queryByText("DAILY WARM-UP");
+
+  it("sits over a running task, its ring the frame's 30px on a phone and 34px up", () => {
+    render(<WarmUpRun dimension="attention" />);
+
+    expect(header()).toBeInTheDocument();
+    const ring = screen.getByTestId("warmup-ring").getAttribute("class")!;
+    expect(ring).toContain("size-[30px]");
+    expect(ring).toContain("sm:size-[34px]");
+  });
+
+  it("is gone once the warm-up is done, as frame 12 draws it", async () => {
+    await sitTheTileTask();
+    await settle();
+
+    expect(screen.getByText("That's it for today")).toBeInTheDocument();
+    expect(header()).toBeNull();
+    expect(screen.queryByTestId("warmup-ring")).toBeNull();
+  });
+
+  it("is gone when the save failed, as D126 draws it", async () => {
+    submit.mockResolvedValue(false);
+    await sitTheTileTask();
+    await settle();
+
+    expect(screen.getByText(/Today's warm-up didn't save/)).toBeInTheDocument();
+    expect(header()).toBeNull();
+    expect(screen.queryByTestId("warmup-ring")).toBeNull();
+  });
+
+  it("is not over the nothing-state either", () => {
+    // No task pinned, and the engine's prompt is still on its way.
+    render(<WarmUpRun />);
+
+    expect(screen.getByRole("button", { name: "Home" })).toBeInTheDocument();
+    expect(header()).toBeNull();
+    expect(screen.queryByTestId("warmup-ring")).toBeNull();
+  });
+});
+
+describe("WarmUpRun — the line above a task is the frame's size", () => {
+  it("is 16px on a phone and 18px from tablet up", () => {
+    // It was 17px at every size.
+    render(<WarmUpRun dimension="attention" />);
+
+    const line = screen.getByText("Which way is the middle arrow pointing?");
+    expect(line.className).toContain("text-[16px]");
+    expect(line.className).toContain("sm:text-[18px]");
+    expect(line.className).not.toContain("text-[17px]");
+  });
 });
 
 describe("WarmUpRun — the write failed (D126, 8 Oct)", () => {

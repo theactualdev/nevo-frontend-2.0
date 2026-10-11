@@ -50,7 +50,7 @@ const settle = async () => {
 };
 
 const doneHeading = () => screen.queryByText(/That's it for today/i);
-const taskIsOnScreen = () => screen.queryByText("Right") !== null;
+const taskIsOnScreen = () => screen.queryByRole("button", { name: "Right" }) !== null;
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -71,7 +71,7 @@ describe("the first warm-up of the day", () => {
     render(<WarmUpRun dimension="attention" />);
     expect(taskIsOnScreen()).toBe(true);
 
-    fireEvent.click(screen.getByText("Right"));
+    fireEvent.click(screen.getByRole("button", { name: "Right" }));
     await settle();
 
     expect(submit).toHaveBeenCalledTimes(1);
@@ -82,7 +82,7 @@ describe("the first warm-up of the day", () => {
     // Design, 23 Sep: "it closes". Where to went Home on 1 Oct (D18), and the
     // button reads "Go on" since 6 Oct (D97).
     render(<WarmUpRun dimension="attention" />);
-    fireEvent.click(screen.getByText("Right"));
+    fireEvent.click(screen.getByRole("button", { name: "Right" }));
     await settle();
 
     expect(screen.getByRole("button", { name: "Go on" })).toBeInTheDocument();
@@ -94,7 +94,7 @@ describe("the first warm-up of the day", () => {
   it("says nothing about how they did", async () => {
     // Ruled explicitly, and it is the line the whole product holds.
     render(<WarmUpRun dimension="attention" />);
-    fireEvent.click(screen.getByText("Left"));
+    fireEvent.click(screen.getByRole("button", { name: "Left" }));
     await settle();
 
     expect(document.body.textContent).not.toMatch(
@@ -114,7 +114,7 @@ describe("coming back the same day", () => {
      * so the whole loop is covered.
      */
     const first = render(<WarmUpRun dimension="attention" />);
-    fireEvent.click(screen.getByText("Right"));
+    fireEvent.click(screen.getByRole("button", { name: "Right" }));
     await settle();
     expect(submit).toHaveBeenCalledTimes(1);
     first.unmount();
