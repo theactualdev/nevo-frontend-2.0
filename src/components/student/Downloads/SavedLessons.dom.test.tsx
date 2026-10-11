@@ -333,3 +333,25 @@ describe("a lesson list that has not answered yet", () => {
     expect(screen.queryByText(/haven.t saved any lessons/i)).toBeNull();
   });
 });
+
+describe("a lesson list that could not be read, with nothing saved", () => {
+  /*
+   * It said only "You haven't saved any lessons on this device yet." - true,
+   * and silent about the read that failed, so a child with lessons waiting
+   * was told, in effect, that there was nothing here for them. Home and
+   * Lessons say the read failed and offer to try again; so does this.
+   */
+  it("says the read failed, in Home's and Lessons' words, and offers Try again", () => {
+    lessons.mockReturnValue({ lessons: [], live: true, loading: false, failed: true });
+    render(<SavedLessons />);
+
+    expect(
+      screen.getByText("We couldn't load your lessons just now"),
+    ).toBeVisible();
+    expect(
+      screen.getByText("Nothing is lost. Give it a moment and try again."),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeVisible();
+    expect(screen.queryByText(/no lessons to save/i)).toBeNull();
+  });
+});

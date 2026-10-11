@@ -6,6 +6,7 @@ import { useHasSession } from "@/hooks/useHasSession";
 import { useHydrated } from "@/hooks/useHydrated";
 import { SampleRegion } from "@/components/shared/SampleRegion";
 import { cn } from "@/lib/utils";
+import { TAB_PAGE, TAB_TITLE } from "@/components/student/Shell/TabPage";
 import { SavedLessons } from "./SavedLessons";
 
 type DownloadStatus = "available" | "downloading" | "downloaded";
@@ -99,10 +100,9 @@ export function DownloadsTab() {
   // end-to-end run SEE it if one ever stops holding.
   return (
     <SampleRegion kind="student:downloads">
-    <div className="mx-auto w-full max-w-[640px] px-5 py-2 pb-6 sm:px-8 sm:py-6">
-      <h1 className="text-2xl font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[30px] lg:text-[32px]">
-        Downloads
-      </h1>
+    <div className={TAB_PAGE}>
+      <div className="max-w-[640px]">
+      <h1 className={TAB_TITLE}>Downloads</h1>
 
       <button
         type="button"
@@ -132,6 +132,7 @@ export function DownloadsTab() {
           </li>
         ))}
       </ul>
+      </div>
     </div>
     </SampleRegion>
   );
@@ -140,11 +141,11 @@ export function DownloadsTab() {
 /** Heading only, while we work out who is looking. */
 function DownloadsShell() {
   return (
-    <div className="mx-auto w-full max-w-[640px] px-5 py-2 pb-6 sm:px-8 sm:py-6">
-      <h1 className="text-2xl font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[30px] lg:text-[32px]">
-        Downloads
-      </h1>
-      <div className="mt-5 h-[52px] animate-pulse rounded-[12px] bg-nevo-cream-elevated" />
+    <div className={TAB_PAGE}>
+      <div className="max-w-[640px]">
+        <h1 className={TAB_TITLE}>Downloads</h1>
+        <div className="mt-5 h-[52px] animate-pulse rounded-[12px] bg-nevo-cream-elevated" />
+      </div>
     </div>
   );
 }

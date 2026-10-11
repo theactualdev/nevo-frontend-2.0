@@ -22,6 +22,7 @@ import {
 } from "@/lib/offline/savedLessons";
 import { LessonExitProvider } from "@/components/student/Lesson/LessonExit";
 import { LessonRoute } from "@/components/student/Lesson/LessonRoute";
+import { TAB_PAGE, TAB_TITLE } from "@/components/student/Shell/TabPage";
 
 /**
  * Downloads for a signed-in child.
@@ -179,14 +180,15 @@ export function SavedLessons() {
   const unsaved = rows.filter((r) => !kept.has(r.id));
 
   return (
-    <div className="mx-auto w-full max-w-[640px] px-5 py-2 pb-6 sm:px-8 sm:py-6">
-      <h1 className="text-2xl font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[30px] lg:text-[32px]">
-        Downloads
-      </h1>
+    <div className={TAB_PAGE}>
+      <div className="max-w-[640px]">
+      <h1 className={TAB_TITLE}>Downloads</h1>
+      {/* Straight apostrophes, as the student screens and the frames write
+          them; this screen mixed both. */}
       <p className="mt-2 text-sm leading-[1.55] text-nevo-near-black/65">
-        Save a lesson while you&rsquo;re connected, and you can open it here
+        Save a lesson while you&apos;re connected, and you can open it here
         even without a connection.
-        {textOnly && <> Pictures and sound aren&rsquo;t saved.</>}
+        {textOnly && <> Pictures and sound aren&apos;t saved.</>}
       </p>
 
       {unsaved.length > 0 && !failed && (
@@ -199,8 +201,9 @@ export function SavedLessons() {
         </button>
       )}
 
+      {/* The readable violet: the surface one is 2.3:1 on cream. */}
       {notice && (
-        <p role="status" className="mt-3 text-sm text-nevo-violet">
+        <p role="status" className="mt-3 text-sm text-nevo-violet-text">
           {notice}
         </p>
       )}
@@ -219,11 +222,31 @@ export function SavedLessons() {
             className="block size-5 rounded-full border-[2.5px] border-nevo-navy/20 border-t-nevo-navy motion-safe:animate-spin motion-safe:[animation-duration:800ms]"
           />
         </div>
+      ) : rows.length === 0 && failed ? (
+        /*
+          A FAILED READ IS NOT AN EMPTY SHELF. With the list unread and nothing
+          saved this said only that nothing was saved here, as if there were
+          nothing to save - the failure itself went unmentioned. Home's and
+          Lessons' failed state, in their words.
+        */
+        <div className="mt-8 rounded-[16px] bg-nevo-cream-elevated p-[22px] shadow-elevation-1">
+          <p className="text-[17px] font-semibold text-nevo-near-black">
+            We couldn&apos;t load your lessons just now
+          </p>
+          <p className="mt-1.5 text-[15px] leading-[1.5] text-nevo-near-black/68">
+            Nothing is lost. Give it a moment and try again.
+          </p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="mt-5 flex h-[48px] cursor-pointer items-center rounded-[12px] bg-nevo-navy px-7 text-[15px] font-medium text-nevo-cream"
+          >
+            Try again
+          </button>
+        </div>
       ) : rows.length === 0 ? (
         <p className="mt-8 text-center text-sm text-nevo-near-black/60">
-          {failed
-            ? "You haven't saved any lessons on this device yet."
-            : "There are no lessons to save yet."}
+          There are no lessons to save yet.
         </p>
       ) : (
         <ul className="mt-3">
@@ -253,7 +276,7 @@ export function SavedLessons() {
                     <button
                       type="button"
                       onClick={() => setOpenId(row.id)}
-                      className="h-10 cursor-pointer rounded-[10px] px-3 text-[15px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/8"
+                      className="h-11 cursor-pointer rounded-[10px] px-3 text-[15px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/8"
                     >
                       Open
                     </button>
@@ -261,7 +284,7 @@ export function SavedLessons() {
                       type="button"
                       aria-label={`Remove ${row.title} from this device`}
                       onClick={() => remove(row.id)}
-                      className="flex size-10 cursor-pointer items-center justify-center rounded-full"
+                      className="flex size-11 cursor-pointer items-center justify-center rounded-full"
                     >
                       <span className="flex size-[22px] items-center justify-center rounded-full bg-nevo-navy">
                         <Check
@@ -276,14 +299,14 @@ export function SavedLessons() {
                   <span
                     role="img"
                     aria-label="Saving"
-                    className="mx-2.5 block size-5 shrink-0 rounded-full border-[2.5px] border-nevo-navy/20 border-t-nevo-navy motion-safe:animate-spin motion-safe:[animation-duration:800ms]"
+                    className="mx-3 block size-5 shrink-0 rounded-full border-[2.5px] border-nevo-navy/20 border-t-nevo-navy motion-safe:animate-spin motion-safe:[animation-duration:800ms]"
                   />
                 ) : (
                   <button
                     type="button"
                     aria-label={`Save ${row.title} for offline`}
                     onClick={() => void save(row.id)}
-                    className="flex size-10 cursor-pointer items-center justify-center rounded-full text-nevo-near-black/50 transition-colors hover:bg-nevo-near-black/6"
+                    className="flex size-11 cursor-pointer items-center justify-center rounded-full text-nevo-near-black/50 transition-colors hover:bg-nevo-near-black/6"
                   >
                     <CloudDownload className="size-[22px]" strokeWidth={2} />
                   </button>
@@ -293,6 +316,7 @@ export function SavedLessons() {
           })}
         </ul>
       )}
+      </div>
     </div>
   );
 }
@@ -334,7 +358,8 @@ function Row({
   return (
     <li
       ref={ref}
-      className="flex items-center gap-3 border-b border-nevo-near-black/8 py-3"
+      // 44px controls in a row no taller than it was.
+      className="flex items-center gap-3 border-b border-nevo-near-black/8 py-2.5"
     >
       {children}
     </li>
