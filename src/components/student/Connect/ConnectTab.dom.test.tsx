@@ -236,6 +236,10 @@ describe("[185] [D104] a conversation's own read", () => {
     // And when the send then fails, there is still a bubble to say so.
     await act(async () => post.reject(new Error("offline")));
     expect(screen.getByText(/Didn.t send - tap to try again/)).toBeTruthy();
+    // The only way to resend, so a 44px target, not the 16px line of text.
+    expect(
+      screen.getByRole("button", { name: /Didn.t send - tap to try again/ }),
+    ).toHaveClass("min-h-11");
   });
 });
 

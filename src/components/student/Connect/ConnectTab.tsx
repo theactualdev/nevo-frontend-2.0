@@ -667,11 +667,15 @@ function MessageStatusLine({
     );
   }
   // failed — warm, never alarming; tap to retry.
+  //
+  // The only way to resend, so a 44px target: it was the 16px line of text.
+  // The negative margin keeps the line where it was; `z-10` keeps the next
+  // message from sitting over the bottom of the target.
   return (
     <button
       type="button"
       onClick={onRetry}
-      className="flex cursor-pointer items-center gap-1.5 px-1 text-xs text-nevo-violet"
+      className="relative z-10 -my-3.5 flex min-h-11 cursor-pointer items-center gap-1.5 px-1 text-xs text-nevo-violet"
     >
       <span className="size-1.5 rounded-full bg-nevo-violet" />
       Didn&apos;t send - tap to try again
