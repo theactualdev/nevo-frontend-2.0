@@ -11,8 +11,9 @@ export const metadata: Metadata = {
 export default async function AssignLessonsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ lesson?: string }>;
+  searchParams: Promise<{ lesson?: string; class?: string }>;
 }) {
-  const { lesson } = await searchParams;
-  return <AssignWizard preselect={lesson} />;
+  // `?class=` is the class the teacher came from, when they came from one.
+  const { lesson, class: fromClass } = await searchParams;
+  return <AssignWizard preselect={lesson} preselectClass={fromClass} />;
 }
