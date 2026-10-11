@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, waitFor } from "@testing-library/react";
+import type { DpaAgreement } from "@/lib/api/school";
 import { DpaStep } from "./DpaStep";
 
 /**
@@ -41,7 +42,7 @@ const acceptDpa = vi.fn(async (...args: unknown[]) => {
   };
 });
 /** The agreement as the server states it (8 Oct) - its version is the one accepted. */
-const AGREEMENT = {
+const AGREEMENT: DpaAgreement = {
   version: "2026-10",
   schoolId: "s1",
   schoolName: "Corona Secondary School",
