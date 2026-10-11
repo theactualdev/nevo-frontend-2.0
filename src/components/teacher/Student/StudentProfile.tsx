@@ -255,7 +255,14 @@ export function StudentProfile({
           and design removed it from C08 on 17 Sep along with the modality
           claim it sat under.
         */}
-        <div className="mt-3.5 flex flex-col gap-3 xl:mt-4 xl:grid xl:grid-cols-2 xl:gap-3.5">
+        {/* C08: two columns on the full profile at desktop, one on a new
+            student's - the early artboard stacks its single card. */}
+        <div
+          className={cn(
+            "mt-3.5 flex flex-col gap-3 xl:mt-4 xl:gap-3.5",
+            !early && "xl:grid xl:grid-cols-2",
+          )}
+        >
           {student.observations.map((pattern) => (
             <div
               key={pattern}

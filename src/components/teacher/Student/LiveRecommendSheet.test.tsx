@@ -502,3 +502,25 @@ describe("focus (C07)", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
+
+/** C08c's header close button, and its option cards' radio. */
+describe("the sheet's own controls", () => {
+  it("closes from the button beside the title", () => {
+    const onClose = vi.fn();
+    show({ onClose });
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("fills the chosen option's radio, and only that one", () => {
+    show();
+    pick(LESSONS[0].title);
+    const chosen = screen.getByRole("button", { pressed: true });
+
+    expect(chosen.querySelector("[aria-hidden] > span")).not.toBeNull();
+    for (const other of screen.getAllByRole("button", { pressed: false })) {
+      expect(other.querySelector("[aria-hidden] > span")).toBeNull();
+    }
+  });
+});
