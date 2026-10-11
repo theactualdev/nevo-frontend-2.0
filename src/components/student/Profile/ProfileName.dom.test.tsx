@@ -251,6 +251,37 @@ describe("an SSO child's account rows (D9)", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText(/progress is saved/i)).toBeNull();
   });
+
+  it("lists Change PIN, then Tell us something, as frame 27 does, with Sign out last", async () => {
+    // Frame 27's Account section draws Change PIN first; ours had the two
+    // reversed. Sign out is ours - no frame draws it there - and stays.
+    auth.user = { method: "manual" };
+    me.mockResolvedValue(account(null));
+    renderProfile();
+    await screen.findByText("Tobi");
+
+    const rows = screen
+      .getAllByRole("button")
+      .map((b) => b.textContent?.trim())
+      .filter((t) => t === "Change PIN" || t === "Tell us something" || t === "Sign out");
+
+    expect(rows).toEqual(["Change PIN", "Tell us something", "Sign out"]);
+  });
+
+  it("offers Stay signed in on the way out, and no close cross the frame does not draw", async () => {
+    auth.user = { method: "manual" };
+    me.mockResolvedValue(account(null));
+    renderProfile();
+    await screen.findByText("Tobi");
+
+    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    await screen.findByText("You can come back anytime with your PIN.");
+
+    expect(
+      screen.getByRole("button", { name: "Stay signed in" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
+  });
 });
 
 /**

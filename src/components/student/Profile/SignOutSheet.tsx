@@ -17,6 +17,10 @@ import { Button } from "@/components/shared";
  *
  * NO "YOUR PROGRESS IS SAVED." (D136, 8 Oct): "nothing claims a save that has
  * not been confirmed", and signing out confirms nothing about any write.
+ *
+ * NO CLOSE CROSS. The Sign Out Modal draws none: "Stay signed in" is its way
+ * out, a full-width 48px button, so the sheet's own corner × was a second
+ * dismiss on a two-button card.
  */
 export function SignOutSheet({
   open,
@@ -34,6 +38,7 @@ export function SignOutSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="bottom"
+        showCloseButton={false}
         aria-describedby={undefined}
         className="gap-0 rounded-t-[20px] border-0! bg-nevo-cream px-6 pt-6 pb-8 text-center text-nevo-near-black shadow-[0_-8px_32px_rgba(0,0,0,0.16)] sm:inset-x-auto! sm:top-1/2 sm:bottom-auto! sm:left-1/2! sm:w-[400px] sm:max-w-[calc(100%-48px)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[16px] sm:p-8 sm:shadow-[0_24px_60px_rgba(0,0,0,0.28)]"
       >

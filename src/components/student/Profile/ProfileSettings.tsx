@@ -35,6 +35,14 @@ const TEXT_SIZES = [
  * global, persisted preferences from `AccessibilityContext` — changing one here
  * takes effect across the whole app immediately, and is kept on the child's
  * account (SCRUM-226).
+ *
+ * FROM THE TABLET UP, THE COLUMN SITS LEFT, as frame 27 draws it: 44px in
+ * (52 on desktop), 600px wide, the heading 8px under the top padding. It was
+ * centred in whatever space the sidebar left.
+ *
+ * THE ACCOUNT ROWS IN THE FRAME'S ORDER: Change PIN, then "Tell us
+ * something". Sign out comes last and is OURS - no frame draws it in this
+ * list, and a child has to be able to sign out. Frame-lags, raised.
  */
 export function ProfileSettings() {
   const router = useRouter();
@@ -106,8 +114,8 @@ export function ProfileSettings() {
     });
 
   return (
-    <div className="mx-auto w-full max-w-[600px] px-5 py-2 pb-8 sm:px-8 sm:py-6">
-      <h1 className="text-2xl font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[30px] lg:text-[32px]">
+    <div className="mx-auto w-full max-w-[600px] px-5 py-2 pb-8 sm:px-8 sm:py-6 md:mx-0 md:max-w-[688px] md:p-11 lg:max-w-[704px] lg:p-[52px]">
+      <h1 className="text-2xl font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[30px] md:mt-2 lg:text-[32px]">
         Profile &amp; Settings
       </h1>
 
@@ -267,6 +275,19 @@ export function ProfileSettings() {
         )}
       </div>
       </MaybeSample>
+      {!sso && (
+        <button
+          type="button"
+          onClick={() => router.push("/student/profile/pin")}
+          className="flex w-full cursor-pointer items-center justify-between border-t border-nevo-near-black/8 py-4 text-left"
+        >
+          <span className="text-[15px] text-nevo-near-black">Change PIN</span>
+          <ChevronRight
+            className="size-5 text-nevo-near-black/40"
+            strokeWidth={2}
+          />
+        </button>
+      )}
       <button
         type="button"
         onClick={() => router.push("/student/profile/feedback")}
@@ -286,19 +307,6 @@ export function ProfileSettings() {
           strokeWidth={2}
         />
       </button>
-      {!sso && (
-        <button
-          type="button"
-          onClick={() => router.push("/student/profile/pin")}
-          className="flex w-full cursor-pointer items-center justify-between border-t border-nevo-near-black/8 py-4 text-left"
-        >
-          <span className="text-[15px] text-nevo-near-black">Change PIN</span>
-          <ChevronRight
-            className="size-5 text-nevo-near-black/40"
-            strokeWidth={2}
-          />
-        </button>
-      )}
       <button
         type="button"
         onClick={() => setSignOutOpen(true)}
