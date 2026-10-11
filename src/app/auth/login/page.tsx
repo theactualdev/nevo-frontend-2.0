@@ -342,20 +342,41 @@ export default function LoginPage() {
       const add = raw.replace(/[^0-9]/g, "");
       if (!add) return;
       setError(null);
-      setDigits((prev) => {
-        const next = (prev + add).slice(0, STUDENT_PIN_LENGTH);
-        if (next.length === STUDENT_PIN_LENGTH) void submit(next, chosen);
-        return next;
-      });
+      setDigits((prev) => (prev + add).slice(0, STUDENT_PIN_LENGTH));
     },
-    [done, checking, chosen, submit, error],
+    [done, checking, chosen, error],
   );
 
+  /*
+   * ONE ENTRY, ONE ATTEMPT. The fourth digit sends the PIN from here, after
+   * the boxes have rendered full, and never from inside the `setDigits`
+   * updater it used to sit in. React may run an updater twice - StrictMode
+   * does on every one, and a concurrent replay can - so every PIN went to the
+   * server twice: two attempts counted towards `too_many_attempts` for one
+   * entry, and the second login could replace the session the first one made.
+   *
+   * `sent` is the entry it belongs to. It is set when the four go and cleared
+   * only once the boxes empty again (a refusal clears them), so a re-run of
+   * this effect for the same four digits - a changed `submit`, a re-render
+   * while the answer is out - sends nothing.
+   */
+  const sent = useRef(false);
+  useEffect(() => {
+    if (digits.length < STUDENT_PIN_LENGTH) {
+      sent.current = false;
+      return;
+    }
+    if (sent.current || !chosen) return;
+    sent.current = true;
+    void submit(digits, chosen);
+  }, [digits, chosen, submit]);
+
   const backspace = useCallback(() => {
-    if (error === "throttled") return;
+    // Not while the four are being checked: they are the entry in flight.
+    if (checking || error === "throttled") return;
     setError(null);
     setDigits((prev) => prev.slice(0, -1));
-  }, [error]);
+  }, [checking, error]);
 
   // The client has not read the roster yet. The server cannot see localStorage,
   // so drawing anything here would flash it at whoever is holding the tablet.
