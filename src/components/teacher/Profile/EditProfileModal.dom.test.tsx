@@ -194,3 +194,29 @@ describe("a blank name (T194)", () => {
     expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled();
   });
 });
+
+/** Whether the browser would ask before leaving: the event was cancelled. */
+const leavingAsks = () => {
+  const e = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(e);
+  return e.defaultPrevented;
+};
+
+/** C17: a changed name or subjects line, not yet saved. */
+describe("an edit not yet saved", () => {
+  it("makes the browser ask before leaving", () => {
+    render(<EditProfileModal profile={PROFILE} onCancel={vi.fn()} onSave={vi.fn()} />);
+    expect(leavingAsks()).toBe(false);
+
+    fireEvent.change(screen.getByLabelText("Full name"), { target: { value: "Amina Bello-Ade" } });
+    expect(leavingAsks()).toBe(true);
+  });
+
+  it("stops asking once the name is back as it was", () => {
+    render(<EditProfileModal profile={PROFILE} onCancel={vi.fn()} onSave={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText("Full name"), { target: { value: "Amina" } });
+    fireEvent.change(screen.getByLabelText("Full name"), { target: { value: "Amina Bello" } });
+
+    expect(leavingAsks()).toBe(false);
+  });
+});

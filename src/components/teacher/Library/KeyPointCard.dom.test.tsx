@@ -436,3 +436,25 @@ describe("when it does not land", () => {
     ).toBeInTheDocument();
   });
 });
+
+/** Whether the browser would ask before leaving: the event was cancelled. */
+const leavingAsks = () => {
+  const e = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(e);
+  return e.defaultPrevented;
+};
+
+/** C17: a rewording in progress is the teacher's own words, unsent. */
+describe("a rewording not yet saved", () => {
+  it("makes the browser ask before leaving, and only once the words differ", () => {
+    show();
+    open();
+    fireEvent.click(screen.getByRole("button", { name: "Edit wording" }));
+    expect(leavingAsks()).toBe(false);
+
+    fireEvent.change(screen.getByLabelText(/Your wording/), {
+      target: { value: "Rewrite both over a common base." },
+    });
+    expect(leavingAsks()).toBe(true);
+  });
+});

@@ -11,6 +11,7 @@ import {
   type UploadStructure,
 } from "@/lib/api/uploads";
 import { cn } from "@/lib/utils";
+import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
 
 /**
  * The SCRUM-101 module review (`Nevo Upload Module Step`) for a REAL upload.
@@ -112,6 +113,9 @@ export function LiveModuleReview({
    */
   const [setAside, setSetAside] = useState<StructureModule[] | null>(null);
   const [dirty, setDirty] = useState(false);
+  // C17: the unit tree beside it asks before a refresh throws its edits away;
+  // the single lesson's review did not.
+  useUnsavedGuard(dirty);
   const [saving, setSaving] = useState<Saving>("idle");
   const [error, setError] = useState("");
 
