@@ -90,7 +90,7 @@ export function LessonDetail({
                 <span className="text-[12px] text-nevo-near-black/55 xl:text-[13px]">
                   Assigned to
                 </span>
-                <div className="mt-1 text-[14.5px] font-semibold text-nevo-near-black xl:text-base">
+                <div className="mt-1 text-[14.5px] font-semibold text-nevo-near-black xl:mt-[5px] xl:text-base">
                   <span className="xl:hidden">{detail.stats.assignedToShort}</span>
                   <span className="hidden xl:inline">{detail.stats.assignedTo}</span>
                 </div>
@@ -100,13 +100,13 @@ export function LessonDetail({
                   <span className="xl:hidden">Finished</span>
                   <span className="hidden xl:inline">Finished so far</span>
                 </span>
-                <div className="mt-1 text-[14.5px] font-semibold text-nevo-near-black xl:text-base">
+                <div className="mt-1 text-[14.5px] font-semibold text-nevo-near-black xl:mt-[5px] xl:text-base">
                   {detail.stats.finished}
                 </div>
               </div>
               <div className="hidden flex-1 rounded-[12px] bg-nevo-cream-elevated px-5 py-[18px] shadow-elevation-1 xl:block">
                 <span className="text-[13px] text-nevo-near-black/55">Opened</span>
-                <div className="mt-1 text-base font-semibold text-nevo-near-black">
+                <div className="mt-1 text-base font-semibold text-nevo-near-black xl:mt-[5px]">
                   {detail.stats.opened}
                 </div>
               </div>
@@ -124,7 +124,7 @@ export function LessonDetail({
         )}
 
         {!assigned && detail.readyNote && (
-          <div className="mt-[18px] flex max-w-[600px] items-start gap-3.5 rounded-[12px] bg-nevo-cream-elevated px-5 py-4 shadow-elevation-1 xl:mt-[26px] xl:px-6 xl:py-[22px]">
+          <div className="mt-5 flex items-start gap-[13px] rounded-[12px] bg-nevo-cream-elevated px-5 py-[18px] shadow-elevation-1 xl:mt-[26px] xl:gap-3.5 xl:px-6 xl:py-[22px]">
             <span className="mt-px shrink-0 text-nevo-navy">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 <path d="M20 6L9 17l-5-5" />

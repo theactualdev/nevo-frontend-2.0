@@ -148,15 +148,15 @@ function SegmentRow({
         // C06b tablet: one line - number, title, how many finished - at
         // 13/18 padding. It was a column below 1280px, so on a tablet the
         // number sat on a line of its own above every section.
-        "flex items-start gap-3 px-[18px] py-[13px] xl:gap-4 xl:px-[22px] xl:py-4",
+        "flex items-start gap-3 px-[18px] py-[13px] xl:gap-3.5 xl:px-5 xl:py-[15px]",
         outstanding && "border-l-[3px] border-nevo-violet",
       )}
     >
-      <span className="w-[22px] shrink-0 text-[12.5px] text-nevo-near-black/40 tabular-nums xl:w-6 xl:text-[13px]">
+      <span className="w-[22px] shrink-0 text-[12.5px] text-nevo-near-black/40 tabular-nums xl:w-[26px] xl:text-[13px]">
         {index + 1}
       </span>
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5 xl:gap-2">
           <span className="text-sm font-semibold text-nevo-near-black xl:text-[15px]">
             {segment.title ?? `Section ${index + 1}`}
           </span>
@@ -179,7 +179,7 @@ function SegmentRow({
             built: "several students slowed here" from `slowdownCount` would
             be the console choosing how many is several (rule 3). */}
         {progress?.note && (
-          <p className="mt-1.5 max-w-[62ch] text-[13.5px] leading-[1.5] text-nevo-navy">
+          <p className="mt-1.5 max-w-[62ch] text-[13.5px] leading-[1.5] text-nevo-navy xl:mt-[5px]">
             {progress.note}
           </p>
         )}
@@ -208,9 +208,9 @@ function SegmentRow({
         )}
       </div>
       {progress ? (
-        <div className="flex shrink-0 items-center gap-3.5">
+        <div className="flex shrink-0 items-center gap-3.5 xl:gap-3">
           {/* The tablet row carries the count without the bar. */}
-          <div className="hidden h-1.5 w-[130px] overflow-hidden rounded-full bg-nevo-navy/14 xl:block">
+          <div className="hidden h-1.5 w-[120px] overflow-hidden rounded-full bg-nevo-navy/14 xl:block">
             <span
               /* Violet where the class slowed - C06b's rule is that a dip is
                  never red, and never reads as a scoreboard. */
@@ -223,7 +223,7 @@ function SegmentRow({
               }}
             />
           </div>
-          <span className="text-right text-[13px] text-nevo-near-black/68 xl:w-[120px] xl:text-sm">
+          <span className="text-right text-[13px] text-nevo-near-black/68 xl:w-[120px] xl:text-[13.5px]">
             {`${progress.completionCount} of ${progress.assignedStudentCount} done`}
           </span>
         </div>
@@ -463,7 +463,7 @@ export function LiveLessonDetail({
         <div className="mt-3.5 flex flex-col gap-4 xl:mt-4 xl:flex-row xl:flex-wrap xl:items-start xl:justify-between xl:gap-6">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2.5">
-              <h1 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
+              <h1 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[27px]">
                 {lesson.title}
               </h1>
               {waiting > 0 && (
@@ -494,7 +494,7 @@ export function LiveLessonDetail({
                 reason is read before the statistics. The section number comes
                 from the flagged segment itself - never a parser token. */}
             {waiting > 0 && reviewLine && (
-              <p className="mt-2 text-[14.5px] font-medium text-nevo-navy">
+              <p className="mt-[7px] text-[14px] font-medium text-nevo-navy xl:mt-2 xl:text-[14.5px]">
                 {reviewLine}
               </p>
             )}
@@ -503,11 +503,11 @@ export function LiveLessonDetail({
                 that actually carry an estimate are listed - a 0 is the
                 schema's default, not a measurement. */}
             {durationLine && (
-              <p className="mt-1.5 text-[13.5px] text-nevo-near-black/55">
+              <p className="mt-1.5 text-sm text-nevo-near-black/55 xl:text-[14.5px]">
                 {durationLine}
               </p>
             )}
-            <span className="mt-[5px] block text-[14.5px] text-nevo-near-black/60">
+            <span className="mt-[5px] block text-[14px] text-nevo-near-black/60 xl:mt-1.5 xl:text-[14.5px]">
               {/* C06b counts KEY POINTS while a review is open and sections
                   otherwise - the meta line describes the thing the screen is
                   currently about. */}
@@ -572,7 +572,7 @@ export function LiveLessonDetail({
         <SplitSourceNotice segments={segments} />
 
         {waiting > 0 ? (
-          <div className="mt-[18px] flex max-w-none items-start gap-3 rounded-[12px] bg-nevo-violet/14 px-[17px] py-[15px] xl:mt-6 xl:max-w-[660px] xl:gap-3.5 xl:px-[18px] xl:py-4">
+          <div className="mt-[18px] flex max-w-none items-start gap-3 rounded-[12px] bg-nevo-violet/14 px-[17px] py-[15px] xl:mt-6 xl:max-w-[600px] xl:px-[18px] xl:py-4">
             <span className="mt-px shrink-0 text-nevo-navy">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 <circle cx="12" cy="12" r="9" />
@@ -610,11 +610,11 @@ export function LiveLessonDetail({
              * is built: `useLessonReview` raises it, above, at the moment the
              * last thing holding the lesson is settled.
              */
-            <div className="mt-5 max-w-none rounded-[12px] bg-nevo-navy/6 px-5 py-[18px] xl:mt-6 xl:max-w-[660px] xl:px-[18px] xl:py-4">
-              <p className="text-[15.5px] font-semibold text-nevo-near-black xl:text-[15px]">
+            <div className="mt-5 max-w-none rounded-[12px] bg-nevo-navy/6 px-5 py-[18px] xl:mt-[26px] xl:px-6 xl:py-[22px]">
+              <p className="text-[15.5px] font-semibold text-nevo-near-black xl:text-base">
                 Ready when you are
               </p>
-              <p className="mt-[5px] text-sm leading-[1.55] text-nevo-near-black/70 xl:mt-1 xl:text-[14.5px]">
+              <p className="mt-[5px] text-sm leading-[1.55] text-nevo-near-black/70 xl:mt-1.5 xl:text-[14.5px]">
                 {`Nevo has prepared this lesson into ${plural(lesson.segmentCount, "section", "sections")}. Assign it to a class and it'll open for students at the time you choose.`}
               </p>
             </div>
@@ -627,10 +627,10 @@ export function LiveLessonDetail({
             ordinary case; a flagged section is the rarer second reason a
             lesson is held. */}
         {review.keyPoints.length > 0 && (
-          <h3 className={cn(SECTION_H, "mt-[26px] xl:mt-7")}>Key points Nevo found</h3>
+          <h3 className={cn(SECTION_H, "mt-[26px] xl:mt-8")}>Key points Nevo found</h3>
         )}
         {review.keyPoints.length > 0 && (
-          <div className="mt-3.5 flex max-w-[860px] flex-col gap-[9px] xl:mt-3 xl:gap-2.5">
+          <div className="mt-3.5 flex max-w-[860px] flex-col gap-[9px] xl:mt-4 xl:gap-2.5">
             {review.keyPoints.map((kp) => (
               <KeyPointCard
                 key={kp.id}
@@ -684,7 +684,7 @@ export function LiveLessonDetail({
         )}
 
         {progress?.slowdownNote && (
-          <p className="mt-5 max-w-[68ch] rounded-[12px] bg-nevo-violet/14 px-[18px] py-4 text-[14.5px] leading-[1.6] text-nevo-near-black/82">
+          <p className="mt-5 max-w-[68ch] rounded-[12px] bg-nevo-violet/14 px-[18px] py-4 text-[14.5px] leading-[1.6] text-nevo-near-black/82 xl:leading-[1.55]">
             {progress.slowdownNote}
           </p>
         )}

@@ -135,7 +135,7 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
 
         {/* Roster / Lessons. Read-only on the Lessons side: design was explicit
             that "Library stays the only place a lesson is created". */}
-        <div className="mt-6 flex gap-1.5" role="tablist" aria-label="Class views">
+        <div className="mt-6 flex gap-1.5 xl:mt-[22px] xl:gap-2.5" role="tablist" aria-label="Class views">
           {(["roster", "lessons"] as const).map((t) => (
             <button
               key={t}
@@ -144,7 +144,7 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
               aria-selected={tab === t}
               onClick={() => setTab(t)}
               className={cn(
-                "h-9 cursor-pointer rounded-[9px] px-3.5 text-[13.5px] font-medium capitalize transition-colors",
+                "h-9 cursor-pointer rounded-[9px] px-3.5 text-[13.5px] font-medium capitalize transition-colors xl:rounded-full xl:px-[15px]",
                 tab === t
                   ? "bg-nevo-navy text-nevo-cream"
                   : "text-nevo-near-black/65 hover:bg-nevo-navy/8",
@@ -199,7 +199,7 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
                 : `Nevo has a learning profile for ${observed} of ${students.length}. The rest build as they work.`}
             </p>
             {/* C05's line, over the rows that now carry Clear PIN. */}
-            <p className="mt-1.5 max-w-[560px] text-[13px] leading-[1.5] text-nevo-near-black/60 xl:max-w-[640px]">
+            <p className="mt-1.5 max-w-[560px] text-[13px] leading-[1.5] text-nevo-near-black/60 xl:max-w-[640px] xl:text-[13.5px] xl:leading-[1.55]">
               If a child forgets their PIN, you can clear it and they choose a
               new one themselves. A deactivated learner can&rsquo;t sign in;
               your admin manages access.

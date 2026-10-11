@@ -27,13 +27,13 @@ const SUCCESS_HOLD_MS = 900;
 
 type Phase = "signing-in" | "success" | "error";
 
-function Ring({ size }: { size: number }) {
+function Ring({ className }: { className: string }) {
   return (
     <span
       role="status"
       aria-label="Working"
-      style={{ width: size, height: size }}
-      className="rounded-full border-[2.5px] border-nevo-navy/20 border-t-nevo-navy motion-safe:animate-spin motion-safe:[animation-duration:800ms]"
+      // `block`: an inline span takes no size, and the success ring sits in one.
+      className={`${className} block rounded-full border-[2.5px] border-nevo-navy/20 border-t-nevo-navy motion-safe:animate-spin motion-safe:[animation-duration:800ms]`}
     />
   );
 }
@@ -143,13 +143,13 @@ export function TeacherSsoCallback() {
   const retry = () => router.push("/auth/teacher");
 
   return (
-    <div className="flex w-full max-w-none flex-col items-center px-10 text-center xl:max-w-[440px]">
+    <div className="flex w-full max-w-none flex-col items-center px-10 text-center">
       {shown === "signing-in" && (
         <>
-          <span className="mb-7">
+          <span className="mb-7 xl:mb-[30px]">
             <LogoMark />
           </span>
-          <Ring size={28} />
+          <Ring className="size-7 xl:size-[30px]" />
           {/*
             "Signing you in through {school}" named `TEACHER_INVITE.school`, a
             fixture, so a teacher of any school was told they were being signed
@@ -187,7 +187,7 @@ export function TeacherSsoCallback() {
             {"Taking you to your dashboard…"}
           </p>
           <span className="mt-7 xl:mt-[30px]">
-            <Ring size={22} />
+            <Ring className="size-[22px] xl:size-6" />
           </span>
         </>
       )}

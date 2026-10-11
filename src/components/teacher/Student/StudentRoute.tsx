@@ -40,7 +40,7 @@ export function StudentRoute({
   if (!hydrated) {
     return (
       <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
-        <div className="mx-auto max-w-[860px]">
+        <div className="mx-auto max-w-[860px] xl:max-w-[900px]">
           <div className="h-8 w-64 animate-pulse rounded bg-nevo-cream-elevated" />
           <div className="mt-8 h-[280px] animate-pulse rounded-[12px] bg-nevo-cream-elevated" />
         </div>
@@ -67,10 +67,10 @@ export function StudentRoute({
   if (state.loading) {
     return (
       <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
-        <div className="mx-auto max-w-[860px]">
+        <div className="mx-auto max-w-[860px] xl:max-w-[900px]">
           <div className="h-5 w-32 animate-pulse rounded bg-nevo-cream-elevated" />
           <div className="mt-4 flex items-center gap-4">
-            <div className="size-14 animate-pulse rounded-full bg-nevo-cream-elevated xl:size-16" />
+            <div className="size-14 animate-pulse rounded-full bg-nevo-cream-elevated" />
             <div className="h-8 w-56 animate-pulse rounded bg-nevo-cream-elevated" />
           </div>
           <div className="mt-8 h-[220px] animate-pulse rounded-[12px] bg-nevo-cream-elevated" />

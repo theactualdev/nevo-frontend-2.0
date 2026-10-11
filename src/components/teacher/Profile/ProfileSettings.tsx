@@ -212,7 +212,7 @@ export function ProfileSettings() {
                   </div>
                 )}
                 {identity?.email && (
-                  <div className="mt-[3px] truncate text-[13px] text-nevo-near-black/50 xl:text-[13.5px]">
+                  <div className="mt-[3px] truncate text-[13px] text-nevo-near-black/50 xl:mt-0.5 xl:text-[13.5px]">
                     {identity.email}
                   </div>
                 )}
@@ -298,9 +298,9 @@ export function ProfileSettings() {
         <button
           type="button"
           onClick={() => setSignOutOpen(true)}
-          className="mt-6 inline-flex cursor-pointer items-center gap-2.5 text-[14.5px] font-medium text-nevo-navy transition-colors hover:text-nevo-navy/80 xl:mt-8 xl:text-[15px]"
+          className="mt-6 inline-flex cursor-pointer items-center gap-[9px] text-[14.5px] font-medium text-nevo-navy transition-colors hover:text-nevo-navy/80 xl:mt-7 xl:text-[15px]"
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-[19px]">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
             <path d="M16 17l5-5-5-5" />
             <path d="M21 12H9" />

@@ -854,7 +854,7 @@ export function UploadWizard() {
                     role="alert"
                     className="mt-5 flex gap-3.5 rounded-[12px] border border-nevo-violet/50 bg-nevo-violet/16 px-[22px] py-5 xl:mt-[22px] xl:gap-4 xl:px-6 xl:py-[22px]"
                   >
-                    <span className="flex size-[44px] shrink-0 items-center justify-center rounded-[11px] bg-nevo-violet/20 text-nevo-navy xl:size-[42px]">
+                    <span className="flex size-[44px] shrink-0 items-center justify-center rounded-[11px] bg-nevo-violet/20 text-nevo-navy">
                       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                         <path d="M6 2h9l5 5v15H6z" />
                         <path d="M14 2v6h6" />
@@ -875,14 +875,14 @@ export function UploadWizard() {
                     <button
                       type="button"
                       onClick={() => fileInput.current?.click()}
-                      className="inline-flex h-12 cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/30 px-5 text-[15px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
+                      className="inline-flex h-12 cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/30 px-6 text-[15px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
                     >
                       Choose another file
                     </button>
                     <button
                       type="button"
                       onClick={() => lastFile.current && startFile(lastFile.current)}
-                      className="inline-flex h-[46px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[22px] text-[15px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93 xl:h-12"
+                      className="inline-flex h-[46px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[26px] text-[15px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93 xl:h-12 xl:px-[30px] xl:text-[15.5px]"
                     >
                       Try again
                     </button>

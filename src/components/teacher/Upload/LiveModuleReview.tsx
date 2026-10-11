@@ -360,7 +360,7 @@ export function LiveModuleReview({
 
   return (
     <>
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-[18px] xl:px-8 xl:py-7">
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-[18px] xl:px-8 xl:py-[22px]">
         {/* The console's reading column: 820px, centred (design system, 8 Oct). */}
         <div className="mx-auto max-w-[820px]">
           {banner}
@@ -385,7 +385,7 @@ export function LiveModuleReview({
           )}
 
           {noSuggestion && (
-            <div className="flex flex-col gap-2.5">
+            <div className="flex flex-col gap-3.5">
               <div className="rounded-[12px] bg-nevo-cream-elevated px-5 py-[18px]">
                 <div className="text-[15px] font-semibold text-nevo-near-black">
                   {/* The frame says "this lesson is short - 5 segments or fewer".
@@ -567,7 +567,7 @@ export function LiveModuleReview({
                         ]
                       ).map((f) => (
                         <div key={f.key}>
-                          <label className="mb-[5px] block text-[11px] font-semibold tracking-[0.05em] text-nevo-near-black/48 uppercase">
+                          <label className="block text-[11px] font-semibold tracking-[0.05em] text-nevo-near-black/48 uppercase">
                             {f.label}
                             <textarea
                               // Nullable in the contract, and an empty box is

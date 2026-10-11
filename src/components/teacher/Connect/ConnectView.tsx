@@ -42,7 +42,7 @@ import { MaybeSample } from "@/components/shared/SampleRegion";
  */
 
 const PlusIcon = ({ size = 18 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-[18px]">
     <path d="M12 5v14" />
     <path d="M5 12h14" />
   </svg>
