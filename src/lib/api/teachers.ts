@@ -26,10 +26,19 @@ export interface TeacherSummary {
   name: string;
   email: string | null;
   status: UserStatus;
+  /** How many classes they hold - on the list since 8 Oct, so no per-row read. */
+  classCount?: number;
+  /** When they were last seen - D06b's "Last active" and "Active today". */
+  lastActiveAt?: string | null;
 }
 
 export interface TeacherDetail extends TeacherSummary {
   classIds: string[];
+  /**
+   * The subjects they teach, by name (8 Oct). D05 marks these "Teaches" and
+   * offers only these when assigning them.
+   */
+  subjects?: string[];
 }
 
 export const teachersApi = {
@@ -59,4 +68,11 @@ export const teachersApi = {
    */
   revoke: (teacherId: string) =>
     api.post<void>(`/api/v1/teachers/${teacherId}/revoke`),
+
+  /**
+   * Give a revoked teacher their access back (8 Oct). The undo the removal
+   * sheet could not promise, because nothing served it.
+   */
+  restore: (teacherId: string) =>
+    api.post<void>(`/api/v1/teachers/${teacherId}/restore`),
 };

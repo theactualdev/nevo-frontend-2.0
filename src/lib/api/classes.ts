@@ -21,6 +21,9 @@ export interface AssignedClass {
   classCode: string | null;
   role: TeacherAssignmentRole;
   assignedAt: string;
+  /** The subject this assignment teaches (8 Oct); null on older ones. */
+  subjectId?: string | null;
+  subject?: string | null;
 }
 
 export interface AssignedTeacher {
@@ -31,6 +34,9 @@ export interface AssignedTeacher {
   email: string | null;
   role: TeacherAssignmentRole;
   assignedAt: string;
+  /** The subject this assignment teaches (8 Oct); null on older ones. */
+  subjectId?: string | null;
+  subject?: string | null;
 }
 
 /**

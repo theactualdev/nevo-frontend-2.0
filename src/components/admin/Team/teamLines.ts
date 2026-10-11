@@ -17,3 +17,25 @@ export function activeLine(iso: string | null | undefined, now: number): string 
   if (days === 1) return "Active yesterday";
   return `${days} days ago`;
 }
+
+/**
+ * D06's "Last active" card: "Today" over the time, or how many days ago over
+ * the date. Null when there is no timestamp - then the card is not drawn.
+ */
+export function lastActiveCard(
+  iso: string | null | undefined,
+  now: number,
+): { value: string; sub: string } | null {
+  if (!iso) return null;
+  const seen = new Date(iso);
+  if (Number.isNaN(seen.getTime())) return null;
+  const day = (t: Date) => new Date(t.getFullYear(), t.getMonth(), t.getDate()).getTime();
+  const days = Math.round((day(new Date(now)) - day(seen)) / 864e5);
+  const time = seen.toLocaleTimeString("en-GB", { hour: "numeric", minute: "2-digit", hour12: true });
+  if (days <= 0) return { value: "Today", sub: time };
+  if (days === 1) return { value: "Yesterday", sub: time };
+  return {
+    value: `${days} days ago`,
+    sub: seen.toLocaleDateString("en-GB", { day: "numeric", month: "long" }),
+  };
+}

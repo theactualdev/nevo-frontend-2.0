@@ -20,6 +20,8 @@ const listClasses = vi.fn();
 const classTeachers = vi.fn();
 const teacherClasses = vi.fn();
 const createAssignment = vi.fn();
+/** The chosen teacher's record - unread by default, so the whole list shows. */
+const getTeacher = vi.fn();
 const reassign = vi.fn();
 const update = vi.fn();
 const listTeachers = vi.fn();
@@ -42,7 +44,14 @@ vi.mock("@/lib/api/classes", async (importOriginal) => {
 });
 vi.mock("@/lib/api/teachers", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/teachers")>();
-  return { ...actual, teachersApi: { ...actual.teachersApi, list: () => listTeachers() } };
+  return {
+    ...actual,
+    teachersApi: {
+      ...actual.teachersApi,
+      list: () => listTeachers(),
+      get: (id: string) => getTeacher(id),
+    },
+  };
 });
 vi.mock("@/lib/api/subjects", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/subjects")>();
@@ -96,6 +105,7 @@ beforeEach(() => {
   teacherClasses.mockResolvedValue([]);
   classTeachers.mockResolvedValue([]);
   createAssignment.mockResolvedValue({});
+  getTeacher.mockRejectedValue(new Error("unread"));
   reassign.mockResolvedValue({});
   update.mockResolvedValue({ id: "c-2c", name: "JSS 2C" });
 });
@@ -316,5 +326,46 @@ describe("from the teacher's page", () => {
     fireEvent.change(screen.getByLabelText("2 · Subject"), { target: { value: "sub-maths" } });
     expect(screen.getByText("JSS 2A", { selector: "span" })).toBeInTheDocument();
     expect(screen.queryByText("JSS 2B", { selector: "span" })).toBeNull();
+  });
+});
+
+describe("D05's Teaches, from the teacher's record (8 Oct)", () => {
+  const pickTeacher = async () =>
+    fireEvent.change(await screen.findByRole("combobox", { name: "Teacher" }), {
+      target: { value: "t-bello" },
+    });
+
+  it("states a single subject and makes it the pick", async () => {
+    getTeacher.mockResolvedValue({ id: "t-bello", name: "Bisi Bello", subjects: ["Mathematics"] });
+    fromClass();
+    await pickTeacher();
+    await waitFor(() => expect(said(document.body)).toMatch(/Teaches Mathematics/));
+    expect(screen.queryByLabelText("2 · Subject", { selector: "select" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Co-teacher/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Assign Mathematics to 1 class" }));
+    await waitFor(() =>
+      expect(createAssignment).toHaveBeenCalledWith(
+        expect.objectContaining({ teacherId: "t-bello", schoolSubjectId: "sub-maths" }),
+      ),
+    );
+  });
+
+  it("offers a choice between several, and only those", async () => {
+    getTeacher.mockResolvedValue({ id: "t-bello", name: "Bisi Bello", subjects: ["Mathematics", "Biology"] });
+    fromClass(undefined, vi.fn());
+    await pickTeacher();
+    const group = await screen.findByRole("radiogroup", { name: "2 · Subject" });
+    expect(within(group).getAllByRole("radio")).toHaveLength(2);
+    fireEvent.click(within(group).getByRole("radio", { name: "Mathematics" }));
+    expect(within(group).getByRole("radio", { name: "Mathematics" })).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("falls back to the school's whole list when the teacher has none on record", async () => {
+    getTeacher.mockResolvedValue({ id: "t-bello", name: "Bisi Bello", subjects: [] });
+    fromClass(undefined, vi.fn());
+    await pickTeacher();
+    await waitFor(() => expect(screen.getByRole("option", { name: "Biology" })).toBeInTheDocument());
+    expect(screen.queryByRole("radiogroup")).toBeNull();
   });
 });

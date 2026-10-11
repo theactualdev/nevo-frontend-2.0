@@ -9,7 +9,7 @@ import {
   type TeacherAssignmentRole,
 } from "@/lib/api/classes";
 import { ApiError, apiErrorMessage } from "@/lib/api/client";
-import { classTakes, subjectsApi, type SchoolSubject } from "@/lib/api/subjects";
+import { classTakes, subjectNamed, subjectsApi, type SchoolSubject } from "@/lib/api/subjects";
 import { teachersApi, type TeacherSummary } from "@/lib/api/teachers";
 import { yearGroupLabel } from "@/lib/constants/yearGroups";
 import { cn } from "@/lib/utils";
@@ -39,11 +39,13 @@ import {
  * detail opens it with that teacher chosen. SCRUM-40 asked that the two word
  * the same write identically, and one sheet makes that true by construction.
  *
- * BUILT REDUCED, with the user's go-ahead (6 Oct). D05 marks the subjects a
- * teacher "Teaches"; no admin read carries a teacher's subjects, so every
- * school subject is offered unmarked, and a pick the teacher does not hold is
- * refused by the server (`subject_not_on_teacher`) in its own words, per
- * class. TODO(api): the teacher's subjects on `TeacherDetailResponse`.
+ * D05'S "TEACHES", NOW THE READ CARRIES IT (8 Oct). `TeacherDetailResponse`
+ * has the teacher's `subjects`, so step 2 offers only those, as D05 draws it:
+ * one subject is simply "Teaches Biology", already chosen; several are a
+ * choice between them. A teacher with none on record, or whose record could
+ * not be read, falls back to the school's whole list - and a pick they do not
+ * hold is refused by the server (`subject_not_on_teacher`) in its own words.
+ * (This shipped reduced on 6 Oct, offering every subject unmarked.)
  *
  * A CLASS THAT DOES NOT TAKE THE SUBJECT cannot be ticked - the server would
  * refuse it (`subject_not_on_class`). D05 offers to add the subject to that
@@ -110,6 +112,11 @@ export function AssignTeachingSheet({
     door.kind === "teacher" ? door.held : null,
   );
   const [subjectId, setSubjectId] = useState("");
+  /**
+   * The chosen teacher's subjects, by name, from their record. Null while
+   * unread or when the read failed - then the whole school list is offered.
+   */
+  const [taught, setTaught] = useState<string[] | null>(null);
   const [ticked, setTicked] = useState<string[]>(
     door.kind === "class" ? [door.klass.id] : [],
   );
@@ -162,10 +169,19 @@ export function AssignTeachingSheet({
       .catch(() => setClassTeachers((m) => ({ ...m, [id]: { state: "failed" } })));
   };
 
+  const readTaught = (id: string) =>
+    teachersApi
+      .get(id)
+      .then((t) => {
+        if (latestTeacher.current === id) setTaught(Array.isArray(t.subjects) ? t.subjects : null);
+      })
+      .catch(() => undefined);
+
   useEffect(() => {
     fetchSubjects();
     if (!given) fetchClasses();
     if (door.kind === "class") fetchTeachers();
+    if (door.kind === "teacher") readTaught(door.teacher.id);
     // Once, on open: each read has its own retry.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -174,7 +190,10 @@ export function AssignTeachingSheet({
     setTeacherId(id);
     latestTeacher.current = id;
     setHeld(null);
+    setTaught(null);
+    setSubjectId("");
     if (!id) return;
+    readTaught(id);
     classesApi
       .teacherClasses(id)
       .then((rows) => {
@@ -185,8 +204,15 @@ export function AssignTeachingSheet({
       .catch(() => undefined);
   };
 
+  /** The school subjects this teacher teaches, matched by name. */
+  const teaches =
+    subjects.state === "ready" && taught
+      ? subjects.value.filter((s) => taught.some((name) => subjectNamed([s], name)))
+      : [];
+  // One subject needs no choosing: D05 states it and it is the pick.
+  const chosenSubjectId = subjectId || (teaches.length === 1 ? teaches[0].id : "");
   const subject =
-    subjects.state === "ready" ? subjects.value.find((s) => s.id === subjectId) : undefined;
+    subjects.state === "ready" ? subjects.value.find((s) => s.id === chosenSubjectId) : undefined;
   const teacherName =
     door.kind === "teacher"
       ? door.teacher.name
@@ -419,22 +445,52 @@ export function AssignTeachingSheet({
         <label htmlFor="assign-subject" className={ASSIGN_LABEL}>
           2 · Subject
         </label>
-        <select
-          id="assign-subject"
-          value={subjectId}
-          onChange={(e) => setSubjectId(e.target.value)}
-          disabled={phase !== "idle" || subjects.state !== "ready"}
-          className={ASSIGN_SELECT}
-        >
-          <option value="">Choose a subject</option>
-          {subjects.state === "ready"
-            ? subjects.value.map((s) => (
-                <option key={s.id} value={s.id}>
+        {teaches.length === 1 ? (
+          <p id="assign-subject" className="m-0 text-[14px] text-nevo-near-black/66">
+            Teaches <strong className="font-semibold text-nevo-near-black">{teaches[0].displayName}</strong>
+          </p>
+        ) : teaches.length > 1 ? (
+          <div role="radiogroup" aria-label="2 · Subject" className="flex flex-wrap gap-2.5">
+            {teaches.map((s) => {
+              const on = s.id === chosenSubjectId;
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={on}
+                  disabled={phase !== "idle"}
+                  onClick={() => setSubjectId(s.id)}
+                  className={cn(
+                    "flex cursor-pointer items-center gap-2 rounded-full border-[1.5px] px-3.5 py-2 text-[14px] font-medium transition-colors",
+                    on
+                      ? "border-nevo-navy bg-nevo-navy text-nevo-cream"
+                      : "border-nevo-near-black/14 bg-nevo-cream-elevated text-nevo-near-black/78 hover:border-nevo-navy/40",
+                  )}
+                >
                   {s.displayName}
-                </option>
-              ))
-            : null}
-        </select>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <select
+            id="assign-subject"
+            value={subjectId}
+            onChange={(e) => setSubjectId(e.target.value)}
+            disabled={phase !== "idle" || subjects.state !== "ready"}
+            className={ASSIGN_SELECT}
+          >
+            <option value="">Choose a subject</option>
+            {subjects.state === "ready"
+              ? subjects.value.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.displayName}
+                  </option>
+                ))
+              : null}
+          </select>
+        )}
         {subjects.state === "failed" ? (
           <ReadFailed className="mt-2" what="your school's subject list" onRetry={loadSubjects} />
         ) : null}

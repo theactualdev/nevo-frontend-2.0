@@ -143,3 +143,12 @@ describe("TeacherDetailView headcount", () => {
     expect(visibleText(container)).toMatch(/Class c3 Archived/);
   });
 });
+
+describe("TeacherDetailView's class rows (8 Oct)", () => {
+  it("name the subject each assignment teaches", async () => {
+    teacherClasses.mockResolvedValue([{ ...held("c1"), subjectId: "sub-bio", subject: "Biology" }]);
+    const { container } = render(<TeacherDetailView teacherId="t1" />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/Class c1/));
+    expect(visibleText(container)).toMatch(/Biology ·/);
+  });
+});

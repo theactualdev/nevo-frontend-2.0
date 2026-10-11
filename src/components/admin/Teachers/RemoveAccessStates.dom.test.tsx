@@ -233,13 +233,13 @@ describe("RemoveAccessSheet after a partial hand-over", () => {
 });
 
 describe("removing a teacher with no classes", () => {
-  it("promises no restore - nothing in the contract undoes a revoke", async () => {
+  it("says access can be restored, in D06b's words, now the undo exists (8 Oct)", async () => {
     list.mockResolvedValue([other()]);
     const { container } = render(
       <RemoveAccessSheet teacher={teacher} held={[]} onClose={() => {}} onRemoved={() => {}} />,
     );
     await waitFor(() => expect(visibleText(container)).toMatch(/will no longer be able to open their Nevo console/));
     expect(visibleText(container)).toMatch(/Their classes and notes stay with the school\./);
-    expect(visibleText(container)).not.toMatch(/restore/i);
+    expect(visibleText(container)).toMatch(/you can restore their access whenever you need to/);
   });
 });

@@ -275,3 +275,16 @@ describe("removing a teacher from the class, while it happens", () => {
     expect(screen.getByRole("button", { name: "Keep them" })).toBeDisabled();
   });
 });
+
+describe("ClassDetailView's teacher rows (8 Oct)", () => {
+  it("say what each assignment teaches, and nothing for an older one", async () => {
+    current = klass();
+    classTeachers.mockResolvedValue([
+      { ...teacher, assignmentId: "a1", subjectId: "sub-bio", subject: "Biology" },
+      { ...teacher, assignmentId: "a2", teacherId: "t2", firstName: "Bisi", lastName: "Bello", subjectId: null, subject: null },
+    ]);
+    const { container } = render(<ClassDetailView classId="c1" />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/Teaches Biology/));
+    expect(visibleText(container).match(/Teaches /g)).toHaveLength(1);
+  });
+});
