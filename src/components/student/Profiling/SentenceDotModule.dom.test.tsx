@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { SentenceDotModule, dotPositions, scatterDots } from "./SentenceDotModule";
 import { BaselineCapture } from "@/lib/profiling/capture";
 import { AGE_BANDS, dotPairs } from "@/lib/profiling/bands";
@@ -451,6 +451,69 @@ describe("SentenceDotModule — 3A says only what a frame gives it", () => {
     render(<SentenceDotModule band="p46" onComplete={() => {}} />);
 
     expect(bubble()?.textContent).toBe("Is this true or false?");
+  });
+});
+
+describe("SentenceDotModule — a new trial paints clean", () => {
+  /*
+   * The buttons eased their colour, and the same button carries on into the
+   * next trial, so the last answer's violet faded out over a fresh one. The
+   * frames move only the scale (`.sv-tap`, `.dc-tap`).
+   */
+  const easesColour = /transition-(colors|all)|transition-\[[^\]]*(background|border|color)/;
+
+  it("draws the next sentence's buttons unpressed, with no colour to fade", () => {
+    render(<SentenceDotModule band="p46" onComplete={() => {}} />);
+    fireEvent.click(screen.getByText("True"));
+    act(() => void vi.advanceTimersByTime(500));
+
+    for (const label of ["True", "False", "Not sure"]) {
+      const b = screen.getByText(label);
+      expect(b.className).not.toContain("bg-nevo-violet");
+      expect(b.className).not.toMatch(easesColour);
+    }
+  });
+
+  it("does the same for the dots' buttons and the heard pictures' I don't know", () => {
+    render(<SentenceDotModule band="p13" onComplete={() => {}} />);
+    act(() => void vi.advanceTimersByTime(1000));
+    for (const b of screen.getAllByRole("button"))
+      expect(b.className).not.toMatch(easesColour);
+    cleanup();
+
+    giveJsdomAVoice();
+    render(<SentenceDotModule band="p13" onComplete={() => {}} />);
+    expect(
+      screen.getByRole("button", { name: /I don.t know/ }).className,
+    ).not.toMatch(easesColour);
+  });
+});
+
+describe("SentenceDotModule — buttons at the frames' sizes", () => {
+  it("draws True, False and Not sure 52px tall, full width on a phone and 168px up", () => {
+    // They were the module's 180x56 default.
+    render(<SentenceDotModule band="p46" onComplete={() => {}} />);
+
+    for (const label of ["True", "False", "Not sure"]) {
+      const b = screen.getByText(label);
+      expect(b.className).toContain("h-[52px]");
+      expect(b.className).toMatch(/(^| )w-full( |$)/);
+      expect(b.className).toContain("sm:w-[168px]");
+    }
+  });
+
+  it("draws the dots' buttons full width at 16px on a phone, 200x64 at 18px up", () => {
+    // They were 170x56 from tablet up, and 300 wide at 18px on a phone.
+    render(<SentenceDotModule band="p13" onComplete={() => {}} />);
+    act(() => void vi.advanceTimersByTime(1000));
+
+    const b = screen.getByRole("button", { name: /Top|Left/ });
+    expect(b.className).toMatch(/(^| )w-full( |$)/);
+    expect(b.className).toContain("text-base");
+    expect(b.className).toContain("sm:h-16");
+    expect(b.className).toContain("sm:w-[200px]");
+    expect(b.className).toContain("sm:text-lg");
+    expect(b.parentElement!.className).not.toContain("max-w-[300px]");
   });
 });
 

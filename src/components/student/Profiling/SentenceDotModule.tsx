@@ -33,6 +33,9 @@ const DOTS: Record<
   ss: { revealMs: 600, dot: "size-2.5", px: 10, box: "size-[200px]" },
 };
 
+/** 3A's True, False and Not sure (`Nevo Sentence Verify Frame`, `btnBase` and `bW`). */
+const TF_BUTTON = "h-[52px] w-full sm:w-[168px]";
+
 /**
  * The inside of the smallest box any band draws: 200px less its 2px border.
  * Positions are worked out here and placed as percentages, so P1-3's 220px
@@ -391,7 +394,7 @@ export function HeardPictures({
         type="button"
         onClick={(e) => onPick(AUDIO_PICS.length, { notSure: true }, e)}
         className={cn(
-          "flex h-14 w-full cursor-pointer items-center justify-center gap-2 rounded-[10px] border-2 border-nevo-violet text-sm font-medium transition-[background-color,transform] active:scale-[0.97] sm:w-[220px]",
+          "flex h-14 w-full cursor-pointer items-center justify-center gap-2 rounded-[10px] border-2 border-nevo-violet text-sm font-medium transition-transform active:scale-[0.97] sm:w-[220px]",
           picked === AUDIO_PICS.length
             ? "bg-nevo-violet text-nevo-near-black"
             : "bg-nevo-cream text-nevo-violet",
@@ -591,9 +594,15 @@ export function SentenceDotModule({
               >
                 {sentence.text}
               </div>
+              {/*
+                The frame's True / False / Not sure (`btnBase`, `bW`): 52px tall,
+                full width on a phone and 168px from tablet up. They were
+                the module's 180x56 default.
+              */}
               <div className="flex w-full flex-col items-center gap-3.5 sm:w-auto sm:flex-row">
                 <TrialButton
                   label="True"
+                  className={TF_BUTTON}
                   pressed={picked === 0}
                   onClick={(e) =>
                     pick(0, { mode, correct: sentence.isTrue === true }, e)
@@ -601,6 +610,7 @@ export function SentenceDotModule({
                 />
                 <TrialButton
                   label="False"
+                  className={TF_BUTTON}
                   pressed={picked === 1}
                   onClick={(e) =>
                     pick(1, { mode, correct: sentence.isTrue === false }, e)
@@ -608,6 +618,7 @@ export function SentenceDotModule({
                 />
                 <TrialButton
                   label="Not sure"
+                  className={TF_BUTTON}
                   soft
                   pressed={picked === 2}
                   onClick={(e) => pick(2, { mode, notSure: true }, e)}
@@ -642,7 +653,7 @@ export function SentenceDotModule({
                 </div>
               ))}
             </div>
-            <div className="flex w-full max-w-[300px] flex-col gap-4 sm:w-auto sm:max-w-none sm:flex-row">
+            <div className="flex w-full flex-col gap-4 sm:w-auto sm:flex-row">
               <DotButton
                 label="Top"
                 wide={left}
@@ -681,7 +692,16 @@ export function SentenceDotModule({
   );
 }
 
-/** 3B answer button: disabled-looking until the mask lands, per the frame. */
+/**
+ * 3B answer button: disabled-looking until the mask lands, per the frame.
+ * The frame's `btnBase` and `bW`: the full width at 56px and 16px on a phone,
+ * 200x64 at 18px from tablet up. It was 170x56 there, and 300 wide at 18px on
+ * a phone.
+ *
+ * NO COLOUR TRANSITION, here or on any trial button: the frames move only
+ * their scale (`.dc-tap`), and a button that eased its colour carried the
+ * last answer's violet into the next trial, fading as the child looked.
+ */
 function DotButton({
   sideLabel,
   label,
@@ -701,7 +721,7 @@ function DotButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex h-14 min-w-[170px] items-center justify-center rounded-[10px] border-2 text-lg font-semibold transition-[background-color,border-color]",
+        "flex h-14 w-full items-center justify-center rounded-[10px] border-2 text-base font-semibold sm:h-16 sm:w-[200px] sm:text-lg",
         pressed
           ? "border-nevo-violet bg-nevo-violet text-nevo-near-black"
           : armed

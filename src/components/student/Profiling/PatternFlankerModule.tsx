@@ -420,6 +420,14 @@ export function FlankerButtons({
   );
 }
 
+/**
+ * One answer of a trial. Every caller sets its frame's width: a 150px floor
+ * here outranked SS's 140px pattern buttons.
+ *
+ * ONLY ITS SCALE MOVES (the frames' `.pm-tap`, `.fl-tap`, `.sv-tap`). Its
+ * colour eased over 150ms, and the same button carries on into the next
+ * trial, so the last answer's violet faded out over a fresh one.
+ */
 export function TrialButton({
   label,
   icon,
@@ -444,7 +452,7 @@ export function TrialButton({
       aria-label={iconOnly ? label : undefined}
       onClick={onClick}
       className={cn(
-        "flex h-14 min-w-[150px] cursor-pointer items-center justify-center rounded-[10px] border-2 transition-[background-color,transform] active:scale-[0.97] sm:w-[180px]",
+        "flex h-14 cursor-pointer items-center justify-center rounded-[10px] border-2 transition-transform active:scale-[0.97] sm:w-[180px]",
         soft ? "text-sm font-medium" : "text-base font-semibold",
         pressed
           ? "border-nevo-violet bg-nevo-violet text-nevo-near-black"
