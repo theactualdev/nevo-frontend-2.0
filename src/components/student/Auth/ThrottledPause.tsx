@@ -57,13 +57,18 @@ export function HeldPinBoxes({
   );
 }
 
-/** The note under the held boxes. Announced, as the door's own lines are. */
+/**
+ * The note under the held boxes. Announced, as the door's own lines are.
+ *
+ * `box-content`: D154's 280px is the text's width, with the padding outside
+ * it, as the frame's own box is measured. Here it was 280 overall.
+ */
 export function ThrottleNote({ className }: { className?: string }) {
   return (
     <p
       role="status"
       className={cn(
-        "mt-[22px] max-w-[280px] rounded-[10px] bg-nevo-violet/14 px-[18px] py-3.5 text-[15px] leading-[1.5] text-nevo-near-black/82",
+        "mt-[22px] box-content max-w-[280px] rounded-[10px] bg-nevo-violet/14 px-[18px] py-3.5 text-[15px] leading-[1.5] text-nevo-near-black/82",
         className,
       )}
     >

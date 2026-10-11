@@ -24,6 +24,13 @@ import { clearSession } from "@/lib/auth/session";
  */
 
 /*
+ * The page's imports are paid by the first test on a cold worker, and on a
+ * contended machine that alone ran past the 5s default. The same allowance
+ * the other door suites give themselves.
+ */
+vi.setConfig({ testTimeout: 30_000 });
+
+/*
  * ONE router and ONE roster array for the whole file. The page's hydrate
  * effect depends on `router`, and a fresh object per render re-runs it; a
  * fresh entries array per call then re-renders, and the two loop until the

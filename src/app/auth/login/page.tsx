@@ -515,7 +515,7 @@ export default function LoginPage() {
         setDigits("");
         setError(null);
       }}
-      className="mt-7 inline-flex h-[46px] cursor-pointer items-center rounded-[10px] px-[18px] text-base font-medium text-nevo-navy transition-[background] hover:bg-nevo-navy/8 lg:landscape:col-start-1 lg:landscape:row-start-3 lg:landscape:justify-self-center"
+      className="mt-7 inline-flex h-[46px] cursor-pointer items-center rounded-[10px] px-[18px] text-base font-medium text-nevo-navy transition-[background] hover:bg-nevo-navy/8 lg:landscape:col-start-1 lg:landscape:row-start-3 lg:landscape:justify-self-center max-lg:[@media(min-height:801px)_and_(max-height:860px)]:mt-3 max-lg:[@media(max-height:800px)]:mt-0"
     >
       Not you? Go back
     </button>
@@ -561,8 +561,17 @@ export default function LoginPage() {
         below keep the left column centred against the taller right one.
 
         No wordmark on 28c-3: the picker before it carries the mark.
+
+        SHORT SCREENS GIVE BACK SPACE, so the ways out stay on screen. On a
+        375x667 phone a wrong PIN put "Forgot PIN?" and "Not you? Go back"
+        below the fold and cut the 0 key in half; at 375x812 the page
+        scrolled. In the one-column layout only (the landscape grid is
+        drawn for 768 tall): up to 860px tall the top padding and the gap
+        above "Not you?" tighten, and up to 800px the avatar shrinks and
+        every gap closes up too. A screen tall enough keeps the values 28c-3
+        draws.
       */}
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-10 pt-10 pb-6 text-center sm:px-14 lg:landscape:grid lg:landscape:grid-cols-[auto_auto] lg:landscape:grid-rows-[1fr_auto_auto_1fr] lg:landscape:content-center lg:landscape:gap-x-20 lg:landscape:px-[72px] lg:landscape:pt-9 lg:landscape:pb-[18px]">
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-10 pt-10 pb-6 text-center sm:px-14 lg:landscape:grid lg:landscape:grid-cols-[auto_auto] lg:landscape:grid-rows-[1fr_auto_auto_1fr] lg:landscape:content-center lg:landscape:gap-x-20 lg:landscape:px-[72px] lg:landscape:pt-9 lg:landscape:pb-[18px] max-lg:[@media(min-height:801px)_and_(max-height:860px)]:pt-6 max-lg:[@media(max-height:800px)]:pt-3 max-lg:[@media(max-height:800px)]:pb-2">
         <div className="flex flex-col items-center lg:landscape:col-start-1 lg:landscape:row-start-2">
           {/*
             The child's shape, never their initials. 28c: avatars are "soft
@@ -572,9 +581,17 @@ export default function LoginPage() {
           */}
           <ChildAvatar
             shapeIndex={chosen.shapeIndex}
-            className="size-[104px] sm:size-[120px] lg:landscape:size-[132px]"
+            className="size-[104px] sm:size-[120px] lg:landscape:size-[132px] max-lg:[@media(max-height:800px)]:size-14"
           />
-          <h2 className="mt-6 text-[24px] font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[28px] lg:landscape:mt-[22px] lg:landscape:text-[30px]">
+          <h2
+            className={cn(
+              "mt-6 tracking-[-0.01em] text-nevo-near-black lg:landscape:mt-[22px] max-lg:[@media(max-height:800px)]:mt-2 max-lg:[@media(max-height:800px)]:leading-tight",
+              // D154 draws its heading lighter and smaller than the name.
+              throttled
+                ? "text-[23px] leading-[1.3] font-medium sm:text-[26px]"
+                : "text-[24px] font-semibold sm:text-[28px] lg:landscape:text-[30px]",
+            )}
+          >
             {/* 28c-3 names ("Ada"); D154's pause takes the slot. */}
             {throttled
               ? THROTTLED_PAUSE_COPY.heading
@@ -592,7 +609,7 @@ export default function LoginPage() {
           <div className="flex flex-col items-center lg:landscape:col-start-2 lg:landscape:row-span-4 lg:landscape:row-start-1 lg:landscape:self-center">
             <HeldPinBoxes
               boxClassName="size-12 sm:size-[58px]"
-              className="mt-8 sm:mt-[34px] sm:gap-4 lg:landscape:mt-0"
+              className="mt-8 sm:mt-[34px] sm:gap-4 lg:landscape:mt-0 max-lg:[@media(max-height:800px)]:mt-4"
             />
             <ThrottleNote />
             <button
@@ -616,7 +633,7 @@ export default function LoginPage() {
           {error ? (
             <div
               role="status"
-              className="mt-[22px] max-w-[360px] rounded-[10px] bg-nevo-violet/18 px-4 py-[13px] text-[15.5px] leading-[1.5] text-nevo-near-black lg:landscape:mt-0 lg:landscape:max-w-[340px] lg:landscape:px-[15px] lg:landscape:py-3 lg:landscape:text-[15px]"
+              className="mt-[22px] max-w-[360px] rounded-[10px] bg-nevo-violet/18 px-4 py-[13px] text-[15.5px] leading-[1.5] text-nevo-near-black lg:landscape:mt-0 lg:landscape:max-w-[340px] lg:landscape:px-[15px] lg:landscape:py-3 lg:landscape:text-[15px] max-lg:[@media(max-height:800px)]:mt-2.5 max-lg:[@media(max-height:800px)]:py-2"
             >
               {/* 28c-5's own words. */}
               {error === "credentials" &&
@@ -629,13 +646,13 @@ export default function LoginPage() {
           ) : (
             <p
               role="status"
-              className="mt-2.5 text-[15px] text-nevo-near-black/60 sm:text-[17px] lg:landscape:mt-0"
+              className="mt-2.5 text-[15px] text-nevo-near-black/60 sm:text-[17px] lg:landscape:mt-0 max-lg:[@media(max-height:800px)]:mt-1"
             >
               Enter your PIN to keep going
             </p>
           )}
           {/* Four, for every child (D58). */}
-          <div className="mt-8 flex flex-wrap justify-center gap-3.5 sm:mt-[34px] sm:gap-4 lg:landscape:mt-[26px]">
+          <div className="mt-8 flex flex-wrap justify-center gap-3.5 sm:mt-[34px] sm:gap-4 lg:landscape:mt-[26px] max-lg:[@media(max-height:800px)]:mt-4">
             {Array.from({ length: STUDENT_PIN_LENGTH }, (_, i) => {
               const active = i === digits.length && !checking;
               return (
@@ -672,7 +689,7 @@ export default function LoginPage() {
             presentation="block"
             onKey={addDigits}
             onBackspace={backspace}
-            className="mt-[30px] lg:landscape:mt-6"
+            className="mt-[30px] lg:landscape:mt-6 max-lg:[@media(max-height:800px)]:mt-4"
           />
 
           <button
@@ -681,7 +698,7 @@ export default function LoginPage() {
               e.stopPropagation();
               router.push(forgotPinHref(chosen.id, next));
             }}
-            className="mt-2 h-11 cursor-pointer px-4 text-[15px] font-medium text-nevo-navy"
+            className="mt-2 h-11 cursor-pointer px-4 text-[15px] font-medium text-nevo-navy max-lg:[@media(max-height:800px)]:mt-0"
           >
             Forgot PIN?
           </button>
