@@ -242,6 +242,58 @@ describe("the server hands a child off from the quick check (B94)", () => {
     expect(screen.queryByText(PROMPT)).toBeNull();
   });
 
+  it("goes forward, not back into the check, when the child closes the panel and taps Next", async () => {
+    saveAttempt.mockResolvedValue(reply(HANDOFF));
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    next();
+    await miss();
+    await screen.findByText(PROMPT);
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    next();
+
+    // Forward - no check sheet, no old wrong pick, no "Not quite."
+    expect(screen.getByText("Body of Denominators.")).toBeTruthy();
+    expect(checkOnScreen()).toBeNull();
+    expect(screen.queryByText("Not quite.")).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    // And on the way back through, neither the check nor the panel again.
+    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+    expect(screen.queryByText(PROMPT)).toBeNull();
+    next();
+    expect(checkOnScreen()).toBeNull();
+    expect(screen.getByText("Body of Denominators.")).toBeTruthy();
+  });
+
+  it("is never the check passed when the child closes the panel and moves on", async () => {
+    const REVIEW = { ...LESSON, assessment: undefined } as unknown as Lesson;
+    saveAttempt.mockResolvedValue(reply(HANDOFF));
+    render(
+      <LessonPlayer
+        lesson={REVIEW}
+        plan={null}
+        review
+        reviewConceptId="concept-1"
+        live
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Begin review" }));
+    next();
+    await miss();
+    await screen.findByText(PROMPT);
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    next();
+    next();
+
+    await waitFor(() =>
+      expect(recordReview).toHaveBeenCalledWith({
+        studentId: "stu-1",
+        conceptId: "concept-1",
+        outcome: "not_recalled",
+      }),
+    );
+  });
+
   it("offers no way on when the server did not say to move on", async () => {
     saveAttempt.mockResolvedValue(
       reply({ ...HANDOFF, advanceAfterHandoff: false }),
