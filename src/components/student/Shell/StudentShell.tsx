@@ -214,7 +214,8 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
         <OfflineNotice online={online} />
 
         {/* Top bar — mobile only (logo + avatar) */}
-        <header className="flex h-[60px] shrink-0 items-center justify-between px-5 md:hidden">
+        {/* Positioned: the bell's panel hangs from this bar on a phone. */}
+        <header className="relative flex h-[60px] shrink-0 items-center justify-between px-5 md:hidden">
           <Image
             src="/brand/nevo-wordmark.png"
             alt="Nevo"
