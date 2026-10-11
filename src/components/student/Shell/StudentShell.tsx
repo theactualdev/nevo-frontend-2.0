@@ -160,9 +160,16 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
     // Text Size is a reading preference, and the player is where the reading
     // happens - it applies there too, not just in the shell. The calibrated
     // activities are deliberately excluded - see `scalesWithTextSize`.
-    if (!scalesWithTextSize(pathname)) return <>{children}</>;
+    // `data-nevo-console`: the student focus ring (globals.css) applies on
+    // these routes too. `contents`, so the bare ones stay bare.
+    if (!scalesWithTextSize(pathname))
+      return (
+        <div data-nevo-console="student" className="contents">
+          {children}
+        </div>
+      );
     return (
-      <div className="nevo-text-zoom">
+      <div data-nevo-console="student" className="nevo-text-zoom">
         {/*
           Ask Nevo is rendered by the LESSON LAYOUT now, not here. As a sibling
           of `children` it sat outside that route's `LessonProvider`, so the
@@ -183,7 +190,10 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
     : STUDENT_NAV.find((item) => within(item.href))?.href;
 
   return (
-    <div className="group/shell flex h-[100dvh] bg-nevo-cream text-nevo-near-black">
+    <div
+      data-nevo-console="student"
+      className="group/shell flex h-[100dvh] bg-nevo-cream text-nevo-near-black"
+    >
       {/* Sidebar — tablet & desktop */}
       <div className="hidden shrink-0 md:block">
         <MaybeSample showing={showingFixtureIdentity} kind="student:identity">

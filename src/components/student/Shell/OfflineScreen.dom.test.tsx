@@ -110,6 +110,8 @@ describe("the full screen", () => {
     expect(dialog.textContent).not.toMatch(/downloaded|saved lessons/i);
     // And no button that can only re-ask what the browser already answered.
     expect(screen.queryByRole("button")).toBeNull();
+    // Portalled out of the shell, so it carries the student scope itself.
+    expect(dialog).toHaveAttribute("data-nevo-console", "student");
   });
 
   it("goes over the tab, leaving what was half-written underneath", async () => {

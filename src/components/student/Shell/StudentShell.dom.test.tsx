@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { StudentShell, fillsScreen, scalesWithTextSize } from "./StudentShell";
@@ -342,5 +344,45 @@ describe("the sidebar's collapse row (Nevo Sidebar Rail)", () => {
     const collapse = screen.getByRole("button", { name: "Collapse sidebar" });
     expect(collapse).toHaveClass("h-11", "w-full");
     expect(collapse).toHaveTextContent("Collapse");
+  });
+});
+
+describe("the student console's focus ring", () => {
+  /*
+   * Every element had the browser's ring in `--ring` at half strength, a 1px
+   * grey that all but vanished on cream. The student console draws a 2px navy
+   * outline instead, scoped by `data-nevo-console="student"` so the teacher
+   * and admin consoles keep theirs. jsdom applies no CSS, so the scope is
+   * pinned here and the rule is read from the stylesheet.
+   */
+  it("is scoped to every student route, tab or full-screen", () => {
+    for (const path of [
+      "/student/dashboard",
+      "/student/connect",
+      "/student/lessons/abc-123",
+      "/student/onboarding/sequence",
+    ]) {
+      const { unmount } = at(path);
+      expect(
+        screen.getByText("lesson body").closest('[data-nevo-console="student"]'),
+      ).not.toBeNull();
+      unmount();
+    }
+  });
+
+  it("is a 2px navy outline in the base layer, which any component's own focus style beats", () => {
+    const css = readFileSync(
+      join(process.cwd(), "src", "app", "globals.css"),
+      "utf8",
+    );
+    const base = css.slice(css.indexOf("@layer base {"));
+    const rule =
+      /\[data-nevo-console="student"\] :focus-visible \{([^}]*)\}/.exec(base);
+    expect(rule).not.toBeNull();
+    expect(rule![1]).toMatch(/outline:\s*2px solid var\(--color-nevo-navy\)/);
+    expect(rule![1]).toMatch(/outline-offset:\s*2px/);
+    // Inside the base layer's own braces, not after them.
+    const layerEnd = base.search(/^}/m);
+    expect(base.indexOf('[data-nevo-console="student"]')).toBeLessThan(layerEnd);
   });
 });

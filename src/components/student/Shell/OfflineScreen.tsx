@@ -93,6 +93,7 @@ export function OfflineScreen() {
     <DialogPrimitive.Root open>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Content
+          data-nevo-console="student"
           aria-describedby="offline-screen-body"
           onEscapeKeyDown={(e) => e.preventDefault()}
           onInteractOutside={(e) => e.preventDefault()}
