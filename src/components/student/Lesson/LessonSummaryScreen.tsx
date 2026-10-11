@@ -59,10 +59,18 @@ export function LessonSummaryScreen({
   const revisit = outcome?.revisit ?? lesson.assessment?.revisitConcepts ?? [];
 
   return (
-    <div className="flex min-h-full flex-col bg-nevo-cream text-nevo-near-black">
+    // Grows to the foot of the shell's region (`data-fills-main`), so the
+    // actions sit at the foot as 18a draws them, not under the last card.
+    <div
+      data-fills-main
+      className="flex min-h-full flex-1 flex-col bg-nevo-cream text-nevo-near-black"
+    >
       <div className="flex-1 px-6 pt-8 pb-6 sm:px-8 lg:px-10">
         <div className="mx-auto w-full max-w-[560px] lg:max-w-[640px]">
-          <h1 className="text-2xl font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[30px] lg:text-[32px]">
+          <span className="font-mono text-[11px] tracking-[0.08em] text-nevo-navy">
+            LESSON SUMMARY
+          </span>
+          <h1 className="mt-2.5 text-2xl font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[30px] lg:text-[32px]">
             {lesson.title}
           </h1>
 
@@ -137,7 +145,7 @@ export function LessonSummaryScreen({
       <div className="shrink-0 px-6 pb-8 sm:px-8 lg:px-10">
         <div className="mx-auto flex w-full max-w-[560px] flex-col gap-2 sm:flex-row sm:gap-3 lg:max-w-[640px]">
           <Button
-            className="w-full sm:flex-1 lg:w-[260px] lg:flex-none"
+            className="w-full sm:flex-1"
             onClick={() => router.push(LESSONS_HREF)}
           >
             Back to lessons

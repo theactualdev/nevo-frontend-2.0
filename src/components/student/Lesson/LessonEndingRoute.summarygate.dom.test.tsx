@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { LessonEndingRoute } from "./LessonEndingRoute";
 
 /**
@@ -65,6 +65,20 @@ describe("opening a summary directly", () => {
 
     expect(body()).toMatch(/isn.t ready yet/i);
     expect(body()).toMatch(/Back to my lessons/i);
+  });
+});
+
+describe("the summary as 18a draws it", () => {
+  it("opens under its LESSON SUMMARY eyebrow, and fills the region to put its actions at the foot", () => {
+    render(<LessonEndingRoute lessonId="l-1" screen="summary" />);
+
+    const eyebrow = screen.getByText("LESSON SUMMARY");
+    const title = screen.getByRole("heading", { level: 1, name: "Adding Fractions" });
+    expect(
+      eyebrow.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    // The opt-in the shell reads to give the screen the region's height.
+    expect(eyebrow.closest("[data-fills-main]")).not.toBeNull();
   });
 });
 

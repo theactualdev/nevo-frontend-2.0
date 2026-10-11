@@ -282,8 +282,15 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
             unmounted, then hidden, behind a full-screen takeover - and either
             way a child part-way through a message to their teacher could not
             see it. The banner above is the whole of the offline state now.
+
+            A SCREEN THAT PINS ITS ACTIONS TO THE FOOT (18a's summary and
+            review) marks itself `data-fills-main`, and only then is this the
+            full height of the region, for it to grow into. Nothing else
+            changes layout.
           */}
-          <div>{children}</div>
+          <div className="has-[[data-fills-main]]:flex has-[[data-fills-main]]:min-h-full has-[[data-fills-main]]:flex-col">
+            {children}
+          </div>
         </main>
 
         {/* Bottom nav — mobile only. Down while a tab's on-screen keyboard is
