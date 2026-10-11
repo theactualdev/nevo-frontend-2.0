@@ -711,3 +711,21 @@ describe("moving a date into the past", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(/cannot be due before it opens/i);
   });
 });
+
+/** C17: dates moved and not yet saved are work too. */
+describe("dates moved but not saved", () => {
+  const leavingAsks = () => {
+    const e = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(e);
+    return e.defaultPrevented;
+  };
+
+  it("make the browser ask before leaving, and only once something moved", () => {
+    render(<AssignmentSchedule assignments={CLASS_OF_THREE} />);
+    fireEvent.click(screen.getByRole("button", { name: /Change dates/i }));
+    expect(leavingAsks()).toBe(false);
+
+    fireEvent.change(screen.getByLabelText(/Due/i), { target: { value: "2026-11-01" } });
+    expect(leavingAsks()).toBe(true);
+  });
+});

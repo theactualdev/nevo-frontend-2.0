@@ -7,6 +7,7 @@ import {
   type Assignment,
 } from "@/lib/api/assignments";
 import { dayOf } from "@/components/teacher/Assign/pastDate";
+import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
 
 /**
  * Who this lesson is set for, and the two ways to change it.
@@ -405,6 +406,8 @@ function DateForm({
   }
   if (due !== toDateInput(dueAt)) changes.dueAt = onDay(due, dueAt, "end");
   const unchanged = Object.keys(changes).length === 0;
+  // C17: dates moved and not yet saved.
+  useUnsavedGuard(!unchanged);
   const movedIntoPast =
     (opens !== toDateInput(availableFrom) && Boolean(opens) && opens < today) ||
     (due !== toDateInput(dueAt) && Boolean(due) && due < today);
