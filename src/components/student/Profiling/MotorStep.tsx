@@ -201,9 +201,16 @@ export function MotorStep({
   useEffect(() => {
     if (!voiced) return;
     let done = false;
+    /*
+     * The failsafe goes with the voice. It stayed armed after a line that
+     * ended normally, and eight seconds in it cancelled speech in the middle
+     * of the step. (It is set before the line is spoken, so it exists by the
+     * time anything can call this.)
+     */
     const go = () => {
       if (done) return;
       done = true;
+      clearTimeout(failsafe);
       setHeard(true);
     };
     const line = new SpeechSynthesisUtterance(SPOKEN_LINE);
@@ -212,18 +219,18 @@ export function MotorStep({
     // The cleanup below holds `line`, so it is not collected before `end`.
     line.onend = go;
     line.onerror = go;
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(line);
     /*
      * A voice that never reported its end is SILENCED before the step goes
      * on, not left talking over it (D138, 8 Oct): "the demonstration finishes
      * before measurement begins. Nothing of it continues into the step
-     * itself." Where it had in fact finished, this silences nothing.
+     * itself." A voice that did report its end has already cleared this.
      */
     const failsafe = setTimeout(() => {
       window.speechSynthesis.cancel();
       go();
     }, VOICE_FAILSAFE_MS);
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(line);
     return () => {
       done = true;
       clearTimeout(failsafe);
