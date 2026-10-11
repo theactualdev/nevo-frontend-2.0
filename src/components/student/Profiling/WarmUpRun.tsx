@@ -1419,9 +1419,13 @@ function WarmUpDots({
 /**
  * reading, for P1-3: a sentence heard and a picture tapped, as the baseline
  * runs it (D81, 6 Oct) - said on arrival, again from the play button, with
- * the baseline's "I don't know" and its line, "Listen, then tap the matching
- * picture". The answer is timed from the end of the sentence (`onOpen`); one
- * made while it is still being said goes with no time at all.
+ * the baseline's "I don't know". The answer is timed from the end of the
+ * sentence (`onOpen`); one made while it is still being said goes with no
+ * time at all.
+ *
+ * NO LINE ABOVE IT. It carried the baseline's "Listen, then tap the matching
+ * picture", which no frame has; the baseline no longer shows it either, and
+ * no warm-up frame draws this round.
  *
  * Only reached where the device can speak; see `unheard` in `WarmUpRun`.
  */
@@ -1462,9 +1466,6 @@ function WarmUpHeard({
 
   return (
     <>
-      <p className={PROMPT}>
-        Listen, then tap the matching picture
-      </p>
       <HeardPictures
         answer={answer}
         picked={picked}

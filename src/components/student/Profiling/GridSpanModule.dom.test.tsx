@@ -189,6 +189,30 @@ describe("GridSpanModule — after a miss (D74)", () => {
   );
 });
 
+describe("GridSpanModule — a wrong tap says nothing", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("nudges the tile and writes no line, then or after", () => {
+    // "Try another" faded in under the grid after every miss, from the
+    // prototype. The frame's nudge state has no text, and 09 says never
+    // "wrong": a line that only shows after a miss says it was one.
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    render(
+      <GridSpanModule config={gridSpanConfig("p46")} onComplete={() => {}} />,
+    );
+    watchItPlay();
+    const before = document.body.textContent;
+
+    // Tile 0 was lit first, so tapping it first is a miss.
+    fireEvent.click(screen.getAllByRole("button", { hidden: true })[0]);
+
+    expect(document.body.textContent).toBe(before);
+    expect(document.body.textContent).not.toMatch(/try another/i);
+    act(() => void vi.advanceTimersByTime(300));
+    expect(document.body.textContent).not.toMatch(/try another/i);
+  });
+});
+
 describe("GridSpanModule — the settle (D136)", () => {
   afterEach(() => vi.restoreAllMocks());
 

@@ -508,6 +508,11 @@ export function SentenceDotModule({
    * as the buttons already did. It asked which SIDE had more above buttons
    * reading Top and Bottom. Words from `Nevo Dot Comparison Frame`'s `prompt`,
    * with its em dash as a colon (the design system allows none).
+   *
+   * NO BUBBLE OVER THE HEARD PICTURES OR THE PASSAGE. "Listen, then tap the
+   * matching picture" and "Read it, then answer" sat there, and no frame has
+   * either: `Nevo Sentence Verify Frame` draws 3A with no avatar row at all.
+   * The sentence form's line is the playable prototype's (11:324).
    */
   const bubble = settling
     ? ""
@@ -515,11 +520,9 @@ export function SentenceDotModule({
       ? masked
         ? "Which had more dots?"
         : "Watch the dots"
-      : mode === "audio"
-        ? "Listen, then tap the matching picture"
-        : mode === "passage"
-          ? "Read it, then answer"
-          : "Is this true or false?";
+      : mode === "sentence"
+        ? "Is this true or false?"
+        : "";
   const phoneBubble =
     act === "dots" && masked ? "Which had more dots: top or bottom?" : undefined;
 

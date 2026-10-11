@@ -422,6 +422,38 @@ describe("SentenceDotModule — the question matches the buttons", () => {
   });
 });
 
+describe("SentenceDotModule — 3A says only what a frame gives it", () => {
+  /*
+   * "Listen, then tap the matching picture" and "Read it, then answer" sat
+   * in a bubble over the heard pictures and the passage. No frame has either:
+   * `Nevo Sentence Verify Frame` draws 3A with no avatar row.
+   */
+  const bubble = () => screen.queryByRole("status");
+
+  it("puts no bubble over the heard pictures", () => {
+    giveJsdomAVoice();
+    render(<SentenceDotModule band="p13" onComplete={() => {}} />);
+
+    expect(screen.getByLabelText("A bus")).toBeInTheDocument();
+    expect(bubble()).toBeNull();
+    expect(document.body.textContent).not.toMatch(/listen, then tap/i);
+  });
+
+  it("puts none over the passage", () => {
+    render(<SentenceDotModule band="ss" onComplete={() => {}} />);
+
+    expect(screen.getByText("Why does Ada keep a notebook?")).toBeInTheDocument();
+    expect(bubble()).toBeNull();
+    expect(document.body.textContent).not.toMatch(/read it, then answer/i);
+  });
+
+  it("keeps the prototype's question over a sentence", () => {
+    render(<SentenceDotModule band="p46" onComplete={() => {}} />);
+
+    expect(bubble()?.textContent).toBe("Is this true or false?");
+  });
+});
+
 describe("SentenceDotModule — the listening task has an honest non-answer", () => {
   it("offers 'I don't know' and records it as declined, never wrong", () => {
     giveJsdomAVoice();

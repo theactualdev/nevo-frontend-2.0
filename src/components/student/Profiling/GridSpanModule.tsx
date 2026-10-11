@@ -337,16 +337,13 @@ export function GridSpanModule({
               })}
             </div>
 
-            {/* Change-of-mind hint on a wrong tap - informational, never alarmed */}
-            <p
-              className={cn(
-                "absolute inset-x-0 -bottom-8 text-center text-[13px] text-nevo-violet transition-opacity duration-300",
-                step === "wrong" ? "opacity-100" : "opacity-0",
-              )}
-              aria-hidden={step !== "wrong"}
-            >
-              Try another
-            </p>
+            {/*
+              NO WORDS ON A WRONG TAP. "Try another" appeared under the grid
+              here, from the playable prototype (11:71). The Grid Span frame's
+              nudge state is the tile's soft-violet ring and nothing else, and
+              09 says never "wrong": a line that only ever shows after a miss
+              tells the child they missed.
+            */}
 
             {/* SS dual task: the check floats over the dimmed grid */}
             {step === "check" && (

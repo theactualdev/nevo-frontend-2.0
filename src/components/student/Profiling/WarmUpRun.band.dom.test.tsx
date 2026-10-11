@@ -299,6 +299,14 @@ describe("the reading task for Primary 1-3 is heard (D81)", () => {
     );
   });
 
+  it("writes no line above the pictures, which no frame gives it", () => {
+    // It carried the baseline's "Listen, then tap the matching picture",
+    // and neither the baseline's frame nor the warm-up's has those words.
+    render(<WarmUpRun dimension="reading" />);
+
+    expect(document.body.textContent).not.toMatch(/listen, then tap/i);
+  });
+
   it("marks the picture against what was said, and times it from the end of the sentence", async () => {
     render(<WarmUpRun dimension="reading" />);
     await wait(1500); // the sentence being said
