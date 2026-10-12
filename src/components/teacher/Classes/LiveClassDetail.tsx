@@ -154,7 +154,7 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
               aria-selected={tab === t}
               onClick={() => setTab(t)}
               className={cn(
-                "h-9 cursor-pointer rounded-[9px] px-3.5 text-[13.5px] font-medium capitalize transition-colors xl:rounded-full xl:px-[15px]",
+                "h-9 cursor-pointer rounded-[10px] px-3.5 text-[13.5px] font-medium capitalize transition-colors xl:rounded-full xl:px-[15px]",
                 tab === t
                   ? "bg-nevo-navy text-nevo-cream"
                   : "text-nevo-near-black/65 hover:bg-nevo-navy/8",
@@ -596,7 +596,7 @@ function LessonsPanel({ classId }: { classId: string }) {
            * a teacher acts on the wrong one.
            */}
           {l.opensAt && !l.cancelled && (
-            <span className="shrink-0 rounded-[7px] border border-nevo-navy/25 px-2 py-1 text-[12px] text-nevo-near-black/65">
+            <span className="shrink-0 rounded-full border border-nevo-navy/25 px-2 py-1 text-[12px] text-nevo-near-black/65">
               Opens later
             </span>
           )}

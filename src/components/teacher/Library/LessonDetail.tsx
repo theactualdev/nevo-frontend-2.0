@@ -52,7 +52,7 @@ export function LessonDetail({
 
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
-      <div className="mx-auto max-w-[860px]">
+      <div className="mx-auto max-w-[820px]">
         <Link
           href="/teacher/lessons"
           className="inline-flex cursor-pointer items-center gap-[7px] text-sm text-nevo-near-black/60 transition-transform active:scale-[0.99]"

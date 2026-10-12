@@ -65,9 +65,9 @@ type Saving = "idle" | "working" | "failed";
 const ghostBtn =
   "inline-flex cursor-pointer items-center gap-[7px] rounded-[10px] border-[1.5px] border-nevo-near-black/18 px-[15px] py-[9px] text-[13.5px] font-semibold text-nevo-near-black transition-colors hover:bg-nevo-near-black/5";
 const inputBase =
-  "nevo-in box-border rounded-[9px] border-[1.5px] border-nevo-navy/22 bg-nevo-cream/50 text-nevo-near-black outline-none transition-colors focus:border-nevo-navy focus:bg-nevo-cream";
+  "nevo-in box-border rounded-[10px] border-[1.5px] border-nevo-navy/22 bg-nevo-cream/50 text-nevo-near-black outline-none transition-colors focus:border-nevo-navy focus:bg-nevo-cream";
 const iconBtn =
-  "inline-flex size-[30px] shrink-0 cursor-pointer items-center justify-center rounded-lg text-nevo-near-black/45 transition-colors hover:bg-nevo-navy/8 hover:text-nevo-near-black/75 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent";
+  "inline-flex size-[30px] shrink-0 cursor-pointer items-center justify-center rounded-[10px] text-nevo-near-black/45 transition-colors hover:bg-nevo-navy/8 hover:text-nevo-near-black/75 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent";
 
 const Arrow = ({ up }: { up: boolean }) => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -441,7 +441,7 @@ export function LiveModuleReview({
                 return (
                   <div
                     key={`${mi}-${m.segmentIds[0] ?? "empty"}`}
-                    className="overflow-hidden rounded-[14px] bg-nevo-cream-elevated shadow-[0_2px_10px_rgba(0,0,0,0.05)]"
+                    className="overflow-hidden rounded-[12px] bg-nevo-cream-elevated shadow-[0_2px_10px_rgba(0,0,0,0.05)]"
                   >
                     <div className="border-b border-nevo-near-black/8 px-[18px] pt-4 pb-3.5">
                       <div className="flex items-center gap-3">
@@ -463,7 +463,7 @@ export function LiveModuleReview({
                         </span>
                       </div>
                       {segs.length === 1 && (
-                        <div className="mt-[11px] flex items-center gap-2.5 rounded-[9px] bg-nevo-violet/14 px-[13px] py-2.5">
+                        <div className="mt-[11px] flex items-center gap-2.5 rounded-[10px] bg-nevo-violet/14 px-[13px] py-2.5">
                           <span className="shrink-0 text-nevo-navy" aria-hidden>
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
                               <circle cx="12" cy="12" r="9" />
@@ -485,7 +485,7 @@ export function LiveModuleReview({
                         const counter = firstIn(mi) + pi + 1;
                         return (
                           <div key={r.key}>
-                            <div className="flex items-center gap-[11px] rounded-[9px] bg-nevo-cream/55 px-[13px] py-[11px]">
+                            <div className="flex items-center gap-[11px] rounded-[12px] bg-nevo-cream/55 px-[13px] py-[11px]">
                               {segmentRow(r, counter)}
                               <span className="flex shrink-0 items-center">
                                 <button
@@ -539,7 +539,7 @@ export function LiveModuleReview({
                                 <button
                                   type="button"
                                   onClick={() => split(mi, pi)}
-                                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border-[1.5px] border-nevo-navy/35 px-[11px] py-1.5 text-xs font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/6"
+                                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] border-[1.5px] border-nevo-navy/35 px-[11px] py-1.5 text-xs font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/6"
                                 >
                                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                                     <path d="M8 3v18M3 8h10M3 16h10M21 8l-3 4 3 4" />
@@ -592,7 +592,7 @@ export function LiveModuleReview({
                         <button
                           type="button"
                           onClick={() => merge(mi)}
-                          className="inline-flex cursor-pointer items-center gap-[7px] rounded-[9px] border-[1.5px] border-dashed border-nevo-navy/35 px-[13px] py-2 text-[12.5px] font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/6"
+                          className="inline-flex cursor-pointer items-center gap-[7px] rounded-[10px] border-[1.5px] border-dashed border-nevo-navy/35 px-[13px] py-2 text-[12.5px] font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/6"
                         >
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                             <path d="M7 4l5 5 5-5M12 9v11" />

@@ -430,14 +430,14 @@ export function LiveStructureTree({
   };
 
   const iconBtn =
-    "inline-flex size-[26px] shrink-0 cursor-pointer items-center justify-center rounded-lg text-nevo-near-black/45 transition-colors hover:bg-nevo-navy/8 hover:text-nevo-near-black/75 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent";
+    "inline-flex size-[26px] shrink-0 cursor-pointer items-center justify-center rounded-[10px] text-nevo-near-black/45 transition-colors hover:bg-nevo-navy/8 hover:text-nevo-near-black/75 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent";
   const titleInput =
-    "min-w-0 flex-1 rounded-[6px] bg-transparent px-1 py-0.5 outline-none focus:bg-nevo-cream focus:ring-2 focus:ring-nevo-navy/30";
+    "min-w-0 flex-1 rounded-[10px] bg-transparent px-1 py-0.5 outline-none focus:bg-nevo-cream focus:ring-2 focus:ring-nevo-navy/30";
 
   /** C07d's caret: points right when folded, down when open. */
   const caret = (open: boolean) =>
     cn(
-      "inline-flex size-[22px] shrink-0 cursor-pointer items-center justify-center rounded-md text-nevo-near-black/55 transition-transform duration-[160ms] ease-out",
+      "inline-flex size-[22px] shrink-0 cursor-pointer items-center justify-center rounded-[10px] text-nevo-near-black/55 transition-transform duration-[160ms] ease-out",
       open && "rotate-90",
     );
   const Caret = () => (
@@ -490,7 +490,7 @@ export function LiveStructureTree({
               onChange={(e) => renameUnit(e.target.value)}
               aria-label="Unit title"
               placeholder={blockName}
-              className="mt-0.5 w-full min-w-0 rounded-lg border-[1.5px] border-transparent bg-transparent px-2 py-[5px] text-base font-semibold text-nevo-cream outline-none transition-colors placeholder:text-nevo-cream/45 hover:bg-nevo-cream/10 focus:border-nevo-violet focus:bg-nevo-navy"
+              className="mt-0.5 w-full min-w-0 rounded-[10px] border-[1.5px] border-transparent bg-transparent px-2 py-[5px] text-base font-semibold text-nevo-cream outline-none transition-colors placeholder:text-nevo-cream/45 hover:bg-nevo-cream/10 focus:border-nevo-violet focus:bg-nevo-navy"
             />
           </div>
           <span className="shrink-0 text-xs text-nevo-cream/70">
@@ -626,7 +626,7 @@ export function LiveStructureTree({
                         return (
                         <li
                           key={seg.key}
-                          className="flex items-center gap-[9px] rounded-lg bg-nevo-cream/55 px-[11px] py-2 text-[13px] leading-[1.45] text-nevo-near-black"
+                          className="flex items-center gap-[9px] rounded-[12px] bg-nevo-cream/55 px-[11px] py-2 text-[13px] leading-[1.45] text-nevo-near-black"
                         >
                           {row ? (
                             <input
@@ -673,7 +673,7 @@ export function LiveStructureTree({
                               onClick={() => splitSectionAfter(li, mi, pi)}
                               aria-label={`Start a new section after ${label}`}
                               title="Start a new section after this segment"
-                              className="inline-flex size-[26px] shrink-0 cursor-pointer items-center justify-center rounded-[7px] border-[1.5px] border-nevo-navy/30 text-nevo-navy transition-colors hover:bg-nevo-navy/6"
+                              className="inline-flex size-[26px] shrink-0 cursor-pointer items-center justify-center rounded-[10px] border-[1.5px] border-nevo-navy/30 text-nevo-navy transition-colors hover:bg-nevo-navy/6"
                             >
                               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                                 <path d="M8 3v18M3 8h10M3 16h10M21 8l-3 4 3 4" />
@@ -760,7 +760,7 @@ export function LiveStructureTree({
 
       {phase === "confirm" && (
         <div className="absolute inset-0 z-5 flex items-end justify-center bg-nevo-near-black/32 p-6">
-          <div className="w-full max-w-[520px] rounded-[16px] bg-nevo-cream px-[26px] py-6 shadow-[0_20px_56px_rgba(0,0,0,0.24)] motion-safe:animate-nevo-rise">
+          <div className="w-full max-w-[520px] rounded-[16px] bg-nevo-cream px-[26px] py-6 shadow-[0_8px_32px_rgba(0,0,0,0.16)] motion-safe:animate-nevo-rise">
             <span className="font-mono text-[10.5px] font-bold tracking-[0.14em] text-nevo-violet">
               ADD TO LIBRARY
             </span>

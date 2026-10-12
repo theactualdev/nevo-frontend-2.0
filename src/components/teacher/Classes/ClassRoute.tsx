@@ -35,7 +35,7 @@ export function ClassRoute({
   if (!hydrated) {
     return (
       <div className="flex flex-1 items-center justify-center p-12">
-        <div className="h-[280px] w-full max-w-[860px] animate-pulse rounded-[12px] bg-nevo-cream-elevated" />
+        <div className="h-[280px] w-full max-w-[820px] animate-pulse rounded-[12px] bg-nevo-cream-elevated" />
       </div>
     );
   }

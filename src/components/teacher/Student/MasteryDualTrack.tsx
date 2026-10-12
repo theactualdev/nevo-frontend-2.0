@@ -81,10 +81,10 @@ export function MasteryDualTrack({
             aria-valuenow={u}
             aria-valuemin={0}
             aria-valuemax={100}
-            className="h-2 flex-1 overflow-hidden rounded-[4px] bg-nevo-navy/10"
+            className="h-2 flex-1 overflow-hidden rounded-full bg-nevo-navy/10"
           >
             <div
-              className="h-full rounded-[4px] bg-nevo-navy"
+              className="h-full rounded-full bg-nevo-navy"
               style={{ width: `${u}%` }}
             />
           </div>
@@ -102,10 +102,10 @@ export function MasteryDualTrack({
             aria-valuenow={r}
             aria-valuemin={0}
             aria-valuemax={100}
-            className="h-1.5 flex-1 overflow-hidden rounded-[3px] bg-nevo-violet/10"
+            className="h-1.5 flex-1 overflow-hidden rounded-full bg-nevo-violet/10"
           >
             <div
-              className="h-full rounded-[3px] bg-nevo-violet"
+              className="h-full rounded-full bg-nevo-violet"
               style={{ width: `${r}%` }}
             />
           </div>

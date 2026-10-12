@@ -186,7 +186,7 @@ export function ClassDetail({ klass }: { klass: TeacherClass }) {
                         {obs.chips.map((chip) => (
                           <span
                             key={chip}
-                            className="inline-flex min-h-7 items-center rounded-[20px] bg-nevo-cream-inset px-3 py-[5px] text-[12px] text-nevo-near-black"
+                            className="inline-flex min-h-7 items-center rounded-full bg-nevo-cream-inset px-3 py-[5px] text-[12px] text-nevo-near-black"
                           >
                             {chip}
                           </span>

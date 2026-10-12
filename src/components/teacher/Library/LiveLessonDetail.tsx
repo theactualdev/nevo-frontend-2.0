@@ -438,7 +438,7 @@ export function LiveLessonDetail({
 
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
-      <div className="mx-auto max-w-[860px]">
+      <div className="mx-auto max-w-[820px]">
         <Link
           href="/teacher/lessons"
           className="inline-flex cursor-pointer items-center gap-[7px] text-sm text-nevo-near-black/60 transition-transform active:scale-[0.99]"
@@ -639,7 +639,7 @@ export function LiveLessonDetail({
           <h3 className={cn(SECTION_H, "mt-[26px] xl:mt-8")}>Key points Nevo found</h3>
         )}
         {review.keyPoints.length > 0 && (
-          <div className="mt-3.5 flex max-w-[860px] flex-col gap-[9px] xl:mt-4 xl:gap-2.5">
+          <div className="mt-3.5 flex max-w-[820px] flex-col gap-[9px] xl:mt-4 xl:gap-2.5">
             {review.keyPoints.map((kp) => (
               <KeyPointCard
                 key={kp.id}
@@ -667,7 +667,7 @@ export function LiveLessonDetail({
         )}
 
         {reviewable.length > 0 && (
-          <div className="mt-4 flex max-w-[860px] flex-col gap-2.5">
+          <div className="mt-4 flex max-w-[820px] flex-col gap-2.5">
             {reviewable.map((s) => (
               <ReviewSection
                 key={s.id}

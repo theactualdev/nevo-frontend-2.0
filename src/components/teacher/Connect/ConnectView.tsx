@@ -54,7 +54,7 @@ function Bubble({ m, isNew }: { m: Message; isNew?: boolean }) {
       <div className="flex justify-end">
         <div
           className={cn(
-            "max-w-[62%] rounded-[12px_12px_4px_12px] bg-nevo-navy px-3.5 py-[11px] xl:px-4 xl:py-3",
+            "max-w-[72%] xl:max-w-[62%] rounded-[12px_12px_4px_12px] bg-nevo-navy px-3.5 py-[11px] xl:px-4 xl:py-3",
             isNew && "motion-safe:animate-nevo-pop",
           )}
         >
@@ -77,7 +77,7 @@ function Bubble({ m, isNew }: { m: Message; isNew?: boolean }) {
 
   return (
     <div className="flex justify-start">
-      <div className="max-w-[62%] rounded-[12px_12px_12px_4px] bg-nevo-cream-elevated px-3.5 py-[11px] xl:px-4 xl:py-3">
+      <div className="max-w-[72%] xl:max-w-[62%] rounded-[12px_12px_12px_4px] bg-nevo-cream-elevated px-3.5 py-[11px] xl:px-4 xl:py-3">
         {m.label && (
           <span className="hidden items-center gap-[5px] text-[11.5px] font-semibold text-nevo-near-black/50 xl:inline-flex">
             {m.label}
@@ -273,7 +273,7 @@ export function ConnectView() {
 
       {loading ? (
         <div className="flex min-h-0 flex-1 border-t border-nevo-near-black/8">
-          <div className="w-[260px] shrink-0 space-y-2 border-r border-nevo-near-black/8 p-2.5 xl:w-[330px] xl:p-3">
+          <div className="w-[264px] shrink-0 space-y-2 border-r border-nevo-near-black/8 p-2.5 xl:w-[330px] xl:p-3">
             {[0, 1, 2, 3].map((i) => (
               <div
                 key={i}
@@ -317,7 +317,7 @@ export function ConnectView() {
         <MaybeSample showing={!live} kind="teacher:connect">
         <div className="flex min-h-0 flex-1 border-t border-nevo-near-black/8">
           {/* Thread list */}
-          <div className="w-[260px] shrink-0 overflow-y-auto border-r border-nevo-near-black/8 p-2.5 xl:w-[330px] xl:p-3">
+          <div className="w-[264px] shrink-0 overflow-y-auto border-r border-nevo-near-black/8 p-2.5 xl:w-[330px] xl:p-3">
             {threads.map((t) => (
               <button
                 key={t.id}
@@ -341,7 +341,7 @@ export function ConnectView() {
                     <span
                       className={cn(
                         "text-sm text-nevo-near-black xl:text-[14.5px]",
-                        t.unread ? "font-bold" : "font-semibold",
+                        t.unread ? "font-semibold" : "font-medium",
                       )}
                     >
                       {t.studentName}

@@ -554,7 +554,7 @@ export function TeacherSidebar() {
               aria-label="Account menu"
               onKeyDown={onMenuKey}
               className={cn(
-                "fixed z-40 overflow-hidden rounded-[14px] bg-nevo-cream shadow-[0_8px_32px_rgba(0,0,0,0.16)] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 motion-safe:duration-150",
+                "fixed z-40 overflow-hidden rounded-[12px] bg-nevo-cream shadow-[0_8px_32px_rgba(0,0,0,0.16)] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95 motion-safe:duration-150",
                 expanded ? "bottom-[88px] left-[196px] w-[248px]" : "bottom-[76px] left-[84px] w-[240px]",
               )}
             >
@@ -609,7 +609,7 @@ export function TeacherSidebar() {
                     </>
                   );
                   const rowCls = cn(
-                    "flex w-full cursor-pointer items-center gap-3 rounded-[9px] px-3 py-[11px] text-left transition-colors hover:bg-nevo-navy/8",
+                    "flex w-full cursor-pointer items-center gap-3 rounded-[10px] px-3 py-[11px] text-left transition-colors hover:bg-nevo-navy/8",
                     m.divider &&
                       "mt-1 border-t border-nevo-near-black/8 pt-[13px]",
                   );

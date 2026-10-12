@@ -122,7 +122,7 @@ export function RecommendSheet({
                 type="button"
                 onClick={onClose}
                 aria-label="Close"
-                className="flex size-8 cursor-pointer items-center justify-center rounded-[9px] text-nevo-near-black/50 transition-colors hover:bg-nevo-near-black/5 xl:size-[34px]"
+                className="flex size-8 cursor-pointer items-center justify-center rounded-[10px] text-nevo-near-black/50 transition-colors hover:bg-nevo-near-black/5 xl:size-[34px]"
               >
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-5">
                   <path d="M6 6l12 12M18 6L6 18" />
@@ -160,7 +160,7 @@ export function RecommendSheet({
                     aria-pressed={on}
                     className={cn(
                       // A constant 1px border keeps rows from shifting on select.
-                      "flex w-full cursor-pointer items-center gap-[13px] rounded-[11px] border bg-nevo-cream-elevated px-4 py-3.5 text-left",
+                      "flex w-full cursor-pointer items-center gap-[13px] rounded-[12px] border bg-nevo-cream-elevated px-4 py-3.5 text-left",
                       on
                         ? "border-transparent outline-2 -outline-offset-2 outline-nevo-navy"
                         : "border-nevo-near-black/8",

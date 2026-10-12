@@ -240,7 +240,7 @@ export function LiveRecommendSheet({
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-[9px] text-nevo-near-black/50 transition-colors hover:bg-nevo-near-black/5 xl:size-[34px]"
+          className="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-[10px] text-nevo-near-black/50 transition-colors hover:bg-nevo-near-black/5 xl:size-[34px]"
         >
           <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-5">
             <path d="M6 6l12 12M18 6L6 18" />
@@ -294,7 +294,7 @@ export function LiveRecommendSheet({
               className={cn(
                 // C08c's option card: cream, a radio, and a 2px navy outline
                 // when chosen.
-                "flex cursor-pointer items-center gap-[13px] rounded-[11px] bg-nevo-cream-elevated px-4 py-3.5 text-left transition-[outline-color,border-color]",
+                "flex cursor-pointer items-center gap-[13px] rounded-[12px] bg-nevo-cream-elevated px-4 py-3.5 text-left transition-[outline-color,border-color]",
                 choice === c.id
                   ? "outline-2 -outline-offset-2 outline-nevo-navy"
                   : "border border-nevo-near-black/8 hover:border-nevo-navy/35",
@@ -415,7 +415,7 @@ function Shell({
         aria-label="Recommend a lesson"
         onClick={(e) => e.stopPropagation()}
         className={cn(
-          "max-h-[90dvh] w-full max-w-[520px] overflow-y-auto rounded-t-[18px] bg-nevo-cream p-7 sm:rounded-[16px]",
+          "max-h-[90dvh] w-full max-w-[520px] overflow-y-auto rounded-t-[16px] bg-nevo-cream p-7 sm:rounded-[16px]",
           narrow ? "xl:max-w-[420px] xl:p-9" : "xl:max-w-[560px] xl:p-[30px]",
         )}
       >

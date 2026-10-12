@@ -166,7 +166,7 @@ export function UploadResult({
   const rereading = regenerate.state === "running";
 
   return (
-    <div className="mx-auto w-full max-w-[860px] px-6 pb-10">
+    <div className="mx-auto w-full max-w-[820px] px-6 pb-10">
       <h2 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
         {lesson.title}
       </h2>

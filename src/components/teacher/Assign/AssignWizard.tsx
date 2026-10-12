@@ -184,11 +184,11 @@ function Toggle({
 }) {
   const seg = (on: boolean) =>
     cn(
-      "flex-1 cursor-pointer rounded-lg p-3 text-center text-[15px] font-medium transition-colors",
+      "flex-1 cursor-pointer rounded-[10px] p-3 text-center text-[15px] font-medium transition-colors",
       on ? "bg-nevo-navy text-nevo-cream" : "text-nevo-near-black/60",
     );
   return (
-    <div className="mt-[22px] flex rounded-[11px] bg-nevo-navy/8 p-1">
+    <div className="mt-[22px] flex rounded-[12px] bg-nevo-navy/8 p-1">
       <button
         type="button"
         onClick={() => onChange("left")}
