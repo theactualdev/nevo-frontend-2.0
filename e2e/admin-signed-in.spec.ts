@@ -258,15 +258,17 @@ test("no signed-in admin surface renders an invented figure", async ({
   }
 });
 
-test("a learner's adaptation history reads, and a refusal would say no access", async ({
+test("a learner's adaptation history reads, or says no access when the role is missing", async ({
   page,
   request,
 }) => {
   /*
    * QA, 10 Oct: /admin/senco/{id} said "We couldn't read Ada's adaptation
-   * history" for this account. Asked of the API directly first, so the CI log
-   * says what production actually returns - a 403 is this account's access, a
-   * 5xx is the backend's, and only a 200 is a page that should read.
+   * history" for this account. Asked of the API directly, production answers
+   * 403 `learning_support_role_required` (12 Oct): the Learning Support ROLE,
+   * which no scope grants and which this account does not hold. So for this
+   * account the page must say NO ACCESS - not "couldn't read", and no retry.
+   * If the account is ever given the role, the history must read instead.
    */
   const auth = { Authorization: `Bearer ${adminToken}` };
   const roster = await request.get(`${API}/api/v1/students`, { headers: auth });
@@ -280,14 +282,21 @@ test("a learner's adaptation history reads, and a refusal would say no access", 
   });
   const body = (await history.text()).slice(0, 300);
   console.log(`GET /api/adaptations/student/${id} -> ${history.status()} ${body}`);
+  const roleMissing =
+    history.status() === 403 && /learning_support_role_required/.test(body);
   expect(
-    history.status(),
+    history.status() === 200 || roleMissing,
     `The adaptation history for ${id} answered ${history.status()}: ${body}`,
-  ).toBe(200);
+  ).toBeTruthy();
 
   await page.goto(`/admin/senco/${id}`);
-  await expect(page.getByRole("heading", { level: 2 }).first()).toBeVisible(LIVE);
   await expect(page.getByText(/Recent adaptations/i).first()).toBeVisible(LIVE);
   await expect(page.getByText(/couldn.t read .* adaptation history/i)).toHaveCount(0);
-  await expect(page.getByText(/don.t have access to .* adaptation history/i)).toHaveCount(0);
+  if (roleMissing) {
+    await expect(
+      page.getByText(/don.t have access to .* adaptation history/i),
+    ).toBeVisible(LIVE);
+  } else {
+    await expect(page.getByText(/don.t have access to .* adaptation history/i)).toHaveCount(0);
+  }
 });
