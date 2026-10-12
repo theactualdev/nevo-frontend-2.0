@@ -34,6 +34,7 @@ const setup = (props: Partial<React.ComponentProps<typeof RejectedRows>> = {}) =
     <RejectedRows
       broken={[]}
       rejected={[]}
+      submitted={[]}
       isStudent
       filename="nevo-students-not-imported.csv"
       {...props}
@@ -74,12 +75,42 @@ describe("rows our parser refused", () => {
 });
 
 describe("rows the server refused", () => {
-  it("shows the server's own row number and reason", () => {
-    setup({ rejected: [{ row: 12, reason: "That email is already invited." }] });
-    expect(screen.getByText("Row 12")).toBeInTheDocument();
-    expect(
-      screen.getByText("That email is already invited."),
-    ).toBeInTheDocument();
+  it("names the line in the admin's own file, through the rows that were sent", () => {
+    // The server's `row` counts into the SENT rows from `rowNumberBase` (1).
+    // Row 2 of what was sent is the second valid row - line 5 of the file.
+    setup({
+      submitted: [
+        brokenRow({ line: 2, name: "Ada Obi", error: null }),
+        brokenRow({ line: 5, name: "Tunde Bello", error: null }),
+      ],
+      rowNumberBase: 1,
+      rejected: [{ row: 2, reason: "That email is already invited.", value: "t.bello@school.edu.ng" }],
+    });
+    expect(screen.getByText("Row 5")).toBeInTheDocument();
+    // The value the server refused, beside its reason.
+    expect(screen.getByText("t.bello@school.edu.ng")).toBeInTheDocument();
+    expect(screen.getByText(/That email is already invited\./)).toBeInTheDocument();
+  });
+
+  it("falls back to the sent row's name when the server gives no value", () => {
+    setup({
+      submitted: [brokenRow({ line: 4, name: "Ada Obi", error: null })],
+      rowNumberBase: 1,
+      rejected: [{ row: 1, reason: "Already invited." }],
+    });
+    expect(screen.getByText("Row 4")).toBeInTheDocument();
+    expect(screen.getByText("Ada Obi")).toBeInTheDocument();
+  });
+
+  it("points at no line when the response gives no base to count from", () => {
+    // An older response: pairing on a guess would name the wrong line.
+    setup({
+      submitted: [brokenRow({ line: 4, name: "Ada Obi", error: null })],
+      rejected: [{ row: 1, reason: "That email is already invited." }],
+    });
+    expect(screen.queryByText(/^Row /)).toBeNull();
+    expect(screen.getByText("Sent")).toBeInTheDocument();
+    expect(screen.getByText("That email is already invited.").textContent).not.toMatch(/Ada Obi/);
   });
 
   it("does NOT borrow a name from a parsed row with the same number", () => {
