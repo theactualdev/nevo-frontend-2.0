@@ -502,11 +502,15 @@ export function TeacherSignIn() {
         )}
       </div>
 
-      {/* SCRUM-88 step 3, bottom-centre for the teacher console. The region is
-          always here, so the words arriving in it are announced. */}
+      {/* SCRUM-88 step 3, in the console's ONE message pattern (design,
+          12 Oct): the shared bar's place, top centre, for its ~5 seconds. It
+          used to be a bottom-centre 1.5-second one-off. The door is outside
+          the shell, so there is no provider to queue it on; it draws the same
+          bar in the same spot instead. The region is always here, so the
+          words arriving in it are announced. */}
       <div
         role="status"
-        className="pointer-events-none fixed inset-x-0 bottom-6 z-[60] flex justify-center px-4"
+        className="nevo-text-zoom pointer-events-none fixed inset-x-0 top-4 z-[60] flex flex-col items-center gap-2 px-4"
       >
         {signedOut && !signedOutSaid && (
           <SystemMessage message={{ kind: "confirm", message: SIGNED_OUT_LINE }} />

@@ -13,6 +13,7 @@ import {
   SystemMessage,
   type SystemMessageInput,
 } from "./SystemMessage";
+import { MESSAGE_LEAVES_AFTER_MS } from "@/lib/constants/systemMessages";
 
 /**
  * The queue behind SCRUM-152's bar: SM-05's resolve-in-place and SM-06's
@@ -41,8 +42,8 @@ import {
  * describes something still running.
  */
 
-/** Long enough to read a short line twice, per design's own worked example. */
-const LEAVES_AFTER_MS = 5000;
+/** See the constant's own note: one dwell for the console's one bar. */
+const LEAVES_AFTER_MS = MESSAGE_LEAVES_AFTER_MS;
 
 /** SM-06: "stacked, newest at top, capped at three". */
 const MAX_ON_SCREEN = 3;
