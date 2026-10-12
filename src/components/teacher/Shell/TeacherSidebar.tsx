@@ -17,6 +17,7 @@ import { AvatarDisc } from "@/components/shared/AvatarDisc";
 import { SignOutModal } from "@/components/teacher/Profile/SignOutModal";
 import { FeedbackPanel } from "./FeedbackPanel";
 import { NotificationsPanel } from "./NotificationsPanel";
+import { useLeaveGuard } from "./UnsavedChanges";
 
 /**
  * Teacher nav rail (`Nevo Teacher Sidebar` frame) - 240px expanded, 64px
@@ -175,6 +176,8 @@ const ACCOUNT_MENU: {
 
 export function TeacherSidebar() {
   const pathname = usePathname();
+  // C18: a sidebar link asks first while a screen holds unsaved work.
+  const leaveGuard = useLeaveGuard();
   // C13: the bell opens a popover; the dot is a badge, never a count, and it
   // reflects live unread state, from `/api/notifications`'s own unreadCount.
   const {
@@ -322,6 +325,7 @@ export function TeacherSidebar() {
             <Link
               key={item.name}
               href={item.href}
+              onClick={(e) => leaveGuard?.onNavigate(e, item.href)}
               title={item.name}
               aria-current={on ? "page" : undefined}
               className={cn(
@@ -618,7 +622,10 @@ export function TeacherSidebar() {
                       key={m.label}
                       role="menuitem"
                       href={m.href}
-                      onClick={() => setMenuOpen(false)}
+                      onClick={(e) => {
+                        setMenuOpen(false);
+                        leaveGuard?.onNavigate(e, m.href!);
+                      }}
                       className={rowCls}
                     >
                       {body}

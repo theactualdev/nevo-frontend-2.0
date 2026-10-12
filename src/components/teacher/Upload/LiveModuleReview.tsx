@@ -115,7 +115,7 @@ export function LiveModuleReview({
   const [dirty, setDirty] = useState(false);
   // C17: the unit tree beside it asks before a refresh throws its edits away;
   // the single lesson's review did not.
-  useUnsavedGuard(dirty);
+  useUnsavedGuard(dirty, "lesson");
   const [saving, setSaving] = useState<Saving>("idle");
   const [error, setError] = useState("");
 

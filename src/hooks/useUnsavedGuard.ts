@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { createContext, useContext, useEffect, useId } from "react";
 
 /**
  * Ask before the browser throws away work nobody has sent yet.
@@ -11,13 +11,44 @@ import { useEffect } from "react";
  * "Leave site?" prompt, raised only while there is something to lose - so it
  * carries no words of ours, and needs none from design.
  *
- * WHAT IT DOES NOT COVER, and why. A click on the console's own sidebar is a
- * client-side navigation, which never fires `beforeunload`; catching that
- * needs a leave confirmation of our own, which no frame draws. Nor does it
- * survive the session lapsing, which navigates on the console's behalf. Both
- * are raised with design rather than invented here.
+ * A CLICK ON THE CONSOLE'S OWN SIDEBAR is a client-side navigation, which
+ * never fires `beforeunload`. Design drew the answer on 12 Oct - C18, "shown
+ * when a teacher clicks away in the sidebar mid-edit" - so while this guard
+ * holds it also registers with the shell, and the sidebar asks before it
+ * goes (`Shell/UnsavedChanges.tsx`). Outside the shell there is no registry
+ * and only the browser's prompt applies.
+ *
+ * Still not covered: the session lapsing, which navigates on the console's
+ * behalf. Raised with design rather than invented here.
  */
-export function useUnsavedGuard(unsaved: boolean): void {
+
+/**
+ * What the unsaved work is, for C18's one line. Design wrote it for a lesson
+ * ("your edits to this lesson won't be kept"); anywhere else the line drops
+ * the three words rather than us writing a new noun for it.
+ */
+export type UnsavedAbout = "lesson" | "edits";
+
+export interface UnsavedRegistry {
+  register: (id: string, about: UnsavedAbout) => void;
+  unregister: (id: string) => void;
+}
+
+/** Provided by the teacher shell. Null anywhere else. */
+export const UnsavedRegistryContext = createContext<UnsavedRegistry | null>(null);
+
+export function useUnsavedGuard(
+  unsaved: boolean,
+  about: UnsavedAbout = "edits",
+): void {
+  const registry = useContext(UnsavedRegistryContext);
+  const id = useId();
+  useEffect(() => {
+    if (!unsaved || !registry) return;
+    registry.register(id, about);
+    return () => registry.unregister(id);
+  }, [unsaved, registry, id, about]);
+
   useEffect(() => {
     if (!unsaved) return;
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
