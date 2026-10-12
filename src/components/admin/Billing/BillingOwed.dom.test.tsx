@@ -151,11 +151,44 @@ describe("Billing's invoice list", () => {
 });
 
 describe("D11's subscription card", () => {
-  it("says payment is due while the upcoming invoice is unpaid", async () => {
+  it("does not put 'Payment due' beside the annual total", async () => {
+    /*
+     * QA, 10 Oct: the card showed the annual total with "Payment due" beside
+     * it while How to pay asked for the upcoming invoice, so it read as if
+     * the year were due. What is due is on the Next charge card.
+     */
     upcoming.mockResolvedValue(charge({ status: "pending" }));
     const { container } = render(<BillingView />);
-    await waitFor(() => expect(visibleText(container)).toMatch(/Payment due/));
+    await waitFor(() => expect(visibleText(container)).toMatch(/How to pay/));
+    expect(visibleText(container)).not.toMatch(/Payment due/);
     expect(visibleText(container)).not.toMatch(/\bActive\b/);
+  });
+
+  it("says on the Next charge card what that invoice covers", async () => {
+    upcoming.mockResolvedValue(charge({ status: "pending", amount: "150500.00" }));
+    rows = [
+      {
+        id: "inv1",
+        invoiceNumber: "NEV-003",
+        issuedAt: "2026-09-01T00:00:00Z",
+        amount: "150500.00",
+        status: "pending",
+        dueAt: "2026-10-30T00:00:00Z",
+        paidAt: null,
+        pdfUrl: "/api/billing/invoices/sch1/NEV-003.pdf",
+        currency: "NGN",
+        periodLabel: "First term 2026/27",
+        studentCount: 1,
+        perStudentRate: "140000.00",
+        totalBeforeVat: "140000.00",
+        vatAmount: "10500.00",
+      },
+    ];
+    const { container } = render(<BillingView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/Covers First term 2026\/27/));
+    const text = visibleText(container);
+    expect(text).toMatch(/1 student × ₦140,000/);
+    expect(text).toMatch(/includes VAT of ₦10,500/);
   });
 
   it("says active once it is paid", async () => {

@@ -251,10 +251,8 @@ export function BillingView() {
           <CostSheet
             pricing={subscription.pricing}
             payStatus={
-              !upcomingFailed && upcoming?.invoiceId
-                ? upcoming.status === "paid"
-                  ? "active"
-                  : "due"
+              !upcomingFailed && upcoming?.invoiceId && upcoming.status === "paid"
+                ? "active"
                 : null
             }
           />
@@ -277,6 +275,27 @@ export function BillingView() {
                       ? ` · ${upcoming.invoiceNumber}`
                       : ""}
                   </p>
+                  {/* WHAT THIS CHARGE COVERS, from the invoice itself (QA,
+                      10 Oct): its period, and the students and rate it was
+                      raised on - so the amount due is not read against the
+                      annual figure above. Each part only when the invoice
+                      carries it. Interim wording; Lydia's to come. */}
+                  {(() => {
+                    const inv = invoices?.find((i) => i.id === upcoming.invoiceId);
+                    if (!inv) return null;
+                    const covers = [
+                      inv.periodLabel ? `Covers ${inv.periodLabel}` : null,
+                      inv.studentCount != null && inv.perStudentRate
+                        ? `${inv.studentCount} ${inv.studentCount === 1 ? "student" : "students"} × ${formatMoney(inv.perStudentRate, inv.currency)}`
+                        : null,
+                      inv.vatAmount ? `includes VAT of ${formatMoney(inv.vatAmount, inv.currency)}` : null,
+                    ].filter(Boolean);
+                    return covers.length > 0 ? (
+                      <p className="m-0 mt-1 text-[13.5px] text-nevo-near-black/62">
+                        {covers.join(" · ")}
+                      </p>
+                    ) : null;
+                  })()}
                 </div>
                 {upcoming.status && <StatusPill status={upcoming.status} />}
               </div>
