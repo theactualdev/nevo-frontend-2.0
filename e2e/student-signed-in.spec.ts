@@ -1117,7 +1117,13 @@ test.describe("a signed-in student", () => {
      */
     await page.goto("/auth/sign-in");
 
-    await page.getByRole("textbox", { name: "School code" }).fill(schoolCode);
+    // Four cells now (00c, D6), one character each: typed into the first,
+    // and each character moves the cursor on, as a child's typing does.
+    await page.getByRole("textbox", { name: /^School code, character 1 of/ }).click();
+    await page.keyboard.type(schoolCode);
+    await expect(
+      page.getByRole("textbox", { name: /^School code, character 4 of/ }),
+    ).not.toHaveValue("");
     await page.locator("#returning-username").fill(STUDENT_LOGIN!);
     await page
       .locator('input[aria-labelledby="returning-pin-label"]')
