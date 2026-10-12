@@ -125,6 +125,18 @@ function initialsFromUsername(identifier: string): string {
 const FIELD_SHELL =
   "relative flex h-14 w-full items-center rounded-[10px] border-[1.5px] border-nevo-navy/40 bg-nevo-cream-elevated px-4 sm:h-15";
 
+/** Clear space between "That's me" and the top of the docked pad. */
+const ABOVE_THE_PAD = 12;
+
+/**
+ * How far to scroll so a button sits above a docked keyboard, by the least
+ * that does it: the button's bottom edge and the keyboard's top edge, both in
+ * viewport pixels. Zero when it is already clear.
+ */
+export function scrollToClearPad(buttonBottom: number, padTop: number): number {
+  return Math.max(0, Math.ceil(buttonBottom + ABOVE_THE_PAD - padTop));
+}
+
 /** Long enough to read "Welcome back", short enough not to feel stuck. */
 const DONE_MS = 1200;
 
@@ -202,6 +214,52 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
     },
     [],
   );
+
+  /*
+   * A FRESH LOAD FOCUSES THE FIRST CELL BEFORE THE PAGE CAN LISTEN. The
+   * server's HTML carries `autofocus`, so the browser focuses cell 0 before
+   * hydration and the focus event reaches nothing: the tray stayed down, and
+   * tapping a cell that already has focus fires no second one, so on touch -
+   * where `inputMode="none"` keeps the device's keyboard away - the first
+   * cell could not be typed into at all. Arriving by client navigation was
+   * fine. So once the page is listening, a cell that already has focus opens
+   * its tray, as it would have; and a tap on a cell opens it too.
+   */
+  const openCodeKeys = (i: number) => {
+    activeCell.current = i;
+    pad.close();
+    codeKeys.onFocus();
+  };
+  useEffect(() => {
+    const at = cellRefs.current.findIndex(
+      (el) => el !== null && el === document.activeElement,
+    );
+    if (at >= 0) openCodeKeys(at);
+    // Once, on the first commit: it answers only the focus that came before it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /*
+   * THE PAD DOCKS UNDER "THAT'S ME", NOT OVER IT. It is in the flow, so the
+   * page grows by its height, but it sits at the foot of the screen: on a
+   * 375x667 phone, a 360x640 one and a tablet held sideways it came up over
+   * the button that sends the PIN - the only way on - and over the last of
+   * the PIN row, and the child had to know to scroll. So when it comes up,
+   * the page scrolls by the least that puts the button just above it, which
+   * keeps the PIN row in view too. Where everything already clears it, as on
+   * an upright tablet, nothing moves and the frame's spacing stands.
+   */
+  const submitRef = useRef<HTMLButtonElement>(null);
+  const padRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!pad.open) return;
+    const button = submitRef.current?.getBoundingClientRect();
+    const keys = padRef.current?.getBoundingClientRect();
+    // No height: the pad is hidden, because a real keyboard is attached.
+    if (!button || !keys || keys.height === 0) return;
+    const by = scrollToClearPad(button.bottom, keys.top);
+    if (by > 0) window.scrollBy({ top: by });
+  }, [pad.open]);
 
   /*
    * ONE APPENDER for the pad and the keyboard. They filled `digits` through
@@ -556,12 +614,13 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
                     }
                   }}
                   onFocus={(e) => {
-                    activeCell.current = i;
                     // Typing over a filled cell replaces it.
                     e.currentTarget.select();
-                    pad.close();
-                    codeKeys.onFocus();
+                    openCodeKeys(i);
                   }}
+                  // A tap on a cell that already has focus fires no focus
+                  // event; it still brings the tray up.
+                  onPointerDown={() => openCodeKeys(i)}
                   onBlur={codeKeys.onBlur}
                   // A fresh arrival starts here; a child handed over from 05
                   // starts at the PIN.
@@ -687,7 +746,10 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
               >
                 {/* Four boxes, for every child (D58). */}
                 {Array.from({ length: STUDENT_PIN_LENGTH }, (_, i) => {
-                  const active = i === digits.length && !checking;
+                  // The caret's box, while the PIN is what is being typed:
+                  // not while a code cell or the Student ID has focus.
+                  const active =
+                    pad.open && i === digits.length && !checking;
                   return (
                     <div
                       key={i}
@@ -758,6 +820,7 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
             </Link>
           ) : (
           <button
+            ref={submitRef}
             type="button"
             disabled={!ready || checking}
             onClick={() => void submit()}
@@ -799,21 +862,26 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
       </div>
 
       {pad.open && !throttled && (
-        <NevoKeyboard
-          layout="pad"
-          onKey={(char) => {
-            if (checking) return;
-            addDigits(char);
-          }}
-          onBackspace={() => setDigits((d) => d.slice(0, -1))}
-          // Docked, and in the flow rather than fixed over it: the page grows
-          // by the tray's height, so nothing it docks over is out of reach.
-          className="sticky bottom-0 z-40"
-        />
+        // Docked, and in the flow rather than fixed over it: the page grows by
+        // the tray's height, so nothing it docks over is out of reach. The
+        // wrapper is what is measured above - the tray inside slides up, and a
+        // transform would move its box mid-measure.
+        <div ref={padRef} className="sticky bottom-0 z-40">
+          <NevoKeyboard
+            layout="pad"
+            onKey={(char) => {
+              if (checking) return;
+              addDigits(char);
+            }}
+            onBackspace={() => setDigits((d) => d.slice(0, -1))}
+          />
+        </div>
       )}
       {codeKeys.open && !throttled && (
         <NevoKeyboard
           layout="qwerty"
+          // A school code is capitals, so its tray stays in capitals.
+          uppercase
           onKey={(char) => {
             const at = activeCell.current;
             if (at !== null) typeIntoCell(at, char);

@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { ReturningSignInScreen } from "./ReturningSignInScreen";
+import { hydrateRoot } from "react-dom/client";
+import { renderToString } from "react-dom/server";
+import {
+  ReturningSignInScreen,
+  scrollToClearPad,
+} from "./ReturningSignInScreen";
 import { ApiError } from "@/lib/api/client";
 import * as authApiModule from "@/lib/api";
 import { clearSession, getRememberedProfile } from "@/lib/auth/session";
@@ -1227,5 +1232,118 @@ describe("arriving from 05 Entry", () => {
       admissionNumber: "BGA/2031",
       pin: "1234",
     });
+  });
+});
+
+/**
+ * Round 11's second look, on a real touch screen: three things the frame's
+ * keyboards did that the form did not.
+ */
+describe("the keyboards on a touch screen", () => {
+  afterEach(() => {
+    clearSignInHandoff();
+    vi.restoreAllMocks();
+  });
+
+  /** The PIN boxes that carry the caret's navy border. */
+  const activeBoxes = () =>
+    document.querySelectorAll(
+      '[role="group"][aria-labelledby="returning-pin-label"] > div.border-2',
+    ).length;
+
+  it("opens the code's tray on a fresh load, where the first cell had focus before the page could listen", async () => {
+    // The server's HTML autofocuses cell 0, so the browser focuses it before
+    // hydration and its focus event reaches nothing. Tapping it again fires
+    // none, and `inputMode="none"` keeps the device's own keyboard away: the
+    // first cell could not be typed into until another was tapped.
+    const container = document.createElement("div");
+    container.innerHTML = renderToString(<ReturningSignInScreen />);
+    document.body.appendChild(container);
+    (container.querySelector("#returning-code-0") as HTMLInputElement).focus();
+
+    expect(screen.queryByRole("button", { name: "Q" })).toBeNull();
+
+    const root = await act(async () =>
+      hydrateRoot(container, <ReturningSignInScreen />),
+    );
+
+    expect(screen.getByRole("button", { name: "Q" })).toBeInTheDocument();
+    act(() => root.unmount());
+    container.remove();
+  });
+
+  it("keeps the code's tray in capitals, as the cells are", () => {
+    render(<ReturningSignInScreen />);
+
+    fireEvent.click(screen.getByRole("button", { name: "K" }));
+
+    expect(screen.getByRole("button", { name: "D" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "d" })).toBeNull();
+  });
+
+  it("draws the caret's box only while the PIN is what is being typed", () => {
+    render(<ReturningSignInScreen />);
+
+    // A fresh arrival is on the code: no PIN box is the active one.
+    expect(document.activeElement).toBe(cells()[0]);
+    expect(activeBoxes()).toBe(0);
+
+    act(() => pinInput().focus());
+    expect(activeBoxes()).toBe(1);
+
+    act(() => cells()[1].focus());
+    expect(activeBoxes()).toBe(0);
+  });
+
+  it("scrolls by the least that puts That's me above the pad", () => {
+    expect(scrollToClearPad(551, 462)).toBe(101);
+    expect(scrollToClearPad(587, 533)).toBe(66);
+    // Already clear: nothing moves.
+    expect(scrollToClearPad(400, 600)).toBe(0);
+  });
+
+  it("brings That's me above the pad when the pad comes up over it", () => {
+    // 375x667: the pad's top at 462, the button at 495-551.
+    const scrollBy = vi
+      .spyOn(window, "scrollBy")
+      .mockImplementation(() => {});
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+      function (this: HTMLElement) {
+        const box = (top: number, height: number) =>
+          ({ top, bottom: top + height, height, left: 0, right: 0, width: 0, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+        if (this.textContent?.trim() === "That's me") return box(495, 56);
+        if (this.querySelector(':scope > [aria-label="On-screen keyboard"]')) {
+          return box(462, 205);
+        }
+        return box(0, 0);
+      },
+    );
+    handSignInOver({ schoolCode: "K7DQ", identifier: "BGA/2031" });
+
+    render(<ReturningSignInScreen />);
+
+    expect(scrollBy).toHaveBeenCalledWith({ top: 101 });
+  });
+
+  it("moves nothing where the pad already clears it", () => {
+    const scrollBy = vi
+      .spyOn(window, "scrollBy")
+      .mockImplementation(() => {});
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+      function (this: HTMLElement) {
+        const box = (top: number, height: number) =>
+          ({ top, bottom: top + height, height, left: 0, right: 0, width: 0, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+        if (this.textContent?.trim() === "That's me") return box(600, 56);
+        if (this.querySelector(':scope > [aria-label="On-screen keyboard"]')) {
+          return box(760, 264);
+        }
+        return box(0, 0);
+      },
+    );
+    handSignInOver({ schoolCode: "K7DQ", identifier: "BGA/2031" });
+
+    render(<ReturningSignInScreen />);
+
+    expect(scrollBy).not.toHaveBeenCalled();
   });
 });
