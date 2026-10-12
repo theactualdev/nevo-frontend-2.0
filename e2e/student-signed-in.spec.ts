@@ -922,7 +922,11 @@ test.describe("a signed-in student", () => {
      */
     await page.waitForTimeout(1_000);
 
-    await expect(page.getByText("DAILY WARM-UP")).toBeVisible();
+    // The header belongs to a run (12, D126): it heads a task, and the done
+    // and nothing states have none.
+    const running = said.doneToday !== true && typeof said.dimension === "string";
+    if (running) await expect(page.getByText("DAILY WARM-UP")).toBeVisible();
+    else await expect(page.getByText("DAILY WARM-UP")).toHaveCount(0);
     if (said.doneToday === true) {
       await expect(page.getByRole("heading", { name: "That's it for today" })).toBeVisible();
     } else if (typeof said.dimension !== "string") {
