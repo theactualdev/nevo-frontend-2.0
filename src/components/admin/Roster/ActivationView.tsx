@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { useSetupGate } from "@/hooks";
 import { billingCurrency, mayActivate, screenFor } from "./activation";
 import { SignInDetailsDownload } from "../Students/SignInDetailsDownload";
+import { ConsentFormDownload } from "../Students/ConsentFormDownload";
 
 /**
  * D24 OB-03 headcount and cost, OB-04 payment, OB-05 activation.
@@ -583,17 +584,18 @@ function Active({
       ) : null}
 
       {/*
-        * OB-05 ALSO OFFERS THE PAPER CONSENT FORM - *"Some parents won't reply
-        * to the emailed request... download the paper consent form."* It is
-        * ABSENT, and not for want of an endpoint: `GET /api/v1/consents/form`
-        * is deployed.
-        *
-        * Design, 24 Sep: the form is stamped v0.0 DRAFT, three of its sections
-        * are placeholders marked "to be supplied by Nevo's counsel", and
-        * **nothing paper ships** until they return. A download button here
-        * would put an unfinished legal document in a school's hands on the day
-        * they switch on, which is the worst possible day for it.
+        * OB-05's paper consent form, from `GET /api/v1/consents/form`. It was
+        * held while design's 24 Sep ruling - nothing paper ships until
+        * counsel's sections return - stood. Counsel is deferred until the
+        * console is complete (12 Oct), so the form ships with its legal
+        * sections still marked as placeholder by the backend that renders it.
         */}
+      <p className="m-0 mt-6 max-w-[64ch] text-[13.5px] leading-[1.55] text-nevo-near-black/62">
+        Some parents won&rsquo;t reply to the emailed request. You can download
+        the paper consent form and collect it in person &ndash; the written
+        route.
+      </p>
+      <ConsentFormDownload className="mt-2" label="Download the paper consent form" />
 
       <Link
         href="/admin"

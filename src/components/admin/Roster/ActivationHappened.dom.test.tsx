@@ -93,7 +93,18 @@ describe("OB-05's What just happened", () => {
     const { container } = await switchOn(state({ stage: "activated", canActivate: false }));
     const text = visibleText(container);
     expect(text).not.toMatch(/invitations? sent/i);
-    expect(text).not.toMatch(/consent/i);
+    // No consent requests claimed in the list. (OB-05's paper-form line sits
+    // below it, which is why this reads the list rather than the page.)
+    const list = screen.getByText(/What just happened/).nextElementSibling as HTMLElement;
+    expect(visibleText(list)).not.toMatch(/consent/i);
+  });
+
+  it("offers the paper consent form, in OB-05's words", async () => {
+    const { container } = await switchOn(state({ stage: "activated", canActivate: false }));
+    expect(visibleText(container)).toMatch(
+      /Some parents won.t reply to the emailed request\. You can download the paper consent form and collect it in person/,
+    );
+    expect(screen.getByRole("button", { name: "Download the paper consent form" })).toBeInTheDocument();
   });
 
   it("offers the sign-in details for the children it just created", async () => {
