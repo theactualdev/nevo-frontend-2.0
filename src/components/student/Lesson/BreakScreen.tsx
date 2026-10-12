@@ -103,7 +103,7 @@ export function BreakScreen({
     "flex h-[52px] w-full cursor-pointer items-center justify-center rounded-[10px] bg-nevo-navy text-base font-medium text-nevo-cream transition-[filter,transform] hover:brightness-106 active:scale-[0.98]";
 
   return (
-    <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-nevo-cream px-10 text-center text-nevo-near-black motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-500">
+    <div className="flex min-h-[calc(100dvh/var(--nevo-text-zoom,1))] flex-col items-center justify-center bg-nevo-cream px-10 text-center text-nevo-near-black motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-500">
       {type === BREAK_TYPES.MICRO && (
         <>
           <IllustrationWrapper

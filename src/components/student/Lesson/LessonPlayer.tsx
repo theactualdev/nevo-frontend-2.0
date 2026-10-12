@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import {
   AdaptiveToggleBar,
@@ -898,11 +905,11 @@ export function LessonPlayer({
    *    focus to <body>, so without this they restart from the top of the
    *    document after every advance.
    * 2. A screen reader announces where they now are, from the group's label.
-   * 3. THE SCROLL POSITION RESETS. Nothing reset it before - a child who read
-   *    to the bottom of a long segment and pressed Next arrived halfway down
-   *    the next one. Focusing scrolls its target into view, so the fix for the
-   *    first two carries this one, and it applies to every child rather than
-   *    only those using a keyboard.
+   * 3. THE SCROLL POSITION RESETS - but not by this. Focusing scrolled its
+   *    target into view, which once carried the reset; with the column the
+   *    scroller it scrolled the group's top 32-48px under the progress bar
+   *    instead. So focus lands without scrolling, and the column is put back
+   *    to its top by `columnRef`'s own reset, below.
    *
    * Not on first render: arriving at a lesson should leave focus where the
    * browser put it, not seize it.
@@ -914,7 +921,7 @@ export function LessonPlayer({
       settled.current = true;
       return;
     }
-    bodyRef.current?.focus();
+    bodyRef.current?.focus({ preventScroll: true });
   }, [segment.id, modality]);
   /*
    * D148: "SEGMENT 3 OF 10" IS SAID ONCE, WHEN THE SEGMENT OPENS - "not on
@@ -1714,6 +1721,18 @@ export function LessonPlayer({
     densityForAction(action) ?? segPlan?.density ?? null;
   const effectiveDensity: Density | null = density ?? systemDensity;
   /*
+   * A NEW SEGMENT, VERSION OR PACE OPENS AT ITS TOP. The column is what
+   * scrolls, and it is the same element from one segment to the next, so it
+   * kept its place: Next from the foot of one long segment opened the next
+   * part-way down with its heading out of sight, and a change of pace opened
+   * the new text where the old had been left. Before the paint, so the old
+   * position is never seen, and before `reachAtEntry` is taken.
+   */
+  useLayoutEffect(() => {
+    const column = columnRef.current;
+    if (column) column.scrollTop = 0;
+  }, [segment.id, modality, effectiveDensity]);
+  /*
    * Only the densities this segment can actually deliver.
    *
    * An offered density that re-renders identical prose is the player telling a
@@ -1733,9 +1752,7 @@ export function LessonPlayer({
    * told the engine they had asked (`slower_trigger`). 17a draws no density
    * pill on the calculation player.
    */
-  const densitySegments: ToggleSegment[] = (
-    modality === MODALITY.TEXT ? DENSITIES : []
-  ).filter(({ id }) =>
+  const textChips: ToggleSegment[] = DENSITIES.filter(({ id }) =>
     id === DENSITY.SLOWER
       ? segment.text?.body[id] !== undefined ||
         isChunkable(segment.text?.body.default, segment.text?.readingChunks)
@@ -1746,6 +1763,7 @@ export function LessonPlayer({
     state:
       density === id ? "manual" : systemDensity === id ? "system" : "default",
   }));
+  const densitySegments = modality === MODALITY.TEXT ? textChips : [];
 
   /*
    * B45: KEPT AS THE SCREEN CHANGES, READ AS THE CHILD LEAVES. React runs a
@@ -2475,11 +2493,28 @@ export function LessonPlayer({
         </div>
         {/* Frame: the density toggle sits alone on its own right-aligned row.
             Absent entirely when the segment has no reshapes to offer, rather
-            than an empty pill rail. */}
-        {densitySegments.length > 0 && (
-          <div className="flex justify-end">
+            than an empty pill rail.
+
+            HELD, UNSEEN, OVER A PICTURE OR A RECORDING of a segment whose
+            text has chips: those have to go there, and taking the row with
+            them lifted the position line and the progress 62px between a
+            text segment and the next - a change of version is felt, not
+            seen (rule 7). Not on the solver: 17a draws no row there, and it
+            needs the room. */}
+        {(densitySegments.length > 0 ||
+          (textChips.length > 0 && !calcShowing)) && (
+          <div
+            className={cn(
+              "flex justify-end",
+              densitySegments.length === 0 && "invisible",
+            )}
+            aria-hidden={densitySegments.length === 0 || undefined}
+            inert={densitySegments.length === 0}
+          >
             <AdaptiveToggleBar
-              segments={densitySegments}
+              segments={
+                densitySegments.length > 0 ? densitySegments : textChips
+              }
               onSelect={pickDensity}
             />
           </div>
@@ -2487,14 +2522,17 @@ export function LessonPlayer({
       </header>
 
       {/* Two-level position line for modular lessons (SCRUM-101.3) - its own
-          full-width row directly above the progress bar (frame: 0 16px 7px). */}
+          full-width row directly above the progress bar (frame: 0 16px 7px).
+          It wraps rather than cutting off: at a larger text size a phone
+          has no room for "Module 2 of 3 · Segment 1 of 4 in this module",
+          and "…in this modu…" told the child nothing. */}
       <div
         className={cn(
           "shrink-0 px-4 pb-[7px]",
           secondaryDim(attentionOn),
         )}
       >
-        <span className="block min-w-0 truncate font-mono text-[11px] tracking-[0.02em] text-nevo-near-black/50">
+        <span className="block min-w-0 font-mono text-[11px] tracking-[0.02em] text-pretty text-nevo-near-black/50">
           {positionLine(lesson, index)}
         </span>
       </div>

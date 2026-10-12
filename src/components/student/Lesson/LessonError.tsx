@@ -21,7 +21,7 @@ export function LessonError({
   onGoBack: () => void;
 }) {
   return (
-    <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-nevo-cream px-6 text-center text-nevo-near-black">
+    <div className="flex min-h-[calc(100dvh/var(--nevo-text-zoom,1))] flex-col items-center justify-center bg-nevo-cream px-6 text-center text-nevo-near-black">
       <span className="flex size-20 items-center justify-center rounded-full bg-nevo-violet/20">
         <RotateCcw className="size-9 text-nevo-navy" strokeWidth={2} />
       </span>

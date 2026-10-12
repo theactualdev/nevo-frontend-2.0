@@ -214,6 +214,11 @@ describe("only while the text is on screen", () => {
       render(<LessonPlayer lesson={lesson} plan={plan} />);
 
       expect(slowerChip()).toBeNull();
+      // Its row keeps its place, unseen and out of reach, so the position
+      // line and the progress do not jump between versions (rule 7).
+      const held = document.querySelector("header .invisible[aria-hidden='true']");
+      expect(held?.textContent).toContain("Slower");
+      expect(held).toHaveAttribute("inert");
     },
   );
 });

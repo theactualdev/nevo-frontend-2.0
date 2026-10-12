@@ -20,7 +20,7 @@ import { Wordmark } from "@/components/shared/BrandMarks";
  */
 export function LessonNotOpened({ onBack }: { onBack: () => void }) {
   return (
-    <div className="flex min-h-[100dvh] w-full flex-col items-center justify-center bg-nevo-cream px-10 text-center text-nevo-near-black">
+    <div className="flex min-h-[calc(100dvh/var(--nevo-text-zoom,1))] w-full flex-col items-center justify-center bg-nevo-cream px-10 text-center text-nevo-near-black">
       <Wordmark size="compact" className="mb-7 sm:mb-9" />
       <Image
         src="/illustrations/error.png"

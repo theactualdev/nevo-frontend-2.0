@@ -68,7 +68,7 @@ export function ReviewEntryScreen({
     ? `You worked on this ${ago}. Let's see what's stuck.`
     : "This one's come back around. Let's see what's stuck.";
   return (
-    <div className="relative flex min-h-[100dvh] flex-col items-center justify-center bg-nevo-cream px-10 text-center text-nevo-near-black motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300">
+    <div className="relative flex min-h-[calc(100dvh/var(--nevo-text-zoom,1))] flex-col items-center justify-center bg-nevo-cream px-10 text-center text-nevo-near-black motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300">
       {onLeave && (
         <div className="absolute inset-x-0 top-0 flex px-3.5 pt-2.5">
           <LeaveButton onLeave={onLeave} />
