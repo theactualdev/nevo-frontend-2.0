@@ -229,7 +229,7 @@ describe("WarmUpRun — the question the engine served", () => {
     render(<WarmUpRun />);
 
     expect(screen.getByText("What is 7 times 8?")).toBeInTheDocument();
-    expect(screen.queryByText("Right")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Right" })).toBeNull();
 
     fireEvent.click(screen.getByText("56"));
     await settle();
@@ -257,7 +257,7 @@ describe("WarmUpRun - a device-task day tells the account (B54)", () => {
     render(<WarmUpRun />);
 
     expect(deviceTaskDone).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByText("Right"));
+    fireEvent.click(screen.getByRole("button", { name: "Right" }));
     await settle();
 
     expect(deviceTaskDone).toHaveBeenCalledTimes(1);
@@ -274,7 +274,7 @@ describe("WarmUpRun - a device-task day tells the account (B54)", () => {
     engine.prompt = deviceDay;
     render(<WarmUpRun />);
 
-    fireEvent.click(screen.getByText("Right"));
+    fireEvent.click(screen.getByRole("button", { name: "Right" }));
     await settle();
 
     expect(screen.getByText("That's it for today")).toBeInTheDocument();
@@ -287,7 +287,7 @@ describe("WarmUpRun - a device-task day tells the account (B54)", () => {
     engine.prompt = deviceDay;
     render(<WarmUpRun />);
 
-    fireEvent.click(screen.getByText("Right"));
+    fireEvent.click(screen.getByRole("button", { name: "Right" }));
     await settle();
     fireEvent.click(screen.getByRole("button", { name: "Go on" }));
 
@@ -299,7 +299,7 @@ describe("WarmUpRun - a device-task day tells the account (B54)", () => {
     signIn();
     render(<WarmUpRun dimension="attention" />);
 
-    fireEvent.click(screen.getByText("Right"));
+    fireEvent.click(screen.getByRole("button", { name: "Right" }));
     await settle();
 
     expect(deviceTaskDone).not.toHaveBeenCalled();
@@ -311,7 +311,7 @@ describe("WarmUpRun - a device-task day tells the account (B54)", () => {
     engine.prompt = deviceDay;
     render(<WarmUpRun />);
 
-    fireEvent.click(screen.getByText("Right"));
+    fireEvent.click(screen.getByRole("button", { name: "Right" }));
     await settle();
 
     expect(deviceTaskDone).not.toHaveBeenCalled();
@@ -335,7 +335,7 @@ describe("WarmUpRun — done today, on the account (B10)", () => {
     await settle();
 
     expect(screen.getByText(/That's it for today/)).toBeInTheDocument();
-    expect(screen.queryByText("Right")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Right" })).toBeNull();
     expect(submit).not.toHaveBeenCalled();
   });
 
@@ -357,7 +357,7 @@ describe("WarmUpRun — done today, on the account (B10)", () => {
     render(<WarmUpRun />);
     await settle();
 
-    expect(screen.getByText("Right")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Right" })).toBeInTheDocument();
     expect(screen.queryByText(/That's it for today/)).toBeNull();
   });
 
@@ -389,7 +389,7 @@ describe("WarmUpRun — a withdrawn guardian", () => {
     consent.withdrawn = true;
     render(<WarmUpRun dimension="attention" />);
 
-    fireEvent.click(screen.getByText("Right"));
+    fireEvent.click(screen.getByRole("button", { name: "Right" }));
     await settle();
 
     expect(screen.getByText(/That's it for today/)).toBeInTheDocument();
@@ -400,7 +400,7 @@ describe("WarmUpRun — a withdrawn guardian", () => {
     consent.withdrawn = true;
     render(<WarmUpRun dimension="attention" />);
 
-    fireEvent.click(screen.getByText("Right"));
+    fireEvent.click(screen.getByRole("button", { name: "Right" }));
     await settle();
 
     expect(submit).not.toHaveBeenCalled();

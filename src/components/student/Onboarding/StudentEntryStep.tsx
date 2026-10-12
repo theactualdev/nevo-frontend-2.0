@@ -492,7 +492,10 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
             spellCheck={false}
             aria-label={`School code, character ${i + 1} of ${SCHOOL_CODE_LENGTH}`}
             className={cn(
-              "h-9 w-10 rounded-none border-0 border-b-2 bg-transparent p-0 text-center text-[22px] font-bold tracking-[0.02em] text-nevo-near-black uppercase outline-none transition-colors sm:h-10 sm:w-11 sm:text-[26px]",
+              // No `outline-none`, here or on the ID field: it hid which
+              // cell the keyboard was typing into from anyone not looking
+              // for a caret. The student console's focus ring shows it.
+              "h-9 w-10 rounded-none border-0 border-b-2 bg-transparent p-0 text-center text-[22px] font-bold tracking-[0.02em] text-nevo-near-black uppercase transition-colors sm:h-10 sm:w-11 sm:text-[26px]",
               cellBorder,
             )}
           />
@@ -529,7 +532,7 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
           autoCapitalize="characters"
           autoCorrect="off"
           spellCheck={false}
-          className="h-full min-w-0 flex-1 bg-transparent pr-[52px] pl-[18px] text-[19px] font-medium tracking-[0.02em] text-nevo-near-black uppercase outline-none sm:text-[21px]"
+          className="h-full min-w-0 flex-1 bg-transparent pr-[52px] pl-[18px] text-[19px] font-medium tracking-[0.02em] text-nevo-near-black uppercase sm:text-[21px]"
         />
         {(status === "pending" || status === "success") && (
           <div className="absolute top-1/2 right-4 flex size-7 -translate-y-1/2 items-center justify-center">

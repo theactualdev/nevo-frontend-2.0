@@ -23,12 +23,112 @@ import { useTrialRunner } from "./useTrialRunner";
  *    ratio is already at threshold)". P4-6 and SS ran the playable
  *    prototype's 850 (11:240) until design settled 09c over it (D75, 6 Oct).
  */
-const DOTS: Record<AgeBand, { revealMs: number; dot: string; box: string }> = {
-  p13: { revealMs: 800, dot: "size-[22px]", box: "size-[200px] sm:size-[220px]" },
-  p46: { revealMs: 600, dot: "size-4", box: "size-[200px]" },
-  jss: { revealMs: 500, dot: "size-[13px]", box: "size-[200px]" },
-  ss: { revealMs: 600, dot: "size-2.5", box: "size-[200px]" },
+const DOTS: Record<
+  AgeBand,
+  { revealMs: number; dot: string; px: number; box: string }
+> = {
+  p13: { revealMs: 800, dot: "size-[22px]", px: 22, box: "size-[200px] sm:size-[220px]" },
+  p46: { revealMs: 600, dot: "size-4", px: 16, box: "size-[200px]" },
+  jss: { revealMs: 500, dot: "size-[13px]", px: 13, box: "size-[200px]" },
+  ss: { revealMs: 600, dot: "size-2.5", px: 10, box: "size-[200px]" },
 };
+
+/** 3A's True, False and Not sure (`Nevo Sentence Verify Frame`, `btnBase` and `bW`). */
+const TF_BUTTON = "h-[52px] w-full sm:w-[168px]";
+
+/**
+ * The inside of the smallest box any band draws: 200px less its 2px border.
+ * Positions are worked out here and placed as percentages, so P1-3's 220px
+ * box from `sm` up only spreads them further apart.
+ */
+const BOX_INNER_PX = 196;
+/** How far every dot stays from the box's edge (`Nevo Dot Comparison Frame` `dots()`, `pad`). */
+const DOT_INSET_PX = 14;
+/**
+ * The closest two dot centres may sit, as a multiple of the dot's diameter:
+ * half a dot of clear cream between any two.
+ */
+export const DOT_MIN_SPACING = 1.5;
+
+/**
+ * Where one array of a band's 3B trial puts its dots. The seed is fixed per
+ * trial and side, so a re-render never moves a shown dot.
+ */
+export function dotPositions(
+  band: AgeBand,
+  trial: number,
+  side: number,
+  count: number,
+): { x: number; y: number }[] {
+  return scatterDots(count, 11 + trial * 3 + side * 29, (DOTS[band] ?? DOTS.p46).px);
+}
+
+/**
+ * Where a 3B array's dots go, as percentages of the box: exactly `count` of
+ * them, deterministic for a seed, no two closer than `DOT_MIN_SPACING`
+ * diameters centre to centre.
+ *
+ * THE ARRAYS OVERLAPPED. Dots were dropped anywhere between 8% and 84% with no
+ * spacing, so some landed on top of each other and a child saw fewer than
+ * were recorded: SS's 12 read as 11 beside a 13 that read as 10, so the
+ * larger side looked the smaller, and P1-3's 3 read as 2. The count recorded
+ * against the answer was not the count on screen.
+ *
+ * Each dot is drawn at random and redrawn if it lands too close to one already
+ * placed. Should that ever fail, the whole array goes onto a lattice instead,
+ * which holds the spacing for every pair a band runs. Only WHERE the dots go
+ * is decided here; how many is the pair's.
+ */
+export function scatterDots(
+  count: number,
+  seed: number,
+  dotPx: number,
+): { x: number; y: number }[] {
+  let s = seed >>> 0;
+  const rng = () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+  const lo = DOT_INSET_PX;
+  const span = BOX_INNER_PX - 2 * DOT_INSET_PX - dotPx;
+  const min = dotPx * DOT_MIN_SPACING;
+  const pct = (p: { x: number; y: number }) => ({
+    x: (p.x / BOX_INNER_PX) * 100,
+    y: (p.y / BOX_INNER_PX) * 100,
+  });
+
+  const placed: { x: number; y: number }[] = [];
+  for (let i = 0; i < count; i++) {
+    let spot: { x: number; y: number } | null = null;
+    for (let attempt = 0; attempt < 400 && !spot; attempt++) {
+      const p = { x: lo + rng() * span, y: lo + rng() * span };
+      if (placed.every((q) => Math.hypot(q.x - p.x, q.y - p.y) >= min)) spot = p;
+    }
+    if (!spot) return latticeDots(count, rng, lo, span).map(pct);
+    placed.push(spot);
+  }
+  return placed.map(pct);
+}
+
+/** The fallback: `count` distinct points of an even lattice, chosen by the seed. */
+function latticeDots(
+  count: number,
+  rng: () => number,
+  lo: number,
+  span: number,
+): { x: number; y: number }[] {
+  const side = Math.max(1, Math.ceil(Math.sqrt(count)));
+  const step = side > 1 ? span / (side - 1) : 0;
+  const cells = Array.from({ length: side * side }, (_, i) => i);
+  for (let i = cells.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [cells[i], cells[j]] = [cells[j], cells[i]];
+  }
+  return cells.slice(0, count).map((c) => ({
+    x: lo + (c % side) * step,
+    y: lo + Math.floor(c / side) * step,
+  }));
+}
 
 /**
  * Module 3 - Reading + Dot Comparison (BP-M3: reading and numerical fluency).
@@ -259,7 +359,8 @@ export function HeardPictures({
       </button>
       {/* From `sm` up each picture is a 160px square, or the square of a
           third of the row where that is narrower (the warm-up's column is
-          480px, three 160s and their gaps 512). */}
+          440px on a tablet and 480px on a desktop, three 160s and their gaps
+          512). */}
       <div className="flex w-full flex-col items-center gap-3.5 sm:flex-row sm:justify-center sm:gap-4">
         {AUDIO_PICS.map((p, i) => (
           <button
@@ -294,7 +395,7 @@ export function HeardPictures({
         type="button"
         onClick={(e) => onPick(AUDIO_PICS.length, { notSure: true }, e)}
         className={cn(
-          "flex h-14 w-full cursor-pointer items-center justify-center gap-2 rounded-[10px] border-2 border-nevo-violet text-sm font-medium transition-[background-color,transform] active:scale-[0.97] sm:w-[220px]",
+          "flex h-14 w-full cursor-pointer items-center justify-center gap-2 rounded-[10px] border-2 border-nevo-violet text-sm font-medium transition-transform active:scale-[0.97] sm:w-[220px]",
           picked === AUDIO_PICS.length
             ? "bg-nevo-violet text-nevo-near-black"
             : "bg-nevo-cream text-nevo-violet",
@@ -309,19 +410,6 @@ export function HeardPictures({
       </button>
     </div>
   );
-}
-
-/** Deterministic scatter so re-renders never reshuffle a shown array. */
-function scatter(count: number, seed: number): { x: number; y: number }[] {
-  let s = seed >>> 0;
-  const rng = () => {
-    s = (s * 1664525 + 1013904223) >>> 0;
-    return s / 4294967296;
-  };
-  return Array.from({ length: count }, () => ({
-    x: 8 + rng() * 76,
-    y: 8 + rng() * 76,
-  }));
 }
 
 export function SentenceDotModule({
@@ -424,6 +512,11 @@ export function SentenceDotModule({
    * as the buttons already did. It asked which SIDE had more above buttons
    * reading Top and Bottom. Words from `Nevo Dot Comparison Frame`'s `prompt`,
    * with its em dash as a colon (the design system allows none).
+   *
+   * NO BUBBLE OVER THE HEARD PICTURES OR THE PASSAGE. "Listen, then tap the
+   * matching picture" and "Read it, then answer" sat there, and no frame has
+   * either: `Nevo Sentence Verify Frame` draws 3A with no avatar row at all.
+   * The sentence form's line is the playable prototype's (11:324).
    */
   const bubble = settling
     ? ""
@@ -431,11 +524,9 @@ export function SentenceDotModule({
       ? masked
         ? "Which had more dots?"
         : "Watch the dots"
-      : mode === "audio"
-        ? "Listen, then tap the matching picture"
-        : mode === "passage"
-          ? "Read it, then answer"
-          : "Is this true or false?";
+      : mode === "sentence"
+        ? "Is this true or false?"
+        : "";
   const phoneBubble =
     act === "dots" && masked ? "Which had more dots: top or bottom?" : undefined;
 
@@ -445,7 +536,7 @@ export function SentenceDotModule({
         <AvatarBubble text={bubble} phoneText={phoneBubble} />
       )}
 
-      <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-center gap-7">
+      <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-center gap-6 sm:gap-10">
         {settling ? (
           <SettleBadge />
         ) : act === "reading" ? (
@@ -504,9 +595,15 @@ export function SentenceDotModule({
               >
                 {sentence.text}
               </div>
+              {/*
+                The frame's True / False / Not sure (`btnBase`, `bW`): 52px tall,
+                full width on a phone and 168px from tablet up. They were
+                the module's 180x56 default.
+              */}
               <div className="flex w-full flex-col items-center gap-3.5 sm:w-auto sm:flex-row">
                 <TrialButton
                   label="True"
+                  className={TF_BUTTON}
                   pressed={picked === 0}
                   onClick={(e) =>
                     pick(0, { mode, correct: sentence.isTrue === true }, e)
@@ -514,6 +611,7 @@ export function SentenceDotModule({
                 />
                 <TrialButton
                   label="False"
+                  className={TF_BUTTON}
                   pressed={picked === 1}
                   onClick={(e) =>
                     pick(1, { mode, correct: sentence.isTrue === false }, e)
@@ -521,6 +619,7 @@ export function SentenceDotModule({
                 />
                 <TrialButton
                   label="Not sure"
+                  className={TF_BUTTON}
                   soft
                   pressed={picked === 2}
                   onClick={(e) => pick(2, { mode, notSure: true }, e)}
@@ -539,7 +638,7 @@ export function SentenceDotModule({
                     dots.box,
                   )}
                 >
-                  {scatter(count, 11 + trial * 3 + side * 29).map((d, i) => (
+                  {dotPositions(band, trial, side, count).map((d, i) => (
                     <span
                       key={i}
                       className={cn(
@@ -555,7 +654,7 @@ export function SentenceDotModule({
                 </div>
               ))}
             </div>
-            <div className="flex w-full max-w-[300px] flex-col gap-4 sm:w-auto sm:max-w-none sm:flex-row">
+            <div className="flex w-full flex-col gap-4 sm:w-auto sm:flex-row">
               <DotButton
                 label="Top"
                 wide={left}
@@ -594,7 +693,16 @@ export function SentenceDotModule({
   );
 }
 
-/** 3B answer button: disabled-looking until the mask lands, per the frame. */
+/**
+ * 3B answer button: disabled-looking until the mask lands, per the frame.
+ * The frame's `btnBase` and `bW`: the full width at 56px and 16px on a phone,
+ * 200x64 at 18px from tablet up. It was 170x56 there, and 300 wide at 18px on
+ * a phone.
+ *
+ * NO COLOUR TRANSITION, here or on any trial button: the frames move only
+ * their scale (`.dc-tap`), and a button that eased its colour carried the
+ * last answer's violet into the next trial, fading as the child looked.
+ */
 function DotButton({
   sideLabel,
   label,
@@ -614,12 +722,15 @@ function DotButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex h-14 min-w-[170px] items-center justify-center rounded-[10px] border-2 text-lg font-semibold transition-[background-color,border-color]",
+        "flex h-14 w-full items-center justify-center rounded-[10px] border-2 text-base font-semibold sm:h-16 sm:w-[200px] sm:text-lg",
         pressed
           ? "border-nevo-violet bg-nevo-violet text-nevo-near-black"
           : armed
             ? "cursor-pointer border-nevo-navy bg-nevo-cream text-nevo-navy"
             : "cursor-default border-nevo-navy/30 bg-nevo-cream text-nevo-navy/40",
+        // The frame's `.dc-tap` press, once the button is live: a button
+        // that still reads as disabled does not answer a press.
+        armed && "transition-transform active:scale-[0.98]",
       )}
     >
       <span className="sm:hidden">{label}</span>

@@ -86,6 +86,41 @@ describe("GridSpanModule — the SS dual task", () => {
     expect(screen.queryByText("True")).toBeNull();
   });
 
+  it("hands focus to the grid when the check is answered, without scrolling", () => {
+    // The pressed True or False went with the check, and focus fell to the
+    // page from a point past the grid: the next Tab left the screen.
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
+    render(
+      <GridSpanModule config={gridSpanConfig("ss")} onComplete={() => {}} />,
+    );
+    watchItPlay();
+    const answer = screen.getByText("False");
+    answer.focus();
+    fireEvent.click(answer);
+
+    const grid = screen.getByTestId("grid-span-grid");
+    expect(document.activeElement).toBe(grid);
+    expect(focus).toHaveBeenLastCalledWith({ preventScroll: true });
+    // And the tiles are next in the tab order.
+    expect(grid.querySelector("button")!.tabIndex).toBe(0);
+    focus.mockRestore();
+  });
+
+  it("leaves focus alone when it was somewhere else", () => {
+    render(
+      <>
+        <button type="button">Elsewhere</button>
+        <GridSpanModule config={gridSpanConfig("ss")} onComplete={() => {}} />
+      </>,
+    );
+    watchItPlay();
+    const elsewhere = screen.getByText("Elsewhere");
+    elsewhere.focus();
+    fireEvent.click(screen.getByText("False"));
+
+    expect(document.activeElement).toBe(elsewhere);
+  });
+
   it("runs no check at all for the other bands", () => {
     render(
       <GridSpanModule config={gridSpanConfig("p46")} onComplete={() => {}} />,
@@ -187,6 +222,30 @@ describe("GridSpanModule — after a miss (D74)", () => {
       expect(playbacks[0]).toMatchObject({ litMs: gridSpanConfig(band).litMs });
     },
   );
+});
+
+describe("GridSpanModule — a wrong tap says nothing", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("nudges the tile and writes no line, then or after", () => {
+    // "Try another" faded in under the grid after every miss, from the
+    // prototype. The frame's nudge state has no text, and 09 says never
+    // "wrong": a line that only shows after a miss says it was one.
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    render(
+      <GridSpanModule config={gridSpanConfig("p46")} onComplete={() => {}} />,
+    );
+    watchItPlay();
+    const before = document.body.textContent;
+
+    // Tile 0 was lit first, so tapping it first is a miss.
+    fireEvent.click(screen.getAllByRole("button", { hidden: true })[0]);
+
+    expect(document.body.textContent).toBe(before);
+    expect(document.body.textContent).not.toMatch(/try another/i);
+    act(() => void vi.advanceTimersByTime(300));
+    expect(document.body.textContent).not.toMatch(/try another/i);
+  });
 });
 
 describe("GridSpanModule — the settle (D136)", () => {

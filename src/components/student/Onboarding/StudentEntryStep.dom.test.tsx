@@ -780,3 +780,14 @@ describe("a pair handed back from the end of a first run (B68)", () => {
     expect(continueButton()).toHaveTextContent("Continue");
   });
 });
+
+describe("05 Entry - where the keyboard is typing", () => {
+  it("lets every field show focus, never suppressing the outline", () => {
+    // The four cells and the ID field all set `outline-none`, so nothing but
+    // a caret said which one the keyboard was typing into.
+    render(<StudentEntryStep framing="school" />);
+
+    for (const el of [...cells(), idField()])
+      expect(el.className).not.toMatch(/(^| )outline-(none|hidden|0)( |$)/);
+  });
+});
