@@ -924,15 +924,24 @@ test.describe("a signed-in student", () => {
 
     // The header belongs to a run (12, D126): it heads a task, and the done
     // and nothing states have none.
-    const running = said.doneToday !== true && typeof said.dimension === "string";
-    if (running) await expect(page.getByText("DAILY WARM-UP")).toBeVisible();
-    else await expect(page.getByText("DAILY WARM-UP")).toHaveCount(0);
+    const header = page.getByText("DAILY WARM-UP");
+    const home = page.getByRole("button", { name: "Home", exact: true });
     if (said.doneToday === true) {
       await expect(page.getByRole("heading", { name: "That's it for today" })).toBeVisible();
+      await expect(header).toHaveCount(0);
     } else if (typeof said.dimension !== "string") {
       // No task named: the nothing-state, whose only control is the way Home.
-      await expect(page.getByRole("button", { name: "Home", exact: true })).toBeVisible();
+      await expect(home).toBeVisible();
       await expect(page.getByRole("button")).toHaveCount(1);
+      await expect(header).toHaveCount(0);
+    } else {
+      /*
+       * A task named runs under the header - unless this device cannot give
+       * it. A heard task on a device with no voice (D139, as this runner is)
+       * draws the nothing-state instead, so either is right, never both.
+       */
+      await expect(header.or(home).first()).toBeVisible();
+      expect((await header.count()) > 0 && (await home.count()) > 0).toBe(false);
     }
 
     await expectNoSampleMarks(page, "The warm-up");
