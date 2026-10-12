@@ -58,8 +58,8 @@
  * verified; "Subprocessor" does not appear in the contract. An erasure-request
  * count would be a second, and has no row: the rights log
  * (`GET /api/v1/consents/rights-log`) carries `request_data | object |
- * withdraw_consent`, with no erasure value, so it cannot count them. (Wiring
- * the log to a screen waits on counsel with the rest of the consent surface.)
+ * withdraw_consent`, with no erasure value, so it cannot count them. The log
+ * itself is on the page now, under the claims - see `ParentRequests`.
  *
  * CONSENT COVERAGE AND RETENTION CARRY REAL FIGURES. Both were once listed as
  * unverifiable and never were: coverage comes from `studentsApi.list()` with
