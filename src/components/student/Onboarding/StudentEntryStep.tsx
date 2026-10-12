@@ -411,6 +411,8 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
         keyboardUp && (
           <NevoKeyboard
             layout="qwerty"
+            // Both fields are capitals, so the tray stays in capitals.
+            uppercase
             onKey={onKey}
             onBackspace={onBackspace}
             onReturn={submit}

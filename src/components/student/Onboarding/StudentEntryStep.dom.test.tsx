@@ -121,6 +121,19 @@ afterEach(() => {
 });
 
 describe("the school code cells", () => {
+  it("keeps the tray in capitals, as both fields are", () => {
+    // The one-shot shift dropped the keys to lowercase after the first letter
+    // while the cells and the Student ID upper-cased whatever arrived.
+    render(<StudentEntryStep framing="school" />);
+    act(() => cells()[0].focus());
+
+    fireEvent.click(screen.getByRole("button", { name: "K" }));
+
+    expect(cells()[0].value).toBe("K");
+    expect(screen.getByRole("button", { name: "D" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "d" })).toBeNull();
+  });
+
   it("draws four cells and the Student ID field, with the frame's labels", () => {
     render(<StudentEntryStep framing="school" />);
 
