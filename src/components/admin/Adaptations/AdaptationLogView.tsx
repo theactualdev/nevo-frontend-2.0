@@ -15,6 +15,8 @@ import {
 import { readAcademic, schoolApi } from "@/lib/api/school";
 import { cn } from "@/lib/utils";
 import { NoAccess, failureKind } from "../NoAccess";
+import { BackLink } from "../BackLink";
+import type { Back } from "../back";
 import { ReadFailed } from "../ReadFailed";
 import {
   currentHalfTerm,
@@ -138,7 +140,7 @@ function fmtTime(iso: string): string {
   return `${d.toLocaleDateString("en-GB", { day: "numeric", month: "short" })} · ${time}`;
 }
 
-export function AdaptationLogView() {
+export function AdaptationLogView({ back = null }: { back?: Back | null } = {}) {
   const [phase, setPhase] = useState<Phase>("loading");
   const [rows, setRows] = useState<AdaptationEventRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -401,12 +403,7 @@ export function AdaptationLogView() {
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
       <div className="mx-auto max-w-[820px]">
-        <Link
-          href="/admin/dashboard"
-          className="text-[13.5px] font-medium text-nevo-navy hover:underline"
-        >
-          &larr; School Overview
-        </Link>
+        <BackLink back={back} fallback={{ href: "/admin/dashboard", label: "School Overview" }} />
 
         <h2 className="mt-3 text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
           Adaptation log

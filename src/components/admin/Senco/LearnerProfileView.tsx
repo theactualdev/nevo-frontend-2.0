@@ -29,6 +29,8 @@ import {
   ROW_DIVIDER,
 } from "../Roster/primitives";
 import { NoAccess, failureKind } from "../NoAccess";
+import { BackLink } from "../BackLink";
+import { withBack, type Back } from "../back";
 
 /**
  * D8b Learner Profile - the SENCo's plain-language view of one learner.
@@ -139,7 +141,14 @@ function ReadFailed({
   );
 }
 
-export function LearnerProfileView({ studentId }: { studentId: string }) {
+export function LearnerProfileView({
+  studentId,
+  back = null,
+}: {
+  studentId: string;
+  /** Where the admin came from - see `back.ts`. */
+  back?: Back | null;
+}) {
   const [phase, setPhase] = useState<Phase>("loading");
   const [student, setStudent] = useState<AdminStudentDetail | null>(null);
   const [classes, setClasses] = useState<AdminClass[]>([]);
@@ -324,12 +333,7 @@ export function LearnerProfileView({ studentId }: { studentId: string }) {
 
   return (
     <Wrapper>
-      <Link
-        href="/admin/senco"
-        className="text-[13.5px] font-semibold text-nevo-navy hover:opacity-75"
-      >
-        &larr; Back to profiles
-      </Link>
+      <BackLink back={back} fallback={{ href: "/admin/senco", label: "Learning Support" }} />
 
       <div className="mt-3 flex items-center gap-4">
         <Avatar name={name} size={56} />
@@ -598,7 +602,11 @@ export function LearnerProfileView({ studentId }: { studentId: string }) {
 
       <div className="mt-8 border-t border-nevo-near-black/10 pt-5">
         <Link
-          href={`/admin/senco/export?student=${encodeURIComponent(studentId)}`}
+          // Back on the exporter returns to this profile.
+          href={withBack(`/admin/senco/export?student=${encodeURIComponent(studentId)}`, {
+            href: back ? withBack(`/admin/senco/${studentId}`, back) : `/admin/senco/${studentId}`,
+            label: name,
+          })}
           className={PRIMARY_BTN}
         >
           Create a progress report

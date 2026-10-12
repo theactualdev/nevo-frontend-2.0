@@ -30,6 +30,8 @@ import { RemoveAccessSheet } from "./RemoveAccessSheet";
 import { TeacherSubjects } from "./TeacherSubjects";
 import { StatusPill, isInvited } from "./status";
 import { NoAccess, failureKind } from "../NoAccess";
+import { BackLink } from "../BackLink";
+import { withBack, type Back } from "../back";
 import { activeLine, lastActiveCard } from "../Team/teamLines";
 import { ApiError, apiErrorMessage } from "@/lib/api/client";
 
@@ -73,7 +75,14 @@ import { ApiError, apiErrorMessage } from "@/lib/api/client";
 
 type Phase = "loading" | "ready" | "failed" | "denied";
 
-export function TeacherDetailView({ teacherId }: { teacherId: string }) {
+export function TeacherDetailView({
+  teacherId,
+  back = null,
+}: {
+  teacherId: string;
+  /** Where the admin came from - see `back.ts`. */
+  back?: Back | null;
+}) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>("loading");
   const [teacher, setTeacher] = useState<TeacherDetail | null>(null);
@@ -204,12 +213,7 @@ export function TeacherDetailView({ teacherId }: { teacherId: string }) {
 
   return (
     <Wrapper>
-      <Link
-        href="/admin/teachers"
-        className="text-[13.5px] font-semibold text-nevo-navy hover:opacity-75"
-      >
-        &larr; Teachers
-      </Link>
+      <BackLink back={back} fallback={{ href: "/admin/teachers", label: "Teachers" }} />
 
       <div className="mt-3 flex items-center gap-4">
         <Avatar name={teacher.name} email={teacher.email} size={56} />
@@ -328,7 +332,11 @@ export function TeacherDetailView({ teacherId }: { teacherId: string }) {
             return (
               <Link
                 key={h.assignmentId}
-                href={`/admin/classes/${h.classId}`}
+                // Back on the class returns to this teacher.
+                href={withBack(`/admin/classes/${h.classId}`, {
+                  href: back ? withBack(`/admin/teachers/${teacher.id}`, back) : `/admin/teachers/${teacher.id}`,
+                  label: teacher.name,
+                })}
                 className={cn(
                   "flex items-center gap-3.5 px-[22px] py-[15px] transition-colors hover:bg-nevo-navy/[0.03]",
                   i < held.length - 1 && ROW_DIVIDER,

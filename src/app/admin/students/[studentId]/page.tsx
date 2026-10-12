@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { StudentDetailView } from "@/components/admin/Students/StudentDetailView";
+import { readBack } from "@/components/admin/back";
 
 export const metadata: Metadata = {
   title: "Student - Nevo",
@@ -7,21 +8,14 @@ export const metadata: Metadata = {
 
 // D7b Student detail. Next.js 16: `params` is a Promise and must be awaited.
 //
-// `?class=` is the class the admin came from - class detail's roster links
-// carry it - so Back returns to that class rather than to all students.
+// `?back=` is where the admin came from - see `components/admin/back.ts`.
 export default async function AdminStudentDetailPage({
   params,
   searchParams,
 }: {
   params: Promise<{ studentId: string }>;
-  searchParams: Promise<{ class?: string | string[] }>;
+  searchParams: Promise<{ back?: string | string[]; backLabel?: string | string[] }>;
 }) {
   const { studentId } = await params;
-  const { class: fromClass } = await searchParams;
-  return (
-    <StudentDetailView
-      studentId={studentId}
-      fromClassId={typeof fromClass === "string" ? fromClass : null}
-    />
-  );
+  return <StudentDetailView studentId={studentId} back={readBack(await searchParams)} />;
 }

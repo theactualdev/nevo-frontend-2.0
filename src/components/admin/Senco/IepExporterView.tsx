@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
   exportApi,
@@ -13,6 +12,8 @@ import { studentsApi, type AdminStudentRow, type ParentLink } from "@/lib/api/st
 import { cn } from "@/lib/utils";
 import { ReadFailed } from "../ReadFailed";
 import { NoAccess, failureKind } from "../NoAccess";
+import { BackLink } from "../BackLink";
+import type { Back } from "../back";
 import {
   Avatar,
   CARD,
@@ -163,9 +164,12 @@ function iso(d: Date): string {
 
 export function IepExporterView({
   initialStudentId = "",
+  back = null,
 }: {
   /** The child to open on, from `?student=` - kept only if they are on the roster. */
   initialStudentId?: string;
+  /** Where the admin came from - a learner's profile, say. See `back.ts`. */
+  back?: Back | null;
 } = {}) {
   const [phase, setPhase] = useState<Phase>("picking");
   const [students, setStudents] = useState<AdminStudentRow[]>([]);
@@ -453,12 +457,7 @@ export function IepExporterView({
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
       <div className="mx-auto max-w-[780px]">
-        <Link
-          href="/admin/senco"
-          className="text-[13.5px] font-semibold text-nevo-navy hover:opacity-75"
-        >
-          &larr; Learning Support
-        </Link>
+        <BackLink back={back} fallback={{ href: "/admin/senco", label: "Learning Support" }} />
 
         {/* -------------------------------------------------------- PICKING */}
         {phase === "picking" || phase === "generating" ? (

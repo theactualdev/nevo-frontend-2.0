@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { IepExporterView } from "@/components/admin/Senco/IepExporterView";
+import { readBack } from "@/components/admin/back";
 
 export const metadata: Metadata = {
   title: "Progress report - Nevo",
@@ -14,8 +15,17 @@ export const metadata: Metadata = {
 export default async function AdminIepExportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ student?: string | string[] }>;
+  searchParams: Promise<{
+    student?: string | string[];
+    back?: string | string[];
+    backLabel?: string | string[];
+  }>;
 }) {
-  const { student } = await searchParams;
-  return <IepExporterView initialStudentId={typeof student === "string" ? student : ""} />;
+  const sp = await searchParams;
+  return (
+    <IepExporterView
+      initialStudentId={typeof sp.student === "string" ? sp.student : ""}
+      back={readBack(sp)}
+    />
+  );
 }

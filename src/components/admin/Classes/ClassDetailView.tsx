@@ -34,6 +34,8 @@ import { AssignTeachingSheet } from "./AssignTeachingSheet";
 import { ClassSubjects } from "./ClassSubjects";
 import { ClassFormSheet } from "./ClassFormSheet";
 import { NoAccess, failureKind } from "../NoAccess";
+import { BackLink } from "../BackLink";
+import { withBack, type Back } from "../back";
 import { WriteFailed } from "../WriteFailed";
 
 /**
@@ -76,7 +78,14 @@ import { WriteFailed } from "../WriteFailed";
 
 type Phase = "loading" | "ready" | "failed" | "denied";
 
-export function ClassDetailView({ classId }: { classId: string }) {
+export function ClassDetailView({
+  classId,
+  back = null,
+}: {
+  classId: string;
+  /** Where the admin came from - see `back.ts`. */
+  back?: Back | null;
+}) {
   const [phase, setPhase] = useState<Phase>("loading");
   const [klass, setKlass] = useState<AdminClass | null>(null);
   const [teachers, setTeachers] = useState<AssignedTeacher[]>([]);
@@ -194,12 +203,7 @@ export function ClassDetailView({ classId }: { classId: string }) {
 
   return (
     <Wrapper>
-      <Link
-        href="/admin/classes"
-        className="text-[13.5px] font-semibold text-nevo-navy hover:opacity-75"
-      >
-        &larr; Classes
-      </Link>
+      <BackLink back={back} fallback={{ href: "/admin/classes", label: "Classes" }} />
 
       <div className="mt-3 flex items-start justify-between gap-6">
         <div className="min-w-0">
@@ -495,8 +499,11 @@ export function ClassDetailView({ classId }: { classId: string }) {
           students.map((s, i) => (
             <Link
               key={s.studentId}
-              // Back on the student's page returns here.
-              href={`/admin/students/${s.studentId}?class=${encodeURIComponent(classId)}`}
+              // Back on the student's page returns here, as the admin left it.
+              href={withBack(`/admin/students/${s.studentId}`, {
+                href: back ? withBack(`/admin/classes/${classId}`, back) : `/admin/classes/${classId}`,
+                label: klass.name,
+              })}
               className={cn(
                 "flex items-center gap-3 px-[22px] py-[13px] transition-colors hover:bg-nevo-navy/[0.03]",
                 i < students.length - 1 && ROW_DIVIDER,

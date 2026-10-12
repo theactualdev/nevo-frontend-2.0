@@ -9,6 +9,7 @@ import { studentsApi, type AdminStudentDetail } from "@/lib/api/students";
 import { yearGroupLabel } from "@/lib/constants/yearGroups";
 import { cn } from "@/lib/utils";
 import { NoAccess, failureKind } from "../NoAccess";
+import type { Back } from "../back";
 import { Avatar, CARD, FailureLine, GHOST_BTN, PRIMARY_BTN } from "../Roster/primitives";
 import { ConsentFormDownload } from "./ConsentFormDownload";
 
@@ -67,7 +68,14 @@ function sizeLine(file: File): string {
   return `${kind} · ${MEGABYTES.format(file.size / 1_000_000)}`;
 }
 
-export function WrittenConsentView({ studentId }: { studentId: string }) {
+export function WrittenConsentView({
+  studentId,
+  back = null,
+}: {
+  studentId: string;
+  /** The student's page, as the admin left it - see `back.ts`. */
+  back?: Back | null;
+}) {
   const [phase, setPhase] = useState<Phase>("loading");
   const [student, setStudent] = useState<AdminStudentDetail | null>(null);
   const [classLine, setClassLine] = useState<string | null>(null);
@@ -147,7 +155,8 @@ export function WrittenConsentView({ studentId }: { studentId: string }) {
       });
   };
 
-  const back = `/admin/students/${studentId}`;
+  // Back to the student's page as the admin left it, its own back intact.
+  const toStudent = back?.href ?? `/admin/students/${studentId}`;
 
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
@@ -180,7 +189,7 @@ export function WrittenConsentView({ studentId }: { studentId: string }) {
                 ? " Their parent has been sent a note saying so, with a way to withdraw at any time."
                 : ""}
             </p>
-            <Link href={back} className={cn(PRIMARY_BTN, "mt-5")}>
+            <Link href={toStudent} className={cn(PRIMARY_BTN, "mt-5")}>
               Back to {firstName}
             </Link>
           </div>
@@ -193,7 +202,7 @@ export function WrittenConsentView({ studentId }: { studentId: string }) {
               Only the parent who withdrew can restore it, so a paper form
               can&rsquo;t be recorded here.
             </p>
-            <Link href={back} className={cn(GHOST_BTN, "mt-5")}>
+            <Link href={toStudent} className={cn(GHOST_BTN, "mt-5")}>
               Back to {firstName}
             </Link>
           </div>
@@ -354,7 +363,7 @@ export function WrittenConsentView({ studentId }: { studentId: string }) {
                 >
                   {save === "saving" ? "Saving…" : "Save consent record"}
                 </button>
-                <Link href={back} className={GHOST_BTN}>
+                <Link href={toStudent} className={GHOST_BTN}>
                   Cancel
                 </Link>
               </div>
