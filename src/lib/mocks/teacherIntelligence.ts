@@ -87,7 +87,7 @@ export const CLASS_OBSERVATIONS: Record<
     "Aisha Abdullahi": { seat: 21, chips: ["Steady pace through this week's lessons"] },
     "Amara Okafor": { seat: 12, chips: ["Taking longer on written segments this week"] },
     "Bello Ibrahim": { seat: 7, chips: ["Worked the problems one step at a time"] },
-    "Chisom Eze": { seat: 16, chips: ["Finished the last four lessons that led with audio"] },
+    "Chisom Eze": { seat: 16, chips: ["Finished the last four lessons without needing a second explanation"] },
     "Chukwuemeka Nwosu": { seat: 4, chips: ["Opened the worked example, then moved quickly through the practice"] },
     "Damilola Akinwande": { seat: 25, chips: ["Worked through the diagrams in this week's lessons"] },
     "Emeka Nwachukwu": { seat: 9, chips: ["Back to full pace this week"] },

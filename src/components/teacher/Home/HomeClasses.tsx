@@ -97,7 +97,10 @@ export function HomeClasses() {
             {a.className}
           </span>
           <div className="mt-[3px] text-[12px] text-nevo-near-black/55 xl:mt-1 xl:text-[13px]">
-            {a.classCode ? `Class code ${a.classCode}` : "Assigned to you"}
+            {/* No class code anywhere (design reference, 30 Sep): a child
+                joins with the school code and their own ID, so a class code
+                here names something no one can use. */}
+            Assigned to you
           </div>
           <div className="mt-3 text-[12.5px] text-nevo-near-black/50 xl:mt-3.5 xl:text-[13.5px]">
             Synced from your school

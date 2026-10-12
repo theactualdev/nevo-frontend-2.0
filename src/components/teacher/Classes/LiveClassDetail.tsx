@@ -252,7 +252,7 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
                       "border-l-[3px] border-nevo-violet",
                   )}
                 >
-                  <div className="flex min-w-0 items-baseline gap-1.5 xl:w-[36%] xl:shrink-0 xl:flex-col xl:gap-0">
+                  <div className="flex min-w-0 flex-col xl:w-[36%] xl:shrink-0">
                     <span className="truncate text-[15px] font-semibold text-nevo-near-black">
                       {studentName(student)}
                     </span>
@@ -260,14 +260,26 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
                         a child finds out their ID - they ask their teacher.
                         It used to give way to `seatContext`, so a class with
                         seats showed nobody's ID. The seat sits beside it. */}
-                    {/* And the admission number beside it (C05's "Student
-                        ID / Admission Number"): sign-in takes either. */}
+                    {/* And the admission number beside it: sign-in takes
+                        either. LABELLED, because design's reference (30 Sep)
+                        says the identifier is always "Student ID / Admission
+                        Number", both words, everywhere a person reads it - and
+                        an unlabelled "amara.o · BGA/2107" is two codes a
+                        teacher has to guess at. */}
                     {(student.loginIdentifier || student.admissionNumber || student.seatContext) && (
-                      <span className="shrink-0 text-[12px] text-nevo-near-black/55 tabular-nums xl:mt-0.5">
-                        <span className="xl:hidden">{"· "}</span>
-                        {[student.loginIdentifier, student.admissionNumber, student.seatContext]
-                          .filter(Boolean)
-                          .join(" · ")}
+                      <span className="mt-0.5 text-[12px] text-nevo-near-black/55 tabular-nums">
+                        {(student.loginIdentifier || student.admissionNumber) && (
+                          <>
+                            <span className="text-nevo-near-black/45">
+                              Student ID / Admission Number
+                            </span>{" "}
+                            {[student.loginIdentifier, student.admissionNumber]
+                              .filter(Boolean)
+                              .join(" · ")}
+                            {student.seatContext && " · "}
+                          </>
+                        )}
+                        {student.seatContext}
                       </span>
                     )}
                   </div>

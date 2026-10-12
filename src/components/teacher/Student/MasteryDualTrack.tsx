@@ -7,7 +7,13 @@
  * SCRUM-38 attribution is text-only: a flagged row gets a navy-outlined pill
  * carrying the words, never an alarm colour and never a hue change on the
  * bars. The component repeats down the C08 mastery panel, so its geometry is
- * literal: 92px label column, 34px value column, 12px gaps, 8px/6px rails.
+ * literal: 92px label column, 12px gaps, 8px/6px rails.
+ *
+ * NO PERCENTAGE BESIDE THE BARS (12 Oct). The frame prints "72%" after each
+ * rail; design's reference says no percentage scores in teacher copy, and a
+ * number beside "Understanding" next to a child's name is exactly that. The
+ * rail carries the proportion; a screen reader still gets the value from
+ * `aria-valuenow`. The frame keeps the figure - flagged to design.
  *
  * THE AUTO-FLAG IS GONE (17 Sep). It read two engine numbers and returned
  * "Concept support needed", "Reading support needed" or "Needs support" from
@@ -88,9 +94,6 @@ export function MasteryDualTrack({
               style={{ width: `${u}%` }}
             />
           </div>
-          <span className="w-[34px] shrink-0 text-right text-[13px] font-medium text-nevo-near-black">
-            {u}%
-          </span>
         </div>
         <div className="flex items-center gap-3">
           <span className="w-[92px] shrink-0 text-xs text-nevo-near-black/70">
@@ -109,9 +112,6 @@ export function MasteryDualTrack({
               style={{ width: `${r}%` }}
             />
           </div>
-          <span className="w-[34px] shrink-0 text-right text-[13px] font-medium text-nevo-near-black/70">
-            {r}%
-          </span>
         </div>
       </div>
     </div>

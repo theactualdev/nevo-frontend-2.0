@@ -8,19 +8,16 @@ import { cn } from "@/lib/utils";
 /**
  * C08c Recommend a Lesson - the primary action on a student's profile. Nevo
  * suggests a fitting lesson and says why in a colleague's voice; the teacher
- * confirms which version and adds an optional note. Confirmation is warm and
+ * confirms which lesson and adds an optional note. Confirmation is warm and
  * matter-of-fact, never celebratory.
  *
  * Tablet drops the "Which lesson" label and the note field entirely (frame),
  * so the note is a desktop-only affordance - flagged to design.
  *
- * The success sentence is templated rather than hardcoded: the third option
- * has no version qualifier, and the note clause only earns its place when a
- * note was actually written.
+ * The success sentence is templated rather than hardcoded: the note clause
+ * only earns its place when a note was actually written. There is no format
+ * choice (§3, 12 Oct): the engine picks the delivery per segment.
  */
-
-const optionTitle = (o: { lesson: string; version?: string }) =>
-  o.version ? `${o.lesson} - ${o.version}` : o.lesson;
 
 export function RecommendSheet({
   student,
@@ -62,12 +59,10 @@ export function RecommendSheet({
    * already solved it the right way, with the child's name. This is the same
    * shape, so the two now read alike.
    */
-  const lessonClause = chosen.version
-    ? `"${chosen.lesson}" - the ${chosen.version} version - is now waiting in ${firstName}'s lessons.`
-    : `"${chosen.lesson}" is now waiting in ${firstName}'s lessons.`;
+  const lessonClause = `"${chosen.lesson}" is now waiting in ${firstName}'s lessons.`;
   const noteClause = note.trim() ? " Your note went with it." : "";
 
-  // The desktop reason bolds the lesson-and-version run, per the frame.
+  // The desktop reason bolds the lesson's name, per the frame.
   const [before, after] = rec.suggestDesktop.split(rec.suggestStrong);
 
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -178,7 +173,7 @@ export function RecommendSheet({
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block text-[14.5px] font-semibold text-nevo-near-black xl:text-[15px]">
-                        {optionTitle(o)}
+                        {o.lesson}
                       </span>
                       <span className="mt-0.5 block text-[12.5px] text-nevo-near-black/58 xl:text-[13px]">
                         {o.meta}
