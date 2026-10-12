@@ -219,9 +219,9 @@ export function AudioSegment({
         <p
           className={cn(
             "mt-4",
-            reading
-              ? [READING_BODY, READING_INK]
-              : "text-base leading-[1.6] text-nevo-near-black/82 sm:text-[18px] lg:text-[19px]",
+            // Merged over the base, never instead of it: see READING_BODY.
+            "text-base leading-[1.6] text-nevo-near-black/82 sm:text-[18px] lg:text-[19px]",
+            reading && [READING_BODY, READING_INK],
           )}
         >
           {content.intro}
@@ -361,9 +361,8 @@ export function AudioSegment({
             <p
               key={i}
               className={cn(
-                reading
-                  ? cn(READING_BODY, READING_INK)
-                  : "text-base leading-[1.7] text-nevo-near-black/82 sm:text-[18px] lg:text-[19px]",
+                "text-base leading-[1.7] text-nevo-near-black/82 sm:text-[18px] lg:text-[19px]",
+                reading && [READING_BODY, READING_INK],
                 i > 0 && PARAGRAPH_GAP,
               )}
             >

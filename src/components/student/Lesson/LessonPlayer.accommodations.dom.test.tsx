@@ -359,6 +359,8 @@ describe("the reading accommodation beyond the text segment (D30, audit 46)", ()
 
     expect(typeOf("Listen to this.")).toContain("leading-[2]");
     expect(typeOf("Listen to this.")).toContain("text-[18px]");
+    // Never smaller than it is drawn for everyone: 19px on a desktop stays.
+    expect(typeOf("Listen to this.")).toContain("lg:text-[19px]");
   });
 
   it("leaves both as drawn when it is off", () => {

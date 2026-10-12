@@ -22,6 +22,7 @@ import {
 import type { TextContent } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { FOCUS_ON_SHAPE } from "./focusOnShape";
+import { READING_BODY, READING_INK } from "./readingSupport";
 
 /** A server reading chunk came on screen or was read past (SCRUM-234). */
 export type OnChunkSeen = (chunkId: string, action: ChunkAction) => void;
@@ -139,10 +140,15 @@ export function TextSegment({
    */
   const chunkedForSlower = density === DENSITY.SLOWER && !steps;
 
+  /*
+   * Reading support is merged over the standard type, never put in its place:
+   * it replaced it, and took the desktop body down from 19px to 18 while the
+   * boxes beside it stayed at 19. Frame 17 sets the reading body at
+   * `Math.max(L.body, 18)` - see READING_BODY.
+   */
   const bodyType = cn(
-    reading
-      ? "text-[18px] leading-[2] tracking-[0.02em] text-nevo-near-black/95"
-      : "text-base leading-[1.75] text-nevo-near-black/82 sm:text-[18px] lg:text-[19px]",
+    "text-base leading-[1.75] text-nevo-near-black/82 sm:text-[18px] lg:text-[19px]",
+    reading && [READING_BODY, READING_INK],
   );
 
   const bodyBlock = attention || chunkedForSlower ? (

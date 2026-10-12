@@ -81,9 +81,9 @@ export function VisualSegment({
         <p
           className={cn(
             "mt-4",
-            reading
-              ? [READING_BODY, READING_INK]
-              : "text-base leading-[1.6] text-nevo-near-black/82 sm:text-[18px] lg:text-[19px]",
+            // Merged over the base, never instead of it: see READING_BODY.
+            "text-base leading-[1.6] text-nevo-near-black/82 sm:text-[18px] lg:text-[19px]",
+            reading && [READING_BODY, READING_INK],
           )}
         >
           {content.intro}

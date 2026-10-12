@@ -574,6 +574,20 @@ describe("reading support in the boxes (frame 17, UDL · reading)", () => {
     }
   });
 
+  it("never shrinks the body or a box: each is the larger of its size and 18px", () => {
+    // Frame 17 sets the reading body at Math.max(L.body, 18). Put in place of
+    // the standard type, reading support took the desktop body from 19px to
+    // 18 while IN SHORT and the equation stayed at 19.
+    render(<TextSegment content={boxed} density={null} reading />);
+
+    for (const words of [BODY, "Plants feed themselves.", "Light is the fuel."]) {
+      const line = screen.getByText(words).className;
+      expect(line).toMatch(/(^|\s)text-\[18px\]/);
+      expect(line).toMatch(/(^|\s)sm:text-\[18px\]/);
+      expect(line).toMatch(/(^|\s)lg:text-\[19px\]/);
+    }
+  });
+
   it("leaves them at the standard size without it", () => {
     render(<TextSegment content={boxed} density={null} />);
 

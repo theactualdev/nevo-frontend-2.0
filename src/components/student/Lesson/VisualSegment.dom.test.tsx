@@ -326,3 +326,21 @@ describe("the small copy of a picture (B47)", () => {
     expect(picture()?.className).not.toMatch(/\bopacity-0\b/);
   });
 });
+
+describe("reading support on the introduction", () => {
+  it("never shrinks it: the larger of its own size and 18px", () => {
+    // Frame 17: the reading body is Math.max(L.body, 18), so 19px on a
+    // desktop stays 19.
+    render(
+      <VisualSegment
+        content={{ ...CONTENT, intro: "Follow the arrows." }}
+        reading
+      />,
+    );
+
+    const intro = screen.getByText("Follow the arrows.").className;
+    expect(intro).toMatch(/(^|\s)text-\[18px\]/);
+    expect(intro).toMatch(/(^|\s)leading-\[2\]/);
+    expect(intro).toMatch(/(^|\s)lg:text-\[19px\]/);
+  });
+});
