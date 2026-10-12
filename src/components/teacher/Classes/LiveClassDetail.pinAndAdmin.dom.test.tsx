@@ -94,6 +94,26 @@ describe("the admission number", () => {
 
     expect(screen.getByText(/amara\.o · Seat 12/)).toBeInTheDocument();
   });
+
+  // Design's reference (30 Sep): "always labelled Student ID / Admission
+  // Number, both words, everywhere a person reads it".
+  it("is labelled with both words wherever an ID is shown", () => {
+    roster(row({ admissionNumber: "BGA/2107" }));
+    render(<LiveClassDetail klass={klass} />);
+
+    const label = screen.getByText("Student ID / Admission Number");
+    expect(label.parentElement).toHaveTextContent(
+      "Student ID / Admission Number amara.o · BGA/2107 · Seat 12",
+    );
+  });
+
+  it("carries no label over a seat alone, where there is no ID to name", () => {
+    roster(row({ loginIdentifier: null, seatContext: "Seat 12" }));
+    render(<LiveClassDetail klass={klass} />);
+
+    expect(screen.getByText("Seat 12")).toBeInTheDocument();
+    expect(screen.queryByText("Student ID / Admission Number")).not.toBeInTheDocument();
+  });
 });
 
 describe("a child who asked for a new PIN", () => {

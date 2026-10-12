@@ -7,6 +7,7 @@ import * as intelligence from "./teacherIntelligence";
 import * as library from "./teacherLibrary";
 import * as notifications from "./teacherNotifications";
 import { TEACHER_CLASSES } from "./teacherClasses";
+import { getStudentProfile, studentSlug } from "./teacherStudents";
 
 /**
  * THE COPY SWEEP, MADE MECHANICAL.
@@ -91,6 +92,18 @@ const COPY: [string, string][] = [
       `library.getLibraryLesson(${l.id})`,
       s,
     ]),
+  ),
+  /*
+   * THE PROFILE, ITS SESSIONS AND ITS RECOMMEND SHEET. Left out until 12 Oct,
+   * which is how "Switched to listen-first and it went more smoothly" sat in a
+   * session step under the rule below that bans exactly that sentence. Design's
+   * §3 correction named profile, Recommend and session detail; this walks all
+   * three, for every child the sample roster can open.
+   */
+  ...TEACHER_CLASSES.flatMap((c) => c.roster).flatMap((r) =>
+    stringsIn(getStudentProfile(studentSlug(r.name))).map(
+      (s): [string, string] => [`students.getStudentProfile(${r.name})`, s],
+    ),
   ),
 ];
 

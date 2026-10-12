@@ -101,8 +101,6 @@ export interface SessionRow {
 export interface LessonOption {
   id: string;
   lesson: string;
-  /** "listen-first" / "standard"; absent when the lesson has no variant. */
-  version?: string;
   meta: string;
   suggested?: boolean;
 }
@@ -175,23 +173,24 @@ const AMARA: Omit<StudentProfileData, "classId" | "className"> = {
     suggestTablet:
       "Since Amara's been slower on written work, \"Simplifying Expressions\" is a good next step for Amara.",
     options: [
+      // C08c as corrected 12 Oct (§3): lessons, not formats. The delivery
+      // mode is the engine's to choose per segment, never the teacher's to
+      // pick for a child.
       {
-        id: "simplifying-expressions-listen-first",
+        id: "simplifying-expressions",
         lesson: "Simplifying Expressions",
-        version: "listen-first",
-        meta: "Audio-led · 5 sections",
+        meta: "Algebra · 5 sections",
         suggested: true,
-      },
-      {
-        id: "simplifying-expressions-standard",
-        lesson: "Simplifying Expressions",
-        version: "standard",
-        meta: "Text-led · 5 sections",
       },
       {
         id: "algebraic-word-problems",
         lesson: "Algebraic Word Problems",
-        meta: "Text-led · 4 sections",
+        meta: "Algebra · 4 sections",
+      },
+      {
+        id: "factorising-quadratics",
+        lesson: "Factorising Quadratics",
+        meta: "Algebra · 6 sections",
       },
     ],
   },
@@ -252,7 +251,7 @@ const AMARA: Omit<StudentProfileData, "classId" | "className"> = {
       date: "9 Jul",
       dateLong: "9 July",
       lesson: "Solving Linear Equations",
-      note: "Worked through it in two sittings. Took the listen-first route on the second half and finished comfortably.",
+      note: "Worked through it in two sittings and finished comfortably.",
       sitting: "finished in two sittings",
       summary: {
         desktop:
@@ -271,7 +270,7 @@ const AMARA: Omit<StudentProfileData, "classId" | "className"> = {
           note: "Took time here - this is where Amara paused and came back the next day.",
           took: true,
         },
-        { title: "Word problems", note: "Switched to listen-first and it went more smoothly.", took: false },
+        { title: "Word problems", note: "Took time and worked through them steadily.", took: false },
         { title: "A tricky one", note: "Gave it a good try and got most of the way.", took: false },
       ],
     },

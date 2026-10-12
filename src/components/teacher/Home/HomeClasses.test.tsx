@@ -118,7 +118,19 @@ describe("HomeClasses - with the teacher's real assignments", () => {
       "href",
       "/teacher/classes/c9",
     );
-    expect(screen.getByText("Class code MAP4KZ")).toBeInTheDocument();
+  });
+
+  // Design's reference (30 Sep): "There is no class code and no QR code
+  // anywhere." The server still sends one; nothing prints it.
+  it("never shows a class code, even when the server sends one", () => {
+    useTeacherClasses.mockReturnValue(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      state({ live: true, liveClasses: [assignment] as any }),
+    );
+    render(<HomeClasses />);
+
+    expect(screen.queryByText(/MAP4KZ|Class code/)).not.toBeInTheDocument();
+    expect(screen.getByText("Assigned to you")).toBeInTheDocument();
   });
 
   it("says the class is assigned rather than inventing a code", () => {

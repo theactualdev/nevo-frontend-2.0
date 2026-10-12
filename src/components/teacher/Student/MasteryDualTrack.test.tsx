@@ -31,6 +31,17 @@ describe("MasteryDualTrack - what the numbers say", () => {
     ).toHaveAttribute("aria-valuenow", "48");
   });
 
+  // Design's reference (12 Oct): no percentage scores in teacher copy. The
+  // rail carries the proportion and the value reaches a screen reader through
+  // the role, but no "72%" is printed beside a child's name.
+  it("prints no percentage beside either rail", () => {
+    const { container } = render(
+      <MasteryDualTrack concept="Equivalent fractions" understanding={72} reading={48} />,
+    );
+    expect(container).not.toHaveTextContent(/%/);
+    expect(container).not.toHaveTextContent(/72|48/);
+  });
+
   it("clamps a value outside 0-100 rather than drawing past the rail", () => {
     render(<MasteryDualTrack concept="Fractions" understanding={140} reading={-20} />);
     expect(
