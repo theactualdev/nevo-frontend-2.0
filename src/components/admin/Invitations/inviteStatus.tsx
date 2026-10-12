@@ -8,10 +8,10 @@ import { cn } from "@/lib/utils";
  * An expired invite is not an error and a revoked one is not a failure - both
  * are ordinary administrative facts, and neither gets an alarm colour.
  *
- * TODO(api): `status` is typed `string|null` with no enum. "pending",
- * "joined", "expired" and "revoked" are the values D19 draws; anything else
- * falls through to a neutral pill showing the backend's own word rather than
- * being forced into one of ours.
+ * The backend's values are `pending | accepted | revoked | expired` (9 Oct);
+ * "accepted" reads as D19's "Joined". Anything else still falls through to a
+ * neutral pill showing the backend's own word rather than being forced into
+ * one of ours.
  */
 
 export type InviteStatus = "pending" | "joined" | "expired" | "revoked";

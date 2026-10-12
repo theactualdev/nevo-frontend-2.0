@@ -223,6 +223,8 @@ export function BulkImportModal({
             <RejectedRows
               broken={broken}
               rejected={result.rejected}
+              submitted={valid}
+              rowNumberBase={result.rowNumberBase}
               isStudent={isStudent}
               filename={`nevo-${noun}-not-imported.csv`}
             />
