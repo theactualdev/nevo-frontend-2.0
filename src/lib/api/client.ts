@@ -244,6 +244,11 @@ function handleAuthFailure(
   if (path.includes("/client-errors")) return;
   const role = getSession()?.role;
   const code = apiErrorCode(detail);
+  // A wrong CURRENT password on Settings is a 401 about the password, not the
+  // session: the token was accepted and the change refused. Treated as a dead
+  // session it signed the admin out mid-form and sent them to "your session
+  // has ended". The screen shows it under the field instead.
+  if (code === "current_password_incorrect") return;
   // A child's pause is shown where they are (28b), over the lesson, rather
   // than by leaving it. The session stays until they tap Okay - see
   // `accountPause.ts` for why, and for the case with nothing to draw it.

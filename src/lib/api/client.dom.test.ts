@@ -222,6 +222,38 @@ describe("the auth latch", () => {
     expect(refused).toMatch(/don't have access/i);
   });
 
+  it("keeps the admin signed in when only their CURRENT password was wrong", async () => {
+    // Settings' change-password answers a wrong current password with 401
+    // `current_password_incorrect`. The token was fine; treating it as dead
+    // signed the admin out mid-form.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              detail: { code: "current_password_incorrect", message: "The current password did not match." },
+            }),
+            { status: 401, headers: { "Content-Type": "application/json" } },
+          ),
+      ),
+    );
+    const { api } = await freshClient();
+    await expect(
+      api.post("/api/v1/auth/password/change", { currentPassword: "x", newPassword: "y" }),
+    ).rejects.toMatchObject({ status: 401 });
+    expect(clearSession).not.toHaveBeenCalled();
+  });
+
+  it("still ends a genuinely dead session on the same route", async () => {
+    vi.stubGlobal("fetch", respondWith(401));
+    const { api } = await freshClient();
+    await expect(
+      api.post("/api/v1/auth/password/change", { currentPassword: "x", newPassword: "y" }),
+    ).rejects.toMatchObject({ status: 401 });
+    expect(clearSession).toHaveBeenCalledTimes(1);
+  });
+
   it("does not treat a 500 as a dead session", async () => {
     vi.stubGlobal("fetch", respondWith(500));
     const { api } = await freshClient();

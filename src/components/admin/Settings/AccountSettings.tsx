@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { authApi, type AuthSession } from "@/lib/api/auth";
+import { ApiError, apiErrorCode } from "@/lib/api/client";
 import { permissionsApi } from "@/lib/api/permissions";
 import { usersApi, type CurrentUser } from "@/lib/api/users";
 import type { PermissionScope } from "@/lib/constants/permissions";
@@ -49,7 +50,7 @@ import {
  */
 
 type Load = "loading" | "ready" | "failed";
-type PwPhase = "idle" | "saving" | "done" | "mismatch" | "failed";
+type PwPhase = "idle" | "saving" | "done" | "mismatch" | "wrong-current" | "failed";
 
 
 function when(iso: string): string {
@@ -164,7 +165,16 @@ export function AccountSettings() {
         setConfirm("");
         loadSessions();
       })
-      .catch(() => setPw("failed"));
+      // SCRUM-99 D12.7 "Wrong current password": a plain line under that
+      // field. The backend says so with 401 `current_password_incorrect`.
+      .catch((err: unknown) =>
+        setPw(
+          err instanceof ApiError &&
+            apiErrorCode(err.detail) === "current_password_incorrect"
+            ? "wrong-current"
+            : "failed",
+        ),
+      );
   };
 
   const others = sessions.filter((s) => !s.current);
@@ -345,10 +355,21 @@ export function AccountSettings() {
               id="pw-current"
               type={reveal.current ? "text" : "password"}
               value={current}
-              onChange={(e) => setCurrent(e.target.value)}
+              onChange={(e) => {
+                setCurrent(e.target.value);
+                if (pw === "wrong-current") setPw("idle");
+              }}
               autoComplete="current-password"
+              aria-describedby={pw === "wrong-current" ? "pw-current-wrong" : undefined}
               className={S_FIELD}
             />
+            {/* D12.7: "Plain line under that field, no lockout language, no
+                attempt counter shown." */}
+            {pw === "wrong-current" ? (
+              <p id="pw-current-wrong" className="mt-2 text-[12.5px] text-nevo-navy">
+                That isn&rsquo;t your current password.
+              </p>
+            ) : null}
           </div>
           <div>
             <div className="flex items-baseline justify-between gap-3">
