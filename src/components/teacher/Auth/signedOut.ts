@@ -1,3 +1,5 @@
+import { LEAVES_AFTER_MS } from "@/components/shared/SystemMessages";
+
 /**
  * SCRUM-88 step 3: after signing out, a brief "Signed out" on the door.
  *
@@ -10,5 +12,10 @@ export const SIGNED_OUT_PARAM = "signedOut";
 export const SIGNED_OUT_DOOR = `/auth/teacher?${SIGNED_OUT_PARAM}=1`;
 /** "Signed out" - SCRUM-88's words. */
 export const SIGNED_OUT_LINE = "Signed out";
-/** SCRUM-88: "Auto-dismiss after 1.5 seconds". */
-export const SIGNED_OUT_HOLD_MS = 1500;
+/**
+ * The shared bar's own dwell, not SCRUM-88's 1.5 seconds. Design, 12 Oct
+ * (`CLAUDE-reference.md`): "One message pattern across the console: the
+ * shared bar, top centre, ~5s. Signed-out and every other system
+ * confirmation use it ... never a bottom-centre or 1.5s one-off."
+ */
+export const SIGNED_OUT_HOLD_MS = LEAVES_AFTER_MS;

@@ -19,7 +19,7 @@ vi.mock("@/hooks", () => ({
 }));
 
 import { TeacherSignIn } from "./TeacherSignIn";
-import { SIGNED_OUT_DOOR, SIGNED_OUT_PARAM } from "./signedOut";
+import { SIGNED_OUT_DOOR, SIGNED_OUT_HOLD_MS, SIGNED_OUT_PARAM } from "./signedOut";
 
 /**
  * The teacher door, for three things it got wrong about what had happened:
@@ -155,12 +155,24 @@ describe("arriving from signing out (T228, SCRUM-88)", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Signed out");
   });
 
-  it("lets it go after a second and a half, and takes it off the address", () => {
+  // Design, 12 Oct: one message pattern - the shared bar, top centre, ~5s.
+  // It was a bottom-centre 1.5-second one-off.
+  it("speaks where every other confirmation does: top centre", () => {
+    arrive();
+    render(<TeacherSignIn />);
+
+    const region = screen.getByRole("status");
+    expect(region.className).toMatch(/\btop-4\b/);
+    expect(region.className).not.toMatch(/\bbottom-/);
+  });
+
+  it("stays for the shared bar's five seconds, then takes itself off the address", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     arrive();
     render(<TeacherSignIn />);
 
-    act(() => void vi.advanceTimersByTime(1400));
+    expect(SIGNED_OUT_HOLD_MS).toBe(5000);
+    act(() => void vi.advanceTimersByTime(4900));
     expect(screen.getByRole("status")).toHaveTextContent("Signed out");
     act(() => void vi.advanceTimersByTime(200));
     expect(screen.getByRole("status")).toBeEmptyDOMElement();
@@ -171,7 +183,7 @@ describe("arriving from signing out (T228, SCRUM-88)", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     params.current = new URLSearchParams(`${SIGNED_OUT_PARAM}=1&next=/teacher/insights`);
     render(<TeacherSignIn />);
-    act(() => void vi.advanceTimersByTime(1500));
+    act(() => void vi.advanceTimersByTime(SIGNED_OUT_HOLD_MS));
 
     expect(replace).toHaveBeenCalledWith(`/auth/teacher?next=${encodeURIComponent("/teacher/insights")}`);
   });

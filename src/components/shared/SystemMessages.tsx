@@ -41,8 +41,12 @@ import {
  * describes something still running.
  */
 
-/** Long enough to read a short line twice, per design's own worked example. */
-const LEAVES_AFTER_MS = 5000;
+/**
+ * Long enough to read a short line twice, per design's own worked example.
+ * Exported for the one bar drawn outside a provider - the signed-out door -
+ * so the console's single message pattern has a single dwell.
+ */
+export const LEAVES_AFTER_MS = 5000;
 
 /** SM-06: "stacked, newest at top, capped at three". */
 const MAX_ON_SCREEN = 3;
@@ -189,7 +193,7 @@ export function SystemMessagesProvider({
         It takes the teacher's text size like the page does (C12).
       */}
       <div
-        role="log"
+        role="log"
         className="nevo-text-zoom pointer-events-none fixed inset-x-0 top-4 z-[60] flex flex-col items-center gap-2 px-4"
       >
         {held.map((h) => (
