@@ -79,12 +79,15 @@ export function CostSheet({
 }: {
   pricing: Pricing;
   /**
-   * D11's badge on the card: "Payment due" while the upcoming invoice is
-   * unpaid, "Active" once it is paid. Billing passes it from that invoice;
-   * null - no upcoming invoice, or it could not be read - shows no badge,
-   * because "Active" is a claim about the school's account.
+   * "Active" once the upcoming invoice is paid. Null shows no badge - no
+   * upcoming invoice, it could not be read, or it is still owed.
+   *
+   * NO "PAYMENT DUE" HERE ANY MORE (QA, 10 Oct). It sat beside the ANNUAL
+   * total (N6,772,500) while How to pay asked for the upcoming invoice
+   * (N150,500), so it read as if the year were due. What is due is said on
+   * the Next charge card, with what that invoice covers.
    */
-  payStatus?: "due" | "active" | null;
+  payStatus?: "active" | null;
 }) {
   const {
     currency,
@@ -119,16 +122,9 @@ export function CostSheet({
                 Founding Partner
               </span>
             ) : null}
-            {payStatus ? (
-              <span
-                className={cn(
-                  "rounded-full px-3 py-1 text-[12.5px] font-semibold",
-                  payStatus === "due"
-                    ? "bg-nevo-violet/24 text-nevo-navy"
-                    : "bg-nevo-navy/12 text-nevo-navy",
-                )}
-              >
-                {payStatus === "due" ? "Payment due" : "Active"}
+            {payStatus === "active" ? (
+              <span className="rounded-full bg-nevo-navy/12 px-3 py-1 text-[12.5px] font-semibold text-nevo-navy">
+                Active
               </span>
             ) : null}
           </div>
