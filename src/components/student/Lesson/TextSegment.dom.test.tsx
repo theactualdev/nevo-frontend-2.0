@@ -588,6 +588,18 @@ describe("reading support in the boxes (frame 17, UDL · reading)", () => {
     }
   });
 
+  it("reaches Slower's step cards, which frame 17 sizes like the body", () => {
+    const stepped = content({ slowerSteps: ["A plant makes its own food."] });
+    render(<TextSegment content={stepped} density={DENSITY.SLOWER} reading />);
+
+    const step = screen.getByText("A plant makes its own food.").className;
+    expect(step).toMatch(/(^|\s)text-\[18px\]/);
+    expect(step).toMatch(/(^|\s)lg:text-\[19px\]/);
+    expect(step).toMatch(/tracking-\[0\.02em\]/);
+    // The card's own line height, as the frame keeps it.
+    expect(step).toMatch(/(^|\s)leading-\[1\.6\]/);
+  });
+
   it("leaves them at the standard size without it", () => {
     render(<TextSegment content={boxed} density={null} />);
 

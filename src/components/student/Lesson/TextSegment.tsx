@@ -194,7 +194,14 @@ export function TextSegment({
               <span className="flex size-[26px] shrink-0 items-center justify-center rounded-full bg-nevo-navy text-sm font-semibold text-nevo-cream">
                 {i + 1}
               </span>
-              <p className="text-base leading-[1.6] text-nevo-near-black/82 sm:text-[18px] lg:text-[19px]">
+              <p
+                className={cn(
+                  "text-base leading-[1.6] text-nevo-near-black/82 sm:text-[18px] lg:text-[19px]",
+                  // Frame 17 sizes a step like the body: the reading size,
+                  // never smaller, on the card's own 1.6 line height.
+                  reading && [BOX_READING, "leading-[1.6]"],
+                )}
+              >
                 {step}
               </p>
             </div>
