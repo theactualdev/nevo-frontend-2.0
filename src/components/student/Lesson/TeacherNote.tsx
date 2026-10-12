@@ -97,7 +97,7 @@ export function TeacherNote({
         that a person wrote this rather than a system.
       */}
       <figcaption className="mt-2 text-[12.5px] text-nevo-near-black/55">
-        — {author ?? "Your teacher"}
+        - {author ?? "Your teacher"}
       </figcaption>
     </figure>
   );

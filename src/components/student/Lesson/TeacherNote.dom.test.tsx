@@ -58,7 +58,7 @@ describe("whose voice it is", () => {
     render(<TeacherNote note="Well done last week." author="Ms Adeyemi" />);
 
     expect(document.querySelector("figcaption")?.textContent).toBe(
-      "— Ms Adeyemi",
+      "- Ms Adeyemi",
     );
   });
 
@@ -75,7 +75,7 @@ describe("whose voice it is", () => {
 
     const caption = document.querySelector("figcaption")?.textContent ?? "";
 
-    expect(caption).toBe("— Your teacher");
+    expect(caption).toBe("- Your teacher");
   });
 });
 
