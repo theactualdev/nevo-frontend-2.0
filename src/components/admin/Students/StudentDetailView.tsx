@@ -36,6 +36,7 @@ import {
 import { useSetupGate } from "@/hooks";
 import { AddGuardianForm } from "./AddGuardianForm";
 import { CANNOT_SEND_LINE, useMaySendConsent } from "./consentRole";
+import { ConsentFormDownload } from "./ConsentFormDownload";
 import { EraseRecordModal } from "./EraseRecordModal";
 import { MoveStudentSheet } from "./MoveStudentSheet";
 import { NoAccess, failureKind } from "../NoAccess";
@@ -377,6 +378,25 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
                 {consentLine}
               </p>
             ) : null}
+          </div>
+        ) : null}
+
+        {/*
+          * D25's written route, beside the emailed one: some parents never
+          * reply to a link, and a signed paper form is consent too. Not for a
+          * withdrawn child - only the parent who withdrew can lift that - nor
+          * once consent is recorded. Any admin may record a form; the backend
+          * takes it from any school role.
+          */}
+        {mayRequestConsent(student.consent) ? (
+          <div className="mt-4 flex flex-wrap items-start gap-x-6 gap-y-2 border-t border-nevo-near-black/8 pt-4">
+            <Link
+              href={`/admin/students/${student.id}/consent`}
+              className="text-[13.5px] font-semibold text-nevo-navy transition-opacity hover:opacity-75"
+            >
+              Record a signed paper form
+            </Link>
+            <ConsentFormDownload studentId={student.id} />
           </div>
         ) : null}
       </div>

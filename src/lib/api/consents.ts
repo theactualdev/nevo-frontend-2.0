@@ -242,7 +242,66 @@ export interface ParentLink {
   accountCreated: boolean;
 }
 
+/**
+ * What a signed paper form says (D25 PC-02). The parent is the one who
+ * consented; the school is recorded as the uploader, never as the consenting
+ * party.
+ */
+export interface WrittenConsentDraft {
+  /** As written on the form, 2-255 characters. */
+  parentName: string;
+  /** 2-80 characters, free text on the contract. */
+  parentRelationship: string;
+  /** The date on the form, YYYY-MM-DD. A date after today is refused. */
+  signedOn: string;
+  /** The photograph or PDF of the signed page. Optional on the contract. */
+  form?: File | null;
+}
+
+/** What the backend recorded (201). */
+export interface WrittenConsentRecord {
+  studentId: string;
+  consentTypes: ConsentType[];
+  parentName: string;
+  parentRelationship: string;
+  signedOn: string;
+  noticeVersion: string;
+  method: "written" | "verbal" | "email" | "digital";
+  evidenceStoragePath: string | null;
+  uploadedBy: string;
+  uploadedAt: string;
+  /** True when the parent was told, so withdrawing stays as easy as consenting. */
+  parentNotified: boolean;
+}
+
 export const consentsApi = {
+  /**
+   * Record a signed form against a child (multipart, 9 Oct). Any admin may.
+   * The consent recorded is the one the console asks for everywhere,
+   * `REQUESTED_CONSENT_TYPES`, which is also the one tick box on the printed
+   * form. `noticeVersion` is left to the server's default.
+   */
+  recordWrittenConsent: (studentId: string, draft: WrittenConsentDraft) => {
+    const body = new FormData();
+    body.append("parentName", draft.parentName.trim());
+    body.append("parentRelationship", draft.parentRelationship.trim());
+    body.append("signedOn", draft.signedOn);
+    for (const type of REQUESTED_CONSENT_TYPES) body.append("consentTypes", type);
+    if (draft.form) body.append("form", draft.form);
+    return api.post<WrittenConsentRecord>(
+      `/api/v1/students/${encodeURIComponent(studentId)}/consents/written`,
+      body,
+    );
+  },
+
+  /**
+   * The printable consent form (D25a) as a PDF, rendered by the backend - with
+   * the child's name on it when `studentId` is given. Its legal sections are
+   * placeholder until counsel's text arrives; that is the backend's to update.
+   */
+  consentForm: (studentId?: string) =>
+    api.blob("/api/v1/consents/form", { params: { studentId } }),
+
   /**
    * The student's own consent record. NOT an onboarding gate - onboarding no
    * longer calls this, because under the ruling it has nothing to decide.
