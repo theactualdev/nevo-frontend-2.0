@@ -536,7 +536,7 @@ export function SentenceDotModule({
         <AvatarBubble text={bubble} phoneText={phoneBubble} />
       )}
 
-      <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-center gap-7">
+      <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-center gap-6 sm:gap-10">
         {settling ? (
           <SettleBadge />
         ) : act === "reading" ? (
@@ -728,6 +728,9 @@ function DotButton({
           : armed
             ? "cursor-pointer border-nevo-navy bg-nevo-cream text-nevo-navy"
             : "cursor-default border-nevo-navy/30 bg-nevo-cream text-nevo-navy/40",
+        // The frame's `.dc-tap` press, once the button is live: a button
+        // that still reads as disabled does not answer a press.
+        armed && "transition-transform active:scale-[0.98]",
       )}
     >
       <span className="sm:hidden">{label}</span>

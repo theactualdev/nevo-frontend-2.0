@@ -426,7 +426,7 @@ export function WarmUpRun({
       {running && <WarmUpHeader />}
 
       {showDone ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-[22px] px-9 text-center">
+        <div className="flex flex-1 flex-col items-center justify-center gap-[22px] p-7 text-center sm:p-9">
           {/*
             The frame's phone sizes below `sm`: a 64px badge with a 32px
             check and a 19px title. Tablet and desktop draw 80px, a 40px
@@ -464,7 +464,7 @@ export function WarmUpRun({
       ) : !dimension || !bandSettled || unheard ? (
         <WarmUpNothing onHome={() => router.push(HOME)} />
       ) : (
-        <div className="flex min-h-0 flex-1 items-center justify-center px-7 pb-10">
+        <div className="flex min-h-0 flex-1 items-center justify-center px-5 pb-10 sm:px-7">
           {/* The frame's column (`cw`): the width on a phone, 440px on a
               tablet and 480px on a desktop. It was 480px from tablet up. */}
           <div className="flex w-full max-w-[440px] flex-col items-center gap-[26px] lg:max-w-[480px]">
@@ -591,7 +591,7 @@ function HomeButton({
  */
 function WarmUpNothing({ onHome }: { onHome: () => void }) {
   return (
-    <div className="flex min-h-0 flex-1 items-center justify-center px-7 pb-10">
+    <div className="flex min-h-0 flex-1 items-center justify-center px-5 pb-10 sm:px-7">
       <HomeButton onClick={onHome} />
     </div>
   );
