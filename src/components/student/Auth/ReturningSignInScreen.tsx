@@ -633,7 +633,11 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
                   autoCorrect="off"
                   spellCheck={false}
                   aria-label={`School code, character ${i + 1} of ${SCHOOL_CODE_LENGTH}`}
-                  className="h-8 w-[26px] rounded-none border-0 border-b-2 border-nevo-near-black/28 bg-transparent p-0 text-center text-[21px] font-bold text-nevo-near-black uppercase outline-none sm:h-9 sm:w-[30px] sm:text-2xl"
+                  // No `outline-none`, here or on the Student ID: it hid
+                  // which cell takes the next character from anyone on a
+                  // keyboard. Neither frame draws a focus state, so the
+                  // student console's focus ring shows it, as on 05.
+                  className="h-8 w-[26px] rounded-none border-0 border-b-2 border-nevo-near-black/28 bg-transparent p-0 text-center text-[21px] font-bold text-nevo-near-black uppercase sm:h-9 sm:w-[30px] sm:text-2xl"
                 />
               ))}
             </div>
@@ -674,7 +678,7 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}
-                className="h-full w-full bg-transparent text-base text-nevo-near-black outline-none"
+                className="h-full w-full bg-transparent text-base text-nevo-near-black"
               />
             </div>
           </div>

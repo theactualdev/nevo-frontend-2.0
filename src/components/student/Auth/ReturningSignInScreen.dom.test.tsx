@@ -1281,6 +1281,15 @@ describe("the keyboards on a touch screen", () => {
     expect(screen.queryByRole("button", { name: "d" })).toBeNull();
   });
 
+  it("lets the code cells and the Student ID show focus, never suppressing the outline", () => {
+    // All five set `outline-none` with no focus style of their own, so a
+    // keyboard user could not see which cell took the next character.
+    render(<ReturningSignInScreen />);
+
+    for (const el of [...cells(), idField()])
+      expect(el.className).not.toMatch(/(^| )outline-(none|hidden|0)( |$)/);
+  });
+
   it("draws the caret's box only while the PIN is what is being typed", () => {
     render(<ReturningSignInScreen />);
 
