@@ -185,7 +185,7 @@ export function AfterLessonAssessment({
   };
 
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-nevo-cream text-nevo-near-black">
+    <div className="flex h-[calc(100dvh/var(--nevo-text-zoom,1))] flex-col bg-nevo-cream text-nevo-near-black">
       {/* D36: the player's exit, where the player draws it. An answer
           already confirmed is behind the child, so the place to come back
           to is the question after it. */}
@@ -228,7 +228,7 @@ export function AfterLessonAssessment({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-6 py-7 sm:px-8 lg:px-10">
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-7 sm:px-8 lg:px-10">
         <div className="mx-auto w-full max-w-[600px] lg:max-w-[640px]">
           {/* B16: a spoken question, keyed so each one is said on arrival. */}
           {question.promptAudio && (
@@ -325,7 +325,7 @@ function Intro({
   reading: boolean;
 }) {
   return (
-    <div className="relative flex min-h-[100dvh] flex-col items-center justify-center bg-nevo-cream px-6 text-center text-nevo-near-black">
+    <div className="relative flex min-h-[calc(100dvh/var(--nevo-text-zoom,1))] flex-col items-center justify-center bg-nevo-cream px-6 text-center text-nevo-near-black">
       {onLeave && (
         <div className="absolute inset-x-0 top-0 flex px-3.5 pt-2.5">
           <LeaveButton onLeave={onLeave} />
@@ -466,7 +466,7 @@ function GrowthResult({
   const resultNote = outcome ? outcome.note : assessment.resultNote;
 
   return (
-    <div className="flex min-h-[100dvh] flex-col justify-center bg-nevo-cream px-6 text-nevo-near-black">
+    <div className="flex min-h-[calc(100dvh/var(--nevo-text-zoom,1))] flex-col justify-center bg-nevo-cream px-6 text-nevo-near-black">
       <div className="mx-auto w-full max-w-[300px] sm:max-w-[430px]">
         <div
           aria-hidden={held || undefined}

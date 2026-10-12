@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { CalculationSolver } from "./CalculationSolver";
 import { calculationFromVariant } from "@/lib/lessons/fromContent";
 import type { CalculationVariant } from "@/lib/api/variants";
@@ -224,6 +224,27 @@ describe("one step at a time", () => {
 
     expect(equation()).toBe("");
   });
+
+  it("draws the equation's minus signs as the field and pad draw them", () => {
+    show(build({ expression: "2 - 5 = -3, on the x-axis" }));
+
+    // The payload's hyphens are the sign, but for a word's own hyphen.
+    expect(equation()).toBe("2 − 5 = −3, on the x-axis");
+  });
+
+  it("still finds a highlight by the token as the payload wrote it", () => {
+    show(
+      build({
+        expression: "2 - 5 = -3",
+        steps: [step({ highlights: [{ target: "-3" }] })],
+      }),
+    );
+
+    const ringed = [...document.querySelectorAll('[aria-live="polite"] span')]
+      .filter((s) => s.classList.contains("outline-nevo-violet"))
+      .map((s) => s.textContent);
+    expect(ringed).toEqual(["−3"]);
+  });
 });
 
 describe("judging a step", () => {
@@ -354,6 +375,22 @@ describe("entering a number (D150)", () => {
     expect(props.onStepAnswered).toHaveBeenCalledWith("s1", true);
   });
 
+  it("keeps the newest digit in view when the number outgrows the field", () => {
+    show(NEGATIVE());
+    const field = screen.getByRole("textbox");
+    const scrolledTo = vi.fn();
+    Object.defineProperty(field, "scrollWidth", { configurable: true, value: 640 });
+    Object.defineProperty(field, "scrollLeft", {
+      configurable: true,
+      get: () => 0,
+      set: scrolledTo,
+    });
+
+    tap("7");
+
+    expect(scrolledTo).toHaveBeenLastCalledWith(640);
+  });
+
   it("deletes at the field, and only once there is something to delete", () => {
     show(NEGATIVE());
     expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
@@ -367,11 +404,195 @@ describe("entering a number (D150)", () => {
     expect(pad()?.querySelector('[aria-label="Delete"]')).toBeNull();
   });
 
+  it("puts Check under the field with the first key and Need a hint? under it, as 17a does", () => {
+    show(NEGATIVE());
+    const field = screen.getByRole("textbox");
+    const hint = screen.getByRole("button", { name: "Need a hint?" });
+    // Nothing held empty before a key: the hint link sits under the field.
+    expect(document.querySelector('form button[type="submit"]')).toBeNull();
+    expect(field.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    tap("3");
+
+    const check = screen.getByRole("button", { name: "Check my answer" });
+    expect(field.compareDocumentPosition(check) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(check.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("docks the pad where the host gives it a place, not under the step", () => {
+    const dock = document.createElement("div");
+    document.body.append(dock);
+    try {
+      render(<CalculationSolver calculation={NEGATIVE()} onSolved={vi.fn()} padDock={dock} />);
+
+      expect(dock).toContainElement(pad());
+      expect(screen.getByRole("textbox").closest("form")?.parentElement).not.toContainElement(pad());
+    } finally {
+      cleanup();
+      dock.remove();
+    }
+  });
+
+  it("waits for the host's place rather than drawing the pad twice", () => {
+    render(<CalculationSolver calculation={NEGATIVE()} onSolved={vi.fn()} padDock={null} />);
+
+    expect(pad()).toBeNull();
+    expect(screen.getByRole("textbox")).toBeInTheDocument();
+  });
+
   it("gives an expression the full keyboard, and no pad", () => {
     show(build({ steps: [step({ input: "number", expectedInput: "text", answer: "3x - 4" })] }));
 
     expect(screen.getByRole("textbox")).toHaveAttribute("inputmode", "text");
     expect(pad()).toBeNull();
+  });
+});
+
+describe("bringing the step into view above the docked pad", () => {
+  /*
+   * jsdom lays nothing out, so the column and where each marked part of the
+   * step sits are given here, and a resize is delivered by hand - as the
+   * browser delivers one after layout.
+   */
+  let rects: Record<string, [number, number]>;
+  let observers: (() => void)[];
+  const scrolled = vi.fn();
+  const before = Element.prototype.scrollIntoView;
+  beforeEach(() => {
+    observers = [];
+    scrolled.mockReset();
+    Element.prototype.scrollIntoView = scrolled;
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(
+      function (this: Element) {
+        const name =
+          this.getAttribute("data-reveal") ??
+          (this.hasAttribute("data-test-column") ? "column" : "");
+        const [top, bottom] = rects[name] ?? [0, 0];
+        return {
+          top,
+          bottom,
+          height: bottom - top,
+          left: 0,
+          right: 375,
+          width: 375,
+          x: 0,
+          y: top,
+          toJSON: () => ({}),
+        } as DOMRect;
+      },
+    );
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        cb: () => void;
+        constructor(cb: () => void) {
+          this.cb = cb;
+        }
+        observe() {
+          observers.push(this.cb);
+        }
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    Element.prototype.scrollIntoView = before;
+  });
+  const resized = () => act(() => observers.splice(0).forEach((cb) => cb()));
+  const inColumn = (
+    calc: CalculationSegment,
+    props: Partial<Parameters<typeof CalculationSolver>[0]> = {},
+  ) => {
+    const onSystemScroll = vi.fn();
+    render(
+      <div data-test-column style={{ overflowY: "auto" }}>
+        <CalculationSolver
+          calculation={calc}
+          onSolved={vi.fn()}
+          onSystemScroll={onSystemScroll}
+          {...props}
+        />
+      </div>,
+    );
+    return onSystemScroll;
+  };
+  /** The part the last move was made by, and how. */
+  const lastMove = () => ({
+    part: (scrolled.mock.contexts.at(-1) as Element | undefined)?.getAttribute(
+      "data-reveal",
+    ),
+    how: scrolled.mock.calls.at(-1)?.[0],
+  });
+  const NUMBER = () =>
+    build({ steps: [step({ input: "number", expectedInput: "numeric", answer: "-3" })] });
+
+  it("shows the question, the field and the hint link together where they fit", () => {
+    rects = { column: [100, 400], prompt: [420, 446], form: [464, 584], field: [496, 568], hint: [600, 644] };
+    const onSystemScroll = inColumn(NUMBER());
+    resized();
+
+    // Below the column: brought up by the end, the least move that shows it.
+    expect(lastMove()).toEqual({ part: "hint", how: { block: "end" } });
+    expect(onSystemScroll).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the question and the field, and lets the hint link go, where all three do not fit", () => {
+    rects = { column: [100, 400], prompt: [420, 446], form: [464, 690], field: [496, 568], hint: [706, 750] };
+    inColumn(NUMBER());
+    resized();
+
+    expect(lastMove()).toEqual({ part: "form", how: { block: "end" } });
+  });
+
+  it("brings Check into view as it goes live, with the field above it", () => {
+    rects = { column: [100, 400], prompt: [120, 146], form: [164, 300], field: [196, 268], hint: [316, 360] };
+    inColumn(NUMBER());
+    resized();
+    // All of it in view: nothing moves.
+    expect(scrolled).not.toHaveBeenCalled();
+
+    // The first key: Check arrives under the helper line, below the column.
+    rects = { ...rects, prompt: [120, 146], form: [164, 452], check: [400, 452], hint: [468, 512] };
+    tap("3");
+    resized();
+
+    expect(lastMove()).toEqual({ part: "form", how: { block: "end" } });
+  });
+
+  it("brings the engine's hint into view with the field when the question will not fit too", () => {
+    rects = { column: [100, 400], prompt: [420, 520], pill: [536, 596], form: [612, 780], field: [650, 722] };
+    inColumn(NUMBER(), { engineHint: "Count down from 2." });
+    resized();
+
+    // Question to field is 302px, the column 300: the hint and the field.
+    expect(lastMove()).toEqual({ part: "field", how: { block: "end" } });
+  });
+
+  it("leaves a choice step where it is, under the child's finger", () => {
+    rects = { column: [100, 400], prompt: [420, 446] };
+    inColumn(build());
+    tap("4 and 4");
+    resized();
+
+    expect(scrolled).not.toHaveBeenCalled();
+  });
+
+  it("brings That's the total into view as it arrives", () => {
+    rects = { column: [100, 400], prompt: [300, 326], total: [380, 432] };
+    const onSystemScroll = inColumn(
+      build({
+        steps: [
+          step({ stepId: "b1", prompt: "Build the total.", expectedInput: "drag", input: "tap", options: [], tapCount: 2 }),
+        ],
+      }),
+    );
+    for (let i = 0; i < 2; i++) placeOne();
+
+    expect(lastMove()).toEqual({ part: "total", how: { block: "end" } });
+    expect(onSystemScroll).toHaveBeenCalled();
   });
 });
 
@@ -652,6 +873,14 @@ describe("D149's array and place value", () => {
     tap("Tap to add, Tens");
     expect(screen.queryByRole("button", { name: "Tap to add, Tens" })).toBeNull();
     expect(screen.queryByRole("button", { name: "That's the total" })).toBeNull();
+    // Tens' piece is gone and its place kept, so Hundreds' has not moved.
+    const tray = screen.getByRole("button", { name: "Tap to add, Hundreds" })
+      .parentElement!;
+    expect(
+      [...tray.children].slice(1).map((c) =>
+        c.hasAttribute("data-tray-place") ? "place" : c.getAttribute("aria-label"),
+      ),
+    ).toEqual(["Tap to add, Hundreds", "place"]);
 
     tap("Tap to add, Hundreds");
     expect(build_().map((c) => [pieces("flat", c), pieces("rod", c)])).toEqual([
@@ -711,8 +940,28 @@ describe("what the asked step names (B107)", () => {
   it("applies a step's highlights from the moment it is asked", () => {
     show(CHOREOGRAPHED());
 
-    expect(ringed()).toEqual([true, true, false]);
-    expect(navy()).toEqual([0, 0, 0]);
+    // The result's bar is kept back, so two bars, both ringed.
+    expect(ringed()).toEqual([true, true]);
+    expect(navy()).toEqual([0, 0]);
+  });
+
+  it("rings the whole of a bar its own mark names, empty cells too", () => {
+    // 17a's `mkBar`: the denominators' ring is round all four quarters of
+    // each bar, not the one or two the bar holds.
+    show(CHOREOGRAPHED());
+
+    expect(countIn(".outline-nevo-violet")()).toEqual([4, 4]);
+  });
+
+  it("keeps a ring on a shared bar to its own mark's cells", () => {
+    show(
+      build({
+        scaffold: { kind: "bar", parts: 5, rows: 1, marks: [3, 1], labels: ["3/5", "1/5"] },
+        steps: [step({ highlights: [{ target: "1/5" }] })],
+      }),
+    );
+
+    expect(countIn(".outline-nevo-violet")()).toEqual([1]);
   });
 
   it("moves to the next step's highlights once a step is accepted", () => {
@@ -720,11 +969,11 @@ describe("what the asked step names (B107)", () => {
 
     // Accepted, its confirmation still showing: step 2's highlights now.
     pick("4 and 4");
-    expect(ringed()).toEqual([false, false, false]);
-    expect(navy()).toEqual([1, 2, 0]);
+    expect(ringed()).toEqual([false, false]);
+    expect(navy()).toEqual([1, 2]);
 
     tap("Next step");
-    expect(navy()).toEqual([1, 2, 0]);
+    expect(navy()).toEqual([1, 2]);
   });
 
   it("keeps the result back until the step naming it is accepted", () => {
@@ -733,9 +982,10 @@ describe("what the asked step names (B107)", () => {
     tap("Next step");
     pick("The numerators: 1 and 2");
 
-    // The last step is asked: its row is rendered, empty, unnamed.
-    expect(scaffoldRows()).toHaveLength(3);
-    expect(navy()).toEqual([0, 0, 0]);
+    // The last step is asked: the result's bar is not drawn at all - no
+    // empty third bar saying where the answer will go (17a, `sc-if done`).
+    expect(scaffoldRows()).toHaveLength(2);
+    expect(navy()).toEqual([0, 0]);
     expect(screen.queryByText("3/4")).toBeNull();
     // The "?" it names is where the answer goes: the frame's dashed box.
     expect(token("?")).toHaveClass("border-dashed");
@@ -883,6 +1133,23 @@ describe("the narration layer", () => {
 
     expect(audio()?.getAttribute("src")).toBe("https://cdn.example/step-2.mp3");
     expect(audio()?.autoplay).toBe(true);
+  });
+
+  it("keeps the bar's place once the solve is done, so the drawing does not move", () => {
+    // 17b §13: "Scaffold and equation never move or reflow between steps."
+    render(
+      <CalculationSolver
+        calculation={build({ steps: [step({ narrationAudio: clip(1) })] })}
+        onSolved={vi.fn()}
+      />,
+    );
+    expect(audio()).not.toBeNull();
+
+    pick("4 and 4");
+
+    // Nothing left to read: the recording goes, and its row stays.
+    expect(audio()).toBeNull();
+    expect(document.querySelector("[data-narration-place]")).toHaveClass("h-16", "mb-4");
   });
 
   it("draws no bar for a step with no recording", () => {

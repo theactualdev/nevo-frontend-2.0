@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
 import { calculationFromVariant } from "@/lib/lessons/fromContent";
 import type { CalculationVariant } from "@/lib/api/variants";
 import type { AdaptationPlan, Lesson } from "@/lib/types";
+import { ADJUSTMENT_ACTIONS } from "@/lib/constants";
 import { offendingCalls } from "@/test/signalCatalogue";
 
 /**
@@ -237,6 +238,153 @@ describe("a calculation's signals", () => {
     expect(screen.getByRole("button", { name: "4 and 4" })).not.toHaveClass(
       "leading-[2]",
     );
+  });
+
+  it("does not read its own move of the column as the child scrolling", () => {
+    /*
+     * The solver brings a number step into view above the docked pad - the
+     * system moving the column, like the focus move onto a segment - so no
+     * `scroll` goes up for it. jsdom lays nothing out: the column, the
+     * step's parts and the move itself are given here, and the resize that
+     * prompts the move is delivered by hand, after the segment has opened.
+     */
+    const style = document.createElement("style");
+    style.textContent = ".overflow-y-auto { overflow-y: auto; }";
+    document.head.append(style);
+    const observers: (() => void)[] = [];
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        cb: () => void;
+        constructor(cb: () => void) {
+          this.cb = cb;
+        }
+        observe() {
+          observers.push(this.cb);
+        }
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    const rect = (top: number, bottom: number) =>
+      ({ top, bottom, height: bottom - top, left: 0, right: 375, width: 375, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+    const PARTS: Record<string, DOMRect> = {
+      prompt: rect(500, 526),
+      form: rect(540, 700),
+      field: rect(560, 632),
+      hint: rect(716, 760),
+    };
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(
+      function (this: Element) {
+        if (this.classList.contains("overflow-y-auto")) return rect(100, 400);
+        return PARTS[this.getAttribute("data-reveal") ?? ""] ?? rect(0, 0);
+      },
+    );
+    const before = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = () => {
+      const column = document.querySelector(".overflow-y-auto")!;
+      Object.defineProperties(column, {
+        scrollTop: { value: 360, configurable: true },
+        clientHeight: { value: 300, configurable: true },
+        scrollHeight: { value: 900, configurable: true },
+      });
+    };
+    try {
+      render(
+        <LessonPlayer
+          lesson={lessonWith([
+            step({ prompt: "So what is 1 + 2?", expectedInput: "numeric", input: "number", options: [], answer: "3" }),
+          ])}
+          plan={PLAN}
+        />,
+      );
+      act(() => observers.splice(0).forEach((cb) => cb()));
+      fireEvent.scroll(document.querySelector(".overflow-y-auto")!);
+
+      expect(sent("scroll")).toEqual([]);
+    } finally {
+      Element.prototype.scrollIntoView = before;
+      vi.restoreAllMocks();
+      vi.unstubAllGlobals();
+      style.remove();
+    }
+  });
+
+  it("docks the number pad on the bottom edge, under the pinned arrows (D150)", () => {
+    render(
+      <LessonPlayer
+        lesson={lessonWith([
+          step({
+            prompt: "So what is 1 + 2?",
+            expectedInput: "numeric",
+            input: "number",
+            options: [],
+            answer: "3",
+          }),
+        ])}
+        plan={PLAN}
+      />,
+    );
+    const pad = screen.getByRole("group", { name: "On-screen keyboard" });
+    const nav = screen.getByRole("button", { name: "Next" }).closest("nav")!;
+    const column = document.querySelector(".overflow-y-auto")!;
+
+    // Out of the column that scrolls, last in the player, after the arrows.
+    expect(column).not.toContainElement(pad);
+    expect(pad.closest("[data-pad-dock]")).toBe(nav.parentElement!.lastElementChild);
+    expect(nav.compareDocumentPosition(pad) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("is one screen high, the column its only scroller", () => {
+    render(<LessonPlayer lesson={lessonWith([step()])} plan={PLAN} />);
+    const nav = screen.getByRole("button", { name: "Next" }).closest("nav")!;
+    const player = nav.parentElement!;
+
+    // The header and the arrows stay put; only the column moves.
+    expect(player.className).toContain("h-[calc(100dvh/var(--nevo-text-zoom,1))]");
+    expect(player.className).not.toContain("min-h-[100dvh]");
+    expect(document.querySelector(".overflow-y-auto")).toHaveClass("min-h-0", "flex-1");
+  });
+
+  it("offers no pacing chips over the solver, so a tap can send no slower_trigger", () => {
+    // The segment's text could be chunked, but the solver is what is on
+    // screen, and 17a draws no density pill there.
+    const lesson = lessonWith([step()]);
+    lesson.segments[0].text = {
+      heading: "Adding",
+      body: { default: "One idea here. A second idea here. A third idea here." },
+    } as Lesson["segments"][number]["text"];
+    render(<LessonPlayer lesson={lesson} plan={PLAN} />);
+
+    expect(screen.getByText("What are the denominators?")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Slower" })).toBeNull();
+    expect(sent("slower_trigger")).toEqual([]);
+    // Nor a held row: 17a draws none on the solver, and it needs the room.
+    expect(document.querySelector("header .invisible")).toBeNull();
+  });
+
+  it("shows the engine's hint in the step's hint place, with no second offer beside it", () => {
+    const HINT = "Look at the number under each line.";
+    render(
+      <LessonPlayer
+        lesson={lessonWith([step()])}
+        plan={{ ...PLAN, adjustment: ADJUSTMENT_ACTIONS.OFFER_HINT, hint: HINT }}
+      />,
+    );
+    const hint = screen.getByText(HINT);
+    const prompt = screen.getByText("What are the denominators?");
+    const firstOption = screen.getByRole("button", { name: "4 and 4" });
+
+    // 17a's "hint auto-shown": the pill between the prompt and the response.
+    expect(prompt.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(hint.compareDocumentPosition(firstOption) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Need a hint?" })).toBeNull();
+    expect(sent("hint_offered")).toEqual([{ segmentId: "calc-1" }]);
+
+    // D29: the child can close it, and their own hint is on offer again.
+    tap("Close hint");
+    expect(screen.queryByText(HINT)).toBeNull();
+    expect(screen.getByRole("button", { name: "Need a hint?" })).toBeInTheDocument();
   });
 
   it("holds the forward chevron until the solution has assembled", () => {

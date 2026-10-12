@@ -125,6 +125,82 @@ describe("LessonPlayer — focus when the content changes", () => {
   });
 });
 
+describe("LessonPlayer — a new segment opens at its top", () => {
+  /*
+   * The column is what scrolls, and it is the same element from segment to
+   * segment - so it kept its place, and focus scrolling its target into view
+   * put the heading under the progress bar. jsdom lays nothing out, so the
+   * column's scroll position is watched where it is set.
+   */
+  const watchColumn = () => {
+    const column = document.querySelector<HTMLElement>(".overflow-y-auto")!;
+    let at = 0;
+    const set = vi.fn((y: number) => {
+      at = y;
+    });
+    Object.defineProperty(column, "scrollTop", {
+      configurable: true,
+      get: () => at,
+      set,
+    });
+    return { scrollTo: (y: number) => (at = y), set, at: () => at };
+  };
+
+  it("puts the column back to the top when the child moves on", () => {
+    render(<LessonPlayer lesson={LESSON} plan={null} />);
+    const column = watchColumn();
+    column.scrollTo(480);
+
+    next();
+
+    expect(column.at()).toBe(0);
+  });
+
+  it("puts it back to the top going back as well", () => {
+    render(<LessonPlayer lesson={LESSON} plan={null} />);
+    next();
+    const column = watchColumn();
+    column.scrollTo(300);
+
+    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+
+    expect(column.at()).toBe(0);
+  });
+
+  it("puts it back to the top when the pace changes the text", () => {
+    const paced = {
+      ...LESSON,
+      segments: [
+        {
+          id: "seg-1",
+          modalities: ["text"],
+          text: {
+            heading: "Numerators",
+            body: { default: "One idea. A second idea. A third idea." },
+          },
+        },
+      ],
+    } as unknown as Lesson;
+    render(<LessonPlayer lesson={paced} plan={null} />);
+    const column = watchColumn();
+    column.scrollTo(220);
+
+    fireEvent.click(screen.getByRole("button", { name: "Slower" }));
+
+    expect(column.at()).toBe(0);
+  });
+
+  it("moves focus without scrolling, so the heading is not pushed under the bar", () => {
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
+    render(<LessonPlayer lesson={LESSON} plan={null} />);
+
+    next();
+
+    expect(focus).toHaveBeenLastCalledWith({ preventScroll: true });
+    focus.mockRestore();
+  });
+});
+
 describe("LessonPlayer — the position is said once per opening (D148)", () => {
   /*
    * Design, 8 Oct: speaking "Segment 3 of 10" is fine, but "it reads once

@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import {
   AdaptiveToggleBar,
@@ -846,6 +853,8 @@ export function LessonPlayer({
   const scrollMarks = useRef<Set<number>>(new Set());
   /** The reading column, measured for `scroll` - see `handleScroll`. */
   const columnRef = useRef<HTMLDivElement | null>(null);
+  /** The foot of the screen, under the arrows, where the solver docks its pad. */
+  const [padDock, setPadDock] = useState<HTMLDivElement | null>(null);
   /**
    * The segment whose body is CHUNKED, reported by the body itself.
    *
@@ -907,11 +916,11 @@ export function LessonPlayer({
    *    focus to <body>, so without this they restart from the top of the
    *    document after every advance.
    * 2. A screen reader announces where they now are, from the group's label.
-   * 3. THE SCROLL POSITION RESETS. Nothing reset it before - a child who read
-   *    to the bottom of a long segment and pressed Next arrived halfway down
-   *    the next one. Focusing scrolls its target into view, so the fix for the
-   *    first two carries this one, and it applies to every child rather than
-   *    only those using a keyboard.
+   * 3. THE SCROLL POSITION RESETS - but not by this. Focusing scrolled its
+   *    target into view, which once carried the reset; with the column the
+   *    scroller it scrolled the group's top 32-48px under the progress bar
+   *    instead. So focus lands without scrolling, and the column is put back
+   *    to its top by `columnRef`'s own reset, below.
    *
    * Not on first render: arriving at a lesson should leave focus where the
    * browser put it, not seize it.
@@ -923,7 +932,7 @@ export function LessonPlayer({
       settled.current = true;
       return;
     }
-    bodyRef.current?.focus();
+    bodyRef.current?.focus({ preventScroll: true });
   }, [segment.id, modality]);
   /*
    * D148: "SEGMENT 3 OF 10" IS SAID ONCE, WHEN THE SEGMENT OPENS - "not on
@@ -1055,18 +1064,16 @@ export function LessonPlayer({
   /*
    * HOW FAR DOWN THE SEGMENT HAS BEEN ON SCREEN, MEASURED ON WHAT SCROLLS.
    *
-   * The column is `overflow-y-auto`, but the player is `min-h-[100dvh]`, so
-   * the column grows with its segment and the PAGE scrolls instead. Its own
-   * scroll room is always 0 - measured on a 30-paragraph segment at 375px,
-   * scrollHeight == clientHeight == 2665 - so a listener on the column never
-   * fired and no `scroll` mark was ever sent.
+   * The column is the scroller now: the player is one screen high, with the
+   * header and the arrows pinned. It was `min-h-[100dvh]` until 11 Oct, so
+   * the column grew with its segment and the PAGE scrolled instead - its own
+   * scroll room was always 0, a listener on the column never fired, and no
+   * `scroll` mark was ever sent.
    *
-   * Measured here rather than fixed by making the column the scroller: that
-   * is a layout change (the chevrons pinned, the break pill's sticky foot
-   * re-anchored), and under the larger text sizes' `zoom` a `100dvh` player
-   * outgrows the screen and the page scrolls again anyway. So whichever
-   * scrolls, this reads it: the column's own room when it has some, and the
-   * viewport's reach down the column when the page carries it.
+   * The page can still carry it - a browser that takes no `dvh`, or a zoom
+   * the height is not divided by - so whichever scrolls, this reads it: the
+   * column's own room when it has some, and the viewport's reach down the
+   * column when the page carries it.
    *
    * Only a scroll of the page or of the column counts. A sheet or a drawer
    * scrolling is not the child scrolling the segment.
@@ -1103,6 +1110,16 @@ export function LessonPlayer({
   useEffect(() => {
     reachAtEntry.current = columnReach()?.reach ?? 0;
   }, [index, modality, columnReach]);
+  /*
+   * The solver bringing its step into view above the pad is the system
+   * moving the column too, like the focus move - so where that leaves it is
+   * taken as where the segment opened, and only the child going further down
+   * is their scroll.
+   */
+  const systemScrolled = useCallback(() => {
+    const at = columnReach();
+    if (at) reachAtEntry.current = Math.max(reachAtEntry.current, at.reach);
+  }, [columnReach]);
   const handleScroll = useCallback(() => {
     // Every mark already sent: nothing to measure, so no layout read per frame.
     if (scrollMarks.current.size === SCROLL_MILESTONES.length) return;
@@ -1326,8 +1343,20 @@ export function LessonPlayer({
    * again. `hint_used` (B41) is sent as the child moves on with this hint
    * still on screen - see `advancePastSegment`. The solver's "Need a hint?"
    * is the hint a child opens, and sends its own pair - see `onCalcHint`.
+   *
+   * ON A CALCULATION THE HINT IS THE SOLVER'S, in the step's hint place, and
+   * a solved calculation has no step left to show it beside - so from then it
+   * is not on screen, and neither offered nor used.
    */
-  const hintOnScreen = segmentShowing && hintHere && Boolean(hintText);
+  const hintOnScreen =
+    segmentShowing &&
+    hintHere &&
+    Boolean(hintText) &&
+    !(
+      modality === MODALITY.INTERACTIVE &&
+      isCalculation(segment) &&
+      solvedCalcs.has(segment.id)
+    );
   const offeredHints = useRef<Set<string>>(new Set());
   const usedHints = useRef<Set<string>>(new Set());
   useEffect(() => {
@@ -1392,9 +1421,8 @@ export function LessonPlayer({
   // A hint seen before the check is answered makes a right answer `after_hint`
   // rather than `first_time` (B28) - only the first lengthens the interval.
   useEffect(() => {
-    if (segmentShowing && hintHere && hintText)
-      hintedSegments.current.add(segment.id);
-  }, [segmentShowing, hintHere, hintText, segment.id]);
+    if (hintOnScreen) hintedSegments.current.add(segment.id);
+  }, [hintOnScreen, segment.id]);
 
   // Break OFFERS (B.7): the plan names a break type to OFFER on this segment,
   // or the engine suggests one mid-lesson. One ask on screen at a time - an
@@ -1718,6 +1746,18 @@ export function LessonPlayer({
     densityForAction(action) ?? segPlan?.density ?? null;
   const effectiveDensity: Density | null = density ?? systemDensity;
   /*
+   * A NEW SEGMENT, VERSION OR PACE OPENS AT ITS TOP. The column is what
+   * scrolls, and it is the same element from one segment to the next, so it
+   * kept its place: Next from the foot of one long segment opened the next
+   * part-way down with its heading out of sight, and a change of pace opened
+   * the new text where the old had been left. Before the paint, so the old
+   * position is never seen, and before `reachAtEntry` is taken.
+   */
+  useLayoutEffect(() => {
+    const column = columnRef.current;
+    if (column) column.scrollTop = 0;
+  }, [segment.id, modality, effectiveDensity]);
+  /*
    * Only the densities this segment can actually deliver.
    *
    * An offered density that re-renders identical prose is the player telling a
@@ -1730,8 +1770,14 @@ export function LessonPlayer({
    * already has, so it is available on live content, and the gate is whether
    * chunking would change anything - a one-sentence segment still offers
    * nothing rather than a control that does nothing.
+   *
+   * AND ONLY WHILE THE TEXT IS WHAT IS ON SCREEN. Each of the three reshapes
+   * the text and nothing else, so a lone "Slower" over a picture, a recording
+   * or the calculation solver changed nothing a child could see - and still
+   * told the engine they had asked (`slower_trigger`). 17a draws no density
+   * pill on the calculation player.
    */
-  const densitySegments: ToggleSegment[] = DENSITIES.filter(({ id }) =>
+  const textChips: ToggleSegment[] = DENSITIES.filter(({ id }) =>
     id === DENSITY.SLOWER
       ? segment.text?.body[id] !== undefined ||
         isChunkable(segment.text?.body.default, segment.text?.readingChunks)
@@ -1742,6 +1788,7 @@ export function LessonPlayer({
     state:
       density === id ? "manual" : systemDensity === id ? "system" : "default",
   }));
+  const densitySegments = modality === MODALITY.TEXT ? textChips : [];
 
   /*
    * B45: KEPT AS THE SCREEN CHANGES, READ AS THE CHILD LEAVES. React runs a
@@ -2399,8 +2446,16 @@ export function LessonPlayer({
   }
 
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-nevo-cream text-nevo-near-black">
-      {/* Top bar: exit + title, then the density toggle (present in every modality).
+    /*
+     * ONE SCREEN HIGH, AND ONLY THE COLUMN SCROLLS - the player frame's
+     * `flex:1 1 auto;min-height:0;overflow-y:auto` between a pinned top and a
+     * pinned arrow row (17c pins it on a chunk longer than the screen). The
+     * page scrolled before, so the header went off the top and Next sat below
+     * the fold on the first segment. Divided by the text-size zoom, which
+     * scales `dvh` too - see globals.css.
+     */
+    <div className="flex h-[calc(100dvh/var(--nevo-text-zoom,1))] flex-col bg-nevo-cream text-nevo-near-black">
+      {/* Top bar: exit + title, then the density toggle (while the text shows).
           Frame: 10/14/12 padding, whole bar carries the secondary dim. */}
       <header
         className={cn(
@@ -2463,11 +2518,28 @@ export function LessonPlayer({
         </div>
         {/* Frame: the density toggle sits alone on its own right-aligned row.
             Absent entirely when the segment has no reshapes to offer, rather
-            than an empty pill rail. */}
-        {densitySegments.length > 0 && (
-          <div className="flex justify-end">
+            than an empty pill rail.
+
+            HELD, UNSEEN, OVER A PICTURE OR A RECORDING of a segment whose
+            text has chips: those have to go there, and taking the row with
+            them lifted the position line and the progress 62px between a
+            text segment and the next - a change of version is felt, not
+            seen (rule 7). Not on the solver: 17a draws no row there, and it
+            needs the room. */}
+        {(densitySegments.length > 0 ||
+          (textChips.length > 0 && !calcShowing)) && (
+          <div
+            className={cn(
+              "flex justify-end",
+              densitySegments.length === 0 && "invisible",
+            )}
+            aria-hidden={densitySegments.length === 0 || undefined}
+            inert={densitySegments.length === 0}
+          >
             <AdaptiveToggleBar
-              segments={densitySegments}
+              segments={
+                densitySegments.length > 0 ? densitySegments : textChips
+              }
               onSelect={pickDensity}
             />
           </div>
@@ -2475,14 +2547,17 @@ export function LessonPlayer({
       </header>
 
       {/* Two-level position line for modular lessons (SCRUM-101.3) - its own
-          full-width row directly above the progress bar (frame: 0 16px 7px). */}
+          full-width row directly above the progress bar (frame: 0 16px 7px).
+          It wraps rather than cutting off: at a larger text size a phone
+          has no room for "Module 2 of 3 · Segment 1 of 4 in this module",
+          and "…in this modu…" told the child nothing. */}
       <div
         className={cn(
           "shrink-0 px-4 pb-[7px]",
           secondaryDim(attentionOn),
         )}
       >
-        <span className="block min-w-0 truncate font-mono text-[11px] tracking-[0.02em] text-nevo-near-black/50">
+        <span className="block min-w-0 font-mono text-[11px] tracking-[0.02em] text-pretty text-nevo-near-black/50">
           {positionLine(lesson, index)}
         </span>
       </div>
@@ -2520,7 +2595,7 @@ export function LessonPlayer({
 
       {/* Content — centered reading column. Its violet frame went with the
           step-up offer it accompanied (D28). */}
-      <div ref={columnRef} className="flex-1 overflow-y-auto">
+      <div ref={columnRef} className="min-h-0 flex-1 overflow-y-auto">
         <div
           className={cn(
             // The 88px bottom padding on mobile was sized to clear the Ask Nevo
@@ -2643,7 +2718,9 @@ export function LessonPlayer({
                 setPositionSaidOn(segment.id);
             }}
             className={cn(
-              "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-300 motion-safe:ease-nevo-slide focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-nevo-navy",
+              // The ring is drawn inside the group: the column scrolls now,
+              // and clips anything drawn outside what it holds.
+              "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-300 motion-safe:ease-nevo-slide focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-nevo-navy",
               // D25: the engine's density, as spacing and nothing else.
               densitySpacing(
                 entryDensity.segmentId === segment.id
@@ -2655,6 +2732,12 @@ export function LessonPlayer({
             <SegmentBody
               segment={segment}
               modality={modality}
+              padDock={padDock}
+              onSystemScroll={systemScrolled}
+              engineHint={hintHere && hintText ? hintText : undefined}
+              onEngineHintClosed={() =>
+                setClosedHints((prev) => new Set(prev).add(hintKey))
+              }
               density={effectiveDensity}
               simplified={simplified.has(segment.id)}
               reading={readingOn}
@@ -2734,8 +2817,9 @@ export function LessonPlayer({
               }}
             />
           </div>
-          {/* §4 `offer_hint`: the unrequested hint under the content. */}
-          {hintHere && hintText && (
+          {/* §4 `offer_hint`: the unrequested hint under the content - or,
+              on the solver, in its step's hint place (17a), passed in. */}
+          {hintHere && hintText && !calcShowing && (
             <HintOverlay
               hint={hintText}
               onClose={() =>
@@ -2819,7 +2903,8 @@ export function LessonPlayer({
       />
 
       {/* The break offer (B.7), at the foot of the lesson and above the
-          chevrons (frame 38 §3). Sticky, so a long segment still shows it. */}
+          chevrons (frame 38 §3): a row of its own, below the column that
+          scrolls, so a long segment still shows it. */}
       {showBreakOffer && (
         <BreakOfferPill
           key={`break-offer-${segment.id}`}
@@ -2843,6 +2928,10 @@ export function LessonPlayer({
         inert={partsLeft}
         className={cn(
           "flex shrink-0 items-center justify-center gap-8 px-3.5 pt-2 pb-6",
+          // Over the docked pad the row is not at the screen's foot, so it
+          // keeps the arrows and gives its padding to the column above: on
+          // a short screen that is the question staying in view.
+          "[&:has(+[data-pad-dock]:not(:empty))]:py-0",
           secondaryDim(attentionOn),
           partsLeft && "invisible",
         )}
@@ -2858,6 +2947,11 @@ export function LessonPlayer({
           onClick={handleNext}
         />
       </nav>
+
+      {/* D150: the calculation pad's tray, last and on the bottom edge, under
+          17a's arrows - the column shrinks above it, so nothing hides under
+          it. Empty, and no height, whenever no step is typing a number. */}
+      <div ref={setPadDock} data-pad-dock className="shrink-0" />
     </div>
   );
 }
@@ -2866,6 +2960,10 @@ export function LessonPlayer({
 function SegmentBody({
   segment,
   modality,
+  padDock,
+  engineHint,
+  onEngineHintClosed,
+  onSystemScroll,
   density,
   simplified,
   reading,
@@ -2883,6 +2981,13 @@ function SegmentBody({
 }: {
   segment: LessonSegment;
   modality: Modality;
+  /** Where the solver docks its number pad - see `CalculationSolver`. */
+  padDock: HTMLElement | null;
+  /** The engine's `offer_hint` text, which the solver shows as its own. */
+  engineHint?: string;
+  onEngineHintClosed: () => void;
+  /** The solver moved the column itself - see `systemScrolled`. */
+  onSystemScroll: () => void;
   density: Density | null;
   /** A lower-depth session reads this segment's simpler version. */
   simplified: boolean;
@@ -2938,6 +3043,10 @@ function SegmentBody({
       return (
         <CalculationSolver
           calculation={segment.calculation}
+          padDock={padDock}
+          engineHint={engineHint}
+          onEngineHintClosed={onEngineHintClosed}
+          onSystemScroll={onSystemScroll}
           // D30: the same accommodation the text segment and the checks take.
           reading={reading}
           onSolved={onCalcSolved}

@@ -178,6 +178,51 @@ describe("a child asking for less at a time, on a live lesson", () => {
   });
 });
 
+describe("only while the text is on screen", () => {
+  /*
+   * A lone "Slower" over a picture or a recording changed nothing the child
+   * could see - it reshapes the text, and the text was not showing - and
+   * still told the engine they had asked.
+   */
+  const SHOWN_AS = (startModality: "visual" | "audio") => ({
+    lesson: {
+      id: "photo-1",
+      title: "Photosynthesis",
+      segments: [
+        {
+          id: "seg-1",
+          modalities: ["text", "visual", "audio"],
+          text: { heading: "Inside a leaf", body: { default: THREE } },
+          visual: {
+            heading: "The leaf",
+            illustration: { src: "https://cdn.example/leaf.png", alt: "A leaf" },
+          },
+          audio: { title: "The leaf", transcript: THREE },
+        },
+      ],
+    } as unknown as Lesson,
+    plan: {
+      lessonId: "photo-1",
+      segments: [{ segmentId: "seg-1", startModality }],
+    } as AdaptationPlan,
+  });
+
+  it.each(["visual", "audio"] as const)(
+    "offers no chips over the %s version of a segment whose text could chunk",
+    (modality) => {
+      const { lesson, plan } = SHOWN_AS(modality);
+      render(<LessonPlayer lesson={lesson} plan={plan} />);
+
+      expect(slowerChip()).toBeNull();
+      // Its row keeps its place, unseen and out of reach, so the position
+      // line and the progress do not jump between versions (rule 7).
+      const held = document.querySelector("header .invisible[aria-hidden='true']");
+      expect(held?.textContent).toContain("Slower");
+      expect(held).toHaveAttribute("inert");
+    },
+  );
+});
+
 describe("the choice holds for the lesson, and no further", () => {
   it("is still in force on the next segment", () => {
     /*

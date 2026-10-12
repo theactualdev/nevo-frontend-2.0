@@ -69,7 +69,7 @@ export function ModuleBoundaryScreen({
   const preview = showRecap ? next.preview : undefined;
 
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-nevo-cream text-nevo-near-black">
+    <div className="flex h-[calc(100dvh/var(--nevo-text-zoom,1))] flex-col bg-nevo-cream text-nevo-near-black">
       {/* Quiet header: lesson title + module position chip */}
       <div className="flex shrink-0 items-center justify-between gap-3 px-5 py-4 sm:px-8 sm:py-5">
         <span className="truncate text-sm font-medium text-nevo-near-black/42 sm:text-base">

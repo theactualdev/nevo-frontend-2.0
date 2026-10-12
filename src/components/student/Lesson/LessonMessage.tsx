@@ -27,7 +27,7 @@ export function LessonMessage({
   onBack?: () => void;
 }) {
   return (
-    <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-nevo-cream px-6 text-nevo-near-black">
+    <div className="flex min-h-[calc(100dvh/var(--nevo-text-zoom,1))] flex-col items-center justify-center bg-nevo-cream px-6 text-nevo-near-black">
       <div className="w-full max-w-[420px] rounded-[16px] bg-nevo-cream-elevated p-[26px] shadow-elevation-1">
         <h1 className="text-[20px] font-semibold tracking-[-0.01em]">
           {title}
