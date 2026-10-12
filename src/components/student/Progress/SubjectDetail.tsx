@@ -313,7 +313,7 @@ function LiveSubjectDetail({
           {name}
         </h1>
         <p className="mt-4 text-[15px] leading-[1.55] text-nevo-near-black/66">
-          We couldn&rsquo;t load this just now. Nothing is lost. Give it a
+          We couldn&apos;t load this just now. Nothing is lost. Give it a
           moment and try again.
         </p>
       </DetailFrame>
@@ -395,7 +395,7 @@ function LiveSubjectDetail({
             What you&apos;ve been learning
           </h2>
           <p className="mt-3 text-[15px] leading-[1.55] text-nevo-near-black/66">
-            We couldn&rsquo;t load your lessons just now. Nothing is lost.
+            We couldn&apos;t load your lessons just now. Nothing is lost.
             Give it a moment and try again.
           </p>
           <button

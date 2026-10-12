@@ -125,7 +125,7 @@ describe("who is told there is nothing to show", () => {
 
     render(<ProgressTab />);
 
-    expect(screen.queryByText(/Here’s what you’ve been working on/)).toBeNull();
+    expect(screen.queryByText(/Here.s what you.ve been working on/)).toBeNull();
   });
 });
 

@@ -370,7 +370,7 @@ export function ConnectTab({
              know and which is the crueller of the two guesses. */
           <div className="flex flex-1 flex-col items-center justify-center px-10 pb-10 text-center">
             <p className="text-[17px] font-medium text-nevo-near-black">
-              We couldn&rsquo;t load your messages
+              We couldn&apos;t load your messages
             </p>
             <p className="mt-2 max-w-[300px] text-[15px] leading-[1.5] text-nevo-near-black/62">
               Nothing is lost. Give it a moment and try again.

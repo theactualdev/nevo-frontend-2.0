@@ -137,7 +137,7 @@ function LiveProgress({
   // stands where there are cards below for it to introduce.
   const summary =
     reflection?.trim() ||
-    (subjects.length > 0 ? "Here’s what you’ve been working on." : null);
+    (subjects.length > 0 ? "Here's what you've been working on." : null);
   return (
     <div className={TAB_PAGE}>
       <h1 className={TAB_TITLE}>Progress</h1>
@@ -226,7 +226,7 @@ function CouldNotLoad() {
       <h1 className={TAB_TITLE}>Progress</h1>
       <div className="mt-8 rounded-[16px] bg-nevo-cream-elevated p-[22px] shadow-elevation-1">
         <p className="text-[17px] font-semibold text-nevo-near-black">
-          We couldn&rsquo;t load your progress just now
+          We couldn&apos;t load your progress just now
         </p>
         <p className="mt-1.5 text-[15px] leading-[1.5] text-nevo-near-black/68">
           Nothing is lost. Give it a moment and try again.

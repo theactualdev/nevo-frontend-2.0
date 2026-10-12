@@ -162,7 +162,7 @@ export function LessonsTab() {
     return shell(
       <div className="mt-6 rounded-[16px] bg-nevo-cream-elevated p-[22px] shadow-elevation-1">
         <p className="text-[17px] font-semibold text-nevo-near-black">
-          We couldn&rsquo;t load your lessons just now
+          We couldn&apos;t load your lessons just now
         </p>
         <p className="mt-1.5 text-[15px] leading-[1.5] text-nevo-near-black/68">
           Nothing is lost. Give it a moment and try again.
