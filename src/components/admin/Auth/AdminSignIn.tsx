@@ -187,7 +187,9 @@ export function AdminSignIn() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { signIn } = useAuth();
-  // Same-app paths only, never an open redirect.
+  // The route guard and the session-expired screen append ?next= so the
+  // admin returns where they were headed. Same-app paths only, never an open
+  // redirect.
   const nextParam = searchParams.get("next");
   // `/admin` picks the persona home from the caller's scopes - the Overview
   // is gated on `oversight`, so sending everyone there landed IT and finance

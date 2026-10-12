@@ -179,3 +179,29 @@ describe("the teacher console's guard", () => {
     expect(destination("/teacher/onboarding")).toBeNull();
   });
 });
+
+/**
+ * The admin door read `?next=` all along. The guard handed it the path and
+ * dropped the query, where a list's filters and the way back (`?back=`) live.
+ */
+describe("the admin console's guard", () => {
+  it("sends anyone else to the admin door, remembering where they were headed", () => {
+    const to = new URL(proxy(request("/admin/classes/c-1")).headers.get("location")!);
+
+    expect(to.pathname).toBe("/auth/admin");
+    expect(to.searchParams.get("next")).toBe("/admin/classes/c-1");
+  });
+
+  it("remembers the query too", () => {
+    const path = `/admin/students/s1?back=${encodeURIComponent("/admin/classes/c-1")}&backLabel=JSS%202A`;
+    const to = new URL(proxy(request(path, USER_ROLES.TEACHER)).headers.get("location")!);
+
+    expect(to.pathname).toBe("/auth/admin");
+    expect(to.searchParams.get("next")).toBe(path);
+  });
+
+  it("lets both admin roles in", () => {
+    expect(destination("/admin/students", USER_ROLES.SENCO_ADMIN)).toBeNull();
+    expect(destination("/admin/students", USER_ROLES.OTHER_ADMIN)).toBeNull();
+  });
+});
