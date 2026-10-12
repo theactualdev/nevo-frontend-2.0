@@ -53,11 +53,19 @@ describe("what the banner is given", () => {
   it("does not hand the banner the flag type", () => {
     // `engagement_decline` beside a named child is the diagnostic register
     // rule 2 forbids. It cannot be rendered by accident if it is not there.
+    // `isSudden` is the one bit the profile chip needs (design, 12 Oct): a
+    // boolean, not the type's words.
     expect(Object.keys(toNoticed([flag()])[0]).sort()).toEqual([
       "generatedAt",
       "id",
+      "isSudden",
       "note",
     ]);
+  });
+
+  it("knows a sudden change from a standing pattern", () => {
+    expect(toNoticed([flag({ flagType: "sudden_change" })])[0].isSudden).toBe(true);
+    expect(toNoticed([flag({ flagType: "engagement_decline" })])[0].isSudden).toBe(false);
   });
 
   it("says nothing when every flag has been seen", () => {

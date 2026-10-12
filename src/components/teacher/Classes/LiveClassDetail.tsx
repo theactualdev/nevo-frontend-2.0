@@ -18,6 +18,8 @@ import {
   useClassRoster,
 } from "@/hooks/useClassRoster";
 import { cn } from "@/lib/utils";
+import { SummaryChip, SummaryCount } from "@/components/teacher/shared/SummaryChip";
+import { attentionByStudent, rosterCounts } from "@/components/teacher/shared/summaryState";
 
 /**
  * A class the school assigned, drawn from what the backend actually serves:
@@ -103,8 +105,16 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
    * second call. A flag the teacher has for a student in ANOTHER class simply
    * does not match, which is the behaviour we want.
    */
-  const { flags, failed: flagsFailed } = useTeacherFlags();
-  const flagFor = new Map(flags.map((f) => [f.studentId, f]));
+  const { flags, failed: flagsFailed, complete: flagsComplete } = useTeacherFlags();
+  const attention = attentionByStudent(flags);
+  /*
+   * C05's header counts, one per state and never summed (design, 12 Oct).
+   * The two read off the flags are left out when that read failed or stopped
+   * short: "0 worth a glance" over a read we do not have is a claim about the
+   * class, and a count over part of the list is a floor said as a total.
+   */
+  const counts = rosterCounts(students, attention, cleared);
+  const flagCountsKnown = !flagsFailed && flagsComplete;
 
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
@@ -140,6 +150,19 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
                 : `${role} · Synced from your school`}
             </span>
           </div>
+          {students.length > 0 && (
+            <div className="flex flex-wrap gap-4">
+              {flagCountsKnown && counts.glance > 0 && (
+                <SummaryCount state="glance" count={counts.glance} />
+              )}
+              {flagCountsKnown && counts.flagged > 0 && (
+                <SummaryCount state="flagged" count={counts.flagged} />
+              )}
+              {counts.cantSignIn > 0 && (
+                <SummaryCount state="cantSignIn" count={counts.cantSignIn} />
+              )}
+            </div>
+          )}
         </div>
 
 
@@ -407,19 +430,16 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
                     // than stacking". A switched-off child's flag is history,
                     // not a prompt.
                     if (marker || pinCleared || pinAsked) return null;
-                    const flag = flagFor.get(student.studentId);
-                    if (!flag) return null;
+                    const state = attention.get(student.studentId);
+                    if (!state) return null;
+                    // Design's chip system (12 Oct): Worth a glance is the
+                    // violet OUTLINE, the quietest; a sudden change is the
+                    // navy fill with its arrow, and outranks it.
                     return (
-                      <span
-                        className={cn(
-                          "mt-1.5 shrink-0 rounded-full px-2.5 py-1 text-[12px] font-medium whitespace-nowrap xl:mt-0",
-                          flag.isSudden
-                            ? "bg-nevo-navy text-nevo-cream"
-                            : "bg-nevo-violet/22 text-nevo-navy",
-                        )}
-                      >
-                        {flag.isSudden ? "Sudden change" : "Worth a glance"}
-                      </span>
+                      <SummaryChip
+                        state={state}
+                        className="mt-1.5 self-start xl:mt-0 xl:self-auto"
+                      />
                     );
                   })()}
                   <span className="mt-1 shrink-0 text-[13px] whitespace-nowrap text-nevo-near-black/55 xl:mt-0">

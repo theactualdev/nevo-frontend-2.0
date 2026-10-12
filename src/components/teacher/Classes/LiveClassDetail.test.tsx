@@ -205,6 +205,119 @@ describe("the two markers", () => {
     expect(screen.queryByText("Sudden change")).not.toBeInTheDocument();
     expect(screen.queryByText("Worth a glance")).not.toBeInTheDocument();
   });
+
+  // Design's chip system, 12 Oct: worth a glance is the quiet OUTLINE and
+  // a sudden change the navy fill. The roster had them the other way round
+  // in weight - a violet fill for the lowest-priority state.
+  it("draws worth a glance as an outline, never a fill", () => {
+    useTeacherFlags.mockReturnValue({
+      flags: [{ id: "f-1", studentId: "s-1", name: "Amara", context: null, note: "", generatedAt: "", isSudden: false }],
+      live: true,
+      failed: false,
+    });
+    render(<LiveClassDetail klass={klass} />);
+
+    const chip = screen.getByText("Worth a glance");
+    expect(chip.className).toMatch(/border-nevo-violet/);
+    expect(chip.className).not.toMatch(/bg-nevo-violet/);
+  });
+
+  it("gives a sudden change its arrow beside the word", () => {
+    useTeacherFlags.mockReturnValue({
+      flags: [{ id: "f-1", studentId: "s-1", name: "Amara", context: null, note: "", generatedAt: "", isSudden: true }],
+      live: true,
+      failed: false,
+    });
+    render(<LiveClassDetail klass={klass} />);
+
+    const chip = screen.getByText("Sudden change");
+    expect(chip.className).toMatch(/bg-nevo-navy/);
+    expect(chip.querySelector("svg")).not.toBeNull();
+  });
+
+  it("lets a sudden change win over a pattern for the same child, whatever the order", () => {
+    useTeacherFlags.mockReturnValue({
+      flags: [
+        { id: "f-1", studentId: "s-1", name: "Amara", context: null, note: "", generatedAt: "", isSudden: true },
+        { id: "f-2", studentId: "s-1", name: "Amara", context: null, note: "", generatedAt: "", isSudden: false },
+      ],
+      live: true,
+      failed: false,
+    });
+    render(<LiveClassDetail klass={klass} />);
+
+    expect(screen.getByText("Sudden change")).toBeInTheDocument();
+    expect(screen.queryByText("Worth a glance")).not.toBeInTheDocument();
+  });
+});
+
+describe("the class header's counts", () => {
+  const flag = (studentId: string, isSudden: boolean) => ({
+    id: `f-${studentId}-${isSudden}`,
+    studentId,
+    name: null,
+    context: null,
+    note: "",
+    generatedAt: "",
+    isSudden,
+  });
+
+  it("counts each state on its own, never one combined number", () => {
+    useClassRoster.mockReturnValue({
+      students: [
+        seg({ studentId: "s-1" }),
+        seg({ studentId: "s-2" }),
+        seg({ studentId: "s-3" }),
+        seg({ studentId: "s-4", status: "deactivated" }),
+        seg({ studentId: "s-5", pinResetRequested: true }),
+      ],
+      loading: false,
+      failed: false,
+    });
+    useTeacherFlags.mockReturnValue({
+      flags: [flag("s-1", false), flag("s-2", false), flag("s-3", true)],
+      live: true,
+      failed: false,
+      complete: true,
+    });
+    render(<LiveClassDetail klass={klass} />);
+
+    expect(screen.getByText("2 worth a glance")).toBeInTheDocument();
+    expect(screen.getByText("1 flagged")).toBeInTheDocument();
+    expect(screen.getByText("2 can’t sign in")).toBeInTheDocument();
+  });
+
+  it("leaves out a state with nobody in it", () => {
+    useTeacherFlags.mockReturnValue({ flags: [], live: true, failed: false, complete: true });
+    render(<LiveClassDetail klass={klass} />);
+
+    expect(screen.queryByText(/worth a glance$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/flagged$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/can’t sign in$/)).not.toBeInTheDocument();
+  });
+
+  it("does not count from a flags read that failed or stopped short", () => {
+    useTeacherFlags.mockReturnValue({
+      flags: [flag("s-1", false)],
+      live: true,
+      failed: false,
+      complete: false,
+    });
+    render(<LiveClassDetail klass={klass} />);
+
+    expect(screen.queryByText("1 worth a glance")).not.toBeInTheDocument();
+  });
+
+  it("stops counting a child once their PIN is cleared on this visit's server word", () => {
+    useClassRoster.mockReturnValue({
+      students: [seg({ studentId: "s-5", pinResetRequested: true, pinCleared: true })],
+      loading: false,
+      failed: false,
+    });
+    render(<LiveClassDetail klass={klass} />);
+
+    expect(screen.queryByText(/can’t sign in$/)).not.toBeInTheDocument();
+  });
 });
 
 describe("the section copy", () => {

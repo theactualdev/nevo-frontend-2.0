@@ -16,6 +16,7 @@ import {
 } from "@/lib/mocks/teacherStudents";
 import { OBSERVATION_COPY, observationCount } from "@/lib/constants/observations";
 import { cn } from "@/lib/utils";
+import { SummaryChip } from "@/components/teacher/shared/SummaryChip";
 import { MasteryDualTrack } from "./MasteryDualTrack";
 import { RecommendSheet } from "./RecommendSheet";
 import { SessionPanel } from "./SessionPanel";
@@ -128,11 +129,9 @@ export function StudentProfile({
                 <h1 className="text-[22px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[27px]">
                   {student.name}
                 </h1>
-                {student.chip && (
-                  <span className="rounded-full bg-nevo-violet/24 px-[9px] py-0.5 text-[11px] font-semibold text-nevo-navy xl:px-[11px] xl:py-[3px] xl:text-xs">
-                    {student.chip}
-                  </span>
-                )}
+                {/* C08's chip system (12 Oct): the sample's one chip is
+                    Worth a glance, drawn as the live profile draws it. */}
+                {student.chip === "Worth a glance" && <SummaryChip state="glance" />}
               </div>
               <span className="mt-[3px] block text-sm text-nevo-near-black/60 xl:mt-[5px] xl:text-[14.5px]">
                 {student.meta}

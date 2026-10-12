@@ -26,8 +26,9 @@ function SummaryDot({ tone }: { tone: "glance" | "ok" }) {
     <span
       className={cn(
         "size-[9px] shrink-0 rounded-full",
+        // Worth a glance is an outline (design, 12 Oct).
         tone === "glance"
-          ? "bg-nevo-violet"
+          ? "border-2 border-nevo-violet"
           : "bg-nevo-navy/30",
       )}
     />

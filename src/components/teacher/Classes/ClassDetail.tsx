@@ -36,15 +36,22 @@ import { cn } from "@/lib/utils";
 const TABS = ["Roster", "Lessons"] as const;
 type Tab = (typeof TABS)[number];
 
+/*
+ * Design's status system, as corrected on 12 Oct (C05, C08's chip board):
+ * worth a glance is the soft-violet OUTLINE, the quietest state; flagged is
+ * the navy FILL. It used to be the other way round, and design says never
+ * invert it - fills carry the weight, so what someone is waiting on reads
+ * first.
+ */
 function statusDotClass(status: StudentStatus, small = false): string {
   return cn(
     "shrink-0 rounded-full",
     small ? "size-[9px]" : "size-[11px]",
-    status === "glance" && "bg-nevo-violet",
-    status === "flag" &&
+    status === "glance" &&
       (small
-        ? "border-2 border-nevo-navy bg-transparent"
-        : "border-[2.5px] border-nevo-navy bg-transparent"),
+        ? "border-2 border-nevo-violet bg-transparent"
+        : "border-[2.5px] border-nevo-violet bg-transparent"),
+    status === "flag" && "bg-nevo-navy",
     status === "ok" && "bg-nevo-navy/28",
   );
 }
@@ -159,7 +166,7 @@ export function ClassDetail({ klass }: { klass: TeacherClass }) {
                   >
                     <div className="flex items-center gap-2 xl:w-[26%] xl:shrink-0">
                       {student.status === "glance" && (
-                        <span className="size-2 shrink-0 rounded-full bg-nevo-violet" />
+                        <span className="size-2 shrink-0 rounded-full border-[1.5px] border-nevo-violet" />
                       )}
                       {student.status === "flag" && (
                         <span className="shrink-0 text-nevo-navy">
@@ -202,7 +209,7 @@ export function ClassDetail({ klass }: { klass: TeacherClass }) {
             </div>
             <div className="mt-4 flex gap-5 text-[12px] text-nevo-near-black/55">
               <span className="flex items-center gap-[7px]">
-                <span className="size-2 shrink-0 rounded-full bg-nevo-violet" />
+                <span className="size-2 shrink-0 rounded-full border-[1.5px] border-nevo-violet" />
                 Worth a glance
               </span>
               <span className="flex items-center gap-[7px]">
