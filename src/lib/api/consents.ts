@@ -274,7 +274,47 @@ export interface WrittenConsentRecord {
   parentNotified: boolean;
 }
 
+/** What a parent asked for, as the rights log records it. */
+export type RightsLogRequestType = "request_data" | "object" | "withdraw_consent";
+
+/**
+ * One request in the school's parent rights log. `studentName` and
+ * `parentName` are typed because they are sent, and are NOT rendered: D22b
+ * allows a category, a date and a status, and nothing that identifies anyone.
+ */
+export interface ParentRightLogRow {
+  id: string;
+  studentId: string;
+  studentName: string;
+  parentId: string;
+  parentName: string;
+  requestType: RightsLogRequestType;
+  /** Whether the parent gave a reason. The text itself is not served. */
+  reasonRecorded: boolean;
+  /** A free string with no documented values - see `ParentRequests`. */
+  status: string;
+  createdAt: string;
+  resolvedAt: string | null;
+}
+
+/** `GET /consents/rights-log`: a page of the log, newest first. */
+export interface ParentRightLog {
+  entries: ParentRightLogRow[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 export const consentsApi = {
+  /**
+   * What parents have asked of this school - data requests, objections and
+   * withdrawals - newest first. `limit` is 1-100.
+   */
+  rightsLog: (options: { limit?: number; offset?: number } = {}) =>
+    api.get<ParentRightLog>("/api/v1/consents/rights-log", {
+      params: { limit: options.limit, offset: options.offset },
+    }),
+
   /**
    * Record a signed form against a child (multipart, 9 Oct). Any admin may.
    * The consent recorded is the one the console asks for everywhere,
