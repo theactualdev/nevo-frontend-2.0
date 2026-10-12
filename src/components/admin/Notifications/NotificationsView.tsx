@@ -33,12 +33,15 @@ import { WriteFailed } from "../WriteFailed";
  * EACH ROW CARRIES ITS CATEGORY NOW (backend B34, 1 Oct), and `NotificationRow`
  * labels it - see `categoryLabel`.
  *
- * TODO(api): `GET /api/notifications` still takes only `archived`, `limit` and
- * `offset`, so D13b's category filter pill and its category-scoped "Mark these
- * as read" have no server route, and search is client-side over the loaded
- * page - there is no `q` parameter. Three of SCRUM-100's six admin categories
- * (roster, SSO, teacher) have no enum value either, so this needs a design and
- * backend answer together.
+ * SEARCH IS THE SERVER'S NOW (`q`, 9 Oct). It ran over the loaded page only,
+ * so a notification older than the first fifty could never be found by
+ * typing. The box waits a moment after the last keystroke, then asks the
+ * feed, and "Show older" pages through the matches.
+ *
+ * TODO(api): D13b's category filter pill and its category-scoped "Mark these
+ * as read" still have no server route. Three of SCRUM-100's six admin
+ * categories (roster, SSO, teacher) have no enum value either, so this needs
+ * a design and backend answer together.
  *
  * THE ADMIN EVENTS ARRIVE NOW (backend, 7 Sep): admin_welcome,
  * consent_action_required, roster_sync_completed, roster_sync_needs_attention,
@@ -56,6 +59,8 @@ type Phase = "loading" | "ready" | "failed" | "denied";
 type View = "inbox" | "archived" | "preferences";
 
 const PAGE = 20;
+/** How long typing pauses before the feed is asked. */
+const SEARCH_PAUSE_MS = 300;
 
 const SEARCH_BAR =
   "flex h-[42px] w-full max-w-[320px] flex-1 items-center gap-[9px] rounded-[10px] border-[1.5px] border-nevo-near-black/10 bg-nevo-cream-elevated px-[15px] text-[14.5px] text-nevo-near-black outline-none transition-colors placeholder:text-nevo-near-black/50 focus-within:border-nevo-navy";
@@ -113,6 +118,8 @@ export function NotificationsView() {
   const [rows, setRows] = useState<Notification[]>([]);
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [search, setSearch] = useState("");
+  /** What the feed was last asked for - `search`, once typing pauses. */
+  const [query, setQuery] = useState("");
   const [hasMore, setHasMore] = useState(false);
   /** The feed's own count of the view - D13b's "N archived". Undefined is unknown. */
   const [total, setTotal] = useState<number | undefined>(undefined);
@@ -125,9 +132,15 @@ export function NotificationsView() {
 
   const archived = view === "archived";
 
-  const load = useCallback((wantArchived: boolean) => {
+  // Ask the server once typing pauses, not on every keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => setQuery(search.trim()), SEARCH_PAUSE_MS);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  const load = useCallback((wantArchived: boolean, q: string) => {
     notificationsApi
-      .list({ archived: wantArchived, limit: PAGE, offset: 0 })
+      .list({ archived: wantArchived, limit: PAGE, offset: 0, q })
       .then((feed) => {
         setRows(feed.notifications);
         setHasMore(Boolean(feed.hasMore));
@@ -141,14 +154,14 @@ export function NotificationsView() {
 
   useEffect(() => {
     if (view === "preferences") return;
-    load(archived);
-  }, [load, archived, view]);
+    load(archived, query);
+  }, [load, archived, view, query]);
 
   const showOlder = () => {
     setOlderFailed(false);
     setLoadingMore(true);
     notificationsApi
-      .list({ archived, limit: PAGE, offset: rows.length })
+      .list({ archived, limit: PAGE, offset: rows.length, q: query })
       .then((feed) => {
         // Append: "Show older" must never move what the reader was looking at.
         setRows((prev) => [...prev, ...feed.notifications]);
@@ -163,17 +176,11 @@ export function NotificationsView() {
       .finally(() => setLoadingMore(false));
   };
 
-  const visible = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    return rows.filter((n) => {
-      if (unreadOnly && n.read) return false;
-      if (!needle) return true;
-      return (
-        n.title.toLowerCase().includes(needle) ||
-        n.description.toLowerCase().includes(needle)
-      );
-    });
-  }, [rows, search, unreadOnly]);
+  // The rows already match the search - the server did it. Unread is ours.
+  const visible = useMemo(
+    () => rows.filter((n) => !(unreadOnly && n.read)),
+    [rows, unreadOnly],
+  );
 
   const grouped = useMemo(() => {
     const out: { day: string; items: Notification[] }[] = [];
@@ -247,7 +254,7 @@ export function NotificationsView() {
     setRows((prev) => prev.filter((n) => n.notificationId !== id));
     notificationsApi.archive(id).then(announceReadStateChanged, () => {
       setWriteFailed("archive that");
-      load(archived);
+      load(archived, query);
     });
   };
 
@@ -257,7 +264,7 @@ export function NotificationsView() {
     setTotal((t) => (typeof t === "number" ? Math.max(0, t - 1) : t));
     notificationsApi.restore(id).then(announceReadStateChanged, () => {
       setWriteFailed("put that back");
-      load(archived);
+      load(archived, query);
     });
   };
 
@@ -374,7 +381,7 @@ export function NotificationsView() {
                   type="button"
                   onClick={() => {
                     setPhase("loading");
-                    load(archived);
+                    load(archived, query);
                   }}
                   className={cn(PRIMARY_BTN, "mt-5")}
                 >
