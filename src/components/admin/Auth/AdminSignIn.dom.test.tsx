@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { ApiError } from "@/lib/api/client";
 
-const { push, loginPassword, signIn, logout } = vi.hoisted(() => ({
+const { push, loginPassword, signIn, logout, search } = vi.hoisted(() => ({
+  search: { current: "" },
   push: vi.fn(),
   loginPassword: vi.fn(),
   signIn: vi.fn(),
@@ -11,7 +12,7 @@ const { push, loginPassword, signIn, logout } = vi.hoisted(() => ({
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, replace: push, prefetch: vi.fn() }),
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => new URLSearchParams(search.current),
 }));
 vi.mock("@/lib/api", () => ({ authApi: { loginPassword, logout } }));
 // The screen reads `signIn` off the auth context; mocking the hook is lighter
@@ -42,6 +43,7 @@ import { AdminSignIn } from "./AdminSignIn";
  */
 
 beforeEach(() => {
+  search.current = "";
   push.mockReset();
   loginPassword.mockReset();
   signIn.mockReset();
@@ -263,4 +265,39 @@ describe("a valid account at the wrong door", () => {
     expect(signIn).not.toHaveBeenCalled();
     expect(push).not.toHaveBeenCalled();
   });
+});
+
+describe("where the door sends an admin once they're in", () => {
+  const HOLD = { timeout: 4000 };
+
+  it("returns them to the page they were headed for, query and all", async () => {
+    const place = `/admin/students/s1?back=${encodeURIComponent("/admin/classes/c-1")}&backLabel=JSS%202A`;
+    search.current = `next=${encodeURIComponent(place)}`;
+    accept("senco_admin");
+    submit();
+
+    await vi.waitFor(() => expect(push).toHaveBeenCalledWith(place), HOLD);
+  });
+
+  it("goes to the console's own home when there was no place", async () => {
+    accept("other_admin");
+    submit();
+
+    await vi.waitFor(() => expect(push).toHaveBeenCalledWith("/admin"), HOLD);
+  });
+
+  it("never follows a next off the admin console", async () => {
+    for (const next of ["https://elsewhere.test/admin/", "//elsewhere.test/admin/", "/teacher/dashboard"]) {
+      push.mockReset();
+      search.current = `next=${encodeURIComponent(next)}`;
+      accept("senco_admin");
+      const { unmount } = render(<AdminSignIn />);
+      fireEvent.change(screen.getByLabelText("Email"), { target: { value: "head@brightgate.edu.ng" } });
+      fireEvent.change(screen.getByLabelText("Password"), { target: { value: "a-password" } });
+      fireEvent.click(screen.getByRole("button", { name: /^Sign in$/i }));
+
+      await vi.waitFor(() => expect(push).toHaveBeenCalledWith("/admin"), HOLD);
+      unmount();
+    }
+  }, 20000);
 });

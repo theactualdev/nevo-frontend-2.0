@@ -114,7 +114,9 @@ export function proxy(request: NextRequest) {
     }
     if (!isAdmin) {
       const url = new URL(ADMIN_SIGN_IN, request.url);
-      url.searchParams.set("next", pathname);
+      // Query and all, as the teacher door has it (T217): a list's filters
+      // and the way back (`?back=`) live there.
+      url.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
       return NextResponse.redirect(url);
     }
     return NextResponse.next();

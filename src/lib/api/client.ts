@@ -196,7 +196,10 @@ export function sessionExpiredDoor(
    *
    * THE TEACHER DOOR TOO (T217). Its screen promises "continue where you left
    * off" and then lost the place: the next was dropped here and nothing read
-   * it there. The admin door's sign-in still reads no `next`, so it gets none.
+   * it there.
+   *
+   * AND THE ADMIN DOOR. Its sign-in always read `next`; nothing handed it one,
+   * so an admin whose session ended mid-page signed back in to their home.
    */
   from?: string | null,
 ): string {
@@ -209,7 +212,8 @@ export function sessionExpiredDoor(
   const query = [
     code ? `reason=${encodeURIComponent(code)}` : null,
     (base === "/auth/session-expired" && from?.startsWith("/student")) ||
-    (base === "/auth/teacher/session-expired" && from?.startsWith("/teacher/"))
+    (base === "/auth/teacher/session-expired" && from?.startsWith("/teacher/")) ||
+    (base === "/auth/admin/session-expired" && from?.startsWith("/admin/"))
       ? `next=${encodeURIComponent(from!)}`
       : null,
   ].filter(Boolean);

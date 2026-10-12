@@ -518,7 +518,18 @@ describe("sessionExpiredDoor, carrying a teacher's place", () => {
     expect(sessionExpiredDoor("teacher", null, "/teacher")).toBe("/auth/teacher/session-expired");
   });
 
-  it("gives the admin door none, whose sign-in reads none", () => {
-    expect(sessionExpiredDoor("senco_admin", null, "/admin/classes")).toBe("/auth/admin/session-expired");
+  it("hands the admin door its place too, query and all", () => {
+    const place = `/admin/students/s1?back=${encodeURIComponent("/admin/classes/c-1")}`;
+    expect(sessionExpiredDoor("senco_admin", null, place)).toBe(
+      `/auth/admin/session-expired?next=${encodeURIComponent(place)}`,
+    );
+    expect(sessionExpiredDoor("other_admin", "session_replaced", "/admin/billing")).toBe(
+      `/auth/admin/session-expired?reason=session_replaced&next=${encodeURIComponent("/admin/billing")}`,
+    );
+  });
+
+  it("carries no route that is not the admin console's", () => {
+    expect(sessionExpiredDoor("senco_admin", null, "/teacher/classes")).toBe("/auth/admin/session-expired");
+    expect(sessionExpiredDoor("senco_admin", null, "/admin")).toBe("/auth/admin/session-expired");
   });
 });
