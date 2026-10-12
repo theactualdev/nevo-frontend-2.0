@@ -78,6 +78,8 @@ export interface ConceptMasteryRow {
 export interface Recommendation {
   id: string;
   studentId: string;
+  /** The lesson Nevo means, when it means one (12 Oct). Null for advice that names none. */
+  lessonId?: string | null;
   /** Already written in plain language by the backend. */
   recommendationText: string;
   generatedAt: string;
@@ -674,6 +676,8 @@ export interface ConversationEvidence {
   periodDays: number;
   interactionCount: number;
   categories: Record<string, number>;
+  /** A phrase for each category key, e.g. `lesson_help` → "Lesson help" (12 Oct). */
+  categoryLabels?: Record<string, string>;
   helpfulResponseRate: number | null;
   privacy: "aggregate_only" | "withheld_below_minimum";
   minimumInteractions?: number;

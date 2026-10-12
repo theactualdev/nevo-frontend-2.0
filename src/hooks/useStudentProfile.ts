@@ -61,6 +61,8 @@ export function helpSeekingLine(
     interactionCount: number;
     periodDays: number;
     categories: Record<string, number>;
+    /** The server's own words for each category key (12 Oct). */
+    categoryLabels?: Record<string, string>;
     privacy: string;
   } | null,
 ): string {
@@ -86,8 +88,19 @@ export function helpSeekingLine(
    * the line stops before it rather than printing it or guessing its words.
    * The words for each are a backend/design ask.
    */
-  const readable = clear && !ranked[0][0].includes("_");
-  const tail = readable ? `, mostly about ${ranked[0][0]}` : "";
+  /*
+   * THE SERVER NAMES THEM NOW (12 Oct): `categoryLabels` carries a phrase for
+   * each key - "Lesson help", "Class planning". Lower-cased to sit inside the
+   * sentence. A key it has no phrase for still stops the line before it.
+   */
+  const top = clear ? ranked[0][0] : null;
+  const label = top ? ev.categoryLabels?.[top]?.trim() : undefined;
+  const topic = label
+    ? label.charAt(0).toLowerCase() + label.slice(1)
+    : top && !top.includes("_")
+      ? top
+      : null;
+  const tail = topic ? `, mostly about ${topic}` : "";
   return `Asked Nevo for help ${times} ${period}${tail}.`;
 }
 

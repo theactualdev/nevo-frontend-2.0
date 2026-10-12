@@ -524,3 +524,54 @@ describe("the sheet's own controls", () => {
     }
   });
 });
+
+/**
+ * C08c's "Suggested" (12 Oct): a recommendation carries the lesson it means
+ * now. That row is marked, and the sheet opens on it; the teacher's own pick
+ * always wins, and a lesson this list does not offer marks nothing.
+ */
+describe("the lesson Nevo suggests", () => {
+  const leavingAsks = () => {
+    const e = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(e);
+    return e.defaultPrevented;
+  };
+
+  it("is marked Suggested, and the sheet opens on it", () => {
+    show({ suggestion: "Try Photosynthesis next.", suggestedLessonId: "l-2" });
+    const row = screen.getByRole("button", { name: /Photosynthesis/ });
+
+    expect(row).toHaveTextContent("Suggested");
+    expect(row).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /Fractions 3/ })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("gives way to the teacher's own pick", () => {
+    show({ suggestedLessonId: "l-2" });
+    pick("Fractions 3");
+
+    expect(screen.getByRole("button", { name: /Fractions 3/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /Photosynthesis/ })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("marks nothing when the lesson is not one this list offers", () => {
+    show({ suggestedLessonId: "l-elsewhere" });
+
+    expect(screen.queryByText("Suggested")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { pressed: true })).not.toBeInTheDocument();
+  });
+
+  it("does not count the suggestion as the teacher's unsaved work", () => {
+    show({ suggestedLessonId: "l-2" });
+
+    expect(leavingAsks()).toBe(false);
+  });
+
+  it("sends the suggested lesson when the teacher simply confirms", async () => {
+    show({ suggestedLessonId: "l-2" });
+    sendIt();
+
+    await vi.waitFor(() => expect(create).toHaveBeenCalled());
+    expect(create.mock.calls[0][0]).toEqual(expect.objectContaining({ lessonIds: ["l-2"] }));
+  });
+});

@@ -71,3 +71,24 @@ describe("asking for a reset link", () => {
     expect(screen.getByRole("button", { name: "Send reset link" })).toBeDisabled();
   });
 });
+
+/**
+ * 12 Oct: reset links last 60 minutes, not the frame's 30, and the receipt
+ * says so. The screen says what the server says.
+ */
+describe("how long the link lasts", () => {
+  it("says what the receipt says", async () => {
+    requestPasswordReset.mockResolvedValue({ status: "ok", message: "", expiresInMinutes: 45 });
+    ask();
+
+    expect(await screen.findByText(/It expires in 45 minutes./, {}, { timeout: 3000 })).toBeInTheDocument();
+  });
+
+  it("says the contract's 60 when the receipt does not say", async () => {
+    requestPasswordReset.mockRejectedValue(new ApiError(500, "no"));
+    ask();
+
+    expect(await screen.findByText(/It expires in 60 minutes./, {}, { timeout: 3000 })).toBeInTheDocument();
+    expect(screen.queryByText(/30 minutes/)).not.toBeInTheDocument();
+  });
+});

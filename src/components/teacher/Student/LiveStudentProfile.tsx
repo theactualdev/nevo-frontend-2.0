@@ -709,6 +709,7 @@ export function LiveStudentProfile({
                prose and no lesson id, so this is context for the teacher's
                choice rather than a preselection. */
             suggestion={recommendations[0]?.recommendationText ?? null}
+            suggestedLessonId={recommendations[0]?.lessonId ?? null}
             onClose={() => setRecommending(false)}
           />
         )}

@@ -188,10 +188,7 @@ export const authApi = {
    * here means the request was accepted, not that a message has landed.
    */
   requestPasswordReset: (email: string) =>
-    api.post<{ status: string; message: string }>(
-      "/api/v1/auth/forgot-password",
-      { email },
-    ),
+    api.post<ResetReceipt>("/api/v1/auth/forgot-password", { email }),
 
   /** Set the new password, using the token from the emailed link. */
   completePasswordReset: (payload: { token: string; password: string }) =>
@@ -221,3 +218,13 @@ export const authApi = {
       replacedSession?: boolean | null;
     }>("/api/v1/auth/sso/callback", { params: query }),
 };
+
+/**
+ * What asking for a reset link answers - the same for any address. Since 12 Oct
+ * it says how long the link lasts, and the contract pins it: `const: 60`.
+ */
+export interface ResetReceipt {
+  status: string;
+  message: string;
+  expiresInMinutes?: number;
+}

@@ -34,3 +34,29 @@ describe("the help-seeking line", () => {
     );
   });
 });
+
+/** 12 Oct: the server sends a phrase for each category key. */
+describe("with the server's category labels", () => {
+  const labelled = (categories: Record<string, number>, categoryLabels: Record<string, string>) => ({
+    ...evidence(categories),
+    categoryLabels,
+  });
+
+  it("names the top category in the server's words, inside the sentence", () => {
+    expect(
+      helpSeekingLine(labelled({ lesson_help: 3, general: 1 }, { lesson_help: "Lesson help", general: "General help" })),
+    ).toBe("Asked Nevo for help 4 times this week, mostly about lesson help.");
+  });
+
+  it("still stops before a code the server gave no words for", () => {
+    const line = helpSeekingLine(labelled({ flag_review: 3, general: 1 }, { general: "General help" }));
+
+    expect(line).toBe("Asked Nevo for help 4 times this week.");
+  });
+
+  it("says nothing of 'mostly' on a tie, words or not", () => {
+    expect(
+      helpSeekingLine(labelled({ lesson_help: 2, general: 2 }, { lesson_help: "Lesson help", general: "General help" })),
+    ).toBe("Asked Nevo for help 4 times this week.");
+  });
+});

@@ -247,8 +247,13 @@ const FIXTURE_CARDS: LibraryCard[] = LIBRARY_LESSONS.map((l) => ({
   subject: l.subject,
 }));
 
-/** The endpoint's own maximum. */
-const LIBRARY_LIMIT = 200;
+/** The endpoint's own maximum, per page. */
+const LIBRARY_PAGE = 200;
+/**
+ * A ceiling on the walk, so an answer that never comes back short cannot loop
+ * for ever. Past it, the library says it is showing the first so many.
+ */
+export const LIBRARY_CEILING = 2000;
 
 export interface LessonLibraryState {
   cards: LibraryCard[];
@@ -260,8 +265,7 @@ export interface LessonLibraryState {
   /** Still waiting, long enough to say so. */
   slow: boolean;
   /**
-   * The read came back full, so there may be lessons it could not return.
-   * The endpoint takes up to 200 and has no way to ask for the next 200.
+   * The walk reached its ceiling, so there may be lessons it did not read.
    */
   capped: boolean;
 }
@@ -276,7 +280,23 @@ export function useLessonLibrary(): LessonLibraryState {
    * pills, the assign wizard and the recommend sheet - with nothing saying
    * so, and "N lessons matching" quietly a floor.
    */
-  const run = useCallback(() => lessonsApi.list({ limit: LIBRARY_LIMIT }), []);
+  /*
+   * EVERY PAGE (12 Oct). The endpoint stopped at 200 with no way to ask for
+   * the next 200, so the 201st lesson was missing from the library, its
+   * search, the assign wizard and the recommend sheet. It takes `offset`
+   * now: read a page at a time until one comes back short. The count headers
+   * (`X-Total-Count`, `X-Has-More`) say the same thing, but the API client
+   * returns bodies only, and a short page is the standard signal.
+   */
+  const run = useCallback(async () => {
+    const all: LessonSummary[] = [];
+    for (let offset = 0; offset < LIBRARY_CEILING; offset += LIBRARY_PAGE) {
+      const page = await lessonsApi.list({ limit: LIBRARY_PAGE, offset });
+      all.push(...page);
+      if (page.length < LIBRARY_PAGE) break;
+    }
+    return all;
+  }, []);
   const { data, failed, slow, loading, refresh } = useLiveQuery<LessonSummary[]>(run, []);
 
   /*
@@ -317,6 +337,6 @@ export function useLessonLibrary(): LessonLibraryState {
     sample: false,
     loading: false,
     slow: false,
-    capped: data.length >= LIBRARY_LIMIT,
+    capped: data.length >= LIBRARY_CEILING,
   };
 }
