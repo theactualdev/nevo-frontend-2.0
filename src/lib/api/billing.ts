@@ -303,6 +303,21 @@ export function invoicePdfPath(pdfUrl: string): string | null {
   return isOwnApiHost(url.hostname) ? `${url.pathname}${url.search}` : null;
 }
 
+/**
+ * A `pdfUrl` that is someone else's link - a pre-signed object-store URL, say -
+ * and so can be followed as a plain link. Null for anything that is not an
+ * absolute http(s) URL: an empty string, a malformed value. Those are no
+ * document at all, and a plain `<a href="">` to one reloads the page.
+ */
+export function externalPdfUrl(pdfUrl: string): string | null {
+  try {
+    const url = new URL(pdfUrl);
+    return url.protocol === "https:" || url.protocol === "http:" ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
 export const billingApi = {
   /**
    * GET /api/billing/bank-transfer-details - the real path, at last.

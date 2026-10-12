@@ -69,7 +69,14 @@ import { WriteFailed } from "../WriteFailed";
 
 type Phase = "loading" | "ready" | "failed" | "denied";
 
-export function StudentDetailView({ studentId }: { studentId: string }) {
+export function StudentDetailView({
+  studentId,
+  fromClassId = null,
+}: {
+  studentId: string;
+  /** The class the admin opened this from, when they came from one. */
+  fromClassId?: string | null;
+}) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>("loading");
   const [student, setStudent] = useState<AdminStudentDetail | null>(null);
@@ -190,14 +197,21 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
   const invited = status === "invited";
   const canErase = erasable(student);
   const currentClass = classes.find((c) => student.classIds.includes(c.id)) ?? null;
+  /*
+   * BACK GOES WHERE THE ADMIN CAME FROM. This was "All students" always, so a
+   * student opened from a class roster sent the admin to the whole school's
+   * list and left them to find the class again. Only a class this school
+   * actually has is honoured; anything else falls back to all students.
+   */
+  const backClass = fromClassId ? (classes.find((c) => c.id === fromClassId) ?? null) : null;
 
   return (
     <Wrapper>
       <Link
-        href="/admin/students"
+        href={backClass ? `/admin/classes/${backClass.id}` : "/admin/students"}
         className="text-[13.5px] font-semibold text-nevo-navy hover:opacity-75"
       >
-        &larr; All students
+        &larr; {backClass ? backClass.name : "All students"}
       </Link>
 
       <div className="mt-3 flex items-center gap-4">

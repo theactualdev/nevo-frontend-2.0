@@ -8,6 +8,7 @@ import {
   type IepExportShare,
 } from "@/lib/api/export";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import { studentsApi, type AdminStudentRow, type ParentLink } from "@/lib/api/students";
 import { cn } from "@/lib/utils";
 import { ReadFailed } from "../ReadFailed";
@@ -183,6 +184,20 @@ export function IepExporterView({
   const [guardians, setGuardians] = useState<ParentLink[]>([]);
   const [guardiansFailed, setGuardiansFailed] = useState(false);
   const [shareFailed, setShareFailed] = useState(false);
+  /**
+   * The server's reason a share was REFUSED - the guardian is not linked to
+   * this child. Nothing was shared, so this is said where the share is, not
+   * as "you don't have access to the IEP exporter".
+   */
+  const [shareRefused, setShareRefused] = useState<string | null>(null);
+  /**
+   * FINALISING IS THE SENCo's, BY ROLE. The backend refuses it to any account
+   * whose role is not `senco_admin` (403 `senco_review_required`) - a role,
+   * not a scope, so an admin holding every scope still cannot. That refusal
+   * used to turn the whole page into "You don't have access to the IEP
+   * exporter" (QA, 10 Oct), over a draft the admin had every right to write.
+   */
+  const [finaliseRefused, setFinaliseRefused] = useState(false);
   /*
    * A 403 from any call here is this admin's scope, not a failure. It used to
    * read "Something went wrong... give it another try", and no retry grants a
@@ -327,6 +342,9 @@ export function IepExporterView({
     draft?.reviewedByUserId && me?.userId && draft.reviewedByUserId === me.userId,
   );
 
+  /** Known not to be the SENCo, before asking. Unknown yet: let the server say. */
+  const mayFinalise = !me || me.role === "senco_admin";
+
   const finalise = () => {
     if (!draft) return;
     setPhase("finalising");
@@ -353,7 +371,14 @@ export function IepExporterView({
         setContent(d.exportContent);
         setPhase("final");
       })
-      .catch(failWith);
+      .catch((err: unknown) => {
+        if (err instanceof ApiError && apiErrorCode(err.detail) === "senco_review_required") {
+          setFinaliseRefused(true);
+          setPhase("draft");
+          return;
+        }
+        failWith(err);
+      });
   };
 
   /*
@@ -386,6 +411,7 @@ export function IepExporterView({
     if (!draft) return;
     setPhase("sharing");
     setShareFailed(false);
+    setShareRefused(null);
     exportApi
       .share(draft.id, { parentId })
       .then(() => {
@@ -395,6 +421,16 @@ export function IepExporterView({
         loadShares(draft.id);
       })
       .catch((err: unknown) => {
+        // Refused for a reason that is not this admin's access: the guardian
+        // is not linked to this child. Nothing was shared, and we know it.
+        if (err instanceof ApiError && apiErrorCode(err.detail) === "parent_share_target_invalid") {
+          setShareRefused(
+            apiErrorMessage(err.detail) ??
+              "That guardian isn't linked to this child, so nothing was shared.",
+          );
+          setPhase("final");
+          return;
+        }
         if (failureKind(err) === "denied") setDenied(true);
         // A failed SHARE is the one write here whose outcome the client
         // genuinely cannot know: a transport failure (ApiError status 0) can
@@ -608,7 +644,7 @@ export function IepExporterView({
                 <button
                   type="button"
                   onClick={finalise}
-                  disabled={phase !== "draft"}
+                  disabled={phase !== "draft" || !mayFinalise || finaliseRefused}
                   className={PRIMARY_BTN}
                 >
                   {phase === "finalising" ? "Finalising…" : "Finalise report"}
@@ -626,10 +662,17 @@ export function IepExporterView({
                     Saved just now
                   </span>
                 ) : null}
-                <p className="m-0 w-full text-[13px] text-nevo-near-black/55">
-                  Finalising locks the wording. You can still share it
-                  afterwards.
-                </p>
+                {!mayFinalise || finaliseRefused ? (
+                  <p className="m-0 w-full text-[13px] leading-[1.5] text-nevo-navy">
+                    Only your school&rsquo;s SENCo can finalise a report. Save
+                    your draft, and they can finalise it from here.
+                  </p>
+                ) : (
+                  <p className="m-0 w-full text-[13px] text-nevo-near-black/55">
+                    Finalising locks the wording. You can still share it
+                    afterwards.
+                  </p>
+                )}
               </div>
             </div>
           </>
@@ -730,6 +773,11 @@ export function IepExporterView({
                 * is suppressed - it only fires when we looked and found
                 * nothing, which is the case where sending again is right.
                 */}
+              {shareRefused && phase !== "shared" ? (
+                <p className="m-0 mt-3 rounded-[10px] bg-nevo-violet/24 px-4 py-3 text-[13.5px] leading-[1.55] text-nevo-navy">
+                  {shareRefused}
+                </p>
+              ) : null}
               {shareFailed && phase !== "shared" && !(shares && shares.length > 0) ? (
                 <p className="m-0 mt-3 rounded-[10px] bg-nevo-violet/24 px-4 py-3 text-[13.5px] leading-[1.55] text-nevo-navy">
                   The last attempt didn&rsquo;t confirm. It may still have
