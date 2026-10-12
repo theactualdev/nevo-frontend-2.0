@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import { NevoKeyboard } from "@/components/shared";
 import { cn } from "@/lib/utils";
+import { FOCUS_ON_SHAPE } from "./focusOnShape";
 
 /**
  * The pieces §4's instructions are applied WITH. Not new screens - small
@@ -22,12 +23,15 @@ import { cn } from "@/lib/utils";
 /**
  * The pill below is drawn 36px tall and touched at 44: the button is the hit
  * area, the inner span is the pill, and `-my-1` keeps the layout the frame
- * draws.
+ * draws. The focus ring goes on the pill, not the hit area (`FOCUS_ON_SHAPE`).
  *
  * There were two pills. `DifficultyOfferPill` - "Ready for something
  * harder?" - went with design's 1 Oct ruling retiring the step-up (D28).
  */
-const PILL_HIT = "group -my-1 inline-flex h-11 cursor-pointer items-center";
+const PILL_HIT = cn(
+  "group -my-1 inline-flex h-11 cursor-pointer items-center",
+  FOCUS_ON_SHAPE.hit,
+);
 
 /** 37b's `socraticQ`: one guided question, a 40px row on the cream card. */
 const PROMPT_ROW =
@@ -327,7 +331,12 @@ export function SocraticPanel({
           onClick={openPanel}
           className={PILL_HIT}
         >
-          <span className="inline-flex h-9 items-center rounded-[20px] bg-nevo-cream-elevated px-[18px] text-[13px] text-nevo-near-black transition-transform group-active:scale-[0.98]">
+          <span
+            className={cn(
+              "inline-flex h-9 items-center rounded-[20px] bg-nevo-cream-elevated px-[18px] text-[13px] text-nevo-near-black transition-transform group-active:scale-[0.98]",
+              FOCUS_ON_SHAPE.shape,
+            )}
+          >
             Which part is unclear?
           </span>
         </button>

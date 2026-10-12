@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import {
   AdaptiveToggleBar,
+  preloadSettlingCharacter,
   ProgressBar,
   type ToggleSegment,
 } from "@/components/shared";
@@ -491,6 +492,16 @@ export function LessonPlayer({
   );
   // Exiting mid-lesson goes through the leave dialog, not straight out.
   const [leaveOpen, setLeaveOpen] = useState(false);
+  /*
+   * THE ENDING'S PICTURE, FETCHED WHILE THERE IS A CONNECTION. The completion
+   * screen and the offline ending both draw it, and either can come after the
+   * connection has dropped. Held for the life of the player, which is what
+   * keeps it to hand.
+   */
+  const endingPicture = useRef<HTMLImageElement | null>(null);
+  useEffect(() => {
+    endingPicture.current ??= preloadSettlingCharacter();
+  }, []);
 
   // Position, on every move - including the ones that go through a module
   // boundary or a break, which is why this watches `index` rather than
@@ -1580,6 +1591,12 @@ export function LessonPlayer({
 
   /** Next chevron — an unpassed Quick Check intercepts the advance. */
   const handleNext = () => {
+    // Next past a hand-off the server moved on from is Keep going by
+    // another way: the panel goes with the segment, as it does there.
+    if (handoffHere?.advance) {
+      keepGoingAfterHandoff();
+      return;
+    }
     if (
       segment.quickCheck &&
       !passedChecks.has(segment.id) &&
@@ -1607,6 +1624,14 @@ export function LessonPlayer({
     );
     if (prompts.length === 0) return;
     setCheckOpen(false);
+    /*
+     * "FORWARD, NEVER BACK TO THE QUESTION" (38a §2) holds from the moment the
+     * server says to move on, not only once Keep going is pressed: a child who
+     * closes the panel and taps Next goes forward too, never into the check
+     * and its old wrong pick. Still not passed, and the misses still stand.
+     */
+    if (stored.advanceAfterHandoff === true)
+      setHandedOff((prev) => new Set(prev).add(segmentId));
     setHandoff((prev) => ({
       segmentId,
       run: (prev?.run ?? 0) + 1,
@@ -2246,7 +2271,7 @@ export function LessonPlayer({
     // screen's default and showed in all of those. When the write did not
     // reach Nevo the child is told, in the same words the daily warm-up uses.
     const savedNote = progress.completionFailed
-      ? "We couldn’t save that just now - that’s on us, not you. Your work is still yours."
+      ? "We couldn't save that just now - that's on us, not you. Your work is still yours."
       : progress.completionSaved
         ? "Your progress is saved."
         : undefined;
@@ -2631,6 +2656,7 @@ export function LessonPlayer({
               segment={segment}
               modality={modality}
               density={effectiveDensity}
+              simplified={simplified.has(segment.id)}
               reading={readingOn}
               attention={attentionOn}
               onReadProgress={noteReadProgress}
@@ -2841,6 +2867,7 @@ function SegmentBody({
   segment,
   modality,
   density,
+  simplified,
   reading,
   attention,
   onReadProgress,
@@ -2857,6 +2884,8 @@ function SegmentBody({
   segment: LessonSegment;
   modality: Modality;
   density: Density | null;
+  /** A lower-depth session reads this segment's simpler version. */
+  simplified: boolean;
   reading: boolean;
   attention: boolean;
   onReadProgress: (pct: number) => void;
@@ -2881,6 +2910,7 @@ function SegmentBody({
         attention={attention}
         onReadProgress={onReadProgress}
         onChunkSeen={onChunkSeen}
+        simplified={simplified}
       />
     );
   if (modality === MODALITY.VISUAL && segment.visual)

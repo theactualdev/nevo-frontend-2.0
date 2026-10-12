@@ -33,6 +33,12 @@
  * Body text: 18px, line-height 2.0, +0.02em. Colour is left to the caller.
  * The `sm:` size is restated so it out-ranks a caller's own `sm:text-[17px]`
  * in `cn`, which would otherwise shrink the text back on a tablet.
+ *
+ * NEVER SMALLER. Merge it OVER the caller's own type - `cn(base, reading &&
+ * READING_BODY)` - and never put it in the base's place: a base that is
+ * larger at a breakpoint (`lg:text-[19px]` on a desktop body) keeps its size,
+ * so the result is the larger of the two, as frame 17 sets it
+ * (`Math.max(L.body, 18)`). In place of the base, it shrank a desktop body.
  */
 export const READING_BODY =
   "text-[18px] sm:text-[18px] leading-[2] tracking-[0.02em]";

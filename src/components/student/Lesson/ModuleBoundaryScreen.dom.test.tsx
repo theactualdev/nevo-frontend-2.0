@@ -53,6 +53,19 @@ describe("the boundary's one action", () => {
   });
 });
 
+describe("the heading names the modules as they were written", () => {
+  it("keeps a title's capitals, so a name in it survives", () => {
+    renderBoundary({
+      finished: { id: "m-1", title: "Rivers of Lagos", segmentIds: ["s1"] },
+      next: { id: "m-2", title: "Newton's Laws", segmentIds: ["s2"] },
+    });
+
+    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
+      "You've finished the Rivers of Lagos. Ready for the Newton's Laws section?",
+    );
+  });
+});
+
 describe("the recap on a phone", () => {
   it("is capped at two lines, and only below tablet width", () => {
     // jsdom lays nothing out, so the cap is asserted where it lives: the

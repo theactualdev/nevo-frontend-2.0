@@ -323,7 +323,7 @@ describe("whether anything landed is the server's word (B98)", () => {
         fireEvent.click(screen.getByRole("button", { name: "Next question" }));
     }
   };
-  const HEADING = "You’re getting the hang of this";
+  const HEADING = "You're getting the hang of this";
 
   it("draws the frame's screen where the server says something landed", () => {
     // Every answer here was wrong: the client's own count would have said

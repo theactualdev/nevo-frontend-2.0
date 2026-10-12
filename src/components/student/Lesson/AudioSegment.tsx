@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Pause, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PARAGRAPH_GAP, paragraphsOf } from "@/lib/lessons/paragraphs";
 import type { AudioContent } from "@/lib/types";
 import { READING_BODY, READING_HEADING, READING_INK } from "./readingSupport";
 import { type MediaFailReason, useMediaSource } from "./useMediaSource";
@@ -218,9 +219,9 @@ export function AudioSegment({
         <p
           className={cn(
             "mt-4",
-            reading
-              ? [READING_BODY, READING_INK]
-              : "text-base leading-[1.6] text-nevo-near-black/82 sm:text-[18px] lg:text-[19px]",
+            // Merged over the base, never instead of it: see READING_BODY.
+            "text-base leading-[1.6] text-nevo-near-black/82 sm:text-[18px] lg:text-[19px]",
+            reading && [READING_BODY, READING_INK],
           )}
         >
           {content.intro}
@@ -333,7 +334,7 @@ export function AudioSegment({
           role="status"
           className="mt-3 text-[14px] leading-[1.55] text-nevo-near-black/70"
         >
-          The recording didn&rsquo;t load. You can read the same words below.
+          The recording didn&apos;t load. You can read the same words below.
         </p>
       )}
 
@@ -355,15 +356,19 @@ export function AudioSegment({
       </button>
       {transcriptOpen && (
         <div className="mt-3 rounded-[12px] bg-nevo-violet/8 p-[18px]">
-          <p
-            className={
-              reading
-                ? cn(READING_BODY, READING_INK)
-                : "text-base leading-[1.7] text-nevo-near-black/82 sm:text-[18px] lg:text-[19px]"
-            }
-          >
-            {content.transcript}
-          </p>
+          {/* In the paragraphs it was written in, as the text body is. */}
+          {paragraphsOf(content.transcript).map((paragraph, i) => (
+            <p
+              key={i}
+              className={cn(
+                "text-base leading-[1.7] text-nevo-near-black/82 sm:text-[18px] lg:text-[19px]",
+                reading && [READING_BODY, READING_INK],
+                i > 0 && PARAGRAPH_GAP,
+              )}
+            >
+              {paragraph}
+            </p>
+          ))}
         </div>
       )}
     </article>

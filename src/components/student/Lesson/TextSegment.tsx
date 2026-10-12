@@ -11,6 +11,7 @@ import {
 } from "react";
 import { DENSITY, type Density } from "@/lib/constants";
 import { bodyParts, chunksForBody } from "@/lib/lessons/chunk";
+import { PARAGRAPH_GAP, paragraphsOf } from "@/lib/lessons/paragraphs";
 import {
   chunkCrossing,
   sightingOf,
@@ -20,6 +21,8 @@ import {
 } from "@/lib/lessons/chunkViews";
 import type { TextContent } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { FOCUS_ON_SHAPE } from "./focusOnShape";
+import { READING_BODY, READING_INK } from "./readingSupport";
 
 /** A server reading chunk came on screen or was read past (SCRUM-234). */
 export type OnChunkSeen = (chunkId: string, action: ChunkAction) => void;
@@ -69,6 +72,7 @@ export function TextSegment({
   attention = false,
   onReadProgress,
   onChunkSeen,
+  simplified = false,
 }: {
   content: TextContent;
   density: Density | null;
@@ -89,6 +93,11 @@ export function TextSegment({
    * Only server chunks report - the on-device split has no ids to name.
    */
   onChunkSeen?: OnChunkSeen;
+  /**
+   * The default text is the segment's simpler version, standing in the
+   * standard text's place for a lower-depth session (`atLowerDepth`).
+   */
+  simplified?: boolean;
 }) {
   const body = (density && content.body[density]) ?? content.body.default;
   const callout = content.callouts?.[density ?? "default"];
@@ -106,8 +115,13 @@ export function TextSegment({
    *
    * Key points are the frame's "IN SHORT", under every view but Expand and
    * Slower.
+   *
+   * A LOWER-DEPTH SESSION'S TEXT IS NOT THE STANDARD TEXT, though it stands
+   * in its place: it is the simpler version, so it is drawn as Simplify draws
+   * it, without the key terms and equations.
    */
-  const besideText = expand || body === content.body.default;
+  const besideText =
+    expand || (!simplified && body === content.body.default);
   const keyTerms = besideText ? content.keyTerms : undefined;
   const equations = besideText ? content.equations : undefined;
   const keyPoints =
@@ -126,10 +140,15 @@ export function TextSegment({
    */
   const chunkedForSlower = density === DENSITY.SLOWER && !steps;
 
+  /*
+   * Reading support is merged over the standard type, never put in its place:
+   * it replaced it, and took the desktop body down from 19px to 18 while the
+   * boxes beside it stayed at 19. Frame 17 sets the reading body at
+   * `Math.max(L.body, 18)` - see READING_BODY.
+   */
   const bodyType = cn(
-    reading
-      ? "text-[18px] leading-[2] tracking-[0.02em] text-nevo-near-black/95"
-      : "text-base leading-[1.75] text-nevo-near-black/82 sm:text-[18px] lg:text-[19px]",
+    "text-base leading-[1.75] text-nevo-near-black/82 sm:text-[18px] lg:text-[19px]",
+    reading && [READING_BODY, READING_INK],
   );
 
   const bodyBlock = attention || chunkedForSlower ? (
@@ -150,15 +169,11 @@ export function TextSegment({
       onChunkSeen={onChunkSeen}
     />
   ) : (
-    <p
-      className={cn(
-        "mt-4",
-        bodyType,
-        reading && "rounded-[12px] bg-[#e5dfd3] px-5 py-4",
-      )}
+    <div
+      className={cn("mt-4", reading && "rounded-[12px] bg-[#e5dfd3] px-5 py-4")}
     >
-      {body}
-    </p>
+      <Paragraphs text={body} className={bodyType} />
+    </div>
   );
 
   return (
@@ -179,7 +194,14 @@ export function TextSegment({
               <span className="flex size-[26px] shrink-0 items-center justify-center rounded-full bg-nevo-navy text-sm font-semibold text-nevo-cream">
                 {i + 1}
               </span>
-              <p className="text-base leading-[1.6] text-nevo-near-black/82 sm:text-[18px] lg:text-[19px]">
+              <p
+                className={cn(
+                  "text-base leading-[1.6] text-nevo-near-black/82 sm:text-[18px] lg:text-[19px]",
+                  // Frame 17 sizes a step like the body: the reading size,
+                  // never smaller, on the card's own 1.6 line height.
+                  reading && [BOX_READING, "leading-[1.6]"],
+                )}
+              >
                 {step}
               </p>
             </div>
@@ -201,7 +223,12 @@ export function TextSegment({
                   {label}
                 </p>
               )}
-              <p className="text-base leading-[1.7] font-medium text-nevo-near-black sm:text-[18px] lg:text-[19px]">
+              <p
+                className={cn(
+                  "text-base leading-[1.7] font-medium text-nevo-near-black sm:text-[18px] lg:text-[19px]",
+                  reading && BOX_READING,
+                )}
+              >
                 {equation}
               </p>
             </div>
@@ -214,7 +241,12 @@ export function TextSegment({
           <p className="font-mono text-[11px] tracking-[0.06em] text-nevo-navy uppercase">
             {callout.label}
           </p>
-          <p className="mt-2.5 text-base leading-[1.7] font-medium text-nevo-near-black sm:text-[18px] lg:text-[19px]">
+          <p
+            className={cn(
+              "mt-2.5 text-base leading-[1.7] font-medium text-nevo-near-black sm:text-[18px] lg:text-[19px]",
+              reading && BOX_READING,
+            )}
+          >
             {callout.text}
           </p>
           {callout.sub && (
@@ -234,7 +266,10 @@ export function TextSegment({
             {keyPoints.map((point, i) => (
               <li
                 key={i}
-                className="text-base leading-[1.7] text-nevo-near-black/82 sm:text-[18px] lg:text-[19px]"
+                className={cn(
+                  "text-base leading-[1.7] text-nevo-near-black/82 sm:text-[18px] lg:text-[19px]",
+                  reading && BOX_READING,
+                )}
               >
                 {point}
               </li>
@@ -245,6 +280,32 @@ export function TextSegment({
     </article>
   );
 }
+
+/**
+ * A text as the paragraphs it was written in, each its own `<p>` in the given
+ * type (see `paragraphsOf`). One paragraph is one `<p>`, as before.
+ */
+function Paragraphs({ text, className }: { text: string; className: string }) {
+  return (
+    <>
+      {paragraphsOf(text).map((paragraph, i) => (
+        <p key={i} className={cn(className, i > 0 && PARAGRAPH_GAP)}>
+          {paragraph}
+        </p>
+      ))}
+    </>
+  );
+}
+
+/*
+ * READING SUPPORT IN THE BOXES. Frame 17's "UDL · reading" sets IN SHORT and
+ * the equation at the reading body size, under the column's +0.02em, and keeps
+ * each box's own 1.7 line height. They had stayed at 16px beside an 18px body.
+ * A definition is drawn in the body's own type, so it has all of it already.
+ * The line height is restated because `cn` drops a line height that comes
+ * before a later size.
+ */
+const BOX_READING = "text-[18px] sm:text-[18px] leading-[1.7] tracking-[0.02em]";
 
 /** The frame's key-term chip: violet, navy text, fully round. */
 const CHIP =
@@ -262,7 +323,8 @@ const CHIP =
  *
  * Drawn at the frame's size and touched at 44px: the button is the hit area,
  * the inner span is the chip, and the negative margin keeps the row the
- * frame draws (the affective pill does the same).
+ * frame draws (the affective pill does the same). The focus ring goes on the
+ * chip, not the hit area (`FOCUS_ON_SHAPE`).
  */
 function KeyTerms({
   terms,
@@ -287,9 +349,12 @@ function KeyTerms({
               aria-expanded={open === i}
               aria-controls={open === i ? definitionId : undefined}
               onClick={() => setOpen(open === i ? null : i)}
-              className="-my-1.5 inline-flex h-11 cursor-pointer items-center"
+              className={cn(
+                "group -my-1.5 inline-flex h-11 cursor-pointer items-center",
+                FOCUS_ON_SHAPE.hit,
+              )}
             >
-              <span className={CHIP}>{term}</span>
+              <span className={cn(CHIP, FOCUS_ON_SHAPE.shape)}>{term}</span>
             </button>
           ) : (
             <span key={i} className={CHIP}>
@@ -353,9 +418,9 @@ function ChunkedPassage({
               )}
             />
           )}
-          <p data-chunk-id={chunk.id} className={className}>
-            {chunk.text}
-          </p>
+          <div data-chunk-id={chunk.id}>
+            <Paragraphs text={chunk.text} className={className} />
+          </div>
         </Fragment>
       ))}
     </div>
@@ -486,17 +551,16 @@ function ChunkedBody({
 
   if (parts.length === 1) {
     return (
-      <p
-        ref={shown as RefObject<HTMLParagraphElement | null>}
+      <div
+        ref={shown as RefObject<HTMLDivElement | null>}
         data-chunk-id={chunkId}
         className={cn(
           "mt-4",
-          className,
           reading && "rounded-[12px] bg-[#e5dfd3] px-5 py-4",
         )}
       >
-        {body}
-      </p>
+        <Paragraphs text={body} className={className} />
+      </div>
     );
   }
 
@@ -537,17 +601,16 @@ function ChunkedBody({
   const last = part === parts.length - 1;
   return (
     <div ref={shown as RefObject<HTMLDivElement | null>} className="mt-4">
-      <p
+      <div
         key={part}
         data-chunk-id={chunkId}
         className={cn(
-          className,
           reading && "rounded-[12px] bg-[#e5dfd3] px-5 py-4",
           "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300",
         )}
       >
-        {parts[part]}
-      </p>
+        <Paragraphs text={parts[part]} className={className} />
+      </div>
       {!last && (
         <button
           type="button"

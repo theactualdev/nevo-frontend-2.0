@@ -261,7 +261,7 @@ describe("the picks the account holds (audit 61)", () => {
     render(<ReviewAnswersScreen lesson={LIVE} live />);
 
     expect(
-      await screen.findByText("We couldn’t open this just now"),
+      await screen.findByText("We couldn't open this just now"),
     ).toBeTruthy();
     expect(screen.queryByText("YOU CHOSE")).toBeNull();
     expect(screen.queryByText("THE ANSWER")).toBeNull();

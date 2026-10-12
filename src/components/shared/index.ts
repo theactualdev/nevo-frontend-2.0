@@ -29,7 +29,10 @@ export {
   IllustrationWrapper,
   type IllustrationMotion,
 } from "./IllustrationWrapper";
-export { SettlingCharacter } from "./SettlingCharacter";
+export {
+  SettlingCharacter,
+  preloadSettlingCharacter,
+} from "./SettlingCharacter";
 export { NevoLockup } from "./NevoLockup";
 export { ConsoleSessionExpired } from "./ConsoleSessionExpired";
 export { BreathingCharacter } from "./BreathingCharacter";

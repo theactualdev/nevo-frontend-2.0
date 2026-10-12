@@ -1,6 +1,6 @@
 "use client";
 
-import { useContext, useEffect } from "react";
+import { useContext, useEffect, useState } from "react";
 import { Button, SettlingCharacter } from "@/components/shared";
 import { LessonContext } from "@/context/LessonContext";
 import { cn } from "@/lib/utils";
@@ -65,13 +65,23 @@ export function LessonComplete({
     return () => allowAskNevo(false);
   }, [allowAskNevo]);
 
+  /*
+   * NO BROKEN BOX. The player fetched this picture while it had a connection
+   * (`preloadSettlingCharacter`), but a lesson opened offline never could.
+   * A picture that will not load is left out, not drawn as its alt text.
+   */
+  const [pictureFailed, setPictureFailed] = useState(false);
+
   return (
     <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-nevo-cream px-6 text-center text-nevo-near-black">
       <div className="flex w-full max-w-[300px] flex-col items-center sm:max-w-[430px]">
-        <SettlingCharacter
-          priority
-          className="w-[200px] sm:w-[280px] lg:w-[300px]"
-        />
+        {!pictureFailed && (
+          <SettlingCharacter
+            priority
+            className="w-[200px] sm:w-[280px] lg:w-[300px]"
+            onError={() => setPictureFailed(true)}
+          />
+        )}
 
         <h2
           aria-hidden={headingHeld || undefined}

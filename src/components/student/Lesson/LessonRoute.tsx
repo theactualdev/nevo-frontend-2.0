@@ -132,7 +132,7 @@ export function LessonRoute({
   if (review ? recallWithdrawn : unavailable === "cancelled") {
     return (
       <LessonMessage
-        title="This one isn’t on your list any more"
+        title="This one isn't on your list any more"
         body="Your teacher took it off."
         actionLabel="Back to my lessons"
         onAction={() => exitTo(LESSONS_HREF)}
@@ -142,7 +142,7 @@ export function LessonRoute({
   if (unavailable === "not_yet") {
     return (
       <LessonMessage
-        title="This one isn’t open yet"
+        title="This one isn't open yet"
         body={opensLine(opensAt)}
         actionLabel="Back to my lessons"
         onAction={() => exitTo(LESSONS_HREF)}
@@ -225,8 +225,8 @@ export function LessonRoute({
   if (empty) {
     return (
       <LessonMessage
-        title="This lesson isn’t ready yet"
-        body="Nevo is still getting it set up. Your teacher will know when it’s ready."
+        title="This lesson isn't ready yet"
+        body="Nevo is still getting it set up. Your teacher will know when it's ready."
         actionLabel="Back to my lessons"
         onAction={() => exitTo(LESSONS_HREF)}
       />
