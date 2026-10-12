@@ -86,6 +86,41 @@ describe("GridSpanModule — the SS dual task", () => {
     expect(screen.queryByText("True")).toBeNull();
   });
 
+  it("hands focus to the grid when the check is answered, without scrolling", () => {
+    // The pressed True or False went with the check, and focus fell to the
+    // page from a point past the grid: the next Tab left the screen.
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
+    render(
+      <GridSpanModule config={gridSpanConfig("ss")} onComplete={() => {}} />,
+    );
+    watchItPlay();
+    const answer = screen.getByText("False");
+    answer.focus();
+    fireEvent.click(answer);
+
+    const grid = screen.getByTestId("grid-span-grid");
+    expect(document.activeElement).toBe(grid);
+    expect(focus).toHaveBeenLastCalledWith({ preventScroll: true });
+    // And the tiles are next in the tab order.
+    expect(grid.querySelector("button")!.tabIndex).toBe(0);
+    focus.mockRestore();
+  });
+
+  it("leaves focus alone when it was somewhere else", () => {
+    render(
+      <>
+        <button type="button">Elsewhere</button>
+        <GridSpanModule config={gridSpanConfig("ss")} onComplete={() => {}} />
+      </>,
+    );
+    watchItPlay();
+    const elsewhere = screen.getByText("Elsewhere");
+    elsewhere.focus();
+    fireEvent.click(screen.getByText("False"));
+
+    expect(document.activeElement).toBe(elsewhere);
+  });
+
   it("runs no check at all for the other bands", () => {
     render(
       <GridSpanModule config={gridSpanConfig("p46")} onComplete={() => {}} />,

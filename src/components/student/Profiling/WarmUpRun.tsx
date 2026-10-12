@@ -36,6 +36,7 @@ import {
   DUAL_CHECK_PROMPT,
   DUAL_CHECKS,
   TILE,
+  useGridFocusAfterCheck,
 } from "./GridSpanModule";
 import {
   FlankerButtons,
@@ -1098,6 +1099,8 @@ function WarmUpGrid({
   const [check, setCheck] = useState(DUAL_CHECKS[0]);
   const [tapped, setTapped] = useState<ReadonlySet<number>>(() => new Set());
   const [wrongCell, setWrongCell] = useState(-1);
+  // As tile memory does: the grid takes focus once its check is answered.
+  const { grid, afterCheck } = useGridFocusAfterCheck(phase === "input");
   const pos = useRef(0);
   const misses = useRef(0);
   const checks = useRef(0);
@@ -1180,6 +1183,7 @@ function WarmUpGrid({
       correct: answer === check.isTrue,
       ...tapPoint(e),
     });
+    afterCheck();
     handOver(seq.length);
   };
 
@@ -1243,6 +1247,9 @@ function WarmUpGrid({
       </p>
       <div className="relative w-full max-w-[420px] sm:w-auto">
         <div
+          ref={grid}
+          tabIndex={-1}
+          data-testid="warmup-grid"
           className={cn("grid w-full sm:w-auto", tile.g)}
           style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}
         >

@@ -165,6 +165,23 @@ describe("the tile task, by band", () => {
     });
   });
 
+  it("hands focus to the grid once the senior band's check is answered", async () => {
+    // As in tile memory: the pressed button went with the check, and focus
+    // fell to the page past the grid, so the next Tab left the screen.
+    roster.value = { band: "ss", settled: true };
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
+    render(<WarmUpRun dimension="wmc" />);
+    await wait(6000);
+    const answer = screen.getByText("False");
+    answer.focus();
+    fireEvent.click(answer);
+
+    const grid = screen.getByTestId("warmup-grid");
+    expect(document.activeElement).toBe(grid);
+    expect(focus).toHaveBeenLastCalledWith({ preventScroll: true });
+    focus.mockRestore();
+  });
+
   it("runs no check for the bands that do not have one", async () => {
     roster.value = { band: "jss", settled: true };
     render(<WarmUpRun dimension="wmc" />);
