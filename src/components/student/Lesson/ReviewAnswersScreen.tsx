@@ -114,10 +114,7 @@ export function ReviewAnswersScreen({
 
   return (
     // Its actions at the foot, as 18a draws them - see the summary screen.
-    <div
-      data-fills-main
-      className="flex min-h-full flex-1 flex-col bg-nevo-cream text-nevo-near-black"
-    >
+    <div className="flex min-h-full flex-1 flex-col bg-nevo-cream text-nevo-near-black">
       <div className="flex-1 px-6 pt-8 pb-6 sm:px-8 lg:px-10">
         <div className="mx-auto w-full max-w-[560px] lg:max-w-[640px]">
           <span className="font-mono text-[11px] tracking-[0.08em] text-nevo-navy">
@@ -181,7 +178,8 @@ export function ReviewAnswersScreen({
         </div>
       </div>
 
-      <div className="shrink-0 px-6 pb-8 sm:px-8 lg:px-10">
+      {/* Pinned at the foot, as the summary's are - see there. */}
+      <div className="sticky bottom-0 shrink-0 bg-nevo-cream px-6 pt-2 pb-8 shadow-[0_68px_0_0_var(--color-nevo-cream)] sm:px-8 md:shadow-[0_76px_0_0_var(--color-nevo-cream)] lg:px-10">
         <div className="mx-auto flex w-full max-w-[560px] flex-col gap-2 sm:flex-row sm:gap-3 lg:max-w-[640px]">
           <Button
             className="w-full sm:flex-1"

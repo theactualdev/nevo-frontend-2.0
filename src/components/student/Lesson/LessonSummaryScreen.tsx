@@ -59,12 +59,9 @@ export function LessonSummaryScreen({
   const revisit = outcome?.revisit ?? lesson.assessment?.revisitConcepts ?? [];
 
   return (
-    // Grows to the foot of the shell's region (`data-fills-main`), so the
+    // Grows to the foot of the shell's region, so on a short page the
     // actions sit at the foot as 18a draws them, not under the last card.
-    <div
-      data-fills-main
-      className="flex min-h-full flex-1 flex-col bg-nevo-cream text-nevo-near-black"
-    >
+    <div className="flex min-h-full flex-1 flex-col bg-nevo-cream text-nevo-near-black">
       <div className="flex-1 px-6 pt-8 pb-6 sm:px-8 lg:px-10">
         <div className="mx-auto w-full max-w-[560px] lg:max-w-[640px]">
           <span className="font-mono text-[11px] tracking-[0.08em] text-nevo-navy">
@@ -142,7 +139,17 @@ export function LessonSummaryScreen({
         </div>
       </div>
 
-      <div className="shrink-0 px-6 pb-8 sm:px-8 lg:px-10">
+      {/*
+        PINNED, AS 18a DRAWS IT: the actions stay at the foot while a long
+        page scrolls under them, rather than flowing below the fold where
+        the bottom nav cut them and the launcher sat on them. `bottom-0` is
+        the scroll region's content edge, inside the shell's launcher
+        clearance (`<main>`'s pb-[68px], md:pb-[76px]), so they clear the
+        nav and the launcher at every size, where a short page puts them
+        too. The cream shadow, that clearance tall, covers what scrolls in
+        the gap below them; it must follow `<main>`'s padding.
+      */}
+      <div className="sticky bottom-0 shrink-0 bg-nevo-cream px-6 pb-8 shadow-[0_68px_0_0_var(--color-nevo-cream)] sm:px-8 md:shadow-[0_76px_0_0_var(--color-nevo-cream)] lg:px-10">
         <div className="mx-auto flex w-full max-w-[560px] flex-col gap-2 sm:flex-row sm:gap-3 lg:max-w-[640px]">
           <Button
             className="w-full sm:flex-1"
