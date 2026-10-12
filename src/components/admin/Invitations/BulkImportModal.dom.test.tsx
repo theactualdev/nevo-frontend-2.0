@@ -196,16 +196,18 @@ describe("BulkImportModal delivery", () => {
 });
 
 describe("BulkImportModal server-rejected rows", () => {
-  it("lists each rejected row once, with the server's own row number", async () => {
+  it("lists each rejected row once, at its line in the admin's file", async () => {
     /*
      * Every server-rejected row used to appear twice: once as "Row N" in the
-     * rejected list and again as "Row N+2" in a second violet list below - the
-     * base-guess `RejectedRows` refuses to make. One of the two was always the
-     * wrong line in the admin's spreadsheet.
+     * rejected list and again as "Row N+2" in a second list below - a guess at
+     * a base nobody had documented. The base is documented now
+     * (`rowNumberBase`, 1), and `row` counts into the rows that were SENT: row
+     * 2 of what was sent is Ngozi, on line 3 of the file.
      */
     bulk.mockResolvedValue({
       created: [created(1, "sent")],
-      rejected: [{ row: 5, reason: "That email is already invited." }],
+      rejected: [{ row: 2, reason: "That email is already invited.", value: "okonkwo.n@school.edu.ng" }],
+      rowNumberBase: 1,
     });
 
     const { container } = open();
@@ -216,7 +218,21 @@ describe("BulkImportModal server-rejected rows", () => {
     );
     const text = visibleText(container);
     expect(text.split("That email is already invited.").length - 1).toBe(1);
-    expect(text).toMatch(/Row 5\b/);
-    expect(text).not.toMatch(/Row 7\b/);
+    expect(text).toMatch(/Row 3\b/);
+    expect(text).toMatch(/okonkwo\.n@school\.edu\.ng/);
+    expect(text).not.toMatch(/Row 2\b|Row 4\b/);
+  });
+
+  it("names no line when the response gives no base to count from", async () => {
+    bulk.mockResolvedValue({
+      created: [created(1, "sent")],
+      rejected: [{ row: 2, reason: "That email is already invited." }],
+    });
+    const { container } = open();
+    await importFile(container);
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/That email is already invited\./),
+    );
+    expect(visibleText(container)).not.toMatch(/Row \d/);
   });
 });
