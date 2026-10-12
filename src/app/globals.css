@@ -470,6 +470,19 @@
     outline: 2px solid var(--color-nevo-navy);
     outline-offset: 2px;
   }
+
+  /*
+   * NEVER WHITE, design's reference says (CLAUDE-reference.md, 12 Oct), and
+   * the page under every screen was `--background`: the component library's
+   * white. It showed wherever a student screen did not paint its own cream -
+   * a phone pulled past its top or bottom, the gap under a short screen.
+   * While a student screen is up, the canvas is cream. Scoped by the same
+   * attribute as the ring above; the teacher and admin consoles are theirs.
+   */
+  html:has([data-nevo-console="student"]),
+  html:has([data-nevo-console="student"]) body {
+    background-color: var(--color-nevo-cream);
+  }
 }
 
 /*

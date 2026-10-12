@@ -411,4 +411,20 @@ describe("the student console's focus ring", () => {
       (before.match(/{/g) ?? []).length - (before.match(/}/g) ?? []).length;
     expect(depth).toBe(0);
   });
+
+  it("lays a cream canvas under a student screen, never the library's white", () => {
+    // Design's reference (12 Oct): never white anywhere. `--background` is
+    // white, and it showed past the edges of any screen shorter than the page.
+    const css = readFileSync(
+      join(process.cwd(), "src", "app", "globals.css"),
+      "utf8",
+    );
+    const selector = 'html:has([data-nevo-console="student"]) body {';
+    const at = css.indexOf(selector);
+    expect(at).toBeGreaterThan(-1);
+    const body = css.slice(at + selector.length, css.indexOf("}", at));
+    expect(body).toMatch(/background-color:\s*var\(--color-nevo-cream\)/);
+    // The page itself too, which is what a phone shows past its edges.
+    expect(css).toMatch(/html:has\(\[data-nevo-console="student"\]\),\r?\n/);
+  });
 });

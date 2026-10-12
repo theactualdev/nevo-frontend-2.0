@@ -133,7 +133,7 @@ describe("who it is from", () => {
 
     render(<LessonPlayer lesson={LESSON} plan={PLAN} assignmentId="a-1" />);
 
-    expect(screen.getByText("— Ms Adeyemi")).toBeInTheDocument();
+    expect(screen.getByText("- Ms Adeyemi")).toBeInTheDocument();
   });
 
   it("still shows the words when the name cannot be resolved", () => {
@@ -148,7 +148,7 @@ describe("who it is from", () => {
     render(<LessonPlayer lesson={LESSON} plan={PLAN} assignmentId="a-1" />);
 
     expect(noteOnScreen()).toBeInTheDocument();
-    expect(screen.getByText("— Your teacher")).toBeInTheDocument();
+    expect(screen.getByText("- Your teacher")).toBeInTheDocument();
   });
 });
 
