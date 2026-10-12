@@ -11,6 +11,7 @@ import {
 } from "react";
 import { notificationsApi, type Notification } from "@/lib/api/notifications";
 import { getSession, getToken, onSessionChange } from "@/lib/auth/session";
+import { USER_ROLES } from "@/lib/constants/permissions";
 import { useHasSession } from "@/hooks/useHasSession";
 import { useHydrated } from "@/hooks/useHydrated";
 import { SAMPLE_NOTIFICATIONS } from "@/lib/mocks/sampleNotifications";
@@ -195,7 +196,15 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const ownerRef = useRef<string | null | undefined>(undefined);
   useEffect(() => {
     const read = () => {
-      const next = getSession()?.userId ?? null;
+      /*
+       * A CHILD'S FEED, AND ONLY A CHILD'S. The provider is mounted at the
+       * root for every role, but only the student bell reads it - the teacher
+       * and admin consoles keep their own - so a staff session read the same
+       * feed twice, once here for nothing. Nobody but a student owns it.
+       */
+      const session = getSession();
+      const next =
+        session?.role === USER_ROLES.STUDENT ? (session.userId ?? null) : null;
       if (ownerRef.current === next) return; // a token refresh: same child
       ownerRef.current = next;
       // A different child, or nobody: nothing of the last one survives.
