@@ -40,6 +40,8 @@ import { ConsentFormDownload } from "./ConsentFormDownload";
 import { EraseRecordModal } from "./EraseRecordModal";
 import { MoveStudentSheet } from "./MoveStudentSheet";
 import { NoAccess, failureKind } from "../NoAccess";
+import { BackLink } from "../BackLink";
+import { withBack, type Back } from "../back";
 import { WriteFailed } from "../WriteFailed";
 
 /**
@@ -71,11 +73,11 @@ type Phase = "loading" | "ready" | "failed" | "denied";
 
 export function StudentDetailView({
   studentId,
-  fromClassId = null,
+  back = null,
 }: {
   studentId: string;
-  /** The class the admin opened this from, when they came from one. */
-  fromClassId?: string | null;
+  /** Where the admin came from - see `back.ts`. */
+  back?: Back | null;
 }) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>("loading");
@@ -197,22 +199,12 @@ export function StudentDetailView({
   const invited = status === "invited";
   const canErase = erasable(student);
   const currentClass = classes.find((c) => student.classIds.includes(c.id)) ?? null;
-  /*
-   * BACK GOES WHERE THE ADMIN CAME FROM. This was "All students" always, so a
-   * student opened from a class roster sent the admin to the whole school's
-   * list and left them to find the class again. Only a class this school
-   * actually has is honoured; anything else falls back to all students.
-   */
-  const backClass = fromClassId ? (classes.find((c) => c.id === fromClassId) ?? null) : null;
+  /** This page, as somewhere to come back to - its own back kept. */
+  const here = back ? withBack(`/admin/students/${student.id}`, back) : `/admin/students/${student.id}`;
 
   return (
     <Wrapper>
-      <Link
-        href={backClass ? `/admin/classes/${backClass.id}` : "/admin/students"}
-        className="text-[13.5px] font-semibold text-nevo-navy hover:opacity-75"
-      >
-        &larr; {backClass ? backClass.name : "All students"}
-      </Link>
+      <BackLink back={back} fallback={{ href: "/admin/students", label: "All students" }} />
 
       <div className="mt-3 flex items-center gap-4">
         <Avatar name={name} size={56} />
@@ -405,7 +397,7 @@ export function StudentDetailView({
         {mayRequestConsent(student.consent) ? (
           <div className="mt-4 flex flex-wrap items-start gap-x-6 gap-y-2 border-t border-nevo-near-black/8 pt-4">
             <Link
-              href={`/admin/students/${student.id}/consent`}
+              href={withBack(`/admin/students/${student.id}/consent`, { href: here, label: name })}
               className="text-[13.5px] font-semibold text-nevo-navy transition-opacity hover:opacity-75"
             >
               Record a signed paper form

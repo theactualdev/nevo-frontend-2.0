@@ -1,11 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { billingApi, type Invoice } from "@/lib/api/billing";
 import { longDate } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import { NoAccess, failureKind } from "../NoAccess";
+import { BackLink } from "../BackLink";
+import type { Back } from "../back";
 import { ReadFailed } from "../ReadFailed";
 import { StatusPill } from "./BillingView";
 import { InvoiceLines } from "./InvoiceBreakdown";
@@ -31,7 +32,14 @@ const CARD = "rounded-xl bg-nevo-cream-elevated shadow-[0_2px_8px_rgba(0,0,0,0.0
 
 type Phase = "loading" | "ready" | "failed" | "denied" | "missing";
 
-export function InvoiceDetailView({ invoiceId }: { invoiceId: string }) {
+export function InvoiceDetailView({
+  invoiceId,
+  back = null,
+}: {
+  invoiceId: string;
+  /** Where the admin came from - see `back.ts`. */
+  back?: Back | null;
+}) {
   const [phase, setPhase] = useState<Phase>("loading");
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [schoolName, setSchoolName] = useState<string | null>(null);
@@ -63,9 +71,7 @@ export function InvoiceDetailView({ invoiceId }: { invoiceId: string }) {
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
       <div className="mx-auto max-w-[720px]">
-        <Link href="/admin/billing" className="text-[13.5px] font-semibold text-nevo-navy hover:underline">
-          &larr; Billing
-        </Link>
+        <BackLink back={back} fallback={{ href: "/admin/billing", label: "Billing" }} />
 
         {phase === "loading" ? (
           <div className={cn(CARD, "mt-5 h-[260px] animate-pulse")} />

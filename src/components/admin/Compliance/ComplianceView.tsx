@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api/client";
 import {
@@ -18,6 +17,8 @@ import {
 import { studentsApi } from "@/lib/api/students";
 import { schoolApi } from "@/lib/api/school";
 import { NoAccess, failureKind } from "../NoAccess";
+import { BackLink } from "../BackLink";
+import type { Back } from "../back";
 import { ParentRequests } from "./ParentRequests";
 
 /**
@@ -64,7 +65,7 @@ function fmtDate(iso: string): string {
   });
 }
 
-export function ComplianceView() {
+export function ComplianceView({ back = null }: { back?: Back | null } = {}) {
   const [phase, setPhase] = useState<Phase>("loading");
   const [audit, setAudit] = useState<ComplianceAudit | null>(null);
   const [exporting, setExporting] = useState<Export>("idle");
@@ -137,12 +138,7 @@ export function ComplianceView() {
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
       <div className="mx-auto max-w-[820px]">
-        <Link
-          href="/admin/dashboard"
-          className="text-[13.5px] font-medium text-nevo-navy hover:underline"
-        >
-          &larr; School Overview
-        </Link>
+        <BackLink back={back} fallback={{ href: "/admin/dashboard", label: "School Overview" }} />
 
         <div className="mt-3 flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">

@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { timeAgo } from "@/lib/relativeTime";
 import { hasTechnicalDetail, latestRun, runIssues } from "@/lib/rosterSync";
 import { NoAccess, failureKind } from "../NoAccess";
+import { withBack } from "../back";
 import { WriteFailed } from "../WriteFailed";
 import { SupportEmailLink } from "../SupportEmail";
 import { usePermissions } from "@/hooks";
@@ -749,7 +750,7 @@ export function SsoView() {
                       written back to your {PROVIDER_LABELS[status.provider]}.
                     </span>
                     <Link
-                      href="/admin/compliance"
+                      href={withBack("/admin/compliance", { href: "/admin/sso", label: "IT & SSO" })}
                       className="shrink-0 text-[13.5px] font-semibold text-nevo-navy hover:underline"
                     >
                       What we store about students
