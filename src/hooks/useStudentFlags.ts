@@ -3,6 +3,7 @@
 import { useCallback } from "react";
 import { intelligenceApi, type AttentionFlag } from "@/lib/api/intelligence";
 import { useLiveQuery } from "./useLiveQuery";
+import { suddenish } from "./useTeacherFlags";
 
 /**
  * What Nevo has noticed about ONE child - C08's noticing banner.
@@ -16,6 +17,10 @@ import { useLiveQuery } from "./useLiveQuery";
  * `flagType` IS NOT CARRIED. The teacher dashboard uses it for an accent, and
  * "engagement decline" beside a named child is the diagnostic register rule 2
  * forbids - the description is what Nevo saw, which is the whole substance.
+ * Only the one bit the profile chip needs survives, as `isSudden`: design's
+ * chip precedence (12 Oct) puts a sudden change above worth a glance, and the
+ * type is the engine's word for which this is. The type's own words are never
+ * rendered.
  *
  * ACKNOWLEDGED FLAGS ARE DROPPED, the same rule "Worth your attention" on the
  * dashboard follows: the banner is what still wants the teacher, not a
@@ -35,6 +40,8 @@ export interface Noticed {
   /** Nevo's own sentence. Never assembled here. */
   note: string;
   generatedAt: string;
+  /** A `sudden_change` flag, as `useTeacherFlags` reads it for Home. */
+  isSudden: boolean;
 }
 
 /**
@@ -46,7 +53,12 @@ export interface Noticed {
 export function toNoticed(flags: AttentionFlag[]): Noticed[] {
   return flags
     .filter((f) => !f.acknowledged)
-    .map((f) => ({ id: f.id, note: f.description, generatedAt: f.generatedAt }))
+    .map((f) => ({
+      id: f.id,
+      note: f.description,
+      generatedAt: f.generatedAt,
+      isSudden: suddenish(f.flagType),
+    }))
     .sort((a, b) => Date.parse(b.generatedAt) - Date.parse(a.generatedAt));
 }
 

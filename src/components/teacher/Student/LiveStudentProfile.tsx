@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useSystemMessages } from "@/components/shared/SystemMessages";
 import { useStudentFlags } from "@/hooks/useStudentFlags";
+import { SummaryChip } from "@/components/teacher/shared/SummaryChip";
+import { profileChip } from "@/components/teacher/shared/summaryState";
 import { useStudentSessions } from "@/hooks/useStudentSessions";
 import { useTeacherClasses } from "@/hooks/useTeacherClasses";
 import { useRosterObservations } from "@/hooks/useRosterObservations";
@@ -133,6 +135,10 @@ export function LiveStudentProfile({
   /* The noticing banner's source. Like the sessions list, it needs the id
      before `profile` is destructured. */
   const { noticed } = useStudentFlags(studentId);
+  // C08's one chip, in design's precedence (12 Oct). Read from the open
+  // flags only: a read that failed or is in flight is no chip, not "nothing
+  // to see" - the noticing section below says which.
+  const chip = profileChip(noticed);
   /* C08's "What Nevo has noticed", from the class this profile was opened
      from. Also before the guard below. */
   const observations = useRosterObservations(classId, studentId);
@@ -233,9 +239,12 @@ export function LiveStudentProfile({
               {initialsOf(student.firstName, student.lastName)}
             </span>
             <div className="min-w-0">
-              <h1 className="text-[22px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[27px]">
-                {name || "This student"}
-              </h1>
+              <div className="flex flex-wrap items-center gap-x-[9px] gap-y-1 xl:gap-x-2.5">
+                <h1 className="text-[22px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[27px]">
+                  {name || "This student"}
+                </h1>
+                {chip && <SummaryChip state={chip} />}
+              </div>
               <span className="mt-[3px] block text-sm text-nevo-near-black/60 xl:mt-[5px] xl:text-[14.5px]">
                 {[
                   student.ageBand,

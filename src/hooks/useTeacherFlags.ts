@@ -61,7 +61,7 @@ export interface TeacherFlag {
  * lookup because a third value will ship before we hear about it, and guessing
  * wrong about an accent is cheaper than rendering no card.
  */
-function suddenish(flagType: string): boolean {
+export function suddenish(flagType: string): boolean {
   const t = flagType.toLowerCase();
   return (
     t.includes("sudden") ||
