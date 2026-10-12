@@ -1,4 +1,4 @@
-import { LEAVES_AFTER_MS } from "@/components/shared/SystemMessages";
+import { MESSAGE_LEAVES_AFTER_MS } from "@/lib/constants/systemMessages";
 
 /**
  * SCRUM-88 step 3: after signing out, a brief "Signed out" on the door.
@@ -18,4 +18,4 @@ export const SIGNED_OUT_LINE = "Signed out";
  * shared bar, top centre, ~5s. Signed-out and every other system
  * confirmation use it ... never a bottom-centre or 1.5s one-off."
  */
-export const SIGNED_OUT_HOLD_MS = LEAVES_AFTER_MS;
+export const SIGNED_OUT_HOLD_MS = MESSAGE_LEAVES_AFTER_MS;
