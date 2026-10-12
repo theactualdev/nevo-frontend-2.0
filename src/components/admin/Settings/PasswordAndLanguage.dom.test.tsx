@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
+import { ApiError } from "@/lib/api/client";
 import { AccountSettings } from "./AccountSettings";
 
 /**
@@ -93,6 +94,32 @@ describe("changing a password", () => {
 });
 
 describe("language", () => {
+  it("says a wrong current password under that field, with no lockout language", async () => {
+    // SCRUM-99 D12.7: "Plain line under that field, no lockout language, no
+    // attempt counter shown."
+    changePassword.mockRejectedValue(
+      new ApiError(401, "Unauthorized", {
+        detail: { code: "current_password_incorrect", message: "The current password did not match." },
+      }),
+    );
+    const { container } = render(<AccountSettings />);
+    await screen.findByLabelText("New password");
+    fireEvent.change(field("pw-current"), { target: { value: "not-it" } });
+    fireEvent.change(field("pw-new"), { target: { value: "a long new phrase" } });
+    fireEvent.change(field("pw-confirm"), { target: { value: "a long new phrase" } });
+    fireEvent.click(screen.getByRole("button", { name: "Change password" }));
+
+    expect(await screen.findByText("That isn’t your current password.")).toBeInTheDocument();
+    expect(field("pw-current").getAttribute("aria-describedby")).toBe("pw-current-wrong");
+    const text = visibleText(container);
+    expect(text).not.toMatch(/attempts?|locked|try again later/i);
+    expect(text).not.toMatch(/didn.t go through/);
+
+    // Typing again clears it.
+    fireEvent.change(field("pw-current"), { target: { value: "the real one" } });
+    await waitFor(() => expect(screen.queryByText("That isn’t your current password.")).toBeNull());
+  });
+
   it("names English read-only, and says whose Nevo it changes", async () => {
     const { container } = render(<AccountSettings />);
     const english = await screen.findByRole("button", { name: "English" });
