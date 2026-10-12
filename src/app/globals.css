@@ -453,6 +453,41 @@
   html {
     @apply font-sans;
   }
+
+  /*
+   * THE STUDENT CONSOLE'S FOCUS RING. The rule above leaves every element the
+   * browser's own ring in `--ring` at half strength: a 1px grey that all but
+   * vanishes on cream. No frame specifies focus, so a child moving by keyboard
+   * or switch gets a 2px navy outline, 2px clear of the control.
+   *
+   * In the base layer, so a component that styles its own focus (a field with
+   * `outline-none` and a navy border, a ring) keeps it: any utility beats
+   * this. Scoped by `data-nevo-console="student"`, which the student shell and
+   * each student overlay that portals out of it carry. The teacher and admin
+   * consoles are untouched.
+   */
+  [data-nevo-console="student"] :focus-visible {
+    outline: 2px solid var(--color-nevo-navy);
+    outline-offset: 2px;
+  }
+}
+
+/*
+ * THE SHARED BUTTON TAKES THE STUDENT RING TOO. `Button` (and the shadcn one)
+ * carries its own focus style - `outline-none` and a 3px ring at 35% navy -
+ * and a utility beats the base-layer rule above, which is the point of putting
+ * it there. So one student screen showed two focus styles: the solid navy
+ * outline on fields and a pale ring on buttons. Inside the student console a
+ * button's focus reads as the console's: the same 2px navy outline, with its
+ * pale ring dropped. Unlayered, because it has to win over those utilities;
+ * keyed on `data-slot="button"`, which only the button components set. The
+ * teacher and admin consoles carry no `data-nevo-console`, so they keep the
+ * ring they had.
+ */
+[data-nevo-console="student"] [data-slot="button"]:focus-visible {
+  outline: 2px solid var(--color-nevo-navy);
+  outline-offset: 2px;
+  --tw-ring-shadow: 0 0 #0000;
 }
 
 /* Reduced-motion mode (Design System v2 §10 / §9 accessibility).

@@ -99,6 +99,7 @@ export function QuickCheckSheet({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
+        data-nevo-console="student"
         side="bottom"
         showCloseButton={false}
         aria-describedby={undefined}

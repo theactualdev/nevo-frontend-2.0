@@ -80,6 +80,7 @@ export function AccountPauseHost() {
       <DialogPrimitive.Portal>
         {closed || settled ? (
           <DialogPrimitive.Content
+            data-nevo-console="student"
             aria-describedby={undefined}
             onEscapeKeyDown={(e) => e.preventDefault()}
             onInteractOutside={(e) => e.preventDefault()}
@@ -98,6 +99,7 @@ export function AccountPauseHost() {
           <>
             <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-nevo-near-black/40 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300" />
             <DialogPrimitive.Content
+              data-nevo-console="student"
               onEscapeKeyDown={(e) => e.preventDefault()}
               onInteractOutside={(e) => e.preventDefault()}
               className="fixed top-1/2 left-1/2 z-50 flex w-[295px] max-w-[calc(100%-48px)] -translate-x-1/2 -translate-y-1/2 flex-col items-center rounded-2xl bg-nevo-cream-elevated px-[30px] py-9 text-center text-nevo-near-black shadow-[0_8px_32px_rgba(0,0,0,0.16)] outline-none motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-98 motion-safe:slide-in-from-bottom-[10px] motion-safe:duration-[380ms] sm:w-[388px] sm:px-10 sm:py-11"

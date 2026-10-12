@@ -93,6 +93,17 @@ describe("a pause that lands while a child is reading", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
+  it("carries the student focus ring, though it portals out of the shell", async () => {
+    const { pause, AccountPauseHost } = await fresh();
+    render(<AccountPauseHost />);
+    act(() => pause.announceAccountPause());
+
+    expect(screen.getByRole("dialog")).toHaveAttribute(
+      "data-nevo-console",
+      "student",
+    );
+  });
+
   it("settles into the full paused screen on Okay, with nothing for the paused child to retry", async () => {
     const { pause, AccountPauseHost } = await fresh();
     render(<AccountPauseHost />);

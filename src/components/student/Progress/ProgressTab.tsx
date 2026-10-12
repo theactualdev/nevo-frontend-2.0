@@ -1,7 +1,6 @@
 "use client";
 
 import { useId, type ReactNode } from "react";
-import { IllustrationWrapper } from "@/components/shared";
 import { SampleRegion } from "@/components/shared/SampleRegion";
 import Link from "next/link";
 import { useHasSession } from "@/hooks/useHasSession";
@@ -12,6 +11,13 @@ import {
   type SubjectTopics,
 } from "@/hooks/useSubjectProgress";
 import { cn } from "@/lib/utils";
+import {
+  EmptyArt,
+  TAB_FILL,
+  TAB_PAGE,
+  TAB_TITLE,
+  TabEmpty,
+} from "@/components/student/Shell/TabPage";
 import { GROWTH_SUMMARY, SUBJECTS } from "./progressData";
 
 /**
@@ -90,10 +96,8 @@ export function ProgressTab() {
   // in fails, rather than reading the fixtures as the assertion's own answer.
   return (
     <SampleRegion kind="student:progress">
-    <div className="mx-auto w-full max-w-[900px] px-5 py-2 pb-6 sm:px-8 sm:py-6 lg:py-8">
-      <h1 className="text-2xl font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[30px] lg:text-[32px]">
-        Progress
-      </h1>
+    <div className={TAB_PAGE}>
+      <h1 className={TAB_TITLE}>Progress</h1>
 
       <p className="mt-5 max-w-[300px] text-base leading-[1.55] text-nevo-near-black/72 sm:mt-6 sm:max-w-[560px] sm:text-[18px] lg:mt-7 lg:max-w-[640px] lg:text-[19px]">
         {GROWTH_SUMMARY}
@@ -133,12 +137,10 @@ function LiveProgress({
   // stands where there are cards below for it to introduce.
   const summary =
     reflection?.trim() ||
-    (subjects.length > 0 ? "Here’s what you’ve been working on." : null);
+    (subjects.length > 0 ? "Here's what you've been working on." : null);
   return (
-    <div className="mx-auto w-full max-w-[900px] px-5 py-2 pb-6 sm:px-8 sm:py-6 lg:py-8">
-      <h1 className="text-2xl font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[30px] lg:text-[32px]">
-        Progress
-      </h1>
+    <div className={TAB_PAGE}>
+      <h1 className={TAB_TITLE}>Progress</h1>
 
       {/* With no cards under it the reflection stands alone at full width,
           and the grid is not drawn at all (22, "reflection only", D103). */}
@@ -220,13 +222,11 @@ function cardLine(currentTopic: string | null | undefined, otherwise: string) {
 /** The read failed - not the same as having done nothing. */
 function CouldNotLoad() {
   return (
-    <div className="mx-auto w-full max-w-[900px] px-5 py-2 pb-6 sm:px-8 sm:py-6 lg:py-8">
-      <h1 className="text-2xl font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[30px] lg:text-[32px]">
-        Progress
-      </h1>
+    <div className={TAB_PAGE}>
+      <h1 className={TAB_TITLE}>Progress</h1>
       <div className="mt-8 rounded-[16px] bg-nevo-cream-elevated p-[22px] shadow-elevation-1">
         <p className="text-[17px] font-semibold text-nevo-near-black">
-          We couldn&rsquo;t load your progress just now
+          We couldn&apos;t load your progress just now
         </p>
         <p className="mt-1.5 text-[15px] leading-[1.5] text-nevo-near-black/68">
           Nothing is lost. Give it a moment and try again.
@@ -246,10 +246,8 @@ function CouldNotLoad() {
 /** Heading only, while we work out who is looking. */
 function ProgressShell() {
   return (
-    <div className="mx-auto w-full max-w-[900px] px-5 py-2 pb-6 sm:px-8 sm:py-6 lg:py-8">
-      <h1 className="text-2xl font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[30px] lg:text-[32px]">
-        Progress
-      </h1>
+    <div className={TAB_PAGE}>
+      <h1 className={TAB_TITLE}>Progress</h1>
       <div className="mt-8 h-24 max-w-[560px] animate-pulse rounded-[12px] bg-nevo-cream-elevated" />
     </div>
   );
@@ -264,24 +262,19 @@ function ProgressShell() {
  */
 function NothingYet() {
   return (
-    <div className="mx-auto w-full max-w-[900px] px-5 py-2 pb-6 sm:px-8 sm:py-6 lg:py-8">
-      <h1 className="text-2xl font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[30px] lg:text-[32px]">
-        Progress
-      </h1>
+    <div className={cn(TAB_PAGE, TAB_FILL)}>
+      <h1 className={TAB_TITLE}>Progress</h1>
 
-      <div className="flex flex-col items-center px-6 pt-10 pb-6 text-center">
-        <IllustrationWrapper
-          src="/illustrations/empty-lessons.png"
-          alt=""
-          width={512}
-          height={512}
-          className="w-[170px]"
-        />
-        {/* 29 Empty States, "Progress (Empty)": one line. */}
-        <h2 className="mt-5 max-w-[280px] text-lg font-medium leading-[1.35] text-nevo-near-black">
-          Your progress will show here as you complete lessons
-        </h2>
-      </div>
+      {/* 29 Empty States, "Progress (Empty)": its own figure, and one line. */}
+      <TabEmpty
+        art={
+          <EmptyArt
+            src="/illustrations/empty-progress.png"
+            className="h-[200px] md:h-[240px] lg:h-[250px]"
+          />
+        }
+        line="Your progress will show here as you complete lessons"
+      />
     </div>
   );
 }

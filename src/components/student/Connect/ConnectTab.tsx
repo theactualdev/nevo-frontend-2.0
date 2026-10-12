@@ -157,6 +157,22 @@ export function ConnectTab({
     if (shownId && shownUnread) markThreadRead(shownId);
   }, [shownId, shownUnread, markThreadRead]);
 
+  /*
+   * A CONVERSATION OPENS AT ITS NEWEST MESSAGE, and stays there as messages
+   * arrive - the one a child came to read, or just sent. It opened at the
+   * oldest, so on a long thread the latest reply was a scroll away.
+   * `view` is here because a phone's conversation pane is not laid out until
+   * it is shown, and has nothing to scroll before then.
+   */
+  const messagesRef = useRef<HTMLDivElement>(null);
+  const activeKey = active?.id;
+  const messageCount = active?.messages.length ?? 0;
+  const historyState = active?.history;
+  useEffect(() => {
+    const el = messagesRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [activeKey, messageCount, historyState, view]);
+
   const setMessages = (threadId: string, fn: (m: Message[]) => Message[]) =>
     setThreads((ts) =>
       ts.map((t) =>
@@ -354,7 +370,7 @@ export function ConnectTab({
              know and which is the crueller of the two guesses. */
           <div className="flex flex-1 flex-col items-center justify-center px-10 pb-10 text-center">
             <p className="text-[17px] font-medium text-nevo-near-black">
-              We couldn&rsquo;t load your messages
+              We couldn&apos;t load your messages
             </p>
             <p className="mt-2 max-w-[300px] text-[15px] leading-[1.5] text-nevo-near-black/62">
               Nothing is lost. Give it a moment and try again.
@@ -465,7 +481,10 @@ export function ConnectTab({
           </span>
         </header>
 
-        <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto p-5">
+        <div
+          ref={messagesRef}
+          className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto p-5"
+        >
           {/* D104 (8 Oct): one conversation loading, or failed to load. Not
               "no messages", and drawn in place of the conversation - its
               messages and the composer come back only once it has loaded,
@@ -648,11 +667,15 @@ function MessageStatusLine({
     );
   }
   // failed — warm, never alarming; tap to retry.
+  //
+  // The only way to resend, so a 44px target: it was the 16px line of text.
+  // The negative margin keeps the line where it was; `z-10` keeps the next
+  // message from sitting over the bottom of the target.
   return (
     <button
       type="button"
       onClick={onRetry}
-      className="flex cursor-pointer items-center gap-1.5 px-1 text-xs text-nevo-violet"
+      className="relative z-10 -my-3.5 flex min-h-11 cursor-pointer items-center gap-1.5 px-1 text-xs text-nevo-violet"
     >
       <span className="size-1.5 rounded-full bg-nevo-violet" />
       Didn&apos;t send - tap to try again

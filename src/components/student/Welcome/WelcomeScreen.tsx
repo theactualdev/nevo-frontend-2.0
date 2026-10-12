@@ -88,6 +88,7 @@ export function WelcomeScreen() {
               </Button>
             </SheetTrigger>
             <SheetContent
+              data-nevo-console="student"
               side="bottom"
               className="rounded-t-[20px] border-0! bg-nevo-cream pb-7 sm:inset-x-auto! sm:top-1/2! sm:bottom-auto! sm:left-1/2! sm:w-[440px] sm:max-w-[calc(100%-48px)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[16px]! sm:p-7 sm:shadow-[0_8px_32px_rgba(0,0,0,0.16)]"
             >
