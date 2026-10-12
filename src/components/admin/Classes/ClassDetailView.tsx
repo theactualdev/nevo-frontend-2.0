@@ -495,7 +495,8 @@ export function ClassDetailView({ classId }: { classId: string }) {
           students.map((s, i) => (
             <Link
               key={s.studentId}
-              href={`/admin/students/${s.studentId}`}
+              // Back on the student's page returns here.
+              href={`/admin/students/${s.studentId}?class=${encodeURIComponent(classId)}`}
               className={cn(
                 "flex items-center gap-3 px-[22px] py-[13px] transition-colors hover:bg-nevo-navy/[0.03]",
                 i < students.length - 1 && ROW_DIVIDER,

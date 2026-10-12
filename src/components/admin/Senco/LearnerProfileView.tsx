@@ -101,11 +101,26 @@ function ReadFailed({
   firstName,
   what,
   onRetry,
+  denied = false,
 }: {
   firstName: string;
   what: string;
   onRetry: () => void;
+  /**
+   * The read was REFUSED (403), not lost. No retry: a refused scope is not
+   * granted by asking again, and "we couldn't read" blamed the system for a
+   * permission decision - the rule #685 applied to the rest of the console.
+   */
+  denied?: boolean;
 }) {
+  if (denied) {
+    return (
+      <p className="m-0 text-sm leading-[1.55] text-nevo-near-black/62">
+        You don&rsquo;t have access to {firstName}&rsquo;s {what}. Whoever
+        manages permissions for your school can change that.
+      </p>
+    );
+  }
   return (
     <div className="m-0 text-sm text-nevo-near-black/62">
       <p className="m-0">
@@ -162,6 +177,12 @@ export function LearnerProfileView({ studentId }: { studentId: string }) {
     mastery: false,
     adaptations: false,
   });
+  /** Which of those failures were refusals (403) rather than lost reads. */
+  const [denied, setDenied] = useState({
+    accommodations: false,
+    mastery: false,
+    adaptations: false,
+  });
 
   const load = useCallback(() => {
     Promise.all([studentsApi.get(studentId), classesApi.list(true)])
@@ -177,18 +198,27 @@ export function LearnerProfileView({ studentId }: { studentId: string }) {
           mastery: false,
           adaptations: false,
         });
+        setDenied({
+          accommodations: false,
+          mastery: false,
+          adaptations: false,
+        });
+        const fail = (section: keyof typeof failed) => (err: unknown) => {
+          setFailed((f) => ({ ...f, [section]: true }));
+          if (failureKind(err) === "denied") setDenied((d) => ({ ...d, [section]: true }));
+        };
         studentsApi
           .accommodations(studentId)
           .then(setAccommodations)
-          .catch(() => setFailed((f) => ({ ...f, accommodations: true })));
+          .catch(fail("accommodations"));
         studentsApi
           .mastery(studentId)
           .then(setMastery)
-          .catch(() => setFailed((f) => ({ ...f, mastery: true })));
+          .catch(fail("mastery"));
         studentsApi
           .adaptations(studentId)
           .then(setAdaptations)
-          .catch(() => setFailed((f) => ({ ...f, adaptations: true })));
+          .catch(fail("adaptations"));
       })
       .catch((err: unknown) => setPhase(failureKind(err)));
   }, [studentId]);
@@ -324,6 +354,7 @@ export function LearnerProfileView({ studentId }: { studentId: string }) {
             firstName={firstName}
             what="accommodations"
             onRetry={load}
+            denied={denied.accommodations}
           />
         ) : active.length === 0 ? (
           <p className="m-0 text-sm text-nevo-near-black/62">
@@ -408,7 +439,12 @@ export function LearnerProfileView({ studentId }: { studentId: string }) {
             })}
           </ul>
         ) : failed.accommodations && observationsPhase !== "ready" ? (
-          <ReadFailed firstName={firstName} what="signals" onRetry={load} />
+          <ReadFailed
+            firstName={firstName}
+            what="signals"
+            onRetry={load}
+            denied={denied.accommodations}
+          />
         ) : signals.length > 0 ? (
           <>
             {/* The weaker source, and labelled as one. These are signal NAMES
@@ -454,6 +490,7 @@ export function LearnerProfileView({ studentId }: { studentId: string }) {
               firstName={firstName}
               what="concept record"
               onRetry={load}
+              denied={denied.mastery}
             />
           </div>
         ) : mastery.length === 0 ? (
@@ -517,6 +554,7 @@ export function LearnerProfileView({ studentId }: { studentId: string }) {
               firstName={firstName}
               what="adaptation history"
               onRetry={load}
+              denied={denied.adaptations}
             />
           </div>
         ) : adaptations.length === 0 ? (
