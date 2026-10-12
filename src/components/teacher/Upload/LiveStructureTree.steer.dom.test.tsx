@@ -127,7 +127,7 @@ describe("folding the tree", () => {
     show();
 
     expect(screen.getAllByLabelText("Section 1 title")).toHaveLength(2);
-    expect(screen.getByText("Springs")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Springs")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Collapse all" })).toBeInTheDocument();
   });
 
@@ -136,14 +136,14 @@ describe("folding the tree", () => {
     fireEvent.click(screen.getByRole("button", { name: "Collapse all" }));
 
     expect(screen.queryByLabelText("Section 1 title")).not.toBeInTheDocument();
-    expect(screen.queryByText("Springs")).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue("Springs")).not.toBeInTheDocument();
     // The lessons themselves stay: only what is under them folds.
     expect(screen.getByLabelText("Lesson 1 title")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
     expect(screen.getAllByLabelText("Section 1 title")).toHaveLength(2);
-    expect(screen.getByText("Springs")).toBeInTheDocument();
-    expect(screen.getByText("Mouths")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Springs")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Mouths")).toBeInTheDocument();
   });
 
   it("folds the sections too, so a lesson opened after Collapse all shows them folded", () => {
@@ -152,7 +152,7 @@ describe("folding the tree", () => {
     fireEvent.click(screen.getByRole("button", { name: "Lesson 1 sections" }));
 
     expect(screen.getAllByLabelText("Section 1 title")).toHaveLength(1);
-    expect(screen.queryByText("Springs")).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue("Springs")).not.toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Section 1 segments" })[0]).toHaveAttribute(
       "aria-expanded",
       "false",
@@ -165,8 +165,8 @@ describe("folding the tree", () => {
     fireEvent.click(caret);
 
     expect(caret).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByText("Springs")).not.toBeInTheDocument();
-    expect(screen.getByText("Mouths")).toBeInTheDocument();
+    expect(screen.queryByDisplayValue("Springs")).not.toBeInTheDocument();
+    expect(screen.getByDisplayValue("Mouths")).toBeInTheDocument();
     // Anything folded means the toggle now offers to expand.
     expect(screen.getByRole("button", { name: "Expand all" })).toBeInTheDocument();
   });
@@ -175,7 +175,7 @@ describe("folding the tree", () => {
     show();
     fireEvent.click(screen.getAllByRole("button", { name: "Section 1 segments" })[0]);
 
-    expect(screen.queryByText("Springs")).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue("Springs")).not.toBeInTheDocument();
     expect(screen.getAllByLabelText("Section 1 title")).toHaveLength(2);
   });
 

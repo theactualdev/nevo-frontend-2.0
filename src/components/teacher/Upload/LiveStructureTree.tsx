@@ -43,8 +43,16 @@ import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
  * new section after this segment" splits a section where the teacher says -
  * all expressible, because `PUT structure` takes `segmentIds` per module.
  * Buttons rather than drag handles, for the reason the rest of the tree uses
- * them: HTML5 drag does not fire on a tablet. Segment titles are not
- * editable: the structure document carries keys, not titles.
+ * them: HTML5 drag does not fire on a tablet.
+ *
+ * TITLES AT EVERY LEVEL, as of 12 Oct (T73, T70). The document now carries
+ * the unit's own `title` and its `segments` rows, so the block header and
+ * each segment row are inputs like the lesson and section titles, and a
+ * rename travels back in the same PUT the commit saves first. A title the
+ * parse did not find stays EMPTY: the block's placeholder is the file's own
+ * name, a segment's is its number, and nothing is written for either until
+ * a teacher types one. A key with no row in the document has nowhere to hold
+ * a title, so it stays numbered and is not offered as an input.
  *
  * NOTHING IS COMMITTED THAT THE SERVER HAS NOT SEEN. The commit acts on the
  * stored structure, so committing a draft would add a unit shaped differently
@@ -61,6 +69,15 @@ import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
  */
 
 type Saving = "idle" | "saving" | "saved" | "failed";
+
+/**
+ * The segment rows to steer: the document's own where it carries them, since
+ * that is the list `PUT structure` writes back, else the status response's.
+ */
+const rowsOf = (
+  doc: UploadStructure,
+  fallback: UploadSegment[] | undefined,
+): UploadSegment[] | undefined => (doc.segments?.length ? doc.segments : fallback);
 
 export function LiveStructureTree({
   uploadId,
@@ -81,6 +98,14 @@ export function LiveStructureTree({
   const say = useSystemMessages();
   const [draft, setDraft] = useState<StructureLesson[]>(() =>
     lessonsOf(structure),
+  );
+  /** The unit's own title. Absent or null is no title, and stays so until typed. */
+  const [title, setTitle] = useState<string | null | undefined>(
+    structure.title,
+  );
+  /** The third level's rows, renamed in place. Undefined on an older upload. */
+  const [rows, setRows] = useState<UploadSegment[] | undefined>(() =>
+    rowsOf(structure, segments),
   );
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState<Saving>("idle");
@@ -134,12 +159,40 @@ export function LiveStructureTree({
     plural(totals.segments, "segment", "segments"),
   ].join(" · ");
 
+  /** Each row by its key, for the title input a segment row renames in place. */
+  const rowByKey = new Map((rows ?? []).map((r) => [r.segmentKey, r]));
+
   /** Every edit goes through here, so nothing changes without marking dirty. */
-  const edit = (next: StructureLesson[]) => {
-    setDraft(next);
+  const touched = () => {
     setDirty(true);
     setSaving("idle");
     setError("");
+  };
+
+  const edit = (next: StructureLesson[]) => {
+    setDraft(next);
+    touched();
+  };
+
+  /** Written as typed, empty included, as a lesson or section title is. */
+  const renameUnit = (next: string) => {
+    setTitle(next);
+    touched();
+  };
+
+  /** A segment's title lives on its row, found by key wherever it now sits. */
+  const renameSegment = (key: string, next: string) => {
+    setRows((prev) =>
+      prev?.map((r) => (r.segmentKey === key ? { ...r, title: next } : r)),
+    );
+    touched();
+  };
+
+  /** What the server says the document now is, at every level. */
+  const adopt = (doc: UploadStructure) => {
+    setDraft(lessonsOf(doc));
+    setTitle(doc.title);
+    setRows(rowsOf(doc, segments));
   };
 
   const renameLesson = (li: number, title: string) =>
@@ -307,6 +360,10 @@ export function LiveStructureTree({
     }));
     return {
       ...structure,
+      // Only a title the document had or a teacher typed: an absent one is
+      // not written as anything.
+      ...(title !== undefined ? { title } : {}),
+      ...(rows ? { segments: rows } : {}),
       lessons,
       // The legacy mirror is the first lesson; keeping it coherent means a
       // reader of either shape sees the same unit.
@@ -322,7 +379,7 @@ export function LiveStructureTree({
     setError("");
     try {
       const res = await uploadsApi.updateStructure(uploadId, normalised());
-      setDraft(lessonsOf(res.structure));
+      adopt(res.structure);
       setCanUndo(Boolean(res.canUndo));
       setDirty(false);
       setSaving("saved");
@@ -346,7 +403,7 @@ export function LiveStructureTree({
   const undo = async () => {
     try {
       const res = await uploadsApi.undo(uploadId);
-      setDraft(lessonsOf(res.structure));
+      adopt(res.structure);
       setCanUndo(Boolean(res.canUndo));
       setDirty(false);
       setSaving("idle");
@@ -424,9 +481,17 @@ export function LiveStructureTree({
             <div className="font-mono text-[10px] font-bold tracking-[0.14em] text-nevo-violet/80">
               THE BLOCK YOU UPLOADED
             </div>
-            <div className="truncate text-base font-semibold text-nevo-cream">
-              {blockName}
-            </div>
+            {/* C07d's block title, as an input (T73). Its treatment is the
+                sample tree's: the frame's cream focus fill would put cream
+                text on cream. No title is an empty field, its hint the
+                file's own name - never a title written on the parse's behalf. */}
+            <input
+              value={title ?? ""}
+              onChange={(e) => renameUnit(e.target.value)}
+              aria-label="Unit title"
+              placeholder={blockName}
+              className="mt-0.5 w-full min-w-0 rounded-lg border-[1.5px] border-transparent bg-transparent px-2 py-[5px] text-base font-semibold text-nevo-cream outline-none transition-colors placeholder:text-nevo-cream/45 hover:bg-nevo-cream/10 focus:border-nevo-violet focus:bg-nevo-navy"
+            />
           </div>
           <span className="shrink-0 text-xs text-nevo-cream/70">
             {summary}
@@ -487,7 +552,7 @@ export function LiveStructureTree({
                 // The third level: every segment, named where the parse
                 // named it and numbered where it did not. An older upload
                 // with no segment rows keeps its count and opens nothing.
-                const named = segments ? namedSegments(m.segmentIds, segments) : [];
+                const named = rows ? namedSegments(m.segmentIds, rows) : [];
                 // Numbered across the lesson, as the single path numbers them.
                 const before = lesson.modules
                   .slice(0, mi)
@@ -553,13 +618,27 @@ export function LiveStructureTree({
                 {moduleOpen && named.length > 0 && (
                     <ul className="mb-1 ml-9 mt-0.5 flex list-none flex-col gap-[5px] p-0">
                       {named.map((seg, pi) => {
-                        const label = seg.title ?? `Segment ${before + pi + 1}`;
+                        const number = `Segment ${before + pi + 1}`;
+                        const label = seg.title ?? number;
+                        // The raw title, not `seg.title`: that one is trimmed,
+                        // and an input fed it could never take a space.
+                        const row = rowByKey.get(seg.key);
                         return (
                         <li
                           key={seg.key}
                           className="flex items-center gap-[9px] rounded-lg bg-nevo-cream/55 px-[11px] py-2 text-[13px] leading-[1.45] text-nevo-near-black"
                         >
-                          <span className="min-w-0 flex-1 truncate">{label}</span>
+                          {row ? (
+                            <input
+                              value={row.title ?? ""}
+                              onChange={(e) => renameSegment(seg.key, e.target.value)}
+                              aria-label={`${number} title`}
+                              placeholder={number}
+                              className={cn(titleInput, "px-[7px] py-1 text-[13px] text-nevo-near-black")}
+                            />
+                          ) : (
+                            <span className="min-w-0 flex-1 truncate">{label}</span>
+                          )}
                           {seg.minutes > 0 && (
                             <span className="shrink-0 text-[11px] text-nevo-near-black/42">
                               {seg.minutes} min
