@@ -675,9 +675,16 @@ export const lessonsApi = {
     }),
 
   /** The parsed lesson library. GET /api/content/lessons */
-  list: (options?: { limit?: number }) =>
+  /** One page: `limit` up to 200, and `offset` since 12 Oct. */
+  list: (options?: { limit?: number; offset?: number }) =>
     api.get<LessonSummary[]>("/api/content/lessons", {
-      params: options?.limit ? { limit: options.limit } : undefined,
+      params:
+        options?.limit || options?.offset
+          ? {
+              ...(options.limit ? { limit: options.limit } : {}),
+              ...(options.offset ? { offset: options.offset } : {}),
+            }
+          : undefined,
     }),
 
   /**

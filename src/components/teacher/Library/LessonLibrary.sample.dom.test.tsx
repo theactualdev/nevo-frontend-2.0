@@ -70,17 +70,17 @@ describe("the lessons on the shelf", () => {
 });
 
 describe("a library the read could not return in full", () => {
-  it("says only the first 200 are shown", () => {
+  it("says only the first 2,000 are shown", () => {
     state({ capped: true });
     render(<LessonLibrary />);
 
-    expect(screen.getByText(/Showing the first 200 of your lessons/)).toBeInTheDocument();
+    expect(screen.getByText(/Showing the first 2,000 of your lessons/)).toBeInTheDocument();
   });
 
   it("says nothing of the kind when it is all there", () => {
     state({ capped: false });
     render(<LessonLibrary />);
 
-    expect(screen.queryByText(/first 200/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Showing the first/)).not.toBeInTheDocument();
   });
 });

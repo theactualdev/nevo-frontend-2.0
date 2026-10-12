@@ -100,6 +100,8 @@ describe("resetting a password", () => {
     render(<TeacherPasswordReset />);
 
     expect(screen.getByText("This link has expired")).toBeInTheDocument();
+    // 60, the contract's value since 12 Oct - not the frame's 30.
+    expect(screen.getByText(/Reset links last 60 minutes/)).toBeInTheDocument();
     expect(screen.getByAltText("Nevo")).toBeInTheDocument();
     expect(screen.getByText(TROUBLE)).toBeInTheDocument();
   });

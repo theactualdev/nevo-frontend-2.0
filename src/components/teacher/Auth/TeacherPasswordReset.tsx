@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { authApi } from "@/lib/api";
+import { RESET_LINK_MINUTES } from "@/lib/constants/passwordReset";
 import { ApiError } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 import { SetPasswordForm } from "./SetPasswordForm";
@@ -77,6 +78,8 @@ export function TeacherPasswordReset({
   const [phase, setPhase] = useState<
     "idle" | "sending" | "sent" | "unreachable"
   >("idle");
+  /** How long the link lasts: the receipt's word, else the contract's (12 Oct). */
+  const [minutes, setMinutes] = useState(RESET_LINK_MINUTES);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
@@ -113,9 +116,7 @@ export function TeacherPasswordReset({
           This link has expired
         </h1>
         <p className="mt-3 text-[15.5px] leading-[1.55] text-nevo-near-black/70 xl:text-[16px]">
-          Reset links last 30 minutes, for your security. Nothing is wrong
-          with your account - request a fresh link and we&rsquo;ll send it right
-          over.
+          {`Reset links last ${RESET_LINK_MINUTES} minutes, for your security. Nothing is wrong with your account - request a fresh link and we${"’"}ll send it right over.`}
         </p>
         <button
           type="button"
@@ -180,7 +181,7 @@ export function TeacherPasswordReset({
           <b className="font-semibold text-nevo-near-black">
             {email.trim() || "that address"}
           </b>
-          {", a reset link is on its way. It expires in 30 minutes."}
+          {`, a reset link is on its way. It expires in ${minutes} minutes.`}
         </p>
         <Link
           href={signInHref}
@@ -213,7 +214,12 @@ export function TeacherPasswordReset({
       // this screen must not produce.
       authApi
         .requestPasswordReset(email.trim())
-        .then(() => true)
+        .then((receipt) => {
+          // The server's own number when it gives one, else the contract's.
+          const n = receipt?.expiresInMinutes;
+          if (typeof n === "number" && n > 0) setMinutes(n);
+          return true;
+        })
         .catch((err: unknown) =>
           err instanceof ApiError && err.status === 0 ? "unreachable" : true,
         ),

@@ -121,18 +121,38 @@ describe("the student directory", () => {
 });
 
 describe("the lesson library", () => {
-  it("asks for the most the endpoint will return", async () => {
+  it("asks for the most the endpoint will return, from the start", async () => {
     api.lessonsList.mockResolvedValue([lesson(1)]);
     renderHook(() => useLessonLibrary());
 
-    await waitFor(() => expect(api.lessonsList).toHaveBeenCalledWith({ limit: 200 }));
+    await waitFor(() => expect(api.lessonsList).toHaveBeenCalledWith({ limit: 200, offset: 0 }));
   });
 
-  it("says it may be capped when a full page comes back", async () => {
+  /*
+   * EVERY PAGE (12 Oct). The endpoint stopped at 200 and could not be asked
+   * for the next 200; it takes `offset` now.
+   */
+  it("reads the next page while a page comes back full, and stops at a short one", async () => {
+    api.lessonsList.mockImplementation(({ offset }: { offset: number }) =>
+      Promise.resolve(
+        Array.from({ length: offset === 0 ? 200 : 50 }, (_, i) => lesson(offset + i)),
+      ),
+    );
+    const { result } = renderHook(() => useLessonLibrary());
+
+    await waitFor(() => expect(result.current.live).toBe(true));
+    expect(result.current.cards).toHaveLength(250);
+    expect(api.lessonsList).toHaveBeenCalledTimes(2);
+    expect(api.lessonsList).toHaveBeenLastCalledWith({ limit: 200, offset: 200 });
+    expect(result.current.capped).toBe(false);
+  });
+
+  it("says it may be capped only once the walk reaches its ceiling", async () => {
     api.lessonsList.mockResolvedValue(Array.from({ length: 200 }, (_, i) => lesson(i)));
     const { result } = renderHook(() => useLessonLibrary());
 
     await waitFor(() => expect(result.current.live).toBe(true));
+    expect(api.lessonsList).toHaveBeenCalledTimes(10);
     expect(result.current.capped).toBe(true);
   });
 

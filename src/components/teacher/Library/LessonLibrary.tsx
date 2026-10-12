@@ -7,6 +7,7 @@ import {
   type CardStatus,
 } from "@/hooks/useLessonLibrary";
 import { cn } from "@/lib/utils";
+import { LIBRARY_CEILING } from "@/hooks/useLessonLibrary";
 import { MaybeSample } from "@/components/shared/SampleRegion";
 
 /**
@@ -128,8 +129,8 @@ export function LessonLibrary() {
   /*
    * C06's result line, which the frame draws on every view - not only under a
    * search. Filtered, it says how many and by what; unfiltered, how many are
-   * in the library. Not when the read came back capped: the first 200 is not
-   * the library, and the line under the heading already says so.
+   * in the library. Not when the read reached its ceiling: the first so many is
+   * not the library, and the line under the heading already says so.
    */
   const filtered = hasQuery || filter !== "All";
   const plural = (n: number) => `${n} ${n === 1 ? "lesson" : "lessons"}`;
@@ -206,8 +207,7 @@ export function LessonLibrary() {
           and a library that drops them without saying so is the bug. */}
       {capped && (
         <p className="mt-2 max-w-[560px] text-[13px] leading-[1.5] text-nevo-near-black/55">
-          Showing the first 200 of your lessons. Search only looks through
-          these.
+          {`Showing the first ${LIBRARY_CEILING.toLocaleString("en-GB")} of your lessons. Search only looks through these.`}
         </p>
       )}
 

@@ -58,25 +58,25 @@ import { cn } from "@/lib/utils";
  * the note is private to that child. Neither version says "she" about a real
  * child whose pronouns nothing here knows.
  *
- * ONE PART OF THE FRAME IS STILL NOT BUILT, deliberately:
- *
- *    NO "SUGGESTED" BADGE. The frame marks one option as Nevo's suggestion.
- *     `Recommendation` is `{id, studentId, recommendationText, generatedAt}` -
- *     prose, with no lesson id - so nothing connects Nevo's sentence to a row
- *     in the library. The sentence is shown above the list, which is what the
- *     frame's "Nevo suggests" block is; the badge needs a `lessonId` on the
- *     recommendation. Raised with backend.
+ * THE "SUGGESTED" BADGE, SINCE 12 OCT. `Recommendation` was prose with no
+ * lesson id, so nothing connected Nevo's sentence to a row in the library.
+ * It carries a nullable `lessonId` now: that row is marked "Suggested" and the
+ * sheet opens on it, as C08c draws. Advice that names no lesson, or names one
+ * this list does not offer, marks nothing.
  */
 export function LiveRecommendSheet({
   studentId,
   firstName,
   suggestion,
+  suggestedLessonId = null,
   onClose,
 }: {
   studentId: string;
   firstName: string;
   /** Nevo's own words, when there are any. Never invented. */
   suggestion?: string | null;
+  /** The lesson Nevo's suggestion means, when it names one (12 Oct). */
+  suggestedLessonId?: string | null;
   onClose: () => void;
 }) {
   /**
@@ -115,11 +115,23 @@ export function LiveRecommendSheet({
   const cards = live
     ? libraryCards.filter((c) => c.kind === "normal")
     : libraryCards;
-  const [choice, setChoice] = useState<string | null>(null);
+  /** What the teacher has picked themselves. */
+  const [picked, setChoice] = useState<string | null>(null);
+  /*
+   * C08c STARTS ON NEVO'S SUGGESTION - the frame draws it chosen and marked.
+   * Only when that lesson is actually offered here; the teacher's own pick
+   * always wins, and they still confirm.
+   */
+  const suggestedHere =
+    suggestedLessonId && cards.some((c) => c.id === suggestedLessonId)
+      ? suggestedLessonId
+      : null;
+  const choice = picked ?? suggestedHere;
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
   const [sent, setSent] = useState<string | null>(null);
-  useUnsavedGuard((choice !== null || note.trim().length > 0) && sent === null);
+  // Their own choice or words, not the default the sheet opened on.
+  useUnsavedGuard((picked !== null || note.trim().length > 0) && sent === null);
   /** Whether the lesson that was sent carried a note, for the confirmation. */
   const [sentWithNote, setSentWithNote] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -307,6 +319,11 @@ export function LiveRecommendSheet({
                   </span>
                 )}
               </span>
+              {c.id === suggestedHere && (
+                <span className="shrink-0 rounded-full bg-nevo-violet/24 px-[9px] py-[3px] text-[11px] font-semibold text-nevo-navy">
+                  Suggested
+                </span>
+              )}
             </button>
           ))}
         </div>
