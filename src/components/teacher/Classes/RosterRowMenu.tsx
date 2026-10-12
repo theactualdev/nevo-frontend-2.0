@@ -34,6 +34,9 @@ export function RosterRowMenu({
   onToggle,
   onClose,
   onCleared,
+  pinAsked = false,
+  raised = null,
+  onAsk,
 }: {
   studentId: string;
   firstName: string;
@@ -46,6 +49,16 @@ export function RosterRowMenu({
   onClose: () => void;
   /** Called only once the server says the PIN is cleared. */
   onCleared: () => void;
+  /** The child asked for a new PIN: Clear PIN comes out of the menu onto the row. */
+  pinAsked?: boolean;
+  /**
+   * An admin has been asked about this deactivated child: the day it was sent,
+   * or "" where an earlier request stands and its day is not known. Null is
+   * not asked.
+   */
+  raised?: string | null;
+  /** Opens "Ask an admin about this" - only offered on a deactivated row. */
+  onAsk?: () => void;
 }) {
   const [explain, setExplain] = useState(false);
   const [clearing, setClearing] = useState(false);
@@ -97,8 +110,41 @@ export function RosterRowMenu({
   const item =
     "flex h-11 w-full cursor-pointer items-center rounded-[10px] px-4 text-left text-[14.5px] font-medium text-nevo-near-black transition-colors hover:bg-nevo-cream-elevated disabled:cursor-default disabled:opacity-55";
 
+  /*
+   * WHAT C05 PUTS ON THE ROW ITSELF, beside the menu: Clear PIN on a row that
+   * asked for one, and on a deactivated row the way to raise it with an admin -
+   * then the request, once sent. Out here rather than inside the row because
+   * the row is a link to the profile, and a button inside a link is neither.
+   */
+  const ask = deactivated && onAsk && raised === null;
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative flex items-center gap-[11px] xl:gap-3.5">
+      {pinAsked && !deactivated && (
+        <button
+          type="button"
+          onClick={() => void clear()}
+          disabled={clearing}
+          className="cursor-pointer text-[13px] font-semibold whitespace-nowrap text-nevo-navy transition-opacity hover:opacity-70 xl:text-[13.5px] disabled:cursor-default disabled:opacity-55"
+        >
+          {clearing ? `Clearing${"…"}` : "Clear PIN"}
+        </button>
+      )}
+      {ask && (
+        <button type="button" onClick={onAsk} className="cursor-pointer text-[13px] font-semibold whitespace-nowrap text-nevo-navy transition-opacity hover:opacity-70 xl:text-[13.5px]">
+          Ask an admin<span className="hidden xl:inline"> about this</span>
+        </button>
+      )}
+      {deactivated && raised !== null && (
+        <span className="inline-flex items-center gap-1.5 text-[12.5px] font-medium whitespace-nowrap text-nevo-near-black/55 xl:text-[13px]">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="hidden text-nevo-violet xl:inline">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 8v4l3 2" />
+          </svg>
+          <span className="hidden xl:inline">Request sent</span>
+          <span className="xl:hidden">Sent</span>
+          {raised && ` ${"·"} ${raised}`}
+        </span>
+      )}
       <button
         type="button"
         aria-label={`More options for ${firstName}`}
@@ -138,9 +184,18 @@ export function RosterRowMenu({
             {clearing ? `Clearing${"…"}` : "Clear PIN"}
           </button>
           {explain && (
-            <p className="mx-1.5 mt-1 mb-1.5 rounded-[10px] bg-nevo-violet/14 px-[15px] py-[13px] text-[13.5px] leading-[1.55] text-nevo-near-black">
+            <div className="mx-1.5 mt-1 mb-1.5 rounded-[10px] bg-nevo-violet/14 px-[15px] py-[13px] text-[13.5px] leading-[1.55] text-nevo-near-black">
               {`${firstName} can${"’"}t sign in while the account is deactivated, so there${"’"}s no PIN to clear yet. Your admin manages access.`}
-            </p>
+              {ask && (
+                <button
+                  type="button"
+                  onClick={onAsk}
+                  className="mt-2 block cursor-pointer font-semibold text-nevo-navy transition-opacity hover:opacity-70"
+                >
+                  Ask an admin about this
+                </button>
+              )}
+            </div>
           )}
           {failed && (
             <p
@@ -152,6 +207,107 @@ export function RosterRowMenu({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * C05's "Ask an admin about {name}'s account?" (SCRUM-145): the teacher raises
+ * a deactivated child's account with the school's administrators, who decide.
+ * A teacher can never un-pause an account - the usual reason for a pause is a
+ * parent withdrawing consent - so this asks and does nothing else.
+ *
+ * THE FRAME'S NOTE FIELD IS NOT HERE. The endpoint takes no body, and a box
+ * that quietly drops what a teacher wrote about a named child is worse than
+ * no box. Raised with backend.
+ *
+ * NOTHING IS CLAIMED THAT DID NOT HAPPEN. `notifiedAdminCount` of zero means
+ * no administrator was told, so "Your admin has been notified" would be false.
+ */
+export function AskAdminDialog({
+  studentId,
+  firstName,
+  onCancel,
+  onSent,
+}: {
+  studentId: string;
+  firstName: string;
+  onCancel: () => void;
+  /** The request stands: newly sent, or an earlier one already did. */
+  onSent: (status: "notified" | "already_notified") => void;
+}) {
+  const [sending, setSending] = useState(false);
+  const [problem, setProblem] = useState<"failed" | "nobody" | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogRef, { onEscape: onCancel });
+
+  const send = async () => {
+    if (sending) return;
+    setSending(true);
+    setProblem(null);
+    try {
+      const res = await studentsApi.requestAdminSupport(studentId);
+      if (res.status === "already_notified") onSent("already_notified");
+      else if (res.notifiedAdminCount > 0) onSent("notified");
+      else setProblem("nobody");
+    } catch {
+      setProblem("failed");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-nevo-near-black/28 backdrop-blur-[1.5px] p-10 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
+      onClick={onCancel}
+    >
+      <div
+        ref={dialogRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ask-admin-title"
+        onClick={(e) => e.stopPropagation()}
+        className="w-[460px] max-w-full rounded-[16px] bg-nevo-cream-elevated px-8 py-[30px] shadow-[0_8px_32px_rgba(0,0,0,0.16)]"
+      >
+        <h3
+          id="ask-admin-title"
+          className="text-[21px] font-semibold tracking-[-0.01em] text-nevo-near-black"
+        >
+          {`Ask an admin about ${firstName}${"’"}s account?`}
+        </h3>
+        <p className="mt-3 text-[15px] leading-[1.6] text-nevo-near-black/68">
+          {`We${"’"}ll let your school admin know you${"’"}re asking about this account. They${"’"}ll follow up with you.`}
+        </p>
+        {problem && (
+          <p
+            role="alert"
+            className="mt-4 rounded-[10px] bg-nevo-violet/14 px-[15px] py-[13px] text-[13.5px] leading-[1.55] text-nevo-near-black"
+          >
+            {problem === "nobody"
+              ? `There${"’"}s no admin at your school to tell just now, so nobody has been asked.`
+              : `We couldn${"’"}t send that just now. Nothing has been sent, so you can try again in a moment.`}
+          </p>
+        )}
+        <div className="mt-[22px] flex items-center gap-5">
+          <button
+            type="button"
+            onClick={() => void send()}
+            disabled={sending}
+            className="inline-flex cursor-pointer items-center justify-center rounded-[10px] bg-nevo-navy px-[26px] py-3 text-[15px] font-semibold text-nevo-cream transition-[filter] hover:brightness-108 disabled:cursor-default disabled:opacity-60"
+          >
+            {sending ? `Sending${"…"}` : "Send"}
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="cursor-pointer text-[15px] font-semibold text-nevo-near-black/60 transition-opacity hover:opacity-70"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -8,7 +8,8 @@ import {
 import { accountStatus, rosterMarker } from "@/lib/constants/accountStatus";
 import { useTeacherFlags } from "@/hooks/useTeacherFlags";
 import { useCallback, useState } from "react";
-import { PinClearedDialog, RosterRowMenu } from "./RosterRowMenu";
+import { AskAdminDialog, PinClearedDialog, RosterRowMenu } from "./RosterRowMenu";
+import { useSystemMessages } from "@/components/shared/SystemMessages";
 import { useClassLessons } from "@/hooks/useClassLessons";
 import type { AssignedClass } from "@/lib/api";
 import {
@@ -82,6 +83,15 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
    */
   const [cleared, setCleared] = useState<Set<string>>(() => new Set());
   const [clearedName, setClearedName] = useState<string | null>(null);
+  /**
+   * Deactivated children an admin has been asked about, this visit: the day
+   * it was sent, or "" when an earlier request stood. The roster read carries
+   * no field for it yet, so a reload offers the link again - and sending
+   * again is harmless, because the request is idempotent and says so.
+   */
+  const [raised, setRaised] = useState<Map<string, string>>(() => new Map());
+  const [askFor, setAskFor] = useState<{ studentId: string; firstName: string } | null>(null);
+  const say = useSystemMessages();
   const role = klass.role === "co_teacher" ? "Co-teacher" : "Primary teacher";
   const { students, loading, failed } = useClassRoster(klass.classId);
   const observed = students.filter(
@@ -209,11 +219,24 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
                 const href = `/teacher/students/${student.studentId}?class=${klass.classId}`;
                 const firstName = student.firstName?.trim() || studentName(student);
                 const marker = rosterMarker(student.status);
+                const deactivated = accountStatus(student.status) === "deactivated";
                 // Account access comes first and replaces the rest (C05).
+                // Cleared: the server's word since 12 Oct, or this visit's.
                 const pinCleared =
                   !marker &&
-                  cleared.has(student.studentId) &&
-                  accountStatus(student.status) !== "deactivated";
+                  !deactivated &&
+                  (student.pinCleared === true || cleared.has(student.studentId));
+                // Then a PIN the child asked for and nobody has cleared yet.
+                const pinAsked = !marker && !pinCleared && student.pinResetRequested === true;
+                const raisedOn = deactivated ? raised.get(student.studentId) : undefined;
+                // Room on the right for what C05 puts on the row beside the menu.
+                const stripPad = pinAsked
+                  ? "pr-[128px] xl:pr-[140px]"
+                  : deactivated && raisedOn === undefined
+                    ? "pr-[150px] xl:pr-[240px]"
+                    : deactivated
+                      ? "pr-[140px] xl:pr-[220px]"
+                      : null;
                 return (
                 <div
                   key={student.studentId}
@@ -224,6 +247,7 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
                   className={cn(
                     "cursor-pointer transition-[filter] hover:brightness-[0.985]",
                     "flex flex-col rounded-[12px] bg-nevo-cream-elevated py-4 pr-14 pl-[18px] shadow-elevation-1 xl:flex-row xl:items-center xl:gap-4 xl:py-5 xl:pr-16 xl:pl-5",
+                    stripPad,
                     student.profileStatus === "observed" &&
                       "border-l-[3px] border-nevo-violet",
                   )}
@@ -236,10 +260,12 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
                         a child finds out their ID - they ask their teacher.
                         It used to give way to `seatContext`, so a class with
                         seats showed nobody's ID. The seat sits beside it. */}
-                    {(student.loginIdentifier || student.seatContext) && (
+                    {/* And the admission number beside it (C05's "Student
+                        ID / Admission Number"): sign-in takes either. */}
+                    {(student.loginIdentifier || student.admissionNumber || student.seatContext) && (
                       <span className="shrink-0 text-[12px] text-nevo-near-black/55 tabular-nums xl:mt-0.5">
                         <span className="xl:hidden">{"· "}</span>
-                        {[student.loginIdentifier, student.seatContext]
+                        {[student.loginIdentifier, student.admissionNumber, student.seatContext]
                           .filter(Boolean)
                           .join(" · ")}
                       </span>
@@ -333,9 +359,18 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
                     </span>
                   )}
                   {pinCleared && (
-                    <span className="mt-1.5 inline-flex shrink-0 items-center gap-[7px] self-start rounded-full bg-nevo-near-black/7 px-[13px] py-[5px] text-[13px] font-semibold whitespace-nowrap text-nevo-near-black/60 xl:mt-0 xl:self-auto">
+                    <span className="mt-1.5 inline-flex shrink-0 items-center gap-[7px] self-start rounded-full bg-nevo-near-black/7 px-3 py-[5px] text-[13px] font-semibold whitespace-nowrap text-nevo-near-black/60 xl:mt-0 xl:self-auto xl:px-[13px]">
                       <span className="size-[7px] shrink-0 rounded-full bg-nevo-near-black/30" aria-hidden />
-                      PIN cleared &middot; new one not chosen yet
+                      {/* C05 tablet says less than desktop. */}
+                      <span className="xl:hidden">PIN cleared</span>
+                      <span className="hidden xl:inline">PIN cleared &middot; new one not chosen yet</span>
+                    </span>
+                  )}
+                  {/* C05's "Forgot PIN", sent from the child's sign-in screen. */}
+                  {pinAsked && (
+                    <span className="mt-1.5 inline-flex shrink-0 items-center gap-[7px] self-start rounded-full bg-nevo-violet/22 px-3 py-[5px] text-[13px] font-semibold whitespace-nowrap text-nevo-navy xl:mt-0 xl:self-auto xl:px-[13px]">
+                      <span className="size-[7px] shrink-0 rounded-full bg-nevo-violet" aria-hidden />
+                      Forgot PIN
                     </span>
                   )}
                   {/*
@@ -359,7 +394,7 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
                     // PIN, then attention - "each replaces the next rather
                     // than stacking". A switched-off child's flag is history,
                     // not a prompt.
-                    if (marker || pinCleared) return null;
+                    if (marker || pinCleared || pinAsked) return null;
                     const flag = flagFor.get(student.studentId);
                     if (!flag) return null;
                     return (
@@ -397,6 +432,12 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
                       setCleared((prev) => new Set(prev).add(student.studentId));
                       setMenuFor(null);
                       setClearedName(firstName);
+                    }}
+                    pinAsked={pinAsked}
+                    raised={raisedOn ?? null}
+                    onAsk={() => {
+                      setMenuFor(null);
+                      setAskFor({ studentId: student.studentId, firstName });
                     }}
                   />
                 </div>
@@ -457,6 +498,27 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
         {tab === "lessons" && <LessonsPanel classId={klass.classId} />}
       </div>
 
+      {askFor && (
+        <AskAdminDialog
+          studentId={askFor.studentId}
+          firstName={askFor.firstName}
+          onCancel={() => setAskFor(null)}
+          onSent={(status) => {
+            setRaised((prev) =>
+              new Map(prev).set(
+                askFor.studentId,
+                status === "notified"
+                  ? new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short" })
+                  : "",
+              ),
+            );
+            setAskFor(null);
+            // C05's own confirmation. True for an earlier request too: the
+            // admins were told then.
+            say.show({ kind: "confirm", message: "Your admin has been notified." });
+          }}
+        />
+      )}
       {clearedName && (
         <PinClearedDialog
           firstName={clearedName}

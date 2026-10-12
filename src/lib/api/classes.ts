@@ -126,6 +126,20 @@ export interface ClassStudent {
   /** Which seat the student occupies against the school's allowance. */
   seatContext: string;
   /**
+   * The school's own number for the child, beside the login identifier. Sign-in
+   * takes either, so a teacher may be asked for both. Null where the school
+   * has none on file.
+   */
+  admissionNumber?: string | null;
+  /** The child asked for a new PIN from the sign-in screen (C05 "Forgot PIN"). */
+  pinResetRequested?: boolean;
+  /**
+   * The PIN is cleared and the child has not chosen a new one yet. Server-held,
+   * so the row's "PIN cleared" survives a reload (12 Oct).
+   */
+  pinCleared?: boolean;
+  pinClearedAt?: string | null;
+  /**
    * DROPPED ON THE FLOOR UNTIL 10 SEP.
    *
    * `ClassStudentResponse.consent` is REQUIRED in the contract - the same

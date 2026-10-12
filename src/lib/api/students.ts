@@ -522,6 +522,18 @@ export const studentsApi = {
   clearPin: (studentId: string) =>
     api.post<PinCleared>(`/api/v1/students/${studentId}/pin/clear`),
 
+  /**
+   * "Ask an admin about this" (C05, SCRUM-145): tells the school's active
+   * administrators that a teacher is asking about a deactivated child's
+   * account. Idempotent. A teacher can raise it and never reverse it - un-pausing
+   * an account is the administrator's decision. No body: the frame's optional
+   * note has nowhere to go yet, so it is not drawn.
+   */
+  requestAdminSupport: (studentId: string) =>
+    api.post<AdminSupportRequest>(
+      `/api/v1/students/${studentId}/admin-support-request`,
+    ),
+
   /** Step one of two. Reversible, keeps everything, frees the seat. */
   deactivate: (studentId: string) =>
     api.post<void>(`/api/v1/students/${studentId}/deactivate`),
@@ -616,6 +628,15 @@ export interface PinCleared {
   /** Always true: the child chooses the next PIN, at their next sign-in. */
   childSetsNext?: boolean;
   pinLength?: number;
+}
+
+/** What comes back from "Ask an admin about this". */
+export interface AdminSupportRequest {
+  studentId: string;
+  /** `already_notified`: an earlier request stands, and nothing new was sent. */
+  status: "notified" | "already_notified" | (string & {});
+  /** How many administrators were told. Zero means nobody was. */
+  notifiedAdminCount: number;
 }
 
 export interface ClassMisconception {
