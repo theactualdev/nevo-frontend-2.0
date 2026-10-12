@@ -152,7 +152,7 @@ function SegmentRow({
         outstanding && "border-l-[3px] border-nevo-violet",
       )}
     >
-      <span className="w-[22px] shrink-0 text-[12.5px] text-nevo-near-black/40 tabular-nums xl:w-[26px] xl:text-[13px]">
+      <span className="w-[22px] shrink-0 text-[12.5px] font-semibold text-nevo-near-black/60 tabular-nums xl:w-[26px] xl:text-[13px]">
         {index + 1}
       </span>
       <div className="min-w-0 flex-1">
@@ -610,13 +610,22 @@ export function LiveLessonDetail({
              * is built: `useLessonReview` raises it, above, at the moment the
              * last thing holding the lesson is settled.
              */
-            <div className="mt-5 max-w-none rounded-[12px] bg-nevo-navy/6 px-5 py-[18px] xl:mt-[26px] xl:px-6 xl:py-[22px]">
-              <p className="text-[15.5px] font-semibold text-nevo-near-black xl:text-base">
-                Ready when you are
-              </p>
-              <p className="mt-[5px] text-sm leading-[1.55] text-nevo-near-black/70 xl:mt-1.5 xl:text-[14.5px]">
-                {`Nevo has prepared this lesson into ${plural(lesson.segmentCount, "section", "sections")}. Assign it to a class and it'll open for students at the time you choose.`}
-              </p>
+            /* C06b's treatment: a raised cream card with a navy check, as the
+               sample page already draws it - not a flat tint. */
+            <div className="mt-5 flex items-start gap-[13px] rounded-[12px] bg-nevo-cream-elevated px-5 py-[18px] shadow-elevation-1 xl:mt-[26px] xl:gap-3.5 xl:px-6 xl:py-[22px]">
+              <span className="mt-px shrink-0 text-nevo-navy">
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-5">
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+              </span>
+              <div>
+                <p className="text-[15.5px] font-semibold text-nevo-near-black xl:text-base">
+                  Ready when you are
+                </p>
+                <p className="mt-[5px] text-sm leading-[1.55] text-nevo-near-black/68 xl:mt-1.5 xl:text-[14.5px]">
+                  {`Nevo has prepared this lesson into ${plural(lesson.segmentCount, "section", "sections")}. Assign it to a class and it'll open for students at the time you choose.`}
+                </p>
+              </div>
             </div>
           )
         )}

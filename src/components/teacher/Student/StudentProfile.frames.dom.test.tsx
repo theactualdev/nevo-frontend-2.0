@@ -6,7 +6,8 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { StudentProfile } from "./StudentProfile";
-import { getStudentProfile } from "@/lib/mocks/teacherStudents";
+import { getStudentProfile, studentSlug } from "@/lib/mocks/teacherStudents";
+import { TEACHER_CLASSES } from "@/lib/mocks/teacherClasses";
 import { OBSERVATION_COPY } from "@/lib/constants/observations";
 
 /**
@@ -70,5 +71,23 @@ describe("Recent sessions at tablet width", () => {
     for (let el: Element | null = heading; el && el !== document.body; el = el.parentElement) {
       expect(el.className.split(" ")).not.toContain("hidden");
     }
+  });
+});
+
+/** C08: observations two across on a full profile at desktop, one column on a new student's. */
+describe("how the observations are laid out", () => {
+  const list = () => screen.getByRole("heading", { name: "What Nevo has noticed" }).nextElementSibling!;
+
+  it("two across on the full profile, from 1280px", () => {
+    render(<StudentProfile student={getStudentProfile("amara-okafor")!} />);
+
+    expect(list()).toHaveClass("xl:grid", "xl:grid-cols-2");
+  });
+
+  it("one column on a new student's", () => {
+    const other = TEACHER_CLASSES.flatMap((c) => c.roster).find((s) => !s.name.startsWith("Amara"))!;
+    render(<StudentProfile student={getStudentProfile(studentSlug(other.name))!} />);
+
+    expect(list().className).not.toMatch(/xl:grid/);
   });
 });
