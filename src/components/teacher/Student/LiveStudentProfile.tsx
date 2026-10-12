@@ -638,7 +638,7 @@ export function LiveStudentProfile({
               {adaptations.map((entry) => (
                 <div
                   key={entry.id}
-                  className="flex items-start gap-3.5 rounded-[8px] bg-nevo-cream-elevated px-[18px] py-4 xl:gap-4"
+                  className="flex items-start gap-3.5 rounded-[12px] bg-nevo-cream-elevated px-[18px] py-4 xl:gap-4"
                 >
                   <span className="w-[46px] shrink-0 pt-px text-[12px] text-nevo-near-black/55">
                     {new Date(entry.timestamp).toLocaleDateString("en-GB", {

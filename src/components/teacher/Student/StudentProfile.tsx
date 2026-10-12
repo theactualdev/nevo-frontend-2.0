@@ -196,7 +196,7 @@ export function StudentProfile({
                               router.push(messageHref);
                             }
                           }}
-                          className="block w-full cursor-pointer rounded-lg px-[13px] py-[11px] text-left text-[14.5px] text-nevo-near-black transition-colors hover:bg-nevo-navy/8"
+                          className="block w-full cursor-pointer rounded-[10px] px-[13px] py-[11px] text-left text-[14.5px] text-nevo-near-black transition-colors hover:bg-nevo-navy/8"
                         >
                           {item.label}
                         </button>
@@ -423,7 +423,7 @@ export function StudentProfile({
               {(STUDENT_ADAPTATIONS[student.id] ?? []).map((entry) => (
                 <div
                   key={`${entry.date}-${entry.lesson}`}
-                  className="flex items-start gap-3.5 rounded-[8px] bg-nevo-cream-elevated px-[18px] py-4 xl:gap-4"
+                  className="flex items-start gap-3.5 rounded-[12px] bg-nevo-cream-elevated px-[18px] py-4 xl:gap-4"
                 >
                   <span className="w-[46px] shrink-0 pt-px text-[12px] text-nevo-near-black/55">
                     {entry.date}

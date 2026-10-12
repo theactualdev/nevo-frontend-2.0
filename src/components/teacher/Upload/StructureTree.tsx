@@ -99,9 +99,9 @@ const ghostBtn =
 const primaryBtn =
   "inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-[10px] bg-nevo-navy px-[18px] py-[11px] text-[13.5px] font-semibold whitespace-nowrap text-nevo-cream transition-[filter] hover:brightness-93";
 const iconBtn =
-  "inline-flex size-[30px] cursor-pointer items-center justify-center rounded-lg bg-nevo-navy/8 text-nevo-navy transition-colors hover:bg-nevo-navy/14";
+  "inline-flex size-[30px] cursor-pointer items-center justify-center rounded-[10px] bg-nevo-navy/8 text-nevo-navy transition-colors hover:bg-nevo-navy/14";
 const treeInput =
-  "min-w-0 flex-1 rounded-lg border-[1.5px] border-transparent bg-transparent text-nevo-near-black outline-none transition-colors hover:bg-nevo-cream/50 focus:border-nevo-navy focus:bg-nevo-cream";
+  "min-w-0 flex-1 rounded-[10px] border-[1.5px] border-transparent bg-transparent text-nevo-near-black outline-none transition-colors hover:bg-nevo-cream/50 focus:border-nevo-navy focus:bg-nevo-cream";
 const dotBtn =
   "size-3.5 shrink-0 cursor-pointer rounded-full bg-nevo-violet shadow-[0_0_0_4px_rgba(154,156,203,0.22)]";
 
@@ -121,7 +121,7 @@ const Caret = ({ open, onClick }: { open: boolean; onClick: () => void }) => (
     onClick={onClick}
     aria-label={open ? "Collapse" : "Expand"}
     className={cn(
-      "flex size-[22px] shrink-0 cursor-pointer items-center justify-center rounded-[6px] text-nevo-near-black/55 transition-transform duration-[160ms] ease-out",
+      "flex size-[22px] shrink-0 cursor-pointer items-center justify-center rounded-[10px] text-nevo-near-black/55 transition-transform duration-[160ms] ease-out",
       open && "rotate-90",
     )}
   >
@@ -361,7 +361,7 @@ export function StructureTree() {
             <button
               type="button"
               onClick={doUndo}
-              className="shrink-0 cursor-pointer text-[13px] font-bold text-nevo-navy underline underline-offset-[3px]"
+              className="shrink-0 cursor-pointer text-[13px] font-semibold text-nevo-navy underline underline-offset-[3px]"
             >
               Undo
             </button>
@@ -400,7 +400,7 @@ export function StructureTree() {
             <input
               value={blockTitle}
               onChange={(e) => setBlockTitle(e.target.value)}
-              className="mt-0.5 w-full rounded-lg border-[1.5px] border-transparent bg-transparent px-2 py-[5px] text-base font-semibold text-nevo-cream outline-none transition-colors hover:bg-nevo-cream/10 focus:border-nevo-violet focus:bg-nevo-navy"
+              className="mt-0.5 w-full rounded-[10px] border-[1.5px] border-transparent bg-transparent px-2 py-[5px] text-base font-semibold text-nevo-cream outline-none transition-colors hover:bg-nevo-cream/10 focus:border-nevo-violet focus:bg-nevo-navy"
             />
           </div>
           <span className="shrink-0 text-xs whitespace-nowrap text-nevo-cream/60">
@@ -484,7 +484,7 @@ export function StructureTree() {
                   </div>
 
                   {les.uncertain && reveal[`L${les.id}`] && (
-                    <div className="mx-[15px] mb-3 ml-[46px] rounded-[9px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-3.5 py-[11px] text-[13px] leading-[1.5] text-nevo-near-black/78">
+                    <div className="mx-[15px] mb-3 ml-[46px] rounded-[10px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-3.5 py-[11px] text-[13px] leading-[1.5] text-nevo-near-black/78">
                       {les.revealText}
                     </div>
                   )}
@@ -553,7 +553,7 @@ export function StructureTree() {
                                     if (M) M.title = e.target.value;
                                   })
                                 }
-                                className={cn(treeInput, "rounded-[7px] px-2 py-[5px] text-[13.5px] font-semibold")}
+                                className={cn(treeInput, "rounded-[10px] px-2 py-[5px] text-[13.5px] font-semibold")}
                               />
                               {mod.uncertain && (
                                 <button
@@ -580,7 +580,7 @@ export function StructureTree() {
                             </div>
 
                             {mod.uncertain && reveal[`M${mod.id}`] && (
-                              <div className="mx-[13px] mb-[11px] ml-[42px] rounded-lg border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[13px] py-2.5 text-[12.5px] leading-[1.5] text-nevo-near-black/78">
+                              <div className="mx-[13px] mb-[11px] ml-[42px] rounded-[10px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[13px] py-2.5 text-[12.5px] leading-[1.5] text-nevo-near-black/78">
                                 {mod.revealText}
                               </div>
                             )}
@@ -616,7 +616,7 @@ export function StructureTree() {
                                     {over === `S:${sg.id}` && (
                                       <div className="mx-1 mb-[5px] h-[2px] rounded-full bg-nevo-violet" />
                                     )}
-                                    <div className="flex items-center gap-[9px] rounded-lg bg-nevo-cream/55 px-[11px] py-2">
+                                    <div className="flex items-center gap-[9px] rounded-[12px] bg-nevo-cream/55 px-[11px] py-2">
                                       <GripIcon className="text-nevo-near-black/28" />
                                       <input
                                         value={sg.title}
@@ -629,7 +629,7 @@ export function StructureTree() {
                                             if (S) S.title = e.target.value;
                                           })
                                         }
-                                        className={cn(treeInput, "rounded-[6px] px-[7px] py-1 text-[13px] font-normal")}
+                                        className={cn(treeInput, "rounded-[10px] px-[7px] py-1 text-[13px] font-normal")}
                                       />
                                       <span className="shrink-0 text-[11px] whitespace-nowrap text-nevo-near-black/42">
                                         {sg.mins}
@@ -639,7 +639,7 @@ export function StructureTree() {
                                           type="button"
                                           title="Start a new section after this segment"
                                           onClick={() => splitModuleAfterSeg(les.id, mod.id, sg.id)}
-                                          className="inline-flex size-[26px] shrink-0 cursor-pointer items-center justify-center rounded-[7px] border-[1.5px] border-nevo-navy/30 text-nevo-navy transition-colors hover:bg-nevo-navy/6"
+                                          className="inline-flex size-[26px] shrink-0 cursor-pointer items-center justify-center rounded-[10px] border-[1.5px] border-nevo-navy/30 text-nevo-navy transition-colors hover:bg-nevo-navy/6"
                                         >
                                           {SplitGlyph}
                                         </button>
@@ -655,7 +655,7 @@ export function StructureTree() {
                                 <button
                                   type="button"
                                   onClick={() => splitLessonAfterModule(les.id, mod.id)}
-                                  className="inline-flex cursor-pointer items-center gap-[7px] rounded-[9px] border-[1.5px] border-dashed border-nevo-navy/35 px-3 py-[7px] text-xs font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/6"
+                                  className="inline-flex cursor-pointer items-center gap-[7px] rounded-[10px] border-[1.5px] border-dashed border-nevo-navy/35 px-3 py-[7px] text-xs font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/6"
                                 >
                                   {SplitGlyph}
                                   Start a new lesson after this section
@@ -694,7 +694,7 @@ export function StructureTree() {
       {/* 102.5 confirmation - a sheet over the page, never a modal route */}
       {phase !== "edit" && (
         <div className="absolute inset-0 z-5 flex items-end justify-center bg-nevo-near-black/32 p-6">
-          <div className="w-full max-w-[520px] rounded-[16px] bg-nevo-cream px-[26px] py-6 shadow-[0_20px_56px_rgba(0,0,0,0.24)] motion-safe:animate-nevo-rise">
+          <div className="w-full max-w-[520px] rounded-[16px] bg-nevo-cream px-[26px] py-6 shadow-[0_8px_32px_rgba(0,0,0,0.16)] motion-safe:animate-nevo-rise">
             {phase === "confirm" && (
               <div>
                 <span className="font-mono text-[10.5px] font-bold tracking-[0.14em] text-nevo-violet">

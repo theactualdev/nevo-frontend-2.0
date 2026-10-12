@@ -200,7 +200,7 @@ export function NotificationsPanel({
                       i < notes.length - 1 && "border-b border-nevo-near-black/6",
                     )}
                   >
-                    <span className="flex size-[34px] shrink-0 items-center justify-center rounded-[9px] bg-nevo-navy/10 text-nevo-navy">
+                    <span className="flex size-[34px] shrink-0 items-center justify-center rounded-[12px] bg-nevo-navy/10 text-nevo-navy">
                       {KIND_ICON[n.kind]}
                     </span>
                     <Row
@@ -233,7 +233,7 @@ export function NotificationsPanel({
                           aria-label="Mark as read"
                           title="Mark as read"
                           onClick={() => onOpen?.(n.id)}
-                          className="inline-flex size-[26px] cursor-pointer items-center justify-center rounded-lg text-nevo-violet transition-colors hover:bg-nevo-navy/8"
+                          className="inline-flex size-[26px] cursor-pointer items-center justify-center rounded-[10px] text-nevo-violet transition-colors hover:bg-nevo-navy/8"
                         >
                           <span className="size-[7px] rounded-full bg-nevo-violet xl:size-2" />
                         </button>
@@ -243,7 +243,7 @@ export function NotificationsPanel({
                         aria-label="Archive"
                         title="Archive"
                         onClick={() => onArchive?.(n.id)}
-                        className="inline-flex size-[26px] cursor-pointer items-center justify-center rounded-lg text-nevo-near-black/40 transition-colors hover:bg-nevo-navy/8 hover:text-nevo-near-black/70"
+                        className="inline-flex size-[26px] cursor-pointer items-center justify-center rounded-[10px] text-nevo-near-black/40 transition-colors hover:bg-nevo-navy/8 hover:text-nevo-near-black/70"
                       >
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                           <rect x="3" y="4" width="18" height="4" rx="1" />

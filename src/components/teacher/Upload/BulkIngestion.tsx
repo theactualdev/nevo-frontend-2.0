@@ -844,7 +844,7 @@ export function BulkIngestion() {
                                 type="button"
                                 onClick={() => resendOne(i)}
                                 disabled={resending !== null}
-                                className="mt-2 inline-flex cursor-pointer items-center rounded-lg border-[1.5px] border-nevo-navy/30 px-[11px] py-[5px] text-[12px] font-semibold whitespace-nowrap text-nevo-navy transition-colors hover:bg-nevo-navy/6 disabled:cursor-default disabled:opacity-55"
+                                className="mt-2 inline-flex cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/30 px-[11px] py-[5px] text-[12px] font-semibold whitespace-nowrap text-nevo-navy transition-colors hover:bg-nevo-navy/6 disabled:cursor-default disabled:opacity-55"
                               >
                                 {resending === i
                                   ? "Sending\u2026"

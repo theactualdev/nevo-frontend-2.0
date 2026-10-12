@@ -277,7 +277,7 @@ export function AssignmentSchedule({
                         setOutcome(null);
                         setEditing(editing === g.key ? null : g.key);
                       }}
-                      className="cursor-pointer rounded-[9px] border border-nevo-navy/22 px-3 py-1.5 text-[13.5px] font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/5 disabled:cursor-not-allowed disabled:opacity-45"
+                      className="cursor-pointer rounded-[10px] border border-nevo-navy/22 px-3 py-1.5 text-[13.5px] font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/5 disabled:cursor-not-allowed disabled:opacity-45"
                     >
                       Change dates
                     </button>
@@ -289,7 +289,7 @@ export function AssignmentSchedule({
                         setEditing(null);
                         setConfirming(confirming === g.key ? null : g.key);
                       }}
-                      className="cursor-pointer rounded-[9px] px-3 py-1.5 text-[13.5px] font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/5 disabled:cursor-not-allowed disabled:opacity-45"
+                      className="cursor-pointer rounded-[10px] px-3 py-1.5 text-[13.5px] font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/5 disabled:cursor-not-allowed disabled:opacity-45"
                     >
                       Cancel lesson
                     </button>
@@ -332,7 +332,7 @@ export function AssignmentSchedule({
                       type="button"
                       disabled={working}
                       onClick={() => void cancelGroup(g)}
-                      className="cursor-pointer rounded-[9px] bg-nevo-navy px-3.5 py-1.5 text-[13.5px] font-semibold text-nevo-cream disabled:cursor-not-allowed disabled:opacity-45"
+                      className="cursor-pointer rounded-[10px] bg-nevo-navy px-3.5 py-1.5 text-[13.5px] font-semibold text-nevo-cream disabled:cursor-not-allowed disabled:opacity-45"
                     >
                       {working ? "Cancelling…" : "Yes, cancel it"}
                     </button>
@@ -340,7 +340,7 @@ export function AssignmentSchedule({
                       type="button"
                       disabled={working}
                       onClick={() => setConfirming(null)}
-                      className="cursor-pointer rounded-[9px] px-3.5 py-1.5 text-[13.5px] font-semibold text-nevo-navy disabled:cursor-not-allowed"
+                      className="cursor-pointer rounded-[10px] px-3.5 py-1.5 text-[13.5px] font-semibold text-nevo-navy disabled:cursor-not-allowed"
                     >
                       Keep it
                     </button>
@@ -422,7 +422,7 @@ function DateForm({
             value={opens}
             min={today}
             onChange={(e) => setOpens(e.target.value)}
-            className="mt-1 block rounded-[8px] border border-nevo-navy/20 bg-nevo-cream-elevated px-2.5 py-1.5 text-[14px] text-nevo-near-black"
+            className="mt-1 block rounded-[10px] border border-nevo-navy/20 bg-nevo-cream-elevated px-2.5 py-1.5 text-[14px] text-nevo-near-black"
           />
         </label>
         <label className="text-[13px] font-medium text-nevo-near-black/70">
@@ -432,7 +432,7 @@ function DateForm({
             value={due}
             min={today}
             onChange={(e) => setDue(e.target.value)}
-            className="mt-1 block rounded-[8px] border border-nevo-navy/20 bg-nevo-cream-elevated px-2.5 py-1.5 text-[14px] text-nevo-near-black"
+            className="mt-1 block rounded-[10px] border border-nevo-navy/20 bg-nevo-cream-elevated px-2.5 py-1.5 text-[14px] text-nevo-near-black"
           />
         </label>
       </div>
@@ -454,7 +454,7 @@ function DateForm({
           type="button"
           disabled={busy || backwards || unchanged || movedIntoPast}
           onClick={() => onSave(changes)}
-          className="cursor-pointer rounded-[9px] bg-nevo-navy px-3.5 py-1.5 text-[13.5px] font-semibold text-nevo-cream disabled:cursor-not-allowed disabled:opacity-45"
+          className="cursor-pointer rounded-[10px] bg-nevo-navy px-3.5 py-1.5 text-[13.5px] font-semibold text-nevo-cream disabled:cursor-not-allowed disabled:opacity-45"
         >
           {busy ? "Saving…" : "Save dates"}
         </button>
@@ -462,7 +462,7 @@ function DateForm({
           type="button"
           disabled={busy}
           onClick={onCancel}
-          className="cursor-pointer rounded-[9px] px-3.5 py-1.5 text-[13.5px] font-semibold text-nevo-navy disabled:cursor-not-allowed"
+          className="cursor-pointer rounded-[10px] px-3.5 py-1.5 text-[13.5px] font-semibold text-nevo-navy disabled:cursor-not-allowed"
         >
           Discard
         </button>

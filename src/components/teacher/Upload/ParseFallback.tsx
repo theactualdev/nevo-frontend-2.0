@@ -62,7 +62,7 @@ const READ_LESSONS = [
 const ghostBtn =
   "inline-flex cursor-pointer items-center gap-[7px] rounded-[10px] border-[1.5px] border-nevo-near-black/18 px-[15px] py-[9px] text-[13.5px] font-semibold text-nevo-near-black transition-colors hover:bg-nevo-near-black/5";
 const ghostBtnSm =
-  "inline-flex cursor-pointer items-center gap-[7px] rounded-[9px] border-[1.5px] border-nevo-navy/30 px-[13px] py-2 text-[12.5px] font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/6";
+  "inline-flex cursor-pointer items-center gap-[7px] rounded-[10px] border-[1.5px] border-nevo-navy/30 px-[13px] py-2 text-[12.5px] font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/6";
 
 /**
  * The backend's reference for this failure, offered quietly.
@@ -155,7 +155,7 @@ export function ParseFallback({
             </div>
 
             {splitOpened && (
-              <div className="mt-3 rounded-[9px] border-l-[3px] border-nevo-violet bg-nevo-navy/6 px-[15px] py-3 text-[13px] leading-[1.5] text-nevo-near-black/75">
+              <div className="mt-3 rounded-[10px] border-l-[3px] border-nevo-violet bg-nevo-navy/6 px-[15px] py-3 text-[13px] leading-[1.5] text-nevo-near-black/75">
                 Opening the editable tree - drag a section out to start a
                 second lesson. Nothing is committed until you&rsquo;re happy.
               </div>
@@ -180,7 +180,7 @@ export function ParseFallback({
                 {FLAT_SEGMENTS.map((s) => (
                   <div
                     key={s.n}
-                    className="flex items-center gap-2.5 rounded-lg bg-nevo-cream/55 px-3 py-[9px]"
+                    className="flex items-center gap-2.5 rounded-[12px] bg-nevo-cream/55 px-3 py-[9px]"
                   >
                     <span className="flex size-[22px] shrink-0 items-center justify-center rounded-[6px] bg-nevo-navy/10 text-[11px] font-semibold text-nevo-navy">
                       {s.n}
@@ -424,7 +424,7 @@ export function ParseFallback({
               </button>
             </div>
             {formatsOpen && (
-              <div className="mt-4 max-w-[420px] rounded-[11px] bg-nevo-navy/6 px-[17px] py-3.5 text-left">
+              <div className="mt-4 max-w-[420px] rounded-[10px] bg-nevo-navy/6 px-[17px] py-3.5 text-left">
                 <div className="text-[12.5px] font-semibold text-nevo-navy">
                   We can read:
                 </div>

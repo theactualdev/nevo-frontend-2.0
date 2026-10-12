@@ -51,7 +51,7 @@ const NOTE_MAX = 5000;
 type FeedbackType = "feedback" | "feature";
 
 const PILL_BASE =
-  "inline-flex h-9 cursor-pointer items-center rounded-[20px] px-4 text-[13px] transition-[filter,background-color] active:scale-[0.98]";
+  "inline-flex h-9 cursor-pointer items-center rounded-full px-4 text-[13px] transition-[filter,background-color] active:scale-[0.98]";
 
 export function FeedbackPanel({ onClose }: { onClose: () => void }) {
   const pathname = usePathname();
@@ -117,7 +117,7 @@ export function FeedbackPanel({ onClose }: { onClose: () => void }) {
   };
 
   const panel =
-    "fixed top-1/2 right-6 z-50 flex w-[360px] max-w-[calc(100%-3rem)] -translate-y-1/2 flex-col rounded-[16px] bg-nevo-cream-inset p-6 shadow-[0_20px_56px_rgba(0,0,0,0.2)]";
+    "fixed top-1/2 right-6 z-50 flex w-[360px] max-w-[calc(100%-3rem)] -translate-y-1/2 flex-col rounded-[16px] bg-nevo-cream-inset p-6 shadow-[0_8px_32px_rgba(0,0,0,0.16)]";
 
   // Two dialogs take turns in this panel: the form, then its thank-you. Each
   // takes focus in its turn, and the last to close gives it back (C07).

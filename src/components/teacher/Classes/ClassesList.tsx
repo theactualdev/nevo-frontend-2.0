@@ -61,7 +61,7 @@ export function ClassesList() {
     return (
       <div className="flex flex-1 items-center justify-center p-10 xl:p-12">
         <div className="flex max-w-[380px] flex-col items-center text-center xl:max-w-[400px]">
-          <div className="flex size-20 items-center justify-center rounded-[20px] bg-nevo-cream-elevated text-nevo-violet shadow-elevation-1 xl:size-[88px]">
+          <div className="flex size-20 items-center justify-center rounded-[12px] bg-nevo-cream-elevated text-nevo-violet shadow-elevation-1 xl:size-[88px]">
             <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-10">
               <circle cx="9" cy="8" r="3" />
               <path d="M2.5 20a6.5 6.5 0 0 1 13 0" />

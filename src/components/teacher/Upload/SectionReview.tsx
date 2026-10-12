@@ -62,7 +62,7 @@ const suggested = (): Module[] => [
 const ghostBtn =
   "inline-flex cursor-pointer items-center gap-[7px] rounded-[10px] border-[1.5px] border-nevo-near-black/18 px-[15px] py-[9px] text-[13.5px] font-semibold text-nevo-near-black transition-colors hover:bg-nevo-near-black/5";
 const inputBase =
-  "nevo-in box-border rounded-[9px] border-[1.5px] border-nevo-navy/22 bg-nevo-cream/50 text-nevo-near-black outline-none transition-colors focus:border-nevo-navy focus:bg-nevo-cream";
+  "nevo-in box-border rounded-[10px] border-[1.5px] border-nevo-navy/22 bg-nevo-cream/50 text-nevo-near-black outline-none transition-colors focus:border-nevo-navy focus:bg-nevo-cream";
 
 function SegRow({ s }: { s: Segment }) {
   return (
@@ -312,7 +312,7 @@ export function SectionReview({
                   <div
                     key={mi}
                     className={cn(
-                      "overflow-hidden rounded-[14px] bg-nevo-cream-elevated shadow-[0_2px_10px_rgba(0,0,0,0.05)]",
+                      "overflow-hidden rounded-[12px] bg-nevo-cream-elevated shadow-[0_2px_10px_rgba(0,0,0,0.05)]",
                       overCard === mi &&
                         "outline-2 -outline-offset-2 outline-nevo-violet",
                     )}
@@ -336,7 +336,7 @@ export function SectionReview({
                         </span>
                       </div>
                       {segs.length === 1 && (
-                        <div className="mt-[11px] flex items-center gap-2.5 rounded-[9px] bg-nevo-violet/14 px-[13px] py-2.5">
+                        <div className="mt-[11px] flex items-center gap-2.5 rounded-[10px] bg-nevo-violet/14 px-[13px] py-2.5">
                           <span className="shrink-0 text-nevo-navy">
                             <svg
                               width="16"
@@ -403,7 +403,7 @@ export function SectionReview({
                           {over === `${mi}:${pi}` && (
                             <div className="mx-1 mb-1.5 h-[2.5px] rounded-full bg-nevo-violet" />
                           )}
-                          <div className="flex items-center gap-[11px] rounded-[9px] bg-nevo-cream/55 px-[13px] py-[11px]">
+                          <div className="flex items-center gap-[11px] rounded-[12px] bg-nevo-cream/55 px-[13px] py-[11px]">
                             <span
                               className="shrink-0 cursor-grab text-nevo-near-black/30"
                               aria-hidden
@@ -429,7 +429,7 @@ export function SectionReview({
                               <button
                                 type="button"
                                 onClick={() => split(mi, pi)}
-                                className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border-[1.5px] border-nevo-navy/35 px-[11px] py-1.5 text-xs font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/6"
+                                className="inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] border-[1.5px] border-nevo-navy/35 px-[11px] py-1.5 text-xs font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/6"
                               >
                                 <svg
                                   width="13"
@@ -527,7 +527,7 @@ export function SectionReview({
                         <button
                           type="button"
                           onClick={() => merge(mi)}
-                          className="inline-flex cursor-pointer items-center gap-[7px] rounded-[9px] border-[1.5px] border-dashed border-nevo-navy/35 px-[13px] py-2 text-[12.5px] font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/6"
+                          className="inline-flex cursor-pointer items-center gap-[7px] rounded-[10px] border-[1.5px] border-dashed border-nevo-navy/35 px-[13px] py-2 text-[12.5px] font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/6"
                         >
                           <svg
                             width="14"

@@ -126,14 +126,14 @@ export function ParseProgress({
                       <path d="M5 12l4 4L19 6" />
                     </svg>
                   ) : (
-                    <span className="text-xs font-bold">{i + 1}</span>
+                    <span className="text-xs font-semibold">{i + 1}</span>
                   )}
                 </span>
                 <span
                   className={cn(
                     "min-w-0 flex-1 text-sm",
                     active
-                      ? "font-bold text-nevo-near-black"
+                      ? "font-semibold text-nevo-near-black"
                       : done
                         ? "font-medium text-nevo-near-black/72"
                         : "font-medium text-nevo-near-black/40",
@@ -150,7 +150,7 @@ export function ParseProgress({
                   <button
                     type="button"
                     onClick={onSteer}
-                    className="inline-flex cursor-pointer items-center rounded-lg border-[1.5px] border-nevo-navy/30 px-[11px] py-[5px] text-[11.5px] font-semibold whitespace-nowrap text-nevo-navy transition-colors hover:bg-nevo-navy/6"
+                    className="inline-flex cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/30 px-[11px] py-[5px] text-[11.5px] font-semibold whitespace-nowrap text-nevo-navy transition-colors hover:bg-nevo-navy/6"
                   >
                     Open and steer
                   </button>

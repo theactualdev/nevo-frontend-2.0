@@ -399,7 +399,7 @@ export function AskNevo() {
                   aria-label="Past conversations"
                   title="Past conversations"
                   onClick={openHistory}
-                  className="flex size-[34px] cursor-pointer items-center justify-center rounded-lg text-nevo-navy transition-transform duration-[120ms] active:scale-[0.98]"
+                  className="flex size-[34px] cursor-pointer items-center justify-center rounded-[10px] text-nevo-navy transition-transform duration-[120ms] active:scale-[0.98]"
                 >
                   {HISTORY_ICON}
                 </button>
@@ -408,7 +408,7 @@ export function AskNevo() {
                 type="button"
                 aria-label="Close"
                 onClick={close}
-                className="flex size-[34px] cursor-pointer items-center justify-center rounded-lg transition-transform duration-[120ms] active:scale-[0.98]"
+                className="flex size-[34px] cursor-pointer items-center justify-center rounded-[10px] transition-transform duration-[120ms] active:scale-[0.98]"
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
                   <path d="M6 6l12 12M18 6L6 18" stroke="#2b2b2f" strokeWidth="2" strokeLinecap="round" />
@@ -426,7 +426,7 @@ export function AskNevo() {
                   type="button"
                   aria-label="Back"
                   onClick={back}
-                  className="flex size-[34px] shrink-0 cursor-pointer items-center justify-center rounded-lg transition-transform duration-[120ms] active:scale-[0.98]"
+                  className="flex size-[34px] shrink-0 cursor-pointer items-center justify-center rounded-[10px] transition-transform duration-[120ms] active:scale-[0.98]"
                 >
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2b2b2f" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                     <path d="M15 18l-6-6 6-6" />
@@ -516,7 +516,7 @@ export function AskNevo() {
                                     aria-pressed={on}
                                     title={v === 1 ? "Helpful" : "Not helpful"}
                                     onClick={() => vote(i, v)}
-                                    className="inline-flex size-[30px] cursor-pointer items-center justify-center rounded-lg transition-transform duration-[120ms] active:scale-[0.98]"
+                                    className="inline-flex size-[30px] cursor-pointer items-center justify-center rounded-[10px] transition-transform duration-[120ms] active:scale-[0.98]"
                                   >
                                     <svg
                                       width="19"
@@ -545,7 +545,7 @@ export function AskNevo() {
                               <Link
                                 href={t.action.href}
                                 onClick={close}
-                                className="inline-flex h-9 cursor-pointer items-center gap-[7px] rounded-[9px] bg-nevo-navy px-3.5 text-[13px] font-medium text-nevo-cream transition-[transform,filter] duration-[120ms] hover:brightness-93 active:scale-[0.98]"
+                                className="inline-flex h-9 cursor-pointer items-center gap-[7px] rounded-[10px] bg-nevo-navy px-3.5 text-[13px] font-medium text-nevo-cream transition-[transform,filter] duration-[120ms] hover:brightness-93 active:scale-[0.98]"
                               >
                                 {t.action.label}
                               </Link>

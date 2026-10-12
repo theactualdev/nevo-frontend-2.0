@@ -66,7 +66,7 @@ export function VariantReview({
               aria-selected={tab === t}
               onClick={() => setTab(t)}
               className={cn(
-                "inline-flex h-[38px] flex-1 basis-0 cursor-pointer items-center justify-center rounded-[8px] px-2 text-[12.5px] transition-[background-color,transform] active:scale-[0.99] xl:h-9 xl:flex-none xl:basis-auto xl:justify-start xl:px-[18px] xl:text-[13px]",
+                "inline-flex h-[38px] flex-1 basis-0 cursor-pointer items-center justify-center rounded-[10px] px-2 text-[12.5px] transition-[background-color,transform] active:scale-[0.99] xl:h-9 xl:flex-none xl:basis-auto xl:justify-start xl:px-[18px] xl:text-[13px]",
                 tab === t
                   ? "bg-nevo-navy font-semibold text-nevo-cream"
                   : "bg-nevo-cream-elevated font-medium text-nevo-near-black/70 hover:bg-nevo-navy/8",

@@ -694,7 +694,7 @@ export function UploadWizard() {
         steps where they are READING what Nevo produced get 860.
       */}
       {phase !== "review" && !fallback && !singleReview && !liveTree && phase !== "demoStructure" && (
-        <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-6 py-[22px] xl:px-8 xl:py-7">
+        <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-6 py-6 xl:px-8 xl:py-7">
           <div
             className={cn(
               // `min-h-full` because `ParseProgress` centres itself against
@@ -704,7 +704,7 @@ export function UploadWizard() {
               "w-full min-h-full",
               phase === "file" || phase === "processing"
                 ? "max-w-[760px]"
-                : "max-w-[860px]",
+                : "max-w-[820px]",
             )}
           >
           {phase === "scope" && (
@@ -726,7 +726,7 @@ export function UploadWizard() {
                   >
                     <span
                       className={cn(
-                        "flex size-[42px] shrink-0 items-center justify-center rounded-[11px]",
+                        "flex size-[42px] shrink-0 items-center justify-center rounded-[12px]",
                         on
                           ? "bg-nevo-navy text-nevo-cream"
                           : "bg-nevo-navy/10 text-nevo-navy",
@@ -854,7 +854,7 @@ export function UploadWizard() {
                     role="alert"
                     className="mt-5 flex gap-3.5 rounded-[12px] border border-nevo-violet/50 bg-nevo-violet/16 px-[22px] py-5 xl:mt-[22px] xl:gap-4 xl:px-6 xl:py-[22px]"
                   >
-                    <span className="flex size-[44px] shrink-0 items-center justify-center rounded-[11px] bg-nevo-violet/20 text-nevo-navy">
+                    <span className="flex size-[44px] shrink-0 items-center justify-center rounded-[12px] bg-nevo-violet/20 text-nevo-navy">
                       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                         <path d="M6 2h9l5 5v15H6z" />
                         <path d="M14 2v6h6" />

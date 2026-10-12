@@ -229,7 +229,7 @@ function VariantBody({
             {v.options.map((o, i) => (
               <li
                 key={`${String(o)}-${i}`}
-                className="rounded-[8px] bg-nevo-cream px-3 py-2 text-[13.5px] leading-[1.5] text-nevo-near-black/72"
+                className="rounded-[12px] bg-nevo-cream px-3 py-2 text-[13.5px] leading-[1.5] text-nevo-near-black/72"
               >
                 {String(o)}
               </li>
@@ -274,7 +274,7 @@ function VariantBody({
           {v.steps.map((step, i) => (
             <li
               key={step.stepId}
-              className="flex gap-3 rounded-[8px] bg-nevo-cream px-3 py-2.5"
+              className="flex gap-3 rounded-[12px] bg-nevo-cream px-3 py-2.5"
             >
               <span className="w-5 shrink-0 pt-px text-[12.5px] text-nevo-near-black/45 tabular-nums">
                 {/* The server's own numbering, not the row index: a variant
@@ -458,7 +458,7 @@ export function LiveVariantReview({
               aria-selected={tab === t}
               onClick={() => setTab(t)}
               className={cn(
-                "inline-flex h-[38px] flex-1 basis-0 cursor-pointer items-center justify-center rounded-[8px] px-2 text-[12.5px] transition-[background-color,transform] active:scale-[0.99] xl:h-9 xl:flex-none xl:basis-auto xl:justify-start xl:px-[18px] xl:text-[13px]",
+                "inline-flex h-[38px] flex-1 basis-0 cursor-pointer items-center justify-center rounded-[10px] px-2 text-[12.5px] transition-[background-color,transform] active:scale-[0.99] xl:h-9 xl:flex-none xl:basis-auto xl:justify-start xl:px-[18px] xl:text-[13px]",
                 tab === t
                   ? "bg-nevo-navy font-semibold text-nevo-cream"
                   : "bg-nevo-cream-elevated font-medium text-nevo-near-black/70 hover:bg-nevo-navy/8",
