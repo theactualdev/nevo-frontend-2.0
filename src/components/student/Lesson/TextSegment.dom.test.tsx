@@ -450,7 +450,8 @@ describe("a key term's definition, in place when tapped (design, 9 Oct)", () => 
     fireEvent.click(chip("glucose"));
 
     const definition = screen.getByText("The sugar a plant makes.");
-    expect(definition.className).toMatch(/text-\[18px\] leading-\[2\]/);
+    expect(definition.className).toMatch(/(^|\s)text-\[18px\]/);
+    expect(definition.className).toMatch(/(^|\s)leading-\[2\]/);
     expect(definition.className).toMatch(/bg-\[#e5dfd3\]/);
   });
 
@@ -465,6 +466,21 @@ describe("a key term's definition, in place when tapped (design, 9 Oct)", () => 
 
     expect(chip("glucose").className).toMatch(/\bh-11\b/);
     expect(chip("glucose").className).toMatch(/cursor-pointer/);
+  });
+
+  it("rings the round chip when focused, not the square hit area around it", () => {
+    // The console's ring outlined the 44px button: a square box round a pill.
+    // jsdom has no :focus-visible, so it is asserted where it lives.
+    render(<TextSegment content={terms} density={null} />);
+
+    const hit = chip("glucose");
+    expect(hit.className).toMatch(/(^|\s)group(\s|$)/);
+    expect(hit.className).toMatch(/focus-visible:outline-none/);
+    const drawn = screen.getByText("glucose");
+    expect(drawn).not.toBe(hit);
+    expect(drawn.className).toMatch(/rounded-full/);
+    expect(drawn.className).toMatch(/group-focus-visible:outline-2/);
+    expect(drawn.className).toMatch(/group-focus-visible:outline-nevo-navy/);
   });
 });
 
@@ -511,7 +527,8 @@ describe("a body written in paragraphs (frames 17 and 17c)", () => {
     const card = screen.getByText(FIRST).parentElement!;
     expect(card.className).toMatch(/bg-\[#e5dfd3\]/);
     expect(screen.getByText(SECOND).parentElement).toBe(card);
-    expect(screen.getByText(SECOND).className).toMatch(/text-\[18px\] leading-\[2\]/);
+    expect(screen.getByText(SECOND).className).toMatch(/(^|\s)text-\[18px\]/);
+    expect(screen.getByText(SECOND).className).toMatch(/(^|\s)leading-\[2\]/);
   });
 
   it("does the same inside a server chunk", () => {

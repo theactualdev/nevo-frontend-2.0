@@ -157,3 +157,17 @@ describe("either ending", () => {
     },
   );
 });
+
+describe("the pill's focus ring", () => {
+  it("rings the drawn pill, not the square 44px hit area around it", () => {
+    // jsdom has no :focus-visible, so it is asserted where it lives.
+    render(<SocraticPanel prompts={PROMPTS} onTryAgain={() => {}} />);
+
+    const hit = screen.getByRole("button", { name: "Which part is unclear?" });
+    expect(hit.className).toMatch(/focus-visible:outline-none/);
+    const drawn = screen.getByText("Which part is unclear?");
+    expect(drawn).not.toBe(hit);
+    expect(drawn.className).toMatch(/rounded-\[20px\]/);
+    expect(drawn.className).toMatch(/group-focus-visible:outline-2/);
+  });
+});

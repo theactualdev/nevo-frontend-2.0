@@ -21,6 +21,7 @@ import {
 } from "@/lib/lessons/chunkViews";
 import type { TextContent } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { FOCUS_ON_SHAPE } from "./focusOnShape";
 
 /** A server reading chunk came on screen or was read past (SCRUM-234). */
 export type OnChunkSeen = (chunkId: string, action: ChunkAction) => void;
@@ -309,7 +310,8 @@ const CHIP =
  *
  * Drawn at the frame's size and touched at 44px: the button is the hit area,
  * the inner span is the chip, and the negative margin keeps the row the
- * frame draws (the affective pill does the same).
+ * frame draws (the affective pill does the same). The focus ring goes on the
+ * chip, not the hit area (`FOCUS_ON_SHAPE`).
  */
 function KeyTerms({
   terms,
@@ -334,9 +336,12 @@ function KeyTerms({
               aria-expanded={open === i}
               aria-controls={open === i ? definitionId : undefined}
               onClick={() => setOpen(open === i ? null : i)}
-              className="-my-1.5 inline-flex h-11 cursor-pointer items-center"
+              className={cn(
+                "group -my-1.5 inline-flex h-11 cursor-pointer items-center",
+                FOCUS_ON_SHAPE.hit,
+              )}
             >
-              <span className={CHIP}>{term}</span>
+              <span className={cn(CHIP, FOCUS_ON_SHAPE.shape)}>{term}</span>
             </button>
           ) : (
             <span key={i} className={CHIP}>
