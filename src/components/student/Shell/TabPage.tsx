@@ -22,8 +22,16 @@ export const TAB_TITLE =
  * What a tab's page box adds to fill the screen, for a state that centres in
  * it (29 Empty States). The shell's content box is a column at least the
  * height of the screen; this grows into it.
+ *
+ * `min-h-0 basis-0`: the page is the screen's height, not its content's, so
+ * what does not fit is taken out of the art (`EmptyArt`) rather than pushed
+ * below the fold. (`basis-0` and not `flex-1`'s 0%, which an auto-height
+ * column treats as "size to content".) Without it the page grew to hold 29's
+ * full-height figure, and on Home - where the greeting and the warm-up card
+ * sit above it, which 29 does not draw - the line under the figure landed
+ * past the bottom of a phone and of a 1280x832 desktop.
  */
-export const TAB_FILL = "flex flex-1 flex-col";
+export const TAB_FILL = "flex min-h-0 flex-1 basis-0 flex-col";
 
 /**
  * 29 Empty States' block: the art centred in what is left under the heading,
@@ -41,9 +49,9 @@ export function TabEmpty({
   children?: ReactNode;
 }) {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center px-5 py-6 text-center md:px-0">
+    <div className="flex min-h-0 flex-1 basis-0 flex-col items-center justify-center px-5 py-6 text-center md:px-0">
       {art}
-      <h2 className="mt-7 max-w-[280px] text-[19px] font-medium leading-[1.35] text-nevo-near-black md:mt-8 md:max-w-[360px] md:text-[22px] lg:max-w-[400px] lg:text-2xl">
+      <h2 className="mt-7 max-w-[280px] shrink-0 text-[19px] font-medium leading-[1.35] text-nevo-near-black md:mt-8 md:max-w-[360px] md:text-[22px] lg:max-w-[400px] lg:text-2xl">
         {line}
       </h2>
       {children}
@@ -55,6 +63,10 @@ export function TabEmpty({
  * One of 29's figures, by HEIGHT as the board draws them (`height:Npx;
  * width:auto`). The figures are 2:3 cut-outs, so the width follows; the
  * intrinsic size given here only picks the file the optimiser serves.
+ *
+ * THE FIGURE GIVES WAY, THE WORDS DO NOT. Inside a `TAB_FILL` page it may
+ * shrink below its height (`min-h-0`) to keep the line under it on screen,
+ * drawn whole (`object-contain`); with the room, it is 29's size exactly.
  */
 export function EmptyArt({
   src,
@@ -70,7 +82,7 @@ export function EmptyArt({
       alt=""
       width={244}
       height={366}
-      className={cn("w-auto shrink-0", className)}
+      className={cn("min-h-0 w-auto object-contain", className)}
     />
   );
 }

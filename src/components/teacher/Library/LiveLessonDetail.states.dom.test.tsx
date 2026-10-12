@@ -678,3 +678,25 @@ describe("at tablet width", () => {
     expect(header).toHaveClass("flex-col", "xl:flex-row");
   });
 });
+
+/**
+ * C06b's own treatments, which the live page had drawn differently from both
+ * the frame and the sample page: the ready state is a raised cream card with
+ * a navy check, not a flat tint; a section's number is set at /60, semibold.
+ */
+describe("C06b's treatments", () => {
+  it("draws the ready state as the raised card with its check", () => {
+    show();
+    const card = screen.getByText("Ready when you are").closest("[class*='rounded-[12px]']")!;
+
+    expect(card).toHaveClass("bg-nevo-cream-elevated", "shadow-elevation-1");
+    expect(card.querySelector("svg path")).toHaveAttribute("d", "M20 6L9 17l-5-5");
+  });
+
+  it("sets each section's number as the frame does", () => {
+    show();
+    const row = screen.getByText("What a leaf does").closest("[class*='py-[13px]']")!;
+
+    expect(row.firstElementChild).toHaveClass("font-semibold", "text-nevo-near-black/60");
+  });
+});

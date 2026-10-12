@@ -46,11 +46,8 @@ import { MasteryDualTrack } from "./MasteryDualTrack";
  * The C16c adaptation insights are live, from `/api/adaptations/student/{id}`,
  * with suppressed entries excluded - the section is what actually happened.
  *
- * Recent sessions come from `students/{id}/progress`. Its rows are not
- * clickable: C08d's session panel wants a section-by-section breakdown, and
- * nothing serves one. Its position indices are not shown either - the spec
- * does not say whether they are 0- or 1-based, and "section 0" in front of a
- * teacher is worse than no position.
+ * Recent sessions come from `students/{id}/sessions`, and each row opens
+ * C08d's session panel for that session (see "REAL SESSIONS" below).
  *
  * Accommodations are what Nevo is OFFERING, on stated evidence - which is a
  * different thing from the engine parameters above, and reads in the same
@@ -396,7 +393,14 @@ export function LiveStudentProfile({
         {observations.length > 0 && (
           <>
             <h3 className={cn(SECTION_H, "mt-[26px]", early ? "xl:mt-8" : "xl:mt-9")}>What Nevo has noticed</h3>
-            <div className="mt-3.5 flex flex-col gap-3 xl:mt-4 xl:grid xl:grid-cols-2 xl:gap-3.5">
+            {/* C08: two columns on the full profile at desktop, one on a new
+                student's - the early artboard stacks its single card. */}
+            <div
+              className={cn(
+                "mt-3.5 flex flex-col gap-3 xl:mt-4 xl:gap-3.5",
+                !early && "xl:grid xl:grid-cols-2",
+              )}
+            >
               {observations.map((o) => {
                 const chip = observationCount(o.pattern, o.count);
                 return (
@@ -535,25 +539,44 @@ export function LiveStudentProfile({
                   key={sn.sessionId}
                   type="button"
                   onClick={() => setOpenSession(sn.sessionId)}
-                  className="flex w-full cursor-pointer gap-[18px] px-[22px] py-4 text-left transition-[filter] hover:brightness-[0.985] xl:py-[18px]"
+                  className="flex w-full cursor-pointer gap-[18px] px-[22px] py-[18px] text-left transition-[filter] hover:brightness-[0.985]"
                 >
-                  <span className="w-[70px] shrink-0 pt-0.5 text-[13.5px] text-nevo-near-black/55">
+                  <span className="w-[62px] shrink-0 pt-0.5 text-[13px] text-nevo-near-black/55 xl:w-[70px] xl:text-[13.5px]">
                     {new Date(sn.occurredAt).toLocaleDateString("en-GB", {
                       day: "numeric",
                       month: "short",
                     })}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block text-[15px] font-semibold text-nevo-near-black xl:text-[15.5px]">
+                    <span className="block text-[14.5px] font-semibold text-nevo-near-black xl:text-[15.5px]">
                       {sn.lessonTitle}
                     </span>
-                    <span className="mt-[5px] block text-[14px] leading-[1.5] text-nevo-near-black/72 xl:text-[14.5px]">
-                      {SESSION_NOTE[sn.completionStatus] ??
-                        sn.completionStatus.replace(/_/g, " ")}
-                      {/* Only from the second visit on. "Visit 1" says nothing
-                          a teacher did not already assume. */}
-                      {sn.sitting > 1 && ` · visit ${sn.sitting}`}
-                    </span>
+                    {/*
+                      OUR WORDS FOR A STATUS, OR NONE. An unknown status was
+                      printed as its token with the underscores swapped for
+                      spaces - the backend's vocabulary in front of a teacher.
+                      Only from the second visit on: "visit 1" says nothing a
+                      teacher did not already assume.
+                    */}
+                    {(SESSION_NOTE[sn.completionStatus] || sn.sitting > 1) && (
+                      <span className="mt-[5px] block text-[14px] leading-[1.5] text-nevo-near-black/72 xl:text-[14.5px]">
+                        {[
+                          SESSION_NOTE[sn.completionStatus],
+                          sn.sitting > 1 &&
+                            (SESSION_NOTE[sn.completionStatus]
+                              ? `visit ${sn.sitting}`
+                              : `Visit ${sn.sitting}`),
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                    )}
+                  </span>
+                  {/* C08's chevron: the row opens the session (C08d). */}
+                  <span className="shrink-0 self-center text-nevo-near-black/40">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-[18px]">
+                      <path d="M9 6l6 6-6 6" />
+                    </svg>
                   </span>
                 </button>
               ))}

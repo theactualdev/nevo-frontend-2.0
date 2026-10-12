@@ -21,6 +21,8 @@ import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { useSetupGate } from "@/hooks";
 import { billingCurrency, mayActivate, screenFor } from "./activation";
+import { SignInDetailsDownload } from "../Students/SignInDetailsDownload";
+import { ConsentFormDownload } from "../Students/ConsentFormDownload";
 
 /**
  * D24 OB-03 headcount and cost, OB-04 payment, OB-05 activation.
@@ -459,7 +461,7 @@ function Waiting({
  * classes, and teachers - are established by the call that just returned, and
  * the counts are the ones it returned. Nothing is counted here.
  *
- * THREE OF THE FRAME'S FOUR ROWS ARE LEFT OUT OR REDUCED, because nothing
+ * TWO OF THE FRAME'S FOUR ROWS ARE LEFT OUT OR REDUCED, because nothing
  * backs them:
  * - "18 teacher invitations sent · Each teacher gets a link to set their
  *   password". Activate says it creates accounts; it says nothing about
@@ -468,13 +470,18 @@ function Waiting({
  *   the contract does establish, and not that anything was sent.
  * - "Parent consent requests sent" - the response carries no consent field,
  *   and consent wording is with counsel.
- * - "Student sign-in details ready · Download or print them" - no endpoint
- *   produces them.
+ *
+ * "Student sign-in details ready · Download or print them to hand out" is
+ * back (9 Oct): `GET /students/sign-in-details` serves them, and the row
+ * carries the download. It shows only when activate created student
+ * accounts, because those are the children on the list.
  * TODO(api): counts and delivery state for anything activate sends, on the
  * activate response.
  */
-function happenedRows(s: OnboardingState): { label: string; sub: string | null }[] {
-  const rows: { label: string; sub: string | null }[] = [];
+type HappenedRow = { label: string; sub: string | null; signIn?: boolean };
+
+function happenedRows(s: OnboardingState): HappenedRow[] {
+  const rows: HappenedRow[] = [];
   const classes = s.classes.length;
   if (s.studentCount > 0) {
     rows.push({
@@ -486,6 +493,13 @@ function happenedRows(s: OnboardingState): { label: string; sub: string | null }
     rows.push({
       label: `${s.teacherCount} teacher ${s.teacherCount === 1 ? "account" : "accounts"} created`,
       sub: null,
+    });
+  }
+  if (s.studentCount > 0) {
+    rows.push({
+      label: "Student sign-in details ready",
+      sub: "Download or print them to hand out",
+      signIn: true,
     });
   }
   return rows;
@@ -541,6 +555,7 @@ function Active({
                     </span>
                   ) : null}
                 </span>
+                {row.signIn ? <SignInDetailsDownload /> : null}
               </li>
             ))}
           </ul>
@@ -569,17 +584,18 @@ function Active({
       ) : null}
 
       {/*
-        * OB-05 ALSO OFFERS THE PAPER CONSENT FORM - *"Some parents won't reply
-        * to the emailed request... download the paper consent form."* It is
-        * ABSENT, and not for want of an endpoint: `GET /api/v1/consents/form`
-        * is deployed.
-        *
-        * Design, 24 Sep: the form is stamped v0.0 DRAFT, three of its sections
-        * are placeholders marked "to be supplied by Nevo's counsel", and
-        * **nothing paper ships** until they return. A download button here
-        * would put an unfinished legal document in a school's hands on the day
-        * they switch on, which is the worst possible day for it.
+        * OB-05's paper consent form, from `GET /api/v1/consents/form`. It was
+        * held while design's 24 Sep ruling - nothing paper ships until
+        * counsel's sections return - stood. Counsel is deferred until the
+        * console is complete (12 Oct), so the form ships with its legal
+        * sections still marked as placeholder by the backend that renders it.
         */}
+      <p className="m-0 mt-6 max-w-[64ch] text-[13.5px] leading-[1.55] text-nevo-near-black/62">
+        Some parents won&rsquo;t reply to the emailed request. You can download
+        the paper consent form and collect it in person &ndash; the written
+        route.
+      </p>
+      <ConsentFormDownload className="mt-2" label="Download the paper consent form" />
 
       <Link
         href="/admin"

@@ -72,6 +72,21 @@ describe("NevoKeyboard qwerty case", () => {
     expect(screen.queryByText("#+=")).toBeNull();
   });
 
+  it("stays in capitals for an upper-case field, with no shift to spend", () => {
+    // A school code's cells upper-case everything; the tray showed lowercase
+    // from the second letter on, so the keys did not match the field.
+    const onKey = vi.fn();
+    render(
+      <NevoKeyboard layout="qwerty" uppercase onKey={onKey} onBackspace={noop} />,
+    );
+
+    typeKeys("K", "D", "Q");
+
+    expect(onKey.mock.calls.map(([c]) => c).join("")).toBe("KDQ");
+    expect(screen.getByRole("button", { name: "W" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^(Uppercase|Lowercase)$/ })).toBeNull();
+  });
+
   it("comes back from the numbers page in the case it left", () => {
     const onKey = vi.fn();
     render(<NevoKeyboard layout="qwerty" onKey={onKey} onBackspace={noop} />);

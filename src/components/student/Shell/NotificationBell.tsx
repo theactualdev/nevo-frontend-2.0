@@ -148,7 +148,7 @@ export function NotificationBell({ className }: { className?: string }) {
           </p>
           {failed ? (
             /* Could not ask is not the same as nothing new. */
-            <PanelNote>We couldn&rsquo;t load these just now</PanelNote>
+            <PanelNote>We couldn&apos;t load these just now</PanelNote>
           ) : loading ? (
             /* Not answered yet is not "nothing new" either. */
             <div className="flex justify-center px-4 pt-8 pb-10">

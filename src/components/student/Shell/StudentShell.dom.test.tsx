@@ -385,4 +385,30 @@ describe("the student console's focus ring", () => {
     const layerEnd = base.search(/^}/m);
     expect(base.indexOf('[data-nevo-console="student"]')).toBeLessThan(layerEnd);
   });
+
+  it("takes over the shared Button's pale ring, unlayered so it beats the button's utilities", () => {
+    /*
+     * `Button` sets `outline-none` and a 3px ring at 35% navy, and a utility
+     * beats the base layer - so buttons kept the pale ring beside the navy
+     * outline on fields. This rule has to sit outside every layer to win.
+     */
+    const css = readFileSync(
+      join(process.cwd(), "src", "app", "globals.css"),
+      "utf8",
+    );
+    const selector =
+      '[data-nevo-console="student"] [data-slot="button"]:focus-visible';
+    const at = css.indexOf(selector);
+    expect(at).toBeGreaterThan(-1);
+    const body = css.slice(css.indexOf("{", at) + 1, css.indexOf("}", at));
+    expect(body).toMatch(/outline:\s*2px solid var\(--color-nevo-navy\)/);
+    expect(body).toMatch(/outline-offset:\s*2px/);
+    // The pale ring is dropped, not drawn alongside.
+    expect(body).toMatch(/--tw-ring-shadow:\s*0 0 #0000/);
+    // Unlayered: no brace is open around it once comments are set aside.
+    const before = css.slice(0, at).replace(/\/\*[\s\S]*?\*\//g, "");
+    const depth =
+      (before.match(/{/g) ?? []).length - (before.match(/}/g) ?? []).length;
+    expect(depth).toBe(0);
+  });
 });

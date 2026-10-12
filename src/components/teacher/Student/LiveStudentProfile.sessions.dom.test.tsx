@@ -75,3 +75,48 @@ describe("recent sessions, for a child with none", () => {
     expect(screen.getByText(/couldn.t load these just now/)).toBeInTheDocument();
   });
 });
+
+/**
+ * C08's session rows: each opens C08d, so each carries the frame's chevron.
+ * And the status line is OUR words or none - an unknown status used to be
+ * printed as its token with the underscores swapped for spaces.
+ */
+describe("a session row", () => {
+  const SESSION = {
+    sessionId: "se-1",
+    lessonTitle: "Fractions 3",
+    occurredAt: "2026-10-01T09:00:00Z",
+    completionStatus: "completed",
+    sitting: 1,
+  };
+  const rowFor = (title: string) => screen.getByRole("button", { name: new RegExp(title) });
+
+  it("carries the chevron that says it opens", () => {
+    sessions({ sessions: [SESSION], total: 1 });
+    render(<LiveStudentProfile studentId="s-1" state={state()} />);
+
+    expect(rowFor("Fractions 3").querySelector("svg path")).toHaveAttribute("d", "M9 6l6 6-6 6");
+  });
+
+  it("says what happened, in our words, and which visit from the second on", () => {
+    sessions({ sessions: [{ ...SESSION, sitting: 2 }], total: 1 });
+    render(<LiveStudentProfile studentId="s-1" state={state()} />);
+
+    expect(rowFor("Fractions 3")).toHaveTextContent("Finished this lesson · visit 2");
+  });
+
+  it("never prints a status it has no words for", () => {
+    sessions({ sessions: [{ ...SESSION, completionStatus: "awaiting_sync" }], total: 1 });
+    render(<LiveStudentProfile studentId="s-1" state={state()} />);
+
+    expect(rowFor("Fractions 3")).not.toHaveTextContent(/awaiting/i);
+  });
+
+  it("still says which visit, on its own, when the status has no words", () => {
+    sessions({ sessions: [{ ...SESSION, completionStatus: "awaiting_sync", sitting: 3 }], total: 1 });
+    render(<LiveStudentProfile studentId="s-1" state={state()} />);
+
+    expect(rowFor("Fractions 3")).toHaveTextContent("Visit 3");
+    expect(rowFor("Fractions 3")).not.toHaveTextContent(/awaiting/i);
+  });
+});

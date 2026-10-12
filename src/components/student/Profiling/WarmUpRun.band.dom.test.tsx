@@ -165,6 +165,23 @@ describe("the tile task, by band", () => {
     });
   });
 
+  it("hands focus to the grid once the senior band's check is answered", async () => {
+    // As in tile memory: the pressed button went with the check, and focus
+    // fell to the page past the grid, so the next Tab left the screen.
+    roster.value = { band: "ss", settled: true };
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
+    render(<WarmUpRun dimension="wmc" />);
+    await wait(6000);
+    const answer = screen.getByText("False");
+    answer.focus();
+    fireEvent.click(answer);
+
+    const grid = screen.getByTestId("warmup-grid");
+    expect(document.activeElement).toBe(grid);
+    expect(focus).toHaveBeenLastCalledWith({ preventScroll: true });
+    focus.mockRestore();
+  });
+
   it("runs no check for the bands that do not have one", async () => {
     roster.value = { band: "jss", settled: true };
     render(<WarmUpRun dimension="wmc" />);
@@ -299,6 +316,14 @@ describe("the reading task for Primary 1-3 is heard (D81)", () => {
     );
   });
 
+  it("writes no line above the pictures, which no frame gives it", () => {
+    // It carried the baseline's "Listen, then tap the matching picture",
+    // and neither the baseline's frame nor the warm-up's has those words.
+    render(<WarmUpRun dimension="reading" />);
+
+    expect(document.body.textContent).not.toMatch(/listen, then tap/i);
+  });
+
   it("marks the picture against what was said, and times it from the end of the sentence", async () => {
     render(<WarmUpRun dimension="reading" />);
     await wait(1500); // the sentence being said
@@ -398,7 +423,7 @@ describe("the dot task, by band (D81)", () => {
     expect(screen.getByText("Watch the dots")).toBeInTheDocument();
     sync(10); // masked at 600
     await wait(400);
-    fireEvent.click(screen.getByText("Left"));
+    fireEvent.click(screen.getByRole("button", { name: "Left" }));
     await wait(1000);
 
     expect(submitted()).toMatchObject({
@@ -441,7 +466,39 @@ describe("the pattern task, by band (D81)", () => {
 });
 
 describe("the flanker, by band (D81)", () => {
-  const arrows = () => [...document.querySelectorAll("svg.lucide-arrow-right")];
+  /** The stimulus's arrows, not the answer buttons'. */
+  const arrows = () => [
+    ...document.querySelectorAll('[data-testid="warmup-flanker"] svg.lucide-arrow-right'),
+  ];
+
+  it("answers with the baseline's arrow buttons, never the words, P1-3 included", () => {
+    // It was two buttons reading "Left" and "Right" for every band, where
+    // the baseline's flanker answers with arrows - which a child who cannot
+    // yet read can use - at each band's size.
+    roster.value = { band: "p13", settled: true };
+    render(<WarmUpRun dimension="attention" />);
+
+    const left = screen.getByRole("button", { name: "Left" });
+    const right = screen.getByRole("button", { name: "Right" });
+    for (const b of [left, right]) {
+      expect(b.textContent).toBe("");
+      expect(b.querySelector("svg.lucide-arrow-right")).not.toBeNull();
+      // P1-3's 160x80 from tablet up (`Nevo Flanker Frame`).
+      expect(b.className).toContain("sm:h-20");
+      expect(b.className).toContain("sm:w-[160px]");
+    }
+    expect(left.querySelector("svg")!.getAttribute("class")).toContain("rotate-180");
+  });
+
+  it("sizes them as each band's flanker does", () => {
+    roster.value = { band: "jss", settled: true };
+    render(<WarmUpRun dimension="attention" />);
+
+    const right = screen.getByRole("button", { name: "Right" });
+    expect(right.textContent).toBe("");
+    expect(right.className).toContain("sm:h-[68px]");
+    expect(right.className).toContain("sm:w-[150px]");
+  });
 
   it("gives the youngest band its arrow alone, with no congruency to record", async () => {
     roster.value = { band: "p13", settled: true };
@@ -449,7 +506,7 @@ describe("the flanker, by band (D81)", () => {
 
     expect(arrows()).toHaveLength(1);
 
-    fireEvent.click(screen.getByText("Right"));
+    fireEvent.click(screen.getByRole("button", { name: "Right" }));
     await wait(1000);
     expect(submitted()).toMatchObject({
       dimension: "attention",
@@ -466,7 +523,7 @@ describe("the flanker, by band (D81)", () => {
     expect(arrows()).toHaveLength(5);
     expect(flankers.every((a) => a.getAttribute("class")!.includes("text-nevo-violet"))).toBe(true);
 
-    fireEvent.click(screen.getByText("Right"));
+    fireEvent.click(screen.getByRole("button", { name: "Right" }));
     await wait(1000);
     expect(submitted()).toMatchObject({
       condition: "incongruent",

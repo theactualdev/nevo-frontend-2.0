@@ -392,6 +392,20 @@ describe("Primary 1-3", () => {
       expect(cancel).toHaveBeenCalledTimes(2);
       expect(target()).toBeNull();
     });
+
+    it("silences nothing later when the voice ended as it should", () => {
+      // The failsafe stayed armed after a normal end, and eight seconds in
+      // it cancelled speech in the middle of the step.
+      const cancel = vi.mocked(window.speechSynthesis.cancel);
+      step("p13");
+      expect(cancel).toHaveBeenCalledTimes(1);
+
+      act(() => spoken[0].onend?.());
+      watchTheDemonstration();
+      act(() => vi.advanceTimersByTime(8_000));
+
+      expect(cancel).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("is only for Primary 1-3: the other bands begin at once", () => {

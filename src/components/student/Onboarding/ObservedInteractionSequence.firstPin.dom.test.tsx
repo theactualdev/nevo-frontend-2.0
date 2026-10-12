@@ -329,6 +329,16 @@ describe("a first PIN the server refuses, and says why (B68)", () => {
     expect(getRememberedProfile()).toBeNull();
     expect(flushPendingBaseline).not.toHaveBeenCalled();
   });
+
+  it("holds them at the age check with 05's Back, so the next child can start", async () => {
+    entrySetPin.mockRejectedValue(refused(403, "age_check_pending"));
+
+    await choosePin();
+
+    expect(
+      screen.getByRole("button", { name: "Back" }),
+    ).toBeInTheDocument();
+  });
 });
 
 describe("a run that did not start on 05", () => {

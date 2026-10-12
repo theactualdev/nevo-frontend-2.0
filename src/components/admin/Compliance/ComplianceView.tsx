@@ -1,13 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { BASE_URL } from "@/lib/api";
+import { api } from "@/lib/api/client";
 import {
   schoolIntelligenceApi,
   type ComplianceAudit,
 } from "@/lib/api/schoolIntelligence";
-import { getToken } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 import {
   consentCoverage,
@@ -19,6 +17,9 @@ import {
 import { studentsApi } from "@/lib/api/students";
 import { schoolApi } from "@/lib/api/school";
 import { NoAccess, failureKind } from "../NoAccess";
+import { BackLink } from "../BackLink";
+import type { Back } from "../back";
+import { ParentRequests } from "./ParentRequests";
 
 /**
  * D22 NDPA compliance audit - the drill-down that turns the Overview's
@@ -39,25 +40,21 @@ import { NoAccess, failureKind } from "../NoAccess";
  * with no state chip. On a compliance screen, an invented figure is the worst
  * possible bug.
  *
- * The export is real: `GET /api/admin/compliance-audit/report.pdf`. It is
- * fetched with the Bearer token and handed to the browser as a blob, because
- * the endpoint is behind auth and a bare link would arrive unauthenticated.
+ * The export is real: `GET /api/admin/compliance-audit/report.pdf`, read
+ * through `api.blob` with the session's token and handed to the browser,
+ * because a bare link would arrive unauthenticated.
  *
  * Export wording is placeholder pending counsel - the frame says so, and the
  * page repeats it rather than letting anyone assume otherwise.
+ *
+ * Under the claims, "Requests from parents" reads the rights log - see
+ * `ParentRequests`.
  */
 
 const CARD = "rounded-xl bg-nevo-cream-elevated shadow-[0_2px_8px_rgba(0,0,0,0.06)]";
 
 type Phase = "loading" | "ready" | "failed" | "denied";
 type Export = "idle" | "working" | "done" | "failed";
-
-/**
- * Flip to true when backend has confirmed the PDF carries neither `term` nor
- * `recordId`. A constant rather than a deletion, so the wiring below stays
- * under test and the reason is greppable.
- */
-const EXPORT_CLEARED_BY_COUNSEL = false;
 
 function fmtDate(iso: string): string {
   return new Date(iso).toLocaleString("en-GB", {
@@ -68,7 +65,7 @@ function fmtDate(iso: string): string {
   });
 }
 
-export function ComplianceView() {
+export function ComplianceView({ back = null }: { back?: Back | null } = {}) {
   const [phase, setPhase] = useState<Phase>("loading");
   const [audit, setAudit] = useState<ComplianceAudit | null>(null);
   const [exporting, setExporting] = useState<Export>("idle");
@@ -116,14 +113,9 @@ export function ComplianceView() {
     if (exporting === "working") return;
     setExporting("working");
     // The endpoint is behind auth, so a plain <a href> would arrive without a
-    // token. Fetch it, then hand the browser a blob.
-    fetch(`${BASE_URL}/api/admin/compliance-audit/report.pdf`, {
-      headers: { Authorization: `Bearer ${getToken() ?? ""}` },
-    })
-      .then((r) => {
-        if (!r.ok) throw new Error(String(r.status));
-        return r.blob();
-      })
+    // token. Read it as a blob, then hand that to the browser.
+    api
+      .blob("/api/admin/compliance-audit/report.pdf")
       .then((blob) => {
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -146,12 +138,7 @@ export function ComplianceView() {
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
       <div className="mx-auto max-w-[820px]">
-        <Link
-          href="/admin/dashboard"
-          className="text-[13.5px] font-medium text-nevo-navy hover:underline"
-        >
-          &larr; School Overview
-        </Link>
+        <BackLink back={back} fallback={{ href: "/admin/dashboard", label: "School Overview" }} />
 
         <div className="mt-3 flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
@@ -165,26 +152,14 @@ export function ComplianceView() {
             )}
           </div>
           {/*
-            * THE EXPORT IS HELD, and it is the one thing on this screen that
-            * counsel's ruling does not reach.
-            *
-            * They cleared what the SCREEN may show: category and status, never
-            * the flagged term, never the recordId. This button hands over a
-            * PDF that BACKEND composes - its 200 is an empty schema, so the
-            * contract constrains nothing - and the obvious contents of a
-            * compliance report are exactly the two fields we were told to
-            * withhold. A rule kept on screen and broken by a download is not
-            * kept.
-            *
-            * Nothing of value is lost by holding it today: the file has been
-            * arriving corrupt anyway, because the proxy decoded it as UTF-8
-            * (fixed in this change, which is what makes the question live).
-            *
-            * Restore it when backend confirms in writing what the PDF
-            * contains, and route it through `api.blob` rather than the
-            * hand-rolled fetch below.
+            * THE EXPORT IS BACK (12 Oct). It was held because the screen may
+            * show only a category and a status - never the flagged term, never
+            * the recordId - and the PDF is composed by the backend, whose 200
+            * is an empty schema. The hold was to last until backend confirmed
+            * in writing what the PDF contains, and it has: "Compliance PDFs
+            * never contain finding terms or record ids" (handoff, 9 Oct).
             */}
-          {EXPORT_CLEARED_BY_COUNSEL && phase === "ready" && (
+          {phase === "ready" && (
             <button
               type="button"
               onClick={exportReport}
@@ -347,21 +322,16 @@ export function ComplianceView() {
               })}
             </div>
 
-            {/*
-              * The export sentence follows the export button. It promised "the
-              * exported report" to a school whose export button is switched
-              * off until counsel clears the PDF - a control the page does not
-              * offer.
-              */}
             <p className="mt-4 max-w-[68ch] text-[13px] leading-[1.6] text-nevo-near-black/55">
-              {EXPORT_CLEARED_BY_COUNSEL
-                ? "The exported report carries the same claims and evidence in a form you can print or hand to a parent. "
-                : null}
-              Wording in this version is placeholder, in the same structure as
+              The exported report carries the same claims and evidence in a
+              form you can print or hand to a parent. Wording in this version
+              is placeholder, in the same structure as
               the DPA; final language is owned by counsel. Consent is summarised
               as coverage only &ndash; never per-child detail, which stays out
               of admin scope.
             </p>
+
+            <ParentRequests />
           </>
         )}
       </div>

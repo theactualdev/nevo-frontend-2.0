@@ -20,8 +20,8 @@ import { isOwnApiHost } from "./upstream";
  *   a hosted gateway checkout, which is the thing D11 forbids.
  * - `POST /billing/payments/{reference}/verify` is a WRITE, not a lookup:
  *   backend's own words are that it asks Paystack about a transaction and
- *   settles the invoice off the answer, so a bank reference 404s there. Manual
- *   transfers go through `manualTransfer` below instead.
+ *   settles the invoice off the answer, so a bank reference 404s there. A
+ *   school's transfer is reported through `reportTransfer` below instead.
  * - D11's "How to pay" panel needs Nevo's own bank account. When this was
  *   written nothing in the spec carried one, and the panel was absent rather
  *   than hard-coding the frame's literal account; it is live now - see below.
@@ -245,27 +245,37 @@ export interface ReceivingAccount {
   currency: PricingCurrency;
 }
 
-/** What the backend made of a declared transfer. */
-export interface PaymentOutcome {
-  transactionId: string;
-  invoiceId: string | null;
+/**
+ * Where to send one invoice's money, and the exact reference to quote on it
+ * (`GET /billing/invoices/{id}/bank-transfer-details`). The backend's own
+ * description of `reference`: "Write this invoice number as the bank-transfer
+ * reference." Served for any unpaid invoice.
+ */
+export interface InvoiceTransferDetails extends ReceivingAccount {
+  invoiceId: string;
   reference: string;
-  status: "pending" | "success" | "failed" | "abandoned";
-  invoicePaid: boolean;
-  message: string | null;
 }
 
 /**
- * A 200 from `manual-transfer` is not an acceptance.
+ * A school saying "we've sent it" (`POST /billing/payments/transfer-report`).
  *
- * `PaymentOutcome.status` is `pending | success | failed | abandoned`, and it
- * was never read anywhere: any 200 was stored as a transfer on file, so a
- * response of `{status: "failed", invoicePaid: false}` flipped the invoice row
- * to "Pending verification" and told the admin their transfer was recorded.
- * They stop chasing it; the invoice stays unpaid; the console never says so.
+ * A CLAIM, NEVER A PAYMENT. The backend records it "without marking the
+ * invoice paid": only Nevo finance, reading a bank statement, confirms a
+ * transfer. So no answer to a report can settle an invoice, and none is a
+ * failure - `awaiting_confirmation` and `confirmed` are both a report on file.
+ *
+ * THIS WAS `manual-transfer`, which is now "Confirm Manual Transfer": finance's
+ * own write, behind an `X-Nevo-Finance-Key`, whose description says a transfer
+ * is confirmed by "a person with the billing scope looking at a bank statement
+ * - never the payer asserting it in the UI". The school's button was still
+ * posting there.
  */
-export function transferAccepted(outcome: PaymentOutcome): boolean {
-  return outcome.status === "pending" || outcome.status === "success";
+export interface TransferReport {
+  transactionId: string;
+  invoiceId: string;
+  bankReference: string;
+  status: "awaiting_confirmation" | "confirmed";
+  message: string;
 }
 
 /**
@@ -291,6 +301,21 @@ export function invoicePdfPath(pdfUrl: string): string | null {
   // This matched nevolearning.com only, so once the backend moved hosts every
   // invoice PDF it served would have been treated as a stranger's link.
   return isOwnApiHost(url.hostname) ? `${url.pathname}${url.search}` : null;
+}
+
+/**
+ * A `pdfUrl` that is someone else's link - a pre-signed object-store URL, say -
+ * and so can be followed as a plain link. Null for anything that is not an
+ * absolute http(s) URL: an empty string, a malformed value. Those are no
+ * document at all, and a plain `<a href="">` to one reloads the page.
+ */
+export function externalPdfUrl(pdfUrl: string): string | null {
+  try {
+    const url = new URL(pdfUrl);
+    return url.protocol === "https:" || url.protocol === "http:" ? url.href : null;
+  } catch {
+    return null;
+  }
 }
 
 export const billingApi = {
@@ -329,23 +354,60 @@ export const billingApi = {
   updateContact: (draft: BillingContactDraft) =>
     api.put<BillingContact>("/api/billing/billing-contact", draft),
   /**
-   * Record a bank transfer the school says they have made.
-   *
-   * `bankReference` is the IDEMPOTENCY KEY, not just a label: confirming the
-   * same transfer twice returns the original transaction with
-   * `invoicePaid: false` and a message saying it was already recorded, so a
-   * double-tap cannot settle an invoice twice. The screen surfaces that message
-   * rather than treating the second call as a failure.
+   * One invoice's account and reference. Null on an incomplete answer, for the
+   * reason on `ReceivingAccount`: a partial account is worse than none.
    */
-  manualTransfer: (invoiceId: string, bankReference: string) =>
-    api.post<PaymentOutcome>("/api/billing/payments/manual-transfer", {
+  invoiceTransferDetails: (invoiceId: string) =>
+    api
+      .get<Partial<InvoiceTransferDetails>>(
+        `/api/billing/invoices/${encodeURIComponent(invoiceId)}/bank-transfer-details`,
+      )
+      .then((d) =>
+        d &&
+        d.bankName &&
+        d.accountNumber &&
+        d.accountName &&
+        d.currency &&
+        d.reference
+          ? ({
+              bankName: d.bankName,
+              accountNumber: d.accountNumber,
+              accountName: d.accountName,
+              currency: d.currency,
+              invoiceId: d.invoiceId ?? invoiceId,
+              reference: d.reference,
+            } satisfies InvoiceTransferDetails)
+          : null,
+      ),
+  /** Tell Nevo finance a transfer is on its way. See `TransferReport`. */
+  reportTransfer: (invoiceId: string, bankReference: string) =>
+    api.post<TransferReport>("/api/billing/payments/transfer-report", {
       invoiceId,
       bankReference,
     }),
+  /**
+   * Every transfer this school has reported. What makes "Pending
+   * verification" survive a reload: it used to live in page state only, so
+   * the invoice forgot the school had told us the moment they left.
+   */
+  transferReports: () =>
+    api.get<TransferReport[]>("/api/billing/payments/transfer-reports"),
 
   /** The invoice PDF itself, with the Bearer token a plain link cannot send. */
   invoicePdf: (path: string) => api.blob(path),
 };
+
+/**
+ * Each invoice's most recent report. The list arrives newest first, so the
+ * first one seen for an invoice is the one that stands.
+ */
+export function latestReportByInvoice(
+  rows: TransferReport[],
+): Record<string, TransferReport> {
+  const out: Record<string, TransferReport> = {};
+  for (const r of rows) if (r.invoiceId && !out[r.invoiceId]) out[r.invoiceId] = r;
+  return out;
+}
 
 /** The API's own bounds on `bankReference`. */
 export const BANK_REF_MIN = 3;

@@ -292,6 +292,10 @@ contract that was never cut. Re-derive it against the deployed spec
 (`node scripts/api-audit.mjs`) before anyone builds to it, and per frontend §7, if the
 contract and the document disagree, say so before building either one.
 
+**ANSWERED, 8 Oct (#698).** A lesson opens on `GET /api/session/state/{id}`, and
+falls back to the accommodations route when that read is refused, so a child
+never loses an accommodation to a newer route.
+
 ---
 
 ## SHIPPED AND UNCONSUMED — check this before you check anything else. 16 Sep.
@@ -338,6 +342,14 @@ finished work.
 
 Screen counting is judgement-heavy: two independent passes over admin gave 50/63
 and 41/51. The RATIO held at ~80% both times. Treat denominators as ±15%.
+
+**Student row, re-read 11 Oct against `main` @ `ea31d38`: usable end to end on
+text lessons.** A child gets in through one entry screen, sits the baseline, plays
+generated lessons through the check, summary and review, and has Connect, Progress
+and offline Downloads on live reads. Door 2, the long pole and the demo hazard
+below are student items, and all three are closed or ruled (#325; #320, #321,
+#697; #327). What is left waits on others - see *Student app › Still open in the
+student lane*.
 
 **API: 132 of 183 endpoints (72%) are truly reachable**, not the 87% a naive
 path-match suggests. **27 are referenced but never called** — the recurring
@@ -422,7 +434,7 @@ found 17 of 97 markers repo-wide were already stale; assume the same rate here.
 **Unparked.** Design ruled on 14 Sep and the screen shipped the same day
 (`ReturningSignInScreen.tsx`, frame 00c); the identity leak it introduced was
 fixed on 15 Sep in PR #398. The history below is kept because the correction in
-it is still load-bearing and the shared-tablet sub-case is still open.
+it is still load-bearing. The shared-tablet sub-case closed on 18 Sep.
 
 **What design chose:** the child types the identifier a teacher reads out, over
 a class name-picker. That trades friction for never exposing a roster to anyone
@@ -442,11 +454,11 @@ holding a class code, and it needed nothing from backend.
   The name read is deliberately NOT awaited — awaiting it put a profile read
   between a child and the lesson they had just unlocked.
 
-**Still open — the shared classroom tablet.** The device remembers exactly ONE
-child (`nevo.auth.profile` is a single slot `rememberProfile` overwrites), so
-the second child to sign in displaces the first. Design's answer is frame 28c, a
-picker holding up to six children by FIRST NAME AND AVATAR ONLY, never full
-names, ageing out after thirty days of non-use. Waiting on the frame.
+~~**Still open - the shared classroom tablet.**~~ **BUILT 18 Sep (#455, #457).**
+The device used to remember exactly ONE child (`nevo.auth.profile`, a single
+slot), so the second child to sign in displaced the first. Frame 28c's picker now
+holds up to six children by FIRST NAME AND AVATAR ONLY, ageing out after thirty
+days of non-use, and since 7 Oct it opens for one remembered child too (D57, #686).
 
 **Note for whoever builds 28c:** "signing out is not forgetting the device" is a
 deliberate, tested decision (`session.dom.test.ts`) and design confirmed on
@@ -581,13 +593,17 @@ mount it.** It is role-aware (`sessionExpiredDoor(role)`) and takes no arguments
    with rotation locked, has no route into Nevo at all. SEND-relevant rather than
    hypothetical.
 
-### Still open in the student lane
+### Still open in the student lane - 11 Sep. ALL THREE CLOSED, re-read 11 Oct
 
-- `PinCreationScreen.tsx` is held by another session — untouched here.
-- The daily warm-up's `WarmUpRun.tsx` (528 lines) is not swept yet. It shares
-  `BaselineCapture` and the same `trial_pick` contract, so expect the same
-  accuracy-key question there. Being taken next by this session.
-- Nothing in the lane has been checked against the design frames since 8 Sep.
+- ~~`PinCreationScreen.tsx` is held by another session~~ - reworked since: the
+  first PIN through `student-entry/pin` (#647), its refusals and its saving and
+  failed states (#682, #717).
+- ~~The daily warm-up's `WarmUpRun.tsx` is not swept yet~~ - swept: served
+  questions only, raw trials, each band's own module (#617, #660, #689).
+- ~~Nothing in the lane has been checked against the design frames since 8 Sep~~ -
+  rounds 2-10 were built to the frames and design's written answers. A visual QA
+  pass of rounds 6-10 is still ours, and is on the current list under
+  *Student app › Still open in the student lane*.
 
 ---
 
@@ -638,7 +654,14 @@ headed for `main` and somebody may yet read it.
 `useStudentLesson`. Each was opened and confirmed to enclose the fallback branch
 itself rather than a sibling. That half of the old claim stands — do not soften it.
 
-**STILL OPEN — student lane, and this one reaches a signed-in child.**
+**STUDENT HALF CLOSED, re-read 11 Oct.** The bell's invented rows were emptied
+and the branch guarded on 18 Sep (`f7ba6a4`), and the bell has carried its mark
+since 22 Sep (`2fd0200`). `DEMO_CLASSES` went the same day, and the class step
+itself was retired on 5 Oct (#647). Downloads and Profile's samples are marked
+(#621). The lane has signed-in and signed-out E2E suites (25 Sep; every route
+since #649). The student paragraphs below are kept as the record.
+
+**~~STILL OPEN~~ CLOSED 18 Sep — student lane, and this one reached a signed-in child.**
 `context/NotificationContext.tsx:135-142` returns `MOCK_NOTIFICATIONS` — "A new
 lesson is ready / Adding Fractions is waiting for you" and "Ms Okafor sent you a
 message / Lovely work on your fractions today" — with no mark.
@@ -977,6 +1000,11 @@ indistinguishable from a wrong PIN. **It is blocked on backend returning a
 distinguishable code** — when that lands, it is the student session's to build, not mine.
 
 ## Account on Pause — designed, enforced, and NOT WIREABLE. 8 Sep.
+
+**WIRED 16 Sep, once backend split the codes (#422, #424).** `account_paused`
+reaches the drawn screen. Since then a closed account (`account_closed`, #655)
+and a withdrawn child (Consent Withdrawn, #686) have screens of their own. Kept
+below as the record of why it waited.
 
 Design ruled that a child whose parent withdrew consent is stopped at sign-in with a
 calm screen ("Your Nevo account is on pause. If you have questions, talk to your
@@ -1414,13 +1442,12 @@ what closed, because two of them were wrong about _why_ they mattered:
   against the deployed API.
 - ~~`messagesApi.reply` unused~~ — **#250**.
 
-**Still open for the student session:** wrap the student lane's fixture
-fallbacks in `<SampleRegion>`. **PARTLY DONE — nine surfaces wrapped and each wrap
-verified real, but the lane is NOT closed.** The notification bell and the
-onboarding class list are both unmarked, and the bell is mis-gated on top of it —
-a signed-in child gets an invented unread dot on the first frame of every page.
-See the retraction under ACTION NEEDED above for the sites and the reason the
-grep everyone used could not find them.
+~~**Still open for the student session:** wrap the student lane's fixture
+fallbacks in `<SampleRegion>`.~~ **DONE.** The bell and the onboarding class list
+were emptied and guarded on 18 Sep (`f7ba6a4`), the bell carries its mark since
+22 Sep (`2fd0200`), and Downloads and Profile's samples since 1 Oct (#621). See
+the retraction under ACTION NEEDED above for why the grep everyone used could not
+find them.
 
 ### FOR THE TEACHER SESSION — Insights is half-unblocked. 21 Sep.
 
@@ -1471,7 +1498,11 @@ want it; **do not also invest in new surfaces that present generated prose as th
 school's own voice until 8.2 is answered**, because that is the part that would
 be reworked.
 
-### FOR THE STUDENT SESSION — the signals wall clock. 17 Sep.
+### FOR THE STUDENT SESSION — the signals wall clock. 17 Sep. DONE THE SAME DAY
+
+**Fixed 17 Sep (`bdb5606`), contract unchanged:** every event is dated from a
+per-session anchor, `wall + (performance.now() - perf)`. See *For backend*. The
+handoff is kept as written.
 
 `npm run architecture` flags two sites and will keep flagging them:
 `hooks/useSignals.ts:178` and `:188` — `new Date().toISOString()` on the
@@ -1685,6 +1716,133 @@ receive anything we send**, and that sits upstream of every invite and consent f
 
 ## Student app
 
+### Where it stands - 11 Oct 2026, `main` @ `ea31d38`
+
+**Everything the student lane can build alone is built.** The 28 Sep student
+audit was worked through in ten rounds of student PRs between #575 and #729.
+What is open now waits on someone else, and is listed below by who. Everything
+dated earlier in this file's student sections is history.
+
+On `main` a child:
+
+- **gets in** through one entry screen, school code and Student ID, which routes
+  on consent, the age check, an existing account and a cleared PIN (SCRUM-208,
+  #647, #717). Every door reads its refusal by code: paused, closed, consent
+  withdrawn, signed in elsewhere, wrong door, throttled (#655, #682, #686, #692,
+  #724).
+- **sits the baseline** as raw trials with the run's context, never a reduction
+  (#660, #714, #723). Onboarding runs three modules, because the knowledge probe
+  has no route before an account exists (#729). The daily warm-up shows only what
+  the engine serves, in each band's own version (#660, #689).
+- **plays a lesson** with its accommodations in place before the first screen
+  (#583, #698), the engine's instructions applied as they arrive, key terms and
+  the server's reading chunks (#725), the calculation player drawn from
+  SCRUM-177's payload (#697, #728), and the Socratic hand-off when the server
+  says so (#727).
+- **finishes it** through the check, which can be left and resumed the same day,
+  with the result, summary and review answers read from the server (#661, #698,
+  #719, #727).
+- **has Connect, Progress, the bell and Downloads** on live reads, and saves
+  lessons offline through the real package. An offline copy is never recorded
+  complete unless it carries its check (#632, #687, #719, #722).
+
+### Still open in the student lane - 11 Oct 2026
+
+**Only the last group is ours.** Everything else waits on an answer, an asset or
+a frame.
+
+**Backend**
+
+- An expression step has no field naming its characters, so the Nevo pad cannot
+  add them per step (design ruled the pad on 9 Oct).
+- What a highlight's `target` names, and what `equationState` is for.
+- Where a number-line build starts. Today a line is hopped from its first
+  position.
+- `ManipulativeKind` says `fraction_bar` and `counters`; D149 draws a bar and
+  dots. `counters` is refused until the names agree.
+- What `numberProblemsStepByStep=false`, `shorterTextBlocks`,
+  `comprehensionCheckInterval` and `initialScaffoldLevel` (beyond the support
+  dots) change on screen. None is applied until then.
+- Baseline trials: what `BaselineTrial.skipped` marks; whether a warm-up's
+  `ageBand` is the child's band or the task's; and that a warm-up's absent
+  `motorStepSkipped` will not read as "the motor step ran".
+- A knowledge-probe route a child can call before their account exists.
+  Onboarding runs three modules until there is one (#729).
+- Offline: does the package send `recap: null`, or leave it out? Left out, that
+  lesson can never complete offline.
+- Resuming a check: does `POST /session` resume the check's session, and does a
+  progress write without `checkPosition` keep the stored one?
+- `pinCleared`: confirm it means "cleared, and not yet set again".
+- The lookup answers a miss with `404 entry_not_found`; its spec declares only
+  200 and 422.
+- A student with no teacher: what does their first message do?
+- Proof that media generation works end to end. Until then, assume text-only
+  lessons.
+
+**Design and Lydia**
+
+- "That version didn't work.": design wants words that own the failure and a
+  route back; SCRUM-181 has a single "Start again". Needs Lydia.
+- D154: what ends the throttled pause. PIN creation's throttled state is not
+  drawn; it shows D154's pause meanwhile.
+- The Downloads empty state.
+- The number line: D149's marker plus labels, against what the contract carries.
+- Calculation styles with no frame.
+- The subject note on a not-started card.
+- Frame updates to match what is built: Account Closed's line, the baseline
+  intro's count (the screen gives none now), the Lesson Player glow, and 28c-7.
+
+**Others**
+
+- SCRUM-223: the tap sound asset.
+- SCRUM-182: the avatar redraw (and backend B63, avatar shapes, which waits on it).
+- Counsel, B30: the session timeline and narrative. Subject detail's session
+  markers stay sample-only until then.
+- The "how you learn" wording. Never raised.
+
+**Ours**
+
+- SCRUM-238, the design runtime. In progress.
+- A visual QA pass of rounds 6-10. They are verified by tests and the E2E sweep,
+  not yet by eye against the frames.
+
+### The 4-11 Sep lists, closed - re-read 11 Oct
+
+These were this section's open lists from 4-11 Sep: the 11 Sep "still open",
+"typed, working, wired to nothing", the 404 stubs, the backend table and the
+design list. Every row is closed or ruled. Kept as one table so the direction
+this file drifted stays visible.
+
+| filed | 11 Oct |
+|---|---|
+| A returning child cannot get back in | Sign back in shipped 14 Sep; the entry screen sends an existing account there (#647) |
+| A finished lesson ends in a bare "Done" | Recap and check on the wire since 15 Sep; the result is the server's `resultState` (#727) |
+| Interactive has no honest mapping | Ruled 17 Sep: build nothing on `expectedInteraction` |
+| Calculation needs `problem.answer` and a scaffold | Drawn from SCRUM-177's payload (#697, #728) |
+| A paused child is told "That PIN didn't match." | The 401 codes are read (#424); a closed account has its own screen (#655, #686) |
+| `PinCreationScreen` prefers `setPin` | The first PIN goes through `student-entry/pin` (#647), a cleared one too (#717) |
+| `acceptJoin` stores no session | Stored 16 Sep (#414); since 5 Oct a child is never sent a join link (D5, #647) |
+| `/student/onboarding` admits a signed-in child | Bounced 17 Sep (#443) |
+| Nothing shipped since 8 Sep seen in a browser | Signed-in and signed-out E2E walk every student route (#649); a visual QA pass of rounds 6-10 is still ours |
+| `markCheckpoint` / `toQuickCheck` wired to nothing | Wired (#253); answers go to the attempts route (#635, #710) |
+| `contentApi.mediaUrl` has no caller | Called when a picture or recording fails (#619, #654) |
+| `playable` and the orphan review session | Linked from Subject detail, 15 Sep |
+| `highlights` has no slot | Ruled 17 Sep: carried, never rendered |
+| `/review` and `/summary` stub on a real lesson | Both live; review answers are read from the account (#698) |
+| Thread unread state | Marked read, 21 Sep |
+| Student SSO is mock | A real callback (#622), and dormant: no school can connect SSO yet (`lib/api/sso.ts`) |
+| Teacher Join compares a hard-coded code | A real join 10 Sep (#330); the class-code path retired 5 Oct (#647) |
+| Per-concept assessment result | The server's `masteredConcepts` and `revisitConcepts`, by name (#661) |
+| Boredom escalation asks nothing | Step-up retired by design (D28, #636) |
+| Downloads hidden from signed-in children | The real offline package (#632), sizes (#658), complete only with its check (#719) |
+| Baseline Module 4 items are mocks | Removed (#729); waits on a pre-account probe route |
+| Ask Nevo cannot scope a question | Scoped to the lesson, 21 Sep |
+| Narration playback is simulated | Real playback (#321); a calculation step plays its own recording (#697) |
+| After-lesson "nothing landed" heading | "That version didn't work." on the server's reroute (#727); its wording is open |
+| Forgot PIN is deliberately uncalled | "Let my teacher know" calls `auth/pin/reset` (#638, #645) |
+| Home encouragement line | Removed (#621) |
+| Consent gate holding state | 00d, 00e and the failed-read hold (#577, #686) |
+
 ### The entrance is open, and the lesson plays real content — 10/11 Sep
 
 **A child can now get in.** That was not true two days ago, and it was the whole
@@ -1733,31 +1891,6 @@ the scroll position, which nothing had ever done (#337).
   15% of 200?". Nothing a signed-in child can read carries an age or year group,
   so the flow asks.
 
-### Still open in the student lane
-
-Nothing here is code we can write alone.
-
-- **A returning child cannot get back in.** No remembered profile means a
-  redirect into onboarding — a second account, new identifier, no history.
-  `00 Student Login` designs only the remembered-device case. DESIGN.
-- **A finished lesson ends in a bare "Done".** No assessment, summary or recap
-  exists on any of the 183 paths. Nine built screens unreachable. BACKEND.
-- **Interactive** is a question on the wire and tickable steps in the player —
-  no honest mapping. **Calculation** needs `problem.answer`, and a ruling on
-  whether `scaffoldImage` replaces the drawn bar model. DESIGN + BACKEND.
-- **A paused child is told "That PIN didn't match."** `login/pin` declares only
-  200/422 and no schema carries an account status. BACKEND.
-- **`PinCreationScreen` prefers `authApi.setPin` when a token exists**, so a
-  device with a stale token saves the PIN and silently never joins the class.
-  Left alone only because another session has been mid-edit in that file.
-- **`acceptJoin` stores no session**, so an invite-link child finishes onboarding
-  with no token. Worth tracing what else that costs them.
-- **`/student/onboarding` admits an already-signed-in child with no bounce** —
-  the door the baseline misattribution came through. Closed for the baseline
-  specifically; the door is still open.
-- **Nothing shipped since 8 Sep has been seen in a browser.** All of the above is
-  verified by tests and measurement, not by watching a child's screen.
-
 ### THE CHOKEPOINT IS OPEN. The gap is now CONTENT. — 7 Sep
 
 `fromContent.ts` carries checkpoints through (#253) and `lessons.ts` declares the
@@ -1785,20 +1918,6 @@ student app.**
 modality on from `availableModalities` alone draws an empty visual frame _today_.
 `fromContent` and `lib/lessons/adaptation.ts` both gate on payload presence
 instead — keep it that way.
-
-### Typed, working, wired to nothing — BUILDABLE
-
-Shipped 4–5 Sep as API-layer work. All have logic and no UI consumer:
-
-| thing                                 | where                    | what it needs                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| ------------------------------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `markCheckpoint` / `toQuickCheck`     | `lib/api/checkpoints.ts` | `fromContent` to carry checkpoints; the player already draws `QuickCheckSheet`                                                                                                                                                                                                                                                                                                                                                                            |
-| `markInteractive` / `mediaUrlExpired` | `lib/api/variants.ts`    | `fromContent` to read the five variants                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `contentApi.mediaUrl`                 | `lib/api/content.ts`     | a caller — `mediaUrlExpired` decides when                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `useDueReviews().playable`            | `hooks/useDueReviews.ts` | `SubjectDetail` pills to become links into `/review-session`                                                                                                                                                                                                                                                                                                                                                                                              |
-| ~~`reflection` / `highlights`~~       | `lib/api/students.ts`    | **DONE #247.** `reflection` renders on both Progress screens, read per-subject from the narrowed route — the two routes' `reflection` mean different things, so the tab's would be a claim about all of a child's learning under one subject's heading. `highlights` is carried and NOT placed: it is a student-level list and the only nearby slot is the per-subject card note, so mapping it by index would be fabrication. **Needs a designed slot.** |
-
-Neither `checkpoints.ts` nor `variants.ts` is exported from `lib/api/index.ts`.
 
 ### Stale comments that now contradict the contract
 
@@ -1834,32 +1953,8 @@ student-facing endpoint, and `useStudentThreads.ts` no longer says "READ ONLY".
   `/student/onboarding/*` stays open: it is the flow that CREATES the session
   (`completeAccount` → `setSession` → first lesson). Do not guard it.
 
-- **`/student/lessons/[lessonId]/review-session` is an orphan** — nothing links
-  to it. `playable` is its entry point.
-
-### Stubs that 404 on a real lesson — NEEDS BACKEND
-
-- `/student/lessons/[lessonId]/review` — `getMockLesson` + `notFound()`. No
-  attempts endpoint; attempts live in `sessionStorage` (`reviewStore.ts`).
-- `/student/lessons/[lessonId]/summary` — same shape. `lessonFromContent` never
-  sets `lesson.summary`, so a live lesson silently loses the summary screen.
-
-### Blocked — NEEDS BACKEND
-
-| thing                           | why                                                                                                                                                                                                                                                                                                                            |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| ~~Student → teacher messaging~~ | **DONE #250.** `POST /api/messages` still has no `teacher` recipient — but `POST /messages/threads/{id}/reply` (3 Sep) is the door, and deliberately a different shape: access IS the thread, so a child may write only where they can already read and still cannot start a conversation.                                     |
-| Thread unread state             | No endpoint reports it; the dot stays off.                                                                                                                                                                                                                                                                                     |
-| Student SSO sign-in             | Entirely mock (`resolveMockSso`). `authApi.ssoCallback` exists and the teacher side calls it.                                                                                                                                                                                                                                  |
-| Teacher-join class code         | Pre-auth join still compares a hard-coded `VALID_CODE`. **Re-check:** `connections/class-code` went public on 3 Sep, so this may now be closable.                                                                                                                                                                              |
-| Per-concept assessment result   | Questions carry no concept id, so the after-lesson result can only tell _all_ from _none_.                                                                                                                                                                                                                                     |
-| ~~Adaptation plan~~             | **DONE #260. The "no student-facing endpoint" claim was wrong.** `POST /api/intelligence/adapt` is Bearer with no role restriction and returns 200 to a student's own token. Per-segment `scaffolding` now drives the indicator, which previously drew 2-of-4 support dots from a hardcoded `?? "light"` on every live lesson. |
-| ~~Backend-triggered breaks~~    | **DONE #262.** `in_lesson` mode at segment boundaries. `useBreakMonitor`'s TODO is answered; the client timer stays as the priming fallback. Only OBSERVED facts are sent — see the Zero-Tag note below.                                                                                                                       |
-| Boredom escalation              | The tap spends the offer and asks nothing.                                                                                                                                                                                                                                                                                     |
-| Downloads / offline             | Endpoints exist; the device half is a Service Worker project. Hidden from signed-in children, honestly.                                                                                                                                                                                                                        |
-| Baseline Module 4 items         | No IRT service; items are authored mocks.                                                                                                                                                                                                                                                                                      |
-| Ask Nevo scoping                | The console holds no student or lesson UUID to send.                                                                                                                                                                                                                                                                           |
-| Narration audio                 | 4 × `TODO(audio)` — the assets do not exist. Playback is a simulated progress bar with no `<audio>` element.                                                                                                                                                                                                                   |
+- ~~**`/student/lessons/[lessonId]/review-session` is an orphan**~~ **DONE
+  15 Sep.** Subject detail's "Ready for another look" chips link into it.
 
 ### Traps in the adaptation engine — do not relearn these
 
@@ -1891,26 +1986,6 @@ child would get a longer break on the strength of a number we made up.
 **`modality_suggestion` returned `null` under every combination tried,** including
 deliberately extreme ones. Nothing is wired to it. **Question for backend: what
 triggers it?**
-
-### NEEDS DESIGN
-
-- **`InteractiveVariant` does not map to `InteractiveContent`.** The wire is a
-  QUESTION (`prompt`, `options`, `answerKey`); the player's is tickable STEPS
-  with an outcome. Two different things sharing a name — a design decision, not
-  wiring.
-- **`CalculationVariant` is partial** — `CalculationSegment` needs `scaffold`
-  (kind/parts/rows) and `problem.answer`; the wire carries neither. Note
-  `CalculationVariant` and `CalculationStep` exist in BOTH `types/lesson.ts` and
-  `api/variants.ts` with different meanings — alias on import.
-- **`highlights` has no slot.** Backend-authored and required; carried by
-  `useStudentProgress` and rendered nowhere.
-- After-lesson "nothing landed" heading — ours, built from the frame's own
-  wording. Needs sign-off.
-- Forgot-PIN — `POST /api/v1/auth/pin/reset` exists and is deliberately not
-  called; the frame draws the screen as informational.
-- Home encouragement line — the designed copy claims something about the child
-  that nothing verifies.
-- Consent gate holding state — the gate never blocks.
 
 ---
 
@@ -2483,6 +2558,15 @@ only and never `scope=student`, and nothing in the SENCo profile, the student
 record or the IEP export references them. The statement counsel is relying on
 holds. SCRUM-169 can close on the admin side.
 
+**CORRECTED 11 Oct: that check covered the admin console only, and the parent
+console was rendering exactly the struck thing.** `/parent-portal` drew D15d -
+the four dimensions, each with a trend ("Growing", "Not enough yet"), for a
+named child, read from `GET /parents/me/children/{id}/growth`. Design struck
+D15d on 20 Sep. It is gone now: the signed-in parent home is D02's portal home
+(one card per subject, covered and mastered this week, from
+`.../subject-progress`), and `ChildGrowth` is deleted. Counsel's statement
+holds from 11 Oct; it did not hold between 20 Sep and then.
+
 ---
 
 ---
@@ -2530,7 +2614,11 @@ It says Nevo is not ready. It does not say the child is blocked, and it never
 mentions consent, a parent, or a school — which is the Zero-Tag reading: a child
 is not told they are the subject of an administrative problem between adults.
 
-### Handoff — student lane
+### Handoff — student lane. DONE 23 Sep
+
+**Built 23 Sep:** all four doors resolve consent through `lib/auth/entryGate` and
+hold at 00d. Since 7 Oct a withdrawn child has 00e, and a failed consent read
+holds the child too (D69, #686).
 
 | | |
 |---|---|
@@ -4339,7 +4427,9 @@ split shipped in PR #267 matches how the backend actually behaves.
 **One correction worth keeping.** `POST /billing/payments/{reference}/verify` must
 NOT be wired for a bank transfer. It is a WRITE that asks Paystack about a
 transaction and settles the invoice off the answer, so a bank reference 404s
-there. Manual transfers go through `manual-transfer`.
+there. Manual transfers went through `manual-transfer` until 11 Oct; that route
+is now Nevo finance's own confirmation behind `X-Nevo-Finance-Key`, and a
+school's "I've made this transfer" posts to `transfer-report` instead.
 
 ---
 
@@ -4364,6 +4454,8 @@ there. Manual transfers go through `manual-transfer`.
   succeed, and the accommodation can never be delivered. Precedent for optimism:
   `POST /api/intelligence/adapt` is on the same prefix and does answer 200 to a
   student's own token.
+  **ANSWERED (B22): yes.** A child may read their own, and that route is now the
+  fallback behind the session-start read (#698).
 - **What characters can a `login_identifier` contain?** (asked 15 Sep) No
   `pattern` on any of the nine schemas carrying it — `string`, 1–50 — and no
   prose anywhere in the document describes the format. Every fixture we have
@@ -4389,8 +4481,8 @@ there. Manual transfers go through `manual-transfer`.
   all live at 100ms and up, so 1ms reads as ample - but if affective inference
   needs finer, THAT is a contract ask for a numeric monotonic field, and the
   anchor above becomes its origin rather than its replacement.
-- **`CalculationVariant` carries no manipulative structure, and §4 says it
-  should.** (asked 17 Sep) Frontend §4: *"Backend supplies structure: kind,
+- ~~**`CalculationVariant` carries no manipulative structure, and §4 says it
+  should.**~~ (asked 17 Sep) Frontend §4: *"Backend supplies structure: kind,
   parts, rows. You render the manipulative. Do not substitute a static scaffold
   image, because the interaction is the mechanism."* The deployed
   `CalculationVariant` is `{type, fullEquation, answer, steps, scaffoldImage,
@@ -4409,6 +4501,8 @@ there. Manual transfers go through `manual-transfer`.
   already describes them. Until then the solver renders the equation and the
   steps and draws no manipulative, which is the honest reduced form rather than
   a picture built from numbers that mean something else.
+  **DELIVERED 20 Sep and consumed 21 Sep; drawn from SCRUM-177's payload since
+  8 Oct (#697, #728).**
 
 ### Affect and density — corrected 17 Sep, and most of it was not blocked
 
@@ -4984,6 +5078,8 @@ change touches three screens and the picker, and bundling it into an enforced
 break would muddle both. Six still works, including an administrator's
 generated reset.
 
+**DONE 25 Sep, and since 7 Oct four is the only length** (D58, #686).
+
 
 ### One warm-up a day, 23 Sep - and the cost was measurement, not tidiness
 
@@ -5034,6 +5130,9 @@ loop completes a real run, unmounts, and re-renders.
 "Begin warm-up" once today's is done, and tapping it lands on the done state.
 That is honest rather than wrong, but it is not what the card should say.
 Deliberately not invented - design has not given words for it.
+
+**DONE 24 Sep.** Design gave the words, and the card stops being an action -
+see *Two copies design supplied, 24 Sep*.
 
 
 ### The teacher's note reaches the child, 23 Sep - and it ships unnamed
@@ -5328,6 +5427,8 @@ two tests.
 wrappers, which is why the end-to-end sweep never caught this. It matters less
 with an empty array and it is the thing that would have caught it, so it is
 worth doing when someone is next in that shell.
+
+**DONE 22 Sep (`2fd0200`).** The bell carries its mark now.
 
 **2. Fourteen invented class names on one of the first screens a school sees.**
 `DEMO_CLASSES` - "Year 2 Wrens", "Year 5 Otters" - rendered whenever

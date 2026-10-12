@@ -821,7 +821,9 @@ test.describe("a signed-in student", () => {
     await expect(page).toHaveURL(/\/student\/profile\/pin$/);
     await expect(page.getByRole("heading", { name: "Enter your current PIN" })).toBeVisible();
     await expect(page.getByText("Step 1 of 3")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Continue" })).toBeDisabled();
+    // Frame 27's step 1 moves on at the fourth digit, like steps 2 and 3, so
+    // there is no Continue to press - and with no digits typed, nothing goes.
+    await expect(page.getByRole("button", { name: "Continue" })).toHaveCount(0);
 
     await expectNoSampleMarks(page, "Change PIN");
     expectNoWrites(writes, "Change PIN");
@@ -922,13 +924,26 @@ test.describe("a signed-in student", () => {
      */
     await page.waitForTimeout(1_000);
 
-    await expect(page.getByText("DAILY WARM-UP")).toBeVisible();
+    // The header belongs to a run (12, D126): it heads a task, and the done
+    // and nothing states have none.
+    const header = page.getByText("DAILY WARM-UP");
+    const home = page.getByRole("button", { name: "Home", exact: true });
     if (said.doneToday === true) {
       await expect(page.getByRole("heading", { name: "That's it for today" })).toBeVisible();
+      await expect(header).toHaveCount(0);
     } else if (typeof said.dimension !== "string") {
       // No task named: the nothing-state, whose only control is the way Home.
-      await expect(page.getByRole("button", { name: "Home", exact: true })).toBeVisible();
+      await expect(home).toBeVisible();
       await expect(page.getByRole("button")).toHaveCount(1);
+      await expect(header).toHaveCount(0);
+    } else {
+      /*
+       * A task named runs under the header - unless this device cannot give
+       * it. A heard task on a device with no voice (D139, as this runner is)
+       * draws the nothing-state instead, so either is right, never both.
+       */
+      await expect(header.or(home).first()).toBeVisible();
+      expect((await header.count()) > 0 && (await home.count()) > 0).toBe(false);
     }
 
     await expectNoSampleMarks(page, "The warm-up");
@@ -1115,7 +1130,13 @@ test.describe("a signed-in student", () => {
      */
     await page.goto("/auth/sign-in");
 
-    await page.getByRole("textbox", { name: "School code" }).fill(schoolCode);
+    // Four cells now (00c, D6), one character each: typed into the first,
+    // and each character moves the cursor on, as a child's typing does.
+    await page.getByRole("textbox", { name: /^School code, character 1 of/ }).click();
+    await page.keyboard.type(schoolCode);
+    await expect(
+      page.getByRole("textbox", { name: /^School code, character 4 of/ }),
+    ).not.toHaveValue("");
     await page.locator("#returning-username").fill(STUDENT_LOGIN!);
     await page
       .locator('input[aria-labelledby="returning-pin-label"]')

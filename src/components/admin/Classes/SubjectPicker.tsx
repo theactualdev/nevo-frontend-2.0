@@ -6,7 +6,7 @@ import { ASSIGN_SELECT } from "./assignParts";
 
 /**
  * The subjects a class takes (D05, SCRUM-194): chips to remove, a select to
- * add from the school's own list.
+ * add from the school's own list. A teacher's subjects use it too.
  *
  * Values are NAMES, because that is what a class stores and reads back; the
  * school list supplies the spelling to show. A name the list does not hold is
@@ -18,12 +18,15 @@ import { ASSIGN_SELECT } from "./assignParts";
  */
 export function SubjectPicker({
   id,
+  listLabel = "Subjects this class takes",
   value,
   onChange,
   subjects,
   disabled,
 }: {
   id: string;
+  /** What the chips are, for a screen reader. */
+  listLabel?: string;
   value: string[];
   onChange: (next: string[]) => void;
   /** The school's list. Null while it is unread: nothing is offered to add. */
@@ -37,7 +40,7 @@ export function SubjectPicker({
     <div>
       {value.length > 0 ? (
         <ul
-          aria-label="Subjects this class takes"
+          aria-label={listLabel}
           className="m-0 flex list-none flex-wrap gap-1.5 p-0"
         >
           {value.map((n) => (

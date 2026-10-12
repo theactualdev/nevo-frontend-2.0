@@ -121,6 +121,19 @@ afterEach(() => {
 });
 
 describe("the school code cells", () => {
+  it("keeps the tray in capitals, as both fields are", () => {
+    // The one-shot shift dropped the keys to lowercase after the first letter
+    // while the cells and the Student ID upper-cased whatever arrived.
+    render(<StudentEntryStep framing="school" />);
+    act(() => cells()[0].focus());
+
+    fireEvent.click(screen.getByRole("button", { name: "K" }));
+
+    expect(cells()[0].value).toBe("K");
+    expect(screen.getByRole("button", { name: "D" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "d" })).toBeNull();
+  });
+
   it("draws four cells and the Student ID field, with the frame's labels", () => {
     render(<StudentEntryStep framing="school" />);
 
@@ -470,9 +483,27 @@ describe("where a match goes", () => {
         name: "Nevo isn't quite ready for you yet",
       }),
     ).toBeNull();
-    expect(screen.queryAllByRole("button")).toHaveLength(0);
     expect(push).not.toHaveBeenCalled();
     expect(getOnboardingDraft()).toEqual({});
+  });
+
+  it("keeps the entry screen's Back on the age-check hold, and nothing else to press (05, state 6)", async () => {
+    // It was 00d's screen - a wordmark and no way off it - so on a shared
+    // tablet the next child could not get past it. The Entry frame keeps its
+    // chevron row: Back to the Welcome is the one control.
+    lookup.mockResolvedValue(matched({ ageCheckPending: true }));
+    render(<StudentEntryStep framing="school" />);
+
+    await enterAndSubmit();
+    await afterTheBeat();
+
+    const buttons = screen.getAllByRole("button");
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]).toHaveAccessibleName("Back");
+
+    fireEvent.click(buttons[0]);
+
+    expect(push).toHaveBeenCalledWith("/student/onboarding");
   });
 
   it("holds a child at the age check even when they already have a PIN", async () => {
@@ -732,6 +763,17 @@ describe("a child whose PIN a teacher cleared (B67)", () => {
       expect(getSession()).toBeNull();
     });
 
+    it("holds them at the age check with the entry screen's Back, not 00d's dead end", async () => {
+      entrySetPin.mockRejectedValue(refused(403, "age_check_pending"));
+      await matchCleared();
+      await chooseNewPin();
+
+      const buttons = screen.getAllByRole("button");
+      expect(buttons).toHaveLength(1);
+      fireEvent.click(buttons[0]);
+      expect(push).toHaveBeenCalledWith("/student/onboarding");
+    });
+
     it("pauses a throttled child, on the PIN screen (D154)", async () => {
       entrySetPin.mockRejectedValue(refused(429, "too_many_attempts"));
       await matchCleared();
@@ -778,5 +820,16 @@ describe("a pair handed back from the end of a first run (B68)", () => {
     expect(message()).toBe("");
     expect(idField().value).toBe("");
     expect(continueButton()).toHaveTextContent("Continue");
+  });
+});
+
+describe("05 Entry - where the keyboard is typing", () => {
+  it("lets every field show focus, never suppressing the outline", () => {
+    // The four cells and the ID field all set `outline-none`, so nothing but
+    // a caret said which one the keyboard was typing into.
+    render(<StudentEntryStep framing="school" />);
+
+    for (const el of [...cells(), idField()])
+      expect(el.className).not.toMatch(/(^| )outline-(none|hidden|0)( |$)/);
   });
 });

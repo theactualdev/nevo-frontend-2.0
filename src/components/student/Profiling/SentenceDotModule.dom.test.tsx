@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen } from "@testing-library/react";
-import { SentenceDotModule } from "./SentenceDotModule";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { SentenceDotModule, dotPositions, scatterDots } from "./SentenceDotModule";
 import { BaselineCapture } from "@/lib/profiling/capture";
+import { AGE_BANDS, dotPairs } from "@/lib/profiling/bands";
 
 /**
  * Module 3 asked children questions and recorded none of their answers.
@@ -325,6 +326,88 @@ describe("SentenceDotModule — each band's dots", () => {
   });
 });
 
+describe("SentenceDotModule — a child sees every dot that is counted", () => {
+  /*
+   * Dots went anywhere between 8% and 84% of the box with no spacing, so some
+   * landed on others: SS's 12 read as 11 beside a 13 that read as 10, and
+   * P1-3's 3 read as 2. The count recorded was not the count on screen.
+   * Sizes are the Dot Comparison frame's; the box is the smallest any band
+   * draws, 200px less its 2px border.
+   */
+  const DOT_PX = { p13: 22, p46: 16, jss: 13, ss: 10 } as const;
+  const INNER = 196;
+  const MIN = 1.5;
+  const px = (p: { x: number; y: number }) => ({
+    x: (p.x / 100) * INNER,
+    y: (p.y / 100) * INNER,
+  });
+  /** The closest two centres in an array, in px. */
+  const closest = (dots: { x: number; y: number }[]) => {
+    let best = Infinity;
+    for (let i = 0; i < dots.length; i++)
+      for (let j = i + 1; j < dots.length; j++)
+        best = Math.min(best, Math.hypot(dots[i].x - dots[j].x, dots[i].y - dots[j].y));
+    return best;
+  };
+
+  it("keeps every pair of dots apart, in every band's pairs, on both sides", () => {
+    for (const band of Object.values(AGE_BANDS)) {
+      const d = DOT_PX[band];
+      dotPairs(band).forEach((pair, trial) => {
+        for (const side of [0, 1])
+          for (const count of [pair.a, pair.b]) {
+            const dots = dotPositions(band, trial, side, count).map(px);
+            // Exactly as many as the pair says: only where they go changed.
+            expect(dots).toHaveLength(count);
+            expect(closest(dots), `${band} trial ${trial} side ${side} ${count}`)
+              .toBeGreaterThanOrEqual(d * MIN);
+            // Inside the box, clear of its edge.
+            for (const p of dots) {
+              expect(p.x).toBeGreaterThanOrEqual(14);
+              expect(p.y).toBeGreaterThanOrEqual(14);
+              expect(p.x + d).toBeLessThanOrEqual(INNER - 14 + 1e-9);
+              expect(p.y + d).toBeLessThanOrEqual(INNER - 14 + 1e-9);
+            }
+          }
+      });
+    }
+  });
+
+  it("places them the same way every time", () => {
+    expect(dotPositions("ss", 0, 1, 12)).toEqual(dotPositions("ss", 0, 1, 12));
+  });
+
+  it("falls back to an even lattice where random places run out, still apart", () => {
+    // Sixteen 30px dots: too crowded to place at random, not for the lattice.
+    const dots = scatterDots(16, 7, 30).map(px);
+
+    expect(dots).toHaveLength(16);
+    expect(closest(dots)).toBeGreaterThanOrEqual(30 * MIN);
+  });
+
+  it("draws the arrays it promises, spaced, on screen", () => {
+    // The larger on the right: P1-3's 8, which overlapped there, on side 1.
+    vi.spyOn(Math, "random").mockReturnValue(0.1);
+    render(<SentenceDotModule band="p13" onComplete={() => {}} />);
+
+    const boxes = [
+      ...new Set(
+        [...document.querySelectorAll<HTMLElement>("span.absolute.bg-nevo-violet")].map(
+          (s) => s.parentElement!,
+        ),
+      ),
+    ];
+    const arrays = boxes.map((b) =>
+      [...b.querySelectorAll<HTMLElement>("span")].map((s) =>
+        px({ x: parseFloat(s.style.left), y: parseFloat(s.style.top) }),
+      ),
+    );
+    expect(arrays.map((a) => a.length)).toEqual([4, 8]);
+    for (const a of arrays) expect(closest(a)).toBeGreaterThanOrEqual(22 * MIN);
+    vi.restoreAllMocks();
+  });
+});
+
 describe("SentenceDotModule — the question matches the buttons", () => {
   it("asks top or bottom on a phone, and which had more from tablet up", () => {
     // It asked which SIDE had more above buttons reading Top and Bottom.
@@ -336,6 +419,101 @@ describe("SentenceDotModule — the question matches the buttons", () => {
     expect(phone.className).toContain("sm:hidden");
     expect(wide.className).toContain("hidden sm:inline");
     expect(document.body.textContent).not.toMatch(/which side/i);
+  });
+});
+
+describe("SentenceDotModule — 3A says only what a frame gives it", () => {
+  /*
+   * "Listen, then tap the matching picture" and "Read it, then answer" sat
+   * in a bubble over the heard pictures and the passage. No frame has either:
+   * `Nevo Sentence Verify Frame` draws 3A with no avatar row.
+   */
+  const bubble = () => screen.queryByRole("status");
+
+  it("puts no bubble over the heard pictures", () => {
+    giveJsdomAVoice();
+    render(<SentenceDotModule band="p13" onComplete={() => {}} />);
+
+    expect(screen.getByLabelText("A bus")).toBeInTheDocument();
+    expect(bubble()).toBeNull();
+    expect(document.body.textContent).not.toMatch(/listen, then tap/i);
+  });
+
+  it("puts none over the passage", () => {
+    render(<SentenceDotModule band="ss" onComplete={() => {}} />);
+
+    expect(screen.getByText("Why does Ada keep a notebook?")).toBeInTheDocument();
+    expect(bubble()).toBeNull();
+    expect(document.body.textContent).not.toMatch(/read it, then answer/i);
+  });
+
+  it("keeps the prototype's question over a sentence", () => {
+    render(<SentenceDotModule band="p46" onComplete={() => {}} />);
+
+    expect(bubble()?.textContent).toBe("Is this true or false?");
+  });
+});
+
+describe("SentenceDotModule — a new trial paints clean", () => {
+  /*
+   * The buttons eased their colour, and the same button carries on into the
+   * next trial, so the last answer's violet faded out over a fresh one. The
+   * frames move only the scale (`.sv-tap`, `.dc-tap`).
+   */
+  const easesColour = /transition-(colors|all)|transition-\[[^\]]*(background|border|color)/;
+
+  it("draws the next sentence's buttons unpressed, with no colour to fade", () => {
+    render(<SentenceDotModule band="p46" onComplete={() => {}} />);
+    fireEvent.click(screen.getByText("True"));
+    act(() => void vi.advanceTimersByTime(500));
+
+    for (const label of ["True", "False", "Not sure"]) {
+      const b = screen.getByText(label);
+      expect(b.className).not.toContain("bg-nevo-violet");
+      expect(b.className).not.toMatch(easesColour);
+    }
+  });
+
+  it("does the same for the dots' buttons and the heard pictures' I don't know", () => {
+    render(<SentenceDotModule band="p13" onComplete={() => {}} />);
+    act(() => void vi.advanceTimersByTime(1000));
+    for (const b of screen.getAllByRole("button"))
+      expect(b.className).not.toMatch(easesColour);
+    cleanup();
+
+    giveJsdomAVoice();
+    render(<SentenceDotModule band="p13" onComplete={() => {}} />);
+    expect(
+      screen.getByRole("button", { name: /I don.t know/ }).className,
+    ).not.toMatch(easesColour);
+  });
+});
+
+describe("SentenceDotModule — buttons at the frames' sizes", () => {
+  it("draws True, False and Not sure 52px tall, full width on a phone and 168px up", () => {
+    // They were the module's 180x56 default.
+    render(<SentenceDotModule band="p46" onComplete={() => {}} />);
+
+    for (const label of ["True", "False", "Not sure"]) {
+      const b = screen.getByText(label);
+      expect(b.className).toContain("h-[52px]");
+      expect(b.className).toMatch(/(^| )w-full( |$)/);
+      expect(b.className).toContain("sm:w-[168px]");
+    }
+  });
+
+  it("draws the dots' buttons full width at 16px on a phone, 200x64 at 18px up", () => {
+    // They were 170x56 from tablet up, and 300 wide at 18px on a phone.
+    render(<SentenceDotModule band="p13" onComplete={() => {}} />);
+    act(() => void vi.advanceTimersByTime(1000));
+
+    const b = screen.getByRole("button", { name: /Top|Left/ });
+    expect(b.className).toMatch(/(^| )w-full( |$)/);
+    expect(b.className).toContain("text-base");
+    expect(b.className).toContain("sm:h-16");
+    expect(b.className).toContain("sm:w-[200px]");
+    expect(b.className).toContain("sm:text-lg");
+    expect(b.parentElement!.className).not.toContain("max-w-[300px]");
   });
 });
 

@@ -1,3 +1,4 @@
+import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   act,
@@ -21,6 +22,13 @@ import { clearSession } from "@/lib/auth/session";
  * six-digit reference is stale wherever it appears." Five to eight were only
  * ever a 422 from `PinLoginRequest`.
  */
+
+/*
+ * The page's imports are paid by the first test on a cold worker, and on a
+ * contended machine that alone ran past the 5s default. The same allowance
+ * the other door suites give themselves.
+ */
+vi.setConfig({ testTimeout: 30_000 });
 
 /*
  * ONE router and ONE roster array for the whole file. The page's hydrate
@@ -222,5 +230,56 @@ describe("which account a remembered child is", () => {
         expect.objectContaining({ userId: "student-1" }),
       ),
     );
+  });
+});
+
+/**
+ * ONE ENTRY, ONE ATTEMPT. The fourth digit used to send the PIN from inside
+ * the `setDigits` updater, and React runs an updater twice under StrictMode
+ * (and may on a concurrent replay), so every entry was posted twice: two
+ * attempts towards `too_many_attempts`, and a second login that could replace
+ * the session the first had made.
+ */
+describe("one entry, one attempt", () => {
+  it.each([
+    ["", false],
+    [" under StrictMode", true],
+  ])("posts a four-digit entry exactly once%s", async (_, strict) => {
+    loginPin.mockRejectedValue(wrongPin());
+    render(
+      strict ? (
+        <StrictMode>
+          <LoginPage />
+        </StrictMode>
+      ) : (
+        <LoginPage />
+      ),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Ada" }));
+    await screen.findByText("Enter your PIN to keep going");
+
+    await tap("1234");
+    await screen.findByText(/didn.t match/);
+    await act(async () => {});
+
+    expect(loginPin).toHaveBeenCalledTimes(1);
+  });
+
+  it("posts the next entry once too, after a refusal", async () => {
+    loginPin.mockRejectedValueOnce(wrongPin()).mockResolvedValue(SESSION);
+    render(
+      <StrictMode>
+        <LoginPage />
+      </StrictMode>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Ada" }));
+    await screen.findByText("Enter your PIN to keep going");
+
+    await tap("1234");
+    await screen.findByText(/didn.t match/);
+    await tap("5678");
+    await waitFor(() => expect(roster.rememberChild).toHaveBeenCalled());
+
+    expect(sentPins()).toEqual(["1234", "5678"]);
   });
 });

@@ -205,6 +205,8 @@ describe("PatternFlankerModule — each band's own sizes", () => {
 
     expect(card().className).toContain("sm:size-[140px]");
     expect(screen.getByText("Same").className).toContain("sm:w-[140px]");
+    // A 150px floor outranked the 140px the frame draws.
+    expect(screen.getByText("Same").className).not.toMatch(/min-w-/);
   });
 
   it("draws the P1-3 arrow at 64px from tablet up", () => {
@@ -216,6 +218,37 @@ describe("PatternFlankerModule — each band's own sizes", () => {
     )!;
     expect(centre.getAttribute("class")).toContain("sm:size-[64px]");
     expect(screen.getByLabelText("Right").className).toContain("sm:h-20");
+  });
+});
+
+describe("PatternFlankerModule — a new trial paints clean", () => {
+  /*
+   * The buttons eased their colour over 150ms, and the same button carries on
+   * into the next trial - so the last answer's violet faded out over a fresh
+   * trial. The frames move only the scale (`.pm-tap`, `.fl-tap`).
+   */
+  const easesColour = /transition-(colors|all)|transition-\[[^\]]*(background|border|color)/;
+
+  it("draws the next pair's buttons unpressed, with no colour to fade", () => {
+    render(<PatternFlankerModule band="p46" onComplete={() => {}} />);
+    fireEvent.click(screen.getByText("Same"));
+    expect(screen.getByText("Same").className).toContain("bg-nevo-violet");
+
+    act(() => void vi.advanceTimersByTime(500));
+
+    for (const label of ["Same", "Different"]) {
+      const b = screen.getByText(label);
+      expect(b.className).toContain("bg-nevo-cream");
+      expect(b.className).not.toMatch(easesColour);
+    }
+  });
+
+  it("does the same for the arrows", () => {
+    render(<PatternFlankerModule band="p46" onComplete={() => {}} />);
+    throughThePatterns();
+
+    for (const label of ["Left", "Right"])
+      expect(screen.getByLabelText(label).className).not.toMatch(easesColour);
   });
 });
 

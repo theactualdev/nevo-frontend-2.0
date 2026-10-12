@@ -9,8 +9,9 @@ import { ActivationView } from "./ActivationView";
  * OB-05's "What just happened" was not rendered at all. It says what the
  * activate call that just returned established - accounts created, counted by
  * that response - and nothing the contract does not: no invitations "sent",
- * no consent requests, no sign-in sheets. On a later visit nothing just
- * happened, so there is no list.
+ * no consent requests. The sign-in details row is back since
+ * `GET /students/sign-in-details` landed (9 Oct), with its download. On a
+ * later visit nothing just happened, so there is no list.
  */
 
 const get = vi.fn();
@@ -92,8 +93,33 @@ describe("OB-05's What just happened", () => {
     const { container } = await switchOn(state({ stage: "activated", canActivate: false }));
     const text = visibleText(container);
     expect(text).not.toMatch(/invitations? sent/i);
-    expect(text).not.toMatch(/consent/i);
-    expect(text).not.toMatch(/sign-in details/i);
+    // No consent requests claimed in the list. (OB-05's paper-form line sits
+    // below it, which is why this reads the list rather than the page.)
+    const list = screen.getByText(/What just happened/).nextElementSibling as HTMLElement;
+    expect(visibleText(list)).not.toMatch(/consent/i);
+  });
+
+  it("offers the paper consent form, in OB-05's words", async () => {
+    const { container } = await switchOn(state({ stage: "activated", canActivate: false }));
+    expect(visibleText(container)).toMatch(
+      /Some parents won.t reply to the emailed request\. You can download the paper consent form and collect it in person/,
+    );
+    expect(screen.getByRole("button", { name: "Download the paper consent form" })).toBeInTheDocument();
+  });
+
+  it("offers the sign-in details for the children it just created", async () => {
+    const { container } = await switchOn(state({ stage: "activated", canActivate: false }));
+    const text = visibleText(container);
+    expect(text).toMatch(/Student sign-in details ready/);
+    expect(text).toMatch(/Download or print them to hand out/);
+    expect(screen.getByRole("button", { name: "Download sign-in details" })).toBeInTheDocument();
+  });
+
+  it("has no sign-in row when no student accounts were created", async () => {
+    const { container } = await switchOn(
+      state({ stage: "activated", canActivate: false, studentCount: 0, classes: [] }),
+    );
+    expect(visibleText(container)).not.toMatch(/sign-in details/i);
   });
 
   it("leaves out a row with nothing in it, and says one in the singular", async () => {

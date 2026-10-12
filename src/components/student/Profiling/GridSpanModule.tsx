@@ -68,6 +68,37 @@ export const DUAL_CHECKS: { text: string; isTrue: boolean }[] = [
 /** What a child is asked while a check is up, here and in the warm-up. */
 export const DUAL_CHECK_PROMPT = "Is this true or false?";
 
+/**
+ * Hands keyboard focus to the grid once the dual check is answered.
+ *
+ * FOCUS WAS LEFT BEHIND THE GRID. True and False sit after the tiles, and the
+ * one that was pressed goes with the check, so focus fell to the page from a
+ * point past the grid: the next Tab left the screen, and a keyboard user had
+ * to Shift+Tab back to reach a tile. Now the grid itself takes focus, without
+ * scrolling, and the next Tab is the first tile. The grid rather than a tile,
+ * so no tile is marked out during a recall.
+ *
+ * Only when focus was in fact dropped - a check answered some other way than
+ * from a focused button leaves focus where it is. `open` is whether the grid
+ * is taking taps; call `afterCheck` from the answer.
+ */
+export function useGridFocusAfterCheck(open: boolean) {
+  const grid = useRef<HTMLDivElement>(null);
+  const pending = useRef(false);
+  useEffect(() => {
+    if (!open || !pending.current) return;
+    pending.current = false;
+    const active = document.activeElement;
+    if (!active || active === document.body) {
+      grid.current?.focus({ preventScroll: true });
+    }
+  }, [open]);
+  const afterCheck = useCallback(() => {
+    pending.current = true;
+  }, []);
+  return { grid, afterCheck };
+}
+
 type Step = "watching" | "check" | "input" | "wrong" | "between" | "settling";
 
 /**
@@ -134,6 +165,7 @@ export function GridSpanModule({
   const [firstRound, setFirstRound] = useState(true);
   const [check, setCheck] = useState(DUAL_CHECKS[0]);
 
+  const { grid, afterCheck } = useGridFocusAfterCheck(step === "input");
   const retries = useRef(0);
   const checkIdx = useRef(0);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -224,6 +256,7 @@ export function GridSpanModule({
       correct: answer === check.isTrue,
       ...tapPoint(e),
     });
+    afterCheck();
     setStep("input");
     capture?.record("input_start", { length: sequence.length });
   };
@@ -296,6 +329,9 @@ export function GridSpanModule({
         ) : (
           <div className="relative">
             <div
+              ref={grid}
+              tabIndex={-1}
+              data-testid="grid-span-grid"
               className={cn("grid", PHONE_GRID, tile.g)}
               style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}
             >
@@ -337,16 +373,13 @@ export function GridSpanModule({
               })}
             </div>
 
-            {/* Change-of-mind hint on a wrong tap - informational, never alarmed */}
-            <p
-              className={cn(
-                "absolute inset-x-0 -bottom-8 text-center text-[13px] text-nevo-violet transition-opacity duration-300",
-                step === "wrong" ? "opacity-100" : "opacity-0",
-              )}
-              aria-hidden={step !== "wrong"}
-            >
-              Try another
-            </p>
+            {/*
+              NO WORDS ON A WRONG TAP. "Try another" appeared under the grid
+              here, from the playable prototype (11:71). The Grid Span frame's
+              nudge state is the tile's soft-violet ring and nothing else, and
+              09 says never "wrong": a line that only ever shows after a miss
+              tells the child they missed.
+            */}
 
             {/* SS dual task: the check floats over the dimmed grid */}
             {step === "check" && (

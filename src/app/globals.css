@@ -472,6 +472,24 @@
   }
 }
 
+/*
+ * THE SHARED BUTTON TAKES THE STUDENT RING TOO. `Button` (and the shadcn one)
+ * carries its own focus style - `outline-none` and a 3px ring at 35% navy -
+ * and a utility beats the base-layer rule above, which is the point of putting
+ * it there. So one student screen showed two focus styles: the solid navy
+ * outline on fields and a pale ring on buttons. Inside the student console a
+ * button's focus reads as the console's: the same 2px navy outline, with its
+ * pale ring dropped. Unlayered, because it has to win over those utilities;
+ * keyed on `data-slot="button"`, which only the button components set. The
+ * teacher and admin consoles carry no `data-nevo-console`, so they keep the
+ * ring they had.
+ */
+[data-nevo-console="student"] [data-slot="button"]:focus-visible {
+  outline: 2px solid var(--color-nevo-navy);
+  outline-offset: 2px;
+  --tw-ring-shadow: 0 0 #0000;
+}
+
 /* Reduced-motion mode (Design System v2 §10 / §9 accessibility).
  * Global safety net: when the OS requests reduced motion, animations and
  * transitions are neutralized everywhere. Components should also gate decorative

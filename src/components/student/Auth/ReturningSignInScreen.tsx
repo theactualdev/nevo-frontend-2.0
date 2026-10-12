@@ -3,15 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check } from "lucide-react";
 import { NevoKeyboard, useNevoKeyboardDock } from "@/components/shared";
 import { Wordmark } from "@/components/shared/BrandMarks";
-import {
-  CodeInput,
-  SCHOOL_CODE_MAX,
-  SCHOOL_CODE_MIN,
-  normaliseCode,
-} from "@/components/student/Onboarding/CodeInput";
 import { authApi } from "@/lib/api";
 import { usersApi } from "@/lib/api/users";
 import {
@@ -20,6 +13,7 @@ import {
 } from "@/lib/auth/loginFailure";
 import { doorForRole, knownRole } from "@/lib/auth/consoleDoor";
 import { withNext } from "@/lib/auth/nextPath";
+import { SCHOOL_CODE_LENGTH, placeSchoolCode } from "@/lib/auth/schoolCode";
 import { rememberProfile } from "@/lib/auth/session";
 import {
   clearSignInHandoff,
@@ -70,14 +64,29 @@ import { WrongDoorScreen } from "./WrongDoorScreen";
  * types, as `admissionNumber`, and the server decides which one it is. The
  * help row points at the person who can read it out.
  *
+ * THE SCHOOL CODE IS FOUR CELLS (D6), as 05 Entry draws it and with 05's
+ * rule (`lib/auth/schoolCode`): every school's code has been four characters
+ * since 30 Sep (SCRUM-201), from an alphabet with no 0, O, 1 or I. It was a
+ * free-text field from when codes were `751A1136` and `BGA-4827`, with a
+ * "YOUR SCHOOL CODE" placeholder the frame never drew. Every live code fits;
+ * the contract's own bound (2-50) is wider than any of them.
+ *
  * PRE-FILLED FROM 05 ENTRY for a child the lookup says already has an
  * account (`accountReady`): they typed the code and the ID one screen ago,
- * and only the PIN is left. See `signInHandoff`.
+ * and only the PIN is left - so the PIN is what is focused, not the code.
+ * See `signInHandoff`.
  *
- * "DIDN'T MATCH" KEEPS THE FIELDS FILLED, per the frame - only the PIN clears.
- * Making a child retype a school code and a username they have just been read
- * out is how you lose them at the last step.
+ * "DIDN'T MATCH" KEEPS EVERYTHING FILLED, the four PIN dots included, with
+ * "Try again" live (frame 00c, state 3). Making a child retype a school code
+ * and a username they have just been read out is how you lose them at the
+ * last step, and the frame's line sends them to check those two, not the PIN.
  */
+
+/** Four empty cells. */
+const NO_CODE: readonly string[] = Array.from(
+  { length: SCHOOL_CODE_LENGTH },
+  () => "",
+);
 
 /**
  * Bound only by what the contract takes: `PinLoginRequest.admissionNumber` is
@@ -109,6 +118,25 @@ function initialsFromUsername(identifier: string): string {
     .toUpperCase();
 }
 
+/**
+ * 00c's field shell, for the school code's cells and the Student ID alike:
+ * 56px (60 from `sm`), a navy hairline at 40% on cream-elevated.
+ */
+const FIELD_SHELL =
+  "relative flex h-14 w-full items-center rounded-[10px] border-[1.5px] border-nevo-navy/40 bg-nevo-cream-elevated px-4 sm:h-15";
+
+/** Clear space between "That's me" and the top of the docked pad. */
+const ABOVE_THE_PAD = 12;
+
+/**
+ * How far to scroll so a button sits above a docked keyboard, by the least
+ * that does it: the button's bottom edge and the keyboard's top edge, both in
+ * viewport pixels. Zero when it is already clear.
+ */
+export function scrollToClearPad(buttonBottom: number, padTop: number): number {
+  return Math.max(0, Math.ceil(buttonBottom + ABOVE_THE_PAD - padTop));
+}
+
 /** Long enough to read "Welcome back", short enough not to feel stuck. */
 const DONE_MS = 1200;
 
@@ -117,12 +145,22 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
   const { signIn } = useAuth();
 
   // From 05, when it sent this child here; empty on any other arrival.
-  const [schoolCode, setSchoolCode] = useState(() =>
-    normaliseCode(peekSignInHandoff()?.schoolCode ?? "", SCHOOL_CODE_MAX),
+  const [code, setCode] = useState<string[]>(
+    () =>
+      placeSchoolCode(NO_CODE, 0, peekSignInHandoff()?.schoolCode ?? "").cells,
   );
   const [username, setUsername] = useState(() =>
     (peekSignInHandoff()?.identifier ?? "").slice(0, USERNAME_MAX),
   );
+  /**
+   * Both of the first two fields arrived filled from 05, so the PIN is the
+   * one left and the one focused. Focusing the code instead put its keyboard
+   * up over the help row, on a field the child had nothing to type into.
+   */
+  const [handedOver] = useState(() => {
+    const handoff = peekSignInHandoff();
+    return Boolean(handoff?.schoolCode && handoff.identifier.trim());
+  });
   // Spent once this screen has it, so the next visit starts empty.
   useEffect(() => clearSignInHandoff(), []);
   const [digits, setDigits] = useState("");
@@ -147,6 +185,12 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
    * field brings its own and only the focused one is up.
    */
   const pad = useNevoKeyboardDock();
+  /** The school code's own keyboard, a qwerty tray docked the same way. */
+  const codeKeys = useNevoKeyboardDock();
+  const cellRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const idRef = useRef<HTMLInputElement>(null);
+  /** The cell the on-screen keyboard types into - the last one focused. */
+  const activeCell = useRef<number | null>(null);
   /**
    * The first name to greet them by, once `users/me` answers. Null until then,
    * and the greeting is a bare "Welcome back" - never the username, which is
@@ -172,6 +216,52 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
   );
 
   /*
+   * A FRESH LOAD FOCUSES THE FIRST CELL BEFORE THE PAGE CAN LISTEN. The
+   * server's HTML carries `autofocus`, so the browser focuses cell 0 before
+   * hydration and the focus event reaches nothing: the tray stayed down, and
+   * tapping a cell that already has focus fires no second one, so on touch -
+   * where `inputMode="none"` keeps the device's keyboard away - the first
+   * cell could not be typed into at all. Arriving by client navigation was
+   * fine. So once the page is listening, a cell that already has focus opens
+   * its tray, as it would have; and a tap on a cell opens it too.
+   */
+  const openCodeKeys = (i: number) => {
+    activeCell.current = i;
+    pad.close();
+    codeKeys.onFocus();
+  };
+  useEffect(() => {
+    const at = cellRefs.current.findIndex(
+      (el) => el !== null && el === document.activeElement,
+    );
+    if (at >= 0) openCodeKeys(at);
+    // Once, on the first commit: it answers only the focus that came before it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /*
+   * THE PAD DOCKS UNDER "THAT'S ME", NOT OVER IT. It is in the flow, so the
+   * page grows by its height, but it sits at the foot of the screen: on a
+   * 375x667 phone, a 360x640 one and a tablet held sideways it came up over
+   * the button that sends the PIN - the only way on - and over the last of
+   * the PIN row, and the child had to know to scroll. So when it comes up,
+   * the page scrolls by the least that puts the button just above it, which
+   * keeps the PIN row in view too. Where everything already clears it, as on
+   * an upright tablet, nothing moves and the frame's spacing stands.
+   */
+  const submitRef = useRef<HTMLButtonElement>(null);
+  const padRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!pad.open) return;
+    const button = submitRef.current?.getBoundingClientRect();
+    const keys = padRef.current?.getBoundingClientRect();
+    // No height: the pad is hidden, because a real keyboard is attached.
+    if (!button || !keys || keys.height === 0) return;
+    const by = scrollToClearPad(button.bottom, keys.top);
+    if (by > 0) window.scrollBy({ top: by });
+  }, [pad.open]);
+
+  /*
    * ONE APPENDER for the pad and the keyboard. They filled `digits` through
    * two separate inline closures before this screen had a keyboard path at
    * all; two copies of "add a digit unless we are full" is how they end up
@@ -190,10 +280,42 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
     setDigits((d) => (d + add).slice(0, STUDENT_PIN_LENGTH));
   }, []);
 
+  /*
+   * THE CODE CELLS, as 05 Entry types into them: each character moves on to
+   * the next cell and the fourth to the Student ID, Backspace in an empty
+   * cell goes back one, and a pasted code spreads across all four.
+   */
+  const typeIntoCell = (i: number, raw: string) => {
+    if (raw === "") {
+      if (!code[i]) return;
+      const next = code.slice();
+      next[i] = "";
+      setCode(next);
+      return;
+    }
+    const placed = placeSchoolCode(code, i, raw);
+    // A 0, an O or a symbol: nothing belongs in the code, so nothing moves.
+    if (placed.last === null) return;
+    setCode(placed.cells);
+    if (placed.last < SCHOOL_CODE_LENGTH - 1) {
+      cellRefs.current[placed.last + 1]?.focus();
+    } else {
+      idRef.current?.focus();
+    }
+  };
+  const backspaceCell = (i: number) => {
+    const at = code[i] ? i : i - 1;
+    if (at < 0) return;
+    const next = code.slice();
+    next[at] = "";
+    setCode(next);
+    if (at !== i) cellRefs.current[at]?.focus();
+  };
+
   const identifier = username.trim();
-  const school = schoolCode.trim();
+  const school = code.join("");
   const ready =
-    school.length >= SCHOOL_CODE_MIN &&
+    school.length === SCHOOL_CODE_LENGTH &&
     identifier.length >= USERNAME_MIN &&
     digits.length === STUDENT_PIN_LENGTH;
 
@@ -331,9 +453,16 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
       }
       leaving = goOn(destination);
     } catch (cause) {
-      // Only the PIN clears. The other two fields stay, deliberately.
-      setDigits("");
-      setError(classifyLearnerLoginFailure(cause));
+      const failure = classifyLearnerLoginFailure(cause);
+      /*
+       * A failure "Try again" answers keeps all three as typed - the four PIN
+       * dots too, and the button live (00c, state 3). It cleared the PIN and
+       * greyed the button out at 40%, under a "Try again" that could not be
+       * pressed. The other failures are screens or pauses of their own, where
+       * the PIN is not coming back.
+       */
+      if (failure !== "credentials" && failure !== "ours") setDigits("");
+      setError(failure);
     } finally {
       if (!leaving) setChecking(false);
     }
@@ -363,23 +492,36 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
   }
 
   if (done) {
+    /*
+     * 00c's success (state 2): the form's wordmark stays, and the avatar disc
+     * pops in above the greeting. It was the generic check-mark beat, with no
+     * wordmark, which is another screen's.
+     */
     return (
-      <main className="flex min-h-[100dvh] flex-col items-center justify-center bg-nevo-cream px-10 text-center text-nevo-near-black">
-        <span className="flex size-16 items-center justify-center rounded-full bg-nevo-navy motion-safe:animate-nevo-pop">
-          <Check className="size-[34px] text-nevo-cream" strokeWidth={2.6} />
-        </span>
-        <h2 className="mt-5 text-[23px] leading-[1.3] font-medium tracking-[-0.01em] sm:text-[26px]">
-          {/*
-            NEVER THE USERNAME. This read "Welcome back, amara.k" - the login
-            identifier, on a shared tablet, beside a school code the whole
-            building knows. The first name arrives inside this 1.2s hold in the
-            ordinary case; until it does, "Welcome back" is warm and true.
-          */}
-          {greetName ? `Welcome back, ${greetName}` : "Welcome back"}
-        </h2>
-        <p className="mt-2.5 text-[15px] text-nevo-near-black/60">
-          Taking you to your lessons…
-        </p>
+      <main className="flex min-h-[100dvh] w-full flex-col bg-nevo-cream text-nevo-near-black">
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-7 pt-[52px] pb-6 text-center sm:px-12 sm:pt-14 sm:pb-8">
+          <Wordmark size="form" />
+          <span
+            aria-hidden
+            className="mt-7 flex size-16 items-center justify-center rounded-full bg-nevo-navy motion-safe:animate-nevo-pop"
+          >
+            <svg viewBox="0 0 24 24" className="size-[46%] fill-nevo-cream">
+              <circle cx="12" cy="12" r="8.5" />
+            </svg>
+          </span>
+          <h2 className="mt-5 text-2xl leading-[1.25] font-medium tracking-[-0.01em] sm:text-[28px]">
+            {/*
+              NEVER THE USERNAME. This read "Welcome back, amara.k" - the login
+              identifier, on a shared tablet, beside a school code the whole
+              building knows. The first name arrives inside this 1.2s hold in
+              the ordinary case; until it does, "Welcome back" is warm and true.
+            */}
+            {greetName ? `Welcome back, ${greetName}` : "Welcome back"}
+          </h2>
+          <p className="mt-2.5 text-[15px] leading-[1.4] text-nevo-near-black/60 sm:text-base">
+            Taking you to your lessons…
+          </p>
+        </div>
       </main>
     );
   }
@@ -409,9 +551,11 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
       <div
         className={cn(
           "flex min-h-0 flex-1 flex-col items-center px-7 pt-[52px] text-center sm:px-12 sm:pt-14",
-          // The frame lifts the form to the top while the pad is up, so the
-          // field being typed into and the button stay above it.
-          pad.open ? "justify-start pb-5" : "justify-center pb-6 sm:pb-8",
+          // The frame lifts the form to the top while a keyboard is up, so
+          // the field being typed into and the button stay above it.
+          pad.open || codeKeys.open
+            ? "justify-start pb-5"
+            : "justify-center pb-6 sm:pb-8",
         )}
       >
         <Wordmark size="form" />
@@ -430,44 +574,80 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
         <div className="mt-7 flex w-full max-w-[336px] flex-col gap-[18px] text-left sm:gap-5">
           <div className="flex flex-col gap-2">
             {/*
-              A VISIBLE label, not just `CodeInput`'s `label` prop - that one is
-              an `aria-label` and shows a sighted child nothing. Elsewhere in
-              onboarding a code field stands alone and the heading above says
-              what it is; here there are three fields in a row, and a child
+              A VISIBLE label: there are three fields in a row, and a child
               being read a code and a username by their teacher has to know
               which box takes which.
             */}
-            <p className="text-[13px] font-semibold text-nevo-near-black/70 sm:text-[13.5px]">
+            <label
+              id="returning-code-label"
+              htmlFor="returning-code-0"
+              className="text-[13px] font-semibold text-nevo-near-black/70 sm:text-[13.5px]"
+            >
               Your school code
-            </p>
+            </label>
             {/*
-              CENTRED, as 00c centres its code cells. From here rather than
-              inside `CodeInput`, which the school step shares and which the
-              entry rework (SCRUM-208) owns; this screen never shows its
-              pending or success mark, so the room kept for it goes too.
+              00c's four underline cells, centred in the frame's field shell.
+              No placeholder and no tint on a miss: the frame draws neither,
+              and its error line says what to check.
             */}
-            <div className="[&_input]:pr-0 [&_input]:text-center">
-              <CodeInput
-                value={schoolCode}
-                onChange={(v) =>
-                  setSchoolCode(normaliseCode(v, SCHOOL_CODE_MAX))
-                }
-                onSubmit={() => void submit()}
-                status={error === "credentials" ? "error" : "idle"}
-                label="School code"
-                placeholder="Your school code"
-                min={SCHOOL_CODE_MIN}
-                max={SCHOOL_CODE_MAX}
-              />
+            <div
+              role="group"
+              aria-labelledby="returning-code-label"
+              className={cn(FIELD_SHELL, "justify-center gap-2.5")}
+            >
+              {code.map((ch, i) => (
+                <input
+                  key={i}
+                  id={`returning-code-${i}`}
+                  ref={(el) => {
+                    cellRefs.current[i] = el;
+                  }}
+                  value={ch}
+                  onChange={(e) => typeIntoCell(i, e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Backspace" && !code[i]) {
+                      e.preventDefault();
+                      backspaceCell(i);
+                    } else if (e.key === "Enter") {
+                      e.preventDefault();
+                      void submit();
+                    }
+                  }}
+                  onFocus={(e) => {
+                    // Typing over a filled cell replaces it.
+                    e.currentTarget.select();
+                    openCodeKeys(i);
+                  }}
+                  // A tap on a cell that already has focus fires no focus
+                  // event; it still brings the tray up.
+                  onPointerDown={() => openCodeKeys(i)}
+                  onBlur={codeKeys.onBlur}
+                  // A fresh arrival starts here; a child handed over from 05
+                  // starts at the PIN.
+                  autoFocus={i === 0 && !handedOver}
+                  // The Nevo keyboard is the input on touch (A.12); a hardware
+                  // keyboard still types on desktop, where the tray is hidden.
+                  inputMode="none"
+                  autoComplete="off"
+                  autoCapitalize="characters"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  aria-label={`School code, character ${i + 1} of ${SCHOOL_CODE_LENGTH}`}
+                  // No `outline-none`, here or on the Student ID: it hid
+                  // which cell takes the next character from anyone on a
+                  // keyboard. Neither frame draws a focus state, so the
+                  // student console's focus ring shows it, as on 05.
+                  className="h-8 w-[26px] rounded-none border-0 border-b-2 border-nevo-near-black/28 bg-transparent p-0 text-center text-[21px] font-bold text-nevo-near-black uppercase sm:h-9 sm:w-[30px] sm:text-2xl"
+                />
+              ))}
             </div>
           </div>
           {/*
-            NOT `CodeInput`, deliberately. That component normalises everything
-            typed into it with `normaliseCode` - uppercase, and strip anything
-            that is not A-Z, 0-9 or a hyphen - which is right for a school code
-            and destroys an identifier. `amara.k` arrives as `AMARAK`, and
-            `BGA/2031` as `BGA2031`, which the server has never heard of. What
-            the child types is sent back exactly as typed.
+            NOT THE CODE'S RULE, deliberately. The code cells keep only what a
+            school code can contain, which is right for a code and destroys an
+            identifier: `amara.k` would arrive as `AMARAK`, and `BGA/2031` as
+            `BGA2031`, which the server has never heard of. What the child
+            types is sent back exactly as typed.
 
             NO PLACEHOLDER: 00c draws the field empty. It said "Ask your
             teacher", which the help row under the button already says.
@@ -479,16 +659,10 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
             >
               Student ID / Admission Number
             </label>
-            <div
-              className={cn(
-                "relative flex h-15 w-full items-center rounded-[10px] border-[1.5px] bg-nevo-cream px-4 shadow-elevation-1 transition-colors sm:h-17",
-                error === "credentials"
-                  ? "border-nevo-violet"
-                  : "border-nevo-near-black/[0.16]",
-              )}
-            >
+            <div className={FIELD_SHELL}>
               <input
                 id="returning-username"
+                ref={idRef}
                 value={username}
                 onChange={(e) =>
                   setUsername(e.target.value.trimStart().slice(0, USERNAME_MAX))
@@ -504,7 +678,7 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}
-                className="w-full bg-transparent text-[17px] text-nevo-near-black outline-none"
+                className="h-full w-full bg-transparent text-base text-nevo-near-black"
               />
             </div>
           </div>
@@ -558,8 +732,12 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
                     void submit();
                   }
                 }}
-                onFocus={pad.onFocus}
+                onFocus={() => {
+                  codeKeys.close();
+                  pad.onFocus();
+                }}
                 onBlur={pad.onBlur}
+                autoFocus={handedOver}
                 inputMode="none"
                 autoComplete="off"
                 aria-labelledby="returning-pin-label"
@@ -572,7 +750,10 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
               >
                 {/* Four boxes, for every child (D58). */}
                 {Array.from({ length: STUDENT_PIN_LENGTH }, (_, i) => {
-                  const active = i === digits.length && !checking;
+                  // The caret's box, while the PIN is what is being typed:
+                  // not while a code cell or the Student ID has focus.
+                  const active =
+                    pad.open && i === digits.length && !checking;
                   return (
                     <div
                       key={i}
@@ -643,6 +824,7 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
             </Link>
           ) : (
           <button
+            ref={submitRef}
             type="button"
             disabled={!ready || checking}
             onClick={() => void submit()}
@@ -684,15 +866,37 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
       </div>
 
       {pad.open && !throttled && (
+        // Docked, and in the flow rather than fixed over it: the page grows by
+        // the tray's height, so nothing it docks over is out of reach. The
+        // wrapper is what is measured above - the tray inside slides up, and a
+        // transform would move its box mid-measure.
+        <div ref={padRef} className="sticky bottom-0 z-40">
+          <NevoKeyboard
+            layout="pad"
+            onKey={(char) => {
+              if (checking) return;
+              addDigits(char);
+            }}
+            onBackspace={() => setDigits((d) => d.slice(0, -1))}
+          />
+        </div>
+      )}
+      {codeKeys.open && !throttled && (
         <NevoKeyboard
-          layout="pad"
+          layout="qwerty"
+          // A school code is capitals, so its tray stays in capitals.
+          uppercase
           onKey={(char) => {
-            if (checking) return;
-            addDigits(char);
+            const at = activeCell.current;
+            if (at !== null) typeIntoCell(at, char);
           }}
-          onBackspace={() => setDigits((d) => d.slice(0, -1))}
-          // Docked, and in the flow rather than fixed over it: the page grows
-          // by the tray's height, so nothing it docks over is out of reach.
+          onBackspace={() => {
+            const at = activeCell.current;
+            if (at !== null) backspaceCell(at);
+          }}
+          onReturn={() => void submit()}
+          // Docked in the flow like the pad: it used to be fixed over the
+          // foot of the form, on top of the help row.
           className="sticky bottom-0 z-40"
         />
       )}

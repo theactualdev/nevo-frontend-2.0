@@ -417,6 +417,22 @@ export interface StudentEnrollment {
   loginIdentifier: string;
 }
 
+/**
+ * One active child's sign-in details (`GET /students/sign-in-details`, 9 Oct):
+ * "Printable school code and Student IDs for active children." The PIN is
+ * the child's own and is on no read.
+ */
+export interface StudentSignInDetail {
+  studentId: string;
+  firstName: string | null;
+  lastName: string | null;
+  /** The Student ID a child types at sign-in. */
+  admissionNumber: string;
+  schoolCode: string;
+  classId?: string | null;
+  className?: string | null;
+}
+
 export const studentsApi = {
   /**
    * Enrol one student directly. POST /api/v1/students
@@ -458,6 +474,12 @@ export const studentsApi = {
         classId: options.classId,
         includeInactive: options.includeInactive ? true : undefined,
       },
+    }),
+
+  /** Every active child's school code and Student ID; one class with `classId`. */
+  signInDetails: (classId?: string) =>
+    api.get<StudentSignInDetail[]>("/api/v1/students/sign-in-details", {
+      params: { classId },
     }),
 
   /** One student, admin-scoped. GET /api/v1/students/{student_id} */

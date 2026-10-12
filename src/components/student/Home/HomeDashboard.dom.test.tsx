@@ -1010,8 +1010,51 @@ describe("the date over the greeting", () => {
     render(<HomeDashboard />);
 
     expect(
-      await screen.findByText("We couldn’t load your lessons just now"),
+      await screen.findByText("We couldn't load your lessons just now"),
     ).toBeInTheDocument();
     expect(screen.getByText(homeDate(new Date()))).toBeInTheDocument();
   });
 });
+
+describe("Home with nothing set, on a short screen", () => {
+  /*
+   * 29's figure is 290 tall on a phone, but 29 draws it alone; Home stacks it
+   * under the greeting and the warm-up card. At full height it pushed the
+   * only line on the screen past the bottom of a phone (heading at 709-760
+   * against a fold at 633) and of a 1280x832 desktop. The figure now gives
+   * way: the page is the screen's height (`basis-0`, `min-h-0` down the
+   * chain) and the figure may shrink (`min-h-0`), drawn whole
+   * (`object-contain`). Measured in Chromium with the built CSS: heading
+   * 533-585 on a 375x812 phone, 615-680 at 1280x832, and the tablet keeps the
+   * full 350. jsdom lays nothing out, so the chain is pinned here.
+   */
+  it("lets the figure shrink so the line stays on screen", async () => {
+    signIn();
+    dashboard.useStudentDashboard.mockReturnValue({
+      data: { assignments: [], recentProgress: [] },
+      failed: false,
+      loading: false,
+    });
+
+    const { container } = render(<HomeDashboard />);
+    const line = await screen.findByText(
+      "Your teacher is setting up your first lesson",
+    );
+
+    const block = line.parentElement!;
+    const figure = block.querySelector("img")!;
+    expect(figure).toHaveClass("min-h-0", "object-contain", "h-[290px]");
+    expect(figure).not.toHaveClass("shrink-0");
+    expect(line).toHaveClass("shrink-0");
+    // Every box from the figure's block up to the page is the screen's
+    // height, not its content's.
+    for (
+      let box: HTMLElement | null = block;
+      box && box !== container;
+      box = box.parentElement
+    ) {
+      expect(box).toHaveClass("min-h-0", "basis-0", "flex-1");
+    }
+  });
+});
+

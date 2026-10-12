@@ -42,41 +42,54 @@ export function SchoolCodeCard() {
   const code = school?.code;
   if (!code) return null;
 
+  /*
+   * D04'S ROW, VALUE FOR VALUE (QA, 10 Oct): "School code" over the code in
+   * monospace, weight 600, 22px (19px below 1024), 0.12em tracking, navy; a
+   * plain "Copy" beside it; the sentence on the right. This was a taller card
+   * with the code at 28px regular, 0.18em, near-black, and a bordered button.
+   *
+   * LINES, NEVER BOXES. The house rule, and it carries meaning: codes are
+   * lines and PINs are boxes, so a child never confuses the two.
+   */
   return (
-    <div className={cn(CARD, "mt-5 px-[26px] py-[22px]")}>
-      <h3 className="m-0 text-[13px] font-semibold tracking-[0.05em] text-nevo-near-black/50 uppercase">
-        Your school code
-      </h3>
-      <div className="mt-2 flex flex-wrap items-center gap-4">
-        {/*
-          * LINES, NEVER BOXES. The house rule, and it carries meaning: codes
-          * are lines and PINs are boxes, so a child never confuses the two.
-          * Same treatment the wizard's handover used.
-          */}
-        <p className="m-0 font-mono text-[28px] tracking-[0.18em] text-nevo-near-black">
-          {code}
-        </p>
-        <button
-          type="button"
-          onClick={() => {
-            navigator.clipboard
-              ?.writeText(code)
-              .then(() => setCopied(true))
-              /*
-               * A refused clipboard is not a copied code. Saying "Copied" when
-               * the browser declined would send somebody to paste nothing -
-               * the code is on screen either way, so the honest failure costs
-               * them a retype rather than a mystery.
-               */
-              .catch(() => setCopied(false));
-          }}
-          className="h-[38px] cursor-pointer rounded-[10px] border border-nevo-navy/30 px-4 text-[13.5px] font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/[0.06]"
-        >
-          {copied ? "Copied" : "Copy code"}
-        </button>
+    <div
+      className={cn(
+        CARD,
+        "mt-5 flex flex-wrap items-center gap-[18px] px-5 py-[15px]",
+      )}
+    >
+      <div className="min-w-0 flex-auto">
+        <h3 className="m-0 text-[11.5px] font-semibold tracking-[0.05em] text-nevo-near-black/50 uppercase lg:text-[12px]">
+          School code
+        </h3>
+        <div className="mt-1 flex items-center gap-[11px] lg:mt-[5px] lg:gap-3">
+          <p className="m-0 font-mono text-[19px] font-semibold tracking-[0.12em] text-nevo-navy lg:text-[22px]">
+            {code}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              navigator.clipboard
+                ?.writeText(code)
+                .then(() => setCopied(true))
+                /*
+                 * A refused clipboard is not a copied code. Saying "Copied"
+                 * when the browser declined would send somebody to paste
+                 * nothing - the code is on screen either way, so the honest
+                 * failure costs them a retype rather than a mystery.
+                 */
+                .catch(() => setCopied(false));
+            }}
+            aria-label={copied ? "Copied" : "Copy school code"}
+            className="cursor-pointer rounded-sm text-[12.5px] font-semibold text-nevo-navy hover:opacity-75 lg:text-[13px]"
+          >
+            {copied ? "Copied" : "Copy"}
+          </button>
+        </div>
       </div>
-      <p className="m-0 mt-2.5 max-w-[56ch] text-[13px] leading-[1.55] text-nevo-near-black/58">
-        Share it so staff and students can join.
+      <p className="m-0 max-w-[360px] text-[13px] leading-normal text-nevo-near-black/60">
+        Share this so staff and students can join. It also lives under IT
+        &amp; SSO.
       </p>
     </div>
   );

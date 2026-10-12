@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { ReturningSignInScreen } from "./ReturningSignInScreen";
+import { hydrateRoot } from "react-dom/client";
+import { renderToString } from "react-dom/server";
+import {
+  ReturningSignInScreen,
+  scrollToClearPad,
+} from "./ReturningSignInScreen";
 import { ApiError } from "@/lib/api/client";
 import * as authApiModule from "@/lib/api";
 import { clearSession, getRememberedProfile } from "@/lib/auth/session";
@@ -93,10 +98,20 @@ const pinInput = () =>
     'input[aria-labelledby="returning-pin-label"]',
   ) as HTMLInputElement;
 
-function fill({ school = "751A1136", user = "amara.k" } = {}) {
-  const [schoolField, userField] = screen.getAllByRole("textbox");
-  fireEvent.change(schoolField, { target: { value: school } });
-  fireEvent.change(userField, { target: { value: user } });
+/** The school code's four cells, as 05 Entry draws them (D6). */
+const cells = () =>
+  screen.getAllByLabelText(/School code, character/) as HTMLInputElement[];
+const codeValue = () => cells().map((c) => c.value).join("");
+const idField = () =>
+  screen.getByLabelText("Student ID / Admission Number") as HTMLInputElement;
+/** The PIN boxes' dots. */
+const pinDots = () =>
+  document.querySelectorAll("span.rounded-full.bg-nevo-near-black").length;
+
+function fill({ school = "K7DQ", user = "amara.k" } = {}) {
+  // Typed into the first cell, a code runs on across all four, as a paste does.
+  fireEvent.change(cells()[0], { target: { value: school } });
+  fireEvent.change(idField(), { target: { value: user } });
   // The pad is focus-driven now (ruling D): tap the boxes, then the keys.
   act(() => pinInput().focus());
   for (const d of ["1", "2", "3", "4"]) {
@@ -151,7 +166,7 @@ describe("ReturningSignInScreen — signing back in", () => {
     // `PinLoginRequest` since 1 Oct. `loginIdentifier` only worked because the
     // server still took it as an alias.
     expect(loginPin).toHaveBeenCalledWith({
-      schoolCode: "751A1136",
+      schoolCode: "K7DQ",
       admissionNumber: "amara.k",
       pin: "1234",
     });
@@ -187,7 +202,7 @@ describe("ReturningSignInScreen — signing back in", () => {
     await signInNow();
 
     expect(getRememberedProfile()).toMatchObject({
-      schoolCode: "751A1136",
+      schoolCode: "K7DQ",
       loginIdentifier: "amara.k",
     });
   });
@@ -203,6 +218,19 @@ describe("ReturningSignInScreen — signing back in", () => {
     // by its own line.
     expect(screen.getByText(/Taking you to your lessons/)).toBeVisible();
     expect(screen.queryByRole("button", { name: "That's me" })).toBeNull();
+  });
+
+  it("keeps the wordmark over the avatar disc on the welcome, as 00c's success draws it", async () => {
+    // It was the generic check-mark beat, with no wordmark.
+    loginPin.mockResolvedValue(SESSION);
+    render(<ReturningSignInScreen />);
+    fill();
+
+    await signInNow();
+
+    expect(screen.getByAltText("Nevo")).toBeInTheDocument();
+    expect(document.querySelector("main svg circle")).not.toBeNull();
+    expect(document.querySelector("svg.lucide-check")).toBeNull();
   });
 
   it("goes where the child was headed, not always to the dashboard", async () => {
@@ -314,8 +342,7 @@ describe("ReturningSignInScreen — signing back in", () => {
 
   it("will not submit until all three are there", () => {
     render(<ReturningSignInScreen />);
-    const [schoolField] = screen.getAllByRole("textbox");
-    fireEvent.change(schoolField, { target: { value: "751A1136" } });
+    fireEvent.change(cells()[0], { target: { value: "K7DQ" } });
 
     fireEvent.click(screen.getByRole("button", { name: "That's me" }));
 
@@ -324,20 +351,51 @@ describe("ReturningSignInScreen — signing back in", () => {
 });
 
 describe("ReturningSignInScreen — when it does not work", () => {
-  it("keeps the code and username, and clears only the PIN", async () => {
-    // From the frame: "fields stay filled". A child has just been read a school
-    // code and a username by their teacher; making them ask again is how you
-    // lose them at the last step.
+  it("keeps all three as typed, the PIN's dots too, with Try again live (00c, state 3)", async () => {
+    // From the frame: "fields stay filled", and its four dots stay filled. A
+    // child has just been read a school code and a username by their
+    // teacher; making them ask again is how you lose them at the last step.
+    // The PIN used to clear, which left "Try again" greyed out at 40% and
+    // impossible to press.
     loginPin.mockRejectedValue(refusal("authentication_failed"));
     render(<ReturningSignInScreen />);
     fill();
 
     await signInNow();
 
-    const [schoolField, userField] = screen.getAllByRole("textbox");
-    expect(schoolField).toHaveValue("751A1136");
-    expect(userField).toHaveValue("amara.k");
+    expect(codeValue()).toBe("K7DQ");
+    expect(idField()).toHaveValue("amara.k");
+    expect(pinDots()).toBe(4);
     expect(screen.getByText(/didn't match/)).toBeVisible();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeEnabled();
+  });
+
+  it("sends the same three again from Try again, with nothing retyped", async () => {
+    loginPin
+      .mockRejectedValueOnce(refusal("authentication_failed"))
+      .mockResolvedValue(SESSION);
+    render(<ReturningSignInScreen />);
+    fill();
+    await signInNow();
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50);
+    });
+
+    expect(loginPin).toHaveBeenCalledTimes(2);
+    expect(loginPin.mock.calls[1][0]).toEqual(loginPin.mock.calls[0][0]);
+  });
+
+  it("keeps the PIN after a fault of ours too, so Try again can send it", async () => {
+    loginPin.mockRejectedValue(new ApiError(500, "Server Error"));
+    render(<ReturningSignInScreen />);
+    fill();
+
+    await signInNow();
+
+    expect(pinDots()).toBe(4);
+    expect(screen.getByRole("button", { name: "Try again" })).toBeEnabled();
   });
 
   it("tells a paused child their account is on pause", async () => {
@@ -424,7 +482,7 @@ describe("ReturningSignInScreen — when it does not work", () => {
     expect(document.querySelector("[data-held-pin]")).not.toBeNull();
     expect(screen.queryByLabelText("Your PIN")).toBeNull();
     expect(screen.queryByRole("button", { name: /That's me|Try again/ })).toBeNull();
-    expect(screen.getAllByRole("textbox")[1]).toHaveValue("amara.k");
+    expect(idField()).toHaveValue("amara.k");
     // Forgot PIN, raised, says who clears a PIN and leads back to a door.
     expect(screen.getByRole("link", { name: "Forgot PIN?" })).toHaveAttribute(
       "href",
@@ -697,9 +755,8 @@ describe("signing in on a device with a real keyboard", () => {
     // and the keyboard share one appender, so they cannot disagree.
     loginPin.mockResolvedValue(SESSION);
     render(<ReturningSignInScreen />);
-    const [schoolField, userField] = screen.getAllByRole("textbox");
-    fireEvent.change(schoolField, { target: { value: "751A1136" } });
-    fireEvent.change(userField, { target: { value: "amara.k" } });
+    fireEvent.change(cells()[0], { target: { value: "K7DQ" } });
+    fireEvent.change(idField(), { target: { value: "amara.k" } });
     for (const d of "1234567890") {
       fireEvent.change(pinField(), { target: { value: d } });
     }
@@ -727,9 +784,8 @@ describe("signing in on a device with a real keyboard", () => {
 
   it("will not sign in with fewer than four digits", () => {
     render(<ReturningSignInScreen />);
-    const [schoolField, userField] = screen.getAllByRole("textbox");
-    fireEvent.change(schoolField, { target: { value: "751A1136" } });
-    fireEvent.change(userField, { target: { value: "amara.k" } });
+    fireEvent.change(cells()[0], { target: { value: "K7DQ" } });
+    fireEvent.change(idField(), { target: { value: "amara.k" } });
     for (const d of "123") {
       fireEvent.change(pinField(), { target: { value: d } });
     }
@@ -739,9 +795,8 @@ describe("signing in on a device with a real keyboard", () => {
 
   it("takes a whole typed PIN and enables the button", () => {
     render(<ReturningSignInScreen />);
-    const [schoolField, userField] = screen.getAllByRole("textbox");
-    fireEvent.change(schoolField, { target: { value: "751A1136" } });
-    fireEvent.change(userField, { target: { value: "amara.k" } });
+    fireEvent.change(cells()[0], { target: { value: "K7DQ" } });
+    fireEvent.change(idField(), { target: { value: "amara.k" } });
 
     for (const d of ["1", "2", "3", "4"]) {
       fireEvent.change(pinField(), { target: { value: d } });
@@ -758,7 +813,7 @@ describe("signing in on a device with a real keyboard", () => {
     render(<ReturningSignInScreen />);
     const fields = [...document.querySelectorAll("input")];
 
-    expect(fields[2]).toBe(pinField());
+    expect(fields.indexOf(pinField())).toBe(fields.indexOf(idField()) + 1);
   });
 });
 
@@ -808,13 +863,56 @@ describe("the form as 00c draws it", () => {
     );
   });
 
-  it("centres the school code, as 00c centres its cells", () => {
+  it("draws the school code as four cells, with no placeholder (D6)", () => {
+    // A free-text field from when codes were 751A1136, with the placeholder
+    // "YOUR SCHOOL CODE". Every code has been four characters since 30 Sep.
     render(<ReturningSignInScreen />);
 
-    const code = screen.getByLabelText("School code");
-    expect(code.parentElement?.parentElement?.className).toContain(
-      "[&_input]:text-center",
-    );
+    expect(cells()).toHaveLength(4);
+    expect(
+      screen.getByRole("group", { name: "Your school code" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(/school code/i)).toBeNull();
+  });
+
+  it("moves a typed code on cell by cell, then on to the Student ID", () => {
+    render(<ReturningSignInScreen />);
+
+    fireEvent.change(cells()[0], { target: { value: "k" } });
+    expect(document.activeElement).toBe(cells()[1]);
+    fireEvent.change(cells()[1], { target: { value: "7" } });
+    fireEvent.change(cells()[2], { target: { value: "d" } });
+    fireEvent.change(cells()[3], { target: { value: "q" } });
+
+    expect(codeValue()).toBe("K7DQ");
+    expect(document.activeElement).toBe(idField());
+  });
+
+  it("keeps out what a school code cannot contain, as 05 does", () => {
+    // No 0, O, 1 or I - the four a child reads off a whiteboard wrongly.
+    render(<ReturningSignInScreen />);
+
+    fireEvent.change(cells()[0], { target: { value: "0" } });
+    fireEvent.change(cells()[0], { target: { value: "o" } });
+
+    expect(codeValue()).toBe("");
+  });
+
+  it("goes back a cell on Backspace in an empty one", () => {
+    render(<ReturningSignInScreen />);
+    fireEvent.change(cells()[0], { target: { value: "K7" } });
+
+    fireEvent.keyDown(cells()[2], { key: "Backspace" });
+
+    expect(codeValue()).toBe("K");
+    expect(document.activeElement).toBe(cells()[1]);
+  });
+
+  it("will not sign in on three characters of a code", () => {
+    render(<ReturningSignInScreen />);
+    fill({ school: "K7D" });
+
+    expect(screen.getByRole("button", { name: "That's me" })).toBeDisabled();
   });
 
   it("asks them to try again after a PIN that did not match, in the tinted box", async () => {
@@ -921,7 +1019,7 @@ describe("an account that is not a student's", () => {
     fireEvent.click(screen.getByRole("button", { name: "Back to sign in" }));
 
     // The form again, with what they typed kept.
-    expect(screen.getAllByRole("textbox")[1]).toHaveValue("amara.k");
+    expect(idField()).toHaveValue("amara.k");
   });
 
   it("tells an account it does not recognise nothing about it", async () => {
@@ -941,7 +1039,7 @@ describe("an account that is not a student's", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
 
-    expect(screen.getAllByRole("textbox")[0]).toHaveValue("751A1136");
+    expect(codeValue()).toBe("K7DQ");
   });
 });
 
@@ -1086,9 +1184,25 @@ describe("arriving from 05 Entry", () => {
     handSignInOver({ schoolCode: "K7DQ", identifier: "BGA/2031" });
     render(<ReturningSignInScreen />);
 
-    const [schoolField, idField] = screen.getAllByRole("textbox");
-    expect(schoolField).toHaveValue("K7DQ");
-    expect(idField).toHaveValue("BGA/2031");
+    expect(codeValue()).toBe("K7DQ");
+    expect(idField()).toHaveValue("BGA/2031");
+  });
+
+  it("focuses the PIN, the one field left, and puts its pad up", () => {
+    // It focused the code, which opened the letter keyboard over the help
+    // row on a field the child had nothing to type into.
+    handSignInOver({ schoolCode: "K7DQ", identifier: "BGA/2031" });
+    render(<ReturningSignInScreen />);
+
+    expect(document.activeElement).toBe(pinInput());
+    expect(screen.getByRole("button", { name: "5" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Q" })).toBeNull();
+  });
+
+  it("starts a fresh arrival at the school code", () => {
+    render(<ReturningSignInScreen />);
+
+    expect(document.activeElement).toBe(cells()[0]);
   });
 
   it("spends the hand-off, so the next visit starts empty", () => {
@@ -1098,9 +1212,8 @@ describe("arriving from 05 Entry", () => {
 
     expect(peekSignInHandoff()).toBeNull();
     render(<ReturningSignInScreen />);
-    const [schoolField, idField] = screen.getAllByRole("textbox");
-    expect(schoolField).toHaveValue("");
-    expect(idField).toHaveValue("");
+    expect(codeValue()).toBe("");
+    expect(idField()).toHaveValue("");
   });
 
   it("signs in with the Student ID as typed, which sign-in accepts", async () => {
@@ -1119,5 +1232,127 @@ describe("arriving from 05 Entry", () => {
       admissionNumber: "BGA/2031",
       pin: "1234",
     });
+  });
+});
+
+/**
+ * Round 11's second look, on a real touch screen: three things the frame's
+ * keyboards did that the form did not.
+ */
+describe("the keyboards on a touch screen", () => {
+  afterEach(() => {
+    clearSignInHandoff();
+    vi.restoreAllMocks();
+  });
+
+  /** The PIN boxes that carry the caret's navy border. */
+  const activeBoxes = () =>
+    document.querySelectorAll(
+      '[role="group"][aria-labelledby="returning-pin-label"] > div.border-2',
+    ).length;
+
+  it("opens the code's tray on a fresh load, where the first cell had focus before the page could listen", async () => {
+    // The server's HTML autofocuses cell 0, so the browser focuses it before
+    // hydration and its focus event reaches nothing. Tapping it again fires
+    // none, and `inputMode="none"` keeps the device's own keyboard away: the
+    // first cell could not be typed into until another was tapped.
+    const container = document.createElement("div");
+    container.innerHTML = renderToString(<ReturningSignInScreen />);
+    document.body.appendChild(container);
+    (container.querySelector("#returning-code-0") as HTMLInputElement).focus();
+
+    expect(screen.queryByRole("button", { name: "Q" })).toBeNull();
+
+    const root = await act(async () =>
+      hydrateRoot(container, <ReturningSignInScreen />),
+    );
+
+    expect(screen.getByRole("button", { name: "Q" })).toBeInTheDocument();
+    act(() => root.unmount());
+    container.remove();
+  });
+
+  it("keeps the code's tray in capitals, as the cells are", () => {
+    render(<ReturningSignInScreen />);
+
+    fireEvent.click(screen.getByRole("button", { name: "K" }));
+
+    expect(screen.getByRole("button", { name: "D" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "d" })).toBeNull();
+  });
+
+  it("lets the code cells and the Student ID show focus, never suppressing the outline", () => {
+    // All five set `outline-none` with no focus style of their own, so a
+    // keyboard user could not see which cell took the next character.
+    render(<ReturningSignInScreen />);
+
+    for (const el of [...cells(), idField()])
+      expect(el.className).not.toMatch(/(^| )outline-(none|hidden|0)( |$)/);
+  });
+
+  it("draws the caret's box only while the PIN is what is being typed", () => {
+    render(<ReturningSignInScreen />);
+
+    // A fresh arrival is on the code: no PIN box is the active one.
+    expect(document.activeElement).toBe(cells()[0]);
+    expect(activeBoxes()).toBe(0);
+
+    act(() => pinInput().focus());
+    expect(activeBoxes()).toBe(1);
+
+    act(() => cells()[1].focus());
+    expect(activeBoxes()).toBe(0);
+  });
+
+  it("scrolls by the least that puts That's me above the pad", () => {
+    expect(scrollToClearPad(551, 462)).toBe(101);
+    expect(scrollToClearPad(587, 533)).toBe(66);
+    // Already clear: nothing moves.
+    expect(scrollToClearPad(400, 600)).toBe(0);
+  });
+
+  it("brings That's me above the pad when the pad comes up over it", () => {
+    // 375x667: the pad's top at 462, the button at 495-551.
+    const scrollBy = vi
+      .spyOn(window, "scrollBy")
+      .mockImplementation(() => {});
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+      function (this: HTMLElement) {
+        const box = (top: number, height: number) =>
+          ({ top, bottom: top + height, height, left: 0, right: 0, width: 0, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+        if (this.textContent?.trim() === "That's me") return box(495, 56);
+        if (this.querySelector(':scope > [aria-label="On-screen keyboard"]')) {
+          return box(462, 205);
+        }
+        return box(0, 0);
+      },
+    );
+    handSignInOver({ schoolCode: "K7DQ", identifier: "BGA/2031" });
+
+    render(<ReturningSignInScreen />);
+
+    expect(scrollBy).toHaveBeenCalledWith({ top: 101 });
+  });
+
+  it("moves nothing where the pad already clears it", () => {
+    const scrollBy = vi
+      .spyOn(window, "scrollBy")
+      .mockImplementation(() => {});
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+      function (this: HTMLElement) {
+        const box = (top: number, height: number) =>
+          ({ top, bottom: top + height, height, left: 0, right: 0, width: 0, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+        if (this.textContent?.trim() === "That's me") return box(600, 56);
+        if (this.querySelector(':scope > [aria-label="On-screen keyboard"]')) {
+          return box(760, 264);
+        }
+        return box(0, 0);
+      },
+    );
+    handSignInOver({ schoolCode: "K7DQ", identifier: "BGA/2031" });
+
+    render(<ReturningSignInScreen />);
+
+    expect(scrollBy).not.toHaveBeenCalled();
   });
 });

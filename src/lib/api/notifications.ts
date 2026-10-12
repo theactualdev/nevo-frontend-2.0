@@ -92,13 +92,19 @@ export const notificationsApi = {
    * which makes D13b's Archived filter buildable. `limit`/`offset` back the
    * frame's "Show older" rather than numbered pages, so an admin never loses
    * their place.
+   *
+   * `q` searches the whole feed on the server (9 Oct, at most 100
+   * characters), so `total` and `hasMore` describe the matches.
    */
-  list: (options: { archived?: boolean; limit?: number; offset?: number } = {}) =>
+  list: (
+    options: { archived?: boolean; limit?: number; offset?: number; q?: string } = {},
+  ) =>
     api.get<NotificationFeed>("/api/notifications", {
       params: {
         archived: options.archived ? true : undefined,
         limit: options.limit,
         offset: options.offset,
+        q: options.q?.trim() ? options.q.trim().slice(0, 100) : undefined,
       },
     }),
 

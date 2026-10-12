@@ -142,3 +142,40 @@ describe("what Nevo has noticed", () => {
     expect(container.textContent).not.toMatch(/some_future_pattern|undefined/);
   });
 });
+
+/**
+ * C08 lays the observations out two across on a full profile at desktop, and
+ * stacks them on a new student's - the early artboard has a single column.
+ */
+describe("how the observations are laid out", () => {
+  /** The list that holds the observation, under its heading. */
+  const container = async () => {
+    const body = await screen.findByText(OBSERVATION_COPY.steadier_pace.body("Amara"));
+    const list = screen
+      .getAllByText("What Nevo has noticed")
+      .map((h) => h.nextElementSibling)
+      .find((el) => el?.contains(body));
+    if (!list) throw new Error("no list holds the observation");
+    return list as HTMLElement;
+  };
+
+  it("two across on a full profile, from 1280px", async () => {
+    classStudents.mockResolvedValue([row("s-1", [{ pattern: "steadier_pace" }])]);
+    render(<LiveStudentProfile studentId="s-1" classId="c-1" state={STATE} />);
+
+    expect(await container()).toHaveClass("xl:grid", "xl:grid-cols-2");
+  });
+
+  it("one column on a new student's profile", async () => {
+    classStudents.mockResolvedValue([row("s-1", [{ pattern: "steadier_pace" }])]);
+    render(
+      <LiveStudentProfile
+        studentId="s-1"
+        classId="c-1"
+        state={{ ...STATE, observed: false, concepts: [] } as StudentProfileState}
+      />,
+    );
+
+    expect((await container()).className).not.toMatch(/xl:grid/);
+  });
+});

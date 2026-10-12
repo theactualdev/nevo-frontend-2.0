@@ -1,29 +1,36 @@
 import { describe, expect, it } from "vitest";
 import {
   invoicePdfPath,
-  transferAccepted,
-  type PaymentOutcome,
+  latestReportByInvoice,
+  type TransferReport,
 } from "./billing";
 
-const outcome = (status: PaymentOutcome["status"]): PaymentOutcome => ({
-  transactionId: "t1",
-  invoiceId: "i1",
-  reference: "FBN-TRF-1",
+const report = (
+  transactionId: string,
+  invoiceId: string,
+  status: TransferReport["status"] = "awaiting_confirmation",
+): TransferReport => ({
+  transactionId,
+  invoiceId,
+  bankReference: `REF-${transactionId}`,
   status,
-  invoicePaid: false,
-  message: null,
+  message: "",
 });
 
-describe("transferAccepted", () => {
-  it("accepts only what the backend actually took", () => {
-    expect(transferAccepted(outcome("pending"))).toBe(true);
-    expect(transferAccepted(outcome("success"))).toBe(true);
+describe("latestReportByInvoice", () => {
+  it("keeps each invoice's newest report - the list arrives newest first", () => {
+    const byInvoice = latestReportByInvoice([
+      report("t3", "i1", "confirmed"),
+      report("t2", "i2"),
+      report("t1", "i1"),
+    ]);
+    expect(byInvoice.i1.transactionId).toBe("t3");
+    expect(byInvoice.i2.transactionId).toBe("t2");
+    expect(Object.keys(byInvoice)).toHaveLength(2);
   });
 
-  it("rejects the two that a 200 used to hide", () => {
-    // Both came back 200 and were stored as transfers on file.
-    expect(transferAccepted(outcome("failed"))).toBe(false);
-    expect(transferAccepted(outcome("abandoned"))).toBe(false);
+  it("is empty when nothing has been reported", () => {
+    expect(latestReportByInvoice([])).toEqual({});
   });
 });
 

@@ -219,9 +219,22 @@ export function LiveRecommendSheet({
 
   return (
     <Shell onClose={onClose}>
-      <h2 className="text-[20px] font-semibold text-nevo-near-black xl:text-[22px]">
-        {`Recommend a lesson to ${firstName}`}
-      </h2>
+      {/* C08c's header: the title, and a close button beside it. */}
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-[20px] font-semibold text-nevo-near-black xl:text-[22px]">
+          {`Recommend a lesson to ${firstName}`}
+        </h2>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-[9px] text-nevo-near-black/50 transition-colors hover:bg-nevo-near-black/5 xl:size-[34px]"
+        >
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-5">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+      </div>
 
       {suggestion && (
         <div className="mt-4 rounded-[12px] bg-nevo-violet/12 px-4 py-3.5 xl:mt-[18px] xl:px-[18px] xl:py-4">
@@ -267,20 +280,33 @@ export function LiveRecommendSheet({
               aria-pressed={choice === c.id}
               onClick={() => setChoice(c.id)}
               className={cn(
-                "cursor-pointer rounded-[10px] border px-4 py-3.5 text-left transition-colors xl:rounded-[11px]",
+                // C08c's option card: cream, a radio, and a 2px navy outline
+                // when chosen.
+                "flex cursor-pointer items-center gap-[13px] rounded-[11px] bg-nevo-cream-elevated px-4 py-3.5 text-left transition-[outline-color,border-color]",
                 choice === c.id
-                  ? "border-nevo-navy bg-nevo-navy/6"
-                  : "border-nevo-near-black/12 hover:border-nevo-navy/35",
+                  ? "outline-2 -outline-offset-2 outline-nevo-navy"
+                  : "border border-nevo-near-black/8 hover:border-nevo-navy/35",
               )}
             >
-              <span className="block text-[14.5px] font-medium text-nevo-near-black xl:text-[15px]">
-                {c.title}
+              <span
+                aria-hidden
+                className={cn(
+                  "flex size-[22px] shrink-0 items-center justify-center rounded-full",
+                  choice === c.id ? "bg-nevo-navy" : "border-2 border-nevo-near-black/24",
+                )}
+              >
+                {choice === c.id && <span className="size-2.5 rounded-full bg-nevo-cream" />}
               </span>
-              {c.meta && (
-                <span className="mt-0.5 block text-[12.5px] text-nevo-near-black/55 xl:text-[13px]">
-                  {c.meta}
+              <span className="min-w-0 flex-1">
+                <span className="block text-[14.5px] font-semibold text-nevo-near-black xl:text-[15px]">
+                  {c.title}
                 </span>
-              )}
+                {c.meta && (
+                  <span className="mt-0.5 block text-[12.5px] text-nevo-near-black/58 xl:text-[13px]">
+                    {c.meta}
+                  </span>
+                )}
+              </span>
             </button>
           ))}
         </div>
