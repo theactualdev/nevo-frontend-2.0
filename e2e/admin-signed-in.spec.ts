@@ -40,6 +40,9 @@ test.skip(
 
 test.describe.configure({ mode: "serial" });
 
+/** The signed-in admin's bearer token, for reading the API directly. */
+let adminToken = "";
+
 async function signInAsAdmin(page: Page, request: APIRequestContext) {
   const res = await request.post(`${API}/api/v1/auth/login/password`, {
     data: { email: EMAIL, password: PASSWORD },
@@ -69,6 +72,7 @@ async function signInAsAdmin(page: Page, request: APIRequestContext) {
     "The login response carried no accessToken - has SessionResponse changed again?",
   ).toBeTruthy();
 
+  adminToken = body.accessToken;
   const session = {
     token: body.accessToken,
     expiresAt: body.expiresAt,
@@ -252,4 +256,38 @@ test("no signed-in admin surface renders an invented figure", async ({
       .evaluateAll((els) => els.map((e) => e.getAttribute("data-nevo-sample")));
     expect(kinds, `${route} rendered a fixture region`).toEqual([]);
   }
+});
+
+test("a learner's adaptation history reads, and a refusal would say no access", async ({
+  page,
+  request,
+}) => {
+  /*
+   * QA, 10 Oct: /admin/senco/{id} said "We couldn't read Ada's adaptation
+   * history" for this account. Asked of the API directly first, so the CI log
+   * says what production actually returns - a 403 is this account's access, a
+   * 5xx is the backend's, and only a 200 is a page that should read.
+   */
+  const auth = { Authorization: `Bearer ${adminToken}` };
+  const roster = await request.get(`${API}/api/v1/students`, { headers: auth });
+  expect(roster.ok(), `GET /api/v1/students answered ${roster.status()}`).toBeTruthy();
+  const students = (await roster.json()) as { id: string }[];
+  test.skip(students.length === 0, "The E2E tenant has no students to open.");
+  const id = students[0].id;
+
+  const history = await request.get(`${API}/api/adaptations/student/${id}?limit=8`, {
+    headers: auth,
+  });
+  const body = (await history.text()).slice(0, 300);
+  console.log(`GET /api/adaptations/student/${id} -> ${history.status()} ${body}`);
+  expect(
+    history.status(),
+    `The adaptation history for ${id} answered ${history.status()}: ${body}`,
+  ).toBe(200);
+
+  await page.goto(`/admin/senco/${id}`);
+  await expect(page.getByRole("heading", { level: 2 }).first()).toBeVisible(LIVE);
+  await expect(page.getByText(/Recent adaptations/i).first()).toBeVisible(LIVE);
+  await expect(page.getByText(/couldn.t read .* adaptation history/i)).toHaveCount(0);
+  await expect(page.getByText(/don.t have access to .* adaptation history/i)).toHaveCount(0);
 });
