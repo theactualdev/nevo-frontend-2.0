@@ -1,3 +1,5 @@
+import { cn } from "@/lib/utils";
+
 /**
  * Frame 00d / SE-01 - Waiting on Consent.
  *
@@ -54,7 +56,6 @@ export function WaitingOnConsent({
   /** What holds the child. Changes the words only, never the screen. */
   hold?: WaitingHold;
 } = {}) {
-  const { heading, line } = WAITING_COPY[hold];
   return (
     <div className="flex min-h-dvh flex-col bg-nevo-cream">
       {/* Same cropped wordmark as the PIN beat and the picker, so the doors do
@@ -70,29 +71,51 @@ export function WaitingOnConsent({
         </span>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-10 text-center">
-        {/*
-          AMBIENT, NOT A PROGRESS INDICATOR, and the difference is the whole
-          instruction. It breathes at a fixed rate and never fills, advances or
-          completes - a spinner would say "wait here", which is the one thing
-          this screen is not allowed to say.
+      <HoldMessage
+        hold={hold}
+        className="min-h-0 flex-1 justify-center px-10"
+      />
+    </div>
+  );
+}
 
-          `motion-safe:` so it simply does not run for a child who asked for
-          less motion; nothing is lost, because it carries no information.
-        */}
-        <span
-          aria-hidden="true"
-          className="mb-[30px] block size-[76px] rounded-full bg-nevo-violet/28 motion-safe:animate-nevo-breathe sm:mb-[34px] sm:size-23"
-        />
+/**
+ * The hold itself - the breathing mark, the heading and the line - without
+ * the screen around it. 00d puts it under its own wordmark; the Entry frame's
+ * "On hold" state (05, state 6) keeps the entry screen's chevron row and Back
+ * around the same three things (`AgeCheckHold`).
+ */
+export function HoldMessage({
+  hold,
+  className,
+}: {
+  hold: WaitingHold;
+  className?: string;
+}) {
+  const { heading, line } = WAITING_COPY[hold];
+  return (
+    <div className={cn("flex flex-col items-center text-center", className)}>
+      {/*
+        AMBIENT, NOT A PROGRESS INDICATOR, and the difference is the whole
+        instruction. It breathes at a fixed rate and never fills, advances or
+        completes - a spinner would say "wait here", which is the one thing
+        this screen is not allowed to say.
 
-        {/* 00d and the hold draw the phone a size down: 76px, 23px, 16px. */}
-        <h1 className="m-0 max-w-[300px] text-[23px] leading-[1.3] font-medium tracking-[-0.01em] text-nevo-near-black sm:max-w-[440px] sm:text-[27px]">
-          {heading}
-        </h1>
-        <p className="mt-[18px] max-w-[280px] text-base leading-[1.6] text-nevo-near-black/70 sm:max-w-[420px] sm:text-[17px]">
-          {line}
-        </p>
-      </div>
+        `motion-safe:` so it simply does not run for a child who asked for
+        less motion; nothing is lost, because it carries no information.
+      */}
+      <span
+        aria-hidden="true"
+        className="mb-[30px] block size-[76px] rounded-full bg-nevo-violet/28 motion-safe:animate-nevo-breathe sm:mb-[34px] sm:size-23"
+      />
+
+      {/* 00d and the hold draw the phone a size down: 76px, 23px, 16px. */}
+      <h1 className="m-0 max-w-[300px] text-[23px] leading-[1.3] font-medium tracking-[-0.01em] text-nevo-near-black sm:max-w-[440px] sm:text-[27px]">
+        {heading}
+      </h1>
+      <p className="mt-[18px] max-w-[280px] text-base leading-[1.6] text-nevo-near-black/70 sm:max-w-[420px] sm:text-[17px]">
+        {line}
+      </p>
     </div>
   );
 }

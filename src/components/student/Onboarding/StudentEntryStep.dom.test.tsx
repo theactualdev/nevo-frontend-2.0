@@ -121,6 +121,19 @@ afterEach(() => {
 });
 
 describe("the school code cells", () => {
+  it("keeps the tray in capitals, as both fields are", () => {
+    // The one-shot shift dropped the keys to lowercase after the first letter
+    // while the cells and the Student ID upper-cased whatever arrived.
+    render(<StudentEntryStep framing="school" />);
+    act(() => cells()[0].focus());
+
+    fireEvent.click(screen.getByRole("button", { name: "K" }));
+
+    expect(cells()[0].value).toBe("K");
+    expect(screen.getByRole("button", { name: "D" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "d" })).toBeNull();
+  });
+
   it("draws four cells and the Student ID field, with the frame's labels", () => {
     render(<StudentEntryStep framing="school" />);
 
@@ -470,9 +483,27 @@ describe("where a match goes", () => {
         name: "Nevo isn't quite ready for you yet",
       }),
     ).toBeNull();
-    expect(screen.queryAllByRole("button")).toHaveLength(0);
     expect(push).not.toHaveBeenCalled();
     expect(getOnboardingDraft()).toEqual({});
+  });
+
+  it("keeps the entry screen's Back on the age-check hold, and nothing else to press (05, state 6)", async () => {
+    // It was 00d's screen - a wordmark and no way off it - so on a shared
+    // tablet the next child could not get past it. The Entry frame keeps its
+    // chevron row: Back to the Welcome is the one control.
+    lookup.mockResolvedValue(matched({ ageCheckPending: true }));
+    render(<StudentEntryStep framing="school" />);
+
+    await enterAndSubmit();
+    await afterTheBeat();
+
+    const buttons = screen.getAllByRole("button");
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]).toHaveAccessibleName("Back");
+
+    fireEvent.click(buttons[0]);
+
+    expect(push).toHaveBeenCalledWith("/student/onboarding");
   });
 
   it("holds a child at the age check even when they already have a PIN", async () => {
@@ -730,6 +761,17 @@ describe("a child whose PIN a teacher cleared (B67)", () => {
       expect(screen.getByRole("heading", { name: heading })).toBeInTheDocument();
       expect(push).not.toHaveBeenCalled();
       expect(getSession()).toBeNull();
+    });
+
+    it("holds them at the age check with the entry screen's Back, not 00d's dead end", async () => {
+      entrySetPin.mockRejectedValue(refused(403, "age_check_pending"));
+      await matchCleared();
+      await chooseNewPin();
+
+      const buttons = screen.getAllByRole("button");
+      expect(buttons).toHaveLength(1);
+      fireEvent.click(buttons[0]);
+      expect(push).toHaveBeenCalledWith("/student/onboarding");
     });
 
     it("pauses a throttled child, on the PIN screen (D154)", async () => {

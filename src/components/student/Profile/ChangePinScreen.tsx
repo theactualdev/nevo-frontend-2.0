@@ -47,14 +47,24 @@ type Step = "current" | "new" | "updated";
  * four to eight, for a PIN that might be six from before 25 Sep; design:
  * "SCRUM-179 settles it and the six-digit reference is stale wherever it
  * appears", and `PinUpdateRequest.currentPin` is exactly four.
+ *
+ * EVERY STEP ENDS ON ITS FOURTH DIGIT (D54, D58). Step 1 had a Continue to
+ * tap after the four, which frame 27 does not draw and steps 2 and 3 never
+ * had - so the step is read from how many digits there are, as 2 and 3 are.
+ * Back from step 2 is step 1, emptied, as Back from 3 is an empty 2.
  */
 export function ChangePinScreen() {
   const router = useRouter();
   const back = useCallback(() => router.push(PROFILE_HREF), [router]);
 
-  const [step, setStep] = useState<Step>("current");
   const [currentPin, setCurrentPin] = useState("");
   const [wrongCurrent, setWrongCurrent] = useState(false);
+  const [updated, setUpdated] = useState(false);
+  const step: Step = updated
+    ? "updated"
+    : currentPin.length === STUDENT_PIN_LENGTH
+      ? "new"
+      : "current";
 
   // Updaters, not values: fast typing lands two keys before a re-render.
   const typeCurrent = useCallback((d: string) => {
@@ -79,13 +89,12 @@ export function ChangePinScreen() {
     return (
       <NewPinStep
         currentPin={currentPin}
-        onBack={() => setStep("current")}
+        onBack={() => setCurrentPin("")}
         onWrongCurrent={() => {
           setCurrentPin("");
           setWrongCurrent(true);
-          setStep("current");
         }}
-        onUpdated={() => setStep("updated")}
+        onUpdated={() => setUpdated(true)}
       />
     );
   }
@@ -97,7 +106,6 @@ export function ChangePinScreen() {
       onDigit={typeCurrent}
       onBackspace={eraseCurrent}
       onBack={back}
-      onContinue={() => setStep("new")}
     />
   );
 }
@@ -109,18 +117,14 @@ function CurrentPinStep({
   onDigit,
   onBackspace,
   onBack,
-  onContinue,
 }: {
   pin: string;
   wrong: boolean;
   onDigit: (d: string) => void;
   onBackspace: () => void;
   onBack: () => void;
-  onContinue: () => void;
 }) {
   usePhysicalKeys(onDigit, onBackspace);
-
-  const ready = pin.length === STUDENT_PIN_LENGTH;
 
   return (
     <PinFrame onBack={onBack}>
@@ -144,15 +148,6 @@ function CurrentPinStep({
           */}
           {wrong ? "That's not your current PIN - try again" : ""}
         </p>
-
-        <button
-          type="button"
-          disabled={!ready}
-          onClick={onContinue}
-          className="mt-6 h-12 cursor-pointer rounded-[10px] bg-nevo-navy px-6 text-base font-semibold text-nevo-cream transition-[filter,transform] hover:brightness-109 active:scale-[0.985] disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          Continue
-        </button>
       </div>
 
       <NevoKeyboard

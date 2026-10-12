@@ -821,7 +821,9 @@ test.describe("a signed-in student", () => {
     await expect(page).toHaveURL(/\/student\/profile\/pin$/);
     await expect(page.getByRole("heading", { name: "Enter your current PIN" })).toBeVisible();
     await expect(page.getByText("Step 1 of 3")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Continue" })).toBeDisabled();
+    // Frame 27's step 1 moves on at the fourth digit, like steps 2 and 3, so
+    // there is no Continue to press - and with no digits typed, nothing goes.
+    await expect(page.getByRole("button", { name: "Continue" })).toHaveCount(0);
 
     await expectNoSampleMarks(page, "Change PIN");
     expectNoWrites(writes, "Change PIN");
@@ -1128,7 +1130,13 @@ test.describe("a signed-in student", () => {
      */
     await page.goto("/auth/sign-in");
 
-    await page.getByRole("textbox", { name: "School code" }).fill(schoolCode);
+    // Four cells now (00c, D6), one character each: typed into the first,
+    // and each character moves the cursor on, as a child's typing does.
+    await page.getByRole("textbox", { name: /^School code, character 1 of/ }).click();
+    await page.keyboard.type(schoolCode);
+    await expect(
+      page.getByRole("textbox", { name: /^School code, character 4 of/ }),
+    ).not.toHaveValue("");
     await page.locator("#returning-username").fill(STUDENT_LOGIN!);
     await page
       .locator('input[aria-labelledby="returning-pin-label"]')

@@ -29,17 +29,14 @@ const type = (pin: string) => {
   }
 };
 
-const continueButton = () => screen.getByRole("button", { name: "Continue" });
-
 /** The PIN boxes on screen, and how many of them hold a dot. */
 const boxes = () => document.querySelectorAll("div.size-12").length;
 const dots = () =>
   document.querySelectorAll("div.size-12 > span.rounded-full").length;
 
-/** Step 1 through to the new-PIN screen. */
+/** Step 1 through to the new-PIN screen: the fourth digit is the way on. */
 const passStepOne = (pin = CURRENT) => {
   type(pin);
-  fireEvent.click(continueButton());
 };
 
 /** The new PIN, twice; then let the write go and its answer land. */
@@ -78,12 +75,28 @@ describe("step 1", () => {
     expect(screen.getByText("Step 1 of 3")).toBeInTheDocument();
   });
 
-  it("will not continue on a part-typed PIN", () => {
+  it("stays on step 1 for a part-typed PIN", () => {
     render(<ChangePinScreen />);
 
     type("12");
 
-    expect(continueButton()).toBeDisabled();
+    expect(screen.getByText("Step 1 of 3")).toBeInTheDocument();
+    expect(dots()).toBe(2);
+  });
+
+  it("moves on at the fourth digit, with no Continue to tap (D54, D58)", () => {
+    // Frame 27 draws step 1 with no button, and steps 2 and 3 never had one.
+    render(<ChangePinScreen />);
+
+    expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "1" }));
+    fireEvent.click(screen.getByRole("button", { name: "2" }));
+    fireEvent.click(screen.getByRole("button", { name: "3" }));
+    expect(screen.getByText("Step 1 of 3")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "4" }));
+
+    expect(screen.getByText("Step 2 of 3")).toBeInTheDocument();
   });
 
   it("takes a physical keyboard, not only taps", () => {
@@ -96,7 +109,17 @@ describe("step 1", () => {
 
     type(CURRENT);
 
-    expect(continueButton()).toBeEnabled();
+    expect(screen.getByText("Step 2 of 3")).toBeInTheDocument();
+  });
+
+  it("goes back from step 2 to an empty step 1", () => {
+    render(<ChangePinScreen />);
+    passStepOne();
+
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+
+    expect(screen.getByText("Step 1 of 3")).toBeInTheDocument();
+    expect(dots()).toBe(0);
   });
 });
 
@@ -122,10 +145,10 @@ describe("what reaches the wire", () => {
     // "Four digits, four boxes." Step 1 took up to eight, for a PIN that
     // might be six from before 25 Sep; `currentPin` is exactly four.
     render(<ChangePinScreen />);
-    type("1234567890");
     expect(boxes()).toBe(4);
-    expect(dots()).toBe(4);
-    fireEvent.click(continueButton());
+    type("1234");
+    // The fourth is the end of it: on to step 2.
+    expect(screen.getByText("Step 2 of 3")).toBeInTheDocument();
     await enterNewPinTwice();
 
     expect(setPin).toHaveBeenCalledWith(NEXT, "1234");
@@ -277,7 +300,7 @@ describe("a wrong current PIN", () => {
     passStepOne("9".repeat(STUDENT_PIN_LENGTH));
     await enterNewPinTwice();
 
-    expect(continueButton()).toBeDisabled();
+    expect(dots()).toBe(0);
   });
 });
 

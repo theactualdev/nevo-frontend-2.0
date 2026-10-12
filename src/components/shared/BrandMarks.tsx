@@ -24,13 +24,13 @@ import { cn } from "@/lib/utils";
  * `revoked`: 26px - frame 28a. `door`: 30px - 28c-2, the device that
  * remembers nobody. `form`: 17px, 19px from `sm` - 00c's sign-back-in form.
  * `corner`: 15 / 18 / 19px - the top-left mark on 28d Account Closed and 00e
- * Consent Withdrawn.
+ * Consent Withdrawn. `bar`: 14px at every size - frame 15's top bar.
  */
 export function Wordmark({
   size,
   className,
 }: {
-  size: "compact" | "pause" | "revoked" | "door" | "form" | "corner";
+  size: "compact" | "pause" | "revoked" | "door" | "form" | "corner" | "bar";
   className?: string;
 }) {
   const box = {
@@ -41,6 +41,7 @@ export function Wordmark({
     pause: "h-[18px] w-[56px] sm:h-[21px] sm:w-[65px] lg:h-[22px] lg:w-[68px]",
     revoked: "h-[26px] w-[81px]",
     door: "h-[30px] w-[93px]",
+    bar: "h-[14px] w-[44px]",
   }[size];
   const img = {
     corner:
@@ -53,6 +54,7 @@ export function Wordmark({
     revoked:
       "h-[260px] w-[260px] -translate-x-[94px] -translate-y-[126px]",
     door: "h-[300px] w-[300px] -translate-x-[109px] -translate-y-[145px]",
+    bar: "h-[140px] w-[140px] -translate-x-[51px] -translate-y-[68px]",
   }[size];
   return (
     <span

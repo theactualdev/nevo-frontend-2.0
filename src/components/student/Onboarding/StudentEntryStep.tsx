@@ -35,6 +35,7 @@ import { handSignInOver } from "@/lib/auth/signInHandoff";
 import { BUSY_REASON } from "@/lib/constants";
 import { openBusyWindow } from "@/lib/signals/busy";
 import { cn, randomId } from "@/lib/utils";
+import { AgeCheckHold } from "./AgeCheckHold";
 import { NewPinAfterClear } from "./NewPinAfterClear";
 import { OnboardingShell } from "./OnboardingShell";
 
@@ -367,6 +368,8 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
   };
 
   if (held === "withdrawn") return <ConsentWithdrawn />;
+  // The Entry frame's own hold, with its Back (05, state 6) - not 00d's.
+  if (held === "age-check") return <AgeCheckHold />;
   if (held) return <WaitingOnConsent hold={held} />;
   if (clearedChild) {
     return <NewPinAfterClear entry={clearedChild} onRefused={refusedNewPin} />;
@@ -408,6 +411,8 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
         keyboardUp && (
           <NevoKeyboard
             layout="qwerty"
+            // Both fields are capitals, so the tray stays in capitals.
+            uppercase
             onKey={onKey}
             onBackspace={onBackspace}
             onReturn={submit}

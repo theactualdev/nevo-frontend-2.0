@@ -97,6 +97,7 @@ export function NevoKeyboard({
   composer,
   value,
   placeholder = "Type here",
+  uppercase = false,
   className,
 }: (
   | { layout: Exclude<KeyboardLayout, "calc">; onBackspace: () => void }
@@ -143,6 +144,13 @@ export function NevoKeyboard({
   value?: string;
   /** Composer placeholder while `value` is empty. */
   placeholder?: string;
+  /**
+   * qwerty only: a field that is capitals whatever is typed - a school code,
+   * a Student ID. The letters show and send as capitals and stay that way,
+   * with no shift key: the one-shot shift dropped the tray to lowercase after
+   * the first letter while the field kept upper-casing what arrived.
+   */
+  uppercase?: boolean;
   className?: string;
 }) {
   /*
@@ -199,14 +207,16 @@ export function NevoKeyboard({
         <PadLayout block={block} onKey={onKey} onBackspace={onBackspace} />
       ) : (
         <QwertyLayout
-          caps={caps}
+          caps={uppercase || caps}
           numeric={numeric}
           returnLabel={isMulti ? "return ↵" : "return"}
           onKey={onKey}
           onBackspace={onBackspace}
           onReturn={onReturn}
-          onToggleCaps={() => setCaps((c) => !c)}
-          onShiftSpent={() => setCaps(false)}
+          onToggleCaps={uppercase ? undefined : () => setCaps((c) => !c)}
+          onShiftSpent={() => {
+            if (!uppercase) setCaps(false);
+          }}
           onToggleNumeric={() => setNumeric((n) => !n)}
         />
       )}
@@ -520,7 +530,8 @@ function QwertyLayout({
   onKey: (c: string) => void;
   onBackspace: () => void;
   onReturn?: () => void;
-  onToggleCaps: () => void;
+  /** Absent for an upper-case field, which has no shift key. */
+  onToggleCaps?: () => void;
   /** A capital was typed, so the one-shot shift drops back to lowercase. */
   onShiftSpent: () => void;
   onToggleNumeric: () => void;
@@ -599,13 +610,15 @@ function QwertyLayout({
         ))}
       </div>
       <div className={ROW}>
-        <ModKey
-          onClick={onToggleCaps}
-          grow={1.5}
-          ariaLabel={caps ? "Lowercase" : "Uppercase"}
-        >
-          <span className={cn(!caps && "opacity-45")}>⇧</span>
-        </ModKey>
+        {onToggleCaps && (
+          <ModKey
+            onClick={onToggleCaps}
+            grow={1.5}
+            ariaLabel={caps ? "Lowercase" : "Uppercase"}
+          >
+            <span className={cn(!caps && "opacity-45")}>⇧</span>
+          </ModKey>
+        )}
         {r3.map((c) => (
           <Key key={c} label={show(c)} onClick={() => emit(c)} />
         ))}
