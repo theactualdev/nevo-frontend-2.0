@@ -22,6 +22,9 @@ import { NoAccess, failureKind } from "../NoAccess";
 import { getSession } from "@/lib/auth/session";
 import { EditAccessPanel, ScopeChecklist } from "./EditAccess";
 import { useSupportEmail } from "../SupportEmail";
+import type { LearningSupportHolders } from "@/lib/api/learningSupport";
+import { useLearningSupport } from "../LearningSupport/useLearningSupport";
+import { LearningSupportRecord } from "../LearningSupport/LearningSupportRecord";
 import {
   FOUNDING_LOCK_LINE,
   seatWords,
@@ -54,6 +57,10 @@ import {
  * ending, not the person." The server refuses yourself, the last Oversight
  * admin, an SSO-managed team, and a restore past the seats - each with its
  * own message, which is shown as it stands.
+ *
+ * LEARNING SUPPORT LIVES ON EACH ROW (SCRUM-247, 12 Oct): whether the person
+ * holds it, who gave it and when, and Give / Remove on anyone but yourself.
+ * See `LearningSupportRecord`.
  *
  * (Two more used to be listed. The SCHOOL NAME was never missing - the school
  * record this screen already reads for the band carries it - and the seat
@@ -97,6 +104,12 @@ function displayName(m: TeamMember): string {
   return full || m.email || "Invited admin";
 }
 
+/** A team member's name by user id - who gave Learning Support, say. */
+function nameIn(team: TeamMember[], userId: string): string | null {
+  const m = team.find((t) => t.userId === userId);
+  return m ? displayName(m) : null;
+}
+
 export function AdminTeamView() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [team, setTeam] = useState<TeamMember[]>([]);
@@ -115,6 +128,8 @@ export function AdminTeamView() {
   });
   /** D03 names the school - "can administer Brightgate Academy". */
   const [school, setSchool] = useState<string | null>(null);
+  /** Who holds Learning Support; null asserts nothing about anyone. */
+  const { holders: ls, setHolders: setLs } = useLearningSupport();
 
   useEffect(() => {
     schoolApi
@@ -180,7 +195,7 @@ export function AdminTeamView() {
         )}
 
         {phase === "ready" && team.length <= 1 && (
-          <JustYou member={team[0]} school={school} onInvite={() => setInviting(true)} />
+          <JustYou member={team[0]} school={school} ls={ls} onInvite={() => setInviting(true)} />
         )}
 
         {phase === "ready" && team.length > 1 && (
@@ -191,6 +206,8 @@ export function AdminTeamView() {
             onInvite={() => setInviting(true)}
             onEdit={setEditing}
             onChanged={fetchTeam}
+            ls={ls}
+            onLs={setLs}
           />
         )}
       </div>
@@ -293,6 +310,10 @@ function MemberRow({
   you = false,
   onEdit,
   onChanged,
+  ls = null,
+  onLs,
+  me = null,
+  nameOf = () => null,
 }: {
   m: TeamMember;
   last: boolean;
@@ -302,6 +323,13 @@ function MemberRow({
   onEdit?: () => void;
   /** Access was removed or restored: the team is read again. */
   onChanged?: () => void;
+  /** Who holds Learning Support, or null when that is not known. */
+  ls?: LearningSupportHolders | null;
+  /** Absent where Learning Support cannot be changed from here. */
+  onLs?: (next: LearningSupportHolders) => void;
+  me?: string | null;
+  /** A granter's name by user id, from the team itself. */
+  nameOf?: (userId: string) => string | null;
 }) {
   const name = displayName(m);
   const { writesPaused } = useSetupGate();
@@ -374,6 +402,20 @@ function MemberRow({
             </span>
           )}
         </span>
+        {/* Not for an invitation still open: there is nobody to hold it yet. */}
+        {ls && !pending ? (
+          <LearningSupportRecord
+            className="mt-1"
+            person={{ userId: m.userId, name }}
+            holders={ls}
+            you={you}
+            me={me}
+            nameOf={nameOf}
+            canGive={Boolean(onLs) && !deactivated && !writesPaused}
+            canRemove={Boolean(onLs) && !writesPaused}
+            onChange={(next) => onLs?.(next)}
+          />
+        ) : null}
       </span>
       {pending && (
         <span className="shrink-0 rounded-full bg-nevo-violet/24 px-[11px] py-1 text-[12px] font-semibold text-nevo-navy">
@@ -470,6 +512,8 @@ function TeamList({
   onInvite,
   onEdit,
   onChanged,
+  ls,
+  onLs,
 }: {
   team: TeamMember[];
   /** The school's name, or null when its record could not be read. */
@@ -479,6 +523,8 @@ function TeamList({
   onInvite: () => void;
   onEdit: (m: TeamMember) => void;
   onChanged: () => void;
+  ls: LearningSupportHolders | null;
+  onLs: (next: LearningSupportHolders) => void;
 }) {
   /*
    * WHO CAN ADMINISTER, AND WHO USES A SEAT: everyone not deactivated. A
@@ -616,6 +662,10 @@ function TeamList({
             // the sheet itself - see `EditAccessPanel`.
             onEdit={m.userId === me ? undefined : () => onEdit(m)}
             onChanged={onChanged}
+            ls={ls}
+            onLs={onLs}
+            me={me}
+            nameOf={(id) => nameIn(team, id)}
           />
         ))}
       </div>
@@ -626,10 +676,12 @@ function TeamList({
 function JustYou({
   member,
   school,
+  ls,
   onInvite,
 }: {
   member: TeamMember | undefined;
   school: string | null;
+  ls: LearningSupportHolders | null;
   onInvite: () => void;
 }) {
   const [me] = useState(() => getSession()?.userId ?? null);
@@ -645,7 +697,14 @@ function JustYou({
 
       {member && (
         <div className={cn(CARD, "mt-5 overflow-hidden")}>
-          <MemberRow m={member} last you={member.userId === me} />
+          <MemberRow
+            m={member}
+            last
+            you={member.userId === me}
+            ls={ls}
+            me={me}
+            nameOf={(id) => nameIn([member], id)}
+          />
         </div>
       )}
 

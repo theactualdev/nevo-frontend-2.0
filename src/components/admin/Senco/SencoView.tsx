@@ -18,6 +18,8 @@ import {
 } from "@/lib/adaptationWindow";
 import { schoolIntelligenceApi } from "@/lib/api/schoolIntelligence";
 import { NoAccess, failureKind } from "../NoAccess";
+import { useLearningSupport } from "../LearningSupport/useLearningSupport";
+import { UnavailableAction } from "../LearningSupport/Unavailable";
 import { WriteFailed } from "../WriteFailed";
 import {
   Avatar,
@@ -130,6 +132,9 @@ function relativeDay(iso: string, now: number): string {
 export function SencoView() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [view, setView] = useState<View>("attention");
+  /** SCRUM-247: without Learning Support the exporter is unavailable, not missing. */
+  const { holders: ls } = useLearningSupport();
+  const lacksRole = ls?.viewerHoldsIt === false;
   const [flags, setFlags] = useState<AttentionFlag[]>([]);
   /**
    * Whether `flags` is every flag, or only the pages we managed to read.
@@ -357,10 +362,23 @@ export function SencoView() {
                 : `${students.length} ${students.length === 1 ? "profile" : "profiles"}, in plain language.`}
             </p>
           </div>
-          <Link href="/admin/senco/export" className={PRIMARY_BTN}>
-            <PlusIcon />
-            Progress report
-          </Link>
+          {lacksRole ? (
+            <UnavailableAction
+              align="end"
+              label={
+                <>
+                  <PlusIcon />
+                  Progress report
+                </>
+              }
+              what="Progress reports"
+            />
+          ) : (
+            <Link href="/admin/senco/export" className={PRIMARY_BTN}>
+              <PlusIcon />
+              Progress report
+            </Link>
+          )}
         </div>
 
         <div
@@ -462,9 +480,17 @@ export function SencoView() {
                 here. You can still create a progress report for any student at
                 any time.
               </p>
-              <Link href="/admin/senco/export" className={cn(PRIMARY_BTN, "mx-auto mt-6")}>
-                Create a progress report
-              </Link>
+              {lacksRole ? (
+                <UnavailableAction
+                  className="mt-6 items-center text-center"
+                  label="Create a progress report"
+                  what="Progress reports"
+                />
+              ) : (
+                <Link href="/admin/senco/export" className={cn(PRIMARY_BTN, "mx-auto mt-6")}>
+                  Create a progress report
+                </Link>
+              )}
             </div>
           ) : (
             <>

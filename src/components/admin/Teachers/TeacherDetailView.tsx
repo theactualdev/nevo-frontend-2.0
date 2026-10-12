@@ -34,6 +34,11 @@ import { BackLink } from "../BackLink";
 import { withBack, type Back } from "../back";
 import { activeLine, lastActiveCard } from "../Team/teamLines";
 import { ApiError, apiErrorMessage } from "@/lib/api/client";
+import { teamApi, type TeamMember } from "@/lib/api/team";
+import { holderFor } from "@/lib/api/learningSupport";
+import { getSession } from "@/lib/auth/session";
+import { useLearningSupport } from "../LearningSupport/useLearningSupport";
+import { LearningSupportRecord } from "../LearningSupport/LearningSupportRecord";
 
 /**
  * D6 teacher detail - oversight, not performance review.
@@ -68,6 +73,11 @@ import { ApiError, apiErrorMessage } from "@/lib/api/client";
  * for the reasoning. What is genuinely missing is the actor and every ENDED
  * assignment, so the dates describe what is still true and claim nothing more.
  *
+ * LEARNING SUPPORT IS ON THE TEACHER'S RECORD (SCRUM-247, 12 Oct). A
+ * school's learning support staff are usually teachers, so an administrator
+ * gives and removes it here as well as in Admin Team. The grant takes a user
+ * id, and a teacher's `id` is theirs.
+ *
  * The Students headcount is summed client-side from each class's
  * `studentCount`, because no teacher-level aggregate exists. (This said
  * `student_headcount`, naming a field that was never the one in play.)
@@ -95,6 +105,33 @@ export function TeacherDetailView({
   const [restoring, setRestoring] = useState(false);
   const [restoreFailed, setRestoreFailed] = useState<string | null>(null);
   const [now] = useState(() => Date.now());
+  const [me] = useState(() => getSession()?.userId ?? null);
+  const { holders: ls, setHolders: setLs } = useLearningSupport();
+  /*
+   * WHO GAVE IT, BY NAME. The holders list carries the granter's id only, and
+   * a granter is always an administrator, so the team names them. Read only
+   * when this teacher holds it; refused or failed, the date still shows.
+   */
+  const grantedBy = holderFor(ls, teacherId)?.grantedBy ?? null;
+  const [admins, setAdmins] = useState<TeamMember[]>([]);
+  useEffect(() => {
+    if (!grantedBy) return;
+    let alive = true;
+    teamApi
+      .list()
+      .then((t) => {
+        if (alive) setAdmins(t.members);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [grantedBy]);
+  const nameOf = (userId: string) => {
+    const m = admins.find((a) => a.userId === userId);
+    if (!m) return null;
+    return [m.firstName, m.lastName].filter(Boolean).join(" ").trim() || m.email || null;
+  };
 
   const load = useCallback(() => {
     Promise.all([
@@ -367,6 +404,27 @@ export function TeacherDetailView({
         Dates show when each assignment started. We can&rsquo;t show who made
         the change, or assignments that have ended.
       </p>
+
+      {/* Not for an invitation still open: there is nobody to hold it yet. */}
+      {ls && !invited ? (
+        <>
+          <div className="mt-[30px]">
+            <SectionHeading>Learning Support</SectionHeading>
+          </div>
+          <div className={cn(CARD, "mt-3.5 px-[22px] py-5")}>
+            <LearningSupportRecord
+              person={{ userId: teacher.id, name: teacher.name }}
+              holders={ls}
+              you={teacher.id === me}
+              me={me}
+              nameOf={nameOf}
+              canGive={canAssign && !writesPaused}
+              canRemove={!writesPaused}
+              onChange={setLs}
+            />
+          </div>
+        </>
+      ) : null}
 
       {/* Removing access is quiet, below a rule, and never a red button. */}
       <div className="mt-[26px] border-t border-nevo-near-black/10 pt-5">

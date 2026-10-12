@@ -14,6 +14,8 @@ import { ReadFailed } from "../ReadFailed";
 import { NoAccess, failureKind } from "../NoAccess";
 import { BackLink } from "../BackLink";
 import type { Back } from "../back";
+import { useLearningSupport } from "../LearningSupport/useLearningSupport";
+import { NEEDS_LEARNING_SUPPORT } from "../LearningSupport/Unavailable";
 import {
   Avatar,
   CARD,
@@ -185,6 +187,13 @@ export function IepExporterView({
   /** The reviewer's own note. Written on finalise, never shared with a parent. */
   const [note, setNote] = useState("");
   const me = useCurrentUser();
+  /*
+   * SCRUM-247: without Learning Support the exporter is unavailable - the page
+   * is still here and says why, rather than a picker that would draft a child's
+   * report for someone the school has not chosen to see it. The backend does
+   * not gate these routes on the role yet; asked of Teslim.
+   */
+  const { holders: ls } = useLearningSupport();
   const [guardians, setGuardians] = useState<ParentLink[]>([]);
   const [guardiansFailed, setGuardiansFailed] = useState(false);
   const [shareFailed, setShareFailed] = useState(false);
@@ -453,6 +462,27 @@ export function IepExporterView({
         loadShares(draft.id);
       });
   };
+
+  if (ls?.viewerHoldsIt === false) {
+    return (
+      <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
+        <div className="mx-auto max-w-[780px]">
+          <BackLink back={back} fallback={{ href: "/admin/senco", label: "Learning Support" }} />
+          <h2 className="m-0 mt-3 text-[28px] font-semibold tracking-[-0.018em] text-nevo-near-black">
+            Create a progress report
+          </h2>
+          <div className={cn(CARD, "mt-6 px-[26px] py-7")}>
+            <h3 className="m-0 text-[17px] font-semibold text-nevo-near-black">
+              Progress reports aren&rsquo;t available to you
+            </h3>
+            <p className="mt-2 max-w-[56ch] text-sm leading-[1.55] text-nevo-near-black/62">
+              {NEEDS_LEARNING_SUPPORT}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">

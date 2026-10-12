@@ -31,6 +31,10 @@ import {
 import { NoAccess, failureKind } from "../NoAccess";
 import { BackLink } from "../BackLink";
 import { withBack, type Back } from "../back";
+import { ApiError, apiErrorCode } from "@/lib/api/client";
+import { LEARNING_SUPPORT_REQUIRED } from "@/lib/api/learningSupport";
+import { useLearningSupport } from "../LearningSupport/useLearningSupport";
+import { NEEDS_LEARNING_SUPPORT, UnavailableAction } from "../LearningSupport/Unavailable";
 
 /**
  * D8b Learner Profile - the SENCo's plain-language view of one learner.
@@ -104,10 +108,17 @@ function ReadFailed({
   what,
   onRetry,
   denied = false,
+  needsLearningSupport = false,
 }: {
   firstName: string;
   what: string;
   onRetry: () => void;
+  /**
+   * Refused for want of Learning Support (SCRUM-247), so the way to it is
+   * named: the role is given on a person's record, not by "whoever manages
+   * permissions" in general, and never by the person themselves.
+   */
+  needsLearningSupport?: boolean;
   /**
    * The read was REFUSED (403), not lost. No retry: a refused scope is not
    * granted by asking again, and "we couldn't read" blamed the system for a
@@ -118,8 +129,10 @@ function ReadFailed({
   if (denied) {
     return (
       <p className="m-0 text-sm leading-[1.55] text-nevo-near-black/62">
-        You don&rsquo;t have access to {firstName}&rsquo;s {what}. Whoever
-        manages permissions for your school can change that.
+        You don&rsquo;t have access to {firstName}&rsquo;s {what}.{" "}
+        {needsLearningSupport
+          ? NEEDS_LEARNING_SUPPORT
+          : "Whoever manages permissions for your school can change that."}
       </p>
     );
   }
@@ -192,6 +205,15 @@ export function LearnerProfileView({
     mastery: false,
     adaptations: false,
   });
+  /** The adaptation history was refused for want of Learning Support. */
+  const [roleRefused, setRoleRefused] = useState(false);
+  /*
+   * SCRUM-247: without Learning Support, the adaptation history and the
+   * progress report exporter show as UNAVAILABLE - present, switched off, and
+   * saying why - rather than missing. Known before either is opened.
+   */
+  const { holders: ls } = useLearningSupport();
+  const lacksRole = ls?.viewerHoldsIt === false;
 
   const load = useCallback(() => {
     Promise.all([studentsApi.get(studentId), classesApi.list(true)])
@@ -212,9 +234,13 @@ export function LearnerProfileView({
           mastery: false,
           adaptations: false,
         });
+        setRoleRefused(false);
         const fail = (section: keyof typeof failed) => (err: unknown) => {
           setFailed((f) => ({ ...f, [section]: true }));
           if (failureKind(err) === "denied") setDenied((d) => ({ ...d, [section]: true }));
+          if (err instanceof ApiError && apiErrorCode(err.detail) === LEARNING_SUPPORT_REQUIRED) {
+            setRoleRefused(true);
+          }
         };
         studentsApi
           .accommodations(studentId)
@@ -552,13 +578,14 @@ export function LearnerProfileView({
 
       <SectionLabel>Recent adaptations</SectionLabel>
       <div className={cn(CARD, "mt-2.5")}>
-        {failed.adaptations ? (
+        {failed.adaptations || lacksRole ? (
           <div className="px-6 py-6">
             <ReadFailed
               firstName={firstName}
               what="adaptation history"
               onRetry={load}
-              denied={denied.adaptations}
+              denied={denied.adaptations || lacksRole}
+              needsLearningSupport={lacksRole || roleRefused}
             />
           </div>
         ) : adaptations.length === 0 ? (
@@ -601,6 +628,10 @@ export function LearnerProfileView({
       </div>
 
       <div className="mt-8 border-t border-nevo-near-black/10 pt-5">
+        {lacksRole ? (
+          <UnavailableAction label="Create a progress report" what="Progress reports" />
+        ) : (
+        <>
         <Link
           // Back on the exporter returns to this profile.
           href={withBack(`/admin/senco/export?student=${encodeURIComponent(studentId)}`, {
@@ -615,6 +646,8 @@ export function LearnerProfileView({
           A progress report turns this into plain prose you can review and share
           with {firstName}&rsquo;s guardian.
         </p>
+        </>
+        )}
       </div>
     </Wrapper>
   );
