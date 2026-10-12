@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
 import { calculationFromVariant } from "@/lib/lessons/fromContent";
 import type { CalculationVariant } from "@/lib/api/variants";
@@ -240,6 +240,76 @@ describe("a calculation's signals", () => {
     );
   });
 
+  it("does not read its own move of the column as the child scrolling", () => {
+    /*
+     * The solver brings a number step into view above the docked pad - the
+     * system moving the column, like the focus move onto a segment - so no
+     * `scroll` goes up for it. jsdom lays nothing out: the column, the
+     * step's parts and the move itself are given here, and the resize that
+     * prompts the move is delivered by hand, after the segment has opened.
+     */
+    const style = document.createElement("style");
+    style.textContent = ".overflow-y-auto { overflow-y: auto; }";
+    document.head.append(style);
+    const observers: (() => void)[] = [];
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        cb: () => void;
+        constructor(cb: () => void) {
+          this.cb = cb;
+        }
+        observe() {
+          observers.push(this.cb);
+        }
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    const rect = (top: number, bottom: number) =>
+      ({ top, bottom, height: bottom - top, left: 0, right: 375, width: 375, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+    const PARTS: Record<string, DOMRect> = {
+      prompt: rect(500, 526),
+      form: rect(540, 700),
+      field: rect(560, 632),
+      hint: rect(716, 760),
+    };
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(
+      function (this: Element) {
+        if (this.classList.contains("overflow-y-auto")) return rect(100, 400);
+        return PARTS[this.getAttribute("data-reveal") ?? ""] ?? rect(0, 0);
+      },
+    );
+    const before = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = () => {
+      const column = document.querySelector(".overflow-y-auto")!;
+      Object.defineProperties(column, {
+        scrollTop: { value: 360, configurable: true },
+        clientHeight: { value: 300, configurable: true },
+        scrollHeight: { value: 900, configurable: true },
+      });
+    };
+    try {
+      render(
+        <LessonPlayer
+          lesson={lessonWith([
+            step({ prompt: "So what is 1 + 2?", expectedInput: "numeric", input: "number", options: [], answer: "3" }),
+          ])}
+          plan={PLAN}
+        />,
+      );
+      act(() => observers.splice(0).forEach((cb) => cb()));
+      fireEvent.scroll(document.querySelector(".overflow-y-auto")!);
+
+      expect(sent("scroll")).toEqual([]);
+    } finally {
+      Element.prototype.scrollIntoView = before;
+      vi.restoreAllMocks();
+      vi.unstubAllGlobals();
+      style.remove();
+    }
+  });
+
   it("docks the number pad on the bottom edge, under the pinned arrows (D150)", () => {
     render(
       <LessonPlayer
@@ -289,6 +359,8 @@ describe("a calculation's signals", () => {
     expect(screen.getByText("What are the denominators?")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Slower" })).toBeNull();
     expect(sent("slower_trigger")).toEqual([]);
+    // Nor a held row: 17a draws none on the solver, and it needs the room.
+    expect(document.querySelector("header .invisible")).toBeNull();
   });
 
   it("shows the engine's hint in the step's hint place, with no second offer beside it", () => {

@@ -16,6 +16,7 @@ import type {
 import { isStoredAnswer } from "@/lib/lessons/storedAnswer";
 import { cn } from "@/lib/utils";
 import { READING_BODY, READING_HEADING, READING_INK } from "./readingSupport";
+import { revealIn, scrollerOf, type Stretch } from "./revealStep";
 import { useMediaSource, type MediaFailReason } from "./useMediaSource";
 
 /**
@@ -69,6 +70,7 @@ export function CalculationSolver({
   padDock,
   engineHint,
   onEngineHintClosed,
+  onSystemScroll,
 }: {
   calculation: CalculationSegment;
   /**
@@ -110,6 +112,11 @@ export function CalculationSolver({
   onAudioBusy?: (phase: "start" | "end") => void;
   /** A step's narration would not load (`media_load_failed`). */
   onNarrationFailed?: (reason: MediaFailReason) => void;
+  /**
+   * The solver moved the column itself, to bring the step into view - so the
+   * host does not read that move as the child scrolling. See `revealStep`.
+   */
+  onSystemScroll?: () => void;
 }) {
   const { steps } = calculation;
   const lastIndex = steps.length - 1;
@@ -159,6 +166,45 @@ export function CalculationSolver({
     (manipulative?.kind === "place_value"
       ? manipulative.columns.every((c, i) => (placedCols[i] ?? 0) >= c.count)
       : placed >= step.target);
+
+  /*
+   * THE STEP IN VIEW ABOVE THE DOCKED PAD (see `revealStep`). A number step
+   * on the pad is brought into view as it opens, again when Check goes live
+   * with the first key, when a hint arrives above the field, and whenever
+   * the column changes size - the pad docking, the break offer taking its
+   * row, the screen turning. The child's finger is on the docked pad, which
+   * none of this moves. A choice step is never moved: the child's finger is
+   * on the options, and moving them under it is what SCRUM-94 took out.
+   */
+  const response = useRef<HTMLDivElement | null>(null);
+  const systemScrolled = useRef(onSystemScroll);
+  useEffect(() => {
+    systemScrolled.current = onSystemScroll;
+  }, [onSystemScroll]);
+  const padStep = asking && step.input === "number" && step.entry === "numeric";
+  const live = typed.trim().length > 0;
+  useEffect(() => {
+    const block = response.current;
+    if (!padStep || !block) return;
+    const show = () => {
+      if (revealIn(block, live ? CHECK_LIVE : STEP_OPEN))
+        systemScrolled.current?.();
+    };
+    const scroller = scrollerOf(block);
+    if (!scroller || typeof ResizeObserver === "undefined") {
+      show();
+      return;
+    }
+    // Observing calls `show` once, after layout, and again on each resize.
+    const watch = new ResizeObserver(show);
+    watch.observe(scroller);
+    return () => watch.disconnect();
+  }, [padStep, step.stepId, live, engineHint, hintOpen]);
+  // A build's "That's the total", as it arrives where the tray was.
+  useEffect(() => {
+    const block = response.current;
+    if (built && block && revealIn(block, BUILT)) systemScrolled.current?.();
+  }, [built]);
 
   const advance = () => {
     if (index === lastIndex) {
@@ -280,7 +326,7 @@ export function CalculationSolver({
       </div>
 
       {/* RESPONSE - the one thing the child does, per step */}
-      <div className="mt-5">
+      <div ref={response} className="mt-5">
         {phase === "confirmed" && step.input === "choice" && (
           <div className="flex flex-col gap-3.5 motion-safe:animate-nevo-reveal">
             <div className="flex items-center justify-between rounded-[12px] border-2 border-nevo-navy bg-nevo-cream-elevated px-[18px] py-4 text-base font-semibold text-nevo-near-black shadow-elevation-1 sm:text-[18px]">
@@ -322,6 +368,7 @@ export function CalculationSolver({
         {asking && (
           <>
             <p
+              data-reveal="prompt"
               className={cn(
                 "text-center text-[19px] font-semibold leading-[1.35] text-nevo-near-black sm:text-[22px]",
                 reading && READING_HEADING,
@@ -382,7 +429,7 @@ export function CalculationSolver({
 
             {step.input === "number" && (
               <NumberEntry
-                // A new step's form opens anew, and is brought into view.
+                // A new step's form opens anew.
                 key={step.stepId}
                 step={step}
                 reading={reading}
@@ -433,6 +480,7 @@ export function CalculationSolver({
                 )}
                 {built && (
                   <Button
+                    data-reveal="total"
                     className="mt-[18px] w-full"
                     onClick={() => answer(true)}
                   >
@@ -460,6 +508,33 @@ export function CalculationSolver({
     </div>
   );
 }
+
+/**
+ * What of a number step to show above the pad, most first: the first of
+ * these that fits is brought into view (`revealIn`). The question with all
+ * of the form under it and the hint link; then without the link; then the
+ * question and the field; then the hint the step was given and the field;
+ * then the field alone. Once Check is live it is in every one.
+ */
+const STEP_OPEN: Stretch[] = [
+  ["prompt", "hint"],
+  ["prompt", "form"],
+  ["prompt", "field"],
+  ["pill", "field"],
+  ["field", "field"],
+];
+const CHECK_LIVE: Stretch[] = [
+  ["prompt", "hint"],
+  ["prompt", "form"],
+  ["pill", "form"],
+  ["field", "form"],
+  ["check", "check"],
+];
+/** A build's commit, with its question if both fit. */
+const BUILT: Stretch[] = [
+  ["prompt", "total"],
+  ["total", "total"],
+];
 
 /**
  * THE PAD IS DOCKED, AS D150 DRAWS IT: the tray last in the screen's column,
@@ -731,57 +806,33 @@ function NumberEntry({
 /**
  * The step's form: Enter or "Check my answer" commits what is typed.
  *
- * `docked`: the step types on the docked pad (D150). Then two things hold.
- *
- * NOTHING ABOVE THE PAD CHANGES HEIGHT AS THE CHILD TYPES. "Check my answer"
- * sits where 17a draws it, under the field, and appears with the first key;
- * its place is kept from the start, so that key moves nothing on screen.
- *
- * THE STEP, ITS FIELD AND CHECK ARE IN VIEW ABOVE THE PAD as the step opens.
- * On a phone the tray takes the lower third of the screen, so the field
- * could open under it. Brought into view the least distance that shows the
- * whole form - after the player has moved focus onto a new segment, which
- * scrolls too - the way a device's keyboard brings its field up.
+ * Check arrives with the first key, under the field, with "Need a hint?"
+ * below it - 17a's order. Its place was held empty from the start for a
+ * while, so the first key moved nothing; with the pad docked nothing the
+ * step does can move the pad anyway, and the held place only pushed "Need a
+ * hint?" down out of view on every pad step. The step is brought back into
+ * view as Check goes live - see `CHECK_LIVE`.
  */
 function EntryForm({
   value,
   onCommit,
-  docked = false,
   children,
 }: {
   value: string;
   onCommit: () => void;
-  docked?: boolean;
   children: React.ReactNode;
 }) {
-  const form = useRef<HTMLFormElement | null>(null);
-  useEffect(() => {
-    if (!docked) return;
-    const frame = window.requestAnimationFrame?.(() =>
-      form.current?.scrollIntoView?.({ block: "nearest" }),
-    );
-    return () => {
-      if (frame != null) window.cancelAnimationFrame?.(frame);
-    };
-  }, [docked]);
-
-  const typed = value.trim().length > 0;
   return (
     <form
-      ref={form}
+      data-reveal="form"
       onSubmit={(e) => {
         e.preventDefault();
         if (value.trim()) onCommit();
       }}
     >
       {children}
-      {(typed || docked) && (
-        <Button
-          type="submit"
-          aria-hidden={!typed || undefined}
-          inert={!typed}
-          className={cn("mt-[18px] w-full", !typed && "invisible")}
-        >
+      {value.trim().length > 0 && (
+        <Button type="submit" data-reveal="check" className="mt-[18px] w-full">
           Check my answer
         </Button>
       )}
@@ -850,7 +901,7 @@ function PadEntry({
   }, [value]);
 
   return (
-    <EntryForm value={value} onCommit={onCommit} docked>
+    <EntryForm value={value} onCommit={onCommit}>
       <div className="mt-[18px] flex flex-col items-center gap-4">
         <span className="font-mono text-[11px] font-bold tracking-[0.12em] text-nevo-near-black/50 uppercase sm:text-[11.5px]">
           Your answer
@@ -860,7 +911,10 @@ function PadEntry({
           className="flex w-full items-center sm:max-w-[440px]"
         >
           {/* The field is `outline-none`, so its box carries the focus ring. */}
-          <div className="flex min-h-[72px] min-w-0 flex-1 items-center gap-1 rounded-[10px] border-[1.5px] border-nevo-navy/40 bg-nevo-cream-elevated px-[18px] py-2.5 transition-colors focus-within:border-nevo-navy has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-nevo-navy has-[input:focus-visible]:ring-offset-2 has-[input:focus-visible]:ring-offset-nevo-cream sm:min-h-[82px] lg:min-h-[80px]">
+          <div
+            data-reveal="field"
+            className="flex min-h-[72px] min-w-0 flex-1 items-center gap-1 rounded-[10px] border-[1.5px] border-nevo-navy/40 bg-nevo-cream-elevated px-[18px] py-2.5 transition-colors focus-within:border-nevo-navy has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-nevo-navy has-[input:focus-visible]:ring-offset-2 has-[input:focus-visible]:ring-offset-nevo-cream sm:min-h-[82px] lg:min-h-[80px]"
+          >
             <input
               ref={field}
               // The pad below is this field's keyboard (D150).
@@ -1468,7 +1522,10 @@ function HintPill({
   onClose?: () => void;
 }) {
   return (
-    <div className="mx-auto mt-4 flex w-max max-w-full items-center gap-2.5 rounded-full bg-nevo-cream-elevated px-[18px] py-2.5 shadow-elevation-1 motion-safe:animate-nevo-reveal">
+    <div
+      data-reveal="pill"
+      className="mx-auto mt-4 flex w-max max-w-full items-center gap-2.5 rounded-full bg-nevo-cream-elevated px-[18px] py-2.5 shadow-elevation-1 motion-safe:animate-nevo-reveal"
+    >
       <span className="size-[7px] shrink-0 rounded-full bg-nevo-violet" />
       <span
         className={cn(
@@ -1501,7 +1558,7 @@ function HintPill({
  */
 function HintLink({ onClick }: { onClick: () => void }) {
   return (
-    <p className="mt-4 text-center">
+    <p data-reveal="hint" className="mt-4 text-center">
       <button
         type="button"
         onClick={onClick}

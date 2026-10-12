@@ -432,6 +432,13 @@ function PadLayout({
  * Sized as the frame's three variants, at the solver's own breakpoints: a
  * full-width tray on a phone, then 460px (tablet) and 420px (desktop) with
  * rounded top corners. Keys do not move when pressed; the frame draws none.
+ *
+ * COMPACT WHERE THE SCREEN IS SHORT. Docked under the lesson's arrows, the
+ * frame's tray left a short phone - or any screen at a larger text size -
+ * too little room above it for the question, the field and Check. There the
+ * keys are 44px, the least a child's finger is given anywhere, with closer
+ * rows; the tray is otherwise as drawn. When is globals.css's to say
+ * (`.nevo-calc-pad`), as the custom properties these read.
  */
 const CALC_ROWS = [
   ["1", "2", "3"],
@@ -440,7 +447,7 @@ const CALC_ROWS = [
 ];
 
 const CALC_KEY =
-  "flex h-14 min-w-0 flex-1 cursor-pointer items-center justify-center rounded-lg text-nevo-near-black select-none sm:h-16 lg:h-[62px]";
+  "flex h-[var(--calc-key,56px)] min-w-0 flex-1 cursor-pointer items-center justify-center rounded-lg text-nevo-near-black select-none sm:h-[var(--calc-key,64px)] lg:h-[var(--calc-key,62px)]";
 const CALC_DIGIT = cn(
   CALC_KEY,
   "bg-nevo-cream text-[24px] font-normal shadow-[0_1px_1px_rgba(43,43,47,0.28)] sm:text-[28px] lg:text-[27px]",
@@ -453,7 +460,7 @@ const CALC_ROW = "flex justify-center gap-2 sm:gap-2.5";
 
 function CalcLayout({ onKey }: { onKey: (c: string) => void }) {
   return (
-    <div className="mx-auto flex w-full flex-col gap-2.5 border-t border-nevo-near-black/8 bg-[#e4ddcc] px-2 pt-2 pb-3.5 sm:mb-2 sm:max-w-[460px] sm:gap-3 sm:rounded-t-[14px] sm:px-3.5 sm:pt-3.5 sm:pb-5 lg:max-w-[420px]">
+    <div className="nevo-calc-pad mx-auto flex w-full flex-col gap-[var(--calc-gap,10px)] border-t border-nevo-near-black/8 bg-[#e4ddcc] px-2 pt-[var(--calc-pad-t,8px)] pb-[var(--calc-pad-b,14px)] sm:mb-2 sm:max-w-[460px] sm:gap-[var(--calc-gap,12px)] sm:rounded-t-[14px] sm:px-3.5 sm:pt-[var(--calc-pad-t,14px)] sm:pb-[var(--calc-pad-b,20px)] lg:max-w-[420px]">
       {CALC_ROWS.map((row) => (
         <div key={row[0]} className={CALC_ROW}>
           {row.map((d) => (

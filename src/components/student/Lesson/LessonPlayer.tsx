@@ -1092,6 +1092,16 @@ export function LessonPlayer({
   useEffect(() => {
     reachAtEntry.current = columnReach()?.reach ?? 0;
   }, [index, modality, columnReach]);
+  /*
+   * The solver bringing its step into view above the pad is the system
+   * moving the column too, like the focus move - so where that leaves it is
+   * taken as where the segment opened, and only the child going further down
+   * is their scroll.
+   */
+  const systemScrolled = useCallback(() => {
+    const at = columnReach();
+    if (at) reachAtEntry.current = Math.max(reachAtEntry.current, at.reach);
+  }, [columnReach]);
   const handleScroll = useCallback(() => {
     // Every mark already sent: nothing to measure, so no layout read per frame.
     if (scrollMarks.current.size === SCROLL_MILESTONES.length) return;
@@ -2645,7 +2655,9 @@ export function LessonPlayer({
                 setPositionSaidOn(segment.id);
             }}
             className={cn(
-              "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-300 motion-safe:ease-nevo-slide focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-nevo-navy",
+              // The ring is drawn inside the group: the column scrolls now,
+              // and clips anything drawn outside what it holds.
+              "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-300 motion-safe:ease-nevo-slide focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-nevo-navy",
               // D25: the engine's density, as spacing and nothing else.
               densitySpacing(
                 entryDensity.segmentId === segment.id
@@ -2658,6 +2670,7 @@ export function LessonPlayer({
               segment={segment}
               modality={modality}
               padDock={padDock}
+              onSystemScroll={systemScrolled}
               engineHint={hintHere && hintText ? hintText : undefined}
               onEngineHintClosed={() =>
                 setClosedHints((prev) => new Set(prev).add(hintKey))
@@ -2851,6 +2864,10 @@ export function LessonPlayer({
         inert={partsLeft}
         className={cn(
           "flex shrink-0 items-center justify-center gap-8 px-3.5 pt-2 pb-6",
+          // Over the docked pad the row is not at the screen's foot, so it
+          // keeps the arrows and gives its padding to the column above: on
+          // a short screen that is the question staying in view.
+          "[&:has(+[data-pad-dock]:not(:empty))]:py-0",
           secondaryDim(attentionOn),
           partsLeft && "invisible",
         )}
@@ -2882,6 +2899,7 @@ function SegmentBody({
   padDock,
   engineHint,
   onEngineHintClosed,
+  onSystemScroll,
   density,
   reading,
   attention,
@@ -2903,6 +2921,8 @@ function SegmentBody({
   /** The engine's `offer_hint` text, which the solver shows as its own. */
   engineHint?: string;
   onEngineHintClosed: () => void;
+  /** The solver moved the column itself - see `systemScrolled`. */
+  onSystemScroll: () => void;
   density: Density | null;
   reading: boolean;
   attention: boolean;
@@ -2958,6 +2978,7 @@ function SegmentBody({
           padDock={padDock}
           engineHint={engineHint}
           onEngineHintClosed={onEngineHintClosed}
+          onSystemScroll={onSystemScroll}
           // D30: the same accommodation the text segment and the checks take.
           reading={reading}
           onSolved={onCalcSolved}

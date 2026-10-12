@@ -506,6 +506,64 @@ html[data-text-size="xl"] .nevo-text-zoom {
   --nevo-text-zoom: 1.2;
 }
 
+/* The calculation pad's compact form (NevoKeyboard's `CalcLayout`, which
+ * reads these). Docked under the lesson's pinned arrows, D150's tray leaves
+ * a short screen too little room above it for the step's question, field,
+ * Check and hint link. Short is counted in the player's own pixels, which a
+ * larger text size divides the screen's by: under 760 on a phone and 830
+ * from 640 wide, so 836 and 913 at "l", 912 and 996 at "xl". "s" is taken
+ * with the default. The keys stay 44px, the least any key here is given. */
+@media (max-height: 759.98px) {
+  .nevo-calc-pad {
+    --calc-key: 44px;
+    --calc-gap: 5px;
+    --calc-pad-t: 5px;
+    --calc-pad-b: 11px;
+  }
+}
+@media (max-height: 835.98px) {
+  html[data-text-size="l"] .nevo-calc-pad,
+  html[data-text-size="xl"] .nevo-calc-pad {
+    --calc-key: 44px;
+    --calc-gap: 5px;
+    --calc-pad-t: 5px;
+    --calc-pad-b: 11px;
+  }
+}
+@media (max-height: 911.98px) {
+  html[data-text-size="xl"] .nevo-calc-pad {
+    --calc-key: 44px;
+    --calc-gap: 5px;
+    --calc-pad-t: 5px;
+    --calc-pad-b: 11px;
+  }
+}
+@media (min-width: 640px) and (max-height: 829.98px) {
+  .nevo-calc-pad {
+    --calc-key: 44px;
+    --calc-gap: 5px;
+    --calc-pad-t: 5px;
+    --calc-pad-b: 11px;
+  }
+}
+@media (min-width: 640px) and (max-height: 912.98px) {
+  html[data-text-size="l"] .nevo-calc-pad,
+  html[data-text-size="xl"] .nevo-calc-pad {
+    --calc-key: 44px;
+    --calc-gap: 5px;
+    --calc-pad-t: 5px;
+    --calc-pad-b: 11px;
+  }
+}
+@media (min-width: 640px) and (max-height: 995.98px) {
+  html[data-text-size="xl"] .nevo-calc-pad {
+    --calc-key: 44px;
+    --calc-gap: 5px;
+    --calc-pad-t: 5px;
+    --calc-pad-b: 11px;
+  }
+}
+
 /* High Contrast — a first pass: darken muted text and strengthen the faint
  * borders/dividers so the hierarchy reads at low vision. A full high-contrast
  * palette is a design follow-up. */
