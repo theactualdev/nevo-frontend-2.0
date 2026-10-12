@@ -1,6 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { OfflineNotice, strandedOffline } from "./OfflineScreen";
+import { offlineArt, resetOfflineArt } from "./offlineArt";
 import { clearSession, setSession } from "@/lib/auth/session";
 import { saveLesson } from "@/lib/offline/savedLessons";
 import { holdProgress } from "@/lib/lessons/pendingProgress";
@@ -109,6 +110,8 @@ describe("the full screen", () => {
     expect(dialog.textContent).not.toMatch(/downloaded|saved lessons/i);
     // And no button that can only re-ask what the browser already answered.
     expect(screen.queryByRole("button")).toBeNull();
+    // Portalled out of the shell, so it carries the student scope itself.
+    expect(dialog).toHaveAttribute("data-nevo-console", "student");
   });
 
   it("goes over the tab, leaving what was half-written underneath", async () => {
@@ -123,6 +126,62 @@ describe("the full screen", () => {
 
     expect(document.querySelector("textarea")?.value).toBe(
       "Dear Ms Okafor, I wanted to ask",
+    );
+  });
+});
+
+describe("the full screen's pictures", () => {
+  /*
+   * They were network images, requested the moment the screen appeared -
+   * which is the moment there was no network. The brand mark and the
+   * illustration both came up broken for the one child the screen is for.
+   * Now they are fetched while online and kept, and drawn from what was kept.
+   */
+  beforeEach(() => resetOfflineArt());
+  afterEach(() => resetOfflineArt());
+
+  it("are fetched while online and drawn offline from the copies kept", async () => {
+    const fetched: string[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      fetched.push(String(input));
+      return {
+        ok: true,
+        blob: async () => new Blob(["png"], { type: "image/png" }),
+      } as Response;
+    });
+    let n = 0;
+    Object.assign(URL, { createObjectURL: () => `blob:kept-${n++}` });
+
+    signIn("child-a");
+    const { rerender } = render(<OfflineNotice online />);
+    await waitFor(() => expect(fetched).toHaveLength(2));
+    // The real files: the combined mark, and the illustration as the screen
+    // has always been served it.
+    expect(fetched[0]).toBe("/brand/nevo-logo-combined.png");
+    expect(fetched[1]).toContain(encodeURIComponent("/illustrations/offline.png"));
+
+    await waitFor(() => {
+      expect(offlineArt().mark).not.toBeNull();
+      expect(offlineArt().illustration).not.toBeNull();
+    });
+
+    rerender(<OfflineNotice online={false} />);
+    const dialog = await screen.findByRole("dialog");
+    const srcs = Array.from(dialog.querySelectorAll("img")).map((img) =>
+      img.getAttribute("src"),
+    );
+    expect(srcs).toHaveLength(2);
+    for (const src of srcs) expect(src).toMatch(/^blob:kept-/);
+  });
+
+  it("fall back to the files themselves when nothing could be kept", async () => {
+    signIn("child-a");
+    render(<OfflineNotice online={false} />);
+    const dialog = await screen.findByRole("dialog");
+
+    expect(dialog.querySelector('img[alt="Nevo"]')).toHaveAttribute(
+      "src",
+      "/brand/nevo-logo-combined.png",
     );
   });
 });

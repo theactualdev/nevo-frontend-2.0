@@ -7,7 +7,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { HomeDashboard } from "./HomeDashboard";
+import { HomeDashboard, homeDate } from "./HomeDashboard";
 import { SAMPLE_ATTR } from "@/lib/sampleData";
 import { clearSession, setSession } from "@/lib/auth/session";
 import { markWarmUpDone } from "@/lib/profiling/warmUpDone";
@@ -983,5 +983,35 @@ describe("what Home says when there is nothing, or nothing left", () => {
     expect(text).not.toMatch(/caught up/);
     expect(text).not.toMatch(/showing up this week/);
     expect(text).not.toMatch(/Nevo keeps up with you/);
+  });
+});
+
+describe("the date over the greeting", () => {
+  /*
+   * Nevo Home Frame draws "TUESDAY · 3 JULY". It read "SUNDAY 11 OCTOBER",
+   * or "Sunday, October 11" on a device set to US English - the shape was the
+   * locale's. The names are the device's; the shape is the frame's.
+   */
+  it("is the weekday, a middle dot, then the day and the month", () => {
+    const tuesday = new Date(2026, 6, 7);
+    expect(homeDate(tuesday, "en-GB")).toBe("Tuesday · 7 July");
+    expect(homeDate(tuesday, "en-US")).toBe("Tuesday · 7 July");
+  });
+
+  it("stays over the greeting when the lessons could not be read", async () => {
+    // The date is the clock's, not the read's, so a failed read keeps it.
+    signIn();
+    dashboard.useStudentDashboard.mockReturnValue({
+      data: null,
+      failed: true,
+      loading: false,
+    });
+
+    render(<HomeDashboard />);
+
+    expect(
+      await screen.findByText("We couldn’t load your lessons just now"),
+    ).toBeInTheDocument();
+    expect(screen.getByText(homeDate(new Date()))).toBeInTheDocument();
   });
 });

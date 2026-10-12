@@ -453,6 +453,23 @@
   html {
     @apply font-sans;
   }
+
+  /*
+   * THE STUDENT CONSOLE'S FOCUS RING. The rule above leaves every element the
+   * browser's own ring in `--ring` at half strength: a 1px grey that all but
+   * vanishes on cream. No frame specifies focus, so a child moving by keyboard
+   * or switch gets a 2px navy outline, 2px clear of the control.
+   *
+   * In the base layer, so a component that styles its own focus (a field with
+   * `outline-none` and a navy border, a ring) keeps it: any utility beats
+   * this. Scoped by `data-nevo-console="student"`, which the student shell and
+   * each student overlay that portals out of it carry. The teacher and admin
+   * consoles are untouched.
+   */
+  [data-nevo-console="student"] :focus-visible {
+    outline: 2px solid var(--color-nevo-navy);
+    outline-offset: 2px;
+  }
 }
 
 /* Reduced-motion mode (Design System v2 §10 / §9 accessibility).

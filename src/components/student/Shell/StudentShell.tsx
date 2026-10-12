@@ -160,9 +160,16 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
     // Text Size is a reading preference, and the player is where the reading
     // happens - it applies there too, not just in the shell. The calibrated
     // activities are deliberately excluded - see `scalesWithTextSize`.
-    if (!scalesWithTextSize(pathname)) return <>{children}</>;
+    // `data-nevo-console`: the student focus ring (globals.css) applies on
+    // these routes too. `contents`, so the bare ones stay bare.
+    if (!scalesWithTextSize(pathname))
+      return (
+        <div data-nevo-console="student" className="contents">
+          {children}
+        </div>
+      );
     return (
-      <div className="nevo-text-zoom">
+      <div data-nevo-console="student" className="nevo-text-zoom">
         {/*
           Ask Nevo is rendered by the LESSON LAYOUT now, not here. As a sibling
           of `children` it sat outside that route's `LessonProvider`, so the
@@ -183,7 +190,10 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
     : STUDENT_NAV.find((item) => within(item.href))?.href;
 
   return (
-    <div className="group/shell flex h-[100dvh] bg-nevo-cream text-nevo-near-black">
+    <div
+      data-nevo-console="student"
+      className="group/shell flex h-[100dvh] bg-nevo-cream text-nevo-near-black"
+    >
       {/* Sidebar — tablet & desktop */}
       <div className="hidden shrink-0 md:block">
         <MaybeSample showing={showingFixtureIdentity} kind="student:identity">
@@ -214,7 +224,8 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
         <OfflineNotice online={online} />
 
         {/* Top bar — mobile only (logo + avatar) */}
-        <header className="flex h-[60px] shrink-0 items-center justify-between px-5 md:hidden">
+        {/* Positioned: the bell's panel hangs from this bar on a phone. */}
+        <header className="relative flex h-[60px] shrink-0 items-center justify-between px-5 md:hidden">
           <Image
             src="/brand/nevo-wordmark.png"
             alt="Nevo"
@@ -275,7 +286,10 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
           // viewport - intruding 61px into this region. Desktop has no nav, so
           // this region reaches the viewport floor and the 44px pill at
           // `bottom-6` intrudes 68px. A few px of margin on each.
-          className="nevo-text-zoom min-h-0 flex-1 overflow-y-auto pb-[68px] md:pb-[76px]"
+          //
+          // Not while a tab's keyboard is docked: the trigger steps aside then
+          // (below), and the keyboard belongs on the floor of the screen.
+          className="nevo-text-zoom min-h-0 flex-1 overflow-y-auto pb-[68px] md:pb-[76px] not-pointer-fine:group-has-[[data-nevo-hide-nav]]/shell:pb-0"
         >
           {/*
             THE TAB STAYS IN FRONT OF THE CHILD OFFLINE. It was first
@@ -283,12 +297,21 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
             way a child part-way through a message to their teacher could not
             see it. The banner above is the whole of the offline state now.
 
-            A SCREEN THAT PINS ITS ACTIONS TO THE FOOT (18a's summary and
-            review) marks itself `data-fills-main`, and only then is this the
-            full height of the region, for it to grow into. Nothing else
-            changes layout.
+            A TAB THAT FILLS THE SCREEN gets a sized box to fill. Connect's
+            `h-full` resolved against this unsized wrapper, so the
+            conversation collapsed to its messages: the composer floated under
+            the last one, and on a long thread it was below the fold, with the
+            header scrolling away and the thread opening at its oldest message.
+            Every other tab scrolls here, in `<main>`, and keeps doing so - in
+            a column at least the screen's height, which a tab's empty state
+            grows into to centre itself (29 Empty States). A tab that does not
+            ask to grow keeps its own height.
           */}
-          <div className="has-[[data-fills-main]]:flex has-[[data-fills-main]]:min-h-full has-[[data-fills-main]]:flex-col">
+          <div
+            className={
+              fillsScreen(pathname) ? "h-full" : "flex min-h-full flex-col"
+            }
+          >
             {children}
           </div>
         </main>
@@ -304,13 +327,34 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
       {/* Ask Nevo (26) — always reachable from the tabs, never interruptive. */}
       {/* Except Profile: the app shell frame mounts the launcher on every tab
           `&& v !== "profile"`, a deliberate exclusion rather than an omission. */}
-      {pathname !== PROFILE_HREF && <AskNevo />}
+      {/* And it steps aside with the bottom nav while a tab's keyboard is
+          docked: the launcher is `fixed` over the bottom of the screen, which
+          is where that keyboard is, so it sat on the keys a child was typing
+          with. Its sheet portals out of here, so an open one is unaffected.
+          `invisible`, not `hidden`: the launcher keeps its box, so a resize
+          while it is away clamps a dragged one against where it really is. */}
+      {pathname !== PROFILE_HREF && (
+        <div className="not-pointer-fine:group-has-[[data-nevo-hide-nav]]/shell:invisible">
+          <AskNevo />
+        </div>
+      )}
     </div>
   );
 }
 
 /** The one tab the app shell frame draws without the Ask Nevo launcher. */
 const PROFILE_HREF = "/student/profile";
+
+/**
+ * The tabs that fill the content region rather than scroll in it: Connect,
+ * whose conversation scrolls inside itself between its header and its
+ * composer (Nevo Connect Frame: the messages `flex:1 1 auto; min-height:0;
+ * overflow-y:auto`, the composer `flex:0 0 auto` at the foot).
+ */
+export function fillsScreen(pathname: string): boolean {
+  return pathname === CONNECT_HREF || pathname.startsWith(`${CONNECT_HREF}/`);
+}
+const CONNECT_HREF = "/student/connect";
 
 /**
  * The immersive player, and the review session that reuses it wholesale (37d).

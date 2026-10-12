@@ -443,6 +443,7 @@ export function AskNevo() {
 
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent
+          data-nevo-console="student"
           side="bottom"
           aria-describedby={undefined}
           // The `!` marks out-shout the stock data-[side=bottom] variants

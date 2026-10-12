@@ -7,11 +7,16 @@ import { lessonHref } from "@/lib/lessons/lessonHref";
 import { segmentPlace, type SegmentPlace } from "@/lib/lessons/segmentPlace";
 import { BookOpen, ChevronRight, Clock, Play, Shapes } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { IllustrationWrapper } from "@/components/shared";
 import { SampleRegion } from "@/components/shared/SampleRegion";
 import { useHydrated } from "@/hooks/useHydrated";
 import type { DashboardProgressRow } from "@/lib/api/students";
 import { useDisplayName } from "@/components/student/Shell/useDisplayName";
+import {
+  EmptyArt,
+  TAB_FILL,
+  TabEmpty,
+} from "@/components/student/Shell/TabPage";
+import { cn } from "@/lib/utils";
 import { useHasSession } from "@/hooks/useHasSession";
 import { useStudentDashboard } from "@/hooks/useStudentDashboard";
 import { TodaysWarmUpCard } from "@/components/student/Profiling/WarmUpCard";
@@ -136,15 +141,50 @@ function useLocalDate() {
   useEffect(() => {
     // Client-only clock read, once on mount — keeps SSR + hydration in agreement.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setDate(
-      new Date().toLocaleDateString(undefined, {
-        weekday: "long",
-        day: "numeric",
-        month: "long",
-      }),
-    );
+    setDate(homeDate(new Date()));
   }, []);
   return date;
+}
+
+/**
+ * Nevo Home Frame's eyebrow: "TUESDAY · 3 JULY" - the weekday, a middle dot,
+ * then the day before the month (uppercased by the eyebrow's style). It read
+ * "SUNDAY 11 OCTOBER", in whatever order and punctuation the device's locale
+ * chose. The names stay the device's own; the shape is the frame's.
+ */
+export function homeDate(date: Date, locale?: string): string {
+  const parts = new Intl.DateTimeFormat(locale, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).formatToParts(date);
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === type)?.value ?? "";
+  return `${part("weekday")} · ${part("day")} ${part("month")}`;
+}
+
+/**
+ * Nevo Home Frame's scroll padding - 8, 20 and 24 round a phone's, 44 on a
+ * tablet, 52 on a desktop - around a column of at most 720 (860 on a
+ * desktop) centred in what is left. The padding was inside the 720, so on a
+ * tablet the greeting sat at (114, 24) where the frame puts it at (108, 44).
+ * Between a phone and a tablet (640-767, no frame) the old 32/24 stands.
+ */
+const HOME_PAGE = "px-5 pt-2 pb-6 sm:px-8 sm:py-6 md:p-11 lg:p-[52px]";
+const HOME_COLUMN = "mx-auto w-full max-w-[720px] lg:max-w-[860px]";
+
+/** The eyebrow and the greeting, the same over every state of the page. */
+function Greeting({ date, name }: { date: string | null; name: string }) {
+  return (
+    <>
+      <span className="flex h-4 items-center font-mono text-[11px] tracking-[0.14em] text-nevo-near-black/60 uppercase">
+        {date ?? ""}
+      </span>
+      <h1 className="mt-2 text-[28px] font-semibold leading-[1.12] tracking-[-0.02em] text-nevo-near-black sm:text-[34px]">
+        Welcome back{name ? `, ${name}` : ""}
+      </h1>
+    </>
+  );
 }
 
 /**
@@ -356,15 +396,17 @@ export function HomeDashboard() {
   // request that carried a student's cookie.
   if (!hydrated || (signedIn && loading)) {
     return (
-      <div className="mx-auto w-full max-w-[720px] px-5 py-2 pb-8 sm:px-8 sm:py-6 lg:max-w-[860px]">
-        <div className="mt-2 h-9 w-64 animate-pulse rounded bg-nevo-cream-elevated" />
-        <div className="mt-7 grid grid-cols-2 gap-3.5 sm:grid-cols-3 sm:gap-4">
-          {[0, 1, 2].map((i) => (
-            <div
-              key={i}
-              className="h-[150px] animate-pulse rounded-[12px] bg-nevo-cream-elevated"
-            />
-          ))}
+      <div className={HOME_PAGE}>
+        <div className={HOME_COLUMN}>
+          <div className="mt-2 h-9 w-64 animate-pulse rounded bg-nevo-cream-elevated" />
+          <div className="mt-7 grid grid-cols-2 gap-3.5 sm:grid-cols-3 sm:gap-4">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="h-[150px] animate-pulse rounded-[12px] bg-nevo-cream-elevated"
+              />
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -372,26 +414,27 @@ export function HomeDashboard() {
 
   if (signedIn && failed) {
     return (
-      <div className="mx-auto w-full max-w-[720px] px-5 py-2 pb-8 sm:px-8 sm:py-6 lg:max-w-[860px]">
-        <h1 className="mt-2 text-[28px] font-semibold leading-[1.12] tracking-[-0.02em] text-nevo-near-black sm:text-[34px]">
-          Welcome back{displayName ? `, ${displayName}` : ""}
-        </h1>
-        {/* The warm-up does not wait on the lessons read (D18). */}
-        <TodaysWarmUpCard />
-        <div className="mt-8 rounded-[16px] bg-nevo-cream-elevated p-[22px] shadow-elevation-1">
-          <p className="text-[17px] font-semibold text-nevo-near-black">
-            We couldn&rsquo;t load your lessons just now
-          </p>
-          <p className="mt-1.5 text-[15px] leading-[1.5] text-nevo-near-black/68">
-            Nothing is lost. Give it a moment and try again.
-          </p>
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="mt-5 flex h-[48px] cursor-pointer items-center rounded-[12px] bg-nevo-navy px-7 text-[15px] font-medium text-nevo-cream"
-          >
-            Try again
-          </button>
+      <div className={HOME_PAGE}>
+        <div className={HOME_COLUMN}>
+          {/* The eyebrow too: the date is the clock's, not the read's. */}
+          <Greeting date={date} name={displayName} />
+          {/* The warm-up does not wait on the lessons read (D18). */}
+          <TodaysWarmUpCard />
+          <div className="mt-8 rounded-[16px] bg-nevo-cream-elevated p-[22px] shadow-elevation-1">
+            <p className="text-[17px] font-semibold text-nevo-near-black">
+              We couldn&rsquo;t load your lessons just now
+            </p>
+            <p className="mt-1.5 text-[15px] leading-[1.5] text-nevo-near-black/68">
+              Nothing is lost. Give it a moment and try again.
+            </p>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="mt-5 flex h-[48px] cursor-pointer items-center rounded-[12px] bg-nevo-navy px-7 text-[15px] font-medium text-nevo-cream"
+            >
+              Try again
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -407,16 +450,14 @@ export function HomeDashboard() {
   // assertion it exists for ("no sample marks once signed in") would have
   // failed on a perfectly healthy Home, and the obvious way to make that test
   // pass is to delete the mark.
+  // Nothing set yet: the page grows to the screen, and 29's figure centres
+  // in what the greeting and the warm-up leave.
   const body = (
-    <div className="mx-auto w-full max-w-[720px] px-5 py-2 pb-8 sm:px-8 sm:py-6 lg:max-w-[860px]">
+    <div className={cn(HOME_PAGE, nothingSet && TAB_FILL)}>
+      <div className={cn(HOME_COLUMN, nothingSet && TAB_FILL)}>
       {/* Greeting */}
       <div className="motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-500">
-        <span className="flex h-4 items-center font-mono text-[11px] tracking-[0.14em] text-nevo-near-black/60 uppercase">
-          {date ?? ""}
-        </span>
-        <h1 className="mt-2 text-[28px] font-semibold leading-[1.12] tracking-[-0.02em] text-nevo-near-black sm:text-[34px]">
-          Welcome back{displayName ? `, ${displayName}` : ""}
-        </h1>
+        <Greeting date={date} name={displayName} />
       </div>
 
       {/* The daily warm-up opens the session (SCRUM-104) - a quick
@@ -511,6 +552,7 @@ export function HomeDashboard() {
         open={previewOpen}
         onOpenChange={setPreviewOpen}
       />
+      </div>
     </div>
   );
 
@@ -626,21 +668,21 @@ function PickUpMark() {
   );
 }
 
-/** 29 Empty States: the Home illustration and one line, nothing more. */
+/**
+ * 29 Empty States, "Home (No lessons)": its own figure, 290 / 350 / 365 tall,
+ * and one line, nothing more.
+ */
 function EmptyState({ line }: { line: string }) {
   return (
-    <div className="flex flex-col items-center px-6 pt-12 pb-6 text-center">
-      <IllustrationWrapper
-        src="/illustrations/welcome-settling.png"
-        alt=""
-        width={697}
-        height={598}
-        className="w-[180px]"
-      />
-      <h2 className="mt-7 max-w-[280px] text-[19px] font-medium leading-[1.35] text-nevo-near-black">
-        {line}
-      </h2>
-    </div>
+    <TabEmpty
+      art={
+        <EmptyArt
+          src="/illustrations/empty-home.png"
+          className="h-[290px] md:h-[350px] lg:h-[365px]"
+        />
+      }
+      line={line}
+    />
   );
 }
 
@@ -669,7 +711,9 @@ function TodayCard({
     <button
       type="button"
       onClick={onOpen}
-      className="cursor-pointer overflow-hidden rounded-[12px] bg-nevo-cream-elevated text-left shadow-elevation-1 transition-transform active:scale-[0.98] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-500"
+      // A column, not a button's centred box: in a row stretched to a taller
+      // neighbour, the tint band slid down off the top of a shorter card.
+      className="flex cursor-pointer flex-col overflow-hidden rounded-[12px] bg-nevo-cream-elevated text-left shadow-elevation-1 transition-transform active:scale-[0.98] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-500"
       style={{ animationDelay: `${180 + index * 60}ms` }}
     >
       <div

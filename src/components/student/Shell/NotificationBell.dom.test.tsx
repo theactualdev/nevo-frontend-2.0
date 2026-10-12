@@ -132,7 +132,7 @@ describe("each row's mark", () => {
   const BUBBLE = "M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.5A8 8 0 1 1 21 12z";
 
   const rowFor = (title: string) =>
-    screen.getByText(title).closest("a, button, div[class*='rounded']")!;
+    screen.getByText(title).closest("a, button, div[class*='items-start']")!;
 
   it("is the frame's book for a lesson and its bubble for a message", () => {
     ctx.value.notifications = [
@@ -182,5 +182,26 @@ describe("a feed that has not answered yet", () => {
 
     expect(screen.getByRole("status", { name: "Loading" })).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/Nothing new right now/i);
+  });
+});
+
+describe("the panel's place on the screen (board 28)", () => {
+  /*
+   * It hung from the bell at 320 wide on every screen. On a phone the bell
+   * sits beside the avatar, so the card ran 9px off the left of a 375 screen.
+   * The board draws a full-width card 16px in from each edge on a phone, and
+   * a 340 / 360 popover under the bell from tablet up. jsdom lays nothing
+   * out, so what is pinned is which box it hangs from.
+   */
+  it("hangs from the top bar on a phone, not from the bell", () => {
+    openPanel();
+    const panel = screen.getByRole("dialog", { name: "Notifications" });
+
+    expect(panel).toHaveClass("absolute", "inset-x-4", "top-full");
+    expect(panel).toHaveClass("md:right-0", "md:w-[340px]", "lg:w-[360px]");
+    // The bell is positioned only from tablet up, where the panel is its.
+    const bell = screen.getByRole("button", { name: "Notifications" });
+    expect(bell.parentElement).not.toHaveClass("relative");
+    expect(bell.parentElement).toHaveClass("md:relative");
   });
 });

@@ -72,7 +72,17 @@ export function Wordmark({
  * session-expired and 404 screens. 30px tall, 35px from `sm`. Glyph box
  * x256-824 / y453-625 in the source, as `NevoLockup` has it.
  */
-export function CombinedMark({ className }: { className?: string }) {
+export function CombinedMark({
+  className,
+  src = "/brand/nevo-logo-combined.png",
+}: {
+  className?: string;
+  /**
+   * The same file from somewhere other than the network - the offline screen
+   * passes the copy it kept while online. Never a different picture.
+   */
+  src?: string;
+}) {
   return (
     <span
       className={cn(
@@ -81,7 +91,7 @@ export function CombinedMark({ className }: { className?: string }) {
       )}
     >
       <img
-        src="/brand/nevo-logo-combined.png"
+        src={src}
         alt="Nevo"
         className="absolute block h-[190px] w-[190px] max-w-none -translate-x-[45px] -translate-y-[80px] sm:h-[220px] sm:w-[220px] sm:-translate-x-[52px] sm:-translate-y-[92px]"
       />
