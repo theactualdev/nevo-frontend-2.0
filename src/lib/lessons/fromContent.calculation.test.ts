@@ -592,6 +592,18 @@ describe("the scaffold drawing", () => {
     expect(drawn({ kind: "bar", parts: 2, labels: ["a", "b", "c"] })).toBeUndefined();
   });
 
+  it("draws nothing for a kind outside D149's five, and keeps the steps", () => {
+    // D149 (8 Oct): `bar`, `number_line`, `dots`, `array`, `place_value`, and
+    // no others reach the player - backend normalises the legacy names. A kind
+    // that still arrives is drawn as nothing rather than as a guess, and the
+    // calculation itself goes on: its steps and equation are the payload's.
+    for (const kind of ["pie", "fraction_bars", "fraction_bar", "counters"]) {
+      const calc = calcOf(algebra({ scaffold: { kind, parts: 4, marks: [1] } }));
+      expect(calc?.scaffold, kind).toBeUndefined();
+      expect(calc?.steps.length, kind).toBeGreaterThan(0);
+    }
+  });
+
   it("draws nothing when the payload carries no scaffold", () => {
     // Absence is the instruction. Nothing is inferred from the notation.
     expect(drawn(null)).toBeUndefined();

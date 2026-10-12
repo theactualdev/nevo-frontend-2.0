@@ -66,11 +66,14 @@ const token = vi.hoisted(() => ({
   value: undefined as string | undefined,
   /** Whose token it is - a different child on the same tablet has another. */
   userId: "student-1",
+  /** Whose kind of session: the bell is a child's, so staff own no feed. */
+  role: "student",
   listeners: new Set<() => void>(),
 }));
 vi.mock("@/lib/auth/session", () => ({
   getToken: () => token.value,
-  getSession: () => (token.value ? { userId: token.userId } : null),
+  getSession: () =>
+    token.value ? { userId: token.userId, role: token.role } : null,
   onSessionChange: (listener: () => void) => {
     token.listeners.add(listener);
     return () => token.listeners.delete(listener);
@@ -153,6 +156,7 @@ beforeEach(() => {
   hydrated.value = true;
   token.value = undefined;
   token.userId = "student-1";
+  token.role = "student";
   token.listeners.clear();
 });
 
@@ -269,6 +273,26 @@ describe("a tablet that more than one child signs into", () => {
 
     await waitFor(() => expect(shown().count).toBe("1"));
     expect(shown().unread).toBe("1");
+  });
+
+  it("reads no feed for a teacher or admin, whose console has its own bell", async () => {
+    hasSession.value = true;
+    let calls = 0;
+    listResult.value = {
+      then: (ok: (v: unknown) => unknown) => {
+        calls += 1;
+        return Promise.resolve(feedOf(false)).then(ok);
+      },
+    } as unknown as Promise<unknown>;
+    for (const role of ["teacher", "senco_admin"]) {
+      token.value = `tok-${role}`;
+      token.userId = `${role}-1`;
+      token.role = role;
+      mount();
+      await act(async () => sessionChanged());
+      cleanup();
+    }
+    expect(calls).toBe(0);
   });
 
   it("drops the last child's feed the moment another child signs in", async () => {
