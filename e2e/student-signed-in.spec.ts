@@ -821,7 +821,9 @@ test.describe("a signed-in student", () => {
     await expect(page).toHaveURL(/\/student\/profile\/pin$/);
     await expect(page.getByRole("heading", { name: "Enter your current PIN" })).toBeVisible();
     await expect(page.getByText("Step 1 of 3")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Continue" })).toBeDisabled();
+    // Frame 27's step 1 moves on at the fourth digit, like steps 2 and 3, so
+    // there is no Continue to press - and with no digits typed, nothing goes.
+    await expect(page.getByRole("button", { name: "Continue" })).toHaveCount(0);
 
     await expectNoSampleMarks(page, "Change PIN");
     expectNoWrites(writes, "Change PIN");
