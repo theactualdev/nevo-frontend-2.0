@@ -64,6 +64,8 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/hooks", () => ({
   useSignals: () => ({ trackEvent: vi.fn(), flush: vi.fn() }),
+  // 00d's Back (D189). A child held here has no session to end.
+  useAuth: () => ({ signOut: vi.fn() }),
 }));
 vi.mock("@/lib/api/studentEntry", () => ({
   studentEntryApi: { lookup, setPin: entrySetPin },
@@ -437,6 +439,8 @@ describe("where a match goes", () => {
     // theirs kept for a flow they are not starting.
     expect(push).not.toHaveBeenCalled();
     expect(getOnboardingDraft()).toEqual({});
+    // D189: and a way back, so the tablet is not held for everyone else.
+    expect(screen.getByRole("button", { name: "Back" })).toBeInTheDocument();
   });
 
   it("holds a child whose consent was withdrawn on 00e, in place, never 00d (D117)", async () => {
