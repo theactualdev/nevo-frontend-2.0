@@ -144,7 +144,7 @@ export function TeacherPasswordReset({
         <span className="text-[12.5px] font-semibold tracking-[0.14em] text-nevo-violet uppercase">
           Password reset
         </span>
-        <h1 className="mt-3.5 text-[30px] leading-[1.15] font-semibold tracking-[-0.02em] text-nevo-near-black">
+        <h1 className="mt-3.5 text-[30px] leading-[1.15] font-semibold tracking-[-0.02em] text-nevo-near-black max-md:text-[28px]">
           We couldn&rsquo;t reach Nevo
         </h1>
         <p className="mt-3 text-[16px] leading-[1.55] text-nevo-near-black/70">
@@ -242,7 +242,7 @@ export function TeacherPasswordReset({
       <span className="text-[12.5px] font-semibold tracking-[0.14em] text-nevo-violet uppercase">
         Password reset
       </span>
-      <h1 className="mt-3.5 text-[30px] leading-[1.15] font-semibold tracking-[-0.02em] text-nevo-near-black xl:text-[32px]">
+      <h1 className="mt-3.5 text-[30px] leading-[1.15] font-semibold tracking-[-0.02em] text-nevo-near-black max-md:text-[28px] xl:text-[32px]">
         Reset your password
       </h1>
       <p className="mt-3 text-[15.5px] leading-[1.55] text-nevo-near-black/70 xl:text-[16px]">

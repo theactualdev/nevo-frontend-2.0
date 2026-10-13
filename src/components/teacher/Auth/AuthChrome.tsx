@@ -14,9 +14,14 @@
  *   included, where it used to appear on the first step only.
  */
 
+/*
+ * Pinned to the corner at tablet and desktop. On a phone it takes its place in
+ * the column instead (C19 A1-A3): a pinned mark sits on top of a form taller
+ * than the screen as soon as it scrolls, and crowds the heading before it does.
+ */
 export function AuthWordmark() {
   return (
-    <span className="fixed top-[34px] left-[clamp(24px,4vw,40px)] z-[2] block h-[18px] w-[62px] overflow-hidden">
+    <span className="fixed top-[34px] left-[clamp(24px,4vw,40px)] z-[2] block h-[18px] w-[62px] overflow-hidden max-md:static max-md:mt-6 max-md:mb-9 max-md:self-start">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src="/brand/logo-wordmark-purple.png"
