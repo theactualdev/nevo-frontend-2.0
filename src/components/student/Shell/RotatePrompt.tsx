@@ -39,7 +39,7 @@ export function RotatePrompt({
     >
       {/* Shrinks where there is no room for it, so the words and the way out
           survive on a short landscape screen. */}
-      <span className="flex size-[150px] shrink-0 items-center justify-center rounded-[28px] bg-nevo-cream-elevated shadow-[0_8px_32px_rgba(0,0,0,0.10)] md:size-[184px] [@media(max-height:460px)]:size-[84px] [@media(max-height:460px)]:rounded-[18px]">
+      <span className="flex size-[150px] shrink-0 items-center justify-center rounded-[16px] bg-nevo-cream-elevated shadow-[0_8px_32px_rgba(0,0,0,0.10)] md:size-[184px] [@media(max-height:460px)]:size-[84px]">
         <svg
           width="92"
           height="92"
