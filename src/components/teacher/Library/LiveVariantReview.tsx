@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { equationsOf, keyTermsOf } from "@/lib/lessons/fromContent";
 import { lessonsApi } from "@/lib/api/lessons";
 import { AudioVariantPlayer } from "./AudioVariantPlayer";
 import { IllustrationWrapper } from "@/components/shared/IllustrationWrapper";
@@ -112,6 +113,18 @@ function VariantBody({
       return (
         <Empty>Nevo has not generated a written version of this section.</Empty>
       );
+    /*
+     * SCRUM-224: WHAT THE CHILD SEES, THE TEACHER REVIEWS. The text segment
+     * now carries key terms and equation callouts beside its body, and the
+     * child's lesson draws both - so a teacher approving this section was
+     * signing off words they had not seen. Read through the same clean-up the
+     * lesson uses, so the two never disagree about what is there.
+     *
+     * No teacher frame draws them yet; they sit with the key points, in the
+     * same quiet register. Raised with design.
+     */
+    const terms = keyTermsOf(v.keyTerms) ?? [];
+    const equations = equationsOf(v.equationCallouts) ?? [];
     return (
       <div className="flex flex-col gap-2.5">
         <Para>{v.body}</Para>
@@ -129,6 +142,43 @@ function VariantBody({
               </li>
             ))}
           </ul>
+        )}
+        {terms.length > 0 && (
+          <div className="mt-1.5">
+            <h4 className="text-[12px] font-semibold tracking-[0.04em] text-nevo-near-black/50 uppercase">
+              Key terms
+            </h4>
+            <dl className="mt-1.5 flex flex-col gap-1.5">
+              {terms.map((t) => (
+                <div key={t.term} className="text-[13.5px] leading-[1.6] text-nevo-near-black/72">
+                  <dt className="inline font-semibold text-nevo-near-black">{t.term}</dt>
+                  {t.definition && (
+                    <dd className="inline">
+                      {" - "}
+                      {t.definition}
+                    </dd>
+                  )}
+                </div>
+              ))}
+            </dl>
+          </div>
+        )}
+        {equations.length > 0 && (
+          <div className="mt-1.5 flex flex-col gap-2">
+            {equations.map(({ equation, label }, i) => (
+              <div key={i} className="rounded-[10px] bg-nevo-violet/8 px-3.5 py-3">
+                {/* No label is no heading, as the lesson has it. */}
+                {label && (
+                  <p className="mb-1.5 font-mono text-[10.5px] tracking-[0.06em] text-nevo-navy uppercase">
+                    {label}
+                  </p>
+                )}
+                <p className="text-[14px] leading-[1.6] font-medium text-nevo-near-black">
+                  {equation}
+                </p>
+              </div>
+            ))}
+          </div>
         )}
       </div>
     );

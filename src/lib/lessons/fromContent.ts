@@ -196,8 +196,12 @@ function textsOf(
   return out.length > 0 ? out : undefined;
 }
 
-/** Each term with words in it, and its definition only where it has one. */
-function keyTermsOf(
+/**
+ * Each term with words in it, and its definition only where it has one.
+ * Exported for the teacher's variant review, so a teacher reviews exactly the
+ * terms a child will see.
+ */
+export function keyTermsOf(
   terms: readonly KeyTerm[] | null | undefined,
 ): TextContent["keyTerms"] {
   const out = (terms ?? []).flatMap((t) => {
@@ -211,7 +215,7 @@ function keyTermsOf(
 }
 
 /** Each equation with words in it, and its label only where it has one. */
-function equationsOf(
+export function equationsOf(
   callouts: readonly EquationCallout[] | null | undefined,
 ): TextContent["equations"] {
   const out = (callouts ?? []).flatMap((c) => {
