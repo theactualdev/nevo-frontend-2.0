@@ -86,6 +86,11 @@ export interface BaselineRunContext {
   formFactor?: "tablet_touch" | "desktop_cursor" | "mobile_touch";
   /** Onboarding only: the warm-up has no motor step to run or skip. */
   motorStepSkipped?: boolean;
+  /**
+   * The motor step's taps, whole milliseconds, at most eight (13 Oct, B119):
+   * what proves the step ran. Sent whenever it ran and never otherwise.
+   */
+  motorSamplesMs?: number[];
 }
 
 /**
@@ -162,9 +167,11 @@ export const baselineApi = {
    * The run's trials, raw, for the server to reduce (B9, 5 Oct).
    *
    * `POST /api/baseline/trials`, body `BaselineTrialsRequest`
-   * `{sessionId, ageBand, formFactor, motorStepSkipped, trials}`. The three in
-   * the middle are the run's context (B76, 8 Oct); whichever the run did not
-   * record is undefined, so it never reaches the wire.
+   * `{sessionId, ageBand, formFactor, motorStepSkipped, motorSamplesMs,
+   * trials}`. The four in the middle are the run's context (B76, 8 Oct; B119,
+   * 13 Oct); whichever the run did not record is undefined, so it never
+   * reaches the wire. `motorMissCount` is not sent: the step records no miss
+   * (a touch off the target does nothing), and what counts as one is asked.
    * It replaced `POST /api/baseline/submit`, which took
    * a vector the device had already reduced - accuracy, mean response time,
    * spans - and which the spec now describes as the thing the architecture
@@ -192,6 +199,7 @@ export const baselineApi = {
             ageBand: context.ageBand,
             formFactor: context.formFactor,
             motorStepSkipped: context.motorStepSkipped,
+            motorSamplesMs: context.motorSamplesMs,
             trials,
           }),
         ),

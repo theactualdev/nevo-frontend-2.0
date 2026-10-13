@@ -142,6 +142,25 @@ describe("submitTrials (B9)", () => {
     });
   });
 
+  it("sends the motor step's samples beside its trials, as the proof it ran (B119)", async () => {
+    // 13 Oct: "motorStepSkipped: false does not mean the motor step ran.
+    // motorSamplesMs proves it ran." The body had no such key.
+    await baselineApi.submitTrials("run-1", [trial], {
+      ageBand: "upper_primary",
+      formFactor: "tablet_touch",
+      motorStepSkipped: false,
+      motorSamplesMs: [812, 456, 430],
+    });
+
+    expect(Object.keys(wire()).sort()).toEqual(
+      [...CONTRACT, "motorSamplesMs"].sort(),
+    );
+    expect(wire()).toMatchObject({
+      motorStepSkipped: false,
+      motorSamplesMs: [812, 456, 430],
+    });
+  });
+
   it("leaves out the motor skip for a warm-up, which has no motor step", async () => {
     await baselineApi.submitTrials("warmup-1", [trial], {
       ageBand: "early_primary",

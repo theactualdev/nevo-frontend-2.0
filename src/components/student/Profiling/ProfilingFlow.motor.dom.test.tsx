@@ -190,6 +190,8 @@ describe("on a touch device", () => {
       ageBand: "upper_primary",
       formFactor: "tablet_touch",
       motorStepSkipped: false,
+      // B119, 13 Oct: the samples are what prove the step ran.
+      motorSamplesMs: [413, 388, 371],
     });
   });
 });

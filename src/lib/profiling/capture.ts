@@ -423,6 +423,12 @@ const CONTRACT_FORM_FACTOR: Record<
  *  - `motorStepSkipped`: true where `motor_skipped` was recorded (a cursor
  *    device, 08a), false where the step ran to its end. A run with neither,
  *    which is the warm-up, has no motor step and leaves the key out.
+ *  - `motorSamplesMs`: every tap the step took, in the order taken, as whole
+ *    milliseconds - sent whenever the step ran, and only then. Backend, 13 Oct
+ *    (B119): "motorStepSkipped: false does not mean the motor step ran.
+ *    motorSamplesMs proves it ran." Nothing sent it, so every child's step
+ *    read as one that never ran. The two practice taps are the first two, as
+ *    the step's fixed order puts them; the median is still the server's.
  */
 export function baselineRunContext(
   capture: BaselineCapture,
@@ -437,9 +443,18 @@ export function baselineRunContext(
       : undefined;
   const skippedStep = capture.ofKind("motor_skipped").length > 0;
   const ranStep = capture.ofKind("motor_end").length > 0;
+  const samples = ranStep
+    ? capture
+        .ofKind("motor_tap")
+        .map((e) => ms(e.payload?.latencyMs))
+        .filter((v): v is number => v !== null)
+        // The contract's cap, which is the step's eight targets.
+        .slice(0, 8)
+    : null;
   return {
     ...(ageBand ? { ageBand } : {}),
     ...(formFactor ? { formFactor } : {}),
     ...(skippedStep || ranStep ? { motorStepSkipped: skippedStep } : {}),
+    ...(samples ? { motorSamplesMs: samples } : {}),
   };
 }

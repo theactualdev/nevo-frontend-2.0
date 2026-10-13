@@ -422,6 +422,8 @@ describe("baselineRunContext - what the run was built for and sat on (B76)", () 
       ageBand: "junior_secondary",
       formFactor: "tablet_touch",
       motorStepSkipped: false,
+      // The step ran and took no tap: see the B119 tests below.
+      motorSamplesMs: [],
     });
   });
 
@@ -470,6 +472,59 @@ describe("baselineRunContext - what the run was built for and sat on (B76)", () 
     const odd = new BaselineCapture("w3");
     odd.record("run_start", { band: "year4", formFactor: "watch" });
     expect(baselineRunContext(odd)).toEqual({});
+  });
+});
+
+/*
+ * BACKEND, 13 OCT (B119): "motorStepSkipped: false does not mean the motor
+ * step ran. motorSamplesMs proves it ran." Nothing sent it, so every child's
+ * step read as one that never ran.
+ */
+describe("baselineRunContext - the motor step's samples prove it ran (B119)", () => {
+  const tap = (c: BaselineCapture, target: number, latencyMs: number) =>
+    c.record("motor_tap", { target, cell: target, latencyMs, practice: target < 2, formFactor: "tablet" });
+
+  it("sends every tap the step took, in whole milliseconds and the order taken", () => {
+    const c = new BaselineCapture("s1");
+    c.record("run_start", { band: "p46", formFactor: "tablet" });
+    tap(c, 0, 812.4);
+    tap(c, 1, 455.6);
+    tap(c, 2, 430);
+    c.record("motor_end", { reason: "complete", grid: 4, formFactor: "tablet" });
+
+    // The practice taps are the first two, by the step's fixed order; no median.
+    expect(baselineRunContext(c)).toEqual({
+      ageBand: "upper_primary",
+      formFactor: "tablet_touch",
+      motorStepSkipped: false,
+      motorSamplesMs: [812, 456, 430],
+    });
+  });
+
+  it("sends the samples there are when the step ended itself", () => {
+    const c = new BaselineCapture("s2");
+    tap(c, 0, 500);
+    c.record("motor_end", { reason: "idle", grid: 4, formFactor: "tablet", target: 1, practice: true });
+
+    expect(baselineRunContext(c).motorSamplesMs).toEqual([500]);
+  });
+
+  it("sends none where the step did not run, skipped or absent", () => {
+    const cursor = new BaselineCapture("s3");
+    cursor.record("run_start", { band: "ss", formFactor: "desktop" });
+    cursor.record("motor_skipped", { reason: "cursor", formFactor: "desktop" });
+    expect(baselineRunContext(cursor)).not.toHaveProperty("motorSamplesMs");
+
+    const warmUp = new BaselineCapture("s4");
+    warmUp.record("warmup_start", { dimension: "wmc", formFactor: "tablet" });
+    expect(baselineRunContext(warmUp)).not.toHaveProperty("motorSamplesMs");
+  });
+
+  it("never sends a tap from a step that did not end, as no run that ran it could", () => {
+    // A tap with no end is not a step that ran: nothing proves it.
+    const c = new BaselineCapture("s5");
+    tap(c, 0, 400);
+    expect(baselineRunContext(c)).not.toHaveProperty("motorSamplesMs");
   });
 });
 
