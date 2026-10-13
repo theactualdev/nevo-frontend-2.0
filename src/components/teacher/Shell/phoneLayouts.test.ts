@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hasPhoneLayout, phoneTitle } from "./phoneLayouts";
+import { hasPhoneLayout, ownsPhoneBar, phoneTitle } from "./phoneLayouts";
 
 /**
  * C19 (design, 12 Oct): a phone gets the screens drawn for one, and "every
@@ -7,7 +7,7 @@ import { hasPhoneLayout, phoneTitle } from "./phoneLayouts";
  * route joins the list only once it is laid out for 375 wide.
  */
 describe("which screens a phone is given", () => {
-  it.each(["/teacher/dashboard", "/teacher/help"])("lays out %s", (path) => {
+  it.each(["/teacher/dashboard", "/teacher/help", "/teacher/students/s-1/clear-pin"])("lays out %s", (path) => {
     expect(hasPhoneLayout(path)).toBe(true);
   });
 
@@ -38,5 +38,12 @@ describe("the phone app bar's title", () => {
 
   it("puts a student's pages under Classes, as the rail has them", () => {
     expect(phoneTitle("/teacher/students/s-1")).toBe("Classes");
+  });
+});
+
+describe("screens that bring their own phone bar", () => {
+  it("lets the one-thumb Clear PIN draw its back bar (B3)", () => {
+    expect(ownsPhoneBar("/teacher/students/s-1/clear-pin")).toBe(true);
+    expect(ownsPhoneBar("/teacher/dashboard")).toBe(false);
   });
 });
