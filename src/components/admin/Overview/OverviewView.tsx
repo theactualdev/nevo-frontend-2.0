@@ -25,6 +25,7 @@ import {
   readOnboarding,
   schoolApi,
   type SchoolNarrative,
+  type ClassActivity,
   type SchoolRosterCounts,
 } from "@/lib/api/school";
 import { glanceRows } from "./overviewGlance";
@@ -96,13 +97,10 @@ import { useCanOpen } from "../Shell/useCanOpen";
  * is not a failure at all: it is this admin not holding `oversight`, and a
  * dashboard of empty cards would be a worse answer than saying so.
  *
- * TODO(api): a roll-up of things needing a decision, and per-class or
- * per-teacher ACTIVITY. (This asked for a narrative endpoint as well, which
- * had already landed, and for "activity counts", which conflated headcounts
- * that exist with recency that does not.) Two of D04's three rows are built
- * client-side now - see `overviewGlance.ts`. The third, "classes that haven't
- * run a lesson", is not drawn at all: it has no source, and a real school was
- * being shown two invented class names under a note. Ruled v1.5.
+ * TODO(api): a roll-up of things needing a decision, and per-teacher
+ * ACTIVITY. All three of D04's glance rows are built client-side now - see
+ * `overviewGlance.ts`. The third, "classes that haven't run a lesson", reads
+ * the overview's `classActivity` (9 Oct), taken up on 13 Oct.
  * Both cards open their drill-down: the compliance card to D22, and the
  * adaptations figure to D21.
  *
@@ -214,6 +212,8 @@ export function OverviewView() {
   const [narrative, setNarrative] = useState<SchoolNarrative | null>(null);
   const [narrativeFailed, setNarrativeFailed] = useState(false);
   const [counts, setCounts] = useState<SchoolRosterCounts | null>(null);
+  /** Each live class's last lesson, or null when the read had none to give. */
+  const [classActivity, setClassActivity] = useState<ClassActivity[] | null>(null);
   /** Open teacher invitations, for the teachers tile. Null when unread. */
   const [pendingTeachers, setPendingTeachers] = useState<number | null>(null);
   /*
@@ -259,6 +259,7 @@ export function OverviewView() {
       setNarrative(n);
       setNarrativeFailed(n === null);
       setCounts(ov ? ov.counts : null);
+      setClassActivity(ov?.classActivity ?? null);
       /*
        * NULL WHEN WE DID NOT READ IT, and it used to be `?? 0`. That mattered
        * only once the audit stopped gating the page: a zero here is the signal
@@ -411,7 +412,7 @@ export function OverviewView() {
    * flatly untrue of a school in its third term.
    */
   const early = adaptationTotal === 0;
-  const glance = early ? [] : glanceRows(roster, flags);
+  const glance = early ? [] : glanceRows(roster, flags, classActivity);
   /*
    * THE SCHOOL RECORD'S NAME FIRST. This took the name from the compliance
    * audit alone, so when that one read failed the title - and the board pack
