@@ -18,13 +18,18 @@ const PHONE_READY: readonly RegExp[] = [
   /^\/teacher\/help\/?$/,
   // B3 - the one-thumb Clear PIN a "forgot PIN" notification opens.
   /^\/teacher\/students\/[^/]+\/clear-pin\/?$/,
+  // B2 - a child's profile, from an attention notification.
+  /^\/teacher\/students\/[^/]+\/?$/,
 ];
 
 /**
  * Screens that draw their own phone bar - a back arrow and where it goes, in
  * place of the menu (C19 B2, B3, B4) - so the shell's bar stands aside.
  */
-const OWNS_PHONE_BAR: readonly RegExp[] = [/^\/teacher\/students\/[^/]+\/clear-pin\/?$/];
+const OWNS_PHONE_BAR: readonly RegExp[] = [
+  /^\/teacher\/students\/[^/]+\/clear-pin\/?$/,
+  /^\/teacher\/students\/[^/]+\/?$/,
+];
 
 export function ownsPhoneBar(pathname: string): boolean {
   return OWNS_PHONE_BAR.some((r) => r.test(pathname));
