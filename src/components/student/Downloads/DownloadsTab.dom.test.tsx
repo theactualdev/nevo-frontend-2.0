@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { SAMPLE_ATTR } from "@/lib/sampleData";
 import { DownloadsTab } from "./DownloadsTab";
 
@@ -40,5 +40,61 @@ describe("DownloadsTab sample marking", () => {
 
     expect(screen.getByText("your saved lessons")).toBeInTheDocument();
     expect(document.querySelector(`[${SAMPLE_ATTR}]`)).toBeNull();
+  });
+});
+
+/**
+ * D211, 13 Oct: "The last one is not blocked, it is finished. It still stays
+ * pressable and still says so rather than going grey."
+ */
+describe("the finished bulk button", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("stays pressable once everything is saved, and says so in place", () => {
+    vi.useFakeTimers();
+    render(<DownloadsTab />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Download today's lessons" }),
+    );
+    act(() => {
+      vi.runAllTimers();
+    });
+
+    const finished = screen.getByRole("button", {
+      name: "All lessons saved for offline",
+    });
+    expect(finished).toBeEnabled();
+    expect(finished.className).not.toMatch(/opacity/);
+    expect(screen.queryByText("Everything's already saved.")).toBeNull();
+
+    fireEvent.click(finished);
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Everything's already saved.",
+    );
+  });
+
+  it("drops the line once a lesson is removed", () => {
+    vi.useFakeTimers();
+    render(<DownloadsTab />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Download today's lessons" }),
+    );
+    act(() => {
+      vi.runAllTimers();
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "All lessons saved for offline" }),
+    );
+
+    fireEvent.click(screen.getByText("Adding Fractions"));
+
+    expect(screen.queryByText("Everything's already saved.")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Download today's lessons" }),
+    ).toBeInTheDocument();
   });
 });

@@ -141,9 +141,7 @@ export function SavedLessons() {
         );
       }
     } catch {
-      setNotice(
-        "That lesson couldn't be saved just now. Try again when you're connected.",
-      );
+      setNotice(saveFailedLine());
     } finally {
       setBusy((b) => ({ ...b, [id]: "idle" }));
       reload();
@@ -319,6 +317,24 @@ export function SavedLessons() {
       </div>
     </div>
   );
+}
+
+/**
+ * WHY A SAVE DIDN'T LAND, ONLY AS FAR AS WE KNOW IT (D181, 13 Oct): "Do not
+ * blame the connection for a server failure." A refused or broken save is the
+ * server's, so it says only that it didn't save. The connection is named only
+ * when the browser itself says there is none - `navigator.onLine` false is
+ * certain, where true proves nothing - and then the old line, which tells the
+ * child the one thing that will help.
+ */
+const SAVE_FAILED = "That didn't save. Try again in a moment.";
+const SAVE_FAILED_OFFLINE =
+  "That lesson couldn't be saved just now. Try again when you're connected.";
+
+function saveFailedLine(): string {
+  return typeof navigator !== "undefined" && navigator.onLine === false
+    ? SAVE_FAILED_OFFLINE
+    : SAVE_FAILED;
 }
 
 /**
