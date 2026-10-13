@@ -56,6 +56,9 @@ export function AfterLessonAssessment({
   resumeAt,
   result,
   resultPending = false,
+  resultUnread = false,
+  onReread,
+  onBackToLessons,
   outcome,
   reading = false,
   onAudioBusy,
@@ -83,6 +86,16 @@ export function AfterLessonAssessment({
   result?: ResultState | null;
   /** The verdict is still on its way, with the completion write. */
   resultPending?: boolean;
+  /**
+   * The result cannot be read (D183): the completion write that brings it
+   * did not reach Nevo - offline, or failed. Given with `onReread` and
+   * `onBackToLessons`, the result is design's "couldn't load" screen instead.
+   */
+  resultUnread?: boolean;
+  /** Read the result again: send the completion again (D183's Try again). */
+  onReread?: () => void;
+  /** D183's Back to my lessons. */
+  onBackToLessons?: () => void;
   /**
    * The server's outcome of the check-in (B26), once the completion write has
    * brought it back. Absent, the result draws only what the lesson itself
@@ -136,6 +149,17 @@ export function AfterLessonAssessment({
     );
   }
   if (stage === "result") {
+    if (resultUnread && onReread && onBackToLessons) {
+      return (
+        <ResultUnread
+          // Asked again and not answered yet.
+          rereading={resultPending}
+          onReread={onReread}
+          onBack={onBackToLessons}
+          reading={reading}
+        />
+      );
+    }
     return (
       <GrowthResult
         verdict={result}
@@ -364,6 +388,57 @@ function Intro({
 }
 
 /**
+ * A RESULT THAT CANNOT BE READ (Lydia, D183, 13 Oct). The completion write
+ * brings the server's verdict and its lists back, and when it did not reach
+ * Nevo - offline, or failed - there is nothing to show. The result screen
+ * drew its Continue alone over a blank, which said nothing at all. Lydia's
+ * words now, and only them: "No claim about what was or was not saved,
+ * because we cannot confirm it." Try again sends the completion again, whose
+ * answer is the only read of the result there is; it holds its place while
+ * that is on its way.
+ *
+ * NOT DRAWN: design's frame for this state is not pushed yet, so it takes the
+ * result's own column and type, with no mark - a mark here would say how the
+ * check went, which is the one thing not known.
+ */
+function ResultUnread({
+  rereading,
+  onReread,
+  onBack,
+  reading,
+}: {
+  rereading: boolean;
+  onReread: () => void;
+  onBack: () => void;
+  reading: boolean;
+}) {
+  return (
+    <div className="flex min-h-[calc(100dvh/var(--nevo-text-zoom,1))] flex-col justify-center bg-nevo-cream px-6 text-nevo-near-black">
+      <div className="mx-auto w-full max-w-[300px] sm:max-w-[430px]">
+        <h2
+          className={cn(
+            "text-center text-[23px] font-semibold tracking-[-0.01em] text-pretty sm:text-[26px]",
+            reading && READING_HEADING,
+          )}
+        >
+          We couldn&apos;t load your result just now.
+        </h2>
+        <Button className="mt-7 w-full" loading={rereading} onClick={onReread}>
+          Try again
+        </Button>
+        <Button
+          variant="ghost"
+          className="mt-2 h-[46px] w-full text-[15px]"
+          onClick={onBack}
+        >
+          Back to my lessons
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
  * The growth result - what's taking hold and what we'll revisit. No score.
  *
  * ONE CASE DIVERGES FROM THE FRAME, and only one. The Lesson Check frame draws
@@ -382,9 +457,10 @@ function Intro({
  * WHETHER ANYTHING LANDED IS THE SERVER'S WORD (B98, 8 Oct): `resultState`,
  * derived from its own marks. This screen counted the child's right answers
  * and called zero "nothing landed"; it counts nothing now. Where a live
- * lesson's verdict cannot be known - the completion write failed - the mark,
- * heading and note claim nothing either way. The signed-out walkthrough, which
- * no server marks, shows the frame as drawn. When the server says nothing
+ * lesson's verdict cannot be known - the write landed without one - the mark,
+ * heading and note claim nothing either way; where the write itself did not
+ * land, this is `ResultUnread` instead (D183). The signed-out walkthrough,
+ * which no server marks, shows the frame as drawn. When the server says nothing
  * landed AND sends the child back through, the player shows SCRUM-181's
  * screen instead of this one - see `rerouteFrom`.
  *

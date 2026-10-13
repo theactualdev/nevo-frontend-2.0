@@ -102,7 +102,7 @@ describe("its label (D95)", () => {
 });
 
 describe("a recording that will not load", () => {
-  it("says so, and stops offering to play", () => {
+  it("says so, and keeps Listen pressable rather than greyed (D211)", () => {
     render(<SpokenPrompt src="https://cdn.example/gone.mp3" />);
 
     fireEvent.error(audio());
@@ -110,7 +110,24 @@ describe("a recording that will not load", () => {
     expect(screen.getByRole("status").textContent).toBe(
       "Couldn't load this recording",
     );
-    expect(screen.getByRole("button", { name: "Listen" })).toBeDisabled();
+    const listen = screen.getByRole("button", { name: "Listen" });
+    expect(listen).toBeEnabled();
+    expect(listen.className).not.toMatch(/opacity-40|cursor-not-allowed/);
+  });
+
+  it("says Lydia's line in place when Listen is pressed (D211)", () => {
+    render(<SpokenPrompt src="https://cdn.example/gone.mp3" />);
+    fireEvent.error(audio());
+    expect(
+      screen.queryByText("The sound didn't load. Try again in a moment."),
+    ).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Listen" }));
+
+    expect(
+      screen.getByText("The sound didn't load. Try again in a moment."),
+    ).toBeTruthy();
+    expect(play).not.toHaveBeenCalled();
   });
 
   it("is not called broken when the browser only wants a tap first", async () => {

@@ -5,6 +5,7 @@ import { ChevronDown, Pause, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PARAGRAPH_GAP, paragraphsOf } from "@/lib/lessons/paragraphs";
 import type { AudioContent } from "@/lib/types";
+import { NO_SOUND, PressedLine } from "./PressedLine";
 import { READING_BODY, READING_HEADING, READING_INK } from "./readingSupport";
 import { type MediaFailReason, useMediaSource } from "./useMediaSource";
 
@@ -93,6 +94,14 @@ export function AudioSegment({
     onMediaFailed,
   );
   const failed = media.failed;
+  /*
+   * PRESSABLE, NOT GREYED (D211). Play on a clip that did not load says so in
+   * place, in Lydia's line, for this load of it. Retried when the connection
+   * returns (`useMediaSource`), a clip that fails again is a new failure, and
+   * is said again only when pressed again.
+   */
+  const [toldFor, setToldFor] = useState<string | null>(null);
+  const told = failed && toldFor === media.key;
   /** What the element says the clip is; null until metadata lands. */
   const [assetDuration, setAssetDuration] = useState<number | null>(null);
   /*
@@ -148,7 +157,10 @@ export function AudioSegment({
   const toggle = () => {
     // A clip that would not load has nothing to toggle. The transcript below
     // is the way in, and the card says so.
-    if (failed) return;
+    if (failed) {
+      setToldFor(media.key);
+      return;
+    }
 
     if (playing) {
       if (simulated) {
@@ -268,14 +280,8 @@ export function AudioSegment({
           <button
             type="button"
             aria-label={playing ? "Pause" : "Play"}
-            disabled={failed}
             onClick={toggle}
-            className={cn(
-              "flex size-[52px] shrink-0 items-center justify-center rounded-full bg-nevo-navy text-nevo-cream transition-transform",
-              failed
-                ? "cursor-not-allowed opacity-40"
-                : "cursor-pointer active:scale-[0.98]",
-            )}
+            className="flex size-[52px] shrink-0 cursor-pointer items-center justify-center rounded-full bg-nevo-navy text-nevo-cream transition-transform active:scale-[0.98]"
           >
             {playing ? (
               <Pause className="size-5" fill="currentColor" strokeWidth={0} />
@@ -306,6 +312,8 @@ export function AudioSegment({
             </span>
           </div>
         </div>
+
+        {told && <PressedLine reading={reading}>{NO_SOUND}</PressedLine>}
 
         {/* Waveform — bottom-aligned violet bars; opacity tracks the played fraction */}
         <div className="flex h-9 items-end gap-[3px]">

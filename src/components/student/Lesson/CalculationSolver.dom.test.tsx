@@ -316,6 +316,14 @@ describe("the hint", () => {
 
     expect(screen.queryByRole("button", { name: "Need a hint?" })).toBeNull();
   });
+
+  it("is set in the darker violet, never soft violet on cream (D210)", () => {
+    show();
+
+    const link = screen.getByRole("button", { name: "Need a hint?" });
+    expect(link.className.split(" ")).toContain("text-nevo-violet-text");
+    expect(link.className.split(" ")).not.toContain("text-nevo-violet");
+  });
 });
 
 describe("entering a number (D150)", () => {
@@ -636,6 +644,19 @@ describe("building with pieces", () => {
     expect(props.onPiecePlaced).toHaveBeenCalledTimes(3);
     expect(props.onStepAnswered).toHaveBeenCalledWith("b1", true);
     expect(props.onSolved).toHaveBeenCalled();
+  });
+
+  it("lays its places at D149's 46px, 6px apart, at every width (design, 13 Oct)", () => {
+    show(build({ steps: [BUILD] }));
+    const places = [...document.querySelectorAll("[data-build-place]")];
+
+    expect(places).toHaveLength(4);
+    for (const place of places) {
+      expect(place.className.split(" ")).toContain("h-[46px]");
+      // One height: no per-breakpoint 34 / 40 / 36 left over.
+      expect(place.className).not.toMatch(/(sm|lg):h-/);
+    }
+    expect(places[0].parentElement?.className.split(" ")).toContain("gap-1.5");
   });
 });
 
@@ -1176,6 +1197,23 @@ describe("the narration layer", () => {
     expect(onNarrationPlayed).toHaveBeenCalledTimes(1);
     expect(onReplay).toHaveBeenCalledTimes(1);
     expect(onAudioBusy.mock.calls).toEqual([["start"], ["end"], ["start"]]);
+  });
+
+  it("keeps Play pressable when the recording did not load, and says so when pressed (D211)", () => {
+    const NO_SOUND = "The sound didn't load. Try again in a moment.";
+    listen({});
+    fireEvent.error(audio()!);
+    const button = screen.getByRole("button", { name: "Play narration" });
+
+    // Not greyed: pressable, and nothing said until it is pressed.
+    expect(button).toBeEnabled();
+    expect(button.className).not.toMatch(/opacity-40|cursor-not-allowed/);
+    expect(screen.queryByText(NO_SOUND)).toBeNull();
+
+    fireEvent.click(button);
+
+    expect(screen.getByText(NO_SOUND)).toBeInTheDocument();
+    expect(play).not.toHaveBeenCalled();
   });
 });
 

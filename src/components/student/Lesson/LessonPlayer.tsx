@@ -109,6 +109,7 @@ import { LessonMessage } from "./LessonMessage";
 import { ModalitySuggestionPill } from "./ModalitySuggestionPill";
 import { ModuleBoundaryScreen } from "./ModuleBoundaryScreen";
 import { OfflineBanner } from "./OfflineBanner";
+import { ONE_MORE_BIT, PressedLine } from "./PressedLine";
 import { ScaffoldIndicator } from "./ScaffoldIndicator";
 import { QuickCheckSheet } from "./QuickCheckSheet";
 import { ReviewEntryScreen } from "./ReviewEntryScreen";
@@ -152,11 +153,17 @@ const FEEDBACK_MS = 3500;
 /** One object, so the signal session is not told the same ending twice. */
 const COMPLETED: SessionOutcome = { completionStatus: "completed" };
 
-/** SCRUM-181's nothing-landed screen (design D35), verbatim. */
+/**
+ * SCRUM-181's nothing-landed screen (design D35), verbatim. ONE ACTION, AND
+ * IT GOES FORWARD (Lydia, D155, 13 Oct): "Start again" read as though the
+ * work just done had been thrown away, when the child is going into a
+ * different explanation. No second action: a way back would be back to the
+ * version that just failed them.
+ */
 const REROUTED = {
   title: "That version didn't work.",
   body: "Nevo is taking you through this lesson again, a simpler way.",
-  action: "Start again",
+  action: "Let's try it another way",
 } as const;
 
 /** Design's ending for a partial offline copy (D142, 8 Oct), verbatim. */
@@ -287,14 +294,14 @@ export function LessonPlayer({
   reviewConceptId?: string;
   /**
    * The depth this session runs at, where it is known before it opens: the
-   * server's reroute that Start again follows. Otherwise the session says so
-   * itself when it opens - see `lowerDepth`.
+   * server's reroute that "Let's try it another way" follows. Otherwise the
+   * session says so itself when it opens - see `lowerDepth`.
    */
   depth?: "standard" | "lower";
   /**
-   * SCRUM-181's Start again: open the lesson afresh from this zero-based
-   * segment, the server's reroute's place, at the reroute's depth. Absent,
-   * the screen is not offered.
+   * SCRUM-181's "Let's try it another way": open the lesson afresh from this
+   * zero-based segment, the server's reroute's place, at the reroute's
+   * depth. Absent, the screen is not offered.
    */
   onStartAgain?: (
     segmentPosition: number,
@@ -304,7 +311,7 @@ export function LessonPlayer({
   /*
    * SCRUM-178: A LOWER-DEPTH SESSION READS EACH SEGMENT'S SIMPLER VERSION, and
    * the normal body where there is none (backend, 9 Oct) - see `atLowerDepth`.
-   * From the first frame when the reroute already said so (Start again).
+   * From the first frame when the reroute already said so (SCRUM-181).
    * When it is the session's own answer, it lands after the first segment is
    * on screen, so it applies from the next segment entered - rewording the
    * text a child has started reading is the snap rule 7 forbids (the same
@@ -2098,6 +2105,16 @@ export function LessonPlayer({
    */
   const verdictPending =
     live && !progress.completionSaved && !progress.completionFailed;
+  /*
+   * D183: AND THEN THE RESULT CANNOT BE READ, and says so in Lydia's words.
+   * Try again sends the completion again (`resend`), and while that is on its
+   * way the screen stays as it is rather than flicking back to a blank result.
+   */
+  const [rereadAsked, setRereadAsked] = useState(false);
+  const resultUnread =
+    live &&
+    resultStateFrom(progress.saved) === null &&
+    (progress.completionFailed || (rereadAsked && verdictPending));
 
   const requestExit = () => {
     trackEvent(SIGNAL_EVENT_TYPES.EXIT_ATTEMPT, { segmentId: segment.id });
@@ -2118,8 +2135,13 @@ export function LessonPlayer({
    * completion screen, so that lesson could not be finished at all. On the
    * last segment forward goes to the assessment when there is one and to
    * completion when there is not; `continueAdvance` already knew both.
+   *
+   * AND IT HOLDS IT PRESSABLE (Lydia, D211, 13 Oct). Greyed, it read as
+   * broken; pressed, it now says why in place, in her line, until the solve
+   * is done or the child moves on.
    */
-  const nextDisabled = calcBlocking;
+  const [heldNextOn, setHeldNextOn] = useState<string | null>(null);
+  const nextHeld = calcBlocking && heldNextOn === segment.id;
 
   /*
    * 37c: UNDER THE ATTENTION ACCOMMODATION, "TAP TO CONTINUE" IS THE WAY ON.
@@ -2138,7 +2160,7 @@ export function LessonPlayer({
    * back saying nothing landed and the server has rerouted the lesson (B98,
    * SCRUM-178). It replaces the check's result, or the completion screen if
    * the child moved on before the write answered. Design's words verbatim,
-   * and no score, count or percentage. Start again follows the server's
+   * and no score, count or percentage. Its one action follows the server's
    * reroute: the lesson opens again from its `segmentPosition`, at its
    * `depth`, and its session is the one `POST /session` then hands back -
    * the same rerouted session (backend, 9 Oct). See `LessonRoute`.
@@ -2187,6 +2209,17 @@ export function LessonPlayer({
         resumeAt={checkResume?.at}
         result={live ? resultStateFrom(progress.saved) : undefined}
         resultPending={verdictPending}
+        resultUnread={resultUnread}
+        onReread={() => {
+          setRereadAsked(true);
+          progress.resend();
+        }}
+        onBackToLessons={() => {
+          // The check is finished either way: the completion is held and
+          // goes when it can (`useLessonProgress`).
+          setEnding(finishedAs);
+          exitTo(LESSONS_HREF);
+        }}
         outcome={live ? checkOutcomeFrom(progress.saved) : null}
         onComplete={finishCheck}
         onLeave={(checkPosition) => {
@@ -2876,7 +2909,8 @@ export function LessonPlayer({
           }}
           onContinue={() => {
             setCheckOpen(false);
-            setFeedback("Nice - that's got it. Here's what's next.");
+            // Lydia's words (D185, 13 Oct): about the work, not the child.
+            setFeedback("That's it. Here's what's next.");
             advancePastSegment();
           }}
         />
@@ -2923,6 +2957,16 @@ export function LessonPlayer({
           reacts to a hint: the forward control's glow went with design's
           D124 (6 Oct), "Anything that reacts visibly to a child's difficulty
           tells them they are being watched." */}
+      {nextHeld && (
+        <div className="shrink-0 px-3.5 pt-2">
+          <PressedLine
+            reading={readingOn}
+            className="mx-auto w-full text-center sm:max-w-[560px] lg:max-w-[600px]"
+          >
+            {ONE_MORE_BIT}
+          </PressedLine>
+        </div>
+      )}
       <nav
         aria-hidden={partsLeft || undefined}
         inert={partsLeft}
@@ -2943,8 +2987,10 @@ export function LessonPlayer({
         />
         <ChevronButton
           dir="next"
-          disabled={nextDisabled}
-          onClick={handleNext}
+          disabled={false}
+          onClick={
+            calcBlocking ? () => setHeldNextOn(segment.id) : handleNext
+          }
         />
       </nav>
 

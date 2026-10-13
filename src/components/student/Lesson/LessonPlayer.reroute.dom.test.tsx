@@ -6,7 +6,8 @@ import type { Lesson } from "@/lib/types";
 /**
  * B98 + SCRUM-178/181: how the check went is the server's word, and when it
  * says nothing landed and reroutes the lesson, the child is told so in
- * design's words and offered Start again, which follows the reroute.
+ * design's words and offered one way on, "Let's try it another way"
+ * (Lydia, D155, 13 Oct), which follows the reroute.
  *
  * `resultState` is derived server-side from the newest marked attempt per
  * problem; the client's own count of right answers decides nothing now.
@@ -17,6 +18,7 @@ const REROUTED_SESSION = "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d";
 
 const progress = vi.hoisted(() => ({
   report: vi.fn(),
+  resend: vi.fn(),
   sessionId: null as string | null,
   completionSaved: false,
   completionFailed: false,
@@ -126,6 +128,7 @@ const finishCheck = () => {
 
 beforeEach(() => {
   progress.report.mockReset();
+  progress.resend.mockReset();
   progress.sessionId = SESSION;
   progress.completionSaved = false;
   progress.completionFailed = false;
@@ -159,7 +162,7 @@ describe("the server says nothing landed and reroutes (SCRUM-181)", () => {
     return onStartAgain;
   };
 
-  it("says so in design's words, with Start again and nothing else", () => {
+  it("says so in design's words, with one action that goes forward (D155)", () => {
     const { rerender } = render(
       <LessonPlayer lesson={LESSON} plan={null} live onStartAgain={vi.fn()} />,
     );
@@ -173,7 +176,7 @@ describe("the server says nothing landed and reroutes (SCRUM-181)", () => {
     expect(screen.getByRole("heading", { name: HEADING })).toBeTruthy();
     expect(screen.getByText(BODY)).toBeTruthy();
     expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual([
-      "Start again",
+      "Let's try it another way",
     ]);
     // No score, count or percentage.
     expect(document.body.textContent).not.toMatch(/\d|%/);
@@ -192,7 +195,7 @@ describe("the server says nothing landed and reroutes (SCRUM-181)", () => {
       }),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Start again" }));
+    fireEvent.click(screen.getByRole("button", { name: "Let's try it another way" }));
 
     expect(onStartAgain).toHaveBeenCalledWith(0, "lower");
     // The run that did not land ended completed, as the server wrote it.
@@ -290,5 +293,90 @@ describe("the server says nothing landed and reroutes (SCRUM-181)", () => {
       expect(position).not.toHaveProperty("resultState");
     for (const [, body] of saveAttempt.mock.calls)
       expect(body).not.toHaveProperty("resultState");
+  });
+});
+
+describe("a check result that can't be read (D183)", () => {
+  const UNREAD = "We couldn't load your result just now.";
+  const rerender_ = (rerender: (ui: React.ReactElement) => void) =>
+    rerender(<LessonPlayer lesson={LESSON} plan={null} live />);
+
+  it("says so in Lydia's words, with Try again and Back to my lessons", () => {
+    const { rerender } = render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    finishCheck();
+
+    // The completion write did not reach Nevo - offline, or failed.
+    progress.completionFailed = true;
+    rerender_(rerender);
+
+    expect(screen.getByRole("heading", { name: UNREAD })).toBeTruthy();
+    expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual([
+      "Try again",
+      "Back to my lessons",
+    ]);
+    // No claim about what was or was not saved.
+    expect(document.body.textContent).not.toMatch(/save/i);
+  });
+
+  it("is not shown while the result is still on its way", () => {
+    render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    finishCheck();
+
+    expect(screen.queryByText(UNREAD)).toBeNull();
+  });
+
+  it("reads the result again on Try again, and shows it once it lands", () => {
+    const { rerender } = render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    finishCheck();
+    progress.completionFailed = true;
+    rerender_(rerender);
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(progress.resend).toHaveBeenCalledTimes(1);
+
+    // On its way: the screen holds, and does not flick back to a blank result.
+    progress.completionFailed = false;
+    rerender_(rerender);
+    expect(screen.getByRole("heading", { name: UNREAD })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
+
+    // It landed, with the server's verdict.
+    progress.completionSaved = true;
+    progress.saved = completed({ resultState: "landed" });
+    rerender_(rerender);
+    expect(screen.queryByText(UNREAD)).toBeNull();
+    expect(
+      screen.getByRole("heading", { name: "You're getting the hang of this" }),
+    ).toBeTruthy();
+  });
+
+  it("stays when the second try fails too", () => {
+    const { rerender } = render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    finishCheck();
+    progress.completionFailed = true;
+    rerender_(rerender);
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    progress.completionFailed = false;
+    rerender_(rerender);
+
+    progress.completionFailed = true;
+    rerender_(rerender);
+
+    expect(screen.getByRole("heading", { name: UNREAD })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Try again" }).hasAttribute("disabled"),
+    ).toBe(false);
+  });
+
+  it("goes to the lessons on Back to my lessons, the check finished", () => {
+    const { rerender } = render(<LessonPlayer lesson={LESSON} plan={null} live />);
+    finishCheck();
+    progress.completionFailed = true;
+    rerender_(rerender);
+
+    fireEvent.click(screen.getByRole("button", { name: "Back to my lessons" }));
+
+    expect(push).toHaveBeenCalledWith("/student/lessons");
+    expect(endings.at(-1)).toEqual({ completionStatus: "completed" });
   });
 });

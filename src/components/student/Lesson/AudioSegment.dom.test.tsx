@@ -9,6 +9,9 @@ import {
 } from "@testing-library/react";
 import { AudioSegment } from "./AudioSegment";
 
+/** Lydia's line for Play on a recording that did not load (D211). */
+const NO_SOUND = "The sound didn't load. Try again in a moment.";
+
 const mediaUrl = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/api/content", () => ({
   contentApi: { mediaUrl: (...a: unknown[]) => mediaUrl(...a) },
@@ -160,7 +163,20 @@ describe("AudioSegment", () => {
     expect(screen.getByText(/read the same words below/i)).toBeTruthy();
     // Not "0:00 / 0:00", which reads as a clip of no length.
     expect(screen.getByText(/Couldn.t load this recording/i)).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Play" })).toBeDisabled();
+    // Pressable, not greyed (D211).
+    expect(screen.getByRole("button", { name: "Play" })).toBeEnabled();
+  });
+
+  it("says Lydia's line in place when Play is pressed on a clip that failed (D211)", () => {
+    const { container } = render(<AudioSegment content={CONTENT} />);
+    fireEvent.error(audioEl(container));
+    const button = screen.getByRole("button", { name: "Play" });
+    expect(button.className).not.toMatch(/opacity-40|cursor-not-allowed/);
+    expect(screen.queryByText(NO_SOUND)).toBeNull();
+
+    fireEvent.click(button);
+
+    expect(screen.getByText(NO_SOUND)).toBeTruthy();
   });
 
   it("does not pretend to play a clip that failed", () => {
@@ -262,14 +278,31 @@ describe("AudioSegment - when playback does not simply start", () => {
   it("tries again when the connection comes back", () => {
     const { container } = render(<AudioSegment content={CONTENT} />);
     fireEvent.error(audioEl(container));
-    expect(screen.getByRole("button", { name: "Play" })).toBeDisabled();
+    expect(container.querySelector("audio")).toBeNull();
 
     act(() => {
       window.dispatchEvent(new Event("online"));
     });
 
-    expect(screen.getByRole("button", { name: "Play" })).toBeEnabled();
     expect(audioEl(container)).not.toBeNull();
+    expect(screen.queryByText(/Couldn.t load this recording/i)).toBeNull();
+  });
+
+  it("says the line again only when pressed again, after a retry fails too (D211)", () => {
+    const { container } = render(<AudioSegment content={CONTENT} />);
+    fireEvent.error(audioEl(container));
+    fireEvent.click(screen.getByRole("button", { name: "Play" }));
+    expect(screen.getByText(NO_SOUND)).toBeTruthy();
+
+    act(() => {
+      window.dispatchEvent(new Event("online"));
+    });
+    expect(screen.queryByText(NO_SOUND)).toBeNull();
+
+    fireEvent.error(audioEl(container));
+    expect(screen.queryByText(NO_SOUND)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Play" }));
+    expect(screen.getByText(NO_SOUND)).toBeTruthy();
   });
 });
 

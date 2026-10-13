@@ -69,18 +69,17 @@ export function opensLaterModule(lesson: Lesson, segmentIndex: number): boolean 
 }
 
 /**
- * A module's display name in running copy; position-based fallbacks.
+ * The finished module's name in the boundary's sentence, or "this section"
+ * where it has no title.
  *
  * THE TITLE AS WRITTEN. It was lowercased to sit mid-sentence, which is right
  * for the frame's "introduction" and wrong for any real title with a name in
  * it: a teacher's "Lagos" or "Newton" is theirs, and is not rewritten.
+ *
+ * AND NOTHING ADDED TO IT (Lydia, D186, 13 Oct): "Drop the article before the
+ * title ... since real titles are already noun phrases." It read "the What
+ * plants need".
  */
-export function moduleName(
-  module: LessonModule,
-  kind: "done" | "next",
-  isLast: boolean,
-): string {
-  if (module.title) return `the ${module.title}${kind === "next" ? " section" : ""}`;
-  if (kind === "done") return "this section";
-  return isLast ? "the last section" : "the next section";
+export function moduleName(module: LessonModule): string {
+  return module.title || "this section";
 }

@@ -402,3 +402,100 @@ describe("useLessonProgress - a completion and the answers held for it", () => {
     );
   });
 });
+
+describe("useLessonProgress - reading a check's result again (D183)", () => {
+  it("sends a failed completion again, and its answer is the result", async () => {
+    const save = vi
+      .spyOn(lessonsApi, "saveProgress")
+      .mockRejectedValueOnce(new ApiError(0, "offline"))
+      .mockResolvedValue({
+        status: "completed",
+        resultState: "landed",
+      } as never);
+    const { result } = renderHook(() => useLessonProgress(LESSON, true));
+    await waitFor(() => expect(result.current.sessionId).toBe("sess-1"));
+    act(() => result.current.report("completed", { segment: 4 }));
+    await waitFor(() => expect(result.current.completionFailed).toBe(true));
+
+    act(() => result.current.resend());
+
+    // In flight: no longer failed, not yet saved.
+    expect(result.current.completionFailed).toBe(false);
+    await waitFor(() => expect(result.current.completionSaved).toBe(true));
+    expect(save).toHaveBeenCalledTimes(2);
+    expect(save).toHaveBeenLastCalledWith(
+      LESSON,
+      expect.objectContaining({ status: "completed", segmentPosition: 4 }),
+    );
+    expect(result.current.saved).toMatchObject({ resultState: "landed" });
+  });
+
+  it("says it failed again when it does", async () => {
+    vi.spyOn(lessonsApi, "saveProgress").mockRejectedValue(
+      new ApiError(0, "offline"),
+    );
+    const { result } = renderHook(() => useLessonProgress(LESSON, true));
+    await waitFor(() => expect(result.current.sessionId).toBe("sess-1"));
+    act(() => result.current.report("completed", { segment: 4 }));
+    await waitFor(() => expect(result.current.completionFailed).toBe(true));
+
+    act(() => result.current.resend());
+
+    await waitFor(() => expect(result.current.completionFailed).toBe(true));
+    expect(result.current.completionSaved).toBe(false);
+  });
+
+  it("opens the session first when it never opened", async () => {
+    vi.spyOn(lessonsApi, "startSession")
+      .mockRejectedValueOnce(new ApiError(0, "offline"))
+      .mockResolvedValue({ sessionId: "sess-2" } as never);
+    const save = vi
+      .spyOn(lessonsApi, "saveProgress")
+      .mockResolvedValue({ status: "completed" } as never);
+    const { result } = renderHook(() => useLessonProgress(LESSON, true));
+    await waitFor(() => expect(result.current.completionFailed).toBe(true));
+    // Reporting with no session tries the session again, which fails once
+    // more here, so the completion is still owed.
+    vi.mocked(lessonsApi.startSession).mockRejectedValueOnce(
+      new ApiError(0, "offline"),
+    );
+    act(() => result.current.report("completed", { segment: 4 }));
+    await waitFor(() => expect(result.current.completionFailed).toBe(true));
+    expect(save).not.toHaveBeenCalled();
+
+    act(() => result.current.resend());
+
+    await waitFor(() => expect(result.current.completionSaved).toBe(true));
+    expect(save).toHaveBeenCalledWith(
+      LESSON,
+      expect.objectContaining({ sessionId: "sess-2", status: "completed" }),
+    );
+  });
+
+  it("never sends completed for a check written exited over a refused answer", async () => {
+    vi.spyOn(lessonsApi, "saveAttempt").mockRejectedValue(
+      new ApiError(422, "refused"),
+    );
+    const save = vi
+      .spyOn(lessonsApi, "saveProgress")
+      .mockImplementation((_, b) => Promise.resolve({ status: b.status }) as never);
+    const { result } = renderHook(() => useLessonProgress(LESSON, true));
+    await waitFor(() => expect(result.current.sessionId).toBe("sess-1"));
+    holdAnswer(LESSON, {
+      sessionId: "sess-1",
+      body: {
+        problemId: "cp-1",
+        source: "assessment",
+        answer: 2,
+        clientAttemptId: "00000001-0000-4000-8000-000000000000",
+      },
+    });
+    act(() => result.current.report("completed", { segment: 4 }));
+    await waitFor(() => expect(result.current.completionFailed).toBe(true));
+
+    act(() => result.current.resend());
+
+    expect(result.current.completionFailed).toBe(true);
+    expect(save.mock.calls.map(([, b]) => b.status)).toEqual(["exited"]);
+  });
+});
