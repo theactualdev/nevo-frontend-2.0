@@ -42,13 +42,14 @@ export function classSelector(candidate: string): string {
 
 /**
  * A window, the pointer that drives it, and whether the element sits inside
- * a letterbox.
+ * a letterbox. A fine pointer hovers and a coarse one does not, unless said.
  */
 export type Viewport = {
   width: number;
   height?: number;
   orientation?: "portrait" | "landscape";
-  pointer?: "fine" | "coarse";
+  pointer?: "fine" | "coarse" | "none";
+  hover?: "hover" | "none";
   inLetterbox?: boolean;
 };
 
@@ -140,8 +141,10 @@ function feature(f: string, at: Required<Viewport>): boolean {
   }
   m = /^\(orientation: ?(portrait|landscape)\)$/.exec(f);
   if (m) return at.orientation === m[1];
-  m = /^\(pointer: ?(fine|coarse)\)$/.exec(f);
+  m = /^\(pointer: ?(fine|coarse|none)\)$/.exec(f);
   if (m) return at.pointer === m[1];
+  m = /^\(hover: ?(hover|none)\)$/.exec(f);
+  if (m) return at.hover === m[1];
   throw new Error(`compiledCss: no answer for the media feature ${f}`);
 }
 
@@ -152,11 +155,10 @@ function feature(f: string, at: Required<Viewport>): boolean {
 function holds(header: string, at: Required<Viewport>): boolean | "layer" {
   if (header.startsWith("@layer")) return "layer";
   if (header.startsWith("@media")) {
-    return header
-      .slice("@media".length)
-      .trim()
-      .split(/\s+and\s+/)
-      .every((f) => feature(f.trim(), at));
+    // A list holds if any of its queries does; a query, if all its features.
+    return selectors(header.slice("@media".length).trim()).some((query) =>
+      query.split(/\s+and\s+/).every((f) => feature(f.trim(), at)),
+    );
   }
   if (header === "&:where(:not([data-nevo-letterbox] *))") return !at.inLetterbox;
   if (header === "&:where([data-nevo-letterbox] *)") return at.inLetterbox;
@@ -176,13 +178,15 @@ export function styleAt(
   viewport: Viewport,
 ): Record<string, string> {
   const height = viewport.height ?? 900;
+  const pointer = viewport.pointer ?? "fine";
   const at: Required<Viewport> = {
     width: viewport.width,
     height,
     orientation:
       viewport.orientation ??
       (viewport.width > height ? "landscape" : "portrait"),
-    pointer: viewport.pointer ?? "fine",
+    pointer,
+    hover: viewport.hover ?? (pointer === "fine" ? "hover" : "none"),
     inLetterbox: viewport.inLetterbox ?? false,
   };
   const won = new Map<string, { value: string; layered: boolean }>();
@@ -225,77 +229,6 @@ export function styleAt(
   };
   walk(parse(css), []);
   return Object.fromEntries([...won].map(([k, v]) => [k, v.value]));
-}
-
-/**
- * A compiled length, in px, at a window: `min()`, `max()`, `calc()` and
- * `var()` over px, rem, vw, vh and dvh, with custom properties as the element
- * inherits them.
- */
-export function lengthAt(
-  value: string,
-  at: { width: number; height: number; vars?: Record<string, string> },
-): number {
-  let expr = value;
-  // Innermost `var()` first, so a fallback that is itself a `var()` resolves.
-  const VAR = /var\((--[\w-]+)(?:,\s*([^()]*))?\)/;
-  for (let m = VAR.exec(expr); m; m = VAR.exec(expr)) {
-    const v = at.vars?.[m[1]] ?? m[2];
-    if (v === undefined) throw new Error(`lengthAt: ${m[1]} is not set`);
-    expr = expr.replace(m[0], v);
-  }
-  const unit: Record<string, number> = {
-    px: 1,
-    rem: 16,
-    vw: at.width / 100,
-    vh: at.height / 100,
-    dvh: at.height / 100,
-  };
-  const inPx = expr
-    .replace(/([\d.]+)(px|rem|vw|dvh|vh)/g, (_, n, u) => `${Number(n) * unit[u]}`)
-    .replace(/\s+/g, "");
-  const tokens = inPx.match(/min|max|calc|[\d.]+|[-+*/(),]/g);
-  // Anything not read above - an unknown unit or function - is refused
-  // rather than skipped.
-  if (!tokens || tokens.join("") !== inPx)
-    throw new Error(`lengthAt: cannot read ${value}`);
-  let i = 0;
-  const peek = () => tokens[i];
-  const next = () => tokens[i++];
-  const args = (): number[] => {
-    next(); // (
-    const out = [sum()];
-    while (peek() === ",") {
-      next();
-      out.push(sum());
-    }
-    next(); // )
-    return out;
-  };
-  const atom = (): number => {
-    const t = next();
-    if (t === "min") return Math.min(...args());
-    if (t === "max") return Math.max(...args());
-    if (t === "calc") return args()[0];
-    if (t === "(") {
-      const v = sum();
-      next();
-      return v;
-    }
-    if (t === "-") return -atom();
-    return Number(t);
-  };
-  const product = (): number => {
-    let v = atom();
-    while (peek() === "*" || peek() === "/") v = next() === "*" ? v * atom() : v / atom();
-    return v;
-  };
-  const sum = (): number => {
-    let v = product();
-    while (peek() === "+" || peek() === "-") v = next() === "+" ? v + product() : v - product();
-    return v;
-  };
-  return sum();
 }
 
 /** The order the compiled stylesheet writes these rule selectors in. */

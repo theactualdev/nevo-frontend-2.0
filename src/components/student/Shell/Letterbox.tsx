@@ -1,16 +1,19 @@
 /**
- * The tablet frame a child's pre-login screen sits in at desktop width (D207).
+ * The tablet frame a child's pre-login screen sits in on a desktop (D207).
  *
  * Design's reference: the pre-login and shared-device flow "is tablet-only and
  * letterboxes at desktop width (≥1024) - by design, not as a fallback. It has
- * no desktop composition and must not be given one." So from 1024px wide the
+ * no desktop composition and must not be given one." So on a desktop the
  * screen is drawn in a 768px frame centred on near-black, laid out exactly as
  * it is on a tablet: the variants in `globals.css` answer for the frame, not
  * the window, while a screen is inside one.
  *
- * BY WIDTH, NOT BY DEVICE. A touch screen 1024 or wider is letterboxed too.
+ * A DESKTOP, NOT A WIDTH: 1024 or wider with a fine pointer that hovers. A
+ * touch screen of any size is never letterboxed - a classroom iPad held
+ * sideways keeps 28c's landscape frames, and an iPad Pro held upright gets no
+ * bars.
  *
- * Below 1024 it draws nothing: both boxes are `contents`, so a phone or a
+ * Anywhere else it draws nothing: both boxes are `contents`, so a phone or a
  * tablet lays the screen out as it always did, in whatever its parent is. The
  * frame's geometry and why it is what it is live with the rules in
  * `globals.css`, which key on the two attributes here.
