@@ -32,6 +32,11 @@ vi.mock("@/lib/api/intelligence", async (importOriginal) => {
 });
 
 vi.mock("@/lib/api/classes", () => ({ classesApi: { list: async () => [] } }));
+// No teacher has raised a concern: the all-clear waits on that read too.
+vi.mock("@/lib/api/escalations", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/escalations")>();
+  return { ...actual, escalationsApi: { ...actual.escalationsApi, list: async () => [] } };
+});
 vi.mock("@/lib/api/students", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/students")>();
   return {

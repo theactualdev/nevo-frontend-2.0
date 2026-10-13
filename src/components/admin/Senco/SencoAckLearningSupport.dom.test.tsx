@@ -54,7 +54,7 @@ const flag: AttentionFlag = {
 };
 
 const NOTE =
-  "Marking a flag as seen needs Learning Support. Another administrator can give it to you on your record in Admin Team.";
+  "Marking a concern or a flag as seen, and starting a progress report, need Learning Support. Another administrator can give it to you on your record in Admin Team.";
 
 beforeEach(() => {
   getFlags.mockResolvedValue([flag]);
