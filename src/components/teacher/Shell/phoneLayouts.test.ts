@@ -12,6 +12,8 @@ describe("which screens a phone is given", () => {
     "/teacher/help",
     "/teacher/students/s-1/clear-pin",
     "/teacher/students/s-1",
+    // ConnectView decides within: a named thread, or the shared state.
+    "/teacher/connect",
   ])("lays out %s", (path) => {
     expect(hasPhoneLayout(path)).toBe(true);
   });
@@ -24,8 +26,6 @@ describe("which screens a phone is given", () => {
     "/teacher/profile",
     // B2 is the profile alone - the recommend route stays for a bigger screen.
     "/teacher/students/s-1/recommend",
-    // Not yet: joins when its phone layout lands.
-    "/teacher/connect",
   ])("sends %s to the bigger-screen state", (path) => {
     expect(hasPhoneLayout(path)).toBe(false);
   });

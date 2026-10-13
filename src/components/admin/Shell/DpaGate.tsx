@@ -1,0 +1,116 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { usePermissions, useSetupGate } from "@/hooks";
+import { PERMISSION_SCOPES } from "@/lib/constants/permissions";
+import { readOnboarding, schoolApi } from "@/lib/api/school";
+import { DpaStep } from "../Onboarding/DpaStep";
+
+/**
+ * NO CONSOLE WITHOUT THE DATA PROCESSING AGREEMENT.
+ *
+ * The setup wizard asks for it as step 3, but it keeps its place only in
+ * memory. A proprietor who confirmed their email, closed the tab and signed in
+ * at /auth/admin landed in the full console with no agreement accepted - and
+ * nothing anywhere sent them back. `GET /api/v1/school/dpa-acceptance` answers
+ * `null` in exactly that case; it was wrapped and never called.
+ *
+ * So the console's pages wait on it. The rail stays - an admin can see where
+ * they are - but every page renders the agreement until it is accepted.
+ *
+ * AN UNCONFIRMED EMAIL COMES FIRST, as it does in the wizard (confirm, then
+ * agree). D01b AC-05 owns that console and its banner.
+ *
+ * FAILS OPEN. Only a `null` that actually came back holds the console. A read
+ * that failed, or has not answered yet, renders the pages as they are: a 500
+ * must not turn into "your school hasn't agreed to anything".
+ *
+ * WHO CAN AGREE. The agreement is accepted "on behalf of" the school, which is
+ * a general-oversight decision. An admin without it - invited to a school
+ * whose founder never finished - is told who can, rather than handed a
+ * checkbox they have no standing to tick.
+ */
+
+/**
+ * `loading` IS NOT `unknown`. Both used to render the pages, so a school with
+ * no agreement saw its console for as long as the read took, then had it
+ * taken away - a flash of everything the gate exists to hold back. (The
+ * end-to-end suite found it: a heading it waited for appeared in that window
+ * and the test passed on a page the school could not actually use.) Loading
+ * now holds a placeholder; only a read that FAILED falls open.
+ */
+type Dpa = "loading" | "unknown" | "accepted" | "missing";
+
+export function DpaGate({ children }: { children: React.ReactNode }) {
+  const { pause } = useSetupGate();
+  const { resolved, hasScope } = usePermissions();
+  const [dpa, setDpa] = useState<Dpa>("loading");
+  const [schoolName, setSchoolName] = useState<string | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    schoolApi
+      .dpaAcceptance()
+      .then(async (a) => {
+        if (a) {
+          if (live) setDpa("accepted");
+          return;
+        }
+        /*
+         * NULL IS NOT YET "NEVER AGREED". Before the typed record existed, the
+         * wizard wrote the acceptance into `profile.onboarding` as
+         * `{dpaVersion, dpaAcceptedAt}`. A school that agreed then has no row
+         * in the new table unless it was migrated - and this gate, reading the
+         * new table alone, would have locked every such school out of its own
+         * console on the day it shipped. The end-to-end school caught it.
+         *
+         * So the old record counts. The school is read here anyway, for the
+         * name the agreement is accepted on behalf of; if that read fails the
+         * gate fails open, as it does everywhere else.
+         */
+        const school = await schoolApi.get();
+        if (!live) return;
+        setSchoolName(school.name?.trim() || null);
+        setDpa(readOnboarding(school).dpaAcceptedAt ? "accepted" : "missing");
+      })
+      .catch(() => live && setDpa("unknown"));
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  // Once per console load: the shell persists across navigation, so this
+  // placeholder is the first paint only, never a page-to-page flicker.
+  if (dpa === "loading") {
+    return (
+      <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px]">
+        <div className="h-[420px] animate-pulse rounded-xl bg-nevo-cream-elevated" />
+      </div>
+    );
+  }
+  if (dpa !== "missing" || pause === "email_unconfirmed") return <>{children}</>;
+
+  const canAgree = resolved && hasScope(PERMISSION_SCOPES.GENERAL_OVERSIGHT);
+
+  return (
+    <div className="mx-auto w-full max-w-[640px] px-6 py-10">
+      {canAgree ? (
+        <DpaStep
+          schoolName={schoolName ?? "your school"}
+          onDone={() => setDpa("accepted")}
+        />
+      ) : (
+        <>
+          <h2 className="m-0 text-[23px] font-semibold tracking-[-0.018em] text-nevo-near-black">
+            Your school hasn&rsquo;t agreed to the data agreement yet
+          </h2>
+          <p className="mt-2.5 max-w-[56ch] text-[15px] leading-[1.55] text-nevo-near-black/68">
+            An administrator with general oversight needs to read and accept
+            Nevo&rsquo;s data processing agreement for your school before the
+            console opens. Once they have, everything here will be waiting.
+          </p>
+        </>
+      )}
+    </div>
+  );
+}

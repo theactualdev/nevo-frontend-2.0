@@ -8,7 +8,7 @@ import { AskNevo } from "./AskNevo";
 import { SystemMessagesProvider } from "@/components/shared/SystemMessages";
 import { UnsavedChangesProvider } from "./UnsavedChanges";
 import { TeacherSidebar } from "./TeacherSidebar";
-import { BiggerScreen, PhoneShell } from "./PhoneShell";
+import { BiggerScreen, PhoneBarProvider, PhoneShell } from "./PhoneShell";
 import { hasPhoneLayout } from "./phoneLayouts";
 
 /**
@@ -77,6 +77,7 @@ export function TeacherShell({ children }: { children: React.ReactNode }) {
     <SystemMessagesProvider>
     {/* C18: unsaved work registers here, and the sidebar asks before it goes. */}
     <UnsavedChangesProvider>
+    <PhoneBarProvider>
     <div className="flex h-dvh flex-row overflow-hidden bg-nevo-cream text-nevo-near-black max-md:flex-col">
       {/* The rail at tablet and desktop; the app bar and drawer on a phone. */}
       <div className="contents max-md:hidden">
@@ -110,6 +111,7 @@ export function TeacherShell({ children }: { children: React.ReactNode }) {
       {/* C15: Ask Nevo floats on every console surface except upload. */}
       {!inUpload && <AskNevo />}
     </div>
+    </PhoneBarProvider>
     </UnsavedChangesProvider>
     </SystemMessagesProvider>
   );

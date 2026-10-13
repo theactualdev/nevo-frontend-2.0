@@ -137,21 +137,23 @@ export function HelpAndSupport() {
     : [];
 
   return (
-    <div className="mx-auto w-full max-w-[1040px] px-12 py-11 xl:px-16 xl:py-14">
+    /* C19 A6 on a phone: the app bar names the page, so the back link and
+       the heading stand aside, and the edges are 18px. */
+    <div className="mx-auto w-full max-w-[1040px] px-12 py-11 max-md:px-[18px] max-md:pt-2 max-md:pb-[22px] xl:px-16 xl:py-14">
       <div className="max-w-[540px] xl:max-w-[560px]">
         <Link
           href="/teacher/profile"
-          className="inline-flex cursor-pointer items-center gap-[7px] text-[13.5px] text-nevo-near-black/60 transition-colors hover:text-nevo-navy xl:text-sm"
+          className="inline-flex cursor-pointer items-center gap-[7px] text-[13.5px] text-nevo-near-black/60 transition-colors hover:text-nevo-navy max-md:hidden xl:text-sm"
         >
           <svg className="size-4 xl:size-[17px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <path d="M15 6l-6 6 6 6" />
           </svg>
           Settings
         </Link>
-        <h1 className="mt-[18px] text-[26px] font-semibold tracking-[-0.018em] text-nevo-near-black xl:mt-5 xl:text-[30px]">
+        <h1 className="mt-[18px] text-[26px] font-semibold tracking-[-0.018em] text-nevo-near-black max-md:sr-only xl:mt-5 xl:text-[30px]">
           Help &amp; support
         </h1>
-        <p className="mt-2.5 text-[15px] leading-[1.6] text-pretty text-nevo-near-black/66 xl:mt-3 xl:text-base">
+        <p className="mt-2.5 text-[15px] leading-[1.6] text-pretty text-nevo-near-black/66 max-md:mt-1 max-md:text-[14.5px] max-md:leading-[1.55] xl:mt-3 xl:text-base">
           Reach a real person on the Nevo team whenever you need a hand.
           We&rsquo;re glad to help.
         </p>
@@ -197,16 +199,16 @@ export function HelpAndSupport() {
                   <a
                     href={c.href}
                     {...(c.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-                    className="flex min-w-0 flex-1 cursor-pointer items-center gap-[18px] rounded-[10px] py-4 pr-3 pl-4 transition-[filter] duration-150 hover:brightness-[0.985]"
+                    className="flex min-w-0 flex-1 cursor-pointer items-center gap-[18px] rounded-[10px] py-4 pr-3 pl-4 transition-[filter] duration-150 hover:brightness-[0.985] max-md:gap-3 max-md:pr-1 max-md:pl-3"
                   >
-                    <span className="flex size-12 shrink-0 items-center justify-center rounded-[12px] bg-nevo-navy/10 text-nevo-navy">
+                    <span className="flex size-12 shrink-0 items-center justify-center rounded-[12px] bg-nevo-navy/10 text-nevo-navy max-md:size-10">
                       {c.icon}
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block text-[12.5px] font-semibold tracking-[0.02em] text-nevo-near-black/50 uppercase xl:text-[13px]">
                         {c.label}
                       </span>
-                      <span className="mt-[5px] block text-lg font-semibold tracking-[-0.01em] break-words text-nevo-near-black xl:text-xl">
+                      <span className="mt-[5px] block text-lg font-semibold tracking-[-0.01em] break-words text-nevo-near-black max-md:text-[15px] xl:text-xl">
                         {c.value}
                       </span>
                     </span>
