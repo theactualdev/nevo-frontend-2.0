@@ -146,11 +146,12 @@ export async function enterFirstLesson(
  * A CLEARED CHILD NO LONGER LOOKS NEW (B67, 8 Oct). `accountReady` is false
  * for a new child and for one whose PIN a teacher cleared alike - neither has
  * a PIN - and until `pinCleared` arrived nothing told them apart, so a cleared
- * child sat the baseline again. The spec gives `pinCleared` no description;
- * it is read as its name says, a PIN a teacher cleared that the child has not
- * yet replaced. It comes AFTER `accountReady`: a child the server says can
- * sign in normally has a PIN, whatever else is set, and the PIN route would
- * refuse them anyway (409).
+ * child sat the baseline again. Backend confirmed its meaning on 13 Oct
+ * (B123): a teacher cleared the PIN and no replacement exists, and it returns
+ * to false once a new PIN is chosen, when `accountReady` takes them to sign
+ * in. It comes AFTER `accountReady`: a child the server says can sign in
+ * normally has a PIN, whatever else is set, and the PIN route would refuse
+ * them anyway (409).
  */
 export type EntryRoute =
   | "waiting"

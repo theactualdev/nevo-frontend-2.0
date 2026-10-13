@@ -275,6 +275,13 @@ describe("entryRoute", () => {
     ).toBe("sign-in");
   });
 
+  it("signs a cleared child in once their new PIN is chosen (B123)", () => {
+    // Confirmed 13 Oct: `pinCleared` returns to false after a new PIN.
+    expect(
+      entryRoute(state({ pinCleared: false, accountReady: true })),
+    ).toBe("sign-in");
+  });
+
   it("holds a child whose consent is pending at 00d, and one whose consent was withdrawn at 00e", () => {
     expect(entryRoute(state({ consentState: "pending" }))).toBe("waiting");
     // D117: there and gone, so 00d's "It will be soon" would be a lie.
