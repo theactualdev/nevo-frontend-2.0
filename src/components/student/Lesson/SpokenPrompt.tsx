@@ -112,8 +112,7 @@ export function SpokenPrompt({
   };
 
   return (
-    // Wraps only to give the pressed line (D211) a row of its own.
-    <div className="flex flex-wrap items-center gap-3 rounded-[12px] bg-nevo-cream-elevated px-3 py-2.5 shadow-elevation-1">
+    <div className="flex items-center gap-3 rounded-[12px] bg-nevo-cream-elevated px-3 py-2.5 shadow-elevation-1">
       {!failed && (
         <audio
           // Keyed so a re-issued link actually reloads.
@@ -158,7 +157,16 @@ export function SpokenPrompt({
           />
         )}
       </button>
-      {failed ? (
+      {/*
+        D211's line takes the failure line's place while it shows, beside
+        the control, so the card grows as little as it can and what is
+        under it barely moves. Its type is the row's own 13px.
+      */}
+      {told ? (
+        <PressedLine className="min-w-0 flex-1 text-[13px] leading-[1.4]">
+          {NO_SOUND}
+        </PressedLine>
+      ) : failed ? (
         <span role="status" className="text-[13px] text-nevo-near-black/70">
           {"Couldn't load this recording"}
         </span>
@@ -186,7 +194,6 @@ export function SpokenPrompt({
           </div>
         </div>
       )}
-      {told && <PressedLine className="basis-full">{NO_SOUND}</PressedLine>}
     </div>
   );
 }

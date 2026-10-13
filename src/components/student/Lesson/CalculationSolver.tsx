@@ -64,6 +64,7 @@ export function CalculationSolver({
   onStepAnswered,
   onPiecePlaced,
   onHintOpened,
+  onAct,
   onReplay,
   onNarrationPlayed,
   onAudioBusy,
@@ -105,6 +106,11 @@ export function CalculationSolver({
   onPiecePlaced?: (stepId: string) => void;
   /** The child opened this step's hint themselves. */
   onHintOpened?: (stepId: string) => void;
+  /**
+   * The child did something in the step: a key, an option, a piece, or the
+   * hint. The host's held-Next line (D211) has done its job by then.
+   */
+  onAct?: () => void;
   /** A finished narration played again from the start (`replay`). */
   onReplay?: () => void;
   /** Narration started for the first time on this calculation. */
@@ -242,12 +248,20 @@ export function CalculationSolver({
   const openHint = () => {
     setHintOpen(true);
     onHintOpened?.(step.stepId);
+    onAct?.();
+  };
+
+  /** What is typed, from the pad, a laptop's keys or delete. */
+  const type = (next: string | ((was: string) => string)) => {
+    setTyped(next);
+    onAct?.();
   };
 
   const place = () => {
     if (step.input !== "tap" || placed >= step.target) return;
     setPlaced(placed + 1);
     onPiecePlaced?.(step.stepId);
+    onAct?.();
   };
 
   /** A piece into one place-value column, until it holds that column's count. */
@@ -259,6 +273,7 @@ export function CalculationSolver({
     next[column] = have + 1;
     setPlacedCols(next);
     onPiecePlaced?.(step.stepId);
+    onAct?.();
   };
 
   const startedNarration = () => {
@@ -395,7 +410,10 @@ export function CalculationSolver({
                     <button
                       key={i}
                       type="button"
-                      onClick={() => setChosen(i)}
+                      onClick={() => {
+                        setChosen(i);
+                        onAct?.();
+                      }}
                       aria-pressed={chosen === i}
                       className={cn(
                         "cursor-pointer rounded-[12px] border-2 bg-nevo-cream-elevated px-[18px] py-4 text-center text-base font-medium text-nevo-near-black shadow-elevation-1 transition-[transform,border-color] active:scale-[0.98] sm:text-[18px]",
@@ -436,7 +454,7 @@ export function CalculationSolver({
                 reading={reading}
                 nudge={nudge}
                 value={typed}
-                onChange={setTyped}
+                onChange={type}
                 onCommit={() => answer(isStoredAnswer(typed, step.accepted))}
               />
             )}
@@ -500,7 +518,7 @@ export function CalculationSolver({
             {step.input === "number" && step.entry === "numeric" && (
               <DockedPad
                 dock={padDock}
-                onKey={(c) => setTyped((t) => t + c)}
+                onKey={(c) => type((t) => t + c)}
               />
             )}
           </>
@@ -1976,8 +1994,7 @@ function StepNarration({
   };
 
   return (
-    // Wraps only to give the pressed line (D211) a row of its own.
-    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-[12px] bg-nevo-cream-elevated px-3 py-2.5 shadow-elevation-1">
+    <div className="mb-4 flex items-center gap-3 rounded-[12px] bg-nevo-cream-elevated px-3 py-2.5 shadow-elevation-1">
       {!media.failed && (
         <audio
           // Keyed so a re-issued link actually reloads.
@@ -2019,7 +2036,16 @@ function StepNarration({
           />
         )}
       </button>
-      {media.failed ? (
+      {/*
+        D211's line takes the failure line's place while it shows, beside
+        the control, so the card grows as little as it can and what is
+        under it barely moves. Its type is the row's own 13px.
+      */}
+      {told ? (
+        <PressedLine className="min-w-0 flex-1 text-[13px] leading-[1.4]">
+          {NO_SOUND}
+        </PressedLine>
+      ) : media.failed ? (
         <span role="status" className="text-[13px] text-nevo-near-black/70">
           {"Couldn't load this recording"}
         </span>
@@ -2047,7 +2073,6 @@ function StepNarration({
           </div>
         </div>
       )}
-      {told && <PressedLine className="basis-full">{NO_SOUND}</PressedLine>}
     </div>
   );
 }

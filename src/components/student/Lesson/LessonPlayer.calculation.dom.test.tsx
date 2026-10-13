@@ -412,10 +412,68 @@ describe("a calculation's signals", () => {
 
     tap("Next");
     expect(screen.getByText(ONE_MORE_BIT)).toBeInTheDocument();
+    // Through the press itself, however often it comes.
+    tap("Next");
+    expect(screen.getByText(ONE_MORE_BIT)).toBeInTheDocument();
 
-    // Solved: the line has nothing left to say, and Next goes on.
+    // The child acts on the step: the line has done its job, and the column
+    // gets its room back for the step.
     tap("4 and 4");
-    tap("Check my answer");
     expect(screen.queryByText(ONE_MORE_BIT)).toBeNull();
+  });
+
+  it("takes the line away on the next key on the pad, or the hint (D211)", () => {
+    const ONE_MORE_BIT = "There's one more bit to do first.";
+    render(
+      <LessonPlayer
+        lesson={lessonWith([
+          step({
+            prompt: "So what is 1 + 2?",
+            expectedInput: "numeric",
+            input: "number",
+            options: [],
+            answer: "3",
+          }),
+        ])}
+        plan={PLAN}
+      />,
+    );
+
+    tap("Next");
+    expect(screen.getByText(ONE_MORE_BIT)).toBeInTheDocument();
+    tap("1");
+    expect(screen.queryByText(ONE_MORE_BIT)).toBeNull();
+
+    tap("Next");
+    expect(screen.getByText(ONE_MORE_BIT)).toBeInTheDocument();
+    tap("Need a hint?");
+    expect(screen.queryByText(ONE_MORE_BIT)).toBeNull();
+  });
+
+  it("sets the line in line with the step, in the reading column's box (D211)", () => {
+    render(<LessonPlayer lesson={lessonWith([step()])} plan={PLAN} />);
+    tap("Next");
+
+    const line = screen.getByText("There's one more bit to do first.");
+    const row = line.parentElement!;
+    const column = document.querySelector(".overflow-y-auto > div")!;
+    const solver = document.querySelector('[aria-live="polite"]')!.parentElement!;
+    const classes = (el: Element) => el.className.split(" ");
+
+    // It spanned the screen less 14px a side, wider than the step above it.
+    // Now the reading column's widths and side padding...
+    const widths = ["max-w-full", "sm:max-w-[620px]", "lg:max-w-[680px]"];
+    expect(classes(column)).toEqual(expect.arrayContaining(widths));
+    expect(classes(row)).toEqual(expect.arrayContaining(widths));
+    expect(classes(column)).toEqual(
+      expect.arrayContaining(["p-6", "sm:p-8", "lg:p-10"]),
+    );
+    expect(classes(row)).toEqual(
+      expect.arrayContaining(["px-6", "sm:px-8", "lg:px-10"]),
+    );
+    // ...and then the solver's narrower one.
+    const narrower = ["sm:max-w-[560px]", "lg:max-w-[600px]"];
+    expect(classes(solver)).toEqual(expect.arrayContaining(narrower));
+    expect(classes(line)).toEqual(expect.arrayContaining(narrower));
   });
 });
