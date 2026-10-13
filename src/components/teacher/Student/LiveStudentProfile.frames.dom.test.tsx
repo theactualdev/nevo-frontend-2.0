@@ -19,7 +19,6 @@ vi.mock("@/hooks/useTeacherClasses", () => ({ useTeacherClasses }));
 
 import { LiveStudentProfile } from "./LiveStudentProfile";
 import type { StudentProfileState } from "@/hooks/useStudentProfile";
-import { ADAPTATIONS_LABEL } from "@/lib/mocks/teacherIntelligence";
 
 /**
  * C08 and C14 A5, word for word, on a real student - where the profile used
@@ -134,9 +133,16 @@ describe("the support action", () => {
   });
 });
 
-describe("how Nevo has adapted", () => {
+/*
+ * C20 (design, 12 Oct): adaptation history is Learning Support material. It
+ * sits in the profile's "Learning support" section, below the teaching views,
+ * for a viewer who holds the role - and is absent, with no trace, for anyone
+ * else. It used to be C16c, drawn for every teacher.
+ */
+describe("the learning support section", () => {
   const ADAPTED = STATE({
     observed: true,
+    learningSupport: true,
     adaptations: [
       {
         id: "ad-1",
@@ -148,19 +154,42 @@ describe("how Nevo has adapted", () => {
     ] as never,
   });
 
-  it("sits below the lesson history, as C16c places it", () => {
+  it("sits below the teaching views, for a holder", () => {
     sessionsState.value = { sessions: [SESSION], total: 1, loading: false, failed: false };
     render(<LiveStudentProfile studentId="s-1" state={ADAPTED} />);
 
     const sessions = screen.getByText("Recent sessions");
-    const adapted = screen.getByText(ADAPTATIONS_LABEL);
-    expect(sessions.compareDocumentPosition(adapted) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const section = screen.getByRole("region", { name: "Learning support" });
+    expect(sessions.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(section).toHaveTextContent("The same record an administrator with the role sees for");
   });
 
-  it("draws no After noticing line", () => {
+  it("carries Nevo's own sentence, dated, and no After noticing line", () => {
     render(<LiveStudentProfile studentId="s-1" state={ADAPTED} />);
+    const section = screen.getByRole("region", { name: "Learning support" });
 
-    expect(screen.getByText("Offered the spoken version of the worked example.")).toBeInTheDocument();
+    expect(section).toHaveTextContent("Adaptation history");
+    expect(section).toHaveTextContent("2 October");
+    expect(section).toHaveTextContent("Offered the spoken version of the worked example.");
     expect(screen.queryByText(/After noticing/)).not.toBeInTheDocument();
+  });
+
+  it("is absent - no heading, no history, no line - without the role", () => {
+    render(
+      <LiveStudentProfile studentId="s-1" state={{ ...ADAPTED, learningSupport: false }} />,
+    );
+
+    expect(screen.queryByRole("region", { name: "Learning support" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Learning support/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("Offered the spoken version of the worked example.")).not.toBeInTheDocument();
+    expect(screen.queryByText("How Nevo has adapted for this student")).not.toBeInTheDocument();
+  });
+
+  it("says plainly when Nevo has changed nothing yet", () => {
+    render(<LiveStudentProfile studentId="s-1" state={{ ...ADAPTED, adaptations: [] }} />);
+
+    expect(screen.getByRole("region", { name: "Learning support" })).toHaveTextContent(
+      "Nevo hasn’t changed anything in",
+    );
   });
 });

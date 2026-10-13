@@ -1,4 +1,4 @@
-import { TEACHER_NAV } from "./teacherNav";
+import { LEARNING_SUPPORT_NAV, TEACHER_NAV } from "./teacherNav";
 
 /**
  * C19 Teacher Phone Layouts (design, 12 Oct): "The console is a desktop and
@@ -50,7 +50,7 @@ export function hasPhoneLayout(pathname: string): boolean {
  * own words, so a phone and a desktop name a place the same way.
  */
 export function phoneTitle(pathname: string): string {
-  const tab = TEACHER_NAV.find((t) => pathname.startsWith(t.href));
+  const tab = [...TEACHER_NAV, LEARNING_SUPPORT_NAV].find((t) => pathname.startsWith(t.href));
   if (tab) return tab.name;
   // A student's pages sit under a class, as the rail has it.
   if (pathname.startsWith("/teacher/students")) return "Classes";

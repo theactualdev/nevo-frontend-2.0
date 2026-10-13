@@ -15,6 +15,8 @@ import {
 } from "@/lib/api/students";
 import { getToken } from "@/lib/auth/session";
 import { useHasSession } from "./useHasSession";
+import { useHoldsLearningSupport } from "./useLearningSupport";
+import { LEARNING_SUPPORT_REQUIRED, refusedWith } from "@/lib/api/learningSupport";
 
 /**
  * One student, as their teacher can see them.
@@ -117,6 +119,12 @@ export interface ProfileReads {
 }
 
 export interface StudentProfileState {
+  /**
+   * The viewer holds Learning Support (C20). Only then is adaptation history
+   * read and the profile's learning support section drawn. Optional, so a
+   * state built by hand - a test, the fixture - is "does not hold it".
+   */
+  learningSupport?: boolean;
   profile: StudentProfileResponse | null;
   concepts: MasteryConcept[];
   /** C08's aggregate help-seeking line; "" when it may not be shown. */
@@ -168,6 +176,7 @@ export function useStudentProfile(studentId: string): StudentProfileState {
   const [missing, setMissing] = useState(false);
   const [failed, setFailed] = useState(false);
   const signedIn = useHasSession();
+  const learningSupport = useHoldsLearningSupport();
   const loading = signedIn && !profile && !missing && !failed;
 
   useEffect(() => {
@@ -188,7 +197,17 @@ export function useStudentProfile(studentId: string): StudentProfileState {
          * with 403. Both read as "we couldn't load this - try again", a retry
          * that can never work. Only an answer that might change is a retry.
          */
-        if (
+        /*
+         * NOT "NO SUCH CHILD". Since backend ab78139 (13 Oct) this route asks
+         * every staff role for Learning Support, teachers included - so a
+         * class teacher without the role is refused their own pupil, and
+         * reading that refusal as missing sent them to a 404. C20 says the
+         * profile looks exactly as it always did without the role; until the
+         * route agrees, it is a read that did not land, not a child who does
+         * not exist. Raised with backend.
+         */
+        if (refusedWith(err, LEARNING_SUPPORT_REQUIRED)) setFailed(true);
+        else if (
           err instanceof ApiError &&
           (err.status === 404 || err.status === 422 || err.status === 403)
         ) {
@@ -221,15 +240,6 @@ export function useStudentProfile(studentId: string): StudentProfileState {
         settle("recommendations", "ready");
       })
       .catch(() => settle("recommendations", "failed"));
-    void studentsApi
-      .adaptations(studentId)
-      .then((rows) => {
-        // A suppressed adaptation is one Nevo considered and withheld; the
-        // section is what actually happened for this student.
-        if (!cancelled) setAdaptations(rows.filter((a) => !a.suppressed));
-        settle("adaptations", "ready");
-      })
-      .catch(() => settle("adaptations", "failed"));
     /*
      * NO PROGRESS READ. `GET /api/students/{id}/progress` was fetched on
      * every profile open and nothing rendered it: the live profile reads the
@@ -257,7 +267,33 @@ export function useStudentProfile(studentId: string): StudentProfileState {
     };
   }, [studentId]);
 
+  /*
+   * ADAPTATION HISTORY IS LEARNING SUPPORT MATERIAL (C20, design 12 Oct): read
+   * only when the viewer holds the role, and the server refuses anyone else
+   * since ab78139. It used to be read for every teacher and drawn as C16c.
+   */
+  useEffect(() => {
+    if (!getToken() || !learningSupport) return;
+    let cancelled = false;
+    const settle = (to: ReadState) => {
+      if (!cancelled) setReads((r) => ({ ...r, adaptations: to }));
+    };
+    void studentsApi
+      .adaptations(studentId)
+      .then((rows) => {
+        // A suppressed adaptation is one Nevo considered and withheld; the
+        // section is what actually happened for this student.
+        if (!cancelled) setAdaptations(rows.filter((a) => !a.suppressed));
+        settle("ready");
+      })
+      .catch(() => settle("failed"));
+    return () => {
+      cancelled = true;
+    };
+  }, [studentId, learningSupport]);
+
   return {
+    learningSupport,
     helpSeeking: helpSeekingLine(evidence),
     profile,
     // A row the engine could not name is a bar with no label - nothing a

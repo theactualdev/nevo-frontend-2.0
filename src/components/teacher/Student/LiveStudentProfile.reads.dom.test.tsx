@@ -51,8 +51,13 @@ const state = (reads: Partial<ProfileReads>, observed = false): StudentProfileSt
   failed: false,
 });
 
-const show = (reads: Partial<ProfileReads>, observed = false) =>
-  render(<LiveStudentProfile studentId="s-1" state={state(reads, observed)} />);
+const show = (reads: Partial<ProfileReads>, observed = false, learningSupport = false) =>
+  render(
+    <LiveStudentProfile
+      studentId="s-1"
+      state={{ ...state(reads, observed), learningSupport }}
+    />,
+  );
 
 describe("while the learner profile is still on its way", () => {
   it("does not say Nevo has not seen enough of them", () => {
@@ -105,8 +110,10 @@ describe("the other sections, when their read failed", () => {
     expect(screen.getByText("What Nevo is offering")).toBeInTheDocument();
   });
 
-  it("keeps the adaptations section and says it could not be read", () => {
-    show({ adaptations: "failed" });
+  // C20: the adaptation history is the holder's, in the learning support
+  // section - and a failed read there says so, as every section does.
+  it("keeps the adaptation history and says it could not be read, for a holder", () => {
+    show({ adaptations: "failed" }, false, true);
 
     expect(screen.getAllByText(/couldn.t load these just now/)).toHaveLength(1);
   });

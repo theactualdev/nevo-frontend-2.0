@@ -17,7 +17,8 @@ import { useHasSession } from "@/hooks/useHasSession";
 import { useHydrated } from "@/hooks/useHydrated";
 import { SignOutModal } from "@/components/teacher/Profile/SignOutModal";
 import { cn } from "@/lib/utils";
-import { MOCK_TEACHER, TEACHER_NAV } from "./teacherNav";
+import { MOCK_TEACHER, teacherNav } from "./teacherNav";
+import { useHoldsLearningSupport } from "@/hooks/useLearningSupport";
 import { OPEN_ASK_NEVO, ownsPhoneBar, phoneTitle } from "./phoneLayouts";
 import { useLeaveGuard } from "./UnsavedChanges";
 
@@ -131,6 +132,7 @@ function PhoneDrawer({
 }) {
   const [signingOut, setSigningOut] = useState(false);
   const leaveGuard = useLeaveGuard();
+  const holdsLearningSupport = useHoldsLearningSupport();
   const ref = useRef<HTMLDivElement>(null);
   useDialogFocus(ref, { onEscape: onClose });
 
@@ -182,7 +184,7 @@ function PhoneDrawer({
         </div>
 
         <nav className="mt-3 flex flex-col gap-[3px]">
-          {TEACHER_NAV.map((t) => {
+          {teacherNav(holdsLearningSupport).map((t) => {
             const on = pathname.startsWith(t.href);
             return (
               <Link
