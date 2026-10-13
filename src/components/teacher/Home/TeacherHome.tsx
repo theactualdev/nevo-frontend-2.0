@@ -181,7 +181,7 @@ export function TeacherHome() {
                * cards, no copy.
                */
               <div aria-busy="true" aria-label="Loading what needs your attention">
-                <div className="mt-[26px] h-[13px] w-[180px] rounded-[6px] bg-nevo-near-black/9 xl:mt-8 xl:h-3.5 xl:w-[200px]" />
+                <div className="mt-[26px] h-[13px] w-[180px] rounded-[10px] bg-nevo-near-black/9 xl:mt-8 xl:h-3.5 xl:w-[200px]" />
                 <div className="mt-3.5 flex flex-col gap-3 xl:mt-4 xl:gap-3.5">
                   {[0, 1, 2].map((i) => (
                     <div

@@ -556,7 +556,7 @@ export function SetPasswordForm({
           <span
             aria-hidden
             className={cn(
-              "mt-px flex size-[22px] shrink-0 items-center justify-center rounded-[6px] border-[1.5px] transition-colors duration-150",
+              "mt-px flex size-[22px] shrink-0 items-center justify-center rounded-[10px] border-[1.5px] transition-colors duration-150",
               consent
                 ? "border-nevo-navy bg-nevo-navy text-nevo-cream"
                 : "border-nevo-near-black/25",

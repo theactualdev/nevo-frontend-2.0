@@ -144,7 +144,7 @@ function CheckCard({
     >
       <span
         className={cn(
-          "flex size-6 shrink-0 items-center justify-center rounded-[7px]",
+          "flex size-6 shrink-0 items-center justify-center rounded-[10px]",
           on
             ? "bg-nevo-navy text-nevo-cream"
             : "border-2 border-nevo-near-black/24",
