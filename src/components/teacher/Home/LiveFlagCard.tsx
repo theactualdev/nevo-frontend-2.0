@@ -79,7 +79,7 @@ export function LiveFlagCard({ flag }: { flag: TeacherFlag }) {
               .join(" · ")}
           </span>
         </div>
-        <p className="mt-[7px] text-[14.5px] leading-[1.5] text-nevo-near-black/82 xl:mt-[9px] xl:text-[15.5px] xl:leading-[1.55]">
+        <p className="mt-[7px] text-[14.5px] leading-[1.5] text-nevo-near-black/82 xl:mt-[9px] xl:max-w-[640px] xl:text-[15.5px] xl:leading-[1.55]">
           {flag.note}
         </p>
         {/*

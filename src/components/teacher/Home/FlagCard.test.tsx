@@ -64,9 +64,22 @@ describe("FlagCard", () => {
     expect(screen.getByText("Time per lesson, last 3")).toBeInTheDocument();
   });
 
+  // Design, 12 Oct: the desktop evidence moves out of the 184px side panel
+  // into a row under the note, the caption beside the bars.
+  it("sets the desktop evidence under the note, not in a side panel", () => {
+    const { container } = render(<FlagCard flag={flag()} />);
+    const note = screen.getByText(flag().note);
+    const label = screen.getByText("Time per lesson, last 3");
+
+    expect(container.querySelector("[class*='w-[184px]']")).toBeNull();
+    // Same column as the note, and after it.
+    expect(label.closest("div")!.parentElement).toBe(note.parentElement);
+    expect(note.compareDocumentPosition(label) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("renders one bar per piece of evidence, at both sizes", () => {
-    // The card draws the bars twice - inline for tablet, panelled for desktop -
-    // and CSS decides which is visible. Three data points must therefore
+    // The card draws the bars twice - inline for tablet, in the row under the
+    // note for desktop - and CSS decides which is visible. Three data points must therefore
     // produce six bars, and a mismatch here would mean a teacher sees fewer
     // sessions than the flag was derived from.
     const { container } = render(<FlagCard flag={flag()} />);
