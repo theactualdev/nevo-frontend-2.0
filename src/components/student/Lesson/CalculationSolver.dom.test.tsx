@@ -1370,3 +1370,343 @@ describe("reading support (D30)", () => {
     expect(screen.getByText("Both denominators are 4.")).not.toHaveClass("leading-[2]");
   });
 });
+
+/**
+ * Round 13: backend's 13 Oct answers (B108-B131), each held to the screen.
+ */
+const render13 = (
+  calc: CalculationSegment,
+  extra: Partial<React.ComponentProps<typeof CalculationSolver>> = {},
+) => {
+  const props = {
+    onSolved: vi.fn(),
+    onStepAnswered: vi.fn(),
+    onHintOpened: vi.fn(),
+    onHintShown: vi.fn(),
+    onHintUsed: vi.fn(),
+  };
+  const view = render(
+    <CalculationSolver calculation={calc} {...props} {...extra} />,
+  );
+  return { props, view };
+};
+
+describe("the pad, extended by the step (B108)", () => {
+  const EXPRESSION = (requiredCharacters: unknown) =>
+    build({
+      steps: [
+        step({
+          input: "number",
+          expectedInput: "text",
+          options: [],
+          answer: "3x - 4",
+          requiredCharacters,
+        }),
+      ],
+    });
+  const pad = () => screen.queryByRole("group", { name: "On-screen keyboard" });
+
+  it("types an expression on the Nevo pad with the keys the step names", () => {
+    const { props } = render13(EXPRESSION(["x"]));
+
+    // The device's keyboard is suppressed: the pad is the keyboard.
+    expect(screen.getByRole("textbox")).toHaveAttribute("inputmode", "none");
+    expect(pad()).toBeInTheDocument();
+    for (const key of ["3", "x", "Minus sign", "4"]) tap(key);
+    tap("Check my answer");
+
+    expect(props.onStepAnswered).toHaveBeenCalledWith("s1", true);
+    // D150's line is about a number; nothing is written for an expression.
+    expect(screen.queryByText(/Type the number you worked out/)).toBeNull();
+  });
+
+  it("is the standard pad where the step names no keys", () => {
+    render13(EXPRESSION([]));
+
+    expect(pad()).toBeInTheDocument();
+    expect(document.querySelector("[data-step-keys]")).toBeNull();
+  });
+
+  it("adds each key once, and none the pad already carries", () => {
+    render13(EXPRESSION(["-", "x", "+", "7", "."]));
+
+    const added = [...document.querySelectorAll("[data-step-keys] button")];
+    expect(added.map((k) => k.textContent)).toEqual(["x", "+"]);
+    expect(screen.getAllByRole("button", { name: "Minus sign" })).toHaveLength(1);
+  });
+});
+
+describe("the equation's tokens and the drawing's ids (B109, B127)", () => {
+  const TOKENS = [
+    { id: "t-a", text: "1/4" },
+    { id: "t-plus", text: "+" },
+    { id: "t-b", text: "2/4" },
+    { id: "t-eq", text: "=" },
+    { id: "t-r", text: "3/4", hiddenUntilAccepted: true },
+  ];
+  const WITH_IDS = (over: Record<string, unknown> = {}) =>
+    build({
+      expression: "1/4 + 2/4",
+      scaffold: {
+        kind: "bar",
+        parts: 4,
+        rows: 3,
+        marks: [1, 2, 3],
+        labels: ["1/4", "2/4", ""],
+        markIds: ["m-a", "m-b", "m-r"],
+      },
+      steps: [
+        step({
+          input: "number",
+          expectedInput: "numeric",
+          options: [],
+          answer: "3",
+          equationTokens: TOKENS,
+          resultTargetId: "t-r",
+          highlights: [
+            { target: "t-plus" },
+            { target: "m-a" },
+            { target: "t-r", role: "result" },
+            { target: "m-r", role: "result" },
+          ],
+          ...over,
+        }),
+      ],
+    });
+  const token = (id: string) =>
+    document.querySelector<HTMLElement>(`[data-token="${id}"]`);
+  const answer = () => {
+    tap("3");
+    tap("Check my answer");
+  };
+
+  it("draws the equation from its tokens, the step's answer kept back", () => {
+    render13(WITH_IDS());
+
+    expect(equation()).toBe("1/4 + 2/4 = ?");
+    expect(token("t-r")).toHaveClass("border-dashed");
+    expect(token("t-r")).toHaveTextContent("?");
+
+    answer();
+    // Accepted: the whole line, its answer in place.
+    expect(equation()).toBe("1/4 + 2/4 = 3/4");
+  });
+
+  it("rings a token by its id, as the bars are (design, 13 Oct)", () => {
+    render13(WITH_IDS());
+
+    expect(token("t-plus")).toHaveClass("outline-nevo-violet");
+    expect(token("t-a")).not.toHaveClass("outline-nevo-violet");
+    // The mark named by its id: the whole of its bar.
+    expect(countIn(".outline-nevo-violet")()).toEqual([4, 0]);
+  });
+
+  it("never matches words on a lesson that carries ids", () => {
+    // "1/4" is a label and a token's text, and names neither here.
+    render13(WITH_IDS({ highlights: [{ target: "1/4" }, { target: "+" }] }));
+
+    expect(document.querySelectorAll(".outline-nevo-violet")).toHaveLength(0);
+  });
+
+  it("keeps back a mark a result names by its id, labelled or not, until accepted", () => {
+    render13(WITH_IDS());
+
+    // The third bar is the result and carries no label: still not drawn.
+    expect(scaffoldRows()).toHaveLength(2);
+
+    answer();
+    expect(scaffoldRows()).toHaveLength(3);
+  });
+
+  it("keeps back a part's label a result names, on a bar and on a line", () => {
+    for (const kind of ["bar", "number_line"]) {
+      render13(
+        build({
+          scaffold: { kind, parts: 3, labels: ["0", "1", "2"], labelIds: ["p0", "p1", "p2"] },
+          steps: [step({ highlights: [{ target: "p2", role: "result" }] })],
+        }),
+      );
+      expect(screen.getByText("1"), kind).toBeInTheDocument();
+      expect(screen.queryByText("2"), kind).toBeNull();
+
+      pick("4 and 4");
+      expect(screen.getByText("2"), kind).toBeInTheDocument();
+      cleanup();
+    }
+  });
+
+  it("keeps back the step's resultTargetId even where it is not flagged", () => {
+    render13(
+      WITH_IDS({
+        equationTokens: TOKENS.map((t) => ({ ...t, hiddenUntilAccepted: false })),
+      }),
+    );
+
+    expect(equation()).toBe("1/4 + 2/4 = ?");
+    expect(screen.queryByText("3/4")).toBeNull();
+  });
+});
+
+describe("the builds B111 and B112 open", () => {
+  const TAP = (tapCount: number) =>
+    step({
+      stepId: "a1",
+      prompt: "Build the total.",
+      expectedInput: "drag",
+      input: "tap",
+      options: [],
+      tapCount,
+    });
+  const beads = () => [...document.querySelectorAll<HTMLElement>("[data-bead]")];
+
+  it("hops a number line from its scaffold's start", () => {
+    render13(
+      build({
+        scaffold: { kind: "number_line", parts: 6, start: 2 },
+        manipulative: { kind: "number_line", parts: 6 },
+        steps: [TAP(2)],
+      }),
+    );
+
+    // Position 2 of 0 to 5, then one hop on.
+    expect(beads().map((b) => b.style.left)).toEqual(["40%"]);
+    tap("+1");
+    expect(beads().map((b) => b.style.left)).toEqual(["60%"]);
+  });
+
+  it("builds counters into D149's dots, one dropped into the next space a tap", () => {
+    const { props } = render13(
+      build({
+        manipulative: { kind: "counters", parts: 5, rows: 2 },
+        steps: [TAP(3)],
+      }),
+    );
+    const filled = () =>
+      document.querySelectorAll('[data-build-dot="filled"]').length;
+
+    expect(document.querySelectorAll("[data-build-dot]")).toHaveLength(10);
+    expect(document.querySelector("[data-build-dot]")).toHaveClass("rounded-full");
+    for (let i = 0; i < 3; i++) tap("Tap to add");
+
+    expect(filled()).toBe(3);
+    expect(screen.queryByRole("button", { name: "Tap to add" })).toBeNull();
+    tap("That's the total");
+    expect(props.onStepAnswered).toHaveBeenCalledWith("a1", true);
+  });
+});
+
+describe("drawn to the support level (B116)", () => {
+  const card = () => screen.queryByText("Picture it");
+  const HINT = "Look at the bottom number of each fraction.";
+
+  it("draws the scaffold at standard, and with no level at all", () => {
+    render13(build(), { level: "moderate" });
+    expect(card()).toBeInTheDocument();
+    cleanup();
+
+    render13(build(), { level: null });
+    expect(card()).toBeInTheDocument();
+  });
+
+  it("takes the scaffold away at light and at none, and keeps the child's own hint", () => {
+    for (const level of ["light", "none", "minimal"] as const) {
+      render13(build(), { level });
+      expect(card(), level).toBeNull();
+      // The prompt and the equation stay.
+      expect(screen.getByText("What are the denominators?")).toBeInTheDocument();
+      expect(equation()).toBe("1/4 + 2/4 = ?");
+      expect(screen.getByRole("button", { name: "Need a hint?" })).toBeInTheDocument();
+      cleanup();
+    }
+  });
+
+  it("shows the step's hint at strong, which the child can close", () => {
+    const { props } = render13(build(), { level: "full" });
+
+    expect(card()).toBeInTheDocument();
+    expect(screen.getByText(HINT)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Need a hint?" })).toBeNull();
+    expect(props.onHintShown).toHaveBeenCalledWith("step", "s1");
+
+    tap("Close hint");
+    expect(screen.queryByText(HINT)).toBeNull();
+    expect(screen.getByRole("button", { name: "Need a hint?" })).toBeInTheDocument();
+  });
+});
+
+describe("when a hint is offered and used (B130, B131)", () => {
+  const ENGINE = "Count the pieces in each bar.";
+
+  it("reports the engine's hint as it shows, not while a confirmation holds its place", () => {
+    const { props, view } = render13(build());
+    pick("4 and 4");
+    // The engine's answer arrives beside step 1's confirmation.
+    view.rerender(
+      <CalculationSolver
+        calculation={build()}
+        onSolved={vi.fn()}
+        onHintShown={props.onHintShown}
+        engineHint={ENGINE}
+      />,
+    );
+    expect(screen.queryByText(ENGINE)).toBeNull();
+    expect(props.onHintShown).not.toHaveBeenCalled();
+
+    tap("Next step");
+    expect(screen.getByText(ENGINE)).toBeInTheDocument();
+    expect(props.onHintShown).toHaveBeenCalledTimes(1);
+    expect(props.onHintShown).toHaveBeenCalledWith("engine", "s2");
+  });
+
+  it("reports the engine's hint used as the step is submitted with it on screen, once a step", () => {
+    const { props } = render13(build(), { engineHint: ENGINE });
+
+    pick("1 and 2");
+    expect(props.onHintUsed).toHaveBeenCalledTimes(1);
+    expect(props.onHintUsed).toHaveBeenCalledWith("engine", "s1");
+    // Before the step's own response, which it is about.
+    expect(props.onHintUsed.mock.invocationCallOrder[0]).toBeLessThan(
+      props.onStepAnswered.mock.invocationCallOrder[0],
+    );
+
+    pick("4 and 4");
+    expect(props.onHintUsed).toHaveBeenCalledTimes(1);
+    tap("Next step");
+    pick("The numerators: 1 and 2");
+    expect(props.onHintUsed).toHaveBeenCalledTimes(2);
+    expect(props.onHintUsed).toHaveBeenLastCalledWith("engine", "s2");
+  });
+
+  it("reports a strong level's hint used on submit, and not one closed first", () => {
+    const shown = render13(build(), { level: "full" });
+    pick("4 and 4");
+    expect(shown.props.onHintUsed).toHaveBeenCalledWith("step", "s1");
+    cleanup();
+
+    const closed = render13(build(), { level: "full" });
+    tap("Close hint");
+    pick("4 and 4");
+    expect(closed.props.onHintUsed).not.toHaveBeenCalled();
+  });
+
+  it("sends no second use on a step whose hint the child opened - opening it was the use", () => {
+    const { props, view } = render13(build());
+
+    tap("Need a hint?");
+    // The engine's hint arrives on the same step, after the child's own.
+    view.rerender(
+      <CalculationSolver
+        calculation={build()}
+        onSolved={vi.fn()}
+        onHintOpened={props.onHintOpened}
+        onHintUsed={props.onHintUsed}
+        engineHint={ENGINE}
+      />,
+    );
+    expect(screen.getByText(ENGINE)).toBeInTheDocument();
+    pick("4 and 4");
+
+    expect(props.onHintOpened).toHaveBeenCalledWith("s1");
+    expect(props.onHintUsed).not.toHaveBeenCalled();
+  });
+});

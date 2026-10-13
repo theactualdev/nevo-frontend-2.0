@@ -99,13 +99,21 @@ export function NevoKeyboard({
   placeholder = "Type here",
   uppercase = false,
   className,
+  keys,
 }: (
-  | { layout: Exclude<KeyboardLayout, "calc">; onBackspace: () => void }
+  | {
+      layout: Exclude<KeyboardLayout, "calc">;
+      onBackspace: () => void;
+      keys?: never;
+    }
   /**
    * The calculation pad has no delete key: "Delete sits at the field" (D150),
    * so the host's field deletes, and nothing here can be wired to do it.
+   *
+   * `keys` are the step's own (B108): "the exact non-digit keys the Nevo pad
+   * must add for this step". See `CalcLayout`.
    */
-  | { layout: "calc"; onBackspace?: never }
+  | { layout: "calc"; onBackspace?: never; keys?: readonly string[] }
 ) & {
   /**
    * How the keys sit on the screen.
@@ -179,7 +187,7 @@ export function NevoKeyboard({
         onMouseDown={(e) => e.preventDefault()}
         className={cn("flex flex-col", className)}
       >
-        <CalcLayout onKey={onKey} />
+        <CalcLayout keys={keys} onKey={onKey} />
       </div>
     );
   }
@@ -469,9 +477,51 @@ const CALC_SIGN = cn(
 );
 const CALC_ROW = "flex justify-center gap-2 sm:gap-2.5";
 
-function CalcLayout({ onKey }: { onKey: (c: string) => void }) {
+/** What the pad carries whatever the step: its digits, minus sign and point. */
+const CALC_OWN = new Set([..."0123456789", "-", "−", "."]);
+
+/**
+ * THE PAD, EXTENDED BY THE STEP (design, 9 Oct; B108): "the step says which
+ * characters it needs and the pad carries those". Each key the step names
+ * that the pad does not already carry, in the order named, in the sign keys'
+ * tone and three to a row like the digits, above them. No frame draws them
+ * yet; this is the least that keeps them the pad's own keys. Each types
+ * exactly the character it shows.
+ */
+function stepRows(keys: readonly string[] | undefined): string[][] {
+  const extra = (keys ?? []).filter((k) => !CALC_OWN.has(k));
+  const rows: string[][] = [];
+  for (let i = 0; i < extra.length; i += 3) rows.push(extra.slice(i, i + 3));
+  return rows;
+}
+
+function CalcLayout({
+  keys,
+  onKey,
+}: {
+  keys?: readonly string[];
+  onKey: (c: string) => void;
+}) {
   return (
     <div className="nevo-calc-pad mx-auto flex w-full flex-col gap-[var(--calc-gap,10px)] border-t border-nevo-near-black/8 bg-[#e4ddcc] px-2 pt-[var(--calc-pad-t,8px)] pb-[var(--calc-pad-b,14px)] sm:mb-2 sm:max-w-[460px] sm:gap-[var(--calc-gap,12px)] sm:rounded-t-[16px] sm:px-3.5 sm:pt-[var(--calc-pad-t,14px)] sm:pb-[var(--calc-pad-b,20px)] lg:max-w-[420px]">
+      {stepRows(keys).map((row) => (
+        <div key={row.join("")} data-step-keys className={CALC_ROW}>
+          {row.map((k) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => onKey(k)}
+              className={CALC_SIGN}
+            >
+              {k}
+            </button>
+          ))}
+          {/* A short row keeps the digits' widths. */}
+          {Array.from({ length: 3 - row.length }).map((_, i) => (
+            <span key={i} aria-hidden className="min-w-0 flex-1" />
+          ))}
+        </div>
+      ))}
       {CALC_ROWS.map((row) => (
         <div key={row[0]} className={CALC_ROW}>
           {row.map((d) => (

@@ -37,9 +37,14 @@ import {
  *
  * `rows` is how many rows of pieces to lay out (1-20, default 1) - the
  * rendered row count, as on `CalculationScaffold` (B100). `fromContent`
- * builds the kinds a frame draws: `fraction_bar` (17b, one row), `array`
- * (D149, `rows` rows of `parts` columns) and `place_value` (D149, its
- * piece counts per column read from the place-value scaffold).
+ * builds every kind: `fraction_bar` (17b, one row), `array` (D149, `rows`
+ * rows of `parts` columns), `counters` (D149's dots, laid out as the array
+ * is), `number_line` (D149's hops) and `place_value` (D149, its piece
+ * counts per column read from the place-value scaffold).
+ *
+ * B112, 13 Oct: "bar and dots are accepted and normalised" - the scaffold's
+ * names for a bar and for counters. The server normalises them on input; if
+ * one still arrives here it is read as the build it names.
  */
 export type ManipulativeKind =
   | "fraction_bar"
@@ -55,6 +60,8 @@ export interface Manipulative {
   /** Rows of pieces to lay out. 1-20, default 1. */
   rows?: number;
   labels?: string[];
+  /** "Stable ids for the draggable pieces, in renderer order" (B109). */
+  pieceIds?: string[];
 }
 
 export interface TextVariant {
@@ -174,8 +181,20 @@ export interface CalculationScaffold {
   parts: number;
   /** The physical row count. 1-20, default 1. */
   rows?: number;
+  /**
+   * "First value on a number line. Null for other scaffold kinds. Older
+   * number-line lessons default to zero" (B111). Where a number-line build
+   * starts - see `manipulativeFor`.
+   */
+  start?: CheckpointScalar | null;
   marks?: CheckpointScalar[];
   labels?: string[];
+  /** `marks[i]`'s id, for a highlight to name it by (B109). */
+  markIds?: string[];
+  /** `labels[i]`'s id (B109). */
+  labelIds?: string[];
+  /** Undescribed in the spec, and read by nothing here (asked). */
+  pieceIds?: string[];
 }
 
 /**
@@ -189,6 +208,18 @@ export interface CalculationScaffold {
 export interface CalculationHighlight {
   target: string;
   role?: "active" | "source" | "result";
+}
+
+/**
+ * "One addressable part of the equation line" (B109): what a highlight's
+ * `target` names on the equation. `hiddenUntilAccepted` is set on the token
+ * holding the step's answer - "result tokens ... remain hidden until the step
+ * is accepted" (B127).
+ */
+export interface CalculationEquationToken {
+  id: string;
+  text: string;
+  hiddenUntilAccepted?: boolean;
 }
 
 export interface CalculationStep {
@@ -231,6 +262,10 @@ export interface CalculationStep {
   narrationAudio?: AudioVariant | null;
   /** How the equation should read once this step is done. */
   visualUpdate: string;
+  /**
+   * "Compatibility snapshot of the equation after this step is accepted"
+   * (B110): read only where an older lesson has no `assembles`.
+   */
   equationState: string;
   /**
    * SCRUM-177's three, REQUIRED in the spec and optional here only so that
@@ -240,7 +275,7 @@ export interface CalculationStep {
    * `targets` are further acceptable answers the pipeline wrote down (Lydia
    * on SCRUM-177: every acceptable form of a step is stored, and the child's
    * entry is matched against that list - nothing is judged at runtime).
-   * `assembles` is the solution as it stands while this step is asked.
+   * `assembles` is the equation once this step is accepted (B110).
    */
   input?: CalculationStepEntry;
   targets?: CheckpointScalar[];
@@ -252,6 +287,20 @@ export interface CalculationStep {
   tapCount?: number | null;
   /** What this step's scaffold choreography names (B107). */
   highlights?: CalculationHighlight[];
+  /**
+   * "The exact non-digit keys the Nevo pad must add for this step, for
+   * example x, plus or minus. Empty means the standard numeric pad is
+   * sufficient" (B108). Absent on a lesson stored before it.
+   */
+  requiredCharacters?: string[];
+  /** The equation line as addressable tokens (B109). Absent on older lessons. */
+  equationTokens?: CalculationEquationToken[];
+  /**
+   * "The equation token that holds this step's answer. It is always marked
+   * hiddenUntilAccepted and has a result highlight" (B127). Required in the
+   * spec; optional here for content stored before it.
+   */
+  resultTargetId?: string;
 }
 
 export interface CalculationVariant {

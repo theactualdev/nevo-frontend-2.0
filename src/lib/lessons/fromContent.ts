@@ -32,6 +32,7 @@ import type {
   CalcHighlight,
   CalcNarration,
   CalcScaffold,
+  CalcToken,
   CalculationSegment,
   CalculationStep,
   CompletionSummary,
@@ -435,9 +436,14 @@ export function calculationFromVariant(
 
   // Resolved once: a tap step needs something to build on, and that is a
   // property of the variant rather than of the step. A place-value build
-  // takes its columns from the scaffold, so the scaffold is read first.
+  // takes its columns from the scaffold, and a number-line build its start,
+  // so the scaffold is read first.
   const scaffold = scaffoldFor(variant.scaffold);
-  const manipulative = manipulativeFor(variant.manipulative, scaffold);
+  const manipulative = manipulativeFor(
+    variant.manipulative,
+    scaffold,
+    variant.scaffold,
+  );
 
   const steps: CalculationStep[] = [];
   for (const step of variant.steps) {
@@ -450,6 +456,9 @@ export function calculationFromVariant(
   return {
     variant: variant.type?.trim() || "co_construction",
     ...(conceptId ? { conceptId } : {}),
+    ...(carriesIds(variant, steps, scaffold, manipulative)
+      ? { byId: true as const }
+      : {}),
     /*
      * `expression` is the problem as notation, required since SCRUM-177.
      * `fullEquation` used to stand in for it on content stored before, when
@@ -464,6 +473,90 @@ export function calculationFromVariant(
     steps,
     completion: variant.completionStatement.trim(),
   };
+}
+
+/**
+ * Does this calculation name its parts by id (B109)? Any id anywhere - a
+ * step's equation tokens or `resultTargetId`, a mark's, a label's or a
+ * piece's - makes it a lesson written with them, and then its highlights are
+ * matched to ids only. A lesson stored before them carries none, and is the
+ * only kind whose targets are matched to words.
+ */
+function carriesIds(
+  variant: WireCalculationVariant,
+  steps: CalculationStep[],
+  scaffold: CalcScaffold | undefined,
+  manipulative: CalculationSegment["manipulative"],
+): boolean {
+  if (variant.steps.some((s) => s.resultTargetId?.trim())) return true;
+  if (steps.some((s) => s.tokens)) return true;
+  if (manipulative && "pieceIds" in manipulative) return true;
+  if (!scaffold) return false;
+  const quantities =
+    scaffold.kind === "place_value"
+      ? scaffold.places
+      : scaffold.kind === "number_line"
+        ? scaffold.points
+        : scaffold.quantities;
+  return (
+    quantities.some((q) => q.id || q.labelId) ||
+    ("partLabelIds" in scaffold && scaffold.partLabelIds !== undefined)
+  );
+}
+
+/**
+ * Ids paired with what they name, one to one in renderer order - or none,
+ * where they do not pair. A list longer or shorter than what it names would
+ * put every id after the gap on the wrong thing, so it is not read at all.
+ */
+function idsFor(
+  ids: readonly string[] | undefined,
+  count: number,
+): string[] | undefined {
+  if (!Array.isArray(ids) || ids.length !== count || count === 0) {
+    return undefined;
+  }
+  return ids.map((id) => (typeof id === "string" ? id.trim() : ""));
+}
+
+/**
+ * A step's equation line as tokens (B109), or none. A token with no id
+ * could not be named, and one with no text could not be drawn, so a list
+ * holding either is not read and the step draws its flat string.
+ *
+ * KEPT BACK, NEVER GUESSED (B127): a token is hidden until the step is
+ * accepted where the payload says so - `hiddenUntilAccepted`, or its being
+ * the step's `resultTargetId`.
+ */
+function tokensFor(step: WireCalculationStep): CalcToken[] | undefined {
+  const wire = step.equationTokens;
+  if (!Array.isArray(wire) || wire.length === 0) return undefined;
+  const result = step.resultTargetId?.trim();
+  const tokens: CalcToken[] = [];
+  for (const t of wire) {
+    const id = typeof t?.id === "string" ? t.id.trim() : "";
+    if (!id || typeof t.text !== "string") return undefined;
+    tokens.push({
+      id,
+      text: t.text.trim(),
+      hidden: t.hiddenUntilAccepted === true || id === result,
+    });
+  }
+  return tokens;
+}
+
+/**
+ * The keys a typed step adds to the Nevo pad (B108), as the step names them,
+ * once each. Absent where the step carries no `requiredCharacters` at all -
+ * a lesson stored before the field.
+ */
+function keysFor(step: WireCalculationStep): string[] | undefined {
+  if (!Array.isArray(step.requiredCharacters)) return undefined;
+  const keys = step.requiredCharacters
+    .filter((k): k is string => typeof k === "string")
+    .map((k) => k.trim())
+    .filter((k) => k !== "");
+  return [...new Set(keys)];
 }
 
 /** A step's stored answers - its `answer`, then its `targets` - as written. */
@@ -493,12 +586,14 @@ function calcStepFor(
 ): CalculationStep | undefined {
   const accepted = storedAnswers(step);
   const narration = narrationFor(step);
+  const tokens = tokensFor(step);
   const base = {
     stepId: step.stepId,
     prompt: step.prompt,
     hint: step.hint?.trim() ?? "",
     assembles: step.assembles?.trim() ?? "",
     equationState: step.equationState?.trim() ?? "",
+    ...(tokens ? { tokens } : {}),
     highlights: highlightsFor(step),
     ...(narration ? { narration } : {}),
   };
@@ -529,10 +624,12 @@ function calcStepFor(
   if (step.input === "number") {
     if (accepted.length === 0) return undefined;
     const unit = step.unit?.trim();
+    const keys = keysFor(step);
     return {
       ...base,
       input: "number",
       entry: step.expectedInput === "text" ? "text" : "numeric",
+      ...(keys ? { keys } : {}),
       accepted,
       ...(unit ? { unit } : {}),
     };
@@ -586,21 +683,24 @@ function highlightsFor(step: WireCalculationStep): CalcHighlight[] {
 /**
  * What a tap step builds on, where a frame draws it.
  *
- * `fraction_bar`, `array`, `number_line` and `place_value`. The wire names
- * five kinds; design has drawn 17b's tap-a-piece-into-the-bar, and D149 the
- * same tap into an array's places, a hop along a number line and a place
- * value's columns. `counters` refuses: D149 says backend normalises it to
- * dots, which the wire's kinds do not name (asked). §4: the interaction IS
- * the mechanism, and a wrong one is a different task rather than a lesser
- * version of the right one.
+ * All five of the wire's kinds (B112): 17b's tap-a-piece-into-the-bar, and
+ * D149's same tap into an array's places, a hop along a number line, a place
+ * value's columns, and counters - "Fill the frame with counters: tap to drop
+ * a dot into the next empty space", D149's dots. `bar` and `dots`, the
+ * scaffold's names for two of them, are "accepted and normalised" (B112):
+ * the server does it on input, and one that still arrives here is read as
+ * the build it names. Any other kind is refused. §4: the interaction IS the
+ * mechanism, and a wrong one is a different task rather than a lesser version
+ * of the right one.
  *
- * A NUMBER LINE IS HOPPED ALONG FROM ITS FIRST POSITION, as a bar fills from
- * its first cell: the wire carries no starting point for one, so a line that
- * starts anywhere else cannot be built (asked).
+ * A NUMBER LINE IS HOPPED ALONG FROM ITS SCAFFOLD'S `start` (B111), "older
+ * payloads default to 0" - its first position. A start that is not a whole
+ * position, or leaves no room to hop, cannot be built and is refused rather
+ * than moved.
  *
  * `rows` is the rendered row count (B100): one bar, as 17b draws, and an
- * array of `rows` rows of `parts` places - "parts is the number of columns in
- * one row" (backend, 9 Oct).
+ * array or counters of `rows` rows of `parts` places - "parts is the number
+ * of columns in one row" (backend, 9 Oct).
  *
  * A PLACE-VALUE BUILD TAKES ITS COUNTS FROM THE SCAFFOLD. Building 123 is one
  * flat, two rods and three units, and one `tapCount` cannot say how many of
@@ -609,31 +709,55 @@ function highlightsFor(step: WireCalculationStep): CalcHighlight[] {
  * this app draws, into those columns, and is done when each column holds its
  * own count - nothing here adds them up.
  *
- * `labels` name pieces, for a highlight to find (`pieceLabels`); no frame
- * draws them on a build.
+ * `labels` name pieces, for a highlight to find (`pieceLabels`), and
+ * `pieceIds` (B109) are their ids; no frame draws either on a build.
  */
 function manipulativeFor(
   m: Manipulative | null | undefined,
   scaffold: CalcScaffold | undefined,
+  wireScaffold: WireCalculationScaffold | null | undefined,
 ): CalculationSegment["manipulative"] {
   if (!m) return undefined;
   if (!Number.isInteger(m.parts) || m.parts < 1) return undefined;
   const rows = m.rows ?? 1;
   const pieceLabels = (m.labels ?? []).map((l) => l.trim());
-  if (m.kind === "fraction_bar") {
+  const kind = BUILD_ALIASES[m.kind] ?? m.kind;
+  const ids = (pieces: number) => {
+    const pieceIds = idsFor(m.pieceIds, pieces);
+    return pieceIds ? { pieceIds } : {};
+  };
+  if (kind === "fraction_bar") {
     return rows === 1
-      ? { kind: "fraction_bar", parts: m.parts, pieceLabels }
+      ? { kind: "fraction_bar", parts: m.parts, pieceLabels, ...ids(m.parts) }
       : undefined;
   }
-  if (m.kind === "array" && Number.isInteger(rows) && rows >= 1) {
-    return { kind: "array", parts: m.parts, rows, pieceLabels };
+  if (
+    (kind === "array" || kind === "counters") &&
+    Number.isInteger(rows) &&
+    rows >= 1
+  ) {
+    return {
+      kind,
+      parts: m.parts,
+      rows,
+      pieceLabels,
+      ...ids(rows * m.parts),
+    };
   }
-  if (m.kind === "number_line") {
-    return rows === 1
-      ? { kind: "number_line", parts: m.parts, pieceLabels }
-      : undefined;
+  if (kind === "number_line") {
+    const start = lineStart(wireScaffold);
+    if (rows !== 1 || start === undefined || start >= m.parts - 1) {
+      return undefined;
+    }
+    return {
+      kind: "number_line",
+      parts: m.parts,
+      start,
+      pieceLabels,
+      ...ids(m.parts),
+    };
   }
-  if (m.kind === "place_value" && scaffold?.kind === "place_value") {
+  if (kind === "place_value" && scaffold?.kind === "place_value") {
     // A build with nothing to place could only be finished by doing nothing.
     if (!scaffold.places.some((p) => p.count > 0)) return undefined;
     return { kind: "place_value", columns: scaffold.places };
@@ -641,16 +765,35 @@ function manipulativeFor(
   return undefined;
 }
 
+/** B112's normalised names: the scaffold's word for the build it names. */
+const BUILD_ALIASES: Partial<Record<string, Manipulative["kind"]>> = {
+  bar: "fraction_bar",
+  dots: "counters",
+};
+
 /**
- * How many pieces a bar or an array has places for, or how many hops a line
- * of `parts` positions has room for. A place-value build has no one number
- * to hold: each column holds its own.
+ * Where a number line's hops start (B111): its scaffold's `start`, as a
+ * position - 0, its first, where the payload says none, as older payloads
+ * default. Only a number-line scaffold carries one ("null for other scaffold
+ * kinds"). Undefined for a start that names no position.
+ */
+function lineStart(
+  scaffold: WireCalculationScaffold | null | undefined,
+): number | undefined {
+  if (scaffold?.kind !== "number_line" || scaffold.start == null) return 0;
+  return countOf(scaffold.start);
+}
+
+/**
+ * How many pieces a bar, an array or counters have places for, or how many
+ * hops a line of `parts` positions has room for from its start. A
+ * place-value build has no one number to hold: each column holds its own.
  */
 function placesIn(
   m: NonNullable<CalculationSegment["manipulative"]>,
 ): number | undefined {
-  if (m.kind === "array") return m.rows * m.parts;
-  if (m.kind === "number_line") return m.parts - 1;
+  if (m.kind === "array" || m.kind === "counters") return m.rows * m.parts;
+  if (m.kind === "number_line") return m.parts - 1 - m.start;
   return m.kind === "fraction_bar" ? m.parts : undefined;
 }
 
@@ -722,10 +865,17 @@ function scaffoldFor(
     if (count === undefined) return undefined;
     counts.push(count);
   }
+  // B109: what a highlight names each mark and label by, where given.
+  const markIds = idsFor(scaffold.markIds, marks.length);
+  const labelIds = idsFor(scaffold.labelIds, labels.length);
   const quantities = counts.map((count, i) => ({
     count,
     ...(labels[i] ? { label: labels[i] } : {}),
+    ...(markIds?.[i] ? { id: markIds[i] } : {}),
+    ...(labelIds?.[i] ? { labelId: labelIds[i] } : {}),
   }));
+  /** A part's label's id, where there are no marks and the labels are a part's. */
+  const partIds = labelIds ? { partLabelIds: labelIds } : {};
   /** What the marks fill, one after another - a layout, not an answer. */
   const filled = counts.reduce((a, b) => a + b, 0);
 
@@ -739,7 +889,7 @@ function scaffoldFor(
     if (rows !== 1) return undefined;
     if (marks.length === 0) {
       return labels.length <= parts
-        ? { kind, parts, points: [], partLabels: labels }
+        ? { kind, parts, points: [], partLabels: labels, ...partIds }
         : undefined;
     }
     return counts.every((c) => c < parts)
@@ -749,7 +899,7 @@ function scaffoldFor(
   if (kind !== "bar" && kind !== "array" && kind !== "dots") return undefined;
   if (marks.length === 0) {
     return labels.length <= parts
-      ? { kind, parts, rows, quantities: [], partLabels: labels }
+      ? { kind, parts, rows, quantities: [], partLabels: labels, ...partIds }
       : undefined;
   }
   if (kind === "array" || kind === "dots") {
