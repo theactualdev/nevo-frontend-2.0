@@ -564,7 +564,7 @@ describe("the door lines 28c draws", () => {
       await screen.findByRole("heading", { name: "Let's take a moment" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("Try your PIN again in a moment. No rush."),
+      screen.getByText("Let's wait a little before trying again."),
     ).toBeInTheDocument();
     expect(screen.queryByText(/didn.t match|wait a moment before/)).toBeNull();
     // The boxes held, and no pad to type into them.

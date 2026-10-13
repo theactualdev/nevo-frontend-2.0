@@ -524,7 +524,7 @@ describe("ReturningSignInScreen — when it does not work", () => {
       screen.getByRole("heading", { name: "Let's take a moment" }),
     ).toBeVisible();
     expect(
-      screen.getByText("Try your PIN again in a moment. No rush."),
+      screen.getByText("Let's wait a little before trying again."),
     ).toBeVisible();
     expect(screen.queryByText(/didn.t match|wait a moment before/)).toBeNull();
     // The PIN boxes held, the fields as typed, and no button to press again.

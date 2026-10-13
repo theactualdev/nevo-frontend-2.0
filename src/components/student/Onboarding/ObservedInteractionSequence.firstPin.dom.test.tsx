@@ -276,7 +276,7 @@ describe("a first PIN the server refuses, and says why (B68)", () => {
       screen.getByRole("heading", { name: "Let's take a moment" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("Try your PIN again in a moment. No rush."),
+      screen.getByText("Let's wait a little before trying again."),
     ).toBeInTheDocument();
     expect(document.body.textContent).not.toContain(PIN_SAVE_FAILED_COPY);
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();

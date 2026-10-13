@@ -142,14 +142,18 @@ describe("when the PIN route says why (B68)", () => {
    * not a lockout ... no blame, no red, no error". It was "That didn't save"
    * with D68's wait line under it.
    */
-  it("pauses a throttled child, with the rows held and no failure said (D154)", async () => {
-    await renderRefused(refused(429, "too_many_attempts"));
+  it.each([
+    ["a 429", refused(429, "too_many_attempts")],
+    // D156: wherever it can be throttled, in the door's words verbatim.
+    ["too_many_attempts on another status", refused(401, "too_many_attempts")],
+  ])("pauses a throttled child (%s), with the rows held and no failure said (D154)", async (_, cause) => {
+    await renderRefused(cause);
 
     expect(
       screen.getByRole("heading", { name: "Let's take a moment" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("Try your PIN again in a moment. No rush."),
+      screen.getByText("Let's wait a little before trying again."),
     ).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(
       /didn.t save|on us|wait a moment before/,

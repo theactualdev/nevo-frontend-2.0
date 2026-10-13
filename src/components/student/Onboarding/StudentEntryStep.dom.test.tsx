@@ -784,7 +784,7 @@ describe("a child whose PIN a teacher cleared (B67)", () => {
       await chooseNewPin();
 
       expect(
-        screen.getByText("Try your PIN again in a moment. No rush."),
+        screen.getByText("Let's wait a little before trying again."),
       ).toBeInTheDocument();
       expect(push).not.toHaveBeenCalled();
     });

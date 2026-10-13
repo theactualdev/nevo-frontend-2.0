@@ -2,10 +2,17 @@ import { STUDENT_PIN_LENGTH } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { PinBox } from "./PinBox";
 
-/** D154, `Nevo Login Frame`'s `throttled` state, verbatim. */
+/**
+ * D154, `Nevo Login Frame`'s `throttled` state, verbatim - and its note is
+ * D156's line (13 Oct), the one wording everywhere a pause is shown: "Backend
+ * sends no retry time, so the front end cannot state one and must not invent
+ * one. Until it does, the line says what is true without a number." It was
+ * "Try your PIN again in a moment. No rush.", which named a moment nobody
+ * knows.
+ */
 export const THROTTLED_PAUSE_COPY = {
   heading: "Let's take a moment",
-  note: "Try your PIN again in a moment. No rush.",
+  note: "Let's wait a little before trying again.",
   forgot: "Forgot PIN?",
 } as const;
 
@@ -21,13 +28,15 @@ export const THROTTLED_PAUSE_COPY = {
  * out (`RAISED_FORGOT`), "because a child who reaches a throttle is usually a
  * child who has forgotten the PIN".
  *
- * NOTHING ENDS THE PAUSE ON A TIMER. The frame draws no end to it and the
- * contract sends no retry time with `too_many_attempts`, so the client has no
- * honest moment to release the boxes (rule 5). It lasts until the child
- * leaves by one of the screen's ways out; asked of design.
+ * NOTHING ENDS THE PAUSE ON A TIMER, AND NOTHING SAYS WHEN. The frame draws
+ * no end to it and the contract sends no retry time with `too_many_attempts`,
+ * so the client has no honest moment to release the boxes or to name (rule 5;
+ * D156, a backend ask). It lasts until the child leaves by one of the screen's
+ * ways out.
  *
  * It replaces D68's wait line ("Let's wait a moment before trying again.") in
- * the doors' tinted box, and #717's "That didn't save" on PIN creation.
+ * the doors' tinted box, and #717's "That didn't save" on PIN creation, which
+ * draws this same pause, in these same words.
  */
 export function HeldPinBoxes({
   boxClassName,
