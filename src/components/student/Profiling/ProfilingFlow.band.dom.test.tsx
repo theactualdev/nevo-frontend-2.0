@@ -55,6 +55,17 @@ const dashboardFor = (id: string, ageBand: string | null) => ({
   recentProgress: [],
 });
 const letsGo = () => screen.getByRole("button", { name: /let's go/i });
+/**
+ * Press Let's go until the run starts. Until the roster answers a press only
+ * says "Nearly ready." (D211), so the intro staying put is how a test sees the
+ * band is not yet known.
+ */
+const startWhenReady = () =>
+  waitFor(() => {
+    const go = screen.queryByRole("button", { name: /let's go/i });
+    if (go) fireEvent.click(go);
+    expect(screen.queryByRole("button", { name: /let's go/i })).toBeNull();
+  });
 
 beforeEach(() => {
   clearOnboardingDraft();
@@ -75,7 +86,8 @@ describe("a signed-in child the roster has a band for", () => {
 
     render(<ProfilingFlow onDone={vi.fn()} ownerUserId="child-1" />);
 
-    await waitFor(() => expect(letsGo()).not.toBeDisabled());
+    expect(screen.queryByText(/how old are you/i)).toBeNull();
+    await startWhenReady();
     expect(screen.queryByText(/how old are you/i)).toBeNull();
   });
 
@@ -84,8 +96,7 @@ describe("a signed-in child the roster has a band for", () => {
     myDashboard.mockResolvedValue(dashboardFor("child-1", "senior_secondary"));
 
     render(<ProfilingFlow onDone={vi.fn()} ownerUserId="child-1" />);
-    await waitFor(() => expect(letsGo()).not.toBeDisabled());
-    fireEvent.click(letsGo());
+    await startWhenReady();
 
     // SS is tile memory's 5x5 band.
     expect(screen.getByText("grid 5")).toBeInTheDocument();
@@ -98,9 +109,10 @@ describe("a signed-in child the roster has a band for", () => {
 
     render(<ProfilingFlow onDone={vi.fn()} ownerUserId="child-1" />);
     // Held until the roster answers, even with a band in hand.
-    expect(letsGo()).toBeDisabled();
-    await waitFor(() => expect(letsGo()).not.toBeDisabled());
     fireEvent.click(letsGo());
+    expect(screen.getByText("Nearly ready.")).toBeInTheDocument();
+    expect(screen.queryByText(/^grid/)).toBeNull();
+    await startWhenReady();
 
     // JSS, not the seven-year-old's 3x3.
     expect(screen.getByText("grid 5")).toBeInTheDocument();
@@ -115,7 +127,9 @@ describe("before the roster answers", () => {
     render(<ProfilingFlow onDone={vi.fn()} ownerUserId="child-1" />);
 
     expect(screen.queryByText(/how old are you/i)).toBeNull();
-    expect(letsGo()).toBeDisabled();
+    fireEvent.click(letsGo());
+    expect(screen.getByText("Nearly ready.")).toBeInTheDocument();
+    expect(screen.queryByText(/^grid/)).toBeNull();
   });
 });
 
@@ -126,10 +140,9 @@ describe("when the roster has no band to give (D153)", () => {
 
     render(<ProfilingFlow onDone={vi.fn()} ownerUserId="child-1" />);
 
-    await waitFor(() => expect(letsGo()).not.toBeDisabled());
     expect(screen.queryByText(/how old are you/i)).toBeNull();
     expect(screen.queryByRole("spinbutton")).toBeNull();
-    fireEvent.click(letsGo());
+    await startWhenReady();
 
     // Primary 4-6 is tile memory's 4x4 band.
     expect(screen.getByText("grid 4")).toBeInTheDocument();
@@ -141,9 +154,8 @@ describe("when the roster has no band to give (D153)", () => {
 
     render(<ProfilingFlow onDone={vi.fn()} ownerUserId="child-1" />);
 
-    await waitFor(() => expect(letsGo()).not.toBeDisabled());
     expect(screen.queryByText(/how old are you/i)).toBeNull();
-    fireEvent.click(letsGo());
+    await startWhenReady();
 
     expect(screen.getByText("grid 4")).toBeInTheDocument();
   });
@@ -155,8 +167,7 @@ describe("when the roster has no band to give (D153)", () => {
     myDashboard.mockResolvedValue(dashboardFor("child-2", "senior_secondary"));
 
     render(<ProfilingFlow onDone={vi.fn()} ownerUserId="child-1" />);
-    await waitFor(() => expect(letsGo()).not.toBeDisabled());
-    fireEvent.click(letsGo());
+    await startWhenReady();
 
     // Primary 4-6, not the other child's SS 5x5.
     expect(screen.getByText("grid 4")).toBeInTheDocument();

@@ -121,7 +121,7 @@ describe("ProfilingFlow — whose baseline it is", () => {
     render(<ProfilingFlow onDone={onDone} ownerUserId="child-sso" />);
     sitTheWholeRun();
 
-    fireEvent.click(screen.getByRole("button", { name: /first lesson/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Let's finish setting up" }));
 
     expect(onDone).toHaveBeenCalledWith(holdBaseline.mock.calls[0][0]);
   });
@@ -156,7 +156,7 @@ describe("ProfilingFlow — what it parks (B9)", () => {
     render(<ProfilingFlow onDone={onDone} runId="profiling-session-1" />);
     sitTheWholeRun();
 
-    fireEvent.click(screen.getByRole("button", { name: /first lesson/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Let's finish setting up" }));
 
     expect(holdBaseline.mock.calls[0][0]).toBe("profiling-session-1");
     expect(onDone).toHaveBeenCalledWith("profiling-session-1");
@@ -237,7 +237,7 @@ describe("ProfilingFlow — the domain probe has nothing to ask (SCRUM-175/176)"
 
     expect(screen.queryByRole("button", { name: "pause" })).toBeNull();
     expect(
-      screen.getByRole("button", { name: /first lesson/i }),
+      screen.getByRole("button", { name: "Let's finish setting up" }),
     ).toBeInTheDocument();
     expect(holdBaseline).toHaveBeenCalledTimes(1);
   });

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ProfilingFlow } from "./ProfilingFlow";
 import {
   clearOnboardingDraft,
@@ -42,9 +42,10 @@ describe("ProfilingFlow — how the band is decided", () => {
 
     expect(screen.queryByText(/how old are you/i)).toBeNull();
     expect(screen.queryByLabelText("Age")).toBeNull();
-    expect(
-      screen.getByRole("button", { name: /let's go/i }),
-    ).not.toBeDisabled();
+    // Nothing to wait for: the run starts on the first press.
+    fireEvent.click(screen.getByRole("button", { name: /let's go/i }));
+    expect(screen.queryByText("Nearly ready.")).toBeNull();
+    expect(screen.queryByRole("button", { name: /let's go/i })).toBeNull();
   });
 
   it("does not ask a child the entry lookup gave a band", () => {
@@ -53,9 +54,9 @@ describe("ProfilingFlow — how the band is decided", () => {
     render(<ProfilingFlow onDone={vi.fn()} />);
 
     expect(screen.queryByText(/how old are you/i)).toBeNull();
-    expect(
-      screen.getByRole("button", { name: /let's go/i }),
-    ).not.toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /let's go/i }));
+    expect(screen.queryByText("Nearly ready.")).toBeNull();
+    expect(screen.queryByRole("button", { name: /let's go/i })).toBeNull();
   });
 
 });
