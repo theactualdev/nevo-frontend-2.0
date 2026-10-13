@@ -350,6 +350,17 @@ export function useLessonProgress(
     };
   }, [lessonId, enabled, write, localId, assignmentId]);
 
+  /*
+   * THIS SESSION'S HELD WRITE IS OURS TO SEND while the player is open: on
+   * the connection's return, below, and on Try again (`resend`). Claimed, so
+   * the shell's flush on the same reconnect does not send it a second time;
+   * released when the player closes, when the flush is the only one left.
+   */
+  useEffect(() => {
+    if (!enabled || !issued) return;
+    return claimSlot(lessonId, issued);
+  }, [enabled, lessonId, issued]);
+
   // Back online: send whatever never landed.
   useEffect(() => {
     if (!enabled) return;

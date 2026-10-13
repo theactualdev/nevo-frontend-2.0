@@ -205,6 +205,12 @@ export function pendingProgressFor(lessonId: string): PendingWrite | null {
  * Slots a mounted player is delivering itself. A position with no session is
  * the player's to send while it is open - it retries the session on its own -
  * and opening a second session for the same visit would split it in two.
+ *
+ * AND ITS SESSION'S POSITION, ONCE IT HAS ONE. The player re-sends a write
+ * that did not land when the connection returns, and on Try again (D183),
+ * and reads the result off the answer - so a flush sending the same held
+ * write on the same reconnect put the completion up twice. The flush still
+ * sends that session's held answers, as before; only the position is left.
  */
 const claimed = new Set<string>();
 
@@ -439,7 +445,7 @@ async function deliverSlot(
     dropProgress(owner, slot, held.heldAt);
     held = undefined;
   }
-  if (claimed.has(slot)) return;
+  const mine = claimed.has(slot);
   const waiting = answersIn(owner, slot).filter(
     (a) => a.refusedAt === undefined,
   );
@@ -448,6 +454,7 @@ async function deliverSlot(
     let sessionId =
       held?.sessionId ?? waiting.find((a) => a.sessionId)?.sessionId ?? null;
     if (!sessionId) {
+      if (mine) return;
       sessionId = (await lessonsApi.startSession(lessonId)).sessionId;
       // Kept under the session from here on, so its answers and its position
       // land in one visit even if they go on different reconnects.
@@ -462,7 +469,7 @@ async function deliverSlot(
       slot = to;
     }
     const answers = await sendAnswers(owner, lessonId, slot, sessionId);
-    if (!held) return;
+    if (!held || mine) return;
     let status = held.status;
     if (status === LESSON_STATUS.COMPLETED && answers !== "sent") {
       if (answers === "held") return;
