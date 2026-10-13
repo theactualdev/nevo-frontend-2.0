@@ -211,3 +211,31 @@ describe("a closed account at the door", () => {
     expect(screen.queryAllByRole("button")).toHaveLength(0);
   });
 });
+
+describe("which of the door's screens sit in the tablet frame (D207)", () => {
+  /*
+   * Closed (28d) and on pause are the door's own states, drawn on the
+   * pre-login tablet canvas, and letterbox at desktop width as they do at the
+   * picker. The session-end screens are frame 28's, drawn on the signed-in
+   * canvas with a desktop composition of their own.
+   */
+  const framed = () =>
+    screen.getByRole("heading", { level: 1 }).closest(
+      "[data-nevo-letterbox-frame]",
+    ) !== null;
+
+  it.each(["account_closed", "account_paused"])("frames %s", async (reason) => {
+    await doorFor(reason);
+
+    expect(framed()).toBe(true);
+  });
+
+  it.each(["session_expired", "session_replaced", "session_revoked"])(
+    "does not frame %s",
+    async (reason) => {
+      await doorFor(reason);
+
+      expect(document.querySelector("[data-nevo-letterbox]")).toBeNull();
+    },
+  );
+});

@@ -323,6 +323,13 @@ describe("a first PIN the server refuses, and says why (B68)", () => {
     await choosePin();
 
     expect(screen.getByRole("heading", { name: heading })).toBeInTheDocument();
+    // In the tablet frame at desktop width, as 05's holds are (D207): the
+    // PIN screen before it is not, and the hold is a pre-login screen.
+    expect(
+      screen
+        .getByRole("heading", { name: heading })
+        .closest("[data-nevo-letterbox-frame]"),
+    ).not.toBeNull();
     expect(alertText()).not.toContain(PIN_SAVE_FAILED_COPY);
     expect(push).not.toHaveBeenCalled();
     expect(getSession()).toBeNull();

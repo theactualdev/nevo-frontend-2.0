@@ -247,6 +247,53 @@ describe("the consent hold", () => {
   });
 });
 
+describe("the tablet frame at desktop width (D207)", () => {
+  /*
+   * "The same rule applies to Welcome, Teacher Join, Onboarding 1 to 3,
+   * Transition, Sequence Shell and SSO." The routes whose every screen is
+   * drawn on the pre-login canvas are framed here; what the frame does at
+   * 1024 is `Letterbox`'s test.
+   */
+  const framed = () =>
+    screen.getByText("lesson body").closest("[data-nevo-letterbox-frame]");
+
+  it.each([
+    "/student/onboarding",
+    "/student/onboarding/school",
+    "/student/onboarding/teacher-join",
+    "/student/waiting",
+    "/student/unavailable",
+  ])("frames %s", (path) => {
+    at(path);
+
+    expect(framed()).not.toBeNull();
+  });
+
+  it.each([
+    // Mixed: the sequence frames its own pre-login screens, not the notice,
+    // PIN creation or You're In.
+    "/student/onboarding/sequence",
+    // Signed in, with desktop compositions of their own.
+    "/student/dashboard",
+    "/student/lessons/abc-123",
+    "/student/warm-up",
+    "/student/profile/pin",
+    // Frame 28's error states.
+    "/student/unchecked",
+  ])("does not frame %s", (path) => {
+    at(path);
+
+    expect(framed()).toBeNull();
+  });
+
+  it("puts a hold's text size inside the frame, so it scales the screen and not the frame", () => {
+    at("/student/waiting");
+
+    const zoom = screen.getByText("lesson body").closest(".nevo-text-zoom");
+    expect(zoom!.closest("[data-nevo-letterbox-frame]")).not.toBeNull();
+  });
+});
+
 describe("scalesWithTextSize — Text Size on the full-screen routes", () => {
   /*
    * The baseline was always exempt: its tasks are sized and timed to measure.

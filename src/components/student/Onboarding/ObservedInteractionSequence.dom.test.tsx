@@ -266,3 +266,35 @@ describe("where the learning notice sits (D10, 1 Oct)", () => {
     expect(screen.getByRole("button", { name: "set pin" })).toBeInTheDocument();
   });
 });
+
+describe("which of its screens sit in the tablet frame (D207)", () => {
+  /*
+   * The Transition and the profiling run are pre-login screens, drawn on the
+   * 768 x 1024 canvas, and letterbox at desktop width. The notice, PIN
+   * creation and You're In are drawn on the signed-in canvas with desktop
+   * compositions of their own, so the frame comes off for them.
+   */
+  const framed = (name: string | RegExp) =>
+    screen
+      .getAllByText(name)[0]
+      .closest("[data-nevo-letterbox-frame]") !== null;
+
+  it("frames the Transition and the profiling run, and nothing after them", async () => {
+    render(<ObservedInteractionSequence />);
+    expect(framed("after transition")).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "after transition" }));
+    expect(framed("after profiling")).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "after profiling" }));
+    expect(framed(/get to know how you learn/i)).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(framed("set pin")).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "set pin" }));
+    await screen.findByRole("button", { name: "you are in" });
+    expect(framed("you are in")).toBe(false);
+    expect(document.querySelector("[data-nevo-letterbox]")).toBeNull();
+  });
+});

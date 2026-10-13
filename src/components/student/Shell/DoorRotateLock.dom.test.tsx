@@ -90,6 +90,73 @@ describe("DoorRotateLock", () => {
 });
 
 /**
+ * D207: the child's pre-login doors sit in the tablet frame at desktop width
+ * ("Sign-in, student entry and Forgot PIN now centre the tablet frame on
+ * near-black at desktop ... The same rule applies to ... SSO"). What the
+ * frame does at 1024 is `Letterbox`'s test; this is which doors get one.
+ */
+describe("which doors sit in the tablet frame (D207)", () => {
+  const frameAround = (text: string) =>
+    screen.getByText(text).closest("[data-nevo-letterbox-frame]");
+
+  it.each([
+    "/auth/login",
+    "/auth/sign-in",
+    "/auth/forgot-pin",
+    "/auth/sso-callback",
+    "/auth/login/",
+  ])("frames %s", (door) => {
+    path.current = door;
+    render(
+      <DoorRotateLock>
+        <main>door</main>
+      </DoorRotateLock>,
+    );
+
+    expect(frameAround("door")).not.toBeNull();
+  });
+
+  it("leaves the rotate prompt over the whole screen, not the frame", () => {
+    path.current = "/auth/login";
+    render(
+      <DoorRotateLock>
+        <main>door</main>
+      </DoorRotateLock>,
+    );
+
+    expect(prompt()!.closest("[data-nevo-letterbox]")).toBeNull();
+  });
+
+  it.each(["/auth/session-expired", "/auth/session-ended"])(
+    "leaves %s to its page: frame 28 draws its own desktop screen",
+    (door) => {
+      path.current = door;
+      render(
+        <DoorRotateLock>
+          <main>door</main>
+        </DoorRotateLock>,
+      );
+
+      expect(frameAround("door")).toBeNull();
+    },
+  );
+
+  it.each(["/auth/teacher", "/auth/admin", "/auth/forgot-password"])(
+    "never frames a staff door, %s",
+    (door) => {
+      path.current = door;
+      render(
+        <DoorRotateLock>
+          <main>door</main>
+        </DoorRotateLock>,
+      );
+
+      expect(document.querySelector("[data-nevo-letterbox]")).toBeNull();
+    },
+  );
+});
+
+/**
  * The student console's own rules - the focus ring first - are scoped to
  * `[data-nevo-console="student"]`, which `StudentShell` carries. A child's
  * doors under `/auth` sit outside the shell, so they carry it here.

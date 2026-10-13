@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { SessionEndScreen } from "@/components/student/Auth/SessionEndScreen";
 import { AccountClosedScreen } from "@/components/student/Auth/AccountClosedScreen";
 import { AccountOnPauseScreen } from "@/components/student/Auth/AccountOnPauseScreen";
+import { Letterbox } from "@/components/student/Shell/Letterbox";
 import { safeNextPath } from "@/lib/auth/nextPath";
 import { sessionEndReason } from "@/lib/auth/sessionEndReason";
 
@@ -68,12 +69,25 @@ export default async function SessionExpiredPage({
   // it. It offers no retry, because retrying is the one thing that cannot work.
   // A closed account is 28d, never on pause (D53, D116): terminal, no way in,
   // but a line to the picker for whoever is next (7 Oct).
+  //
+  // Both are the door's own states, drawn on the pre-login tablet canvas, so
+  // they sit in its frame at desktop width (D207) as they do at the picker.
+  // The session-end screens below are not: frame 28 draws them on the
+  // signed-in canvas, with a desktop composition.
   if (ended === "closed") {
-    return <AccountClosedScreen toPicker={{ href: "/auth/login" }} />;
+    return (
+      <Letterbox>
+        <AccountClosedScreen toPicker={{ href: "/auth/login" }} />
+      </Letterbox>
+    );
   }
   if (ended === "paused") {
     // No retry, but a way back to the picker for whoever is next (D52).
-    return <AccountOnPauseScreen back={{ href: "/auth/login" }} />;
+    return (
+      <Letterbox>
+        <AccountOnPauseScreen back={{ href: "/auth/login" }} />
+      </Letterbox>
+    );
   }
 
   return <SessionEndScreen variant={ended} next={safeNextPath(next)} />;

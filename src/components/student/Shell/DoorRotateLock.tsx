@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { Letterbox } from "./Letterbox";
 import { RotateLock } from "./RotateLock";
 
 /**
@@ -25,6 +26,30 @@ export function isStudentDoor(pathname: string | null | undefined): boolean {
 }
 
 /**
+ * The doors that are letterboxed at desktop width (D207): every screen on
+ * them is drawn on the pre-login tablet canvas. The picker and PIN door with
+ * their states, 00c, Forgot PIN and the SSO callback.
+ *
+ * NOT the session-end doors. Their own screens (28, 28a) are drawn on the
+ * signed-in canvas with a desktop composition; the two of their states that
+ * are the door's, closed and on pause, are letterboxed by the page.
+ */
+const LETTERBOXED_DOORS = [
+  "/auth/login",
+  "/auth/sign-in",
+  "/auth/forgot-pin",
+  "/auth/sso-callback",
+];
+
+export function isLetterboxedDoor(
+  pathname: string | null | undefined,
+): boolean {
+  if (!pathname) return false;
+  const path = pathname.replace(/\/+$/, "");
+  return LETTERBOXED_DOORS.includes(path);
+}
+
+/**
  * The rotate prompt over the sign-in doors too (D65, 6 Oct): "The door and the
  * app behave the same way, and a child turning a tablet at sign-in should not
  * meet different behaviour from the one they meet a minute later."
@@ -44,13 +69,23 @@ export function isStudentDoor(pathname: string | null | undefined): boolean {
  * ends too, which sit outside the shell. Here because this is the one place
  * that already knows which doors are a child's; a staff door is never marked.
  * `contents`, like the lock's own wrapper, so it draws no box.
+ *
+ * AND THE TABLET FRAME AT DESKTOP WIDTH (D207), for the same reason: this is
+ * where a child's door is known. Inside the lock, so the rotate prompt still
+ * covers the whole screen rather than the frame.
  */
 export function DoorRotateLock({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   if (!isStudentDoor(pathname)) return <>{children}</>;
   return (
     <div data-nevo-console="student" className="contents">
-      <RotateLock className="contents">{children}</RotateLock>
+      <RotateLock className="contents">
+        {isLetterboxedDoor(pathname) ? (
+          <Letterbox>{children}</Letterbox>
+        ) : (
+          children
+        )}
+      </RotateLock>
     </div>
   );
 }
