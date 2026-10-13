@@ -78,11 +78,16 @@ export function dotPositions(
  * placed. Should that ever fail, the whole array goes onto a lattice instead,
  * which holds the spacing for every pair a band runs. Only WHERE the dots go
  * is decided here; how many is the pair's.
+ *
+ * `boxPx` is the inside of the smallest box the arrays are drawn in. The
+ * daily warm-up's boxes are smaller than this module's on a phone, so it
+ * passes its own (D197).
  */
 export function scatterDots(
   count: number,
   seed: number,
   dotPx: number,
+  boxPx: number = BOX_INNER_PX,
 ): { x: number; y: number }[] {
   let s = seed >>> 0;
   const rng = () => {
@@ -90,11 +95,11 @@ export function scatterDots(
     return s / 4294967296;
   };
   const lo = DOT_INSET_PX;
-  const span = BOX_INNER_PX - 2 * DOT_INSET_PX - dotPx;
+  const span = boxPx - 2 * DOT_INSET_PX - dotPx;
   const min = dotPx * DOT_MIN_SPACING;
   const pct = (p: { x: number; y: number }) => ({
-    x: (p.x / BOX_INNER_PX) * 100,
-    y: (p.y / BOX_INNER_PX) * 100,
+    x: (p.x / boxPx) * 100,
+    y: (p.y / boxPx) * 100,
   });
 
   const placed: { x: number; y: number }[] = [];
@@ -228,9 +233,11 @@ export function warmUpDots(band: AgeBand): {
   pair: DotPair;
   revealMs: number;
   dot: string;
+  /** The dot's diameter, which its spacing is measured in (D197). */
+  px: number;
 } {
-  const { revealMs, dot } = DOTS[band] ?? DOTS.p46;
-  return { pair: dotPairs(band)[0], revealMs, dot };
+  const { revealMs, dot, px } = DOTS[band] ?? DOTS.p46;
+  return { pair: dotPairs(band)[0], revealMs, dot, px };
 }
 
 /**
@@ -513,10 +520,11 @@ export function SentenceDotModule({
    * reading Top and Bottom. Words from `Nevo Dot Comparison Frame`'s `prompt`,
    * with its em dash as a colon (the design system allows none).
    *
-   * NO BUBBLE OVER THE HEARD PICTURES OR THE PASSAGE. "Listen, then tap the
-   * matching picture" and "Read it, then answer" sat there, and no frame has
-   * either: `Nevo Sentence Verify Frame` draws 3A with no avatar row at all.
-   * The sentence form's line is the playable prototype's (11:324).
+   * NO BUBBLE OVER ANY OF 3A. "Listen, then tap the matching picture" and
+   * "Read it, then answer" sat there, and no frame has either: `Nevo Sentence
+   * Verify Frame` draws 3A with no avatar row at all. Nor over the sentence
+   * (D198, 13 Oct): "Is this true or false?" was the playable prototype's
+   * (11:324), and Lydia dropped it because no frame draws it.
    */
   const bubble = settling
     ? ""
@@ -524,9 +532,7 @@ export function SentenceDotModule({
       ? masked
         ? "Which had more dots?"
         : "Watch the dots"
-      : mode === "sentence"
-        ? "Is this true or false?"
-        : "";
+      : "";
   const phoneBubble =
     act === "dots" && masked ? "Which had more dots: top or bottom?" : undefined;
 
