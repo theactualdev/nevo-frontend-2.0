@@ -172,6 +172,81 @@ describe("saving a lesson for offline", () => {
 
 });
 
+/**
+ * D211, 13 Oct: "Downloads, 'All lessons saved for offline' | Everything's
+ * already saved. The last one is not blocked, it is finished. It still stays
+ * pressable and still says so rather than going grey." A signed-in child's
+ * bulk control used to vanish once everything was saved, so no child ever
+ * met the ruled behaviour.
+ */
+describe("the bulk control once everything is saved", () => {
+  const finished = () =>
+    screen.getByRole("button", { name: "All lessons saved for offline" });
+
+  it("stays, pressable and not grey", () => {
+    saveLesson("ada", lesson("l1", "Adding fractions") as never);
+
+    render(<SavedLessons />);
+
+    expect(finished()).toBeEnabled();
+    expect(finished().className).not.toMatch(/opacity|disabled/);
+    expect(screen.queryByText("Save all my lessons")).toBeNull();
+    expect(screen.queryByText("Everything's already saved.")).toBeNull();
+  });
+
+  it("says everything's already saved, in place, when pressed", () => {
+    saveLesson("ada", lesson("l1", "Adding fractions") as never);
+    render(<SavedLessons />);
+
+    fireEvent.click(finished());
+
+    const said = screen.getByText("Everything's already saved.");
+    expect(said).toHaveAttribute("role", "status");
+    expect(downloadLesson).not.toHaveBeenCalled();
+  });
+
+  it("still saves one more lesson after a removal", async () => {
+    saveLesson("ada", lesson("l1", "Adding fractions") as never);
+    downloadLesson.mockResolvedValue(packaged("l1", "Adding fractions"));
+    render(<SavedLessons />);
+    fireEvent.click(finished());
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Remove Adding fractions from this device" }),
+    );
+
+    expect(screen.queryByText("Everything's already saved.")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Save all my lessons" }));
+
+    await waitFor(() => expect(screen.getByText("Open")).toBeVisible());
+    expect(downloadLesson).toHaveBeenCalledWith("l1");
+    expect(savedLesson("ada", "l1")).not.toBeNull();
+    expect(finished()).toBeEnabled();
+    // Finished again, but not pressed again: no line yet.
+    expect(screen.queryByText("Everything's already saved.")).toBeNull();
+  });
+
+  it("claims nothing while the lesson list is still being read", () => {
+    saveLesson("ada", lesson("l1", "Adding fractions") as never);
+    lessons.mockReturnValue({ lessons: [], live: false, loading: true, failed: false });
+
+    render(<SavedLessons />);
+
+    expect(screen.queryByText("All lessons saved for offline")).toBeNull();
+  });
+
+  it("is not there over a failed read", () => {
+    saveLesson("ada", lesson("l9", "The water cycle") as never);
+    lessons.mockReturnValue({ lessons: [], live: true, loading: false, failed: true });
+
+    render(<SavedLessons />);
+
+    expect(screen.getByText("The water cycle")).toBeVisible();
+    expect(screen.queryByText("All lessons saved for offline")).toBeNull();
+    expect(screen.queryByText("Save all my lessons")).toBeNull();
+  });
+});
+
 describe("with no connection", () => {
   it("still lists what the child saved when their lesson list cannot load", () => {
     saveLesson("ada", lesson("l9", "The water cycle") as never, {

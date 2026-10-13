@@ -65,3 +65,21 @@ describe("the shell's sheets and system cards", () => {
     expect(heavyShadows(source(file))).toEqual([]);
   });
 });
+
+/**
+ * Frame 26 draws the phone's Ask Nevo sheet at 88% of the screen. The stock
+ * sheet's `data-[side=bottom]:h-auto` (class plus attribute) outranked a
+ * plain `h-[88%]`, so on a phone the sheet was only as tall as its content.
+ * Only an important height beats it.
+ */
+describe("the Ask Nevo sheet on a phone", () => {
+  it("is the frame's 88% tall, over the stock sheet's h-auto", () => {
+    const stock = readFileSync(
+      join(process.cwd(), "src", "components", "ui", "sheet.tsx"),
+      "utf8",
+    );
+    expect(stock).toMatch(/data-\[side=bottom\]:h-auto/);
+
+    expect(source("AskNevo/AskNevo.tsx")).toMatch(/\sh-\[88%\]!\s/);
+  });
+});
