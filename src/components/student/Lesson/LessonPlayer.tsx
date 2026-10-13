@@ -134,6 +134,26 @@ const DENSITIES: { id: Density; label: string }[] = [
   { id: DENSITY.SLOWER, label: "Slower" },
 ];
 
+/**
+ * The pace chips a segment's text can deliver: Simplify and Expand where an
+ * authored reshape exists, Slower where one does or the server's reading
+ * chunks break the body - see `textChips`.
+ */
+const densitiesFor = (segment: LessonSegment) =>
+  DENSITIES.filter(({ id }) =>
+    id === DENSITY.SLOWER
+      ? segment.text?.body[id] !== undefined ||
+        isChunkable(segment.text?.body.default, segment.text?.readingChunks)
+      : segment.text?.body[id] !== undefined,
+  );
+
+/** What holds the chip row's height, unseen, on a segment that has none. */
+const HELD_CHIPS: ToggleSegment[] = DENSITIES.map(({ id, label }) => ({
+  id,
+  label,
+  state: "default",
+}));
+
 // Each density is its own event type in the backend ingest contract.
 const DENSITY_TRIGGER: Record<Density, SignalEventType> = {
   [DENSITY.SIMPLIFY]: SIGNAL_EVENT_TYPES.SIMPLIFY_TRIGGER,
@@ -1793,18 +1813,27 @@ export function LessonPlayer({
    * told the engine they had asked (`slower_trigger`). 17a draws no density
    * pill on the calculation player.
    */
-  const textChips: ToggleSegment[] = DENSITIES.filter(({ id }) =>
-    id === DENSITY.SLOWER
-      ? segment.text?.body[id] !== undefined ||
-        isChunkable(segment.text?.body.default, segment.text?.readingChunks)
-      : segment.text?.body[id] !== undefined,
-  ).map(({ id, label }) => ({
-    id,
-    label,
-    state:
-      density === id ? "manual" : systemDensity === id ? "system" : "default",
-  }));
+  const textChips: ToggleSegment[] = densitiesFor(segment).map(
+    ({ id, label }) => ({
+      id,
+      label,
+      state:
+        density === id ? "manual" : systemDensity === id ? "system" : "default",
+    }),
+  );
   const densitySegments = modality === MODALITY.TEXT ? textChips : [];
+  /*
+   * THE CHIP ROW'S HEIGHT IS THE LESSON'S, NOT THE SEGMENT'S. Whether a
+   * segment offers a chip is down to its own content - since B114, whether
+   * the server broke its body into chunks - so taking the row away on a
+   * segment with none lifted the position line, the progress and the column
+   * 62px from one segment to the next. A lesson with a chip anywhere holds
+   * the row on every segment; a lesson with none has no row at all.
+   */
+  const chipsInLesson = useMemo(
+    () => lesson.segments.some((s) => densitiesFor(s).length > 0),
+    [lesson],
+  );
 
   /*
    * B45: KEPT AS THE SCREEN CHANGES, READ AS THE CHILD LEAVES. React runs a
@@ -2563,14 +2592,13 @@ export function LessonPlayer({
             Absent entirely when the segment has no reshapes to offer, rather
             than an empty pill rail.
 
-            HELD, UNSEEN, OVER A PICTURE OR A RECORDING of a segment whose
-            text has chips: those have to go there, and taking the row with
-            them lifted the position line and the progress 62px between a
-            text segment and the next - a change of version is felt, not
-            seen (rule 7). Not on the solver: 17a draws no row there, and it
-            needs the room. */}
-        {(densitySegments.length > 0 ||
-          (textChips.length > 0 && !calcShowing)) && (
+            HELD, UNSEEN, WHERE THIS SCREEN HAS NO CHIPS IN A LESSON THAT HAS
+            THEM - over a picture or a recording, or on a segment whose text
+            offers none (`chipsInLesson`): taking the row away lifted the
+            position line and the progress 62px between one segment and the
+            next - a change of version is felt, not seen (rule 7). Not on the
+            solver: 17a draws no row there, and it needs the room. */}
+        {(densitySegments.length > 0 || (chipsInLesson && !calcShowing)) && (
           <div
             className={cn(
               "flex justify-end",
@@ -2581,7 +2609,11 @@ export function LessonPlayer({
           >
             <AdaptiveToggleBar
               segments={
-                densitySegments.length > 0 ? densitySegments : textChips
+                densitySegments.length > 0
+                  ? densitySegments
+                  : textChips.length > 0
+                    ? textChips
+                    : HELD_CHIPS
               }
               onSelect={pickDensity}
             />
