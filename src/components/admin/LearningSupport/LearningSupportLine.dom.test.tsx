@@ -132,6 +132,10 @@ describe("the school's last holder", () => {
     show({ holders: held() });
     fireEvent.click(screen.getByRole("switch"));
     await screen.findByRole("dialog");
+    // The dialog listens for Escape from the same effect that focuses Close.
+    // On a loaded CI runner the dialog can be in the DOM before that effect
+    // has run, so wait for the focus before pressing the key.
+    await waitFor(() => expect(screen.getByRole("button", { name: "Close" })).toHaveFocus());
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("dialog")).toBeNull();
   });

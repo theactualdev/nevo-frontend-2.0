@@ -550,10 +550,22 @@
   }
 
   /*
+   * And the teacher console's, for the same reason: the shell paints its own
+   * cream, but the page under it is the library's white - past the edges of a
+   * phone, under a short sign-in page, behind a sheet as it slides in. Marked
+   * by `data-nevo-console="teacher"` on the teacher shell and the teacher
+   * sign-in pages. A new value, so none of the student rules above apply.
+   */
+  html:has([data-nevo-console="teacher"]),
+  html:has([data-nevo-console="teacher"]) body {
+    background-color: var(--color-nevo-cream);
+  }
+
+  /*
    * And under a letterboxed screen on a desktop, the near-black field the
    * tablet frame sits on - so the page pulled past its ends, or longer than
    * the window, shows the field rather than cream around the frame. After the
-   * rule above, which it overrides there.
+   * student canvas rule above, which it overrides there.
    */
   @media (width >= --theme(--breakpoint-lg)) and (pointer: fine) and (hover: hover) {
     html:has([data-nevo-letterbox]),

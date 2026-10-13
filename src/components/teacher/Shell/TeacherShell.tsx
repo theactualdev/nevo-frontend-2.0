@@ -8,7 +8,7 @@ import { AskNevo } from "./AskNevo";
 import { SystemMessagesProvider } from "@/components/shared/SystemMessages";
 import { UnsavedChangesProvider } from "./UnsavedChanges";
 import { TeacherSidebar } from "./TeacherSidebar";
-import { BiggerScreen, PhoneShell } from "./PhoneShell";
+import { BiggerScreen, PhoneBarProvider, PhoneShell } from "./PhoneShell";
 import { hasPhoneLayout } from "./phoneLayouts";
 
 /**
@@ -50,7 +50,14 @@ export function TeacherShell({ children }: { children: React.ReactNode }) {
   // And leave when another tab signs this teacher out (C02).
   useSessionElsewhere();
 
-  if (pathname.startsWith("/teacher/onboarding")) return <>{children}</>;
+  // Bare, but still the teacher console's - its canvas is cream (globals.css).
+  if (pathname.startsWith("/teacher/onboarding")) {
+    return (
+      <div data-nevo-console="teacher" className="contents">
+        {children}
+      </div>
+    );
+  }
 
   /*
    * The pill yields inside the upload wizard and returns when it closes
@@ -77,7 +84,11 @@ export function TeacherShell({ children }: { children: React.ReactNode }) {
     <SystemMessagesProvider>
     {/* C18: unsaved work registers here, and the sidebar asks before it goes. */}
     <UnsavedChangesProvider>
-    <div className="flex h-dvh flex-row overflow-hidden bg-nevo-cream text-nevo-near-black max-md:flex-col">
+    <PhoneBarProvider>
+    <div
+      data-nevo-console="teacher"
+      className="flex h-dvh flex-row overflow-hidden bg-nevo-cream text-nevo-near-black max-md:flex-col"
+    >
       {/* The rail at tablet and desktop; the app bar and drawer on a phone. */}
       <div className="contents max-md:hidden">
         <TeacherSidebar />
@@ -110,6 +121,7 @@ export function TeacherShell({ children }: { children: React.ReactNode }) {
       {/* C15: Ask Nevo floats on every console surface except upload. */}
       {!inUpload && <AskNevo />}
     </div>
+    </PhoneBarProvider>
     </UnsavedChangesProvider>
     </SystemMessagesProvider>
   );

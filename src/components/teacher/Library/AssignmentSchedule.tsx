@@ -4,10 +4,13 @@ import { useState } from "react";
 import { useTeacherClasses } from "@/hooks/useTeacherClasses";
 import {
   applyToAssignments,
+  cancelAssignments,
+  type CancellationReason,
   type Assignment,
 } from "@/lib/api/assignments";
 import { dayOf } from "@/components/teacher/Assign/pastDate";
 import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
+import { cn } from "@/lib/utils";
 
 /**
  * Who this lesson is set for, and the two ways to change it.
@@ -68,8 +71,39 @@ type Busy = { key: string; kind: "dates" | "cancel" } | null;
  * without saying how to finish it. That is the whole fix: the button no longer
  * decides what to do; the outcome tells it.
  */
+/**
+ * SCRUM-225's prompt. The ticket's own words for the reasons, in its two
+ * groups, with what each group does to a child's reviews - which is the whole
+ * reason the question is asked. No frame draws this; raised with design.
+ */
+const REASONS: {
+  heading: string;
+  outcome: string;
+  options: { value: CancellationReason; label: string }[];
+}[] = [
+  {
+    heading: "The teaching stands",
+    outcome: "Students keep their reviews of what it taught.",
+    options: [
+      { value: "finished_with", label: "Finished with" },
+      { value: "superseded", label: "Superseded" },
+      { value: "duplicate", label: "Duplicate" },
+      { value: "housekeeping", label: "Housekeeping" },
+    ],
+  },
+  {
+    heading: "It is being taken back",
+    outcome: "Their reviews of what it taught are withdrawn.",
+    options: [
+      { value: "wrong_content", label: "Wrong content" },
+      { value: "wrong_class", label: "Wrong class" },
+      { value: "assigned_in_error", label: "Assigned in error" },
+    ],
+  },
+];
+
 type Again =
-  | { action: "cancel" }
+  | { action: "cancel"; reason: CancellationReason }
   | { action: "restore" }
   | { action: "dates"; changes: DateChanges };
 
@@ -107,6 +141,8 @@ export function AssignmentSchedule({
   const [outcome, setOutcome] = useState<Outcome>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
+  // The reason chosen in the open confirmation, if any.
+  const [reason, setReason] = useState<CancellationReason | null>(null);
 
   const groups = groupByClass(assignments, cancelled, edited, restored);
   if (groups.length === 0) return null;
@@ -127,10 +163,10 @@ export function AssignmentSchedule({
     );
   };
 
-  async function cancelGroup(g: Group) {
+  async function cancelGroup(g: Group, why: CancellationReason) {
     setBusy({ key: g.key, kind: "cancel" });
     setOutcome(null);
-    const { ok, failed } = await applyToAssignments(g.ids, { status: "cancelled" });
+    const { ok, failed } = await cancelAssignments(g.ids, why);
     setCancelled((prev) => new Set([...prev, ...ok]));
     setBusy(null);
     setConfirming(null);
@@ -145,7 +181,7 @@ export function AssignmentSchedule({
         kind: "partial",
         text: `Cancelled for ${ok.length} of ${g.ids.length} students. The rest still have it.`,
         retry: failed,
-        again: { action: "cancel" },
+        again: { action: "cancel", reason: why },
       });
     }
   }
@@ -215,7 +251,7 @@ export function AssignmentSchedule({
   /** Finish a partial write: the same action, on only the rows that failed. */
   function tryTheRest(g: Group, retry: string[], again: Again) {
     const rest = { ...g, ids: retry, students: retry.length };
-    if (again.action === "cancel") return cancelGroup(rest);
+    if (again.action === "cancel") return cancelGroup(rest, again.reason);
     if (again.action === "restore") return restoreGroup(rest);
     return saveDates(rest, again.changes);
   }
@@ -287,6 +323,7 @@ export function AssignmentSchedule({
                       onClick={() => {
                         setOutcome(null);
                         setEditing(null);
+                        setReason(null);
                         setConfirming(confirming === g.key ? null : g.key);
                       }}
                       className="cursor-pointer rounded-[10px] px-3 py-1.5 text-[13.5px] font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/5 disabled:cursor-not-allowed disabled:opacity-45"
@@ -327,11 +364,53 @@ export function AssignmentSchedule({
                         ? " The student who has already finished it keeps it."
                         : ` The ${g.finished} students who have already finished it keep it.`)}
                   </p>
-                  <div className="mt-3 flex gap-2">
+                  <fieldset className="mt-3.5">
+                    <legend className="text-[13.5px] font-semibold text-nevo-near-black">
+                      Why are you cancelling it?
+                    </legend>
+                    <div className="mt-2.5 flex flex-col gap-3">
+                      {REASONS.map((group) => (
+                        <div key={group.heading}>
+                          <p className="text-[12px] font-semibold tracking-[0.03em] text-nevo-near-black/55 uppercase">
+                            {group.heading}
+                          </p>
+                          <div className="mt-1.5 flex flex-wrap gap-1.5">
+                            {group.options.map((o) => (
+                              <label
+                                key={o.value}
+                                className={cn(
+                                  "cursor-pointer rounded-full border-[1.5px] px-3 py-1 text-[13px] font-medium transition-colors",
+                                  reason === o.value
+                                    ? "border-nevo-navy bg-nevo-navy text-nevo-cream"
+                                    : "border-nevo-navy/25 text-nevo-navy hover:bg-nevo-navy/6",
+                                )}
+                              >
+                                <input
+                                  type="radio"
+                                  name={`cancel-reason-${g.key}`}
+                                  value={o.value}
+                                  checked={reason === o.value}
+                                  onChange={() => setReason(o.value)}
+                                  className="sr-only"
+                                />
+                                {o.label}
+                              </label>
+                            ))}
+                          </div>
+                          <p className="mt-1.5 text-[12.5px] leading-[1.45] text-nevo-near-black/60">
+                            {group.outcome}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </fieldset>
+                  <div className="mt-3.5 flex gap-2">
+                    {/* Disabled until a reason is chosen - the one honest
+                        case for it: the form is not finished yet. */}
                     <button
                       type="button"
-                      disabled={working}
-                      onClick={() => void cancelGroup(g)}
+                      disabled={working || !reason}
+                      onClick={() => reason && void cancelGroup(g, reason)}
                       className="cursor-pointer rounded-[10px] bg-nevo-navy px-3.5 py-1.5 text-[13.5px] font-semibold text-nevo-cream disabled:cursor-not-allowed disabled:opacity-45"
                     >
                       {working ? "Cancelling…" : "Yes, cancel it"}

@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useRef, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { AvatarDisc } from "@/components/shared/AvatarDisc";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useDialogFocus } from "@/hooks/useDialogFocus";
@@ -10,7 +17,8 @@ import { useHasSession } from "@/hooks/useHasSession";
 import { useHydrated } from "@/hooks/useHydrated";
 import { SignOutModal } from "@/components/teacher/Profile/SignOutModal";
 import { cn } from "@/lib/utils";
-import { MOCK_TEACHER, TEACHER_NAV } from "./teacherNav";
+import { MOCK_TEACHER, teacherNav } from "./teacherNav";
+import { useHoldsLearningSupport } from "@/hooks/useLearningSupport";
 import { OPEN_ASK_NEVO, ownsPhoneBar, phoneTitle } from "./phoneLayouts";
 import { useLeaveGuard } from "./UnsavedChanges";
 
@@ -26,6 +34,33 @@ const MENU_ICON = (
     <path d="M4 6h16M4 12h16M4 18h16" />
   </svg>
 );
+
+/*
+ * A SCREEN THAT DRAWS ITS OWN PHONE BAR ONLY SOMETIMES. Most do or do not by
+ * route (`ownsPhoneBar`); Connect does only while a thread is open (B4), and
+ * the thread is in the query, which the shell does not read. So the page says
+ * so, and the shell's bar stands aside.
+ */
+const PageOwnsBar = createContext(false);
+const SetPageOwnsBar = createContext<(owned: boolean) => void>(() => {});
+
+export function PhoneBarProvider({ children }: { children: ReactNode }) {
+  const [owned, setOwned] = useState(false);
+  return (
+    <SetPageOwnsBar.Provider value={setOwned}>
+      <PageOwnsBar.Provider value={owned}>{children}</PageOwnsBar.Provider>
+    </SetPageOwnsBar.Provider>
+  );
+}
+
+/** For the page: "I am drawing the phone bar myself" while `owned`. */
+export function usePhoneOwnBar(owned: boolean): void {
+  const set = useContext(SetPageOwnsBar);
+  useEffect(() => {
+    set(owned);
+    return () => set(false);
+  }, [owned, set]);
+}
 
 /** Who the shell names: the teacher, the walkthrough's persona, or nobody. */
 function usePhoneIdentity() {
@@ -55,7 +90,8 @@ export function PhoneShell() {
   }
 
   // A screen with its own back bar (C19 B2-B4) draws it in place of this one.
-  if (ownsPhoneBar(pathname)) return null;
+  const pageOwnsBar = useContext(PageOwnsBar);
+  if (ownsPhoneBar(pathname) || pageOwnsBar) return null;
 
   return (
     <div className="flex shrink-0 items-center gap-3 px-4 pt-3 pb-3 md:hidden">
@@ -96,6 +132,7 @@ function PhoneDrawer({
 }) {
   const [signingOut, setSigningOut] = useState(false);
   const leaveGuard = useLeaveGuard();
+  const holdsLearningSupport = useHoldsLearningSupport();
   const ref = useRef<HTMLDivElement>(null);
   useDialogFocus(ref, { onEscape: onClose });
 
@@ -147,7 +184,7 @@ function PhoneDrawer({
         </div>
 
         <nav className="mt-3 flex flex-col gap-[3px]">
-          {TEACHER_NAV.map((t) => {
+          {teacherNav(holdsLearningSupport).map((t) => {
             const on = pathname.startsWith(t.href);
             return (
               <Link

@@ -215,6 +215,51 @@ export const assignmentsApi = {
 };
 
 /**
+ * WHY A TEACHER CANCELLED (SCRUM-225, the D39 ruling). The server's closed set
+ * on `AssignmentCancelRequest`. The first four mean the teaching stands and
+ * the assignment is only being tidied up, so the child keeps their reviews of
+ * what it taught; the last three take the teaching back, so those reviews are
+ * withdrawn. The server makes that call from the reason - this client only
+ * carries the teacher's answer to it.
+ */
+export type CancellationReason =
+  | "finished_with"
+  | "superseded"
+  | "duplicate"
+  | "housekeeping"
+  | "wrong_content"
+  | "wrong_class"
+  | "assigned_in_error";
+
+/** Cancel one assignment, with the reason (`DELETE`, 204). */
+export const cancelAssignment = (assignmentId: string, reason: CancellationReason) =>
+  api.del<void>(`/api/v1/assignments/${encodeURIComponent(assignmentId)}`, {
+    body: { reason },
+  });
+
+/**
+ * Cancel many, with one reason, reporting what landed - the same honest
+ * accounting as `applyToAssignments` below.
+ *
+ * DELETE, AND NO LONGER THE IRREVERSIBLE ONE. The PATCH note above chose
+ * PATCH because DELETE dropped the row. Since SCRUM-225 it does not: it marks
+ * the assignment cancelled, keeps the row and records the reason (backend
+ * `cancel_assignment`). It is the only cancel that carries a reason, and so
+ * the only one that can keep a child's reviews. Setting it again is still a
+ * PATCH back to `assigned`.
+ */
+export async function cancelAssignments(
+  ids: string[],
+  reason: CancellationReason,
+): Promise<{ ok: string[]; failed: string[] }> {
+  const results = await Promise.allSettled(ids.map((id) => cancelAssignment(id, reason)));
+  const ok: string[] = [];
+  const failed: string[] = [];
+  results.forEach((r, i) => (r.status === "fulfilled" ? ok : failed).push(ids[i]));
+  return { ok, failed };
+}
+
+/**
  * Apply one change to many assignments, reporting HONESTLY what happened.
  *
  * An assignment is per-student even when a teacher created it for a class, so

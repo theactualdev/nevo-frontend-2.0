@@ -16,6 +16,11 @@ let pathname = "/admin/classes";
 
 vi.mock("next/navigation", () => ({ usePathname: () => pathname }));
 vi.mock("./AdminSidebar", () => ({ AdminSidebar: () => <nav>rail</nav> }));
+// The agreement gate holds the page until it has read the school's agreement;
+// it has its own tests (`DpaGate.dom.test.tsx`), and these are about labels.
+vi.mock("./DpaGate", () => ({
+  DpaGate: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
 vi.mock("@/lib/api/school", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/school")>();
   return { ...actual, schoolApi: { ...actual.schoolApi, get: () => get() } };

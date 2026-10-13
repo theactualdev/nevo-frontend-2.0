@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { Fragment } from "react";
 import { AdminSidebar } from "./AdminSidebar";
+import { DpaGate } from "./DpaGate";
 import { useYearGroupLabels } from "./useYearGroupLabels";
 
 /**
@@ -31,7 +32,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     <div className="flex h-dvh min-h-0 w-full overflow-hidden bg-nevo-cream">
       <AdminSidebar />
       <main className="min-w-0 flex-1 overflow-y-auto">
-        <Fragment key={labelsKey}>{children}</Fragment>
+        <DpaGate>
+          <Fragment key={labelsKey}>{children}</Fragment>
+        </DpaGate>
       </main>
     </div>
   );

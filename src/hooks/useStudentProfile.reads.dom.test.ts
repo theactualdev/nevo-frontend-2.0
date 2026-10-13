@@ -11,6 +11,8 @@ const api = vi.hoisted(() => ({
   accommodations: vi.fn(),
   forStudent: vi.fn(),
 }));
+const holds = vi.hoisted(() => ({ value: true }));
+vi.mock("./useLearningSupport", () => ({ useHoldsLearningSupport: () => holds.value }));
 vi.mock("@/lib/api/students", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/students")>();
   return {
@@ -31,6 +33,7 @@ vi.mock("@/lib/api/students", async (importOriginal) => {
 
 import { useStudentProfile } from "./useStudentProfile";
 import { clearSession, setSession } from "@/lib/auth/session";
+import { ApiError } from "@/lib/api/client";
 
 /**
  * Each background read now says where it stands. They were all swallowed, so
@@ -39,6 +42,7 @@ import { clearSession, setSession } from "@/lib/auth/session";
  */
 
 beforeEach(() => {
+  holds.value = true;
   clearSession();
   window.localStorage.clear();
   setSession({
@@ -162,5 +166,52 @@ describe("what Nevo adjusted", () => {
 
     await waitFor(() => expect(result.current.reads?.adaptations).toBe("ready"));
     expect(result.current.adaptations.map((a) => a.id)).toEqual(["a-1"]);
+  });
+});
+
+/**
+ * C20 (design, 12 Oct): adaptation history is Learning Support material - read
+ * for a holder only, and refused to everyone else by the server since ab78139.
+ */
+describe("adaptation history and Learning Support", () => {
+  it("is not read for a teacher who does not hold the role", async () => {
+    holds.value = false;
+    const { result } = renderHook(() => useStudentProfile("s-1"));
+
+    await waitFor(() => expect(result.current.reads?.mastery).toBe("ready"));
+    expect(api.adaptations).not.toHaveBeenCalled();
+    expect(result.current.learningSupport).toBe(false);
+  });
+
+  it("is read for a holder, and says so", async () => {
+    const { result } = renderHook(() => useStudentProfile("s-1"));
+
+    await waitFor(() => expect(result.current.reads?.adaptations).toBe("ready"));
+    expect(api.adaptations).toHaveBeenCalledWith("s-1");
+    expect(result.current.learningSupport).toBe(true);
+  });
+});
+
+describe("a Learning Support refusal on the profile itself", () => {
+  it("is a read that did not land, never a child who does not exist", async () => {
+    // ab78139 asks every staff role for the role on this route, so a class
+    // teacher without it is refused their own pupil - which read as missing
+    // and sent them to a 404.
+    api.profile.mockRejectedValue(
+      new ApiError(403, "refused", {
+        detail: { code: "learning_support_role_required", message: "..." },
+      }),
+    );
+    const { result } = renderHook(() => useStudentProfile("s-1"));
+
+    await waitFor(() => expect(result.current.failed).toBe(true));
+    expect(result.current.missing).toBe(false);
+  });
+
+  it("still reads any other refusal as a child this teacher cannot open", async () => {
+    api.profile.mockRejectedValue(new ApiError(403, "Forbidden", { detail: "Not your student" }));
+    const { result } = renderHook(() => useStudentProfile("s-1"));
+
+    await waitFor(() => expect(result.current.missing).toBe(true));
   });
 });
