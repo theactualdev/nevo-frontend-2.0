@@ -129,3 +129,35 @@ describe("the teacher console shell", () => {
     expect(getByText("console")).toBeInTheDocument();
   });
 });
+
+/**
+ * C19 (design, 12 Oct): on a phone, a screen with no phone layout shows the
+ * shared "needs a bigger screen" state in its place. CSS decides the width;
+ * these pin which screens carry the swap at all.
+ */
+describe("the console on a phone", () => {
+  it("stands the bigger-screen state in for a screen with no phone layout", () => {
+    usePathname.mockReturnValue("/teacher/insights");
+    const { getByText, getByRole } = render(
+      <TeacherShell>
+        <div>insights</div>
+      </TeacherShell>,
+    );
+
+    expect(getByRole("heading", { name: "This page needs a bigger screen" })).toBeInTheDocument();
+    // The page is still there for a tablet or a computer - hidden below md.
+    expect(getByText("insights").parentElement?.className).toMatch(/max-md:hidden/);
+  });
+
+  it("gives a phone the screen itself where one is drawn", () => {
+    usePathname.mockReturnValue("/teacher/dashboard");
+    const { getByText, queryByRole } = render(
+      <TeacherShell>
+        <div>home</div>
+      </TeacherShell>,
+    );
+
+    expect(queryByRole("heading", { name: "This page needs a bigger screen" })).not.toBeInTheDocument();
+    expect(getByText("home").parentElement?.className ?? "").not.toMatch(/max-md:hidden/);
+  });
+});

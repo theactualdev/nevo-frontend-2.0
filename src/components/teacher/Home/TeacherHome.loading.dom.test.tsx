@@ -90,7 +90,12 @@ describe("how many things are worth the teacher's eye", () => {
     twoFlags(true);
     render(<TeacherHome />);
 
-    expect(screen.getByText(/2 things are worth your eye/)).toBeInTheDocument();
+    // Twice: the desktop's line, and C19 B1's shorter one for a phone. CSS
+    // shows one of them.
+    expect(screen.getByText(/2 things are worth your eye before first period/)).toBeInTheDocument();
+    expect(
+      screen.getByText("2 things are worth your eye. Everything else is steady."),
+    ).toBeInTheDocument();
   });
 
   it("is not said when the pages ran out with more still coming", () => {

@@ -14,7 +14,9 @@ vi.mock("@/hooks/useCurrentUser", () => ({
   useCurrentUser: () => ({ school: "E2E Probe School" }),
 }));
 
+import { act } from "@testing-library/react";
 import { AskNevo } from "./AskNevo";
+import { OPEN_ASK_NEVO } from "./phoneLayouts";
 
 /**
  * The drawer had no Escape and never took focus (C07). Opening it unmounts
@@ -84,5 +86,26 @@ describe("Ask Nevo's drawer", () => {
     fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
 
     expect(drawer.contains(document.activeElement)).toBe(true);
+  });
+});
+
+/**
+ * C19 C1: on a phone there is no pill - the drawer lists Ask Nevo, and its
+ * row opens the same sheet. The pill is hidden below md in CSS, so it is
+ * still in the DOM here; what is pinned is that the drawer's call is heard.
+ */
+describe("Ask Nevo opened from the phone drawer", () => {
+  it("opens when the drawer asks for it", () => {
+    render(<AskNevo />);
+    act(() => {
+      window.dispatchEvent(new Event(OPEN_ASK_NEVO));
+    });
+
+    expect(screen.getByRole("dialog", { name: "Ask Nevo" })).toBeInTheDocument();
+  });
+
+  it("keeps its pill off a phone", () => {
+    render(<AskNevo />);
+    expect(screen.getByRole("button", { name: "Ask Nevo" }).className).toMatch(/max-md:hidden/);
   });
 });
