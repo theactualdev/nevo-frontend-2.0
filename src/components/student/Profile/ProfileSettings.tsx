@@ -4,11 +4,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, ChevronRight, LogOut, MessageCircle } from "lucide-react";
 import { NevoKeyboard, Switch } from "@/components/shared";
+import { MaybeSample } from "@/components/shared/SampleRegion";
 import { useAuth } from "@/hooks";
-import { useDisplayName } from "@/components/student/Shell/useDisplayName";
+import { useHasSession } from "@/hooks/useHasSession";
+import { useHydrated } from "@/hooks/useHydrated";
+import {
+  saveChosenName,
+  useDisplayName,
+} from "@/components/student/Shell/useDisplayName";
 import { useAvatarTone } from "@/components/student/Shell/useAvatarTone";
-import { getRememberedProfile, setStoredDisplayName } from "@/lib/auth/session";
-import { settingsApi } from "@/lib/api/settings";
+import { PREFERRED_NAME_MAX } from "@/lib/api/users";
 import { useAccessibility } from "@/context/AccessibilityContext";
 import { cn } from "@/lib/utils";
 import { AvatarPickerSheet } from "./AvatarPickerSheet";
@@ -23,27 +28,49 @@ const TEXT_SIZES = [
 
 /**
  * Profile & Settings (screen 27). Read-only learning preferences (observed, not
- * self-reported), accessibility controls, break preference, and account. Every
- * change is acknowledged with a quiet "Saved" pill.
+ * self-reported), accessibility controls, and account. Every change is
+ * acknowledged with a quiet "Saved" pill, once it is kept.
  *
  * The accessibility controls (Reduced Motion / Text Size / High Contrast) are the
  * global, persisted preferences from `AccessibilityContext` — changing one here
- * takes effect across the whole app immediately.
+ * takes effect across the whole app immediately, and is kept on the child's
+ * account (SCRUM-226).
+ *
+ * FROM THE TABLET UP, THE COLUMN SITS LEFT, as frame 27 draws it: 44px in
+ * (52 on desktop), 600px wide, the heading 8px under the top padding. It was
+ * centred in whatever space the sidebar left.
+ *
+ * THE ACCOUNT ROWS IN THE FRAME'S ORDER: Change PIN, then "Tell us
+ * something". Sign out comes last and is OURS - no frame draws it in this
+ * list, and a child has to be able to sign out. Frame-lags, raised.
  */
 export function ProfileSettings() {
   const router = useRouter();
-  const { signOut } = useAuth();
+  const { signOut, user } = useAuth();
+  /*
+   * A child who signs in through their school (SSO) has no PIN, so Change PIN
+   * is not theirs to see and sign-out does not promise one (D9). Dormant until
+   * school SSO works; the session records the door it came through.
+   */
+  const sso = user?.method === "sso";
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [lookOpen, setLookOpen] = useState(false);
   const { tone, choose: chooseTone } = useAvatarTone();
 
   // Editable display name (product frame: tap Change → inline input; initials
-  // derive from the name). TODO(api): persist via the profile endpoint.
+  // derive from the name). Saved against the account - see `saveChosenName`.
   const stored = useDisplayName();
+  // Signed out, the name and initials are the fixture child's ("Ada"), so the
+  // row is marked - the same gate the shell's identity uses.
+  const signedIn = useHasSession();
+  const hydrated = useHydrated();
+  const showingFixtureIdentity = hydrated && !signedIn;
   const [name, setName] = useState(stored.name);
   const [editingName, setEditingName] = useState(false);
   const [nameKbOpen, setNameKbOpen] = useState(false);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
+  /** The name as it was before this edit, which a refused save goes back to. */
+  const nameBefore = useRef("");
   const initials =
     name
       .split(/\s+/)
@@ -61,9 +88,6 @@ export function ProfileSettings() {
     setHighContrast,
     setTextSize,
   } = useAccessibility();
-  // Was local, unpersisted state that nothing read - flipping it off left
-  // the 20-minute prompt firing exactly as before.
-  const { suggestBreaks, setSuggestBreaks } = useAccessibility();
 
   // Transient "Saved" confirmation.
   const [saved, setSaved] = useState(false);
@@ -79,10 +103,19 @@ export function ProfileSettings() {
     if (savedTimer.current) clearTimeout(savedTimer.current);
     savedTimer.current = setTimeout(() => setSaved(false), 1700);
   }, []);
+  /*
+   * "Saved" for an accessibility choice only once it is KEPT - on the child's
+   * account, since SCRUM-226 - and not on the tap (D112). The choice itself
+   * applies at once either way; a write that fails just says nothing.
+   */
+  const savedOnceKept = (kept: Promise<boolean>) =>
+    void kept.then((ok) => {
+      if (ok) flashSaved();
+    });
 
   return (
-    <div className="mx-auto w-full max-w-[600px] px-5 py-2 pb-8 sm:px-8 sm:py-6">
-      <h1 className="text-2xl font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[30px] lg:text-[32px]">
+    <div className="mx-auto w-full max-w-[600px] px-5 py-2 pb-8 sm:px-8 sm:py-6 md:mx-0 md:max-w-[688px] md:p-11 lg:max-w-[704px] lg:p-[52px]">
+      <h1 className="text-2xl font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[30px] md:mt-2 lg:text-[32px]">
         Profile &amp; Settings
       </h1>
 
@@ -101,8 +134,7 @@ export function ProfileSettings() {
         <Switch
           checked={reducedMotion}
           onCheckedChange={(v) => {
-            setReducedMotion(v);
-            flashSaved();
+            savedOnceKept(setReducedMotion(v));
           }}
           aria-label="Reduced motion"
         />
@@ -118,8 +150,7 @@ export function ProfileSettings() {
                 type="button"
                 aria-pressed={textSize === size.id}
                 onClick={() => {
-                  setTextSize(size.id);
-                  flashSaved();
+                  savedOnceKept(setTextSize(size.id));
                 }}
                 className={cn(
                   "min-w-8 cursor-pointer rounded-full px-2.5 py-1.5 text-[13px] font-medium transition-colors",
@@ -143,34 +174,23 @@ export function ProfileSettings() {
         <Switch
           checked={highContrast}
           onCheckedChange={(v) => {
-            setHighContrast(v);
-            flashSaved();
+            savedOnceKept(setHighContrast(v));
           }}
           aria-label="High contrast"
         />
       </SettingRow>
 
-      {/* Breaks */}
-      <SectionHeading>Breaks</SectionHeading>
-      <div className="flex items-center justify-between py-1.5">
-        <span className="text-[15px] text-nevo-near-black">
-          Suggest breaks automatically
-        </span>
-        <Switch
-          checked={suggestBreaks}
-          onCheckedChange={(v) => {
-            setSuggestBreaks(v);
-            flashSaved();
-          }}
-          aria-label="Suggest breaks automatically"
-        />
-      </div>
-      <p className="mt-1 text-[13px] text-nevo-near-black/60">
-        Nevo will still check in during moments that really call for a break
-      </p>
+      {/*
+        NO BREAKS SECTION (D87). The Profile frame deleted the heading, the
+        "Suggest breaks automatically" toggle and its helper line on 6 Oct.
+        When to offer a break is the engine's call (frontend §5b), and nothing
+        had read the switch since the client's break timer went - it offered
+        a child a choice that changed nothing.
+      */}
 
       {/* Account */}
       <SectionHeading>Account</SectionHeading>
+      <MaybeSample showing={showingFixtureIdentity} kind="student:identity">
       <div className="flex items-center gap-3.5 py-3">
         {/* The disc opens "Choose your look" (frame 27). */}
         <button
@@ -186,7 +206,9 @@ export function ProfileSettings() {
           <input
             ref={nameInputRef}
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) =>
+              setName(e.target.value.slice(0, PREFERRED_NAME_MAX))
+            }
             onFocus={() => setNameKbOpen(true)}
             onBlur={() => {
               setNameKbOpen(false);
@@ -195,16 +217,26 @@ export function ProfileSettings() {
                 setName(stored.name);
                 return;
               }
-              // "Saved" now means it: the name persists to the device and
-              // the rest of the app follows it.
-              setStoredDisplayName(name, initials);
-              // Also against the account, so the name they chose for
-              // themselves follows them to another device. Best-effort: the
-              // device copy is what this screen reads back either way.
-              void settingsApi
-                .update({ displayName: name.trim() })
-                .catch(() => {});
-              flashSaved();
+              if (name.trim() === nameBefore.current.trim()) return;
+              // Signed out there is no account to hold it - the walkthrough's
+              // choice lives in this tab, as its look does.
+              if (!signedIn) {
+                flashSaved();
+                return;
+              }
+              /*
+               * "Saved" only once the ACCOUNT holds it. This wrote the device
+               * copy, fired a best-effort write to the deprecated settings bag
+               * and said Saved in the same breath, so a refused write still
+               * said Saved and the name never reached another tablet. The
+               * field keeps what they typed while it goes; a refusal puts
+               * the name back to what the account still has.
+               */
+              const before = nameBefore.current;
+              void saveChosenName(name).then((ok) => {
+                if (ok) flashSaved();
+                else setName(before);
+              });
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
@@ -215,6 +247,7 @@ export function ProfileSettings() {
             // A.12: the Nevo Keyboard drives entry on touch; hardware keyboard
             // still types on desktop, where the on-screen one is hidden.
             inputMode="none"
+            maxLength={PREFERRED_NAME_MAX}
             autoFocus
             aria-label="Your name"
             className="h-[42px] min-w-0 flex-1 rounded-[10px] border-[1.5px] border-nevo-navy bg-nevo-cream-elevated px-3.5 text-[15px] text-nevo-near-black outline-none"
@@ -231,6 +264,7 @@ export function ProfileSettings() {
                 // server name arriving - so entering edit re-seeds from
                 // whatever the hook now says.
                 setName((n) => n || stored.name);
+                nameBefore.current = name || stored.name;
                 setEditingName(true);
               }}
               className="cursor-pointer text-[15px] font-medium text-nevo-navy"
@@ -240,6 +274,20 @@ export function ProfileSettings() {
           </>
         )}
       </div>
+      </MaybeSample>
+      {!sso && (
+        <button
+          type="button"
+          onClick={() => router.push("/student/profile/pin")}
+          className="flex w-full cursor-pointer items-center justify-between border-t border-nevo-near-black/8 py-4 text-left"
+        >
+          <span className="text-[15px] text-nevo-near-black">Change PIN</span>
+          <ChevronRight
+            className="size-5 text-nevo-near-black/40"
+            strokeWidth={2}
+          />
+        </button>
+      )}
       <button
         type="button"
         onClick={() => router.push("/student/profile/feedback")}
@@ -261,17 +309,6 @@ export function ProfileSettings() {
       </button>
       <button
         type="button"
-        onClick={() => router.push("/student/profile/pin")}
-        className="flex w-full cursor-pointer items-center justify-between border-t border-nevo-near-black/8 py-4 text-left"
-      >
-        <span className="text-[15px] text-nevo-near-black">Change PIN</span>
-        <ChevronRight
-          className="size-5 text-nevo-near-black/40"
-          strokeWidth={2}
-        />
-      </button>
-      <button
-        type="button"
         onClick={() => setSignOutOpen(true)}
         className="flex w-full cursor-pointer items-center justify-between border-t border-nevo-near-black/8 py-4 text-left"
       >
@@ -285,6 +322,7 @@ export function ProfileSettings() {
         />
       </button>
 
+      <MaybeSample showing={showingFixtureIdentity} kind="student:identity">
       <AvatarPickerSheet
         open={lookOpen}
         onOpenChange={setLookOpen}
@@ -298,19 +336,22 @@ export function ProfileSettings() {
           chooseTone(next.id).then(flashSaved, () => {});
         }}
       />
+      </MaybeSample>
 
       <SignOutSheet
         open={signOutOpen}
         onOpenChange={setSignOutOpen}
+        sso={sso}
         onSignOut={() => {
           setSignOutOpen(false);
           signOut();
-          // The sheet promises "you can come back anytime with your PIN" -
-          // onboarding has no route to the PIN unlock, so a remembered
-          // device would have stranded them in the full setup flow.
-          const door = getRememberedProfile()
-            ? "/auth/login"
-            : "/student/onboarding";
+          // The sheet promises "you can come back anytime with your PIN", and
+          // the PIN door is where every child goes - ALWAYS. This read the
+          // legacy one-child profile key and sent a device it did not name to
+          // onboarding, which cannot sign anyone in: on a shared tablet that
+          // is the second-account trap. `/auth/login` handles a device that
+          // remembers nobody itself (28c-2).
+          const door = "/auth/login";
           // A HARD navigation, not router.push - the same race the teacher
           // console hit in #176. The route guard reads the `nevo.role` cookie
           // and a client-side push runs before the clear settles, so the guard
@@ -325,7 +366,7 @@ export function ProfileSettings() {
       {nameKbOpen && (
         <NevoKeyboard
           layout="qwerty"
-          onKey={(c) => setName((n) => n + c)}
+          onKey={(c) => setName((n) => (n + c).slice(0, PREFERRED_NAME_MAX))}
           onBackspace={() => setName((n) => n.slice(0, -1))}
           onReturn={() => nameInputRef.current?.blur()}
           className="fixed inset-x-0 bottom-0 z-40"

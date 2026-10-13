@@ -4,8 +4,58 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Bell } from "lucide-react";
 import { useNotifications } from "@/hooks";
+import type { NotificationKind } from "@/context/NotificationContext";
 import { MaybeSample } from "@/components/shared/SampleRegion";
 import { cn } from "@/lib/utils";
+
+/**
+ * Board 28's row marks, drawn with the frame's own paths: a book for a new
+ * lesson, a speech bubble for a teacher's message. A kind the frame does not
+ * draw - a review coming due, a change to how the child signs in - wears the
+ * bell itself rather than a mark we chose for it.
+ */
+function KindMark({ kind }: { kind?: NotificationKind }) {
+  if (kind === "lesson" || kind === "message") {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden
+        className="size-5"
+      >
+        <path
+          d={
+            kind === "lesson"
+              ? "M4 5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2z"
+              : "M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.5A8 8 0 1 1 21 12z"
+          }
+        />
+      </svg>
+    );
+  }
+  return <Bell className="size-5" strokeWidth={2} aria-hidden />;
+}
+
+/**
+ * Board 28's tile and line, for an empty feed - and for a feed that could not
+ * be read, which the board does not draw and which keeps the same shape.
+ */
+function PanelNote({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col items-center p-8 text-center md:px-[18px] md:pt-6 md:pb-[34px]">
+      <span className="flex size-[60px] items-center justify-center rounded-[12px] bg-nevo-cream text-nevo-navy/50 md:size-14">
+        <Bell className="size-7 md:size-[26px]" strokeWidth={2} />
+      </span>
+      <p className="mt-4 text-sm text-nevo-near-black/60 md:mt-3.5">
+        {children}
+      </p>
+    </div>
+  );
+}
 
 /**
  * Notifications (board 28) - a quiet bell opening a calm panel: the two-line
@@ -17,9 +67,15 @@ import { cn } from "@/lib/utils";
  * the field is nullable in the contract. A panel anchored under the bell (popover on tablet/desktop, the same
  * card sized to the viewport on mobile). Never a badge count - a single dot
  * marks unread, no numbers anywhere.
+ *
+ * WHAT REACHES IT (backend B34, 1 Oct): the four types addressed to a child -
+ * a lesson set, a review due, a teacher's reply, a change to how they sign in
+ * - and nothing else; see `FOR_A_CHILD` in the context. The words are the
+ * backend's, rendered as written. Each row wears the frame's mark for its
+ * kind.
  */
 export function NotificationBell({ className }: { className?: string }) {
-  const { notifications, unreadCount, failed, markRead, showingSamples } =
+  const { notifications, unreadCount, failed, loading, markRead, showingSamples } =
     useNotifications();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -35,7 +91,9 @@ export function NotificationBell({ className }: { className?: string }) {
   }, [open]);
 
   return (
-    <div ref={rootRef} className={cn("relative", className)}>
+    // Not positioned on a phone, so the panel hangs from the top bar instead
+    // of from the bell - see the panel.
+    <div ref={rootRef} className={cn("md:relative", className)}>
       <button
         type="button"
         aria-label="Notifications"
@@ -63,44 +121,64 @@ export function NotificationBell({ className }: { className?: string }) {
       */}
       {open && (
         <MaybeSample showing={showingSamples} kind="student:notifications">
+        {/*
+          Board 28's panel: on a phone a full-width card under the top bar,
+          16px in from each edge; a popover under the bell from tablet up, 340
+          wide and 360 on desktop. It hung from the bell at 320 everywhere, and
+          on a phone the bell sits beside the avatar, so the card ran 9px off
+          the left of a 375 screen.
+        */}
         <div
           role="dialog"
           aria-label="Notifications"
-          className="absolute top-12 right-0 z-40 w-[320px] max-w-[calc(100vw-32px)] rounded-[12px] bg-nevo-cream p-2 shadow-[0_8px_32px_rgba(0,0,0,0.16)] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-1 motion-safe:duration-150"
+          className="absolute inset-x-4 top-full z-40 overflow-hidden rounded-[12px] bg-nevo-cream-elevated shadow-[0_4px_16px_rgba(0,0,0,0.10)] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-1 motion-safe:duration-150 md:inset-x-auto md:top-12 md:right-0 md:w-[340px] md:shadow-[0_8px_32px_rgba(0,0,0,0.16)] lg:w-[360px]"
         >
-          <p className="px-3 pt-2 pb-1.5 text-[15px] font-semibold text-nevo-near-black">
+          {/* The phone's card for an empty feed is the tile and its line
+              alone - board 28 draws it with no title. */}
+          <p
+            className={cn(
+              "px-4 pt-4 pb-2 text-base font-medium text-nevo-near-black md:px-[18px] md:pt-[18px] md:pb-2.5",
+              !failed &&
+                !loading &&
+                notifications.length === 0 &&
+                "max-md:hidden",
+            )}
+          >
             Notifications
           </p>
           {failed ? (
             /* Could not ask is not the same as nothing new. */
-            <div className="flex flex-col items-center px-4 pt-6 pb-8 text-center">
-              <span className="flex size-14 items-center justify-center rounded-[12px] bg-nevo-cream-elevated text-nevo-navy/50">
-                <Bell className="size-[26px]" strokeWidth={2} />
-              </span>
-              <p className="mt-3.5 text-sm text-nevo-near-black/60">
-                We couldn&rsquo;t load these just now
-              </p>
+            <PanelNote>We couldn&apos;t load these just now</PanelNote>
+          ) : loading ? (
+            /* Not answered yet is not "nothing new" either. */
+            <div className="flex justify-center px-4 pt-8 pb-10">
+              <span
+                role="status"
+                aria-label="Loading"
+                className="block size-5 rounded-full border-[2.5px] border-nevo-navy/20 border-t-nevo-navy motion-safe:animate-spin motion-safe:[animation-duration:800ms]"
+              />
             </div>
           ) : notifications.length === 0 ? (
-            <div className="flex flex-col items-center px-4 pt-6 pb-8 text-center">
-              <span className="flex size-14 items-center justify-center rounded-[12px] bg-nevo-cream-elevated text-nevo-navy/50">
-                <Bell className="size-[26px]" strokeWidth={2} />
-              </span>
-              <p className="mt-3.5 text-sm text-nevo-near-black/60">
-                Nothing new right now
-              </p>
-            </div>
+            <PanelNote>Nothing new right now</PanelNote>
           ) : (
             <div className="flex flex-col">
               {notifications.map((n) => {
                 const body = (
                   <>
+                    {/* The frame's mark for the row, with the unread dot on
+                        its shoulder the way the bell wears its own. */}
                     <span
-                      className={cn(
-                        "mt-1.5 size-2 shrink-0 rounded-full",
-                        n.read ? "bg-transparent" : "bg-nevo-violet",
+                      className="relative mt-px size-5 shrink-0 text-nevo-navy"
+                      data-kind={n.kind ?? "other"}
+                    >
+                      <KindMark kind={n.kind} />
+                      {!n.read && (
+                        <span
+                          aria-label="Unread"
+                          className="absolute -top-0.5 -right-1 size-2 rounded-full bg-nevo-violet ring-2 ring-nevo-cream-elevated"
+                        />
                       )}
-                    />
+                    </span>
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm leading-[1.4] font-medium text-nevo-near-black">
                         {n.title}
@@ -117,7 +195,7 @@ export function NotificationBell({ className }: { className?: string }) {
                   </>
                 );
                 const row =
-                  "flex items-start gap-3 rounded-[10px] px-3 py-3 text-left transition-colors hover:bg-nevo-cream-elevated";
+                  "flex items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-nevo-cream md:px-[18px]";
                 /*
                  * OPENING IT IS READING IT, on both kinds of row.
                  *

@@ -69,3 +69,33 @@ export function classifyLoginFailure(cause: unknown): LoginFailure {
    */
   return "credentials";
 }
+
+/**
+ * The child's doors read one code more than the staff ones: `account_closed`.
+ *
+ * Backend's 5 Oct answer gives a removed account its own 401 (B58), apart from
+ * `account_paused` - not yet named in the deployed spec, whose login 401 lists
+ * only the other three - and design ruled that a removed child reads that
+ * their account is closed, not that it is on pause (D53). Through
+ * `classifyLoginFailure` that code is unrecognised, so a removed child who
+ * typed the right PIN was told it did not match - the blame-the-child shape
+ * this module exists to stop.
+ *
+ * A SEPARATE UNION, so the staff doors' `Record<LoginFailure, ...>` maps are
+ * not made to carry a state no staff frame draws. Staff keep reading this code
+ * as they did before it had a name.
+ */
+export type LearnerLoginFailure = LoginFailure | "closed";
+
+export function classifyLearnerLoginFailure(
+  cause: unknown,
+): LearnerLoginFailure {
+  if (
+    cause instanceof ApiError &&
+    (cause.status === 401 || cause.status === 403) &&
+    apiErrorCode(cause.detail) === "account_closed"
+  ) {
+    return "closed";
+  }
+  return classifyLoginFailure(cause);
+}

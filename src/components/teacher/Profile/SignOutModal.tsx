@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { useAuth } from "@/hooks";
+import { SIGNED_OUT_DOOR } from "@/components/teacher/Auth/signedOut";
 
 /**
  * C11 sign-out confirm. The violet glyph and the reassurance line keep it a
@@ -33,21 +35,26 @@ export function SignOutModal({ onStay }: { onStay: () => void }) {
     // saw a teacher, bounced them off /auth/teacher back into the console, and
     // the token then dropped underneath them - so signing out landed you back
     // where you started and quietly logged you out a moment later.
-    // Teachers land on their own door, not the student PIN unlock.
-    window.location.assign("/auth/teacher");
+    // Teachers land on their own door, not the student PIN unlock - which
+    // says "Signed out" as they arrive (SCRUM-88, T228).
+    window.location.assign(SIGNED_OUT_DOOR);
   };
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogRef);
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-nevo-near-black/50 p-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-nevo-near-black/50 backdrop-blur-[1.5px] p-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
       onClick={() => !busy && onStay()}
     >
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label="Sign out of Nevo?"
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-[400px] rounded-2xl bg-nevo-cream p-8 text-center shadow-[0_24px_60px_rgba(0,0,0,0.3)] motion-safe:animate-in motion-safe:zoom-in-95 motion-safe:duration-200"
+        className="w-full max-w-[400px] rounded-[16px] bg-nevo-cream p-8 text-center shadow-[0_8px_32px_rgba(0,0,0,0.16)] motion-safe:animate-in motion-safe:zoom-in-95 motion-safe:duration-200"
       >
         <span className="inline-flex size-14 items-center justify-center rounded-full bg-nevo-violet/22 text-nevo-navy">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>

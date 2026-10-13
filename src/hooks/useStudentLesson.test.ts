@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { useStudentLesson } from "./useStudentLesson";
 import { clearSession, setSession } from "@/lib/auth/session";
 import { FIRST_LESSON_ID } from "@/lib/mocks";
 import { ApiError } from "@/lib/api/client";
+import { saveLesson, savedLesson } from "@/lib/offline/savedLessons";
 
 /**
  * The worst thing this hook could do, and did.
@@ -22,12 +23,15 @@ import { ApiError } from "@/lib/api/client";
  * least of all when something has gone wrong.
  */
 
-const { detail, modules, dashboard, adaptation } = vi.hoisted(() => ({
-  detail: vi.fn(),
-  modules: vi.fn(),
-  dashboard: vi.fn(),
-  adaptation: vi.fn(),
-}));
+const { detail, modules, dashboard, adaptation, accommodations } = vi.hoisted(
+  () => ({
+    detail: vi.fn(),
+    modules: vi.fn(),
+    dashboard: vi.fn(),
+    adaptation: vi.fn(),
+    accommodations: vi.fn(),
+  }),
+);
 
 vi.mock("@/lib/api/lessons", async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
@@ -35,6 +39,9 @@ vi.mock("@/lib/api/lessons", async (orig) => ({
 }));
 vi.mock("./useStudentDashboard", () => ({ useStudentDashboard: dashboard }));
 vi.mock("./useAdaptation", () => ({ useAdaptation: adaptation }));
+vi.mock("./useAccommodations", () => ({
+  useAccommodationsState: accommodations,
+}));
 
 /** The shape the live-read test already proves `lessonFromContent` accepts. */
 const LIVE_LESSON = {
@@ -74,7 +81,12 @@ beforeEach(() => {
   clearSession();
   modules.mockResolvedValue([]);
   dashboard.mockReturnValue({ data: null, loading: false, failed: false });
-  adaptation.mockReturnValue({ plan: null });
+  // The engine has answered, with nothing to change - a settled read.
+  adaptation.mockReturnValue({
+    plan: { lessonId: FIRST_LESSON_ID, segments: [] },
+    error: null,
+  });
+  accommodations.mockReturnValue({ active: null, settled: true });
 });
 
 afterEach(() => {
@@ -312,6 +324,54 @@ describe("useStudentLesson", () => {
 });
 
 /**
+ * The child's progress row goes to the player and the summary as the
+ * dashboard gave it: where a check was left (B82) and how it went (B84).
+ * Never another lesson's, an older one, or one made up when there is none.
+ */
+describe("the progress row this lesson's screens read", () => {
+  const row = (over: Record<string, unknown>) => ({
+    lessonId: FIRST_LESSON_ID,
+    status: "exited",
+    segmentPosition: 0,
+    updatedAt: "2026-10-08T09:00:00Z",
+    ...over,
+  });
+
+  it("is the newest row for this lesson", async () => {
+    signIn();
+    detail.mockResolvedValue(LIVE_LESSON);
+    dashboard.mockReturnValue({
+      data: {
+        assignments: [],
+        recentProgress: [
+          row({ checkPosition: 0, updatedAt: "2026-10-07T09:00:00Z" }),
+          row({ checkPosition: 1 }),
+          row({ lessonId: "another", checkPosition: 3 }),
+        ],
+      },
+      loading: false,
+      failed: false,
+    });
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.progressRow).toMatchObject({ checkPosition: 1 });
+  });
+
+  it("is none when the dashboard did not answer", async () => {
+    signIn();
+    detail.mockResolvedValue(LIVE_LESSON);
+    dashboard.mockReturnValue({ data: null, loading: false, failed: true });
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.lesson).not.toBeNull());
+    expect(result.current.progressRow).toBeNull();
+  });
+});
+
+/**
  * A lesson a teacher had called off played exactly like a live one.
  *
  * This is the "opens it, completes it" half of the defect, and the galling part
@@ -347,6 +407,39 @@ describe("a lesson the child is not meant to be doing", () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.unavailable).toBe("cancelled");
+    // Nothing said the reviews went with it (SCRUM-225: default false).
+    expect(result.current.recallWithdrawn).toBe(false);
+  });
+
+  it("says when cancelling it also withdrew its reviews (SCRUM-225)", async () => {
+    signIn();
+    withAssignment({
+      status: "cancelled",
+      availableFrom: null,
+      cancellationReason: "wrong_content",
+      recallWithdrawn: true,
+    });
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.recallWithdrawn).toBe(true);
+  });
+
+  it("keeps the reviews of a housekeeping cancellation (SCRUM-225)", async () => {
+    signIn();
+    withAssignment({
+      status: "cancelled",
+      availableFrom: null,
+      cancellationReason: "housekeeping",
+      recallWithdrawn: false,
+    });
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.unavailable).toBe("cancelled");
+    expect(result.current.recallWithdrawn).toBe(false);
   });
 
   it("says a lesson that opens on Friday is not yet open, and when", async () => {
@@ -394,5 +487,376 @@ describe("a lesson the child is not meant to be doing", () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.unavailable).toBeNull();
     expect(result.current.lesson).not.toBeNull();
+  });
+});
+
+/**
+ * Design D22, 1 Oct: reopening a finished lesson never marks it unfinished.
+ * The player withholds its `in_progress` and `exited` writes on this flag, so
+ * it has to be true for every finished lesson and for nothing else.
+ */
+describe("a lesson the child has already finished", () => {
+  const read = (
+    assignments: Record<string, unknown>[],
+    recentProgress: Record<string, unknown>[],
+  ) => {
+    detail.mockResolvedValue(LIVE_LESSON);
+    dashboard.mockReturnValue({
+      data: { assignments, recentProgress },
+      loading: false,
+      failed: false,
+    });
+  };
+  const row = (status: string, updatedAt: string) => ({
+    lessonId: FIRST_LESSON_ID,
+    status,
+    segmentPosition: 0,
+    updatedAt,
+  });
+
+  it("is finished when the newest progress row says completed", async () => {
+    signIn();
+    read([], [row("completed", "2026-09-30T10:00:00Z")]);
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.finished).toBe(true);
+    // Opened from the top, for review.
+    expect(result.current.resumeAt).toBeNull();
+  });
+
+  it("is finished when the assignment says so and no row is left", async () => {
+    // The feed is recent activity, so an old completion may have no row.
+    signIn();
+    read(
+      [
+        {
+          id: "a-1",
+          status: "completed",
+          availableFrom: null,
+          lesson: { id: FIRST_LESSON_ID },
+        },
+      ],
+      [],
+    );
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.finished).toBe(true);
+  });
+
+  it("is not finished while the child is part-way", async () => {
+    // Without this, a flag that was always true would pass both above - and
+    // silence every position write a real lesson makes.
+    signIn();
+    read(
+      [
+        {
+          id: "a-1",
+          status: "assigned",
+          availableFrom: null,
+          lesson: { id: FIRST_LESSON_ID },
+        },
+      ],
+      [
+        row("completed", "2026-09-29T10:00:00Z"),
+        row("in_progress", "2026-09-30T10:00:00Z"),
+      ],
+    );
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.finished).toBe(false);
+  });
+
+  it("is not finished when nothing has been started", async () => {
+    signIn();
+    read([], []);
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.finished).toBe(false);
+  });
+});
+
+describe("what the first frame waits for", () => {
+  /*
+   * Loading waited for the lesson and the dashboard only, so the engine's
+   * opening plan and the child's accommodations reshaped a segment that was
+   * already showing (rules 6 and 7). Now the first frame waits for both - but
+   * not for ever, since the client has no request timeout.
+   */
+  const ready = () => {
+    signIn();
+    detail.mockResolvedValue(LIVE_LESSON);
+    dashboard.mockReturnValue({
+      data: { assignments: [], recentProgress: [] },
+      loading: false,
+      failed: false,
+    });
+  };
+
+  afterEach(() => vi.useRealTimers());
+
+  it("waits for the child's accommodations", async () => {
+    ready();
+    accommodations.mockReturnValue({ active: null, settled: false });
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.lesson).not.toBeNull());
+    expect(result.current.loading).toBe(true);
+  });
+
+  it("waits for the engine's opening plan", async () => {
+    ready();
+    adaptation.mockReturnValue({ plan: null, error: null });
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.lesson).not.toBeNull());
+    expect(result.current.loading).toBe(true);
+  });
+
+  it("does not wait on an engine that failed", async () => {
+    ready();
+    adaptation.mockReturnValue({ plan: null, error: "unreachable" });
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+  });
+
+  it("opens anyway once it has waited long enough", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    ready();
+    adaptation.mockReturnValue({ plan: null, error: null });
+    accommodations.mockReturnValue({ active: null, settled: false });
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+    await vi.waitFor(() => expect(result.current.lesson).not.toBeNull());
+    expect(result.current.loading).toBe(true);
+
+    await act(async () => {
+      vi.advanceTimersByTime(4000);
+    });
+
+    expect(result.current.loading).toBe(false);
+  });
+});
+
+describe("an accommodation when the engine does not answer", () => {
+  it("is still applied, not dropped with the plan it would have ridden on", async () => {
+    /*
+     * They merged only onto a non-null plan, so a failed adapt call took a
+     * delivered accommodation away for the whole lesson - while the teacher's
+     * screen showed it active.
+     */
+    signIn();
+    detail.mockResolvedValue(LIVE_LESSON);
+    adaptation.mockReturnValue({ plan: null, error: "unreachable" });
+    accommodations.mockReturnValue({
+      active: { reading: true, attention: false, numerical: false },
+      settled: true,
+    });
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.lesson).not.toBeNull());
+    expect(result.current.plan?.accommodations?.reading).toBe(true);
+  });
+});
+
+describe("where calculation support starts (B103, 9 Oct)", () => {
+  it("rides on the live plan as the indicator draws it", async () => {
+    signIn();
+    detail.mockResolvedValue(LIVE_LESSON);
+    adaptation.mockReturnValue({ plan: null, error: "unreachable" });
+    accommodations.mockReturnValue({
+      active: null,
+      settled: true,
+      support: { initialScaffoldLevel: "strong" },
+    });
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.lesson).not.toBeNull());
+    expect(result.current.plan?.initialScaffold).toBe("full");
+    // Nothing else is invented beside it.
+    expect(result.current.plan).not.toHaveProperty("accommodations");
+  });
+
+  it("is no level when the read gave none, or one this client does not know", async () => {
+    signIn();
+    detail.mockResolvedValue(LIVE_LESSON);
+    adaptation.mockReturnValue({ plan: null, error: "unreachable" });
+    for (const support of [null, {}, { initialScaffoldLevel: "medium" }]) {
+      accommodations.mockReturnValue({ active: null, settled: true, support });
+
+      const { result, unmount } = renderHook(() =>
+        useStudentLesson(FIRST_LESSON_ID),
+      );
+
+      await waitFor(() => expect(result.current.lesson).not.toBeNull());
+      expect(result.current.plan?.initialScaffold).toBeUndefined();
+      unmount();
+    }
+  });
+});
+
+describe("a lesson the child saved for offline", () => {
+  /*
+   * With no connection the lesson read fails, and a child who saved the lesson
+   * gets the copy they kept - built exactly as it would be online. Never for a
+   * 404 (a lesson the school removed stays removed), and never another child's.
+   */
+  beforeEach(() => window.localStorage.clear());
+
+  it("opens from the saved copy when the read cannot be made", async () => {
+    signIn();
+    saveLesson("student-1", LIVE_LESSON as never);
+    detail.mockRejectedValue(new ApiError(0, "Network"));
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.lesson).not.toBeNull());
+    expect(result.current.failed).toBe(false);
+    expect(result.current.lesson?.title).toBe("Fractions Lesson 3");
+  });
+
+  /*
+   * Lydia, 6 Oct: a lesson played without its modules, recap and check is not
+   * recorded completed. A copy saved before B85 (8 Oct) carries none of them,
+   * and the player is told which copy it has.
+   */
+  it("says when the saved copy lacks what completion needs", async () => {
+    signIn();
+    // An older package copy under the detail's names: none of the three keys.
+    saveLesson("student-1", LIVE_LESSON as never);
+    detail.mockRejectedValue(new ApiError(0, "Network"));
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.lesson).not.toBeNull());
+    expect(result.current.partial).toBe(true);
+  });
+
+  it("does not for a copy that carries all three", async () => {
+    // The detail read's, or a package's since B85: either completes.
+    signIn();
+    saveLesson("student-1", {
+      ...LIVE_LESSON,
+      modules: [],
+      recap: null,
+      assessment: [],
+    } as never);
+    detail.mockRejectedValue(new ApiError(0, "Network"));
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.lesson).not.toBeNull());
+    expect(result.current.fromShelf).toBe(true);
+    expect(result.current.partial).toBe(false);
+  });
+
+  it("does not for a lesson read live", async () => {
+    signIn();
+    saveLesson("student-1", LIVE_LESSON as never);
+    detail.mockResolvedValue(LIVE_LESSON);
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.lesson).not.toBeNull());
+    expect(result.current.partial).toBe(false);
+  });
+
+  it("does not bring back a lesson the school removed", async () => {
+    signIn();
+    saveLesson("student-1", LIVE_LESSON as never);
+    detail.mockRejectedValue(new ApiError(404, "Not Found"));
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.missing).toBe(true));
+    expect(result.current.lesson).toBeNull();
+  });
+
+  it("does not open another child's saved copy", async () => {
+    signIn();
+    saveLesson("someone-else", LIVE_LESSON as never);
+    detail.mockRejectedValue(new ApiError(0, "Network"));
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.failed).toBe(true));
+  });
+
+  it("keeps a saved copy as fresh as the last online open", async () => {
+    signIn();
+    saveLesson("student-1", { ...LIVE_LESSON, title: "Old title" } as never);
+    detail.mockResolvedValue(LIVE_LESSON);
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.lesson).not.toBeNull());
+    expect(savedLesson("student-1", FIRST_LESSON_ID)?.title).toBe(
+      "Fractions Lesson 3",
+    );
+  });
+});
+
+/**
+ * "No saved place" and "could not read the saved place" are different answers.
+ *
+ * A failed dashboard read left `resumeAt` null exactly as a lesson never
+ * started does, so the player opened at segment 0 and wrote that over where
+ * the child had really got to - and the cancelled check, which reads the same
+ * response, silently passed.
+ */
+describe("a saved place that could not be read", () => {
+  beforeEach(() => window.localStorage.clear());
+
+  it("is reported as unknown, not as none", async () => {
+    signIn();
+    detail.mockResolvedValue(LIVE_LESSON);
+    dashboard.mockReturnValue({ data: null, loading: false, failed: true });
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.lesson).not.toBeNull());
+    expect(result.current.placeUnknown).toBe(true);
+    expect(result.current.fromShelf).toBe(false);
+  });
+
+  it("is known once the dashboard answers, even with no row for this lesson", async () => {
+    signIn();
+    detail.mockResolvedValue(LIVE_LESSON);
+    dashboard.mockReturnValue({
+      data: { assignments: [], recentProgress: [] },
+      loading: false,
+      failed: false,
+    });
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.lesson).not.toBeNull());
+    expect(result.current.placeUnknown).toBe(false);
+  });
+
+  it("says when the lesson came from the offline shelf", async () => {
+    signIn();
+    saveLesson("student-1", LIVE_LESSON as never);
+    detail.mockRejectedValue(new ApiError(0, "Network"));
+    dashboard.mockReturnValue({ data: null, loading: false, failed: true });
+
+    const { result } = renderHook(() => useStudentLesson(FIRST_LESSON_ID));
+
+    await waitFor(() => expect(result.current.lesson).not.toBeNull());
+    expect(result.current.fromShelf).toBe(true);
+    expect(result.current.placeUnknown).toBe(true);
   });
 });

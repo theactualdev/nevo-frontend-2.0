@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import {
   CARD,
   GHOST_BTN,
+  AssignTeacherButton,
   NoTeacherYet,
   PausedNote,
   PRIMARY_BTN,
@@ -26,7 +27,9 @@ import {
 import { useSetupGate } from "@/hooks";
 import { BulkClassSheet } from "./BulkClassSheet";
 import { ClassFormSheet } from "./ClassFormSheet";
+import { AssignTeachingSheet } from "./AssignTeachingSheet";
 import { NoAccess, failureKind } from "../NoAccess";
+import { SubjectSpellings } from "./SubjectSpellings";
 
 /**
  * D5 Classes - the list a school actually works from.
@@ -40,14 +43,10 @@ import { NoAccess, failureKind } from "../NoAccess";
  * adaptation reasoning - the spec calls that boundary structural rather than a
  * matter of taste, and the roster routes honour it.
  *
- * TODO(api): `GET /api/v1/classes` returns no teachers. SCRUM-40's data note
- * asks for `teachers:[{id,name,role}]` on each row and the whole screen is
- * built around it, so until that lands each row resolves its own teachers
- * through `GET /api/v1/classes/{id}/teachers`. That is N+1 requests, fired in
- * parallel after the list paints, with the column showing a quiet placeholder
- * until they land - the list itself never waits on them. Fine at fourteen
- * classes, wrong at four hundred. Folding teachers into the list response
- * deletes this entire mechanism.
+ * `GET /api/v1/classes` CARRIES ITS TEACHERS NOW (24 Sep) - SCRUM-40's
+ * `teachers:[{id,name,role}]` on each row - so the page is one request. It
+ * used to resolve each row's teachers with its own `classes/{id}/teachers`
+ * call after the list painted; see `teacherLabel` below.
  *
  * DONE, AND IT WAS NEVER BACKEND'S. This note read "no endpoint reports when
  * the SSO roster last synced", then was corrected to "the gap is only that
@@ -90,9 +89,9 @@ function SearchIcon() {
   );
 }
 
-/** "Ms. Adeyemi +1" - the primary leads the label, the rest are a count. */
 /**
- * Who teaches this class, primary first.
+ * Who teaches this class: "Ms. Adeyemi +1" - the primary leads the label, the
+ * rest are a count.
  *
  * TAKES THE ROW'S OWN `teachers` NOW. It used to take the result of a
  * per-class `classTeachers` request - one per row, fired after the list
@@ -124,6 +123,8 @@ export function ClassesView() {
   /** D24 / D01b: reachable, and visibly locked while setup is unfinished. */
   const { writesPaused } = useSetupGate();
   const [bulking, setBulking] = useState(false);
+  /** The class whose "Assign a teacher" was pressed, straight from its row. */
+  const [assigningClass, setAssigningClass] = useState<AdminClass | null>(null);
   /** The row that just arrived, so it can be marked for one shot. */
   const [justCreated, setJustCreated] = useState<string | null>(null);
   /**
@@ -304,8 +305,15 @@ export function ClassesView() {
           </div>
         ) : null}
 
+        {/* D05: the spelling questions sit under the heading, above the list. */}
+        {phase === "ready" ? <SubjectSpellings paused={writesPaused} /> : null}
+
         {phase === "ready" && classes.length === 0 && !showArchived ? (
-          <EmptyState onCreate={() => setCreating(true)} paused={writesPaused} />
+          <EmptyState
+            onCreate={() => setCreating(true)}
+            paused={writesPaused}
+            onShowArchived={() => setShowArchived(true)}
+          />
         ) : null}
 
         {phase === "ready" && (classes.length > 0 || showArchived) ? (
@@ -445,18 +453,28 @@ export function ClassesView() {
                           {section.label}
                         </h3>
                       ) : null}
-                    <button
-                      type="button"
-                      onClick={() => router.push(`/admin/classes/${c.id}`)}
+                    {/*
+                      * THE ROW OPENS THE CLASS, AND "ASSIGN A TEACHER" IS ITS
+                      * OWN BUTTON. The row was one <button>, and a control
+                      * cannot sit inside a button. So the class name is the
+                      * button, stretched over the row by its ::after, and the
+                      * assign control is lifted above it - two siblings, each
+                      * doing what it says.
+                      */}
+                    <div
                       className={cn(
-                        "grid w-full cursor-pointer grid-cols-[1.6fr_90px_1.2fr] items-center gap-4 px-6 py-4 text-left transition-colors hover:bg-nevo-navy/[0.03] max-xl:grid-cols-[1.4fr_70px_1fr] max-xl:px-[18px] max-xl:py-[13px]",
+                        "relative grid w-full grid-cols-[1.6fr_90px_1.2fr] items-center gap-4 px-6 py-4 text-left transition-colors hover:bg-nevo-navy/[0.03] max-xl:grid-cols-[1.4fr_70px_1fr] max-xl:px-[18px] max-xl:py-[13px]",
                         /* Only the very last row in the list loses its
                             divider; a group's last row butts against the next
                             heading and keeps one. */
                         !(lastSection && lastRow) && ROW_DIVIDER,
                       )}
                     >
-                      <span className="min-w-0">
+                      <button
+                        type="button"
+                        onClick={() => router.push(`/admin/classes/${c.id}`)}
+                        className="min-w-0 cursor-pointer text-left after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-nevo-navy/40"
+                      >
                         <span className="block truncate text-[15.5px] font-semibold text-nevo-near-black">
                           {c.name}
                         </span>
@@ -476,7 +494,7 @@ export function ClassesView() {
                             Archived
                           </span>
                         ) : null}
-                      </span>
+                      </button>
                       <span className="text-sm text-nevo-near-black/66">{c.studentCount}</span>
                       <span className="flex min-w-0 items-center gap-2">
                         {justCreated === c.id ? (
@@ -492,15 +510,25 @@ export function ClassesView() {
                           * the names arrived after the list; now they arrive
                           * with it, so an empty array means what it says.
                           */}
+                        {/* A control where one can act (Lydia, 7 Oct); the plain
+                            state where nothing can be assigned from here - an
+                            archived class, or one the provider's sync owns. */}
                         {assigned.length === 0 ? (
-                          <NoTeacherYet />
+                          c.archivedAt || c.source === "roster_sync" ? (
+                            <NoTeacherYet />
+                          ) : (
+                            <AssignTeacherButton
+                              disabled={writesPaused}
+                              onClick={() => setAssigningClass(c)}
+                            />
+                          )
                         ) : (
                           <span className="truncate text-sm text-nevo-near-black/78">
                             {teacherLabel(assigned)}
                           </span>
                         )}
                       </span>
-                    </button>
+                    </div>
                     </div>
                   );
                   }),
@@ -540,6 +568,17 @@ export function ClassesView() {
         * for a single arriving row; a dozen rows pulsing at once is noise,
         * and the sheet's own result already names what was made.
         */}
+      {assigningClass ? (
+        <AssignTeachingSheet
+          door={{ kind: "class", klass: assigningClass, assigned: [] }}
+          onClose={() => setAssigningClass(null)}
+          onAssigned={() => {
+            setAssigningClass(null);
+            load(showArchived);
+          }}
+        />
+      ) : null}
+
       {bulking ? (
         <BulkClassSheet
           onClose={() => setBulking(false)}
@@ -557,7 +596,15 @@ export function ClassesView() {
  * The first-run state. Two ways forward, because a school that has connected a
  * provider should not be typing its roster in by hand.
  */
-function EmptyState({ onCreate, paused }: { onCreate: () => void; paused: boolean }) {
+function EmptyState({
+  onCreate,
+  paused,
+  onShowArchived,
+}: {
+  onCreate: () => void;
+  paused: boolean;
+  onShowArchived: () => void;
+}) {
   return (
     /*
      * The same definite height as `Teachers/TeachersView`'s empty state, and
@@ -603,6 +650,21 @@ function EmptyState({ onCreate, paused }: { onCreate: () => void; paused: boolea
             Create from a staff or student file
           </Link>
         </div>
+        {/*
+          * A SCHOOL WHOSE CLASSES ARE ALL ARCHIVED lands here too - the list
+          * is fetched without archived classes - and the "Show archived"
+          * toggle only exists in the list view. So last year's classes were
+          * unreachable, while the duplicate-name note told the admin to
+          * restore one. Offered every time: if there are none, the archived
+          * view says so.
+          */}
+        <button
+          type="button"
+          onClick={onShowArchived}
+          className="mt-5 cursor-pointer text-[13.5px] font-semibold text-nevo-navy hover:underline"
+        >
+          Show archived classes
+        </button>
       </div>
     </div>
   );

@@ -1,21 +1,26 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import {
   AdaptiveToggleBar,
+  preloadSettlingCharacter,
   ProgressBar,
   type ToggleSegment,
 } from "@/components/shared";
 import {
-  BREAK_TYPES,
   BUSY_PHASE,
   BUSY_REASON,
   DENSITY,
   MODALITY,
   SIGNAL_EVENT_TYPES,
-  TRIGGER_SOURCE,
   type BreakType,
   type BusyPhase,
   type BusyReason,
@@ -23,12 +28,21 @@ import {
   type Modality,
   type SignalEventType,
 } from "@/lib/constants";
-import { useAccessibility } from "@/context/AccessibilityContext";
-import { useBreakMonitor, useLesson, useSignals } from "@/hooks";
-import { useRuntimeAdaptation } from "@/hooks/useRuntimeAdaptation";
+import { useLesson, useSignals } from "@/hooks";
+import { formFactor, type SessionOutcome } from "@/hooks/useSignals";
+import {
+  useRuntimeAdaptation,
+  type AppliedAdaptations,
+} from "@/hooks/useRuntimeAdaptation";
+import { useLessonExit } from "./LessonExit";
 import { useScaffoldLevel } from "@/hooks/useScaffoldLevel";
-import type { AdaptSegment } from "@/lib/api/intelligence";
-import type { AdaptationPlan, Lesson, LessonSegment } from "@/lib/types";
+import { intelligenceApi, type AdaptSegment } from "@/lib/api/intelligence";
+import type {
+  AdaptationPlan,
+  DensityLevel,
+  Lesson,
+  LessonSegment,
+} from "@/lib/types";
 import { cn, randomId } from "@/lib/utils";
 import {
   lessonModules,
@@ -38,20 +52,50 @@ import {
 } from "@/lib/utils/modules";
 import {
   secondaryDim,
-  DifficultyOfferPill,
   HintOverlay,
   SocraticPanel,
+  type GuidedAnswerOutcome,
+  type GuidedReply,
+  type PanelPrompt,
 } from "./AffectiveLayer";
 import { AfterLessonAssessment } from "./AfterLessonAssessment";
 import { ADJUSTMENT_ACTIONS } from "@/lib/constants/affect";
 import { densityForAction } from "@/lib/lessons/densityForAction";
+import { densitySpacing } from "@/lib/lessons/densitySpacing";
+import { depthShown, type DepthShown } from "@/lib/lessons/depthShown";
+import { atLowerDepth, NOTHING_SIMPLIFIED } from "@/lib/lessons/lowerDepth";
 import { scaffoldAttemptFor } from "@/lib/lessons/scaffoldAttempt";
 import { scaffoldsApi } from "@/lib/api/scaffolds";
 import { useAssignmentNote } from "@/hooks/useAssignmentNote";
 import { isChunkable } from "@/lib/lessons/chunk";
-import { LESSON_STATUS } from "@/lib/api/lessons";
+import {
+  LESSON_STATUS,
+  lessonsApi,
+  type LessonQuestionAttempt,
+  type LessonQuestionAttemptWrite,
+} from "@/lib/api/lessons";
 import { schedulerApi } from "@/lib/api/scheduler";
+import { answerFor } from "@/lib/lessons/attempts";
+import { holdAnswer, retryable } from "@/lib/lessons/pendingProgress";
+import {
+  answersBefore,
+  checkResumeAt,
+  type CheckLeft,
+} from "@/lib/lessons/checkResume";
+import {
+  checkOutcomeFrom,
+  rerouteFrom,
+  resultStateFrom,
+} from "@/lib/lessons/checkOutcome";
+import {
+  REVIEW_COPY,
+  reviewCompletionCopy,
+  reviewOutcome,
+  type RecallEvidence,
+  type ReviewRecord,
+} from "@/lib/lessons/reviewOutcome";
 import { getSession } from "@/lib/auth/session";
+import { openBusyWindow } from "@/lib/signals/busy";
 import { useLessonProgress } from "@/hooks/useLessonProgress";
 import { AudioSegment } from "./AudioSegment";
 import { BreakOfferPill } from "./BreakOfferPill";
@@ -61,19 +105,26 @@ import { FeedbackStrip } from "./FeedbackStrip";
 import { InteractiveSegment } from "./InteractiveSegment";
 import { LeaveLessonDialog } from "./LeaveLessonDialog";
 import { LessonComplete } from "./LessonComplete";
+import { LessonMessage } from "./LessonMessage";
 import { ModalitySuggestionPill } from "./ModalitySuggestionPill";
 import { ModuleBoundaryScreen } from "./ModuleBoundaryScreen";
 import { OfflineBanner } from "./OfflineBanner";
 import { ScaffoldIndicator } from "./ScaffoldIndicator";
 import { QuickCheckSheet } from "./QuickCheckSheet";
 import { ReviewEntryScreen } from "./ReviewEntryScreen";
-import { type ReviewAnswer, saveReviewAnswers } from "./reviewStore";
+import {
+  type ReviewAnswer,
+  saveCheckOutcome,
+  saveReviewAnswers,
+} from "./reviewStore";
 import { TeacherNote } from "./TeacherNote";
-import { TextSegment } from "./TextSegment";
+import { TextSegment, type OnChunkSeen } from "./TextSegment";
 import { VisualSegment } from "./VisualSegment";
+import type { MediaFailReason } from "./useMediaSource";
 
+// Finishing a lesson goes back to the lessons (frame: "Back to lessons");
+// leaving one part way goes Home (IA: "Leave for now" -> Home Dashboard).
 const LESSONS_HREF = "/student/lessons";
-// Finishing a lesson returns to Home (the daily landing), not the lesson list.
 const HOME_HREF = "/student/dashboard";
 
 const DENSITIES: { id: Density; label: string }[] = [
@@ -89,11 +140,30 @@ const DENSITY_TRIGGER: Record<Density, SignalEventType> = {
   [DENSITY.SLOWER]: SIGNAL_EVENT_TYPES.SLOWER_TRIGGER,
 };
 
-/** Scroll-depth marks (%) that each emit one `scroll` signal per segment. */
+/**
+ * Scroll-depth marks (%) that each emit one `scroll` signal per segment. Sent
+ * as the catalogue's `depthRatio`, a ratio: 50 goes up as 0.5.
+ */
 const SCROLL_MILESTONES = [25, 50, 75, 100];
 
 /** How long the transient post-answer feedback note lingers before fading. */
 const FEEDBACK_MS = 3500;
+
+/** One object, so the signal session is not told the same ending twice. */
+const COMPLETED: SessionOutcome = { completionStatus: "completed" };
+
+/** SCRUM-181's nothing-landed screen (design D35), verbatim. */
+const REROUTED = {
+  title: "That version didn't work.",
+  body: "Nevo is taking you through this lesson again, a simpler way.",
+  action: "Start again",
+} as const;
+
+/** Design's ending for a partial offline copy (D142, 8 Oct), verbatim. */
+const PARTIAL_ENDING = {
+  heading: "That's as far as this one goes for now.",
+  note: "We'll pick up the rest when you're back online.",
+} as const;
 
 /** A calculation segment whose Interactive modality routes to the solver (§8). */
 function isCalculation(segment: LessonSegment): boolean {
@@ -139,15 +209,21 @@ function openingModality(
  * interaction and publishes the session into `LessonContext`.
  */
 export function LessonPlayer({
-  lesson,
+  lesson: given,
   plan,
   review = false,
   reviewConceptId,
   live = false,
+  finished = false,
+  partial = false,
   assignmentId,
   startAt = 0,
+  placeUnknown = false,
+  progressRow = null,
   lastWorkedAt = null,
   adaptSegments,
+  depth,
+  onStartAgain,
 }: {
   lesson: Lesson;
   plan: AdaptationPlan | null;
@@ -170,23 +246,80 @@ export function LessonPlayer({
    */
   live?: boolean;
   /**
+   * The child already finished this lesson, and is opening it again to look
+   * back over it (design D22, 1 Oct). Writes no `in_progress` or `exited`, for
+   * the same reason a review writes neither: a finished lesson reopened is
+   * never marked unfinished. Finishing it again still reports completion.
+   */
+  finished?: boolean;
+  /**
+   * A saved copy missing its modules, closing recap or after-lesson check -
+   * see `isPartialCopy`. Reaching its end is never written `completed` - see
+   * `markComplete`. A package copy carrying all three is not partial.
+   */
+  partial?: boolean;
+  /**
    * Segment to open on, from saved progress. Clamped by the caller; a review
    * session always opens at the top regardless.
    */
   startAt?: number;
+  /**
+   * Where the child got to could not be read, so `startAt` is a default and
+   * not their place. The opening segment is then not written until they move.
+   */
+  placeUnknown?: boolean;
+  /**
+   * The child's newest progress row for this lesson, from the dashboard read
+   * before the first frame: where the after-lesson check was left, and until
+   * when (B82). Null when there is none or it could not be read.
+   */
+  progressRow?: CheckLeft | null;
   /** Passed to the review entry screen so its recency line is a fact. */
   lastWorkedAt?: string | null;
   /**
    * Review session (37d): the same player as a spaced-retrieval variant. Adds
-   * only an entry screen, the REVIEW pill during, and the "You strengthened
-   * this concept" completion; the after-lesson assessment is skipped (the
-   * quick checks are the recall).
+   * only an entry screen, the REVIEW pill during, and its own completion
+   * message (D40); the after-lesson assessment is skipped (the quick checks
+   * are the recall).
    */
   review?: boolean;
   /** The concept a review session is for; absent on an ordinary lesson. */
   reviewConceptId?: string;
+  /**
+   * The depth this session runs at, where it is known before it opens: the
+   * server's reroute that Start again follows. Otherwise the session says so
+   * itself when it opens - see `lowerDepth`.
+   */
+  depth?: "standard" | "lower";
+  /**
+   * SCRUM-181's Start again: open the lesson afresh from this zero-based
+   * segment, the server's reroute's place, at the reroute's depth. Absent,
+   * the screen is not offered.
+   */
+  onStartAgain?: (
+    segmentPosition: number,
+    depth: "standard" | "lower",
+  ) => void;
 }) {
-  const router = useRouter();
+  /*
+   * SCRUM-178: A LOWER-DEPTH SESSION READS EACH SEGMENT'S SIMPLER VERSION, and
+   * the normal body where there is none (backend, 9 Oct) - see `atLowerDepth`.
+   * From the first frame when the reroute already said so (Start again).
+   * When it is the session's own answer, it lands after the first segment is
+   * on screen, so it applies from the next segment entered - rewording the
+   * text a child has started reading is the snap rule 7 forbids (the same
+   * rule as `entryDensity`). Lower stays lower for the rest of the session.
+   */
+  const [lowerDepth, setLowerDepth] = useState(depth === "lower");
+  const { lesson, simplified } = useMemo(
+    () =>
+      lowerDepth
+        ? atLowerDepth(given)
+        : { lesson: given, simplified: NOTHING_SIMPLIFIED },
+    [given, lowerDepth],
+  );
+  // Every exit from the lesson - see `useLessonExit`.
+  const exitTo = useLessonExit();
   const total = lesson.segments.length;
 
   const planFor = (segmentId: string) =>
@@ -206,10 +339,39 @@ export function LessonPlayer({
   // ids are invented and a 404 would be ours, not the network's.
   const progress = useLessonProgress(lesson.id, live, assignmentId);
   const { report: reportProgress } = progress;
+  /*
+   * The server's reroute (SCRUM-178), off the completion write's answer: it
+   * only ever comes back on a completed row, so the session it closes ended
+   * completed - and says so even if the child starts again from the result,
+   * before Continue would have said it. See the SCRUM-181 screen below.
+   */
+  const reroute = live ? rerouteFrom(progress.saved) : null;
 
   // Signals ride the BACKEND's session id, not the local one above - see
   // `useSignals`. Null until `POST /session` answers, which the hook holds for.
-  const { trackEvent } = useSignals(progress.sessionId, lesson.id);
+  // How the session ended travels on its envelope; set where it ends.
+  const [ending, setEnding] = useState<SessionOutcome | null>(null);
+  /*
+   * WHAT THE CHILD SAW APPLIED (B42), counted where it reaches the screen:
+   * the system's reshape of the text, a modality change from an offer taken,
+   * a hint, and since B74 (8 Oct) a Socratic panel rendered and a density
+   * spacing changed mid-session - not the one the lesson opened on. Not
+   * offers, not instructions the screen could not show, and not the child's
+   * own picks. The count rides the session envelope and the
+   * moment feeds the engine's cooldown - see `AppliedAdaptations`.
+   */
+  const applied = useRef<AppliedAdaptations>({ count: 0, lastAt: null });
+  const noteApplied = useCallback(() => {
+    applied.current.count += 1;
+    applied.current.lastAt = performance.now();
+  }, []);
+  const { trackEvent } = useSignals(
+    progress.sessionId,
+    lesson.id,
+    "lesson",
+    ending ?? (reroute ? COMPLETED : null),
+    applied,
+  );
   const { setActiveLesson } = useLesson();
 
   // Assessment picks, captured for the Review Answers screen (a separate route).
@@ -228,14 +390,44 @@ export function LessonPlayer({
     !review && startAt > 0 && startAt < lesson.segments.length ? startAt : 0;
   const [index, setIndex] = useState(opening);
 
+  /*
+   * B82: A CHECK LEFT PART WAY OPENS STRAIGHT BACK INTO IT, on the question it
+   * was left at, while the server still says it can be picked up. Read off the
+   * dashboard's row, which is in hand before this first frame - so the child
+   * is never shown the last segment first, or moved under. Past the server's
+   * deadline this is null and the check starts fresh when they reach it. Not
+   * for a review, a finished lesson or the walkthrough, which resume no check.
+   */
+  const [checkOpensAt] = useState<number | null>(() => {
+    const count = lesson.assessment?.questions.length ?? 0;
+    return live && !review && !finished && count > 0
+      ? checkResumeAt(progressRow, count)
+      : null;
+  });
+
   const first = lesson.segments[opening];
   const firstPlan = planFor(first.id);
 
   // The student's MANUAL density pick (navy chip). Separate from the system's
-  // standing density — the segment plan's, defaulting to Simplify (frame:
-  // `adaptive ?? "Simplify"`) — which renders as the violet chip and supplies
-  // the resting view until the student overrides. Both can show at once.
+  // density - the engine's instruction or the segment plan's, and NOTHING
+  // when neither gave one (D23, below) - which renders as the violet chip and
+  // supplies the view until the student overrides. Both can show at once.
   const [density, setDensity] = useState<Density | null>(null);
+  /*
+   * THE ENGINE'S DENSITY LEVEL, READ ON THE WAY INTO A SEGMENT (D25), and held
+   * for that visit.
+   *
+   * Rendered only as spacing - see `densitySpacing`. Read at the boundary
+   * rather than live because the mid-lesson read is asked as a child arrives,
+   * so its answer lands a moment after the segment has drawn: applied live,
+   * the gaps would visibly shift under a child who had just started reading,
+   * which is the snap rule 7 forbids. A newer answer reaches the next segment
+   * entered. Keyed by segment, like `chunkRead`, so it cannot outlive one.
+   */
+  const [entryDensity, setEntryDensity] = useState<{
+    segmentId: string;
+    level: DensityLevel | null;
+  }>(() => ({ segmentId: first.id, level: firstPlan?.densityLevel ?? null }));
   const [modality, setModality] = useState<Modality>(
     openingModality(first, firstPlan?.startModality),
   );
@@ -247,7 +439,7 @@ export function LessonPlayer({
   );
 
   // Segments whose Quick Check has been answered correctly — only a correct
-  // answer spends the check (a miss offers Try again / See it explained).
+  // answer spends the check (a miss offers Try again).
   /*
    * FIRST answers in a review session, kept only to tell the scheduler how
    * recall went. Cleared with the session; never rendered to the child.
@@ -257,18 +449,66 @@ export function LessonPlayer({
    * perfect recall for a child who got it wrong twice.
    */
   const firstAnswers = useRef<Map<number, boolean>>(new Map());
+  /*
+   * The inline checks, by segment: how many picks it took and whether a hint
+   * was showing first - what B28's `outcome` reports. A review skips the
+   * after-lesson questions, so these are the only answers it ever has.
+   */
+  const checkRecall = useRef<Map<string, RecallEvidence & { picks: number }>>(
+    new Map(),
+  );
+  // Segments whose hint - or guided questions - were on screen, for
+  // `after_hint`.
+  const hintedSegments = useRef<Set<string>>(new Set());
   const [passedChecks, setPassedChecks] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
   const [checkOpen, setCheckOpen] = useState(false);
+  /*
+   * B94 / SCRUM-241: THE SERVER HANDING A CHILD OFF FROM A QUICK CHECK to the
+   * Socratic panel (38a), with the prompts it sent. `run` remounts the panel
+   * for each hand-off, so a second one arrives open as the first did.
+   * `answeredRight` is read where the reply lands, which state is not: a
+   * hand-off for an earlier miss arriving after a right answer is moot.
+   * `handedOff` is the checks the server moved the child past
+   * (`advanceAfterHandoff`) - never counted as passed.
+   */
+  const [handoff, setHandoff] = useState<{
+    segmentId: string;
+    run: number;
+    prompts: PanelPrompt[];
+    advance: boolean;
+  } | null>(null);
+  const [handedOff, setHandedOff] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const answeredRight = useRef<Set<string>>(new Set());
+  // Segments whose hand-off panel has been counted as applied (B74).
+  const handoffsApplied = useRef<Set<string>>(new Set());
   // Segments are the lesson itself; the assessment takes over the screen once
   // the last segment is done (growth framing — never a score), then completion.
   // Review sessions open on their entry screen first (37d).
   const [phase, setPhase] = useState<
     "review-entry" | "segments" | "assessment" | "complete"
-  >(review ? "review-entry" : "segments");
+  >(
+    review
+      ? "review-entry"
+      : checkOpensAt !== null
+        ? "assessment"
+        : "segments",
+  );
   // Exiting mid-lesson goes through the leave dialog, not straight out.
   const [leaveOpen, setLeaveOpen] = useState(false);
+  /*
+   * THE ENDING'S PICTURE, FETCHED WHILE THERE IS A CONNECTION. The completion
+   * screen and the offline ending both draw it, and either can come after the
+   * connection has dropped. Held for the life of the player, which is what
+   * keeps it to hand.
+   */
+  const endingPicture = useRef<HTMLImageElement | null>(null);
+  useEffect(() => {
+    endingPicture.current ??= preloadSettlingCharacter();
+  }, []);
 
   // Position, on every move - including the ones that go through a module
   // boundary or a break, which is why this watches `index` rather than
@@ -282,23 +522,29 @@ export function LessonPlayer({
    * completed lesson as `in_progress, segment 0` on the very first frame.
    *
    * Finishing the review put the completion back. Leaving it partway did not:
-   * the lesson stayed demoted, reappeared on Home under "Pick back up" as
-   * though it were unfinished, and the child was invited to redo work they had
-   * done. The record of having completed it was simply gone.
+   * the lesson stayed demoted, came back on Home as unfinished work to pick
+   * up, and the child was invited to redo work they had done. The record of
+   * having completed it was simply gone.
    *
    * The review's own outcome belongs to the scheduler
-   * (`POST /api/scheduler/record-review`), which nothing calls yet. Until it
-   * does, the honest behaviour is to leave the lesson's progress alone rather
-   * than overwrite it with something false.
+   * (`POST /api/scheduler/record-review`, sent at the end - see below), not to
+   * the lesson's progress, so a review leaves that progress alone rather than
+   * overwrite it with something false.
    */
+  // An unknown place opens at the top, and the top is not a position: it is
+  // written once the child moves, never over the place they really reached.
+  const unplacedAt = useRef<number | null>(placeUnknown ? opening : null);
   useEffect(() => {
-    if (review) return;
+    // A finished lesson reopened is the same case - see `finished`.
+    if (review || finished) return;
+    if (unplacedAt.current === index) return;
+    unplacedAt.current = null;
     const pos = modulePositionFor(lesson, index);
     reportProgress(LESSON_STATUS.IN_PROGRESS, {
       segment: index,
       ...(pos ? { module: pos.moduleIndex } : {}),
     });
-  }, [lesson, index, review, reportProgress]);
+  }, [lesson, index, review, finished, reportProgress]);
 
   // Completion. Reported once, however the child leaves the finished lesson.
   //
@@ -311,19 +557,76 @@ export function LessonPlayer({
   //
   // So completion is a function both exits call, not a side effect of one of
   // them. The ref keeps it idempotent.
+  /*
+   * A PARTIAL COPY IS NEVER COMPLETED (Lydia, 6 Oct): "A lesson played
+   * offline without its modules, recap and after-lesson check is not
+   * recorded as completed, and it comes back when the child is next online."
+   * Booked complete, the engine would teach this child from a check that
+   * never happened. Since B85 a package copy carries all three and completes
+   * as usual; one that does not, or one saved before 8 Oct, is partial. Its
+   * end is written `exited` at the last segment instead -
+   * the furthest place, and how they left - so it comes back on Home and
+   * opens there online, with its check. The signal session ends the same way
+   * (`finishedAs`). A review or a finished lesson reopened writes nothing,
+   * as neither ever writes `exited`.
+   */
   const completionReported = useRef(false);
   const markComplete = useCallback(() => {
     if (completionReported.current) return;
     completionReported.current = true;
-    reportProgress(LESSON_STATUS.COMPLETED, {
-      segment: Math.max(0, lesson.segments.length - 1),
-    });
-  }, [lesson, reportProgress]);
+    const last = Math.max(0, lesson.segments.length - 1);
+    if (partial) {
+      if (review || finished) return;
+      const pos = modulePositionFor(lesson, last);
+      reportProgress(LESSON_STATUS.EXITED, {
+        segment: last,
+        ...(pos ? { module: pos.moduleIndex } : {}),
+      });
+      return;
+    }
+    reportProgress(LESSON_STATUS.COMPLETED, { segment: last });
+  }, [lesson, reportProgress, partial, review, finished]);
+  // How the signal session ends when the child reaches the end: completed,
+  // or - for a partial copy, above - exited at the last segment.
+  const finishedAs = useMemo<SessionOutcome>(
+    () =>
+      partial
+        ? {
+            completionStatus: "exited",
+            exitPosition: lesson.segments[lesson.segments.length - 1].id,
+          }
+        : COMPLETED,
+    [partial, lesson],
+  );
 
   useEffect(() => {
     if (phase !== "complete") return;
     markComplete();
   }, [phase, markComplete]);
+
+  /*
+   * B49: A CHECK LEFT PART WAY REOPENS WHERE IT WAS LEFT, the same day.
+   * Decided once: as the lesson opens (B82, `checkOpensAt`), or as the child
+   * moves into the check - see `beginCheck`. Nothing about what landed before
+   * rides with it: how the check went is the server's `resultState` (B98).
+   */
+  const [checkResume, setCheckResume] = useState<{ at: number } | null>(() =>
+    checkOpensAt === null ? null : { at: checkOpensAt },
+  );
+  // The answers still on their way, which the completion waits for.
+  const attemptWrites = useRef<Promise<unknown>[]>([]);
+
+  /*
+   * B26: THE CHECK-IN'S OUTCOME comes back on the completion write, so it is
+   * kept here for the summary, which is its own route and reads this copy
+   * before the dashboard row's (B84).
+   */
+  const savedRow = progress.saved;
+  useEffect(() => {
+    if (!live) return;
+    const outcome = checkOutcomeFrom(savedRow);
+    if (outcome) saveCheckOutcome(lesson.id, outcome);
+  }, [live, lesson.id, savedRow]);
 
   /*
    * TELL THE SCHEDULER HOW THE REVIEW WENT. Once, at the end, and only when
@@ -339,12 +642,16 @@ export function LessonPlayer({
    * spaced retrieval on ONE concept; crediting it with a right answer about a
    * different one is inventing a signal in a smaller shape. If none of the
    * questions was tagged with it - or the child was never asked - nothing is
-   * sent at all, because there is no evidence either way and a cheerful `true`
-   * for reaching the end is exactly what Zero-Tag exists to stop.
+   * sent at all, because there is no evidence either way and a cheerful
+   * outcome for reaching the end is exactly what Zero-Tag exists to stop.
    *
-   * Failure is swallowed. The scheduler missing one outcome costs a slightly
-   * wrong interval; telling a child their review did not count would be worse
-   * and is not true - they did the work.
+   * What is sent is B28's `outcome` - what happened, not a mark - and the
+   * server decides whether it counts as recall.
+   *
+   * A failure is not announced. The scheduler missing one outcome costs a
+   * slightly wrong interval; telling a child their review did not count would
+   * be worse and is not true - they did the work. The completion screen simply
+   * claims nothing the scheduler did not confirm.
    */
   /*
    * 37a's indicator, sourced from the scaffolds engine where a concept exists.
@@ -358,57 +665,130 @@ export function LessonPlayer({
    */
   const teacherNote = useAssignmentNote(assignmentId);
 
+  /*
+   * SENT FROM THE MOVE THAT FINISHES THE REVIEW, not from an effect on the
+   * phase, because the completion screen now waits on the answer (D40): what
+   * it may claim is what the scheduler said back. See `reviewCompletionCopy`.
+   */
   const reviewRecorded = useRef(false);
-  useEffect(() => {
-    if (phase !== "complete" || !review || !reviewConceptId) return;
+  const [reviewRecord, setReviewRecord] = useState<ReviewRecord>({
+    state: "unsent",
+  });
+  const recordReview = () => {
+    if (!review || !reviewConceptId) return;
     if (reviewRecorded.current) return;
     const studentId = getSession()?.userId;
     if (!studentId) return;
 
     const questions = lesson.assessment?.questions ?? [];
-    const onThisConcept = questions
-      .map((q, i) => ({ conceptId: q.conceptId, answered: firstAnswers.current.get(i) }))
-      .filter((q) => q.conceptId === reviewConceptId && q.answered !== undefined);
-    if (onThisConcept.length === 0) return;
+    /*
+     * THE INLINE CHECKS COUNT TOO, and in a review they are all there is.
+     * This read only the after-lesson questions - which a review skips by
+     * design - so `onThisConcept` was always empty and the outcome was never
+     * sent, however the child did.
+     *
+     * An after-lesson question has no second try - a miss moves on - so its
+     * first answer is the whole of the evidence.
+     */
+    const onThisConcept: RecallEvidence[] = [
+      ...questions.map((q, i) => {
+        const first = firstAnswers.current.get(i);
+        return {
+          conceptId: q.conceptId,
+          evidence:
+            first === undefined
+              ? undefined
+              : { rightOnPick: first ? 1 : null, hinted: false },
+        };
+      }),
+      ...lesson.segments.map((s) => ({
+        conceptId: s.quickCheck?.conceptId,
+        evidence: checkRecall.current.get(s.id),
+      })),
+    ].flatMap((q) =>
+      q.conceptId === reviewConceptId && q.evidence ? [q.evidence] : [],
+    );
+    const outcome = reviewOutcome(onThisConcept);
+    if (!outcome) return;
 
     reviewRecorded.current = true;
-    void schedulerApi
-      .recordReview({
-        studentId,
-        conceptId: reviewConceptId,
-        // Every question about this concept, right first time.
-        recallSuccessful: onThisConcept.every((q) => q.answered === true),
-      })
-      .catch(() => {});
-  }, [phase, review, reviewConceptId, lesson]);
+    setReviewRecord({ state: "pending" });
+    schedulerApi
+      .recordReview({ studentId, conceptId: reviewConceptId, outcome })
+      .then((response) => setReviewRecord({ state: "recorded", response }))
+      .catch(() => setReviewRecord({ state: "failed" }));
+  };
   // SCRUM-101: the segment index the player is about to enter across a module
   // boundary. Non-null takes over the screen with the boundary landing; the
-  // student's continue (or break + "I'm ready") completes the move.
+  // student's continue completes the move.
   const [boundaryTo, setBoundaryTo] = useState<number | null>(null);
+  /*
+   * ARRIVING AT A BOUNDARY IS ARRIVING IN THE NEXT MODULE.
+   *
+   * The position effect above watches `index`, which does not move until the
+   * child leaves this screen - so a child who closed the app here resumed on
+   * the last segment of the module they had just finished, and met the same
+   * boundary again. The place written is the one the boundary opens onto.
+   */
+  useEffect(() => {
+    if (review || finished || boundaryTo === null) return;
+    const pos = modulePositionFor(lesson, boundaryTo);
+    reportProgress(LESSON_STATUS.IN_PROGRESS, {
+      segment: boundaryTo,
+      ...(pos ? { module: pos.moduleIndex } : {}),
+    });
+  }, [lesson, boundaryTo, review, finished, reportProgress]);
   // Break module (frame 18): a plan-delivered break takes over the screen on
   // the way out of its segment; finishing it resumes the interrupted advance.
   // One break per segment - taken breaks never re-trigger on a back-and-forth.
   const [breakActive, setBreakActive] = useState<BreakType | null>(null);
   const breaksTaken = useRef<Set<string>>(new Set());
   // Where the active break came from: "advance" resumes the interrupted move,
-  // "offer" returns to the same segment. Trigger travels into `break_start`.
+  // "offer" returns to the same segment. A module boundary offers none (D91).
+  // Trigger travels into `break_start`.
   const breakOrigin = useRef<"advance" | "offer">("advance");
   const breakTrigger = useRef<string>("adaptation_plan");
-  // Break OFFERS (B.7/§4): spent per segment for offered breaks, once per
-  // session for the 20-minute monitor. Declining spends; never re-asks.
+  // Break OFFERS (B.7/§4): spent per segment, whoever made them. Declining
+  // spends; the same segment never re-asks.
+  /*
+   * THERE IS NO CLIENT TIMER ANY MORE. A 20-minute clock here offered breaks
+   * the engine had not decided - when it said no, when the read failed, and
+   * in reviews - and frontend §5b is plain that the timing is never ours. It
+   * was also spent once per lesson, so after one offer every break the ENGINE
+   * suggested was dropped for the rest of it. Absent an engine offer, nothing
+   * is offered (rule 5).
+   */
   const [spentBreakOffers, setSpentBreakOffers] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-  const [timeOfferSpent, setTimeOfferSpent] = useState(false);
-  // Step-up offers, spent per segment by acting on them.
-  const [spentEscalations, setSpentEscalations] = useState<ReadonlySet<string>>(
+  // Hints the child closed, by segment and hint - see `hintHere`.
+  const [closedHints, setClosedHints] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-  // The student's own preference gates the prompt - turning it off used to
-  // change nothing at all.
-  const { suggestBreaks } = useAccessibility();
-  const { approachingThreshold } = useBreakMonitor(
-    phase === "segments" && suggestBreaks,
+  /*
+   * WHAT THE ENGINE IS TOLD THE CHILD DID, as counts - see `RuntimeState`.
+   * State rather than refs because the request is built from what renders.
+   */
+  const [observed, setObserved] = useState({
+    replays: 0,
+    consecutiveErrors: 0,
+    declined: [] as Modality[],
+    declines: 0,
+    shownHere: false,
+    sinceShown: null as number | null,
+    breaksTaken: 0,
+  });
+  const noteAnswer = (correct: boolean) =>
+    setObserved((o) => ({
+      ...o,
+      consecutiveErrors: correct ? 0 : o.consecutiveErrors + 1,
+    }));
+  // The engine answer whose modality offer has been spent - see `suggested`.
+  const [spentSuggestionOf, setSpentSuggestionOf] =
+    useState<AdaptationPlan | null>(null);
+  // The offer on screen right now, for `ignored` when the child moves on.
+  const shownSuggestion = useRef<{ segmentId: string; suggested: Modality } | null>(
+    null,
   );
   // Transient post-answer note that greets the next segment, then fades.
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -421,13 +801,11 @@ export function LessonPlayer({
   const segment = lesson.segments[index];
 
   /**
-   * The engine's mid-lesson read, asked at each segment boundary.
+   * The engine's mid-lesson read, asked at each segment boundary and when the
+   * child does something it reports.
    *
-   * This is what `useBreakMonitor`'s "the actual break decision is confirmed by
-   * the backend" has always pointed at. The client timer still primes the
-   * offer; the engine decides whether one is warranted and WHICH - the time
-   * path used to hard-code a micro break, and the engine asks for a movement
-   * break on the same trigger.
+   * The engine decides whether a break is warranted and WHICH; nothing on
+   * this side primes or times one.
    *
    * Only observed facts are sent. Engagement and comprehension scores would
    * unlock more of the engine and would have to be invented, so they are not
@@ -436,28 +814,54 @@ export function LessonPlayer({
   const runtime = useRuntimeAdaptation(
     lesson.id,
     adaptSegments,
-    live && !review,
+    // Not for a visit that opened in the check (B82): the child never sees a
+    // segment, and the engine must not be told they arrived on one.
+    live && !review && checkOpensAt === null,
     {
       currentSegmentId: segment.id,
       currentModality: modality,
       availableModalities: segment.modalities,
       midpointReached: index >= Math.floor(lesson.segments.length / 2),
+      replayCountOnSegment: observed.replays,
+      consecutiveErrors: observed.consecutiveErrors,
+      declinedModalities: observed.declined,
+      sessionDeclineCount: observed.declines,
+      sameSegmentSuggestionShown: observed.shownHere,
+      segmentsSinceLastSuggestion: observed.sinceShown,
+      breaksTaken: observed.breaksTaken,
     },
+    lesson,
+    applied,
   );
 
-  // ── Signal helpers ──────────────────────────────────────────────────────
-  // Max scroll depth + which milestones have fired, reset per segment.
-  const scrollDepth = useRef(0);
-  const scrollMarks = useRef<Set<number>>(new Set());
-  /** The scrolling reading column, so a segment can be measured, not guessed. */
-  const scrollerRef = useRef<HTMLDivElement | null>(null);
-  /**
-   * How much of a CHUNKED body has been shown, reported by the body itself.
+  /*
+   * THE ENGINE'S NEWEST WORD ON A SEGMENT, over what it said at load.
    *
-   * The attention accommodation deliberately holds most of the body back, so
-   * the layout measurement below - "no room to scroll, therefore they saw all
-   * of it" - becomes false exactly when it is on. The body is the only thing
-   * that knows which part is showing, so it says.
+   * Merged rather than replaced: an in-lesson row carries the segment's
+   * modality, scaffold and suggestion, and nothing about breaks - so the
+   * load-time plan's planned and offered breaks survive the engine
+   * reconsidering the rest.
+   */
+  const livePlanFor = (segmentId: string) => {
+    const base = planFor(segmentId);
+    const fresh = runtime.plan?.segments.find((s) => s.segmentId === segmentId);
+    return fresh ? { ...base, ...fresh } : base;
+  };
+
+  // ── Signal helpers ──────────────────────────────────────────────────────
+  // Which scroll milestones have fired, reset per segment.
+  const scrollMarks = useRef<Set<number>>(new Set());
+  /** The reading column, measured for `scroll` - see `handleScroll`. */
+  const columnRef = useRef<HTMLDivElement | null>(null);
+  /** The foot of the screen, under the arrows, where the solver docks its pad. */
+  const [padDock, setPadDock] = useState<HTMLDivElement | null>(null);
+  /**
+   * The segment whose body is CHUNKED, reported by the body itself.
+   *
+   * The attention accommodation and the child's own Slower deliberately hold
+   * most of the body back, so the column's scroll describes one part, not the
+   * segment - see `handleScroll`. The body is the only thing that knows it is
+   * in parts, so it says.
    *
    * STAMPED WITH THE SEGMENT ID RATHER THAN CLEARED ON SEGMENT CHANGE, and
    * that is deliberate. React runs child effects before parent ones, so a new
@@ -466,12 +870,41 @@ export function LessonPlayer({
    * that race because it does not race: a report either belongs to the
    * segment being asked about or it does not.
    */
-  const chunkRead = useRef<{ segmentId: string; pct: number } | null>(null);
+  const chunkRead = useRef<{ segmentId: string } | null>(null);
+  /**
+   * HOW FAR DOWN THE SEGMENT THE CHILD SAW, 0 to 1, for `time_on_segment`'s
+   * `depthRatio` (B90, 8 Oct). The furthest it has been, never where it is
+   * now: scrolling back up unreads nothing. Measured where the column is -
+   * see `columnReach` - so a segment that fits on one screen is 1, and a
+   * chunked body by the parts it has shown. Stamped like `chunkRead`.
+   */
+  const deepest = useRef<{ segmentId: string; ratio: number } | null>(null);
+  const noteDepth = useCallback((segmentId: string, ratio: number) => {
+    const before =
+      deepest.current?.segmentId === segmentId ? deepest.current.ratio : 0;
+    deepest.current = {
+      segmentId,
+      ratio: Math.min(1, Math.max(before, ratio)),
+    };
+  }, []);
+  /** The text version on screen, for `time_on_segment` - see `depthShown`. */
+  const textShown = useRef<{ segmentId: string; depth: DepthShown } | null>(
+    null,
+  );
+  /*
+   * The segment whose chunked body still has parts to show, for the chevrons
+   * (37c, below). State rather than the ref above because the screen changes
+   * with it; stamped with the id for the same reason the ref is.
+   */
+  const [partsLeftOn, setPartsLeftOn] = useState<string | null>(null);
   const noteReadProgress = useCallback(
     (pct: number) => {
-      chunkRead.current = { segmentId: lesson.segments[index].id, pct };
+      chunkRead.current = { segmentId: lesson.segments[index].id };
+      setPartsLeftOn(pct < 100 ? lesson.segments[index].id : null);
+      // The parts shown so far are how far down it the child has seen.
+      noteDepth(lesson.segments[index].id, pct / 100);
     },
-    [lesson.segments, index],
+    [lesson.segments, index, noteDepth],
   );
 
   /**
@@ -483,11 +916,11 @@ export function LessonPlayer({
    *    focus to <body>, so without this they restart from the top of the
    *    document after every advance.
    * 2. A screen reader announces where they now are, from the group's label.
-   * 3. THE SCROLL POSITION RESETS. Nothing reset it before - a child who read
-   *    to the bottom of a long segment and pressed Next arrived halfway down
-   *    the next one. Focusing scrolls its target into view, so the fix for the
-   *    first two carries this one, and it applies to every child rather than
-   *    only those using a keyboard.
+   * 3. THE SCROLL POSITION RESETS - but not by this. Focusing scrolled its
+   *    target into view, which once carried the reset; with the column the
+   *    scroller it scrolled the group's top 32-48px under the progress bar
+   *    instead. So focus lands without scrolling, and the column is put back
+   *    to its top by `columnRef`'s own reset, below.
    *
    * Not on first render: arriving at a lesson should leave focus where the
    * browser put it, not seize it.
@@ -499,97 +932,274 @@ export function LessonPlayer({
       settled.current = true;
       return;
     }
-    bodyRef.current?.focus();
+    bodyRef.current?.focus({ preventScroll: true });
   }, [segment.id, modality]);
+  /*
+   * D148: "SEGMENT 3 OF 10" IS SAID ONCE, WHEN THE SEGMENT OPENS - "not on
+   * every interaction inside it" (design, 8 Oct). It is the group's name, so a
+   * screen reader says it whenever focus lands on the group or comes back
+   * into it. Two things inside a segment did that: a modality taken from the
+   * suggestion rebuilds the body and focus lands on it again, and a child who
+   * stepped out to the chips or the hint and came back walked into it again.
+   * So the name is dropped for the rest of the visit once focus has left the
+   * group, and a rebuild for a new modality comes up without it. A new
+   * segment - or the same one opened again - is named afresh. The line above
+   * the progress bar still shows it throughout.
+   */
+  const [positionSaidOn, setPositionSaidOn] = useState<string | null>(null);
 
   // time_on_segment: one event per segment, emitted when it's left (index
-  // change) or on unmount. Keyed on `index` so within-segment modality/density
-  // changes don't split the timing.
+  // change, or the segments phase ending) or on unmount. Keyed on `index` so
+  // within-segment modality/density changes don't split the timing.
+  /*
+   * ONLY THE TIME THE SEGMENT WAS ON SCREEN. This was keyed on the index
+   * alone, so the review entry screen, a break, a module boundary rest and
+   * the whole after-lesson check all counted as time on the segment beneath
+   * them - a child resting or answering reported as dwelling, which is the
+   * reading the engine takes as struggle. The clock now runs only while the
+   * segment is showing and pauses under anything that covers it.
+   */
+  const inSegments = phase === "segments";
+  const segmentShowing =
+    inSegments && breakActive === null && boundaryTo === null;
+  const segmentClock = useRef<{ shownMs: number; since: number | null } | null>(
+    null,
+  );
+  /** How long the segment has been on screen so far, on the clock above. */
+  const shownSoFar = useCallback(() => {
+    const clock = segmentClock.current;
+    if (!clock) return 0;
+    return (
+      clock.shownMs +
+      (clock.since === null ? 0 : performance.now() - clock.since)
+    );
+  }, []);
+  /**
+   * The switch taken on this segment, for `modality_switch_outcome` as it is
+   * left: from and to, and how long the segment had been on screen by then.
+   */
+  const switched = useRef<{
+    segmentId: string;
+    from: Modality;
+    to: Modality;
+    atShownMs: number;
+  } | null>(null);
   useEffect(() => {
-    const enteredAt = Date.now();
+    if (!inSegments) return;
+    const clock = { shownMs: 0, since: null as number | null };
+    segmentClock.current = clock;
     const segId = lesson.segments[index].id;
-    scrollDepth.current = 0;
     scrollMarks.current = new Set();
     return () => {
+      // Monotonic (rule 4): this duration goes to the engine, and a wall
+      // clock that jumps - a tablet correcting itself mid-lesson - sends a
+      // negative.
+      const shownMs =
+        clock.shownMs +
+        (clock.since === null ? 0 : performance.now() - clock.since);
+      // An offer still on screen as the child moves on was neither taken nor
+      // turned down.
+      const offer = shownSuggestion.current;
+      if (offer?.segmentId === segId) {
+        shownSuggestion.current = null;
+        trackEvent(SIGNAL_EVENT_TYPES.MODALITY_SUGGESTION_IGNORED, {
+          segmentId: segId,
+          suggested: offer.suggested,
+        });
+      }
+      // B45: the text version on screen as the child left, stamped with the
+      // segment like `chunkRead`. Unknown is left out rather than guessed.
+      const depth =
+        textShown.current?.segmentId === segId ? textShown.current.depth : null;
       /*
-       * A chunked body's own count outranks the layout measurement, and only
-       * ever for the segment it was reported against.
-       *
-       * THIS IS THE WHOLE FIX, and it is deliberately the only place that
-       * knows. An earlier version also guarded the measurement effect above so
-       * it would not write 100 for a chunked segment; a mutation proved that
-       * guard changed nothing, because a chunked segment never reads
-       * `scrollDepth` anyway. Two half-defences that look load-bearing are
-       * worse than one that is.
+       * HOW FAR DOWN IT THE CHILD SAW, as the catalogue's `depthRatio` (B90,
+       * 8 Oct) - see `deepest`. It was a `scrollDepthPct` the catalogue did
+       * not declare, and then nothing until it did. A column never laid out
+       * measured nothing, and nothing is sent rather than a 0 it did not see.
        */
-      const chunked =
-        chunkRead.current?.segmentId === segId ? chunkRead.current.pct : null;
+      const seen =
+        deepest.current?.segmentId === segId ? deepest.current.ratio : null;
       trackEvent(SIGNAL_EVENT_TYPES.TIME_ON_SEGMENT, {
         segmentId: segId,
-        durationMs: Date.now() - enteredAt,
-        scrollDepthPct: chunked ?? Math.round(scrollDepth.current),
+        durationMs: Math.max(0, Math.round(shownMs)),
+        ...(depth ? { depthShown: depth } : {}),
+        ...(seen !== null ? { depthRatio: seen } : {}),
       });
+      /*
+       * WHAT BECAME OF A SWITCH (B73/B104, 8 Oct): sent once, as the segment
+       * shown in the new modality is left or the lesson ends on it. In this
+       * player that is the segment the switch was taken on - the next opens
+       * in whatever the plan names. Its time is what was measured, in ms
+       * (confirmed 9 Oct): the segment on screen from the switch to the way
+       * out. No `outcome` and no score - better, worse, comprehension and
+       * engagement are judgements of the child (rule 3). The server takes
+       * the scores as supplied aggregates and derives none yet; an aggregate
+       * worked out here would still be this client judging the child.
+       */
+      const taken = switched.current;
+      if (taken?.segmentId === segId) {
+        switched.current = null;
+        trackEvent(SIGNAL_EVENT_TYPES.MODALITY_SWITCH_OUTCOME, {
+          segmentId: segId,
+          from: taken.from,
+          to: taken.to,
+          timeOnSegment: Math.max(0, Math.round(shownMs - taken.atShownMs)),
+        });
+      }
     };
-  }, [index, lesson.segments, trackEvent]);
+  }, [index, inSegments, lesson.segments, trackEvent]);
+
+  // Runs the clock above while the segment is on screen. Declared AFTER it,
+  // so on a segment change this starts the new clock rather than the old one.
+  useEffect(() => {
+    const clock = segmentClock.current;
+    if (!segmentShowing || !clock) return;
+    clock.since = performance.now();
+    return () => {
+      if (clock.since !== null) clock.shownMs += performance.now() - clock.since;
+      clock.since = null;
+    };
+  }, [segmentShowing, index]);
 
   /*
-   * A SEGMENT THAT FITS ON ONE SCREEN WAS REPORTED AS UNREAD.
+   * HOW FAR DOWN THE SEGMENT HAS BEEN ON SCREEN, MEASURED ON WHAT SCROLLS.
    *
-   * `handleScroll` already had the right rule - no room to scroll means the
-   * child can see all of it, so depth is 100 - but it lives in an `onScroll`
-   * handler. A segment that fits never scrolls, so the handler never runs and
-   * the rule never fires. `scrollDepth` stayed at the 0 it is reset to on
-   * entry, and every short segment told the adaptation engine the child had
-   * read NONE of it.
+   * The column is the scroller now: the player is one screen high, with the
+   * header and the arrows pinned. It was `min-h-[100dvh]` until 11 Oct, so
+   * the column grew with its segment and the PAGE scrolled instead - its own
+   * scroll room was always 0, a listener on the column never fired, and no
+   * `scroll` mark was ever sent.
    *
-   * That is most segments. This product deliberately keeps them short for low
-   * cognitive load, so the engine was being fed "read nothing" about children
-   * who had read everything - a fabricated signal about a child's learning,
-   * which is the one kind this product must never send.
+   * The page can still carry it - a browser that takes no `dvh`, or a zoom
+   * the height is not divided by - so whichever scrolls, this reads it: the
+   * column's own room when it has some, and the viewport's reach down the
+   * column when the page carries it.
    *
-   * Measured after the content is laid out, and re-measured when the modality
-   * changes, because an audio segment and a text segment are different heights.
+   * Only a scroll of the page or of the column counts. A sheet or a drawer
+   * scrolling is not the child scrolling the segment.
    *
-   * DECLARED AFTER THE RESET ABOVE, AND THAT ORDER IS LOAD-BEARING. React runs
-   * effects in declaration order, so measuring before the reset means the
-   * reset wipes the measurement on every segment change - which is exactly
-   * what the first version of this fix did, silently, while looking correct.
-   *
-   * Known and accepted: content that grows AFTER this runs - a late image -
-   * could leave 100 recorded for a segment that became scrollable. The child
-   * did see everything present at the time. Over-reporting one late-growing
-   * segment is a far smaller error than under-reporting every short one, which
-   * is what this replaces.
+   * AND ONLY ONCE THE CHILD HAS GONE FURTHER DOWN THAN THE SEGMENT OPENED
+   * SHOWING. The catalogue's `scroll` is "the child scrolls within a
+   * segment", and the page also moves when the child did not: the player's
+   * own focus move onto a new segment after Next is a scroll event too. So
+   * how far down was on screen at the start is taken once the segment is in
+   * place, and nothing goes up until the child passes it. A segment that fits
+   * on one screen can never be passed, so it sends no `scroll` - a depth for
+   * one nobody scrolled would be a scroll that never happened. How much of
+   * such a segment was on screen has no declared home now - see
+   * `time_on_segment` above.
    */
+  const columnReach = useCallback(() => {
+    const column = columnRef.current;
+    if (!column) return null;
+    if (column.scrollHeight - column.clientHeight > 0)
+      return {
+        reach: column.scrollTop + column.clientHeight,
+        height: column.scrollHeight,
+      };
+    const rect = column.getBoundingClientRect();
+    if (rect.height <= 0) return null;
+    return {
+      reach: Math.max(0, Math.min(window.innerHeight, rect.bottom) - rect.top),
+      height: rect.height,
+    };
+  }, []);
+  /** How far down the column was on screen when the segment opened, in px. */
+  const reachAtEntry = useRef(0);
+  // After the focus move above, so it measures where that move left the page.
   useEffect(() => {
-    const el = scrollerRef.current;
-    if (!el) return;
-    if (el.scrollHeight - el.clientHeight <= 0) scrollDepth.current = 100;
-  }, [index, modality]);
-
-  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const el = e.currentTarget;
-    const room = el.scrollHeight - el.clientHeight;
-    const pct = room <= 0 ? 100 : (el.scrollTop / room) * 100;
-    scrollDepth.current = Math.max(scrollDepth.current, pct);
+    reachAtEntry.current = columnReach()?.reach ?? 0;
+  }, [index, modality, columnReach]);
+  /*
+   * The solver bringing its step into view above the pad is the system
+   * moving the column too, like the focus move - so where that leaves it is
+   * taken as where the segment opened, and only the child going further down
+   * is their scroll.
+   */
+  const systemScrolled = useCallback(() => {
+    const at = columnReach();
+    if (at) reachAtEntry.current = Math.max(reachAtEntry.current, at.reach);
+  }, [columnReach]);
+  const handleScroll = useCallback(() => {
+    // Every mark already sent: nothing to measure, so no layout read per frame.
+    if (scrollMarks.current.size === SCROLL_MILESTONES.length) return;
+    const at = columnReach();
+    if (!at) return;
     /*
      * A milestone describes the SEGMENT, so a chunked body cannot raise one.
      * Scrolling to the foot of Part 1 of 3 is the bottom of a third, and
-     * emitting `depthPct: 100` for it would tell the engine the child had read
-     * the whole segment. The honest depth for a chunked segment travels on
-     * `time_on_segment` above; this stays quiet rather than overstating.
+     * emitting `depthRatio: 1` for it would tell the engine the child had read
+     * the whole segment. This stays quiet rather than overstating - and so
+     * does `deepest`, which takes a chunked body's own count.
      */
     if (chunkRead.current?.segmentId === segment.id) return;
+    noteDepth(segment.id, at.reach / at.height);
+    if (at.reach <= reachAtEntry.current) return;
+    const seen = at.reach / at.height;
     for (const mark of SCROLL_MILESTONES) {
-      if (pct >= mark && !scrollMarks.current.has(mark)) {
+      if (seen * 100 >= mark && !scrollMarks.current.has(mark)) {
         scrollMarks.current.add(mark);
         trackEvent(SIGNAL_EVENT_TYPES.SCROLL, {
           segmentId: segment.id,
-          depthPct: mark,
+          depthRatio: mark / 100,
         });
       }
     }
-  };
+  }, [columnReach, segment.id, trackEvent, noteDepth]);
+  useEffect(() => {
+    const onScroll = (e: Event) => {
+      const target = e.target;
+      if (target === document || target === window || target === columnRef.current)
+        handleScroll();
+    };
+    // Captured, because an element's scroll does not bubble to the window.
+    window.addEventListener("scroll", onScroll, { capture: true, passive: true });
+    return () =>
+      window.removeEventListener("scroll", onScroll, { capture: true });
+  }, [handleScroll]);
+
+  /*
+   * B105 (9 Oct): THE PAGE GOING HIDDEN MID-LESSON, AND FOR HOW LONG - two of
+   * `engagement_signal`'s indicators, and two the client sees as they are,
+   * with no cutoff of its own. `task_switch` (a count, 1) as it goes, and
+   * `return_after_pause` (the ms it stayed hidden) as it comes back. Hidden
+   * covers another app, another tab and a locked screen alike; which of
+   * those it was, and whether it matters, is the engine's to read.
+   *
+   * Only while the lesson is under way - not before a review begins, and
+   * not on the finished screen. A page that opened hidden was not switched
+   * away from, so nothing goes up until it has been seen to go.
+   *
+   * CAPTURED, so this runs before `useSignals`' own listener on the same
+   * event, which sends the queue as the page hides: the switch goes in that
+   * send rather than waiting for the page to come back.
+   */
+  const lessonUnderWay = phase === "segments" || phase === "assessment";
+  useEffect(() => {
+    if (!lessonUnderWay) return;
+    let hiddenAt: number | null = null;
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        if (hiddenAt !== null) return;
+        hiddenAt = performance.now();
+        trackEvent(SIGNAL_EVENT_TYPES.ENGAGEMENT_SIGNAL, {
+          indicator: "task_switch",
+          value: 1,
+        });
+        return;
+      }
+      if (hiddenAt === null) return;
+      const away = performance.now() - hiddenAt;
+      hiddenAt = null;
+      trackEvent(SIGNAL_EVENT_TYPES.ENGAGEMENT_SIGNAL, {
+        indicator: "return_after_pause",
+        value: Math.max(0, Math.round(away)),
+      });
+    };
+    document.addEventListener("visibilitychange", onVisibility, true);
+    return () =>
+      document.removeEventListener("visibilitychange", onVisibility, true);
+  }, [lessonUnderWay, trackEvent]);
 
   // Auto-clear the feedback note.
   useEffect(() => {
@@ -599,12 +1209,36 @@ export function LessonPlayer({
   }, [feedback]);
 
   // ── Touch Signal Contract markers (SCRUM-94.8) ──────────────────────────
-  /** `system_busy` start/end pair — brackets windows the system owns. */
+  /** The `system_busy` windows open now, one per reason. */
+  const busyWindows = useRef(new Map<BusyReason, () => void>());
+  /**
+   * Opens or closes the window the system owns for `reason`. It goes up once,
+   * as it closes, with its length - see `openBusyWindow`.
+   *
+   * One window per reason: a second start while one is open is the same wait,
+   * and an end with nothing open has no length anyone measured, so it sends
+   * nothing.
+   */
   const trackBusy = useCallback(
-    (reason: BusyReason, phase: BusyPhase) =>
-      trackEvent(SIGNAL_EVENT_TYPES.SYSTEM_BUSY, { reason, phase }),
+    (reason: BusyReason, phase: BusyPhase) => {
+      const open = busyWindows.current;
+      if (phase === BUSY_PHASE.START) {
+        if (!open.has(reason)) open.set(reason, openBusyWindow(trackEvent, reason));
+        return;
+      }
+      open.get(reason)?.();
+      open.delete(reason);
+    },
     [trackEvent],
   );
+  // Leaving the player mid-wait ends the wait: what is open goes up as it was.
+  useEffect(() => {
+    const open = busyWindows.current;
+    return () => {
+      for (const close of open.values()) close();
+      open.clear();
+    };
+  }, []);
 
   // While the Quick Check sheet is up, the player beneath is unavailable.
   useEffect(() => {
@@ -615,15 +1249,23 @@ export function LessonPlayer({
 
   // Scrim taps (the shared sheet overlay broadcasts them): recorded as blocked,
   // never as latency or an aborted gesture — a design signal, not a student one.
+  // ONLY WHILE THE QUICK CHECK IS UP, the one sheet whose scrim really blocks.
+  // Every sheet broadcasts, so this recorded `tap_blocked` for scrim taps that
+  // dismissed something, which is the opposite of blocked. The reason is the
+  // busy window the tap fell in, opened just above.
   useEffect(() => {
+    if (!checkOpen) return;
     const onScrimTap = () =>
-      trackEvent(SIGNAL_EVENT_TYPES.TAP_BLOCKED, { target: "scrim" });
+      trackEvent(SIGNAL_EVENT_TYPES.TAP_BLOCKED, {
+        target: "scrim",
+        reason: BUSY_REASON.BLOCKED_BY_MODAL,
+      });
     window.addEventListener("nevo-scrim-tap", onScrimTap);
     return () => window.removeEventListener("nevo-scrim-tap", onScrimTap);
-  }, [trackEvent]);
+  }, [checkOpen, trackEvent]);
 
   // ── The engine's instruction (§4) ───────────────────────────────────────
-  const segPlan = planFor(segment.id);
+  const segPlan = livePlanFor(segment.id);
   /*
    * ONE INSTRUCTION, AND NEVER A STATE.
    *
@@ -643,7 +1285,13 @@ export function LessonPlayer({
    * that no field carries, so they render the nothing-state rather than an
    * empty card - rule 5, and an empty hint is worse than no hint.
    */
-  const action = plan?.adjustment ?? segPlan?.adjustment ?? null;
+  /*
+   * The engine's NEWEST answer wins, and its silence counts: once it has
+   * answered mid-lesson, an absent instruction means none now (rule 5), not
+   * "keep whatever it said at load".
+   */
+  const engine = runtime.plan ?? plan;
+  const action = engine?.adjustment ?? segPlan?.adjustment ?? null;
   /*
    * WHAT THE INSTRUCTION SHOWS, engine first and authored second - the same
    * order the instruction itself resolves in.
@@ -656,24 +1304,129 @@ export function LessonPlayer({
    * Still nothing-state when the engine sends an instruction with no content.
    * An empty hint card is worse than no hint, and the translator has already
    * dropped a hint that arrived under the wrong action.
+   *
+   * AND ONLY ON THE SEGMENT IT WAS GIVEN FOR. The engine's instruction is
+   * lesson-level on the wire, but a hint or a guided question is about the
+   * content in front of the child when it was asked for: the segment a
+   * mid-lesson read was made on, or the one the lesson opened on for the
+   * load-time plan. Without this the same hint sat under every later segment,
+   * and a failed read kept it there indefinitely. The authored per-segment
+   * seam is already per segment.
    */
-  const hintText = plan?.hint ?? segPlan?.hint ?? null;
-  const guidedQuestions =
-    plan?.guidedQuestions?.length
-      ? plan.guidedQuestions
-      : (segPlan?.socraticPrompts ?? []);
-  // §4: "Secondary UI to 40% opacity, transitions slow, gentler copy variants."
-  const softened = action === ADJUSTMENT_ACTIONS.MODULATE_DENSITY;
-  // §4: "'Ready for something harder?' pill, scaffold withdraws." The pill
-  // already carries that exact sentence.
-  const stepUpOffered = action === ADJUSTMENT_ACTIONS.INCREASE_DIFFICULTY;
+  const engineOn = runtime.plan ? runtime.forSegmentId : first.id;
+  const contentHere = !engine?.adjustment || engineOn === segment.id;
+  const hintText = engine?.hint ?? segPlan?.hint ?? null;
+  /*
+   * The panel's rows, read the way the questions always were. Where the
+   * engine sent answerable prompts they are shown INSTEAD of its bare
+   * questions, not as well: both describe the same panel, and only a prompt
+   * has an id a reply can be sent against (B19).
+   */
+  const guidedPrompts: PanelPrompt[] = engine?.guidedPrompts?.length
+    ? engine.guidedPrompts
+    : (engine?.guidedQuestions?.length
+        ? engine.guidedQuestions
+        : (segPlan?.socraticPrompts ?? [])
+      ).map((prompt) => ({ prompt }));
+  /*
+   * A hint the child closed stays closed for that segment (D29). Keyed by the
+   * hint as well, so a different hint the engine sends later still shows.
+   */
+  const hintKey = `${segment.id}:${hintText ?? ""}`;
+  const hintHere =
+    contentHere &&
+    action === ADJUSTMENT_ACTIONS.OFFER_HINT &&
+    !closedHints.has(hintKey);
+  /*
+   * `hint_offered` (B20): the hint card went on screen. Once per hint per
+   * segment - a return visit or a re-render is not the engine offering it
+   * again. `hint_used` (B41) is sent as the child moves on with this hint
+   * still on screen - see `advancePastSegment`. The solver's "Need a hint?"
+   * is the hint a child opens, and sends its own pair - see `onCalcHint`.
+   *
+   * ON A CALCULATION THE HINT IS THE SOLVER'S, in the step's hint place, and
+   * a solved calculation has no step left to show it beside - so from then it
+   * is not on screen, and neither offered nor used.
+   */
+  const hintOnScreen =
+    segmentShowing &&
+    hintHere &&
+    Boolean(hintText) &&
+    !(
+      modality === MODALITY.INTERACTIVE &&
+      isCalculation(segment) &&
+      solvedCalcs.has(segment.id)
+    );
+  const offeredHints = useRef<Set<string>>(new Set());
+  const usedHints = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!hintOnScreen || offeredHints.current.has(hintKey)) return;
+    offeredHints.current.add(hintKey);
+    trackEvent(SIGNAL_EVENT_TYPES.HINT_OFFERED, { segmentId: segment.id });
+    // An unrequested hint on screen is an adaptation applied (B42).
+    noteApplied();
+  }, [hintOnScreen, hintKey, segment.id, trackEvent, noteApplied]);
+
+  /*
+   * B74 (8 Oct): A RENDERED SOCRATIC PANEL IS AN ADAPTATION APPLIED, counted
+   * as the engine's panel goes on screen under the segment - the same
+   * condition that draws it below - and not again as the child opens it,
+   * which is theirs. Once per segment, like a hint: a return visit or a
+   * re-render is not the engine applying it again.
+   */
+  const panelOnScreen =
+    segmentShowing &&
+    contentHere &&
+    action === ADJUSTMENT_ACTIONS.SHOW_SOCRATIC_PANEL &&
+    guidedPrompts.length > 0;
+  const countedPanels = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!panelOnScreen || countedPanels.current.has(segment.id)) return;
+    countedPanels.current.add(segment.id);
+    noteApplied();
+  }, [panelOnScreen, segment.id, noteApplied]);
+
+  /*
+   * A REPLY TO A GUIDED PROMPT (B19) goes to its own route, which puts it on
+   * the signal stream as `guided_question_answered` itself - so it is not
+   * also emitted here, or the engine would read one reply as two. Never the
+   * child's words: the option they picked, how much they wrote, or that they
+   * left it (6 Oct, frame 38).
+   *
+   * Live lessons and a signed-in child only; a demo's prompt ids mean nothing
+   * to the engine. Fire and forget, like the scaffold attempt: a reply that
+   * did not land costs one reading, and telling a child their thinking did
+   * not count would be worse and untrue.
+   */
+  const answerGuided = (
+    promptId: string,
+    outcome: GuidedAnswerOutcome | "abandoned",
+    reply?: GuidedReply,
+  ) => {
+    const studentId = getSession()?.userId;
+    if (!live || !studentId) return;
+    void intelligenceApi
+      .answerGuidedQuestion({
+        studentId,
+        sessionId: progress.sessionId ?? null,
+        promptId,
+        ...reply,
+        outcome,
+      })
+      .catch(() => {});
+  };
   // UDL accommodations (37c) - cross-session delivery themes from the plan.
   const readingOn = Boolean(plan?.accommodations?.reading);
   const attentionOn = Boolean(plan?.accommodations?.attention);
+  // A hint seen before the check is answered makes a right answer `after_hint`
+  // rather than `first_time` (B28) - only the first lengthens the interval.
+  useEffect(() => {
+    if (hintOnScreen) hintedSegments.current.add(segment.id);
+  }, [hintOnScreen, segment.id]);
 
-  // Break OFFERS (B.7): the plan names a break type to OFFER on this segment;
-  // the 20-minute monitor primes a micro one. One ask on screen at a time -
-  // an offered break outranks (and suppresses) the modality suggestion.
+  // Break OFFERS (B.7): the plan names a break type to OFFER on this segment,
+  // or the engine suggests one mid-lesson. One ask on screen at a time - an
+  // offered break outranks (and suppresses) the modality suggestion.
   //
   // `offerBreak` BEING PRESENT IS THE INSTRUCTION now. It used to be gated on
   // the frustration state as well, so the plan could name a break and be
@@ -681,38 +1434,89 @@ export function LessonPlayer({
   const offeredBreakType = segPlan?.offerBreak ?? null;
   const showOfferedBreak =
     offeredBreakType !== null && !spentBreakOffers.has(segment.id);
-  // The engine's own call, or the client's 20-minute prime as the fallback it
-  // was always meant to be. Either can raise the offer; the engine chooses the
-  // TYPE when it is the one asking.
-  const showTimeBreakOffer =
-    !showOfferedBreak &&
-    (runtime.offeredBreak !== null || approachingThreshold) &&
-    !timeOfferSpent;
-  const showBreakOffer = showOfferedBreak || showTimeBreakOffer;
+  // The engine's own call, for the segment it was asked about - its answer
+  // about the segment just left is not an offer for this one.
+  const engineBreak =
+    runtime.forSegmentId === segment.id ? (runtime.offeredBreak ?? null) : null;
+  const breakOffered = showOfferedBreak
+    ? offeredBreakType
+    : engineBreak !== null && !spentBreakOffers.has(segment.id)
+      ? engineBreak
+      : null;
+  const showBreakOffer = breakOffered !== null;
+  // Who asked, as every offer event and the break it leads to say it: the
+  // catalogue's one key. NOT RENAMED, deliberately - these are wire values in
+  // the set backend closed (with `adaptation_plan` and `module_boundary`), so
+  // they are not ours to tidy.
+  const offerTrigger = showOfferedBreak ? "affect_offer" : "engine_offer";
+
+  /*
+   * THE ENGINE'S SUGGESTION IS ONE OFFER PER ANSWER. It is lesson-level (see
+   * `toAdaptationPlan`), so a mid-lesson answer is offered on the segment it
+   * was asked about, and the load-time one wherever it can first be drawn -
+   * once, and spent by being taken, turned down or left on screen. The
+   * per-segment `suggestModality` is the authored seam and keeps its own
+   * per-segment rule.
+   */
+  const engineSuggests = runtime.plan
+    ? runtime.forSegmentId === segment.id
+      ? (runtime.plan.suggestModality ?? null)
+      : null
+    : (plan?.suggestModality ?? null);
+  const authoredSuggests = segPlan?.suggestModality ?? null;
+  const suggestionFromEngine =
+    authoredSuggests === null && engineSuggests !== null && engine !== spentSuggestionOf;
 
   // Offer the plan's suggestion only while it's renderable and not already
   // showing. Rate-limits: never on consecutive segments, never on the first
   // segment after a module boundary (SCRUM-101 - the student just made a
   // transition decision; don't stack an adaptation offer on top of it), and
   // never alongside a break offer.
-  const suggested = segPlan?.suggestModality ?? null;
-  const showSuggestion =
+  const suggested = authoredSuggests ?? (suggestionFromEngine ? engineSuggests : null);
+  const offerable =
     !suggestionSpent &&
-    !showBreakOffer &&
     suggested !== null &&
     suggested !== modality &&
-    hasContent(segment, suggested) &&
-    lastSuggestedIndex !== index - 1 &&
-    !opensLaterModule(lesson, index);
+    hasContent(segment, suggested);
+  const consecutive = lastSuggestedIndex === index - 1;
+  const afterBoundary = opensLaterModule(lesson, index);
+  const showSuggestion =
+    offerable && !showBreakOffer && !consecutive && !afterBoundary;
+
+  /*
+   * AN OFFER THE PLAYER'S OWN RULES HOLD BACK IS NOT REPORTED FROM HERE.
+   * `adaptation_suppressed` is server-written (backend, 5 Oct, B37): this
+   * player sent it too, from #623 until 6 Oct, which doubled every
+   * suppression the engine counted. See `SERVER_WRITTEN_EVENT_TYPES`.
+   */
 
   const go = (next: number) => {
     if (next < 0 || next >= total) return;
     // Leaving a segment that had a live offer counts as that segment having
     // suggested — the next segment must stay quiet (never consecutive).
     if (showSuggestion) setLastSuggestedIndex(index);
+    // An engine offer left on screen is spent with the segment it was on.
+    if (suggestionFromEngine && shownSuggestion.current?.segmentId === segment.id)
+      setSpentSuggestionOf(engine);
+    setObserved((o) => ({
+      ...o,
+      replays: 0,
+      shownHere: false,
+      sinceShown: o.sinceShown === null ? null : o.sinceShown + 1,
+    }));
     const nextSegment = lesson.segments[next];
-    const nextPlan = planFor(nextSegment.id);
+    const nextPlan = livePlanFor(nextSegment.id);
     setIndex(next);
+    // Opening a segment names it, a return visit included (D148).
+    setPositionSaidOn(null);
+    // A session that opened lower reads lower from here on (SCRUM-178). Only
+    // ever with a move, so the text changes as a segment opens, never under
+    // one being read.
+    if (progress.opened?.depth === "lower") setLowerDepth(true);
+    setEntryDensity({
+      segmentId: nextSegment.id,
+      level: nextPlan?.densityLevel ?? null,
+    });
     /*
      * THE CHILD'S PACE CHOICE HOLDS FOR THE REST OF THE LESSON.
      *
@@ -724,8 +1528,7 @@ export function LessonPlayer({
      * So it lives in component state and nowhere else: never written to the
      * profile, never sent back to the engine as a value, and gone at the next
      * sign-in because a new lesson is a new player. What the engine still
-     * learns is the truth about what the child was actually shown, through the
-     * chunked flow's exposure reporting.
+     * learns is that the child asked, from the trigger the chip sends.
      *
      * A segment that cannot deliver the chosen density simply renders its
      * default - the pick is not cleared, so it applies again on the next
@@ -734,22 +1537,12 @@ export function LessonPlayer({
     setModality(openingModality(nextSegment, nextPlan?.startModality));
     setSuggestionSpent(false);
     /*
-     * A plan-applied density is a system-driven adaptation - but only when the
-     * system's density is the one actually on screen.
-     *
-     * Gated on there being no manual pick in force, which became possible the
-     * moment the pick started carrying across segments. Without the gate, a
-     * child who asked for Slower on segment 1 would have every later segment
-     * report that the SYSTEM applied its own density, while the screen showed
-     * the child's. That is a false signal about an adaptation that did not
-     * happen, and the engine would learn from it.
+     * A PLAN'S DENSITY IS NOT A TRIGGER. This sent the authored per-segment
+     * density as `simplify_trigger` / `expand_trigger` / `slower_trigger` with
+     * `source: "system"`, and the catalogue's trigger for all three is the
+     * child asking. Only the demo lessons carry a per-segment density, so no
+     * engine reading is lost; the child's own chip is the one trigger left.
      */
-    if (nextPlan?.density && density === null) {
-      trackEvent(DENSITY_TRIGGER[nextPlan.density], {
-        segmentId: nextSegment.id,
-        source: TRIGGER_SOURCE.SYSTEM,
-      });
-    }
   };
 
   /** The forward move itself — next segment, then assessment, then done. */
@@ -764,9 +1557,13 @@ export function LessonPlayer({
       go(index + 1);
       return;
     }
-    // Review sessions end on the strengthened completion - the quick checks
-    // were the retrieval, so no second assessment (37d).
-    setPhase(hasAssessment && !review ? "assessment" : "complete");
+    // Review sessions end on their own completion - the quick checks were the
+    // retrieval, so no second assessment (37d).
+    const assess = hasAssessment && !review;
+    if (assess) beginCheck();
+    setPhase(assess ? "assessment" : "complete");
+    if (!assess) setEnding(finishedAs);
+    if (!assess) recordReview();
   };
 
   /**
@@ -774,7 +1571,13 @@ export function LessonPlayer({
    * intercepts once on the way out; finishing it resumes this same advance.
    */
   const advancePastSegment = () => {
-    const plannedBreak = planFor(segment.id)?.breakAfter ?? null;
+    // B41: moving on with the whole hint still on screen is acting on it. A
+    // hint the child closed is not on screen, and stays `hint_offered` alone.
+    if (hintOnScreen && !usedHints.current.has(hintKey)) {
+      usedHints.current.add(hintKey);
+      trackEvent(SIGNAL_EVENT_TYPES.HINT_USED, { segmentId: segment.id });
+    }
+    const plannedBreak = livePlanFor(segment.id)?.breakAfter ?? null;
     if (plannedBreak && !breaksTaken.current.has(segment.id)) {
       breaksTaken.current.add(segment.id);
       breakOrigin.current = "advance";
@@ -787,57 +1590,129 @@ export function LessonPlayer({
 
   /** Accept/decline the offered break; either way the offer is spent. */
   const acceptBreakOffer = () => {
-    if (showOfferedBreak) {
-      setSpentBreakOffers((prev) => new Set(prev).add(segment.id));
-      // NOT RENAMED, deliberately. This string is sent to the engine as the
-      // `trigger` on a BREAK_START signal, so it is wire vocabulary and not
-      // ours to tidy. Raised with backend instead - see BUILD_STATUS.
-      breakTrigger.current = "affect_offer";
-      breakOrigin.current = "offer";
-      setBreakActive(offeredBreakType);
-      return;
-    }
-    setTimeOfferSpent(true);
-    breakTrigger.current = runtime.offeredBreak ? "engine_offer" : "time_offer";
+    if (!breakOffered) return;
+    setSpentBreakOffers((prev) => new Set(prev).add(segment.id));
+    trackEvent(SIGNAL_EVENT_TYPES.BREAK_TAKEN, {
+      breakType: breakOffered,
+      trigger: offerTrigger,
+    });
+    breakTrigger.current = offerTrigger;
     breakOrigin.current = "offer";
-    // The engine's type when it asked; the micro break only when this is the
-    // client timer talking, which is all it could ever offer.
-    setBreakActive(runtime.offeredBreak ?? BREAK_TYPES.MICRO);
+    // The type is whoever asked's: nothing here picks one.
+    setBreakActive(breakOffered);
   };
 
+  /*
+   * "NOT NOW" IS AN ANSWER, and the catalogue has a type for it now. Without
+   * `break_declined` the engine could not tell a child who turned the offer
+   * down from one who never answered it, and may offer again a minute later.
+   * Moving on with the pill still up stays no answer at all.
+   */
   const dismissBreakOffer = () => {
-    if (showOfferedBreak) {
-      setSpentBreakOffers((prev) => new Set(prev).add(segment.id));
-      return;
-    }
-    setTimeOfferSpent(true);
+    if (!breakOffered) return;
+    setSpentBreakOffers((prev) => new Set(prev).add(segment.id));
+    trackEvent(SIGNAL_EVENT_TYPES.BREAK_DECLINED, {
+      breakType: breakOffered,
+      trigger: offerTrigger,
+    });
   };
 
   /** Next chevron — an unpassed Quick Check intercepts the advance. */
   const handleNext = () => {
-    if (segment.quickCheck && !passedChecks.has(segment.id)) {
+    // Next past a hand-off the server moved on from is Keep going by
+    // another way: the panel goes with the segment, as it does there.
+    if (handoffHere?.advance) {
+      keepGoingAfterHandoff();
+      return;
+    }
+    if (
+      segment.quickCheck &&
+      !passedChecks.has(segment.id) &&
+      !handedOff.has(segment.id)
+    ) {
       setCheckOpen(true);
       return;
     }
     advancePastSegment();
   };
 
+  /*
+   * B94: THE SERVER SAID HAND OFF. The answer to a quick check came back with
+   * `handoffTo: "socratic_panel"` - after three misses the server marked, not
+   * any count kept here - so the check gives way to the panel (38a): the sheet
+   * closes, and the panel arrives open with the server's prompts and nothing
+   * to accept or decline. Prompts with no id or no words are not drawn; a
+   * hand-off with none left draws nothing (rule 5), and the check stays.
+   */
+  const handOffFrom = (segmentId: string, stored: LessonQuestionAttempt) => {
+    if (stored.handoffTo !== "socratic_panel") return;
+    if (answeredRight.current.has(segmentId)) return;
+    const prompts = (stored.guidedPrompts ?? []).flatMap((p) =>
+      p?.id && p.prompt?.trim() ? [{ id: p.id, prompt: p.prompt }] : [],
+    );
+    if (prompts.length === 0) return;
+    setCheckOpen(false);
+    /*
+     * "FORWARD, NEVER BACK TO THE QUESTION" (38a §2) holds from the moment the
+     * server says to move on, not only once Keep going is pressed: a child who
+     * closes the panel and taps Next goes forward too, never into the check
+     * and its old wrong pick. Still not passed, and the misses still stand.
+     */
+    if (stored.advanceAfterHandoff === true)
+      setHandedOff((prev) => new Set(prev).add(segmentId));
+    setHandoff((prev) => ({
+      segmentId,
+      run: (prev?.run ?? 0) + 1,
+      prompts,
+      advance: stored.advanceAfterHandoff === true,
+    }));
+  };
+
+  /*
+   * 38a's return: "forward, never back to the question". Only when the server
+   * said to move on after it (`advanceAfterHandoff`); otherwise the panel has
+   * no ending and the check is still the way on. Moving on is not passing:
+   * the check is never marked passed, its misses stand for the review, and
+   * the panel on screen already made a right answer later `after_hint` - so
+   * nothing records this as known first time.
+   */
+  const keepGoingAfterHandoff = () => {
+    setHandedOff((prev) => new Set(prev).add(segment.id));
+    setHandoff(null);
+    advancePastSegment();
+  };
+  // The hand-off on this segment, if one arrived for it.
+  const handoffHere = handoff?.segmentId === segment.id ? handoff : null;
+
+  /*
+   * Previous chevron. B105 (9 Oct): BACK TO AN EARLIER SEGMENT IS THE ONE
+   * NON-LINEAR MOVE THIS PLAYER HAS - Next goes on by one, and the check has
+   * no way back - so each is one `navigation_fragmentation`. Whether the
+   * moves add up to fragmentation is the engine's reading, not this one's.
+   */
+  const handlePrev = () => {
+    if (index === 0) return;
+    trackEvent(SIGNAL_EVENT_TYPES.ENGAGEMENT_SIGNAL, {
+      indicator: "navigation_fragmentation",
+      value: 1,
+    });
+    go(index - 1);
+  };
+
   const pickDensity = (id: string) => {
     const d = id as Density;
     const next = density === d ? null : d;
     setDensity(next);
-    // A tap that sets (not clears) a density is a manual adaptation.
+    // A tap that sets (not clears) a density is the child asking - the only
+    // thing these triggers mean, so no `source` rides with it.
     if (next) {
-      trackEvent(DENSITY_TRIGGER[next], {
-        segmentId: segment.id,
-        source: TRIGGER_SOURCE.MANUAL,
-      });
+      trackEvent(DENSITY_TRIGGER[next], { segmentId: segment.id });
     }
   };
 
   // Frame contract: the manual pick is navy; the system's standing density is
-  // violet (glow-once) and KEEPS showing beside a different manual pick. The
-  // sparkle rides the unfollowed system chip (AdaptiveToggleBar).
+  // violet and KEEPS showing beside a different manual pick. No glow and no
+  // sparkle on it since D144 - see `AdaptiveToggleBar`.
   /*
    * ONE PATH, TWO CALLERS - design, 23 Sep. The engine's `simplify`, `slower`
    * and `expand` are the same operation as the child's own chips, so they
@@ -854,10 +1729,34 @@ export function LessonPlayer({
    * claims no adaptation - `TextSegment` falls back to `body.default` on its
    * own. That is the existing rule, not a new one, and it is why this needed
    * no gate of its own.
+   *
+   * **NO INSTRUCTION IS THE STANDARD TEXT** (design, 1 Oct, D23). This fell
+   * back to Simplify - the frame's `adaptive ?? "Simplify"` - so every segment
+   * with a simpler version opened on it, under a pulsing violet chip claiming
+   * a system action nobody had taken. Standard is the lesson as the teacher
+   * wrote it, and "the front end does not choose a teaching treatment the
+   * engine did not ask for." With no instruction there is no system density,
+   * so no chip lights.
+   *
+   * The engine is told which version was on screen: `depthShown` on every
+   * `time_on_segment` (B45, 5 Oct), so it can tell a child who read the
+   * simpler text from one who read the standard.
    */
-  const systemDensity: Density =
-    densityForAction(action) ?? segPlan?.density ?? DENSITY.SIMPLIFY;
-  const effectiveDensity: Density = density ?? systemDensity;
+  const systemDensity: Density | null =
+    densityForAction(action) ?? segPlan?.density ?? null;
+  const effectiveDensity: Density | null = density ?? systemDensity;
+  /*
+   * A NEW SEGMENT, VERSION OR PACE OPENS AT ITS TOP. The column is what
+   * scrolls, and it is the same element from one segment to the next, so it
+   * kept its place: Next from the foot of one long segment opened the next
+   * part-way down with its heading out of sight, and a change of pace opened
+   * the new text where the old had been left. Before the paint, so the old
+   * position is never seen, and before `reachAtEntry` is taken.
+   */
+  useLayoutEffect(() => {
+    const column = columnRef.current;
+    if (column) column.scrollTop = 0;
+  }, [segment.id, modality, effectiveDensity]);
   /*
    * Only the densities this segment can actually deliver.
    *
@@ -871,11 +1770,17 @@ export function LessonPlayer({
    * already has, so it is available on live content, and the gate is whether
    * chunking would change anything - a one-sentence segment still offers
    * nothing rather than a control that does nothing.
+   *
+   * AND ONLY WHILE THE TEXT IS WHAT IS ON SCREEN. Each of the three reshapes
+   * the text and nothing else, so a lone "Slower" over a picture, a recording
+   * or the calculation solver changed nothing a child could see - and still
+   * told the engine they had asked (`slower_trigger`). 17a draws no density
+   * pill on the calculation player.
    */
-  const densitySegments: ToggleSegment[] = DENSITIES.filter(({ id }) =>
+  const textChips: ToggleSegment[] = DENSITIES.filter(({ id }) =>
     id === DENSITY.SLOWER
       ? segment.text?.body[id] !== undefined ||
-        isChunkable(segment.text?.body.default)
+        isChunkable(segment.text?.body.default, segment.text?.readingChunks)
       : segment.text?.body[id] !== undefined,
   ).map(({ id, label }) => ({
     id,
@@ -883,19 +1788,150 @@ export function LessonPlayer({
     state:
       density === id ? "manual" : systemDensity === id ? "system" : "default",
   }));
+  const densitySegments = modality === MODALITY.TEXT ? textChips : [];
+
+  /*
+   * B45: KEPT AS THE SCREEN CHANGES, READ AS THE CHILD LEAVES. React runs a
+   * commit's effect cleanups before its setups, so the time-on-segment
+   * cleanup reads the segment being left before the next one's version
+   * lands here - and the segment id it is stamped with says so either way.
+   */
+  const depthNow = depthShown(
+    segment,
+    modality,
+    effectiveDensity,
+    simplified.has(segment.id),
+  );
+  useEffect(() => {
+    textShown.current = { segmentId: segment.id, depth: depthNow };
+  }, [segment.id, depthNow]);
+
+  /*
+   * B90: WHAT WAS ON SCREEN AS THE SEGMENT OPENED, OR AS ITS TEXT CHANGED, IS
+   * SEEN - all of a segment that fits, without a scroll. A chunked body
+   * reports its own parts instead, so its column, one part, is not measured.
+   * After the focus move, so it measures where that move left the page; and
+   * again as anything covering the segment lifts.
+   */
+  useEffect(() => {
+    if (!segmentShowing || chunkRead.current?.segmentId === segment.id) return;
+    const at = columnReach();
+    if (at) noteDepth(segment.id, at.reach / at.height);
+  }, [
+    segmentShowing,
+    segment.id,
+    modality,
+    effectiveDensity,
+    columnReach,
+    noteDepth,
+  ]);
+
+  /*
+   * B42: THE SYSTEM'S RESHAPE, APPLIED. Its density on a text segment that
+   * can deliver it, with no pick of the child's over it - the violet chip in
+   * force. Counted once per instruction: a standing Simplify carried on to
+   * the next segment is the same adaptation, not another, while a new or
+   * withdrawn instruction starts over. The child's own picks are not counted.
+   */
+  const systemReshapeShown =
+    segmentShowing &&
+    modality === MODALITY.TEXT &&
+    density === null &&
+    densitySegments.some((d) => d.state === "system")
+      ? systemDensity
+      : null;
+  const reshapeCounted = useRef<Density | null>(null);
+  useEffect(() => {
+    if (reshapeCounted.current !== systemDensity) reshapeCounted.current = null;
+    if (!systemReshapeShown || reshapeCounted.current === systemReshapeShown)
+      return;
+    reshapeCounted.current = systemReshapeShown;
+    noteApplied();
+  }, [systemDensity, systemReshapeShown, noteApplied]);
+
+  /*
+   * B74 (8 Oct): THE ENGINE'S DENSITY SPACING, COUNTED WHEN IT CHANGES ON
+   * SCREEN MID-SESSION. The spacing the lesson opened on is not an adaptation
+   * applied; a different one reaching a later segment is. Compared as the
+   * spacing drawn, so a medium level after none - the segment as it has
+   * always been drawn, both - changes nothing a child could see.
+   */
+  const spacingOnScreen = segmentShowing
+    ? densitySpacing(
+        entryDensity.segmentId === segment.id ? entryDensity.level : null,
+      )
+    : null;
+  const spacingShown = useRef<string | null>(null);
+  useEffect(() => {
+    if (spacingOnScreen === null) return;
+    const before = spacingShown.current;
+    if (before !== null && before !== spacingOnScreen) noteApplied();
+    spacingShown.current = spacingOnScreen;
+  }, [spacingOnScreen, noteApplied]);
+
+  /** What became of the offer: said to the engine, and the offer spent. */
+  const settleSuggestion = useCallback(
+    (outcome: SignalEventType) => {
+      shownSuggestion.current = null;
+      if (suggestionFromEngine) setSpentSuggestionOf(engine);
+      trackEvent(outcome, { segmentId: segment.id, suggested });
+    },
+    [suggestionFromEngine, engine, trackEvent, segment.id, suggested],
+  );
 
   const acceptSuggestion = useCallback(() => {
     if (suggested) setModality(suggested);
+    // The body comes back in the new modality without its position (D148).
+    setPositionSaidOn(segment.id);
     setLastSuggestedIndex(index);
     setSuggestionSpent(true);
+    settleSuggestion(SIGNAL_EVENT_TYPES.MODALITY_SUGGESTION_ACCEPTED);
     // The accept beat is over and the new modality is on screen.
     trackBusy(BUSY_REASON.MODALITY_SWITCH, BUSY_PHASE.END);
-  }, [suggested, index, trackBusy]);
+    // A modality change, applied (B42).
+    if (suggested) noteApplied();
+    // Its outcome goes up as this segment is left (B73/B104).
+    if (suggested && suggested !== modality)
+      switched.current = {
+        segmentId: segment.id,
+        from: modality,
+        to: suggested,
+        atShownMs: shownSoFar(),
+      };
+  }, [
+    suggested,
+    index,
+    trackBusy,
+    settleSuggestion,
+    noteApplied,
+    modality,
+    segment.id,
+    shownSoFar,
+  ]);
 
   const dismissSuggestion = useCallback(() => {
     setLastSuggestedIndex(index);
     setSuggestionSpent(true);
-  }, [index]);
+    settleSuggestion(SIGNAL_EVENT_TYPES.MODALITY_SUGGESTION_DECLINED);
+    if (suggested)
+      setObserved((o) => ({
+        ...o,
+        declines: o.declines + 1,
+        declined: o.declined.includes(suggested)
+          ? o.declined
+          : [...o.declined, suggested],
+      }));
+  }, [index, settleSuggestion, suggested]);
+
+  const suggestionShown = useCallback(() => {
+    if (!suggested) return;
+    shownSuggestion.current = { segmentId: segment.id, suggested };
+    setObserved((o) => ({ ...o, shownHere: true, sinceShown: 0 }));
+    trackEvent(SIGNAL_EVENT_TYPES.MODALITY_SUGGESTION_SHOWN, {
+      segmentId: segment.id,
+      suggested,
+    });
+  }, [segment.id, suggested, trackEvent]);
 
   /*
    * AN ASSESSMENT WITH NO QUESTIONS IS NOT AN ASSESSMENT.
@@ -913,28 +1949,215 @@ export function LessonPlayer({
    */
   const hasAssessment = (lesson.assessment?.questions.length ?? 0) > 0;
 
+  /*
+   * D36: EVERY ANSWER TO A CHECK IS STORED ON THE ACCOUNT AS IT IS GIVEN, so a
+   * check left part way keeps the answers already given. Marked server-side.
+   * Never in the child's way: a write that fails costs them nothing in the
+   * check. Not for the authored mocks, whose question ids are not real.
+   *
+   * HELD ON THE DEVICE WHEN IT CANNOT GO NOW (Lydia, 6 Oct) - no session yet,
+   * or a failure worth retrying, such as no connection - under this visit, so
+   * its completion waits for it (`pendingProgress`). One the server refused
+   * is not held, as before. `clientAttemptId` is the answer's own, kept with
+   * it, so one whose reply was lost is not filed twice when it is sent again.
+   *
+   * `onStored` hears the server's answer to it - the stored row, marked -
+   * which is where a hand-off arrives (B94). An answer held for later has no
+   * answer yet, and none is waited for.
+   */
+  const saveAttempt = (
+    answer: Omit<LessonQuestionAttemptWrite, "sessionId"> | null,
+    onStored?: (stored: LessonQuestionAttempt) => void,
+  ) => {
+    if (!live || !answer) return;
+    const body = { ...answer, clientAttemptId: randomId() };
+    const id = progress.sessionId;
+    // Taken now: a 401 clears the session before its failure arrives.
+    const owner = getSession()?.userId ?? null;
+    if (!id) {
+      holdAnswer(
+        lesson.id,
+        { sessionId: null, localId: progress.localId, body },
+        owner,
+      );
+      return;
+    }
+    attemptWrites.current.push(
+      lessonsApi.saveAttempt(lesson.id, { sessionId: id, ...body }).then(
+        // Beside the failure, not before it: what the answer leads to is no
+        // reason to hold the answer again.
+        (stored) => onStored?.(stored),
+        (cause: unknown) => {
+          if (retryable(cause)) {
+            holdAnswer(lesson.id, { sessionId: id, body }, owner);
+          }
+        },
+      ),
+    );
+  };
+
+  /*
+   * The answers given before the exit, read back from the account for Review
+   * Answers. Read for the picks only: whether anything landed is the
+   * server's verdict (B98), not a count made here.
+   */
+  const readAnswersBefore = useCallback(
+    (at: number, asked: string) => {
+      const questions = lesson.assessment?.questions ?? [];
+      lessonsApi
+        .attempts(lesson.id, asked)
+        .then((rows) => {
+          const before = answersBefore(rows, questions, at);
+          reviewAnswers.current = [
+            ...before.picks.filter(
+              (p) =>
+                !reviewAnswers.current.some(
+                  (a) => a.questionIndex === p.questionIndex,
+                ),
+            ),
+            ...reviewAnswers.current,
+          ];
+          saveReviewAnswers(lesson.id, reviewAnswers.current);
+        })
+        // Unread, Review Answers simply has fewer picks to show.
+        .catch(() => {});
+    },
+    [lesson],
+  );
+
+  /*
+   * B49: INTO THE CHECK, OR BACK INTO IT, for a child who reaches it from the
+   * last segment - one the lesson did not open into (`checkOpensAt`).
+   *
+   * Where it was left comes off the newest read of it this visit has: the
+   * answer to the newest progress write, else the session's own (B82). So a
+   * child who moves on before either answers starts the check fresh, as every
+   * check started before this. Decided here, once, and never moved under a
+   * child who is already answering.
+   */
+  const beginCheck = () => {
+    // A new run of the check; the last run's outcome is not this one's.
+    saveCheckOutcome(lesson.id, null);
+    const questions = lesson.assessment?.questions ?? [];
+    const at = live
+      ? checkResumeAt(progress.saved ?? progress.opened, questions.length)
+      : null;
+    if (at === null) return;
+    const asked = progress.sessionId;
+    setCheckResume({ at });
+    if (at >= questions.length) finishCheck();
+    if (asked) readAnswersBefore(at, asked);
+  };
+
+  /*
+   * THE CHECK IS DONE WHEN ITS LAST QUESTION IS ANSWERED, and that is when
+   * the lesson is written complete - not on the tap after the result, which a
+   * child who closes the tab there never makes. It is also the write that
+   * brings the check-in's outcome back (B26), and the server reads that from
+   * the answers it has stored - the last of which went a moment ago - so it
+   * waits for the answers still on their way. Continue and Review answers
+   * still complete at once; `markComplete` sends it once either way.
+   */
+  const finishCheck = () => {
+    void Promise.allSettled(attemptWrites.current).then(() => markComplete());
+  };
+
+  /*
+   * B82: A LESSON OPENED STRAIGHT INTO ITS CHECK starts that run of it as
+   * `beginCheck` would: the last run's outcome cleared, and - left with every
+   * question answered and its result unseen - the lesson completed, as the
+   * result appears. Nothing is waiting to be stored this early. Once.
+   */
+  const checkOpened = useRef(false);
+  useEffect(() => {
+    if (checkOpensAt === null || checkOpened.current) return;
+    checkOpened.current = true;
+    saveCheckOutcome(lesson.id, null);
+    if (checkOpensAt >= (lesson.assessment?.questions.length ?? 0)) {
+      markComplete();
+    }
+  }, [checkOpensAt, lesson, markComplete]);
+
+  /*
+   * And its answers from before are read back once there is a session to
+   * read them under - which this early there seldom is yet.
+   */
+  const answersAsked = useRef(false);
+  const checkSession = progress.sessionId;
+  useEffect(() => {
+    if (checkOpensAt === null || answersAsked.current || !checkSession) return;
+    answersAsked.current = true;
+    readAnswersBefore(checkOpensAt, checkSession);
+  }, [checkOpensAt, checkSession, readAnswersBefore]);
+
+  /*
+   * B98: HOW THE CHECK WENT IS THE SERVER'S VERDICT, and it comes back on the
+   * completion write. Until that write answers the result keeps its place
+   * unseen; if it fails - or no session ever opens - there is no verdict, and
+   * the result claims none. The walkthrough has no server to give one.
+   */
+  const verdictPending =
+    live && !progress.completionSaved && !progress.completionFailed;
+
   const requestExit = () => {
-    trackEvent(SIGNAL_EVENT_TYPES.EXIT_ATTEMPT, {
-      segmentId: segment.id,
-      index,
-    });
+    trackEvent(SIGNAL_EVENT_TYPES.EXIT_ATTEMPT, { segmentId: segment.id });
     setLeaveOpen(true);
   };
 
   // A calculation being co-constructed holds the forward chevron until it's
   // solved (17b: forward disabled until the segment completes).
-  const calcBlocking =
-    modality === MODALITY.INTERACTIVE &&
-    isCalculation(segment) &&
-    !solvedCalcs.has(segment.id);
+  const calcShowing =
+    modality === MODALITY.INTERACTIVE && isCalculation(segment);
+  const calcBlocking = calcShowing && !solvedCalcs.has(segment.id);
 
-  // Once the last segment is behind us there is nowhere further to chevron to
-  // (the assessment brings its own forward path).
-  const nextDisabled =
-    calcBlocking ||
-    (index === total - 1 &&
-      !hasAssessment &&
-      !(segment.quickCheck && !passedChecks.has(segment.id)));
+  /*
+   * ONLY AN UNSOLVED CALCULATION HOLDS THE FORWARD CHEVRON.
+   *
+   * It was also disabled on the last segment of a lesson with no
+   * end-of-lesson questions - and forward is the only thing that reaches the
+   * completion screen, so that lesson could not be finished at all. On the
+   * last segment forward goes to the assessment when there is one and to
+   * completion when there is not; `continueAdvance` already knew both.
+   */
+  const nextDisabled = calcBlocking;
+
+  /*
+   * 37c: UNDER THE ATTENTION ACCOMMODATION, "TAP TO CONTINUE" IS THE WAY ON.
+   * The frame draws no chevron row while a chunked body has parts left, and
+   * the row here was only dimmed - so Next skipped Parts 2 and 3 unread. It
+   * is held out of sight (and out of reach) rather than removed, so nothing
+   * jumps when the last part brings it back; the last part has no continue of
+   * its own. The child's own Slower chunks too, and keeps its chevrons: that
+   * pace is theirs to leave.
+   */
+  const partsLeft =
+    attentionOn && modality === MODALITY.TEXT && partsLeftOn === segment.id;
+
+  /*
+   * SCRUM-181: "THAT VERSION DIDN'T WORK." - when the completion write comes
+   * back saying nothing landed and the server has rerouted the lesson (B98,
+   * SCRUM-178). It replaces the check's result, or the completion screen if
+   * the child moved on before the write answered. Design's words verbatim,
+   * and no score, count or percentage. Start again follows the server's
+   * reroute: the lesson opens again from its `segmentPosition`, at its
+   * `depth`, and its session is the one `POST /session` then hands back -
+   * the same rerouted session (backend, 9 Oct). See `LessonRoute`.
+   * A lesson nobody attempted is never sent here; it resumes from Home.
+   */
+  if (
+    reroute &&
+    onStartAgain &&
+    (phase === "assessment" || phase === "complete")
+  ) {
+    return (
+      <LessonMessage
+        title={REROUTED.title}
+        body={REROUTED.body}
+        actionLabel={REROUTED.action}
+        onAction={() => onStartAgain(reroute.segmentPosition, reroute.depth)}
+      />
+    );
+  }
 
   // The entry, assessment and completion screens each take over the full
   // screen — their own layout, no player chrome.
@@ -944,6 +2167,13 @@ export function LessonPlayer({
         lessonTitle={lesson.title}
         lastWorkedAt={lastWorkedAt}
         onBegin={() => setPhase("segments")}
+        onLeave={() => {
+          // D36. Not started is not completed: nothing goes to the scheduler,
+          // so the concept stays due, and the lesson's own progress is left
+          // alone as every review leaves it.
+          setEnding({ completionStatus: "exited", exitPosition: first.id });
+          exitTo(HOME_HREF);
+        }}
       />
     );
   }
@@ -952,11 +2182,71 @@ export function LessonPlayer({
     return (
       <AfterLessonAssessment
         assessment={lesson.assessment!}
-        onAnswer={({ questionIndex, selectedId, correct }) => {
+        reading={readingOn}
+        onAudioBusy={(phase) => trackBusy(BUSY_REASON.MEDIA_PLAYING, phase)}
+        resumeAt={checkResume?.at}
+        result={live ? resultStateFrom(progress.saved) : undefined}
+        resultPending={verdictPending}
+        outcome={live ? checkOutcomeFrom(progress.saved) : null}
+        onComplete={finishCheck}
+        onLeave={(checkPosition) => {
+          /*
+           * D36: LEAVING THE CHECK IS NOT FINISHING IT, AND NOT FAILING IT.
+           *
+           * `exited` at the last segment, the same record the leave dialog
+           * makes - so the lesson stays unfinished and comes back on Home to
+           * pick up. No `resultState`, on this write or any: it is the
+           * server's to derive from its own marks since B98, and the write's
+           * field is deprecated. The answers already given were stored one by
+           * one as they were confirmed.
+           *
+           * B49: and WHERE in the check, so it reopens there the same day.
+           * None from the intro - a check not begun has no place to keep.
+           *
+           * NOTHING FOR A FINISHED LESSON REOPENED (D22), as the leave dialog
+           * writes nothing for one: `exited` here demoted a lesson the child
+           * had completed back to unfinished work on Home.
+           */
+          const last = total - 1;
+          const pos = modulePositionFor(lesson, last);
+          if (!review && !finished) {
+            reportProgress(LESSON_STATUS.EXITED, {
+              segment: last,
+              ...(pos ? { module: pos.moduleIndex } : {}),
+              ...(checkPosition !== undefined ? { check: checkPosition } : {}),
+            });
+          }
+          setEnding({
+            completionStatus: "exited",
+            exitPosition: lesson.segments[last].id,
+          });
+          exitTo(HOME_HREF);
+        }}
+        onAnswer={({ questionIndex, selectedId, correct, responseTimeMs }) => {
+          // The pick goes up on the attempt, where the server marks it.
+          const checkpointId = lesson.assessment?.questions[questionIndex]?.id;
+          saveAttempt(
+            answerFor({
+              questionId: checkpointId,
+              source: "assessment",
+              choice: lesson.assessment?.questions[questionIndex]?.options.find(
+                (o) => o.id === selectedId,
+              ),
+            }),
+          );
+          /*
+           * THE CATALOGUE'S KEYS, `segmentId` and `questionId`, and nothing it
+           * does not declare: correctness is decided on the server against the
+           * stored answer, so `correct` - and the pick and its timing beside it
+           * - are not sent here. NO `segmentId`: an after-lesson question
+           * belongs to the lesson, not to any one segment, and naming the last
+           * one would put the answer on a segment it was never about - and
+           * the catalogue makes it optional for exactly this (9 Oct).
+           * `source` says it is the after-lesson check's (B90/B92, 8 Oct).
+           */
           trackEvent(SIGNAL_EVENT_TYPES.COMPREHENSION_RESPONSE, {
-            kind: "assessment",
-            questionIndex,
-            correct,
+            ...(checkpointId ? { questionId: checkpointId } : {}),
+            source: "assessment",
           });
           // The first answer to each question, for the scheduler. `Map.set` is
           // guarded so a re-answer cannot overwrite what they knew first time.
@@ -988,6 +2278,12 @@ export function LessonPlayer({
               question: lesson.assessment?.questions[questionIndex] ?? {},
               correct,
               studentId: getSession()?.userId,
+              responseTimeMs,
+              // B27: the pick itself, and the lesson it came from.
+              choice: lesson.assessment?.questions[questionIndex]?.options.find(
+                (o) => o.id === selectedId,
+              ),
+              lessonId: lesson.id,
             });
             if (attempt) void scaffoldsApi.attempt(attempt).catch(() => {});
           }
@@ -1000,48 +2296,77 @@ export function LessonPlayer({
           ];
           saveReviewAnswers(lesson.id, reviewAnswers.current);
         }}
-        onFinish={() => setPhase("complete")}
+        onFinish={() => {
+          setPhase("complete");
+          setEnding(finishedAs);
+        }}
         onReviewAnswers={() => {
           // The lesson IS finished at this point - reviewing is a way of
           // leaving it, not of abandoning it.
           markComplete();
-          router.push(`${LESSONS_HREF}/${lesson.id}/review`);
+          setEnding(finishedAs);
+          exitTo(`${LESSONS_HREF}/${lesson.id}/review`);
         }}
       />
     );
   }
 
   if (phase === "complete") {
-    // "Your progress is saved" is the screen's default note, and until the
-    // progress write existed it was simply untrue. Now it is a report: when
-    // the write did not reach Nevo the child is told, in the same words the
-    // daily warm-up uses - the fault is ours and it says so.
+    // "Your progress is saved" is a REPORT, so it appears once the completion
+    // write has landed and not before - not while it is in flight, not while
+    // it waits on a session, and never for a lesson nothing writes. It was the
+    // screen's default and showed in all of those. When the write did not
+    // reach Nevo the child is told, in the same words the daily warm-up uses.
     const savedNote = progress.completionFailed
-      ? "We couldn’t save that just now — that’s on us, not you. Your work is still yours."
-      : undefined;
+      ? "We couldn't save that just now - that's on us, not you. Your work is still yours."
+      : progress.completionSaved
+        ? "Your progress is saved."
+        : undefined;
 
-    // Review sessions close on the strengthened-concept variant (37d) - the
-    // standard completion screen with only the message swapped.
+    // Review sessions close on their own variant (37d) - the standard
+    // completion screen with only the message swapped, and the message is
+    // only what the scheduler confirmed (D40). The frame's "is settling in"
+    // and "once more before it fully sticks" go with it: the first claims the
+    // movement the heading now waits for, the second a count nothing carries.
     if (review) {
+      const copy = reviewCompletionCopy(reviewRecord);
       return (
         <LessonComplete
-          onDone={() => router.push(HOME_HREF)}
-          heading="You strengthened this concept"
+          onDone={() => exitTo(HOME_HREF)}
+          heading={copy.heading}
+          headingHeld={copy.held}
           note={
-            savedNote ??
-            `${lesson.title} is settling in. We'll bring it back once more before it fully sticks.`
+            copy.bringBack && !progress.completionFailed
+              ? REVIEW_COPY.later
+              : savedNote
           }
           doneLabel="Done"
         />
       );
     }
+    /*
+     * D142: A PARTIAL COPY'S END IS NOT THE LESSON DONE. It stopped short of
+     * its modules, recap and check and is written `exited`, not completed (see
+     * `markComplete`), so "That's the lesson done." was untrue. Design's words,
+     * 8 Oct, and nothing else: no saved line, since nothing here was completed
+     * to save, and no summary, which is the recap this copy lacks.
+     */
+    if (partial) {
+      return (
+        <LessonComplete
+          onDone={() => exitTo(LESSONS_HREF)}
+          heading={PARTIAL_ENDING.heading}
+          note={PARTIAL_ENDING.note}
+        />
+      );
+    }
     return (
       <LessonComplete
-        onDone={() => router.push(HOME_HREF)}
+        onDone={() => exitTo(LESSONS_HREF)}
         note={savedNote}
         onSeeSummary={
           lesson.summary
-            ? () => router.push(`${LESSONS_HREF}/${lesson.id}/summary`)
+            ? () => exitTo(`${LESSONS_HREF}/${lesson.id}/summary`)
             : undefined
         }
       />
@@ -1055,24 +2380,28 @@ export function LessonPlayer({
     return (
       <BreakScreen
         type={breakActive}
+        // The catalogue's keys and no others: the break's type (B89, 8 Oct),
+        // `trigger`, and how long it lasted. The segment is not among them.
         onStart={() =>
           trackEvent(SIGNAL_EVENT_TYPES.BREAK_START, {
-            type: breakActive,
+            breakType: breakActive,
             trigger: breakTrigger.current,
-            segmentId: segment.id,
           })
         }
         onEnd={(durationMs) =>
           trackEvent(SIGNAL_EVENT_TYPES.BREAK_END, {
-            type: breakActive,
+            breakType: breakActive,
+            trigger: breakTrigger.current,
             durationMs,
           })
         }
         onFeelings={(feelings) =>
-          trackEvent(SIGNAL_EVENT_TYPES.FEELING_CHECKIN, { feelings })
+          // `response` is the catalogue's key for what the child picked.
+          trackEvent(SIGNAL_EVENT_TYPES.FEELING_CHECKIN, { response: feelings })
         }
         onDone={() => {
           setBreakActive(null);
+          setObserved((o) => ({ ...o, breaksTaken: o.breaksTaken + 1 }));
           // An offered break returns to the segment it interrupted; a
           // plan-delivered one resumes the advance it intercepted.
           if (breakOrigin.current === "advance") continueAdvance();
@@ -1082,7 +2411,7 @@ export function LessonPlayer({
   }
 
   // Module boundary landing (SCRUM-101) — a full player screen between modules,
-  // never a modal. Continue (or break + "I'm ready") completes the move.
+  // never a modal. Its one action, Continue, completes the move (D91).
   if (boundaryTo !== null) {
     const modules = lessonModules(lesson);
     const nextPos = modulePositionFor(lesson, boundaryTo);
@@ -1117,13 +2446,21 @@ export function LessonPlayer({
   }
 
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-nevo-cream text-nevo-near-black">
-      {/* Top bar: exit + title, then the density toggle (present in every modality).
+    /*
+     * ONE SCREEN HIGH, AND ONLY THE COLUMN SCROLLS - the player frame's
+     * `flex:1 1 auto;min-height:0;overflow-y:auto` between a pinned top and a
+     * pinned arrow row (17c pins it on a chunk longer than the screen). The
+     * page scrolled before, so the header went off the top and Next sat below
+     * the fold on the first segment. Divided by the text-size zoom, which
+     * scales `dvh` too - see globals.css.
+     */
+    <div className="flex h-[calc(100dvh/var(--nevo-text-zoom,1))] flex-col bg-nevo-cream text-nevo-near-black">
+      {/* Top bar: exit + title, then the density toggle (while the text shows).
           Frame: 10/14/12 padding, whole bar carries the secondary dim. */}
       <header
         className={cn(
           "flex shrink-0 flex-col gap-2.5 px-3.5 pt-2.5 pb-3",
-          secondaryDim(softened, attentionOn),
+          secondaryDim(attentionOn),
         )}
       >
         <div className="flex items-center gap-2.5">
@@ -1144,8 +2481,9 @@ export function LessonPlayer({
           <h1 className="min-w-0 flex-1 truncate text-base font-medium text-nevo-near-black sm:text-lg">
             {lesson.title}
           </h1>
-          {/* 37a: the global scaffold indicator, opposite the exit. 37b:
-              boredom pulses it once at the transition. */}
+          {/* 37a: the global scaffold indicator, opposite the exit. It does
+              not pulse: the step-up that pulsed it is retired (D28), and the
+              dots change quietly (D27). */}
           {/*
             THE CONCEPT'S OWN LEVEL WINS WHERE THERE IS A CONCEPT, and the two
             sources never overlap: the scaffolds engine is keyed per concept
@@ -1153,23 +2491,55 @@ export function LessonPlayer({
             ordinary segments that carry none. Null falls through to the plan,
             because a read that never answered is not evidence about a child.
 
-            It is also the only way the fourth circle is ever reachable - the
-            plan's `ScaffoldingLevel` has three values and the frame draws
-            four. See `lib/lessons/scaffoldLevel.ts`.
+            It is also the only way one filled circle is ever reachable - the
+            plan's `ScaffoldingLevel` runs none, light, standard, strong, and
+            has no minimal. See `lib/lessons/scaffoldLevel.ts`.
+
+            NO LEVEL IS THE NOTHING-STATE, NOT "LIGHT" (rule 5). With no plan,
+            or a value we do not know, this drew two circles and "Nevo sets it
+            for you" about support nobody had set, then changed when a plan
+            landed.
+
+            THE STARTING LEVEL, LAST, AND ONLY ON THE SOLVER (B103, 9 Oct).
+            `initialScaffold` is the engine config's "starting level for
+            calculation scaffolds", which the client applies - so it shows
+            while a calculation is being worked and nothing more specific has
+            been said for the segment, and on no other screen.
           */}
           <ScaffoldIndicator
             key={`scaf-${segment.id}`}
-            level={conceptScaffold ?? segPlan?.scaffold ?? "light"}
-            pulse={stepUpOffered}
+            level={
+              conceptScaffold ??
+              segPlan?.scaffold ??
+              (calcShowing ? plan?.initialScaffold : undefined) ??
+              null
+            }
           />
         </div>
         {/* Frame: the density toggle sits alone on its own right-aligned row.
             Absent entirely when the segment has no reshapes to offer, rather
-            than an empty pill rail. */}
-        {densitySegments.length > 0 && (
-          <div className="flex justify-end">
+            than an empty pill rail.
+
+            HELD, UNSEEN, OVER A PICTURE OR A RECORDING of a segment whose
+            text has chips: those have to go there, and taking the row with
+            them lifted the position line and the progress 62px between a
+            text segment and the next - a change of version is felt, not
+            seen (rule 7). Not on the solver: 17a draws no row there, and it
+            needs the room. */}
+        {(densitySegments.length > 0 ||
+          (textChips.length > 0 && !calcShowing)) && (
+          <div
+            className={cn(
+              "flex justify-end",
+              densitySegments.length === 0 && "invisible",
+            )}
+            aria-hidden={densitySegments.length === 0 || undefined}
+            inert={densitySegments.length === 0}
+          >
             <AdaptiveToggleBar
-              segments={densitySegments}
+              segments={
+                densitySegments.length > 0 ? densitySegments : textChips
+              }
               onSelect={pickDensity}
             />
           </div>
@@ -1177,14 +2547,17 @@ export function LessonPlayer({
       </header>
 
       {/* Two-level position line for modular lessons (SCRUM-101.3) - its own
-          full-width row directly above the progress bar (frame: 0 16px 7px). */}
+          full-width row directly above the progress bar (frame: 0 16px 7px).
+          It wraps rather than cutting off: at a larger text size a phone
+          has no room for "Module 2 of 3 · Segment 1 of 4 in this module",
+          and "…in this modu…" told the child nothing. */}
       <div
         className={cn(
           "shrink-0 px-4 pb-[7px]",
-          secondaryDim(softened, attentionOn),
+          secondaryDim(attentionOn),
         )}
       >
-        <span className="block min-w-0 truncate font-mono text-[11px] tracking-[0.02em] text-nevo-near-black/50">
+        <span className="block min-w-0 font-mono text-[11px] tracking-[0.02em] text-pretty text-nevo-near-black/50">
           {positionLine(lesson, index)}
         </span>
       </div>
@@ -1193,24 +2566,18 @@ export function LessonPlayer({
           module boundaries; the text above carries the module breakdown. */}
       <ProgressBar
         value={(index + 1) / total}
-        className={cn("shrink-0", secondaryDim(softened, attentionOn))}
+        className={cn("shrink-0", secondaryDim(attentionOn))}
         aria-label={positionLine(lesson, index)}
       />
 
       {/* Calm banner while the device is offline — the cached lesson stays usable */}
       <OfflineBanner />
 
-      {/* Anchor for system offers — one ask at a time, just below the top bar.
-          A break offer (B.7) outranks the modality suggestion. */}
+      {/* Anchor for the modality suggestion, just below the top bar. One ask
+          at a time: a break offer (B.7) outranks it, and is asked at the foot
+          of the lesson instead (frame 38 §3) - see below. */}
       <div className="relative">
-        {showBreakOffer ? (
-          <BreakOfferPill
-            key={`break-offer-${segment.id}`}
-            trigger={showOfferedBreak ? "instruction" : "time"}
-            onAccept={acceptBreakOffer}
-            onDismiss={dismissBreakOffer}
-          />
-        ) : (
+        {showBreakOffer ? null : (
           showSuggestion && (
             <ModalitySuggestionPill
               key={`pill-${segment.id}`}
@@ -1219,38 +2586,26 @@ export function LessonPlayer({
               onAcceptStart={() =>
                 trackBusy(BUSY_REASON.MODALITY_SWITCH, BUSY_PHASE.START)
               }
+              onShown={suggestionShown}
               onDismiss={dismissSuggestion}
             />
           )
         )}
       </div>
 
-      {/* Content — centered reading column. 37b: boredom frames it in a soft
-          violet border ("more here if you want it"). */}
-      <div
-        ref={scrollerRef}
-        className="flex-1 overflow-y-auto"
-        onScroll={handleScroll}
-      >
+      {/* Content — centered reading column. Its violet frame went with the
+          step-up offer it accompanied (D28). */}
+      <div ref={columnRef} className="min-h-0 flex-1 overflow-y-auto">
         <div
           className={cn(
-            // The bottom padding clears the Ask Nevo trigger, which is
-            // `fixed` and therefore lands ON this scrolling column rather than
-            // below it. The arithmetic, on mobile: the chevron nav is
-            // pt-2 + size-12 + pb-6 = 80px and `shrink-0`, so this region ends
-            // 80px off the bottom; the trigger is `bottom-[82px]` and 52px
-            // tall, so it sits between 134px and 82px off the bottom - inside
-            // this column, over the last line's right-hand end. 88px of slack
-            // means text always stops above it.
-            //
-            // Not needed from `sm:` up: there the trigger is the 44px pill at
-            // `bottom-6`, which ends 68px off the bottom - below this region
-            // entirely, in the nav row, and clear of the centred chevrons.
-            // `sm:p-8` and `lg:p-10` reset it on their own - measured against
-            // the real stylesheet at 375 / 700 / 1280, giving 88 / 32 / 40px -
-            // because their media rules come after the base utility.
+            // The 88px bottom padding on mobile was sized to clear the Ask Nevo
+            // trigger, which is `fixed` and would land on this column. Ask Nevo
+            // is no longer mounted over lesson content (IA 31, see
+            // `LessonAskNevo`), so it clears nothing now; the last line simply
+            // stops well above the chevrons. `sm:p-8` and `lg:p-10` reset it
+            // on their own, because their media rules come after the base
+            // utility.
             "mx-auto w-full max-w-full p-6 pb-[88px] sm:max-w-[620px] sm:p-8 lg:max-w-[680px] lg:p-10",
-            stepUpOffered && "rounded-[12px] border-2 border-nevo-violet/45",
           )}
         >
           {/*
@@ -1267,23 +2622,66 @@ export function LessonPlayer({
             <TeacherNote
               note={teacherNote.text}
               author={teacherNote.author}
+              reading={readingOn}
             />
           )}
           {feedback && <FeedbackStrip message={feedback} />}
-          {stepUpOffered && !spentEscalations.has(segment.id) && (
-              <DifficultyOfferPill
-                key={`stepup-${segment.id}`}
-                onSpent={() => {
-                  setSpentEscalations((prev) => new Set(prev).add(segment.id));
-                  setFeedback("Noted - we'll step things up.");
-                }}
-              />
-            )}
-          {action === ADJUSTMENT_ACTIONS.SHOW_SOCRATIC_PANEL &&
-            guidedQuestions.length > 0 && (
+          {(handoffHere ||
+            (contentHere &&
+              action === ADJUSTMENT_ACTIONS.SHOW_SOCRATIC_PANEL &&
+              guidedPrompts.length > 0)) && (
               <SocraticPanel
-                key={`socratic-${segment.id}`}
-                prompts={guidedQuestions}
+                key={
+                  handoffHere
+                    ? `handoff-${segment.id}-${handoffHere.run}`
+                    : `socratic-${segment.id}`
+                }
+                prompts={handoffHere ? handoffHere.prompts : guidedPrompts}
+                /*
+                 * SCRUM-241: TWO WAYS IN, AND THE PANEL IS TOLD WHICH. The
+                 * server's hand-off (B94, `handOffFrom`) arrives open and ends
+                 * on Keep going, on into the next segment. Otherwise it is
+                 * the engine's `show_socratic_panel`, opened by the child from
+                 * the confusion prompt, and ends on the way back to the
+                 * question - the check, while it is still to pass. One panel
+                 * at a time: a hand-off is the one on screen.
+                 */
+                entry={handoffHere ? "handoff" : "self"}
+                onTryAgain={
+                  !handoffHere &&
+                  segment.quickCheck &&
+                  !passedChecks.has(segment.id)
+                    ? () => setCheckOpen(true)
+                    : undefined
+                }
+                onKeepGoing={
+                  handoffHere?.advance ? keepGoingAfterHandoff : undefined
+                }
+                onShown={(promptIds) => {
+                  // Reached through the panel is not reached first time: a
+                  // check answered after it reports as after help (B28).
+                  hintedSegments.current.add(segment.id);
+                  for (const promptId of promptIds)
+                    trackEvent(SIGNAL_EVENT_TYPES.GUIDED_QUESTION_SHOWN, {
+                      segmentId: segment.id,
+                      promptId,
+                    });
+                  /*
+                   * B74: A RENDERED SOCRATIC PANEL IS AN ADAPTATION APPLIED.
+                   * The hand-off's is counted here, once per segment - a
+                   * second hand-off on the same segment is the same panel
+                   * arriving again. The engine's own panel is counted with
+                   * the other applied adaptations, not here.
+                   */
+                  if (handoffHere && !handoffsApplied.current.has(segment.id)) {
+                    handoffsApplied.current.add(segment.id);
+                    noteApplied();
+                  }
+                }}
+                onAnswer={(promptId, reply, outcome) =>
+                  answerGuided(promptId, outcome, reply)
+                }
+                onAbandon={(promptId) => answerGuided(promptId, "abandoned")}
               />
             )}
           <div
@@ -1304,25 +2702,73 @@ export function LessonPlayer({
              * `role="group"` with the position as its name so that landing here
              * announces "Module 2 of 3 · Segment 1 of 4 in this module" before
              * the content - the orientation a sighted child gets for free from
-             * the line above the progress bar.
+             * the line above the progress bar. Once per opening (D148): see
+             * `positionSaidOn`.
              */
             tabIndex={-1}
             role="group"
-            aria-label={positionLine(lesson, index)}
-            className="motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-300 motion-safe:ease-nevo-slide focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-nevo-navy"
+            aria-label={
+              positionSaidOn === segment.id
+                ? undefined
+                : positionLine(lesson, index)
+            }
+            onBlur={(e) => {
+              // Focus leaving the group, not moving inside it.
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null))
+                setPositionSaidOn(segment.id);
+            }}
+            className={cn(
+              // The ring is drawn inside the group: the column scrolls now,
+              // and clips anything drawn outside what it holds.
+              "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-300 motion-safe:ease-nevo-slide focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-nevo-navy",
+              // D25: the engine's density, as spacing and nothing else.
+              densitySpacing(
+                entryDensity.segmentId === segment.id
+                  ? entryDensity.level
+                  : null,
+              ),
+            )}
           >
             <SegmentBody
               segment={segment}
               modality={modality}
+              padDock={padDock}
+              onSystemScroll={systemScrolled}
+              engineHint={hintHere && hintText ? hintText : undefined}
+              onEngineHintClosed={() =>
+                setClosedHints((prev) => new Set(prev).add(hintKey))
+              }
               density={effectiveDensity}
+              simplified={simplified.has(segment.id)}
               reading={readingOn}
               attention={attentionOn}
               onReadProgress={noteReadProgress}
-              onReplay={() =>
-                trackEvent(SIGNAL_EVENT_TYPES.REPLAY, { segmentId: segment.id })
+              onChunkSeen={(chunkId, action) =>
+                trackEvent(SIGNAL_EVENT_TYPES.READING_CHUNK_VIEWED, {
+                  segmentId: segment.id,
+                  chunkId,
+                  action,
+                  formFactor: formFactor(),
+                })
+              }
+              onReplay={() => {
+                trackEvent(SIGNAL_EVENT_TYPES.REPLAY, { segmentId: segment.id });
+                setObserved((o) => ({ ...o, replays: o.replays + 1 }));
+              }}
+              onNarrationPlayed={() =>
+                trackEvent(SIGNAL_EVENT_TYPES.NARRATION_PLAYED, {
+                  segmentId: segment.id,
+                })
               }
               onAudioBusy={(phase) =>
                 trackBusy(BUSY_REASON.MEDIA_PLAYING, phase)
+              }
+              onMediaFailed={(channel, reason) =>
+                trackEvent(SIGNAL_EVENT_TYPES.MEDIA_LOAD_FAILED, {
+                  segmentId: segment.id,
+                  channel,
+                  reason,
+                })
               }
               onCalcSolved={() => {
                 setSolvedCalcs((prev) => new Set(prev).add(segment.id));
@@ -1332,29 +2778,54 @@ export function LessonPlayer({
                   segmentId: segment.id,
                 });
               }}
-              onCalcStep={(correct) =>
-                // The ingest enum has a type for this. It was riding
-                // `comprehension_response` under a `kind` of our own invention,
-                // which obliges the engine to know our convention - and no
-                // batch had ever actually landed under it, so switching now
-                // costs no history.
+              onCalcStep={(stepId, correct) => {
+                // The catalogue's keys, exactly: which step, never whether it
+                // was right. The match against the stored answers feeds the
+                // error streak the engine reads (`consecutiveErrors`) - that
+                // is where correctness is declared, not on this event.
                 trackEvent(SIGNAL_EVENT_TYPES.CALCULATION_STEP_RESPONSE, {
                   segmentId: segment.id,
-                  correct,
-                })
-              }
-              onPiecePlaced={(placed, needed) =>
+                  stepId,
+                });
+                noteAnswer(correct);
+              }}
+              onPiecePlaced={(stepId) =>
                 trackEvent(SIGNAL_EVENT_TYPES.MANIPULATIVE_PIECE_PLACED, {
                   segmentId: segment.id,
-                  placed,
-                  needed,
+                  stepId,
                 })
               }
+              onCalcHint={() => {
+                /*
+                 * THE HINT A CHILD OPENS WAS SILENT (audit 44). Opening it is
+                 * both halves of the catalogue's pair: a hint shown "whether
+                 * or not the child asked for one", and one "they had to open"
+                 * acted on. The concept rides along where the payload names
+                 * one; no hint index, which nothing defines.
+                 */
+                const conceptId = segment.calculation?.conceptId;
+                trackEvent(SIGNAL_EVENT_TYPES.HINT_OFFERED, {
+                  segmentId: segment.id,
+                  ...(conceptId ? { conceptId } : {}),
+                });
+                trackEvent(SIGNAL_EVENT_TYPES.HINT_USED, {
+                  segmentId: segment.id,
+                  ...(conceptId ? { conceptId } : {}),
+                });
+                // A right answer to this segment's check is `after_hint` now.
+                hintedSegments.current.add(segment.id);
+              }}
             />
           </div>
-          {/* §4 `offer_hint`: the unrequested hint under the content. */}
-          {action === ADJUSTMENT_ACTIONS.OFFER_HINT && hintText && (
-            <HintOverlay hint={hintText} />
+          {/* §4 `offer_hint`: the unrequested hint under the content - or,
+              on the solver, in its step's hint place (17a), passed in. */}
+          {hintHere && hintText && !calcShowing && (
+            <HintOverlay
+              hint={hintText}
+              onClose={() =>
+                setClosedHints((prev) => new Set(prev).add(hintKey))
+              }
+            />
           )}
         </div>
       </div>
@@ -1365,11 +2836,40 @@ export function LessonPlayer({
           check={segment.quickCheck}
           open={checkOpen}
           onOpenChange={setCheckOpen}
-          onAnswered={(correct) => {
+          reading={readingOn}
+          onAudioBusy={(phase) => trackBusy(BUSY_REASON.MEDIA_PLAYING, phase)}
+          onAnswered={(correct, answered) => {
+            const checkpointId = segment.quickCheck?.id;
+            // The catalogue's keys, `source` naming a quick check's answer
+            // from the after-lesson check's; the pick goes up on the attempt
+            // below, where the server marks it.
             trackEvent(SIGNAL_EVENT_TYPES.COMPREHENSION_RESPONSE, {
-              kind: "quick_check",
               segmentId: segment.id,
-              correct,
+              ...(checkpointId ? { questionId: checkpointId } : {}),
+              source: "checkpoint",
+            });
+            saveAttempt(
+              answerFor({
+                questionId: checkpointId,
+                segmentId: segment.id,
+                source: "checkpoint",
+                choice: segment.quickCheck?.options.find(
+                  (o) => o.id === answered.selectedId,
+                ),
+              }),
+              // B94: the server's answer may hand this child off.
+              (stored) => handOffFrom(segment.id, stored),
+            );
+            if (correct) answeredRight.current.add(segment.id);
+            noteAnswer(correct);
+            // Which pick first got it, for the scheduler - a miss re-opens the
+            // check until it is passed, so "passed" is true of everyone.
+            const seen = checkRecall.current.get(segment.id);
+            const picks = (seen?.picks ?? 0) + 1;
+            checkRecall.current.set(segment.id, {
+              picks,
+              rightOnPick: seen?.rightOnPick ?? (correct ? picks : null),
+              hinted: seen?.hinted ?? hintedSegments.current.has(segment.id),
             });
             if (correct)
               setPassedChecks((prev) => new Set(prev).add(segment.id));
@@ -1385,6 +2885,7 @@ export function LessonPlayer({
       <LeaveLessonDialog
         open={leaveOpen}
         onOpenChange={setLeaveOpen}
+        resumable={live && !review && !finished}
         onLeave={() => {
           // `exited` is a status the contract defines and nothing ever sent.
           // Leaving deliberately is not the same fact as drifting off mid
@@ -1393,37 +2894,64 @@ export function LessonPlayer({
           // Same reason as the position write above: leaving a REVIEW part way
           // says nothing about the lesson, which was finished before the review
           // began. Writing `exited` here would demote it on the way out.
-          if (!review) {
+          if (!review && !finished) {
             reportProgress(LESSON_STATUS.EXITED, { segment: index });
           }
-          router.push(LESSONS_HREF);
+          setEnding({ completionStatus: "exited", exitPosition: segment.id });
+          exitTo(HOME_HREF);
         }}
       />
 
-      {/* Chevron nav — dims under anxiety; frustration guides the forward
-          control with three quiet glow cycles (never displaces it). */}
+      {/* The break offer (B.7), at the foot of the lesson and above the
+          chevrons (frame 38 §3): a row of its own, below the column that
+          scrolls, so a long segment still shows it. */}
+      {showBreakOffer && (
+        <BreakOfferPill
+          key={`break-offer-${segment.id}`}
+          onShown={() =>
+            trackEvent(SIGNAL_EVENT_TYPES.BREAK_SUGGESTED, {
+              breakType: breakOffered,
+              trigger: offerTrigger,
+            })
+          }
+          onAccept={acceptBreakOffer}
+          onDismiss={dismissBreakOffer}
+        />
+      )}
+
+      {/* Chevron nav — dims under the attention accommodation. Nothing on it
+          reacts to a hint: the forward control's glow went with design's
+          D124 (6 Oct), "Anything that reacts visibly to a child's difficulty
+          tells them they are being watched." */}
       <nav
+        aria-hidden={partsLeft || undefined}
+        inert={partsLeft}
         className={cn(
           "flex shrink-0 items-center justify-center gap-8 px-3.5 pt-2 pb-6",
-          secondaryDim(softened, attentionOn),
+          // Over the docked pad the row is not at the screen's foot, so it
+          // keeps the arrows and gives its padding to the column above: on
+          // a short screen that is the question staying in view.
+          "[&:has(+[data-pad-dock]:not(:empty))]:py-0",
+          secondaryDim(attentionOn),
+          partsLeft && "invisible",
         )}
       >
         <ChevronButton
           dir="prev"
           disabled={index === 0}
-          onClick={() => go(index - 1)}
+          onClick={handlePrev}
         />
         <ChevronButton
           dir="next"
           disabled={nextDisabled}
           onClick={handleNext}
-          className={cn(
-            action === ADJUSTMENT_ACTIONS.OFFER_HINT &&
-              !nextDisabled &&
-              "motion-safe:animate-nevo-glow-guide",
-          )}
         />
       </nav>
+
+      {/* D150: the calculation pad's tray, last and on the bottom edge, under
+          17a's arrows - the column shrinks above it, so nothing hides under
+          it. Empty, and no height, whenever no step is typing a number. */}
+      <div ref={setPadDock} data-pad-dock className="shrink-0" />
     </div>
   );
 }
@@ -1432,27 +2960,51 @@ export function LessonPlayer({
 function SegmentBody({
   segment,
   modality,
+  padDock,
+  engineHint,
+  onEngineHintClosed,
+  onSystemScroll,
   density,
+  simplified,
   reading,
   attention,
   onReadProgress,
+  onChunkSeen,
   onReplay,
+  onNarrationPlayed,
   onAudioBusy,
+  onMediaFailed,
   onCalcSolved,
   onCalcStep,
   onPiecePlaced,
+  onCalcHint,
 }: {
   segment: LessonSegment;
   modality: Modality;
+  /** Where the solver docks its number pad - see `CalculationSolver`. */
+  padDock: HTMLElement | null;
+  /** The engine's `offer_hint` text, which the solver shows as its own. */
+  engineHint?: string;
+  onEngineHintClosed: () => void;
+  /** The solver moved the column itself - see `systemScrolled`. */
+  onSystemScroll: () => void;
   density: Density | null;
+  /** A lower-depth session reads this segment's simpler version. */
+  simplified: boolean;
   reading: boolean;
   attention: boolean;
   onReadProgress: (pct: number) => void;
+  onChunkSeen: OnChunkSeen;
   onReplay: () => void;
+  onNarrationPlayed: () => void;
   onAudioBusy: (phase: BusyPhase) => void;
+  /** A picture or recording would not load (B12). */
+  onMediaFailed: (channel: "image" | "audio", reason: MediaFailReason) => void;
   onCalcSolved: () => void;
-  onCalcStep: (correct: boolean) => void;
-  onPiecePlaced: (placed: number, needed: number) => void;
+  onCalcStep: (stepId: string, correct: boolean) => void;
+  onPiecePlaced: (stepId: string) => void;
+  /** The child opened a calculation step's hint themselves. */
+  onCalcHint: () => void;
 }) {
   if (modality === MODALITY.TEXT && segment.text)
     return (
@@ -1462,16 +3014,27 @@ function SegmentBody({
         reading={reading}
         attention={attention}
         onReadProgress={onReadProgress}
+        onChunkSeen={onChunkSeen}
+        simplified={simplified}
       />
     );
   if (modality === MODALITY.VISUAL && segment.visual)
-    return <VisualSegment content={segment.visual} />;
+    return (
+      <VisualSegment
+        content={segment.visual}
+        reading={reading}
+        onMediaFailed={(reason) => onMediaFailed("image", reason)}
+      />
+    );
   if (modality === MODALITY.AUDIO && segment.audio)
     return (
       <AudioSegment
         content={segment.audio}
+        reading={reading}
         onReplay={onReplay}
+        onPlayed={onNarrationPlayed}
         onBusy={onAudioBusy}
+        onMediaFailed={(reason) => onMediaFailed("audio", reason)}
       />
     );
   if (modality === MODALITY.INTERACTIVE) {
@@ -1480,10 +3043,22 @@ function SegmentBody({
       return (
         <CalculationSolver
           calculation={segment.calculation}
+          padDock={padDock}
+          engineHint={engineHint}
+          onEngineHintClosed={onEngineHintClosed}
+          onSystemScroll={onSystemScroll}
+          // D30: the same accommodation the text segment and the checks take.
+          reading={reading}
           onSolved={onCalcSolved}
           onStepAnswered={onCalcStep}
-          onReplay={onReplay}
           onPiecePlaced={onPiecePlaced}
+          onHintOpened={onCalcHint}
+          // A step's narration is the segment's narration: the same four
+          // signals the audio card sends, from the same handlers.
+          onReplay={onReplay}
+          onNarrationPlayed={onNarrationPlayed}
+          onAudioBusy={onAudioBusy}
+          onNarrationFailed={(reason) => onMediaFailed("audio", reason)}
         />
       );
     if (segment.interactive)

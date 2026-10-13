@@ -1,10 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { classesApi, type AssignedClass } from "@/lib/api/classes";
+import { classesApi, type AdminClass, type AssignedClass } from "@/lib/api/classes";
+import { yearGroupLabel } from "@/lib/constants/yearGroups";
 import { teachersApi, type TeacherDetail, type TeacherSummary } from "@/lib/api/teachers";
 import { cn } from "@/lib/utils";
 import { isActive } from "./status";
+import { LAST_LEARNING_SUPPORT_HOLDER, refusedWith } from "@/lib/api/learningSupport";
+import { lastHolderAccessLine } from "../LearningSupport/LearningSupportLine";
 import {
   CheckIcon,
   FailureLine,
@@ -70,12 +73,26 @@ type StaffRead = "loading" | "ready" | "failed";
 export function RemoveAccessSheet({
   teacher,
   held,
+  classes = [],
   onClose,
   onRemoved,
 }: {
   teacher: TeacherDetail;
   held: AssignedClass[];
-  onClose: () => void;
+  /**
+   * The school's classes, for D06b's row meta - "Year 8 · 34 students" - which
+   * tells an admin which class they are handing over before they choose who
+   * takes it. The teacher page already holds them; a class it could not see
+   * simply shows no meta.
+   */
+  classes?: AdminClass[];
+  /**
+   * `changed` is true when any assignment moved before the sheet closed - a
+   * partial hand-over. The parent must reload, or reopening the sheet builds
+   * its plan from `held` as it was, and the retry reassigns classes that
+   * have already moved, and fails.
+   */
+  onClose: (changed: boolean) => void;
   onRemoved: () => void;
 }) {
   const [staff, setStaff] = useState<TeacherSummary[]>([]);
@@ -83,7 +100,16 @@ export function RemoveAccessSheet({
     Object.fromEntries(held.map((h) => [h.assignmentId, { kind: "unresolved" } as Resolution])),
   );
   const [phase, setPhase] = useState<Phase>("idle");
+  /*
+   * Refused because they are the school's only Learning Support holder
+   * (SCRUM-248). The teacher page says so before this sheet opens; this is the
+   * case where someone else removed theirs in the meantime. No retry: the
+   * answer will not change until somebody else holds it.
+   */
+  const [lastHolder, setLastHolder] = useState(false);
   const [applied, setApplied] = useState(0);
+  /** Every way out of the sheet says whether anything moved on the way. */
+  const close = () => onClose(applied > 0);
   const [read, setRead] = useState<StaffRead>("loading");
 
   const loadStaff = useCallback(() => {
@@ -153,9 +179,10 @@ export function RemoveAccessSheet({
       // Let the confirmation be read before the sheet goes, matching the
       // assign flow's own settle.
       setTimeout(onRemoved, 1400);
-    } catch {
+    } catch (err: unknown) {
       // Nothing was revoked - that call is last and only runs if the loop
       // completed. Say which it is rather than claiming nothing changed.
+      setLastHolder(refusedWith(err, LAST_LEARNING_SUPPORT_HOLDER));
       setPhase(done > 0 ? "partial" : "failed");
     }
   };
@@ -167,7 +194,7 @@ export function RemoveAccessSheet({
       busy={phase === "working"}
         title="Remove access?"
         subtitle={teacher.name}
-        onClose={onClose}
+        onClose={close}
         footer={
           phase === "working" ? (
             <div className="flex flex-1 items-center justify-center gap-2.5 py-3">
@@ -186,11 +213,24 @@ export function RemoveAccessSheet({
           ) : phase === "failed" ? (
             <>
               <FailureLine>
-                That didn&rsquo;t complete, and nothing has changed.
-                We&rsquo;re on it.
+                {lastHolder ? (
+                  lastHolderAccessLine(teacher.name)
+                ) : (
+                  <>
+                    That didn&rsquo;t complete, and nothing has changed.
+                    We&rsquo;re on it.
+                  </>
+                )}
               </FailureLine>
-              <button type="button" onClick={apply} className={PRIMARY_BTN}>
-                Try again
+              {lastHolder ? null : (
+                <button type="button" onClick={apply} className={PRIMARY_BTN}>
+                  Try again
+                </button>
+              )}
+              {/* SCRUM-40: "Primary 'Try again', secondary 'Close'." A failure with
+                  one way out holds the sheet open until it succeeds. */}
+              <button type="button" onClick={close} className={GHOST_BTN}>
+                Close
               </button>
             </>
           ) : (
@@ -202,7 +242,7 @@ export function RemoveAccessSheet({
               >
                 Remove access
               </button>
-              <button type="button" onClick={onClose} className={GHOST_BTN}>
+              <button type="button" onClick={close} className={GHOST_BTN}>
                 Cancel
               </button>
             </>
@@ -210,9 +250,12 @@ export function RemoveAccessSheet({
         }
       >
         <p className="m-0 text-[14.5px] leading-[1.6] text-nevo-near-black/72">
-          {teacher.name} will no longer be able to open their Nevo console.
-          Their classes and notes stay with the school, and you can restore
-          access later.
+          {/* D06b's own words for this case. The restore clause was cut while
+              nothing undid `POST /teachers/{id}/revoke`; the undo landed on
+              8 Oct (`POST /teachers/{id}/restore`). */}
+          {teacher.name} will no longer be able to open their Nevo console,
+          and you can restore their access whenever you need to. Their
+          classes and notes stay with the school.
         </p>
       </Sheet>
     );
@@ -223,8 +266,7 @@ export function RemoveAccessSheet({
       busy={phase === "working"}
       title="Remove admin-side access"
       subtitle={teacher.name}
-      onClose={onClose}
-      widthClass="max-w-[472px]"
+      onClose={close}
       footer={
         phase === "working" ? (
           <div className="flex flex-1 items-center justify-center gap-2.5 py-3">
@@ -247,21 +289,41 @@ export function RemoveAccessSheet({
           <>
             <FailureLine>
               {applied} of {held.length} classes were handed over before this
-              stopped. {firstName} still has access - nothing was revoked. You
-              can pick up where it left off.
+              stopped.{" "}
+              {lastHolder ? (
+                lastHolderAccessLine(teacher.name)
+              ) : (
+                <>
+                  {firstName} still has access - nothing was revoked. You can
+                  pick up where it left off.
+                </>
+              )}
             </FailureLine>
-            <button type="button" onClick={onClose} className={PRIMARY_BTN}>
+            <button type="button" onClick={close} className={PRIMARY_BTN}>
               Close
             </button>
           </>
         ) : phase === "failed" ? (
           <>
             <FailureLine>
-              That didn&rsquo;t complete, and nothing has changed. We&rsquo;re
-              on it.
+              {lastHolder ? (
+                lastHolderAccessLine(teacher.name)
+              ) : (
+                <>
+                  That didn&rsquo;t complete, and nothing has changed.
+                  We&rsquo;re on it.
+                </>
+              )}
             </FailureLine>
-            <button type="button" onClick={apply} className={PRIMARY_BTN}>
-              Try again
+            {lastHolder ? null : (
+              <button type="button" onClick={apply} className={PRIMARY_BTN}>
+                Try again
+              </button>
+            )}
+            {/* SCRUM-40: "Primary 'Try again', secondary 'Close'." A failure with
+                one way out holds the sheet open until it succeeds. */}
+            <button type="button" onClick={close} className={GHOST_BTN}>
+              Close
             </button>
           </>
         ) : ready ? (
@@ -273,7 +335,7 @@ export function RemoveAccessSheet({
             >
               Reassign and remove access
             </button>
-            <button type="button" onClick={onClose} className={GHOST_BTN}>
+            <button type="button" onClick={close} className={GHOST_BTN}>
               Cancel
             </button>
           </>
@@ -343,8 +405,24 @@ export function RemoveAccessSheet({
               className="rounded-xl border-[1.5px] border-nevo-near-black/14 bg-nevo-cream-elevated px-4 py-3.5"
             >
               <div className="flex items-center gap-3">
-                <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-nevo-near-black">
-                  {h.className}
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate text-[15px] font-semibold text-nevo-near-black">
+                    {h.className}
+                  </span>
+                  {(() => {
+                    const info = classes.find((c) => c.id === h.classId);
+                    const meta = info
+                      ? [
+                          yearGroupLabel(info.yearGroup),
+                          `${info.studentCount} ${info.studentCount === 1 ? "student" : "students"}`,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")
+                      : null;
+                    return meta ? (
+                      <span className="truncate text-[13px] text-nevo-near-black/58">{meta}</span>
+                    ) : null;
+                  })()}
                 </span>
                 <RolePill role={h.role} />
               </div>
@@ -373,8 +451,15 @@ export function RemoveAccessSheet({
                       {h.role === "primary" ? `${t.name} — as Primary` : t.name}
                     </option>
                   ))}
-                  {/* Only offered where the class keeps its primary regardless. */}
-                  {h.role === "co_teacher" ? (
+                  {/*
+                    * Offered where the class keeps its primary regardless -
+                    * AND on a Primary row when there is nobody else to hand
+                    * it to. The note above tells the admin "you can still
+                    * remove them from each class below", and a Primary row
+                    * with no remove option left the commit disabled behind
+                    * that instruction, with no way through.
+                    */}
+                  {h.role === "co_teacher" || (read === "ready" && staff.length === 0) ? (
                     <option value="__remove">
                       Just remove {firstName} from this class
                     </option>
@@ -388,9 +473,12 @@ export function RemoveAccessSheet({
 
       {ready ? (
         <p className="m-0 rounded-[10px] bg-nevo-violet/24 px-4 py-3 text-[13.5px] leading-[1.55] text-nevo-navy">
+          {/* "...and you can restore access later" was cut: the contract has
+              `POST /teachers/{id}/revoke` and nothing that undoes it, so the
+              sentence promised a button that does not exist. */}
           {firstName}&rsquo;s classes will be handed over first, then their
           console access ends. Their notes stay with the school, attributed to
-          them, and you can restore access later.
+          them.
         </p>
       ) : null}
     </Sheet>

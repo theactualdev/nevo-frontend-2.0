@@ -111,6 +111,12 @@ describe("financeHomeRows", () => {
     expect(row.title).not.toMatch(/issues/i);
   });
 
+  it("promises no email - the billing page is what updates (Lydia, 7 Oct)", () => {
+    const row = financeHomeRows(sub(), upcoming(), [])!.find((r) => r.key === "upcoming")!;
+    expect(row.sub).toMatch(/Your billing page updates once a transfer clears\.$/);
+    expect(row.sub).not.toMatch(/email/i);
+  });
+
   it("omits the rate lock when there is no locked-until date", () => {
     expect(
       keys(financeHomeRows(sub({ rateLockedUntil: null }), null, [])),

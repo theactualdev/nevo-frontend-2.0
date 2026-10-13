@@ -134,6 +134,22 @@ describe("useSessionLapse", () => {
     expect(replace).toHaveBeenCalledWith("/auth/teacher/session-expired");
   });
 
+  it("remembers the lesson they were in, so signing back in returns them to it", async () => {
+    // IA 31: "lesson position preserved". The door used to carry nothing, so a
+    // lapse mid-lesson signed the child back in to Home. `pushState` moves
+    // jsdom's address without redefining `window.location`.
+    window.history.pushState({}, "", "/student/lessons/frac-3");
+    signIn();
+    renderHook(() => useSessionLapse());
+
+    await vi.advanceTimersByTimeAsync(30 * MINUTE + 1000);
+
+    expect(replace).toHaveBeenCalledWith(
+      "/auth/session-expired?next=%2Fstudent%2Flessons%2Ffrac-3",
+    );
+    window.history.pushState({}, "", "/");
+  });
+
   it("leaves a child alone when the expiry is unreadable", async () => {
     // A malformed date gives us no instant to arm for. The session is present
     // and readable nonsense is not grounds for evicting someone mid-lesson.

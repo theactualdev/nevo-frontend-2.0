@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { EnrolmentBand, SchoolAuthMethod } from "@/lib/api/school";
+import type { EnrolmentBand } from "@/lib/api/school";
 import { cn } from "@/lib/utils";
 import { ConfirmEmailStep } from "./ConfirmEmailStep";
 import { DpaStep } from "./DpaStep";
@@ -19,11 +19,9 @@ import { SignUpStep } from "./SignUpStep";
  * back-out to a marketing site - once a proprietor starts, the only way is
  * through or away.
  *
- * FIVE STEPS OR SIX? The D1 frame draws "Step 1 of 5"; SCRUM-39 says "Six
- * short steps" and specifies a row of six pills. The spec enumerates D1.1
- * through D1.5 as five distinct SCREENS, with 1.5 having two variants - so the
- * sixth pill is the workspace itself, arriving. Five steps are built, and the
- * indicator shows five. Raised with design; it is a one-line change either way.
+ * FOUR STEPS, ANSWERED BY DESIGN (D01, 20 Sep). The old frame drew five and
+ * SCRUM-39 six; the band and sign-in method steps have both gone. See `TOTAL`
+ * below for why each went.
  *
  * FAILURE IS A RECOVERY MOMENT throughout: no red, no alarm glyph, no blame.
  * The system owns the fault, the work so far is preserved AND SAID to be
@@ -36,9 +34,14 @@ export type Step = 0 | 1 | 2 | 3;
 
 export interface WizardState {
   schoolName: string;
+  /**
+   * D01's "Location". Not a registration field - `SchoolRegistrationRequest`
+   * is `{schoolName, adminName, email, password}` - so it is held here and
+   * written to the school's contact once the new admin is signed in.
+   */
+  location: string;
   adminName: string;
   email: string;
-  authMethod: SchoolAuthMethod | null;
   band: EnrolmentBand | null;
   /**
    * The school, once it exists. LIVES HERE, not in `SignUpStep`, because the
@@ -60,11 +63,11 @@ export interface WizardState {
  *    the cost lives on D24's dashboard panel rather than in onboarding. This
  *    file's own note had recorded the frame saying "no tiers, no plan to
  *    choose" long before anybody acted on it.
- *  - **The sign-in method is DEFERRED, not dead.** Every school is manual for
- *    now - school code, CSV upload, staff signing in with their own email and
- *    password - and nothing in the console asks about a provider. Backend's
- *    SSO work stays; see `AuthMethodStep`, which is kept on disk and off the
- *    flow.
+ *  - **The sign-in method is CUT from onboarding (Lydia, 7 Oct).** It is
+ *    not a setup step but a connection a school makes when it is ready, and
+ *    its home is IT & SSO: asking a proprietor on day one decides something
+ *    their IT person does in week two. `AuthMethodStep` and the handover's
+ *    provider branch are deleted, not parked.
  */
 const TOTAL = 4;
 
@@ -72,9 +75,9 @@ export function OnboardingWizard() {
   const [step, setStep] = useState<Step>(0);
   const [state, setState] = useState<WizardState>({
     schoolName: "",
+    location: "",
     adminName: "",
     email: "",
-    authMethod: null,
     band: null,
     registration: null,
   });

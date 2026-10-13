@@ -8,8 +8,8 @@ import { cn } from "@/lib/utils";
  * open it and start steering while later levels run - the done rungs carry
  * "Open and steer" into the structure tree.
  *
- * Presentational: the wizard owns the stage clock (mock until the parse
- * seam). NOTE: the C07e frame's own head reads "STEP 2 OF 5 / 40%", which
+ * Presentational: the wizard decides the rung - from the staged upload's
+ * own `stage` on a real unit, from the walkthrough's beats signed out. NOTE: the C07e frame's own head reads "STEP 2 OF 5 / 40%", which
  * contradicts the C07g flow map (parse = step 3) - the wizard keeps 3 OF 5
  * at 50% per the audit; flagged to design.
  */
@@ -89,7 +89,8 @@ export function ParseProgress({
   onSteer?: () => void;
 }) {
   return (
-    <div className="flex min-h-full flex-col items-center justify-center">
+    // `flex-1` for the live path, where it is a flex item (see UploadWizard).
+    <div className="flex min-h-full flex-1 flex-col items-center justify-center">
       <div className="flex w-full max-w-[460px] flex-col items-center">
         <div className="flex flex-col items-center gap-[18px]">
           <span className="size-[52px] shrink-0 rounded-full border-4 border-nevo-navy/16 border-t-nevo-navy motion-safe:animate-spin motion-safe:[animation-duration:950ms]" />
@@ -106,7 +107,7 @@ export function ParseProgress({
               <div
                 key={s.stage}
                 className={cn(
-                  "flex items-center gap-[13px] rounded-xl px-[15px] py-[11px]",
+                  "flex items-center gap-[13px] rounded-[12px] px-[15px] py-[11px]",
                   active && "bg-nevo-violet/20",
                   done && "bg-nevo-navy/7",
                 )}
@@ -125,14 +126,14 @@ export function ParseProgress({
                       <path d="M5 12l4 4L19 6" />
                     </svg>
                   ) : (
-                    <span className="text-xs font-bold">{i + 1}</span>
+                    <span className="text-xs font-semibold">{i + 1}</span>
                   )}
                 </span>
                 <span
                   className={cn(
                     "min-w-0 flex-1 text-sm",
                     active
-                      ? "font-bold text-nevo-near-black"
+                      ? "font-semibold text-nevo-near-black"
                       : done
                         ? "font-medium text-nevo-near-black/72"
                         : "font-medium text-nevo-near-black/40",
@@ -149,7 +150,7 @@ export function ParseProgress({
                   <button
                     type="button"
                     onClick={onSteer}
-                    className="inline-flex cursor-pointer items-center rounded-lg border-[1.5px] border-nevo-navy/30 px-[11px] py-[5px] text-[11.5px] font-semibold whitespace-nowrap text-nevo-navy transition-colors hover:bg-nevo-navy/6"
+                    className="inline-flex cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/30 px-[11px] py-[5px] text-[11.5px] font-semibold whitespace-nowrap text-nevo-navy transition-colors hover:bg-nevo-navy/6"
                   >
                     Open and steer
                   </button>
@@ -159,7 +160,7 @@ export function ParseProgress({
           })}
         </div>
 
-        <div className="mt-6 flex w-full items-center gap-2.5 rounded-xl bg-nevo-violet/14 px-4 py-3">
+        <div className="mt-6 flex w-full items-center gap-2.5 rounded-[12px] bg-nevo-violet/14 px-4 py-3">
           <span className="shrink-0 text-nevo-navy">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />

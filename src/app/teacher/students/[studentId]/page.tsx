@@ -29,6 +29,7 @@ export default async function TeacherStudentDetailPage({
       fixture={getStudentProfile(studentId)}
       studentId={studentId}
       classHref={classId ? `/teacher/classes/${classId}` : undefined}
+      classId={classId}
     />
   );
 }

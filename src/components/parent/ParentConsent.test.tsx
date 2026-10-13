@@ -198,6 +198,31 @@ describe("giving consent", () => {
     expect(screen.queryByText(/that’s all we needed/i)).not.toBeInTheDocument();
   });
 
+  it("says why when the address already belongs to a staff or student account", async () => {
+    /*
+     * 29 Sep: a test request sent to an address that was already an admin's.
+     * The backend answers `parent_account_conflict`, and the page said "try
+     * again in a moment" - which can never work. The fix is the school's.
+     */
+    completeConsent.mockRejectedValueOnce(
+      new ApiError(409, "conflict", {
+        detail: {
+          code: "parent_account_conflict",
+          message: "That contact belongs to an incompatible account.",
+        },
+      }),
+    );
+    render(<ParentConsent token={TOKEN} invitation={inv()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Yes, I give my consent/ }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/already used for a different kind of Nevo account/);
+    expect(alert).toHaveTextContent(/send the request to a different email address/);
+    expect(alert).not.toHaveTextContent(/try again/i);
+    expect(screen.queryByText(/that’s all we needed/i)).not.toBeInTheDocument();
+  });
+
   it("treats a dead link as the end of the road, not a retry", async () => {
     completeConsent.mockRejectedValueOnce(new ApiError(404, "gone"));
     render(<ParentConsent token={TOKEN} invitation={inv()} />);
@@ -473,6 +498,44 @@ describe("setting up a parent account", () => {
     expect(screen.getByText(/All done/i)).toBeInTheDocument();
     expect(screen.getByText(/set up an account later from the same link/i)).toBeInTheDocument();
     expect(requestCode).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Consent creates the parent account (9 Oct handoff, item 14), so the thank-you
+ * says what D01b's "Consent given · account created" says - and finishing it
+ * is what is left, not setting one up from nothing.
+ */
+describe("an account the consent created", () => {
+  beforeEach(() => {
+    completeConsent.mockResolvedValue({
+      invitationId: "inv-1",
+      parentLinkId: "pl-1",
+      parentId: "p-1",
+      studentId: "s-1",
+      confirmedTypes: ["data_processing"],
+      completedAt: "2026-09-08T10:00:00Z",
+      receiptSentTo: null,
+      parentAccountCreated: true,
+      parentAccountReady: false,
+    });
+  });
+
+  it("says one has been set up", async () => {
+    render(<ParentConsent token={TOKEN} invitation={inv()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Yes, I give my consent/ }));
+    expect(await screen.findByText(/We.ve set up a parent account so you can follow/)).toBeInTheDocument();
+    expect(screen.queryByText(/Set up an account and you can follow/)).toBeNull();
+  });
+
+  it("says it can be finished later, not set up", async () => {
+    render(<ParentConsent token={TOKEN} invitation={inv()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Yes, I give my consent/ }));
+    await screen.findByText(/that[’']s all we needed/i);
+    fireEvent.click(screen.getByRole("button", { name: /Maybe later/i }));
+    expect(
+      screen.getByText(/finish setting up your account later from the same link/i),
+    ).toBeInTheDocument();
   });
 });
 

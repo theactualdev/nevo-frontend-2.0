@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
+import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
 import { useStudentDirectory } from "@/hooks/useStudentDirectory";
 import { useHasSession } from "@/hooks/useHasSession";
 import { studentSlug } from "@/lib/mocks/teacherStudents";
@@ -62,9 +64,16 @@ export function ComposeModal({
     loading: directoryLoading,
     failed: directoryFailed,
   } = useStudentDirectory();
+  /*
+   * A signed-in teacher's own classes, or none. The chips were built from
+   * `options` unguarded, which is the fixture three while the read is in
+   * flight and after it fails - and picking "JSS 2A" filtered a REAL roster
+   * by an invented class's name. The roster below was already guarded; its
+   * filter was not. Signed out, the walkthrough keeps its three.
+   */
   const classFilters = [
     COMPOSE_CLASS_FILTERS[0],
-    ...classes.map((c) => c.name),
+    ...(live || !signedIn ? classes : []).map((c) => c.name),
   ];
   const [filter, setFilter] = useState(COMPOSE_CLASS_FILTERS[0]);
   // Never preset from the fixtures for a signed-in teacher: those rows carry
@@ -78,6 +87,8 @@ export function ComposeModal({
   const [presetUsed, setPresetUsed] = useState(false);
   const [text, setText] = useState("");
   const [phase, setPhase] = useState<Phase>("form");
+  // A message written and not yet sent, or one that failed to go.
+  useUnsavedGuard(text.trim().length > 0 && phase !== "sent");
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
@@ -188,17 +199,21 @@ export function ComposeModal({
   };
 
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogRef);
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-nevo-near-black/28 p-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-nevo-near-black/28 backdrop-blur-[1.5px] p-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
       onClick={() => phase === "form" && onClose()}
     >
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label="New message"
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-[480px] rounded-2xl bg-nevo-cream p-7 shadow-[0_8px_32px_rgba(0,0,0,0.16)] motion-safe:animate-in motion-safe:zoom-in-95 motion-safe:duration-200 xl:max-w-[520px] xl:p-[30px]"
+        className="w-full max-w-[500px] rounded-[16px] bg-nevo-cream p-[26px] shadow-[0_8px_32px_rgba(0,0,0,0.16)] motion-safe:animate-in motion-safe:zoom-in-95 motion-safe:duration-200 xl:max-w-[520px] xl:p-[30px]"
       >
         {phase === "sending" && (
           <div className="flex flex-col items-center py-10 text-center">
@@ -214,33 +229,33 @@ export function ComposeModal({
         )}
 
         {phase === "sent" && (
-          <div className="mx-auto flex max-w-[440px] flex-col items-center py-6 text-center">
-            <span className="flex size-[72px] items-center justify-center rounded-full bg-nevo-navy motion-safe:animate-nevo-pop">
-              <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#f7f1e6" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <div className="mx-auto flex max-w-[400px] flex-col items-center py-6 text-center xl:max-w-[440px]">
+            <span className="flex size-[68px] items-center justify-center rounded-full bg-nevo-navy motion-safe:animate-nevo-pop xl:size-[72px]">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#f7f1e6" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-[34px]">
                 <path d="M5 12.5l4.5 4.5L19 7" />
               </svg>
             </span>
-            <h2 className="mt-[26px] text-[26px] font-semibold tracking-[-0.015em] text-nevo-near-black">
+            <h2 className="mt-6 text-[27px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:mt-[26px] xl:text-[26px]">
               Message sent
             </h2>
-            <p className="mt-3 text-[16px] leading-[1.6] text-nevo-near-black/70">
+            <p className="mt-[11px] text-[16px] leading-[1.6] text-nevo-near-black/70 xl:mt-3">
               {`Your note to ${firstName} is on its way.`}
             </p>
-            <p className="mt-2 text-[14.5px] leading-[1.55] text-nevo-near-black/55">
+            <p className="mt-2 text-sm leading-[1.55] text-nevo-near-black/55 xl:text-[14.5px]">
               {"It's saved to the conversation in Connect."}
             </p>
-            <div className="mt-7 flex gap-3">
+            <div className="mt-[26px] flex gap-3 xl:mt-7">
               <button
                 type="button"
                 onClick={onClose}
-                className="inline-flex h-12 cursor-pointer items-center rounded-[10px] bg-nevo-navy px-6 text-[15px] font-semibold text-nevo-cream transition-[filter,transform] duration-150 hover:brightness-93 active:scale-[0.98]"
+                className="inline-flex h-[46px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[22px] text-[14.5px] font-semibold text-nevo-cream transition-[filter,transform] duration-150 hover:brightness-93 active:scale-[0.98] xl:h-12 xl:px-6 xl:text-[15px]"
               >
                 Back to Connect
               </button>
               <button
                 type="button"
                 onClick={sendAnother}
-                className="inline-flex h-12 cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/30 px-[22px] text-[15px] font-medium text-nevo-navy transition-[background-color,transform] duration-150 hover:bg-nevo-navy/6 active:scale-[0.98]"
+                className="inline-flex h-[46px] cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/30 px-5 text-[14.5px] font-medium text-nevo-navy transition-[background-color,transform] duration-150 hover:bg-nevo-navy/6 active:scale-[0.98] xl:h-12 xl:px-[22px] xl:text-[15px]"
               >
                 Send another
               </button>
@@ -249,39 +264,39 @@ export function ComposeModal({
         )}
 
         {phase === "failed" && (
-          <div className="mx-auto flex max-w-[460px] flex-col items-center py-6 text-center">
+          <div className="mx-auto flex max-w-[420px] flex-col items-center py-6 text-center xl:max-w-[460px]">
             {/* Soft violet, never red - a failure is ours, not an alarm. */}
-            <span className="flex size-[72px] items-center justify-center rounded-full bg-nevo-violet/20 text-nevo-navy motion-safe:animate-nevo-pop">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <span className="flex size-[68px] items-center justify-center rounded-full bg-nevo-violet/20 text-nevo-navy motion-safe:animate-nevo-pop xl:size-[72px]">
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-8">
                 <path d="M4 4v6h6" />
                 <path d="M20 20v-6h-6" />
                 <path d="M20 8a8 8 0 0 0-14.9-2M4 16a8 8 0 0 0 14.9 2" />
               </svg>
             </span>
-            <h2 className="mt-[26px] text-[26px] font-semibold tracking-[-0.015em] text-nevo-near-black">
+            <h2 className="mt-6 text-[27px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:mt-[26px] xl:text-[26px]">
               {"We couldn't send that just now"}
             </h2>
-            <p className="mt-3 text-[16px] leading-[1.6] text-nevo-near-black/70">
+            <p className="mt-[11px] text-[16px] leading-[1.6] text-nevo-near-black/70 xl:mt-3">
               Something went wrong on our side. Your message is saved as a
               draft, so nothing is lost.
             </p>
-            <div className="mt-7 flex gap-3">
+            <div className="mt-[26px] flex gap-3 xl:mt-7">
               <button
                 type="button"
                 onClick={attempt}
-                className="inline-flex h-12 cursor-pointer items-center rounded-[10px] bg-nevo-navy px-6 text-[15px] font-semibold text-nevo-cream transition-[filter,transform] duration-150 hover:brightness-93 active:scale-[0.98]"
+                className="inline-flex h-[46px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[22px] text-[14.5px] font-semibold text-nevo-cream transition-[filter,transform] duration-150 hover:brightness-93 active:scale-[0.98] xl:h-12 xl:px-6 xl:text-[15px]"
               >
                 Try again
               </button>
               <button
                 type="button"
                 onClick={() => setPhase("form")}
-                className="inline-flex h-12 cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/30 px-[22px] text-[15px] font-medium text-nevo-navy transition-[background-color,transform] duration-150 hover:bg-nevo-navy/6 active:scale-[0.98]"
+                className="inline-flex h-[46px] cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/30 px-5 text-[14.5px] font-medium text-nevo-navy transition-[background-color,transform] duration-150 hover:bg-nevo-navy/6 active:scale-[0.98] xl:h-12 xl:px-[22px] xl:text-[15px]"
               >
                 Go back to editing
               </button>
             </div>
-            <p className="mt-[18px] text-[14px] leading-[1.55] text-nevo-near-black/55">
+            <p className="mt-4 text-[13.5px] leading-[1.55] text-nevo-near-black/55 xl:mt-[18px] xl:text-[14px]">
               If it keeps happening, your school admin can help.
             </p>
           </div>
@@ -297,7 +312,7 @@ export function ComposeModal({
                 type="button"
                 onClick={onClose}
                 aria-label="Close"
-                className="flex size-8 cursor-pointer items-center justify-center rounded-[9px] text-nevo-near-black/50 transition-colors hover:bg-nevo-near-black/5 xl:size-[34px]"
+                className="flex size-8 cursor-pointer items-center justify-center rounded-[10px] text-nevo-near-black/50 transition-colors hover:bg-nevo-near-black/5 xl:size-[34px]"
               >
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-5">
                   <path d="M6 6l12 12M18 6L6 18" />
@@ -318,7 +333,8 @@ export function ComposeModal({
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder="Search your students"
-                    className="h-12 w-full rounded-[10px] border-[1.5px] border-nevo-near-black/14 bg-nevo-cream-elevated pr-4 pl-[42px] text-[15px] text-nevo-near-black outline-none transition-colors focus:border-nevo-navy"
+                    aria-label="Search your students"
+                    className="h-[46px] w-full rounded-[10px] border-[1.5px] border-nevo-near-black/14 bg-nevo-cream-elevated pr-4 pl-[42px] text-[14.5px] text-nevo-near-black outline-none transition-colors focus:border-nevo-navy xl:h-12 xl:text-[15px]"
                   />
                 </div>
 
@@ -344,22 +360,26 @@ export function ComposeModal({
                   })}
                 </div>
 
-                <div className="mt-3.5 max-h-[300px] overflow-y-auto">
+                <div className="mt-3 max-h-[340px] overflow-y-auto xl:mt-3.5 xl:max-h-[300px]">
                   {shown.map((s) => (
                     <button
-                      key={s.name}
+                      // By who, not what they are called (T169): two Amaras
+                      // shared a key, and React drew one where there were two.
+                      // With the class, because the directory lists a child
+                      // once per class they are in.
+                      key={`${s.studentId ?? s.name}:${s.className}`}
                       type="button"
                       onClick={() => setChosen(s)}
-                      className="flex w-full cursor-pointer items-center gap-[13px] rounded-[10px] px-2 py-[11px] text-left transition-colors hover:bg-nevo-navy/6"
+                      className="flex w-full cursor-pointer items-center gap-3 rounded-[10px] px-2 py-2.5 text-left transition-colors hover:bg-nevo-navy/6 xl:gap-[13px] xl:py-[11px]"
                     >
-                      <span className="flex size-[38px] shrink-0 items-center justify-center rounded-full bg-nevo-navy/10 text-[12.5px] font-semibold text-nevo-navy">
+                      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-nevo-navy/10 text-xs font-semibold text-nevo-navy xl:size-[38px] xl:text-[12.5px]">
                         {s.initials}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block text-[15px] font-medium text-nevo-near-black">
+                        <span className="block text-[14.5px] font-medium text-nevo-near-black xl:text-[15px]">
                           {s.name}
                         </span>
-                        <span className="mt-px block text-[12.5px] text-nevo-near-black/55">
+                        <span className="mt-px block text-xs text-nevo-near-black/55 xl:text-[12.5px]">
                           {s.className}
                         </span>
                       </span>
@@ -404,14 +424,14 @@ export function ComposeModal({
                   To
                 </span>
                 <div className="mt-2 flex items-center gap-[11px] rounded-[10px] bg-nevo-cream-elevated px-3.5 py-2.5">
-                  <span className="flex size-[34px] shrink-0 items-center justify-center rounded-full bg-nevo-navy text-xs font-semibold text-nevo-cream">
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-nevo-navy text-xs font-semibold text-nevo-cream xl:size-[34px]">
                     {picked.initials}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="text-[14.5px] font-semibold text-nevo-near-black">
+                    <span className="text-sm font-semibold text-nevo-near-black xl:text-[14.5px]">
                       {picked.name}
                     </span>
-                    <span className="ml-2 text-[12.5px] text-nevo-near-black/55">
+                    <span className="ml-2 text-xs text-nevo-near-black/55 xl:text-[12.5px]">
                       {picked.className}
                     </span>
                   </span>
@@ -424,27 +444,27 @@ export function ComposeModal({
                     }}
                     className="shrink-0 cursor-pointer text-nevo-near-black/45 transition-colors hover:text-nevo-near-black/70"
                   >
-                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-[17px]">
                       <path d="M6 6l12 12M18 6L6 18" />
                     </svg>
                   </button>
                 </div>
 
-                <label className="mt-4 block text-[13px] font-semibold text-nevo-near-black/70">
+                <label className="mt-3.5 block text-[13px] font-semibold text-nevo-near-black/70 xl:mt-4">
                   Message
                   <textarea
                     value={text}
                     onChange={(e) => setText(e.target.value)}
                     placeholder="Write your message…"
-                    className="mt-2 h-[110px] w-full resize-none rounded-[10px] border-[1.5px] border-nevo-near-black/16 bg-nevo-cream-elevated px-3.5 py-3 text-[14.5px] leading-[1.5] font-normal text-nevo-near-black outline-none transition-colors focus:border-nevo-navy"
+                    className="mt-2 h-[100px] w-full resize-none rounded-[10px] border-[1.5px] border-nevo-near-black/16 bg-nevo-cream-elevated px-3.5 py-3 text-sm leading-[1.5] font-normal text-nevo-near-black outline-none transition-colors focus:border-nevo-navy xl:h-[110px] xl:text-[14.5px]"
                   />
                 </label>
 
-                <div className="mt-[18px] flex items-center gap-3.5">
+                <div className="mt-4 flex items-center gap-3 xl:mt-[18px] xl:gap-3.5">
                   <button
                     type="button"
                     onClick={onClose}
-                    className="flex h-[50px] cursor-pointer items-center justify-center rounded-[10px] border-[1.5px] border-nevo-navy/30 px-5 text-[15px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
+                    className="flex h-12 cursor-pointer items-center justify-center rounded-[10px] border-[1.5px] border-nevo-navy/30 px-5 text-[14.5px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6 xl:h-[50px] xl:text-[15px]"
                   >
                     Cancel
                   </button>
@@ -452,13 +472,13 @@ export function ComposeModal({
                     type="button"
                     onClick={() => ready && attempt()}
                     className={cn(
-                      "flex h-[50px] items-center justify-center gap-2 rounded-[10px] bg-nevo-navy px-6 text-[15px] font-semibold text-nevo-cream transition-[filter]",
+                      "flex h-12 items-center justify-center gap-2 rounded-[10px] bg-nevo-navy px-6 text-[14.5px] font-semibold text-nevo-cream transition-[filter] xl:h-[50px] xl:text-[15px]",
                       ready
                         ? "cursor-pointer hover:brightness-93"
                         : "cursor-default opacity-50",
                     )}
                   >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-[18px]">
                       <path d="M22 2L11 13" />
                       <path d="M22 2l-7 20-4-9-9-4z" />
                     </svg>

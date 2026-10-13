@@ -7,7 +7,13 @@
  * SCRUM-38 attribution is text-only: a flagged row gets a navy-outlined pill
  * carrying the words, never an alarm colour and never a hue change on the
  * bars. The component repeats down the C08 mastery panel, so its geometry is
- * literal: 92px label column, 34px value column, 12px gaps, 8px/6px rails.
+ * literal: 92px label column, 12px gaps, 8px/6px rails.
+ *
+ * NO PERCENTAGE BESIDE THE BARS (12 Oct). The frame prints "72%" after each
+ * rail; design's reference says no percentage scores in teacher copy, and a
+ * number beside "Understanding" next to a child's name is exactly that. The
+ * rail carries the proportion; a screen reader still gets the value from
+ * `aria-valuenow`. The frame keeps the figure - flagged to design.
  *
  * THE AUTO-FLAG IS GONE (17 Sep). It read two engine numbers and returned
  * "Concept support needed", "Reading support needed" or "Needs support" from
@@ -29,9 +35,8 @@
  * as a payload and this component renders it. Until then there is no label.
  */
 
-/** Frame clamps to 0-100; NaN would emit `width:NaN%`, so guard it too. */
-const clamp = (v: number, fallback: number) =>
-  Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : fallback;
+/** Frame clamps to 0-100. Only ever called with a finite value - see below. */
+const clamp = (v: number) => Math.max(0, Math.min(100, v));
 
 export function MasteryDualTrack({
   concept,
@@ -45,8 +50,14 @@ export function MasteryDualTrack({
   reading: number;
   flag?: string;
 }) {
-  const u = clamp(understanding, 72);
-  const r = clamp(reading, 48);
+  /*
+   * NO VALUE IS NOT 72%. A non-number fell back to the frame's own example
+   * figures - 72 and 48 - so a concept with no measurement was drawn as one
+   * a student had mostly understood. Absence is an instruction: no bar.
+   */
+  if (!Number.isFinite(understanding) || !Number.isFinite(reading)) return null;
+  const u = clamp(understanding);
+  const r = clamp(reading);
   // No fallback. Nothing computes a label here; "none" is kept as an explicit
   // suppression so a caller can say "not on this row" as well as say nothing.
   const label = !flag || flag === "none" ? "" : flag;
@@ -76,16 +87,13 @@ export function MasteryDualTrack({
             aria-valuenow={u}
             aria-valuemin={0}
             aria-valuemax={100}
-            className="h-2 flex-1 overflow-hidden rounded-[4px] bg-nevo-navy/10"
+            className="h-2 flex-1 overflow-hidden rounded-full bg-nevo-navy/10"
           >
             <div
-              className="h-full rounded-[4px] bg-nevo-navy"
+              className="h-full rounded-full bg-nevo-navy"
               style={{ width: `${u}%` }}
             />
           </div>
-          <span className="w-[34px] shrink-0 text-right text-[13px] font-medium text-nevo-near-black">
-            {u}%
-          </span>
         </div>
         <div className="flex items-center gap-3">
           <span className="w-[92px] shrink-0 text-xs text-nevo-near-black/70">
@@ -97,16 +105,13 @@ export function MasteryDualTrack({
             aria-valuenow={r}
             aria-valuemin={0}
             aria-valuemax={100}
-            className="h-1.5 flex-1 overflow-hidden rounded-[3px] bg-nevo-violet/10"
+            className="h-1.5 flex-1 overflow-hidden rounded-full bg-nevo-violet/10"
           >
             <div
-              className="h-full rounded-[3px] bg-nevo-violet"
+              className="h-full rounded-full bg-nevo-violet"
               style={{ width: `${r}%` }}
             />
           </div>
-          <span className="w-[34px] shrink-0 text-right text-[13px] font-medium text-nevo-near-black/70">
-            {r}%
-          </span>
         </div>
       </div>
     </div>

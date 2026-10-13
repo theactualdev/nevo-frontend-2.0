@@ -140,3 +140,58 @@ describe("reading the lesson again", () => {
     expect(onLesson).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * A RE-READ THAT FAILED, AND WHY. The parse run's own sentence was wrapped in
+ * an error and thrown away, and its reference never read - so the lesson
+ * page gave a generic line where the upload screens give the server's.
+ */
+describe("a re-read that failed", () => {
+  it("keeps the run's own reason and reference", async () => {
+    awaitParseRun.mockResolvedValue({
+      status: "failed",
+      finished: true,
+      failureReason: "Nevo couldn’t find readable text in that file.",
+      incidentId: "7e728d46d73e",
+    });
+    const { result } = renderHook(() => useLessonRegenerate(vi.fn()));
+
+    act(() => result.current.run("l-1"));
+
+    await waitFor(() => expect(result.current.state).toBe("failed"));
+    expect(result.current.failureReason).toBe("Nevo couldn’t find readable text in that file.");
+    expect(result.current.incident).toBe("7e728d46d73e");
+  });
+
+  it("keeps a reference from a request that failed outright", async () => {
+    const { ApiError } = await import("@/lib/api/client");
+    regenerate.mockRejectedValue(
+      new ApiError(500, "server", { detail: { code: "unexpected_error", incidentId: "9f2c4a7b1d3e" } }),
+    );
+    const { result } = renderHook(() => useLessonRegenerate(vi.fn()));
+
+    act(() => result.current.run("l-1"));
+
+    await waitFor(() => expect(result.current.state).toBe("failed"));
+    expect(result.current.incident).toBe("9f2c4a7b1d3e");
+    expect(result.current.failureReason).toBeNull();
+  });
+
+  it("forgets the last failure when it is run again", async () => {
+    awaitParseRun.mockResolvedValueOnce({
+      status: "failed",
+      finished: true,
+      failureReason: "A fault at our end.",
+      incidentId: "aa11",
+    });
+    const { result } = renderHook(() => useLessonRegenerate(vi.fn()));
+    act(() => result.current.run("l-1"));
+    await waitFor(() => expect(result.current.state).toBe("failed"));
+
+    awaitParseRun.mockReturnValueOnce(new Promise(() => {}));
+    act(() => result.current.run("l-1"));
+
+    expect(result.current.failureReason).toBeNull();
+    expect(result.current.incident).toBeNull();
+  });
+});

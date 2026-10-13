@@ -223,6 +223,8 @@ export function BulkImportModal({
             <RejectedRows
               broken={broken}
               rejected={result.rejected}
+              submitted={valid}
+              rowNumberBase={result.rowNumberBase}
               isStudent={isStudent}
               filename={`nevo-${noun}-not-imported.csv`}
             />
@@ -231,7 +233,8 @@ export function BulkImportModal({
           /* Was: "Each parent has been sent a consent request." The bulk
              response is `{created, rejected}` and carries no delivery state at
              all, so this had even less behind it than the single-invite claim.
-             See `deliveryCopy.ts` - nothing in the product requests consent. */
+             See `deliveryCopy.ts` - nothing queues a consent request against
+             an invitation. */
           <p className="mt-4 text-center text-[14.5px] leading-[1.6] text-nevo-near-black/72">
             {/* The SIBLING of the branch above, and it kept the claim that
                 branch was corrected for. SCRUM-80: an unconfirmed consent is
@@ -260,15 +263,13 @@ export function BulkImportModal({
           />
         ) : null}
 
-        {result.rejected.length > 0 ? (
-          <ul className="mt-4 list-none space-y-1.5 rounded-[10px] bg-nevo-violet/[0.18] p-4 text-[13px] leading-[1.5] text-nevo-navy">
-            {result.rejected.map((r) => (
-              <li key={r.row}>
-                Row {r.row + 2}: {r.reason}
-              </li>
-            ))}
-          </ul>
-        ) : null}
+        {/*
+          * A SECOND LIST OF THE SAME ROWS USED TO SIT HERE, as
+          * `Row {r.row + 2}` - the very guess `RejectedRows` above refuses to
+          * make, since the contract documents no base for `row`. So every
+          * server-rejected row appeared twice, two numbers apart, and at least
+          * one of the two pointed the admin at the wrong line.
+          */}
       </Modal>
     );
   }

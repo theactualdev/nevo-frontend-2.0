@@ -99,6 +99,21 @@ beforeEach(() => {
   useHasSession.mockReturnValue(true);
 });
 
+/**
+ * Leave EXACTLY these classes ticked on step 2. It opens with the first class
+ * alphabetically already ticked (the 14 Sep default), so a bare click on that
+ * one would un-tick it.
+ */
+const onlyClasses = (...names: RegExp[]) => {
+  for (const b of screen.queryAllByRole("button", { pressed: true })) {
+    if (!names.some((n) => n.test(b.textContent ?? ""))) fireEvent.click(b);
+  }
+  for (const n of names) {
+    const b = screen.getByRole("button", { name: n });
+    if (b.getAttribute("aria-pressed") !== "true") fireEvent.click(b);
+  }
+};
+
 /** Walk to step 2 with a lesson chosen, then switch to the student picker. */
 const toStudents = () => {
   render(<AssignWizard preselect="l-1" />);
@@ -186,8 +201,7 @@ describe("sending to specific students", () => {
   it("still sends one request per class for a whole-class pick", async () => {
     render(<AssignWizard preselect="l-1" />);
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    fireEvent.click(screen.getByRole("button", { name: /JSS 2A/ }));
-    fireEvent.click(screen.getByRole("button", { name: /JSS 2B/ }));
+    onlyClasses(/JSS 2A/, /JSS 2B/);
     send();
 
     await vi.waitFor(() => expect(create).toHaveBeenCalledTimes(2));
@@ -439,8 +453,14 @@ describe("the lessons a teacher is offered", () => {
     ).toBeInTheDocument();
   });
 
-  it("falls back to them when the read genuinely failed", () => {
-    // `sample` is the honest signal: true only once the read has failed.
+  /*
+   * THIS TEST PINNED THE LEAK. It asserted that a signed-in teacher whose
+   * library read failed was offered "Simplifying Algebraic Fractions" - one of
+   * the frame's four invented lessons, pickable, unmarked, and refused only at
+   * step 4 after classes and a time had been chosen for it. Inverted: the
+   * teacher is told the read failed, in the sentence step 4 already used.
+   */
+  it("offers none of the invented four when the read failed", () => {
     useLessonLibrary.mockReturnValue({
       cards: [],
       live: false,
@@ -452,8 +472,26 @@ describe("the lessons a teacher is offered", () => {
     render(<AssignWizard />);
 
     expect(
-      screen.getByText("Simplifying Algebraic Fractions"),
+      screen.queryByText("Simplifying Algebraic Fractions"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/We couldn.t load your lessons, so we can.t assign them/),
     ).toBeInTheDocument();
+  });
+
+  it("says nothing of the kind to a visitor with no session", () => {
+    useLessonLibrary.mockReturnValue({
+      cards: [],
+      live: false,
+      sample: false,
+      loading: false,
+      slow: false,
+    });
+    useHasSession.mockReturnValue(false);
+
+    render(<AssignWizard />);
+
+    expect(screen.queryByText(/couldn.t load your lessons/)).not.toBeInTheDocument();
   });
 });
 
@@ -534,7 +572,7 @@ describe("when the students already have the lesson", () => {
   const sendToClass = () => {
     render(<AssignWizard preselect="l-1" />);
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    fireEvent.click(screen.getByRole("button", { name: /JSS 2A/ }));
+    onlyClasses(/JSS 2A/);
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm assignment" }));
@@ -601,7 +639,7 @@ describe("a 409 that names the lessons", () => {
   const sendOne = () => {
     render(<AssignWizard preselect="l-1" />);
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    fireEvent.click(screen.getByRole("button", { name: /JSS 2A/ }));
+    onlyClasses(/JSS 2A/);
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm assignment" }));
@@ -629,7 +667,7 @@ describe("a 409 that names the lessons", () => {
     fireEvent.click(screen.getByRole("button", { name: /Fractions 3/ }));
     fireEvent.click(screen.getByRole("button", { name: /Angles/ }));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    fireEvent.click(screen.getByRole("button", { name: /JSS 2A/ }));
+    onlyClasses(/JSS 2A/);
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm assignment" }));
@@ -737,7 +775,7 @@ describe("what a teacher is told once it is assigned", () => {
   const toClasses = (...names: RegExp[]) => {
     inShell();
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    for (const n of names) fireEvent.click(screen.getByRole("button", { name: n }));
+    onlyClasses(...names);
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm assignment" }));
@@ -861,5 +899,240 @@ describe("what a teacher is told once it is assigned", () => {
     await vi.waitFor(() => expect(push).toHaveBeenCalled());
     expect(create).not.toHaveBeenCalled();
     expect(screen.queryByText(/assigned to/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * THE SAMPLE LESSONS AND CLASSES CARRY THE MARK NOW.
+ *
+ * Neither did, so the signed-in end-to-end check - which counts
+ * `data-nevo-sample` - could not see either, and does not visit this route.
+ */
+describe("what is marked as a sample", () => {
+  const regions = () =>
+    Array.from(document.querySelectorAll("[data-nevo-sample]")).map((e) =>
+      e.getAttribute("data-nevo-sample"),
+    );
+
+  it("marks the walkthrough's lessons", () => {
+    useLessonLibrary.mockReturnValue({
+      cards: [],
+      live: false,
+      sample: false,
+      loading: false,
+      slow: false,
+    });
+    useHasSession.mockReturnValue(false);
+
+    render(<AssignWizard />);
+
+    expect(regions()).toContain("teacher:assign-lessons");
+  });
+
+  it("marks the sample classes a failed class read stands in with", () => {
+    useTeacherClasses.mockReturnValue({
+      options: CLASSES,
+      classes: [],
+      liveClasses: [],
+      live: false,
+      loading: false,
+      sample: true,
+    });
+    render(<AssignWizard preselect="l-1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(regions()).toContain("teacher:assign-classes");
+  });
+
+  it("marks nothing when the lessons and classes are the teacher's own", () => {
+    render(<AssignWizard preselect="l-1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(regions()).toEqual([]);
+  });
+});
+
+/**
+ * NOTHING TO ASSIGN, SAID. An empty library or no classes left a heading over
+ * nothing and a Continue that would not go - with no reason anywhere.
+ */
+describe("a teacher with nothing to pick from", () => {
+  it("says the library is empty", () => {
+    useLessonLibrary.mockReturnValue({
+      cards: [],
+      live: true,
+      sample: false,
+      loading: false,
+      slow: false,
+    });
+    render(<AssignWizard />);
+
+    expect(screen.getByText(/Your library is empty, so there is nothing to assign yet/)).toBeInTheDocument();
+  });
+
+  it("says nothing of the kind over a library with lessons in it", () => {
+    render(<AssignWizard />);
+
+    expect(screen.queryByText(/library is empty/)).not.toBeInTheDocument();
+  });
+
+  it("says the teacher has no classes yet", () => {
+    useTeacherClasses.mockReturnValue({
+      options: [],
+      classes: [],
+      liveClasses: [],
+      live: true,
+      loading: false,
+      sample: false,
+    });
+    render(<AssignWizard preselect="l-1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(screen.getByText(/You don.t have any classes yet/)).toBeInTheDocument();
+  });
+
+  it("says nothing of the kind while the classes are still loading", () => {
+    useTeacherClasses.mockReturnValue({
+      options: [],
+      classes: [],
+      liveClasses: [],
+      live: false,
+      loading: true,
+      sample: false,
+    });
+    render(<AssignWizard preselect="l-1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(screen.queryByText(/any classes yet/)).not.toBeInTheDocument();
+  });
+});
+
+/** Whether the browser would ask before leaving: the event was cancelled. */
+const leavingAsks = () => {
+  const e = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(e);
+  return e.defaultPrevented;
+};
+
+describe("choices made in the wizard", () => {
+  it("make the browser ask once past the first step", () => {
+    render(<AssignWizard preselect="l-1" />);
+    expect(leavingAsks()).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(leavingAsks()).toBe(true);
+  });
+});
+
+/**
+ * T106. `?lesson=` seeded the choice unchecked, so a lesson with no card on
+ * step 1 - still parsing, failed, or past the first page - could not be seen
+ * or un-chosen, and its id went to Confirm.
+ */
+describe("a lesson handed in on the address", () => {
+  it("counts only when its card is on offer", () => {
+    render(<AssignWizard preselect="l-not-offered" />);
+
+    expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
+  });
+
+  it("is never sent alongside one the teacher did choose", async () => {
+    render(<AssignWizard preselect="l-not-offered" />);
+    fireEvent.click(screen.getByRole("button", { name: /Fractions 3/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    onlyClasses(/JSS 2A/);
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm assignment" }));
+
+    await vi.waitFor(() => expect(create).toHaveBeenCalled());
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ lessonIds: ["l-1"] }));
+  });
+
+  it("is chosen, and lets the teacher go on, when it is", () => {
+    render(<AssignWizard preselect="l-1" />);
+
+    expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
+  });
+
+  it("does not count while it is still being read", () => {
+    useLessonLibrary.mockReturnValue({
+      cards: [{ id: "l-1", title: "Fractions 3", meta: "Mathematics", kind: "parsing" }],
+      live: true,
+      sample: false,
+      loading: false,
+      slow: false,
+    });
+    render(<AssignWizard preselect="l-1" />);
+
+    expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
+  });
+});
+
+/** T105. "Is the library empty" was the wrong question for this list. */
+describe("a library with nothing ready to assign", () => {
+  it("says so, rather than drawing the heading over nothing", () => {
+    useLessonLibrary.mockReturnValue({
+      cards: [
+        { id: "l-1", title: "Fractions 3", meta: "Mathematics", kind: "parsing" },
+        { id: "l-2", title: "Angles", meta: "Mathematics", kind: "failed" },
+      ],
+      live: true,
+      sample: false,
+      loading: false,
+      slow: false,
+    });
+    render(<AssignWizard />);
+
+    expect(screen.getByText("Nothing in your library is ready to assign yet.")).toBeInTheDocument();
+    expect(screen.queryByText(/Your library is empty/)).not.toBeInTheDocument();
+  });
+
+  it("still calls an empty library empty", () => {
+    useLessonLibrary.mockReturnValue({ cards: [], live: true, sample: false, loading: false, slow: false });
+    render(<AssignWizard />);
+
+    expect(screen.getByText(/Your library is empty/)).toBeInTheDocument();
+    expect(screen.queryByText(/Nothing in your library is ready/)).not.toBeInTheDocument();
+  });
+
+  it("says neither when there is something to choose", () => {
+    render(<AssignWizard />);
+
+    expect(screen.queryByText(/Nothing in your library is ready/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Your library is empty/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * T102. A signed-in teacher whose class list failed was offered the fixture
+ * classes - marked, noticed, and still pickable until Confirm refused them.
+ */
+describe("a class list that could not be read", () => {
+  const failedClasses = () =>
+    useTeacherClasses.mockReturnValue({
+      options: CLASSES,
+      classes: [],
+      liveClasses: [],
+      live: false,
+      loading: false,
+      sample: true,
+    });
+
+  it("offers a signed-in teacher no classes at all", () => {
+    failedClasses();
+    render(<AssignWizard preselect="l-1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(screen.queryByText("JSS 2A")).not.toBeInTheDocument();
+    expect(screen.getByText(/so we can.t assign to your classes/)).toBeInTheDocument();
+  });
+
+  it("does not tell them they have no classes", () => {
+    failedClasses();
+    render(<AssignWizard preselect="l-1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(screen.queryByText(/You don.t have any classes yet/)).not.toBeInTheDocument();
   });
 });

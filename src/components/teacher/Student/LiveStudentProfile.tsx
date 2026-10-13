@@ -2,9 +2,18 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
+import { useSystemMessages } from "@/components/shared/SystemMessages";
 import { useStudentFlags } from "@/hooks/useStudentFlags";
+import { SummaryChip } from "@/components/teacher/shared/SummaryChip";
+import { profileChip } from "@/components/teacher/shared/summaryState";
 import { useStudentSessions } from "@/hooks/useStudentSessions";
+import { useTeacherClasses } from "@/hooks/useTeacherClasses";
+import { useRosterObservations } from "@/hooks/useRosterObservations";
+import {
+  OBSERVATION_COPY,
+  observationCount,
+} from "@/lib/constants/observations";
 import { LiveSessionPanel } from "./LiveSessionPanel";
 import { LiveRecommendSheet } from "./LiveRecommendSheet";
 import { LiveShareSheet } from "./LiveShareSheet";
@@ -16,6 +25,7 @@ import {
 } from "@/lib/mocks/teacherIntelligence";
 import { cn } from "@/lib/utils";
 import { MasteryDualTrack } from "./MasteryDualTrack";
+import { PhoneRosterBar } from "@/components/teacher/Shell/PhoneBackBar";
 
 /**
  * C08 Student Profile for a real student.
@@ -39,11 +49,8 @@ import { MasteryDualTrack } from "./MasteryDualTrack";
  * The C16c adaptation insights are live, from `/api/adaptations/student/{id}`,
  * with suppressed entries excluded - the section is what actually happened.
  *
- * Recent sessions come from `students/{id}/progress`. Its rows are not
- * clickable: C08d's session panel wants a section-by-section breakdown, and
- * nothing serves one. Its position indices are not shown either - the spec
- * does not say whether they are 0- or 1-based, and "section 0" in front of a
- * teacher is worse than no position.
+ * Recent sessions come from `students/{id}/sessions`, and each row opens
+ * C08d's session panel for that session (see "REAL SESSIONS" below).
  *
  * Accommodations are what Nevo is OFFERING, on stated evidence - which is a
  * different thing from the engine parameters above, and reads in the same
@@ -53,8 +60,14 @@ import { MasteryDualTrack } from "./MasteryDualTrack";
  * absent "for want of an endpoint", and that was never true: the flags route
  * has taken `studentId` all along and `description` is required on every flag
  * it returns. It renders Nevo's own sentences, dated, claiming no window - see
- * `useStudentFlags`. The confidence dimensions beside it in the frame are not
- * deferred either; design deleted the confidence rating outright on 17 Sep.
+ * `useStudentFlags`.
+ *
+ * "WHAT NEVO HAS NOTICED" IS LIVE TOO (6 Oct). This comment used to fold it
+ * into the confidence rating design deleted on 17 Sep, and they were never one
+ * thing: the rating went, the observations stayed in C08. They arrive on the
+ * class roster and not on the profile read, so they are read from the class
+ * the row came from - see `useRosterObservations` - and the section is
+ * absent when there is no class to ask.
  *
  * STILL ABSENT: the "what Nevo has seen" evidence list, which has an endpoint
  * that does not fit it - see `students.ts`.
@@ -66,8 +79,6 @@ import { MasteryDualTrack } from "./MasteryDualTrack";
 const SECTION_H =
   "text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase xl:text-sm";
 
-/** Matches ConnectView, which is the console's other C14 toast. */
-const TOAST_MS = 3000;
 
 /** The support Nevo turned on, named the way the console talks about it. */
 const ACCOMMODATION_LABEL: Record<string, string> = {
@@ -93,6 +104,7 @@ export function LiveStudentProfile({
   state,
   studentId,
   classHref,
+  classId,
   recommendOpen = false,
 }: {
   state: StudentProfileState;
@@ -103,6 +115,8 @@ export function LiveStudentProfile({
    */
   studentId: string;
   classHref?: string;
+  /** The class the roster row came from; observations are read from it. */
+  classId?: string;
   recommendOpen?: boolean;
 }) {
   const router = useRouter();
@@ -114,11 +128,26 @@ export function LiveStudentProfile({
    * shipped the sessions list and this is the id it hands over.
    */
   const [openSession, setOpenSession] = useState<string | null>(null);
-  const { sessions: realSessions, failed: sessionsFailed } =
-    useStudentSessions(studentId);
+  const {
+    sessions: realSessions,
+    failed: sessionsFailed,
+    loading: sessionsLoading,
+  } = useStudentSessions(studentId);
   /* The noticing banner's source. Like the sessions list, it needs the id
      before `profile` is destructured. */
   const { noticed } = useStudentFlags(studentId);
+  // C08's one chip, in design's precedence (12 Oct). Read from the open
+  // flags only: a read that failed or is in flight is no chip, not "nothing
+  // to see" - the noticing section below says which.
+  const chip = profileChip(noticed);
+  /* C08's "What Nevo has noticed", from the class this profile was opened
+     from. Also before the guard below. */
+  const observations = useRosterObservations(classId, studentId);
+  /* C08 and C14 A5 both draw the way back as "{class} · Roster". */
+  const { liveClasses } = useTeacherClasses();
+  const className = classId
+    ? liveClasses.find((c) => c.classId === classId)?.className
+    : undefined;
   const [sharing, setSharing] = useState(false);
   /**
    * C14 B5's two halves, both driven only by a stored escalation.
@@ -132,15 +161,8 @@ export function LiveStudentProfile({
    * nothing about history.
    */
   const [shared, setShared] = useState(false);
-  const [toast, setToast] = useState(false);
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(
-    () => () => {
-      if (toastTimer.current) clearTimeout(toastTimer.current);
-    },
-    [],
-  );
+  /* C14 B5's toast is the shared bar now: frame 43 made them one thing. */
+  const say = useSystemMessages();
   const {
     profile,
     concepts,
@@ -153,53 +175,134 @@ export function LiveStudentProfile({
     // profile next door, which has no live read to replace it with.
     accommodations,
     observed,
+    reads,
   } = state;
   if (!profile) return null;
+
+  /** Absent means a fixture state, every read in. */
+  const read = (key: keyof NonNullable<typeof reads>) => reads?.[key] ?? "ready";
 
   const { student, openFlagCount } = profile;
   const name = [student.firstName, student.lastName]
     .filter(Boolean)
     .join(" ")
     .trim();
-  const early = !observed && concepts.length === 0;
+  /*
+   * "STILL GETTING TO KNOW THEM" IS A CLAIM, and it needs both reads it rests
+   * on to have answered. It was drawn over in-flight and failed reads alike,
+   * for a child with weeks of history: absence of an answer read as absence
+   * of a profile.
+   */
+  const early =
+    read("learnerProfile") === "ready" &&
+    read("mastery") === "ready" &&
+    !observed &&
+    concepts.length === 0;
+  /**
+   * C14 A5 rather than C08's early card: no session and no pattern at all.
+   * Only once the sessions read has answered - a list still loading is not
+   * a child who has never started.
+   */
+  const tooEarly =
+    early &&
+    !sessionsLoading &&
+    !sessionsFailed &&
+    realSessions.length === 0 &&
+    observations.length === 0;
+  const first = student.firstName?.trim() || name.split(" ")[0] || "them";
+  /** The sessions section's own failure line, for any section that failed. */
+  const failedLine = `We couldn${"’"}t load these just now. Nothing has changed for ${student.firstName ?? "them"}, so you can try again in a moment.`;
 
   return (
-    <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
-      <div className="mx-auto max-w-[860px]">
+    /* C19 B2 on a phone: the back bar in place of the menu, 18px edges, and
+       only what B2 draws - who this is, what Nevo noticed, and Recommend. */
+    <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] max-md:px-[18px] max-md:pt-0 max-md:pb-[22px] xl:px-[52px] xl:py-11">
+      <div className="mx-auto xl:max-w-[900px]">
+        <PhoneRosterBar classId={classId} />
         <Link
           href={classHref ?? "/teacher/classes"}
-          className="inline-flex cursor-pointer items-center gap-[7px] text-sm text-nevo-near-black/60 transition-transform active:scale-[0.99]"
+          className="inline-flex cursor-pointer items-center gap-[7px] text-[13.5px] text-nevo-near-black/60 transition-transform active:scale-[0.99] max-md:hidden xl:text-sm"
         >
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-[17px]">
             <path d="M15 6l-6 6 6 6" />
           </svg>
-          {classHref ? "Back to the class" : "My Classes"}
+          {className ? `${className} · Roster` : "My Classes"}
         </Link>
 
-        <div className="mt-4 flex items-center gap-4">
-          <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-nevo-navy text-xl font-semibold text-nevo-cream xl:size-16">
-            {initialsOf(student.firstName, student.lastName)}
-          </span>
-          <div className="min-w-0">
-            <h2 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
-              {name || "This student"}
-            </h2>
-            <span className="mt-[3px] block text-[14.5px] text-nevo-near-black/60">
-              {[
-                student.ageBand,
-                observed ? "Learning profile building" : "No profile yet",
-              ]
-                .filter(Boolean)
-                .join(" · ")}
+        {/*
+          C08's HEADER: who this is, then what a teacher can do about it -
+          beside the name on desktop, in a row of their own under it on tablet
+          ("actions wrap"). The actions used to sit at the very foot of the
+          page, under every section, at both widths: a teacher who came to
+          recommend a lesson scrolled past the whole profile to find the
+          button. The fixture profile always had them here.
+        */}
+        <div className="mt-3.5 flex flex-col items-start gap-4 xl:mt-4 xl:flex-row xl:flex-wrap xl:justify-between xl:gap-6">
+          <div className="flex items-center gap-3.5 xl:gap-4">
+            <span className="flex size-[50px] shrink-0 items-center justify-center rounded-full bg-nevo-navy text-[17px] font-semibold text-nevo-cream xl:size-14 xl:text-[19px]">
+              {initialsOf(student.firstName, student.lastName)}
             </span>
-            {/* C14 B5's quiet note. The frame writes it with a dash; design
-                ruled on 15 Sep that Nevo copy carries no dashes anywhere, so
-                it reads straight. It appears only after a stored escalation. */}
-            {shared && (
-              <span className="mt-[3px] block text-[14.5px] text-nevo-near-black/60">
-                Shared with Learning Support today
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-x-[9px] gap-y-1 xl:gap-x-2.5">
+                <h1 className="text-[22px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[27px]">
+                  {name || "This student"}
+                </h1>
+                {chip && <SummaryChip state={chip} />}
+              </div>
+              <span className="mt-[3px] block text-sm text-nevo-near-black/60 xl:mt-[5px] xl:text-[14.5px]">
+                {[
+                  student.ageBand,
+                  // Only once the learner profile has answered: "No profile
+                  // yet" over a read in flight, or one that failed, is a claim
+                  // about this child made from our own network.
+                  read("learnerProfile") !== "ready"
+                    ? null
+                    : observed
+                      ? "Learning profile building"
+                      : "No profile yet",
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
               </span>
-            )}
+              {/* C14 B5's quiet note. The frame writes it with a dash; design
+                  ruled on 15 Sep that Nevo copy carries no dashes anywhere, so
+                  it reads straight. It appears only after a stored escalation. */}
+              {shared && (
+                <span className="mt-1 block text-xs text-nevo-near-black/60">
+                  Shared with Learning Support today
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* C08's order: the primary action first. `flex-wrap` since 15 Sep -
+              a third action turned a bare row into one that ran off a tablet. */}
+          <div className="flex flex-wrap items-center gap-2.5 max-md:hidden">
+            <button
+              type="button"
+              onClick={() => setRecommending(true)}
+              className="inline-flex h-[42px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[18px] text-sm font-semibold text-nevo-cream transition-[filter] hover:brightness-93 xl:h-11 xl:px-5 xl:text-[14.5px]"
+            >
+              Recommend a lesson
+            </button>
+            {/* `POST /api/v1/escalations` landed 15 Sep; before it this action
+                existed only on the fixture profile. C08's label - the sheet it
+                opens is "Share with Learning Support"; the button is not. */}
+            <button
+              type="button"
+              onClick={() => setSharing(true)}
+              className="inline-flex h-[42px] cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 px-4 text-sm font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6 xl:h-11 xl:px-[18px] xl:text-[14.5px]"
+            >
+              Flag for support
+            </button>
+            <Link
+              /* With the child's id: compose opens on them rather than on
+                 an empty recipient list. */
+              href={`/teacher/connect?student=${student.id}`}
+              className="inline-flex h-[42px] cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 px-4 text-sm font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6 xl:h-11 xl:px-[18px] xl:text-[14.5px]"
+            >
+              Send them a message
+            </Link>
           </div>
         </div>
 
@@ -209,7 +312,7 @@ export function LiveStudentProfile({
             fixture has a single flag, and dropping the rest would hide the
             thing this banner exists to show. */}
         {noticed.length > 0 && (
-          <div className="mt-6 max-w-[660px] rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4 xl:px-5 xl:py-[18px]">
+          <div className="mt-6 rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4 xl:mt-7 xl:px-5 xl:py-[18px]">
             <span className="block text-sm font-semibold text-nevo-near-black xl:text-[15px]">
               What Nevo noticed
             </span>
@@ -261,34 +364,111 @@ export function LiveStudentProfile({
             still getting to know them" underneath a sentence about what Nevo
             noticed contradicts it. A flag means something was observed, so the
             banner wins and the calm note stands down. */}
-        {early && noticed.length === 0 && (
-          <div className="mt-6 flex max-w-[660px] items-start gap-4 rounded-[12px] bg-nevo-cream-elevated px-[26px] py-6 shadow-elevation-1">
-            <span className="mt-px shrink-0 text-nevo-violet">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        {/*
+          TWO EARLY STATES, AS THE FRAMES DRAW THEM, where there used to be
+          one card of our own words that matched neither.
+          - C08's early card: Nevo has started to see something - a session,
+            or a pattern on the roster - but not enough to read much into.
+          - C14 A5, "too early, no data yet": nothing at all. It is a line
+            under "What Nevo has noticed", further down.
+        */}
+        {early && noticed.length === 0 && !tooEarly && !sessionsLoading && (
+          <div className="mt-5 flex items-start gap-3 rounded-[12px] bg-nevo-violet/16 px-[18px] py-4 xl:mt-[26px] xl:gap-[13px] xl:px-5 xl:py-[18px]">
+            <span className="mt-px shrink-0 text-nevo-navy">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-5">
                 <circle cx="12" cy="12" r="9" />
-                <path d="M12 16v-4M12 8h.01" />
+                <path d="M12 16v-4" />
+                <path d="M12 8h.01" />
               </svg>
             </span>
-            <div>
-              <h3 className="text-[16px] font-semibold text-nevo-near-black xl:text-[17px]">
-                {`Nevo is still getting to know ${name.split(" ")[0] || "them"}`}
-              </h3>
-              <p className="mt-[5px] text-sm leading-[1.55] text-nevo-near-black/66 xl:text-[14.5px]">
-                A picture builds as they work through lessons. There&rsquo;s
-                nothing to read into a quiet profile this early.
-              </p>
-            </div>
+            <p className="text-sm leading-[1.55] text-nevo-near-black/78 xl:text-[15px]">
+              {`Still getting a picture of ${first}${"’"}s work. A few more sessions and this will fill in - for now, here${"’"}s the early picture.`}
+            </p>
           </div>
+        )}
+
+        {/*
+          C08's "What Nevo has noticed": the engine's own patterns, in the
+          copy file's sentences - the same source as the roster's chips, so
+          the two screens cannot say different things about one child. A
+          count shows only as its own chip, and only where that file allows.
+        */}
+        {/* C14 A5's own line, under C08's heading, when there is nothing. */}
+        {early && noticed.length === 0 && tooEarly && (
+          <>
+            <h3 className={cn(SECTION_H, "mt-8 xl:mt-9")}>What Nevo has noticed</h3>
+            <p className="mt-3.5 text-[13px] leading-[1.6] text-nevo-near-black/68 xl:mt-4 xl:max-w-[560px]">
+              {`Nevo has not seen enough of ${first}${"’"}s work yet to say anything useful.`}
+            </p>
+          </>
+        )}
+
+        {observations.length > 0 && (
+          <>
+            <h3 className={cn(SECTION_H, "mt-[26px]", early ? "xl:mt-8" : "xl:mt-9")}>What Nevo has noticed</h3>
+            {/* C08: two columns on the full profile at desktop, one on a new
+                student's - the early artboard stacks its single card. */}
+            <div
+              className={cn(
+                "mt-3.5 flex flex-col gap-3 xl:mt-4 xl:gap-3.5",
+                !early && "xl:grid xl:grid-cols-2",
+              )}
+            >
+              {observations.map((o) => {
+                const chip = observationCount(o.pattern, o.count);
+                return (
+                  <div
+                    key={o.pattern}
+                    className="flex items-start justify-between gap-3.5 rounded-[12px] bg-nevo-cream-elevated px-5 py-[18px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:gap-4 xl:p-[22px]"
+                  >
+                    <p className="text-[15.5px] leading-[1.45] font-medium text-pretty text-nevo-near-black xl:text-[16.5px]">
+                      {OBSERVATION_COPY[o.pattern].body(
+                        student.firstName?.trim() || "They",
+                      )}
+                    </p>
+                    {chip && (
+                      <span className="shrink-0 rounded-full bg-nevo-violet/24 px-[11px] py-1 text-[12.5px] font-semibold whitespace-nowrap text-nevo-navy">
+                        {chip}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {/* B2's one action, at the foot where a thumb is. The header's row
+            of three is the tablet's and the desktop's. */}
+        <button
+          type="button"
+          onClick={() => setRecommending(true)}
+          className="mt-[18px] flex h-[54px] w-full cursor-pointer items-center justify-center rounded-[10px] bg-nevo-navy text-base font-semibold text-nevo-cream transition-[filter] hover:brightness-93 md:hidden"
+        >
+          Recommend a lesson
+        </button>
+
+        {/* B2 draws none of what follows: mastery, what Nevo is offering,
+            sessions, adaptations and the help-seeking line are for a bigger
+            screen. */}
+        <div className="max-md:hidden">
+        {concepts.length === 0 && read("mastery") === "failed" && (
+          <>
+            <h3 className={cn(SECTION_H, "mt-[26px] xl:mt-9")}>Concept mastery</h3>
+            <p className="mt-3 text-[14px] leading-[1.55] text-nevo-near-black/68">
+              {failedLine}
+            </p>
+          </>
         )}
 
         {concepts.length > 0 && (
           <>
-            <h3 className={cn(SECTION_H, "mt-8")}>Concept mastery</h3>
-            <p className="mt-2 max-w-[62ch] text-[13px] leading-[1.5] text-nevo-near-black/60">
+            <h3 className={cn(SECTION_H, "mt-[26px] xl:mt-9")}>Concept mastery</h3>
+            <p className="mt-2 text-[13.5px] leading-[1.5] text-nevo-near-black/60 xl:mt-[9px] xl:max-w-[660px] xl:text-sm xl:leading-[1.55]">
               How well each idea has landed, and how much the reading itself is
               shaping that.
             </p>
-            <div className="mt-4 flex flex-col gap-5 rounded-[12px] bg-nevo-cream-elevated px-[22px] py-6 shadow-elevation-1 xl:px-[26px]">
+            <div className="mt-3.5 flex flex-col gap-5 rounded-[12px] bg-nevo-cream-elevated px-[22px] py-5 shadow-elevation-1 xl:mt-4 xl:gap-[22px] xl:px-[26px] xl:py-6">
               {concepts.map((c) => (
                 <MasteryDualTrack
                   key={c.conceptId}
@@ -303,7 +483,7 @@ export function LiveStudentProfile({
 
         {accommodations && accommodations.activeAccommodations.length > 0 && (
           <>
-            <h3 className={cn(SECTION_H, "mt-8")}>What Nevo is offering</h3>
+            <h3 className={cn(SECTION_H, "mt-[26px] xl:mt-9")}>What Nevo is offering</h3>
             <p className="mt-2 max-w-[62ch] text-[13px] leading-[1.5] text-nevo-near-black/60">
               Support Nevo has turned on, and what it saw that led there.
             </p>
@@ -330,9 +510,27 @@ export function LiveStudentProfile({
           </>
         )}
 
+        {read("accommodations") === "failed" && (
+          <>
+            <h3 className={cn(SECTION_H, "mt-[26px] xl:mt-9")}>What Nevo is offering</h3>
+            <p className="mt-3 text-[14px] leading-[1.55] text-nevo-near-black/68">
+              {failedLine}
+            </p>
+          </>
+        )}
+
+        {recommendations.length === 0 && read("recommendations") === "failed" && (
+          <>
+            <h3 className={cn(SECTION_H, "mt-[26px] xl:mt-9")}>What might help</h3>
+            <p className="mt-3 text-[14px] leading-[1.55] text-nevo-near-black/68">
+              {failedLine}
+            </p>
+          </>
+        )}
+
         {recommendations.length > 0 && (
           <>
-            <h3 className={cn(SECTION_H, "mt-8")}>What might help</h3>
+            <h3 className={cn(SECTION_H, "mt-[26px] xl:mt-9")}>What might help</h3>
             <div className="mt-3.5 divide-y divide-nevo-near-black/7 overflow-hidden rounded-[12px] bg-nevo-cream-elevated shadow-elevation-1">
               {recommendations.map((r) => (
                 <p
@@ -343,53 +541,6 @@ export function LiveStudentProfile({
                 </p>
               ))}
             </div>
-          </>
-        )}
-
-        {/* C16c - what Nevo quietly adjusted, and why. */}
-        {adaptations.length > 0 && (
-          <>
-            <h3 className="mt-8 block text-[11px] font-bold tracking-[0.14em] text-nevo-violet uppercase">
-              {ADAPTATIONS_LABEL}
-            </h3>
-            <p className="mt-2 text-[13px] text-nevo-near-black/60">
-              {`Nevo quietly adjusts lessons based on how each student learns. Here is what has happened for ${name.split(" ")[0] || "them"} recently.`}
-            </p>
-            <div className="mt-3.5 flex flex-col gap-2 xl:mt-4">
-              {adaptations.map((entry) => (
-                <div
-                  key={entry.id}
-                  className="flex items-start gap-3.5 rounded-[8px] bg-nevo-cream-elevated px-[18px] py-4 xl:gap-4"
-                >
-                  <span className="w-[46px] shrink-0 pt-px text-[12px] text-nevo-near-black/55">
-                    {new Date(entry.timestamp).toLocaleDateString("en-GB", {
-                      day: "numeric",
-                      month: "short",
-                    })}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <span className="block text-[13px] font-semibold text-nevo-near-black">
-                      {entry.lessonTitle}
-                    </span>
-                    <p className="mt-1 text-[13px] leading-[1.55] text-nevo-near-black/72">
-                      {entry.adaptation}
-                    </p>
-                    {entry.trigger && (
-                      <p className="mt-1 text-[12.5px] leading-[1.5] text-nevo-near-black/55">
-                        {`After noticing: ${entry.trigger}`}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <p className="mt-4 text-[12px] leading-[1.55] text-nevo-near-black/55 italic">
-              {ADAPTATIONS_FOOTNOTE_MAIN}
-              <span className="hidden xl:inline">
-                {" "}
-                {ADAPTATIONS_FOOTNOTE_DESKTOP_TAIL}
-              </span>
-            </p>
           </>
         )}
 
@@ -408,32 +559,51 @@ export function LiveStudentProfile({
         */}
         {realSessions.length > 0 && (
           <>
-            <h3 className={cn(SECTION_H, "mt-8")}>Recent sessions</h3>
-            <div className="mt-3.5 divide-y divide-nevo-near-black/7 overflow-hidden rounded-[12px] bg-nevo-cream-elevated shadow-elevation-1">
+            <h3 className={cn(SECTION_H, "mt-[26px] xl:mt-9")}>Recent sessions</h3>
+            <div className="mt-3.5 divide-y divide-nevo-near-black/7 overflow-hidden rounded-[12px] bg-nevo-cream-elevated shadow-elevation-1 xl:mt-4">
               {realSessions.map((sn) => (
                 <button
                   key={sn.sessionId}
                   type="button"
                   onClick={() => setOpenSession(sn.sessionId)}
-                  className="flex w-full cursor-pointer gap-[18px] px-[22px] py-4 text-left transition-[filter] hover:brightness-[0.985]"
+                  className="flex w-full cursor-pointer gap-[18px] px-[22px] py-[18px] text-left transition-[filter] hover:brightness-[0.985]"
                 >
-                  <span className="w-[70px] shrink-0 pt-0.5 text-[13.5px] text-nevo-near-black/55">
+                  <span className="w-[62px] shrink-0 pt-0.5 text-[13px] text-nevo-near-black/55 xl:w-[70px] xl:text-[13.5px]">
                     {new Date(sn.occurredAt).toLocaleDateString("en-GB", {
                       day: "numeric",
                       month: "short",
                     })}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block text-[15px] font-semibold text-nevo-near-black">
+                    <span className="block text-[14.5px] font-semibold text-nevo-near-black xl:text-[15.5px]">
                       {sn.lessonTitle}
                     </span>
-                    <span className="mt-[5px] block text-[14px] leading-[1.5] text-nevo-near-black/72">
-                      {SESSION_NOTE[sn.completionStatus] ??
-                        sn.completionStatus.replace(/_/g, " ")}
-                      {/* Only from the second visit on. "Visit 1" says nothing
-                          a teacher did not already assume. */}
-                      {sn.sitting > 1 && ` · visit ${sn.sitting}`}
-                    </span>
+                    {/*
+                      OUR WORDS FOR A STATUS, OR NONE. An unknown status was
+                      printed as its token with the underscores swapped for
+                      spaces - the backend's vocabulary in front of a teacher.
+                      Only from the second visit on: "visit 1" says nothing a
+                      teacher did not already assume.
+                    */}
+                    {(SESSION_NOTE[sn.completionStatus] || sn.sitting > 1) && (
+                      <span className="mt-[5px] block text-[14px] leading-[1.5] text-nevo-near-black/72 xl:text-[14.5px]">
+                        {[
+                          SESSION_NOTE[sn.completionStatus],
+                          sn.sitting > 1 &&
+                            (SESSION_NOTE[sn.completionStatus]
+                              ? `visit ${sn.sitting}`
+                              : `Visit ${sn.sitting}`),
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                    )}
+                  </span>
+                  {/* C08's chevron: the row opens the session (C08d). */}
+                  <span className="shrink-0 self-center text-nevo-near-black/40">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-[18px]">
+                      <path d="M9 6l6 6-6 6" />
+                    </svg>
                   </span>
                 </button>
               ))}
@@ -444,11 +614,82 @@ export function LiveStudentProfile({
         {/* A failed read is not "no sessions". Saying nothing here would tell a
             teacher this child has never worked, which is a claim about a named
             child made from our own network trouble. */}
+        {/* C14 A5, verbatim with this child's own name. An empty list
+            rendered nothing at all, so a child who had never started a lesson
+            looked the same as a page that had not finished loading. Only once
+            the read has answered, and answered with none. */}
+        {realSessions.length === 0 && !sessionsLoading && !sessionsFailed && (
+          <>
+            <h3 className={cn(SECTION_H, "mt-8 xl:mt-9")}>Recent sessions</h3>
+            <p className="mt-3.5 text-[13px] leading-[1.6] text-nevo-near-black/50 xl:mt-4 xl:max-w-[560px]">
+              {student.firstName
+                ? `No sessions yet - ${student.firstName} hasn${"’"}t started a lesson.`
+                : "No sessions yet."}
+            </p>
+          </>
+        )}
+
         {realSessions.length === 0 && sessionsFailed && (
           <>
-            <h3 className={cn(SECTION_H, "mt-8")}>Recent sessions</h3>
+            <h3 className={cn(SECTION_H, "mt-[26px] xl:mt-9")}>Recent sessions</h3>
             <p className="mt-3 text-[14px] leading-[1.55] text-nevo-near-black/68">
               {`We couldn${"’"}t load these just now. Nothing has changed for ${student.firstName ?? "them"}, so you can try again in a moment.`}
+            </p>
+          </>
+        )}
+
+        {/* C16c - what Nevo quietly adjusted, and why. BELOW the lesson
+            history, where C16c places it; it sat above the sessions. The
+            frame draws no "After noticing" line, and `trigger` is a free
+            string nobody has reviewed for this screen, so it is not shown. */}
+        {adaptations.length === 0 && read("adaptations") === "failed" && (
+          <>
+            <h3 className="mt-8 block text-[11px] font-bold tracking-[0.14em] text-nevo-violet uppercase xl:mt-7">
+              {ADAPTATIONS_LABEL}
+            </h3>
+            <p className="mt-3 text-[14px] leading-[1.55] text-nevo-near-black/68">
+              {failedLine}
+            </p>
+          </>
+        )}
+
+        {adaptations.length > 0 && (
+          <>
+            <h3 className="mt-8 block text-[11px] font-bold tracking-[0.14em] text-nevo-violet uppercase xl:mt-7">
+              {ADAPTATIONS_LABEL}
+            </h3>
+            <p className="mt-2 text-[13px] text-nevo-near-black/60">
+              {`Nevo quietly adjusts lessons based on how each student learns. Here is what has happened for ${name.split(" ")[0] || "them"} recently.`}
+            </p>
+            <div className="mt-3.5 flex flex-col gap-2 xl:mt-4">
+              {adaptations.map((entry) => (
+                <div
+                  key={entry.id}
+                  className="flex items-start gap-3.5 rounded-[12px] bg-nevo-cream-elevated px-[18px] py-4 xl:gap-4"
+                >
+                  <span className="w-[46px] shrink-0 pt-px text-[12px] text-nevo-near-black/55">
+                    {new Date(entry.timestamp).toLocaleDateString("en-GB", {
+                      day: "numeric",
+                      month: "short",
+                    })}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <span className="block text-[13px] font-semibold text-nevo-near-black">
+                      {entry.lessonTitle}
+                    </span>
+                    <p className="mt-1 text-[13px] leading-[1.55] text-nevo-near-black/72">
+                      {entry.adaptation}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="mt-4 text-[12px] leading-[1.55] text-nevo-near-black/55 italic">
+              {ADAPTATIONS_FOOTNOTE_MAIN}
+              <span className="hidden xl:inline">
+                {" "}
+                {ADAPTATIONS_FOOTNOTE_DESKTOP_TAIL}
+              </span>
             </p>
           </>
         )}
@@ -466,40 +707,8 @@ export function LiveStudentProfile({
             {state.helpSeeking}
           </p>
         )}
-
-        {/* `flex flex-wrap gap-3` replaced a bare block on 15 Sep. Two
-            inline-flex children were separated only by a whitespace text node,
-            which a third action turns into a row that runs off a tablet. */}
-        <div className="mt-8 flex flex-wrap gap-3">
-          <Link
-            /* With the child's id: compose opens on them rather than on
-               an empty recipient list. */
-            href={`/teacher/connect?student=${student.id}`}
-            className="inline-flex h-[50px] cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 px-[22px] text-[15px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
-          >
-            Send them a message
-          </Link>
-          {/* THE SECOND ACTION. Until 15 Sep this profile offered exactly one
-              of the four C08 draws, and the other three were mounted only from
-              the fixture profile. */}
-          <button
-            type="button"
-            onClick={() => setRecommending(true)}
-            className="inline-flex h-[50px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[22px] text-[15px] font-medium text-nevo-cream transition-[filter] hover:brightness-93"
-          >
-            Recommend a lesson
-          </button>
-          {/* THE THIRD. `POST /api/v1/escalations` landed 15 Sep; before it
-              this action existed only on the fixture profile, behind a
-              disabled button explaining there was nowhere to send it. */}
-          <button
-            type="button"
-            onClick={() => setSharing(true)}
-            className="inline-flex h-[50px] cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 px-[22px] text-[15px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
-          >
-            Share with Learning Support
-          </button>
         </div>
+
 
         {/*
           C08d. The panel makes no request while `openSession` is null, so a
@@ -528,6 +737,7 @@ export function LiveStudentProfile({
                prose and no lesson id, so this is context for the teacher's
                choice rather than a preselection. */
             suggestion={recommendations[0]?.recommendationText ?? null}
+            suggestedLessonId={recommendations[0]?.lessonId ?? null}
             onClose={() => setRecommending(false)}
           />
         )}
@@ -538,25 +748,18 @@ export function LiveStudentProfile({
             firstName={student.firstName ?? name}
             onCancel={() => setSharing(false)}
             /* C14 B5, and every part of it waits on a stored escalation: the
-               sheet dismisses, the toast confirms, the quiet note settles. */
+               sheet dismisses, the bar confirms, the quiet note settles. */
             onSent={() => {
               setSharing(false);
               setShared(true);
-              setToast(true);
-              if (toastTimer.current) clearTimeout(toastTimer.current);
-              toastTimer.current = setTimeout(() => setToast(false), TOAST_MS);
+              say.show({
+                kind: "confirm",
+                message: `Sent to Learning Support. They${"’"}ll take it from here.`,
+              });
             }}
           />
         )}
 
-        {toast && (
-          <div
-            role="status"
-            className="fixed bottom-7 left-1/2 z-50 -translate-x-1/2 rounded-[10px] bg-nevo-near-black px-[18px] py-3 text-[14.5px] font-medium text-nevo-cream shadow-[0_6px_24px_rgba(0,0,0,0.22)]"
-          >
-            {`Sent to Learning Support. They${"’"}ll take it from here.`}
-          </div>
-        )}
       </div>
     </div>
   );

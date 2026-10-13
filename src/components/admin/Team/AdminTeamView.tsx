@@ -2,21 +2,36 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
+  SEAT_LIMIT_REACHED,
   adminActivationLink,
   teamApi,
   roleForScopes,
+  type AdminTeam,
   type InvitedTeamMember,
   type TeamMember,
 } from "@/lib/api/team";
+import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
+import { activeLine } from "./teamLines";
 import type { PermissionScope } from "@/lib/constants/permissions";
 import { cn } from "@/lib/utils";
 import { feedbackApi } from "@/lib/api/feedback";
-import { CheckIcon, PausedNote } from "../Roster/primitives";
+import { CheckIcon, CloseIcon, PausedNote } from "../Roster/primitives";
 import { useSetupGate } from "@/hooks";
-import { readOnboarding, schoolApi } from "@/lib/api/school";
+import { schoolApi } from "@/lib/api/school";
 import { NoAccess, failureKind } from "../NoAccess";
+import { getSession } from "@/lib/auth/session";
+import { EditAccessPanel, ScopeChecklist } from "./EditAccess";
+import { useSupportEmail } from "../SupportEmail";
+import type { LearningSupportHolders } from "@/lib/api/learningSupport";
+import { useLearningSupport } from "../LearningSupport/useLearningSupport";
 import {
-  adminSeatAllowance,
+  LearningSupportLine,
+  lastHolderAccessLine,
+} from "../LearningSupport/LearningSupportLine";
+import { LAST_LEARNING_SUPPORT_HOLDER, refusedWith } from "@/lib/api/learningSupport";
+import {
+  FOUNDING_LOCK_LINE,
+  seatWords,
   SCOPE_CATALOGUE,
   initialsFor,
   orderScopes,
@@ -35,17 +50,28 @@ import {
  * fetch-failure state are NOT drawn anywhere in the admin set - those two are
  * ours, and deliberately quiet.
  *
- * WHAT THE API DOES NOT CARRY, so the frame cannot be met in full:
- * - no founding flag, so the "Founding" badge and the locked General Oversight
- *   pill (with the note about a school never locking itself out) cannot render
- * - no last-active timestamp, so the frame's "Active today" / "2 days ago"
- *   column has nothing behind it
- * - no school name, so the count line says "this school"
- * - no seat allowance, so the five is a constant we assert
- * All four are raised with backend rather than invented here.
+ * THE FOUNDING FLAG AND LAST-ACTIVE ARRIVED (backend, 8 Oct), and both used
+ * to be listed here as missing. The founding admin wears D03's "Founding"
+ * badge, their General Oversight renders locked with its reason, and every
+ * row says when its admin was last seen in SCRUM-39's neutral words.
  *
- * TODO(api): PUT /admin/team/{id}/scopes is deployed and typed, but D03 draws
- * no affordance for changing an existing admin's access. Needs design.
+ * REMOVING ACCESS IS REAL NOW. `POST /admin/team/{id}/deactivate` and
+ * `/restore` landed with it - there was no way to take access away from an
+ * admin who had left. SCRUM-39: "Calm confirm card. Language is about access
+ * ending, not the person." The server refuses yourself, the last Oversight
+ * admin, an SSO-managed team, and a restore past the seats - each with its
+ * own message, which is shown as it stands.
+ *
+ * LEARNING SUPPORT IS ONE PERMISSION ON THE PERSON'S RECORD (SCRUM-247; D03b,
+ * design 9d0ff6b): a toggle in their access sheet, where the "SENCo / Learning
+ * Support" scope used to be ticked - the backend now gives and takes that
+ * scope with the role. Your own row says whether you hold it, and offers
+ * nothing to press. See `LearningSupportLine`.
+ *
+ * (Two more used to be listed. The SCHOOL NAME was never missing - the school
+ * record this screen already reads for the band carries it - and the seat
+ * allowance now follows that band. Editing an admin's access shipped on 30
+ * Sep - see `EditAccess`.)
  */
 
 const CARD = "rounded-xl bg-nevo-cream-elevated shadow-[0_2px_8px_rgba(0,0,0,0.06)]";
@@ -64,10 +90,17 @@ function longDate(iso: string): string {
 
 type SendPhase = "idle" | "sending" | "sent";
 
-function ScopePill({ label }: { label: string }) {
+function ScopePill({ label, locked = false }: { label: string; locked?: boolean }) {
   return (
-    <span className="inline-flex items-center rounded-full bg-nevo-violet/24 px-[11px] py-1 text-[11.5px] font-semibold text-nevo-navy">
+    <span className="inline-flex items-center gap-1 rounded-full bg-nevo-violet/24 px-[11px] py-1 text-[11.5px] font-semibold text-nevo-navy">
+      {locked ? (
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <rect x="5" y="11" width="14" height="10" rx="2" />
+          <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+        </svg>
+      ) : null}
       {label}
+      {locked ? <span className="sr-only"> (locked)</span> : null}
     </span>
   );
 }
@@ -81,19 +114,28 @@ export function AdminTeamView() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [inviting, setInviting] = useState(false);
-  /*
-   * The seat allowance follows the school's BAND, which onboarding recorded
-   * and quoted to them ("Mid-Market comes with 10 admin seats"). It was a
-   * hardcoded five for every school - see `adminScopes.ts`. Null means we
-   * could not read it, and then nothing is asserted and nothing is blocked.
+  /** The admin whose access is being edited, if any. */
+  const [editing, setEditing] = useState<TeamMember | null>(null);
+  /**
+   * The allowance as the SERVER states it (8 Oct): limit, used, remaining,
+   * overrides included. Null fields mean an older answer carried none, and
+   * then nothing about seats is asserted.
    */
-  const [seats, setSeats] = useState<number | null>(null);
+  const [seatInfo, setSeatInfo] = useState<Omit<AdminTeam, "members">>({
+    seatLimit: null,
+    seatsUsed: null,
+    seatsRemaining: null,
+  });
+  /** D03 names the school - "can administer Brightgate Academy". */
+  const [school, setSchool] = useState<string | null>(null);
+  /** Who holds Learning Support; null asserts nothing about anyone. */
+  const { holders: ls, setHolders: setLs } = useLearningSupport();
 
   useEffect(() => {
     schoolApi
       .get()
-      .then((sc) => setSeats(adminSeatAllowance(readOnboarding(sc).band)))
-      .catch(() => setSeats(null));
+      .then((sc) => setSchool(sc.name?.trim() || null))
+      .catch(() => setSchool(null));
   }, []);
 
   // No synchronous setState in the effect body (react-hooks/set-state-in-effect):
@@ -101,8 +143,9 @@ export function AdminTeamView() {
   const fetchTeam = useCallback(() => {
     teamApi
       .list()
-      .then((rows) => {
-        setTeam(rows);
+      .then(({ members, ...seats }) => {
+        setTeam(members);
+        setSeatInfo(seats);
         setPhase("ready");
       })
       .catch((err: unknown) => setPhase(failureKind(err)));
@@ -152,11 +195,19 @@ export function AdminTeamView() {
         )}
 
         {phase === "ready" && team.length <= 1 && (
-          <JustYou member={team[0]} onInvite={() => setInviting(true)} />
+          <JustYou member={team[0]} school={school} ls={ls} onInvite={() => setInviting(true)} />
         )}
 
         {phase === "ready" && team.length > 1 && (
-          <TeamList team={team} seats={seats} onInvite={() => setInviting(true)} />
+          <TeamList
+            team={team}
+            seats={seatInfo}
+            school={school}
+            onInvite={() => setInviting(true)}
+            onEdit={setEditing}
+            onChanged={fetchTeam}
+            ls={ls}
+          />
         )}
       </div>
 
@@ -172,9 +223,29 @@ export function AdminTeamView() {
         */}
       {inviting && (
         <InvitePanel
+          atLimit={seatInfo.seatsRemaining !== null && seatInfo.seatsRemaining <= 0}
+          seatLimit={seatInfo.seatLimit}
           onCancel={() => setInviting(false)}
           onSent={() => {
             setInviting(false);
+            retry();
+          }}
+        />
+      )}
+
+      {editing && (
+        <EditAccessPanel
+          member={editing}
+          name={displayName(editing)}
+          ls={ls}
+          onLs={(next) => {
+            setLs(next);
+            // The senco scope moved with the role: the row's pills re-read.
+            fetchTeam();
+          }}
+          onCancel={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
             retry();
           }}
         />
@@ -183,7 +254,7 @@ export function AdminTeamView() {
   );
 }
 
-function Heading({ count }: { count: number | null }) {
+function Heading({ count, school = null }: { count: number | null; school?: string | null }) {
   return (
     <>
       <h2 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
@@ -191,12 +262,19 @@ function Heading({ count }: { count: number | null }) {
       </h2>
       {count !== null && (
         <p className="mt-1.5 text-[15.5px] leading-[1.55] text-nevo-near-black/60">
-          {/* The team response carries no school name - see the docblock. */}
-          {`${count} ${count === 1 ? "person" : "people"} can administer this school`}
+          {`${count} ${count === 1 ? "person" : "people"} can administer ${school ?? "this school"}`}
         </p>
       )}
     </>
   );
+}
+
+/**
+ * At the allowance, in D03's terms: the seats are in use, and another is added
+ * at no charge on request - which is made from the Admin Team page.
+ */
+function limitLine(limit: number | null): string {
+  return `All ${limit === null ? "your" : seatWords(limit)} admin accounts are in use, so this invitation can't be sent yet. Request another account from the Admin Team page - it's added at no charge.`;
 }
 
 function SeatsLine({ used, seats }: { used: number; seats: number | null }) {
@@ -231,18 +309,68 @@ function InviteButton({
   );
 }
 
-function MemberRow({ m, last }: { m: TeamMember; last: boolean }) {
+function MemberRow({
+  m,
+  last,
+  you = false,
+  onEdit,
+  onChanged,
+  ls = null,
+  me = null,
+}: {
+  m: TeamMember;
+  last: boolean;
+  /** The signed-in admin's own row - D03's grey "You" beside the name. */
+  you?: boolean;
+  /** Absent where this admin's access cannot be edited from here. */
+  onEdit?: () => void;
+  /** Access was removed or restored: the team is read again. */
+  onChanged?: () => void;
+  /** Who holds Learning Support, or null when that is not known. */
+  ls?: LearningSupportHolders | null;
+  me?: string | null;
+}) {
   const name = displayName(m);
-  // Anything other than an active account reads as still-pending; the API
-  // types `status` as a bare string, so this stays a loose check.
-  const pending = m.status.toLowerCase() !== "active";
+  const { writesPaused } = useSetupGate();
+  const [confirming, setConfirming] = useState(false);
+  const [working, setWorking] = useState(false);
+  const [refusal, setRefusal] = useState<string | null>(null);
+  const [now] = useState(() => Date.now());
+  const seen = activeLine(m.lastActiveAt, now);
+
+  const change = (write: (id: string) => Promise<unknown>) => {
+    setWorking(true);
+    setRefusal(null);
+    write(m.userId)
+      .then(() => {
+        setConfirming(false);
+        onChanged?.();
+      })
+      .catch((err: unknown) =>
+        setRefusal(
+          // SCRUM-248: deactivating the final Learning Support holder is
+          // refused, and said as what happened and what to do.
+          refusedWith(err, LAST_LEARNING_SUPPORT_HOLDER)
+            ? lastHolderAccessLine(name)
+            : (err instanceof ApiError && apiErrorMessage(err.detail)) ||
+                "That didn't go through, and nothing has changed. Try again in a moment.",
+        ),
+      )
+      .finally(() => setWorking(false));
+  };
+  /*
+   * THE SPEC'S THREE STATES, NOT "ACTIVE OR NOT". This read anything other
+   * than `active` as still-pending, so a DEACTIVATED admin wore the violet
+   * "Invited" pill - telling the proprietor someone they had removed was on
+   * their way in. The spec's enum is active | invited | deactivated; a status
+   * outside it carries no pill rather than a guessed one.
+   */
+  const status = m.status.toLowerCase();
+  const pending = status === "invited";
+  const deactivated = status === "deactivated";
   return (
-    <div
-      className={cn(
-        "flex items-center gap-[13px] px-[22px] py-[18px]",
-        !last && "border-b border-nevo-near-black/7",
-      )}
-    >
+    <div className={cn(!last && "border-b border-nevo-near-black/7")}>
+    <div className="flex items-center gap-[13px] px-[22px] py-[18px]">
       <span className="flex size-[38px] shrink-0 items-center justify-center rounded-full bg-nevo-navy/10 text-[12.5px] font-semibold text-nevo-navy">
         {initialsFor(name, m.email)}
       </span>
@@ -251,6 +379,16 @@ function MemberRow({ m, last }: { m: TeamMember; last: boolean }) {
           <span className="truncate text-[15px] font-semibold text-nevo-near-black">
             {name}
           </span>
+          {you ? (
+            <span className="shrink-0 rounded-full bg-nevo-near-black/7 px-2 py-0.5 text-[10.5px] font-semibold text-nevo-near-black/50">
+              You
+            </span>
+          ) : null}
+          {m.founding ? (
+            <span className="shrink-0 rounded-full bg-nevo-navy/12 px-2 py-0.5 text-[10.5px] font-semibold text-nevo-navy">
+              Founding
+            </span>
+          ) : null}
         </span>
         {m.email && (
           <span className="truncate text-[13px] text-nevo-near-black/55">
@@ -259,7 +397,7 @@ function MemberRow({ m, last }: { m: TeamMember; last: boolean }) {
         )}
         <span className="mt-0.5 flex flex-wrap gap-[6px]">
           {orderScopes(m.scopes).map((s) => (
-            <ScopePill key={s} label={scopeName(s)} />
+            <ScopePill key={s} label={scopeName(s)} locked={Boolean(m.founding) && s === "oversight"} />
           ))}
           {m.scopes.length === 0 && (
             <span className="text-[12.5px] text-nevo-near-black/45">
@@ -267,12 +405,106 @@ function MemberRow({ m, last }: { m: TeamMember; last: boolean }) {
             </span>
           )}
         </span>
+        {/* Not for an invitation still open: there is nobody to hold it yet. */}
+        {/* D03b: your own record is status only. Anyone else's is changed
+            in their access sheet, beside their other permissions. */}
+        {ls && you ? (
+          <LearningSupportLine
+            className="mt-2 max-w-[460px] rounded-[10px] bg-nevo-cream px-[15px] py-[11px]"
+            person={{ userId: m.userId, name }}
+            holders={ls}
+            you
+            me={me}
+            canGive={false}
+            canRemove={false}
+            onChange={() => {}}
+          />
+        ) : null}
       </span>
       {pending && (
         <span className="shrink-0 rounded-full bg-nevo-violet/24 px-[11px] py-1 text-[12px] font-semibold text-nevo-navy">
           Invited
         </span>
       )}
+      {deactivated && (
+        <span className="shrink-0 rounded-full bg-nevo-near-black/8 px-[11px] py-1 text-[12px] font-semibold text-nevo-near-black/60">
+          Deactivated
+        </span>
+      )}
+      {seen && !pending && !deactivated ? (
+        <span className="shrink-0 text-[12.5px] text-nevo-near-black/50">{seen}</span>
+      ) : null}
+      {onEdit && !deactivated ? (
+        <button
+          type="button"
+          onClick={onEdit}
+          disabled={writesPaused}
+          className="shrink-0 cursor-pointer text-[13.5px] font-semibold text-nevo-navy hover:underline disabled:cursor-not-allowed disabled:text-nevo-near-black/45 disabled:no-underline"
+        >
+          Edit access
+        </button>
+      ) : null}
+      {/* Never on your own row, and never the founder's: their Oversight is
+          the school's guarantee it cannot lock itself out. */}
+      {onChanged && !you && !m.founding && !deactivated ? (
+        <button
+          type="button"
+          onClick={() => {
+            setRefusal(null);
+            setConfirming((c) => !c);
+          }}
+          disabled={writesPaused || working}
+          className="shrink-0 cursor-pointer text-[13.5px] font-semibold text-nevo-near-black/60 hover:underline disabled:cursor-not-allowed disabled:opacity-50 disabled:no-underline"
+        >
+          Remove access
+        </button>
+      ) : null}
+      {onChanged && deactivated ? (
+        <button
+          type="button"
+          onClick={() => change(teamApi.restore)}
+          disabled={writesPaused || working}
+          className="shrink-0 cursor-pointer text-[13.5px] font-semibold text-nevo-navy hover:underline disabled:cursor-not-allowed disabled:opacity-50 disabled:no-underline"
+        >
+          {working ? "Restoring…" : "Restore access"}
+        </button>
+      ) : null}
+    </div>
+      {m.founding ? (
+        <p className="m-0 -mt-2 px-[22px] pb-4 pl-[73px] text-[12.5px] leading-[1.5] text-nevo-near-black/55">
+          {FOUNDING_LOCK_LINE}
+        </p>
+      ) : null}
+      {/* SCRUM-39's calm confirm card: about access ending, not the person. */}
+      {confirming ? (
+        <div className="mx-[22px] mb-4 rounded-[10px] bg-nevo-violet/[0.18] px-4 py-3">
+          <p className="m-0 text-[13.5px] leading-[1.5] text-nevo-navy">
+            {`${name} will no longer be able to open the admin areas. Their account stays, and nothing they set up is lost.`}
+          </p>
+          <div className="mt-3 flex gap-2.5">
+            <button
+              type="button"
+              onClick={() => change(teamApi.deactivate)}
+              disabled={working}
+              className="cursor-pointer rounded-lg bg-nevo-navy px-4 py-2 text-[13.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-110 disabled:opacity-60"
+            >
+              {working ? "Removing…" : "Remove access"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirming(false)}
+              className="cursor-pointer rounded-lg px-4 py-2 text-[13.5px] font-semibold text-nevo-near-black/70 transition-colors hover:bg-nevo-near-black/[0.06]"
+            >
+              Keep
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {refusal ? (
+        <p role="status" className="m-0 mx-[22px] mb-4 text-[13px] leading-[1.5] text-nevo-near-black/70">
+          {refusal}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -280,14 +512,43 @@ function MemberRow({ m, last }: { m: TeamMember; last: boolean }) {
 function TeamList({
   team,
   seats,
+  school,
   onInvite,
+  onEdit,
+  onChanged,
+  ls,
 }: {
   team: TeamMember[];
-  /** The school's allowance, or null when it could not be read. */
-  seats: number | null;
+  /** The school's name, or null when its record could not be read. */
+  school: string | null;
+  /** The server's seat figures; null fields assert nothing. */
+  seats: Omit<AdminTeam, "members">;
   onInvite: () => void;
+  onEdit: (m: TeamMember) => void;
+  onChanged: () => void;
+  ls: LearningSupportHolders | null;
 }) {
-  const atAllowance = seats !== null && team.length >= seats;
+  /*
+   * WHO CAN ADMINISTER, AND WHO USES A SEAT: everyone not deactivated. A
+   * removed admin was counted in "N people can administer" and against the
+   * allowance, so a school could be told its seats were full by people who
+   * no longer have access.
+   */
+  const live = team.filter((m) => m.status.toLowerCase() !== "deactivated");
+  /** The signed-in admin, whose own row is not editable here. */
+  const [me] = useState(() => getSession()?.userId ?? null);
+  const supportEmail = useSupportEmail();
+  /*
+   * The server's count decides, not ours: it knows the limit, overrides
+   * included, and who it counts against it. Our own count of live members is
+   * only the fallback for an answer that carried no seat figures.
+   */
+  const limit = seats.seatLimit;
+  const used = seats.seatsUsed ?? live.length;
+  const atAllowance =
+    seats.seatsRemaining !== null
+      ? seats.seatsRemaining <= 0
+      : limit !== null && used >= limit;
   const [requested, setRequested] = useState<
     "idle" | "sending" | "sent" | "failed"
   >("idle");
@@ -298,7 +559,7 @@ function TeamList({
     feedbackApi
       .submit({
         type: "account_request",
-        note: `Requesting an additional admin account. All ${seats ?? team.length} admin accounts are in use.`,
+        note: `Requesting an additional admin account. All ${limit ?? used} admin accounts are in use.`,
         // Ops' first question about any request is which screen it came from.
         context: "/admin/team",
       })
@@ -310,7 +571,7 @@ function TeamList({
     <>
       <div className="flex items-start justify-between gap-6">
         <div className="min-w-0">
-          <Heading count={team.length} />
+          <Heading count={live.length} school={school} />
         </div>
         {/*
           * THE ACTION STAYS, ALWAYS. At the seat allowance this button was
@@ -326,16 +587,18 @@ function TeamList({
       <PausedNote className="mt-3" />
 
       <div className="mt-5 flex items-center justify-between gap-4">
-        <SeatsLine used={team.length} seats={seats} />
+        <SeatsLine used={used} seats={limit} />
       </div>
 
       {atAllowance && (
         <div className={cn(CARD, "mt-3 px-[26px] py-6")}>
           <h3 className="text-[16px] font-semibold text-nevo-near-black">
-            {`All ${seats} admin accounts are in use`}
+            {`All ${limit === null ? used : seatWords(limit)} admin accounts are in use`}
           </h3>
           <p className="mt-2 max-w-[60ch] text-sm leading-[1.6] text-nevo-near-black/66">
-            {`This school includes ${seats} admin accounts as standard.`}{" "}
+            {limit !== null
+              ? `${school ?? "This school"} includes ${seatWords(limit)} admin accounts as standard. `
+              : ""}
             Need another?
             We&rsquo;ll add it at no charge - just ask. Keeping the standing
             number small is a data-governance and security measure, not a
@@ -380,7 +643,7 @@ function TeamList({
                 </button>
                 <span className="text-[13px] text-nevo-near-black/55">
                   {requested === "failed"
-                    ? "That didn’t send. Nothing has changed — try again, or email support@nevolearning.com."
+                    ? `That didn’t send. Nothing has changed — try again, or email ${supportEmail}.`
                     : "Added at no charge, usually the same day. Admin accounts are always free."}
                 </span>
               </>
@@ -391,7 +654,19 @@ function TeamList({
 
       <div className={cn(CARD, "mt-3 overflow-hidden")}>
         {team.map((m, i) => (
-          <MemberRow key={m.userId} m={m} last={i === team.length - 1} />
+          <MemberRow
+            key={m.userId}
+            m={m}
+            last={i === team.length - 1}
+            you={m.userId === me}
+            // Not your own row: taking your own Oversight away would lose the
+            // page you are standing on. The founder's Oversight is locked in
+            // the sheet itself - see `EditAccessPanel`.
+            onEdit={m.userId === me ? undefined : () => onEdit(m)}
+            onChanged={onChanged}
+            ls={ls}
+            me={me}
+          />
         ))}
       </div>
     </>
@@ -400,24 +675,35 @@ function TeamList({
 
 function JustYou({
   member,
+  school,
+  ls,
   onInvite,
 }: {
   member: TeamMember | undefined;
+  school: string | null;
+  ls: LearningSupportHolders | null;
   onInvite: () => void;
 }) {
+  const [me] = useState(() => getSession()?.userId ?? null);
   return (
     <>
       <h2 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
         Admin Team
       </h2>
       <p className="mt-1.5 max-w-[60ch] text-[15.5px] leading-[1.55] text-nevo-near-black/60">
-        It&rsquo;s just you for now &ndash; you have full oversight of this
-        school.
+        It&rsquo;s just you for now &ndash; you have full oversight of{" "}
+        {school ?? "this school"}.
       </p>
 
       {member && (
         <div className={cn(CARD, "mt-5 overflow-hidden")}>
-          <MemberRow m={member} last />
+          <MemberRow
+            m={member}
+            last
+            you={member.userId === me}
+            ls={ls}
+            me={me}
+          />
         </div>
       )}
 
@@ -439,9 +725,14 @@ function JustYou({
 }
 
 function InvitePanel({
+  atLimit,
+  seatLimit,
   onCancel,
   onSent,
 }: {
+  /** The server says no seat is left: say so before anything is typed. */
+  atLimit: boolean;
+  seatLimit: number | null;
   onCancel: () => void;
   onSent: () => void;
 }) {
@@ -455,7 +746,32 @@ function InvitePanel({
   const [error, setError] = useState("");
 
   const count = on.size;
-  const valid = /.+@.+\..+/.test(email.trim()) && count > 0;
+  const valid = /.+@.+\..+/.test(email.trim()) && count > 0 && !atLimit;
+
+  /*
+   * ONE WAY OUT, THREE DOORS: the close button, the backdrop and Escape, as
+   * every other sheet in the console has them. There was no close button at
+   * all, and the backdrop closed the panel even mid-send.
+   *
+   * Never while the invitation is being created - the write is in flight and
+   * its answer carries the only copy of the activation link. And once it
+   * exists, leaving is "Done": the list refreshes to show the new admin.
+   */
+  const close = () => {
+    if (phase === "sending") return;
+    if (phase === "sent") onSent();
+    else onCancel();
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || phase === "sending") return;
+      if (phase === "sent") onSent();
+      else onCancel();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [phase, onSent, onCancel]);
 
   const send = () => {
     if (!valid || phase !== "idle") return;
@@ -475,8 +791,13 @@ function InvitePanel({
         setInvited(created);
         setPhase("sent");
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         setPhase("idle");
+        // The server's refusal past the allowance is not a fault to retry.
+        if (err instanceof ApiError && apiErrorCode(err.detail) === SEAT_LIMIT_REACHED) {
+          setError(limitLine(seatLimit));
+          return;
+        }
         /*
          * THE SYSTEM OWNS THE FAULT. "Check the address and try again" reads
          * as a correction to the admin, on a failure we have no reason to
@@ -493,18 +814,30 @@ function InvitePanel({
   return (
     <div
       className="fixed inset-0 z-50 flex justify-end bg-nevo-near-black/28 backdrop-blur-[0.4px] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
-      onClick={onCancel}
+      onClick={close}
     >
       <div
         role="dialog"
         aria-modal="true"
+        aria-busy={phase === "sending"}
         aria-label="Invite a new admin"
         onClick={(e) => e.stopPropagation()}
         className="h-full w-full max-w-[560px] overflow-y-auto bg-nevo-cream px-[38px] py-[34px] shadow-[0_0_48px_rgba(0,0,0,0.22)] motion-safe:animate-in motion-safe:slide-in-from-right motion-safe:duration-200"
       >
-        <h2 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
-          Invite a new admin
-        </h2>
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
+            Invite a new admin
+          </h2>
+          <button
+            type="button"
+            onClick={close}
+            disabled={phase === "sending"}
+            aria-label="Close"
+            className="flex size-[34px] flex-none cursor-pointer items-center justify-center rounded-lg text-nevo-near-black transition-colors hover:bg-nevo-near-black/[0.06] disabled:cursor-default disabled:opacity-40"
+          >
+            <CloseIcon />
+          </button>
+        </div>
         <p className="mt-1.5 text-[15.5px] leading-[1.55] text-nevo-near-black/60">
           {/*
             * WAS: "They'll get an email to set a password and join."
@@ -538,55 +871,13 @@ function InvitePanel({
         <span className="mt-7 block text-[13px] font-semibold text-nevo-near-black/70">
           What can they access?
         </span>
-        <div className="mt-2.5 flex flex-col gap-2">
-          {SCOPE_CATALOGUE.map((s) => {
-            const checked = on.has(s.scope);
-            return (
-              <label
-                key={s.scope}
-                className="flex cursor-pointer items-center gap-[13px] rounded-[10px] bg-nevo-cream-elevated px-[15px] py-[13px]"
-              >
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  disabled={phase !== "idle"}
-                  onChange={() =>
-                    setOn((prev) => {
-                      const next = new Set(prev);
-                      if (next.has(s.scope)) next.delete(s.scope);
-                      else next.add(s.scope);
-                      return next;
-                    })
-                  }
-                  className="sr-only"
-                />
-                <span
-                  aria-hidden
-                  className={cn(
-                    "flex size-[22px] shrink-0 items-center justify-center rounded-[6px]",
-                    checked
-                      ? "bg-nevo-navy text-nevo-cream"
-                      : "border-2 border-nevo-near-black/24",
-                  )}
-                >
-                  {checked && (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                      <path d="M5 12.5l4.5 4.5L19 7.5" />
-                    </svg>
-                  )}
-                </span>
-                <span className="flex min-w-0 flex-col">
-                  <span className="text-[14.5px] font-semibold text-nevo-near-black">
-                    {s.name}
-                  </span>
-                  <span className="mt-px text-[13px] text-nevo-near-black/58">
-                    {s.desc}
-                  </span>
-                </span>
-              </label>
-            );
-          })}
-        </div>
+        <ScopeChecklist on={on} setOn={setOn} disabled={phase !== "idle"} />
+
+        {atLimit && !error ? (
+          <p className="mt-4 rounded-[10px] bg-nevo-violet/16 px-4 py-3 text-[13.5px] leading-[1.5] text-nevo-near-black/78">
+            {limitLine(seatLimit)}
+          </p>
+        ) : null}
 
         {error && (
           <p className="mt-4 rounded-[10px] bg-nevo-violet/16 px-4 py-3 text-[13.5px] leading-[1.5] text-nevo-near-black/78">

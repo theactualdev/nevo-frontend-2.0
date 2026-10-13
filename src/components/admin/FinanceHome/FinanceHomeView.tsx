@@ -8,7 +8,7 @@ import {
   type Subscription,
   type UpcomingCharge,
 } from "@/lib/api/billing";
-import { formatMoney } from "@/lib/money";
+import { formatMoney, formatVatRate, isAmount } from "@/lib/money";
 import { longDate } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import { NoAccess, failureKind } from "../NoAccess";
@@ -26,11 +26,13 @@ import { financeHomeRows, overdueCount } from "./financeHomeRows";
  * because a supplementary list timed out, and it must not imply everything is
  * settled because it could not check.
  *
- * NO VAT RATE, deliberately, even though the frame prints "+ 7.5% VAT".
- * `PricingResponse.vatRate` is a bare string with no example, so "7.5" and
- * "0.075" are indistinguishable and differ by 100x on screen. Billing already
- * shows the AMOUNT for that reason and this screen agrees with it rather than
- * with the frame. See the TODO in `lib/api/billing.ts`.
+ * THE HEADLINE IS THE TOTAL WITH VAT, AND SAYS SO. It is `totalWithVat`, the
+ * same figure Billing's cost sheet leads with, so a bursar sees one number on
+ * both screens. Unlabelled, it sat beside "Billed on 387 students at ₦150,000
+ * each" and the sum did not come out - the per-student rate is before VAT. So
+ * the figure carries "incl. VAT at 7.5%" and the rate line says "before VAT".
+ * The rate is the server's, through `formatVatRate` (settled 15 Sep as a
+ * percentage); one it cannot read shows as plain "incl. VAT", never a guess.
  *
  * NO RED. Overdue billing never gates access, so the loudest state here is
  * violet and the copy says access continues.
@@ -58,6 +60,12 @@ const CADENCE: Record<string, string> = {
   annual: "per year",
   per_term: "per term",
 };
+
+/** The headline's label: the rate as served, or none rather than a guess. */
+function vatIncluded(vatRate: string | null | undefined): string {
+  const rate = formatVatRate(vatRate);
+  return rate ? `incl. VAT at ${rate}` : "incl. VAT";
+}
 
 export function FinanceHomeView() {
   const [phase, setPhase] = useState<Phase>("loading");
@@ -141,6 +149,11 @@ export function FinanceHomeView() {
                   {CADENCE[subscription.pricing.pricingPlan] ?? ""}
                 </span>
               </div>
+              {isAmount(subscription.pricing.totalWithVat) ? (
+                <p className="m-0 mt-1 text-[12.5px] text-nevo-near-black/50">
+                  {vatIncluded(subscription.pricing.vatRate)}
+                </p>
+              ) : null}
 
               {/* THE STATUS LINE IS OMITTED when the invoice list did not
                   answer. "Settled and up to date" off an unread list is the
@@ -172,7 +185,7 @@ export function FinanceHomeView() {
               )}
 
               <p className="mt-3 max-w-[62ch] text-[14.5px] leading-[1.55] text-nevo-near-black/62">
-                {`Billed on ${subscription.pricing.studentCount} student${subscription.pricing.studentCount === 1 ? "" : "s"} at ${formatMoney(subscription.pricing.perStudentRate, subscription.pricing.currency)} each.`}
+                {`Billed on ${subscription.pricing.studentCount} student${subscription.pricing.studentCount === 1 ? "" : "s"} at ${formatMoney(subscription.pricing.perStudentRate, subscription.pricing.currency)} each, before VAT.`}
                 {longDate(subscription.contractEnd)
                   ? ` Your contract runs to ${longDate(subscription.contractEnd)}.`
                   : ""}

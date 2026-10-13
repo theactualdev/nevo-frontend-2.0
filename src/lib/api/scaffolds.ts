@@ -59,15 +59,25 @@ export interface ScaffoldAttempt {
   studentId: string;
   conceptId: string;
   /**
-   * **NOTHING IN A LESSON CARRIES ONE, which is why no attempt is posted yet.**
-   * `AssessmentQuestion` has a prompt, options with ids and a `correctId`, and
-   * no id of its own. Deriving one from the question's position would key the
-   * server's per-problem history to an array index that moves the moment
-   * content is re-authored, and deriving one from `correctId` would key it to
-   * the answer. Raised 23 Sep; see the module note on `attempt`.
+   * The checkpoint id - `AssessmentQuestion.id`, which the question carried
+   * all along (see its note). Never a position in an array, which moves when
+   * content is re-authored, and never `correctId`, which is the answer.
    */
   problemId: string;
-  responseCorrect: boolean;
+  /** Lets the server find the question it marks against. */
+  lessonId?: string | null;
+  segmentId?: string | null;
+  /**
+   * The child's own pick (B27), at most 400 characters. The server marks it
+   * where the attempt names a lesson segment whose calculation it holds.
+   */
+  answer?: string | null;
+  /**
+   * The device's verdict. Optional since B27, and the contract still takes it
+   * where the server cannot mark the answer itself - see `scaffoldAttemptFor`
+   * for why the after-lesson check is one of those places.
+   */
+  responseCorrect?: boolean | null;
   scaffoldIntensity?: ScaffoldIntensity | null;
   responseTimeMs?: number | null;
   expectedResponseTimeMs?: number | null;
@@ -125,12 +135,9 @@ export const scaffoldsApi = {
     ),
 
   /**
-   * Report one attempt and receive the decision.
-   *
-   * **NOT CALLED YET, and the reason is `problemId`** - it is required and
-   * nothing in a lesson has one. See `ScaffoldAttempt.problemId`. Wired here so
-   * the call exists the moment an identifier does, rather than the endpoint
-   * sitting unreachable for another fortnight.
+   * Report one attempt and receive the decision. Called once per question of
+   * the after-lesson check, keyed on the checkpoint's own id - see
+   * `ScaffoldAttempt.problemId` and `lib/lessons/scaffoldAttempt`.
    */
   attempt: (body: ScaffoldAttempt) =>
     api.post<ScaffoldDecision>("/api/intelligence/scaffolds/attempt", body),

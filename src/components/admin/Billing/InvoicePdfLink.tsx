@@ -1,7 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { billingApi, invoicePdfPath, type Invoice } from "@/lib/api/billing";
+import {
+  billingApi,
+  externalPdfUrl,
+  invoicePdfPath,
+  type Invoice,
+} from "@/lib/api/billing";
 
 /**
  * The invoice PDF, fetched with the token a plain link cannot carry.
@@ -19,28 +24,38 @@ import { billingApi, invoicePdfPath, type Invoice } from "@/lib/api/billing";
  * A pre-signed link to some other host still works as a plain link and is left
  * as one - `invoicePdfPath` returns null for those.
  *
+ * NO DOCUMENT, NO LINK. An empty or malformed `pdfUrl` also returned null from
+ * `invoicePdfPath`, and fell through to `<a href="">` - which reloads the page
+ * the admin is on. QA met exactly that on 10 Oct. Nothing renders now unless
+ * there is a document to open.
+ *
  * The download is an anchor click rather than `window.open`, because a popup
  * opened after an await is exactly what a popup blocker eats.
  */
 export function InvoicePdfLink({
   invoice,
   className,
+  label = "PDF",
 }: {
   invoice: Invoice;
   className?: string;
+  /** "PDF" in a list row; the detail page's button says "Download PDF". */
+  label?: string;
 }) {
   const [state, setState] = useState<"" | "loading" | "failed">("");
   const path = invoicePdfPath(invoice.pdfUrl);
 
   if (!path) {
+    const external = externalPdfUrl(invoice.pdfUrl);
+    if (!external) return null;
     return (
       <a
-        href={invoice.pdfUrl}
+        href={external}
         target="_blank"
         rel="noopener noreferrer"
         className={className}
       >
-        PDF
+        {label}
       </a>
     );
   }
@@ -68,7 +83,7 @@ export function InvoicePdfLink({
   return (
     <span className="flex shrink-0 flex-col items-end">
       <button type="button" onClick={fetchIt} className={className}>
-        {state === "loading" ? "Fetching…" : state === "failed" ? "Try again" : "PDF"}
+        {state === "loading" ? "Fetching…" : state === "failed" ? "Try again" : label}
       </button>
       {state === "failed" && (
         <span className="mt-0.5 text-[12px] text-nevo-near-black/55">

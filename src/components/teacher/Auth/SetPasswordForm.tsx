@@ -6,6 +6,15 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { authApi, teamApi } from "@/lib/api";
 import { invitesApi } from "@/lib/api/invites";
+import { ApiError } from "@/lib/api/client";
+import {
+  DOOR_HREF,
+  DOOR_LABEL,
+  doorForRole,
+  knownRole,
+} from "@/lib/auth/consoleDoor";
+import { clearSession, setSession } from "@/lib/auth/session";
+import { AuthWordmark, ContactFooter } from "./AuthChrome";
 
 /**
  * Set Password (`Nevo Set Password`) - one component behind two flows:
@@ -34,10 +43,29 @@ import { invitesApi } from "@/lib/api/invites";
 
 const SUCCESS_HOLD_MS = 1600;
 
+/** The staff consoles this form can finish in. */
+type StaffDoor = "teacher" | "admin";
+
+/**
+ * Where each console starts - the same homes `proxy.ts` sends a signed-in
+ * teacher or admin to. `/admin` picks the persona home from the caller's
+ * scopes itself.
+ */
+const CONSOLE_HOME: Record<StaffDoor, string> = {
+  teacher: "/teacher/dashboard",
+  admin: "/admin",
+};
+
+const RESET_HREF: Record<StaffDoor, string> = {
+  teacher: "/auth/teacher/reset",
+  admin: "/auth/admin/reset",
+};
+
 const REQUIREMENTS = [
   { label: "At least 8 characters", test: (p: string) => p.length >= 8 },
   { label: "Contains a letter", test: (p: string) => /[a-zA-Z]/.test(p) },
-  { label: "At least one number", test: (p: string) => /[0-9]/.test(p) },
+  // The frame's words, matching the line above it.
+  { label: "Contains a number", test: (p: string) => /[0-9]/.test(p) },
 ];
 
 /** Display only - it never gates the button, the three requirements do. */
@@ -120,12 +148,30 @@ export function SetPasswordForm({
   mode,
   email,
   school,
+  door = "teacher",
+  signInHref,
+  resetHref,
 }: {
   mode: "activation" | "reset";
   /** Activation only: the invite names the account. A reset link does not,
    *  and nothing resolves an opaque reset token to an address. */
   email?: string;
   school?: string;
+  /**
+   * WHOSE FORM THIS IS - it was the teacher's whatever route rendered it.
+   *
+   * Every destination and one sentence were hardcoded to the teacher console,
+   * so an invited admin was told "Your teacher account is active" and sent to
+   * the teacher door, and an admin's reset finished there too. The admin
+   * routes say so now. It decides where a failed sign-in hop and a reset
+   * finish; a successful sign-in goes by the role the server returned, which
+   * is the better answer when there is one.
+   */
+  door?: StaffDoor;
+  /** Where "sign in" means on this route. Defaults to the door's own. */
+  signInHref?: string;
+  /** Where an expired reset link recovers. Defaults to the door's own. */
+  resetHref?: string;
 }) {
   const router = useRouter();
   const [password, setPassword] = useState("");
@@ -134,6 +180,10 @@ export function SetPasswordForm({
   const [phase, setPhase] = useState<"form" | "saving" | "done">("form");
   const [error, setError] = useState("");
   const [landing, setLanding] = useState<"console" | "signin">("console");
+  /** The console they turned out to belong to - what the success line names. */
+  const [arrivedAs, setArrivedAs] = useState<StaffDoor>(door);
+  const signInAt = signInHref ?? DOOR_HREF[door];
+  const resetAt = resetHref ?? RESET_HREF[door];
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
@@ -149,6 +199,26 @@ export function SetPasswordForm({
   const inviteEmail = params.get("email") ?? email ?? "";
   /** Set by the join landing: this token belongs to the product-access flow. */
   const viaJoin = params.get("via") === "join";
+  /*
+   * The school a join link is from, for the eyebrow the screen already draws
+   * (T209). The landing knew it and passed nothing on; the link is public and
+   * says it again.
+   */
+  const [joinSchool, setJoinSchool] = useState<string | null>(null);
+  useEffect(() => {
+    if (!viaJoin || !token || school) return;
+    let current = true;
+    invitesApi
+      .lookupJoin(token)
+      .then((found) => {
+        if (current) setJoinSchool(found.schoolName ?? null);
+      })
+      .catch(() => {});
+    return () => {
+      current = false;
+    };
+  }, [viaJoin, token, school]);
+  const shownSchool = school ?? joinSchool;
   const activation = mode === "activation";
   const met = REQUIREMENTS.map((r) => r.test(password));
   const allMet = met.every(Boolean);
@@ -157,13 +227,13 @@ export function SetPasswordForm({
   const s = strength(password);
 
   /** Where the success screen is heading - the console needs a live session. */
-  const finish = (next: "console" | "signin") => {
+  const finish = (next: "console" | "signin", as: StaffDoor = door) => {
     setLanding(next);
+    setArrivedAs(as);
     setPhase("done");
     timers.current.push(
       setTimeout(
-        () =>
-          router.push(next === "console" ? "/teacher/dashboard" : "/auth/teacher"),
+        () => router.push(next === "console" ? CONSOLE_HOME[as] : signInAt),
         SUCCESS_HOLD_MS,
       ),
     );
@@ -184,12 +254,29 @@ export function SetPasswordForm({
       }
       try {
         await authApi.completePasswordReset({ token, password });
-      } catch {
-        // A rejected reset token is almost always an expired one, and that
-        // screen already offers a way forward.
-        router.push("/auth/teacher/reset?expired=1");
+      } catch (err: unknown) {
+        /*
+         * ONLY AN ANSWER ABOUT THE LINK IS "EXPIRED". Every failure went to
+         * the expired screen - a dropped connection and a server fault
+         * included - so a teacher whose link was fine was told to request a
+         * new one. A 4xx is the server reading the token and refusing it;
+         * no status, or a 5xx, is ours, and the same link will still work.
+         * The request screen already draws this line between the two.
+         */
+        const status = err instanceof ApiError ? err.status : 0;
+        if (status >= 400 && status < 500) {
+          router.push(`${resetAt}?expired=1`);
+          return;
+        }
+        setPhase("form");
+        setError(
+          "We couldn’t reach Nevo just now, so your password hasn’t changed. Try again in a moment.",
+        );
         return;
       }
+      // Whoever was signed in here is not who the door should greet: the
+      // sign-in screen bounces a live staff session straight into its console.
+      clearSession();
       finish("signin");
       return;
     }
@@ -219,9 +306,11 @@ export function SetPasswordForm({
      *
      * `?via=join` is set by the join landing and says which this is.
      */
+    /** A join link answers with a session of its own (16 Sep); an invitation does not. */
+    let joined: Awaited<ReturnType<typeof invitesApi.acceptJoin>>["session"] = null;
     try {
       if (viaJoin) {
-        await invitesApi.acceptJoin(token, { password });
+        joined = (await invitesApi.acceptJoin(token, { password })).session ?? null;
       } else {
         await teamApi.acceptInvitation({
           invitationToken: token,
@@ -234,6 +323,40 @@ export function SetPasswordForm({
         "We couldn't activate your account with this link. It may have expired, and your school admin can send a new one.",
       );
       return;
+    }
+
+    /*
+     * END WHATEVER SESSION THIS DEVICE WAS HOLDING.
+     *
+     * It belongs to somebody else - the account that just activated has never
+     * had one. Left in place, every route below that ends at the sign-in door
+     * was bounced by `proxy.ts` into the PREVIOUS teacher's console, because
+     * a signed-in teacher has no use for their own door. On a shared staffroom
+     * machine that is a new colleague landing in someone else's classes. The
+     * student hand-over ends the session the same way, and for the same reason.
+     */
+    clearSession();
+
+    /*
+     * THE JOIN LINK ALREADY SIGNED THEM IN (T209). `JoinAcceptedResponse`
+     * carries a session, and it was thrown away - so every teacher who joined
+     * by link was then signed in a second time with the address on the URL,
+     * and sent to the door when the link carried none. Kept, it is the
+     * console straight away, whatever the link carries.
+     */
+    if (joined) {
+      const role = knownRole(joined.role);
+      const as = doorForRole(role);
+      if (role && (as === "teacher" || as === "admin")) {
+        setSession({
+          token: joined.accessToken,
+          expiresAt: joined.expiresAt,
+          userId: joined.userId,
+          role,
+        });
+        finish("console", as);
+        return;
+      }
     }
 
     // The account is active from here on. Accepting returns no session
@@ -249,8 +372,17 @@ export function SetPasswordForm({
       return;
     }
     try {
-      await authApi.loginPassword({ email: inviteEmail, password });
-      finish("console");
+      const login = await authApi.loginPassword({ email: inviteEmail, password });
+      // The role the server returned decides the console, not the route: an
+      // admin invite from before the admin route existed still lands here.
+      const as = doorForRole(knownRole(login.role));
+      if (as === "teacher" || as === "admin") {
+        finish("console", as);
+        return;
+      }
+      // No staff console serves this role; do not carry its session anywhere.
+      clearSession();
+      finish("signin");
     } catch {
       finish("signin");
     }
@@ -259,20 +391,21 @@ export function SetPasswordForm({
   if (phase === "done") {
     return (
       <div className="flex w-full max-w-[440px] flex-col items-center px-6 text-center">
+        <AuthWordmark />
         <span className="flex size-[72px] items-center justify-center rounded-full bg-nevo-navy motion-safe:animate-nevo-pop">
           <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#f7f1e6" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <path d="M5 12.5l4.5 4.5L19 7.5" />
           </svg>
         </span>
-        <h2 className="mt-[26px] text-[30px] font-semibold tracking-[-0.02em] text-nevo-near-black">
+        <h1 className="mt-[26px] text-[30px] font-semibold tracking-[-0.02em] text-nevo-near-black">
           {activation ? "You're all set" : "Password updated"}
-        </h2>
+        </h1>
         <p className="mt-3 text-[16px] leading-[1.55] text-nevo-near-black/70">
           {!activation
             ? "You can now sign in with your new password."
             : landing === "console"
-              ? "Your teacher account is active."
-              : "Your teacher account is active. Sign in to get started."}
+              ? `Your ${DOOR_LABEL[arrivedAs]} account is active.`
+              : `Your ${DOOR_LABEL[arrivedAs]} account is active. Sign in to get started.`}
         </p>
         <span className="mt-[26px] flex items-center gap-2.5 text-[13.5px] text-nevo-near-black/55">
           <span
@@ -289,15 +422,23 @@ export function SetPasswordForm({
   }
 
   return (
-    <div className="flex w-full max-w-[440px] flex-col items-stretch px-6">
-      {school && (
+    <form
+      noValidate
+      onSubmit={(e) => {
+        e.preventDefault();
+        void submit();
+      }}
+      className="flex w-full max-w-[440px] flex-col items-stretch px-6"
+    >
+      <AuthWordmark />
+      {shownSchool && (
         <span className="text-center text-[12.5px] font-semibold tracking-[0.14em] text-nevo-violet uppercase">
-          {school}
+          {shownSchool}
         </span>
       )}
-      <h2 className="mt-3.5 text-center text-[34px] leading-[1.15] font-semibold tracking-[-0.02em] text-nevo-near-black">
+      <h1 className="mt-3.5 text-center text-[34px] leading-[1.15] font-semibold tracking-[-0.02em] text-nevo-near-black">
         {activation ? "Create your password" : "Choose a new password"}
-      </h2>
+      </h1>
       <p className="mt-3 text-center text-[16px] leading-[1.55] text-nevo-near-black/70">
         {activation
           ? "One last thing before your dashboard. Choose a password you’ll remember."
@@ -344,7 +485,10 @@ export function SetPasswordForm({
               />
             ))}
           </div>
-          <span className="text-[12.5px] text-nevo-near-black/60">{s.label}</span>
+          {/* The frame's weight and colour: the label is read, not muted. */}
+          <span className="shrink-0 text-[12.5px] font-semibold text-nevo-navy">
+            {s.label}
+          </span>
         </div>
       )}
 
@@ -380,7 +524,23 @@ export function SetPasswordForm({
         }
       />
       {confirm.length > 0 && (
-        <p className="mt-[7px] text-[13px] text-nevo-near-black/60">
+        <p
+          className={cn(
+            "mt-[7px] inline-flex items-center gap-1.5 text-[13px] font-medium",
+            matches ? "text-nevo-navy" : "text-[#7c7ea8]",
+          )}
+        >
+          {matches ? (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M20 6L9 17l-5-5" />
+            </svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 8v4" />
+              <path d="M12 16h.01" />
+            </svg>
+          )}
           {matches ? "Passwords match" : "Passwords don't match yet"}
         </p>
       )}
@@ -430,11 +590,20 @@ export function SetPasswordForm({
         </label>
       )}
 
+      {/* The frame's violet callout, not a plain line. */}
       {!activation && (
-        <p className="mt-6 text-[13.5px] leading-[1.55] text-nevo-near-black/60">
-          For your security, saving a new password signs you out of Nevo on your
-          other devices.
-        </p>
+        <div className="mt-[22px] flex w-full items-start gap-2.5 rounded-[10px] bg-nevo-violet/16 px-[15px] py-[13px] text-left">
+          <span className="mt-px flex shrink-0 text-nevo-navy">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 11v5M12 8h.01" />
+            </svg>
+          </span>
+          <span className="text-[13.5px] leading-[1.5] text-nevo-near-black/78">
+            For your security, saving a new password signs you out of Nevo on
+            your other devices.
+          </span>
+        </div>
       )}
 
       {error && (
@@ -452,8 +621,7 @@ export function SetPasswordForm({
       )}
 
       <button
-        type="button"
-        onClick={() => void submit()}
+        type="submit"
         disabled={!canSubmit}
         className={cn(
           "mt-7 flex h-[54px] w-full items-center justify-center gap-2.5 rounded-[10px] text-[16px] font-semibold transition-[filter] duration-150",
@@ -479,13 +647,17 @@ export function SetPasswordForm({
       </button>
 
       {activation && (
-        <p className="mt-5 text-[13px] leading-[1.5] text-nevo-near-black/55">
+        <div className="mt-[22px] flex items-center justify-center gap-2 text-[13px] text-nevo-near-black/55">
+          <span className="flex text-nevo-navy">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M12 3l7 3v5c0 4.4-3 8.3-7 9.5C8 21.3 5 17.4 5 13V6z" />
+              <path d="M9.5 12.5l1.8 1.8 3.2-3.6" />
+            </svg>
+          </span>
           Your information is protected from the moment you sign in.
-        </p>
+        </div>
       )}
-      <p className="mt-2 text-[13px] leading-[1.5] text-nevo-near-black/55">
-        Having trouble? Contact your school administrator.
-      </p>
-    </div>
+      <ContactFooter className="mt-5" />
+    </form>
   );
 }

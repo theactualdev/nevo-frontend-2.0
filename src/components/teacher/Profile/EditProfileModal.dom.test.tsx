@@ -151,3 +151,72 @@ describe("changing the photo", () => {
     await waitFor(() => expect(onPhotoPicked).toHaveBeenCalledTimes(2));
   });
 });
+
+describe("saving (C20)", () => {
+  it("saves from Enter in a field, through the form its button submits", () => {
+    const onSave = vi.fn().mockResolvedValue(true);
+    render(<EditProfileModal profile={PROFILE} onCancel={vi.fn()} onSave={onSave} />);
+    const name = screen.getByLabelText("Full name") as HTMLInputElement;
+    const save = screen.getByRole("button", { name: "Save changes" }) as HTMLButtonElement;
+
+    expect(save.type).toBe("submit");
+    expect(save.form).toBe(name.form);
+    // Handled here, so the browser does not reload the page as well.
+    expect(fireEvent.submit(name.form!)).toBe(false);
+    expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not let Cancel submit it", () => {
+    render(<EditProfileModal profile={PROFILE} onCancel={vi.fn()} onSave={vi.fn()} />);
+
+    expect((screen.getByRole("button", { name: "Cancel" }) as HTMLButtonElement).type).toBe("button");
+  });
+});
+
+describe("a blank name (T194)", () => {
+  it("cannot be saved", () => {
+    const onSave = vi.fn().mockResolvedValue(true);
+    render(<EditProfileModal profile={PROFILE} onCancel={vi.fn()} onSave={onSave} />);
+    const name = screen.getByLabelText("Full name") as HTMLInputElement;
+    fireEvent.change(name, { target: { value: "   " } });
+
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
+    fireEvent.submit(name.form!);
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("can be saved again once there is a name", () => {
+    render(<EditProfileModal profile={PROFILE} onCancel={vi.fn()} onSave={vi.fn()} />);
+    const name = screen.getByLabelText("Full name");
+    fireEvent.change(name, { target: { value: "" } });
+    fireEvent.change(name, { target: { value: "Amina Bello" } });
+
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled();
+  });
+});
+
+/** Whether the browser would ask before leaving: the event was cancelled. */
+const leavingAsks = () => {
+  const e = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(e);
+  return e.defaultPrevented;
+};
+
+/** C17: a changed name or subjects line, not yet saved. */
+describe("an edit not yet saved", () => {
+  it("makes the browser ask before leaving", () => {
+    render(<EditProfileModal profile={PROFILE} onCancel={vi.fn()} onSave={vi.fn()} />);
+    expect(leavingAsks()).toBe(false);
+
+    fireEvent.change(screen.getByLabelText("Full name"), { target: { value: "Amina Bello-Ade" } });
+    expect(leavingAsks()).toBe(true);
+  });
+
+  it("stops asking once the name is back as it was", () => {
+    render(<EditProfileModal profile={PROFILE} onCancel={vi.fn()} onSave={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText("Full name"), { target: { value: "Amina" } });
+    fireEvent.change(screen.getByLabelText("Full name"), { target: { value: "Amina Bello" } });
+
+    expect(leavingAsks()).toBe(false);
+  });
+});

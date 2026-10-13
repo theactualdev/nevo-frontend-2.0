@@ -21,7 +21,7 @@ const pending: Invitation = {
   email: "bola@school.edu.ng",
   name: "Bola Eze",
   status: "pending",
-  expiresAt: "2026-12-01T00:00:00Z",
+  expiresAt: "2099-01-01T00:00:00Z", // far off: InvitationsView judges expiry against today
   consentStatus: null,
   deliveryStatus: "sent",
 };

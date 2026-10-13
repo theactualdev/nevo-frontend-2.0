@@ -16,6 +16,8 @@ import { RosterImportView } from "./RosterImportView";
 const get = vi.fn();
 const stageImport = vi.fn();
 const confirm = vi.fn();
+const template = vi.fn();
+const decideMerges = vi.fn();
 
 vi.mock("@/lib/api/onboarding", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/onboarding")>();
@@ -26,9 +28,25 @@ vi.mock("@/lib/api/onboarding", async (importOriginal) => {
       get: () => get(),
       stageImport: (k: string, f: File) => stageImport(k, f),
       confirm: () => confirm(),
+      template: (name: string) => template(name),
+      decideMerges: (d: unknown) => decideMerges(d),
     },
   };
 });
+
+/*
+ * The templates as the server writes them (backend `import_templates.py`): a
+ * BOM for Excel, readable headings generated from the parser's columns, an
+ * example row in the school's own class names, and a line saying to delete it.
+ */
+const STUDENT_TEMPLATE =
+  "﻿First name,Surname,Class,Date of birth,Student ID / Admission Number,Guardian first name,Guardian surname,Guardian email,Relationship to the child\r\n" +
+  "Amara,Okafor,JSS 1A,2015-04-23,ADM001,Ngozi,Okafor,ngozi.okafor@example.com,Mother\r\n" +
+  "EXAMPLE ROW - DELETE THIS LINE BEFORE UPLOADING\r\n";
+const TEACHER_TEMPLATE =
+  "﻿First name,Surname,Email,Subject,Class\r\n" +
+  "Bisi,Bello,bisi.bello@example.com,Mathematics,JSS 1A\r\n";
+const csv = (text: string) => new Blob([text], { type: "text/csv" });
 
 const state = (over: Partial<OnboardingState> = {}): OnboardingState => ({
   stage: "uploading",
@@ -74,6 +92,9 @@ beforeEach(() => {
   get.mockResolvedValue(state());
   stageImport.mockResolvedValue(READ);
   confirm.mockResolvedValue(state({ stage: "confirmed" }));
+  template.mockImplementation((name: string) =>
+    Promise.resolve(csv(name === "students" ? STUDENT_TEMPLATE : TEACHER_TEMPLATE)),
+  );
 });
 
 describe("OB-01 upload", () => {
@@ -206,15 +227,6 @@ describe("OB-01 upload", () => {
       "/admin/students",
     );
   });
-
-  it("does not invent the expected columns", async () => {
-    // No endpoint serves them, and a school reformatting 400 rows to a header
-    // we guessed gets 400 rejections.
-    const { container } = render(<RosterImportView />);
-    await waitFor(() => expect(visibleText(container)).toMatch(/Add your roster/));
-
-    expect(visibleText(container)).not.toMatch(/Expected columns/i);
-  });
 });
 
 describe("OB-02 what Nevo found", () => {
@@ -294,9 +306,21 @@ describe("OB-02 what Nevo found", () => {
   });
 
   it("does not draw a teachers panel it has no names for", async () => {
-    // `OnboardingState` carries `teacherCount` and no teacher list.
+    // An older answer, or a file with no teachers in it: no list, no panel.
     const { container } = await reachFound();
     expect(visibleText(container)).not.toMatch(/Teachers found/i);
+  });
+
+  it("names every teacher the file gave, as D24's Teachers found (9 Oct field)", async () => {
+    get.mockResolvedValue({ ...READ, teachersFound: ["Adunni Okafor", "Bola Eze"] });
+    render(<RosterImportView />);
+    fireEvent.click(await screen.findByRole("button", { name: /See what Nevo found/i }));
+    expect(await screen.findByText("Teachers found")).toBeInTheDocument();
+    const list = screen.getByRole("list");
+    expect(list).toHaveTextContent("Adunni Okafor");
+    expect(list).toHaveTextContent("Bola Eze");
+    // Names only: nothing carries the classes D24 draws under each.
+    expect(list.querySelectorAll("li")).toHaveLength(2);
   });
 
   it("hides the rows-to-fix section entirely on a clean file", async () => {
@@ -307,5 +331,166 @@ describe("OB-02 what Nevo found", () => {
 
     expect(visibleText(container)).not.toMatch(/rows to fix/i);
     expect(visibleText(container)).not.toMatch(/\b0 row/);
+  });
+});
+
+describe("OB-01's expected columns and templates", () => {
+  /*
+   * The frame shows the columns BEFORE upload. They are read off the server's
+   * template - whose header the server generates from the parser's own columns
+   * - and never held by the console, which once drew a list the parser refused.
+   */
+  const columnsOf = (name: RegExp) =>
+    Array.from(screen.getByRole("list", { name }).querySelectorAll("li")).map((li) => li.textContent);
+
+  it("shows each template's own header row before anything is uploaded", async () => {
+    const { container } = render(<RosterImportView />);
+    await waitFor(() => expect(screen.getByRole("list", { name: /for students/ })).toBeInTheDocument());
+    expect(columnsOf(/for students/)).toEqual([
+      "First name",
+      "Surname",
+      "Class",
+      "Date of birth",
+      "Student ID / Admission Number",
+      "Guardian first name",
+      "Guardian surname",
+      "Guardian email",
+      "Relationship to the child",
+    ]);
+    await waitFor(() => expect(screen.getByRole("list", { name: /for staff/ })).toBeInTheDocument());
+    expect(columnsOf(/for staff/)).toEqual(["First name", "Surname", "Email", "Subject", "Class"]);
+    expect(template).toHaveBeenCalledWith("students");
+    expect(template).toHaveBeenCalledWith("teachers");
+    expect(stageImport).not.toHaveBeenCalled();
+    expect(visibleText(container)).toMatch(/The format is strict, which is why the columns are shown here/);
+  });
+
+  it("shows no list, and no sentence pointing at one, when a template can't be read", async () => {
+    template.mockRejectedValue(new ApiError(500, "x"));
+    const { container } = render(<RosterImportView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/Add your roster/));
+    await waitFor(() => expect(template).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole("list", { name: /Expected columns/ })).toBeNull();
+    expect(visibleText(container)).not.toMatch(/Expected columns/i);
+    expect(visibleText(container)).not.toMatch(/format is strict/);
+    // The link is still there, and says so when it can't fetch either.
+    fireEvent.click(screen.getByRole("button", { name: "Download the student template" }));
+    await waitFor(() => expect(visibleText(container)).toMatch(/That didn.t download/));
+    expect(template).toHaveBeenCalledTimes(3);
+  });
+
+  it("downloads the file it already read, under the server's own name", async () => {
+    const saved: string[] = [];
+    const created = vi.fn((b: Blob) => {
+      void b;
+      return "blob:template";
+    });
+    Object.assign(URL, { createObjectURL: created, revokeObjectURL: vi.fn() });
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(function (this: HTMLAnchorElement) {
+        saved.push(this.download);
+      });
+    render(<RosterImportView />);
+    await waitFor(() => expect(screen.getByRole("list", { name: /for staff/ })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Download the teacher template" }));
+    await waitFor(() => expect(saved).toEqual(["nevo-teacher-import.csv"]));
+    expect(template).toHaveBeenCalledTimes(2);
+    expect(await (created.mock.calls[0][0] as Blob).text()).toContain("Bisi,Bello");
+    click.mockRestore();
+  });
+
+  it("fetches nothing for a school past the upload step", async () => {
+    get.mockResolvedValue(state({ stage: "activated" }));
+    render(<RosterImportView />);
+    await waitFor(() => expect(get).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 20));
+    expect(template).not.toHaveBeenCalled();
+  });
+});
+
+describe("OB-02's class questions", () => {
+  /*
+   * The server holds Confirm closed while any spelling is unsettled
+   * (`canConfirm` false; `POST /confirm` refuses with class_merges_unresolved).
+   * This screen never asked, so a school whose file wrote "JSS2A" and "JSS 2A"
+   * could not confirm its roster at all.
+   */
+  const PROPOSAL = {
+    key: "m1",
+    proposedName: "JSS 2A",
+    studentCount: 34,
+    reason: "Same letters and digits.",
+    candidates: [
+      { name: "JSS2A", normalisedName: "jss2a", studentCount: 3, teacherCount: 0 },
+      { name: "JSS 2A", normalisedName: "jss 2a", studentCount: 31, teacherCount: 1 },
+    ],
+  };
+  const ASKING = state({ ...READ, canConfirm: false, classMerges: [PROPOSAL] });
+  const SETTLED = state({ ...READ, canConfirm: true, classMerges: [] });
+  /** As a reader sees it: pieces joined as rendered, apostrophes straightened. */
+  const said = (el: HTMLElement) =>
+    (el.textContent ?? "").replace(/\u2019/g, "'").replace(/\s+/g, " ");
+
+  const open = async () => {
+    get.mockResolvedValue(ASKING);
+    const r = render(<RosterImportView />);
+    fireEvent.click(await screen.findByRole("button", { name: /See what Nevo found/i }));
+    await screen.findByText(/What Nevo found/);
+    return r;
+  };
+  const confirmButton = () => screen.getByRole("button", { name: /^Confirm \d+ student/ });
+
+  it("asks each one, says why Confirm is closed, and leaves it closed", async () => {
+    const { container } = await open();
+    expect(said(container)).toMatch(/JSS2A \(3 students\) and JSS 2A \(31 students\): same class\?/);
+    expect(said(container)).toMatch(/1 class question still to answer before you can go on\./);
+    expect(confirmButton()).toBeDisabled();
+  });
+
+  it("sends Same class with the proposed name, and opens Confirm on the server's word", async () => {
+    decideMerges.mockResolvedValue(SETTLED);
+    const { container } = await open();
+    fireEvent.click(screen.getByRole("button", { name: "Same class" }));
+    await waitFor(() =>
+      expect(decideMerges).toHaveBeenCalledWith([{ key: "m1", merge: true, keepName: "JSS 2A" }]),
+    );
+    await waitFor(() => expect(said(container)).toMatch(/One class: JSS 2A · 34/));
+    expect(said(container)).not.toMatch(/still to answer/);
+    expect(confirmButton()).toBeEnabled();
+    // Nothing undoes a merge, so nothing offers to.
+    expect(screen.queryByRole("button", { name: "Change" })).toBeNull();
+  });
+
+  it("sends Keep separate as a no, and says the classes stay as written", async () => {
+    decideMerges.mockResolvedValue(SETTLED);
+    const { container } = await open();
+    fireEvent.click(screen.getByRole("button", { name: "Keep separate" }));
+    await waitFor(() =>
+      expect(decideMerges).toHaveBeenCalledWith([{ key: "m1", merge: false, keepName: null }]),
+    );
+    await waitFor(() =>
+      expect(said(container)).toMatch(/2 classes, kept exactly as your school wrote them: JSS2A, JSS 2A\./),
+    );
+  });
+
+  it("keeps the question and says why when an answer doesn't save", async () => {
+    decideMerges.mockRejectedValue(
+      new ApiError(409, "x", { detail: { code: "stale", message: "Your file changed since this was asked." } }),
+    );
+    const { container } = await open();
+    fireEvent.click(screen.getByRole("button", { name: "Same class" }));
+    await waitFor(() => expect(said(container)).toMatch(/Your file changed since this was asked\./));
+    expect(screen.getByRole("button", { name: "Same class" })).toBeEnabled();
+    expect(confirmButton()).toBeDisabled();
+  });
+});
+
+describe("a refusal on the roster screen", () => {
+  it("says it is about access, with no retry", async () => {
+    get.mockRejectedValue(new ApiError(403, "forbidden"));
+    const { container } = render(<RosterImportView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/don't have access to the roster upload/));
+    expect(screen.queryByRole("button", { name: /Try again/ })).toBeNull();
   });
 });

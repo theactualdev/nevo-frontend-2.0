@@ -1,4 +1,4 @@
-import { api, type RequestOptions } from "./client";
+import { api, ApiError, apiErrorCode, type RequestOptions } from "./client";
 
 /**
  * Ask Nevo endpoints (FE Architecture §1; Student B.12) - wired to the live
@@ -19,9 +19,9 @@ const UUID_RE =
  * one. The console is built on human-readable slugs ("amara-okafor",
  * "jss-2a"), so a value only travels when it genuinely is a UUID.
  *
- * TODO(api): flagged to backend - the console holds no UUID for students or
- * lessons, so that context cannot be sent at all until an endpoint surfaces
- * one. `currentPage` carries the route in the meantime.
+ * The console's routes are UUID-keyed now, so `contextIdsFor` sends the
+ * student, class or lesson a page is about; this guard keeps a fixture slug
+ * on the signed-out walkthrough from becoming a 422.
  */
 export function asUuid(value: string | null | undefined): string | null {
   return value && UUID_RE.test(value) ? value : null;
@@ -55,6 +55,23 @@ export type AskNevoCategory =
 
 export interface AskNevoAnswer {
   answer: string;
+  /**
+   * The answer as one paragraph of plain text. Defaults to "" on the
+   * contract, so it is only preferred when it says something.
+   */
+  plainText?: string;
+  /** `structured` means `answer` carries markup; `plain` means it does not. */
+  answerFormat?: "plain" | "structured";
+  /**
+   * FALSE IS THE SERVER SAYING THIS ONE BELONGS WITH THE TEACHER (1 Oct).
+   *
+   * Frame 26 draws that state - "Can't help · hands to teacher" - and the
+   * student drawer used to reach it only through its own canned engine. The
+   * answer is still safe to render; false adds the hand-over beside it.
+   */
+  canHelp: boolean;
+  /** Why it could not help. Never rendered: no frame draws a reason. */
+  cannotHelpReason?: string | null;
   questionCategory: AskNevoCategory;
   interactionId: string;
   aiGatewayCallId: string;
@@ -159,6 +176,29 @@ export function recentThreads(
     })
     .sort((a, b) => Date.parse(b.lastMessageAt) - Date.parse(a.lastMessageAt))
     .slice(0, HISTORY_LIMIT);
+}
+
+/**
+ * The code on the 429 `POST /api/v1/ask-nevo/` answers once the day's
+ * allowance is spent (B33). From the spec's own description of that response,
+ * which is the authority here: "ask_nevo_daily_limit when the day's allowance
+ * is spent".
+ */
+export const ALLOWANCE_SPENT_CODE = "ask_nevo_daily_limit";
+
+/**
+ * Was this refusal the day's allowance running out?
+ *
+ * BY ITS CODE, NOT ITS STATUS. A 429 is also what an ordinary rate limit
+ * says, and that one really does clear in a moment - so a bare 429 keeps the
+ * "try again" answer, and only this code means "not until tomorrow" (D45).
+ */
+export function allowanceSpent(cause: unknown): boolean {
+  return (
+    cause instanceof ApiError &&
+    cause.status === 429 &&
+    apiErrorCode(cause.detail) === ALLOWANCE_SPENT_CODE
+  );
 }
 
 export const askNevoApi = {

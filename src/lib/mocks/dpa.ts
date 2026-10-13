@@ -14,20 +14,23 @@
  * than as invented values - a legal document with plausible fabricated dates
  * in it is worse than one with obvious gaps.
  *
- * TODO(legal): replace wholesale when counsel returns the final wording, and
- * bump DPA_VERSION when you do. The accepted version is stored with the
- * acceptance and is what D12 and the D22 NDPA surface display later, so the
- * number must change whenever the words do.
+ * THE VERSION IS THE SERVER'S NOW (8 Oct). `GET /school/dpa-agreement` serves
+ * the current version - "2026-10" when it landed - and that is what a school
+ * accepts and what D12 and D22 display. This file used to hold its own
+ * "0.9-draft", so a school agreed to a version the backend had never heard of.
+ * When counsel's wording arrives it should come from the server with that
+ * version, so the two cannot drift; until then the words are here.
+ *
+ * TODO(legal): replace wholesale when counsel returns the final wording.
  */
-
-/** Bump on every wording change. Stored with each acceptance. */
-export const DPA_VERSION = "0.9-draft";
 
 export const DPA_BADGE =
   "Placeholder wording - final legal text pending counsel";
 
-export const DPA_VERSION_LINE =
-  `Version ${DPA_VERSION} · Governed by the Nigeria Data Protection Act (NDPA) 2023`;
+/** The line under the agreement, for the version the server states. */
+export function dpaVersionLine(version: string): string {
+  return `Version ${version} · Governed by the Nigeria Data Protection Act (NDPA) 2023`;
+}
 
 export interface DpaClause {
   num: string;
@@ -59,28 +62,28 @@ export const DPA_CLAUSES: DpaClause[] = [
   },
   /*
    * ============================================================================
-   * CONFLICT WITH SCRUM-80 - NOT RESOLVED HERE, BECAUSE IT IS COUNSEL'S TO
-   * RESOLVE. Flagged 11 Sep 2026.
+   * CLAUSE 5 IS COUNSEL'S, AND STILL OPEN. Flagged 11 Sep 2026; the consent
+   * position beside it moved on 23 Sep.
    *
    * This clause warrants that Nevo "will not activate a learner whose consent
-   * has not been confirmed". SCRUM-80 (7 Sep) ruled the opposite: the School
-   * warrants consent through the DSA, so an unconfirmed consent is the
-   * school's administrative task and the learner PROCEEDS - only an explicit
-   * withdrawal stops processing. `lib/api/consents.ts` encodes that ruling and
-   * the deployed `ConsentGateResponse` carries `granted` and `blocked` as two
-   * separate booleans precisely because they are different questions.
+   * has not been confirmed". When it was flagged, SCRUM-80 (7 Sep) had ruled
+   * the opposite - an unconfirmed consent was the school's administrative
+   * task and the learner proceeded. Design's 23 Sep ruling superseded that:
+   * every entry path resolves consent before anything mounts, so a child
+   * whose consent is not given waits on 00d, a withdrawn child on 00e, and a
+   * check that cannot complete holds them too (D69). See
+   * `docs/waiting-on-counsel.md` item 1.
    *
-   * Both cannot be true. This matters more than ordinary copy drift because
-   * the school FORMALLY ACCEPTS this document - `POST /school/dpa-acceptance`
-   * records the version, the accepting administrator and the timestamp, and
-   * the D22 compliance surface then cites that acceptance as evidence. So it
-   * is a contractual term that may not describe the product.
+   * Whether the clause stands as written is still counsel's question. It
+   * matters more than ordinary copy because the school FORMALLY ACCEPTS this
+   * document - `POST /school/dpa-acceptance` records the version, the
+   * accepting administrator and the timestamp, and the D22 compliance surface
+   * then cites that acceptance as evidence.
    *
    * Unlike clauses 6 and 7 this one carries no `[Placeholder: ...]` marker, so
    * it reads as settled. The text is deliberately left EXACTLY as counsel last
    * had it: silently rewording a term a school has already accepted would be
-   * the worse error. Either the clause changes or the product gates - and
-   * whichever it is, it is not a decision this file gets to make.
+   * the worse error, and it is not a decision this file gets to make.
    * ============================================================================
    */
   {

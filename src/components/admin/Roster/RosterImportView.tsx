@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ReadFailed } from "../ReadFailed";
-import { CARD } from "./primitives";
+import { NoAccess, failureKind } from "../NoAccess";
+import { Avatar, CARD } from "./primitives";
 import {
   onboardingApi,
+  type ClassMergeProposal,
   type OnboardingState,
   type RejectedRow,
 } from "@/lib/api/onboarding";
@@ -16,7 +18,11 @@ import {
   foundCounts,
   hasStaged,
   mayConfirm,
+  mergeSpellings,
+  mergesLeftLine,
+  openMerges,
   rejectedCsv,
+  templateColumns,
   toFixLabel,
 } from "./rosterImport";
 
@@ -43,46 +49,71 @@ import {
  * value, the reason and the fix. No error is only a count. Nothing here is red
  * or urgent - the number states the position and leaves it."*
  *
+ * EXPECTED COLUMNS ARE THE SERVER'S TEMPLATE, READ. OB-01 shows them before
+ * upload, and they are the one thing here that must not be guessed: a school
+ * that reformats four hundred rows to a header we invented gets four hundred
+ * rejections. The frame's own list was wrong once ("Full name", "Class(es)"),
+ * and the columns have changed twice since. So the console holds none: each
+ * panel's template (`onboardingApi.template`) has a header row the server
+ * generates from the parser's own columns; that row is what the panel shows,
+ * and the same file is "Download the … template". A template that cannot be
+ * read shows no list - never a remembered one.
+ *
  * ============================================================================
- * TWO THINGS THE FRAME DRAWS THAT NOTHING CAN FILL:
- *
- * - **"Expected columns"**, shown BEFORE upload rather than after a failure,
- *   and **"Download the … template"**. No endpoint serves either, and the
- *   column names are the one thing here that must not be guessed: a school
- *   that reformats four hundred rows to a header we invented gets four hundred
- *   rejections. Absent rather than wrong.
- *   TODO(api): the expected columns per `kind`, and a template file.
- *
- *   25 Sep, backend named them - and THE FRAME'S LIST IS WRONG. Students:
- *   first_name · last_name · class · date_of_birth · parent_name ·
- *   parent_email. Teachers: first_name · last_name · email · class. All
- *   required. The frame's "Full name", "Class(es)" and missing Parent name
- *   would each fail a file drawn to it. Raised with design; until the frame
- *   is corrected the list stays absent, and a wrong file gets the server's
- *   own 400 naming what is missing (see `uploadFailed`).
- *
- * - **"Teachers found"**, a panel of names and initials. `OnboardingState`
- *   carries `teacherCount` and no teacher list, so the count renders and the
- *   panel does not.
- *   TODO(api): the derived teachers, the way `classes` carries the derived
- *   classes.
+ * "TEACHERS FOUND" IS BUILT, REDUCED (13 Oct). `OnboardingState.teachersFound`
+ * (9 Oct) is a list of names, so the panel draws each name and its initials.
+ * D24 also draws the classes each teacher takes, and an edit pencil; nothing
+ * carries the first and no route edits a found teacher, so neither is drawn.
  */
 
-type Phase = "loading" | "ready" | "failed";
+type Phase = "loading" | "ready" | "failed" | "denied";
 type Kind = "teacher" | "student";
 
-const KINDS: { kind: Kind; title: string; sub: string }[] = [
+/** A template as fetched: the bytes to save, and the headings read off them. */
+interface Template {
+  blob: Blob;
+  columns: string[] | null;
+}
+
+const KINDS: {
+  kind: Kind;
+  title: string;
+  sub: string;
+  template: "students" | "teachers";
+  /** D24's "Download the {tmpl} template". */
+  tmpl: string;
+  /** The server's own name for the file. */
+  file: string;
+}[] = [
   {
     kind: "student",
     title: "Students",
     sub: "One row per student, with the class they are in.",
+    template: "students",
+    tmpl: "student",
+    file: "nevo-student-roster.csv",
   },
   {
     kind: "teacher",
     title: "Staff",
     sub: "One row per member of staff, with the classes they teach.",
+    template: "teachers",
+    tmpl: "teacher",
+    file: "nevo-teacher-import.csv",
   },
 ];
+
+/** Hand a fetched file to the browser to save, as the invoice PDF does. */
+function saveFile(blob: Blob, name: string) {
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = href;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(href);
+}
 
 export function RosterImportView() {
   const [phase, setPhase] = useState<Phase>("loading");
@@ -104,6 +135,19 @@ export function RosterImportView() {
   } | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [confirmFailed, setConfirmFailed] = useState(false);
+  /*
+   * OB-02's class questions. Each answer is sent as it is given: a yes folds
+   * the students together and a no is remembered, and nothing undoes either,
+   * so there is no draft to hold. What was answered this visit is kept to say
+   * what became of it; the server's state is what the screen counts.
+   */
+  const [deciding, setDeciding] = useState<string | null>(null);
+  const [decideFailed, setDecideFailed] = useState<{ key: string; reason: string | null } | null>(
+    null,
+  );
+  const [answered, setAnswered] = useState<{ proposal: ClassMergeProposal; merge: boolean }[]>(
+    [],
+  );
   /** OB-02 is a step forward from OB-01, not a different screen. */
   const [showFound, setShowFound] = useState(false);
   /*
@@ -113,6 +157,35 @@ export function RosterImportView() {
    */
   const { refresh: refreshGate } = useSetupGate();
 
+  /*
+   * Both templates, read once the upload panels are what this screen shows -
+   * an active or confirmed school sees no panels, so it fetches nothing.
+   */
+  const [templates, setTemplates] = useState<Partial<Record<Kind, Template>>>({});
+  const showsPanels =
+    phase === "ready" &&
+    state !== null &&
+    state.stage !== "activated" &&
+    state.stage !== "confirmed" &&
+    state.stage !== "awaiting_payment";
+  useEffect(() => {
+    if (!showsPanels) return;
+    let live = true;
+    for (const k of KINDS) {
+      onboardingApi
+        .template(k.template)
+        .then(async (blob) => {
+          const columns = templateColumns(await blob.text());
+          if (live) setTemplates((t) => ({ ...t, [k.kind]: { blob, columns } }));
+        })
+        // Absent, not remembered: no list, and the link fetches it again.
+        .catch(() => {});
+    }
+    return () => {
+      live = false;
+    };
+  }, [showsPanels]);
+
   const load = useCallback(() => {
     onboardingApi
       .get()
@@ -120,7 +193,8 @@ export function RosterImportView() {
         setState(s);
         setPhase("ready");
       })
-      .catch(() => setPhase("failed"));
+      // A 403 is this admin's scope, not a failure: no retry can grant it.
+      .catch((err) => setPhase(failureKind(err) === "denied" ? "denied" : "failed"));
   }, []);
 
   useEffect(() => {
@@ -150,6 +224,27 @@ export function RosterImportView() {
       .finally(() => setUploading(null));
   };
 
+  const decide = (proposal: ClassMergeProposal, merge: boolean) => {
+    setDeciding(proposal.key);
+    setDecideFailed(null);
+    onboardingApi
+      .decideMerges([
+        { key: proposal.key, merge, keepName: merge ? proposal.proposedName : null },
+      ])
+      .then((s) => {
+        setState(s);
+        setAnswered((a) => [...a, { proposal, merge }]);
+        refreshGate();
+      })
+      .catch((err) =>
+        setDecideFailed({
+          key: proposal.key,
+          reason: err instanceof ApiError ? apiErrorMessage(err.detail) : null,
+        }),
+      )
+      .finally(() => setDeciding(null));
+  };
+
   const confirm = () => {
     setConfirming(true);
     setConfirmFailed(false);
@@ -165,6 +260,9 @@ export function RosterImportView() {
 
   if (phase === "loading") {
     return <div className={cn(CARD, "mt-5 h-[380px] animate-pulse")} />;
+  }
+  if (phase === "denied") {
+    return <NoAccess className="mt-5" what="the roster upload" />;
   }
   if (phase === "failed" || !state) {
     return (
@@ -219,6 +317,10 @@ export function RosterImportView() {
             confirmFailed={confirmFailed}
             onBack={() => setShowFound(false)}
             onConfirm={confirm}
+            answered={answered}
+            deciding={deciding}
+            decideFailed={decideFailed}
+            onDecide={decide}
           />
         ) : (
           <>
@@ -241,11 +343,22 @@ export function RosterImportView() {
                   failed={uploadFailed?.kind === k.kind}
                   reason={uploadFailed?.kind === k.kind ? uploadFailed.reason : null}
                   onFile={(f) => upload(k.kind, f)}
+                  columns={templates[k.kind]?.columns ?? null}
+                  tmpl={k.tmpl}
+                  fetchTemplate={() => {
+                    const held = templates[k.kind];
+                    return held ? Promise.resolve(held.blob) : onboardingApi.template(k.template);
+                  }}
+                  file={k.file}
                 />
               ))}
             </div>
 
             <p className="mt-5 max-w-[62ch] text-[13px] leading-[1.55] text-nevo-near-black/55">
+              {/* Only true while a list is on screen to point at. */}
+              {KINDS.some((k) => templates[k.kind]?.columns)
+                ? "The format is strict, which is why the columns are shown here. "
+                : null}
               You&rsquo;ll see and confirm everything Nevo derives on the next
               screen before anything is created.
             </p>
@@ -333,6 +446,10 @@ function DropPanel({
   failed,
   reason,
   onFile,
+  columns,
+  tmpl,
+  fetchTemplate,
+  file,
 }: {
   title: string;
   sub: string;
@@ -341,9 +458,27 @@ function DropPanel({
   /** The server's sentence, when it gave one. See `uploadFailed`. */
   reason: string | null;
   onFile: (f: File) => void;
+  /** The template's own header row; null draws no list. */
+  columns: string[] | null;
+  tmpl: string;
+  fetchTemplate: () => Promise<Blob>;
+  file: string;
 }) {
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
+  const [download, setDownload] = useState<"" | "loading" | "failed">("");
+
+  const downloadIt = () => {
+    if (download === "loading") return;
+    setDownload("loading");
+    fetchTemplate()
+      .then((blob) => {
+        saveFile(blob, file);
+        setDownload("");
+      })
+      // No red, and no dead end: it says what happened and stays pressable.
+      .catch(() => setDownload("failed"));
+  };
 
   return (
     <div className={cn(CARD, "px-[22px] py-[20px]")}>
@@ -354,12 +489,26 @@ function DropPanel({
         {sub}
       </p>
 
-      {/*
-        * THE FRAME'S "Expected columns" LIST IS ABSENT. No endpoint serves the
-        * column names and they are the one thing here that must not be
-        * guessed - a school that reformats four hundred rows to a header we
-        * invented gets four hundred rejections. See the header's TODO(api).
-        */}
+      {columns ? (
+        <div className="mt-4 rounded-[10px] border border-nevo-near-black/10 bg-nevo-cream px-3.5 py-3">
+          <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.06em] text-nevo-near-black/50">
+            Expected columns
+          </p>
+          <ul
+            aria-label={`Expected columns for ${title.toLowerCase()}`}
+            className="m-0 mt-2 flex list-none flex-wrap gap-1.5 p-0"
+          >
+            {columns.map((c) => (
+              <li
+                key={c}
+                className="rounded-[6px] bg-nevo-navy/[0.09] px-[9px] py-1 font-mono text-[12px] text-nevo-navy"
+              >
+                {c}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       <div
         onDragOver={(e) => {
@@ -425,6 +574,19 @@ function DropPanel({
           )}
         </p>
       ) : null}
+
+      <button
+        type="button"
+        onClick={downloadIt}
+        className="mt-3.5 inline-flex cursor-pointer items-center gap-[7px] text-[13px] font-semibold text-nevo-navy hover:underline"
+      >
+        {download === "loading" ? "Fetching…" : `Download the ${tmpl} template`}
+      </button>
+      {download === "failed" ? (
+        <p className="m-0 mt-1 text-[12.5px] text-nevo-near-black/55">
+          That didn&rsquo;t download. Try again in a moment.
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -436,6 +598,10 @@ function WhatNevoFound({
   confirmFailed,
   onBack,
   onConfirm,
+  answered,
+  deciding,
+  decideFailed,
+  onDecide,
 }: {
   state: OnboardingState;
   counts: ReturnType<typeof foundCounts>;
@@ -443,8 +609,14 @@ function WhatNevoFound({
   confirmFailed: boolean;
   onBack: () => void;
   onConfirm: () => void;
+  answered: { proposal: ClassMergeProposal; merge: boolean }[];
+  deciding: string | null;
+  decideFailed: { key: string; reason: string | null } | null;
+  onDecide: (proposal: ClassMergeProposal, merge: boolean) => void;
 }) {
   const toFix = toFixLabel(counts.toFix);
+  const merges = openMerges(state);
+  const mergesLeft = mergesLeftLine(merges.length);
 
   return (
     <>
@@ -463,6 +635,75 @@ function WhatNevoFound({
         {/* Absent at zero: a clean file has no position to state. */}
         {toFix ? <Tile n={counts.toFix} label="rows to fix" /> : null}
       </div>
+
+      {merges.length > 0 || answered.length > 0 ? (
+        <section aria-label="Classes that may be one class">
+          <h3 className="mt-9 text-[13px] font-semibold tracking-[0.05em] text-nevo-near-black/50 uppercase">
+            Classes that may be one class
+          </h3>
+          <p className="mt-2 max-w-[64ch] text-[14px] leading-[1.55] text-nevo-near-black/66">
+            Nevo found these names close enough to be the same class written
+            two ways. Answer each once; your headcount, and so your invoice,
+            depends on it.
+          </p>
+          <div className={cn(CARD, "mt-3 divide-y divide-nevo-near-black/7")}>
+            {answered.map(({ proposal: p, merge }) => (
+              <div key={p.key} className="px-[22px] py-3.5 text-[14.5px] text-nevo-near-black">
+                {/*
+                  * No "Change", which the frame draws: a yes has folded the
+                  * students together and a no is remembered, and the contract
+                  * undoes neither. Offering it would promise a reversal.
+                  */}
+                {merge ? (
+                  <>
+                    One class: <strong className="font-semibold">{p.proposedName}</strong> &middot;{" "}
+                    {p.studentCount}
+                  </>
+                ) : (
+                  <>
+                    {p.candidates.length} classes, kept exactly as your school wrote them:{" "}
+                    {p.candidates.map((c) => c.name).join(", ")}.
+                  </>
+                )}
+              </div>
+            ))}
+            {merges.map((p) => {
+              const busy = deciding === p.key;
+              const failed = decideFailed?.key === p.key ? decideFailed : null;
+              return (
+                <div key={p.key} className="px-[22px] py-4">
+                  <p className="m-0 text-[14.5px] leading-[1.5] text-nevo-near-black">
+                    {mergeSpellings(p)}: same class?
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => onDecide(p, true)}
+                      disabled={deciding !== null}
+                      className="h-[42px] cursor-pointer rounded-[10px] bg-nevo-navy px-4 text-[14px] font-semibold text-nevo-cream transition-[filter] hover:brightness-110 disabled:cursor-default disabled:opacity-55"
+                    >
+                      {busy ? "Saving…" : "Same class"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDecide(p, false)}
+                      disabled={deciding !== null}
+                      className="h-[42px] cursor-pointer rounded-[10px] border-[1.5px] border-nevo-near-black/16 px-4 text-[14px] font-semibold text-nevo-near-black/75 transition-colors hover:bg-nevo-near-black/[0.04] disabled:cursor-default disabled:opacity-55"
+                    >
+                      Keep separate
+                    </button>
+                  </div>
+                  {failed ? (
+                    <p className="m-0 mt-2 text-[13px] leading-[1.5] text-nevo-navy">
+                      {failed.reason ?? "That answer didn’t save. Nothing has changed – try again."}
+                    </p>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
 
       {state.rejected.length > 0 ? (
         <RejectedList rows={state.rejected} />
@@ -492,12 +733,32 @@ function WhatNevoFound({
         </>
       ) : null}
 
-      {/*
-        * "Teachers found" - the frame's panel of names and initials - is
-        * ABSENT. `OnboardingState` carries `teacherCount` and no teacher list,
-        * so the count is in the tiles above and the panel is not invented.
-        * See the header's TODO(api).
-        */}
+      {/* D24's "Teachers found", reduced to the names the file gave: see the
+          header. Absent when the server sent none, never an empty panel. */}
+      {state.teachersFound && state.teachersFound.length > 0 ? (
+        <>
+          <h3 className="mt-9 text-[13px] font-semibold tracking-[0.05em] text-nevo-near-black/50 uppercase">
+            Teachers found
+          </h3>
+          <ul className={cn(CARD, "m-0 mt-3 list-none divide-y divide-nevo-near-black/7 p-0")}>
+            {state.teachersFound.map((name, i) => (
+              <li key={`${name}-${i}`} className="flex items-center gap-3 px-[22px] py-3">
+                <Avatar name={name} size={34} />
+                <span className="min-w-0 truncate text-[14.5px] font-semibold text-nevo-near-black">
+                  {name}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+
+      {mergesLeft ? (
+        /* Why Confirm is closed, said where the button is. */
+        <p className="mt-6 max-w-[56ch] text-[13.5px] leading-[1.5] text-nevo-near-black/66">
+          {mergesLeft}
+        </p>
+      ) : null}
 
       {confirmFailed ? (
         <p className="mt-6 max-w-[56ch] text-[13.5px] leading-[1.5] text-nevo-navy">

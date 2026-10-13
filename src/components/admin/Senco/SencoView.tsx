@@ -9,6 +9,9 @@ import {
   type LearnerObservation,
 } from "@/lib/api/classes";
 import { intelligenceApi, type AttentionFlag } from "@/lib/api/intelligence";
+import { ESCALATION_PAGE, escalationsApi, type Escalation } from "@/lib/api/escalations";
+import { teachersApi } from "@/lib/api/teachers";
+import { TeacherConcerns } from "./TeacherConcerns";
 import { studentsApi, type AdminStudentRow } from "@/lib/api/students";
 import { YEAR_GROUPS, yearGroupLabel } from "@/lib/constants/yearGroups";
 import { cn } from "@/lib/utils";
@@ -18,6 +21,9 @@ import {
 } from "@/lib/adaptationWindow";
 import { schoolIntelligenceApi } from "@/lib/api/schoolIntelligence";
 import { NoAccess, failureKind } from "../NoAccess";
+import { useLearningSupport } from "../LearningSupport/useLearningSupport";
+import { GET_LEARNING_SUPPORT, UnavailableAction } from "../LearningSupport/Unavailable";
+import { LEARNING_SUPPORT_REQUIRED, refusedWith } from "@/lib/api/learningSupport";
 import { WriteFailed } from "../WriteFailed";
 import {
   Avatar,
@@ -43,24 +49,19 @@ import {
  * is theirs and has not gone anywhere.
  *
  * ============================================================================
- * "ESCALATED BY A TEACHER" IS NOT BUILT, AND CANNOT BE.
+ * "ESCALATED BY A TEACHER" IS BUILT (13 Oct). D8 puts teacher escalations
+ * ABOVE Nevo's own flags, and says why: "a teacher's escalation carries a
+ * human concern". It is the more important half of this screen.
  *
- * D8 puts teacher escalations ABOVE Nevo's own flags, and says why: "a
- * teacher's escalation carries a human concern". It is the more important half
- * of this screen.
+ * It was held only by the 21 Sep counsel hold on the learning-support surface;
+ * the transport (`GET /api/v1/escalations`, `.../{id}/acknowledge`) has been
+ * live since 15 Sep. Olayinka deferred counsel on 12 Oct - nothing is held on
+ * them any more - so the section is here. See `TeacherConcerns`.
  *
- * There is no teacher-to-SENCo transport anywhere in the API. Nothing creates
- * an escalation, nothing stores one, nothing lists one. The teacher console
- * already hit this from the other side - its escalation sheet had to stop
- * confirming delivery, because it was reporting a safeguarding referral as
- * sent over a handler that posted nothing.
- *
- * So the section is ABSENT rather than empty-stated: an empty "Escalated by a
- * teacher" list would tell a SENCo that no teacher has raised a concern, which
- * is a claim this console cannot make and the most damaging possible thing to
- * get wrong on this screen. The overview says plainly what it does and does not
- * cover instead. Raised with backend as the single highest priority on the
- * SENCo surface.
+ * Still never an empty-stated section: a failed read says so, and the
+ * all-clear below waits until both the concerns and the flags were read in
+ * full, because "no teacher has raised a concern" is the most damaging thing
+ * this screen could get wrong.
  * ============================================================================
  *
  * THE ARITHMETIC THAT JUSTIFIED THIS DEFERRAL WAS TWO-THIRDS WRONG. It read:
@@ -129,7 +130,21 @@ function relativeDay(iso: string, now: number): string {
 export function SencoView() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [view, setView] = useState<View>("attention");
+  /** SCRUM-247: without Learning Support the exporter is unavailable, not missing. */
+  const { holders: ls } = useLearningSupport();
+  /*
+   * Marking a flag as seen needs it too (13 Oct): only a holder can say
+   * learning support saw it. Known up front from the holders read, or learned
+   * from the refusal itself when that read did not answer.
+   */
+  const [ackRefused, setAckRefused] = useState(false);
+  const lacksRole = ls?.viewerHoldsIt === false || ackRefused;
   const [flags, setFlags] = useState<AttentionFlag[]>([]);
+  /** Teachers' concerns: null until read, and a failed read is its own state. */
+  const [concerns, setConcerns] = useState<Escalation[] | null>(null);
+  const [concernsFailed, setConcernsFailed] = useState(false);
+  /** Who raised each concern, by teacher id; empty when the list can't be read. */
+  const [teacherNames, setTeacherNames] = useState<Record<string, string>>({});
   /**
    * Whether `flags` is every flag, or only the pages we managed to read.
    * False means neither the count nor the all-clear may be stated.
@@ -181,7 +196,27 @@ export function SencoView() {
     number
   > | null>(null);
 
+  const loadConcerns = useCallback(() => {
+    escalationsApi
+      .list()
+      .then((rows) => {
+        setConcerns(rows);
+        setConcernsFailed(false);
+      })
+      .catch(() => {
+        setConcerns(null);
+        setConcernsFailed(true);
+      });
+    teachersApi
+      .list()
+      .then((ts) => setTeacherNames(Object.fromEntries(ts.map((t) => [t.id, t.name]))))
+      .catch(() => setTeacherNames({}));
+  }, []);
+
   const load = useCallback(() => {
+    // Their own read, their own failure: a concern list that didn't answer
+    // must not hold Nevo's flags or the profiles behind it.
+    loadConcerns();
     /*
      * Its own read, its own failure. This pages the whole week's log, so it is
      * the slowest thing on the screen and must never hold the profiles behind
@@ -262,7 +297,7 @@ export function SencoView() {
         });
       })
       .catch((err: unknown) => setPhase(failureKind(err)));
-  }, []);
+  }, [loadConcerns]);
 
   useEffect(() => {
     load();
@@ -275,6 +310,13 @@ export function SencoView() {
     () => flags.filter((f) => !f.acknowledged),
     [flags],
   );
+  const openConcerns = useMemo(
+    () => (concerns ?? []).filter((e) => !e.acknowledged),
+    [concerns],
+  );
+  /** Every concern was read, so a count is a total and "none" is true. */
+  const concernsComplete = concerns !== null && concerns.length < ESCALATION_PAGE;
+  const concernsClear = concernsComplete && openConcerns.length === 0;
 
   /** The year groups this school's classes actually use, in enum order. */
   const years = useMemo(() => {
@@ -332,7 +374,29 @@ export function SencoView() {
           prev.map((f) => (f.id === flagId ? { ...f, acknowledged: true } : f)),
         ),
       )
-      .catch(() => setAckFailed(true))
+      .catch((err: unknown) => {
+        if (refusedWith(err, LEARNING_SUPPORT_REQUIRED)) setAckRefused(true);
+        else setAckFailed(true);
+      })
+      .finally(() => setAcking(null));
+  };
+
+  /** Pessimistic, as flags are: the card leaves only once the server agrees. */
+  const acknowledgeConcern = (id: string) => {
+    if (acking) return;
+    setAcking(id);
+    setAckFailed(false);
+    escalationsApi
+      .acknowledge(id)
+      .then(() =>
+        setConcerns((prev) =>
+          (prev ?? []).map((e) => (e.id === id ? { ...e, acknowledged: true } : e)),
+        ),
+      )
+      .catch((err: unknown) => {
+        if (refusedWith(err, LEARNING_SUPPORT_REQUIRED)) setAckRefused(true);
+        else setAckFailed(true);
+      })
       .finally(() => setAcking(null));
   };
 
@@ -352,14 +416,27 @@ export function SencoView() {
             </h2>
             <p className="mt-1.5 text-[14.5px] leading-[1.6] text-nevo-near-black/62">
               {view === "attention"
-                ? "Patterns Nevo has flagged. You decide what happens next - nothing here has been shared with anyone."
+                ? "Students a teacher has escalated, and patterns Nevo has flagged. You decide what happens next - nothing here has been shared with anyone."
                 : `${students.length} ${students.length === 1 ? "profile" : "profiles"}, in plain language.`}
             </p>
           </div>
-          <Link href="/admin/senco/export" className={PRIMARY_BTN}>
-            <PlusIcon />
-            Progress report
-          </Link>
+          {lacksRole ? (
+            <UnavailableAction
+              align="end"
+              label={
+                <>
+                  <PlusIcon />
+                  Progress report
+                </>
+              }
+              what="Progress reports"
+            />
+          ) : (
+            <Link href="/admin/senco/export" className={PRIMARY_BTN}>
+              <PlusIcon />
+              Progress report
+            </Link>
+          )}
         </div>
 
         <div
@@ -425,7 +502,29 @@ export function SencoView() {
         ) : null}
 
         {phase === "ready" && view === "attention" ? (
-          openFlags.length === 0 && !flagsComplete ? (
+          <>
+          {lacksRole ? (
+            <p
+              id="ack-needs-learning-support"
+              className="mt-6 max-w-[62ch] text-[13px] leading-[1.55] text-nevo-near-black/62"
+            >
+              {`Marking a concern or a flag as seen, and starting a progress report, need Learning Support. ${GET_LEARNING_SUPPORT}`}
+            </p>
+          ) : null}
+          <TeacherConcerns
+            open={openConcerns}
+            complete={concernsComplete}
+            failed={concernsFailed}
+            studentName={(e) => byId.get(e.studentId)?.name ?? e.studentFirstName?.trim() ?? "A student"}
+            describeClass={describeClass}
+            teacherName={(id) => teacherNames[id] ?? null}
+            when={(iso) => relativeDay(iso, now)}
+            lacksRole={lacksRole}
+            acking={acking}
+            onAcknowledge={acknowledgeConcern}
+            onRetry={loadConcerns}
+          />
+          {openFlags.length === 0 && !flagsComplete ? (
             /*
              * Nothing open among what we read, but we did not read it all.
              * "Nothing needs your attention" would be a claim about pages we
@@ -441,6 +540,9 @@ export function SencoView() {
               </p>
             </div>
           ) : openFlags.length === 0 ? (
+            // The all-clear waits for the concerns too: open ones are shown
+            // above, and a failed or partial read is never "nothing".
+            !concernsClear ? null : (
             <div className={cn(CARD, "mt-6 px-6 py-14 text-center")}>
               {/* The frame's mark, which every sibling admin empty state has
                   and this one did not - so the calmest screen in the console
@@ -457,14 +559,23 @@ export function SencoView() {
                 Nothing needs your attention right now
               </h3>
               <p className="mx-auto mt-2.5 max-w-[48ch] text-[15px] leading-[1.6] text-nevo-near-black/64">
-                When Nevo notices a pattern worth a look, it&rsquo;ll appear
-                here. You can still create a progress report for any student at
-                any time.
+                When a teacher escalates a student, or Nevo notices a pattern
+                worth a look, it&rsquo;ll appear here. You can still create a
+                progress report for any student at any time.
               </p>
-              <Link href="/admin/senco/export" className={cn(PRIMARY_BTN, "mx-auto mt-6")}>
-                Create a progress report
-              </Link>
+              {lacksRole ? (
+                <UnavailableAction
+                  className="mt-6 items-center text-center"
+                  label="Create a progress report"
+                  what="Progress reports"
+                />
+              ) : (
+                <Link href="/admin/senco/export" className={cn(PRIMARY_BTN, "mx-auto mt-6")}>
+                  Create a progress report
+                </Link>
+              )}
             </div>
+            )
           ) : (
             <>
               <div className="mt-7 flex items-center justify-between gap-4">
@@ -520,7 +631,8 @@ export function SencoView() {
                         <button
                           type="button"
                           onClick={() => acknowledge(f.id)}
-                          disabled={acking !== null}
+                          disabled={acking !== null || lacksRole}
+                          aria-describedby={lacksRole ? "ack-needs-learning-support" : undefined}
                           className="cursor-pointer text-[13px] font-semibold text-nevo-near-black/55 transition-opacity hover:text-nevo-near-black/80 disabled:cursor-wait disabled:opacity-50"
                         >
                           {acking === f.id ? "Marking…" : "Mark as seen"}
@@ -531,17 +643,8 @@ export function SencoView() {
                 })}
               </div>
             </>
-          )
-        ) : null}
-
-        {/* Said plainly, because an absent section is otherwise indistinguishable
-            from a section with nothing in it. */}
-        {phase === "ready" && view === "attention" ? (
-          <p className="mt-5 max-w-[62ch] text-[13px] leading-[1.6] text-nevo-near-black/55">
-            This list covers what Nevo noticed on its own. Concerns a teacher
-            raises with you directly don&rsquo;t reach this screen yet - they
-            come to you the way they always have.
-          </p>
+          )}
+          </>
         ) : null}
 
         {/* ------------------------------------------------ LEARNER PROFILES */}

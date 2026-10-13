@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 
 const { detail, useCurrentUser, start, staged } = vi.hoisted(() => ({
   detail: vi.fn(),
@@ -128,7 +128,7 @@ const startUnitUpload = () => {
 beforeEach(() => {
   stagedState();
   detail.mockReset().mockResolvedValue(LESSON);
-  start.mockReset();
+  start.mockReset().mockResolvedValue("staged");
   useCurrentUser.mockReset().mockReturnValue(null);
   clearSession();
   window.localStorage.clear();
@@ -261,7 +261,7 @@ describe("a request that failed", () => {
 });
 
 describe("a file the server refused", () => {
-  it("blames the file only when the server answered about the file", () => {
+  it("blames the file only when the server answered about the file", async () => {
     /*
      * The third outcome, and the one the move onto the staged hook would
      * have quietly dropped: `start` reported every rejection as `request`,
@@ -269,12 +269,15 @@ describe("a file the server refused", () => {
      * with "nothing is wrong with your file" written over a file the server
      * had just refused.
      */
-    stagedState({ uploadId: "u-1", failed: true, failureKind: "file" });
+    start.mockResolvedValue("refused");
+    stagedState();
 
     startSingleUpload();
 
-    expect(screen.getByText(/couldn’t read this file/i)).toBeInTheDocument();
+    // C07's own state, on the file step (T65) - and still never our outage.
+    expect(await screen.findByText(/That file didn’t come through/)).toBeInTheDocument();
     expect(screen.queryByText(/couldn’t reach Nevo/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/a scan saved in a format/i)).not.toBeInTheDocument();
   });
 });
 
@@ -307,15 +310,16 @@ describe("a failure nobody planned for", () => {
     expect(screen.queryByText(/quote/i)).not.toBeInTheDocument();
   });
 
-  it("offers no reference for a file the server explained", () => {
+  it("offers no reference for a file the server explained", async () => {
     // A refused file has a REASON, and a reason beats a reference. The
     // incident line must not follow a teacher onto a screen that already
     // told them what to do about it.
-    stagedState({ uploadId: "u-1", failed: true, failureKind: "file" });
+    start.mockResolvedValue("refused");
+    stagedState({ incident: "inc-123" });
 
     startSingleUpload();
 
-    expect(screen.getByText(/couldn’t read this file/i)).toBeInTheDocument();
+    expect(await screen.findByText(/That file didn’t come through/)).toBeInTheDocument();
     expect(screen.queryByText(/quote/i)).not.toBeInTheDocument();
   });
 
@@ -575,5 +579,278 @@ describe("why the parse stopped", () => {
     expect(
       screen.queryAllByText(/asyncpg|depth_variants/i),
     ).toHaveLength(0);
+  });
+});
+
+/**
+ * "TRY AGAIN" AFTER THE CONNECTION FAILED - the same upload, never a new one.
+ *
+ * The fallback resent the file, staging a second copy of a parse that had very
+ * likely carried on and finished server-side; the unit card reopened the
+ * picker under a sentence saying nothing was wrong with the file. With an
+ * upload id there is an upload to ask about again. Only when the file itself
+ * never landed does it go a second time - and then the same one, not a trip
+ * back to the picker for a failure that was ours.
+ */
+describe("trying again after the connection failed", () => {
+  const resume = vi.fn();
+  const reset = vi.fn();
+  beforeEach(() => {
+    resume.mockReset();
+    reset.mockReset();
+  });
+
+  it("picks the same single-lesson upload back up", () => {
+    stagedState({ uploadId: "u-1", failed: true, failureKind: "request", resume, reset });
+    startSingleUpload();
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(resume).toHaveBeenCalledTimes(1);
+    expect(start).toHaveBeenCalledTimes(1); // the drop, and nothing since
+  });
+
+  it("sends the same file when the single lesson never landed", () => {
+    stagedState({ uploadId: null, failed: true, failureKind: "request", resume, reset });
+    startSingleUpload();
+    const sent = start.mock.calls[0][0] as File;
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(resume).not.toHaveBeenCalled();
+    expect(start).toHaveBeenCalledTimes(2);
+    expect(start.mock.calls[1][0]).toBe(sent);
+  });
+
+  it("picks the same unit upload back up", () => {
+    stagedState({ uploadId: "u-1", failed: true, failureKind: "request", resume, reset });
+    startUnitUpload();
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(resume).toHaveBeenCalledTimes(1);
+    expect(reset).not.toHaveBeenCalled();
+    expect(start).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends the same unit file rather than reopening the picker", () => {
+    stagedState({ uploadId: null, failed: true, failureKind: "request", resume, reset });
+    startUnitUpload();
+    const sent = start.mock.calls[0][0] as File;
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(start).toHaveBeenCalledTimes(2);
+    expect(start.mock.calls[1][0]).toBe(sent);
+    expect(screen.queryByText("Choose a file")).not.toBeInTheDocument();
+  });
+
+  it("still sends a refused unit back to the picker", () => {
+    // A refused file is an answer: a different file IS the remedy there.
+    stagedState({ uploadId: "u-1", failed: true, failureKind: "file", resume, reset });
+    startUnitUpload();
+
+    fireEvent.click(screen.getByRole("button", { name: "Try another file" }));
+
+    expect(resume).not.toHaveBeenCalled();
+    expect(reset).toHaveBeenCalledTimes(1);
+    expect(start).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends a failed single-lesson parse again as a fresh upload", () => {
+    // The parse gave an answer; asking about that upload again changes nothing.
+    stagedState({ uploadId: "u-1", failed: true, failureKind: "parse", resume, reset });
+    startSingleUpload();
+
+    fireEvent.click(screen.getByRole("button", { name: /Try this file again/ }));
+
+    expect(resume).not.toHaveBeenCalled();
+    expect(start).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("a unit whose file never landed", () => {
+  it("says so, instead of the demo ladder stuck on its first rung", () => {
+    /*
+     * No upload id, so the block path fell through to the signed-out demo's
+     * ladder - which only the demo ever advances. A teacher watched it sit on
+     * "Reading the document" for ever over a failure nobody told them about.
+     */
+    stagedState({ uploadId: null, failed: true, failureKind: "request" });
+
+    startUnitUpload();
+
+    expect(screen.getByText(/couldn’t reach Nevo/i)).toBeInTheDocument();
+    expect(screen.queryByText("Reading the document")).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * T65. C07 draws a refused file on the file step - "That file didn't come
+ * through", with Choose another file and Try again - and nothing held a file
+ * to the step's own "up to 25 MB" before uploading all of it.
+ */
+describe("a file the step itself would refuse", () => {
+  const dropThis = (file: File) => {
+    const input = document.querySelector('input[type="file"]');
+    if (!input) throw new Error("no file input");
+    fireEvent.change(input, { target: { files: [file] } });
+  };
+  const toFileStep = () => {
+    render(<UploadWizard />);
+    fireEvent.click(screen.getByRole("button", { name: /one lesson/i }));
+    fireEvent.click(screen.getByRole("button", { name: /continue/i }));
+  };
+  const big = () => {
+    const f = new File(["x"], "term.pdf", { type: "application/pdf" });
+    Object.defineProperty(f, "size", { value: 26 * 1024 * 1024 });
+    return f;
+  };
+
+  it("is refused before a byte is sent when it is over 25 MB", () => {
+    stagedState();
+    toFileStep();
+    dropThis(big());
+
+    expect(screen.getByText(/That file didn’t come through/)).toBeInTheDocument();
+    expect(start).not.toHaveBeenCalled();
+  });
+
+  it("is refused when it is not a format the step reads, dropped past the picker", () => {
+    stagedState();
+    toFileStep();
+    dropThis(new File(["x"], "notes.zip", { type: "application/zip" }));
+
+    expect(screen.getByText(/That file didn’t come through/)).toBeInTheDocument();
+    expect(start).not.toHaveBeenCalled();
+  });
+
+  it("offers the frame's two ways on, and Try again sends the same file", async () => {
+    start.mockResolvedValueOnce("refused").mockResolvedValue("staged");
+    stagedState();
+    startSingleUpload();
+    await screen.findByText(/That file didn’t come through/);
+    const sent = start.mock.calls[0][0] as File;
+
+    expect(screen.getByRole("button", { name: "Choose another file" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(start).toHaveBeenCalledTimes(2);
+    expect(start.mock.calls[1][0]).toBe(sent);
+  });
+
+  it("goes when a file that fits is picked", () => {
+    stagedState();
+    toFileStep();
+    dropThis(big());
+    dropThis(new File(["x"], "lesson.pdf", { type: "application/pdf" }));
+
+    expect(screen.queryByText(/That file didn’t come through/)).not.toBeInTheDocument();
+    expect(start).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not send a file the server has not refused back to the step", async () => {
+    start.mockResolvedValue("failed");
+    stagedState();
+    startSingleUpload();
+    await act(async () => {});
+
+    expect(screen.queryByText(/That file didn’t come through/)).not.toBeInTheDocument();
+  });
+});
+
+/** T244: the wizard tests stopped short of the tree they lead to. */
+describe("a unit that has been read", () => {
+  it("opens its structure to steer, in the wizard", () => {
+    stagedState({
+      uploadId: "u-1",
+      status: "ready",
+      structure: {
+        lessonId: "l-1",
+        modules: [],
+        lessons: [
+          {
+            lessonId: "l-1",
+            title: "Rivers",
+            sequenceOrder: 1,
+            modules: [{ title: "Where rivers start", sequenceOrder: 1, segmentIds: [], recap: null, preview: null }],
+          },
+        ],
+      },
+      segments: [],
+    });
+    startUnitUpload();
+
+    expect(screen.getByDisplayValue("Rivers")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Looks right - add to my library/ })).toBeInTheDocument();
+  });
+});
+
+/**
+ * C07d and C07e AT EVERY WIDTH. The live tree is built as a pane - its own
+ * scroll, its commit bar pinned at the foot, its confirm sheet over its own
+ * area - and it was mounted inside the body's 760px reading column, where
+ * the bar scrolled away with the tree and the sheet anchored to whatever was
+ * positioned further up. And the live ladder sat in a plain block that
+ * collapsed to its own height, so it never centred.
+ */
+describe("where a unit's reading is drawn", () => {
+  const READY = {
+    uploadId: "u-1",
+    status: "ready",
+    structure: {
+      lessonId: "l-1",
+      modules: [],
+      lessons: [
+        {
+          lessonId: "l-1",
+          title: "Rivers",
+          sequenceOrder: 1,
+          modules: [{ title: "Where rivers start", sequenceOrder: 1, segmentIds: [], recap: null, preview: null }],
+        },
+      ],
+    },
+    segments: [],
+  };
+  const commitBar = () =>
+    screen.getByRole("button", { name: /Looks right - add to my library/ }).parentElement!;
+
+  it("gives the tree the pane, not a slot in the reading column", () => {
+    stagedState(READY);
+    startUnitUpload();
+
+    expect(commitBar().closest("[class*='max-w-[760px]']")).toBeNull();
+    expect(commitBar().closest("[class*='overflow-y-auto']")).toBeNull();
+    // The confirm sheet is `absolute inset-0`: its pane is what it covers.
+    expect(commitBar().parentElement).toHaveClass("relative");
+  });
+
+  it("and the body gives way to it - no reading spinner left beside the tree", () => {
+    stagedState(READY);
+    startUnitUpload();
+
+    expect(screen.queryByText("Nevo is reading your unit")).not.toBeInTheDocument();
+    expect(screen.queryByText("Reading your upload")).not.toBeInTheDocument();
+  });
+
+  it("keeps the faint-pages card, above the tree and inside its scroll", () => {
+    stagedState({ ...READY, failedPages: [3] });
+    startUnitUpload();
+
+    const retry = screen.getByRole("button", { name: "Read that page again" });
+    const scroll = retry.closest("[class*='overflow-y-auto']");
+
+    expect(scroll).not.toBeNull();
+    expect(scroll).toContainElement(screen.getByDisplayValue("Rivers"));
+  });
+
+  it("centres the live ladder in a full-height column", () => {
+    stagedState({ uploadId: "u-1", status: "parsing", stage: "lessons" });
+    startUnitUpload();
+
+    const ladder = screen.getAllByText("Reading your upload")[0].closest("div.min-h-full")!;
+
+    expect(ladder).toHaveClass("flex-1", "justify-center");
+    expect(ladder.parentElement).toHaveClass("flex", "flex-col", "min-h-full");
   });
 });

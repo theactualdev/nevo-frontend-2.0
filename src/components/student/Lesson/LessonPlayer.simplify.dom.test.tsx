@@ -27,7 +27,6 @@ import { lessonFromContent } from "@/lib/lessons/fromContent";
 
 const { trackEvent } = vi.hoisted(() => ({ trackEvent: vi.fn() }));
 vi.mock("@/hooks", () => ({
-  useBreakMonitor: () => ({ due: false, dismiss: vi.fn() }),
   useLesson: () => ({ setActiveLesson: vi.fn() }),
   useSignals: () => ({ trackEvent }),
 }));
@@ -54,11 +53,11 @@ const LONGER = "The fuller version, with more said about it.";
  * Authored content with BOTH reshapes, and that is what makes these tests
  * mean anything.
  *
- * The frame's standing density is `adaptive ?? Simplify`, so an authored
- * segment ALREADY opens on its Simplify reshape before any engine speaks. A
- * test that only checked "engine says simplify, Simplify appears" would pass
- * against a client that ignored the instruction completely. Expand is the one
- * that has to be asked for.
+ * Until 1 Oct an authored segment opened on its Simplify reshape before any
+ * engine spoke, so a test that only checked "engine says simplify, Simplify
+ * appears" would have passed against a client that ignored the instruction.
+ * It opens on the standard body now (D23), and both reshapes have to be asked
+ * for.
  */
 const AUTHORED: Lesson = {
   id: "photo-1",
@@ -156,14 +155,65 @@ describe("end to end, from parsed content to the screen", () => {
   });
 });
 
-describe("the engine's instruction reaching the screen", () => {
-  it("opens on Simplify with no instruction at all - the standing default", () => {
-    // The baseline the next test has to beat. Stated explicitly so nobody
-    // mistakes it for the instruction working.
+describe("no instruction is the standard text (D23)", () => {
+  /*
+   * Design, 1 Oct: "Open on the standard text. Standard is the lesson as the
+   * teacher wrote it ... The front end does not choose a teaching treatment
+   * the engine did not ask for." This opened on Simplify - the frame's
+   * `adaptive ?? "Simplify"` - under a pulsing chip claiming a system action
+   * nobody had taken.
+   */
+  it("opens on the standard body, though a simpler one exists", () => {
     render(<LessonPlayer lesson={AUTHORED} plan={planWith(null)} />);
 
-    expect(body()).toContain(SHORT);
+    expect(body()).toContain(FULL);
+    expect(body()).not.toContain(SHORT);
   });
+
+  it("lights no system chip when nothing was instructed", () => {
+    render(<LessonPlayer lesson={AUTHORED} plan={planWith(null)} />);
+
+    for (const name of ["Simplify", "Expand"]) {
+      expect(chip(name)).toHaveAttribute("aria-pressed", "false");
+      expect(chip(name)!.className).not.toMatch(/bg-nevo-violet/);
+    }
+  });
+
+  it("lights the system chip when the engine did instruct", () => {
+    render(<LessonPlayer lesson={AUTHORED} plan={planWith("simplify")} />);
+
+    expect(body()).toContain(SHORT);
+    expect(chip("Simplify")).toHaveAttribute("aria-pressed", "true");
+    expect(chip("Simplify")!.className).toMatch(/bg-nevo-violet/);
+  });
+
+  it("lights it without a glow or a sparkle (D144)", () => {
+    // "Everything that reacts visibly to a child's input is coming out."
+    render(<LessonPlayer lesson={AUTHORED} plan={planWith("simplify")} />);
+
+    const bar = screen.getByRole("group", { name: "Lesson pacing" });
+    expect(bar.innerHTML).not.toMatch(/animate-/);
+    expect(bar.querySelector("svg")).toBeNull();
+  });
+
+  it("claims no density trigger on the way into a segment", () => {
+    // A trigger is the child asking; arriving at a segment is not. `go()`
+    // used to report the plan's density as one, with source "system".
+    const two = {
+      ...AUTHORED,
+      segments: [AUTHORED.segments[0], { ...AUTHORED.segments[0], id: "seg-2" }],
+    } as Lesson;
+    render(<LessonPlayer lesson={two} plan={planWith(null)} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(
+      trackEvent.mock.calls.filter(([t]) => String(t).endsWith("_trigger")),
+    ).toEqual([]);
+  });
+});
+
+describe("the engine's instruction reaching the screen", () => {
 
   it("moves the screen to Expand when the engine asks for it", () => {
     /*
@@ -250,11 +300,9 @@ describe("instructions that are not densities", () => {
      * screen must be the one it would have been with no instruction.
      *
      * Asserted against the no-instruction BASELINE rather than against a
-     * literal, because the baseline is not the default body: the frame's
-     * standing density is `adaptive ?? Simplify`, so an authored segment
-     * already opens on its Simplify reshape before any engine says anything.
-     * A test that asserted the full text here would be asserting a behaviour
-     * this codebase does not have, and my first version of it did.
+     * literal, so this stays about "changes nothing" whatever the baseline
+     * is - it was the Simplify reshape until 1 Oct and is the standard body
+     * now (D23).
      */
     const { unmount } = render(
       <LessonPlayer lesson={AUTHORED} plan={planWith(null)} />,

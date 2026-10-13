@@ -1,5 +1,6 @@
 import { api } from "./client";
 import type { ConsentStatus } from "./consents";
+import type { ConceptOutcome } from "./lessons";
 
 /**
  * What a teacher can read about one student.
@@ -62,7 +63,8 @@ export interface ConceptMasteryRow {
   studentId: string;
   conceptId: string;
   /** Shipped 31 Aug. Before it, this read had ids only. */
-  conceptName: string;
+  /** Nullable in the contract: a concept the engine has no name for. */
+  conceptName: string | null;
   /** 0-1. The frame's bars are percentages. */
   masteryProbabilityConcept: number;
   masteryProbabilityReading: number;
@@ -76,6 +78,8 @@ export interface ConceptMasteryRow {
 export interface Recommendation {
   id: string;
   studentId: string;
+  /** The lesson Nevo means, when it means one (12 Oct). Null for advice that names none. */
+  lessonId?: string | null;
   /** Already written in plain language by the backend. */
   recommendationText: string;
   generatedAt: string;
@@ -160,6 +164,24 @@ export interface StudentProgress {
    */
   reflection: string;
   highlights: string[];
+  /**
+   * A short note, written short rather than cut down (backend B29, 1 Oct) -
+   * the line the Progress card draws under a subject. A plain string in the
+   * contract, not nullable but not required, defaulting to "": empty or
+   * absent means there is no note. Scoped like `reflection`, so a card reads
+   * its subject's own from the narrowed route.
+   */
+  note?: string;
+  /**
+   * The Progress card's topic counts (backend B53, 5 Oct). A topic is done
+   * when understanding passes the engine's own threshold - the engine's, not
+   * ours. The total is topics this child HAS MET, not the curriculum. Not
+   * required, defaulting to 0 and "": 0 total is "not said", and an empty
+   * `currentTopic` is no topic. Scoped like `note`.
+   */
+  topicsDone?: number;
+  topicsTotal?: number;
+  currentTopic?: string;
 }
 
 /** One row of the student's own recent lesson activity. */
@@ -167,8 +189,36 @@ export interface DashboardProgressRow {
   lessonId: string;
   /** LessonCompletionStatus: in_progress | completed | exited. */
   status: string;
+  /** ZERO-based cursor (backend B51) - see `lib/lessons/segmentPlace`. */
   segmentPosition: number;
   updatedAt: string;
+  /**
+   * The lesson's own title and subject (backend B52, 5 Oct), so a lesson the
+   * child started from the library can sit on Home with no assignment behind
+   * it. `title` defaults to "" and `subject` is nullable: blank is no title.
+   */
+  title?: string;
+  subject?: string | null;
+  /**
+   * Every segment in the lesson (B51), so the row carries its own fraction.
+   * Defaults to 0, which no playable lesson has: 0 is "not said".
+   */
+  segmentCount?: number;
+  /**
+   * Where the after-lesson check was left and until when it can be picked up
+   * (B82, 8 Oct), as on the progress write's answer (B49) - see
+   * `lib/lessons/checkResume`. Absent or null is no check to pick up.
+   */
+  checkPosition?: number | null;
+  checkResumableUntil?: string | null;
+  /**
+   * The check-in's outcome (B84, 8 Oct), as the completion write brings it
+   * back (B26) - see `lib/lessons/checkOutcome`, which reads it only off a
+   * completed row. Not required: absent and empty both draw nothing.
+   */
+  masteredConcepts?: ConceptOutcome[];
+  revisitConcepts?: ConceptOutcome[];
+  resultNote?: string;
 }
 
 /**
@@ -200,19 +250,6 @@ export interface DashboardProgressRow {
  * drifts, and the half that was wrong made `status === "withdrawn"` a type
  * error, so the name stays for its callers and the values come from one place.
  */
-/**
- * What comes back from issuing a child a new PIN. The `pin` is the only time
- * this value is ever visible to anyone - it is not readable again afterwards,
- * by us or by the contract.
- */
-export interface PinIssueResponse {
-  studentId: string;
-  pin: string;
-  issuedAt: string;
-  /** The server's own instruction that this must not travel electronically. */
-  mustShareSecurely: boolean;
-}
-
 export type ConsentState = ConsentStatus;
 
 /**
@@ -233,6 +270,12 @@ export interface AdminStudentRow {
   name: string;
   /** The student's sign-in name. Belongs on the detail page; do not drop it. */
   loginIdentifier: string | null;
+  /**
+   * The Student ID / Admission Number the school typed at enrolment - the one
+   * a child signs back in with after a PIN clear. On the reads since 8 Oct;
+   * null for a child enrolled without one.
+   */
+  admissionNumber?: string | null;
   /** "active" | "deactivated" in practice; the schema does not narrow it. */
   status: string;
   ageBand: string | null;
@@ -262,6 +305,8 @@ export interface AdminStudentDetail {
   firstName: string | null;
   lastName: string | null;
   loginIdentifier: string | null;
+  /** See `AdminStudentRow.admissionNumber`. */
+  admissionNumber?: string | null;
   email: string | null;
   status: string;
   ageBand: string | null;
@@ -342,21 +387,52 @@ export interface StudentSessionDetail {
 }
 
 
-/** `POST /api/v1/students`. Only the name and class are required. */
+/**
+ * `POST /api/v1/students`. Name, class and admission number are required.
+ *
+ * The admission number is the school's own Student ID, required since 1 Oct;
+ * a duplicate within the school is a named 409, `admission_number_in_use`.
+ * There is no `email`: SCRUM-202 took it off enrolment - children have none,
+ * and asking was why schools were inventing them.
+ */
 export interface StudentEnroll {
   firstName: string;
   lastName: string;
   classId: string;
-  email?: string | null;
+  admissionNumber: string;
   ageBand?: string | null;
   /** ISO date. Optional; the server refuses a date in the future. */
   dateOfBirth?: string | null;
+  /**
+   * The guardian's email, restored to enrolment in SCRUM-189. It RECORDS the
+   * guardian - a parent link with an empty name, the parent giving their own
+   * at consent - and SENDS NOTHING. The request is a second call,
+   * `consentsApi.addGuardian`, which finds this same link (both paths fold
+   * the address the same way) and fills in the name.
+   */
+  parentEmail?: string | null;
 }
 
 /** What enrolment returns: the new id, and the name the child signs in with. */
 export interface StudentEnrollment {
   id: string;
   loginIdentifier: string;
+}
+
+/**
+ * One active child's sign-in details (`GET /students/sign-in-details`, 9 Oct):
+ * "Printable school code and Student IDs for active children." The PIN is
+ * the child's own and is on no read.
+ */
+export interface StudentSignInDetail {
+  studentId: string;
+  firstName: string | null;
+  lastName: string | null;
+  /** The Student ID a child types at sign-in. */
+  admissionNumber: string;
+  schoolCode: string;
+  classId?: string | null;
+  className?: string | null;
 }
 
 export const studentsApi = {
@@ -402,6 +478,12 @@ export const studentsApi = {
       },
     }),
 
+  /** Every active child's school code and Student ID; one class with `classId`. */
+  signInDetails: (classId?: string) =>
+    api.get<StudentSignInDetail[]>("/api/v1/students/sign-in-details", {
+      params: { classId },
+    }),
+
   /** One student, admin-scoped. GET /api/v1/students/{student_id} */
   get: (studentId: string) =>
     api.get<AdminStudentDetail>(`/api/v1/students/${studentId}`),
@@ -425,6 +507,35 @@ export const studentsApi = {
       { classId },
     ),
 
+  /**
+   * Clear a child's PIN so they choose a new one themselves. SCRUM-216.
+   * POST /api/v1/students/{student_id}/pin/clear
+   *
+   * A CLEAR, NOT A RESET. It never accepts, returns or generates a PIN, so
+   * there is no path by which an adult learns or chooses one. The old PIN
+   * stops working, the child's sessions end, and the child sets the next one
+   * through the student entry - a door open only while the PIN is cleared.
+   *
+   * THE CHILD'S TEACHERS CALL IT, from the class roster (C05). Admin's
+   * console dropped its own control on 6 Oct for exactly that reason: the
+   * person who can recognise the child is the one who should answer for them.
+   * Scoped server-side to a class this teacher takes.
+   */
+  clearPin: (studentId: string) =>
+    api.post<PinCleared>(`/api/v1/students/${studentId}/pin/clear`),
+
+  /**
+   * "Ask an admin about this" (C05, SCRUM-145): tells the school's active
+   * administrators that a teacher is asking about a deactivated child's
+   * account. Idempotent. A teacher can raise it and never reverse it - un-pausing
+   * an account is the administrator's decision. No body: the frame's optional
+   * note has nowhere to go yet, so it is not drawn.
+   */
+  requestAdminSupport: (studentId: string) =>
+    api.post<AdminSupportRequest>(
+      `/api/v1/students/${studentId}/admin-support-request`,
+    ),
+
   /** Step one of two. Reversible, keeps everything, frees the seat. */
   deactivate: (studentId: string) =>
     api.post<void>(`/api/v1/students/${studentId}/deactivate`),
@@ -432,29 +543,6 @@ export const studentsApi = {
   /** Undo a deactivation - they pick up exactly where they left off. */
   restore: (studentId: string) =>
     api.post<void>(`/api/v1/students/${studentId}/restore`),
-
-  /**
-   * Issue a new PIN for a child who cannot get in, and return it ONCE.
-   *
-   * THE PRODUCT PROMISED THIS AND NOTHING PERFORMED IT. `ForgotPinScreen`
-   * carries the frame's own note - "No self-service reset, points gently to
-   * the teacher, never a dead end" - and tells a locked-out child to ask an
-   * adult. No surface in any console could issue one, and
-   * `NotificationType.pin_reset_requested` delivered the child's request to a
-   * screen with no action on it. This is the missing half.
-   *
-   * IT RESETS RATHER THAN REVEALS. The old PIN stops working the moment this
-   * returns, so the child is locked out harder until someone hands them the
-   * new one. That is why the sheet confirms before it calls, and why nothing
-   * calls this speculatively to "look up" a PIN - there is nothing to look up.
-   *
-   * `mustShareSecurely` is the server telling us how the result may travel.
-   * The response is not stored, not logged and not put on the clipboard: the
-   * frame's instruction is that an adult hands it over in person, and a copy
-   * button exists to paste into somewhere that is not in person.
-   */
-  issuePin: (studentId: string) =>
-    api.post<PinIssueResponse>(`/api/v1/students/${studentId}/pin/reset`),
 
   /**
    * Step two of two, and the only permanent deletion in the admin set. Only
@@ -532,9 +620,31 @@ export const studentsApi = {
 };
 
 /** One misconception several students in a class share (C09). */
+/**
+ * What comes back from clearing a child's PIN (SCRUM-216). No PIN in it, by
+ * design: nobody but the child ever sets one, and nobody is told the old one.
+ */
+export interface PinCleared {
+  studentId: string;
+  clearedAt: string;
+  /** Always true: the child chooses the next PIN, at their next sign-in. */
+  childSetsNext?: boolean;
+  pinLength?: number;
+}
+
+/** What comes back from "Ask an admin about this". */
+export interface AdminSupportRequest {
+  studentId: string;
+  /** `already_notified`: an earlier request stands, and nothing new was sent. */
+  status: "notified" | "already_notified" | (string & {});
+  /** How many administrators were told. Zero means nobody was. */
+  notifiedAdminCount: number;
+}
+
 export interface ClassMisconception {
   conceptId: string;
-  conceptName: string;
+  /** Nullable in the contract: a concept the engine has no name for. */
+  conceptName: string | null;
   /** A short name for the shape of the error. */
   pattern: string;
   studentCount: number;
@@ -545,7 +655,8 @@ export interface ClassMisconception {
  *  per-student read - see the note at the top of this file. */
 export interface ClassMasteryRow {
   conceptId: string;
-  conceptName: string;
+  /** Nullable in the contract: a concept the engine has no name for. */
+  conceptName: string | null;
   studentCount: number;
   masteryProbabilityConcept: number;
   masteryProbabilityReading: number;
@@ -565,6 +676,8 @@ export interface ConversationEvidence {
   periodDays: number;
   interactionCount: number;
   categories: Record<string, number>;
+  /** A phrase for each category key, e.g. `lesson_help` → "Lesson help" (12 Oct). */
+  categoryLabels?: Record<string, string>;
   helpfulResponseRate: number | null;
   privacy: "aggregate_only" | "withheld_below_minimum";
   minimumInteractions?: number;
@@ -613,17 +726,22 @@ export interface ClassInsightsNarrative {
 
 export const classInsightsApi = {
   /**
-   * Shared misconceptions. `minimumStudents` filters out one-offs.
+   * Shared misconceptions - the ones enough children share to be worth naming.
    *
-   * THREE IS THE FLOOR, and it is the server's, not a preference: the spec
-   * constrains this parameter to `minimum: 3` (default 3, max 50). We sent 2,
-   * so every single request 422'd and C09's "a shared sticking point" section
-   * has never rendered for any class since it was written. Do not lower it.
+   * `minimumStudents` IS NOT SENT, and that is the fix rather than an omission.
+   * It is the small-cell privacy floor: how many children must share a
+   * misconception before a teacher is told about it. Rule 3 - the engine owns
+   * the cutoffs - makes that the server's number, and the spec gives it a
+   * default for exactly this reason (min 3, default 3, max 50).
+   *
+   * This sent 2 first, which 422'd on every request, so the section never
+   * rendered. Then it pinned 3, which works today and would silently override
+   * the day backend raises the default to protect smaller classes - the one
+   * change here that has to reach every screen without a client release.
+   * Omitted, the server's default is the only number in play.
    */
-  misconceptions: (classId: string, minimumStudents = 3) =>
-    api.get<ClassMisconception[]>(`/api/misconceptions/class/${classId}`, {
-      params: { minimumStudents },
-    }),
+  misconceptions: (classId: string) =>
+    api.get<ClassMisconception[]>(`/api/misconceptions/class/${classId}`),
 
   mastery: (classId: string) =>
     api.get<ClassMasteryRow[]>(`/api/mastery/class/${classId}`),

@@ -1,4 +1,8 @@
-import type { OnboardingState, RejectedRow } from "@/lib/api/onboarding";
+import type {
+  ClassMergeProposal,
+  OnboardingState,
+  RejectedRow,
+} from "@/lib/api/onboarding";
 
 /**
  * The pure half of D24's OB-01/OB-02 - what the upload screens claim, separate
@@ -88,4 +92,61 @@ export function rejectedCsv(rows: RejectedRow[]): string {
  */
 export function mayConfirm(state: OnboardingState | null): boolean {
   return state?.canConfirm === true;
+}
+
+/**
+ * The column headings out of a template the server made - its first row.
+ *
+ * Read, not known: the server generates that row from the parser's own
+ * columns, so this is the one list of them that cannot drift. Split as CSV
+ * because a heading may be quoted; the BOM it carries for Excel goes with the
+ * trim, which counts it as whitespace. Null when there is nothing to show,
+ * which renders as no list rather than an empty one.
+ */
+export function templateColumns(text: string): string[] | null {
+  const first = text.split(/\r?\n/, 1)[0] ?? "";
+  const cells: string[] = [];
+  let cell = "";
+  let quoted = false;
+  for (let i = 0; i < first.length; i++) {
+    const ch = first[i];
+    if (quoted) {
+      if (ch !== '"') cell += ch;
+      else if (first[i + 1] === '"') {
+        cell += '"';
+        i++;
+      } else quoted = false;
+    } else if (ch === '"') quoted = true;
+    else if (ch === ",") {
+      cells.push(cell);
+      cell = "";
+    } else cell += ch;
+  }
+  cells.push(cell);
+  const columns = cells.map((c) => c.trim()).filter(Boolean);
+  return columns.length ? columns : null;
+}
+
+/** The class questions still open - the server's list, never a guess. */
+export function openMerges(state: OnboardingState | null): ClassMergeProposal[] {
+  return state?.classMerges ?? [];
+}
+
+/**
+ * "JSS2A (3 students) and JSS 2A (31 students)" - every spelling, with what
+ * each holds, because the counts are how a school recognises its own mistake.
+ */
+export function mergeSpellings(p: ClassMergeProposal): string {
+  const parts = p.candidates.map(
+    (c) => `${c.name} (${c.studentCount} ${c.studentCount === 1 ? "student" : "students"})`,
+  );
+  return parts.length > 1
+    ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`
+    : (parts[0] ?? p.proposedName);
+}
+
+/** D24 OB-02's footer line while questions remain; null when none do. */
+export function mergesLeftLine(n: number): string | null {
+  if (n <= 0) return null;
+  return `${n} class ${n === 1 ? "question" : "questions"} still to answer before you can go on.`;
 }

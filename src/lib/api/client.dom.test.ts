@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { sessionExpiredDoor } from "./client";
 
 const clearSession = vi.fn();
@@ -69,8 +69,12 @@ describe("sessionExpiredDoor", () => {
   it("sends both admin roles to the admin door", () => {
     // The backend has no plain "admin" - only these two, and a comparison
     // against "admin" would silently send a SENCo to the child's screen.
-    expect(sessionExpiredDoor("senco_admin")).toBe("/auth/admin/session-expired");
-    expect(sessionExpiredDoor("other_admin")).toBe("/auth/admin/session-expired");
+    expect(sessionExpiredDoor("senco_admin")).toBe(
+      "/auth/admin/session-expired",
+    );
+    expect(sessionExpiredDoor("other_admin")).toBe(
+      "/auth/admin/session-expired",
+    );
   });
 
   it("sends a student, and anyone unknown, to the shared door", () => {
@@ -155,7 +159,10 @@ describe("the auth latch", () => {
     vi.stubGlobal("fetch", respondWith(401));
     const { api } = await freshClient();
     await expect(
-      api.post("/api/v1/auth/login/password", { email: "a@b.c", password: "x" }),
+      api.post("/api/v1/auth/login/password", {
+        email: "a@b.c",
+        password: "x",
+      }),
     ).rejects.toThrow();
 
     expect(clearSession).not.toHaveBeenCalled();
@@ -215,11 +222,314 @@ describe("the auth latch", () => {
     expect(refused).toMatch(/don't have access/i);
   });
 
+  it("keeps the admin signed in when only their CURRENT password was wrong", async () => {
+    // Settings' change-password answers a wrong current password with 401
+    // `current_password_incorrect`. The token was fine; treating it as dead
+    // signed the admin out mid-form.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              detail: { code: "current_password_incorrect", message: "The current password did not match." },
+            }),
+            { status: 401, headers: { "Content-Type": "application/json" } },
+          ),
+      ),
+    );
+    const { api } = await freshClient();
+    await expect(
+      api.post("/api/v1/auth/password/change", { currentPassword: "x", newPassword: "y" }),
+    ).rejects.toMatchObject({ status: 401 });
+    expect(clearSession).not.toHaveBeenCalled();
+  });
+
+  it("still ends a genuinely dead session on the same route", async () => {
+    vi.stubGlobal("fetch", respondWith(401));
+    const { api } = await freshClient();
+    await expect(
+      api.post("/api/v1/auth/password/change", { currentPassword: "x", newPassword: "y" }),
+    ).rejects.toMatchObject({ status: 401 });
+    expect(clearSession).toHaveBeenCalledTimes(1);
+  });
+
   it("does not treat a 500 as a dead session", async () => {
     vi.stubGlobal("fetch", respondWith(500));
     const { api } = await freshClient();
     await expect(api.get("/api/v1/classes")).rejects.toThrow();
 
     expect(clearSession).not.toHaveBeenCalled();
+  });
+});
+
+describe("where a child's session-end door sends them back to", () => {
+  it("carries the lesson they were in, so signing back in returns them to it", () => {
+    // IA 31: "Log back in -> Student Login Screen (lesson position preserved)".
+    // The door carried only `?reason=`, so a lapse mid-lesson landed on Home.
+    expect(
+      sessionExpiredDoor(
+        "student",
+        "session_expired",
+        "/student/lessons/frac-3",
+      ),
+    ).toBe(
+      "/auth/session-expired?reason=session_expired&next=%2Fstudent%2Flessons%2Ffrac-3",
+    );
+    expect(sessionExpiredDoor("student", null, "/student/progress")).toBe(
+      "/auth/session-expired?next=%2Fstudent%2Fprogress",
+    );
+  });
+
+  it("carries nothing that is not a student route", () => {
+    expect(sessionExpiredDoor("student", null, "/")).toBe(
+      "/auth/session-expired",
+    );
+    expect(sessionExpiredDoor("student", null, "/auth/login")).toBe(
+      "/auth/session-expired",
+    );
+  });
+
+  it("does not hand a destination to the staff doors, which do not read one", () => {
+    expect(
+      sessionExpiredDoor("teacher", "session_expired", "/student/lessons/x"),
+    ).toBe("/auth/teacher/session-expired?reason=session_expired");
+  });
+});
+
+/**
+ * 28b: a pause that lands mid-lesson is shown OVER the lesson, not by leaving
+ * it. What can be observed here is the half that decides: a paused child with
+ * a host mounted keeps their session (the card clears it on Okay) and the card
+ * is raised; without a host, or for anyone else, the old door still happens.
+ */
+describe("a child paused mid-lesson", () => {
+  const paused = () =>
+    vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({ detail: { code: "account_paused", message: "x" } }),
+          { status: 401, headers: { "Content-Type": "application/json" } },
+        ),
+    );
+  const asStudent = () =>
+    getSession.mockReturnValue({
+      token: "tok-live",
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+      userId: "student-1",
+      role: "student",
+    });
+
+  // `mockReturnValue` outlives the test; put the file's teacher back.
+  afterEach(() => {
+    getSession.mockReturnValue({
+      token: "tok-live",
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+      userId: "user-1",
+      role: "teacher",
+    });
+  });
+
+  it("stays on the page and raises the card", async () => {
+    asStudent();
+    vi.stubGlobal("fetch", paused());
+    const { api } = await freshClient();
+    const pause = await import("@/lib/auth/accountPause");
+    const unregister = pause.registerPauseHost();
+
+    await expect(api.get("/api/v1/lessons/x")).rejects.toThrow();
+
+    expect(pause.isAccountPaused()).toBe(true);
+    // Leaving would have cleared it here; the card does it on Okay instead.
+    expect(clearSession).not.toHaveBeenCalled();
+    unregister();
+  });
+
+  it("still goes to the door when nothing is mounted to draw the card", async () => {
+    // An event nobody hears would leave the child with nothing at all.
+    asStudent();
+    vi.stubGlobal("fetch", paused());
+    const { api } = await freshClient();
+    const pause = await import("@/lib/auth/accountPause");
+
+    await expect(api.get("/api/v1/lessons/x")).rejects.toThrow();
+
+    expect(pause.isAccountPaused()).toBe(false);
+    expect(clearSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("raises the closed card, not the paused one, for a removed child (B58, D53)", async () => {
+    asStudent();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ detail: { code: "account_closed", message: "x" } }),
+            { status: 401, headers: { "Content-Type": "application/json" } },
+          ),
+      ),
+    );
+    const { api } = await freshClient();
+    const pause = await import("@/lib/auth/accountPause");
+    const unregister = pause.registerPauseHost();
+
+    await expect(api.get("/api/v1/lessons/x")).rejects.toThrow();
+
+    expect(pause.accountHold()).toBe("closed");
+    expect(clearSession).not.toHaveBeenCalled();
+    unregister();
+  });
+
+  it("leaves a paused teacher on their own door", async () => {
+    // Staff have a frame of their own for this; 28b is the child's.
+    vi.stubGlobal("fetch", paused());
+    const { api } = await freshClient();
+    const pause = await import("@/lib/auth/accountPause");
+    const unregister = pause.registerPauseHost();
+
+    await expect(api.get("/api/v1/classes")).rejects.toThrow();
+
+    expect(pause.isAccountPaused()).toBe(false);
+    expect(clearSession).toHaveBeenCalledTimes(1);
+    unregister();
+  });
+});
+
+/**
+ * B36: a crash report is sent from an error screen. If the session behind it
+ * has died, its 401 must not clear the session and carry the child off the
+ * screen they are reading - the next ordinary read finds the dead session.
+ */
+describe("a crash report", () => {
+  it("never sends anyone to a door, whatever it is answered", async () => {
+    vi.stubGlobal("fetch", respondWith(401));
+    const { api } = await freshClient();
+
+    await expect(
+      api.post("/api/v1/client-errors", { message: "x" }),
+    ).rejects.toThrow();
+
+    expect(clearSession).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * B7: a withdrawn child's 403 `consent_withdrawn` goes to 00e (D117),
+ * through the same once-only latch as the session doors. Where it goes is
+ * `withdrawnDoor`'s, tested on its own; what can be observed here is that the
+ * client acts on it - a later 401 finds the latch already taken - and that the
+ * caller still gets its error.
+ */
+describe("a withdrawn child refused mid-use", () => {
+  const sequence = (...replies: [number, unknown][]) => {
+    const fetch = vi.fn();
+    for (const [status, body] of replies) {
+      fetch.mockResolvedValueOnce(
+        new Response(JSON.stringify(body), {
+          status,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    }
+    return fetch;
+  };
+  const WITHDRAWN: [number, unknown] = [
+    403,
+    { detail: { code: "consent_withdrawn", message: "x" } },
+  ];
+  const EXPIRED: [number, unknown] = [
+    401,
+    { detail: { code: "session_expired" } },
+  ];
+  const as = (role: string) =>
+    getSession.mockReturnValue({
+      token: "tok-live",
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+      userId: "u-1",
+      role,
+    });
+
+  afterEach(() => {
+    as("teacher");
+    vi.unstubAllGlobals();
+  });
+
+  it("is sent to the held screen, once, and the caller still hears why", async () => {
+    as("student");
+    vi.stubGlobal("fetch", sequence(WITHDRAWN, EXPIRED));
+    const { api, ApiError } = await freshClient();
+
+    const refused = await api
+      .post("/api/v1/lessons/x/session", {})
+      .catch((e: unknown) => e);
+    expect(refused).toBeInstanceOf(ApiError);
+    expect((refused as InstanceType<typeof ApiError>).status).toBe(403);
+
+    // The latch is taken: nothing else on this page sends them anywhere.
+    await expect(api.get("/api/v1/lessons/x")).rejects.toThrow();
+    expect(clearSession).not.toHaveBeenCalled();
+  });
+
+  it("leaves a teacher's refusal to the screen that met it", async () => {
+    as("teacher");
+    vi.stubGlobal("fetch", sequence(WITHDRAWN, EXPIRED));
+    const { api } = await freshClient();
+
+    await expect(api.get("/api/v1/students/s-1")).rejects.toThrow();
+    // No latch: a later dead session still finds its door.
+    await expect(api.get("/api/v1/classes")).rejects.toThrow();
+    expect(clearSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves an ordinary 403 to the screen that met it", async () => {
+    as("student");
+    vi.stubGlobal(
+      "fetch",
+      sequence([403, { detail: { code: "forbidden" } }], EXPIRED),
+    );
+    const { api } = await freshClient();
+
+    await expect(api.get("/api/v1/lessons/x")).rejects.toThrow();
+    await expect(api.get("/api/v1/lessons/x")).rejects.toThrow();
+    expect(clearSession).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * T217. The teacher's expired screen promises "continue where you left off",
+ * and the place was dropped here - only the learner door was given it.
+ */
+describe("sessionExpiredDoor, carrying a teacher's place", () => {
+  it("hands the teacher door where they were, query and all", () => {
+    expect(sessionExpiredDoor("teacher", null, "/teacher/classes/c-1?tab=roster")).toBe(
+      `/auth/teacher/session-expired?next=${encodeURIComponent("/teacher/classes/c-1?tab=roster")}`,
+    );
+  });
+
+  it("keeps the reason beside it", () => {
+    expect(sessionExpiredDoor("teacher", "session_replaced", "/teacher/insights")).toBe(
+      `/auth/teacher/session-expired?reason=session_replaced&next=${encodeURIComponent("/teacher/insights")}`,
+    );
+  });
+
+  it("carries no route that is not the teacher console's", () => {
+    expect(sessionExpiredDoor("teacher", null, "/student/home")).toBe("/auth/teacher/session-expired");
+    expect(sessionExpiredDoor("teacher", null, "/teacher")).toBe("/auth/teacher/session-expired");
+  });
+
+  it("hands the admin door its place too, query and all", () => {
+    const place = `/admin/students/s1?back=${encodeURIComponent("/admin/classes/c-1")}`;
+    expect(sessionExpiredDoor("senco_admin", null, place)).toBe(
+      `/auth/admin/session-expired?next=${encodeURIComponent(place)}`,
+    );
+    expect(sessionExpiredDoor("other_admin", "session_replaced", "/admin/billing")).toBe(
+      `/auth/admin/session-expired?reason=session_replaced&next=${encodeURIComponent("/admin/billing")}`,
+    );
+  });
+
+  it("carries no route that is not the admin console's", () => {
+    expect(sessionExpiredDoor("senco_admin", null, "/teacher/classes")).toBe("/auth/admin/session-expired");
+    expect(sessionExpiredDoor("senco_admin", null, "/admin")).toBe("/auth/admin/session-expired");
   });
 });

@@ -1,16 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render } from "@testing-library/react";
 
-const { useSessionLapse, usePathname } = vi.hoisted(() => ({
-  useSessionLapse: vi.fn(),
-  usePathname: vi.fn(),
-}));
+const { useSessionLapse, useSessionRefresh, useSessionElsewhere, usePathname } = vi.hoisted(
+  () => ({
+    useSessionLapse: vi.fn(),
+    useSessionRefresh: vi.fn(),
+    useSessionElsewhere: vi.fn(),
+    usePathname: vi.fn(),
+  }),
+);
 
 vi.mock("@/hooks/useSessionLapse", () => ({ useSessionLapse }));
-vi.mock("next/navigation", () => ({ usePathname }));
-vi.mock("@/context/AccessibilityContext", () => ({
-  TEXT_ZOOM: { normal: "", large: "" },
-  useAccessibility: () => ({ textSize: "normal" }),
+vi.mock("@/hooks/useSessionRefresh", () => ({ useSessionRefresh }));
+vi.mock("./sessionElsewhere", () => ({ useSessionElsewhere }));
+// The shell holds C18's leave confirmation, which navigates with the router.
+vi.mock("next/navigation", () => ({
+  usePathname,
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
 }));
 vi.mock("./AskNevo", () => ({ AskNevo: () => null }));
 vi.mock("./TeacherSidebar", () => ({ TeacherSidebar: () => null }));
@@ -36,6 +42,8 @@ import { TeacherShell } from "./TeacherShell";
  */
 
 beforeEach(() => {
+  useSessionRefresh.mockReset();
+  useSessionElsewhere.mockReset();
   useSessionLapse.mockReset();
   usePathname.mockReset();
   usePathname.mockReturnValue("/teacher/dashboard");
@@ -67,6 +75,50 @@ describe("the teacher console shell", () => {
     expect(useSessionLapse).toHaveBeenCalled();
   });
 
+  it("zooms the page by the class the boot script keys, not an inline style (C12)", () => {
+    const { container } = render(
+      <TeacherShell>
+        <div>console</div>
+      </TeacherShell>,
+    );
+    const main = container.querySelector("main");
+
+    expect(main).toHaveClass("nevo-text-zoom");
+    expect(main?.style.zoom).toBe("");
+  });
+
+  it("renews the teacher's session, which only the student shell ever did (T219)", () => {
+    render(
+      <TeacherShell>
+        <div>console</div>
+      </TeacherShell>,
+    );
+
+    expect(useSessionRefresh).toHaveBeenCalled();
+  });
+
+  it("leaves when another tab signs the teacher out (C02)", () => {
+    render(
+      <TeacherShell>
+        <div>console</div>
+      </TeacherShell>,
+    );
+
+    expect(useSessionElsewhere).toHaveBeenCalled();
+  });
+
+  it("does both on the full-screen flows too, above the early return", () => {
+    usePathname.mockReturnValue("/teacher/onboarding");
+    render(
+      <TeacherShell>
+        <div>bare</div>
+      </TeacherShell>,
+    );
+
+    expect(useSessionRefresh).toHaveBeenCalled();
+    expect(useSessionElsewhere).toHaveBeenCalled();
+  });
+
   it("still renders what it was given", () => {
     const { getByText } = render(
       <TeacherShell>
@@ -75,5 +127,37 @@ describe("the teacher console shell", () => {
     );
 
     expect(getByText("console")).toBeInTheDocument();
+  });
+});
+
+/**
+ * C19 (design, 12 Oct): on a phone, a screen with no phone layout shows the
+ * shared "needs a bigger screen" state in its place. CSS decides the width;
+ * these pin which screens carry the swap at all.
+ */
+describe("the console on a phone", () => {
+  it("stands the bigger-screen state in for a screen with no phone layout", () => {
+    usePathname.mockReturnValue("/teacher/insights");
+    const { getByText, getByRole } = render(
+      <TeacherShell>
+        <div>insights</div>
+      </TeacherShell>,
+    );
+
+    expect(getByRole("heading", { name: "This page needs a bigger screen" })).toBeInTheDocument();
+    // The page is still there for a tablet or a computer - hidden below md.
+    expect(getByText("insights").parentElement?.className).toMatch(/max-md:hidden/);
+  });
+
+  it("gives a phone the screen itself where one is drawn", () => {
+    usePathname.mockReturnValue("/teacher/dashboard");
+    const { getByText, queryByRole } = render(
+      <TeacherShell>
+        <div>home</div>
+      </TeacherShell>,
+    );
+
+    expect(queryByRole("heading", { name: "This page needs a bigger screen" })).not.toBeInTheDocument();
+    expect(getByText("home").parentElement?.className ?? "").not.toMatch(/max-md:hidden/);
   });
 });

@@ -25,16 +25,3 @@ export const DENSITY = {
 } as const;
 
 export type Density = (typeof DENSITY)[keyof typeof DENSITY];
-
-/**
- * Layers available on a calculation segment. `interactive` is the co-construction
- * solver itself; `audio` and `kinesthetic` are layers over it (never replacements
- * — audio must not hide the text). Distinct from the player's top-level MODALITY.
- */
-export const CALC_MODALITY = {
-  INTERACTIVE: "interactive",
-  AUDIO: "audio",
-  KINESTHETIC: "kinesthetic",
-} as const;
-
-export type CalcModality = (typeof CALC_MODALITY)[keyof typeof CALC_MODALITY];

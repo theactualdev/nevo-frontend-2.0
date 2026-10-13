@@ -35,7 +35,7 @@ export function ClassRoute({
   if (!hydrated) {
     return (
       <div className="flex flex-1 items-center justify-center p-12">
-        <div className="h-[280px] w-full max-w-[860px] animate-pulse rounded-[12px] bg-nevo-cream-elevated" />
+        <div className="h-[280px] w-full max-w-[820px] animate-pulse rounded-[12px] bg-nevo-cream-elevated" />
       </div>
     );
   }
@@ -55,6 +55,7 @@ export function ClassRoute({
   if (!live && !loading && fixture)
     return (
       <SampleRegion kind="teacher:class-detail">
+        {/* Signed in, this is a failed read standing in - never a code. */}
         <ClassDetail klass={fixture} />
       </SampleRegion>
     );
@@ -69,9 +70,9 @@ export function ClassRoute({
     return (
       <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
         <div className="mx-auto max-w-[660px] rounded-[12px] bg-nevo-cream-elevated px-[26px] py-7 shadow-elevation-1">
-          <h2 className="text-[17px] font-semibold text-nevo-near-black">
+          <h1 className="text-[17px] font-semibold text-nevo-near-black">
             We couldn&rsquo;t load this class
-          </h2>
+          </h1>
           <p className="mt-2 text-sm leading-[1.55] text-nevo-near-black/62">
             It hasn&rsquo;t gone anywhere. Try again in a moment.
           </p>

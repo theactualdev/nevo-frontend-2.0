@@ -34,10 +34,14 @@ import {
   TEXT_ACTION,
 } from "../Roster/primitives";
 import { useSetupGate } from "@/hooks";
+import { AddGuardianForm } from "./AddGuardianForm";
+import { CANNOT_SEND_LINE, useMaySendConsent } from "./consentRole";
+import { ConsentFormDownload } from "./ConsentFormDownload";
 import { EraseRecordModal } from "./EraseRecordModal";
-import { IssuePinSheet } from "./IssuePinSheet";
 import { MoveStudentSheet } from "./MoveStudentSheet";
 import { NoAccess, failureKind } from "../NoAccess";
+import { BackLink } from "../BackLink";
+import { withBack, type Back } from "../back";
 import { WriteFailed } from "../WriteFailed";
 
 /**
@@ -54,16 +58,11 @@ import { WriteFailed } from "../WriteFailed";
  * deactivated, and is gated on the typed name. Nothing goes from live to
  * erased in a single pass.
  *
- * TODO(api): BUILT, and this marker outlived it. `StudentDetailResponse.consent` is a
- * REQUIRED `{status, actorId, actorName, timestamp, channel}` - all four
- * things it says are missing - and the card is rendered in this very file
- * (the `Consent` section, with `ConsentPill` and `consentDetailLine`).
- * Formerly: "the CONSENT card is not built." `GET /api/v1/students/{id}`
- * carries no consent state, no giver, no date and no channel, and
- * `parent-links` carries `accountCreated`, which answers a different
- * question. The card is a record a school may have to stand behind, so it is
- * absent rather than assembled from the nearest-looking fields. This also
- * removes the header's consent pill and the "View record" link.
+ * THE CONSENT CARD IS BUILT. `StudentDetailResponse.consent` is a REQUIRED
+ * `{status, actorId, actorName, timestamp, channel}`, and the card is the
+ * `Consent` section in this file, with `ConsentPill` and `consentDetailLine`.
+ * It was absent while the read carried none of that, rather than assembled
+ * from `parent-links`' `accountCreated`, which answers a different question.
  *
  * TODO(api): three enrolment fields the frame draws have no source - the
  * ENROLLED date, the "Added by" line (hand-enrolled vs roster sync), and the
@@ -72,7 +71,14 @@ import { WriteFailed } from "../WriteFailed";
 
 type Phase = "loading" | "ready" | "failed" | "denied";
 
-export function StudentDetailView({ studentId }: { studentId: string }) {
+export function StudentDetailView({
+  studentId,
+  back = null,
+}: {
+  studentId: string;
+  /** Where the admin came from - see `back.ts`. */
+  back?: Back | null;
+}) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>("loading");
   const [student, setStudent] = useState<AdminStudentDetail | null>(null);
@@ -80,15 +86,22 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
   const [guardians, setGuardians] = useState<ParentLink[]>([]);
   const [guardiansFailed, setGuardiansFailed] = useState(false);
   const { stateFor: consentStateFor, send: sendConsent } = useConsentRequests();
+  /** Requests, and so adding a guardian, need roster or SENCo access - see `consentRole`. */
+  const maySend = useMaySendConsent();
   const [moving, setMoving] = useState(false);
   /** D24 / D01b: every change to a student pauses while setup is unfinished. */
   const { writesPaused } = useSetupGate();
-  const [issuingPin, setIssuingPin] = useState(false);
   const [confirmDeactivate, setConfirmDeactivate] = useState(false);
   const [erasing, setErasing] = useState(false);
   const [working, setWorking] = useState(false);
   /** The deactivate was refused. Hold the dialog and say so. */
   const [deactivateFailed, setDeactivateFailed] = useState(false);
+  /** A restore was refused - said, not swallowed. */
+  const [restoreFailed, setRestoreFailed] = useState(false);
+  /** The add-a-guardian form is open. */
+  const [addingGuardian, setAddingGuardian] = useState(false);
+  /** What the request just sent to a new guardian said about delivery. */
+  const [guardianAdded, setGuardianAdded] = useState<string | null>(null);
 
   const load = useCallback(() => {
     Promise.all([studentsApi.get(studentId), classesApi.list(true)])
@@ -186,15 +199,12 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
   const invited = status === "invited";
   const canErase = erasable(student);
   const currentClass = classes.find((c) => student.classIds.includes(c.id)) ?? null;
+  /** This page, as somewhere to come back to - its own back kept. */
+  const here = back ? withBack(`/admin/students/${student.id}`, back) : `/admin/students/${student.id}`;
 
   return (
     <Wrapper>
-      <Link
-        href="/admin/students"
-        className="text-[13.5px] font-semibold text-nevo-navy hover:opacity-75"
-      >
-        &larr; All students
-      </Link>
+      <BackLink back={back} fallback={{ href: "/admin/students", label: "All students" }} />
 
       <div className="mt-3 flex items-center gap-4">
         <Avatar name={name} size={56} />
@@ -241,6 +251,12 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
             }
           />
           <Field label="Username" value={student.loginIdentifier ?? "Not set"} />
+          {/* On the read since 8 Oct. The one a child signs back in with
+              after a PIN clear, so the school needs to be able to find it. */}
+          <Field
+            label="Student ID / Admission Number"
+            value={student.admissionNumber?.trim() || "Not set"}
+          />
           <Field
             label="Status"
             value={
@@ -341,7 +357,12 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
           * own words for the two cases, and it never claims delivery it has
           * not been told about - the receipt's `deliveryStatus` decides.
           */}
-        {mayRequestConsent(student.consent) ? (
+        {mayRequestConsent(student.consent) && !maySend ? (
+          <p className="m-0 mt-4 max-w-[54ch] border-t border-nevo-near-black/8 pt-4 text-[13.5px] leading-[1.55] text-nevo-near-black/62">
+            {CANNOT_SEND_LINE}
+          </p>
+        ) : null}
+        {mayRequestConsent(student.consent) && maySend ? (
           <div className="mt-4 border-t border-nevo-near-black/8 pt-4">
             <button
               type="button"
@@ -365,9 +386,36 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
             ) : null}
           </div>
         ) : null}
+
+        {/*
+          * D25's written route, beside the emailed one: some parents never
+          * reply to a link, and a signed paper form is consent too. Not for a
+          * withdrawn child - only the parent who withdrew can lift that - nor
+          * once consent is recorded. Any admin may record a form; the backend
+          * takes it from any school role.
+          */}
+        {mayRequestConsent(student.consent) ? (
+          <div className="mt-4 flex flex-wrap items-start gap-x-6 gap-y-2 border-t border-nevo-near-black/8 pt-4">
+            <Link
+              href={withBack(`/admin/students/${student.id}/consent`, { href: here, label: name })}
+              className="text-[13.5px] font-semibold text-nevo-navy transition-opacity hover:opacity-75"
+            >
+              Record a signed paper form
+            </Link>
+            <ConsentFormDownload studentId={student.id} />
+          </div>
+        ) : null}
       </div>
 
       <SectionLabel>Parent / guardian accounts</SectionLabel>
+      {guardianAdded ? (
+        <p
+          role="status"
+          className="m-0 mt-2 max-w-[60ch] text-[13.5px] leading-[1.55] text-nevo-navy"
+        >
+          {guardianAdded}
+        </p>
+      ) : null}
       <div className={cn(CARD, "mt-2.5")}>
         {guardiansFailed ? (
           <ReadFailed
@@ -376,14 +424,51 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
             onRetry={load}
           />
         ) : guardians.length === 0 ? (
+          /*
+           * WAS A DEAD END: "No guardian on the record. A parent account is
+           * created automatically once a guardian confirms consent." - with
+           * nothing to press. Consent is a gate, so a child with nobody on
+           * record could never start. See `AddGuardianForm`.
+           */
           <div className="px-6 py-[22px]">
             <p className="m-0 text-[15px] font-semibold text-nevo-near-black">
               No guardian on the record
             </p>
-            <p className="m-0 mt-1.5 text-[13.5px] leading-[1.55] text-nevo-near-black/62">
-              A parent account is created automatically once a guardian
-              confirms consent.
+            <p className="m-0 mt-1.5 max-w-[56ch] text-[13.5px] leading-[1.55] text-nevo-near-black/62">
+              {firstName} can&rsquo;t start until a parent or guardian gives
+              permission.{" "}
+              {maySend ? "Add one and we’ll send them the request." : CANNOT_SEND_LINE}
             </p>
+            {/* No other route writes a guardian onto an existing student: the
+                request is the write. So the form follows the request's role. */}
+            {!maySend ? null : addingGuardian ? (
+              <div className="mt-4">
+                <AddGuardianForm
+                  studentId={student.id}
+                  studentFirstName={firstName}
+                  onCancel={() => setAddingGuardian(false)}
+                  onAdded={(receipt, name) => {
+                    setAddingGuardian(false);
+                    setGuardianAdded(
+                      consentRequestLine(
+                        { kind: "done", parentName: name, delivery: receipt.deliveryStatus },
+                        firstName,
+                      ),
+                    );
+                    load();
+                  }}
+                />
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setAddingGuardian(true)}
+                disabled={writesPaused}
+                className={cn(TEXT_ACTION, "mt-3")}
+              >
+                Add a parent or guardian
+              </button>
+            )}
           </div>
         ) : (
           guardians.map((g, i) => (
@@ -394,13 +479,21 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
                 i < guardians.length - 1 && ROW_DIVIDER,
               )}
             >
-              <Avatar name={g.parentName} size={44} />
+              {/*
+                * A GUARDIAN RECORDED AT ENROLMENT HAS NO NAME YET, on purpose:
+                * enrolment stores the email alone and the parent gives their
+                * own name at consent. So the address stands in for the name
+                * rather than the row rendering blank.
+                */}
+              <Avatar name={g.parentName.trim() || g.parentContact} size={44} />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-base font-semibold text-nevo-near-black">
-                  {g.parentName}
+                  {g.parentName.trim() || g.parentContact}
                 </div>
                 <div className="truncate text-[13.5px] text-nevo-near-black/62">
-                  {g.parentContact}
+                  {g.parentName.trim()
+                    ? g.parentContact
+                    : "They’ll give their own name when they answer the request"}
                 </div>
               </div>
               <span
@@ -432,16 +525,23 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
               disabled={working || writesPaused}
               onClick={() => {
                 setWorking(true);
+                setRestoreFailed(false);
                 studentsApi
                   .restore(student.id)
                   .then(load)
-                  .catch(() => undefined)
+                  // Was `.catch(() => undefined)`: a refused restore left the
+                  // page byte-identical, so it read as a dead button. The
+                  // class page's restore was fixed the same way.
+                  .catch(() => setRestoreFailed(true))
                   .finally(() => setWorking(false));
               }}
               className={TEXT_ACTION}
             >
               Restore this student
             </button>
+            {restoreFailed ? (
+              <WriteFailed className="mt-2" what={`restore ${firstName}`} />
+            ) : null}
             <p className="mt-1.5 max-w-[520px] text-[13px] leading-[1.5] text-nevo-near-black/55">
               They pick up exactly where they left off, in the same class unless
               you move them.
@@ -500,26 +600,11 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
               </p>
             </div>
             {/*
-              * THE OTHER END OF "ASK YOUR TEACHER". The child's Forgot-PIN
-              * screen is informational by design and sends them to an adult;
-              * until now no adult in any console had a control to press, and
-              * `pin_reset_requested` notifications arrived nowhere. Active
-              * students only: an invited child has not joined, and a
-              * deactivated one cannot sign in whatever PIN they hold.
+              * NO PIN CONTROL HERE, deliberately. SCRUM-216 gives clearing a
+              * child's PIN to the teachers of that child's classes - the
+              * adults who can recognise her - and no ticket asks for an admin
+              * one. A child who forgets her PIN asks her teacher (C05).
               */}
-            <div>
-              <button
-                type="button"
-                onClick={() => setIssuingPin(true)}
-                disabled={writesPaused}
-                className={TEXT_ACTION}
-              >
-                Give {firstName} a new PIN
-              </button>
-              <p className="mt-1.5 max-w-[420px] text-[13px] leading-[1.5] text-nevo-near-black/55">
-                For when they can&rsquo;t get in. You hand it over in person.
-              </p>
-            </div>
             <div>
               <button
                 type="button"
@@ -548,19 +633,6 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
             setMoving(false);
             load();
           }}
-        />
-      ) : null}
-
-      {/*
-        * NO `load()` ON CLOSE, unlike the sheets around it. A new PIN changes
-        * nothing this screen renders, and a reload here would replace the
-        * record underneath an admin who is still copying the number down.
-        */}
-      {issuingPin ? (
-        <IssuePinSheet
-          studentId={student.id}
-          studentName={name}
-          onClose={() => setIssuingPin(false)}
         />
       ) : null}
 

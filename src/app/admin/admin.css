@@ -1,0 +1,62 @@
+/*
+ * D14 Interaction States, for the admin console - "the single source of truth
+ * for button and control behaviour".
+ *
+ * WHY A STYLESHEET AND NOT THE TOKENS ALONE. Buttons across this console are
+ * built from a handful of shared tokens (PRIMARY_BTN, GHOST_BTN, TEXT_ACTION)
+ * and a great many local class strings - pills, icon buttons, chips, toggles,
+ * row links. D14's focus ring belongs on every one of them, and it is the same
+ * ring on every one; stamping it into each class string would be dozens of
+ * edits that the next new control forgets. So the ring is one rule here, and
+ * the tokens carry the per-kind states (pressed, disabled) that differ.
+ *
+ * SCOPED TO THE ADMIN CONSOLE by `data-console="admin"` on the admin layout,
+ * and in its own file: `globals.css` is shared with the student and teacher
+ * consoles, which own their own interaction states.
+ *
+ * `:focus-visible`, not `:focus` - the keyboard user's ring, which a mouse
+ * click does not leave behind.
+ */
+
+/* The ring: 3px cream, then 2px violet (#9a9ccb) - D14's Focus column. */
+[data-console="admin"]
+  :where(
+    button,
+    a[href],
+    summary,
+    [role="button"],
+    [role="tab"],
+    [role="switch"],
+    [tabindex]:not([tabindex="-1"])
+  ):focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px #f7f1e6,
+    0 0 0 5px #9a9ccb;
+}
+
+/*
+ * A checkbox or radio drawn as a card keeps the real input `sr-only`, so the
+ * ring goes on the label the admin can see.
+ */
+[data-console="admin"] label:has(input.sr-only:focus-visible) {
+  outline: none;
+  box-shadow:
+    0 0 0 3px #f7f1e6,
+    0 0 0 5px #9a9ccb;
+}
+
+/*
+ * Fields: D14's input focus is a navy border AND a soft violet halo. Every
+ * field here showed the border change alone.
+ */
+[data-console="admin"]
+  :where(
+    input:not([type="checkbox"]):not([type="radio"]):not(.sr-only),
+    select,
+    textarea
+  ):focus-visible {
+  outline: none;
+  border-color: #3b3f6e;
+  box-shadow: 0 0 0 3px rgba(154, 156, 203, 0.35);
+}

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePermissions } from "@/hooks";
 import { notificationsApi, type Notification } from "@/lib/api/notifications";
+import { announceReadStateChanged } from "./readState";
 import { cn } from "@/lib/utils";
 import { CARD, PRIMARY_BTN, ROW_DIVIDER } from "../Roster/primitives";
 import { NotificationPreferences } from "./NotificationPreferences";
@@ -29,12 +30,18 @@ import { WriteFailed } from "../WriteFailed";
  * an admin never loses their place. It appends, and the scroll position is
  * therefore preserved for free.
  *
- * TODO(api): `GET /api/notifications` takes `archived`, `limit` and `offset`
- * and nothing else, and `NotificationResponse` carries no CATEGORY. So D13b's
- * category filter pill, its per-row category label and its category-scoped
- * "Mark these as read" have no source. Search is client-side over the loaded
- * page for the same reason - there is no `q` parameter. All three become real
- * the moment a category lands on the row.
+ * EACH ROW CARRIES ITS CATEGORY NOW (backend B34, 1 Oct), and `NotificationRow`
+ * labels it - see `categoryLabel`.
+ *
+ * SEARCH IS THE SERVER'S NOW (`q`, 9 Oct). It ran over the loaded page only,
+ * so a notification older than the first fifty could never be found by
+ * typing. The box waits a moment after the last keystroke, then asks the
+ * feed, and "Show older" pages through the matches.
+ *
+ * TODO(api): D13b's category filter pill and its category-scoped "Mark these
+ * as read" still have no server route. Three of SCRUM-100's six admin
+ * categories (roster, SSO, teacher) have no enum value either, so this needs
+ * a design and backend answer together.
  *
  * THE ADMIN EVENTS ARRIVE NOW (backend, 7 Sep): admin_welcome,
  * consent_action_required, roster_sync_completed, roster_sync_needs_attention,
@@ -46,18 +53,14 @@ import { WriteFailed } from "../WriteFailed";
  * (soft violet for unread, navy for the rest) and no urgency glyphs anywhere in
  * the set; picking six new icons would be inventing design rather than applying
  * it.
- *
- * TODO(api): a `category` ON THE ROW. `NotificationCategory` exists for
- * preferences, but `NotificationResponse` carries only `type` - so the category
- * filter, the per-category label and "mark these as read" still have no source.
- * Three of SCRUM-100's six admin categories (roster, SSO, teacher) have no enum
- * value either, so this needs a design and backend answer together.
  */
 
 type Phase = "loading" | "ready" | "failed" | "denied";
 type View = "inbox" | "archived" | "preferences";
 
 const PAGE = 20;
+/** How long typing pauses before the feed is asked. */
+const SEARCH_PAUSE_MS = 300;
 
 const SEARCH_BAR =
   "flex h-[42px] w-full max-w-[320px] flex-1 items-center gap-[9px] rounded-[10px] border-[1.5px] border-nevo-near-black/10 bg-nevo-cream-elevated px-[15px] text-[14.5px] text-nevo-near-black outline-none transition-colors placeholder:text-nevo-near-black/50 focus-within:border-nevo-navy";
@@ -115,7 +118,11 @@ export function NotificationsView() {
   const [rows, setRows] = useState<Notification[]>([]);
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [search, setSearch] = useState("");
+  /** What the feed was last asked for - `search`, once typing pauses. */
+  const [query, setQuery] = useState("");
   const [hasMore, setHasMore] = useState(false);
+  /** The feed's own count of the view - D13b's "N archived". Undefined is unknown. */
+  const [total, setTotal] = useState<number | undefined>(undefined);
   const [olderFailed, setOlderFailed] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [allRead, setAllRead] = useState(false);
@@ -125,12 +132,19 @@ export function NotificationsView() {
 
   const archived = view === "archived";
 
-  const load = useCallback((wantArchived: boolean) => {
+  // Ask the server once typing pauses, not on every keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => setQuery(search.trim()), SEARCH_PAUSE_MS);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  const load = useCallback((wantArchived: boolean, q: string) => {
     notificationsApi
-      .list({ archived: wantArchived, limit: PAGE, offset: 0 })
+      .list({ archived: wantArchived, limit: PAGE, offset: 0, q })
       .then((feed) => {
         setRows(feed.notifications);
         setHasMore(Boolean(feed.hasMore));
+        setTotal(typeof feed.total === "number" ? feed.total : undefined);
         setNow(Date.now());
         setAllRead(feed.unreadCount === 0);
         setPhase("ready");
@@ -140,14 +154,14 @@ export function NotificationsView() {
 
   useEffect(() => {
     if (view === "preferences") return;
-    load(archived);
-  }, [load, archived, view]);
+    load(archived, query);
+  }, [load, archived, view, query]);
 
   const showOlder = () => {
     setOlderFailed(false);
     setLoadingMore(true);
     notificationsApi
-      .list({ archived, limit: PAGE, offset: rows.length })
+      .list({ archived, limit: PAGE, offset: rows.length, q: query })
       .then((feed) => {
         // Append: "Show older" must never move what the reader was looking at.
         setRows((prev) => [...prev, ...feed.notifications]);
@@ -162,17 +176,11 @@ export function NotificationsView() {
       .finally(() => setLoadingMore(false));
   };
 
-  const visible = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    return rows.filter((n) => {
-      if (unreadOnly && n.read) return false;
-      if (!needle) return true;
-      return (
-        n.title.toLowerCase().includes(needle) ||
-        n.description.toLowerCase().includes(needle)
-      );
-    });
-  }, [rows, search, unreadOnly]);
+  // The rows already match the search - the server did it. Unread is ours.
+  const visible = useMemo(
+    () => rows.filter((n) => !(unreadOnly && n.read)),
+    [rows, unreadOnly],
+  );
 
   const grouped = useMemo(() => {
     const out: { day: string; items: Notification[] }[] = [];
@@ -205,7 +213,7 @@ export function NotificationsView() {
     setAllRead(true);
     setWriteFailed("");
     setRows((prev) => prev.map((n) => ({ ...n, read: true })));
-    notificationsApi.markAllRead().catch(() => {
+    notificationsApi.markAllRead().then(announceReadStateChanged, () => {
       setAllRead(false);
       setRows((prev) =>
         prev.map((n) =>
@@ -218,23 +226,46 @@ export function NotificationsView() {
     });
   };
 
+  /*
+   * Its failure was swallowed, leaving the row painted read while the server
+   * still held it unread. Now it is put back and said, as mark-all does.
+   */
   const onRead = (id: string) => {
+    const wasUnread = rows.some((n) => n.notificationId === id && !n.read);
     setRows((prev) =>
       prev.map((n) => (n.notificationId === id ? { ...n, read: true } : n)),
     );
-    notificationsApi.markRead(id).catch(() => undefined);
+    notificationsApi.markRead(id).then(announceReadStateChanged, () => {
+      if (!wasUnread) return;
+      setRows((prev) =>
+        prev.map((n) => (n.notificationId === id ? { ...n, read: false } : n)),
+      );
+      setWriteFailed("mark that as read");
+    });
   };
 
   // Archive and Put back both remove the row from the view it is in, because
   // that view is defined by the flag they just changed.
+  //
+  // A refusal reloaded the list SILENTLY - the row came back with no word why,
+  // which reads as the button not working. It now says what didn't happen.
   const onArchive = (id: string) => {
+    setWriteFailed("");
     setRows((prev) => prev.filter((n) => n.notificationId !== id));
-    notificationsApi.archive(id).catch(() => load(archived));
+    notificationsApi.archive(id).then(announceReadStateChanged, () => {
+      setWriteFailed("archive that");
+      load(archived, query);
+    });
   };
 
   const onRestore = (id: string) => {
+    setWriteFailed("");
     setRows((prev) => prev.filter((n) => n.notificationId !== id));
-    notificationsApi.restore(id).catch(() => load(archived));
+    setTotal((t) => (typeof t === "number" ? Math.max(0, t - 1) : t));
+    notificationsApi.restore(id).then(announceReadStateChanged, () => {
+      setWriteFailed("put that back");
+      load(archived, query);
+    });
   };
 
   const filtering = Boolean(search.trim() || unreadOnly);
@@ -317,6 +348,11 @@ export function NotificationsView() {
 
             {archived ? (
               <p className="mt-4 text-[13px] leading-[1.55] text-nevo-near-black/58">
+                {/* D13b's count line, from the feed's own total - never the
+                    rows loaded so far, which are one page of it. */}
+                {phase === "ready" && typeof total === "number" && total > 0
+                  ? `${total} archived. `
+                  : ""}
                 Archiving only tidies your list. You can put anything back -
                 nothing is ever deleted.
               </p>
@@ -345,7 +381,7 @@ export function NotificationsView() {
                   type="button"
                   onClick={() => {
                     setPhase("loading");
-                    load(archived);
+                    load(archived, query);
                   }}
                   className={cn(PRIMARY_BTN, "mt-5")}
                 >
@@ -357,11 +393,19 @@ export function NotificationsView() {
             {phase === "ready" && visible.length === 0 ? (
               <div className={cn(CARD, "mt-4 px-6 py-14 text-center")}>
                 <h3 className="m-0 text-[17px] font-semibold text-nevo-near-black">
+                  {/*
+                    * "You're up to date." ONLY WHEN IT IS KNOWN. Unread-only
+                    * filters the rows loaded so far; with older pages not yet
+                    * fetched it could claim a caught-up inbox over unread
+                    * notifications it had never seen.
+                    */}
                   {archived
                     ? "Nothing archived"
                     : filtering
                       ? unreadOnly && !search.trim()
-                        ? "You're up to date."
+                        ? hasMore
+                          ? "Nothing unread among the latest"
+                          : "You're up to date."
                         : "Nothing matches that"
                       : "Nothing yet"}
                 </h3>
@@ -369,9 +413,23 @@ export function NotificationsView() {
                   {archived
                     ? "Archive anything you've dealt with and it will wait here. Nothing is ever deleted."
                     : filtering
-                      ? "Try a different search, or clear the filters."
-                      : "When a parent confirms consent, a teacher joins, an invoice arrives or your sign-in needs attention, it'll show up here."}
+                      ? unreadOnly && !search.trim()
+                        ? hasMore
+                          ? "There are older notifications we haven't shown yet. Show them to check those too."
+                          : "Everything here has been read."
+                        : "Try a different search, or clear the filters."
+                      : "When a consent record needs you, an invoice arrives, a roster sync finishes or your sign-in needs attention, it'll show up here."}
                 </p>
+                {unreadOnly && !search.trim() && hasMore ? (
+                  <button
+                    type="button"
+                    onClick={showOlder}
+                    disabled={loadingMore}
+                    className="mt-3 mr-4 cursor-pointer text-sm font-semibold text-nevo-navy hover:opacity-75 disabled:cursor-default disabled:opacity-50"
+                  >
+                    {loadingMore ? "Loading…" : "Show older"}
+                  </button>
+                ) : null}
                 {filtering ? (
                   <button
                     type="button"

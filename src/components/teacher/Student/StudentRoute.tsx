@@ -8,6 +8,7 @@ import type { StudentProfileData } from "@/lib/mocks/teacherStudents";
 import { LiveStudentProfile } from "./LiveStudentProfile";
 import { StudentProfile } from "./StudentProfile";
 import { SampleRegion } from "@/components/shared/SampleRegion";
+import { PhoneRosterBar } from "@/components/teacher/Shell/PhoneBackBar";
 
 /**
  * Resolves a student route, live first - the same shape as the class and
@@ -21,11 +22,14 @@ export function StudentRoute({
   fixture,
   studentId,
   classHref,
+  classId,
   recommendOpen,
 }: {
   fixture: StudentProfileData | null;
   studentId: string;
   classHref?: string;
+  /** The class the roster row came from, which is where observations live. */
+  classId?: string;
   /** C08c opens as its own URL; the gate below has to cover both. */
   recommendOpen?: boolean;
 }) {
@@ -36,8 +40,9 @@ export function StudentRoute({
   // page fell through to notFound() and answered 404 on any hard load.
   if (!hydrated) {
     return (
-      <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
-        <div className="mx-auto max-w-[860px]">
+      <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] max-md:px-[18px] max-md:pt-0 xl:px-[52px] xl:py-11">
+        <PhoneRosterBar classId={classId} />
+        <div className="mx-auto max-w-[820px] xl:max-w-[900px]">
           <div className="h-8 w-64 animate-pulse rounded bg-nevo-cream-elevated" />
           <div className="mt-8 h-[280px] animate-pulse rounded-[12px] bg-nevo-cream-elevated" />
         </div>
@@ -51,6 +56,7 @@ export function StudentRoute({
         state={state}
         studentId={studentId}
         classHref={classHref}
+        classId={classId}
         /* DROPPED UNTIL 15 SEP. `/teacher/students/{id}/recommend` passes this,
            and the live branch ignored it - so the route existed, resolved, and
            rendered an ordinary profile. C08c was unreachable for every
@@ -62,11 +68,12 @@ export function StudentRoute({
 
   if (state.loading) {
     return (
-      <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
-        <div className="mx-auto max-w-[860px]">
+      <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] max-md:px-[18px] max-md:pt-0 xl:px-[52px] xl:py-11">
+        <PhoneRosterBar classId={classId} />
+        <div className="mx-auto max-w-[820px] xl:max-w-[900px]">
           <div className="h-5 w-32 animate-pulse rounded bg-nevo-cream-elevated" />
           <div className="mt-4 flex items-center gap-4">
-            <div className="size-14 animate-pulse rounded-full bg-nevo-cream-elevated xl:size-16" />
+            <div className="size-14 animate-pulse rounded-full bg-nevo-cream-elevated" />
             <div className="h-8 w-56 animate-pulse rounded bg-nevo-cream-elevated" />
           </div>
           <div className="mt-8 h-[220px] animate-pulse rounded-[12px] bg-nevo-cream-elevated" />
@@ -77,11 +84,12 @@ export function StudentRoute({
 
   if (state.failed) {
     return (
-      <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
+      <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] max-md:px-[18px] max-md:pt-0 xl:px-[52px] xl:py-11">
+        <PhoneRosterBar classId={classId} />
         <div className="mx-auto max-w-[660px] rounded-[12px] bg-nevo-cream-elevated px-[26px] py-7 shadow-elevation-1">
-          <h2 className="text-[17px] font-semibold text-nevo-near-black">
+          <h1 className="text-[17px] font-semibold text-nevo-near-black">
             We couldn&rsquo;t load this student
-          </h2>
+          </h1>
           <p className="mt-2 text-sm leading-[1.55] text-nevo-near-black/62">
             Nothing has changed for them. Try again in a moment.
           </p>

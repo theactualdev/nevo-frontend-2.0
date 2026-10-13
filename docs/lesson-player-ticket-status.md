@@ -35,7 +35,8 @@ suggestion (1-per-segment, never consecutive) · inline Quick Check (navy correc
 / violet recovery, retry, "see it explained") · after-lesson assessment (growth
 result, no score) · completion + leave dialog · loading/error (Next conventions)
 + offline banner · signal instrumentation (`time_on_segment`, `scroll`,
-`simplify_trigger` ±source, `comprehension_response`, `exit_attempt`, `replay`) ·
+`simplify_trigger` / `expand_trigger` / `slower_trigger` - the child's own ask,
+`{segmentId}` and no source - `comprehension_response`, `exit_attempt`, `replay`) ·
 typed `LessonContext`/`useAdaptation` · calculation co-construction solver
 (scaffold + equation assembly + step machine + audio + kinesthetic).
 

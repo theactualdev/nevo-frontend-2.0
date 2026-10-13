@@ -69,6 +69,22 @@ describe("what the student profile says about a child", () => {
     }
   });
 
+  // §3, 12 Oct: "The delivery-mode choice comes out of Recommend a Lesson."
+  // The engine picks a format per segment; a teacher picking one for a named
+  // child is a modality stored on that child by another route.
+  it("offers lessons in Recommend, never a format", () => {
+    const format = /(audio|visual|listen.first|text.led|audio.led|standard version)/i;
+    const withRecommend = profiles.filter((p) => p.recommend);
+    expect(withRecommend.length).toBeGreaterThan(0);
+
+    for (const p of withRecommend) {
+      for (const o of p.recommend!.options) {
+        expect(o, `${p.name}: ${o.id}`).not.toHaveProperty("version");
+        expect(`${o.id} ${o.lesson} ${o.meta}`, `${p.name}: ${o.id}`).not.toMatch(format);
+      }
+    }
+  });
+
   it("guesses no pronoun", () => {
     // Nothing stores one and no field could make it right (frontend section 6),
     // which is why the fixture's `pronoun` field was deleted on 17 Sep.
@@ -88,5 +104,16 @@ describe("what the student profile says about a child", () => {
         expect(OBSERVATION_COPY[d], `${p.name}: ${d}`).toBeDefined();
       }
     }
+  });
+});
+
+describe("the early profile's note (T128)", () => {
+  it("opens with C08's own sentence, about the child's work", () => {
+    const early = profiles.find((p) => p.earlyNote);
+    const first = early!.name.split(" ")[0];
+
+    expect(early!.earlyNote).toBe(
+      `Still getting a picture of ${first}'s work. A few more sessions and this will fill in - for now, here's the early picture.`,
+    );
   });
 });

@@ -2,19 +2,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ClassStudent } from "@/lib/api/classes";
 
-const { useClassRoster, useTeacherFlags, push, useClassLessons } = vi.hoisted(() => ({
+const { useClassRoster, useTeacherFlags, useClassLessons, clearPin } = vi.hoisted(() => ({
   useClassRoster: vi.fn(),
   useTeacherFlags: vi.fn(),
-  push: vi.fn(),
   useClassLessons: vi.fn(),
+  clearPin: vi.fn(),
 }));
 
-// Added when "Show full screen" stopped being a local overlay and became a
-// navigation to /teacher/classes/{id}/code. Without this every test in the file
-// dies on "invariant expected app router to be mounted".
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push, replace: push, prefetch: vi.fn() }),
-}));
+vi.mock("@/lib/api/students", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/students")>();
+  return { ...actual, studentsApi: { ...actual.studentsApi, clearPin } };
+});
 
 vi.mock("@/hooks/useClassRoster", async (importOriginal) => ({
   // `studentName` and `lastSeenLine` are real: they are the row's own logic and
@@ -103,7 +101,7 @@ describe("observation chips", () => {
 
     render(<LiveClassDetail klass={klass} />);
 
-    expect(screen.getByText(/3 times/)).toBeInTheDocument();
+    expect(screen.getByText(/3 lessons/)).toBeInTheDocument();
   });
 
   it("says nothing about a count it was not given", () => {
@@ -145,13 +143,13 @@ describe("observation chips", () => {
 });
 
 describe("seat context", () => {
-  it("shows the seat rather than the login identifier", () => {
-    // A teacher looking at their class wants the seat; the login identifier is
-    // an account detail that belongs on the admin roster.
+  it("shows the login identifier, with the seat beside it", () => {
+    // SCRUM-133: the identifier is how a child finds out their ID - they ask
+    // their teacher. It used to give way to the seat, so a class with seats
+    // showed nobody's ID.
     render(<LiveClassDetail klass={klass} />);
 
-    expect(screen.getByText("Seat 12")).toBeInTheDocument();
-    expect(screen.queryByText("amara.o")).not.toBeInTheDocument();
+    expect(screen.getByText("amara.o · Seat 12")).toBeInTheDocument();
   });
 
   it("falls back to the login identifier when there is no seat", () => {
@@ -206,6 +204,119 @@ describe("the two markers", () => {
 
     expect(screen.queryByText("Sudden change")).not.toBeInTheDocument();
     expect(screen.queryByText("Worth a glance")).not.toBeInTheDocument();
+  });
+
+  // Design's chip system, 12 Oct: worth a glance is the quiet OUTLINE and
+  // a sudden change the navy fill. The roster had them the other way round
+  // in weight - a violet fill for the lowest-priority state.
+  it("draws worth a glance as an outline, never a fill", () => {
+    useTeacherFlags.mockReturnValue({
+      flags: [{ id: "f-1", studentId: "s-1", name: "Amara", context: null, note: "", generatedAt: "", isSudden: false }],
+      live: true,
+      failed: false,
+    });
+    render(<LiveClassDetail klass={klass} />);
+
+    const chip = screen.getByText("Worth a glance");
+    expect(chip.className).toMatch(/border-nevo-violet/);
+    expect(chip.className).not.toMatch(/bg-nevo-violet/);
+  });
+
+  it("gives a sudden change its arrow beside the word", () => {
+    useTeacherFlags.mockReturnValue({
+      flags: [{ id: "f-1", studentId: "s-1", name: "Amara", context: null, note: "", generatedAt: "", isSudden: true }],
+      live: true,
+      failed: false,
+    });
+    render(<LiveClassDetail klass={klass} />);
+
+    const chip = screen.getByText("Sudden change");
+    expect(chip.className).toMatch(/bg-nevo-navy/);
+    expect(chip.querySelector("svg")).not.toBeNull();
+  });
+
+  it("lets a sudden change win over a pattern for the same child, whatever the order", () => {
+    useTeacherFlags.mockReturnValue({
+      flags: [
+        { id: "f-1", studentId: "s-1", name: "Amara", context: null, note: "", generatedAt: "", isSudden: true },
+        { id: "f-2", studentId: "s-1", name: "Amara", context: null, note: "", generatedAt: "", isSudden: false },
+      ],
+      live: true,
+      failed: false,
+    });
+    render(<LiveClassDetail klass={klass} />);
+
+    expect(screen.getByText("Sudden change")).toBeInTheDocument();
+    expect(screen.queryByText("Worth a glance")).not.toBeInTheDocument();
+  });
+});
+
+describe("the class header's counts", () => {
+  const flag = (studentId: string, isSudden: boolean) => ({
+    id: `f-${studentId}-${isSudden}`,
+    studentId,
+    name: null,
+    context: null,
+    note: "",
+    generatedAt: "",
+    isSudden,
+  });
+
+  it("counts each state on its own, never one combined number", () => {
+    useClassRoster.mockReturnValue({
+      students: [
+        seg({ studentId: "s-1" }),
+        seg({ studentId: "s-2" }),
+        seg({ studentId: "s-3" }),
+        seg({ studentId: "s-4", status: "deactivated" }),
+        seg({ studentId: "s-5", pinResetRequested: true }),
+      ],
+      loading: false,
+      failed: false,
+    });
+    useTeacherFlags.mockReturnValue({
+      flags: [flag("s-1", false), flag("s-2", false), flag("s-3", true)],
+      live: true,
+      failed: false,
+      complete: true,
+    });
+    render(<LiveClassDetail klass={klass} />);
+
+    expect(screen.getByText("2 worth a glance")).toBeInTheDocument();
+    expect(screen.getByText("1 flagged")).toBeInTheDocument();
+    expect(screen.getByText("2 can’t sign in")).toBeInTheDocument();
+  });
+
+  it("leaves out a state with nobody in it", () => {
+    useTeacherFlags.mockReturnValue({ flags: [], live: true, failed: false, complete: true });
+    render(<LiveClassDetail klass={klass} />);
+
+    expect(screen.queryByText(/worth a glance$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/flagged$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/can’t sign in$/)).not.toBeInTheDocument();
+  });
+
+  it("does not count from a flags read that failed or stopped short", () => {
+    useTeacherFlags.mockReturnValue({
+      flags: [flag("s-1", false)],
+      live: true,
+      failed: false,
+      complete: false,
+    });
+    render(<LiveClassDetail klass={klass} />);
+
+    expect(screen.queryByText("1 worth a glance")).not.toBeInTheDocument();
+  });
+
+  it("stops counting a child once their PIN is cleared on this visit's server word", () => {
+    useClassRoster.mockReturnValue({
+      students: [seg({ studentId: "s-5", pinResetRequested: true, pinCleared: true })],
+      loading: false,
+      failed: false,
+    });
+    render(<LiveClassDetail klass={klass} />);
+
+    expect(screen.queryByText(/can’t sign in$/)).not.toBeInTheDocument();
   });
 });
 
@@ -309,37 +420,29 @@ describe("whether the child can get in", () => {
 });
 
 /**
- * Projecting the class code.
+ * No class code (design, 30 Sep). A child signs in with the school code and
+ * their own Student ID, and their roster row exists before they arrive, so a
+ * class code joins nobody to anything. C12 and C18 were deleted that day.
  *
- * "Show full screen" used to swap local state for an overlay with no URL, so a
- * teacher who closed it had to walk back through class detail and the dialog to
- * get it up again. Design's ruling for the standalone route is that teachers
- * "project it, read it aloud and RETURN TO IT", and the third of those is the
- * one an overlay cannot do.
- *
- * The route renders the same `ClassQrScreen`, so what is projected is unchanged.
+ * `klass` above still carries one, because the server still sends it: these
+ * prove the screen does not show it.
  */
-describe("projecting the class code", () => {
-  it("navigates to the class code route rather than opening an overlay", async () => {
+describe("the class code", () => {
+  it("is not offered, even on a class that has one", () => {
     render(<LiveClassDetail klass={klass} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /Class code/i }));
-    fireEvent.click(await screen.findByRole("button", { name: /Show full screen/i }));
-
-    expect(push).toHaveBeenCalledWith("/teacher/classes/c-1/code");
+    expect(screen.queryByRole("button", { name: /Class code/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/AB12/)).not.toBeInTheDocument();
   });
 
-  it("still opens the dialog from the class header", () => {
-    // The dialog is the in-console view and design kept it; only the
-    // projection moved to a URL.
+  it("is not what an empty roster tells a teacher to share", () => {
+    useClassRoster.mockReturnValue({ students: [], loading: false, failed: false });
     render(<LiveClassDetail klass={klass} />);
 
-    expect(screen.queryByRole("button", { name: /Show full screen/i })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /Class code/i }));
-
-    expect(screen.getByRole("button", { name: /Show full screen/i })).toBeInTheDocument();
-    expect(push).not.toHaveBeenCalled();
+    expect(
+      screen.getByText("Your students will appear here as your school adds them."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/class code/i)).not.toBeInTheDocument();
   });
 });
 
@@ -451,5 +554,235 @@ describe("the Lessons tab", () => {
     render(<LiveClassDetail klass={klass} />);
 
     expect(screen.queryByText("Fractions 3")).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * WHEN A READ BEHIND THE ROSTER FAILED.
+ *
+ * The roster's failure card said "Try again in a moment" with nothing to
+ * press, and a failed flags read removed every "Worth a glance" marker with
+ * nothing saying so - a class with nothing worth a glance, as far as the
+ * screen could tell anyone.
+ */
+describe("a roster read that failed", () => {
+  it("offers the Try again it promises", () => {
+    useClassRoster.mockReturnValue({ students: [], loading: false, failed: true });
+    render(<LiveClassDetail klass={klass} />);
+
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+  });
+
+  it("offers no retry over a class nobody has joined yet", () => {
+    useClassRoster.mockReturnValue({ students: [], loading: false, failed: false });
+    render(<LiveClassDetail klass={klass} />);
+
+    expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+  });
+});
+
+describe("a flags read that failed", () => {
+  it("says no one is marked because it could not check, not because nobody is", () => {
+    useTeacherFlags.mockReturnValue({ flags: [], live: false, failed: true });
+    render(<LiveClassDetail klass={klass} />);
+
+    expect(
+      screen.getByText(/couldn.t read what needs your attention just now, so no one below is marked/),
+    ).toBeInTheDocument();
+  });
+
+  it("says nothing of the kind when the flags read landed", () => {
+    render(<LiveClassDetail klass={klass} />);
+
+    expect(screen.queryByText(/no one below is marked/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Clearing a forgotten PIN (SCRUM-216 / SCRUM-217, C05). A clear, never a PIN:
+ * nothing here shows, accepts or generates one.
+ */
+describe("clearing a child's PIN", () => {
+  beforeEach(() => {
+    clearPin.mockReset().mockResolvedValue({ studentId: "s-1", clearedAt: "2026-10-06T09:00:00Z" });
+  });
+
+  const openMenu = (name = "Amara") =>
+    fireEvent.click(screen.getByRole("button", { name: `More options for ${name}` }));
+
+  it("offers the profile and Clear PIN from the row's menu", () => {
+    render(<LiveClassDetail klass={klass} />);
+    openMenu();
+
+    expect(screen.getByRole("menuitem", { name: "View profile" })).toHaveAttribute(
+      "href",
+      "/teacher/students/s-1?class=c-1",
+    );
+    expect(screen.getByRole("menuitem", { name: "Clear PIN" })).toBeInTheDocument();
+  });
+
+  it("clears this child's PIN and says the child chooses the next one", async () => {
+    render(<LiveClassDetail klass={klass} />);
+    openMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Clear PIN" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Amara’s PIN is cleared" });
+    expect(clearPin).toHaveBeenCalledWith("s-1");
+    expect(dialog).toHaveTextContent("Amara chooses a new PIN at the next sign-in.");
+    // SCRUM-217: or a teacher goes looking for a PIN to read out.
+    expect(dialog).toHaveTextContent("You won’t be able to see the new PIN. Only Amara will know it.");
+    expect(dialog.textContent).not.toMatch(/\d{4}/);
+  });
+
+  it("marks the row once it is cleared, and closes on Done", async () => {
+    render(<LiveClassDetail klass={klass} />);
+    openMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Clear PIN" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Done" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByText(/PIN cleared · new one not chosen yet/)).toBeInTheDocument();
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  it("says so when the clear failed, and claims nothing", async () => {
+    clearPin.mockRejectedValue(new Error("500"));
+    render(<LiveClassDetail klass={klass} />);
+    openMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Clear PIN" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "We couldn’t clear Amara’s PIN just now. Nothing has changed.",
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByText(/PIN cleared/)).not.toBeInTheDocument();
+  });
+
+  it("holds the item while the clear is in flight", () => {
+    clearPin.mockReturnValue(new Promise(() => {}));
+    render(<LiveClassDetail klass={klass} />);
+    openMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Clear PIN" }));
+
+    expect(screen.getByRole("menuitem", { name: /Clearing/ })).toBeDisabled();
+  });
+
+  it("explains in place on a deactivated child, and clears nothing", () => {
+    useClassRoster.mockReturnValue({
+      students: [seg({ status: "deactivated" })],
+      loading: false,
+      failed: false,
+    });
+    render(<LiveClassDetail klass={klass} />);
+    openMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Clear PIN" }));
+
+    expect(
+      screen.getByText(
+        "Amara can’t sign in while the account is deactivated, so there’s no PIN to clear yet. Your admin manages access.",
+      ),
+    ).toBeInTheDocument();
+    expect(clearPin).not.toHaveBeenCalled();
+  });
+
+  it("puts account access ahead of a cleared PIN on the row", async () => {
+    useClassRoster.mockReturnValue({
+      students: [seg({ status: "invited" })],
+      loading: false,
+      failed: false,
+    });
+    render(<LiveClassDetail klass={klass} />);
+    openMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Clear PIN" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Done" }));
+
+    expect(screen.getByText("Invited")).toBeInTheDocument();
+    expect(screen.queryByText(/PIN cleared · new one not chosen yet/)).not.toBeInTheDocument();
+  });
+
+  it("closes the menu on Escape and on a press elsewhere", () => {
+    render(<LiveClassDetail klass={klass} />);
+    openMenu();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+
+    openMenu();
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  it("opens one row's menu at a time", () => {
+    useClassRoster.mockReturnValue({
+      students: [seg(), seg({ studentId: "s-2", firstName: "Bello", lastName: "Ibrahim", displayName: "Bello Ibrahim" })],
+      loading: false,
+      failed: false,
+    });
+    render(<LiveClassDetail klass={klass} />);
+    openMenu("Amara");
+    openMenu("Bello");
+
+    expect(screen.getAllByRole("menu")).toHaveLength(1);
+    expect(screen.getByRole("menu", { name: "Options for Bello" })).toBeInTheDocument();
+  });
+
+  it("starts each opening clean", async () => {
+    clearPin.mockRejectedValueOnce(new Error("500"));
+    render(<LiveClassDetail klass={klass} />);
+    openMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Clear PIN" }));
+    await screen.findByRole("alert");
+    openMenu();
+    openMenu();
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("tells the teacher what Clear PIN does, over the rows", () => {
+    render(<LiveClassDetail klass={klass} />);
+
+    expect(
+      screen.getByText(/If a child forgets their PIN, you can clear it and they choose a new one themselves/),
+    ).toBeInTheDocument();
+  });
+});
+
+/**
+ * C05's status precedence: "account access first, then a forgotten PIN, then
+ * attention. Each replaces the next rather than stacking."
+ */
+describe("what a row says about a child, in order", () => {
+  const flagged = () =>
+    useTeacherFlags.mockReturnValue({
+      flags: [{ id: "f-1", studentId: "s-1", isSudden: false, note: "Slower on written work." }],
+      live: true,
+      failed: false,
+    });
+
+  it("shows the account state instead of the attention marker", () => {
+    flagged();
+    useClassRoster.mockReturnValue({ students: [seg({ status: "deactivated" })], loading: false, failed: false });
+    render(<LiveClassDetail klass={klass} />);
+
+    expect(screen.getByText("Deactivated")).toBeInTheDocument();
+    expect(screen.queryByText("Worth a glance")).not.toBeInTheDocument();
+  });
+
+  it("still shows the attention marker for an active child", () => {
+    flagged();
+    render(<LiveClassDetail klass={klass} />);
+
+    expect(screen.getByText("Worth a glance")).toBeInTheDocument();
+  });
+
+  it("puts a cleared PIN ahead of attention too", async () => {
+    flagged();
+    clearPin.mockReset().mockResolvedValue({ studentId: "s-1", clearedAt: "2026-10-06T09:00:00Z" });
+    render(<LiveClassDetail klass={klass} />);
+    fireEvent.click(screen.getByRole("button", { name: "More options for Amara" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Clear PIN" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Done" }));
+
+    expect(screen.getByText(/PIN cleared · new one not chosen yet/)).toBeInTheDocument();
+    expect(screen.queryByText("Worth a glance")).not.toBeInTheDocument();
   });
 });

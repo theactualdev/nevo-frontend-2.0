@@ -87,10 +87,52 @@ export interface ClassCorrection {
  * naira total for four hundred students does not survive a round trip through
  * a float. It is rendered, never arithmetic'd.
  */
+/** One of the several spellings a single class arrived under. */
+export interface ClassMergeCandidate {
+  name: string;
+  normalisedName: string;
+  studentCount: number;
+  teacherCount: number;
+}
+
+/**
+ * Several spellings of what looks like one class, for a person to settle -
+ * never applied on its own. Backend's reason: "guessing would be guessing at
+ * an invoice: the headcount per class is what the school pays."
+ */
+export interface ClassMergeProposal {
+  key: string;
+  /** The name kept if the school says they are one class. */
+  proposedName: string;
+  candidates: ClassMergeCandidate[];
+  studentCount: number;
+  reason: string;
+}
+
+/** One answer to one proposal. A no is remembered; neither is undone. */
+export interface ClassMergeDecision {
+  key: string;
+  merge: boolean;
+  keepName?: string | null;
+}
+
 export interface OnboardingState {
   stage: OnboardingStage;
   classes: DerivedClass[];
+  /**
+   * Unsettled spellings. CONFIRM IS CLOSED WHILE ANY REMAIN - the server's
+   * `canConfirm` is false and `POST /confirm` refuses with
+   * `class_merges_unresolved` - so a school whose file wrote "JSS2A" and
+   * "JSS 2A" could not confirm at all until this screen asked.
+   */
+  classMerges?: ClassMergeProposal[];
   teacherCount: number;
+  /**
+   * The teachers the file named, by name only (since 9 Oct). D24 draws each
+   * with the classes they teach; nothing carries that, so the names stand
+   * alone.
+   */
+  teachersFound?: string[];
   studentCount: number;
   rejected: RejectedRow[];
   invoiceId: string | null;
@@ -187,6 +229,28 @@ export const onboardingApi = {
     form.append("file", file);
     return api.post<OnboardingState>("/api/v1/onboarding/imports", form);
   },
+
+  /**
+   * Settle class spellings. POST /api/v1/onboarding/classes/merges
+   *
+   * A yes folds the spellings into the kept name and moves their students; a
+   * no is remembered, so the same file is not asked twice. Nothing undoes
+   * either, which is why each is sent as it is answered rather than held.
+   */
+  decideMerges: (decisions: ClassMergeDecision[]) =>
+    api.post<OnboardingState>("/api/v1/onboarding/classes/merges", { decisions }),
+
+  /**
+   * The file a school fills in. GET /api/v1/onboarding/templates/{template}
+   *
+   * Kept as bytes: it is a CSV the school saves, with a BOM so Excel reads
+   * Nigerian names as written, and an example row in the school's own class
+   * names. Its header row is generated from the same columns the parser
+   * checks, so the console holds no column list of its own - a copy here is
+   * how a school once downloaded a file its own upload rejected.
+   */
+  template: (name: "students" | "teachers") =>
+    api.blob(`/api/v1/onboarding/templates/${name}`),
 
   /**
    * Correct what was derived, before anything is created.

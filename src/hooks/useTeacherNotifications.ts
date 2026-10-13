@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   notificationsApi,
   type Notification,
+  type NotificationType,
 } from "@/lib/api/notifications";
 import { getToken } from "@/lib/auth/session";
 import {
@@ -19,9 +20,10 @@ import { useHasSession } from "./useHasSession";
  * The response carries `unreadCount` alongside the rows, so the badge is read
  * from the same call rather than polling `/unread-count`.
  *
- * `type` has no enum in the spec, so `kindOf` maps what the C13 frame drew and
- * anything unrecognised falls back to `done`'s neutral mark. A type the
- * backend adds tomorrow renders as a plain row rather than an empty square.
+ * `type` is the spec's `NotificationType` enum, and `kindOf` maps it to the
+ * C13 frame's marks; anything unrecognised falls back to `done`'s neutral
+ * mark, so a type the backend adds tomorrow renders as a plain row rather
+ * than an empty square.
  *
  * Fixtures back the designed panel when there is no session; a signed-in
  * teacher whose feed fails sees an empty bell rather than invented events,
@@ -34,20 +36,36 @@ import { useHasSession } from "./useHasSession";
  */
 
 
-/** The frame's five marks, matched on what the type string contains. */
-function kindOf(type: string): NotificationKind {
-  const t = type.toLowerCase();
-  if (t.includes("message") || t.includes("reply")) return "message";
-  if (t.includes("flag") || t.includes("alert") || t.includes("concern")) {
-    return "flag";
-  }
-  if (t.includes("support") || t.includes("senco") || t.includes("escalat")) {
-    return "support";
-  }
-  if (t.includes("class") || t.includes("enrol") || t.includes("roster")) {
-    return "klass";
-  }
-  return "done";
+/**
+ * The frame's five marks, BY THE CONTRACT'S OWN TYPES.
+ *
+ * This matched words inside the type string - "message", "flag", "class" -
+ * and the deployed types contain almost none of them, so `attention_summary`
+ * wore the "done" tick. The enum is typed now; each type is given the mark
+ * that says what it is about, and only the ones with a plain match. Anything
+ * else - including a type added tomorrow - takes the neutral mark, with the
+ * row's `category` as the second guess.
+ */
+const KIND_BY_TYPE: Partial<Record<NotificationType, NotificationKind>> = {
+  attention_summary: "flag",
+  teacher_replied: "message",
+  roster_sync_completed: "klass",
+  roster_sync_needs_attention: "klass",
+  pin_reset_requested: "support",
+  consent_action_required: "support",
+};
+
+const KIND_BY_CATEGORY: Record<string, NotificationKind> = {
+  attention: "flag",
+  messages: "message",
+};
+
+function kindOf(type: string, category?: string | null): NotificationKind {
+  return (
+    KIND_BY_TYPE[type as NotificationType] ??
+    (category ? KIND_BY_CATEGORY[category] : undefined) ??
+    "done"
+  );
 }
 
 function relative(iso: string): string {
@@ -68,7 +86,7 @@ function relative(iso: string): string {
 function toRow(n: Notification): TeacherNotification {
   return {
     id: n.notificationId,
-    kind: kindOf(n.type),
+    kind: kindOf(n.type, n.category),
     // TWO lines, per design: the title is the label and the description the
     // sentence under it. This used to collapse to `description || title`,
     // which threw away half of every notification.
@@ -100,6 +118,13 @@ export interface TeacherNotificationsState {
   undoArchive: () => void;
   /** The row waiting to be undone, if any. */
   lastArchived: TeacherNotification | null;
+  /**
+   * The first read has not answered yet. Not "nothing new" - the panel used
+   * to say exactly that for the whole 1-6 seconds the feed takes.
+   */
+  loading: boolean;
+  /** Read the feed again - on opening the bell, and from the failed state. */
+  refresh: () => void;
 }
 
 export function useTeacherNotifications(): TeacherNotificationsState {
@@ -108,6 +133,26 @@ export function useTeacherNotifications(): TeacherNotificationsState {
   const [failed, setFailed] = useState(false);
   const [archived, setArchived] = useState<Notification[]>([]);
   const signedIn = useHasSession();
+  /**
+   * Bumped to read again.
+   *
+   * THE FEED WAS READ ONCE PER CONSOLE LOAD. The rail lives in the persistent
+   * layout, so a teacher who kept the console open all day never saw a new
+   * flag, message or reply, and the dot stayed as it was at sign-in. It is
+   * read again when the bell is opened, when the tab comes back into view,
+   * and from the failed state's Try again - not on a timer, because nothing
+   * here is urgent enough to poll for.
+   */
+  const [nonce, setNonce] = useState(0);
+  const refresh = useCallback(() => setNonce((n) => n + 1), []);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [refresh]);
 
   /*
    * NO RACE, NO CAP. This hook used to run the feed against a 6s timeout and
@@ -136,16 +181,16 @@ export function useTeacherNotifications(): TeacherNotificationsState {
       })
       .catch(() => {
         // Empty rather than fixtures - these rows name real children - but
-        // flagged as failed so the panel can say so.
+        // flagged as failed so the panel can say so. A re-read that fails
+        // keeps the rows it already had: they are still true, just not new.
         if (cancelled) return;
-        setFeed([]);
-        setUnread(0);
+        setFeed((f) => f ?? []);
         setFailed(true);
       });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [nonce]);
 
   /*
    * Every one of these does its network call OUTSIDE the state updater.
@@ -229,6 +274,8 @@ export function useTeacherNotifications(): TeacherNotificationsState {
       archive,
       undoArchive,
       lastArchived: null,
+      loading: false,
+      refresh,
     };
   }
 
@@ -242,5 +289,9 @@ export function useTeacherNotifications(): TeacherNotificationsState {
     archive,
     undoArchive,
     lastArchived: archived[0] ? toRow(archived[0]) : null,
+    // A failure sets the feed to what it had or [], so null is only ever
+    // "not answered yet".
+    loading: feed === null,
+    refresh,
   };
 }

@@ -119,6 +119,14 @@ export interface ParentConsentCompletion {
    * route, so the screen never guesses.
    */
   receiptSentTo: ParentContactMethod | null;
+  /**
+   * Whether giving consent created the parent's account (9 Oct handoff, item
+   * 14). It does, and says so; sign-in is switched on only once the parent
+   * verifies a code or sets a password (`parentAccountReady`). An older answer
+   * carries neither, and then the screen claims no account.
+   */
+  parentAccountCreated?: boolean;
+  parentAccountReady?: boolean;
 }
 
 
@@ -165,52 +173,44 @@ export interface ParentChild {
   schoolName: string;
 }
 
-/** The four dimensions, in the frame's order. */
-export type GrowthDimension =
-  | "staying_with_hard_problems"
-  | "knowing_what_she_knows"
-  | "connecting_ideas"
-  | "learning_new_things_faster";
-
 /**
- * `not_enough_yet` is the one that matters. Below five sessions there is no
- * period to describe, and the backend says so plainly rather than softening it.
- * A parent told their child is growing on four lessons of evidence has been
- * misled, however kindly - so this state is RENDERED, never hidden.
+ * What kind of week the window was (`WindowState`). Backend: "An empty week
+ * means three different things and the front end draws three different
+ * screens. Deciding which is ours."
  */
-export type GrowthTrend = "growing" | "steady" | "emerging" | "not_enough_yet";
+export type ProgressWindowState = "in_term" | "in_break" | "terms_not_set";
 
-export interface GrowthStatement {
-  dimension: GrowthDimension;
-  trend: GrowthTrend;
-  /**
-   * Written in advance and selected by evidence - no model, no interpolation.
-   * The backend has a test that fails if a statement contains a digit, which is
-   * the same rule this screen is built around: a parent is never shown a number.
-   */
-  statement: string;
+/** Monday to Sunday, in Lagos. `inProgress` is the week still under way. */
+export interface ProgressWindow {
+  startsOn: string;
+  endsOn: string;
+  state: ProgressWindowState;
+  inProgress: boolean;
 }
 
 /**
- * D15d's whole payload.
- *
- * THE DATES ARE LOAD-BEARING. There are no term dates anywhere in the roster,
- * so the window is a fixed 90 days against the preceding 90. A page saying
- * "than last term" would be claiming something the backend cannot support -
- * hence both ranges are sent, and this screen says what was actually compared.
+ * One subject's week for one child. "Counts and concept names. There is
+ * deliberately no field for a score, an index, a percentile or a rating, and
+ * none for any figure about another child."
  */
-export interface GrowthNarrative {
+export interface SubjectProgress {
+  subjectId: string;
+  subjectName: string;
+  /** `not_started`: the class holds the subject and no lesson has arrived. */
+  state: "active" | "not_started";
+  covered: string[];
+  masteredThisWindow: string[];
+  /** Typed because it is sent; D02 draws no line for it yet. */
+  stillWorkingOn: string[];
+  /** Typed because it is sent; not rendered - see `portalWeek.ts`. */
+  masteredBeforeWindow: number;
+}
+
+/** D02's portal home for one child (`GET .../subject-progress`). */
+export interface ChildSubjectProgress {
   studentId: string;
-  studentFirstName: string;
-  headline: string;
-  summary: string;
-  statements: GrowthStatement[];
-  periodStart: string;
-  periodEnd: string;
-  comparisonStart: string;
-  comparisonEnd: string;
-  generatedAt: string;
-  source?: string;
+  window: ProgressWindow;
+  subjects: SubjectProgress[];
 }
 
 /** 202 of POST /api/v1/parent/{token}/rights. */
@@ -329,10 +329,17 @@ export const parentApi = {
   /** The signed-in parent's own children. 403 for any non-parent role. */
   myChildren: () => api.get<ParentChild[]>("/api/v1/parents/me/children"),
 
-  /** D15d. One child's growth narrative, for a signed-in parent. */
-  childGrowth: (studentId: string) =>
-    api.get<GrowthNarrative>(
-      `/api/v1/parents/me/children/${encodeURIComponent(studentId)}/growth`,
+  /**
+   * D02's portal home: this week, by subject, for one child.
+   *
+   * REPLACES `childGrowth` (`.../growth`), which drew D15d - four named
+   * dimensions with a trend on each, per named child. Design struck D15d on
+   * 20 Sep: "a score about a named child, the thing the architecture exists to
+   * prevent." It was still the signed-in parent's home.
+   */
+  subjectProgress: (studentId: string) =>
+    api.get<ChildSubjectProgress>(
+      `/api/v1/parents/me/children/${encodeURIComponent(studentId)}/subject-progress`,
     ),
 
   /**

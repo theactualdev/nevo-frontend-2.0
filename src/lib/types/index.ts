@@ -6,8 +6,13 @@ export type {
   InteractiveContent,
   QuickCheck,
   CalculationVariant,
-  CalcCardStep,
-  CalcNumericStep,
+  CalcChoiceStep,
+  CalcNumberStep,
+  CalcTapStep,
+  CalcScaffold,
+  CalcNarration,
+  CalcHighlight,
+  ScaffoldQuantity,
   CalculationStep,
   CalculationSegment,
   LessonSegment,
@@ -18,5 +23,6 @@ export type {
   Lesson,
   SegmentAdaptation,
   AdaptationPlan,
+  DensityLevel,
+  GuidedPrompt,
 } from "./lesson";
-export { isCardStep, isNumericStep, isTextStep } from "./lesson";

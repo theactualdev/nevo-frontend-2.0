@@ -1,5 +1,8 @@
 import { api } from "./client";
-import type { ComprehensionCheckpoint } from "./checkpoints";
+import type {
+  CheckpointScalar,
+  ComprehensionCheckpoint,
+} from "./checkpoints";
 import type { SegmentVariants } from "./variants";
 
 /**
@@ -49,6 +52,13 @@ export interface LessonSummary {
   /** Shipped 31 Aug. Free text; only the staged upload routes can set one. */
   subject?: string | null;
   /**
+   * The lesson's "what you'll do" line. Shipped 1 Oct (backend 70b14a4), with
+   * existing lessons backfilled. Nullable and not required, so null and absent
+   * both mean there is none, and the preview renders no line rather than one
+   * we wrote.
+   */
+  description?: string | null;
+  /**
    * Shipped 1 Sep, pre-summed so a list view need not load segments.
    * Estimated from word count at a school reading pace and floored per content
    * type, so a real lesson is never 0 - which makes 0 (its schema default) and
@@ -87,6 +97,9 @@ export interface LessonSummary {
    */
   unapprovedSegmentCount?: number;
   createdAt: string;
+  /** Who uploaded it - on the response since the library listed by school. */
+  createdById?: string | null;
+  createdByName?: string | null;
 }
 
 /**
@@ -132,7 +145,9 @@ export interface LessonClass {
  * that happen.
  */
 /**
- * All 15 values the deployed enum carries, re-polled 16 Sep. This listed 6 for
+ * All 16 values the deployed enum carries, re-polled 6 Oct (the sixteenth,
+ * `calculation_variant_missing_manipulative`, read as "a reason this console
+ * doesn't recognise yet" until then). Was 15 on 16 Sep. This listed 6 for
  * long enough that NINE live reasons rendered as "a reason this console doesn't
  * recognise yet" - and eight of the nine are calculation reasons, on exactly the
  * variant the review screen does not draw a tab for yet (SCRUM-136). A teacher
@@ -157,8 +172,21 @@ export type SegmentReviewReason =
   | "calculation_step_unknown_input_type"
   | "calculation_step_missing_answer"
   | "calculation_step_missing_options"
+  | "calculation_variant_missing_manipulative"
   | "calculation_segment_has_no_interactive_delivery"
   | "model_flagged_for_review";
+
+/**
+ * "A stable, ordered reading boundary generated from approved lesson text."
+ * The offsets are into the segment's `body`.
+ */
+export interface ReadingChunk {
+  id: string;
+  sequenceOrder: number;
+  text: string;
+  startOffset: number;
+  endOffset: number;
+}
 
 export interface LessonSegment extends SegmentVariants {
   id: string;
@@ -169,6 +197,11 @@ export interface LessonSegment extends SegmentVariants {
   sequenceOrder: number;
   title: string | null;
   body: string;
+  /**
+   * Where the server breaks `body` for reading (SCRUM-234/236, B87). Absent
+   * or empty is one body, which is a normal state.
+   */
+  readingChunks?: ReadingChunk[];
   availableModalities: ContentModality[];
   /**
    * Typed as of 3 Sep. `answerKey` is NULLABLE for lessons parsed before the
@@ -203,8 +236,9 @@ export interface LessonSegment extends SegmentVariants {
 export interface SegmentApproval {
   lessonId: string;
   segmentId: string;
-  approvedAt: string;
-  approvedBy: string;
+  /** Nullable in the contract, like the segment's own fields above. */
+  approvedAt: string | null;
+  approvedBy: string | null;
   approvedSegmentCount: number;
   segmentCount: number;
   lessonApproved: boolean;
@@ -408,6 +442,50 @@ export interface LessonClassProgress {
 export interface LessonSessionResponse {
   sessionId: string;
   resumed: boolean;
+  /**
+   * Where this lesson's after-lesson check was left, and when it stops being
+   * resumable (B82, 8 Oct) - the same pair the progress row carries (B49).
+   * Neither is required; absent or null is no check to pick up.
+   */
+  checkPosition?: number | null;
+  checkResumableUntil?: string | null;
+  /**
+   * The depth this session runs at, and the session a reroute came from
+   * (SCRUM-178). A `lower` session reads each segment's simplified version,
+   * falling back to its body (backend, 9 Oct) - see `atLowerDepth`. After a
+   * reroute this route resumes and returns that same lower-depth session.
+   */
+  depth?: "standard" | "lower";
+  reroutedFromSessionId?: string | null;
+}
+
+/**
+ * `OfflineManifestResponse` - what one offline download holds.
+ *
+ * `sizeBytes`, `files` and `includesMedia` shipped 1 Oct (B31). None is in the
+ * schema's `required` list: `sizeBytes` defaults to 0, which no real archive
+ * can be, so 0 and absent both mean "not told" and no size is shown.
+ */
+export interface OfflineManifest {
+  lessonId: string;
+  version: number;
+  segmentCount: number;
+  generatedAt: string;
+  packageUrl: string;
+  /** Measured from the real archive, by the server. */
+  sizeBytes?: number;
+  files?: string[];
+  /**
+   * False today for every lesson: media is referenced by URL, not bundled, so
+   * a saved lesson is text only without a connection.
+   */
+  includesMedia?: boolean;
+}
+
+/** `OfflineDownloadResponse`, from `POST /api/v1/lessons/{id}/download`. */
+export interface OfflineDownload {
+  id: string;
+  manifest: OfflineManifest;
 }
 
 /** `LessonCompletionStatus` - the values progress rows come back with. */
@@ -424,7 +502,28 @@ export interface LessonProgressRequest {
   assignmentId?: string | null;
   modulePosition?: number;
   segmentPosition?: number;
+  /**
+   * Where a child left the after-lesson check: the index of the next question
+   * to ask (B49). Sent on the exit write and nowhere else, so the write that
+   * leaves a check is the one that says where.
+   */
+  checkPosition?: number | null;
   status: LessonStatus;
+}
+
+/**
+ * `ConceptOutcomeResponse` - one concept, and how the check-in went on it
+ * (B26). The server marks it from the stored answers; nothing here does.
+ *
+ * `asked` and `correct` are counts of a child's answers. Typed because the
+ * contract sends them, and NEVER RENDERED: the screen names the concept, and a
+ * number beside it would be a mark (rule 9).
+ */
+export interface ConceptOutcome {
+  conceptId?: string | null;
+  conceptName: string;
+  asked: number;
+  correct: number;
 }
 
 export interface LessonProgressResponse {
@@ -434,9 +533,141 @@ export interface LessonProgressResponse {
   segmentPosition: number;
   /** Untyped in the spec (`additionalProperties: true`), so it is not read. */
   intelligence: Record<string, unknown>;
+  /**
+   * What "From the check-in" draws (B26). None is in the schema's `required`
+   * list, so absent and empty both mean there is nothing to show - never that
+   * nothing landed.
+   */
+  masteredConcepts?: ConceptOutcome[];
+  revisitConcepts?: ConceptOutcome[];
+  /** The result's paragraph. `""`, its default, is no paragraph. */
+  resultNote?: string;
+  /**
+   * Where the check was left, and the moment it stops being resumable (B49).
+   * `checkResumableUntil` is the end of the day the check started, decided by
+   * the server so that two tablets agree on when it has lapsed.
+   */
+  checkPosition?: number | null;
+  checkResumableUntil?: string | null;
+  /**
+   * How the lesson went, decided by the server from its own marks (B98).
+   * The write no longer sends one - `ProgressWrite.resultState` is deprecated
+   * and never controlled rerouting - and nothing here works one out.
+   */
+  resultState?: ResultState | null;
+  /**
+   * The server sending the child back through the lesson (SCRUM-178): a new
+   * session at another depth, and the place to start it from.
+   */
+  reroute?: LessonReroute | null;
+}
+
+/** `resultState`'s four values, on the attempt and the progress row alike. */
+export type ResultState =
+  | "landed"
+  | "partly_landed"
+  | "nothing_landed"
+  | "not_attempted";
+
+/** `LessonRerouteResponse` (SCRUM-178). */
+export interface LessonReroute {
+  sessionId: string;
+  lessonId: string;
+  depth: "standard" | "lower";
+  /** Zero-based, like every segment position on the wire. */
+  segmentPosition: number;
+  reason: "nothing_landed" | "not_attempted";
+}
+
+/**
+ * One answer to one lesson question - `LessonQuestionAttemptWrite`, deployed
+ * 1 Oct.
+ *
+ * `answer` is the OPTION'S OWN VALUE (`CheckpointOption.value`), not our
+ * stringified option id: the server marks it against the stored answer key,
+ * and a `"2"` where the key is `2` is a right answer marked wrong. The client
+ * never sends a key or a verdict.
+ */
+export interface LessonQuestionAttemptWrite {
+  sessionId: string;
+  /**
+   * `ComprehensionCheckpoint.id` - "the server-issued question/problem id".
+   * Named `problemId` on the write since 8 Oct (it was `questionId`, which
+   * the server now refuses); the stored attempt still reads it back as
+   * `questionId`.
+   */
+  problemId: string;
+  segmentId?: string | null;
+  source?: "checkpoint" | "assessment";
+  answer: CheckpointScalar | CheckpointScalar[];
+  /** Ours, for idempotent retries. */
+  clientAttemptId?: string | null;
+}
+
+/** `LessonQuestionAttemptResponse` - one stored answer, marked server-side. */
+export interface LessonQuestionAttempt {
+  id: string;
+  lessonId: string;
+  sessionId: string;
+  questionId: string;
+  segmentId: string | null;
+  source: "checkpoint" | "assessment";
+  attemptNumber: number;
+  /** The question as it stood when answered, snapshotted beside the answer. */
+  question: ComprehensionCheckpoint;
+  answer: unknown;
+  /** NULL MEANS UNMARKABLE, never wrong - see `api/checkpoints.ts`. */
+  correct: boolean | null;
+  submittedAt: string;
+  /**
+   * How the lesson stands, derived by the server from the newest marked
+   * attempt per problem (B98, 8 Oct). Required on the contract; optional here
+   * because a stored row read back from before 8 Oct carries none.
+   */
+  resultState?: ResultState;
+  /**
+   * THE HAND-OFF (B94, SCRUM-241). After three server-marked misses on the
+   * same problem the answer comes back with `handoffTo: "socratic_panel"`,
+   * the prompts to open it with and whether to move on once they are worked
+   * through. The client counts no misses and decides none of it.
+   */
+  handoffTo?: "socratic_panel" | null;
+  guidedPrompts?: SocraticHandoffPrompt[];
+  /** Default false on the contract. */
+  advanceAfterHandoff?: boolean;
+}
+
+/** `SocraticHandoffPrompt` - one guided question a hand-off opens with. */
+export interface SocraticHandoffPrompt {
+  id: string;
+  prompt: string;
 }
 
 export const lessonsApi = {
+  /**
+   * Store one answer. POST /api/v1/lessons/{id}/attempts (201)
+   *
+   * The player writes every answer to a quick check and to the after-lesson
+   * check here, so a child who leaves a check part way keeps the answers they
+   * gave (D36). The body is built by `answerFor`, which sends the option's
+   * own value rather than its stringified id. Review answers reads them back
+   * through `attempts` below, as a resumed check does (B49).
+   */
+  saveAttempt: (lessonId: string, body: LessonQuestionAttemptWrite) =>
+    api.post<LessonQuestionAttempt>(
+      `/api/v1/lessons/${lessonId}/attempts`,
+      body,
+    ),
+
+  /**
+   * The signed-in child's stored answers for a lesson, optionally one
+   * session's. GET /api/v1/lessons/{id}/attempts?sessionId=
+   */
+  attempts: (lessonId: string, sessionId?: string) =>
+    api.get<LessonQuestionAttempt[]>(`/api/v1/lessons/${lessonId}/attempts`, {
+      params: sessionId ? { sessionId } : undefined,
+    }),
+
   /** One class's progress through this lesson. */
   classProgress: (lessonId: string, classId: string) =>
     api.get<LessonClassProgress>(`/api/v1/lessons/${lessonId}/class-progress`, {
@@ -444,9 +675,16 @@ export const lessonsApi = {
     }),
 
   /** The parsed lesson library. GET /api/content/lessons */
-  list: (options?: { limit?: number }) =>
+  /** One page: `limit` up to 200, and `offset` since 12 Oct. */
+  list: (options?: { limit?: number; offset?: number }) =>
     api.get<LessonSummary[]>("/api/content/lessons", {
-      params: options?.limit ? { limit: options.limit } : undefined,
+      params:
+        options?.limit || options?.offset
+          ? {
+              ...(options.limit ? { limit: options.limit } : {}),
+              ...(options.offset ? { offset: options.offset } : {}),
+            }
+          : undefined,
     }),
 
   /**
@@ -455,6 +693,30 @@ export const lessonsApi = {
    */
   detail: (lessonId: string) =>
     api.get<LessonDetailResponse>(`/api/content/lessons/${lessonId}`),
+
+  /**
+   * Ask for a lesson's offline package. POST /api/v1/lessons/{id}/download
+   * Takes no body; the manifest carries the archive's size. See
+   * `lib/offline/lessonPackage`.
+   */
+  download: (lessonId: string) =>
+    api.post<OfflineDownload>(`/api/v1/lessons/${lessonId}/download`),
+
+  /**
+   * What a lesson would cost to keep, WITHOUT keeping it (backend B61, 5 Oct).
+   * GET /api/v1/lessons/{id}/offline-manifest is a read and records nothing,
+   * unlike `download`. The server builds the archive to measure it, so ask
+   * only for lessons about to be shown.
+   */
+  offlineManifest: (lessonId: string) =>
+    api.get<OfflineManifest>(`/api/v1/lessons/${lessonId}/offline-manifest`),
+
+  /**
+   * The package itself, as bytes: an `application/zip` holding `lesson.json`
+   * and `manifest.json`. GET /api/v1/lessons/{id}/offline-package
+   */
+  offlinePackage: (lessonId: string) =>
+    api.blob(`/api/v1/lessons/${lessonId}/offline-package`),
 
   /**
    * Approve one segment for students. Per SEGMENT, matching how the screen
@@ -502,12 +764,6 @@ export const lessonsApi = {
     api.del<LessonReview>(
       `/api/v1/lessons/${lessonId}/key-points/${keyPointId}`,
     ),
-  /** The module grouping, which only the v1 alias returns. */
-  modules: (lessonId: string) =>
-    api
-      .get<{ modules?: LessonModule[] }>(`/api/v1/lessons/${lessonId}`)
-      .then((r) => r.modules ?? []),
-
   /**
    * Open (or re-open) a play session. POST /api/v1/lessons/{id}/session
    * Takes no body.

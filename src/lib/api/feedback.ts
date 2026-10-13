@@ -24,8 +24,12 @@ import { api } from "./client";
  * ask", and doing nothing when asked. There is no bespoke endpoint for an
  * extra admin seat and there does not need to be: this route is deployed,
  * carries `context`, and lands where somebody triages it.
+ *
+ * `plan_change` is the fourth (8 Oct): D11d's switch between the annual and
+ * per-term plans, which backend confirms "through the relationship manager" -
+ * so, like the extra seat, it is a sentence to a person, not a mutation.
  */
-export type FeedbackType = "feedback" | "feature" | "account_request";
+export type FeedbackType = "feedback" | "feature" | "account_request" | "plan_change";
 
 export const feedbackApi = {
   submit: (payload: { type: FeedbackType; note: string; context?: string }) =>

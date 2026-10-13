@@ -15,48 +15,54 @@ import { WarmUpRun } from "./WarmUpRun";
  * reduce would have had nothing to score - and the working-memory task recorded
  * neither `posInSeq` nor `round_complete`, the two things its reducer reads.
  *
- * These tests assert on what `baselineApi.submitWithRetry` was handed, because that is
- * the only part that leaves the device.
+ * Since B9 (5 Oct) what leaves is the run's TRIALS, one per answer, and the
+ * server reduces them; the device sends no mean, accuracy or span. These tests
+ * assert on what `baselineApi.submitTrials` was handed, because that is the
+ * only part that leaves the device.
  */
 
 const { submit } = vi.hoisted(() => ({ submit: vi.fn() }));
-vi.mock("@/lib/api", () => ({ baselineApi: { submitWithRetry: submit } }));
+vi.mock("@/lib/api", () => ({ baselineApi: { submitTrials: submit } }));
 const { holdBaseline } = vi.hoisted(() => ({ holdBaseline: vi.fn() }));
 vi.mock("@/lib/profiling/pendingBaseline", () => ({ holdBaseline }));
+// These pin the task with the `dimension` prop; the engine's prompt is
+// covered in WarmUpRun.engine.dom.test.tsx.
 vi.mock("@/hooks/useWarmUpDimension", () => ({
-  useWarmUpDimension: (fallback: string) => fallback,
-}));
-vi.mock("@/hooks/useNextLessonHref", () => ({
-  useNextLessonHref: () => "/student/lessons/x",
+  useWarmUpPrompt: () => ({ state: "waiting" }),
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
 
-/** What the one submitted feature object looked like. */
-const submitted = () => submit.mock.calls[0][1][0];
+/** The trials that were sent. */
+const trials = () => submit.mock.calls[0][1];
+/** The first of them. */
+const submitted = () => trials()[0];
 
 /**
- * Watch the tiles light, then sweep the whole grid in order, repeatedly.
+ * Sit the tile task: watch the tiles light, then tap them back in reverse.
  *
- * The module accepts only the next tile in the reversed sequence and ignores
- * everything else, so sweeping finds it without the test knowing what it is.
+ * It used to sweep the whole grid, because a wrong tap was ignored. A wrong
+ * tap now nudges and replays, and the third ends the round - as in tile
+ * memory - so the test has to know the sequence. `Math.random` pinned to 0
+ * draws tiles 0, 1, 2, so the reverse is 2, 1, 0.
  * The 50ms between taps is deliberate: under fake timers `performance.now()`
- * does not move on its own, and a recall gap of zero is filtered out as
- * impossible - which is exactly how a measurement that was never taken looks.
+ * does not move on its own, and a gap of zero is what a measurement that was
+ * never taken looks like.
  */
-const tapThroughTheGrid = async () => {
+const sitTheTileTask = async () => {
+  const random = vi.spyOn(Math, "random").mockReturnValue(0);
+  render(<WarmUpRun dimension="wmc" />);
+  random.mockRestore();
   await act(async () => {
     await vi.advanceTimersByTimeAsync(4000);
   });
   const tiles = screen.getAllByRole("button");
-  for (let pass = 0; pass < 3; pass++) {
-    for (const tile of tiles) {
-      fireEvent.click(tile);
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(50);
-      });
-    }
+  for (const i of [2, 1, 0]) {
+    fireEvent.click(tiles[i]);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50);
+    });
   }
 };
 
@@ -83,37 +89,64 @@ describe("WarmUpRun — what actually reaches Nevo", () => {
     render(<WarmUpRun dimension="attention" />);
 
     // Only the centre arrow points right; the four flankers are mirrored.
-    fireEvent.click(screen.getByText("Right"));
+    fireEvent.click(screen.getByRole("button", { name: "Right" }));
     await settle();
 
-    expect(submitted().acts.attention).toMatchObject({
-      trials: 1,
-      scored: 1,
-      accuracy: 1,
+    expect(trials()).toHaveLength(1);
+    expect(submitted()).toMatchObject({
+      dimension: "attention",
+      response: "Right",
+      correct: true,
     });
   });
 
   it("sends a wrong answer as wrong", async () => {
     render(<WarmUpRun dimension="attention" />);
 
-    fireEvent.click(screen.getByText("Left"));
+    fireEvent.click(screen.getByRole("button", { name: "Left" }));
     await settle();
 
-    expect(submitted().acts.attention.accuracy).toBe(0);
+    expect(submitted().correct).toBe(false);
   });
 
-  it("still says which dimension ran, and for how long", async () => {
-    // The two fields it used to send are the two it should keep.
+  it("says which dimension ran on the trial itself, with the answer's own time", async () => {
     render(<WarmUpRun dimension="reading" />);
 
     fireEvent.click(screen.getByText("True"));
     await settle();
 
-    expect(submitted()).toMatchObject({
-      module: "warmup",
-      dimension: "reading",
-    });
-    expect(submitted().durationMs).toBeGreaterThanOrEqual(0);
+    expect(submitted().dimension).toBe("reading");
+    expect(submitted().responseTimeMs).toEqual(expect.any(Number));
+  });
+
+  it("sends the answers as they were, never a mean, an accuracy or a span (B9)", async () => {
+    await sitTheTileTask();
+    await settle();
+
+    for (const trial of trials()) {
+      expect(Object.keys(trial).sort()).toEqual([
+        "condition",
+        "correct",
+        "dimension",
+        "probeItemId",
+        "response",
+        "responseTimeMs",
+      ]);
+    }
+    expect(JSON.stringify(trials())).not.toMatch(
+      /mean|accuracy|span|rounds|retries|duration/i,
+    );
+  });
+
+  it("says the reading was a sentence read, as the reading activity does", async () => {
+    // With no band, the frame's one sentence; SS reads a passage instead
+    // (WarmUpRun.band), so which one ran has to travel.
+    render(<WarmUpRun dimension="reading" />);
+
+    fireEvent.click(screen.getByText("True"));
+    await settle();
+
+    expect(submitted()).toMatchObject({ condition: "sentence", correct: true });
   });
 
   it("never marks 'Not sure' wrong", async () => {
@@ -122,53 +155,77 @@ describe("WarmUpRun — what actually reaches Nevo", () => {
     fireEvent.click(screen.getByText("Not sure"));
     await settle();
 
-    expect(submitted().acts.reading).toMatchObject({
-      trials: 1,
-      scored: 0,
-      notSure: 1,
-      accuracy: null,
+    expect(submitted()).toMatchObject({ response: "not_sure", correct: null });
+  });
+
+  it("sends a completed working-memory recall as one answer, its three taps in order (B80)", async () => {
+    // A child who did it perfectly once reduced to maxSpan 0 -
+    // indistinguishable from never finishing. Then it went up as three
+    // trials, one per tap; backend's contract is one per completed recall.
+    await sitTheTileTask();
+    await settle();
+
+    expect(trials()).toHaveLength(1);
+    expect(submitted()).toMatchObject({
+      dimension: "wmc",
+      condition: "length_3",
+      response: "2,1,0",
+      correct: true,
     });
   });
 
-  it("reports a completed working-memory round as completed", async () => {
-    // It recorded neither `posInSeq` nor `round_complete`, so a child who did
-    // it perfectly reduced to maxSpan 0 - indistinguishable from never
-    // finishing.
-    render(<WarmUpRun dimension="wmc" />);
-    await tapThroughTheGrid();
+  it("times the recall from when the grid was handed over to its last tap", async () => {
+    // The first tap had nothing to be timed from: the warm-up never recorded
+    // when its grid was handed over. The two 50ms gaps after the first tap
+    // are inside the recall, so they are inside its time.
+    await sitTheTileTask();
     await settle();
 
-    expect(submitted()).toMatchObject({ maxSpan: 3, roundsCompleted: 1 });
-  });
-
-  it("can measure how fast the recall was", async () => {
-    // `reduceGridSpan` pairs consecutive taps by `posInSeq`, which this never
-    // recorded - so every warm-up reported a null recall gap whatever the child
-    // did.
-    render(<WarmUpRun dimension="wmc" />);
-    await tapThroughTheGrid();
-    await settle();
-
-    expect(submitted().meanRecallGapMs).toEqual(expect.any(Number));
+    expect(submitted().responseTimeMs).toEqual(expect.any(Number));
+    expect(submitted().responseTimeMs).toBeGreaterThanOrEqual(100);
   });
 });
 
-describe("WarmUpRun — the dot arrays are not always side by side", () => {
-  it("calls them top and bottom when they are stacked", () => {
-    // They sit side by side from `sm` up and STACK below it, and the buttons
-    // said "Left" and "Right" regardless - so on a phone a child was asked
-    // which SIDE had more when one array was above the other.
+describe("WarmUpRun — the dot arrays, as the warm-up frame draws them", () => {
+  it("sits them side by side at every size, under Left and Right", () => {
+    // They stacked on a phone under buttons reading Top and Bottom. The
+    // Warm-Up Run frame draws two 150px boxes side by side at 375, 200px
+    // from tablet up, and Left / Right at every size.
     render(<WarmUpRun dimension="ans" />);
 
-    expect(screen.getByText("Top")).toBeInTheDocument();
-    expect(screen.getByText("Bottom")).toBeInTheDocument();
+    const [box] = screen.getAllByTestId("warmup-dot-box");
+    const row = box.parentElement!;
+    expect(row.className).not.toMatch(/flex-col/);
+    expect(row.className).toContain("gap-[18px]");
+    expect(row.className).toContain("sm:gap-7");
+    expect(box.className).toContain("size-[150px]");
+    expect(box.className).toContain("sm:size-[200px]");
+    expect(screen.queryByText("Top")).toBeNull();
+    expect(screen.queryByText("Bottom")).toBeNull();
+    expect(
+      screen.getAllByRole("button").map((b) => b.textContent),
+    ).toEqual(["Left", "Right"]);
   });
 
-  it("still calls them left and right for the wider layout", () => {
+  it("wraps each array's dots in rows, so none can sit on another", () => {
+    // A random scatter let dots land on each other, and a child counted
+    // fewer than were recorded. The frame wraps them 10px apart inside a
+    // 14px pad; P4-6's frame pair is 9 against 5, every one of them drawn.
     render(<WarmUpRun dimension="ans" />);
 
-    expect(screen.getByText("Left")).toBeInTheDocument();
-    expect(screen.getByText("Right")).toBeInTheDocument();
+    const boxes = screen.getAllByTestId("warmup-dot-box");
+    for (const box of boxes) {
+      expect(box.className).toMatch(/(^| )flex-wrap( |$)/);
+      expect(box.className).toContain("gap-2.5");
+      expect(box.className).toContain("p-3.5");
+      for (const dot of box.querySelectorAll("span")) {
+        expect(dot.className).not.toMatch(/absolute/);
+        expect(dot.getAttribute("style")).toBeNull();
+      }
+    }
+    expect(
+      boxes.map((b) => b.querySelectorAll("span").length).sort(),
+    ).toEqual([5, 9]);
   });
 
   it("parks the day's measurement when the write is refused", async () => {
@@ -182,7 +239,7 @@ describe("WarmUpRun — the dot arrays are not always side by side", () => {
     submit.mockResolvedValue(false);
     render(<WarmUpRun dimension="attention" />);
 
-    fireEvent.click(screen.getByText("Right"));
+    fireEvent.click(screen.getByRole("button", { name: "Right" }));
     await settle();
 
     expect(holdBaseline).toHaveBeenCalled();
@@ -192,7 +249,7 @@ describe("WarmUpRun — the dot arrays are not always side by side", () => {
     submit.mockRejectedValue(new Error("network"));
     render(<WarmUpRun dimension="attention" />);
 
-    fireEvent.click(screen.getByText("Right"));
+    fireEvent.click(screen.getByRole("button", { name: "Right" }));
     await settle();
 
     expect(holdBaseline).toHaveBeenCalled();
@@ -202,9 +259,195 @@ describe("WarmUpRun — the dot arrays are not always side by side", () => {
     submit.mockResolvedValue(true);
     render(<WarmUpRun dimension="attention" />);
 
-    fireEvent.click(screen.getByText("Right"));
+    fireEvent.click(screen.getByRole("button", { name: "Right" }));
     await settle();
 
     expect(holdBaseline).not.toHaveBeenCalled();
+  });
+});
+
+describe("WarmUpRun — the dot task has no fixed answer", () => {
+  /*
+   * The nine-dot array was always on the left, so "Left" was always right -
+   * every day, for every child. The side is now drawn per run.
+   */
+  const pickLeftAfterTheMask = async () => {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Left" }));
+    await settle();
+  };
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it("marks Left wrong when the larger array is on the right", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.9);
+    render(<WarmUpRun dimension="ans" />);
+
+    await pickLeftAfterTheMask();
+
+    expect(submitted()).toMatchObject({ dimension: "ans", correct: false });
+  });
+
+  it("marks Left right when the larger array is on the left", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.1);
+    render(<WarmUpRun dimension="ans" />);
+
+    await pickLeftAfterTheMask();
+
+    expect(submitted()).toMatchObject({ dimension: "ans", correct: true });
+  });
+});
+
+describe("WarmUpRun — the done state claims no save", () => {
+  it("says nothing about saving while the write is still in flight", async () => {
+    submit.mockReturnValue(new Promise(() => {}));
+    await sitTheTileTask();
+    await settle();
+
+    expect(screen.getByText("That's it for today")).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/saved|didn't save|couldn't save/i);
+    expect(screen.queryByTestId("warmup-save-failed-mark")).toBeNull();
+  });
+
+  it("is the title and Go on once the write lands, with no body line (D80, D97)", async () => {
+    // It said "Nevo is tuned to how you're doing today. Your progress is
+    // saved." here, and its button read "Home". The 6 Oct frame is the title
+    // and "Go on".
+    await sitTheTileTask();
+    await settle();
+
+    expect(screen.getByText("That's it for today")).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/saved|tuned|didn't|couldn't/i);
+    expect(screen.queryByTestId("warmup-save-failed-mark")).toBeNull();
+    expect(screen.getByRole("button", { name: "Go on" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Home" })).toBeNull();
+  });
+
+  it("draws the frame's phone sizes, and the larger ones from tablet up", async () => {
+    // It was a 22px title and an 80px badge at every width. The Warm-Up Run
+    // frame draws 19px and 64px on a phone, 22px and 80px on tablet and
+    // desktop.
+    await sitTheTileTask();
+    await settle();
+
+    const title = screen.getByText("That's it for today");
+    const badge = title.parentElement!.previousElementSibling!;
+    expect(title.className).toContain("text-[19px]");
+    expect(title.className).toContain("sm:text-[22px]");
+    expect(badge.className).toMatch(/(^| )size-16( |$)/);
+    expect(badge.className).toContain("sm:size-20");
+    // Its check is 32px on a phone and 40px from tablet up; it was 36px.
+    const check = badge.querySelector("svg")!.getAttribute("class")!;
+    expect(check).toMatch(/(^| )size-8( |$)/);
+    expect(check).toContain("sm:size-10");
+  });
+
+});
+
+describe("WarmUpRun — the header is the running state's", () => {
+  const header = () => screen.queryByText("DAILY WARM-UP");
+
+  it("sits over a running task, its ring the frame's 30px on a phone and 34px up", () => {
+    render(<WarmUpRun dimension="attention" />);
+
+    expect(header()).toBeInTheDocument();
+    const ring = screen.getByTestId("warmup-ring").getAttribute("class")!;
+    expect(ring).toContain("size-[30px]");
+    expect(ring).toContain("sm:size-[34px]");
+  });
+
+  it("is gone once the warm-up is done, as frame 12 draws it", async () => {
+    await sitTheTileTask();
+    await settle();
+
+    expect(screen.getByText("That's it for today")).toBeInTheDocument();
+    expect(header()).toBeNull();
+    expect(screen.queryByTestId("warmup-ring")).toBeNull();
+  });
+
+  it("is gone when the save failed, as D126 draws it", async () => {
+    submit.mockResolvedValue(false);
+    await sitTheTileTask();
+    await settle();
+
+    expect(screen.getByText(/Today's warm-up didn't save/)).toBeInTheDocument();
+    expect(header()).toBeNull();
+    expect(screen.queryByTestId("warmup-ring")).toBeNull();
+  });
+
+  it("is not over the nothing-state either", () => {
+    // No task pinned, and the engine's prompt is still on its way.
+    render(<WarmUpRun />);
+
+    expect(screen.getByRole("button", { name: "Home" })).toBeInTheDocument();
+    expect(header()).toBeNull();
+    expect(screen.queryByTestId("warmup-ring")).toBeNull();
+  });
+});
+
+describe("WarmUpRun — the line above a task is the frame's size", () => {
+  it("is 16px on a phone and 18px from tablet up", () => {
+    // It was 17px at every size.
+    render(<WarmUpRun dimension="attention" />);
+
+    const line = screen.getByText("Which way is the middle arrow pointing?");
+    expect(line.className).toContain("text-[16px]");
+    expect(line.className).toContain("sm:text-[18px]");
+    expect(line.className).not.toContain("text-[17px]");
+  });
+});
+
+describe("WarmUpRun — the write failed (D126, 8 Oct)", () => {
+  const failed = async () => {
+    submit.mockResolvedValue(false);
+    await sitTheTileTask();
+    await settle();
+  };
+
+  it("says it didn't save in the frame's one line, under the same title and Go on", async () => {
+    // It read "Thanks for doing that. We couldn't save it just now - that's
+    // on us, not you." D126: no apology, no reason, no retry.
+    await failed();
+
+    expect(screen.getByText("That's it for today")).toBeInTheDocument();
+    expect(
+      screen.getByText("Today's warm-up didn't save. It won't change your lessons."),
+    ).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/couldn't|on us|sorry|try again/i);
+    // Go on, and nothing else to press: no retry.
+    expect(
+      screen.getAllByRole("button").map((b) => b.textContent),
+    ).toEqual(["Go on"]);
+  });
+
+  it("draws the line at the frame's sizes and its quieter colour", async () => {
+    await failed();
+
+    const line = screen.getByText(/Today's warm-up didn't save/);
+    expect(line.className).toContain("text-[14.5px]");
+    expect(line.className).toContain("sm:text-[15.5px]");
+    expect(line.className).toContain("text-nevo-near-black/70");
+    expect(line.className).toContain("max-w-[300px]");
+    expect(line.className).toContain("mt-3");
+  });
+
+  it("shows a quiet neutral mark, not the success check, at the badge's sizes", async () => {
+    await failed();
+
+    const mark = screen.getByTestId("warmup-save-failed-mark");
+    const title = screen.getByText("That's it for today");
+    expect(title.parentElement!.previousElementSibling).toBe(mark);
+    expect(mark.querySelector("svg")).toBeNull();
+    expect(mark.className).toMatch(/(^| )size-16( |$)/);
+    expect(mark.className).toContain("sm:size-20");
+    expect(mark.className).toContain("bg-nevo-violet/22");
+    expect(mark.className).not.toMatch(/animate/);
+    const bar = mark.firstElementChild!;
+    expect(bar.className).toContain("w-[26px]");
+    expect(bar.className).toContain("sm:w-8");
+    expect(bar.className).toContain("h-[3px]");
+    expect(bar.className).toContain("bg-nevo-navy");
   });
 });

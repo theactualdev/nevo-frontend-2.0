@@ -24,7 +24,7 @@ describe("AccountOnPauseScreen", () => {
     expect(screen.getByText(/talk to your teacher/)).toBeVisible();
   });
 
-  it("offers nothing to press", () => {
+  it("offers the paused child nothing to press", () => {
     // From the frame, and it matters: there is nothing here a child can do, and
     // an action that cannot work is worse than no action. The way back is a
     // teacher.
@@ -32,6 +32,20 @@ describe("AccountOnPauseScreen", () => {
 
     expect(screen.queryAllByRole("button")).toHaveLength(0);
     expect(screen.queryAllByRole("link")).toHaveLength(0);
+  });
+
+  it("offers the next child one way back to the picker, and only that (D52)", () => {
+    // A shared tablet left on a screen with no controls locks every other
+    // child out of it. The control is not a retry and must not read as one.
+    render(<AccountOnPauseScreen back={{ href: "/auth/login" }} />);
+
+    expect(screen.getByRole("link", { name: "Back to sign in" })).toHaveAttribute(
+      "href",
+      "/auth/login",
+    );
+    expect(screen.getAllByRole("link")).toHaveLength(1);
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
+    expect(document.body.textContent?.toLowerCase()).not.toContain("try again");
   });
 
   it("names no reason", () => {
@@ -61,5 +75,36 @@ describe("AccountOnPauseScreen", () => {
     for (const blame of ["didn't match", "incorrect", "wrong", "try again"]) {
       expect(body).not.toContain(blame);
     }
+  });
+
+  it("shows the pause bars in its circle, not the brand mark (D64)", () => {
+    // 6 Oct: "The glyph is the pause bars, not the brand mark. Our mark does
+    // not appear on a screen that is telling someone their access has been
+    // interrupted." The wordmark above is the page's, and stays.
+    render(<AccountOnPauseScreen />);
+
+    // The frame's own bars since 8 Oct (D147): two solid, fully rounded navy
+    // bars, 15 x 54 on a phone, 18 x 66 on a tablet, 19 x 70 on a desktop.
+    const bars = document.querySelectorAll("[data-pause-bar]");
+    expect(bars).toHaveLength(2);
+    for (const bar of bars) {
+      for (const size of [
+        "w-[15px]",
+        "h-[54px]",
+        "sm:w-[18px]",
+        "sm:h-[66px]",
+        "lg:w-[19px]",
+        "lg:h-[70px]",
+        "rounded-full",
+        "bg-nevo-navy",
+      ]) {
+        expect(bar.className).toContain(size);
+      }
+    }
+    expect(document.querySelector("img[src*=\"logo-icon\"]")).toBeNull();
+    expect(screen.getByAltText("Nevo")).toHaveAttribute(
+      "src",
+      "/brand/logo-wordmark-purple.png",
+    );
   });
 });

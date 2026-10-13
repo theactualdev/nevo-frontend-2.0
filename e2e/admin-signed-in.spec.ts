@@ -40,6 +40,9 @@ test.skip(
 
 test.describe.configure({ mode: "serial" });
 
+/** The signed-in admin's bearer token, for reading the API directly. */
+let adminToken = "";
+
 async function signInAsAdmin(page: Page, request: APIRequestContext) {
   const res = await request.post(`${API}/api/v1/auth/login/password`, {
     data: { email: EMAIL, password: PASSWORD },
@@ -69,6 +72,7 @@ async function signInAsAdmin(page: Page, request: APIRequestContext) {
     "The login response carried no accessToken - has SessionResponse changed again?",
   ).toBeTruthy();
 
+  adminToken = body.accessToken;
   const session = {
     token: body.accessToken,
     expiresAt: body.expiresAt,
@@ -251,5 +255,48 @@ test("no signed-in admin surface renders an invented figure", async ({
       .locator(`[${SAMPLE_ATTR}]`)
       .evaluateAll((els) => els.map((e) => e.getAttribute("data-nevo-sample")));
     expect(kinds, `${route} rendered a fixture region`).toEqual([]);
+  }
+});
+
+test("a learner's adaptation history reads, or says no access when the role is missing", async ({
+  page,
+  request,
+}) => {
+  /*
+   * QA, 10 Oct: /admin/senco/{id} said "We couldn't read Ada's adaptation
+   * history" for this account. Asked of the API directly, production answers
+   * 403 `learning_support_role_required` (12 Oct): the Learning Support ROLE,
+   * which no scope grants and which this account does not hold. So for this
+   * account the page must say NO ACCESS - not "couldn't read", and no retry.
+   * If the account is ever given the role, the history must read instead.
+   */
+  const auth = { Authorization: `Bearer ${adminToken}` };
+  const roster = await request.get(`${API}/api/v1/students`, { headers: auth });
+  expect(roster.ok(), `GET /api/v1/students answered ${roster.status()}`).toBeTruthy();
+  const students = (await roster.json()) as { id: string }[];
+  test.skip(students.length === 0, "The E2E tenant has no students to open.");
+  const id = students[0].id;
+
+  const history = await request.get(`${API}/api/adaptations/student/${id}?limit=8`, {
+    headers: auth,
+  });
+  const body = (await history.text()).slice(0, 300);
+  console.log(`GET /api/adaptations/student/${id} -> ${history.status()} ${body}`);
+  const roleMissing =
+    history.status() === 403 && /learning_support_role_required/.test(body);
+  expect(
+    history.status() === 200 || roleMissing,
+    `The adaptation history for ${id} answered ${history.status()}: ${body}`,
+  ).toBeTruthy();
+
+  await page.goto(`/admin/senco/${id}`);
+  await expect(page.getByText(/Recent adaptations/i).first()).toBeVisible(LIVE);
+  await expect(page.getByText(/couldn.t read .* adaptation history/i)).toHaveCount(0);
+  if (roleMissing) {
+    await expect(
+      page.getByText(/don.t have access to .* adaptation history/i),
+    ).toBeVisible(LIVE);
+  } else {
+    await expect(page.getByText(/don.t have access to .* adaptation history/i)).toHaveCount(0);
   }
 });

@@ -4,18 +4,26 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { GridSpanConfig } from "@/lib/profiling/bands";
-import type { BaselineCapture } from "@/lib/profiling/capture";
+import { tapPoint, type BaselineCapture } from "@/lib/profiling/capture";
 import { AvatarBubble, ProfilingShell } from "./ProfilingShell";
 
-/** Playback pacing (BP-M1 playable): slows as struggle accumulates. */
-const LIT_BASE_MS = 660;
-const LIT_STRUGGLE_MS = 300;
-const GAP_BASE_MS = 280;
-const GAP_STRUGGLE_MS = 120;
+/**
+ * Playback pacing (BP-M1 playable, 11:202). The highlight is per band -
+ * `GridSpanConfig.litMs` - and one pace holds for the whole module: no band
+ * slows after a miss (D74, 6 Oct), so a replay plays exactly as the first
+ * playback did.
+ */
+const GAP_MS = 280;
 const PLAYBACK_LEAD_MS = 560;
 /** The wrong-tap nudge: grid locks, soft-violet ring, then the pattern replays. */
 const NUDGE_MS = 1500;
-/** Beats between rounds and into the settle. */
+/**
+ * Beats between rounds and into the settle.
+ *
+ * NOTHING LOADS IN THIS BEAT, so it carries no "Loading next round": the next
+ * sequence is drawn on the device (`genSeq`). Module 1's frame (09) draws that
+ * state anyway, and design dropped it on 1 Oct (D14).
+ */
 const NEXT_ROUND_MS = 750;
 const END_AT_MAX_MS = 650;
 const SETTLE_MS = 1700;
@@ -24,6 +32,13 @@ const MAX_RETRIES = 3;
 
 /**
  * SS dual-task checks, answered between watch and recall.
+ *
+ * DESIGN RULING, 30 SEP 2026 - KEEP AS BUILT. NOT A DEVIATION.
+ * The true/false sum over the dimmed grid is drawn in neither the Grid Span
+ * frame nor the playable prototype, and QA reported it as broken. Design and QA
+ * then confirmed it is intended, and design approved it on 30 Sep. A check
+ * against the frames will not find it there; that is expected. Do not remove
+ * it to match the frames. (Recorded in CONSOLE_INVENTORY, "S-D. Not a gap".)
  *
  * The note here said "never marked", and the code agreed: `answerCheck`
  * recorded which button was pressed and nothing about whether it was right,
@@ -38,28 +53,89 @@ const MAX_RETRIES = 3;
  *
  * Never SHOWN to the child, which is what the frames mean by no marking: no
  * tick, no red, no feedback of any kind.
+ *
+ * The daily warm-up's SS tile round runs the same checks (D81, 6 Oct): "A
+ * warm-up that measures a different construct from the baseline cannot
+ * recalibrate it", and the SS baseline is a complex span because of them.
  */
-const DUAL_CHECKS: { text: string; isTrue: boolean }[] = [
+export const DUAL_CHECKS: { text: string; isTrue: boolean }[] = [
   { text: "7 + 5 = 13", isTrue: false },
   { text: "9 - 4 = 5", isTrue: true },
   { text: "6 + 6 = 12", isTrue: true },
   { text: "8 - 3 = 4", isTrue: false },
 ];
 
+/** What a child is asked while a check is up, here and in the warm-up. */
+export const DUAL_CHECK_PROMPT = "Is this true or false?";
+
+/**
+ * Hands keyboard focus to the grid once the dual check is answered.
+ *
+ * FOCUS WAS LEFT BEHIND THE GRID. True and False sit after the tiles, and the
+ * one that was pressed goes with the check, so focus fell to the page from a
+ * point past the grid: the next Tab left the screen, and a keyboard user had
+ * to Shift+Tab back to reach a tile. Now the grid itself takes focus, without
+ * scrolling, and the next Tab is the first tile. The grid rather than a tile,
+ * so no tile is marked out during a recall.
+ *
+ * Only when focus was in fact dropped - a check answered some other way than
+ * from a focused button leaves focus where it is. `open` is whether the grid
+ * is taking taps; call `afterCheck` from the answer.
+ */
+export function useGridFocusAfterCheck(open: boolean) {
+  const grid = useRef<HTMLDivElement>(null);
+  const pending = useRef(false);
+  useEffect(() => {
+    if (!open || !pending.current) return;
+    pending.current = false;
+    const active = document.activeElement;
+    if (!active || active === document.body) {
+      grid.current?.focus({ preventScroll: true });
+    }
+  }, [open]);
+  const afterCheck = useCallback(() => {
+    pending.current = true;
+  }, []);
+  return { grid, afterCheck };
+}
+
 type Step = "watching" | "check" | "input" | "wrong" | "between" | "settling";
 
-/** Per-band tile sizing (mobile / sm+), from the frame's tileSize map. */
-const TILE: Record<number, { m: string; g: string }> = {
-  3: { m: "size-[92px] sm:size-[104px]", g: "gap-1.5 sm:gap-2.5" },
-  4: { m: "size-[78px] sm:size-[84px]", g: "gap-1.5 sm:gap-2.5" },
-  5: { m: "size-[62px] sm:size-[66px]", g: "gap-1.5 sm:gap-[9px]" },
+/**
+ * Per-band tile sizing. From `sm` up these are the frame's tileSize map, exact.
+ *
+ * BELOW `sm` THE TILES FILL THEIR COLUMN INSTEAD OF A FIXED SIZE (QA, 30 Sep).
+ * The frame's phone sizes were fixed pixels, so on a phone held upright the
+ * grid sat small in the middle of a tall screen - and on a 320px phone the
+ * 5x5 band's 62px tiles were forced into 56px columns and overlapped. Now the
+ * grid takes the width it has (see `PHONE_GRID`) and each tile is a square of
+ * its column, so the grid is as large as the screen allows and never overlaps.
+ *
+ * Shared with the daily warm-up's tile task, which runs this module's grid
+ * per band (D17).
+ */
+export const TILE: Record<number, { m: string; g: string }> = {
+  3: { m: "aspect-square w-full sm:size-[104px]", g: "gap-1.5 sm:gap-2.5" },
+  4: { m: "aspect-square w-full sm:size-[84px]", g: "gap-1.5 sm:gap-2.5" },
+  5: { m: "aspect-square w-full sm:size-[66px]", g: "gap-1.5 sm:gap-[9px]" },
 };
+
+/**
+ * How wide the grid is on a phone: the screen's width less the shell's
+ * padding, but never so tall that the bubble, the grid and the SS dual task's
+ * buttons stop fitting on one screen (the 380px is what sits above and below
+ * the grid), and never wider than 420px. From `sm` up the frame's fixed tile
+ * sizes decide it again.
+ */
+const PHONE_GRID =
+  "w-[min(calc(100vw-40px),calc(100dvh-380px),420px)] sm:w-auto";
 
 /**
  * Module 1 - Spatial Grid Span (BP-M1, working memory). Tiles light in
  * sequence; the student taps them back in reverse. Adaptive: the span starts at
- * 3 and grows by one per clean recall to the band ceiling; playback slows while
- * the student struggles and recovers as they do. A wrong tap gives a gentle
+ * the band's start and grows by one per clean recall to the band ceiling, each
+ * from the Module 1 frame (see `gridSpanConfig`), and playback keeps one
+ * pace throughout, misses or not (D74). A wrong tap gives a gentle
  * soft-violet nudge (the tile never fills, nothing shakes, nothing is "wrong"),
  * locks the grid for a beat, and replays the same pattern; three misses at a
  * length end the module seamlessly. The SS band interleaves a true/false check
@@ -77,7 +153,7 @@ export function GridSpanModule({
   capture?: BaselineCapture;
   onComplete: () => void;
 }) {
-  const { n, spanStart, spanMax, dual, instruction } = config;
+  const { n, spanStart, spanMax, litMs, dual, instruction } = config;
   const cells = n * n;
 
   const [step, setStep] = useState<Step>("watching");
@@ -89,7 +165,7 @@ export function GridSpanModule({
   const [firstRound, setFirstRound] = useState(true);
   const [check, setCheck] = useState(DUAL_CHECKS[0]);
 
-  const struggle = useRef(0);
+  const { grid, afterCheck } = useGridFocusAfterCheck(step === "input");
   const retries = useRef(0);
   const checkIdx = useRef(0);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -129,9 +205,6 @@ export function GridSpanModule({
   const startRound = useCallback(
     (seq: number[]) => {
       clearTimers();
-      const s = Math.min(3, struggle.current);
-      const lit = LIT_BASE_MS + s * LIT_STRUGGLE_MS;
-      const gap = GAP_BASE_MS + s * GAP_STRUGGLE_MS;
       setStep("watching");
       setSequence(seq);
       setLitIndex(-1);
@@ -140,14 +213,14 @@ export function GridSpanModule({
       setWrongCell(-1);
       capture?.record("playback_start", {
         length: seq.length,
-        litMs: lit,
-        gapMs: gap,
+        litMs,
+        gapMs: GAP_MS,
       });
       let t = PLAYBACK_LEAD_MS;
       seq.forEach((cell) => {
         after(t, () => setLitIndex(cell));
-        after(t + lit, () => setLitIndex(-1));
-        t += lit + gap;
+        after(t + litMs, () => setLitIndex(-1));
+        t += litMs + GAP_MS;
       });
       after(t + 150, () => {
         setLitIndex(-1);
@@ -163,7 +236,7 @@ export function GridSpanModule({
         }
       });
     },
-    [after, capture, clearTimers, dual],
+    [after, capture, clearTimers, dual, litMs],
   );
 
   // Kick off round 1 on a zero-delay timer: the cleanup cancels it, so
@@ -175,18 +248,20 @@ export function GridSpanModule({
     return () => clearTimeout(t);
   }, [genSeq, spanStart, startRound]);
 
-  const answerCheck = (answer: boolean) => {
+  const answerCheck = (answer: boolean, e: React.MouseEvent) => {
     if (step !== "check") return;
     capture?.record("check_answer", {
       check: check.text,
       answer,
       correct: answer === check.isTrue,
+      ...tapPoint(e),
     });
+    afterCheck();
     setStep("input");
     capture?.record("input_start", { length: sequence.length });
   };
 
-  const tapTile = (cell: number) => {
+  const tapTile = (cell: number, e: React.MouseEvent) => {
     if (step !== "input") return;
     const expected = [...sequence].reverse();
     const correct = cell === expected[inputPos];
@@ -195,6 +270,7 @@ export function GridSpanModule({
       correct,
       posInSeq: inputPos,
       length: sequence.length,
+      ...tapPoint(e),
     });
     if (correct) {
       const nextTapped = new Set(tapped).add(cell);
@@ -208,7 +284,6 @@ export function GridSpanModule({
         if (sequence.length >= spanMax) {
           after(END_AT_MAX_MS, settle);
         } else {
-          struggle.current = Math.max(0, struggle.current - 1);
           retries.current = 0;
           after(NEXT_ROUND_MS, () => startRound(genSeq(sequence.length + 1)));
         }
@@ -218,7 +293,6 @@ export function GridSpanModule({
       }
     } else {
       retries.current += 1;
-      struggle.current = Math.min(3, struggle.current + 1);
       setWrongCell(cell);
       setStep("wrong");
       const fails = retries.current;
@@ -238,7 +312,7 @@ export function GridSpanModule({
   const bubbleText = settling
     ? ""
     : step === "check"
-      ? "Is this true or false?"
+      ? DUAL_CHECK_PROMPT
       : step === "input" || step === "wrong"
         ? "Now tap them in reverse"
         : firstRound
@@ -255,7 +329,10 @@ export function GridSpanModule({
         ) : (
           <div className="relative">
             <div
-              className={cn("grid", tile.g)}
+              ref={grid}
+              tabIndex={-1}
+              data-testid="grid-span-grid"
+              className={cn("grid", PHONE_GRID, tile.g)}
               style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}
             >
               {Array.from({ length: cells }, (_, i) => {
@@ -268,7 +345,7 @@ export function GridSpanModule({
                     type="button"
                     tabIndex={interactive ? 0 : -1}
                     aria-hidden={!interactive}
-                    onClick={() => tapTile(i)}
+                    onClick={(e) => tapTile(i, e)}
                     className={cn(
                       "flex items-center justify-center rounded-[12px] transition-[transform,box-shadow] duration-150",
                       tile.m,
@@ -296,16 +373,13 @@ export function GridSpanModule({
               })}
             </div>
 
-            {/* Change-of-mind hint on a wrong tap - informational, never alarmed */}
-            <p
-              className={cn(
-                "absolute inset-x-0 -bottom-8 text-center text-[13px] text-nevo-violet transition-opacity duration-300",
-                step === "wrong" ? "opacity-100" : "opacity-0",
-              )}
-              aria-hidden={step !== "wrong"}
-            >
-              Try another
-            </p>
+            {/*
+              NO WORDS ON A WRONG TAP. "Try another" appeared under the grid
+              here, from the playable prototype (11:71). The Grid Span frame's
+              nudge state is the tile's soft-violet ring and nothing else, and
+              09 says never "wrong": a line that only ever shows after a miss
+              tells the child they missed.
+            */}
 
             {/* SS dual task: the check floats over the dimmed grid */}
             {step === "check" && (
@@ -320,8 +394,8 @@ export function GridSpanModule({
 
         {step === "check" && (
           <div className="flex gap-3">
-            <CheckButton label="True" onClick={() => answerCheck(true)} />
-            <CheckButton label="False" onClick={() => answerCheck(false)} />
+            <CheckButton label="True" onClick={(e) => answerCheck(true, e)} />
+            <CheckButton label="False" onClick={(e) => answerCheck(false, e)} />
           </div>
         )}
       </div>
@@ -329,12 +403,13 @@ export function GridSpanModule({
   );
 }
 
-function CheckButton({
+/** A dual-task answer: 48px tall, the floor 09 bumps these to. */
+export function CheckButton({
   label,
   onClick,
 }: {
   label: string;
-  onClick: () => void;
+  onClick: (e: React.MouseEvent) => void;
 }) {
   return (
     <button
@@ -347,7 +422,14 @@ function CheckButton({
   );
 }
 
-/** "That's it. Saved." - the module's quiet settle, no score, no celebration. */
+/**
+ * "That's it." - the module's quiet settle, no score, no celebration.
+ *
+ * IT CLAIMS NO SAVE (D136, 8 Oct). It read "That's it. Saved.", and nothing
+ * had been saved: the trials are taken at the end of the run and parked, and
+ * the device that sends raw answers has no way of knowing a send landed.
+ * Design: "'That's it.' on its own is fine and claims nothing."
+ */
 export function SettleBadge() {
   return (
     <div className="flex flex-col items-center gap-3.5">
@@ -355,7 +437,7 @@ export function SettleBadge() {
         <Check className="size-8 text-nevo-cream" strokeWidth={2.6} />
       </span>
       <span className="text-[17px] font-semibold text-nevo-navy">
-        That&apos;s it. Saved.
+        That&apos;s it.
       </span>
     </div>
   );

@@ -77,3 +77,46 @@ test.describe("routes that must stay open", () => {
     await expect(page).toHaveURL(/\/auth\/teacher/);
   });
 });
+
+/**
+ * T232. The teacher's own doors before a session exists - activating an
+ * account, resetting a password, coming back from school SSO, and landing
+ * after a session ran out - were never opened by any spec.
+ */
+test.describe("the teacher's doors before a session", () => {
+  test("activation opens the password form", async ({ page }) => {
+    await page.goto("/auth/teacher/activate");
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Create your password");
+  });
+
+  test("the reset opens the request form", async ({ page }) => {
+    await page.goto("/auth/teacher/reset");
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Reset your password");
+  });
+
+  test("the SSO callback with no handshake says it could not sign them in", async ({ page }) => {
+    // No code on the URL is no handshake. It used to write a token-less
+    // session that the route guard let into the console.
+    await page.goto("/auth/teacher/sso-callback");
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("We couldn't sign you in");
+    await expect(page).toHaveURL(/\/auth\/teacher\/sso-callback/);
+  });
+
+  test("the expired screen hands Sign in the place they were", async ({ page }) => {
+    await page.goto(
+      `/auth/teacher/session-expired?next=${encodeURIComponent("/teacher/classes/c-1")}`,
+    );
+    const link = page.getByRole("link", { name: "Sign in" });
+
+    await expect(link).toHaveAttribute(
+      "href",
+      `/auth/teacher?next=${encodeURIComponent("/teacher/classes/c-1")}`,
+    );
+  });
+
+  test("the guard remembers the query too, where a tab or a section lives", async ({ page }) => {
+    await page.goto("/teacher/classes?tab=roster");
+
+    expect(new URL(page.url()).searchParams.get("next")).toBe("/teacher/classes?tab=roster");
+  });
+});

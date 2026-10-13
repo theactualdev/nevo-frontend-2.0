@@ -58,8 +58,8 @@ const STUDENT_HOME = "/student/dashboard";
  * The first screen of the flow that CREATES an account, and the only onboarding
  * route a signed-in child has no business on.
  *
- * The root only, deliberately. Onboarding ends by calling `completeAccount`,
- * which stores the session before routing the child on, so the later steps are
+ * The root only, deliberately. Onboarding ends by storing the first PIN, which
+ * stores the session before routing the child on, so the later steps are
  * legitimately reached WITH a session and bouncing them would break the end of
  * the flow for every new child.
  */
@@ -77,10 +77,13 @@ const PRE_AUTH_TEACHER_ROUTES = ["/teacher/onboarding", "/teacher/help"];
 const PRE_AUTH_ADMIN_ROUTES = ["/admin/onboarding"];
 /**
  * Onboarding is the flow that CREATES the session, so it cannot require one.
- * It ends by calling `completeAccount`, which stores the session (and with it
- * this cookie) before routing the child into their first lesson - so every
- * route below is genuinely reachable with a session by the time it is asked
- * for.
+ * It ends by storing the first PIN, which stores the session (and with it this
+ * cookie) before routing the child into their first lesson - so every route
+ * below is genuinely reachable with a session by the time it is asked for.
+ *
+ * NO ENTRY LINK. `/student/entry/{token}` was let through here, and it is gone:
+ * its endpoint never resolved for anyone (B2), and 05 Entry under
+ * `/student/onboarding` is the one way in (SCRUM-208).
  */
 const PRE_AUTH_STUDENT_ROUTES = ["/student/onboarding"];
 
@@ -97,8 +100,9 @@ export function proxy(request: NextRequest) {
     }
     if (!isTeacher) {
       const url = new URL(SIGN_IN, request.url);
-      // So the door can send them back where they were headed.
-      url.searchParams.set("next", pathname);
+      // So the door can send them back where they were headed - query and all
+      // (T217): a class's tab or a lesson's section lives there.
+      url.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
       return NextResponse.redirect(url);
     }
     return NextResponse.next();
@@ -110,7 +114,9 @@ export function proxy(request: NextRequest) {
     }
     if (!isAdmin) {
       const url = new URL(ADMIN_SIGN_IN, request.url);
-      url.searchParams.set("next", pathname);
+      // Query and all, as the teacher door has it (T217): a list's filters
+      // and the way back (`?back=`) live there.
+      url.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
       return NextResponse.redirect(url);
     }
     return NextResponse.next();
@@ -131,15 +137,9 @@ export function proxy(request: NextRequest) {
      * It is also plainly wrong on its own terms: a child who already has an
      * account being asked to make one is the product forgetting them.
      *
-     * A JOIN LINK IS LET THROUGH. `?token=` is a different child arriving on a
-     * device someone is signed into. Bouncing it would discard the invitation
-     * in silence and drop the new child into the signed-in child's dashboard,
-     * which is a worse version of the bug this fixes.
-     *
-     * THE HAND-OVER IS BUILT, as of 18 Sep, and it is in `WelcomeScreen` rather
-     * than here: the session lives in localStorage, which no server can see, so
-     * this file cannot tell a token arrival on a signed-in tablet from one on
-     * an empty tablet. The screen ends the session before onboarding starts.
+     * NO EXCEPTION FOR `?token=` ANY MORE. It let a join link through, for a
+     * different child arriving on a device someone was signed into. A child is
+     * never sent a link (design, D5), so a token on this address is nobody's.
      *
      * Safe to bounce for the same reason the PIN screen below is: signing out
      * is a HARD navigation, so the cookie clear has settled before this runs.
@@ -148,8 +148,7 @@ export function proxy(request: NextRequest) {
       isStudent &&
       // A trailing slash would otherwise fall straight through to the pre-auth
       // allowance below and render the very screen this is closing.
-      pathname.replace(/\/+$/, "") === STUDENT_ONBOARDING_ROOT &&
-      !request.nextUrl.searchParams.has("token")
+      pathname.replace(/\/+$/, "") === STUDENT_ONBOARDING_ROOT
     ) {
       return NextResponse.redirect(new URL(STUDENT_HOME, request.url));
     }

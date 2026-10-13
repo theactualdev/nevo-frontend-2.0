@@ -68,27 +68,39 @@ export interface AdultMessage {
  * caller on a student screen has nothing to reach for.
  *
  * `state` is the whole vocabulary. Adding to it is a design decision, not a
- * convenience - which is the point of it being three words rather than a
+ * convenience - which is the point of it being a closed set rather than a
  * string.
+ *
+ * NO "OFFLINE" AND NO "ONLINE" (design, D55). The child's bar carries only
+ * what Nevo itself says about the service, and never repeats the offline
+ * banner, which already owns the connection on every tab and in the player.
+ * Both states were here and were raised by nothing; they are gone so that
+ * nothing can. And in v1 nothing raises this bar for a child at all - the
+ * student shell mounts no `SystemMessagesProvider` - so on a child's screen it
+ * renders nothing, which is the ruling's own answer for that case.
  */
 export interface ChildMessage {
   audience: "child";
-  state: "saved" | "offline" | "online";
+  state: "saved";
 }
 
 export type SystemMessageInput = AdultMessage | ChildMessage;
 
 /**
- * The only three things a child's screen may say, and none of them is praise.
+ * The only thing a child's screen may say here, and it is not praise.
  *
- * Factual system states, in the frame's own register: what happened to their
- * work, and whether the product can reach anything. No tick, no count, no
- * "well done", nothing a child could read as a score.
+ * A factual system state, in the frame's own register: what happened to their
+ * work. No tick, no count, no "well done", nothing a child could read as a
+ * score - and nothing about the connection, which is the banner's (D55).
+ *
+ * ONLY ONCE THE BACKEND HAS CONFIRMED THE SAVE (design D112, 6 Oct): "Yes,
+ * if it states something the backend confirmed. If the save is not confirmed,
+ * the line does not appear at all, per D88 and D89." So `saved` is raised
+ * from a write's success and never from its attempt, a queued retry or a
+ * device copy. Nothing raises it today.
  */
 const CHILD_COPY: Record<ChildMessage["state"], string> = {
   saved: "Your work is saved.",
-  offline: "You're offline. Nevo will keep what you do.",
-  online: "You're back online.",
 };
 
 export function isChild(m: SystemMessageInput): m is ChildMessage {
@@ -152,10 +164,13 @@ export function SystemMessage({
   /** Absent when the bar leaves on its own (SM-01, SM-02, SM-05). */
   onDismiss?: () => void;
 }) {
+  // Neither bar is a live region of its own: the provider's rail is one,
+  // mounted before anything is said, which is what makes a screen reader
+  // announce it (C14). A region inserted already holding its words is often
+  // not read at all, and one nested in another can be read twice.
   if (isChild(message)) {
     return (
       <div
-        role="status"
         className="inline-flex w-max max-w-[420px] items-center gap-[9px] rounded-[12px] bg-nevo-violet/20 px-3.5 py-[9px] motion-safe:animate-nevo-rise"
       >
         {/* The dot and nothing else. No tick - a tick is the shape of a
@@ -172,7 +187,6 @@ export function SystemMessage({
 
   return (
     <div
-      role="status"
       className="inline-flex w-max max-w-[560px] items-center gap-3 rounded-[12px] bg-nevo-navy py-3.5 pr-4 pl-[15px] shadow-[0_8px_32px_rgba(0,0,0,0.16)] motion-safe:animate-nevo-rise"
     >
       <Mark kind={message.kind} />

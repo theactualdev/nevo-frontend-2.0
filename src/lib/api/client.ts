@@ -12,6 +12,12 @@
  */
 
 import { clearSession, getSession, getToken } from "@/lib/auth/session";
+import {
+  announceAccountPause,
+  pauseHostsMounted,
+  pausesInPlace,
+} from "@/lib/auth/accountPause";
+import { withdrawnDoor } from "@/lib/auth/consentHold";
 import { noteServerClock } from "./serverClock";
 import { isAdminRole } from "@/lib/constants/permissions";
 import { API_ORIGIN } from "./upstream";
@@ -182,6 +188,20 @@ export function sessionExpiredDoor(
    * query string can only ever under-claim.
    */
   code?: string | null,
+  /**
+   * Where the person was when it ended, carried as `?next=` so signing back in
+   * returns them there - IA 31: "Log back in -> Student Login Screen (lesson
+   * position preserved)". Each door takes only its own console's routes, so
+   * nothing else can be a place it sends anyone.
+   *
+   * THE TEACHER DOOR TOO (T217). Its screen promises "continue where you left
+   * off" and then lost the place: the next was dropped here and nothing read
+   * it there.
+   *
+   * AND THE ADMIN DOOR. Its sign-in always read `next`; nothing handed it one,
+   * so an admin whose session ended mid-page signed back in to their home.
+   */
+  from?: string | null,
 ): string {
   const base =
     role === "teacher"
@@ -189,7 +209,15 @@ export function sessionExpiredDoor(
       : isAdminRole(role)
         ? "/auth/admin/session-expired"
         : "/auth/session-expired";
-  return code ? `${base}?reason=${encodeURIComponent(code)}` : base;
+  const query = [
+    code ? `reason=${encodeURIComponent(code)}` : null,
+    (base === "/auth/session-expired" && from?.startsWith("/student")) ||
+    (base === "/auth/teacher/session-expired" && from?.startsWith("/teacher/")) ||
+    (base === "/auth/admin/session-expired" && from?.startsWith("/admin/"))
+      ? `next=${encodeURIComponent(from!)}`
+      : null,
+  ].filter(Boolean);
+  return query.length ? `${base}?${query.join("&")}` : base;
 }
 
 /**
@@ -215,7 +243,24 @@ function handleAuthFailure(
   // token, and exempting it left the student browsing an app that still
   // looked signed in.
   if (path.includes("/auth/login") || path.includes("/auth/logout")) return;
+  // Nor does a crash report: it is sent from an error screen and must never
+  // move the person off it (B36). A dead session is found by the next read.
+  if (path.includes("/client-errors")) return;
   const role = getSession()?.role;
+  const code = apiErrorCode(detail);
+  // A wrong CURRENT password on Settings is a 401 about the password, not the
+  // session: the token was accepted and the change refused. Treated as a dead
+  // session it signed the admin out mid-form and sent them to "your session
+  // has ended". The screen shows it under the field instead.
+  if (code === "current_password_incorrect") return;
+  // A child's pause is shown where they are (28b), over the lesson, rather
+  // than by leaving it. The session stays until they tap Okay - see
+  // `accountPause.ts` for why, and for the case with nothing to draw it.
+  if (pausesInPlace(role, code, pauseHostsMounted())) {
+    redirecting = true;
+    announceAccountPause(code);
+    return;
+  }
   clearSession();
   // Every console now lands on a screen that SAYS the session ended, rather
   // than reappearing as a sign-in form with no explanation - design shipped
@@ -224,7 +269,31 @@ function handleAuthFailure(
   // picks the door the screen offers. The backend's admin roles are
   // `senco_admin` and `other_admin`, never a plain "admin".
   redirecting = true;
-  window.location.assign(sessionExpiredDoor(role, apiErrorCode(detail)));
+  window.location.assign(
+    sessionExpiredDoor(
+      role,
+      code,
+      `${window.location.pathname}${window.location.search}`,
+    ),
+  );
+}
+
+/**
+ * A child whose parent withdrew consent goes to the held screen (B7) rather
+ * than meeting each refused call's own generic failure. The decision is
+ * `withdrawnDoor`; this only acts on it, once, behind the same latch.
+ */
+function holdIfWithdrawn(status: number, detail: unknown): void {
+  if (typeof window === "undefined" || redirecting) return;
+  const door = withdrawnDoor(
+    getSession()?.role,
+    status,
+    apiErrorCode(detail),
+    window.location.pathname,
+  );
+  if (!door) return;
+  redirecting = true;
+  window.location.assign(door);
 }
 
 /** An array repeats the key - see `buildUrl`. */
@@ -346,6 +415,7 @@ export async function request<T>(
     if (response.status === 401) {
       handleAuthFailure(path, Boolean(token), detail);
     }
+    holdIfWithdrawn(response.status, detail);
     throw new ApiError(
       response.status,
       friendlyMessage(response.status),

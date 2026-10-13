@@ -2,16 +2,20 @@
 
 import { useMemo, useState } from "react";
 import { Check, Search } from "lucide-react";
-import {
-  IllustrationWrapper,
-  NevoKeyboard,
-  useNevoKeyboardDock,
-} from "@/components/shared";
+import { NevoKeyboard, useNevoKeyboardDock } from "@/components/shared";
 import { SampleRegion } from "@/components/shared/SampleRegion";
 import { useHydrated } from "@/hooks/useHydrated";
 import { useHasSession } from "@/hooks/useHasSession";
 import { useStudentLessons } from "@/hooks/useStudentLessons";
+import type { SegmentPlace } from "@/lib/lessons/segmentPlace";
 import { cn } from "@/lib/utils";
+import {
+  EmptyArt,
+  TAB_FILL,
+  TAB_PAGE,
+  TAB_TITLE,
+  TabEmpty,
+} from "@/components/student/Shell/TabPage";
 import {
   LESSON_CATALOG,
   SUBJECT_ICON,
@@ -22,12 +26,33 @@ import { LessonPreviewSheet } from "./LessonPreviewSheet";
 
 type Filter = "all" | LessonStatus;
 
+/**
+ * Sentence case, as every place that names a status says it (design D127,
+ * 6 Oct: "Sentence case throughout, so 'In progress' everywhere") - the
+ * cards' own marks already read "In progress" and "Not started".
+ */
 const FILTERS: { id: Filter; label: string }[] = [
   { id: "all", label: "All" },
-  { id: "in_progress", label: "In Progress" },
-  { id: "not_started", label: "Not Started" },
+  { id: "in_progress", label: "In progress" },
+  { id: "not_started", label: "Not started" },
   { id: "completed", label: "Completed" },
 ];
+
+/**
+ * What a chip's empty list says, in 29 Empty States' words for each chip
+ * (design D102, 6 Oct). "All" with nothing under it and no search typed has
+ * no drawn line and keeps the one that shipped.
+ *
+ * 29 draws these over `illustration-empty-search.png`, which we do not have
+ * yet ("The illustration export is coming", D127), so the chip states keep
+ * the illustration they had.
+ */
+const FILTERED_EMPTY: Record<Filter, string> = {
+  all: "Nothing in that group yet",
+  in_progress: "Nothing in progress right now.",
+  not_started: "Nothing waiting.",
+  completed: "No completed lessons yet",
+};
 
 /**
  * Lessons Tab (screen 20). The student's lessons, with a calm status on each
@@ -40,9 +65,10 @@ const FILTERS: { id: Filter; label: string }[] = [
  * one of them claiming they were 55% through it. Signed out, the fixtures back
  * the designed screen as before.
  *
- * Live lessons carry no subject, so they render as one ungrouped grid; the
- * fixtures keep their subject headings. Grouping by an invented subject would
- * be the same mistake in a different place.
+ * GROUPED BY SUBJECT where a lesson has one. A live lesson carries the subject
+ * its upload recorded (see `useStudentLessons`), and the fixtures carry their
+ * own. A lesson with none goes into one unheaded group rather than under an
+ * invented subject.
  */
 export function LessonsTab() {
   const signedIn = useHasSession();
@@ -67,8 +93,8 @@ export function LessonsTab() {
         (filter === "all" || l.status === filter) &&
         (q === "" || l.title.toLowerCase().includes(q)),
     );
-    // Grouped by subject where one exists; live lessons have none and fall
-    // into a single unlabelled group.
+    // Grouped by subject where one exists; lessons without one fall into a
+    // single unlabelled group.
     const bySubject = new Map<string, LessonSummary[]>();
     for (const lesson of matched) {
       const key = lesson.subject ?? "";
@@ -92,7 +118,10 @@ export function LessonsTab() {
    * one control offered did not restore anything, which reads as the button
    * being broken rather than as the chip still being on.
    *
-   * So the copy names whichever is narrowing, and the control clears both.
+   * So the copy names whichever is narrowing, in the frames' words, and the
+   * control clears exactly what it names. With both on, "Clear search" lands
+   * on the chip's own empty state, which says so and offers "Clear filter" -
+   * every tap changes what the child sees.
    */
   const searching = query.trim().length > 0;
   /** Nothing has been assigned yet - different from a search finding nothing. */
@@ -103,11 +132,10 @@ export function LessonsTab() {
     setPreviewOpen(true);
   };
 
-  const shell = (children: React.ReactNode) => (
-    <div className="mx-auto w-full max-w-[900px] px-5 py-2 pb-6 sm:px-8 sm:py-6">
-      <h1 className="text-2xl font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[30px] lg:text-[32px]">
-        Lessons
-      </h1>
+  // `fill`: the page grows to the screen, for a state centred in it.
+  const shell = (children: React.ReactNode, fill = false) => (
+    <div className={cn(TAB_PAGE, fill && TAB_FILL)}>
+      <h1 className={TAB_TITLE}>Lessons</h1>
       {children}
     </div>
   );
@@ -134,7 +162,7 @@ export function LessonsTab() {
     return shell(
       <div className="mt-6 rounded-[16px] bg-nevo-cream-elevated p-[22px] shadow-elevation-1">
         <p className="text-[17px] font-semibold text-nevo-near-black">
-          We couldn&rsquo;t load your lessons just now
+          We couldn&apos;t load your lessons just now
         </p>
         <p className="mt-1.5 text-[15px] leading-[1.5] text-nevo-near-black/68">
           Nothing is lost. Give it a moment and try again.
@@ -151,22 +179,18 @@ export function LessonsTab() {
   }
 
   if (nothingAssigned) {
+    // 29 Empty States, "Lessons (No lessons)": one line, no more.
     return shell(
-      <div className="flex flex-col items-center px-6 pt-11 pb-6 text-center">
-        <IllustrationWrapper
-          src="/illustrations/empty-lessons.png"
-          alt=""
-          width={512}
-          height={512}
-          className="w-[170px]"
-        />
-        <h2 className="mt-5 text-lg font-medium text-nevo-near-black">
-          No lessons yet
-        </h2>
-        <p className="mt-1.5 max-w-[280px] text-sm leading-[1.5] text-nevo-near-black/60">
-          When your teacher sets one, it will appear here.
-        </p>
-      </div>,
+      <TabEmpty
+        art={
+          <EmptyArt
+            src="/illustrations/empty-lessons.png"
+            className="h-[200px] md:h-[240px] lg:h-[250px]"
+          />
+        }
+        line="Your lessons will show up here soon"
+      />,
+      true,
     );
   }
 
@@ -174,11 +198,12 @@ export function LessonsTab() {
   // lessons AND the signed-out catalogue - only the latter is sample data, so
   // the mark is conditional. Marking both would make the end-to-end assertion
   // fire on a correct screen, which is the fastest way to get a mark deleted.
+  // A chip's empty list centres in the screen (29); a search's sits under
+  // the search, as the Lessons frame draws it.
+  const chipEmpty = noResults && !searching;
   const body = (
-    <div className="mx-auto w-full max-w-[900px] px-5 py-2 pb-6 sm:px-8 sm:py-6">
-      <h1 className="text-2xl font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-[30px] lg:text-[32px]">
-        Lessons
-      </h1>
+    <div className={cn(TAB_PAGE, chipEmpty && TAB_FILL)}>
+      <h1 className={TAB_TITLE}>Lessons</h1>
 
       {/* Search */}
       <div className="relative mt-4">
@@ -233,34 +258,47 @@ export function LessonsTab() {
         })}
       </div>
 
-      {noResults ? (
+      {chipEmpty ? (
+        // 29 Empty States, a chip with nothing under it: the heading alone,
+        // and the way back to everything. The board's own figure for this is
+        // still to come (D127), so the art is the one these states had.
+        <TabEmpty
+          art={
+            <EmptyArt
+              src="/illustrations/empty-lessons.png"
+              className="h-[210px] md:h-[240px] lg:h-[250px]"
+            />
+          }
+          line={FILTERED_EMPTY[filter]}
+        >
+          <button
+            type="button"
+            onClick={() => setFilter("all")}
+            className="mt-5 h-11 cursor-pointer rounded-[10px] px-5 text-[15px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6 md:mt-[22px]"
+          >
+            Clear filter
+          </button>
+        </TabEmpty>
+      ) : noResults ? (
+        // Nevo Lessons Frame, a search that finds nothing: under the search,
+        // the figure in a 170 box, the heading and the line.
         <div className="flex flex-col items-center px-6 pt-11 pb-6 text-center">
-          <IllustrationWrapper
+          <EmptyArt
             src="/illustrations/empty-lessons.png"
-            alt=""
-            width={512}
-            height={512}
-            className="w-[170px]"
+            className="h-[170px]"
           />
           <h2 className="mt-5 text-lg font-medium text-nevo-near-black">
-            {searching
-              ? "No lessons match your search"
-              : "Nothing in that group yet"}
+            No lessons match your search
           </h2>
           <p className="mt-1.5 max-w-[280px] text-sm leading-[1.5] text-nevo-near-black/60">
-            {searching
-              ? "Try a different word, or see everything."
-              : "Try another group, or see everything."}
+            Try a different word, or clear the search to see everything.
           </p>
           <button
             type="button"
-            onClick={() => {
-              setQuery("");
-              setFilter("all");
-            }}
+            onClick={() => setQuery("")}
             className="mt-5 h-11 cursor-pointer rounded-[10px] px-[22px] text-[15px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
           >
-            Show all lessons
+            Clear search
           </button>
         </div>
       ) : (
@@ -268,9 +306,9 @@ export function LessonsTab() {
           {groups.map(([subject, lessons]) => (
             <section key={subject} className="mb-7">
               {/* Not sticky: a pinned header overlays cards (taps land on it)
-                  and perturbs the scroll signal (SCRUM-94). Live lessons have
-                  no subject, so they render headingless rather than under an
-                  invented one. */}
+                  and perturbs the scroll signal (SCRUM-94). Lessons with no
+                  subject render headingless rather than under an invented
+                  one. */}
               {subject && (
                 <h2 className="mb-3 py-1.5 text-lg font-semibold text-nevo-near-black">
                   {subject}
@@ -312,7 +350,8 @@ function LessonCard({
   lesson: LessonSummary;
   onOpen: () => void;
 }) {
-  // No subject on live lessons - the neutral book mark stands in.
+  // A live subject is free text, so one outside the three marks, or no
+  // subject at all, gets the neutral book mark.
   const Icon =
     (lesson.subject ? SUBJECT_ICON[lesson.subject] : undefined) ??
     SUBJECT_ICON.English;
@@ -320,11 +359,13 @@ function LessonCard({
     <button
       type="button"
       onClick={onOpen}
-      className="relative overflow-hidden rounded-[12px] bg-nevo-cream-elevated text-left shadow-elevation-1 transition-transform active:scale-[0.98]"
+      // A column, not a button's centred box: in a row stretched to a taller
+      // neighbour, the accent bar slid down off the top of a shorter card.
+      className="relative flex cursor-pointer flex-col overflow-hidden rounded-[12px] bg-nevo-cream-elevated text-left shadow-elevation-1 transition-transform active:scale-[0.98]"
     >
       {/* Accent bar (subject) */}
       <div className="h-[5px] bg-nevo-violet/70" />
-      <StatusMark status={lesson.status} />
+      <StatusMark status={lesson.status} place={lesson.place} />
       <div className="p-4">
         <span className="flex size-10 items-center justify-center rounded-[10px] bg-nevo-cream text-nevo-navy">
           <Icon className="size-5" strokeWidth={2} />
@@ -340,8 +381,26 @@ function LessonCard({
   );
 }
 
-/** Calm status dot — completed (navy check), in-progress (violet ring), or not started. */
-function StatusMark({ status }: { status: LessonStatus }) {
+/**
+ * Calm status dot — completed (navy check), in-progress (violet ring filled
+ * as far as the child is), or not started.
+ *
+ * THE FILL IS THE CHILD'S OWN, OR THERE IS NONE (design D21, backend B51). It
+ * was a conic fill fixed at 55% on every in-progress card, which a child reads
+ * as how far they are - the same for everyone, so it was the rising curve
+ * again. D21 allowed the fill back only once the real fraction was on the
+ * wire, and B51 put it there: the frame's conic fill now runs to this child's
+ * `segmentPosition / segmentCount`, and says "Segment 3 of 10" rather than a
+ * number. A row that does not say keeps the plain mark - a centre dot, which
+ * no reading turns into a portion.
+ */
+function StatusMark({
+  status,
+  place,
+}: {
+  status: LessonStatus;
+  place?: SegmentPlace;
+}) {
   if (status === "completed") {
     return (
       <span
@@ -353,16 +412,29 @@ function StatusMark({ status }: { status: LessonStatus }) {
       </span>
     );
   }
+  if (status === "in_progress" && place) {
+    return (
+      <span
+        role="img"
+        aria-label={`In progress. ${place.words}`}
+        data-segment-fill
+        className="absolute top-3 right-3 size-5 rounded-full border-2 border-nevo-violet"
+        // Degrees, not a percentage: the amount is drawn, never written.
+        style={{
+          background: `conic-gradient(var(--color-nevo-navy) ${place.fraction * 360}deg, transparent 0)`,
+        }}
+      />
+    );
+  }
   if (status === "in_progress") {
     return (
       <span
         role="img"
         aria-label="In progress"
-        className="absolute top-3 right-3 size-5 rounded-full border-2 border-nevo-violet"
-        style={{
-          background: "conic-gradient(#3b3f6e 55%, transparent 0)",
-        }}
-      />
+        className="absolute top-3 right-3 flex size-5 items-center justify-center rounded-full border-2 border-nevo-violet"
+      >
+        <span className="size-2 rounded-full bg-nevo-navy" aria-hidden />
+      </span>
     );
   }
   return (

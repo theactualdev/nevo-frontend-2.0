@@ -25,14 +25,30 @@
  *    learner's `Account On Pause` frame one level up: a teacher is pointed at
  *    the school administrator exactly as a learner is pointed at their teacher.
  *    NO retry button, because retrying does nothing.
+ *  - `account_closed` (B58, backend's 5 Oct answer; not yet in the deployed
+ *    spec) is a sixth code and a second account state: a removed account,
+ *    which no school can turn back on. The child's
+ *    door says closed rather than on pause (D53). The STAFF screen has no
+ *    closed state drawn, so it keeps the ordinary copy it showed this code
+ *    before the code had a name - raised, not invented here.
  *
  * A pure module, separate from the screen, because the mapping is the half that
  * can be wrong and a component that reaches Next's router cannot be rendered in
  * this test harness. Same reasoning as `loginFailure.ts`, which does this for
  * the sign-in doors.
+ *
+ * THE WORDS ARE THE STAFF SCREEN'S ONLY. There was a `learner` set as well,
+ * adapting these down a register, and nothing ever rendered it: board 28 drew
+ * the child's own screens, and `SessionEndScreen` carries their words. The
+ * mapping above is shared; the copy below is the console's.
  */
 
-export type SessionEndReason = "expired" | "revoked" | "replaced" | "paused";
+export type SessionEndReason =
+  | "expired"
+  | "revoked"
+  | "replaced"
+  | "paused"
+  | "closed";
 
 export interface SessionEndCopy {
   heading: string;
@@ -64,19 +80,16 @@ export function sessionEndReason(code: string | null | undefined): SessionEndRea
       return "replaced";
     case "account_paused":
       return "paused";
+    case "account_closed":
+      return "closed";
     // `session_expired`, `invalid_session`, anything unrecognised, and nothing.
     default:
       return "expired";
   }
 }
 
-/** Who a person is told to ask. Staff are sent one level up, learners to staff. */
-export type Audience = "staff" | "learner";
-
-export function sessionEndCopy(
-  reason: SessionEndReason,
-  audience: Audience = "staff",
-): SessionEndCopy {
+/** What the staff screen says for each reason. */
+export function sessionEndCopy(reason: SessionEndReason): SessionEndCopy {
   switch (reason) {
     case "revoked":
       return {
@@ -95,26 +108,25 @@ export function sessionEndCopy(
         body: "Signing in somewhere else ends the session here. Sign in again to carry on using Nevo on this device.",
         // The whole reason this state is drawn separately. If it was not them,
         // this is the only place they will be told.
-        note:
-          audience === "staff"
-            ? "If that wasn’t you, change your password and tell your school administrator."
-            : "If that wasn’t you, tell your teacher.",
+        note: "If that wasn’t you, change your password and tell your school administrator.",
         offersSignIn: true,
       };
 
     case "paused":
       return {
-        // The learner frame's own words, one level up. An account state, not a
-        // session one, so it does not say "your session has ended".
+        // The learner frame's own words, one level up: a teacher is pointed at
+        // the school administrator as a learner is pointed at their teacher.
+        // An account state, not a session one, so it does not say "your
+        // session has ended".
         heading: "Your Nevo account is on pause.",
-        body:
-          audience === "staff"
-            ? "If you have questions, talk to your school administrator."
-            : "If you have questions, talk to your teacher.",
+        body: "If you have questions, talk to your school administrator.",
         note: null,
         offersSignIn: false,
       };
 
+    // NOT DRAWN for staff. What this code showed before it had a name, so the
+    // staff screens do not change under a learner ruling.
+    case "closed":
     case "expired":
     default:
       return {

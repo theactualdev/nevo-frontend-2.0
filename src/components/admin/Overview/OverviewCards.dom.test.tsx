@@ -20,6 +20,7 @@ import { OverviewView } from "./OverviewView";
 const audit = vi.fn();
 const adaptationLog = vi.fn();
 const narrative = vi.fn();
+let academicConfig: Record<string, unknown> = {};
 const overview = vi.fn();
 
 vi.mock("@/lib/api/schoolIntelligence", async (importOriginal) => {
@@ -30,7 +31,7 @@ vi.mock("@/lib/api/schoolIntelligence", async (importOriginal) => {
     schoolIntelligenceApi: {
       ...actual.schoolIntelligenceApi,
       complianceAudit: () => audit(),
-      adaptationLog: () => adaptationLog(),
+      adaptationLog: (q: unknown) => adaptationLog(q),
     },
   };
 });
@@ -50,12 +51,18 @@ vi.mock("@/lib/api/school", async (importOriginal) => {
           code: null,
           slug: null,
           profile: { onboarding: { band: "mid_market" } },
-          academicConfig: {},
+          academicConfig,
           retentionPolicy: "contract",
           retentionDays: 365,
         }),
     },
   };
+});
+
+const invites = vi.fn();
+vi.mock("@/lib/api/invites", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/invites")>();
+  return { ...actual, invitesApi: { ...actual.invitesApi, list: () => invites() } };
 });
 
 vi.mock("@/lib/api/students", () => ({
@@ -85,10 +92,13 @@ const NARRATIVE = {
 };
 
 beforeEach(() => {
+  academicConfig = {};
   audit.mockReset();
   adaptationLog.mockReset();
   narrative.mockReset();
   overview.mockReset();
+  invites.mockReset();
+  invites.mockResolvedValue([]);
   audit.mockResolvedValue(AUDIT);
   adaptationLog.mockResolvedValue({
     events: [],
@@ -162,18 +172,19 @@ describe("a compliance audit that fails", () => {
     expect(pasted).not.toMatch(/Diagnostic labels stored/);
   });
 
-  it("still denies the whole page on a 403, which is not a card failing", async () => {
+  it("treats a 403 as this card's scope, not a failure, and not the page's", async () => {
+    // Until 6 Oct a refused audit denied the whole page. An IT admin now
+    // lands here without oversight, and the server serves them the rest.
     audit.mockRejectedValue(new ApiError(403, "forbidden"));
     const { container } = render(<OverviewView />);
 
     await waitFor(() =>
-      expect(visibleText(container)).toMatch(
-        /don't have access to the school overview/i,
-      ),
+      expect(visibleText(container)).toMatch(/shown to admins with General Oversight/),
     );
-    // No half-built dashboard beside the refusal.
-    expect(visibleText(container)).not.toMatch(/Students enrolled/);
-    expect(visibleText(container)).not.toMatch(/Try again/);
+    expect(visibleText(container)).toMatch(/Two hundred and forty students have been learning/);
+    expect(visibleText(container)).not.toMatch(/don't have access to the school overview/i);
+    // A scope does not become granted by asking again.
+    expect(visibleText(container)).not.toMatch(/couldn't pull this in/i);
   });
 });
 
@@ -216,20 +227,51 @@ describe("the early-life variant", () => {
 });
 
 describe("the snapshot header", () => {
-  it("claims a scope the figures actually have", async () => {
+  it("claims no period for the page - not 'since setup', not 'this week'", async () => {
     const { container } = render(<OverviewView />);
     await waitFor(() => expect(visibleText(container)).toMatch(/Activity so far/));
     const text = visibleText(container);
-    expect(text).toMatch(/Since setup/);
-    // Not one figure on this page is scoped to a half-term or a week.
+    expect(text).not.toMatch(/Since setup/);
     expect(text).not.toMatch(/Activity this (week|half-term)/);
   });
 
-  it("carries the band's denominator on the enrolled tile", async () => {
+  it("puts no denominator on the enrolled tile, even for a school with a band", async () => {
     const { container } = render(<OverviewView />);
     await waitFor(() => expect(visibleText(container)).toMatch(/Students enrolled/));
-    // mid_market: 251-500.
-    expect(visibleText(container)).toMatch(/of 500/);
+    expect(visibleText(container)).not.toMatch(/of 500/);
+  });
+});
+
+describe("adaptations made, this term (Lydia, 7 Oct)", () => {
+  const now = Date.now();
+  const ymd = (offsetDays: number) =>
+    new Date(now + offsetDays * 864e5).toISOString().slice(0, 10);
+
+  it("asks the log for this term's count and names the term", async () => {
+    academicConfig = {
+      terms: [{ id: "t1", name: "First term", start: ymd(-20), end: ymd(40) }],
+    };
+    adaptationLog.mockImplementation((q?: { dateFrom?: string }) =>
+      Promise.resolve({ events: [], total: q?.dateFrom ? 312 : 1240, limit: 1, offset: 0 }),
+    );
+    const { container } = render(<OverviewView />);
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/across all students in First term/),
+    );
+    expect(visibleText(container)).toMatch(/312/);
+    expect(visibleText(container)).not.toMatch(/1,240/);
+    const asked = adaptationLog.mock.calls.map(([q]) => q as { dateFrom?: string } | undefined);
+    expect(asked.some((q) => q?.dateFrom)).toBe(true);
+  });
+
+  it("leaves the tile off between terms rather than showing a total since setup", async () => {
+    academicConfig = {
+      terms: [{ id: "t1", name: "First term", start: ymd(-90), end: ymd(-30) }],
+    };
+    const { container } = render(<OverviewView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/Students enrolled/));
+    expect(visibleText(container)).not.toMatch(/Adaptations made/);
+    expect(visibleText(container)).not.toMatch(/across all students so far/);
   });
 });
 
@@ -292,5 +334,60 @@ describe("the roll-up", () => {
     expect(text).not.toMatch(/Worth a glance/i);
     expect(text).not.toMatch(/is a sample/i);
     expect(container.querySelector("[data-nevo-sample]")).toBeNull();
+  });
+});
+
+describe("the school's name", () => {
+  it("comes from the school record, so a failed compliance read is not 'your school'", async () => {
+    // The title - and the board pack copied for governors - fell back to
+    // "your school" whenever the compliance audit failed.
+    audit.mockRejectedValue(new Error("500"));
+    const { container } = render(<OverviewView />);
+
+    await waitFor(() => expect(visibleText(container)).toMatch(/Brightgate Academy/));
+    expect(visibleText(container)).not.toMatch(/\byour school\b/i);
+  });
+});
+
+describe("the board summary", () => {
+  it("can be tried again on its own when it fails", async () => {
+    narrative.mockRejectedValueOnce(new Error("500")).mockResolvedValueOnce(NARRATIVE);
+    const { container } = render(<OverviewView />);
+
+    await waitFor(() => expect(visibleText(container)).toMatch(/couldn.t load your summary/));
+    const retry = Array.from(container.querySelectorAll("button")).find(
+      (b) => (b.textContent ?? "").trim() === "Try again",
+    )!;
+    fireEvent.click(retry);
+
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/Two hundred and forty students have been learning/),
+    );
+  });
+});
+
+describe("the teachers tile", () => {
+  const invite = (id: string, role: string) => ({
+    id,
+    token: null,
+    role,
+    email: `${id}@school.edu.ng`,
+    name: null,
+    status: "pending",
+    expiresAt: "2099-01-01T00:00:00Z",
+    deliveryStatus: null,
+  });
+
+  it("says how many teacher invitations are open, as D04 does", async () => {
+    invites.mockResolvedValue([invite("a", "teacher"), invite("b", "teacher"), invite("c", "student")]);
+    const { container } = render(<OverviewView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/2 invitations pending/));
+  });
+
+  it("keeps its own words when the invitations cannot be read", async () => {
+    invites.mockRejectedValue(new Error("403"));
+    const { container } = render(<OverviewView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/with a Nevo account/));
+    expect(visibleText(container)).not.toMatch(/invitations? pending/);
   });
 });

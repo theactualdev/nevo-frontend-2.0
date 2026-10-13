@@ -15,23 +15,30 @@ import { TEXT_ACTION } from "../Roster/primitives";
  * number and left to find the four themselves. Per SCRUM-149 a rejected row
  * carries its row number, the offending value and a plain reason.
  *
- * TWO SOURCES, DELIBERATELY NOT MERGED INTO ONE NUMBERING.
- *
- * Rows rejected by OUR parser carry the full row, so their offending value is
- * shown. Rows rejected by the SERVER carry `{row, reason}` and nothing else.
- * It is tempting to look up the server's `row` in the parsed rows and show the
- * value from there — and that is exactly what this does not do. Our `line` is
- * `index + 2` (header, plus spreadsheets counting from one); the contract
- * documents no base for `row` at all. Pairing them on an assumption would put
- * the wrong name beside a real reason, which is worse than showing no name.
- *
- * TODO(api): document the base of `RejectedInvitationResponse.row`, or add the
- * offending value to it. Either closes the gap; guessing does not.
+ * ONE NUMBERING NOW (9 Oct). Rows rejected by OUR parser carry their file
+ * line. The SERVER's `row` counts into the rows we SENT - only the valid ones
+ * - from `rowNumberBase` (1), and it carries the value it refused. So a
+ * server rejection is mapped back to the sent row, and from there to the line
+ * in the admin's own file. This was held while the base was undocumented:
+ * pairing on a guess would have put the wrong name beside a real reason.
+ * Where a row cannot be mapped (an older response with no base), it says so
+ * rather than pointing at a line.
  */
 
 export interface ServerRejection {
   row: number;
   reason: string;
+  value?: string | null;
+}
+
+/** The file line a server rejection came from, when it can be known. */
+export function sentLine(
+  r: ServerRejection,
+  submitted: ParsedRow[],
+  rowNumberBase: number | undefined,
+): ParsedRow | null {
+  if (rowNumberBase === undefined) return null;
+  return submitted[r.row - rowNumberBase] ?? null;
 }
 
 /** What an admin needs to find and fix one row in their own spreadsheet. */
@@ -42,13 +49,19 @@ function csvEscape(value: string): string {
 export function RejectedRows({
   broken,
   rejected,
+  submitted,
+  rowNumberBase,
   isStudent,
   filename,
 }: {
   /** Rows our own parser refused. Full data, so re-uploadable after a fix. */
   broken: ParsedRow[];
-  /** Rows the server refused. Row number and reason only. */
+  /** Rows the server refused: a position in `submitted`, a reason, a value. */
   rejected: ServerRejection[];
+  /** The rows that were sent, in order - what the server's `row` counts into. */
+  submitted: ParsedRow[];
+  /** Where the server's `row` counts from. Undefined: it cannot be mapped. */
+  rowNumberBase?: number;
   isStudent: boolean;
   filename: string;
 }) {
@@ -77,9 +90,21 @@ export function RejectedRows({
         .map((v) => csvEscape(String(v ?? "")))
         .join(","),
     );
-    const theirs = rejected.map((r) =>
-      [r.row, r.reason].map((v) => csvEscape(String(v))).join(","),
-    );
+    const theirs = rejected.map((r) => {
+      const src = sentLine(r, submitted, rowNumberBase);
+      // The same columns, in the same order, as the header and our own rows.
+      const name = src?.name ?? r.value ?? "";
+      return [
+        src?.line ?? "",
+        r.reason,
+        name,
+        ...(isStudent
+          ? [src?.className ?? "", src?.email ?? "", src?.parentContact ?? ""]
+          : [src?.email ?? "", src?.className ?? ""]),
+      ]
+        .map((v) => csvEscape(String(v)))
+        .join(",");
+    });
     const blob = new Blob([[header, ...ours, ...theirs].join("\n")], {
       type: "text/csv;charset=utf-8",
     });
@@ -122,19 +147,28 @@ export function RejectedRows({
             </span>
           </li>
         ))}
-        {rejected.map((r) => (
-          <li
-            key={`theirs-${r.row}-${r.reason}`}
-            className="flex gap-3 border-b border-nevo-near-black/[0.07] px-3.5 py-2.5 text-[13.5px] leading-[1.5] last:border-b-0"
-          >
-            <span className="w-[54px] shrink-0 font-semibold tabular-nums text-nevo-near-black/55">
-              Row {r.row}
-            </span>
-            <span className="min-w-0 flex-1 text-nevo-near-black/78">
-              {r.reason}
-            </span>
-          </li>
-        ))}
+        {rejected.map((r) => {
+          const src = sentLine(r, submitted, rowNumberBase);
+          // The value the server refused, else the name on the sent row.
+          const value = r.value?.trim() || src?.name || null;
+          return (
+            <li
+              key={`theirs-${r.row}-${r.reason}`}
+              className="flex gap-3 border-b border-nevo-near-black/[0.07] px-3.5 py-2.5 text-[13.5px] leading-[1.5] last:border-b-0"
+            >
+              <span className="w-[54px] shrink-0 font-semibold tabular-nums text-nevo-near-black/55">
+                {src ? `Row ${src.line}` : "Sent"}
+              </span>
+              <span className="min-w-0 flex-1 text-nevo-near-black/78">
+                {value ? (
+                  <span className="font-semibold text-nevo-near-black">{value}</span>
+                ) : null}
+                {value ? " — " : null}
+                {r.reason}
+              </span>
+            </li>
+          );
+        })}
       </ul>
 
       <p className="mt-2 text-[13px] leading-[1.5] text-nevo-near-black/55">

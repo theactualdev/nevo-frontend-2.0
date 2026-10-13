@@ -77,9 +77,51 @@ const MODALITY_PROP = /^(modality|modalities)$/i;
 
 // ---------------------------------------------------------------- rule 3
 // performance.now(), never Date.now() - for anything timed and sent up.
+//
+// THREE BLIND SPOTS, closed 1 Oct after an audit found the rule passing every
+// timing breach in the lesson player. It needed (1) a file whose PATH said
+// "signal", and the player, the solver and the check sheets say no such thing;
+// (2) the exact bare name - `duration`, never `durationMs` or
+// `responseTimeMs`, which is how every payload here spells it; and (3) the
+// wall clock inside the initializer itself, so `const t0 = Date.now()` ...
+// `durationMs: performance.now() - t0` sailed through.
+//
+// So a file is a signal file by what it DOES as well as what it is called,
+// a time name may carry its unit, and a name the file set from the wall clock
+// counts as the wall clock.
 const SIGNAL_FILE = /(signal|telemetry|tracking|interaction|adaptation)/i;
+const SIGNAL_CONTENT =
+  /\b(trackEvent|useSignals|TrackEvent|signalsApi|useRuntimeAdaptation|onStepAnswered|onAnswered|scaffoldAttemptFor)\b/;
 const TIME_PROP =
-  /^(timestamp|ts|occurred_?at|emitted_?at|started_?at|ended_?at|dwell|latency|duration)$/i;
+  /^(timestamp|ts|occurred_?at|emitted_?at|started_?at|ended_?at|dwell|latency|duration|elapsed|response_?time|continuous)(_?(ms|millis|seconds|secs|minutes|mins))?$/i;
+/** A wall-clock reading. `new Date(x)` from a value is not one. */
+const WALL_CLOCK = /Date\.now\(|new Date\(\s*\)/;
+
+/**
+ * Does this expression read the wall clock itself - not inside a callback it
+ * merely builds? `useCallback(() => Date.now())` makes a function, not a time.
+ */
+function readsWallClock(node) {
+  let found = false;
+  const visit = (n) => {
+    if (found || ts.isFunctionLike(n)) return;
+    if (
+      (ts.isCallExpression(n) &&
+        ts.isPropertyAccessExpression(n.expression) &&
+        n.expression.expression.getText() === "Date" &&
+        n.expression.name.text === "now") ||
+      (ts.isNewExpression(n) &&
+        n.expression.getText() === "Date" &&
+        (n.arguments?.length ?? 0) === 0)
+    ) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(n, visit);
+  };
+  visit(node);
+  return found;
+}
 
 // ---------------------------------------------------------------- rules 4, 5
 // Never a score, grade or percentage shown to a child. No reward mechanics.
@@ -126,7 +168,14 @@ const REWARD =
 // Scoped to the surfaces where a threshold becomes a CLAIM about a person.
 // `lib/` is exempt: a pure helper handed a threshold by the engine is fine, and
 // the decision is made where it is rendered.
-const DECIDES = /[\/](hooks|components[\/](student|teacher|parent))[\/]/;
+//
+// ADMIN WAS MISSING until 30 Sep, and it makes claims about children too -
+// learner profiles, support flags, cohort analytics. Reports shipped a
+// three-period "enough for a trend" count and a 0.15 "reading is the barrier"
+// line through the gap. (Neither would have matched the patterns below as
+// written - a named constant, a gap - which is why they were fixed by hand;
+// the scope is widened so the next one that does match is caught.)
+const DECIDES = /[\/](hooks|components[\/](student|teacher|parent|admin))[\/]/;
 
 /**
  * A SUFFICIENCY VERDICT, computed here.
@@ -177,21 +226,56 @@ function sufficiencyVerdict(node, src) {
     /\w+\s*(>=|<=|>|<)\s*\d/.test(text);
 }
 
-/** `Date.now() - x` (or a `new Date()` difference) compared to a number. */
+/**
+ * A NAMED cutoff. The rule matched only a numeric literal, so the client's
+ * break timer - `Date.now() - started >= BREAK_TIME_THRESHOLD_MS`, which
+ * offered children breaks the engine had not decided - passed it. A constant
+ * is the usual way a threshold is written, not a way round the rule.
+ */
+const NAMED_CUTOFF = /^[A-Z][A-Z0-9_]*$/;
+
+function isCutoff(n) {
+  if (ts.isNumericLiteral(n)) return true;
+  if (ts.isIdentifier(n)) return NAMED_CUTOFF.test(n.text);
+  if (ts.isPropertyAccessExpression(n)) return NAMED_CUTOFF.test(n.name.text);
+  return false;
+}
+
+/**
+ * Elapsed time compared to a cutoff: `Date.now() - x`, a `new Date()`
+ * difference or - since a local idle timer is the same breach on a better
+ * clock (frontend 5b, "no local timer") - `performance.now() - x`.
+ * Returns the cutoff's text, or null.
+ */
 function clockVsNumber(node, src) {
-  if (!ts.isBinaryExpression(node)) return false;
+  if (!ts.isBinaryExpression(node)) return null;
   const rel = new Set([
     ts.SyntaxKind.GreaterThanToken,
     ts.SyntaxKind.GreaterThanEqualsToken,
     ts.SyntaxKind.LessThanToken,
     ts.SyntaxKind.LessThanEqualsToken,
   ]);
-  if (!rel.has(node.operatorToken.kind)) return false;
-  const hasNum = ts.isNumericLiteral(node.left) || ts.isNumericLiteral(node.right);
-  if (!hasNum) return false;
-  const other = ts.isNumericLiteral(node.left) ? node.right : node.left;
-  return /Date\.now\(\)|new Date\(/.test(other.getText(src));
+  if (!rel.has(node.operatorToken.kind)) return null;
+  const cutoff = isCutoff(node.right) ? node.right : isCutoff(node.left) ? node.left : null;
+  if (!cutoff) return null;
+  const other = cutoff === node.right ? node.left : node.right;
+  return /Date\.now\(\)|new Date\(|performance\.now\(\)/.test(other.getText(src))
+    ? cutoff.getText(src)
+    : null;
 }
+
+/**
+ * Duration cutoffs that are not about a child, each with its reason - the
+ * same two terms as the lists below: every entry says why, and an entry that
+ * stops matching is reported stale.
+ */
+const CLOCK_ALLOWED = new Map([
+  [
+    "src/hooks/useStagedUpload.ts:SLOW_AFTER_MS",
+    "A teacher's upload still parsing after 30s turns on a note about the UPLOAD - that it is taking a while - and decides nothing about a child or anything the engine owns. Permanent: there is no engine threshold to wait for.",
+  ],
+]);
+const clockHits = new Set();
 
 // ---------------------------------------------------------------- rule 6
 // Never a gendered pronoun in generated copy. No pronoun is stored for any
@@ -344,6 +428,27 @@ const CLASSIFIER_ALLOWED = new Map([
     "src/hooks/useTeacherHome.ts:band",
     "Accepted for launch (design, 17 Sep) pending backend serving the cutoffs. The labels are generated FROM the thresholds - \"Above 75%\", not \"Strong\" - so they cannot state an opinion the number does not support. Remove this entry when the engine sends the bands.",
   ],
+  // The two below arrived when admin came into scope (30 Sep). Neither is a
+  // label about a person, and neither has a cutoff the engine could own.
+  [
+    "src/components/admin/Overview/notActive.ts:studentsSub",
+    "`classes > 0` chooses between \"340 students across 12 classes\" and \"340 students added\" - whether a count exists to mention (rule 5, absence), about a school's uploaded file, not a verdict about any child. Permanent: there is no engine threshold to wait for.",
+  ],
+  [
+    "src/components/admin/Settings/academicCalendar.ts:unresolvedLine",
+    "`rows === 1` is English grammar - \"1 term needs\" vs \"2 terms need\" - about the school's own calendar settings. Permanent: pluralisation is not a cutoff.",
+  ],
+  // Teacher console, 6 Oct: the line under an Assign that is waiting, shared
+  // by the lesson page and the upload finish screen.
+  [
+    "src/components/teacher/Library/LessonDetailActions.tsx:stillToCheck",
+    "`keyPoints > 0` and `sections > 0` ask whether the SERVER'S counts have anything to mention (rule 5, absence), and the word is the server's own verdict restated - Assign gates on `readyToAssign`, never on these. About a lesson's review, not a child. Permanent: there is no cutoff to own.",
+  ],
+  // Teacher console, 8 Oct (T95): the bulk upload's results line.
+  [
+    "src/components/teacher/Upload/BulkIngestion.tsx:resultsLine",
+    "`reading > 0`, `refused > 0` and `look === 0` ask whether any of a teacher's UPLOADED FILES is still being read, was refused, or stopped - the server's own statuses counted, nothing measured about anyone - and `n === 1` is \"file\"/\"files\" grammar. About a batch of documents, not a child. Permanent: there is no cutoff to own.",
+  ],
 ]);
 const allowlistHits = new Set();
 
@@ -446,6 +551,32 @@ for (const abs of files) {
     true,
   );
   const isTest = /\.(test|spec)\.tsx?$/.test(file);
+  const signalFile = SIGNAL_FILE.test(file) || SIGNAL_CONTENT.test(sf.text);
+
+  // Names this file sets from the wall clock - `const t0 = Date.now()`,
+  // `startedAt.current = Date.now()` - so a duration built from one later
+  // is caught even when the clock call is lines away.
+  const wallNames = new Set();
+  (function collect(node) {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer &&
+      readsWallClock(node.initializer)
+    )
+      wallNames.add(node.name.text);
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      readsWallClock(node.right)
+    ) {
+      const target = node.left.getText(sf).replace(/\.current$/, "");
+      if (/^[A-Za-z_$][\w$]*$/.test(target)) wallNames.add(target);
+    }
+    ts.forEachChild(node, collect);
+  })(sf);
+  const usesWallName = (text) =>
+    [...wallNames].some((n) => new RegExp(`\\b${n}\\b`).test(text));
 
   const visit = (node) => {
     // rule 1 - banned names, anywhere, including tests
@@ -490,8 +621,8 @@ for (const abs of files) {
       const init = node.initializer.getText(sf);
       if (
         TIME_PROP.test(name) &&
-        /new Date\(\s*\)|Date\.now\(/.test(init) &&
-        SIGNAL_FILE.test(file) &&
+        (WALL_CLOCK.test(init) || usesWallName(init)) &&
+        signalFile &&
         !isTest // a fixture timestamp is not a measurement
       ) {
         add(
@@ -519,7 +650,10 @@ for (const abs of files) {
           `Sufficiency decided here, not by the engine: \`${node.getText(sf).slice(0, 90)}\``,
         );
       }
-      if (clockVsNumber(node, sf))
+      const cutoff = clockVsNumber(node, sf);
+      const clockKey = `${file}:${cutoff}`;
+      if (cutoff && CLOCK_ALLOWED.has(clockKey)) clockHits.add(clockKey);
+      else if (cutoff)
         add(
           "threshold",
           file,
@@ -616,6 +750,15 @@ for (const [kind, list] of Object.entries(byKind)) {
 // The allowlist is printed, never silent: an exception nobody sees is an
 // exception nobody removes. A stale entry is reported the same way, because
 // the entry is what reminds us the acceptance had a condition on it.
+if (CLOCK_ALLOWED.size > 0) {
+  console.log(`## Duration cutoffs allowed, with their reasons  (${CLOCK_ALLOWED.size})`);
+  for (const [key, why] of CLOCK_ALLOWED) {
+    const stale = clockHits.has(key) ? "" : "  [STALE - matched nothing, delete it]";
+    console.log(`   ${key}${stale}
+     ${why}`);
+  }
+  console.log("");
+}
 if (SUFFICIENCY_ALLOWED.size > 0) {
   console.log(`## Sufficiency cases allowed, with their reasons  (${SUFFICIENCY_ALLOWED.size})`);
   for (const [key, why] of SUFFICIENCY_ALLOWED) {

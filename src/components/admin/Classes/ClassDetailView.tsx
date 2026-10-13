@@ -18,6 +18,7 @@ import {
   CloseIcon,
   GHOST_BTN,
   Modal,
+  AssignTeacherButton,
   NoTeacherYet,
   PausedNote,
   PRIMARY_BTN,
@@ -29,9 +30,12 @@ import {
   TEXT_ACTION,
 } from "../Roster/primitives";
 import { useSetupGate } from "@/hooks";
-import { AssignTeacherSheet } from "./AssignTeacherSheet";
+import { AssignTeachingSheet } from "./AssignTeachingSheet";
+import { ClassSubjects } from "./ClassSubjects";
 import { ClassFormSheet } from "./ClassFormSheet";
 import { NoAccess, failureKind } from "../NoAccess";
+import { BackLink } from "../BackLink";
+import { withBack, type Back } from "../back";
 import { WriteFailed } from "../WriteFailed";
 
 /**
@@ -74,7 +78,14 @@ import { WriteFailed } from "../WriteFailed";
 
 type Phase = "loading" | "ready" | "failed" | "denied";
 
-export function ClassDetailView({ classId }: { classId: string }) {
+export function ClassDetailView({
+  classId,
+  back = null,
+}: {
+  classId: string;
+  /** Where the admin came from - see `back.ts`. */
+  back?: Back | null;
+}) {
   const [phase, setPhase] = useState<Phase>("loading");
   const [klass, setKlass] = useState<AdminClass | null>(null);
   const [teachers, setTeachers] = useState<AssignedTeacher[]>([]);
@@ -92,6 +103,8 @@ export function ClassDetailView({ classId }: { classId: string }) {
    */
   const [archiveFailed, setArchiveFailed] = useState(false);
   const [removeFailed, setRemoveFailed] = useState(false);
+  /** The removal in flight - it showed nothing while working, and fired twice. */
+  const [removeBusy, setRemoveBusy] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [restoreFailed, setRestoreFailed] = useState(false);
 
@@ -181,17 +194,16 @@ export function ClassDetailView({ classId }: { classId: string }) {
   const meta = [
     yearGroupLabel(klass.yearGroup),
     `${klass.studentCount} ${klass.studentCount === 1 ? "student" : "students"}`,
-    klass.subjects.length > 0 ? klass.subjects.join(", ") : null,
+    // D05's header: "Year 8 · 34 students · 9 subjects". The names are in
+    // their own section below, where they can be changed.
+    klass.subjects.length > 0
+      ? `${klass.subjects.length} ${klass.subjects.length === 1 ? "subject" : "subjects"}`
+      : null,
   ].filter(Boolean);
 
   return (
     <Wrapper>
-      <Link
-        href="/admin/classes"
-        className="text-[13.5px] font-semibold text-nevo-navy hover:opacity-75"
-      >
-        &larr; Classes
-      </Link>
+      <BackLink back={back} fallback={{ href: "/admin/classes", label: "Classes" }} />
 
       <div className="mt-3 flex items-start justify-between gap-6">
         <div className="min-w-0">
@@ -269,10 +281,29 @@ export function ClassDetailView({ classId }: { classId: string }) {
         </p>
       ) : null}
 
+      {/*
+        * SUBJECTS. Above the teachers on purpose: since SCRUM-194 a teacher is
+        * assigned a subject the class takes, so this list is what makes the
+        * section below possible.
+        */}
+      <div className="mt-[30px]">
+        <SectionHeading>Subjects this class takes</SectionHeading>
+      </div>
+      <div className={cn(CARD, "mt-3.5 px-[22px] py-5")}>
+        <ClassSubjects
+          key={klass.subjects.join("\u0000")}
+          klass={klass}
+          editable={!archived && !writesPaused}
+          onSaved={reload}
+        />
+      </div>
+
       {/* TEACHERS */}
       <div className="mt-[30px] flex items-center justify-between gap-4">
         <SectionHeading>Teachers for this class</SectionHeading>
-        {!archived && !ssoSourced ? (
+        {/* With nobody teaching, the card below carries the one "Assign a
+            teacher" control, so the page never shows two. */}
+        {!archived && !ssoSourced && teachers.length > 0 ? (
           <button
             type="button"
             onClick={() => setAssigning(true)}
@@ -288,7 +319,11 @@ export function ClassDetailView({ classId }: { classId: string }) {
       <div className={cn(CARD, "mt-3.5")}>
         {teachers.length === 0 ? (
           <div className="px-[22px] py-6">
-            <NoTeacherYet />
+            {!archived && !ssoSourced ? (
+              <AssignTeacherButton disabled={writesPaused} onClick={() => setAssigning(true)} />
+            ) : (
+              <NoTeacherYet />
+            )}
             <p className="mt-2 text-[13px] leading-[1.5] text-nevo-near-black/58">
               Nobody teaches this class at the moment. Students keep their
               progress either way.
@@ -320,6 +355,13 @@ export function ClassDetailView({ classId }: { classId: string }) {
                         {t.email}
                       </div>
                     ) : null}
+                    {/* What this assignment teaches - on the read since 8 Oct;
+                        an older assignment carries none and says nothing. */}
+                    {t.subject?.trim() ? (
+                      <div className="truncate text-[13px] text-nevo-near-black/66">
+                        {`Teaches ${t.subject.trim()}`}
+                      </div>
+                    ) : null}
                     {longDate(t.assignedAt) ? (
                       <div className="truncate text-[12.5px] text-nevo-near-black/45">
                         {`Assigned ${longDate(t.assignedAt)}`}
@@ -334,8 +376,11 @@ export function ClassDetailView({ classId }: { classId: string }) {
                         setRemoveFailed(false);
                         setRemoving(confirming ? null : t.assignmentId);
                       }}
+                      // Pauses with every other change to a class, and holds
+                      // still while a removal is in flight.
+                      disabled={writesPaused || removeBusy}
                       aria-label={`Remove ${name} from this class`}
-                      className="flex size-[30px] flex-none cursor-pointer items-center justify-center rounded-lg text-nevo-near-black/40 transition-colors hover:bg-nevo-near-black/[0.06] hover:text-nevo-near-black/70"
+                      className="flex size-[30px] flex-none cursor-pointer items-center justify-center rounded-lg text-nevo-near-black/40 transition-colors hover:bg-nevo-near-black/[0.06] hover:text-nevo-near-black/70 disabled:cursor-default disabled:opacity-40"
                     >
                       <CloseIcon size={17} />
                     </button>
@@ -365,7 +410,11 @@ export function ClassDetailView({ classId }: { classId: string }) {
                     <div className="mt-3 flex gap-2.5">
                       <button
                         type="button"
-                        onClick={() =>
+                        disabled={removeBusy}
+                        onClick={() => {
+                          if (removeBusy) return;
+                          setRemoveBusy(true);
+                          setRemoveFailed(false);
                           classesApi
                             .removeAssignment(t.assignmentId)
                             .then(() => {
@@ -376,18 +425,20 @@ export function ClassDetailView({ classId }: { classId: string }) {
                             // a teacher who still holds the class still holds
                             // its children's work.
                             .catch(() => setRemoveFailed(true))
-                        }
-                        className="cursor-pointer rounded-lg bg-nevo-navy px-4 py-2 text-[13.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-110"
+                            .finally(() => setRemoveBusy(false));
+                        }}
+                        className="cursor-pointer rounded-lg bg-nevo-navy px-4 py-2 text-[13.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-110 disabled:cursor-default disabled:opacity-60"
                       >
-                        Remove from this class
+                        {removeBusy ? "Removing…" : "Remove from this class"}
                       </button>
                       <button
                         type="button"
+                        disabled={removeBusy}
                         onClick={() => {
                           setRemoving(null);
                           setRemoveFailed(false);
                         }}
-                        className="cursor-pointer rounded-lg px-4 py-2 text-[13.5px] font-semibold text-nevo-near-black/70 transition-colors hover:bg-nevo-near-black/[0.06]"
+                        className="cursor-pointer rounded-lg px-4 py-2 text-[13.5px] font-semibold text-nevo-near-black/70 transition-colors hover:bg-nevo-near-black/[0.06] disabled:cursor-default disabled:opacity-50"
                       >
                         Keep them
                       </button>
@@ -431,8 +482,15 @@ export function ClassDetailView({ classId }: { classId: string }) {
             <p className="m-0 text-sm text-nevo-near-black/62">
               Nobody is enrolled in this class yet.
             </p>
+            {/* Was /admin/invitations, which opens on the TEACHERS tab and is
+                a different mechanism - the child accepts a link. Enrolling a
+                student now lives on Students ("Enrol a student", D24b), so
+                this goes there, already narrowed to this class. */}
             {!ssoSourced ? (
-              <Link href="/admin/invitations" className={cn(TEXT_ACTION, "mt-2.5")}>
+              <Link
+                href={`/admin/students?class=${klass.id}`}
+                className={cn(TEXT_ACTION, "mt-2.5")}
+              >
                 Enrol students
               </Link>
             ) : null}
@@ -441,7 +499,11 @@ export function ClassDetailView({ classId }: { classId: string }) {
           students.map((s, i) => (
             <Link
               key={s.studentId}
-              href={`/admin/students/${s.studentId}`}
+              // Back on the student's page returns here, as the admin left it.
+              href={withBack(`/admin/students/${s.studentId}`, {
+                href: back ? withBack(`/admin/classes/${classId}`, back) : `/admin/classes/${classId}`,
+                label: klass.name,
+              })}
               className={cn(
                 "flex items-center gap-3 px-[22px] py-[13px] transition-colors hover:bg-nevo-navy/[0.03]",
                 i < students.length - 1 && ROW_DIVIDER,
@@ -478,11 +540,8 @@ export function ClassDetailView({ classId }: { classId: string }) {
       ) : null}
 
       {assigning ? (
-        <AssignTeacherSheet
-          classId={klass.id}
-          className={klass.name}
-          classSubtitle={yearGroupLabel(klass.yearGroup)}
-          assigned={teachers}
+        <AssignTeachingSheet
+          door={{ kind: "class", klass, assigned: teachers }}
           onClose={() => setAssigning(false)}
           onAssigned={() => {
             setAssigning(false);

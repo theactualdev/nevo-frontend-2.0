@@ -2,6 +2,7 @@ import type {
   LessonDetailResponse,
   LessonModule as ContentModule,
   LessonSegment as ContentSegment,
+  ReadingChunk,
 } from "@/lib/api/lessons";
 import { toQuickCheck } from "@/lib/api/checkpoints";
 /*
@@ -15,17 +16,22 @@ import { toQuickCheck } from "@/lib/api/checkpoints";
  * as "does not exist" on a type that plainly has it.
  */
 import type {
+  CalculationScaffold as WireCalculationScaffold,
   CalculationVariant as WireCalculationVariant,
   CalculationStep as WireCalculationStep,
+  EquationCallout,
+  KeyTerm,
+  Manipulative,
 } from "@/lib/api/variants";
-import {
-  CALC_MODALITY,
-  MODALITY,
-  type CalcModality,
-  type Modality,
-} from "@/lib/constants";
+import type { CheckpointScalar } from "@/lib/api/checkpoints";
+import { isStoredAnswer } from "./storedAnswer";
+import { chunksForBody } from "./chunk";
+import { MODALITY, type Modality } from "@/lib/constants";
 import type {
   Assessment,
+  CalcHighlight,
+  CalcNarration,
+  CalcScaffold,
   CalculationSegment,
   CalculationStep,
   CompletionSummary,
@@ -70,13 +76,15 @@ import type {
  * one, which for a child who finds reading effortful is the channel that
  * matters most.
  *
- * STILL OFF, and why:
+ * STILL OFF, OR ONLY PART-WAY ON, and why:
  *   - INTERACTIVE does not map at all. The wire's `InteractiveVariant` is a
  *     QUESTION (`prompt`, `options`, `answerKey`); the player's
  *     `InteractiveContent` is tickable STEPS with an outcome. Two different
  *     things sharing a name - a design question, not a wiring one.
- *   - CALCULATION is partial: `CalculationSegment` needs `scaffold`
- *     (kind/parts/rows) and `problem.answer`, and the wire carries neither.
+ *   - CALCULATION is on where `calculationFor` can build every step from the
+ *     payload SCRUM-177 delivered: each step's `input`, its stored answers,
+ *     `assembles` and `equationState`, and the `scaffold` drawing where a
+ *     frame draws its kind. See `calculationFromVariant`.
  *
  * ON EXPIRING URLS, which used to be the stated reason visual was off: the
  * variants carry `urlExpiresInSeconds`, and `contentApi.mediaUrl` mints a fresh
@@ -150,6 +158,11 @@ function textFor(segment: ContentSegment, lessonTitle: string): TextContent {
    * Simplify was blocked on `textVariant` for a week. It was never
    * `textVariant`; it was this field, which did not exist yet.
    */
+  const variant = segment.textVariant;
+  const keyPoints = textsOf(variant?.keyPoints);
+  const keyTerms = keyTermsOf(variant?.keyTerms);
+  const equations = equationsOf(variant?.equationCallouts);
+  const readingChunks = chunksOf(segment.readingChunks, base);
   return {
     heading: segment.title ?? lessonTitle,
     body: {
@@ -157,7 +170,84 @@ function textFor(segment: ContentSegment, lessonTitle: string): TextContent {
       ...reshape("simplify", segment.depthVariants?.simplified?.body, base),
       ...reshape("expand", segment.depthVariants?.expanded?.body, base),
     },
+    /*
+     * SCRUM-224. `keyPoints` were never removed from the wire - this dropped
+     * them - and `keyTerms` and `equationCallouts` are typed as of 8 Oct.
+     * Omitted rather than empty: the segment draws a box only for what came.
+     *
+     * A KEY TERM'S `definition` comes with it: design, 9 Oct, "A definition
+     * appears in place when the child taps the term."
+     */
+    ...(keyPoints ? { keyPoints } : {}),
+    ...(keyTerms ? { keyTerms } : {}),
+    ...(equations ? { equations } : {}),
+    ...(readingChunks ? { readingChunks } : {}),
   };
+}
+
+/** The non-blank strings of a list, trimmed, or nothing when none are left. */
+function textsOf(
+  list: readonly unknown[] | null | undefined,
+): string[] | undefined {
+  const out = (list ?? [])
+    .filter((s): s is string => typeof s === "string")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return out.length > 0 ? out : undefined;
+}
+
+/** Each term with words in it, and its definition only where it has one. */
+function keyTermsOf(
+  terms: readonly KeyTerm[] | null | undefined,
+): TextContent["keyTerms"] {
+  const out = (terms ?? []).flatMap((t) => {
+    const term = typeof t?.term === "string" ? t.term.trim() : "";
+    if (!term) return [];
+    const definition =
+      typeof t.definition === "string" ? t.definition.trim() : "";
+    return [definition ? { term, definition } : { term }];
+  });
+  return out.length > 0 ? out : undefined;
+}
+
+/** Each equation with words in it, and its label only where it has one. */
+function equationsOf(
+  callouts: readonly EquationCallout[] | null | undefined,
+): TextContent["equations"] {
+  const out = (callouts ?? []).flatMap((c) => {
+    const equation = typeof c?.equation === "string" ? c.equation.trim() : "";
+    if (!equation) return [];
+    const label = typeof c.label === "string" ? c.label.trim() : "";
+    return [label ? { equation, label } : { equation }];
+  });
+  return out.length > 0 ? out : undefined;
+}
+
+/**
+ * The server's reading chunks for this body, in order - or nothing, and the
+ * body reads as one.
+ *
+ * REFUSED WHOLE WHEN THEY ARE NOT THIS BODY'S WORDS. They are drawn in place
+ * of `body`, so a set that drops, adds or changes a word would put text on
+ * screen that is not the approved lesson. A set that does not carry exactly
+ * the body's words, or a chunk with no id or no text, falls back to the body
+ * itself: nothing is lost, the passage is simply one block. The segment asks
+ * the same question again of the text it actually shows - `chunksForBody`.
+ */
+function chunksOf(
+  chunks: readonly ReadingChunk[] | null | undefined,
+  body: string,
+): TextContent["readingChunks"] {
+  if (!Array.isArray(chunks) || chunks.length === 0) return undefined;
+  const ordered = chunks
+    .slice()
+    .sort((a, b) => a.sequenceOrder - b.sequenceOrder)
+    .map((c) => ({
+      id: typeof c?.id === "string" ? c.id : "",
+      text: typeof c?.text === "string" ? c.text.trim() : "",
+    }));
+  if (ordered.some((c) => !c.id || !c.text)) return undefined;
+  return chunksForBody(body, ordered) ? ordered : undefined;
 }
 
 /**
@@ -220,9 +310,23 @@ function visualFor(
       // better than narrating a generator's prompt at a child.
       alt: caption ?? "",
       ...(caption ? { caption } : {}),
+      // Kept so a link that has aged out can be re-issued rather than shown
+      // broken - `imageUrl` is signed and expires, `storagePath` does not.
+      ...(variant.storagePath ? { storagePath: variant.storagePath } : {}),
+      // The small copy, to paint first (B47). Null on pictures stored before
+      // it existed, which is "use imageUrl", not a fault.
+      ...(variant.previewUrl ? { previewSrc: variant.previewUrl } : {}),
+      // The picture's own shape, when measured. Absent falls back to the
+      // frame's 4:3, which is what every picture was squeezed into before.
+      ...(isPositive(variant.width) && isPositive(variant.height)
+        ? { width: variant.width, height: variant.height }
+        : {}),
     },
   };
 }
+
+const isPositive = (n: number | undefined): n is number =>
+  typeof n === "number" && Number.isFinite(n) && n > 0;
 
 /**
  * The segment's narration, when there is a clip AND words to fall back on.
@@ -256,6 +360,7 @@ function audioFor(
     heading,
     title: `Narrated: ${heading}`,
     src: variant.audioUrl,
+    ...(variant.storagePath ? { storagePath: variant.storagePath } : {}),
     transcript,
     ...(typeof variant.durationMs === "number" && variant.durationMs > 0
       ? { durationSec: Math.round(variant.durationMs / 1000) }
@@ -275,21 +380,29 @@ function audioFor(
 function quickCheckFor(segment: ContentSegment): QuickCheck | undefined {
   for (const checkpoint of segment.comprehensionCheckpoints) {
     const check = toQuickCheck(checkpoint);
-    if (check) return check;
+    // The concept rides along for a review's scheduler write - see
+    // `QuickCheck.conceptId`. Omitted rather than null, like the assessment.
+    if (check) {
+      return checkpoint.conceptId
+        ? { ...check, conceptId: checkpoint.conceptId }
+        : check;
+    }
   }
   return undefined;
 }
 
 /**
  * The co-construction solver's content, when the segment carries a calculation
- * this app can honestly mark.
+ * this app can draw and mark from the payload alone (SCRUM-181, on SCRUM-177's
+ * payload).
  *
- * NOTHING MAPPED THIS UNTIL NOW. `calculationVariant` has been on the wire and
- * typed in this client for weeks, and no code anywhere read it into a
- * `CalculationSegment` - so `LessonPlayer`'s `segment.calculationVariant &&
- * segment.calculation` was false for every lesson that has ever existed, and
- * the product's most distinctive screen rendered as plain text. The JSS3 maths
- * lesson's two calculation segments are the first content that can reach it.
+ * THE FRONT END COMPUTES NOTHING HERE. Every step's right answer is one the
+ * pipeline wrote down - `answer`, `targets`, or the options they name - and
+ * the child's entry is matched against that list (`isStoredAnswer`). The
+ * drawing is the payload's `scaffold` read as given, and the equation is the
+ * payload's own `assembles` and `equationState` strings. Nothing is parsed out
+ * of notation and nothing is worked out from it, which is why this no longer
+ * reads a fraction's numerator to find how many pieces a child builds.
  *
  * REFUSES WHOLE, NEVER IN PART. If any one step cannot be built, the whole
  * variant is dropped and the segment stays text. Half a solve is worse than
@@ -301,207 +414,366 @@ function calculationFor(
   segment: ContentSegment,
 ): CalculationSegment | undefined {
   const variant = segment.calculationVariant;
-  if (!variant || variant.steps.length === 0) return undefined;
+  return variant ? calculationFromVariant(variant) : undefined;
+}
 
-  // Resolved once: every step needs to know whether a drag has anything to be
-  // built on, and it is a property of the variant rather than of the step.
-  const manipulative = manipulativeFor(variant);
+/**
+ * One wire `CalculationVariant` as the solver draws it, or nothing.
+ *
+ * Exported because the signed-out walkthrough's calculation is written in the
+ * wire's own shape and run through this same adapter, so the demo a visitor
+ * plays is the payload path and cannot drift from it.
+ */
+export function calculationFromVariant(
+  variant: WireCalculationVariant,
+): CalculationSegment | undefined {
+  if (variant.steps.length === 0) return undefined;
+
+  // Resolved once: a tap step needs something to build on, and that is a
+  // property of the variant rather than of the step. A place-value build
+  // takes its columns from the scaffold, so the scaffold is read first.
+  const scaffold = scaffoldFor(variant.scaffold);
+  const manipulative = manipulativeFor(variant.manipulative, scaffold);
 
   const steps: CalculationStep[] = [];
   for (const step of variant.steps) {
-    const built = calcStepFor(step, manipulative !== undefined);
+    const built = calcStepFor(step, manipulative);
     if (!built) return undefined;
     steps.push(built);
   }
 
-  /*
-   * The equation as it reads at each moment, opening state first.
-   *
-   * `fullEquation` is where the child starts and each step's `equationState`
-   * is where that step leaves it, so the states run one longer than the steps.
-   * Dropped entirely if the backend wrote none, because a blank line under the
-   * prompt says less than no line at all.
-   */
-  const states = [variant.fullEquation, ...variant.steps.map((s) => s.equationState)]
-    .map((s) => s?.trim())
-    .filter((s): s is string => Boolean(s));
-
+  const conceptId = variant.conceptId?.trim();
   return {
-    variant: variant.type?.trim() || "generated",
-    problem: {
-      expression: variant.fullEquation,
-      // The variant's own answer, and ONLY as the whole calculation's answer.
-      // It is not a step's answer - for `5x - 4 = 2x + 11` it is "5" while the
-      // steps answer "3x - 4", "3x" and 5 - so it never reaches a step here.
-      ...(variant.answer != null && String(variant.answer).trim()
-        ? { answer: String(variant.answer).trim() }
-        : {}),
-    },
-    // No scaffold. `{kind, parts, rows}` is the authored fraction variant's
-    // shape and the deployed contract has nothing like it; `scaffoldImage` is
-    // a generated picture and a different question. The solver draws no bars
-    // rather than bars made from numbers that mean something else.
-    ...(states.length > 1 ? { equationStates: states } : {}),
-    steps,
-    completion: variant.completionStatement,
-    modalities: calcModalitiesFor(variant),
+    variant: variant.type?.trim() || "co_construction",
+    ...(conceptId ? { conceptId } : {}),
+    /*
+     * `expression` is the problem as notation, required since SCRUM-177.
+     * `fullEquation` used to stand in for it on content stored before, when
+     * nobody had said what it was. Backend has now (B101): it is the solved
+     * equation, so standing it in would show the answer before the first
+     * step. A problem with no notation shows none until a step assembles one.
+     */
+    expression: variant.expression?.trim() ?? "",
+    fullEquation: variant.fullEquation?.trim() ?? "",
+    ...(scaffold ? { scaffold } : {}),
     ...(manipulative ? { manipulative } : {}),
+    steps,
+    completion: variant.completionStatement.trim(),
   };
+}
+
+/** A step's stored answers - its `answer`, then its `targets` - as written. */
+function storedAnswers(step: WireCalculationStep): string[] {
+  return [step.answer, ...(step.targets ?? [])]
+    .filter((a): a is string | number | boolean => a != null)
+    .map((a) => String(a).trim())
+    .filter((a) => a !== "");
 }
 
 /**
  * One step, or nothing.
  *
- * `answer` is PER STEP and landed 16 Sep. Mapping the variant's answer onto
- * every step renders "5" for all three steps of `5x - 4 = 2x + 11`, where only
- * the last is right - and a number stays a number while a string stays a
- * string, so `3/4` does not stop being a fraction on the way through.
+ * `input` - SCRUM-177's tap, choice or number - is what the child does, and it
+ * alone decides how the step is drawn. A step that names none is content
+ * stored before it, and is refused rather than given an input inferred from
+ * `expectedInput`, which says what kind of answer it is, not what the child
+ * does to give it.
  *
- * `answer`, `options` and `unit` are all OPTIONAL in the deployed schema, and
- * a lesson parsed before the 0057 migration carries none of them. A step with
- * no answer cannot be marked, so it is refused rather than drawn.
+ * A choice or a number refuses a step nobody can be right about: no stored
+ * answer at all, or a choice whose stored answers name none of its own
+ * options. A tap step is right when its `tapCount` is built.
  */
 function calcStepFor(
   step: WireCalculationStep,
-  /** Whether this variant carries a manipulative the player can draw. */
-  hasManipulative: boolean,
+  manipulative: CalculationSegment["manipulative"],
 ): CalculationStep | undefined {
-  const answer = step.answer;
-  const hasAnswer = answer != null && String(answer).trim() !== "";
+  const accepted = storedAnswers(step);
+  const narration = narrationFor(step);
+  const base = {
+    stepId: step.stepId,
+    prompt: step.prompt,
+    hint: step.hint?.trim() ?? "",
+    assembles: step.assembles?.trim() ?? "",
+    equationState: step.equationState?.trim() ?? "",
+    highlights: highlightsFor(step),
+    ...(narration ? { narration } : {}),
+  };
 
-  if (step.expectedInput === "selection") {
-    const options = step.options ?? [];
-    // Backend now rejects a selection step with fewer than two options, but
-    // older content is already parsed and this app must not draw a prompt with
-    // one choice or none.
-    if (options.length < 2 || !hasAnswer) return undefined;
-    const correct = options.findIndex(
-      (o) => String(o.value).trim() === String(answer).trim(),
-    );
-    // A key matching none of its own options is the same defect `toQuickCheck`
-    // refuses on a comprehension checkpoint, for the same reason.
-    if (correct < 0) return undefined;
+  if (step.input === "choice") {
+    const options = (step.options ?? []).map((o) => ({
+      value: String(o.value).trim(),
+      label: o.label,
+    }));
+    // Backend rejects a choice with fewer than two options now, but older
+    // content is already parsed and a prompt with one choice is not a choice.
+    if (options.length < 2) return undefined;
+    // The same defect `toQuickCheck` refuses on a checkpoint: a key that names
+    // none of its own options is a question with no right answer.
+    if (!options.some((o) => isStoredAnswer(o.value, accepted))) {
+      return undefined;
+    }
+    const confirm = step.confirmationText?.trim();
     return {
-      prompt: step.prompt,
-      choices: options.map((o) => o.label),
-      correct,
-      hint: step.hint,
-      ...(step.confirmationText?.trim()
-        ? { onCorrect: { confirm: step.confirmationText.trim() } }
-        : {}),
+      ...base,
+      input: "choice",
+      options,
+      accepted,
+      ...(confirm ? { confirm } : {}),
     };
   }
 
-  if (step.expectedInput === "numeric" || step.expectedInput === "text") {
-    if (!hasAnswer) return undefined;
+  if (step.input === "number") {
+    if (accepted.length === 0) return undefined;
+    const unit = step.unit?.trim();
     return {
-      prompt: step.prompt,
-      input: step.expectedInput,
-      answer: String(answer).trim(),
-      hint: step.hint,
-      ...(step.unit?.trim() ? { unit: step.unit.trim() } : {}),
+      ...base,
+      input: "number",
+      entry: step.expectedInput === "text" ? "text" : "numeric",
+      accepted,
+      ...(unit ? { unit } : {}),
     };
   }
 
-  /*
-   * `drag` IS the co-construction, and it now has structure to be built on.
-   *
-   * The step still renders as a numeric one: the manipulative is a LAYER the
-   * child turns on over it, not a replacement for it, which is §4's "the one
-   * place modalities layer rather than switch". What the manipulative needs -
-   * the parts and the target - comes off the variant, not the step, so it is
-   * resolved once in `manipulativeFor` and the step only has to be markable.
-   *
-   * Refused without an answer, exactly as numeric and text are: a step nobody
-   * can be right about is not a step.
-   */
-  if (step.expectedInput === "drag") {
+  if (step.input === "tap") {
     /*
-     * ONLY WHERE THERE IS SOMETHING TO BUILD.
-     *
-     * Without a drawable manipulative this stays refused, exactly as it was
-     * before the structure existed. A drag step asks the child to construct a
-     * quantity; handing them a number pad instead is the same substitution §4
-     * forbids for the scaffold image - a different task wearing the right
-     * prompt. The old behaviour was correct for content with no structure, and
-     * most content still has none.
+     * ONLY WHERE THERE IS SOMETHING TO BUILD. A tap step asks the child to
+     * construct a quantity; handing them a number field instead is the same
+     * substitution §4 forbids for the scaffold image - a different task
+     * wearing the right prompt.
      */
-    if (!hasAnswer || !hasManipulative) return undefined;
-    return {
-      prompt: step.prompt,
-      input: "numeric",
-      answer: String(answer).trim(),
-      hint: step.hint,
-      ...(step.unit?.trim() ? { unit: step.unit.trim() } : {}),
-    };
+    if (!manipulative) return undefined;
+    /*
+     * HOW MANY PIECES IS `tapCount`, a positive whole number (B102). It used
+     * to be read out of the step's stored answers, which said what the answer
+     * was rather than how many taps build it. A count the bar or the array
+     * cannot hold is refused, never clamped.
+     */
+    const target = step.tapCount;
+    if (typeof target !== "number" || !Number.isInteger(target)) {
+      return undefined;
+    }
+    const places = placesIn(manipulative);
+    if (target < 1 || (places !== undefined && target > places)) {
+      return undefined;
+    }
+    return { ...base, input: "tap", target };
   }
 
   return undefined;
 }
 
 /**
- * The structure behind a `drag` step, when there is one we can actually draw.
- *
- * ONLY `fraction_bar`. The wire names five kinds - `fraction_bar`,
- * `number_line`, `array`, `place_value`, `counters` - and design has drawn
- * exactly one of them: 17b's tap-a-quarter-into-a-four-part-bar. The other
- * four have no frame at all, checked across the student set on 21 Sep.
- *
- * Drawing them anyway would mean inventing four interactions, and §4 is
- * explicit that the interaction IS the mechanism - a wrong one is not a
- * lesser version of the right one, it is a different task. So the rest refuse
- * and the calculation renders without a kinesthetic layer, which is the
- * honest reduced form. Filed for design.
- *
- * `target` comes off the drag step's own answer. The frontend computes no
- * quantity of its own (rule 3): if the answer does not resolve to a whole
- * number of pieces the bar can hold, there is nothing to build and the
- * manipulative is refused rather than clamped.
+ * What a step's answer does to the drawing (B107), as written. A role the
+ * spec does not name is dropped rather than read as one it does, and a
+ * highlight with no target names nothing.
  */
-function manipulativeFor(
-  variant: WireCalculationVariant,
-): { kind: string; parts: number; target: number } | undefined {
-  const m = variant.manipulative;
-  if (!m || m.kind !== "fraction_bar") return undefined;
-
-  const parts = Math.trunc(m.parts);
-  if (!Number.isFinite(parts) || parts < 1) return undefined;
-
-  const drag = variant.steps.find((st) => st.expectedInput === "drag");
-  const raw = drag?.answer;
-  if (raw == null) return undefined;
-
-  // "3" and "3/4" both mean three pieces of a four-part bar. Anything else is
-  // not a count, and guessing at one would be inventing the child's answer.
-  const text = String(raw).trim();
-  const numerator = /^(\d+)\s*\/\s*\d+$/.exec(text)?.[1] ?? text;
-  if (!/^\d+$/.test(numerator)) return undefined;
-
-  const target = Number(numerator);
-  if (target < 1 || target > parts) return undefined;
-
-  return { kind: m.kind, parts, target };
+function highlightsFor(step: WireCalculationStep): CalcHighlight[] {
+  const out: CalcHighlight[] = [];
+  for (const h of step.highlights ?? []) {
+    const target = h.target?.trim();
+    const role = h.role ?? "active";
+    if (!target) continue;
+    if (role !== "active" && role !== "source" && role !== "result") continue;
+    out.push({ target, role });
+  }
+  return out;
 }
 
 /**
- * Which layers this calculation actually has.
+ * What a tap step builds on, where a frame draws it.
  *
- * Interactive always - it IS the co-construction. Audio only where a step
- * carries narration. Kinesthetic where the variant carries a manipulative this
- * player can draw, which since 21 Sep is a real possibility rather than a
- * standing no.
+ * `fraction_bar`, `array`, `number_line` and `place_value`. The wire names
+ * five kinds; design has drawn 17b's tap-a-piece-into-the-bar, and D149 the
+ * same tap into an array's places, a hop along a number line and a place
+ * value's columns. `counters` refuses: D149 says backend normalises it to
+ * dots, which the wire's kinds do not name (asked). §4: the interaction IS
+ * the mechanism, and a wrong one is a different task rather than a lesser
+ * version of the right one.
+ *
+ * A NUMBER LINE IS HOPPED ALONG FROM ITS FIRST POSITION, as a bar fills from
+ * its first cell: the wire carries no starting point for one, so a line that
+ * starts anywhere else cannot be built (asked).
+ *
+ * `rows` is the rendered row count (B100): one bar, as 17b draws, and an
+ * array of `rows` rows of `parts` places - "parts is the number of columns in
+ * one row" (backend, 9 Oct).
+ *
+ * A PLACE-VALUE BUILD TAKES ITS COUNTS FROM THE SCAFFOLD. Building 123 is one
+ * flat, two rods and three units, and one `tapCount` cannot say how many of
+ * each. The place-value scaffold can: "marks are the piece counts for the
+ * columns named by labels". So it builds only beside a place-value scaffold
+ * this app draws, into those columns, and is done when each column holds its
+ * own count - nothing here adds them up.
+ *
+ * `labels` name pieces, for a highlight to find (`pieceLabels`); no frame
+ * draws them on a build.
  */
-function calcModalitiesFor(variant: WireCalculationVariant): CalcModality[] {
-  const modalities: CalcModality[] = [CALC_MODALITY.INTERACTIVE];
-  if (variant.steps.some((s) => s.narrationAudio)) {
-    modalities.push(CALC_MODALITY.AUDIO);
+function manipulativeFor(
+  m: Manipulative | null | undefined,
+  scaffold: CalcScaffold | undefined,
+): CalculationSegment["manipulative"] {
+  if (!m) return undefined;
+  if (!Number.isInteger(m.parts) || m.parts < 1) return undefined;
+  const rows = m.rows ?? 1;
+  const pieceLabels = (m.labels ?? []).map((l) => l.trim());
+  if (m.kind === "fraction_bar") {
+    return rows === 1
+      ? { kind: "fraction_bar", parts: m.parts, pieceLabels }
+      : undefined;
   }
-  // Offered only where there is something to build. Claiming the layer without
-  // the structure is what `availableModalities` did for months.
-  if (manipulativeFor(variant)) {
-    modalities.push(CALC_MODALITY.KINESTHETIC);
+  if (m.kind === "array" && Number.isInteger(rows) && rows >= 1) {
+    return { kind: "array", parts: m.parts, rows, pieceLabels };
   }
-  return modalities;
+  if (m.kind === "number_line") {
+    return rows === 1
+      ? { kind: "number_line", parts: m.parts, pieceLabels }
+      : undefined;
+  }
+  if (m.kind === "place_value" && scaffold?.kind === "place_value") {
+    // A build with nothing to place could only be finished by doing nothing.
+    if (!scaffold.places.some((p) => p.count > 0)) return undefined;
+    return { kind: "place_value", columns: scaffold.places };
+  }
+  return undefined;
+}
+
+/**
+ * How many pieces a bar or an array has places for, or how many hops a line
+ * of `parts` positions has room for. A place-value build has no one number
+ * to hold: each column holds its own.
+ */
+function placesIn(
+  m: NonNullable<CalculationSegment["manipulative"]>,
+): number | undefined {
+  if (m.kind === "array") return m.rows * m.parts;
+  if (m.kind === "number_line") return m.parts - 1;
+  return m.kind === "fraction_bar" ? m.parts : undefined;
+}
+
+/** A mark as a count: a whole number, or a whole number written as text. */
+function countOf(mark: CheckpointScalar): number | undefined {
+  if (typeof mark === "number") {
+    return Number.isInteger(mark) && mark >= 0 ? mark : undefined;
+  }
+  return typeof mark === "string" && /^\d+$/.test(mark.trim())
+    ? Number(mark.trim())
+    : undefined;
+}
+
+/**
+ * The drawing beside the notation, read by backend's definitions (B100, and
+ * 9 Oct): "rows controls rendered rows; marks are overlays/values and do not
+ * create rows. A bar may therefore have more marks than rows. label[i]
+ * belongs to mark[i] when marks exist; otherwise it belongs to scaffold part
+ * i." Each kind is drawn as its frame draws it, with the payload's values:
+ *  - `bar`: `rows` bars of `parts` cells (17b). Where there are as many marks
+ *    as bars, a mark fills its own bar from the start, its label at the
+ *    bar's start, as 17b draws `1/4 + 2/4`. Where one bar carries several
+ *    marks - SCRUM-177's own `3/5 + 1/5` as `rows: 1, marks: [3, 1]` - they
+ *    fill it one after another, in renderer order, each label under its own
+ *    cells. No marks: empty bars, a part's label under its cell;
+ *  - `array`: `rows` rows of `parts` places - "parts is the number of columns
+ *    in one row" - the marks filling them one after another in reading order
+ *    (D149);
+ *  - `place_value`: D149's three columns on one row, flats then rods then
+ *    units - "marks are the piece counts for the columns named by labels".
+ *    Ten to one each step is what the shapes say, so they hold for any three
+ *    neighbouring places; which places is the labels' to say, and D149's
+ *    "Hundreds", "Tens" and "Ones" are not drawn for a payload naming none;
+ *  - `dots`: D149's `rows` rows of `parts` round places, filled as the
+ *    array's are - D149 replaced 37c's groups of two, which read neither
+ *    `rows` nor `parts`;
+ *  - `number_line`: D149's line of `parts` positions - "cells or positions
+ *    in one row" - a marker at each mark's position, its label beneath; or,
+ *    with no marks, a part's label beneath its position.
+ *
+ * Those are the only readings made. Anything that does not fit is not drawn
+ * rather than drawn some other way:
+ *  - more labels than marks: a label with no mark of its own belongs nowhere;
+ *  - several marks over several bars, but not one to a bar: which bar each
+ *    belongs on is not said;
+ *  - marks that do not fit: one bar or line holding more than `parts`, or
+ *    an array more than its places - never clamped;
+ *  - a mark that is not a whole number: drawing 2.5 cells is not a reading;
+ *  - an array's or dots' marks with labels: no frame says where a label for
+ *    a run that wraps a row would go;
+ *  - place value with other than three marks, or on more than one row: D149
+ *    draws three columns, and which three two marks would be is not said;
+ *  - a line on more than one row, or a mark past its last position.
+ */
+function scaffoldFor(
+  scaffold: WireCalculationScaffold | null | undefined,
+): CalcScaffold | undefined {
+  if (!scaffold) return undefined;
+  const marks = scaffold.marks ?? [];
+  const labels = (scaffold.labels ?? []).map((l) => l.trim());
+  const rows = scaffold.rows ?? 1;
+  const { kind, parts } = scaffold;
+  if (!Number.isInteger(rows) || rows < 1) return undefined;
+  if (marks.length > 0 && labels.length > marks.length) return undefined;
+
+  const counts: number[] = [];
+  for (const mark of marks) {
+    const count = countOf(mark);
+    if (count === undefined) return undefined;
+    counts.push(count);
+  }
+  const quantities = counts.map((count, i) => ({
+    count,
+    ...(labels[i] ? { label: labels[i] } : {}),
+  }));
+  /** What the marks fill, one after another - a layout, not an answer. */
+  const filled = counts.reduce((a, b) => a + b, 0);
+
+  if (kind === "place_value") {
+    return rows === 1 && marks.length === PLACE_VALUE_COLUMNS
+      ? { kind, places: quantities }
+      : undefined;
+  }
+  if (!Number.isInteger(parts) || parts < 1) return undefined;
+  if (kind === "number_line") {
+    if (rows !== 1) return undefined;
+    if (marks.length === 0) {
+      return labels.length <= parts
+        ? { kind, parts, points: [], partLabels: labels }
+        : undefined;
+    }
+    return counts.every((c) => c < parts)
+      ? { kind, parts, points: quantities, partLabels: [] }
+      : undefined;
+  }
+  if (kind !== "bar" && kind !== "array" && kind !== "dots") return undefined;
+  if (marks.length === 0) {
+    return labels.length <= parts
+      ? { kind, parts, rows, quantities: [], partLabels: labels }
+      : undefined;
+  }
+  if (kind === "array" || kind === "dots") {
+    if (labels.length > 0) return undefined;
+    return filled <= rows * parts
+      ? { kind, parts, rows, quantities, partLabels: [] }
+      : undefined;
+  }
+  if (counts.some((c) => c > parts)) return undefined;
+  const fits = marks.length === rows || (rows === 1 && filled <= parts);
+  return fits ? { kind, parts, rows, quantities, partLabels: [] } : undefined;
+}
+
+/** D149's place-value columns: a flat, a rod and a unit. */
+const PLACE_VALUE_COLUMNS = 3;
+
+/**
+ * A step's narration (17b §5), where it has a clip. No transcript is needed
+ * the way segment audio needs one: the step's prompt and the equation stay on
+ * screen the whole time, which is the rule for this layer.
+ */
+function narrationFor(step: WireCalculationStep): CalcNarration | undefined {
+  const clip = step.narrationAudio;
+  if (!clip?.audioUrl) return undefined;
+  return {
+    src: clip.audioUrl,
+    ...(clip.storagePath ? { storagePath: clip.storagePath } : {}),
+  };
 }
 
 function segmentFor(
@@ -610,9 +882,10 @@ export function lessonFromContent(
  * this surface - letting the component's default win keeps one string in one
  * place rather than two that can drift.
  *
- * `masteredConcepts`, `revisitConcepts` and `resultNote` are left unset:
- * backend supplies none of them and none is derivable. Both consuming screens
- * already guard on their absence.
+ * `masteredConcepts`, `revisitConcepts` and `resultNote` are left unset: they
+ * are not on the lesson. The server sends them on the completion write's
+ * answer (B26), and the player hands them to both screens - see
+ * `lib/lessons/checkOutcome`. None is derivable here.
  */
 function assessmentFor(res: LessonDetailResponse): Assessment | undefined {
   const questions = (res.assessment ?? [])
@@ -645,6 +918,8 @@ function assessmentFor(res: LessonDetailResponse): Assessment | undefined {
       // Omitted rather than null: every consumer tests for presence, and a
       // question with no concept simply cannot inform a review.
       ...(checkpoint.conceptId ? { conceptId: checkpoint.conceptId } : {}),
+      // A spoken question (B16), only where the server made it one.
+      ...(quick.promptAudio ? { promptAudio: quick.promptAudio } : {}),
     }));
 
   return questions.length > 0 ? { questions } : undefined;

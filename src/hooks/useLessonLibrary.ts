@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { lessonsApi, type LessonSummary, type LessonSourceType } from "@/lib/api/lessons";
 import { useLiveQuery } from "./useLiveQuery";
 import { LIBRARY_LESSONS } from "@/lib/mocks/teacherLibrary";
@@ -199,6 +199,9 @@ function toCard(lesson: LessonSummary): LibraryCard {
     // estimate" - the figure is floored per content type server-side, so a
     // real lesson is never 0 minutes and "0 min" would be a claim.
     meta: [
+      // C06's meta leads with the subject. A lesson uploaded without one
+      // simply starts with its sections.
+      lesson.subject || null,
       `${n} ${n === 1 ? "section" : "sections"}`,
       SOURCE_LABEL[lesson.sourceType] ?? lesson.sourceType,
       lesson.estimatedMinutes ? `${lesson.estimatedMinutes} min` : null,
@@ -244,6 +247,14 @@ const FIXTURE_CARDS: LibraryCard[] = LIBRARY_LESSONS.map((l) => ({
   subject: l.subject,
 }));
 
+/** The endpoint's own maximum, per page. */
+const LIBRARY_PAGE = 200;
+/**
+ * A ceiling on the walk, so an answer that never comes back short cannot loop
+ * for ever. Past it, the library says it is showing the first so many.
+ */
+export const LIBRARY_CEILING = 2000;
+
 export interface LessonLibraryState {
   cards: LibraryCard[];
   /** Real lessons are in hand rather than fixtures. */
@@ -253,14 +264,72 @@ export interface LessonLibraryState {
   loading: boolean;
   /** Still waiting, long enough to say so. */
   slow: boolean;
+  /**
+   * The walk reached its ceiling, so there may be lessons it did not read.
+   */
+  capped: boolean;
 }
 
+/** How often to look again while a lesson is still being read. */
+const PARSING_REREAD_MS = 10_000;
+
 export function useLessonLibrary(): LessonLibraryState {
-  const run = useCallback(() => lessonsApi.list(), []);
-  const { data, failed, slow, loading } = useLiveQuery<LessonSummary[]>(run, []);
+  /*
+   * THE MOST THE ENDPOINT WILL RETURN. No limit meant its default of 50, so
+   * lesson 51 onwards was missing from the library, its search, its subject
+   * pills, the assign wizard and the recommend sheet - with nothing saying
+   * so, and "N lessons matching" quietly a floor.
+   */
+  /*
+   * EVERY PAGE (12 Oct). The endpoint stopped at 200 with no way to ask for
+   * the next 200, so the 201st lesson was missing from the library, its
+   * search, the assign wizard and the recommend sheet. It takes `offset`
+   * now: read a page at a time until one comes back short. The count headers
+   * (`X-Total-Count`, `X-Has-More`) say the same thing, but the API client
+   * returns bodies only, and a short page is the standard signal.
+   */
+  const run = useCallback(async () => {
+    const all: LessonSummary[] = [];
+    for (let offset = 0; offset < LIBRARY_CEILING; offset += LIBRARY_PAGE) {
+      const page = await lessonsApi.list({ limit: LIBRARY_PAGE, offset });
+      all.push(...page);
+      if (page.length < LIBRARY_PAGE) break;
+    }
+    return all;
+  }, []);
+  const { data, failed, slow, loading, refresh } = useLiveQuery<LessonSummary[]>(run, []);
+
+  /*
+   * A PARSING CARD THAT NEVER FINISHED (C06). "Processing your lesson... It
+   * will appear here when it's done" - and the library was read once, so it
+   * never appeared until the teacher reloaded. While any lesson is still being
+   * read, read the library again every little while, and as soon as the tab
+   * is looked at again. Nothing parsing, nothing asked.
+   */
+  const parsing =
+    data?.some((l) => l.status === "pending" || l.status === "processing") ?? false;
+  useEffect(() => {
+    if (!parsing) return;
+    const timer = setInterval(refresh, PARSING_REREAD_MS);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [parsing, refresh]);
 
   if (data === null) {
-    return { cards: FIXTURE_CARDS, live: false, sample: failed, loading, slow };
+    return {
+      cards: FIXTURE_CARDS,
+      live: false,
+      sample: failed,
+      loading,
+      slow,
+      capped: false,
+    };
   }
   return {
     cards: data.map(toCard),
@@ -268,5 +337,6 @@ export function useLessonLibrary(): LessonLibraryState {
     sample: false,
     loading: false,
     slow: false,
+    capped: data.length >= LIBRARY_CEILING,
   };
 }

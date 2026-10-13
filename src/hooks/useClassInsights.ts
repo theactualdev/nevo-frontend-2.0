@@ -60,6 +60,8 @@ export interface InsightsConcept {
 
 export interface InsightsFlag {
   id: string;
+  /** Who the flag is about - required on the contract, and the card's link. */
+  studentId: string;
   name: string | null;
   note: string;
   isSudden: boolean;
@@ -85,6 +87,12 @@ export interface ClassInsightsState {
   settledWeek: boolean;
   /** Every read FAILED. Never the same thing as a quiet class. */
   failed: boolean;
+  /**
+   * Which of the three lists failed ON ITS OWN. A lone failed flags or
+   * mastery read used to drop its section as if there were nothing in it -
+   * and the page could still call the week settled.
+   */
+  sectionFailed: { misconceptions: boolean; mastery: boolean; flags: boolean };
   /**
    * The narrative read failed on its own. The three lists may still have
    * landed, so this is not `failed` - but nothing may claim the class is
@@ -112,6 +120,11 @@ export function useClassInsights(classId: string | null): ClassInsightsState {
   const [narrativeFailed, setNarrativeFailed] = useState(false);
   const [settled, setSettled] = useState(0);
   const [failures, setFailures] = useState(0);
+  const [sectionFailed, setSectionFailed] = useState({
+    misconceptions: false,
+    mastery: false,
+    flags: false,
+  });
   const signedIn = useHasSession();
   const { students } = useStudentDirectory();
 
@@ -128,8 +141,10 @@ export function useClassInsights(classId: string | null): ClassInsightsState {
     // A read that FAILED is not a class with nothing to show. Counting them
     // separately is what keeps "we couldn't load this" out of the mouth of
     // "this class is just getting started".
-    const fail = () => {
-      if (!cancelled) setFailures((n) => n + 1);
+    const fail = (section: "misconceptions" | "mastery" | "flags") => () => {
+      if (cancelled) return;
+      setFailures((n) => n + 1);
+      setSectionFailed((s) => ({ ...s, [section]: true }));
     };
 
     void classInsightsApi
@@ -137,21 +152,23 @@ export function useClassInsights(classId: string | null): ClassInsightsState {
       .then((rows) => {
         if (!cancelled) setMisconceptions(rows);
       })
-      .catch(fail)
+      .catch(fail("misconceptions"))
       .finally(done);
     void classInsightsApi
       .mastery(classId)
       .then((rows) => {
         if (!cancelled) setMastery(rows);
       })
-      .catch(fail)
+      .catch(fail("mastery"))
       .finally(done);
     void intelligenceApi
-      .getFlags({ classId })
+      // The most one page holds. A class has nowhere near 200 open flags,
+      // and the default 50 was a cap nobody chose.
+      .getFlags({ classId, limit: 200 })
       .then((rows) => {
         if (!cancelled) setFlags(rows.filter((f) => !f.acknowledged));
       })
-      .catch(fail)
+      .catch(fail("flags"))
       .finally(done);
     void classInsightsApi
       .narrative(classId)
@@ -181,15 +198,17 @@ export function useClassInsights(classId: string | null): ClassInsightsState {
   return {
     failed: allFailed,
     misconceptions,
-    concepts: mastery.map((m) => ({
+    // Unnamed concepts are left out, as on the student profile.
+    concepts: mastery.filter((m) => m.conceptName).map((m) => ({
       conceptId: m.conceptId,
-      name: m.conceptName,
+      name: m.conceptName as string,
       understanding: pct(m.masteryProbabilityConcept),
       reading: pct(m.masteryProbabilityReading),
       studentCount: m.studentCount,
     })),
     flags: flags.map((f) => ({
       id: f.id,
+      studentId: f.studentId,
       name: byId.get(f.studentId)?.name ?? null,
       note: f.description,
       isSudden: suddenish(f.flagType),
@@ -206,5 +225,6 @@ export function useClassInsights(classId: string | null): ClassInsightsState {
     gathering: !loading && narrative?.state === "gathering",
     settledWeek: !loading && narrative?.state === "settled",
     narrativeFailed,
+    sectionFailed,
   };
 }

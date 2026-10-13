@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { classesApi, type AdminClass } from "@/lib/api/classes";
 import { invitesApi, type Invitation, type InviteRole } from "@/lib/api/invites";
@@ -7,6 +8,7 @@ import { cn } from "@/lib/utils";
 import {
   CARD,
   GHOST_BTN,
+  CheckIcon,
   PausedNote,
   PRIMARY_BTN,
   PlusIcon,
@@ -24,7 +26,12 @@ import {
 } from "./inviteFilters";
 import { NewInviteModal } from "./NewInviteModal";
 import { LinkHandout } from "./LinkHandout";
-import { confirmedSent, consentNote, needsManualDelivery } from "./deliveryCopy";
+import {
+  confirmedSent,
+  consentNote,
+  unconfirmedResendLead,
+  unconfirmedResendToast,
+} from "./deliveryCopy";
 import { inviteeName, joinLink } from "./joinLink";
 import { NoAccess, failureKind } from "../NoAccess";
 
@@ -41,15 +48,18 @@ import { NoAccess, failureKind } from "../NoAccess";
  * failures follow gentle recovery rather than alarm. Nothing here is red,
  * because none of it is an emergency - an expired invite is Tuesday.
  *
- * TODO(api): the invitation row carries no `classId`, so D19's CLASS COLUMN
- * and its class filter are absent. The invite request accepts a class and the
- * response drops it, which also means a sent invite cannot be shown with the
- * class it was sent for.
+ * D19's CLASS AND INVITED COLUMNS ARE HERE (9 Oct): the row carries
+ * `classId` and `createdAt` now, so each invite shows the class it was sent
+ * for and the day it went, and the class filter works. An invite with no
+ * class, or one sent before the field existed, shows a dash rather than a
+ * guess.
  *
- * TODO(api): no created-at either, so the frame's "Invited 9 Jul" column has
- * no source. `expiresAt` is the only date on the row, and it is shown as an
- * expiry rather than back-computed into a send date from a TTL nobody
- * documented.
+ * CHILDREN ARE NOT INVITED (design, 1 Oct; SCRUM-215 on the backend, where
+ * `InvitableRole` is now `teacher` only). A child has no email and joins with
+ * the school code and their Student ID, so every student invite this tab sent
+ * was refused. The tab stays, because older student invitations - and the
+ * consent each carries - still live here; its buttons go to Students, where a
+ * child is enrolled and their sign-in details are downloaded.
  */
 
 type Phase = "loading" | "ready" | "failed" | "denied";
@@ -102,6 +112,8 @@ export function InvitationsView() {
   const [classes, setClasses] = useState<AdminClass[]>([]);
   const [tab, setTab] = useState<Tab>("teacher");
   const [status, setStatus] = useState("");
+  /** D19's Class filter. Empty: every class, and invites with none. */
+  const [classFilter, setClassFilter] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [composing, setComposing] = useState(false);
@@ -115,6 +127,13 @@ export function InvitationsView() {
    * to hand someone a link they are responsible for sending.
    */
   const [handout, setHandout] = useState<Invitation | null>(null);
+  /**
+   * Rows whose resend the backend confirmed emailing, with the line D19 draws
+   * under them - "Invite resent to n.obi@…". In the row and kept, where this
+   * was a three-second toast at the foot of the screen: an admin working down
+   * a list of pending invites needs to see which ones they have already done.
+   */
+  const [resent, setResent] = useState<Record<string, string>>({});
   const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   /** The instant every row's expiry is judged against - see `normaliseStatus`. */
@@ -154,17 +173,23 @@ export function InvitationsView() {
     [invites, tab],
   );
 
+  const classNames = useMemo(
+    () => new Map(classes.map((c) => [c.id, c.name])),
+    [classes],
+  );
+
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase();
     return forTab.filter((i) => {
       if (!matchesStatus(i, status, now)) return false;
+      if (classFilter && i.classId !== classFilter) return false;
       if (!needle) return true;
       return (
         (i.name ?? "").toLowerCase().includes(needle) ||
         (i.email ?? "").toLowerCase().includes(needle)
       );
     });
-  }, [forTab, search, status, now]);
+  }, [forTab, search, status, classFilter, now]);
 
   const stats = useMemo(() => statTiles(forTab, now), [forTab, now]);
 
@@ -181,7 +206,7 @@ export function InvitationsView() {
   const rows = visible.slice(pager.start, pager.start + PAGE_SIZE);
 
   const noun = tab === "teacher" ? "teachers" : "students";
-  const filtering = Boolean(search.trim() || status);
+  const filtering = Boolean(search.trim() || status || classFilter);
 
   /** Any change to what is being looked at starts again at the top. */
   const filterBy = (next: string) => {
@@ -202,6 +227,11 @@ export function InvitationsView() {
   const resend = (invite: Invitation) => {
     setBusy(invite.id);
     setHandout(null);
+    setResent((prev) => {
+      const next = { ...prev };
+      delete next[invite.id];
+      return next;
+    });
     invitesApi
       .resend(invite.id)
       .then((updated) => {
@@ -221,19 +251,18 @@ export function InvitationsView() {
          */
         if (!confirmedSent(updated.deliveryStatus)) {
           setHandout(updated);
-          const hasLink = Boolean(joinLink(updated.token));
           say(
-            needsManualDelivery(updated.deliveryStatus)
-              ? hasLink
-                ? "No email went out - their link is in the row below"
-                : "No email went out, and no link came back"
-              : hasLink
-                ? "We couldn't confirm an email - their link is in the row below"
-                : "We couldn't confirm an email went out",
+            unconfirmedResendToast(
+              updated.deliveryStatus,
+              Boolean(joinLink(updated.token)),
+            ),
           );
           return;
         }
-        say(`Invite resent to ${updated.email ?? updated.name ?? "them"}`);
+        setResent((prev) => ({
+          ...prev,
+          [updated.id]: `Invite resent to ${updated.email ?? inviteeName(updated)}`,
+        }));
       })
       .catch(() => say("That didn't resend. We're on it - try again in a moment."))
       .finally(() => setBusy(null));
@@ -264,25 +293,31 @@ export function InvitationsView() {
               Add teachers and students to start using Nevo
             </p>
           </div>
-          <div className="flex flex-none gap-3">
-            <button
-              type="button"
-              onClick={() => setImporting(true)}
-              disabled={writesPaused}
-              className={GHOST_BTN}
-            >
-              Bulk import
-            </button>
-            <button
-              type="button"
-              onClick={() => setComposing(true)}
-              disabled={writesPaused}
-              className={PRIMARY_BTN}
-            >
-              <PlusIcon />
-              New invite
-            </button>
-          </div>
+          {tab === "teacher" ? (
+            <div className="flex flex-none gap-3">
+              <button
+                type="button"
+                onClick={() => setImporting(true)}
+                disabled={writesPaused}
+                className={GHOST_BTN}
+              >
+                Bulk import
+              </button>
+              <button
+                type="button"
+                onClick={() => setComposing(true)}
+                disabled={writesPaused}
+                className={PRIMARY_BTN}
+              >
+                <PlusIcon />
+                New invite
+              </button>
+            </div>
+          ) : (
+            <Link href="/admin/students" className={cn(PRIMARY_BTN, "flex-none")}>
+              Go to Students
+            </Link>
+          )}
         </div>
 
         <PausedNote className="mt-3" />
@@ -345,7 +380,16 @@ export function InvitationsView() {
           </div>
         ) : null}
 
-        {phase === "ready" && forTab.length === 0 && !filtering ? (
+        {phase === "ready" && tab === "student" ? (
+          <p className="mt-6 max-w-[64ch] text-[14px] leading-[1.6] text-nevo-near-black/66">
+            Children aren&rsquo;t sent invitations. They sign in with your school
+            code and their Student ID, so there&rsquo;s no link to send. Add them
+            from Students, where you can also download their sign-in details.
+            {forTab.length > 0 ? " Invitations sent to students earlier are listed below." : ""}
+          </p>
+        ) : null}
+
+        {phase === "ready" && tab === "teacher" && forTab.length === 0 && !filtering ? (
           <div className={cn(CARD, "mt-6 px-6 py-16 text-center")}>
             <h3 className="m-0 text-xl font-semibold text-nevo-near-black">
               No invites yet
@@ -437,18 +481,49 @@ export function InvitationsView() {
                   ) : null}
                 </select>
               </label>
+              {classes.length > 0 ? (
+                <label className={FILTER_PILL}>
+                  <span className="sr-only">Filter by class</span>
+                  <select
+                    value={classFilter}
+                    onChange={(e) => {
+                      setClassFilter(e.target.value);
+                      setPage(1);
+                    }}
+                    className="cursor-pointer appearance-none bg-transparent outline-none"
+                  >
+                    <option value="">All classes</option>
+                    {classes.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
             </div>
 
-            <div className={cn(CARD, "mt-4")}>
-              <div className="grid grid-cols-[1.4fr_1.4fr_110px_150px] gap-4 border-b border-nevo-near-black/8 bg-nevo-near-black/[0.03] px-6 py-[13px] text-[11.5px] font-semibold uppercase tracking-[0.05em] text-nevo-near-black/50 max-lg:grid-cols-[1.4fr_110px_120px]">
+            {/*
+              * CARDS BELOW 1024, A TABLE ABOVE (Lydia, 7 Oct): "A table at
+              * tablet width is a row of truncated columns." Below `lg` the
+              * shared card dissolves, the column headings go, and each
+              * invitation becomes its own card - name and email in full, the
+              * status pill beside them, the actions along the bottom - as
+              * D19's tablet card frame draws it. One list, two layouts, so
+              * the two cannot drift apart.
+              */}
+            <div className={cn(CARD, "mt-4 max-lg:overflow-visible max-lg:rounded-none max-lg:bg-transparent max-lg:shadow-none")}>
+              <div className="grid grid-cols-[1.2fr_1.3fr_96px_72px_104px_150px] gap-4 border-b border-nevo-near-black/8 bg-nevo-near-black/[0.03] px-6 py-[13px] text-[11.5px] font-semibold uppercase tracking-[0.05em] text-nevo-near-black/50 max-lg:hidden">
                 <span>Name</span>
                 <span className="max-lg:hidden">Email</span>
+                <span>Class</span>
+                <span>Invited</span>
                 <span>Status</span>
                 <span>Actions</span>
               </div>
 
               {visible.length === 0 ? (
-                <div className="px-6 py-12 text-center">
+                <div className="px-6 py-12 text-center max-lg:rounded-xl max-lg:bg-nevo-cream-elevated">
                   <p className="m-0 text-[15px] font-semibold text-nevo-near-black">
                     No invites match
                   </p>
@@ -459,6 +534,7 @@ export function InvitationsView() {
                     type="button"
                     onClick={() => {
                       setSearch("");
+                      setClassFilter("");
                       filterBy("");
                     }}
                     className="mt-3 cursor-pointer text-sm font-semibold text-nevo-navy hover:opacity-75"
@@ -469,22 +545,47 @@ export function InvitationsView() {
               ) : (
                 rows.map((invite, i) => {
                   const s = normaliseStatus(invite.status, invite.expiresAt, now);
+                  /** The class it was sent for, by name; null when none or unknown. */
+                  const className = invite.classId ? (classNames.get(invite.classId) ?? null) : null;
                   const confirming = confirmRevoke === invite.id;
                   const working = busy === invite.id;
                   const joined = s === "joined";
                   return (
                     <div
                       key={invite.id}
-                      className={cn("px-6 py-[15px]", i < rows.length - 1 && ROW_DIVIDER)}
+                      className={cn(
+                        "px-6 py-[15px] max-lg:mb-3 max-lg:rounded-xl max-lg:bg-nevo-cream-elevated max-lg:px-5 max-lg:py-4 max-lg:shadow-[0_2px_8px_rgba(0,0,0,0.06)]",
+                        // The divider is the table's; cards are apart already.
+                        i < rows.length - 1 && cn(ROW_DIVIDER, "max-lg:border-b-0"),
+                      )}
                     >
-                      <div className="grid grid-cols-[1.4fr_1.4fr_110px_150px] items-center gap-4 max-lg:grid-cols-[1.4fr_110px_120px]">
+                      <div className="grid grid-cols-[1.2fr_1.3fr_96px_72px_104px_150px] items-center gap-4 max-lg:grid-cols-[minmax(0,1fr)_auto] max-lg:items-start max-lg:gap-x-3 max-lg:gap-y-3">
                         <span className="min-w-0">
-                          <span className="block truncate text-[15px] font-semibold text-nevo-near-black">
+                          <span className="block truncate text-[15px] font-semibold text-nevo-near-black max-lg:whitespace-normal max-lg:break-words">
                             {invite.name ?? invite.email ?? "Invited person"}
                           </span>
+                          {/* On a card the email sits under the name, whole -
+                              the table gives it a column of its own. */}
+                          {invite.name && invite.email ? (
+                            <span className="block break-all text-[13px] text-nevo-near-black/66 lg:hidden">
+                              {invite.email}
+                            </span>
+                          ) : null}
                           <span className="block text-[12.5px] text-nevo-near-black/55">
                             Expires {formatDate(invite.expiresAt)}
                           </span>
+                          {/* On a card, D19's tablet line carries the class
+                              and "Invited 9 Jul"; the table has columns. */}
+                          {className || invite.createdAt ? (
+                            <span className="block text-[12.5px] text-nevo-near-black/55 lg:hidden">
+                              {[
+                                className,
+                                invite.createdAt ? `Invited ${formatDate(invite.createdAt)}` : null,
+                              ]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </span>
+                          ) : null}
                           {/* Students only - consent is a fact about a child,
                               and a teacher invite has no parent behind it. The
                               note is ABSENT when the invite carried no consent
@@ -500,11 +601,24 @@ export function InvitationsView() {
                         <span className="min-w-0 truncate text-sm text-nevo-near-black/66 max-lg:hidden">
                           {invite.email ?? "—"}
                         </span>
-                        <span className="flex">
+                        <span className="min-w-0 truncate text-sm text-nevo-near-black/66 max-lg:hidden">
+                          {className ?? "—"}
+                        </span>
+                        <span className="text-sm text-nevo-near-black/66 tabular-nums max-lg:hidden">
+                          {invite.createdAt ? formatDate(invite.createdAt) : "—"}
+                        </span>
+                        <span className="flex max-lg:col-start-2 max-lg:row-start-1 max-lg:justify-end">
                           <InviteStatusPill status={s} />
                         </span>
-                        <span className="flex items-center gap-3">
-                          {joined ? (
+                        <span className="flex items-center gap-3 max-lg:col-span-2 max-lg:border-t max-lg:border-nevo-near-black/[0.07] max-lg:pt-3">
+                          {/*
+                            * EACH ACTION ONLY WHERE IT MEANS SOMETHING, as the
+                            * frame draws them. All three used to show on every
+                            * row that had not joined - so an expired invite
+                            * offered Revoke, and a revoked one offered a dead
+                            * link to copy and hand to a child.
+                            */}
+                          {joined || s === "revoked" ? (
                             <span className="text-[13px] text-nevo-near-black/45">
                               Nothing to do
                             </span>
@@ -512,8 +626,9 @@ export function InvitationsView() {
                             <>
                               {/* Only when the read actually carried a
                                   token - `token` is nullable in the contract
-                                  and only promised on create. */}
-                              {joinLink(invite.token) ? (
+                                  and only promised on create - and only while
+                                  the invite is live: an expired link is dead. */}
+                              {s === "pending" && joinLink(invite.token) ? (
                                 <button
                                   type="button"
                                   onClick={() => copyLink(invite)}
@@ -530,30 +645,42 @@ export function InvitationsView() {
                               >
                                 Resend
                               </button>
-                              <button
-                                type="button"
-                                disabled={working || writesPaused}
-                                onClick={() => setConfirmRevoke(confirming ? null : invite.id)}
-                                className="cursor-pointer text-[13.5px] font-semibold text-nevo-near-black/60 transition-opacity hover:opacity-75 disabled:opacity-45"
-                              >
-                                Revoke
-                              </button>
+                              {/* Revoke is for a live invite. An expired one
+                                  already cannot be used. */}
+                              {s === "pending" ? (
+                                <button
+                                  type="button"
+                                  disabled={working || writesPaused}
+                                  onClick={() => setConfirmRevoke(confirming ? null : invite.id)}
+                                  className="cursor-pointer text-[13.5px] font-semibold text-nevo-near-black/60 transition-opacity hover:opacity-75 disabled:opacity-45"
+                                >
+                                  Revoke
+                                </button>
+                              ) : null}
                             </>
                           )}
                         </span>
                       </div>
 
+                      {resent[invite.id] ? (
+                        <p
+                          role="status"
+                          className="m-0 mt-3 flex items-center gap-[7px] rounded-lg bg-[#e5dfd3] px-3.5 py-2.5 text-[13px] text-nevo-navy motion-safe:animate-nevo-rise"
+                        >
+                          <CheckIcon size={13} />
+                          {resent[invite.id]}
+                        </p>
+                      ) : null}
+
                       {handout?.id === invite.id ? (
                         <LinkHandout
                           className="mt-3"
                           invites={[handout]}
-                          lead={
-                            needsManualDelivery(handout.deliveryStatus)
-                              ? joinLink(handout.token)
-                                ? `No email was sent to ${inviteeName(handout)} - this school has no mail set up in Nevo, so this link is the only way in.`
-                                : `No email was sent to ${inviteeName(handout)}, and this resend carried no link.`
-                              : `We couldn't confirm an email reached ${inviteeName(handout)}.`
-                          }
+                          lead={unconfirmedResendLead(
+                            handout.deliveryStatus,
+                            Boolean(joinLink(handout.token)),
+                            inviteeName(handout),
+                          )}
                           /* NOT "resend from the invitations list" - this IS
                              the invitations list, and that is the button they
                              just pressed. */

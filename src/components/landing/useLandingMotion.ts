@@ -672,8 +672,12 @@ export function useLandingMotion() {
     onScroll();
 
     // ---- Responsive nav links ----
+    // Sign up is exempt. It is an <a> in the same row, so a bare
+    // `#nv-navlinks a` swept it in: under 720px this hid the one CTA a school
+    // on a phone needs, and above it the `display = ""` wiped its inline-flex,
+    // pinning the label to the top of the button.
     const navLinkEls = Array.from(
-      root.querySelectorAll<HTMLElement>("#nv-navlinks a"),
+      root.querySelectorAll<HTMLElement>("#nv-navlinks a:not(.nv-signup)"),
     );
     const setNavLinks = () =>
       navLinkEls.forEach((a) => {

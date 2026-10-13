@@ -74,9 +74,14 @@ function typeLabel(t: string): string {
 }
 
 /** `needs_media_review` -> "needs media review". */
-function TypeTag({ children }: { children: React.ReactNode }) {
+function TypeTag({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <span className="shrink-0 rounded-full bg-nevo-navy/9 px-[9px] py-0.5 text-[11px] font-semibold whitespace-nowrap text-nevo-near-black/55">
+    <span
+      className={cn(
+        "shrink-0 rounded-full bg-nevo-navy/9 px-[9px] py-0.5 text-[11px] font-semibold whitespace-nowrap text-nevo-near-black/55",
+        className,
+      )}
+    >
       {children}
     </span>
   );
@@ -140,19 +145,23 @@ function SegmentRow({
   return (
     <div
       className={cn(
-        "flex flex-col gap-2 px-[22px] py-4 xl:flex-row xl:items-start xl:gap-4",
+        // C06b tablet: one line - number, title, how many finished - at
+        // 13/18 padding. It was a column below 1280px, so on a tablet the
+        // number sat on a line of its own above every section.
+        "flex items-start gap-3 px-[18px] py-[13px] xl:gap-3.5 xl:px-5 xl:py-[15px]",
         outstanding && "border-l-[3px] border-nevo-violet",
       )}
     >
-      <span className="w-6 shrink-0 text-[13px] text-nevo-near-black/40 tabular-nums">
+      <span className="w-[22px] shrink-0 text-[12.5px] font-semibold text-nevo-near-black/60 tabular-nums xl:w-[26px] xl:text-[13px]">
         {index + 1}
       </span>
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2.5">
-          <span className="text-[15px] font-semibold text-nevo-near-black">
+        <div className="flex flex-wrap items-center gap-2.5 xl:gap-2">
+          <span className="text-sm font-semibold text-nevo-near-black xl:text-[15px]">
             {segment.title ?? `Section ${index + 1}`}
           </span>
-          <TypeTag>{typeLabel(segment.contentType)}</TypeTag>
+          {/* The tablet row draws no type tag. */}
+          <TypeTag className="hidden xl:inline">{typeLabel(segment.contentType)}</TypeTag>
           <Link
             href={`/teacher/lessons/${lessonId}/variants?section=${index + 1}`}
             className="cursor-pointer text-[12.5px] font-medium text-nevo-navy underline-offset-2 transition-[filter] hover:underline"
@@ -163,6 +172,15 @@ function SegmentRow({
         {segment.body && (
           <p className="mt-1.5 line-clamp-2 max-w-[62ch] text-[13.5px] leading-[1.5] text-nevo-near-black/62">
             {segment.body}
+          </p>
+        )}
+        {/* The engine's own words about how the class moved through this
+            section, when it has any - C06b's per-row note. Quoted, never
+            built: "several students slowed here" from `slowdownCount` would
+            be the console choosing how many is several (rule 3). */}
+        {progress?.note && (
+          <p className="mt-1.5 max-w-[62ch] text-[13.5px] leading-[1.5] text-nevo-navy xl:mt-[5px]">
+            {progress.note}
           </p>
         )}
         {outstanding && (
@@ -190,8 +208,9 @@ function SegmentRow({
         )}
       </div>
       {progress ? (
-        <div className="flex shrink-0 items-center gap-3.5">
-          <div className="h-1.5 w-[130px] overflow-hidden rounded-full bg-nevo-navy/14">
+        <div className="flex shrink-0 items-center gap-3.5 xl:gap-3">
+          {/* The tablet row carries the count without the bar. */}
+          <div className="hidden h-1.5 w-[120px] overflow-hidden rounded-full bg-nevo-navy/14 xl:block">
             <span
               /* Violet where the class slowed - C06b's rule is that a dip is
                  never red, and never reads as a scoreboard. */
@@ -204,7 +223,7 @@ function SegmentRow({
               }}
             />
           </div>
-          <span className="w-[120px] text-right text-sm text-nevo-near-black/68">
+          <span className="text-right text-[13px] text-nevo-near-black/68 xl:w-[120px] xl:text-[13.5px]">
             {`${progress.completionCount} of ${progress.assignedStudentCount} done`}
           </span>
         </div>
@@ -223,6 +242,7 @@ export function LiveLessonDetail({
   lesson,
   modules,
   assignments,
+  assignmentsFailed = false,
   progress,
   /**
    * The classes this lesson went to, named.
@@ -237,6 +257,8 @@ export function LiveLessonDetail({
   lesson: LessonDetailResponse;
   modules: LessonModule[];
   assignments: Assignment[];
+  /** The assignments could not be read, so an empty list is not "none". */
+  assignmentsFailed?: boolean;
   progress?: LessonClassProgress | null;
   classes?: LessonClass[];
   /** How many classes hold this lesson; >1 means the rows name one of them. */
@@ -304,6 +326,32 @@ export function LiveLessonDetail({
   /** Anything at all still waiting, from either half. */
   const waiting = outstandingPoints + outstandingSections;
   const hadReview = review.hadReview || reviewable.length > 0;
+  /*
+   * WHETHER THERE IS A LESSON HERE TO SEND AT ALL.
+   *
+   * A failed parse, or one still running, reached the ready state below -
+   * "Ready when you are. Nevo has prepared this lesson into 0 sections.
+   * Assign it" - directly above "Nevo couldn't read this file", with a
+   * pressable Assign, because nothing here asked the lesson's own status.
+   * The library has never let either be opened as a normal lesson and the
+   * assign wizard leaves both out; this page is reachable by URL, so it
+   * asks too. The library's own test, word for word: `completed` or
+   * `completed_with_review`, and something to send.
+   */
+  const assignable =
+    (lesson.status === "completed" ||
+      lesson.status === "completed_with_review") &&
+    segments.length > 0;
+  /*
+   * "READY" IS AN ANSWER, AND IT HAS NOT ARRIVED YET.
+   *
+   * The review hook reports ready while its read is in flight - unknown does
+   * not block, which is right for a FAILED read and wrong for one still on
+   * its way. So for that window the page said "Ready when you are" and then
+   * swapped it for "2 key points waiting", with Assign pressable in between
+   * and a 409 behind it.
+   */
+  const settled = !review.loading;
   /**
    * C06b's reason line names the SECTION, not the parser's reason codes.
    * `reviewReasons` has no vocabulary in the contract - we would be printing
@@ -390,7 +438,7 @@ export function LiveLessonDetail({
 
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
-      <div className="mx-auto max-w-[860px]">
+      <div className="mx-auto max-w-[820px]">
         <Link
           href="/teacher/lessons"
           className="inline-flex cursor-pointer items-center gap-[7px] text-sm text-nevo-near-black/60 transition-transform active:scale-[0.99]"
@@ -410,12 +458,14 @@ export function LiveLessonDetail({
             actions squeezed against each other instead of stacking - which
             is the likeliest thing behind QA's "Assign is off-centre",
             reported twice and not reproducible at desktop width. */}
-        <div className="mt-4 flex flex-wrap items-start justify-between gap-6">
+        {/* And at tablet width C06b stacks them outright: the actions sit
+            16px under the meta, not beside the title. */}
+        <div className="mt-3.5 flex flex-col gap-4 xl:mt-4 xl:flex-row xl:flex-wrap xl:items-start xl:justify-between xl:gap-6">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2.5">
-              <h2 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
+              <h1 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[27px]">
                 {lesson.title}
-              </h2>
+              </h1>
               {waiting > 0 && (
                 <span className="inline-flex shrink-0 items-center gap-[5px] rounded-full bg-nevo-violet/34 py-[3px] pr-[11px] pl-2 text-[11.5px] font-semibold whitespace-nowrap text-nevo-navy">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -425,12 +475,26 @@ export function LiveLessonDetail({
                   Needs review
                 </span>
               )}
+              {/* C06b's "Ready · not yet assigned": a quiet pill beside the
+                  title, in the frame's own neutral. Only once the review has
+                  answered and found nothing, on a lesson with something to
+                  send that nobody has yet. */}
+              {assignable &&
+                settled &&
+                waiting === 0 &&
+                review.ready &&
+                assignments.length === 0 &&
+                !assignmentsFailed && (
+                  <span className="inline-flex shrink-0 items-center rounded-full bg-nevo-navy/10 px-2.5 py-[3px] text-[11.5px] font-semibold whitespace-nowrap text-nevo-near-black/60">
+                    Ready
+                  </span>
+                )}
             </div>
             {/* C06b's violet reason line sits ABOVE the grey meta, so the
                 reason is read before the statistics. The section number comes
                 from the flagged segment itself - never a parser token. */}
             {waiting > 0 && reviewLine && (
-              <p className="mt-2 text-[14.5px] font-medium text-nevo-navy">
+              <p className="mt-[7px] text-[14px] font-medium text-nevo-navy xl:mt-2 xl:text-[14.5px]">
                 {reviewLine}
               </p>
             )}
@@ -439,14 +503,16 @@ export function LiveLessonDetail({
                 that actually carry an estimate are listed - a 0 is the
                 schema's default, not a measurement. */}
             {durationLine && (
-              <p className="mt-1.5 text-[13.5px] text-nevo-near-black/55">
+              <p className="mt-1.5 text-sm text-nevo-near-black/55 xl:text-[14.5px]">
                 {durationLine}
               </p>
             )}
-            <span className="mt-[5px] block text-[14.5px] text-nevo-near-black/60">
+            <span className="mt-[5px] block text-[14px] text-nevo-near-black/60 xl:mt-1.5 xl:text-[14.5px]">
               {/* C06b counts KEY POINTS while a review is open and sections
                   otherwise - the meta line describes the thing the screen is
                   currently about. */}
+              {/* C06b's header leads with the subject, as the card does. */}
+              {lesson.subject && `${lesson.subject} · `}
               {waiting > 0 && review.keyPoints.length > 0
                 ? plural(review.keyPoints.length, "key point", "key points")
                 : plural(lesson.segmentCount, "section", "sections")}
@@ -456,6 +522,7 @@ export function LiveLessonDetail({
                 ` · Due ${new Date(nextDue).toLocaleDateString("en-GB", { day: "numeric", month: "long" })}`}
             </span>
           </div>
+          {assignable && (
           <LessonDetailActions
             lessonId={lesson.id}
             /* THE GATE IS `readyToAssign`, and the count is only what the
@@ -479,9 +546,11 @@ export function LiveLessonDetail({
              * to click.
              */
             ready={review.ready}
+            checking={!settled}
             outstandingKeyPoints={outstandingPoints}
             outstandingSections={outstandingSections}
           />
+          )}
         </div>
 
         {/*
@@ -503,14 +572,14 @@ export function LiveLessonDetail({
         <SplitSourceNotice segments={segments} />
 
         {waiting > 0 ? (
-          <div className="mt-6 flex max-w-[660px] items-start gap-3.5 rounded-[12px] bg-nevo-violet/14 px-[18px] py-4">
+          <div className="mt-[18px] flex max-w-none items-start gap-3 rounded-[12px] bg-nevo-violet/14 px-[17px] py-[15px] xl:mt-6 xl:max-w-[600px] xl:px-[18px] xl:py-4">
             <span className="mt-px shrink-0 text-nevo-navy">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 <circle cx="12" cy="12" r="9" />
                 <path d="M12 8h.01M11 12h1v4h1" />
               </svg>
             </span>
-            <p className="text-[14.5px] leading-[1.55] text-nevo-near-black/78">
+            <p className="text-sm leading-[1.55] text-nevo-near-black/78 xl:text-[14.5px]">
               <strong className="font-semibold text-nevo-near-black">
                 {`${waitingLine} waiting for you:`}
               </strong>{" "}
@@ -522,7 +591,11 @@ export function LiveLessonDetail({
             </p>
           </div>
         ) : (
-          assignments.length === 0 && (
+          assignable &&
+          settled &&
+          assignments.length === 0 &&
+          // Not "never assigned" - we could not find out. Said below.
+          !assignmentsFailed && (
             /*
              * LR-05, and C06b draws it as a STATE rather than a sentence.
              *
@@ -533,16 +606,26 @@ export function LiveLessonDetail({
              * was reviewed or arrived clean, and it says what a teacher can
              * do next rather than what they just did.
              *
-             * SCRUM-152's system message is the other half of this beat and
-             * is not built in this console yet.
+             * SCRUM-152's system message is the other half of this beat. It
+             * is built: `useLessonReview` raises it, above, at the moment the
+             * last thing holding the lesson is settled.
              */
-            <div className="mt-6 max-w-[660px] rounded-[12px] bg-nevo-navy/6 px-[18px] py-4">
-              <p className="text-[15px] font-semibold text-nevo-near-black">
-                Ready when you are
-              </p>
-              <p className="mt-1 text-[14.5px] leading-[1.55] text-nevo-near-black/70">
-                {`Nevo has prepared this lesson into ${plural(lesson.segmentCount, "section", "sections")}. Assign it to a class and it'll open for students at the time you choose.`}
-              </p>
+            /* C06b's treatment: a raised cream card with a navy check, as the
+               sample page already draws it - not a flat tint. */
+            <div className="mt-5 flex items-start gap-[13px] rounded-[12px] bg-nevo-cream-elevated px-5 py-[18px] shadow-elevation-1 xl:mt-[26px] xl:gap-3.5 xl:px-6 xl:py-[22px]">
+              <span className="mt-px shrink-0 text-nevo-navy">
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-5">
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+              </span>
+              <div>
+                <p className="text-[15.5px] font-semibold text-nevo-near-black xl:text-base">
+                  Ready when you are
+                </p>
+                <p className="mt-[5px] text-sm leading-[1.55] text-nevo-near-black/68 xl:mt-1.5 xl:text-[14.5px]">
+                  {`Nevo has prepared this lesson into ${plural(lesson.segmentCount, "section", "sections")}. Assign it to a class and it'll open for students at the time you choose.`}
+                </p>
+              </div>
             </div>
           )
         )}
@@ -553,10 +636,10 @@ export function LiveLessonDetail({
             ordinary case; a flagged section is the rarer second reason a
             lesson is held. */}
         {review.keyPoints.length > 0 && (
-          <h3 className={cn(SECTION_H, "mt-7")}>Key points Nevo found</h3>
+          <h3 className={cn(SECTION_H, "mt-[26px] xl:mt-8")}>Key points Nevo found</h3>
         )}
         {review.keyPoints.length > 0 && (
-          <div className="mt-3 flex max-w-[860px] flex-col gap-2.5">
+          <div className="mt-3.5 flex max-w-[820px] flex-col gap-[9px] xl:mt-4 xl:gap-2.5">
             {review.keyPoints.map((kp) => (
               <KeyPointCard
                 key={kp.id}
@@ -584,12 +667,16 @@ export function LiveLessonDetail({
         )}
 
         {reviewable.length > 0 && (
-          <div className="mt-4 flex max-w-[860px] flex-col gap-2.5">
+          <div className="mt-4 flex max-w-[820px] flex-col gap-2.5">
             {reviewable.map((s) => (
               <ReviewSection
                 key={s.id}
                 segment={s}
-                index={s.sequenceOrder}
+                // Its place in the lesson, counted from 1 as the section rows
+                // below count (T51). `sequenceOrder` is the server's sort key,
+                // and nothing says it starts at 1 - a 0 read "Section 0" here
+                // beside "Section 1" for the same section in the list.
+                index={segments.indexOf(s) + 1}
                 approved={sections.isApproved(s)}
                 approving={sections.approving === s.id}
                 failed={sections.failed === s.id}
@@ -606,7 +693,7 @@ export function LiveLessonDetail({
         )}
 
         {progress?.slowdownNote && (
-          <p className="mt-5 max-w-[68ch] rounded-[12px] bg-nevo-violet/14 px-[18px] py-4 text-[14.5px] leading-[1.6] text-nevo-near-black/82">
+          <p className="mt-5 max-w-[68ch] rounded-[12px] bg-nevo-violet/14 px-[18px] py-4 text-[14.5px] leading-[1.6] text-nevo-near-black/82 xl:leading-[1.55]">
             {progress.slowdownNote}
           </p>
         )}
@@ -614,7 +701,17 @@ export function LiveLessonDetail({
         {/* Sits ABOVE the lesson's contents, because a teacher who has come
             here to undo a mis-assignment is not looking for the segment list -
             they are looking for the class they got wrong. */}
-        <AssignmentSchedule assignments={assignments} />
+        {assignmentsFailed ? (
+          /* The key points' own failure line, for the other read. The schedule
+             is where a teacher cancels or re-dates, so its absence is said
+             rather than left to look like a lesson nobody has. */
+          <p className="mt-6 max-w-[660px] text-[14.5px] leading-[1.55] text-nevo-near-black/68">
+            We couldn&rsquo;t load who has this lesson just now. Nothing is
+            wrong with the lesson - try again in a moment.
+          </p>
+        ) : (
+          <AssignmentSchedule assignments={assignments} classes={classes} />
+        )}
 
         {/*
           WHERE THIS LESSON WENT - all of it, per design's ruling of 24 Sep.
@@ -629,7 +726,7 @@ export function LiveLessonDetail({
         {classes.length > 0 && (
           <>
             <h3 className={cn(SECTION_H, "mt-8")}>Where this lesson went</h3>
-            <ul className="mt-3 flex list-none flex-col gap-0 overflow-hidden rounded-xl bg-nevo-cream-elevated p-0 shadow-elevation-1">
+            <ul className="mt-3 flex list-none flex-col gap-0 overflow-hidden rounded-[12px] bg-nevo-cream-elevated p-0 shadow-elevation-1">
               {classes.map((c, i) => (
                 <li
                   key={c.id}
@@ -663,7 +760,10 @@ export function LiveLessonDetail({
         )}
 
         <h3 className={cn(SECTION_H, "mt-8")}>
-          What&rsquo;s in this lesson
+          {/* C06b's two headings: what is in the lesson before anyone has
+              worked through it, and how the class moved through it once
+              there is progress to show. */}
+          {progress ? "How the class moved through it" : "What’s inside"}
           {progress && classes.length > 1 && (
             /*
              * THE PROGRESS IS STILL ONE CLASS'S, and now it can say whose.

@@ -10,6 +10,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { notificationsApi } from "@/lib/api/notifications";
 import { cn } from "@/lib/utils";
 import { NotificationsPanel } from "../Notifications/NotificationsPanel";
+import { READ_STATE_EVENT, unreadFrom } from "../Notifications/readState";
 import { AdminSignOutModal } from "./AdminSignOutModal";
 import { activeNavLabel, navForScopes, scopeSummary } from "./adminNav";
 import { SampleRegion } from "@/components/shared/SampleRegion";
@@ -24,14 +25,10 @@ import { SampleRegion } from "@/components/shared/SampleRegion";
  * proprietor's is eleven. Scopes come from `permissions/me` through the
  * provider the admin layout already mounts.
  *
- * Identity follows the same rule as the teacher console: the session carries a
- * `userId` and a role and no name, so a signed-in admin gets their scope
- * summary over a neutral glyph rather than the frame's fixture persona.
- *
- * DONE, and this said otherwise. It read "TODO(api): a profile endpoint,
- * after which the name and job title are real." `GET /api/v1/users/me`
- * returns `{userId, role, firstName, lastName, displayName, email,
- * school}` and `PATCH` writes it; `usersApi.me` is consumed two files away.
+ * IDENTITY IS THE ADMIN'S OWN NAME. The session carries only a `userId` and
+ * a role, so the name comes from `GET /api/v1/users/me` (`useCurrentUser`) - never
+ * the frame's fixture persona. It once said "TODO(api): a profile endpoint"
+ * after that endpoint had shipped.
  *
  * THE NOTIFICATIONS INDICATOR IS A DOT, NEVER A COUNT. SCRUM-100's first rule,
  * and its "done when" goes further: no count is rendered OR EVEN FETCHED. So
@@ -181,26 +178,28 @@ export function AdminSidebar() {
   const [hasUnread, setHasUnread] = useState(false);
   const [signOutOpen, setSignOutOpen] = useState(false);
 
-  /**
-   * A boolean, deliberately. The endpoint's own body varies between a bare
-   * `true` and `{ exists: true }` depending on version, so both are accepted
-   * and anything else reads as "nothing new" - a missing dot is a far smaller
-   * failure than a permanent one nobody can clear.
-   */
+  /** A boolean, read whatever the body's key - see `unreadFrom`. */
   const refreshUnread = useCallback(() => {
     if (!signedIn) return;
     notificationsApi
       .unreadExists()
-      .then((res) => {
-        setHasUnread(
-          typeof res === "boolean" ? res : Boolean(res && (res as { exists?: boolean }).exists),
-        );
-      })
+      .then((res) => setHasUnread(unreadFrom(res)))
       .catch(() => setHasUnread(false));
   }, [signedIn]);
 
+  /*
+   * Re-read on every navigation, and whenever another surface changes what
+   * is read. It read ONCE, when the session began: a notification arriving
+   * during a session never lit the dot, and reading on the full page never
+   * cleared it.
+   */
   useEffect(() => {
     refreshUnread();
+  }, [refreshUnread, pathname]);
+
+  useEffect(() => {
+    window.addEventListener(READ_STATE_EVENT, refreshUnread);
+    return () => window.removeEventListener(READ_STATE_EVENT, refreshUnread);
   }, [refreshUnread]);
 
   const active = activeNavLabel(pathname);
@@ -339,7 +338,8 @@ export function AdminSidebar() {
           "relative mt-2 flex h-11 shrink-0 cursor-pointer items-center gap-[13px] rounded-[10px] transition-colors duration-[130ms] ease-out hover:bg-nevo-navy/5",
           expanded ? "px-3" : "justify-center",
           // Active and has-notifications are independent: a row can be both.
-          panelOpen && "bg-nevo-navy/[0.08]",
+          // Active on the full page too, like every other row on its route.
+          (panelOpen || pathname.startsWith("/admin/notifications")) && "bg-nevo-navy/[0.08]",
         )}
       >
         <span className="relative flex size-[38px] shrink-0 items-center justify-center rounded-[10px] text-nevo-near-black/70">

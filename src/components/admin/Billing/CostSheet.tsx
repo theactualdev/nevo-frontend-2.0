@@ -56,7 +56,7 @@ const CADENCE: Record<Pricing["pricingPlan"], string> = {
  * SCRUM-98's access window, which the schema itself calls "a fact the cost
  * sheet has to state" - a per-term school is not buying the holidays.
  */
-const WINDOW: Record<Pricing["accessWindow"], string> = {
+export const WINDOW: Record<Pricing["accessWindow"], string> = {
   year_round:
     "Covers the whole calendar year, including the breaks between terms.",
   school_session:
@@ -73,7 +73,22 @@ function longDate(iso: string): string | null {
   });
 }
 
-export function CostSheet({ pricing }: { pricing: Pricing }) {
+export function CostSheet({
+  pricing,
+  payStatus = null,
+}: {
+  pricing: Pricing;
+  /**
+   * "Active" once the upcoming invoice is paid. Null shows no badge - no
+   * upcoming invoice, it could not be read, or it is still owed.
+   *
+   * NO "PAYMENT DUE" HERE ANY MORE (QA, 10 Oct). It sat beside the ANNUAL
+   * total (N6,772,500) while How to pay asked for the upcoming invoice
+   * (N150,500), so it read as if the year were due. What is due is said on
+   * the Next charge card, with what that invoice covers.
+   */
+  payStatus?: "active" | null;
+}) {
   const {
     currency,
     studentCount,
@@ -97,6 +112,23 @@ export function CostSheet({ pricing }: { pricing: Pricing }) {
         {pricingPlan === "per_term" ? "Your cost per term" : "Your annual cost"}
       </h2>
       <div className={cn(CARD, "mt-3 px-6 py-[22px]")}>
+        {/* D11's FOUNDING PARTNER pill. The rate type belongs to the
+            subscription as it stands - which is exactly this card. (The
+            invoice page leaves it out: an old invoice may predate it.) */}
+        {rateType === "founding_partner" || payStatus ? (
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            {rateType === "founding_partner" ? (
+              <span className="rounded-full bg-nevo-violet/24 px-3 py-1 text-[11.5px] font-semibold tracking-[0.06em] text-nevo-navy uppercase">
+                Founding Partner
+              </span>
+            ) : null}
+            {payStatus === "active" ? (
+              <span className="rounded-full bg-nevo-navy/12 px-3 py-1 text-[12.5px] font-semibold text-nevo-navy">
+                Active
+              </span>
+            ) : null}
+          </div>
+        ) : null}
         {isAmount(totalWithVat) ? (
           <>
             <div className="flex flex-wrap items-baseline justify-between gap-4">

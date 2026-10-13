@@ -9,6 +9,8 @@ const { create, useLessonLibrary } = vi.hoisted(() => ({
 vi.mock("@/lib/api/assignments", () => ({ assignmentsApi: { create } }));
 vi.mock("@/hooks/useLessonLibrary", () => ({ useLessonLibrary }));
 
+import { ApiError } from "@/lib/api/client";
+
 import { LiveRecommendSheet } from "./LiveRecommendSheet";
 
 /**
@@ -27,9 +29,12 @@ import { LiveRecommendSheet } from "./LiveRecommendSheet";
  */
 
 const LESSONS = [
-  { id: "l-1", title: "Fractions 3", meta: "Mathematics · 20 min" },
-  { id: "l-2", title: "Photosynthesis", meta: "Science · 25 min" },
+  { id: "l-1", title: "Fractions 3", meta: "Mathematics · 20 min", kind: "normal" },
+  { id: "l-2", title: "Photosynthesis", meta: "Science · 25 min", kind: "normal" },
 ];
+
+/** What `POST /api/v1/assignments` actually answers - not `{created: 1}`. */
+const CREATED = { assignmentIds: ["a-1"], createdCount: 1, duplicateCount: 0 };
 
 const show = (props: Record<string, unknown> = {}) =>
   render(
@@ -51,7 +56,7 @@ beforeEach(() => {
   create.mockReset();
   useLessonLibrary.mockReset();
   useLessonLibrary.mockReturnValue({ cards: LESSONS, live: true, sample: false, loading: false });
-  create.mockResolvedValue({ created: 1 });
+  create.mockResolvedValue(CREATED);
 });
 
 describe("sending", () => {
@@ -78,7 +83,7 @@ describe("sending", () => {
     // Mid-flight: nothing is confirmed yet. The fixture sheet confirmed here.
     expect(screen.queryByText(/That’s sent to Amara/)).not.toBeInTheDocument();
 
-    resolve({ created: 1 });
+    resolve(CREATED);
     expect(await screen.findByText(/That’s sent to Amara/)).toBeInTheDocument();
   });
 
@@ -315,5 +320,258 @@ describe("an empty or unreachable library", () => {
     // Not the failure copy either: nothing has failed yet.
     expect(screen.queryByText(/couldn’t reach your library/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/library is empty/i)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * THE SIBLINGS OF THE ASSIGN WIZARD'S FIXES, on the other door to the same
+ * endpoint. Each of these was fixed in the wizard between 22 and 24 Sep and
+ * missed here.
+ */
+describe("only a lesson that can be sent", () => {
+  const MIXED = [
+    ...LESSONS,
+    { id: "l-3", title: "Water Cycle", meta: "", kind: "failed" },
+    { id: "l-4", title: "Rivers", meta: "", kind: "parsing" },
+  ];
+
+  it("is offered - not one whose parse failed, nor one still being read", () => {
+    // A failed parse leaves a lesson with no sections; sending it sent a
+    // child an empty lesson.
+    useLessonLibrary.mockReturnValue({ cards: MIXED, live: true, sample: false, loading: false });
+    show();
+
+    expect(screen.getByRole("button", { name: /Fractions 3/ })).toBeInTheDocument();
+    expect(screen.queryByText("Water Cycle")).not.toBeInTheDocument();
+    expect(screen.queryByText("Rivers")).not.toBeInTheDocument();
+  });
+});
+
+describe("a lesson that is not approved yet", () => {
+  const refuse = (message?: string) =>
+    create.mockRejectedValueOnce(
+      new ApiError(409, "conflict", {
+        detail: { code: "lesson_not_approved", ...(message ? { message } : {}) },
+      }),
+    );
+
+  it("says what the server said is outstanding, not 'try again'", async () => {
+    refuse("Fractions 3 has 2 sections waiting for you.");
+    show();
+    pick("Fractions 3");
+    sendIt();
+
+    const said = await screen.findByRole("alert");
+    expect(said).toHaveTextContent("Fractions 3 has 2 sections waiting for you.");
+    expect(said).not.toHaveTextContent(/try again/i);
+  });
+
+  it("points at the lesson that settles it", async () => {
+    refuse("Fractions 3 has 2 sections waiting for you.");
+    show();
+    pick("Fractions 3");
+    sendIt();
+
+    expect(
+      await screen.findByRole("link", { name: "Open the lesson and check them" }),
+    ).toHaveAttribute("href", "/teacher/lessons/l-1");
+  });
+
+  it("keeps the wizard's sentence where the server gave none", async () => {
+    refuse();
+    show();
+    pick("Fractions 3");
+    sendIt();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "This lesson still has sections waiting for you, so it cannot go to students yet.",
+    );
+  });
+
+  it("offers no lesson link for an ordinary failure", async () => {
+    create.mockRejectedValueOnce(new ApiError(500, "server"));
+    show();
+    pick("Fractions 3");
+    sendIt();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/try again/i);
+    expect(screen.queryByRole("link", { name: /Open the lesson/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("a send that created nothing", () => {
+  it("says the child already has it, rather than 'That's sent'", async () => {
+    create.mockResolvedValueOnce({ assignmentIds: [], createdCount: 0, duplicateCount: 1 });
+    show();
+    pick("Fractions 3");
+    sendIt();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Amara already has this lesson, so nothing was sent again.",
+    );
+    expect(screen.queryByText(/That’s sent/)).not.toBeInTheDocument();
+  });
+
+  it("promises no note that nothing is holding", async () => {
+    create.mockResolvedValueOnce({ assignmentIds: [], createdCount: 0, duplicateCount: 1 });
+    show();
+    pick("Fractions 3");
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Have a go." } });
+    sendIt();
+
+    await screen.findByRole("alert");
+    expect(screen.queryByText(/Your note goes with this lesson/)).not.toBeInTheDocument();
+  });
+
+  it("does not claim a duplicate the server did not report", async () => {
+    // Absent is not a duplicate: an older deployment may not send the field.
+    create.mockResolvedValueOnce({ assignmentIds: [], createdCount: 0 });
+    show();
+    pick("Fractions 3");
+    sendIt();
+
+    const said = await screen.findByRole("alert");
+    expect(said).not.toHaveTextContent(/already has/);
+    expect(screen.queryByText(/That’s sent/)).not.toBeInTheDocument();
+  });
+});
+
+describe("the note box, when there is no lesson under it", () => {
+  it("is not there while the library is loading", () => {
+    useLessonLibrary.mockReturnValue({ cards: LESSONS, live: false, sample: false, loading: true });
+    show();
+
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+  });
+
+  it("is not there when the library could not be reached", () => {
+    useLessonLibrary.mockReturnValue({ cards: LESSONS, live: false, sample: true, loading: false });
+    show();
+
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+  });
+
+  it("is there once there are lessons to send", () => {
+    show();
+
+    expect(screen.getByRole("textbox")).toBeInTheDocument();
+  });
+});
+
+/** Whether the browser would ask before leaving: the event was cancelled. */
+const leavingAsks = () => {
+  const e = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(e);
+  return e.defaultPrevented;
+};
+
+describe("a recommendation not yet sent", () => {
+  it("makes the browser ask once a lesson is picked", () => {
+    show();
+    expect(leavingAsks()).toBe(false);
+
+    pick("Fractions 3");
+    expect(leavingAsks()).toBe(true);
+  });
+});
+
+/** C08c's own placeholder: a teacher talking to the child. */
+describe("the note's placeholder", () => {
+  it("is the frame's", () => {
+    show();
+    pick("Fractions 3");
+
+    expect(screen.getByPlaceholderText("Try this one - I think it’ll click…")).toBeInTheDocument();
+  });
+});
+
+describe("focus (C07)", () => {
+  it("moves into the sheet when it opens", () => {
+    show();
+
+    expect(
+      screen.getByRole("dialog", { name: "Recommend a lesson" }).contains(document.activeElement),
+    ).toBe(true);
+  });
+
+  it("closes on Escape, which it never did", () => {
+    const onClose = vi.fn();
+    show({ onClose });
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+/** C08c's header close button, and its option cards' radio. */
+describe("the sheet's own controls", () => {
+  it("closes from the button beside the title", () => {
+    const onClose = vi.fn();
+    show({ onClose });
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("fills the chosen option's radio, and only that one", () => {
+    show();
+    pick(LESSONS[0].title);
+    const chosen = screen.getByRole("button", { pressed: true });
+
+    expect(chosen.querySelector("[aria-hidden] > span")).not.toBeNull();
+    for (const other of screen.getAllByRole("button", { pressed: false })) {
+      expect(other.querySelector("[aria-hidden] > span")).toBeNull();
+    }
+  });
+});
+
+/**
+ * C08c's "Suggested" (12 Oct): a recommendation carries the lesson it means
+ * now. That row is marked, and the sheet opens on it; the teacher's own pick
+ * always wins, and a lesson this list does not offer marks nothing.
+ */
+describe("the lesson Nevo suggests", () => {
+  const leavingAsks = () => {
+    const e = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(e);
+    return e.defaultPrevented;
+  };
+
+  it("is marked Suggested, and the sheet opens on it", () => {
+    show({ suggestion: "Try Photosynthesis next.", suggestedLessonId: "l-2" });
+    const row = screen.getByRole("button", { name: /Photosynthesis/ });
+
+    expect(row).toHaveTextContent("Suggested");
+    expect(row).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /Fractions 3/ })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("gives way to the teacher's own pick", () => {
+    show({ suggestedLessonId: "l-2" });
+    pick("Fractions 3");
+
+    expect(screen.getByRole("button", { name: /Fractions 3/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /Photosynthesis/ })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("marks nothing when the lesson is not one this list offers", () => {
+    show({ suggestedLessonId: "l-elsewhere" });
+
+    expect(screen.queryByText("Suggested")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { pressed: true })).not.toBeInTheDocument();
+  });
+
+  it("does not count the suggestion as the teacher's unsaved work", () => {
+    show({ suggestedLessonId: "l-2" });
+
+    expect(leavingAsks()).toBe(false);
+  });
+
+  it("sends the suggested lesson when the teacher simply confirms", async () => {
+    show({ suggestedLessonId: "l-2" });
+    sendIt();
+
+    await vi.waitFor(() => expect(create).toHaveBeenCalled());
+    expect(create.mock.calls[0][0]).toEqual(expect.objectContaining({ lessonIds: ["l-2"] }));
   });
 });

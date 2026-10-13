@@ -14,17 +14,6 @@ import type { ConsentStatus } from "./consents";
 export type InviteRole = "teacher" | "student";
 
 /**
- * One invitation, as every list and mutation returns it.
- *
- * WHAT IS NOT ON IT, and what that costs D19:
- * - no `classId`, so the frame's CLASS COLUMN and class filter have nothing to
- *   read. Both are absent rather than blank-filled.
- * - no created-at, so the frame's "Invited 9 Jul" column has no source.
- *   `expiresAt` is the only date here, and back-computing a send date from it
- *   would be inventing a TTL we were never told.
- * Both are flagged on `InvitationsView` and raised with backend.
- */
-/**
  * Whether the invitation email actually went out - the spec's own words:
  * "`email_not_configured` is deliberately distinct from `sent`: the invitation
  * exists and its link is valid, but nobody was emailed, so the caller has to
@@ -45,8 +34,12 @@ export interface Invitation {
   role: string | null;
   email: string | null;
   name: string | null;
-  /** "pending" | "joined" | "expired" in the frame's vocabulary. */
+  /** "pending" | "accepted" | "revoked" | "expired" - see `normaliseStatus`. */
   status: string | null;
+  /** The class it was sent for (9 Oct) - D19's Class column and filter. */
+  classId?: string | null;
+  /** When it was sent (9 Oct) - D19's "Invited 9 Jul". */
+  createdAt?: string | null;
   expiresAt: string;
   deliveryStatus: InvitationDeliveryStatus | null;
   /**
@@ -81,24 +74,34 @@ export interface InviteDraft {
   classId?: string | null;
 }
 
-/** A row the backend refused, by position in the submitted array. */
+/**
+ * A row the backend refused, by position in the submitted array - counted
+ * from `BulkInviteResult.rowNumberBase` (1, since 9 Oct) - with the value it
+ * refused.
+ */
 export interface RejectedInvitation {
   row: number;
   reason: string;
+  value?: string | null;
 }
 
 export interface BulkInviteResult {
   created: Invitation[];
   rejected: RejectedInvitation[];
+  /** Where `rejected[].row` counts from: 1. */
+  rowNumberBase?: number;
 }
 
 /** What the join link resolves to, before anyone has an account. */
 export interface JoinLookup {
-  /** "valid" | "expired" | "revoked" - drives which of D19's three states shows. */
+  /** Always "valid": a dead link is a 404, never a 200 with another status. */
   status: string;
   role: string;
   schoolName: string | null;
   expiresAt: string;
+  /** The invitee's name, on the wire since 1 Oct - D19's "Welcome, Amara". */
+  firstName?: string | null;
+  lastName?: string | null;
 }
 
 /** 201 of `POST /join/{token}/accept`. See `acceptJoin` for why each field is here. */

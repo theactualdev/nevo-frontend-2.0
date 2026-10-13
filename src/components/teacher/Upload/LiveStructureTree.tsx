@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Fragment, useState } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import {
   lessonsOf,
   namedSegments,
@@ -11,6 +11,8 @@ import {
   type UploadStructure,
 } from "@/lib/api/uploads";
 import { cn } from "@/lib/utils";
+import { useSystemMessages } from "@/components/shared/SystemMessages";
+import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
 
 /**
  * C07d for a REAL staged upload: the unit Nevo made, the steering a teacher
@@ -31,40 +33,113 @@ import { cn } from "@/lib/utils";
  *
  * The third level NAMES its rows, also as of 3 Sep. `segments` on the status
  * response carries `{segmentKey, title, estimatedMinutes, needsReview}` and
- * modules point at them by key, so a section can list what is under it. The
- * count remains the fallback: `segments` is optional in the contract, and a
- * segment's `title` is nullable, so anything unnamed stays a count rather
- * than becoming an invented title.
+ * modules point at them by key, so a section can list what is under it. A
+ * segment the parse did not name is NUMBERED, never given an invented title -
+ * the rule `LiveModuleReview` already follows. With no `segments` at all (an
+ * older upload) the section keeps its count and lists nothing.
  *
- * NOTHING IS COMMITTED THAT THE SERVER HAS NOT SEEN. Confirm is refused while
- * there are unsaved edits: the commit acts on the stored structure, so
- * committing a draft would add a unit shaped differently from the one on
- * screen.
+ * AND IT IS STEERED, as C07d asks at every level (6 Oct). A segment moves up
+ * or down within its section, into the section above or below, and "Start a
+ * new section after this segment" splits a section where the teacher says -
+ * all expressible, because `PUT structure` takes `segmentIds` per module.
+ * Buttons rather than drag handles, for the reason the rest of the tree uses
+ * them: HTML5 drag does not fire on a tablet.
+ *
+ * TITLES AT EVERY LEVEL, as of 12 Oct (T73, T70). The document now carries
+ * the unit's own `title` and its `segments` rows, so the block header and
+ * each segment row are inputs like the lesson and section titles, and a
+ * rename travels back in the same PUT the commit saves first. A title the
+ * parse did not find stays EMPTY: the block's placeholder is the file's own
+ * name, a segment's is its number, and nothing is written for either until
+ * a teacher types one. A key with no row in the document has nowhere to hold
+ * a title, so it stays numbered and is not offered as an input.
+ *
+ * NOTHING IS COMMITTED THAT THE SERVER HAS NOT SEEN. The commit acts on the
+ * stored structure, so committing a draft would add a unit shaped differently
+ * from the one on screen. That used to be enforced by greying the commit out
+ * over unsaved edits, explained only by a hover title - a button a teacher
+ * could press and be told nothing. It now saves first and asks second, as
+ * `LiveModuleReview` does on the single path: if the save fails, the error
+ * says so and nothing is asked.
+ *
+ * EXPAND AND COLLAPSE, as C07d draws them: a caret on each lesson and on each
+ * section that has named rows under it, and "Expand all" / "Collapse all"
+ * above the tree. It opens fully expanded, which is how it has always opened,
+ * so the toggle starts as "Collapse all".
  */
 
 type Saving = "idle" | "saving" | "saved" | "failed";
+
+/**
+ * The segment rows to steer: the document's own where it carries them, since
+ * that is the list `PUT structure` writes back, else the status response's.
+ */
+const rowsOf = (
+  doc: UploadStructure,
+  fallback: UploadSegment[] | undefined,
+): UploadSegment[] | undefined => (doc.segments?.length ? doc.segments : fallback);
 
 export function LiveStructureTree({
   uploadId,
   structure,
   segments,
   blockName,
+  banner,
 }: {
   uploadId: string;
   structure: UploadStructure;
   /** Named rows for the third level. Absent on an older upload. */
   segments?: UploadSegment[];
   blockName: string;
+  /** Above the tree, inside its scroll - the faint-pages card, as on the module review. */
+  banner?: ReactNode;
 }) {
   const router = useRouter();
+  const say = useSystemMessages();
   const [draft, setDraft] = useState<StructureLesson[]>(() =>
     lessonsOf(structure),
+  );
+  /** The unit's own title. Absent or null is no title, and stays so until typed. */
+  const [title, setTitle] = useState<string | null | undefined>(
+    structure.title,
+  );
+  /** The third level's rows, renamed in place. Undefined on an older upload. */
+  const [rows, setRows] = useState<UploadSegment[] | undefined>(() =>
+    rowsOf(structure, segments),
   );
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState<Saving>("idle");
   const [canUndo, setCanUndo] = useState(false);
   const [phase, setPhase] = useState<"idle" | "confirm" | "committing">("idle");
   const [error, setError] = useState("");
+  /** What a teacher has folded away. Empty is everything open. */
+  const [closed, setClosed] = useState<Set<string>>(() => new Set());
+  // Edits the server has not seen yet.
+  useUnsavedGuard(dirty, "lesson");
+
+  const lessonKey = (lesson: StructureLesson, li: number) =>
+    lesson.lessonId ?? `new-${li}`;
+  const moduleKey = (lesson: StructureLesson, li: number, mi: number) =>
+    `${lessonKey(lesson, li)}:${mi}`;
+  const toggle = (key: string) =>
+    setClosed((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  const allOpen = closed.size === 0;
+  const toggleAll = () =>
+    setClosed(
+      allOpen
+        ? new Set(
+            draft.flatMap((l, li) => [
+              lessonKey(l, li),
+              ...l.modules.map((_, mi) => moduleKey(l, li, mi)),
+            ]),
+          )
+        : new Set(),
+    );
 
   const plural = (n: number, one: string, many: string) =>
     `${n} ${n === 1 ? one : many}`;
@@ -84,12 +159,40 @@ export function LiveStructureTree({
     plural(totals.segments, "segment", "segments"),
   ].join(" · ");
 
+  /** Each row by its key, for the title input a segment row renames in place. */
+  const rowByKey = new Map((rows ?? []).map((r) => [r.segmentKey, r]));
+
   /** Every edit goes through here, so nothing changes without marking dirty. */
-  const edit = (next: StructureLesson[]) => {
-    setDraft(next);
+  const touched = () => {
     setDirty(true);
     setSaving("idle");
     setError("");
+  };
+
+  const edit = (next: StructureLesson[]) => {
+    setDraft(next);
+    touched();
+  };
+
+  /** Written as typed, empty included, as a lesson or section title is. */
+  const renameUnit = (next: string) => {
+    setTitle(next);
+    touched();
+  };
+
+  /** A segment's title lives on its row, found by key wherever it now sits. */
+  const renameSegment = (key: string, next: string) => {
+    setRows((prev) =>
+      prev?.map((r) => (r.segmentKey === key ? { ...r, title: next } : r)),
+    );
+    touched();
+  };
+
+  /** What the server says the document now is, at every level. */
+  const adopt = (doc: UploadStructure) => {
+    setDraft(lessonsOf(doc));
+    setTitle(doc.title);
+    setRows(rowsOf(doc, segments));
   };
 
   const renameLesson = (li: number, title: string) =>
@@ -185,6 +288,69 @@ export function LiveStructureTree({
     edit(next.filter((l) => l.modules.length > 0));
   };
 
+  /** Replace one lesson's sections, through `edit` so it marks dirty. */
+  const withModules = (li: number, mods: StructureLesson["modules"]) =>
+    edit(draft.map((l, i) => (i === li ? { ...l, modules: mods } : l)));
+
+  /** Reorder a segment within its section. */
+  const moveSegment = (li: number, mi: number, pi: number, by: -1 | 1) => {
+    const ids = draft[li].modules[mi].segmentIds;
+    const to = pi + by;
+    if (to < 0 || to >= ids.length) return;
+    const nextIds = [...ids];
+    [nextIds[pi], nextIds[to]] = [nextIds[to], nextIds[pi]];
+    withModules(
+      li,
+      draft[li].modules.map((m, j) => (j === mi ? { ...m, segmentIds: nextIds } : m)),
+    );
+  };
+
+  /**
+   * Move a segment into the section above or below it, in the same lesson:
+   * to the end of the one above, the start of the one below. A section the
+   * move empties is no longer a section.
+   */
+  const moveSegmentAcross = (li: number, mi: number, pi: number, by: -1 | 1) => {
+    const mods = draft[li].modules;
+    const to = mi + by;
+    if (to < 0 || to >= mods.length) return;
+    const key = mods[mi].segmentIds[pi];
+    const next = mods.map((m, j) => {
+      if (j === mi) {
+        return { ...m, segmentIds: m.segmentIds.filter((_, k) => k !== pi) };
+      }
+      if (j === to) {
+        return {
+          ...m,
+          segmentIds: by === -1 ? [...m.segmentIds, key] : [key, ...m.segmentIds],
+        };
+      }
+      return m;
+    });
+    withModules(li, next.filter((m) => m.segmentIds.length > 0));
+  };
+
+  /**
+   * C07d's "Start a new section after this segment": everything after it
+   * moves to a new, untitled section directly below. Offered on every segment
+   * but the last, where it would split off nothing.
+   */
+  const splitSectionAfter = (li: number, mi: number, pi: number) => {
+    const mods = draft[li].modules;
+    const moved = mods[mi].segmentIds.slice(pi + 1);
+    if (moved.length === 0) return;
+    const next = mods.map((m) => ({ ...m, segmentIds: [...m.segmentIds] }));
+    next[mi].segmentIds = next[mi].segmentIds.slice(0, pi + 1);
+    next.splice(mi + 1, 0, {
+      title: "",
+      sequenceOrder: mi + 2,
+      segmentIds: moved,
+      recap: null,
+      preview: null,
+    });
+    withModules(li, next);
+  };
+
   /** Renumber before sending: `sequenceOrder` is the order, not a label. */
   const normalised = (): UploadStructure => {
     const lessons = draft.map((l, i) => ({
@@ -194,6 +360,10 @@ export function LiveStructureTree({
     }));
     return {
       ...structure,
+      // Only a title the document had or a teacher typed: an absent one is
+      // not written as anything.
+      ...(title !== undefined ? { title } : {}),
+      ...(rows ? { segments: rows } : {}),
       lessons,
       // The legacy mirror is the first lesson; keeping it coherent means a
       // reader of either shape sees the same unit.
@@ -202,28 +372,38 @@ export function LiveStructureTree({
     };
   };
 
-  const save = async () => {
-    if (saving === "saving") return;
+  /** Resolves true once the server holds what is on screen. */
+  const save = async (): Promise<boolean> => {
+    if (saving === "saving") return false;
     setSaving("saving");
     setError("");
     try {
       const res = await uploadsApi.updateStructure(uploadId, normalised());
-      setDraft(lessonsOf(res.structure));
+      adopt(res.structure);
       setCanUndo(Boolean(res.canUndo));
       setDirty(false);
       setSaving("saved");
+      return true;
     } catch {
       setSaving("failed");
       setError(
         "We couldn’t save that just now. Your changes are still here. Try again in a moment.",
       );
+      return false;
     }
+  };
+
+  /** Save what is on screen first, then ask: confirm acts on what is stored. */
+  const addToLibrary = async () => {
+    if (phase === "committing" || saving === "saving") return;
+    if (dirty && !(await save())) return;
+    setPhase("confirm");
   };
 
   const undo = async () => {
     try {
       const res = await uploadsApi.undo(uploadId);
-      setDraft(lessonsOf(res.structure));
+      adopt(res.structure);
       setCanUndo(Boolean(res.canUndo));
       setDirty(false);
       setSaving("idle");
@@ -237,6 +417,9 @@ export function LiveStructureTree({
     setError("");
     try {
       await uploadsApi.confirm(uploadId);
+      // C07d draws "Added to your library." and then Done. The shared bar
+      // carries it across to the Library, as the assign wizard's does.
+      say.show({ kind: "confirm", message: "Added to your library." });
       router.push("/teacher/lessons");
     } catch {
       setPhase("idle");
@@ -247,9 +430,21 @@ export function LiveStructureTree({
   };
 
   const iconBtn =
-    "inline-flex size-[26px] shrink-0 cursor-pointer items-center justify-center rounded-lg text-nevo-near-black/45 transition-colors hover:bg-nevo-navy/8 hover:text-nevo-near-black/75 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent";
+    "inline-flex size-[26px] shrink-0 cursor-pointer items-center justify-center rounded-[10px] text-nevo-near-black/45 transition-colors hover:bg-nevo-navy/8 hover:text-nevo-near-black/75 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent";
   const titleInput =
-    "min-w-0 flex-1 rounded-[6px] bg-transparent px-1 py-0.5 outline-none focus:bg-nevo-cream focus:ring-2 focus:ring-nevo-navy/30";
+    "min-w-0 flex-1 rounded-[10px] bg-transparent px-1 py-0.5 outline-none focus:bg-nevo-cream focus:ring-2 focus:ring-nevo-navy/30";
+
+  /** C07d's caret: points right when folded, down when open. */
+  const caret = (open: boolean) =>
+    cn(
+      "inline-flex size-[22px] shrink-0 cursor-pointer items-center justify-center rounded-[10px] text-nevo-near-black/55 transition-transform duration-[160ms] ease-out",
+      open && "rotate-90",
+    );
+  const Caret = () => (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M9 6l6 6-6 6" />
+    </svg>
+  );
 
   const Arrow = ({ up }: { up: boolean }) => (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -258,36 +453,71 @@ export function LiveStructureTree({
   );
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-[22px] xl:px-8 xl:py-7">
-        <div className="mb-3.5 flex items-center gap-3 rounded-xl bg-nevo-navy px-[18px] py-[15px]">
+    /* `relative`: the confirm sheet below is `absolute inset-0` and belongs
+       to this pane (C07d). Without it the sheet took the nearest positioned
+       ancestor up the tree instead. */
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-[18px] xl:px-8 xl:py-[22px]">
+        {banner}
+        <div className="mb-3 flex justify-end">
+          <button
+            type="button"
+            onClick={toggleAll}
+            className="inline-flex shrink-0 cursor-pointer items-center gap-[7px] rounded-[10px] border-[1.5px] border-nevo-near-black/18 px-3.5 py-[9px] text-[13px] font-semibold whitespace-nowrap text-nevo-near-black transition-colors hover:bg-nevo-near-black/5"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d={allOpen ? "M7 11l5-5 5 5M7 17l5-5 5 5" : "M7 13l5 5 5-5M7 7l5 5 5-5"} />
+            </svg>
+            {allOpen ? "Collapse all" : "Expand all"}
+          </button>
+        </div>
+        <div className="mb-3.5 flex items-center gap-3 rounded-[12px] bg-nevo-navy px-[18px] py-[15px]">
           <span className="shrink-0 text-nevo-violet" aria-hidden>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M4 5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H4z" />
             </svg>
           </span>
           <div className="min-w-0 flex-1">
-            <div className="font-mono text-[10.5px] font-bold tracking-[0.14em] text-nevo-violet/80">
+            <div className="font-mono text-[10px] font-bold tracking-[0.14em] text-nevo-violet/80">
               THE BLOCK YOU UPLOADED
             </div>
-            <div className="truncate text-[17px] font-semibold text-nevo-cream">
-              {blockName}
-            </div>
+            {/* C07d's block title, as an input (T73). Its treatment is the
+                sample tree's: the frame's cream focus fill would put cream
+                text on cream. No title is an empty field, its hint the
+                file's own name - never a title written on the parse's behalf. */}
+            <input
+              value={title ?? ""}
+              onChange={(e) => renameUnit(e.target.value)}
+              aria-label="Unit title"
+              placeholder={blockName}
+              className="mt-0.5 w-full min-w-0 rounded-[10px] border-[1.5px] border-transparent bg-transparent px-2 py-[5px] text-base font-semibold text-nevo-cream outline-none transition-colors placeholder:text-nevo-cream/45 hover:bg-nevo-cream/10 focus:border-nevo-violet focus:bg-nevo-navy"
+            />
           </div>
-          <span className="shrink-0 text-[13px] text-nevo-cream/70">
+          <span className="shrink-0 text-xs text-nevo-cream/70">
             {summary}
           </span>
         </div>
 
-        {draft.map((lesson, li) => (
+        {draft.map((lesson, li) => {
+          const lessonOpen = !closed.has(lessonKey(lesson, li));
+          return (
           <div
             /* A split lesson has no id until the server mints one, so the
                key falls back to position rather than going undefined. */
-            key={lesson.lessonId ?? `new-${li}`}
-            className="mb-3 rounded-[12px] bg-nevo-cream-elevated px-[18px] py-4 shadow-elevation-1"
+            key={lessonKey(lesson, li)}
+            className="mb-[9px] rounded-[12px] bg-nevo-cream-elevated px-[18px] py-4 shadow-elevation-1"
           >
             <div className="flex items-center gap-2.5">
-              <span className="shrink-0 font-mono text-[10.5px] font-bold tracking-[0.12em] text-nevo-violet">
+              <button
+                type="button"
+                onClick={() => toggle(lessonKey(lesson, li))}
+                aria-expanded={lessonOpen}
+                aria-label={`Lesson ${li + 1} sections`}
+                className={caret(lessonOpen)}
+              >
+                <Caret />
+              </button>
+              <span className="shrink-0 font-mono text-[10px] font-bold tracking-[0.12em] text-nevo-violet">
                 {`LESSON ${li + 1}`}
               </span>
               <input
@@ -297,10 +527,10 @@ export function LiveStructureTree({
                 placeholder="Untitled lesson"
                 className={cn(
                   titleInput,
-                  "text-[15.5px] font-semibold text-nevo-near-black",
+                  "text-[15px] font-semibold text-nevo-near-black",
                 )}
               />
-              <span className="shrink-0 text-[12.5px] text-nevo-near-black/55">
+              <span className="shrink-0 text-[11.5px] text-nevo-near-black/55">
                 {plural(lesson.modules.length, "section", "sections")}
               </span>
               <button type="button" onClick={() => moveLesson(li, -1)} disabled={li === 0} aria-label="Move lesson up" title="Move up" className={iconBtn}>
@@ -316,13 +546,37 @@ export function LiveStructureTree({
               </button>
             </div>
 
+            {lessonOpen && (
             <div className="mt-2.5 flex flex-col gap-2">
-              {lesson.modules.map((m, mi) => (
+              {lesson.modules.map((m, mi) => {
+                // The third level: every segment, named where the parse
+                // named it and numbered where it did not. An older upload
+                // with no segment rows keeps its count and opens nothing.
+                const named = rows ? namedSegments(m.segmentIds, rows) : [];
+                // Numbered across the lesson, as the single path numbers them.
+                const before = lesson.modules
+                  .slice(0, mi)
+                  .reduce((n, x) => n + x.segmentIds.length, 0);
+                const moduleOpen = !closed.has(moduleKey(lesson, li, mi));
+                return (
                 <Fragment key={`${lesson.lessonId ?? "new"}-${li}-${mi}`}>
                 <div
-                  className="flex items-center gap-2.5 rounded-[10px] bg-nevo-cream-inset px-3.5 py-2.5"
+                  className="flex items-center gap-2.5 rounded-[10px] bg-nevo-cream-inset px-[13px] py-[11px]"
                 >
-                  <span className="shrink-0 font-mono text-[10px] font-bold tracking-[0.1em] text-nevo-near-black/45">
+                  {named.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => toggle(moduleKey(lesson, li, mi))}
+                      aria-expanded={moduleOpen}
+                      aria-label={`Section ${mi + 1} segments`}
+                      className={caret(moduleOpen)}
+                    >
+                      <Caret />
+                    </button>
+                  ) : (
+                    <span className="size-[22px] shrink-0" aria-hidden />
+                  )}
+                  <span className="shrink-0 font-mono text-[9.5px] font-bold tracking-[0.1em] text-nevo-near-black/45">
                     {`SECTION ${mi + 1}`}
                   </span>
                   <input
@@ -330,11 +584,11 @@ export function LiveStructureTree({
                     onChange={(e) => renameModule(li, mi, e.target.value)}
                     aria-label={`Section ${mi + 1} title`}
                     placeholder="Untitled section"
-                    className={cn(titleInput, "text-[14px] text-nevo-near-black")}
+                    className={cn(titleInput, "text-[13.5px] text-nevo-near-black")}
                   />
                   {/* Named where the parse named them, counted where it did
                       not - never an invented title. */}
-                  <span className="shrink-0 text-[12.5px] text-nevo-near-black/55">
+                  <span className="shrink-0 text-[11px] text-nevo-near-black/55">
                     {plural(m.segmentIds.length, "segment", "segments")}
                   </span>
                   <button type="button" onClick={() => moveModule(li, mi, -1)} disabled={mi === 0} aria-label="Move section up" title="Move up" className={iconBtn}>
@@ -361,25 +615,32 @@ export function LiveStructureTree({
                     </svg>
                   </button>
                 </div>
-                {/* The third level. Only the named ones are listed; a section
-                    whose keys resolve to nothing keeps its count above and
-                    says nothing here. */}
-                {(() => {
-                  const named = namedSegments(m.segmentIds, segments).filter(
-                    (seg) => seg.title !== null,
-                  );
-                  if (named.length === 0) return null;
-                  return (
-                    <ul className="mb-1 ml-9 mt-0.5 list-none space-y-0.5 p-0">
-                      {named.map((seg) => (
+                {moduleOpen && named.length > 0 && (
+                    <ul className="mb-1 ml-9 mt-0.5 flex list-none flex-col gap-[5px] p-0">
+                      {named.map((seg, pi) => {
+                        const number = `Segment ${before + pi + 1}`;
+                        const label = seg.title ?? number;
+                        // The raw title, not `seg.title`: that one is trimmed,
+                        // and an input fed it could never take a space.
+                        const row = rowByKey.get(seg.key);
+                        return (
                         <li
                           key={seg.key}
-                          className="flex items-center gap-2 text-[12.5px] leading-[1.5] text-nevo-near-black/62"
+                          className="flex items-center gap-[9px] rounded-[12px] bg-nevo-cream/55 px-[11px] py-2 text-[13px] leading-[1.45] text-nevo-near-black"
                         >
-                          <span className="size-1 shrink-0 rounded-full bg-nevo-near-black/28" aria-hidden />
-                          <span className="min-w-0 truncate">{seg.title}</span>
+                          {row ? (
+                            <input
+                              value={row.title ?? ""}
+                              onChange={(e) => renameSegment(seg.key, e.target.value)}
+                              aria-label={`${number} title`}
+                              placeholder={number}
+                              className={cn(titleInput, "px-[7px] py-1 text-[13px] text-nevo-near-black")}
+                            />
+                          ) : (
+                            <span className="min-w-0 flex-1 truncate">{label}</span>
+                          )}
                           {seg.minutes > 0 && (
-                            <span className="shrink-0 text-nevo-near-black/45">
+                            <span className="shrink-0 text-[11px] text-nevo-near-black/42">
                               {seg.minutes} min
                             </span>
                           )}
@@ -388,21 +649,55 @@ export function LiveStructureTree({
                               needs a look
                             </span>
                           )}
+                          <button type="button" onClick={() => moveSegment(li, mi, pi, -1)} disabled={pi === 0} aria-label={`Move ${label} up`} title="Move up" className={iconBtn}>
+                            <Arrow up />
+                          </button>
+                          <button type="button" onClick={() => moveSegment(li, mi, pi, 1)} disabled={pi === named.length - 1} aria-label={`Move ${label} down`} title="Move down" className={iconBtn}>
+                            <Arrow up={false} />
+                          </button>
+                          <button type="button" onClick={() => moveSegmentAcross(li, mi, pi, -1)} disabled={mi === 0} aria-label={`Move ${label} to the section above`} title="Move to the section above" className={iconBtn}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                              <path d="M9 14l-4-4 4-4M5 10h9a5 5 0 0 1 5 5v4" />
+                            </svg>
+                          </button>
+                          <button type="button" onClick={() => moveSegmentAcross(li, mi, pi, 1)} disabled={mi === lesson.modules.length - 1} aria-label={`Move ${label} to the section below`} title="Move to the section below" className={iconBtn}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                              <path d="M9 10l-4 4 4 4M5 14h9a5 5 0 0 0 5-5V5" />
+                            </svg>
+                          </button>
+                          {/* C07d's own control and title. Not on the last
+                              segment, where it would split off nothing. */}
+                          {pi < named.length - 1 && (
+                            <button
+                              type="button"
+                              onClick={() => splitSectionAfter(li, mi, pi)}
+                              aria-label={`Start a new section after ${label}`}
+                              title="Start a new section after this segment"
+                              className="inline-flex size-[26px] shrink-0 cursor-pointer items-center justify-center rounded-[10px] border-[1.5px] border-nevo-navy/30 text-nevo-navy transition-colors hover:bg-nevo-navy/6"
+                            >
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                                <path d="M8 3v18M3 8h10M3 16h10M21 8l-3 4 3 4" />
+                              </svg>
+                            </button>
+                          )}
                         </li>
-                      ))}
+                        );
+                      })}
                     </ul>
-                  );
-                })()}
+                )}
                 </Fragment>
-              ))}
+                );
+              })}
               {lesson.modules.length === 0 && (
                 <p className="text-[13px] text-nevo-near-black/55">
                   Nevo didn&rsquo;t split this lesson into sections.
                 </p>
               )}
             </div>
+            )}
           </div>
-        ))}
+          );
+        })}
 
         {error && (
           <p className="mt-3 max-w-[600px] rounded-[10px] bg-nevo-violet/14 px-[15px] py-3 text-[13px] leading-[1.5] text-nevo-near-black/78">
@@ -411,7 +706,7 @@ export function LiveStructureTree({
         )}
       </div>
 
-      <div className="flex shrink-0 items-center gap-3 border-t border-nevo-near-black/10 bg-nevo-cream px-6 py-3 xl:px-8 xl:py-3.5">
+      <div className="flex shrink-0 items-center gap-3.5 border-t border-nevo-near-black/10 bg-nevo-cream px-6 py-3 xl:px-8 xl:py-3.5">
         <button
           type="button"
           onClick={() => void save()}
@@ -448,14 +743,11 @@ export function LiveStructureTree({
 
         <button
           type="button"
-          onClick={() => setPhase("confirm")}
-          disabled={phase === "committing" || dirty}
-          title={
-            dirty ? "Save your changes before adding this to your library" : undefined
-          }
+          onClick={() => void addToLibrary()}
+          disabled={phase === "committing" || saving === "saving"}
           className={cn(
-            "flex h-[46px] items-center rounded-[10px] px-[26px] text-[15px] font-semibold",
-            phase === "committing" || dirty
+            "flex items-center rounded-[10px] px-[18px] py-[11px] text-[13.5px] font-semibold",
+            phase === "committing" || saving === "saving"
               ? "cursor-not-allowed bg-nevo-navy/18 text-nevo-near-black/40"
               : "cursor-pointer bg-nevo-navy text-nevo-cream transition-[filter] hover:brightness-93",
           )}
@@ -468,7 +760,7 @@ export function LiveStructureTree({
 
       {phase === "confirm" && (
         <div className="absolute inset-0 z-5 flex items-end justify-center bg-nevo-near-black/32 p-6">
-          <div className="w-full max-w-[520px] rounded-2xl bg-nevo-cream px-[26px] py-6 shadow-[0_20px_56px_rgba(0,0,0,0.24)] motion-safe:animate-nevo-rise">
+          <div className="w-full max-w-[520px] rounded-[16px] bg-nevo-cream px-[26px] py-6 shadow-[0_8px_32px_rgba(0,0,0,0.16)] motion-safe:animate-nevo-rise">
             <span className="font-mono text-[10.5px] font-bold tracking-[0.14em] text-nevo-violet">
               ADD TO LIBRARY
             </span>
@@ -482,14 +774,14 @@ export function LiveStructureTree({
               <button
                 type="button"
                 onClick={() => void commit()}
-                className="flex h-[46px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-5 text-[15px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93"
+                className="flex cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[18px] py-[11px] text-[13.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93"
               >
                 Yes, add them
               </button>
               <button
                 type="button"
                 onClick={() => setPhase("idle")}
-                className="flex h-[46px] cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-near-black/18 px-5 text-[15px] font-semibold text-nevo-near-black transition-colors hover:bg-nevo-near-black/5"
+                className="flex cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-near-black/18 px-3.5 py-[9px] text-[13px] font-semibold text-nevo-near-black transition-colors hover:bg-nevo-near-black/5"
               >
                 Let me review first
               </button>

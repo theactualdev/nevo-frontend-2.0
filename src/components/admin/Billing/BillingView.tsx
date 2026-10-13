@@ -1,14 +1,17 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
   billingApi,
+  latestReportByInvoice,
   type BillingContact,
   type Invoice,
   type InvoiceStatus,
-  type PaymentOutcome,
+  type InvoiceTransferDetails,
   type ReceivingAccount,
   type Subscription,
+  type TransferReport,
   type UpcomingCharge,
 } from "@/lib/api/billing";
 import { formatMoney } from "@/lib/money";
@@ -22,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { ReadFailed } from "../ReadFailed";
 import { BillingContactSheet } from "./BillingContactSheet";
 import { CostSheet } from "./CostSheet";
+import { PlanOptions } from "./PlanOptions";
 import { HowToPayPanel } from "./HowToPayPanel";
 import { InvoicePdfLink } from "./InvoicePdfLink";
 import { NoAccess, failureKind } from "../NoAccess";
@@ -38,15 +42,15 @@ import { NoAccess, failureKind } from "../NoAccess";
  *
  * 1. THE COST SHEET IS BUILT (7 Sep). The dispute that blocked it is settled in
  *    the contract itself: `pricingModel` is a const `"per_student"`, and the
- *    read carries `activeStudentCount`, `perStudentAnnualRate` and `currency`.
- *    See `CostSheet` - it computes from the numbers the school is billed on,
- *    not from `studentsProfiled` or `invitedStudents`, which are different
- *    populations.
- * 2. THE "HOW TO PAY" PANEL now exists (D11c, design ruling 7 Sep) but as a
- *    SEAM: Teslim is building the endpoint, nothing serves one yet, and until
- *    it answers the panel says the details are not available rather than
- *    inventing them. See `HowToPayPanel` - the frame's Kuda Bank account number
- *    is its illustration, not a value to hard-code.
+ *    read carries `studentCount`, `perStudentRate`, the server's VAT figures
+ *    and `currency`. See `CostSheet` - it shows the totals the server computed
+ *    and does no arithmetic of its own.
+ * 2. THE "HOW TO PAY" PANEL IS LIVE (D11c, design ruling 7 Sep). The invoice
+ *    owed is read through `GET /billing/invoices/{id}/bank-transfer-details`,
+ *    which gives the account and that invoice's exact reference together
+ *    (9 Oct); the school-wide `GET /billing/bank-transfer-details` stands in
+ *    if that read fails. See `HowToPayPanel`. The frame's Kuda Bank account
+ *    number is its illustration, not a value to hard-code.
  * 3. PAYMENT METHOD AND CHECKOUT. `PUT /billing/payment-method` takes `card` or
  *    `direct_debit`, and `POST /payments/checkout` returns a Paystack
  *    `authorizationUrl`. D11: "no cards, no in-app checkout."
@@ -81,7 +85,7 @@ function longDate(iso: string | null): string {
 }
 
 /** No red: overdue is violet, paid is navy, pending is quiet. */
-function StatusPill({ status }: { status: InvoiceStatus }) {
+export function StatusPill({ status }: { status: InvoiceStatus }) {
   return (
     <span
       className={cn(
@@ -114,13 +118,19 @@ export function BillingView() {
   const [contact, setContact] = useState<BillingContact | null>(null);
   const [editing, setEditing] = useState(false);
   const [account, setAccount] = useState<ReceivingAccount | null>(null);
+  /** The owed invoice's own account and reference, when that read answers. */
+  const [payDetails, setPayDetails] = useState<InvoiceTransferDetails | null>(
+    null,
+  );
   /**
-   * Transfers the BACKEND has on file this session, keyed by invoice number.
-   * No longer optimistic: `manual-transfer` records it, and a repeat of the
-   * same bank reference comes back as the original transaction rather than
-   * paying twice.
+   * Transfers the school has reported, by invoice id, from
+   * `GET /billing/payments/transfer-reports`. This was session-only state
+   * keyed by invoice number, so "Pending verification" vanished on reload
+   * and the school was asked again for a transfer it had already reported.
+   * A failed read is an empty map: each invoice then shows its own status,
+   * which is never wrong, only less complete.
    */
-  const [recorded, setRecorded] = useState<Record<string, PaymentOutcome>>({});
+  const [reports, setReports] = useState<Record<string, TransferReport>>({});
 
   const load = useCallback(() => {
     // The subscription read owns the page - it carries the school name and the
@@ -153,12 +163,17 @@ export function BillingView() {
             setInvoicesFailed(true);
           });
 
-        // The receiving account is its own read and its own absence. A 404 is
-        // the ordinary "no endpoint yet" state, not a failure worth reporting.
+        // The receiving account is its own read and its own absence: when it
+        // fails, How to pay says the details aren't available, not "try again".
         billingApi
           .receivingAccount()
           .then(setAccount)
           .catch(() => setAccount(null));
+
+        billingApi
+          .transferReports()
+          .then((rows) => setReports(latestReportByInvoice(rows)))
+          .catch(() => setReports({}));
 
         setUpcomingFailed(false);
         billingApi
@@ -166,6 +181,13 @@ export function BillingView() {
           .then((u) => {
             setUpcoming(u);
             setUpcomingFailed(false);
+            setPayDetails(null);
+            if (u.invoiceId && u.status !== "paid") {
+              billingApi
+                .invoiceTransferDetails(u.invoiceId)
+                .then(setPayDetails)
+                .catch(() => setPayDetails(null));
+            }
           })
           .catch(() => setUpcomingFailed(true));
       })
@@ -226,7 +248,14 @@ export function BillingView() {
             </div>
           )}
 
-          <CostSheet pricing={subscription.pricing} />
+          <CostSheet
+            pricing={subscription.pricing}
+            payStatus={
+              !upcomingFailed && upcoming?.invoiceId && upcoming.status === "paid"
+                ? "active"
+                : null
+            }
+          />
 
           <h2 className="mt-8 text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase">
             Next charge
@@ -246,6 +275,27 @@ export function BillingView() {
                       ? ` · ${upcoming.invoiceNumber}`
                       : ""}
                   </p>
+                  {/* WHAT THIS CHARGE COVERS, from the invoice itself (QA,
+                      10 Oct): its period, and the students and rate it was
+                      raised on - so the amount due is not read against the
+                      annual figure above. Each part only when the invoice
+                      carries it. Interim wording; Lydia's to come. */}
+                  {(() => {
+                    const inv = invoices?.find((i) => i.id === upcoming.invoiceId);
+                    if (!inv) return null;
+                    const covers = [
+                      inv.periodLabel ? `Covers ${inv.periodLabel}` : null,
+                      inv.studentCount != null && inv.perStudentRate
+                        ? `${inv.studentCount} ${inv.studentCount === 1 ? "student" : "students"} × ${formatMoney(inv.perStudentRate, inv.currency)}`
+                        : null,
+                      inv.vatAmount ? `includes VAT of ${formatMoney(inv.vatAmount, inv.currency)}` : null,
+                    ].filter(Boolean);
+                    return covers.length > 0 ? (
+                      <p className="m-0 mt-1 text-[13.5px] text-nevo-near-black/62">
+                        {covers.join(" · ")}
+                      </p>
+                    ) : null;
+                  })()}
                 </div>
                 {upcoming.status && <StatusPill status={upcoming.status} />}
               </div>
@@ -360,7 +410,16 @@ export function BillingView() {
                       {formatMoney(inv.amount, inv.currency)}
                     </span>
                     <span className="mt-0.5 text-[13px] text-nevo-near-black/58">
-                      {inv.invoiceNumber} &middot; issued{" "}
+                      {/* D11b: an invoice opens to its own page. The number is
+                          the link rather than the whole row, because the row
+                          also holds the PDF button. */}
+                      <Link
+                        href={`/admin/billing/invoices/${inv.id}`}
+                        className="font-semibold text-nevo-navy hover:underline"
+                      >
+                        {inv.invoiceNumber}
+                      </Link>{" "}
+                      &middot; issued{" "}
                       {longDate(inv.issuedAt)} &middot;{" "}
                       {inv.status === "paid"
                         ? `paid ${longDate(inv.paidAt)}`
@@ -378,7 +437,7 @@ export function BillingView() {
                       {overdueLine(daysPastDue(inv.dueAt, now)!)}
                     </span>
                   ) : null}
-                  {recorded[inv.invoiceNumber] && inv.status !== "paid" ? (
+                  {reports[inv.id] && inv.status !== "paid" ? (
                     <span className="shrink-0 rounded-full bg-nevo-violet/25 px-3 py-1 text-[12.5px] font-semibold text-nevo-navy">
                       Pending verification
                     </span>
@@ -442,9 +501,19 @@ export function BillingView() {
             )}
           </div>
 
+          {/*
+            * ONLY WHEN SOMETHING IS OWED. This rendered whatever the upcoming
+            * charge said - a paid invoice, or none at all - so a school with
+            * nothing to pay met bank details and a disabled "I've made this
+            * transfer" with no reference to quote.
+            */}
+          {upcoming?.invoiceId && upcoming.status !== "paid" ? (
           <HowToPayPanel
-            account={account}
-            reference={upcoming?.invoiceNumber ?? null}
+            account={payDetails ?? account}
+            /* The backend's reference for this invoice. Its own description
+               says that is the invoice number, so the number stands in when
+               the per-invoice read fails - still the server's value. */
+            reference={payDetails?.reference ?? upcoming?.invoiceNumber ?? null}
             amount={
               upcoming?.amount
                 ? formatMoney(upcoming.amount, subscription.pricing.currency)
@@ -452,26 +521,23 @@ export function BillingView() {
             }
             billedIn={subscription.pricing.currency}
             invoiceId={upcoming?.invoiceId ?? null}
-            recorded={
-              upcoming?.invoiceNumber
-                ? (recorded[upcoming.invoiceNumber] ?? null)
-                : null
+            recorded={reports[upcoming.invoiceId] ?? null}
+            onRecord={billingApi.reportTransfer}
+            // A report never settles an invoice, so there is nothing to
+            // re-read: the invoice is paid when finance confirms it.
+            onRecorded={(report) =>
+              setReports((prev) => ({ ...prev, [report.invoiceId]: report }))
             }
-            onRecord={billingApi.manualTransfer}
-            onRecorded={(outcome) => {
-              const ref = upcoming?.invoiceNumber;
-              if (ref) setRecorded((prev) => ({ ...prev, [ref]: outcome }));
-              // The backend may have settled it outright; re-read so the
-              // invoice list shows what it now says rather than our guess.
-              if (outcome.invoicePaid) load();
-            }}
           />
+          ) : null}
 
-          {/* Name the hole, rather than letting it read as unfinished. */}
-          <p className="mt-8 text-[13px] leading-[1.6] text-nevo-near-black/55 italic">
-            Plan options and switching aren&rsquo;t here yet (D11d). Your cost
-            above is the model your school is billed on.
-          </p>
+          {/* D11d's plans (Lydia, 7 Oct: "D11d wins. The plan choice
+              exists."). This was a line naming the hole: "Plan options and
+              switching aren't here yet." */}
+          <PlanOptions
+            current={subscription.pricing.pricingPlan}
+            vatRate={subscription.pricing.vatRate}
+          />
         </>
       )}
 

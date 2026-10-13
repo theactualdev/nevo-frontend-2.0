@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import {
   askNevoApi,
   asUuid,
@@ -15,12 +16,17 @@ import {
   ASK_NEVO_CONTEXTS,
   CANNOT_HELP_LINE,
   contextForPath,
+  contextIdsFor,
+  liveContextFor,
+  liveStripFor,
   OUT_OF_SCOPE,
   stripForPath,
 } from "@/lib/mocks/teacherAskNevo";
 import { useHasSession } from "@/hooks/useHasSession";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { MOCK_TEACHER } from "./teacherNav";
+import { OPEN_ASK_NEVO } from "./phoneLayouts";
+import { useAskNevoClass } from "./askNevoScope";
 
 /**
  * Ask Nevo (`Nevo Teacher Ask`) - a reusable overlay dropped onto every
@@ -76,13 +82,13 @@ type Turn =
       kind: "answer";
       text: string;
       action?: { label: string; href: string };
-      /** Canned stand-in shown after a live attempt failed. */
-      sample?: boolean;
       /** Present only on a REAL answer - what the vote is cast against. */
       interactionId?: string;
       vote?: 1 | -1;
     }
-  | { kind: "cannothelp" };
+  | { kind: "cannothelp" }
+  /** A signed-in question that got no answer. Not a sample - nothing at all. */
+  | { kind: "failed" };
 
 const SPARKLE = (size: number) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
@@ -93,6 +99,8 @@ const SPARKLE = (size: number) => (
 
 export function AskNevo() {
   const pathname = usePathname() ?? "";
+  /** A class chosen in place on the open screen - Insights' pills (T182). */
+  const screenClass = useAskNevoClass();
   /**
    * THE SERVER'S thread id, not one we made up.
    *
@@ -107,6 +115,15 @@ export function AskNevo() {
    */
   const threadId = useRef<string | null>(null);
   const [open, setOpen] = useState(false);
+  /*
+   * C19: on a phone there is no pill - the drawer lists Ask Nevo with the
+   * tabs, and opening it from there arrives here.
+   */
+  useEffect(() => {
+    const onOpen = () => setOpen(true);
+    window.addEventListener(OPEN_ASK_NEVO, onOpen);
+    return () => window.removeEventListener(OPEN_ASK_NEVO, onOpen);
+  }, []);
   const [mode, setMode] = useState<Mode>("chat");
   const [threads, setThreads] = useState<ThreadSummary[] | null>(null);
   const [threadsFailed, setThreadsFailed] = useState(false);
@@ -131,8 +148,11 @@ export function AskNevo() {
   }, []);
 
   const context = contextForPath(pathname);
-  const data = ASK_NEVO_CONTEXTS[context];
-  const strip = stripForPath(context, pathname);
+  // The frame's people stay on the walkthrough. A signed-in teacher is shown
+  // the screen and "this student", never an invented name - see
+  // `liveContextFor`.
+  const data = signedIn ? liveContextFor(context) : ASK_NEVO_CONTEXTS[context];
+  const strip = signedIn ? liveStripFor(context) : stripForPath(context, pathname);
 
   // Closing resets the transcript, per the frame - and with it the thread, or
   // the next question would silently continue a conversation the teacher
@@ -242,7 +262,16 @@ export function AskNevo() {
       .ask({
         role: "teacher",
         currentPage: pathname,
-        contextIds: { threadId: asUuid(threadId.current) },
+        // The record on screen, so the answer is about THIS student, class
+        // or lesson. The routes have carried real ids all along; the drawer
+        // sent only the thread.
+        contextIds: {
+          // The route names the record when it can; a class picked in place
+          // fills in only where the route names no class of its own.
+          classId: asUuid(screenClass) ?? undefined,
+          ...contextIdsFor(pathname),
+          threadId: asUuid(threadId.current),
+        },
         question,
       })
       .catch(() => null);
@@ -258,12 +287,28 @@ export function AskNevo() {
         res
           ? {
               kind: "answer",
-              text: res.answer,
+              // A structured answer's `answer` carries its markup; the
+              // contract gives `plainText` for a client that renders one
+              // paragraph, which this bubble is.
+              text:
+                res.answerFormat === "structured" && res.plainText
+                  ? res.plainText
+                  : res.answer,
               // Kept so the vote below has something to post against; a
               // canned answer has no interaction and gets no vote.
               interactionId: res.interactionId,
             }
-          : { ...cannedFor(question), sample: Boolean(getToken()) },
+          : /*
+             * NOT A SAMPLE ANSWER. A signed-in teacher whose question failed
+             * was shown the frame's canned reply - "Tunde stalled on
+             * Tuesday... eight in JSS 2A slowed", with a button to a profile
+             * that does not exist - under one italic line. An answer about
+             * invented children, in the voice of the assistant, is the worst
+             * thing this drawer can say. It says the question did not land.
+             */
+            getToken()
+            ? { kind: "failed" as const }
+            : cannedFor(question),
       ]);
       setThinking(false);
       requestAnimationFrame(() =>
@@ -296,15 +341,28 @@ export function AskNevo() {
 
   const showEntry = turns.length === 0 && !thinking;
 
+  // The drawer had no Escape and never took focus (C07). Opening it unmounts
+  // the pill that had focus, so the hook has nothing to give focus back to -
+  // the pill takes it back itself when the drawer closes.
+  const drawerRef = useRef<HTMLElement>(null);
+  const pillRef = useRef<HTMLButtonElement>(null);
+  const wasOpen = useRef(false);
+  useDialogFocus(drawerRef, { active: open, onEscape: close });
+  useEffect(() => {
+    if (wasOpen.current && !open) pillRef.current?.focus();
+    wasOpen.current = open;
+  }, [open]);
+
   return (
     <>
       {!open && (
         <button
+          ref={pillRef}
           type="button"
           aria-label="Ask Nevo"
           title="Ask Nevo"
           onClick={() => setOpen(true)}
-          className="fixed right-6 bottom-6 z-30 flex h-[52px] cursor-pointer items-center gap-2.5 rounded-full bg-nevo-navy px-[22px] text-[15px] font-medium text-nevo-cream shadow-[0_8px_32px_rgba(0,0,0,0.16)] transition-[transform,filter] duration-[140ms] hover:brightness-108 active:scale-105"
+          className="fixed right-6 bottom-6 z-30 flex h-[52px] max-md:hidden cursor-pointer items-center gap-2.5 rounded-full bg-nevo-navy px-[22px] text-[15px] font-medium text-nevo-cream shadow-[0_8px_32px_rgba(0,0,0,0.16)] transition-[transform,filter] duration-[140ms] hover:brightness-108 active:scale-105"
         >
           {SPARKLE(22)}
           Ask Nevo
@@ -315,13 +373,15 @@ export function AskNevo() {
         <>
           <div
             onClick={close}
-            className="fixed inset-0 z-40 bg-nevo-near-black/28 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
+            className="fixed inset-0 z-40 bg-nevo-near-black/28 backdrop-blur-[1.5px] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
           />
           <aside
+            ref={drawerRef}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-label="Ask Nevo"
-            className={`fixed inset-y-0 right-0 z-50 flex flex-col bg-nevo-cream shadow-[-8px_0_32px_rgba(0,0,0,0.16)] motion-safe:animate-nevo-sheet-r ${SHEET}`}
+            className={`nevo-text-zoom fixed inset-y-0 right-0 z-50 flex max-w-full flex-col bg-nevo-cream shadow-[-8px_0_32px_rgba(0,0,0,0.16)] motion-safe:animate-nevo-sheet-r ${SHEET}`}
           >
             {/* Header */}
             <div className="flex shrink-0 items-center justify-between border-b border-nevo-near-black/8 px-[22px] pt-5 pb-4">
@@ -349,7 +409,7 @@ export function AskNevo() {
                   aria-label="Past conversations"
                   title="Past conversations"
                   onClick={openHistory}
-                  className="flex size-[34px] cursor-pointer items-center justify-center rounded-lg text-nevo-navy transition-transform duration-[120ms] active:scale-[0.98]"
+                  className="flex size-[34px] cursor-pointer items-center justify-center rounded-[10px] text-nevo-navy transition-transform duration-[120ms] active:scale-[0.98]"
                 >
                   {HISTORY_ICON}
                 </button>
@@ -358,7 +418,7 @@ export function AskNevo() {
                 type="button"
                 aria-label="Close"
                 onClick={close}
-                className="flex size-[34px] cursor-pointer items-center justify-center rounded-lg transition-transform duration-[120ms] active:scale-[0.98]"
+                className="flex size-[34px] cursor-pointer items-center justify-center rounded-[10px] transition-transform duration-[120ms] active:scale-[0.98]"
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
                   <path d="M6 6l12 12M18 6L6 18" stroke="#2b2b2f" strokeWidth="2" strokeLinecap="round" />
@@ -376,7 +436,7 @@ export function AskNevo() {
                   type="button"
                   aria-label="Back"
                   onClick={back}
-                  className="flex size-[34px] shrink-0 cursor-pointer items-center justify-center rounded-lg transition-transform duration-[120ms] active:scale-[0.98]"
+                  className="flex size-[34px] shrink-0 cursor-pointer items-center justify-center rounded-[10px] transition-transform duration-[120ms] active:scale-[0.98]"
                 >
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2b2b2f" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                     <path d="M15 18l-6-6 6-6" />
@@ -388,8 +448,9 @@ export function AskNevo() {
               </div>
             )}
 
-            {/* Context strip - what the teacher is looking at */}
-            {mode === "chat" && (
+            {/* Context strip - what the teacher is looking at. Absent when
+                it could only have named a record it does not know. */}
+            {mode === "chat" && strip && (
             <div className="flex shrink-0 items-center gap-[9px] border-b border-nevo-violet/18 bg-nevo-violet/10 px-[22px] py-[11px]">
               <span className="shrink-0 text-nevo-navy">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -428,7 +489,7 @@ export function AskNevo() {
                         key={chip}
                         type="button"
                         onClick={() => ask(chip)}
-                        className="flex cursor-pointer items-center gap-2.5 rounded-xl border-[1.5px] border-nevo-violet/60 bg-nevo-violet/6 px-[15px] py-3 text-left text-[14px] leading-[1.35] text-nevo-navy transition-[transform,background-color] duration-[120ms] hover:bg-nevo-violet/14 active:scale-[0.98]"
+                        className="flex cursor-pointer items-center gap-2.5 rounded-[12px] border-[1.5px] border-nevo-violet/60 bg-nevo-violet/6 px-[15px] py-3 text-left text-[14px] leading-[1.35] text-nevo-navy transition-[transform,background-color] duration-[120ms] hover:bg-nevo-violet/14 active:scale-[0.98]"
                       >
                         <span className="shrink-0 text-nevo-navy/55">→</span>
                         {chip}
@@ -453,12 +514,6 @@ export function AskNevo() {
                           <p className="text-[14.5px] leading-[1.6] text-nevo-near-black">
                             {t.text}
                           </p>
-                          {t.sample && (
-                            <p className="mt-2.5 text-[12px] leading-[1.45] text-nevo-near-black/55 italic">
-                              We couldn&rsquo;t reach Nevo just now, so this is
-                              a sample answer.
-                            </p>
-                          )}
                           {t.interactionId && (
                             <div className="mt-[11px] flex items-center justify-end gap-1 border-t border-nevo-near-black/9 pt-[9px]">
                               {([1, -1] as const).map((v) => {
@@ -471,7 +526,7 @@ export function AskNevo() {
                                     aria-pressed={on}
                                     title={v === 1 ? "Helpful" : "Not helpful"}
                                     onClick={() => vote(i, v)}
-                                    className="inline-flex size-[30px] cursor-pointer items-center justify-center rounded-lg transition-transform duration-[120ms] active:scale-[0.98]"
+                                    className="inline-flex size-[30px] cursor-pointer items-center justify-center rounded-[10px] transition-transform duration-[120ms] active:scale-[0.98]"
                                   >
                                     <svg
                                       width="19"
@@ -500,7 +555,7 @@ export function AskNevo() {
                               <Link
                                 href={t.action.href}
                                 onClick={close}
-                                className="inline-flex h-9 cursor-pointer items-center gap-[7px] rounded-[9px] bg-nevo-navy px-3.5 text-[13px] font-medium text-nevo-cream transition-[transform,filter] duration-[120ms] hover:brightness-93 active:scale-[0.98]"
+                                className="inline-flex h-9 cursor-pointer items-center gap-[7px] rounded-[10px] bg-nevo-navy px-3.5 text-[13px] font-medium text-nevo-cream transition-[transform,filter] duration-[120ms] hover:brightness-93 active:scale-[0.98]"
                               >
                                 {t.action.label}
                               </Link>
@@ -508,20 +563,24 @@ export function AskNevo() {
                           )}
                         </div>
                       </div>
+                    ) : t.kind === "failed" ? (
+                      <div key={i} className="mt-3.5 flex justify-start">
+                        <p className="max-w-[88%] text-[14px] leading-[1.55] text-nevo-near-black/68">
+                          We couldn&rsquo;t reach Nevo just now. Try asking
+                          again in a moment.
+                        </p>
+                      </div>
                     ) : (
                       <div key={i} className="mt-3.5 flex flex-col items-start">
                         <div className="max-w-[88%] rounded-[14px_14px_14px_4px] border border-nevo-violet/35 bg-nevo-violet/15 px-4 py-3.5">
+                          {/* One paragraph, as the frame draws it. The admin
+                              sentence is the line's own close; it used to be
+                              printed again underneath. Design deleted
+                              "Message your school admin" on 31 Aug. */}
                           <p className="text-[14.5px] leading-[1.6] text-nevo-near-black">
                             {CANNOT_HELP_LINE}
                           </p>
                         </div>
-                        {/* Design deleted "Message your school admin" from
-                            this state on 31 Aug: Connect messages STUDENTS,
-                            so the link went somewhere that could not do what
-                            it offered. Plain text now, per the frame. */}
-                        <p className="mt-2.5 ml-1 text-[13px] leading-[1.5] text-nevo-near-black/60">
-                          Your school admin looks after that side of things.
-                        </p>
                       </div>
                     ),
                   )}
@@ -533,7 +592,7 @@ export function AskNevo() {
                           <span
                             key={delay}
                             style={{ animationDelay: `${delay}ms` }}
-                            className="size-1.5 rounded-full bg-nevo-navy motion-safe:animate-nevo-dot"
+                            className="size-[7px] rounded-full bg-nevo-navy motion-safe:animate-nevo-dot"
                           />
                         ))}
                       </div>
@@ -549,8 +608,9 @@ export function AskNevo() {
 
             {/* Input */}
             <div className="shrink-0 border-t border-nevo-near-black/8 px-[18px] pt-3.5 pb-[18px]">
-              <div className="flex h-[46px] items-center gap-2 rounded-full border-[1.5px] border-nevo-near-black/16 bg-nevo-cream pr-2 pl-4">
+              <div className="flex h-[46px] items-center gap-2 rounded-full border-[1.5px] border-nevo-near-black/16 bg-nevo-cream pr-2 pl-4 transition-colors focus-within:border-nevo-navy">
                 <input
+                  data-autofocus
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   onKeyDown={(e) => {
@@ -560,6 +620,8 @@ export function AskNevo() {
                     }
                   }}
                   placeholder={"Ask about a student, class, or lesson"}
+                  // A placeholder is not a name: it goes the moment you type.
+                  aria-label="Ask about a student, class, or lesson"
                   className="min-w-0 flex-1 border-none bg-transparent text-[14.5px] text-nevo-near-black outline-none"
                 />
                 {/* Visual affordance only in the frame - no recording state. */}
@@ -645,7 +707,7 @@ function HistoryList({
         {[0, 1, 2, 3].map((i) => (
           <div
             key={i}
-            className="h-[62px] animate-pulse rounded-xl bg-nevo-cream-elevated"
+            className="h-[62px] animate-pulse rounded-[12px] bg-nevo-cream-elevated"
           />
         ))}
       </div>
@@ -669,7 +731,7 @@ function HistoryList({
           <button
             type="button"
             onClick={() => onOpen(t)}
-            className="block w-full cursor-pointer rounded-xl bg-nevo-cream-elevated px-4 py-3.5 text-left transition-transform duration-[120ms] active:scale-[0.99]"
+            className="block w-full cursor-pointer rounded-[12px] bg-nevo-cream-elevated px-4 py-3.5 text-left transition-transform duration-[120ms] active:scale-[0.99]"
           >
             {/* One line, ellipsised - the frame's rows never wrap. */}
             <span className="block truncate text-[14px] leading-[1.4] text-nevo-near-black">

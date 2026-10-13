@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { IllustrationWrapper } from "@/components/shared/IllustrationWrapper";
 import { MasteryDualTrack } from "@/components/teacher/Student/MasteryDualTrack";
 import { useTeacherClasses } from "@/hooks/useTeacherClasses";
 import { getClassInsights, hasGap } from "@/lib/mocks/teacherInsights";
-import { SampleRegion } from "@/components/shared/SampleRegion";
+import { MaybeSample, SampleRegion } from "@/components/shared/SampleRegion";
 import { LiveClassInsights } from "./LiveClassInsights";
+import { setAskNevoClass } from "@/components/teacher/Shell/askNevoScope";
 import { cn } from "@/lib/utils";
 
 /**
@@ -39,6 +40,8 @@ const CHEVRON = (
 export function InsightsView() {
   // C14 A3: nothing is selected on arrival, so this is nullable by contract.
   const [classId, setClassId] = useState<string | null>(null);
+  // Ask Nevo hears which class this page is about (T182), until it leaves.
+  useEffect(() => () => setAskNevoClass(null), []);
   // The selector offers the teacher's real classes, not the fixture three.
   const { options: classes, live, sample, loading } = useTeacherClasses();
   // A live class reads from the intelligence endpoints (see
@@ -67,6 +70,15 @@ export function InsightsView() {
 
   const pills = (
     <div className="flex gap-2">
+      {/* The fixture three are marked where they are offered, not only once
+          one is picked: the landing is where the wrong choice gets made.
+
+          NOT WHILE THE READ IS IN FLIGHT. `!live` is already true then, so
+          an empty row of pills was marked as sample data - nothing invented
+          on screen, and the mark said otherwise. This page draws no skeleton
+          while it waits, so the signed-in sweep checked straight away and,
+          whenever the backend was slow, failed every lane's run (8 Oct). */}
+      <MaybeSample showing={!live && !loading} kind="teacher:insights-classes">
       {selectable.map((c) => {
         const on = c.id === classId;
         return (
@@ -74,7 +86,10 @@ export function InsightsView() {
             key={c.id}
             type="button"
             aria-pressed={on}
-            onClick={() => setClassId(c.id)}
+            onClick={() => {
+              setClassId(c.id);
+              setAskNevoClass(c.id);
+            }}
             className={cn(
               "cursor-pointer rounded-full px-[13px] py-[7px] text-[12.5px] font-medium transition-[filter,background-color] xl:px-[15px] xl:py-2 xl:text-[13.5px]",
               on
@@ -86,14 +101,15 @@ export function InsightsView() {
           </button>
         );
       })}
+      </MaybeSample>
     </div>
   );
 
   const heading = (
     <div className="flex flex-wrap items-center justify-between gap-4 xl:gap-5">
-      <h2 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
+      <h1 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
         Insights
-      </h2>
+      </h1>
       {pills}
     </div>
   );
@@ -121,7 +137,7 @@ export function InsightsView() {
           {heading}
           {sampleNotice}
         </div>
-        <div className="flex flex-1 flex-col items-center justify-center px-12 pb-10 text-center">
+        <div className="flex flex-1 flex-col items-center justify-center px-10 pb-9 text-center xl:px-12 xl:pb-10">
           <IllustrationWrapper
             src="/illustrations/empty-insights-select.png"
             alt="Two overlapping circles"
@@ -129,10 +145,27 @@ export function InsightsView() {
             height={512}
             className="w-[190px] xl:w-[220px]"
           />
+          {/*
+            "Pick one of your classes above" with no classes above: while the
+            list loads, and for a teacher who has none. Loading claims
+            nothing; no classes says the classes list's own sentence.
+          */}
+          {loading ? null : live && classes.length === 0 ? (
+            <>
+              <h3 className="mt-[22px] text-xl font-semibold tracking-[-0.01em] text-nevo-near-black xl:mt-6 xl:text-[21px]">
+                Your classes will appear here once assigned
+              </h3>
+              <p className="mt-2.5 max-w-[360px] text-[15px] leading-[1.55] text-nevo-near-black/62 xl:mt-2 xl:text-[15.5px]">
+                This usually happens before your first sign-in. If it&rsquo;s
+                taking a while, your school admin can set it up.
+              </p>
+            </>
+          ) : (
+          <>
           <h3 className="mt-[22px] text-xl font-semibold tracking-[-0.01em] text-nevo-near-black xl:mt-6 xl:text-[21px]">
             Select a class to see insights
           </h3>
-          <p className="mt-2 max-w-[340px] text-[15px] leading-[1.55] text-nevo-near-black/62 xl:max-w-[360px] xl:text-[15.5px]">
+          <p className="mt-2.5 max-w-[340px] text-[15px] leading-[1.55] text-nevo-near-black/62 xl:mt-[11px] xl:max-w-[360px] xl:text-[15.5px]">
             <span className="xl:hidden">
               Pick one of your classes above to see how the week is going.
             </span>
@@ -141,6 +174,8 @@ export function InsightsView() {
               week is going.
             </span>
           </p>
+          </>
+          )}
         </div>
       </div>
     );
@@ -165,7 +200,7 @@ export function InsightsView() {
         {data && (
         <SampleRegion kind="teacher:insights">
         {(data.sparse ? (
-          <div className="mt-8 flex max-w-[640px] items-start gap-4 rounded-xl bg-nevo-cream-elevated p-7 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+          <div className="mt-[26px] flex items-start gap-3.5 rounded-[12px] bg-nevo-cream-elevated p-6 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-8 xl:max-w-[640px] xl:gap-4 xl:p-7">
             <span className="mt-px size-[22px] shrink-0 text-nevo-violet xl:size-6">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="size-full">
                 <circle cx="12" cy="12" r="9" />
@@ -187,7 +222,7 @@ export function InsightsView() {
         ) : (
           <>
             {/* ---- This week ---- */}
-            <div className="mt-[18px] rounded-xl bg-nevo-cream-elevated px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-[22px] xl:px-[26px] xl:py-6">
+            <div className="mt-[18px] rounded-[12px] bg-nevo-cream-elevated px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-[22px] xl:px-[26px] xl:py-6">
               <div className="flex items-center gap-[9px]">
                 {/* The lightbulb is desktop-only in the frame. */}
                 <span className="hidden text-nevo-navy xl:inline-flex">
@@ -218,7 +253,7 @@ export function InsightsView() {
 
             {/* ---- Misconception callout ---- */}
             {data.misconception && (
-              <div className="mt-3.5 flex items-start gap-[11px] rounded-xl border border-nevo-violet/20 bg-nevo-violet/8 px-4 py-3.5 xl:mt-4 xl:gap-3 xl:px-[18px] xl:py-4">
+              <div className="mt-3.5 flex items-start gap-[11px] rounded-[12px] border border-nevo-violet/20 bg-nevo-violet/8 px-4 py-3.5 xl:mt-4 xl:gap-3 xl:px-[18px] xl:py-4">
                 <span className="mt-px size-[17px] shrink-0 text-nevo-violet xl:size-[18px]">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="size-full">
                     <circle cx="12" cy="12" r="9" />
@@ -252,12 +287,12 @@ export function InsightsView() {
             {data.flags && data.flags.length > 0 && (
               <>
                 <h3 className={SECTION_H3}>Flags</h3>
-                <div className="mt-3.5 flex flex-col gap-3 xl:mt-4">
+                <div className="mt-3.5 flex flex-col gap-[11px] xl:mt-4 xl:gap-3">
                   {data.flags.map((f) => (
                     <Link
                       key={f.name}
                       href={f.href}
-                      className="relative flex cursor-pointer gap-3.5 rounded-xl bg-nevo-cream-elevated py-4 pr-[18px] pl-[22px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-[filter,transform] hover:brightness-[0.985] active:scale-[0.99] xl:gap-4 xl:py-5 xl:pr-[22px] xl:pl-[26px]"
+                      className="relative flex cursor-pointer gap-3.5 rounded-[12px] bg-nevo-cream-elevated py-4 pr-[18px] pl-[22px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-[filter,transform] hover:brightness-[0.985] active:scale-[0.99] xl:gap-4 xl:py-5 xl:pr-[22px] xl:pl-[26px]"
                     >
                       <span
                         className={cn(
@@ -266,9 +301,9 @@ export function InsightsView() {
                         )}
                       />
                       <span className="min-w-0 flex-1">
-                        <span className="flex items-center gap-[9px]">
+                        <span className="flex items-center gap-2 xl:gap-[9px]">
                           {f.isSudden && (
-                            <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-nevo-navy text-nevo-cream">
+                            <span className="inline-flex size-[18px] shrink-0 items-center justify-center rounded-full bg-nevo-navy text-nevo-cream xl:size-5">
                               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                                 <path d="M12 5v9" />
                                 <path d="M8 11l4 4 4-4" />
@@ -297,18 +332,13 @@ export function InsightsView() {
             {data.concepts && data.concepts.length > 0 && (
               <>
                 <h3 className={SECTION_H3}>Where the class stands</h3>
-                <p className="mt-2 text-[13.5px] leading-[1.5] text-nevo-near-black/60 xl:max-w-[660px] xl:text-sm xl:leading-[1.55]">
-                  <span className="xl:hidden">
-                    Class average per concept, on two tracks. A gap points to
-                    the text, not the maths.
-                  </span>
-                  <span className="hidden xl:inline">
-                    Class average for each concept, on two tracks:
-                    understanding, and the reading load underneath it. When the
-                    two pull apart, it&apos;s usually the text, not the maths.
-                  </span>
+                {/* Desktop only: C09's tablet artboard draws no description here. */}
+                <p className="mt-2 hidden max-w-[660px] text-sm leading-[1.55] text-nevo-near-black/60 xl:block">
+                  Class average for each concept, on two tracks: understanding,
+                  and the reading load underneath it. When the two pull apart,
+                  it&apos;s usually the text, not the maths.
                 </p>
-                <div className="mt-3.5 flex flex-col gap-5 rounded-xl bg-nevo-cream-elevated px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-4 xl:gap-[22px] xl:px-[26px] xl:py-6">
+                <div className="mt-3.5 flex flex-col gap-5 rounded-[12px] bg-nevo-cream-elevated px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-4 xl:gap-[22px] xl:px-[26px] xl:py-6">
                   {data.concepts.map((c) => (
                     <div key={c.name}>
                       <MasteryDualTrack
@@ -337,7 +367,7 @@ export function InsightsView() {
                     <Link
                       key={r.name}
                       href={r.href}
-                      className="flex cursor-pointer flex-col rounded-xl bg-nevo-cream-elevated px-[18px] py-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-[filter,transform] hover:brightness-[0.985] active:scale-[0.99] xl:px-[22px] xl:py-5"
+                      className="flex cursor-pointer flex-col rounded-[12px] bg-nevo-cream-elevated px-[18px] py-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-[filter,transform] hover:brightness-[0.985] active:scale-[0.99] xl:px-[22px] xl:py-5"
                     >
                       <span className="text-[14.5px] font-semibold text-nevo-navy xl:text-[15px]">
                         {r.name}
@@ -358,7 +388,7 @@ export function InsightsView() {
             {data.lookingAhead && (
               <>
                 <h3 className={SECTION_H3}>Looking ahead</h3>
-                <div className="mt-3.5 rounded-xl border-l-[3px] border-nevo-violet bg-nevo-cream-elevated px-5 py-[18px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-4 xl:max-w-[660px] xl:px-6 xl:py-[22px]">
+                <div className="mt-3.5 rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-cream-elevated px-5 py-[18px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-4 xl:max-w-[660px] xl:px-6 xl:py-[22px]">
                   <p className="text-[14.5px] leading-[1.6] text-nevo-near-black/82 xl:text-[15.5px]">
                     <span className="xl:hidden">{data.lookingAhead.tablet}</span>
                     <span className="hidden xl:inline">

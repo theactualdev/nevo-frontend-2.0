@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { invitesApi, type JoinLookup } from "@/lib/api/invites";
+import { linkIsDead } from "@/lib/auth/linkAnswer";
 import { cn } from "@/lib/utils";
 import { PRIMARY_BTN, Spinner } from "../Roster/primitives";
 
@@ -14,71 +15,78 @@ import { PRIMARY_BTN, Spinner } from "../Roster/primitives";
  * message and gets opened on a phone. The desktop variant is the same page
  * with room around it, not a different design.
  *
- * It is also PUBLIC. `proxy.ts` guards only `/teacher`, `/admin` and the two
- * sign-in doors, so `/join/:token` needs no exemption - but that is worth
- * knowing rather than rediscovering: this page must never assume a session,
- * and `lookupJoin` is deliberately the only call it makes before someone
- * chooses to continue.
+ * It is also PUBLIC. `proxy.ts` guards `/teacher`, `/admin`, `/student` and
+ * the sign-in doors, and its matcher never sees `/join`, so `/join/:token`
+ * needs no exemption - but that is worth knowing rather than rediscovering:
+ * this page must never assume a session, and `lookupJoin` is deliberately the
+ * only call it makes before someone chooses to continue.
  *
- * Three states, and two of them are dead ends by design. An expired or revoked
- * link says so plainly and points at the school; it offers no retry, because
- * there is nothing the person holding it can do from here. Neither is styled
- * as an error - a link that ran out of time is not the reader's mistake.
+ * A dead link is a dead end by design. It says so plainly and points at the
+ * school; it offers no retry, because there is nothing the person holding it
+ * can do from here. It is not styled as an error - a link that ran out of time
+ * is not the reader's mistake.
  *
- * TODO(api): `GET /api/v1/join/{token}` returns
- * `{status, role, schoolName, expiresAt}` and no NAME, so D19's "Welcome,
- * Amara" cannot be personalised. The greeting is warm but general rather than
- * addressed to somebody we cannot name.
+ * D19 DRAWS "EXPIRED" AND "INVALID / REVOKED" APART, AND THE CONTRACT CANNOT.
+ * `JoinInspectionResponse.status` is the constant "valid", so a 200 is a good
+ * link, and every dead one is the same 404 - *"Join link is invalid or
+ * expired"*, live, 1 Oct. The expired panel used to be reached by comparing
+ * `expiresAt` with this device's clock, which the server had already done: on
+ * a tablet whose clock ran fast it turned a good invite away. Shipped reduced
+ * to the one dead panel, whose words fit both, until the wire tells them apart.
  *
- * DONE. This read: "Students do not: they land on onboarding with the token in
- * the query and nothing yet reads it... the student half of this handoff is not
- * finished until that route exists."
+ * D19'S "Welcome, Amara". `GET /api/v1/join/{token}` carries the invitee's
+ * name since 1 Oct; an invite without one keeps the plain "Welcome" rather
+ * than addressing somebody we cannot name.
  *
- * Four files read it. `app/student/onboarding/page.tsx` passes `?token=`
- * through as `joinToken`, `WelcomeScreen` persists it to the onboarding draft,
- * `NameAndAgeStep` routes on it, and `ObservedInteractionSequence` redeems it
- * with `invitesApi.acceptJoin`. Both halves of the handoff are finished.
+ * NO CHILD BRANCH (design, 1 Oct, D5). A child is never sent a link - a child
+ * has no email - so no child reaches this page, and it serves teacher
+ * invitations only. Children come in through the school code and their
+ * Student ID on 05 Entry (SCRUM-208). SCRUM-215 takes the student role out of
+ * the invitation machinery on the backend; until it lands
+ * `InvitableRole` still carries `student`, so a student link that resolves
+ * meets the dead-link panel rather than a door into onboarding that no longer
+ * exists. Its words fit: the link is no longer a way in, and the school
+ * administrator is who can say what is.
  */
 
-type Phase = "loading" | "ready" | "failed";
-
-/** Which panel to show. Decided once, when the lookup lands. */
-type Outcome = "valid" | "expired" | "invalid";
+/**
+ * `failed` is the lookup ANSWERING that the link is dead - see `linkIsDead`.
+ * `unreachable` is the lookup not answering at all - a network blip or a 5xx.
+ * They used to be one state, so a brief outage told a teacher or a child that
+ * their invite was "no longer valid" - on the one public page they reach from
+ * a message, with no way to try again.
+ */
+type Phase = "loading" | "ready" | "failed" | "unreachable";
 
 export function JoinLanding({ token }: { token: string }) {
   const [phase, setPhase] = useState<Phase>("loading");
   const [lookup, setLookup] = useState<JoinLookup | null>(null);
-  const [outcome, setOutcome] = useState<Outcome>("invalid");
+
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     invitesApi
       .lookupJoin(token)
       .then((res) => {
+        // A 200 IS the server saying the link is good: the status is a
+        // constant on the wire, and expiry was judged where the clock is
+        // right. See the docblock above.
         setLookup(res);
-        // The clock is read HERE, in an effect, not during render - and a
-        // link that says "valid" but is past its date is treated as expired,
-        // because the date is the fact and the label is a summary of it.
-        const status = (res.status ?? "").toLowerCase();
-        const past = Date.parse(res.expiresAt) < Date.now();
-        setOutcome(
-          status === "valid" && !past
-            ? "valid"
-            : status === "expired" || (status === "valid" && past)
-              ? "expired"
-              : "invalid",
-        );
         setPhase("ready");
       })
-      // A 404 or 410 is not an error state here - it IS the answer, and the
-      // "no longer valid" panel below is what it means.
-      .catch(() => setPhase("failed"));
-  }, [token]);
-
-  const valid = phase === "ready" && outcome === "valid";
-  const expired = phase === "ready" && outcome === "expired";
-  const invalid = phase === "failed" || (phase === "ready" && outcome === "invalid");
+      // A dead link is not an error state here - it IS the answer, and the
+      // "no longer valid" panel below is what it means. Anything else is the
+      // lookup failing to answer, which says nothing about the invite.
+      .catch((err: unknown) => {
+        setPhase(linkIsDead(err) ? "failed" : "unreachable");
+      });
+  }, [token, attempt]);
 
   const isTeacher = (lookup?.role ?? "").toLowerCase() === "teacher";
+  // A good link for a role this page no longer serves - see the docblock.
+  const valid = phase === "ready" && isTeacher;
+  const invalid = phase === "failed" || (phase === "ready" && !isTeacher);
+
   /*
    * `via=join` matters. The activation screen serves two token namespaces -
    * admin-team invitations and product-access join links - and posts to a
@@ -86,9 +94,7 @@ export function JoinLanding({ token }: { token: string }) {
    * the admin-team accept, which does not know them, so a teacher invited
    * from the admin console could never redeem their link.
    */
-  const onward = isTeacher
-    ? `/auth/teacher/activate?token=${encodeURIComponent(token)}&via=join`
-    : `/student/onboarding?token=${encodeURIComponent(token)}`;
+  const onward = `/auth/teacher/activate?token=${encodeURIComponent(token)}&via=join`;
 
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center bg-nevo-cream px-6 py-12">
@@ -130,25 +136,14 @@ export function JoinLanding({ token }: { token: string }) {
                 : "You have been invited to Nevo"}
             </p>
             <h1 className="m-0 mt-3 text-[30px] font-semibold tracking-[-0.02em] text-nevo-near-black">
-              Welcome
+              {lookup?.firstName?.trim() ? `Welcome, ${lookup.firstName.trim()}` : "Welcome"}
             </h1>
             <p className="m-0 mt-2.5 text-[15px] text-nevo-near-black/62">
-              You are joining as {isTeacher ? "a teacher" : "a student"}
+              You are joining as a teacher
             </p>
             <Link href={onward} className={cn(PRIMARY_BTN, "mt-8 w-full justify-center")}>
               Get started
             </Link>
-          </>
-        ) : null}
-
-        {expired ? (
-          <>
-            <h1 className="m-0 text-[26px] font-semibold tracking-[-0.018em] text-nevo-near-black">
-              This invite has expired
-            </h1>
-            <p className="m-0 mt-3 text-[15px] leading-[1.6] text-nevo-near-black/62">
-              Contact your school administrator to request a new invite.
-            </p>
           </>
         ) : null}
 
@@ -160,6 +155,28 @@ export function JoinLanding({ token }: { token: string }) {
             <p className="m-0 mt-3 text-[15px] leading-[1.6] text-nevo-near-black/62">
               Contact your school administrator for help.
             </p>
+          </>
+        ) : null}
+
+        {phase === "unreachable" ? (
+          <>
+            <h1 className="m-0 text-[26px] font-semibold tracking-[-0.018em] text-nevo-near-black">
+              We couldn&rsquo;t check your invite just now
+            </h1>
+            <p className="m-0 mt-3 text-[15px] leading-[1.6] text-nevo-near-black/62">
+              Your link may be fine &ndash; we just couldn&rsquo;t reach Nevo.
+              Try again in a moment.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setPhase("loading");
+                setAttempt((n) => n + 1);
+              }}
+              className={cn(PRIMARY_BTN, "mx-auto mt-6")}
+            >
+              Try again
+            </button>
           </>
         ) : null}
       </div>

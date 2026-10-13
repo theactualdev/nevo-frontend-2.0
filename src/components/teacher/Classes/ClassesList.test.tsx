@@ -268,3 +268,53 @@ describe("the sample mark", () => {
     expect(container.querySelector("[data-nevo-sample]")).toBeNull();
   });
 });
+
+/**
+ * Design, 30 Sep: children sign in with the school code and their own Student
+ * ID, so a class code joins nobody to anything. The server still sends one.
+ */
+describe("the class code on a live class card", () => {
+  it("is not shown, on either layout", () => {
+    useTeacherClasses.mockReturnValue(
+      state({
+        classes: [],
+        liveClasses: [
+          {
+            assignmentId: "a-1",
+            classId: "c-1",
+            className: "JSS 2A",
+            classCode: "NEVO-2A",
+            role: "primary",
+            assignedAt: "2026-09-01T09:00:00Z",
+          },
+        ],
+        live: true,
+      }),
+    );
+
+    render(<ClassesList />);
+
+    expect(screen.getAllByText("JSS 2A")).toHaveLength(2);
+    expect(screen.queryByText(/NEVO-2A/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Class code/)).not.toBeInTheDocument();
+  });
+});
+
+describe("its title (C20)", () => {
+  it("is the screen's one h1", () => {
+    useTeacherClasses.mockReturnValue(state({ loading: false }));
+    render(<ClassesList />);
+
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("My Classes");
+  });
+
+  it("is the empty state's sentence when there are no classes yet", () => {
+    useTeacherClasses.mockReturnValue(state({ loading: false, classes: [] }));
+    render(<ClassesList />);
+
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      "Your classes will appear here once assigned",
+    );
+  });
+});

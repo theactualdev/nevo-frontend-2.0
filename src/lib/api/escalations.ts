@@ -19,9 +19,9 @@ import { api } from "./client";
  * stay. Do not assemble a summary here and post it; it would be a second,
  * divergent account of the same child.
  *
- * `GET` is the SENCo/admin view. It is typed here because the escalation is
- * one object with two readers, and the admin console will want this exact
- * shape - but nothing in the teacher console calls it. A teacher's own
+ * `GET` is the SENCo/admin view: the admin console's Learning Support screen
+ * reads it for D8's "Escalated by a teacher" - but nothing in the teacher
+ * console calls it. A teacher's own
  * "already shared" state is deliberately NOT read back from it: whether a
  * teacher may list escalations at all is untested, and a 403 rendered as
  * "not shared yet" would be a worse answer than showing nothing.
@@ -57,7 +57,18 @@ export interface Escalation {
   recentPicture: string;
   generatedAt: string;
   acknowledged: boolean;
+  /** Who marked it as seen and when, since 13 Oct - what the teacher is told. */
+  acknowledgedAt?: string | null;
+  acknowledgedBy?: string | null;
+  acknowledgedByName?: string | null;
 }
+
+/**
+ * `GET /api/v1/escalations` answers the school's newest 100, seen ones
+ * included, and takes no paging. A full page may have left older open ones
+ * behind, so it is not a total and the all-clear may not be said on it.
+ */
+export const ESCALATION_PAGE = 100;
 
 export const escalationsApi = {
   /** Raise a concern with the SENCo. 201 on success; 422 on a rejected body. */
@@ -66,4 +77,11 @@ export const escalationsApi = {
 
   /** The SENCo/admin inbox. Not called from the teacher console - see above. */
   list: () => api.get<Escalation[]>("/api/v1/escalations"),
+
+  /**
+   * Mark a concern as seen. Learning Support holders only (403
+   * `learning_support_role_required`); the first acknowledgement stands.
+   */
+  acknowledge: (escalationId: string) =>
+    api.post<Escalation>(`/api/v1/escalations/${encodeURIComponent(escalationId)}/acknowledge`),
 };

@@ -1,17 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { ApiError } from "@/lib/api/client";
-import type { GrowthNarrative, ParentChild } from "@/lib/api/parent";
+import type { ChildSubjectProgress, ParentChild } from "@/lib/api/parent";
 
-const { myChildren, childGrowth, getSession } = vi.hoisted(() => ({
+const { myChildren, subjectProgress, getSession } = vi.hoisted(() => ({
   myChildren: vi.fn(),
-  childGrowth: vi.fn(),
+  subjectProgress: vi.fn(),
   getSession: vi.fn(),
 }));
 
 // Replaced wholesale - see ParentDataManagement.test.tsx for why importOriginal
 // deadlocks the jsdom worker here.
-vi.mock("@/lib/api/parent", () => ({ parentApi: { myChildren, childGrowth } }));
+vi.mock("@/lib/api/parent", () => ({ parentApi: { myChildren, subjectProgress } }));
 vi.mock("@/lib/auth/session", () => ({ getSession }));
 
 import { ParentHome } from "./ParentHome";
@@ -37,28 +37,26 @@ const CHILD: ParentChild = {
 
 const SIBLING: ParentChild = { ...CHILD, studentId: "s-2", firstName: "Tunde" };
 
-const growthFor = (name: string, id: string): GrowthNarrative => ({
+/** A week in which one subject moved, named so a test can tell whose it is. */
+const weekFor = (id: string, topic: string): ChildSubjectProgress => ({
   studentId: id,
-  studentFirstName: name,
-  headline: "Real change",
-  summary: `${name} is settling in.`,
-  statements: [
+  window: { startsOn: "2026-10-05", endsOn: "2026-10-11", state: "in_term", inProgress: false },
+  subjects: [
     {
-      dimension: "connecting_ideas",
-      trend: "growing",
-      statement: `${name} is carrying ideas between subjects.`,
+      subjectId: `${id}-maths`,
+      subjectName: "Mathematics",
+      state: "active",
+      covered: [topic],
+      masteredThisWindow: [],
+      stillWorkingOn: [],
+      masteredBeforeWindow: 0,
     },
   ],
-  periodStart: "2026-06-12",
-  periodEnd: "2026-09-10",
-  comparisonStart: "2026-03-14",
-  comparisonEnd: "2026-06-11",
-  generatedAt: "2026-09-10T09:00:00Z",
 });
 
 beforeEach(() => {
   myChildren.mockReset();
-  childGrowth.mockReset();
+  subjectProgress.mockReset();
   getSession.mockReset();
   getSession.mockReturnValue({
     token: "t",
@@ -67,8 +65,8 @@ beforeEach(() => {
     role: "parent_guardian",
   });
   myChildren.mockResolvedValue([CHILD]);
-  childGrowth.mockImplementation(async (id: string) =>
-    growthFor(id === "s-2" ? "Tunde" : "Amara", id),
+  subjectProgress.mockImplementation(async (id: string) =>
+    weekFor(id, id === "s-2" ? "Tunde's topic" : "Amara's topic"),
   );
 });
 
@@ -142,12 +140,22 @@ describe("a parent who is not signed in", () => {
 });
 
 describe("one child", () => {
-  it("goes straight to the growth view, with no list of one to pick from", async () => {
+  it("goes straight to the week, with no list of one to pick from", async () => {
     render(<ParentHome />);
 
-    expect(await screen.findByText(/How Amara Is Growing/)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Amara’s week" })).toBeInTheDocument();
+    expect(screen.getByText("Amara's topic")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Amara" })).not.toBeInTheDocument();
-    expect(childGrowth).toHaveBeenCalledWith("s-1");
+    expect(subjectProgress).toHaveBeenCalledWith("s-1");
+  });
+
+  it("no longer shows the struck growth view in any form", async () => {
+    // D15d, struck 20 Sep: "a score about a named child". It was this page.
+    render(<ParentHome />);
+    await screen.findByRole("heading", { name: "Amara’s week" });
+    const text = document.body.textContent ?? "";
+    expect(text).not.toMatch(/Is Growing|Staying with hard problems|Knowing what|Connecting ideas|Learning new things faster/);
+    expect(text).not.toMatch(/\bGrowing\b|Not enough yet|Starting out/);
   });
 });
 
@@ -159,27 +167,32 @@ describe("more than one child", () => {
     expect(await screen.findByRole("button", { name: "Amara" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Tunde" })).toBeInTheDocument();
     expect(screen.getByText(/Choose a child/i)).toBeInTheDocument();
-    expect(childGrowth).not.toHaveBeenCalled();
+    expect(subjectProgress).not.toHaveBeenCalled();
   });
 
-  it("never shows one child's narrative under another child's name", async () => {
-    // The failure worth guarding. Leaving the previous narrative on screen
-    // while the next loads would attribute one child's growth to their sibling.
+  it("never shows one child's week under another child's name", async () => {
+    // The failure worth guarding. Leaving the previous week on screen while
+    // the next loads would attribute one child's work to their sibling.
     myChildren.mockResolvedValue([CHILD, SIBLING]);
     render(<ParentHome />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Amara" }));
-    expect(await screen.findByText(/How Amara Is Growing/)).toBeInTheDocument();
+    expect(await screen.findByText("Amara's topic")).toBeInTheDocument();
 
-    let release: (v: GrowthNarrative) => void = () => {};
-    childGrowth.mockReturnValueOnce(new Promise<GrowthNarrative>((r) => { release = r; }));
+    let release: (v: ChildSubjectProgress) => void = () => {};
+    subjectProgress.mockReturnValueOnce(
+      new Promise<ChildSubjectProgress>((r) => {
+        release = r;
+      }),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Tunde" }));
 
-    // Mid-flight: Amara's narrative is GONE, not lingering under Tunde's name.
-    expect(screen.queryByText(/How Amara Is Growing/)).not.toBeInTheDocument();
+    // Mid-flight: Amara's week is GONE, not lingering under Tunde's name.
+    expect(screen.queryByText("Amara's topic")).not.toBeInTheDocument();
 
-    release(growthFor("Tunde", "s-2"));
-    expect(await screen.findByText(/How Tunde Is Growing/)).toBeInTheDocument();
+    release(weekFor("s-2", "Tunde's topic"));
+    expect(await screen.findByText("Tunde's topic")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Tunde’s week" })).toBeInTheDocument();
   });
 });
 
@@ -191,8 +204,8 @@ describe("edges", () => {
     expect(await screen.findByText(/Nothing to show yet/i)).toBeInTheDocument();
   });
 
-  it("does not blame the parent when the growth read fails", async () => {
-    childGrowth.mockRejectedValue(new ApiError(500, "boom"));
+  it("does not blame the parent when the week can't be read", async () => {
+    subjectProgress.mockRejectedValue(new ApiError(500, "boom"));
     render(<ParentHome />);
 
     expect(await screen.findByText(/couldn’t load this just now/i)).toBeInTheDocument();

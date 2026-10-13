@@ -4,7 +4,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 const { detail, useCurrentUser, start } = vi.hoisted(() => ({
   detail: vi.fn(),
   useCurrentUser: vi.fn(),
-  start: vi.fn(),
+  start: vi.fn().mockResolvedValue("staged"),
 }));
 vi.mock("@/lib/api/lessons", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/lessons")>();
@@ -82,7 +82,7 @@ beforeEach(() => {
     modules: [],
     confirmationSummary: null,
   });
-  start.mockReset();
+  start.mockReset().mockResolvedValue("staged");
   useCurrentUser.mockReset().mockReturnValue(identity(["Mathematics", "English"]));
   clearSession();
   window.localStorage.clear();

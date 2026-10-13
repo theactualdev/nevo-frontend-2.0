@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
   exportApi,
@@ -8,9 +7,16 @@ import {
   type IepExportShare,
 } from "@/lib/api/export";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import { studentsApi, type AdminStudentRow, type ParentLink } from "@/lib/api/students";
 import { cn } from "@/lib/utils";
 import { ReadFailed } from "../ReadFailed";
+import { NoAccess, failureKind } from "../NoAccess";
+import { BackLink } from "../BackLink";
+import type { Back } from "../back";
+import { useLearningSupport } from "../LearningSupport/useLearningSupport";
+import { NEEDS_LEARNING_SUPPORT } from "../LearningSupport/Unavailable";
+import { LEARNING_SUPPORT_REQUIRED, refusedWith } from "@/lib/api/learningSupport";
 import {
   Avatar,
   CARD,
@@ -159,10 +165,18 @@ function iso(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-export function IepExporterView() {
+export function IepExporterView({
+  initialStudentId = "",
+  back = null,
+}: {
+  /** The child to open on, from `?student=` - kept only if they are on the roster. */
+  initialStudentId?: string;
+  /** Where the admin came from - a learner's profile, say. See `back.ts`. */
+  back?: Back | null;
+} = {}) {
   const [phase, setPhase] = useState<Phase>("picking");
   const [students, setStudents] = useState<AdminStudentRow[]>([]);
-  const [studentId, setStudentId] = useState("");
+  const [studentId, setStudentId] = useState(initialStudentId);
   /** Distinct from "no students": one is a school, the other is a GET. */
   const [studentsFailed, setStudentsFailed] = useState(false);
   /** So a retry that fails again still visibly did something. */
@@ -174,9 +188,43 @@ export function IepExporterView() {
   /** The reviewer's own note. Written on finalise, never shared with a parent. */
   const [note, setNote] = useState("");
   const me = useCurrentUser();
+  /*
+   * SCRUM-247: without Learning Support the exporter is unavailable - the page
+   * is still here and says why, rather than a picker that would draft a child's
+   * report for someone the school has not chosen to see it. Every export
+   * route enforces the role server-side since 13 Oct, so a refusal met along
+   * the way says the same thing.
+   */
+  const { holders: ls } = useLearningSupport();
+  const [roleRefused, setRoleRefused] = useState(false);
   const [guardians, setGuardians] = useState<ParentLink[]>([]);
   const [guardiansFailed, setGuardiansFailed] = useState(false);
   const [shareFailed, setShareFailed] = useState(false);
+  /**
+   * The server's reason a share was REFUSED - the guardian is not linked to
+   * this child. Nothing was shared, so this is said where the share is, not
+   * as "you don't have access to the IEP exporter".
+   */
+  const [shareRefused, setShareRefused] = useState<string | null>(null);
+  /**
+   * FINALISING IS THE SENCo's, BY ROLE. The backend refuses it to any account
+   * whose role is not `senco_admin` (403 `senco_review_required`) - a role,
+   * not a scope, so an admin holding every scope still cannot. That refusal
+   * used to turn the whole page into "You don't have access to the IEP
+   * exporter" (QA, 10 Oct), over a draft the admin had every right to write.
+   */
+  const [finaliseRefused, setFinaliseRefused] = useState(false);
+  /*
+   * A 403 from any call here is this admin's scope, not a failure. It used to
+   * read "Something went wrong... give it another try", and no retry grants a
+   * scope - so it says what it is instead.
+   */
+  const [denied, setDenied] = useState(false);
+  const failWith = (err: unknown) => {
+    if (refusedWith(err, LEARNING_SUPPORT_REQUIRED)) setRoleRefused(true);
+    if (failureKind(err) === "denied") setDenied(true);
+    setPhase("failed");
+  };
   /*
    * NULL IS "WE HAVE NOT LOOKED", NOT "NOBODY". The empty array is a real
    * answer - this export has reached no guardian - and it is now a fact rather
@@ -220,8 +268,13 @@ export function IepExporterView() {
       .then((rows) => {
         setStudents(rows);
         setStudentsFailed(false);
+        // An id from the address that is not on this school's roster is not
+        // a child to preselect - the picker starts empty instead.
+        setStudentId((cur) => (rows.some((r) => r.id === cur) ? cur : ""));
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        if (refusedWith(err, LEARNING_SUPPORT_REQUIRED)) setRoleRefused(true);
+        if (failureKind(err) === "denied") setDenied(true);
         setStudents([]);
         setStudentsFailed(true);
       })
@@ -276,7 +329,7 @@ export function IepExporterView() {
         setPhase(d.status === "final" ? "final" : "draft");
         loadGuardians(studentId);
       })
-      .catch(() => setPhase("failed"));
+      .catch(failWith);
   };
 
   const saveDraft = () => {
@@ -292,7 +345,7 @@ export function IepExporterView() {
         setPhase(d.status === "final" ? "final" : "draft");
         setTimeout(() => setSavedAt(false), 2000);
       })
-      .catch(() => setPhase("failed"));
+      .catch(failWith);
   };
 
   const reviewedOn =
@@ -306,6 +359,9 @@ export function IepExporterView() {
   const reviewedByMe = Boolean(
     draft?.reviewedByUserId && me?.userId && draft.reviewedByUserId === me.userId,
   );
+
+  /** Known not to be the SENCo, before asking. Unknown yet: let the server say. */
+  const mayFinalise = !me || me.role === "senco_admin";
 
   const finalise = () => {
     if (!draft) return;
@@ -333,7 +389,14 @@ export function IepExporterView() {
         setContent(d.exportContent);
         setPhase("final");
       })
-      .catch(() => setPhase("failed"));
+      .catch((err: unknown) => {
+        if (err instanceof ApiError && apiErrorCode(err.detail) === "senco_review_required") {
+          setFinaliseRefused(true);
+          setPhase("draft");
+          return;
+        }
+        failWith(err);
+      });
   };
 
   /*
@@ -366,6 +429,7 @@ export function IepExporterView() {
     if (!draft) return;
     setPhase("sharing");
     setShareFailed(false);
+    setShareRefused(null);
     exportApi
       .share(draft.id, { parentId })
       .then(() => {
@@ -374,7 +438,19 @@ export function IepExporterView() {
         // attempt that came before this one and did not confirm.
         loadShares(draft.id);
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        // Refused for a reason that is not this admin's access: the guardian
+        // is not linked to this child. Nothing was shared, and we know it.
+        if (err instanceof ApiError && apiErrorCode(err.detail) === "parent_share_target_invalid") {
+          setShareRefused(
+            apiErrorMessage(err.detail) ??
+              "That guardian isn't linked to this child, so nothing was shared.",
+          );
+          setPhase("final");
+          return;
+        }
+        if (refusedWith(err, LEARNING_SUPPORT_REQUIRED)) setRoleRefused(true);
+        if (failureKind(err) === "denied") setDenied(true);
         // A failed SHARE is the one write here whose outcome the client
         // genuinely cannot know: a transport failure (ApiError status 0) can
         // leave a share committed server-side. Generate, save and finalise
@@ -393,15 +469,31 @@ export function IepExporterView() {
       });
   };
 
+  if (ls?.viewerHoldsIt === false || roleRefused) {
+    return (
+      <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
+        <div className="mx-auto max-w-[780px]">
+          <BackLink back={back} fallback={{ href: "/admin/senco", label: "Learning Support" }} />
+          <h2 className="m-0 mt-3 text-[28px] font-semibold tracking-[-0.018em] text-nevo-near-black">
+            Create a progress report
+          </h2>
+          <div className={cn(CARD, "mt-6 px-[26px] py-7")}>
+            <h3 className="m-0 text-[17px] font-semibold text-nevo-near-black">
+              Progress reports aren&rsquo;t available to you
+            </h3>
+            <p className="mt-2 max-w-[56ch] text-sm leading-[1.55] text-nevo-near-black/62">
+              {NEEDS_LEARNING_SUPPORT}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
       <div className="mx-auto max-w-[780px]">
-        <Link
-          href="/admin/senco"
-          className="text-[13.5px] font-semibold text-nevo-navy hover:opacity-75"
-        >
-          &larr; Learning Support
-        </Link>
+        <BackLink back={back} fallback={{ href: "/admin/senco", label: "Learning Support" }} />
 
         {/* -------------------------------------------------------- PICKING */}
         {phase === "picking" || phase === "generating" ? (
@@ -437,7 +529,7 @@ export function IepExporterView() {
                       <p className="mt-1.5 text-[13px] text-nevo-near-black/45">
                         Looking up your students&hellip;
                       </p>
-                    ) : studentsFailed ? (
+                    ) : studentsFailed && !denied ? (
                       <ReadFailed
                         className="mt-1.5"
                         what="your student list"
@@ -587,7 +679,7 @@ export function IepExporterView() {
                 <button
                   type="button"
                   onClick={finalise}
-                  disabled={phase !== "draft"}
+                  disabled={phase !== "draft" || !mayFinalise || finaliseRefused}
                   className={PRIMARY_BTN}
                 >
                   {phase === "finalising" ? "Finalising…" : "Finalise report"}
@@ -605,10 +697,17 @@ export function IepExporterView() {
                     Saved just now
                   </span>
                 ) : null}
-                <p className="m-0 w-full text-[13px] text-nevo-near-black/55">
-                  Finalising locks the wording. You can still share it
-                  afterwards.
-                </p>
+                {!mayFinalise || finaliseRefused ? (
+                  <p className="m-0 w-full text-[13px] leading-[1.5] text-nevo-navy">
+                    Only your school&rsquo;s SENCo can finalise a report. Save
+                    your draft, and they can finalise it from here.
+                  </p>
+                ) : (
+                  <p className="m-0 w-full text-[13px] text-nevo-near-black/55">
+                    Finalising locks the wording. You can still share it
+                    afterwards.
+                  </p>
+                )}
               </div>
             </div>
           </>
@@ -709,6 +808,11 @@ export function IepExporterView() {
                 * is suppressed - it only fires when we looked and found
                 * nothing, which is the case where sending again is right.
                 */}
+              {shareRefused && phase !== "shared" ? (
+                <p className="m-0 mt-3 rounded-[10px] bg-nevo-violet/24 px-4 py-3 text-[13.5px] leading-[1.55] text-nevo-navy">
+                  {shareRefused}
+                </p>
+              ) : null}
               {shareFailed && phase !== "shared" && !(shares && shares.length > 0) ? (
                 <p className="m-0 mt-3 rounded-[10px] bg-nevo-violet/24 px-4 py-3 text-[13.5px] leading-[1.55] text-nevo-navy">
                   The last attempt didn&rsquo;t confirm. It may still have
@@ -787,7 +891,8 @@ export function IepExporterView() {
         ) : null}
 
         {/* --------------------------------------------------------- FAILED */}
-        {phase === "failed" ? (
+        {denied ? <NoAccess className="mt-6" what="the IEP exporter" /> : null}
+        {phase === "failed" && !denied ? (
           <div className={cn(CARD, "mt-6 px-[26px] py-7")}>
             <h3 className="text-[17px] font-semibold text-nevo-near-black">
               Something went wrong. We&rsquo;re on it.

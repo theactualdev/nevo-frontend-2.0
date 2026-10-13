@@ -103,3 +103,55 @@ describe("the breathing mark", () => {
     expect(mark?.className).toContain("motion-safe:animate-nevo-breathe");
   });
 });
+
+/**
+ * A date of birth the school and the parent disagree about (backend, B64), in
+ * the Entry frame's "On hold" words (D121, 6 Oct): the words change, and
+ * nothing else may.
+ */
+describe("held at the age check", () => {
+  it("says the Entry frame's On hold words, verbatim (D121)", () => {
+    render(<WaitingOnConsent hold="age-check" />);
+
+    expect(
+      screen.getByRole("heading", {
+        name: "Nevo is sorting something out with your school",
+      }),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        "It's nothing you did, and there's nothing for you to fix.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("names no age, date, record, check or verification, and no timeframe", () => {
+    // The frame: "It never names age, dates, records, checks or verification,
+    // never blames the school", and "no timeframe, because nobody controls
+    // one" - which is what backend's "a day or two" stand-in promised.
+    render(<WaitingOnConsent hold="age-check" />);
+
+    expect(document.body.textContent).not.toMatch(
+      /birth|\bage\b|date|record|check|verif|parent|day|soon|ask/i,
+    );
+  });
+
+  it("offers no way onward, polls nothing and fetches nothing, like 00d", () => {
+    const setInterval = vi.spyOn(globalThis, "setInterval");
+    const setTimeout = vi.spyOn(globalThis, "setTimeout");
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    render(<WaitingOnConsent hold="age-check" />);
+
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
+    expect(screen.queryAllByRole("link")).toHaveLength(0);
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(setInterval).not.toHaveBeenCalled();
+    expect(setTimeout).not.toHaveBeenCalled();
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    setInterval.mockRestore();
+    setTimeout.mockRestore();
+    fetchSpy.mockRestore();
+  });
+});

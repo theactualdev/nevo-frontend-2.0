@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ApiError } from "@/lib/api/client";
+import { ApiError, incidentId } from "@/lib/api/client";
 import { awaitParseRun, contentApi } from "@/lib/api/content";
 import { lessonsApi, type LessonDetailResponse } from "@/lib/api/lessons";
 
@@ -33,6 +33,14 @@ export type RegenerateState = "idle" | "running" | "failed";
 
 export interface LessonRegenerate {
   state: RegenerateState;
+  /**
+   * The parse's own sentence when the re-read FAILED, from the field that
+   * promises prose. It was wrapped in an error and thrown away, so a teacher
+   * got a generic line while the upload screens showed the server's.
+   */
+  failureReason: string | null;
+  /** The backend's reference for a failure, to quote in a report. */
+  incident: string | null;
   /** Re-read the lesson. Ignored while one is already running. */
   run: (lessonId: string) => void;
 }
@@ -41,6 +49,8 @@ export function useLessonRegenerate(
   onLesson: (lesson: LessonDetailResponse) => void,
 ): LessonRegenerate {
   const [state, setState] = useState<RegenerateState>("idle");
+  const [failureReason, setFailureReason] = useState<string | null>(null);
+  const [incident, setIncident] = useState<string | null>(null);
   const abort = useRef<AbortController | null>(null);
   const running = useRef(false);
   const onLessonRef = useRef(onLesson);
@@ -67,6 +77,8 @@ export function useLessonRegenerate(
     const controller = new AbortController();
     abort.current = controller;
     setState("running");
+    setFailureReason(null);
+    setIncident(null);
 
     void contentApi
       .regenerate(lessonId)
@@ -75,6 +87,9 @@ export function useLessonRegenerate(
           signal: controller.signal,
         });
         if (parseRun.status === "failed") {
+          // Kept for the screen, not only thrown: these are the run's answer.
+          setFailureReason(parseRun.failureReason ?? null);
+          setIncident(parseRun.incidentId ?? null);
           throw new ApiError(
             500,
             parseRun.failureReason ?? "The parse failed.",
@@ -88,8 +103,11 @@ export function useLessonRegenerate(
         setState("idle");
         onLessonRef.current(lesson);
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         running.current = false;
+        // A request that failed outright may still carry a reference.
+        const ref = err instanceof ApiError ? incidentId(err.detail) : null;
+        if (ref) setIncident(ref);
         // An aborted poll is not a failure the teacher should be told about:
         // they left the screen.
         if (controller.signal.aborted) return;
@@ -97,5 +115,5 @@ export function useLessonRegenerate(
       });
   }, []);
 
-  return { state, run };
+  return { state, run, failureReason, incident };
 }

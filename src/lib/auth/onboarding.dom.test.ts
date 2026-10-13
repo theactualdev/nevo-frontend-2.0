@@ -1,16 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   clearOnboardingDraft,
+  entryIdentityFromDraft,
   mergeOnboardingDraft,
   rememberOnboardedStudent,
+  startOnboardingDraft,
 } from "./onboarding";
 import { clearSession, getRememberedProfile } from "./session";
 
 /**
  * A remembered profile the server cannot authenticate is worse than none.
  *
- * `POST /auth/login/pin` takes THREE things — `schoolCode`, `loginIdentifier`
- * and the PIN. If the device remembers a child against a credential missing any
+ * `POST /auth/login/pin` takes THREE things — `schoolCode`, the identifier
+ * (sent as `admissionNumber`) and the PIN. If the device remembers a child against a credential missing any
  * of them, the next morning it shows that child their own avatar and "Welcome
  * back", they type the PIN they were told to remember, and they get a 401 they
  * can do nothing about. A child who simply has no account at least knows where
@@ -55,9 +57,9 @@ describe("rememberOnboardedStudent", () => {
   });
 
   it("refuses to remember a child with no school code", () => {
-    // THE INVITE-LINK CHILD. `join/{token}` returns a `schoolName` and never a
-    // code, so this is every child who arrived by QR or link. Remembering them
-    // against "" would greet them by name tomorrow and then 401 them.
+    // A run that never started on 05 - a typed URL straight into the
+    // sequence. Remembering them against "" would greet them by name tomorrow
+    // and then 401 them.
     mergeOnboardingDraft({ name: "Amara Kalu" });
 
     expect(rememberOnboardedStudent(SERVER_IDENTIFIER)).toBe(false);
@@ -119,5 +121,32 @@ describe("rememberOnboardedStudent", () => {
     expect(rememberOnboardedStudent(SERVER_IDENTIFIER)).toBe(true);
 
     expect(window.sessionStorage.getItem("nevo.onboarding.draft")).toBeNull();
+  });
+});
+
+/**
+ * Who 05 matched, read back at the PIN step. Both halves or nothing: half a
+ * pair identifies nobody, and a PIN attached to nobody is the bug.
+ */
+describe("entryIdentityFromDraft", () => {
+  it("is the pair 05 matched", () => {
+    startOnboardingDraft({ schoolCode: "K7DQ", admissionNumber: "BGA/2031" });
+
+    expect(entryIdentityFromDraft()).toEqual({
+      schoolCode: "K7DQ",
+      admissionNumber: "BGA/2031",
+    });
+  });
+
+  it("is nothing when the run did not start on 05", () => {
+    expect(entryIdentityFromDraft()).toBeNull();
+  });
+
+  it("is nothing with only half the pair", () => {
+    startOnboardingDraft({ schoolCode: "K7DQ" });
+    expect(entryIdentityFromDraft()).toBeNull();
+
+    startOnboardingDraft({ schoolCode: "K7DQ", admissionNumber: "   " });
+    expect(entryIdentityFromDraft()).toBeNull();
   });
 });

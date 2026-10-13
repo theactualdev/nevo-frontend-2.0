@@ -6,6 +6,7 @@ import { useStudentLesson } from "@/hooks/useStudentLesson";
 import { useHydrated } from "@/hooks/useHydrated";
 import { LessonLoadingSkeleton } from "./LessonLoadingSkeleton";
 import { LessonMessage } from "./LessonMessage";
+import { LessonNotOpened } from "./LessonNotOpened";
 import { LessonSummaryScreen } from "./LessonSummaryScreen";
 import { ReviewAnswersScreen } from "./ReviewAnswersScreen";
 
@@ -40,9 +41,8 @@ export function LessonEndingRoute({
   screen: "summary" | "review";
 }) {
   const router = useRouter();
-  const { lesson, live, loading, failed, empty } = useStudentLesson(lessonId, {
-    adapt: false,
-  });
+  const { lesson, live, loading, failed, empty, progressRow } =
+    useStudentLesson(lessonId, { adapt: false });
   const hydrated = useHydrated();
 
   // The server cannot read the token, so it cannot know whether this lesson
@@ -66,8 +66,8 @@ export function LessonEndingRoute({
   if (lesson && screen === "summary" && !lesson.summary) {
     return (
       <LessonMessage
-        title="This lesson isn’t ready yet"
-        body="There’s no summary for it yet. Your teacher will know when there is."
+        title="This lesson isn't ready yet"
+        body="There's no summary for it yet. Your teacher will know when there is."
         actionLabel="Back to my lessons"
         onAction={() => router.push(LESSONS_HREF)}
       />
@@ -77,9 +77,11 @@ export function LessonEndingRoute({
   if (lesson) {
     const view =
       screen === "summary" ? (
-        <LessonSummaryScreen lesson={lesson} />
+        // The row carries the check-in's outcome for a lesson finished on
+        // another visit (B84) - see the screen.
+        <LessonSummaryScreen lesson={lesson} progressRow={progressRow} />
       ) : (
-        <ReviewAnswersScreen lesson={lesson} />
+        <ReviewAnswersScreen lesson={lesson} live={live} />
       );
     /*
      * `live` false means one of the two authored lessons, which only a
@@ -96,8 +98,8 @@ export function LessonEndingRoute({
   if (failed) {
     return (
       <LessonMessage
-        title="We couldn’t open this just now"
-        body="It hasn’t gone anywhere. Give it a moment and try again."
+        title="We couldn't open this just now"
+        body="It hasn't gone anywhere. Give it a moment and try again."
         actionLabel="Try again"
         onAction={() => window.location.reload()}
         onBack={() => router.push(LESSONS_HREF)}
@@ -110,17 +112,15 @@ export function LessonEndingRoute({
    * segments. Either way there is nothing to summarise, and the child is told
    * that in their own words rather than dropped onto the app's "This page
    * doesn't exist", which is written for a developer and has no way back in.
+   * The 404 is the lesson route's own D90 screen, so the two cannot drift.
    */
+  if (!empty) {
+    return <LessonNotOpened onBack={() => router.push(LESSONS_HREF)} />;
+  }
   return (
     <LessonMessage
-      title={
-        empty ? "This lesson isn’t ready yet" : "We couldn’t find that lesson"
-      }
-      body={
-        empty
-          ? "Nevo is still getting it set up. Your teacher will know when it’s ready."
-          : "It may have been put away. Your other lessons are all still here."
-      }
+      title="This lesson isn't ready yet"
+      body="Nevo is still getting it set up. Your teacher will know when it's ready."
       actionLabel="Back to my lessons"
       onAction={() => router.push(LESSONS_HREF)}
     />

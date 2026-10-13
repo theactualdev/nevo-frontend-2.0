@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { classesApi, type AdminClass } from "@/lib/api/classes";
 import {
   EVENT_TYPE_OPTIONS,
@@ -12,8 +12,21 @@ import {
   type AdaptationEventRow,
   type AdaptationEventType,
 } from "@/lib/api/schoolIntelligence";
+import { readAcademic, schoolApi } from "@/lib/api/school";
 import { cn } from "@/lib/utils";
 import { NoAccess, failureKind } from "../NoAccess";
+import { BackLink } from "../BackLink";
+import type { Back } from "../back";
+import { ReadFailed } from "../ReadFailed";
+import {
+  currentHalfTerm,
+  customProblem,
+  rangeWords,
+  toYmd,
+  windowFor,
+  type HalfTerm,
+  type RangeChoice,
+} from "./logWindow";
 
 /**
  * D21 Adaptation log - the receipts behind "adaptations this week". A
@@ -32,9 +45,10 @@ import { NoAccess, failureKind } from "../NoAccess";
  * - Before / after. Each row expands to show what the lesson looked like
  *   either side of the change; the response carries `adaptation` and `trigger`
  *   and nothing describing the prior state. The expander shows what exists.
- * - The TYPE filter. `eventType` comes back on every row but is not a query
- *   parameter, and there is no enum for it, so there is nothing to populate a
- *   filter from. The date range is real - `dateFrom` - and is offered.
+ *
+ * THE RANGE IS THE FRAME'S NOW: This week, This half-term, Custom range - see
+ * `logWindow`. It was rolling 7, 30 and 120 days with the 120 labelled "This
+ * term", and `dateTo` was never sent.
  *
  * THE CLASS FILTER IS BUILT, AND WAS LISTED HERE AS IMPOSSIBLE. The marker read
  * "no endpoint lists classes, so neither filter has a source". `GET
@@ -86,11 +100,20 @@ const CHIP_MUTED =
 
 type Phase = "loading" | "ready" | "failed" | "denied";
 
-const RANGES = [
-  { label: "This week", days: 7 },
-  { label: "This month", days: 30 },
-  { label: "This term", days: 120 },
-] as const;
+const RANGES: { kind: RangeChoice["kind"]; label: string }[] = [
+  { kind: "week", label: "This week" },
+  { kind: "half-term", label: "This half-term" },
+  { kind: "custom", label: "Custom range…" },
+];
+
+const DATE_INPUT =
+  "h-[34px] cursor-pointer rounded-lg border border-nevo-near-black/12 bg-nevo-cream-elevated px-2.5 text-[13px] text-nevo-near-black outline-none focus:border-nevo-navy";
+
+/** The school's calendar, read for the half-term - see `logWindow`. */
+type Calendar =
+  | { state: "loading" }
+  | { state: "ready"; halfTerm: HalfTerm }
+  | { state: "failed" };
 
 /** A stable letter per learner, so rows stay comparable without a name. */
 function learnerTag(studentId: string, order: string[]): string {
@@ -117,12 +140,13 @@ function fmtTime(iso: string): string {
   return `${d.toLocaleDateString("en-GB", { day: "numeric", month: "short" })} · ${time}`;
 }
 
-export function AdaptationLogView() {
+export function AdaptationLogView({ back = null }: { back?: Back | null } = {}) {
   const [phase, setPhase] = useState<Phase>("loading");
   const [rows, setRows] = useState<AdaptationEventRow[]>([]);
   const [total, setTotal] = useState(0);
-  const [rangeIdx, setRangeIdx] = useState(0);
-  const [shown, setShown] = useState(PAGE);
+  const [choice, setChoice] = useState<RangeChoice>({ kind: "week" });
+  const [calendar, setCalendar] = useState<Calendar>({ state: "loading" });
+
   const [expanded, setExpanded] = useState<string | null>(null);
   const [classId, setClassId] = useState("");
   /*
@@ -170,37 +194,175 @@ export function AdaptationLogView() {
     loadClasses();
   }, [loadClasses]);
 
-  const range = RANGES[rangeIdx];
+  /*
+   * The school's terms, for "This half-term" only. Its own read and its own
+   * failure, like the class list: a calendar that will not load costs the
+   * half-term choice, never the log.
+   */
+  const loadCalendar = useCallback(() => {
+    schoolApi
+      .get()
+      .then((s) =>
+        setCalendar({
+          state: "ready",
+          halfTerm: currentHalfTerm(readAcademic(s).terms ?? [], Date.now()),
+        }),
+      )
+      .catch(() => setCalendar({ state: "failed" }));
+  }, []);
+
+  useEffect(() => {
+    loadCalendar();
+  }, [loadCalendar]);
+
+  const halfTerm = calendar.state === "ready" ? calendar.halfTerm : null;
+  const customIssue =
+    choice.kind === "custom" ? customProblem(choice.from, choice.to) : null;
+  /**
+   * What stands between the chosen range and a query, if anything. The log is
+   * not asked for a window nobody can name, and what was on screen for the
+   * previous one is not left standing under the new choice's name.
+   */
+  const blocked: "calendar-loading" | "calendar-failed" | "no-half-term" | "custom" | null =
+    choice.kind === "half-term"
+      ? calendar.state === "loading"
+        ? "calendar-loading"
+        : calendar.state === "failed"
+          ? "calendar-failed"
+          : halfTerm && "from" in halfTerm
+            ? null
+            : "no-half-term"
+      : customIssue
+        ? "custom"
+        : null;
+  const words = rangeWords(choice);
+
+  /*
+   * PAGED BY OFFSET, NOT BY A GROWING LIMIT.
+   *
+   * "Load earlier" used to raise `limit` by five and refetch everything. The
+   * contract caps `limit` at 100, so the twentieth press sent `limit=105`, got
+   * a 422, and the whole log was replaced by a failure card that "Try again"
+   * could never clear. Now the first page is five rows and each press fetches
+   * the next five at `offset = rows shown`, appended - the limit never grows.
+   *
+   * The window's start is fixed at the first load (`windowRef`), so later pages
+   * count from the same instant and a new adaptation arriving meanwhile does
+   * not shift every offset by one.
+   */
+  const windowRef = useRef<{
+    from: string;
+    to?: string;
+    cls: string;
+    kinds: AdaptationEventType[];
+    generation: number;
+  } | null>(null);
+  const generation = useRef(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreFailed, setMoreFailed] = useState(false);
+
+  const query = (
+    w: { from: string; to?: string; cls: string; kinds: AdaptationEventType[] },
+    offset: number,
+  ) =>
+    schoolIntelligenceApi.adaptationLog({
+      dateFrom: w.from,
+      // A custom range's end. Omitted otherwise: the log runs to now.
+      ...(w.to ? { dateTo: w.to } : {}),
+      limit: PAGE,
+      offset,
+      // OMITTED, not empty: `classId` is a uuid on the contract and "" is a 422.
+      ...(w.cls ? { classId: w.cls } : {}),
+      ...(w.kinds.length ? { eventType: w.kinds } : {}),
+    });
 
   const load = useCallback(
     (
-      days: number,
-      limit: number,
+      span: { dateFrom: string; dateTo?: string },
       cls: string,
       kinds: AdaptationEventType[],
     ) => {
-      const from = new Date(Date.now() - days * 864e5).toISOString();
-      // OMITTED, not empty: `classId` is a uuid on the contract and "" is a 422.
-      schoolIntelligenceApi
-        .adaptationLog({
-          dateFrom: from,
-          limit,
-          ...(cls ? { classId: cls } : {}),
-          ...(kinds.length ? { eventType: kinds } : {}),
-        })
+      generation.current += 1;
+      const w = {
+        from: span.dateFrom,
+        to: span.dateTo,
+        cls,
+        kinds,
+        generation: generation.current,
+      };
+      windowRef.current = w;
+      query(w, 0)
         .then((log) => {
+          if (w.generation !== generation.current) return;
+          // Reset here, not before the request: an earlier page's failure
+          // belongs to the list this one replaces.
+          setMoreFailed(false);
           setRows(log.events);
           setTotal(log.total);
           setPhase("ready");
         })
-        .catch((err: unknown) => setPhase(failureKind(err)));
+        .catch((err: unknown) => {
+          if (w.generation !== generation.current) return;
+          setPhase(failureKind(err));
+        });
     },
     [],
   );
 
+  const loadMore = () => {
+    const w = windowRef.current;
+    if (!w || loadingMore) return;
+    setLoadingMore(true);
+    setMoreFailed(false);
+    query(w, rows.length)
+      .then((log) => {
+        // A filter changed while this was in flight: it belongs to a list
+        // that is no longer on screen.
+        if (w.generation !== generation.current) return;
+        setRows((prev) => [...prev, ...log.events]);
+        setTotal(log.total);
+      })
+      // A failed page costs only itself - the rows already shown stay.
+      .catch(() => {
+        if (w.generation === generation.current) setMoreFailed(true);
+      })
+      .finally(() => setLoadingMore(false));
+  };
+
+  /** Query the chosen window, if there is one to query. */
+  const reload = useCallback(() => {
+    const span = windowFor(choice, Date.now(), halfTerm);
+    if (span) load(span, classId, types);
+  }, [load, choice, halfTerm, classId, types]);
+
   useEffect(() => {
-    load(range.days, shown, classId, types);
-  }, [load, range.days, shown, classId, types]);
+    reload();
+  }, [reload]);
+
+  /** D21's "Clear filters": every filter back to where the page opened. */
+  const anyFilter = choice.kind !== "week" || Boolean(classId) || types.length > 0;
+  const clearFilters = () => {
+    setChoice({ kind: "week" });
+    setClassId("");
+    setTypes([]);
+    setExpanded(null);
+  };
+
+  const pickRange = (kind: RangeChoice["kind"]) => {
+    if (kind === choice.kind) return;
+    setExpanded(null);
+    if (kind === "custom") {
+      // Opens on the week it replaces, so nothing jumps until a date is moved.
+      const today = new Date();
+      setChoice({
+        kind: "custom",
+        from: toYmd(new Date(today.getTime() - 7 * 864e5)),
+        to: toYmd(today),
+      });
+      return;
+    }
+    setChoice({ kind });
+  };
 
   // Order of first appearance decides the letters, so they read A, B, C down
   // the page rather than jumping about.
@@ -217,14 +379,12 @@ export function AdaptationLogView() {
 
   const pickClass = (next: string) => {
     setClassId(next);
-    setShown(PAGE);
     setExpanded(null);
   };
 
   /** Clearing the kind filter, from the row of chips or from the empty state. */
   const clearTypes = () => {
     setTypes([]);
-    setShown(PAGE);
     setExpanded(null);
   };
 
@@ -237,43 +397,33 @@ export function AdaptationLogView() {
     setTypes((prev) =>
       prev.includes(kind) ? prev.filter((k) => k !== kind) : [...prev, kind],
     );
-    setShown(PAGE);
     setExpanded(null);
   };
 
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
       <div className="mx-auto max-w-[820px]">
-        <Link
-          href="/admin/dashboard"
-          className="text-[13.5px] font-medium text-nevo-navy hover:underline"
-        >
-          &larr; School Overview
-        </Link>
+        <BackLink back={back} fallback={{ href: "/admin/dashboard", label: "School Overview" }} />
 
         <h2 className="mt-3 text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
           Adaptation log
         </h2>
-        {phase === "ready" && (
+        {phase === "ready" && !blocked && (
           <p className="mt-1.5 text-[15px] text-nevo-near-black/60">
             {total === 0
-              ? `No adaptations${scope} in the last ${range.days} days`
-              : `${total.toLocaleString("en-GB")} adaptation${total === 1 ? "" : "s"}${scope} in the last ${range.days} days`}
+              ? `No adaptations${scope} ${words}`
+              : `${total.toLocaleString("en-GB")} adaptation${total === 1 ? "" : "s"}${scope} ${words}`}
           </p>
         )}
 
         <div className="mt-5 flex flex-wrap items-center gap-2">
-          {RANGES.map((r, i) => (
+          {RANGES.map((r) => (
             <button
-              key={r.label}
+              key={r.kind}
               type="button"
-              onClick={() => {
-                setRangeIdx(i);
-                setShown(PAGE);
-                setExpanded(null);
-              }}
-              aria-pressed={i === rangeIdx}
-              className={cn(CHIP, i === rangeIdx ? CHIP_ON : CHIP_OFF)}
+              onClick={() => pickRange(r.kind)}
+              aria-pressed={choice.kind === r.kind}
+              className={cn(CHIP, choice.kind === r.kind ? CHIP_ON : CHIP_OFF)}
             >
               {r.label}
             </button>
@@ -332,7 +482,48 @@ export function AdaptationLogView() {
               </span>
             </label>
           )}
+
+          {/* D21's reset for the whole bar - type, class and range together.
+              "Show all kinds" below only ever cleared the types, and nothing
+              put the range back. */}
+          {anyFilter && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="ml-auto cursor-pointer px-1 text-[13px] font-semibold text-nevo-navy hover:opacity-75"
+            >
+              Clear filters
+            </button>
+          )}
         </div>
+
+        {choice.kind === "custom" && (
+          <div className="mt-2.5 flex flex-wrap items-center gap-2 text-[13px] text-nevo-near-black/62">
+            <label className="inline-flex items-center gap-2">
+              From
+              <input
+                type="date"
+                value={choice.from}
+                max={choice.to || undefined}
+                onChange={(e) => setChoice({ ...choice, from: e.target.value })}
+                className={DATE_INPUT}
+              />
+            </label>
+            <label className="inline-flex items-center gap-2">
+              to
+              <input
+                type="date"
+                value={choice.to}
+                min={choice.from || undefined}
+                onChange={(e) => setChoice({ ...choice, to: e.target.value })}
+                className={DATE_INPUT}
+              />
+            </label>
+            {customIssue && (
+              <span className="text-[13px] font-medium text-nevo-navy">{customIssue}</span>
+            )}
+          </div>
+        )}
 
         {/* D21's type filter. A second row rather than more chips on the
             first: eight options beside three ranges and a class select would
@@ -363,12 +554,49 @@ export function AdaptationLogView() {
           )}
         </div>
 
-        {phase === "loading" && (
+        {!blocked && phase === "loading" && (
           <div className={cn(CARD, "mt-5 h-[280px] animate-pulse")} />
         )}
 
+        {/* A range nobody can name is not queried - and the rows from the
+            last one are not left standing under its name. */}
+        {phase !== "denied" && blocked === "calendar-loading" && (
+          <div className={cn(CARD, "mt-5 h-[160px] animate-pulse")} />
+        )}
+        {phase !== "denied" && blocked === "calendar-failed" && (
+          <div className={cn(CARD, "mt-5 px-[26px] py-7")}>
+            <ReadFailed
+              what="your term dates"
+              onRetry={() => {
+                setCalendar({ state: "loading" });
+                loadCalendar();
+              }}
+            />
+          </div>
+        )}
+        {phase !== "denied" && blocked === "no-half-term" && (
+          <div className={cn(CARD, "mt-5 px-[26px] py-7")}>
+            <h3 className="text-[17px] font-semibold text-nevo-near-black">
+              {halfTerm && "missing" in halfTerm && halfTerm.missing === "term"
+                ? "Today isn’t inside any of your terms"
+                : "Your half-term dates aren’t set"}
+            </h3>
+            <p className="mt-2 max-w-[56ch] text-sm leading-[1.55] text-nevo-near-black/62">
+              {halfTerm && "missing" in halfTerm && halfTerm.missing === "term"
+                ? "This half-term comes from the term dates in Settings, and today falls outside all of them. Choose a custom range instead, or check your terms."
+                : "This half-term comes from the term dates in Settings, and this term has no half-term break recorded. Add it there, or choose a custom range."}
+            </p>
+            <Link
+              href="/admin/settings#settings-school"
+              className="mt-4 inline-block text-[13.5px] font-semibold text-nevo-navy hover:underline"
+            >
+              Your term dates in Settings
+            </Link>
+          </div>
+        )}
+
         {phase === "denied" && <NoAccess what="the adaptation log" />}
-        {phase === "failed" && (
+        {!blocked && phase === "failed" && (
           <div className={cn(CARD, "mt-5 px-[26px] py-7")}>
             <h3 className="text-[17px] font-semibold text-nevo-near-black">
               We couldn&rsquo;t load the adaptation log
@@ -380,7 +608,7 @@ export function AdaptationLogView() {
               type="button"
               onClick={() => {
                 setPhase("loading");
-                load(range.days, shown, classId, types);
+                reload();
               }}
               className="mt-5 h-[46px] cursor-pointer rounded-[10px] bg-nevo-navy px-5 text-sm font-semibold text-nevo-cream transition-[filter] hover:brightness-110 active:brightness-93"
             >
@@ -389,7 +617,7 @@ export function AdaptationLogView() {
           </div>
         )}
 
-        {phase === "ready" && rows.length === 0 && (
+        {!blocked && phase === "ready" && rows.length === 0 && (
           /*
            * THE EMPTY STATE HAS TO NAME EVERY FILTER THAT COULD BE CAUSING IT.
            *
@@ -412,10 +640,10 @@ export function AdaptationLogView() {
             </h3>
             <p className="mx-auto mt-2 max-w-[46ch] text-sm leading-[1.55] text-nevo-near-black/62">
               {types.length > 0
-                ? `No adaptations of that kind were made${scope} in the last ${range.days} days. Try a wider range, or show every kind.`
+                ? `No adaptations of that kind were made${scope} ${words}. Try a wider range, or show every kind.`
                 : classId
-                  ? `No adaptations were made${scope} in the last ${range.days} days. Try a wider range, or show all classes.`
-                  : `No adaptations were made in the last ${range.days} days. Try a wider range, or check back once lessons are running.`}
+                  ? `No adaptations were made${scope} ${words}. Try a wider range, or show all classes.`
+                  : `No adaptations were made ${words}. Try a wider range, or check back once lessons are running.`}
             </p>
             <div className="mt-5 flex flex-wrap items-center justify-center gap-2.5">
               {classId && (
@@ -440,7 +668,7 @@ export function AdaptationLogView() {
           </div>
         )}
 
-        {phase === "ready" && rows.length > 0 && (
+        {!blocked && phase === "ready" && rows.length > 0 && (
           <>
             <div className={cn(CARD, "mt-5 overflow-hidden")}>
               {rows.map((r, i) => {
@@ -529,13 +757,20 @@ export function AdaptationLogView() {
               {rows.length < total && (
                 <button
                   type="button"
-                  onClick={() => setShown((s) => s + PAGE)}
-                  className="h-[42px] cursor-pointer rounded-[10px] border-[1.5px] border-nevo-navy/30 px-4 text-[13.5px] font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/6"
+                  onClick={loadMore}
+                  disabled={loadingMore}
+                  className="h-[42px] cursor-pointer rounded-[10px] border-[1.5px] border-nevo-navy/30 px-4 text-[13.5px] font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/6 disabled:cursor-wait disabled:opacity-60"
                 >
-                  Load earlier adaptations
+                  {loadingMore ? "Loading…" : "Load earlier adaptations"}
                 </button>
               )}
             </div>
+            {moreFailed ? (
+              <p className="m-0 mt-2 text-right text-[13px] text-nevo-navy">
+                We couldn&rsquo;t load the earlier ones just now. What&rsquo;s
+                above is unchanged &ndash; try again in a moment.
+              </p>
+            ) : null}
           </>
         )}
       </div>

@@ -25,10 +25,10 @@ import { api } from "./client";
  * console persists lives under one top-level key, so that a shallow merge
  * cannot have the student app's preferences overwrite the teacher's.
  *
- * Accessibility preferences are deliberately NOT here: reduced motion and
- * larger text are properties of the device someone is sitting at, not of
- * their account, and they already apply instantly through the accessibility
- * context.
+ * A CHILD'S ACCESSIBILITY PREFERENCES ARE ON THEIR ACCOUNT since 8 Oct
+ * (SCRUM-226: "account-level ... not tablet-local"), through
+ * `personalSettingsApi` below and `AccessibilityContext`. They were kept off
+ * it as properties of the device; backend ruled otherwise.
  */
 
 export interface TeacherNotificationSettings {
@@ -99,20 +99,38 @@ export const notificationPrefsApi = {
 };
 
 /**
- * The student's own preferences. Only what belongs to the CHILD lives here -
- * the name they chose for themselves follows them to a school tablet. Motion,
- * contrast and text size stay on the device, for the same reason they do on
- * the teacher side: they describe the screen someone is sitting at, not the
- * account.
+ * The free-form bag behind `/api/settings/me`, which the contract marks
+ * superseded by `/api/v1/settings/me`.
+ *
+ * THE CHILD'S CHOSEN NAME NO LONGER LIVES HERE. It rode in this bag as
+ * `displayName` until `users/me` gained a typed `preferredName` on 1 Oct; it
+ * is read and written there now (`useDisplayName`), as the look already was.
  */
-export interface StudentPreferences {
-  displayName?: string;
-}
-
 export const settingsApi = {
   get: () => api.get<{ settings: SettingsBag }>("/api/settings/me"),
 
   /** Merged server-side, so only the keys sent are touched. */
   update: (patch: SettingsBag) =>
     api.put<{ settings: SettingsBag }>("/api/settings/me", patch),
+};
+
+/**
+ * The account's own preferences, `GET/PUT /api/v1/settings/me` - the pair that
+ * supersedes the bag above and reads the same column (`PersonalSettingsResponse`,
+ * `PersonalSettingsWrite`).
+ *
+ * `preferences` is an open object: the contract names no keys, so the keys
+ * inside it are ours to keep stable. A PUT MERGES what it is sent into what is
+ * stored, so a write touches only the keys it carries.
+ */
+export interface PersonalSettings {
+  userId: string;
+  preferences: Record<string, unknown>;
+}
+
+export const personalSettingsApi = {
+  get: () => api.get<PersonalSettings>("/api/v1/settings/me"),
+
+  update: (preferences: Record<string, unknown>) =>
+    api.put<PersonalSettings>("/api/v1/settings/me", { preferences }),
 };

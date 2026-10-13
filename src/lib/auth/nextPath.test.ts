@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { safeNextPath } from "./nextPath";
+import { safeNextPath, withNext } from "./nextPath";
 
 /**
  * `?next=` arrives in a URL, and a URL is something anyone can send a child.
@@ -48,5 +48,30 @@ describe("safeNextPath", () => {
     // A trimmed value that then starts with `//` is still a host.
     expect(safeNextPath("  //evil.test")).toBeUndefined();
     expect(safeNextPath("  /student/dashboard")).toBe("/student/dashboard");
+  });
+});
+
+describe("withNext", () => {
+  it("carries the destination to the next door", () => {
+    expect(withNext("/auth/sign-in", "/student/lessons/frac-3")).toBe(
+      "/auth/sign-in?next=%2Fstudent%2Flessons%2Ffrac-3",
+    );
+  });
+
+  it("leaves a bare door bare when there is nowhere to go back to", () => {
+    // No dangling `?next=`, which the doors would read as an empty path.
+    expect(withNext("/auth/login", undefined)).toBe("/auth/login");
+    expect(withNext("/auth/login", "")).toBe("/auth/login");
+  });
+
+  it("round-trips through the door that reads it", () => {
+    // What one door writes, the next must read back as the same safe path.
+    const url = new URL(
+      withNext("/auth/login", "/student/lessons/frac-3?part=2"),
+      "https://nevo.test",
+    );
+    expect(safeNextPath(url.searchParams.get("next"))).toBe(
+      "/student/lessons/frac-3?part=2",
+    );
   });
 });

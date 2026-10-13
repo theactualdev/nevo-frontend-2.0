@@ -42,8 +42,27 @@ describe("SchoolCodeCard", () => {
     const { container } = render(<SchoolCodeCard />);
 
     await waitFor(() => expect(visibleText(container)).toMatch(/BGA-4827/));
-    expect(visibleText(container)).toMatch(/Your school code/i);
-    expect(visibleText(container)).toMatch(/staff and students can join/i);
+    expect(visibleText(container)).toMatch(/School code/i);
+    expect(visibleText(container)).toMatch(
+      /Share this so staff and students can join\. It also lives under IT & SSO\./,
+    );
+  });
+
+  it("sets the code as D04 draws it: monospace, 600, navy, 0.12em, 22px (19px on tablet)", async () => {
+    render(<SchoolCodeCard />);
+    const code = await screen.findByText("BGA-4827");
+    const cls = code.className;
+    for (const token of [
+      "font-mono",
+      "font-semibold",
+      "text-nevo-navy",
+      "tracking-[0.12em]",
+      "text-[19px]",
+      "lg:text-[22px]",
+    ]) {
+      expect(cls).toContain(token);
+    }
+    expect(cls).not.toMatch(/text-nevo-near-black|tracking-\[0\.18em\]|text-\[28px\]/);
   });
 
   it("is absent rather than blank when there is no code", async () => {
@@ -76,7 +95,7 @@ describe("SchoolCodeCard", () => {
       clipboard: { writeText: () => Promise.reject(new Error("denied")) },
     });
     const { container } = render(<SchoolCodeCard />);
-    const btn = await screen.findByRole("button", { name: /Copy code/i });
+    const btn = await screen.findByRole("button", { name: /Copy school code/i });
     btn.click();
 
     await waitFor(() => expect(visibleText(container)).toMatch(/BGA-4827/));

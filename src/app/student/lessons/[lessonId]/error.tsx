@@ -6,6 +6,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { LessonError } from "@/components/student/Lesson/LessonError";
+import { reportClientError } from "@/lib/api/clientErrors";
 
 export default function LessonRouteError({
   error,
@@ -17,8 +18,9 @@ export default function LessonRouteError({
   const router = useRouter();
 
   useEffect(() => {
-    // TODO(observability): report to the error service once one exists.
     console.error(error);
+    // The screen says "We're on it"; this is what makes it so (B36).
+    reportClientError(error, "student");
   }, [error]);
 
   return (

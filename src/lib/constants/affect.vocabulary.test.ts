@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { ADJUSTMENT_ACTIONS } from "./affect";
+import { ADJUSTMENT_ACTIONS, asAdjustmentAction } from "./affect";
 import { densityForAction } from "@/lib/lessons/densityForAction";
 
 /**
@@ -51,7 +51,7 @@ const code = (src: string) =>
 describe("the affective vocabulary this codebase is allowed", () => {
   it("names no affective state in any code path", () => {
     // The four the engine infers and §4 forbids us knowing. Word-bounded, so
-    // `no_action` and `modulate_density` are untouched.
+    // `no_action` is untouched.
     const states = /\b(anxiety|anxious|boredom|bored|frustration|frustrated|confusion|confused)\b/i;
 
     for (const f of FILES) {
@@ -84,23 +84,34 @@ describe("the affective vocabulary this codebase is allowed", () => {
     ];
 
     /*
-     * Held on design's explicit instruction of 23 Sep - *"do not declare it
-     * dead yet"* - pending their answer on whether density dropping has a
-     * channel at all. `no_action` is ours rather than the engine's: the
-     * absence of an instruction is a state the player reasons about.
-     * `offer_break` is correctly absent from the enum, because a break is not
-     * an adaptation instruction and has its own signal on `breakSuggestion`.
+     * `no_action` is ours rather than the engine's: the absence of an
+     * instruction is a state the player reasons about. `offer_break` is
+     * correctly absent from the enum, because a break is not an adaptation
+     * instruction and has its own signal on `breakSuggestion`.
+     *
+     * `modulate_density` LEFT THIS LIST ON 1 OCT. Design removed the "dim the
+     * screen" state it drove (SCRUM-180): it could never arrive, and screen
+     * comfort belongs in device settings rather than an instruction.
+     *
+     * `increase_difficulty` LEFT IT THE SAME DAY (D28). Design retired the
+     * step-up offer: nothing in the contract can trigger it, and a control
+     * nothing can trigger is not a feature.
      */
-    const HELD = [
-      "increase_difficulty",
-      "modulate_density",
-      "no_action",
-      "offer_break",
-    ];
+    const HELD = ["no_action", "offer_break"];
 
     expect(Object.values(ADJUSTMENT_ACTIONS).sort()).toEqual(
       [...CONTRACT, ...HELD].sort(),
     );
+  });
+
+  it("no longer knows modulate_density, so it can dim nothing", () => {
+    // SCRUM-180. Unrecognised is null, and null is the nothing-state.
+    expect(asAdjustmentAction("modulate_density")).toBeNull();
+  });
+
+  it("no longer knows increase_difficulty, so it can offer no step up", () => {
+    // D28. A demo row or a stray engine string resolves to nothing.
+    expect(asAdjustmentAction("increase_difficulty")).toBeNull();
   });
 
   it("maps every pace instruction the contract sends, and only those", () => {
@@ -108,10 +119,6 @@ describe("the affective vocabulary this codebase is allowed", () => {
      * The join design asked for - one path, two callers - seen from the
      * vocabulary's side. Three of the contract's five are densities; the other
      * two are instructions about the same screen and must not become one.
-     *
-     * `modulate_density` is the one to watch: the NAME says density, it is
-     * held rather than deleted, and folding it in here would quietly turn a
-     * dim of secondary chrome into a reshape of the child's text.
      */
     const densities = Object.values(ADJUSTMENT_ACTIONS)
       .filter((a) => densityForAction(a) !== null)

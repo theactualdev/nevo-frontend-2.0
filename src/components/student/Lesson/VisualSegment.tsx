@@ -1,24 +1,91 @@
+"use client";
+
+import { useState } from "react";
 import { ArrowRight, Leaf } from "lucide-react";
 import { IllustrationWrapper } from "@/components/shared";
 import type { VisualContent } from "@/lib/types";
+import { cn } from "@/lib/utils";
+import { READING_BODY, READING_HEADING, READING_INK } from "./readingSupport";
+import { type MediaFailReason, useMediaSource } from "./useMediaSource";
 
 /**
  * Visual modality (Lesson Player frame 17) — the segment as a picture: finished
  * inline art (or a produced illustration asset) plus the on-brand input→output
  * diagram card. Where no art exists at all, a quiet cream-elevated tile — never
  * a dashed wireframe box on a finished screen (frontend handoff §07).
+ *
+ * A PICTURE THAT WILL NOT LOAD IS NO PICTURE. It drew the browser's broken
+ * image. Now an expired link is re-issued once (`useMediaSource`), and a
+ * picture that still fails takes the same quiet tile as a segment with no art -
+ * the caption under it carries the description either way.
+ *
+ * AND THE SEGMENT SAYS SO (D26). The quiet tile alone read as a picture that
+ * was meant to be blank, so a child could not tell something was missing. A
+ * short line under it says the picture did not load, in the whole-lesson
+ * failure's words scoped to the one picture; the rest of the segment stays as
+ * it is and the lesson carries on. `onMediaFailed` tells the engine.
+ *
+ * THE SMALL COPY PAINTS FIRST (B47). `previewSrc` is the same picture, much
+ * smaller, so on a slow connection the child sees it at once and the full one
+ * takes its place when it has arrived. Only ever a stand-in for the picture
+ * still on its way: absent, or failing itself, it simply is not drawn, and it
+ * never stands in for a picture that failed.
  */
-export function VisualSegment({ content }: { content: VisualContent }) {
+/** A picture on the frame's card: 82% of its height, within 94% of its width. */
+const PICTURE =
+  "h-[82%] w-auto max-w-[94%] object-contain [grid-area:1/1]";
+
+export function VisualSegment({
+  content,
+  reading = false,
+  onMediaFailed,
+}: {
+  content: VisualContent;
+  /**
+   * The reading accommodation's typographic half (D30) - see
+   * `readingSupport`. The caption keeps its quieter ink.
+   */
+  reading?: boolean;
+  /** The picture would not load, after its one fresh link. */
+  onMediaFailed?: (reason: MediaFailReason) => void;
+}) {
   const inlineArt = content.art ? INLINE_ART[content.art.id] : undefined;
   const caption = content.art?.caption ?? content.illustration?.caption;
+  const media = useMediaSource(
+    content.illustration?.src,
+    content.illustration?.storagePath,
+    onMediaFailed,
+  );
+  // Only a picture that was there to load: inline art cannot fail, and a
+  // segment with no picture at all is the quiet tile and nothing more.
+  const pictureFailed =
+    !(content.art && inlineArt) &&
+    Boolean(content.illustration) &&
+    media.failed;
+  const [arrived, setArrived] = useState(false);
+  const [previewFailed, setPreviewFailed] = useState(false);
+  const preview =
+    !arrived && !previewFailed ? content.illustration?.previewSrc : undefined;
 
   return (
     <article>
-      <h2 className="text-[22px] font-semibold leading-[1.3] tracking-[-0.01em] text-nevo-near-black sm:text-[26px] lg:text-[28px]">
+      <h2
+        className={cn(
+          "text-[22px] font-semibold leading-[1.3] tracking-[-0.01em] text-nevo-near-black sm:text-[26px] lg:text-[28px]",
+          reading && READING_HEADING,
+        )}
+      >
         {content.heading}
       </h2>
       {content.intro && (
-        <p className="mt-4 text-base leading-[1.6] text-nevo-near-black/82 sm:text-[18px] lg:text-[19px]">
+        <p
+          className={cn(
+            "mt-4",
+            // Merged over the base, never instead of it: see READING_BODY.
+            "text-base leading-[1.6] text-nevo-near-black/82 sm:text-[18px] lg:text-[19px]",
+            reading && [READING_BODY, READING_INK],
+          )}
+        >
           {content.intro}
         </p>
       )}
@@ -32,28 +99,64 @@ export function VisualSegment({ content }: { content: VisualContent }) {
           >
             {inlineArt}
           </div>
-        ) : content.illustration ? (
-          <div className="flex justify-center">
+        ) : content.illustration && media.src && !media.failed ? (
+          /*
+           * On the frame's card, as the inline art is: 12px corners on
+           * cream-elevated with the soft shadow, the column's width and 180
+           * high (220 from tablet), the picture centred at 82% of that and
+           * no wider than 94% of the card. One cell, so the full picture
+           * lands exactly over its small copy.
+           */
+          <div className="grid h-[180px] grid-rows-1 place-items-center overflow-hidden rounded-[12px] bg-nevo-cream-elevated shadow-elevation-1 sm:h-[220px]">
+            {preview && (
+              <IllustrationWrapper
+                src={preview}
+                // The picture's description is on the full one above it.
+                alt=""
+                width={content.illustration.width ?? 640}
+                height={content.illustration.height ?? 480}
+                onError={() => setPreviewFailed(true)}
+                className={PICTURE}
+              />
+            )}
             <IllustrationWrapper
-              src={content.illustration.src}
+              key={media.key}
+              src={media.src}
               alt={content.illustration.alt}
-              width={640}
-              height={480}
-              className="w-full max-w-[420px]"
+              width={content.illustration.width ?? 640}
+              height={content.illustration.height ?? 480}
+              onError={media.onError}
+              onLoad={() => setArrived(true)}
+              className={cn(PICTURE, preview && "opacity-0")}
             />
           </div>
         ) : (
-          // No art at all — a quiet cream-elevated tile (calm, finished-looking).
+          // No art at all, or art that would not load — a quiet
+          // cream-elevated tile (calm, finished-looking).
           <div className="flex h-[180px] items-center justify-center rounded-[12px] bg-nevo-cream-elevated shadow-elevation-1 sm:h-[220px]">
             <Leaf className="size-[46px] text-nevo-violet" strokeWidth={1.6} />
           </div>
         )}
         {caption && (
-          <figcaption className="mx-0.5 mt-2.5 text-[13px] leading-[1.5] text-nevo-near-black/60">
+          <figcaption
+            className={cn(
+              "mx-0.5 mt-2.5 text-nevo-near-black/60",
+              reading ? READING_BODY : "text-[13px] leading-[1.5]",
+            )}
+          >
             {caption}
           </figcaption>
         )}
       </figure>
+
+      {pictureFailed && (
+        <p
+          role="status"
+          className="mt-3 text-[14px] leading-[1.55] text-nevo-near-black/70"
+        >
+          This picture didn&apos;t load. Nothing you did caused it.
+        </p>
+      )}
 
       {content.diagram && (
         <div className="mt-4 rounded-[12px] bg-nevo-cream-elevated p-5 shadow-elevation-1">

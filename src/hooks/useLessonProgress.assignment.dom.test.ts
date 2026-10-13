@@ -38,6 +38,13 @@ vi.mock("@/lib/lessons/pendingProgress", () => ({
   holdProgress: vi.fn(),
   clearProgress: vi.fn(),
   flushPendingProgress: vi.fn(),
+  claimSlot: vi.fn(() => () => {}),
+  // The held answers beside the held positions: none held here, so a
+  // completion goes at once, as it did before answers could be held.
+  holdsAnswers: vi.fn(() => false),
+  sendHeldAnswers: vi.fn(() => Promise.resolve("sent")),
+  adoptAnswers: vi.fn(),
+  settleAnswers: vi.fn(),
 }));
 
 const signIn = () =>

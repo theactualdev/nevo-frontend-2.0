@@ -1,0 +1,312 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
+import { LessonRoute } from "./LessonRoute";
+import { LessonLoadingSkeleton } from "./LessonLoadingSkeleton";
+
+/**
+ * What a child sees when a lesson does not simply open.
+ *
+ * A 404 dropped them on the app's developer-worded "This page doesn't exist";
+ * a failed read showed words the frame never drew; the loading skeleton drew a
+ * grey square where the frame keeps Exit, on a load nothing times out; and a
+ * dashboard read that failed opened the lesson anyway - at segment 0, over the
+ * child's real place, whether or not their teacher had called it off.
+ */
+
+const { push, notFound } = vi.hoisted(() => ({
+  push: vi.fn(),
+  notFound: vi.fn(),
+}));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push, replace: vi.fn(), back: vi.fn() }),
+  notFound,
+}));
+vi.mock("@/hooks/useHydrated", () => ({ useHydrated: () => true }));
+
+const lessonState = vi.hoisted(() => ({
+  value: {} as Record<string, unknown>,
+}));
+vi.mock("@/hooks/useStudentLesson", () => ({
+  useStudentLesson: () => lessonState.value,
+}));
+
+const playerProps = vi.hoisted(() => ({ value: null as unknown }));
+/** How many players have been built - a remount is a new one. */
+const mounts = vi.hoisted(() => ({ count: 0 }));
+vi.mock("./LessonPlayer", async () => {
+  const { useState } = await vi.importActual<typeof import("react")>("react");
+  return {
+    LessonPlayer: (props: unknown) => {
+      useState(() => ++mounts.count);
+      playerProps.value = props;
+      return <div data-testid="player" />;
+    },
+  };
+});
+
+const LESSON = { id: "les-1", title: "Fractions", segments: [{ id: "s1" }] };
+
+const state = (over: Record<string, unknown>) => {
+  lessonState.value = {
+    lesson: null,
+    live: true,
+    plan: null,
+    loading: false,
+    missing: false,
+    failed: false,
+    empty: false,
+    resumeAt: null,
+    progressRow: null,
+    lastWorkedAt: null,
+    adaptSegments: undefined,
+    unavailable: null,
+    opensAt: null,
+    placeUnknown: false,
+    fromShelf: false,
+    partial: false,
+    ...over,
+  };
+};
+
+beforeEach(() => {
+  push.mockReset();
+  notFound.mockReset();
+  playerProps.value = null;
+});
+
+afterEach(() => cleanup());
+
+describe("a lesson that is not there", () => {
+  it("is frame 28's D90 screen with its one way back, not the app's 404", () => {
+    state({ missing: true });
+    render(<LessonRoute lessonId="les-1" />);
+
+    expect(notFound).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("heading", { name: "We couldn't open that lesson." }),
+    ).toBeTruthy();
+    // The frame's one line: no guess at why, and one action.
+    expect(screen.queryByText(/put away/)).toBeNull();
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Back to lessons" }));
+    expect(push).toHaveBeenCalledWith("/student/lessons");
+  });
+});
+
+describe("a lesson that would not load", () => {
+  it("uses the player frame's own error words", () => {
+    state({ failed: true });
+    render(<LessonRoute lessonId="les-1" />);
+
+    expect(screen.getByText("Something went wrong. We're on it.")).toBeTruthy();
+    expect(screen.getByText(/Nothing you did caused it/)).toBeTruthy();
+    // D89: a load that failed has no save to confirm, so it claims none.
+    expect(document.body.textContent).not.toMatch(/saved/i);
+    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Go back" }));
+    expect(push).toHaveBeenCalledWith("/student/lessons");
+  });
+});
+
+describe("a lesson whose saved place could not be read", () => {
+  it("does not open over the place the child really reached", () => {
+    state({ lesson: LESSON, placeUnknown: true });
+    render(<LessonRoute lessonId="les-1" />);
+
+    expect(screen.queryByTestId("player")).toBeNull();
+    expect(screen.getByText(/Nothing you did caused it/)).toBeTruthy();
+  });
+
+  it("still opens from the offline shelf, without writing where it opened", () => {
+    // Offline the dashboard was never going to answer; the child saved this
+    // lesson so it would open.
+    state({ lesson: LESSON, placeUnknown: true, fromShelf: true });
+    render(<LessonRoute lessonId="les-1" />);
+
+    expect(screen.getByTestId("player")).toBeTruthy();
+    expect(playerProps.value).toMatchObject({ placeUnknown: true });
+  });
+
+  it("still opens a review, which writes no place", () => {
+    state({ lesson: LESSON, placeUnknown: true });
+    render(<LessonRoute lessonId="les-1" review />);
+
+    expect(screen.getByTestId("player")).toBeTruthy();
+  });
+
+  it("opens normally when the place is known", () => {
+    state({ lesson: LESSON, resumeAt: 0 });
+    render(<LessonRoute lessonId="les-1" />);
+
+    expect(screen.getByTestId("player")).toBeTruthy();
+    expect(playerProps.value).toMatchObject({ placeUnknown: false });
+  });
+});
+
+describe("a lesson the teacher called off", () => {
+  it("says so, and claims no save it cannot confirm (D89)", () => {
+    state({ lesson: LESSON, unavailable: "cancelled" });
+    render(<LessonRoute lessonId="les-1" />);
+
+    expect(screen.getByText("Your teacher took it off.")).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/saved/i);
+  });
+
+  /*
+   * SCRUM-225 / D39, 8 Oct. A housekeeping cancellation keeps the lesson's
+   * reviews and a genuine retraction withdraws them; the server says which
+   * with `recallWithdrawn`. A due review was refused on any cancellation.
+   */
+  it("still opens a due review when the cancellation kept its reviews", () => {
+    state({ lesson: LESSON, unavailable: "cancelled", recallWithdrawn: false });
+    render(<LessonRoute lessonId="les-1" review reviewConceptId="c-1" />);
+
+    expect(screen.getByTestId("player")).toBeTruthy();
+    expect(screen.queryByText("Your teacher took it off.")).toBeNull();
+  });
+
+  it("refuses a due review whose reviews were withdrawn", () => {
+    state({ lesson: LESSON, unavailable: "cancelled", recallWithdrawn: true });
+    render(<LessonRoute lessonId="les-1" review reviewConceptId="c-1" />);
+
+    expect(screen.getByText("Your teacher took it off.")).toBeTruthy();
+    expect(screen.queryByTestId("player")).toBeNull();
+  });
+
+  it("still refuses the lesson itself, whatever happened to its reviews", () => {
+    state({ lesson: LESSON, unavailable: "cancelled", recallWithdrawn: false });
+    render(<LessonRoute lessonId="les-1" />);
+
+    expect(screen.getByText("Your teacher took it off.")).toBeTruthy();
+    expect(screen.queryByTestId("player")).toBeNull();
+  });
+});
+
+describe("where the child left the lesson's check (B82)", () => {
+  // The player opens straight into a check left part way, off this row.
+  it("hands the player the dashboard's row for this lesson", () => {
+    const row = {
+      status: "exited",
+      checkPosition: 1,
+      checkResumableUntil: "2026-10-08T23:59:59Z",
+    };
+    state({ lesson: LESSON, progressRow: row });
+    render(<LessonRoute lessonId="les-1" />);
+
+    expect(playerProps.value).toMatchObject({ progressRow: row });
+  });
+});
+
+describe("a lesson opened from a partial saved copy", () => {
+  // Lydia, 6 Oct: played without its modules, recap and check, it is not
+  // recorded completed. The player is told, because the player writes it.
+  it("tells the player it is the partial copy", () => {
+    state({ lesson: LESSON, fromShelf: true, partial: true });
+    render(<LessonRoute lessonId="les-1" />);
+
+    expect(playerProps.value).toMatchObject({ partial: true });
+  });
+
+  it("does not for the whole lesson", () => {
+    state({ lesson: LESSON, fromShelf: true, partial: false });
+    render(<LessonRoute lessonId="les-1" />);
+
+    expect(playerProps.value).toMatchObject({ partial: false });
+  });
+});
+
+describe("a lesson the child already finished", () => {
+  // Design D22: it opens for review, and the player is told so, because the
+  // player is what would otherwise write it back as unfinished.
+  it("tells the player it is finished", () => {
+    state({ lesson: LESSON, finished: true });
+    render(<LessonRoute lessonId="les-1" />);
+
+    expect(playerProps.value).toMatchObject({ finished: true });
+  });
+
+  it("does not tell it so for a lesson still to do", () => {
+    state({ lesson: LESSON, finished: false });
+    render(<LessonRoute lessonId="les-1" />);
+
+    expect(playerProps.value).toMatchObject({ finished: false });
+  });
+});
+
+describe("the loading skeleton", () => {
+  it("keeps a real Exit, because a stalled load has no other way off it", () => {
+    render(<LessonLoadingSkeleton />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Exit lesson" }));
+
+    expect(push).toHaveBeenCalledWith("/student/dashboard");
+  });
+
+  it("does not read its bar out as a percentage", () => {
+    render(<LessonLoadingSkeleton />);
+
+    const bar = screen.getByRole("progressbar");
+    expect(bar.getAttribute("aria-valuetext")).toBe("Loading lesson");
+  });
+});
+
+describe("starting again after the server rerouted the lesson (SCRUM-178)", () => {
+  const startAgain = (at: number, depth: "standard" | "lower" = "lower") =>
+    act(() =>
+      (
+        playerProps.value as {
+          onStartAgain: (at: number, depth: "standard" | "lower") => void;
+        }
+      ).onStartAgain(at, depth),
+    );
+
+  it("builds a new player at the reroute's place, not the dashboard's", () => {
+    state({
+      lesson: LESSON,
+      resumeAt: 3,
+      progressRow: { status: "exited", checkPosition: 1 },
+    });
+    render(<LessonRoute lessonId="les-1" />);
+    const built = mounts.count;
+    // An ordinary open says no depth: the session it opens will.
+    expect(playerProps.value).toMatchObject({ depth: undefined });
+
+    startAgain(0);
+
+    // Nothing of the run that did not land carries into the new one.
+    expect(mounts.count).toBe(built + 1);
+    expect(playerProps.value).toMatchObject({
+      startAt: 0,
+      progressRow: null,
+      placeUnknown: false,
+      // At the reroute's depth from its first frame (SCRUM-178).
+      depth: "lower",
+    });
+  });
+
+  it("builds another each time it is asked", () => {
+    state({ lesson: LESSON });
+    render(<LessonRoute lessonId="les-1" />);
+    const built = mounts.count;
+
+    startAgain(0);
+    startAgain(0);
+
+    expect(mounts.count).toBe(built + 2);
+  });
+
+  it("is offered nowhere a server never marked the lesson", () => {
+    state({ lesson: LESSON, live: false });
+    render(<LessonRoute lessonId="les-1" />);
+
+    expect(playerProps.value).toMatchObject({ onStartAgain: undefined });
+  });
+});

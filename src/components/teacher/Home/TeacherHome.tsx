@@ -42,6 +42,11 @@ import { FlagCard } from "./FlagCard";
  *     arrives; see `LiveClassPulse`.
  *   - the greeting uses the teacher's real name, from `GET /api/v1/users/me`,
  *     and falls back to a nameless welcome rather than the fixture persona.
+ *   - the SCHOOL CODE sits beside it (C03, 30 Sep), from the same read's
+ *     `school.code`, because it is what a teacher now reads out to a class:
+ *     children sign in with it and their own Student ID. It replaced the
+ *     class code. No code, no box - and never on the signed-out walkthrough,
+ *     where a sample code would be one a child could type.
  *
  * TODO(design): the pulse's number-to-word banding is ours - see
  * `useTeacherHome`.
@@ -50,12 +55,18 @@ import { FlagCard } from "./FlagCard";
 const SECTION_H =
   "text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase xl:text-sm";
 
+/**
+ * "Wednesday, 10 July", as the Build Lock fixes it - with the comma, which
+ * en-GB's own long format leaves out.
+ */
 function todayLine(): string {
-  return new Date().toLocaleDateString("en-GB", {
-    weekday: "long",
+  const now = new Date();
+  const weekday = now.toLocaleDateString("en-GB", { weekday: "long" });
+  const dayMonth = now.toLocaleDateString("en-GB", {
     day: "numeric",
     month: "long",
   });
+  return `${weekday}, ${dayMonth}`;
 }
 
 export function TeacherHome() {
@@ -74,6 +85,8 @@ export function TeacherHome() {
     flags: liveFlags,
     live: flagsLive,
     failed: flagsFailed,
+    loading: flagsLoading,
+    complete: flagsComplete,
   } = useTeacherFlags();
   const {
     pulse,
@@ -90,20 +103,45 @@ export function TeacherHome() {
   const hasFlags = flagCount > 0;
 
   return (
-    <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
+    /* C19 B1 on a phone: 18px edges under the app bar, which names the page. */
+    <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] max-md:px-[18px] max-md:pt-1.5 max-md:pb-[22px] xl:px-[52px] xl:py-11">
       <div className="mx-auto max-w-[940px]">
-        <span className="text-[13px] text-nevo-near-black/55 xl:text-[13.5px]">
-          {todayLine()}
-        </span>
-        <h2 className="mt-1 text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
-          {greetName ? `Welcome back, ${greetName}` : "Welcome back"}
-        </h2>
+        <div className="flex items-start justify-between gap-[18px] xl:gap-6">
+          <div className="min-w-0">
+            {/* B1 draws no date line and no school code: on a phone this
+                is a page a notification opened, finished one-handed. */}
+            <span className="text-[13px] text-nevo-near-black/55 max-md:hidden xl:text-[13.5px]">
+              {todayLine()}
+            </span>
+            <h1 className="mt-1 text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black max-md:mt-1 max-md:text-[22px] xl:text-[26px]">
+              {greetName ? `Welcome back, ${greetName}` : "Welcome back"}
+            </h1>
+          </div>
+          {signedIn && identity?.schoolCode && (
+            <div className="flex shrink-0 flex-col items-end gap-1 rounded-[12px] bg-nevo-cream-elevated px-3.5 py-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] max-md:hidden xl:px-4 xl:py-3">
+              <span className="text-xs font-semibold tracking-[0.05em] text-nevo-near-black/55 uppercase">
+                School code
+              </span>
+              <span className="font-mono text-lg font-semibold tracking-[0.14em] text-nevo-navy xl:text-xl">
+                {identity.schoolCode}
+              </span>
+            </div>
+          )}
+        </div>
         {/* The frame's line says "Three things"; the real count is whatever
             the flags endpoint returned. */}
-        {hasFlags && (
-          <p className="mt-2 hidden text-[15.5px] leading-[1.55] text-nevo-near-black/60 xl:block">
-            {`${flagCount} ${flagCount === 1 ? "thing is" : "things are"} worth your eye before first period. Everything else is running smoothly.`}
-          </p>
+        {/* The count is said only when it is the whole count. A fixture
+            count is the walkthrough's own; a live one needs every page. */}
+        {hasFlags && (fixtureFlags.length > 0 || flagsComplete) && (
+          <>
+            <p className="mt-2 hidden text-[15.5px] leading-[1.55] text-nevo-near-black/60 xl:block">
+              {`${flagCount} ${flagCount === 1 ? "thing is" : "things are"} worth your eye before first period. Everything else is running smoothly.`}
+            </p>
+            {/* B1's shorter line, for a phone. */}
+            <p className="mt-1.5 text-[14px] leading-[1.5] text-nevo-near-black/60 md:hidden">
+              {`${flagCount} ${flagCount === 1 ? "thing is" : "things are"} worth your eye. Everything else is steady.`}
+            </p>
+          </>
         )}
 
         {noClasses ? (
@@ -129,7 +167,10 @@ export function TeacherHome() {
           )
         )}
 
-        {/* C16a: the pulse leads - class weather first, specifics below. */}
+        {/* C16a: the pulse leads - class weather first, specifics below.
+            Not on a phone: C19's B1 is the greeting and "Worth your
+            attention" alone, the page a notification opens. */}
+        <div className="max-md:hidden">
         {!noClasses &&
           (homeLive
             ? pulse.map((p) => <LiveClassPulse key={p.classId} pulse={p} />)
@@ -148,13 +189,35 @@ export function TeacherHome() {
                   <ClassPulse />
                 </SampleRegion>
               ))}
+        </div>
 
         {/* All of this is class-derived. With no classes there is nothing
             truthful to put here - including the calm no-flags card, which
             would claim everyone is moving along. */}
         {!noClasses && (
           <>
-            {hasFlags ? (
+            {flagsLoading ? (
+              /*
+               * C03's FIRST LOAD, which was never built - so for the whole
+               * 1-6 seconds the flags take, a teacher was told "Nothing needs
+               * you right now" over a morning that may have three children in
+               * it. Rule 5: not knowing yet is not knowing nothing.
+               *
+               * The frame's own shape: a 200px heading bar and three 118px
+               * cards, no copy.
+               */
+              <div aria-busy="true" aria-label="Loading what needs your attention">
+                <div className="mt-[26px] h-[13px] w-[180px] rounded-[6px] bg-nevo-near-black/9 xl:mt-8 xl:h-3.5 xl:w-[200px]" />
+                <div className="mt-3.5 flex flex-col gap-3 xl:mt-4 xl:gap-3.5">
+                  {[0, 1, 2].map((i) => (
+                    <div
+                      key={i}
+                      className="h-[118px] animate-pulse rounded-[12px] border border-nevo-near-black/5 bg-nevo-near-black/5"
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : hasFlags ? (
               <>
                 <div className="mt-[26px] flex items-center gap-2.5 xl:mt-8">
                   <h3 className={SECTION_H}>Worth your attention</h3>
@@ -179,7 +242,7 @@ export function TeacherHome() {
                     it does not sit beside live flags pretending to be theirs. */}
                 {fixtureFlags.length > 0 && (
                 <SampleRegion kind="teacher:home-good-to-know">
-                <div className="mt-[22px] flex max-w-[660px] items-start gap-3 rounded-[12px] bg-nevo-violet/14 px-[18px] py-4">
+                <div className="mt-[22px] hidden max-w-[660px] items-start gap-3 rounded-[12px] bg-nevo-violet/14 px-[18px] py-4 xl:flex">
                   <span className="mt-px shrink-0 text-nevo-navy">
                     <svg
                       width="18"
@@ -208,11 +271,12 @@ export function TeacherHome() {
               </>
             ) : (
               // Calm morning - nothing flagged (C03 no-flags state)
-              <div className="mt-[26px] flex max-w-[660px] items-center gap-4 rounded-[12px] bg-nevo-cream-elevated px-[26px] py-6 shadow-elevation-1">
-                <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-nevo-violet/24 text-nevo-navy">
+              <div className="mt-[22px] flex max-w-none items-center gap-3.5 rounded-[12px] bg-nevo-cream-elevated px-[22px] py-5 shadow-elevation-1 xl:mt-[26px] xl:max-w-[660px] xl:gap-4 xl:px-[26px] xl:py-6">
+                <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-nevo-violet/24 text-nevo-navy xl:size-12">
                   <svg
-                    width="24"
-                    height="24"
+                    width="22"
+                    height="22"
+                    className="xl:size-6"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
@@ -236,11 +300,14 @@ export function TeacherHome() {
               </div>
             )}
 
+            {/* B1 again: classes and activity are the tablet's and the
+                desktop's. */}
+            <div className="max-md:hidden">
             <h3 className={cn(SECTION_H, "mt-[30px] xl:mt-10")}>My classes</h3>
             <HomeClasses />
 
             {(homeLive ? activity.length > 0 : showFixtureHome) && (
-              <h3 className={cn(SECTION_H, "mt-[30px] xl:mt-9")}>
+              <h3 className={cn(SECTION_H, "mt-[26px] xl:mt-9")}>
                 Recent activity
               </h3>
             )}
@@ -261,10 +328,10 @@ export function TeacherHome() {
                       )}
                     >
                       <div className="flex min-w-0 flex-col">
-                        <span className="text-[15.5px] font-semibold text-nevo-near-black">
+                        <span className="text-[14.5px] font-semibold text-nevo-near-black xl:text-[15.5px]">
                           {a.title}
                         </span>
-                        <span className="mt-[3px] text-[13px] text-nevo-near-black/55">
+                        <span className="mt-[3px] text-[12px] text-nevo-near-black/55 xl:text-[13px]">
                           {[a.detail, a.when].filter(Boolean).join(" · ")}
                         </span>
                       </div>
@@ -286,8 +353,8 @@ export function TeacherHome() {
                         reverse, is not a fraction and must not be drawn as one.
                       */}
                       {a.completedCount != null && a.totalCount != null && (
-                        <div className="flex shrink-0 items-center gap-3.5">
-                          <div className="h-1.5 w-[130px] overflow-hidden rounded-full bg-nevo-navy/14">
+                        <div className="flex shrink-0 items-center gap-3 xl:gap-3.5">
+                          <div className="h-1.5 w-[90px] overflow-hidden rounded-full bg-nevo-navy/14 xl:w-[130px]">
                             <span
                               className="block h-full rounded-full bg-nevo-navy"
                               style={{
@@ -298,7 +365,7 @@ export function TeacherHome() {
                               }}
                             />
                           </div>
-                          <span className="w-[120px] text-right text-sm text-nevo-near-black/68">
+                          <span className="w-[96px] text-right text-[13px] text-nevo-near-black/68 xl:w-[120px] xl:text-sm">
                             {`${a.completedCount} of ${a.totalCount} done`}
                           </span>
                         </div>
@@ -323,15 +390,15 @@ export function TeacherHome() {
                   )}
                 >
                   <div className="flex min-w-0 flex-col">
-                    <span className="text-[15.5px] font-semibold text-nevo-near-black">
+                    <span className="text-[14.5px] font-semibold text-nevo-near-black xl:text-[15.5px]">
                       {a.lesson}
                     </span>
-                    <span className="mt-[3px] text-[13px] text-nevo-near-black/55">
+                    <span className="mt-[3px] text-[12px] text-nevo-near-black/55 xl:text-[13px]">
                       {a.klass} · {a.when}
                     </span>
                   </div>
-                  <div className="flex shrink-0 items-center gap-3.5">
-                    <div className="h-1.5 w-[130px] overflow-hidden rounded-full bg-nevo-navy/14">
+                  <div className="flex shrink-0 items-center gap-3 xl:gap-3.5">
+                    <div className="h-1.5 w-[90px] overflow-hidden rounded-full bg-nevo-navy/14 xl:w-[130px]">
                       <span
                         className="block h-full rounded-full bg-nevo-navy"
                         style={{
@@ -339,7 +406,7 @@ export function TeacherHome() {
                         }}
                       />
                     </div>
-                    <span className="w-[120px] text-right text-sm text-nevo-near-black/68">
+                    <span className="w-[96px] text-right text-[13px] text-nevo-near-black/68 xl:w-[120px] xl:text-sm">
                       {a.done} of {a.total} done
                     </span>
                   </div>
@@ -348,6 +415,7 @@ export function TeacherHome() {
             </div>
             </SampleRegion>
             )}
+            </div>
           </>
         )}
       </div>

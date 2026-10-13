@@ -29,21 +29,29 @@ const type = (pin: string) => {
   }
 };
 
-const continueButton = () => screen.getByRole("button", { name: "Continue" });
+/** The PIN boxes on screen, and how many of them hold a dot. */
+const boxes = () => document.querySelectorAll("div.size-12").length;
+const dots = () =>
+  document.querySelectorAll("div.size-12 > span.rounded-full").length;
 
-/** Step 1 through to the new-PIN screen. */
+/** Step 1 through to the new-PIN screen: the fourth digit is the way on. */
 const passStepOne = (pin = CURRENT) => {
   type(pin);
-  fireEvent.click(continueButton());
 };
 
-/** The new PIN is entered twice by the pattern; advance its 1.2s beat. */
+/** The new PIN, twice; then let the write go and its answer land. */
 const enterNewPinTwice = async () => {
   type(NEXT + NEXT);
   await act(async () => {
-    await vi.advanceTimersByTimeAsync(1500);
+    await vi.advanceTimersByTimeAsync(500);
   });
 };
+
+/** Past the "updated" screen's beat. */
+const readTheConfirmation = () =>
+  act(async () => {
+    await vi.advanceTimersByTimeAsync(2000);
+  });
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -67,12 +75,28 @@ describe("step 1", () => {
     expect(screen.getByText("Step 1 of 3")).toBeInTheDocument();
   });
 
-  it("will not continue on a part-typed PIN", () => {
+  it("stays on step 1 for a part-typed PIN", () => {
     render(<ChangePinScreen />);
 
     type("12");
 
-    expect(continueButton()).toBeDisabled();
+    expect(screen.getByText("Step 1 of 3")).toBeInTheDocument();
+    expect(dots()).toBe(2);
+  });
+
+  it("moves on at the fourth digit, with no Continue to tap (D54, D58)", () => {
+    // Frame 27 draws step 1 with no button, and steps 2 and 3 never had one.
+    render(<ChangePinScreen />);
+
+    expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "1" }));
+    fireEvent.click(screen.getByRole("button", { name: "2" }));
+    fireEvent.click(screen.getByRole("button", { name: "3" }));
+    expect(screen.getByText("Step 1 of 3")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "4" }));
+
+    expect(screen.getByText("Step 2 of 3")).toBeInTheDocument();
   });
 
   it("takes a physical keyboard, not only taps", () => {
@@ -85,7 +109,17 @@ describe("step 1", () => {
 
     type(CURRENT);
 
-    expect(continueButton()).toBeEnabled();
+    expect(screen.getByText("Step 2 of 3")).toBeInTheDocument();
+  });
+
+  it("goes back from step 2 to an empty step 1", () => {
+    render(<ChangePinScreen />);
+    passStepOne();
+
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+
+    expect(screen.getByText("Step 1 of 3")).toBeInTheDocument();
+    expect(dots()).toBe(0);
   });
 });
 
@@ -102,8 +136,124 @@ describe("what reaches the wire", () => {
     render(<ChangePinScreen />);
     passStepOne();
     await enterNewPinTwice();
+    await readTheConfirmation();
 
     expect(push).toHaveBeenCalledWith("/student/profile");
+  });
+
+  it("takes four digits for the old PIN, in four boxes (D58)", async () => {
+    // "Four digits, four boxes." Step 1 took up to eight, for a PIN that
+    // might be six from before 25 Sep; `currentPin` is exactly four.
+    render(<ChangePinScreen />);
+    expect(boxes()).toBe(4);
+    type("1234");
+    // The fourth is the end of it: on to step 2.
+    expect(screen.getByText("Step 2 of 3")).toBeInTheDocument();
+    await enterNewPinTwice();
+
+    expect(setPin).toHaveBeenCalledWith(NEXT, "1234");
+  });
+});
+
+describe("the frame's own steps", () => {
+  it("carries no wordmark bar, on any step", () => {
+    // Frame 27 draws a back chevron and nothing else above the PIN.
+    render(<ChangePinScreen />);
+    expect(screen.queryByAltText("Nevo")).toBeNull();
+    passStepOne();
+    expect(screen.queryByAltText("Nevo")).toBeNull();
+  });
+
+  it("counts the new PIN as step 2 and the confirmation as step 3", () => {
+    render(<ChangePinScreen />);
+    passStepOne();
+    expect(screen.getByText("Step 2 of 3")).toBeInTheDocument();
+
+    type(NEXT);
+
+    expect(screen.getByText("Step 3 of 3")).toBeInTheDocument();
+  });
+
+  /*
+   * D62: frame 27 draws steps 2 and 3 as two screens, each one row of four.
+   * It was one screen with both rows, headed "Create a PIN".
+   */
+  it("draws step 2 as Choose a new PIN, with one row of four", () => {
+    render(<ChangePinScreen />);
+    passStepOne();
+
+    expect(
+      screen.getByRole("heading", { name: "Choose a new PIN" }),
+    ).toBeInTheDocument();
+    expect(boxes()).toBe(STUDENT_PIN_LENGTH);
+    expect(screen.queryByText(/Create a PIN|Type it again/)).toBeNull();
+  });
+
+  it("draws step 3 as Type it again, a screen of its own with one empty row", () => {
+    render(<ChangePinScreen />);
+    passStepOne();
+
+    type(NEXT);
+
+    expect(screen.getByRole("heading", { name: "Type it again" })).toBeInTheDocument();
+    expect(screen.queryByText("Choose a new PIN")).toBeNull();
+    expect(boxes()).toBe(STUDENT_PIN_LENGTH);
+    expect(dots()).toBe(0);
+
+    type(NEXT.slice(0, 2));
+
+    expect(dots()).toBe(2);
+  });
+
+  it("goes back from step 3 to an empty step 2, not to step 1", () => {
+    render(<ChangePinScreen />);
+    passStepOne();
+    type(NEXT);
+
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+
+    expect(screen.getByText("Step 2 of 3")).toBeInTheDocument();
+    expect(dots()).toBe(0);
+  });
+
+  it("keeps them on step 3 when the two do not match", () => {
+    render(<ChangePinScreen />);
+    passStepOne();
+    type(NEXT + "3".repeat(STUDENT_PIN_LENGTH));
+
+    expect(screen.getByText("Step 3 of 3")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(/didn.t match/);
+    expect(setPin).not.toHaveBeenCalled();
+  });
+});
+
+describe("saying it worked", () => {
+  it("waits for the server, and never borrows onboarding's words", async () => {
+    // THE BUG: "You're all set" showed for a beat BEFORE the write went, so a
+    // child saw their PIN confirmed even when the server then refused it.
+    let land: () => void = () => {};
+    setPin.mockReturnValue(
+      new Promise<void>((resolve) => {
+        land = resolve;
+      }),
+    );
+    render(<ChangePinScreen />);
+    passStepOne();
+    await enterNewPinTwice();
+
+    expect(setPin).toHaveBeenCalled();
+    expect(screen.queryByText("Your PIN is updated")).toBeNull();
+    expect(document.body.textContent).not.toMatch(/all set/i);
+
+    await act(async () => {
+      land();
+    });
+
+    expect(screen.getByRole("status")).toHaveTextContent("Your PIN is updated");
+    expect(
+      screen.getByText("You'll use the new one next time you sign in."),
+    ).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/all set/i);
   });
 });
 
@@ -150,21 +300,24 @@ describe("a wrong current PIN", () => {
     passStepOne("9".repeat(STUDENT_PIN_LENGTH));
     await enterNewPinTwice();
 
-    expect(continueButton()).toBeDisabled();
+    expect(dots()).toBe(0);
   });
 });
 
 describe("a failure that is not theirs", () => {
-  it("is left to the pattern's own copy", async () => {
+  it("is said in the pattern's own words, and claims nothing", async () => {
     // A dropped network is not a mistyped PIN, and this screen must not claim
-    // it is. `PinCreationScreen` owns that sentence.
+    // it is. The PIN pattern owns that sentence.
     setPin.mockRejectedValue(new TypeError("fetch failed"));
 
     render(<ChangePinScreen />);
     passStepOne();
     await enterNewPinTwice();
+    await readTheConfirmation();
 
     expect(screen.queryByText(/not your current PIN/i)).toBeNull();
+    expect(screen.getByRole("alert")).toHaveTextContent(/on us, not you/);
+    expect(screen.queryByText("Your PIN is updated")).toBeNull();
     expect(push).not.toHaveBeenCalled();
   });
 });

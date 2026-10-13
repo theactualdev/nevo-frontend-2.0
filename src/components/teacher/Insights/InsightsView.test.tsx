@@ -21,6 +21,7 @@ vi.mock("@/components/shared/IllustrationWrapper", () => ({
 }));
 
 import { InsightsView } from "./InsightsView";
+import { useAskNevoClass } from "@/components/teacher/Shell/askNevoScope";
 import { TEACHER_CLASSES } from "@/lib/mocks/teacherClasses";
 import { visibleText } from "@/test/visibleText";
 
@@ -146,5 +147,99 @@ describe("a real class", () => {
 
     expect(screen.getByText("LIVE INSIGHTS FOR E2E Probe Class")).toBeInTheDocument();
     expect(container.querySelector("[data-nevo-sample]")).toBeNull();
+  });
+});
+
+/**
+ * MARKED WHERE THE WRONG CHOICE IS MADE. The fixture three were marked only
+ * after one was picked; the landing - where a teacher chooses - carried no
+ * `data-nevo-sample` at all.
+ */
+describe("the class pills on the landing", () => {
+  const regions = () =>
+    Array.from(document.querySelectorAll("[data-nevo-sample]")).map((e) =>
+      e.getAttribute("data-nevo-sample"),
+    );
+
+  it("are marked when they are the fixture three", () => {
+    useTeacherClasses.mockReturnValue(state({ sample: true }));
+    render(<InsightsView />);
+
+    expect(screen.getByRole("button", { name: FIXTURE_CLASS })).toBeInTheDocument();
+    expect(regions()).toEqual(["teacher:insights-classes"]);
+  });
+
+  it("carry no mark while the read is still in flight, when there are none to mark", () => {
+    useTeacherClasses.mockReturnValue(state({ loading: true }));
+    render(<InsightsView />);
+
+    expect(screen.queryByRole("button", { name: FIXTURE_CLASS })).not.toBeInTheDocument();
+    expect(regions()).toEqual([]);
+  });
+
+  it("carry no mark when they are the teacher's own", () => {
+    useTeacherClasses.mockReturnValue(
+      state({ live: true, options: [{ id: "c-1", name: "Year 7 Blue", joinCode: null }] as never }),
+    );
+    render(<InsightsView />);
+
+    expect(screen.getByRole("button", { name: "Year 7 Blue" })).toBeInTheDocument();
+    expect(regions()).toEqual([]);
+  });
+});
+
+/**
+ * "PICK ONE OF YOUR CLASSES ABOVE" with no classes above - while the list
+ * loads, and for a teacher who has none.
+ */
+describe("the landing with no classes to pick", () => {
+  it("claims nothing while the class list loads", () => {
+    useTeacherClasses.mockReturnValue(state({ loading: true }));
+    render(<InsightsView />);
+
+    expect(screen.queryByText("Select a class to see insights")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Pick one of your classes/)).not.toBeInTheDocument();
+  });
+
+  it("says the classes list's own sentence to a teacher with none", () => {
+    useTeacherClasses.mockReturnValue(state({ live: true, options: [], classes: [] }));
+    render(<InsightsView />);
+
+    expect(screen.getByText("Your classes will appear here once assigned")).toBeInTheDocument();
+    expect(screen.queryByText("Select a class to see insights")).not.toBeInTheDocument();
+  });
+
+  it("still asks a teacher with classes to pick one", () => {
+    useTeacherClasses.mockReturnValue(
+      state({ live: true, options: [{ id: "c-1", name: "Year 7 Blue", joinCode: null }] as never }),
+    );
+    render(<InsightsView />);
+
+    expect(screen.getByText("Select a class to see insights")).toBeInTheDocument();
+  });
+});
+
+/** T182: the class picked here is the class Ask Nevo is asked about. */
+describe("telling Ask Nevo which class this is", () => {
+  function Probe() {
+    return <span data-testid="scope">{useAskNevoClass() ?? "none"}</span>;
+  }
+
+  it("names the class a teacher picks, and forgets it when the page goes", () => {
+    useTeacherClasses.mockReturnValue(
+      state({ live: true, options: [{ id: "c-1", name: "Year 7 Blue", joinCode: null }] as never }),
+    );
+    const { unmount } = render(
+      <>
+        <InsightsView />
+        <Probe />
+      </>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Year 7 Blue" }));
+    expect(screen.getByTestId("scope")).toHaveTextContent("c-1");
+
+    unmount();
+    render(<Probe />);
+    expect(screen.getByTestId("scope")).toHaveTextContent("none");
   });
 });

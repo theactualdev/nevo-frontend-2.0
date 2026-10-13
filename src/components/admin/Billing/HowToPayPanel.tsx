@@ -4,11 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import {
   BANK_REF_MAX,
   BANK_REF_MIN,
-  transferAccepted,
-  type PaymentOutcome,
   type PricingCurrency,
   type ReceivingAccount,
+  type TransferReport,
 } from "@/lib/api/billing";
+import { ApiError, apiErrorMessage } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 
 /**
@@ -20,17 +20,17 @@ import { cn } from "@/lib/utils";
  * says the details are not available and points at what IS known: the
  * reference, which the invoice already carries. It never invents an account.
  *
- * THE TRANSFER IS NOW RECORDED, NOT ASSUMED (backend, 7 Sep).
- * `POST /billing/payments/manual-transfer` takes the invoice and the school's
- * own bank reference, so "I've made this transfer" tells the backend rather
- * than only colouring a pill. The reference is required, 3-120 characters, so
- * the button expands IN PLACE to ask for it - still no modal, per the ruling.
+ * "I'VE MADE THIS TRANSFER" IS A REPORT, NEVER A PAYMENT (backend, 9 Oct).
+ * It posts to `POST /billing/payments/transfer-report`, which records the
+ * school's claim "without marking the invoice paid"; Nevo finance confirms the
+ * money against a bank statement. It used to post to `manual-transfer`, which
+ * is now finance's own confirmation behind a key the school does not hold. The
+ * school's bank reference is required, 3-120 characters, so the button expands
+ * IN PLACE to ask for it - still no modal, per the ruling.
  *
- * THE REFERENCE IS AN IDEMPOTENCY KEY. Sending the same one twice returns the
- * ORIGINAL transaction with `invoicePaid: false` and a message saying it was
- * already recorded. That is not a failure and is not shown as one: a
- * double-tap cannot settle an invoice twice, and the admin is told their
- * transfer is already on file.
+ * Reporting the same reference twice returns the same report, so a double-tap
+ * files one claim. An invoice that is already paid is refused (409) in the
+ * server's own words, which the panel shows.
  *
  * `POST /billing/payments/{reference}/verify` is deliberately NOT used -
  * backend's own words are that it is a write which asks Paystack about a
@@ -95,7 +95,10 @@ export function HowToPayPanel({
 }: {
   /** Null until the endpoint exists, or when it answers incompletely. */
   account: ReceivingAccount | null;
-  /** The invoice reference to quote on the transfer. */
+  /**
+   * The reference to quote on the transfer: the invoice's own, from
+   * `invoiceTransferDetails` where the caller has it.
+   */
   reference: string | null;
   /** Formatted, already grouped by the caller. */
   amount: string | null;
@@ -107,16 +110,18 @@ export function HowToPayPanel({
    * account loses real money on a real transfer.
    */
   billedIn: PricingCurrency | null;
-  /** The backend has this transfer on file. */
-  recorded?: PaymentOutcome | null;
+  /** The school has reported this transfer, and finance has it to check. */
+  recorded?: TransferReport | null;
   /**
    * OPTIONAL, AND THEIR ABSENCE IS A REAL CASE RATHER THAN A CONVENIENCE.
    *
-   * D24's OB-04 shows the same account details during onboarding, where
-   * Paystack reconciles the transfer automatically off the reference -
-   * *"Use the reference so Paystack can match your payment automatically.
-   * This invoice then updates to Paid on its own."* There is nothing for a
-   * school to record there, so the control is not rendered.
+   * D24's OB-04 shows the same account details during onboarding. Lydia's
+   * 7 Oct copy there is "We check for transfers through the day. This page
+   * updates as soon as yours clears, and there is nothing else for you to
+   * do." - so there is nothing for a school to report on that screen, and the
+   * control is not rendered. (This used to say Paystack matched the transfer
+   * automatically. It never did: a bank transfer never reaches Paystack, and
+   * finance confirms it by hand.)
    *
    * Without these the panel is exactly the half that is still true: here is
    * where to send it, here is what to quote. Passing a no-op instead would
@@ -126,8 +131,8 @@ export function HowToPayPanel({
   onRecord?: (
     invoiceId: string,
     bankReference: string,
-  ) => Promise<PaymentOutcome>;
-  onRecorded?: (outcome: PaymentOutcome) => void;
+  ) => Promise<TransferReport>;
+  onRecorded?: (report: TransferReport) => void;
 }) {
   const [entering, setEntering] = useState(false);
   const [bankRef, setBankRef] = useState("");
@@ -149,27 +154,14 @@ export function HowToPayPanel({
     setFailed(false);
     setFailedMessage(null);
     onRecord?.(invoiceId, trimmed)
-      .then((outcome) => {
-        /*
-         * A 200 IS NOT AN ACCEPTANCE. `status` is
-         * `pending | success | failed | abandoned` and was never read: a
-         * response of `failed` was stored as a transfer on file, flipped the
-         * invoice row to "Pending verification", and told the admin their
-         * money was on its way. They stop chasing it and the invoice stays
-         * unpaid with nothing on the screen ever saying otherwise.
-         */
-        if (!transferAccepted(outcome)) {
-          setFailed(true);
-          setFailedMessage(outcome.message ?? null);
-          setSaving(false);
-          return;
-        }
-        onRecorded?.(outcome);
-      })
-      .catch(() => {
-        // Stay open, keep their reference, and say nothing changed.
+      // Any report the server returns is on file: `awaiting_confirmation`
+      // and `confirmed` are the only two it has, and neither is a refusal.
+      .then((report) => onRecorded?.(report))
+      .catch((err: unknown) => {
+        // Stay open, keep their reference, and say nothing changed - in the
+        // server's words where it gave some ("This invoice is already paid.").
         setFailed(true);
-        setFailedMessage(null);
+        setFailedMessage(err instanceof ApiError ? apiErrorMessage(err.detail) : null);
         setSaving(false);
       });
   };
@@ -234,10 +226,15 @@ export function HowToPayPanel({
           </>
         ) : (
           /* No account, and no invented one. Say so, and give them the one
-             thing that IS known - the reference is on the invoice already. */
+             thing that IS known - the reference is on the invoice already.
+
+             WAS "Transfer details aren't available here yet." That was true
+             before `GET /api/billing/bank-transfer-details` existed; it is
+             live now, so an absent account means the read failed, and "not
+             available yet" told the school the feature was unbuilt. */
           <>
             <p className="m-0 text-[14.5px] leading-[1.55] text-nevo-near-black/78">
-              Transfer details aren&rsquo;t available here yet.
+              We couldn&rsquo;t load Nevo&rsquo;s bank details just now.
             </p>
             <p className="m-0 mt-1.5 text-[13.5px] leading-[1.55] text-nevo-near-black/62">
               Your invoice carries the amount
@@ -258,11 +255,11 @@ export function HowToPayPanel({
               role="status"
               className="m-0 rounded-[10px] bg-nevo-violet/[0.18] px-4 py-3 text-[13.5px] leading-[1.5] text-nevo-navy"
             >
-              {/* The backend's own words when this reference was already on
-                  file, so a repeat reads as "we have it" rather than a
-                  failure. */}
-              {recorded.message ??
-                "Payment sent, pending verification. We’ll update this invoice as soon as the transfer is confirmed."}
+              {/* D11c's own line. The report's `message` is the server's note
+                  ("Nevo finance will confirm it against the bank statement")
+                  and is not shown: the frame's copy is binding. */}
+              Payment sent, pending verification. We&rsquo;ll update this
+              invoice as soon as the transfer is confirmed.
             </p>
           ) : entering ? (
             /* Expands in place - no modal, per the ruling. */
@@ -280,9 +277,11 @@ export function HowToPayPanel({
                   className="mt-1.5 h-11 w-full max-w-[420px] rounded-[10px] border border-nevo-near-black/15 bg-nevo-cream px-3.5 text-[15px] text-nevo-near-black outline-none focus:border-nevo-navy"
                 />
               </label>
+              {/* WAS "...Sending the same reference twice won't pay the invoice
+                  twice." A report never pays anything, so that reassurance
+                  answered a question this button no longer raises. */}
               <p className="m-0 mt-1.5 text-[12.5px] text-nevo-near-black/55">
-                We use this to match your transfer. Sending the same reference
-                twice won&rsquo;t pay the invoice twice.
+                We use this to find your transfer on our bank statement.
               </p>
               {failed && (
                 <p className="m-0 mt-2.5 rounded-[10px] bg-nevo-violet/[0.18] px-4 py-3 text-[13.5px] leading-[1.5] text-nevo-navy">

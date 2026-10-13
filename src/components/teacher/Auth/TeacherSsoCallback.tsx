@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/hooks";
 import { authApi } from "@/lib/api";
 import { setSession } from "@/lib/auth/session";
+import { ssoLanding } from "@/lib/auth/entryGate";
 import { type UserRole } from "@/lib/constants";
 
 /**
@@ -17,21 +18,22 @@ import { type UserRole } from "@/lib/constants";
  * `/api/v1/auth/sso/{provider}/callback` (`lib/api/auth.ts:257`) and its result
  * is what sets the session. What is still true is that no school can reach this
  * screen: nothing in the deployed spec ENROLS a school in SSO, so every sso
- * path presupposes a connection that cannot be created. `?mock=error` forces
- * the error state for design review.
+ * path presupposes a connection that cannot be created. Loaded with no code
+ * on the URL, the screen shows its error state - which is also how design
+ * reviews it. There is no `?mock=` switch.
  */
 
 const SUCCESS_HOLD_MS = 900;
 
 type Phase = "signing-in" | "success" | "error";
 
-function Ring({ size }: { size: number }) {
+function Ring({ className }: { className: string }) {
   return (
     <span
       role="status"
       aria-label="Working"
-      style={{ width: size, height: size }}
-      className="rounded-full border-[2.5px] border-nevo-navy/20 border-t-nevo-navy motion-safe:animate-spin motion-safe:[animation-duration:800ms]"
+      // `block`: an inline span takes no size, and the success ring sits in one.
+      className={`${className} block rounded-full border-[2.5px] border-nevo-navy/20 border-t-nevo-navy motion-safe:animate-spin motion-safe:[animation-duration:800ms]`}
     />
   );
 }
@@ -64,7 +66,7 @@ export function TeacherSsoCallback() {
   const shown: Phase = incomplete ? "error" : phase;
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  // Schedules the (mock) handshake; only ever sets state from inside the
+  // Schedules the handshake; only ever sets state from inside the
   // timer callback, so the effect body stays setState-free.
   /*
    * A REAL handshake, or none.
@@ -91,6 +93,18 @@ export function TeacherSsoCallback() {
       .ssoCallback({ provider, code, state })
       .then((res) => {
         const role = res.role as UserRole;
+        /*
+         * `destination` IS AN ENUM, NOT A ROUTE (T225): "home_dashboard" or
+         * "observed_interaction". Handed to `router.replace` it was a relative
+         * path that 404s. `ssoLanding` is the student callback's own answer:
+         * the enum only decides a child's route, and a staff member goes to
+         * their console's home. A role no console serves gets no session.
+         */
+        const landing = ssoLanding(role, res.destination);
+        if (!landing) {
+          setPhase("error");
+          return;
+        }
         setSession({
           token: res.accessToken,
           expiresAt: res.expiresAt,
@@ -105,7 +119,7 @@ export function TeacherSsoCallback() {
         setPhase("success");
         timers.current.push(
           setTimeout(
-            () => router.replace(res.destination || "/teacher/dashboard"),
+            () => router.replace(landing),
             SUCCESS_HOLD_MS,
           ),
         );
@@ -119,19 +133,23 @@ export function TeacherSsoCallback() {
     return () => pending.forEach(clearTimeout);
   }, [schedule]);
 
-  const retry = () => {
-    setPhase("signing-in");
-    schedule();
-  };
+  /*
+   * "TRY AGAIN" STARTS AGAIN. It re-ran the callback, which either did
+   * nothing - with no code, the only state this screen can reach today, it
+   * fell straight back to the error - or would re-send a single-use OAuth
+   * code the provider has already spent. Trying again means beginning the
+   * sign-in again, from the door.
+   */
+  const retry = () => router.push("/auth/teacher");
 
   return (
-    <div className="flex w-full max-w-[440px] flex-col items-center px-10 text-center">
+    <div className="flex w-full max-w-none flex-col items-center px-10 text-center">
       {shown === "signing-in" && (
         <>
-          <span className="mb-7">
+          <span className="mb-7 xl:mb-[30px]">
             <LogoMark />
           </span>
-          <Ring size={28} />
+          <Ring className="size-7 xl:size-[30px]" />
           {/*
             "Signing you in through {school}" named `TEACHER_INVITE.school`, a
             fixture, so a teacher of any school was told they were being signed
@@ -162,14 +180,14 @@ export function TeacherSsoCallback() {
               <path d="M5 12.5l4.5 4.5L19 7.5" />
             </svg>
           </span>
-          <h2 className="mt-6 text-[24px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:mt-[26px] xl:text-[26px]">
+          <h1 className="mt-6 text-[24px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:mt-[26px] xl:text-[26px]">
             {"You're in"}
-          </h2>
+          </h1>
           <p className="mt-[11px] max-w-[380px] text-[16px] leading-[1.55] text-nevo-near-black/65 xl:mt-3 xl:max-w-[420px] xl:text-[16.5px]">
             {"Taking you to your dashboard…"}
           </p>
           <span className="mt-7 xl:mt-[30px]">
-            <Ring size={22} />
+            <Ring className="size-[22px] xl:size-6" />
           </span>
         </>
       )}
@@ -184,9 +202,9 @@ export function TeacherSsoCallback() {
               <circle cx="12" cy="12" r="9" />
             </svg>
           </span>
-          <h2 className="mt-6 text-[24px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:mt-[26px] xl:text-[26px]">
+          <h1 className="mt-6 text-[24px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:mt-[26px] xl:text-[26px]">
             {"We couldn't sign you in"}
-          </h2>
+          </h1>
           <p className="mt-[11px] max-w-[400px] text-[16px] leading-[1.55] text-nevo-near-black/65 xl:mt-3 xl:max-w-[440px] xl:text-[16.5px]">
             {"Something went wrong between Nevo and your school's sign-in. Nothing on your end - let's try once more, or your school's IT admin can check the connection."}
           </p>

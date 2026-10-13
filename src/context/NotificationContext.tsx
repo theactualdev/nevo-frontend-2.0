@@ -5,19 +5,31 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import { notificationsApi, type Notification } from "@/lib/api/notifications";
-import { getToken } from "@/lib/auth/session";
+import { getSession, getToken, onSessionChange } from "@/lib/auth/session";
+import { USER_ROLES } from "@/lib/constants/permissions";
 import { useHasSession } from "@/hooks/useHasSession";
 import { useHydrated } from "@/hooks/useHydrated";
 import { SAMPLE_NOTIFICATIONS } from "@/lib/mocks/sampleNotifications";
+
+/**
+ * Which of board 28's marks a row wears. The frame draws a book for a new
+ * lesson and a speech bubble for a teacher's message; `review_due` and
+ * `sign_in_changed` have no drawn mark and wear the bell's own until design
+ * draws one. Matched on the closed type, not guessed from the title.
+ */
+export type NotificationKind = "lesson" | "message" | "other";
 
 export interface NotificationItem {
   id: string;
   /** The headline ("A new lesson is ready"). */
   title: string;
+  /** Absent on a row with no type, which wears the neutral mark. */
+  kind?: NotificationKind;
   /**
    * The sentence under it. The feed carries BOTH a title and a description,
    * and this used to collapse them to `description || title` - so every
@@ -42,6 +54,12 @@ export interface NotificationContextValue {
    * ask.
    */
   failed: boolean;
+  /**
+   * The child's feed has not answered yet. Kept apart from an empty feed for
+   * the same reason as `failed`: "Nothing new right now" is a claim, and
+   * while the read is in flight it is a guess.
+   */
+  loading: boolean;
   refresh: () => void;
   /**
    * Mark one notification read. Opening it IS reading it.
@@ -86,16 +104,75 @@ function ago(iso: string): string {
   return `${Math.floor(days / 7)}w`;
 }
 
+/**
+ * THE FOUR TYPES ADDRESSED TO A CHILD (backend B34, 1 Oct), and the only ones
+ * this bell shows.
+ *
+ * `NotificationType` is a closed set, and the rest of it is teacher and admin
+ * business - `attention_summary` and `modality_shift` among them, which are
+ * exactly what a child must never read about themselves. The feed is scoped
+ * to the recipient, so none should arrive here; this is what makes "none" true
+ * on a child's screen rather than merely expected. A type added tomorrow is
+ * shown once it is listed here, after someone has read what it says.
+ */
+const FOR_A_CHILD = new Map<string, NotificationKind>([
+  ["lesson_assigned", "lesson"],
+  ["review_due", "other"],
+  ["teacher_replied", "message"],
+  ["sign_in_changed", "other"],
+]);
+
+/**
+ * THE OLD PATHS ROWS ALREADY DELIVERED STILL CARRY, AND ONLY THOSE.
+ *
+ * Backend now sends our own routes (B86, 8 Oct): `review_due` navigates to
+ * /student/progress and `teacher_replied` to /student/connect, alongside
+ * /student/lessons and /student/profile, which were always ours. Those pass
+ * through `childHref` untouched.
+ *
+ * What stays is the fallback for rows written before that. On 5 Oct (B62)
+ * backend's paths for the same two types were /student/review and
+ * /student/messages, which name screens this app does not have, and a child's
+ * feed keeps those rows. Without these entries their links would go nowhere:
+ *
+ * - /student/messages is our Connect tab, /student/connect.
+ * - /student/review has no screen of its own. Reviews due are offered on a
+ *   subject's page ("Ready for another look"), which Progress leads to.
+ *
+ * Mapped here rather than with redirect pages, so nothing else in the app
+ * learns the old spelling. The path is matched exactly; whatever follows it
+ * (`?thread=`) rides along.
+ */
+const CHILD_ROUTE: Record<string, string> = {
+  "/student/messages": "/student/connect",
+  "/student/review": "/student/progress",
+};
+
+/**
+ * Where a child's row may take them: somewhere in the student console, or
+ * nowhere. `navigatesTo` is the server's, and a path into another console
+ * would land a child on a screen that is not theirs - so anything else is a
+ * row with no link, which is what a null `navigatesTo` already means.
+ */
+export function childHref(target: string | null): string | null {
+  if (!target || !/^\/student(\/|\?|#|$)/.test(target)) return null;
+  const cut = target.search(/[?#]/);
+  const path = cut === -1 ? target : target.slice(0, cut);
+  const ours = CHILD_ROUTE[path.replace(/\/+$/, "")];
+  return ours ? ours + (cut === -1 ? "" : target.slice(cut)) : target;
+}
+
 function toItem(n: Notification): NotificationItem {
   return {
     id: n.notificationId,
     // Both, on two lines - see `NotificationItem.text`. A description equal to
     // the title is not a second line, it is the same line twice.
     title: n.title,
+    kind: FOR_A_CHILD.get(n.type),
     text: n.description && n.description !== n.title ? n.description : undefined,
     ago: ago(n.createdAt),
     read: n.read,
-    href: n.navigatesTo,
+    href: childHref(n.navigatesTo),
   };
 }
 
@@ -107,9 +184,42 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const [failed, setFailed] = useState(false);
   /** Bumped by `refresh` to re-run the fetch. */
   const [nonce, setNonce] = useState(0);
+  /**
+   * Whose feed this is. The provider is mounted once at the root, so it used
+   * to read the feed when the app loaded and never again: a child who signed
+   * in afterwards got no bell at all, and the next child on the tablet could
+   * open the last child's. Tracked here, the feed empties and reloads the
+   * moment the account changes.
+   */
+  const [owner, setOwner] = useState<string | null>(null);
+  /** `undefined` until the first read, so the first read always lands. */
+  const ownerRef = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    const read = () => {
+      /*
+       * A CHILD'S FEED, AND ONLY A CHILD'S. The provider is mounted at the
+       * root for every role, but only the student bell reads it - the teacher
+       * and admin consoles keep their own - so a staff session read the same
+       * feed twice, once here for nothing. Nobody but a student owns it.
+       */
+      const session = getSession();
+      const next =
+        session?.role === USER_ROLES.STUDENT ? (session.userId ?? null) : null;
+      if (ownerRef.current === next) return; // a token refresh: same child
+      ownerRef.current = next;
+      // A different child, or nobody: nothing of the last one survives.
+      setFeed(null);
+      setUnread(0);
+      setFailed(false);
+      setOwner(next);
+    };
+    // Post-mount read of an external store.
+    read();
+    return onSessionChange(read);
+  }, []);
 
   useEffect(() => {
-    if (!getToken()) return;
+    if (!owner || !getToken()) return;
     let cancelled = false;
     void notificationsApi
       .list()
@@ -131,7 +241,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [nonce]);
+  }, [nonce, owner]);
 
   const refresh = useCallback(() => setNonce((n) => n + 1), []);
 
@@ -189,6 +299,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         notifications: [],
         unreadCount: 0,
         failed: false,
+        loading: true,
         refresh,
         markRead,
         // Not a sample: a deliberate blank while the client works out who is
@@ -202,15 +313,24 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         notifications: SAMPLE_NOTIFICATIONS,
         unreadCount: SAMPLE_NOTIFICATIONS.filter((n) => !n.read).length,
         failed: false,
+        loading: false,
         refresh,
         markRead,
         showingSamples: true,
       };
     }
+    // Only what is addressed to a child - see `FOR_A_CHILD`. A row this bell
+    // does not show must not light its dot either.
+    const rows = feed ?? [];
+    const mine = rows.filter((n) => FOR_A_CHILD.has(n.type));
+    const hiddenUnread = rows.filter(
+      (n) => !FOR_A_CHILD.has(n.type) && !n.read,
+    ).length;
     return {
-      notifications: (feed ?? []).map(toItem),
-      unreadCount: unread,
+      notifications: mine.map(toItem),
+      unreadCount: Math.max(0, unread - hiddenUnread),
       failed,
+      loading: feed === null && !failed,
       refresh,
       markRead,
       showingSamples: false,

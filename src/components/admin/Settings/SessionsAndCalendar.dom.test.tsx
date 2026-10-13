@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { fireEvent, render, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
 import { AccountSettings } from "./AccountSettings";
 
@@ -17,6 +17,7 @@ import { AccountSettings } from "./AccountSettings";
 
 const sessions = vi.fn();
 const endSession = vi.fn();
+const endOthers = vi.fn();
 
 vi.mock("@/lib/api/auth", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/auth")>();
@@ -26,7 +27,7 @@ vi.mock("@/lib/api/auth", async (importOriginal) => {
       ...actual.authApi,
       sessions: () => sessions(),
       endSession: (id: string) => endSession(id),
-      endOtherSessions: () => Promise.resolve(),
+      endOtherSessions: () => endOthers(),
     },
   };
 });
@@ -67,6 +68,8 @@ beforeEach(() => {
   sessions.mockReset();
   endSession.mockReset();
   endSession.mockResolvedValue(undefined);
+  endOthers.mockReset();
+  endOthers.mockResolvedValue(undefined);
 });
 
 function button(container: HTMLElement, label: string) {
@@ -139,8 +142,62 @@ describe("a single session", () => {
     sessions.mockResolvedValue([]);
     const { container } = render(<AccountSettings />);
     await waitFor(() =>
-      expect(visibleText(container)).toMatch(/couldn't list your sessions/),
+      expect(visibleText(container)).toMatch(/couldn't read where you're signed in/),
     );
     expect(visibleText(container)).not.toMatch(/only device signed in as you/);
+  });
+
+  it("offers a retry when the read fails, and says nothing while it is out", async () => {
+    let fail!: (e: unknown) => void;
+    sessions.mockReturnValue(new Promise((_, r) => (fail = r)));
+    const { container } = render(<AccountSettings />);
+    // The section must be on the page for its silence to mean anything.
+    await screen.findByText("Where you're signed in");
+    expect(visibleText(container)).not.toMatch(/couldn't read where you're signed in/);
+    fail(new Error("down"));
+    await waitFor(() => expect(visibleText(container)).toMatch(/couldn't read where you're signed in/));
+    sessions.mockResolvedValue([session("s1", true)]);
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(visibleText(container)).toMatch(/only device signed in as you/));
+  });
+});
+
+describe("when signing a device out does not go through", () => {
+  it("keeps the confirm open and says nothing changed", async () => {
+    sessions.mockResolvedValue([session("s1", true), session("s2", false)]);
+    endSession.mockRejectedValue(new Error("500"));
+    const { container } = render(<AccountSettings />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/Another device/));
+
+    fireEvent.click(button(container, "End it")!);
+    await waitFor(() => expect(button(container, "Sign it out")).toBeTruthy());
+    fireEvent.click(button(container, "Sign it out")!);
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/didn.t sign it out, and nothing has changed/),
+    );
+    // Still there to try again - closing it is what success looks like.
+    expect(button(container, "Sign it out")).toBeTruthy();
+  });
+
+  it("says when signing out everywhere else failed", async () => {
+    sessions.mockResolvedValue([session("s1", true), session("s2", false)]);
+    endOthers.mockRejectedValue(new Error("500"));
+    const { container } = render(<AccountSettings />);
+    await waitFor(() => expect(button(container, "Sign out everywhere else")).toBeTruthy());
+    fireEvent.click(button(container, "Sign out everywhere else")!);
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/didn.t sign anything out, and nothing has changed/),
+    );
+  });
+
+  it("says this device stayed signed in when everywhere else is done", async () => {
+    sessions.mockResolvedValueOnce([session("s1", true), session("s2", false)]);
+    sessions.mockResolvedValue([session("s1", true)]);
+    const { container } = render(<AccountSettings />);
+    await waitFor(() => expect(button(container, "Sign out everywhere else")).toBeTruthy());
+    fireEvent.click(button(container, "Sign out everywhere else")!);
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(/Every other session is signed out. You.re still signed in here/),
+    );
   });
 });

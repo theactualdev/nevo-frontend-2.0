@@ -21,7 +21,6 @@ import type { AdaptationPlan, Lesson } from "@/lib/types";
 
 const { trackEvent } = vi.hoisted(() => ({ trackEvent: vi.fn() }));
 vi.mock("@/hooks", () => ({
-  useBreakMonitor: () => ({ due: false, dismiss: vi.fn() }),
   useLesson: () => ({ setActiveLesson: vi.fn() }),
   useSignals: () => ({ trackEvent }),
 }));
@@ -123,7 +122,33 @@ describe("answering a question", () => {
       conceptId: "c-1",
       problemId: "cp-7",
       responseCorrect: true,
+      // How long the question was in front of the child, measured. The attempt
+      // never carried one, so the engine read every answer as untimed.
+      responseTimeMs: expect.any(Number),
     });
+  });
+
+  it("carries the child's pick and the lesson it came from (B27)", () => {
+    const LESSON_ID = "6f2c1d8e-4b3a-4c5d-9e8f-7a6b5c4d3e2f";
+    const lesson = {
+      ...lessonWith({
+        ...QUESTION,
+        options: [
+          { id: "a", label: "Chloroplasts", value: "chloroplasts" },
+          { id: "b", label: "Roots", value: "roots" },
+        ],
+      }),
+      id: LESSON_ID,
+    } as Lesson;
+    render(<LessonPlayer lesson={lesson} plan={PLAN} live />);
+    reachAssessment();
+
+    answer("Roots");
+
+    // The option's own value, not our id for it.
+    expect(attempt).toHaveBeenCalledWith(
+      expect.objectContaining({ answer: "roots", lessonId: LESSON_ID }),
+    );
   });
 
   it("reports a wrong answer as wrong", () => {
@@ -224,5 +249,27 @@ describe("what a failed report costs", () => {
     expect(document.body.textContent).not.toMatch(
       /couldn't|error|failed|try again/i,
     );
+  });
+});
+
+describe("what an answer tells the engine", () => {
+  it("names the checkpoint, and no segment the question never belonged to", () => {
+    render(<LessonPlayer lesson={lessonWith(QUESTION)} plan={PLAN} live />);
+    reachAssessment();
+
+    answer("Roots");
+
+    /*
+     * The catalogue's `{ segmentId, questionId }`, as far as each is true. An
+     * after-lesson question belongs to the lesson, so it names no segment.
+     * Correctness is decided on the server against the stored answer, and the
+     * pick goes up on the attempt the server marks - so `correct`, the pick
+     * and its timing, which rode here under keys the catalogue does not take,
+     * are not sent. `source` tells it from a quick check's (B90/B92, 8 Oct).
+     */
+    expect(trackEvent).toHaveBeenCalledWith("comprehension_response", {
+      questionId: "cp-7",
+      source: "assessment",
+    });
   });
 });

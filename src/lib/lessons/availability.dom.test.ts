@@ -8,12 +8,9 @@ import { noteServerClock, resetServerClock } from "@/lib/api/serverClock";
  * Nothing in the student app had ever read either of the two fields that say
  * whether an assignment is a child's to do:
  *
- * 1. `status`. Two surfaces looked like they checked it — `a.status !==
- *    "completed"` — but `AssignmentStatus` is `"assigned" | "cancelled"` and
- *    has no "completed" member, so that comparison can never be false. Worse,
- *    `Assignment` types the field as a plain `string`, so typecheck never
- *    objected and will not object if it comes back. These tests are the only
- *    guard.
+ * 1. `status`. A cancelled row was never filtered at all. `Assignment` types
+ *    the field as a plain `string`, so typecheck never objected and will not
+ *    object if it comes back. These tests are the only guard.
  * 2. `availableFrom`. The moment an assignment OPENS, required on the read
  *    since 31 Aug, and read by nobody — so a lesson scheduled for Friday was on
  *    the child's Home the instant it was scheduled.
@@ -70,14 +67,29 @@ describe("an assignment a teacher called off", () => {
     expect(unavailableReason(assignment())).toBeNull();
   });
 
-  it("is not fooled by the status that does not exist", () => {
-    /*
-     * `"completed"` is not a member of `AssignmentStatus`, and the two dead
-     * filters compared against it. A row carrying it is nothing we were told
-     * to withhold, so it stays open — the point is that this function does not
-     * reproduce the bug by treating an unknown string as a refusal.
-     */
-    expect(isOpenToStudent(assignment({ status: "completed" }))).toBe(true);
+  it("does not treat an unknown status as a refusal", () => {
+    // A value the enum does not list is nothing we were told to withhold.
+    expect(isOpenToStudent(assignment({ status: "reassigned" }))).toBe(true);
+  });
+});
+
+describe("an assignment the child has finished", () => {
+  /*
+   * `completed` IS in the deployed enum (since 25 Sep), and the progress route
+   * writes it when a child finishes. This file's tests used to pin the
+   * opposite - that a completed row stays open - on the belief the value could
+   * not occur. So a finished lesson stayed on Home's Today list and counted in
+   * its "N ready", and the onboarding hand-off could send a child into a
+   * lesson they had already done.
+   */
+  it("is not open work", () => {
+    expect(isOpenToStudent(assignment({ status: "completed" }))).toBe(false);
+  });
+
+  it("is still the child's to open again", () => {
+    // Finished is not taken away. The player and the Lessons tab use this to
+    // decide what a child may open, and a finished lesson stays readable.
+    expect(unavailableReason(assignment({ status: "completed" }))).toBeNull();
   });
 });
 

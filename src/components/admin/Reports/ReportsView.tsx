@@ -1,5 +1,6 @@
 "use client";
 
+import { ReportsViews } from "./ReportsViews";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   analyticsApi,
@@ -28,11 +29,16 @@ import { NoAccess, failureKind } from "../NoAccess";
  * with the growth chart being "Self-Regulation Index, cohort average, week by
  * week" and the headline reading "+8 points since April".
  *
- * None of the four exists anywhere in the API. `GET /api/transformation-metrics`
- * returns VOLUMES - lessons transformed, transformation runs, sessions,
- * adaptations applied and per session - which is how much adapting happened,
- * not how a cohort is growing. There is no index, no month-over-month trend on
- * one, and nothing to put on a week-by-week axis.
+ * `GET /api/transformation-metrics`, which this screen reads, returns VOLUMES -
+ * how much adapting happened, not how a cohort is growing.
+ *
+ * SINCE 7 OCT THREE SCHOOL-WIDE FIGURES EXIST, in the view beside this one
+ * under Reports (D26, `SchoolTransformationView`; see `ReportsViews`) - and under
+ * honest names, because backend computes narrower things than D26's titles:
+ * the share of started lessons finished, the minutes a finished lesson took,
+ * and counts of format changes. Calibration is not measurable at all. None is
+ * a series, so the week-by-week growth chart D20 draws still has nothing to
+ * plot.
  *
  * Inventing an index from the counters would be the worst option available: a
  * proprietor would read a number called Self-Regulation, quote it to a parent
@@ -104,8 +110,17 @@ import { NoAccess, failureKind } from "../NoAccess";
 
 type Phase = "loading" | "ready" | "failed" | "denied";
 
-/** Enough of a picture to be worth drawing a trend through. */
-const MIN_PERIODS = 3;
+/*
+ * ~~const MIN_PERIODS = 3~~ - "enough of a picture to be worth drawing a
+ * trend through". Removed 30 Sep: it was a sufficiency threshold this console
+ * invented (architecture rule 3), and it hid a school's first two periods
+ * behind "There aren't enough lessons yet to show a trend with confidence" -
+ * a judgement nothing in the contract makes. The chart draws one point or two
+ * perfectly well; the nothing-state is for nothing.
+ */
+
+/** How many concepts show before "Show all" - a display cap, never a ranking. */
+const CONCEPTS_SHOWN = 8;
 
 function formatPeriod(iso: string): string {
   const d = new Date(iso);
@@ -122,6 +137,14 @@ export function ReportsView() {
   const [outcomes, setOutcomes] = useState<OutcomePeriod[]>([]);
   const [mastery, setMastery] = useState<SchoolConceptMastery[]>([]);
   const [transformation, setTransformation] = useState<TransformationMetrics | null>(null);
+  /*
+   * Their own failures, like the outcomes read. Both were `.catch(() =>
+   * undefined)`, so a failed read looked exactly like an empty one and the
+   * section silently disappeared - an admin could not tell "nothing yet" from
+   * "we could not ask".
+   */
+  const [masteryFailed, setMasteryFailed] = useState(false);
+  const [transformationFailed, setTransformationFailed] = useState(false);
 
   const load = useCallback(() => {
     // School health answers first because it carries the schoolId the other
@@ -141,12 +164,18 @@ export function ReportsView() {
           .catch(() => setOutcomesFailed(true));
         analyticsApi
           .getSchoolMastery(h.schoolId)
-          .then(setMastery)
-          .catch(() => undefined);
+          .then((m) => {
+            setMastery(m);
+            setMasteryFailed(false);
+          })
+          .catch(() => setMasteryFailed(true));
         analyticsApi
           .getTransformationMetrics()
-          .then(setTransformation)
-          .catch(() => undefined);
+          .then((t) => {
+            setTransformation(t);
+            setTransformationFailed(false);
+          })
+          .catch(() => setTransformationFailed(true));
       })
       .catch((err: unknown) => setPhase(failureKind(err)));
   }, []);
@@ -180,18 +209,16 @@ export function ReportsView() {
     [sorted],
   );
 
+  /*
+   * THE SERVER'S ORDER, AND NOTHING RANKED. This sorted concepts by a gap it
+   * computed (concept minus reading) and kept the top eight - a score and a
+   * selection the console made up, which architecture rule 3 forbids. The
+   * school mastery read carries no attribution; the engine has not said any
+   * concept's reading is "the barrier", so the screen does not either.
+   */
   const masteryRows: DualTrackRow[] = useMemo(
     () =>
-      [...mastery]
-        // Widest gap first: where the text is most in the way.
-        .sort(
-          (a, b) =>
-            b.masteryProbabilityConcept -
-            b.masteryProbabilityReading -
-            (a.masteryProbabilityConcept - a.masteryProbabilityReading),
-        )
-        .slice(0, 8)
-        .map((m) => ({
+      mastery.map((m) => ({
           key: m.conceptId,
           label: m.conceptName ?? "Unnamed concept",
           concept: m.masteryProbabilityConcept,
@@ -201,18 +228,23 @@ export function ReportsView() {
     [mastery],
   );
 
-  const enoughForTrend = sorted.length >= MIN_PERIODS;
+  const enoughForTrend = sorted.length > 0;
+  const [allConcepts, setAllConcepts] = useState(false);
+  const shownConcepts = allConcepts
+    ? masteryRows
+    : masteryRows.slice(0, CONCEPTS_SHOWN);
 
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
       <div className="mx-auto max-w-[880px]">
-        <h2 className="m-0 text-[28px] font-semibold tracking-[-0.018em] text-nevo-near-black">
+        <ReportsViews current="cohort" />
+        <h2 className="m-0 mt-6 text-[28px] font-semibold tracking-[-0.018em] text-nevo-near-black">
           Cohort analytics
         </h2>
         <p className="mt-1.5 max-w-[62ch] text-[14.5px] leading-[1.6] text-nevo-near-black/62">
-          How your school is using Nevo, and where the material is getting in
-          the way. Everything here is school-wide - no individual learner
-          appears on this screen.
+          How your school is using Nevo, and how understanding and reading
+          are going, concept by concept. Everything here is school-wide - no
+          individual learner appears on this screen.
         </p>
 
         {phase === "loading" ? (
@@ -314,27 +346,55 @@ export function ReportsView() {
                       Still gathering this cohort&rsquo;s picture
                     </h3>
                     <p className="mx-auto mt-2 max-w-[48ch] text-sm leading-[1.6] text-nevo-near-black/62">
-                      There aren&rsquo;t enough lessons yet to show a trend with
-                      confidence. It fills in on its own as your school keeps
-                      learning - nothing to set up.
+                      No lessons have finished yet, so there&rsquo;s nothing to
+                      chart. It fills in on its own as your school starts
+                      learning &ndash; nothing to set up.
                     </p>
                   </>
                 )}
               </div>
             )}
 
+            {masteryFailed ? (
+              <div className={cn(CARD, "mt-5 px-6 py-[22px]")}>
+                <ReadFailed what="understanding and reading by concept" onRetry={load} />
+              </div>
+            ) : null}
+            {transformationFailed ? (
+              <div className={cn(CARD, "mt-5 px-6 py-[22px]")}>
+                <ReadFailed what="how much Nevo adapted" onRetry={load} />
+              </div>
+            ) : null}
+
             {masteryRows.length > 0 ? (
               <div className={cn(CARD, "mt-5 px-6 py-[26px]")}>
+                {/*
+                  * WAS "Where the reading is getting in the way", with "Where
+                  * the two part company, the barrier is the text". That is a
+                  * diagnosis, and the school mastery read carries none - it
+                  * reports two tracks, not which one is in the way. The
+                  * tracks stay; the verdict goes until the engine gives one.
+                  */}
                 <h3 className="m-0 text-[17px] font-semibold text-nevo-near-black">
-                  Where the reading is getting in the way
+                  Understanding and reading, concept by concept
                 </h3>
                 <p className="m-0 mb-5 mt-1 max-w-[62ch] text-[13px] leading-[1.6] text-nevo-near-black/58">
-                  Two tracks per concept: how well the school understands the
-                  idea, and the reading level the material demands. Where the
-                  two part company, the barrier is the text rather than the
-                  concept - and that is something you can change.
+                  Two tracks for each concept across the school: how well
+                  learners understand the idea, and how well they handle the
+                  reading the material asks of them.
                 </p>
-                <DualTrackBars rows={masteryRows} />
+                <DualTrackBars rows={shownConcepts} />
+                {masteryRows.length > CONCEPTS_SHOWN ? (
+                  <button
+                    type="button"
+                    onClick={() => setAllConcepts((v) => !v)}
+                    className="mt-5 cursor-pointer text-[13px] font-semibold text-nevo-navy hover:opacity-75"
+                  >
+                    {allConcepts
+                      ? "Show fewer"
+                      : `Show all ${masteryRows.length} concepts`}
+                  </button>
+                ) : null}
               </div>
             ) : null}
 

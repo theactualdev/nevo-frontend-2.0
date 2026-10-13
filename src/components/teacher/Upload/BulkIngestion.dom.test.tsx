@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 
-const { batch, status, list, create, getToken } = vi.hoisted(() => ({
+const { batch, status, list, create, getToken, confirm, push } = vi.hoisted(() => ({
+  push: vi.fn(),
+  confirm: vi.fn(),
   batch: vi.fn(),
   status: vi.fn(),
   list: vi.fn(),
@@ -9,15 +11,16 @@ const { batch, status, list, create, getToken } = vi.hoisted(() => ({
   getToken: vi.fn(),
 }));
 vi.mock("@/lib/api/uploads", () => ({
-  uploadsApi: { batch, status, list, create },
+  uploadsApi: { batch, status, list, create, confirm },
 }));
 vi.mock("@/lib/api/lessons", () => ({ lessonsApi: { detail: vi.fn() } }));
 vi.mock("@/lib/auth/session", () => ({ getToken }));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
+  useRouter: () => ({ push, replace: vi.fn(), prefetch: vi.fn() }),
 }));
 
 import { BulkIngestion } from "./BulkIngestion";
+import { SystemMessagesProvider } from "@/components/shared/SystemMessages";
 
 /**
  * The bulk parsing beat, and the counter that belonged to nobody.
@@ -496,5 +499,273 @@ describe("a resend that cannot know which file a row is", () => {
     expect(
       screen.queryByRole("button", { name: /send this one again/i }),
     ).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * A batch that never went returned the teacher to the drop zone with no
+ * word: the sentence was set, and only the results screen read it.
+ */
+describe("a batch that could not be sent", () => {
+  it("says so where the teacher lands", async () => {
+    getToken.mockReturnValue("tok");
+    batch.mockRejectedValue(new Error("network"));
+    render(<BulkIngestion />);
+    drop(3);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /couldn.t send those just now. Nothing has been added/,
+    );
+  });
+});
+
+/**
+ * A batch where every file was refused had no way out but the browser's
+ * back button; and a batch that went in landed on the Library without a word.
+ */
+describe("the end of a batch", () => {
+  const ALL_REFUSED = {
+    acceptedCount: 0,
+    rejectedCount: 2,
+    uploads: [
+      { uploadId: null, filename: "a.zip", accepted: false, error: "Unsupported file type.", status: null, stage: null },
+      { uploadId: null, filename: "b.zip", accepted: false, error: "Unsupported file type.", status: null, stage: null },
+    ],
+  };
+
+  // C07h (12 Oct): "Back to my library" in the foot of every results
+  // screen - design's convention that no screen leaves a teacher with only
+  // the browser's back button. It replaces the close that appeared for the
+  // all-refused case alone.
+  it("offers a way out when every file was refused", async () => {
+    getToken.mockReturnValue("tok");
+    batch.mockResolvedValue(ALL_REFUSED);
+    push.mockReset();
+    render(<BulkIngestion />);
+    drop(2);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Back to my library" }));
+    expect(push).toHaveBeenCalledWith("/teacher/lessons");
+  });
+
+  it("offers the same way out over a batch that still has something to add", async () => {
+    getToken.mockReturnValue("tok");
+    batch.mockResolvedValue(ONE_ACCEPTED);
+    status.mockReturnValue(new Promise(() => {}));
+    render(<BulkIngestion />);
+    drop(1);
+
+    await screen.findByText(/sent for reading/);
+    expect(screen.getByRole("button", { name: "Back to my library" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Close" })).not.toBeInTheDocument();
+  });
+});
+
+describe("a batch that went in", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  /** The batch is taken, then one poll round says how each reading ended. */
+  const settled = async (rows: { id: string; status: string }[], result = ONE_ACCEPTED) => {
+    getToken.mockReturnValue("tok");
+    batch.mockResolvedValue(result);
+    list.mockResolvedValue(rows);
+    confirm.mockReset().mockResolvedValue({});
+    render(
+      <SystemMessagesProvider>
+        <BulkIngestion />
+      </SystemMessagesProvider>,
+    );
+    drop(result.uploads.length);
+    await act(async () => {});
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+  };
+
+  it("says it was added, in the shared bar, as C07d draws it", async () => {
+    await settled([{ id: "u-1", status: "ready" }]);
+    expect(screen.getByText(/came through cleanly/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Add all/ }));
+    await act(async () => {});
+
+    expect(screen.getByText("Added to your library.")).toBeInTheDocument();
+  });
+
+  it("says nothing came through cleanly while it is still being read (T95)", async () => {
+    await settled([{ id: "u-1", status: "processing" }]);
+
+    expect(screen.queryByText(/came through cleanly/)).not.toBeInTheDocument();
+    expect(screen.getByText("1 file sent for reading.")).toBeInTheDocument();
+  });
+
+  it("marks a row still being read as waiting, not with the tick (T95)", async () => {
+    await settled([{ id: "u-1", status: "processing" }]);
+
+    expect(document.querySelector("[data-reading]")).not.toBeNull();
+  });
+
+  it("will not add what is still being read (T96)", async () => {
+    await settled([{ id: "u-1", status: "processing" }]);
+
+    expect(screen.getByRole("button", { name: /Add all/ })).toBeDisabled();
+  });
+
+  it("counts a reading that stopped as one that needs a look, not as clean (T95)", async () => {
+    await settled([{ id: "u-1", status: "failed" }]);
+
+    expect(screen.getByText("0 came through cleanly. 1 needs a quick look.")).toBeInTheDocument();
+  });
+
+  it("adds only what is ready, never a reading that stopped (T96)", async () => {
+    const TWO = {
+      acceptedCount: 2,
+      rejectedCount: 0,
+      uploads: [
+        { ...ONE_ACCEPTED.uploads[0], uploadId: "u-1", filename: "a.docx" },
+        { ...ONE_ACCEPTED.uploads[0], uploadId: "u-2", filename: "b.docx" },
+      ],
+    };
+    await settled(
+      [
+        { id: "u-1", status: "ready" },
+        { id: "u-2", status: "failed" },
+      ],
+      TWO,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Add all/ }));
+    await act(async () => {});
+
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(confirm).toHaveBeenCalledWith("u-1");
+  });
+
+  it("adds only the rest when asked again after some did not go (T96)", async () => {
+    const TWO = {
+      acceptedCount: 2,
+      rejectedCount: 0,
+      uploads: [
+        { ...ONE_ACCEPTED.uploads[0], uploadId: "u-1", filename: "a.docx" },
+        { ...ONE_ACCEPTED.uploads[0], uploadId: "u-2", filename: "b.docx" },
+      ],
+    };
+    await settled(
+      [
+        { id: "u-1", status: "ready" },
+        { id: "u-2", status: "ready" },
+      ],
+      TWO,
+    );
+    confirm.mockImplementation((id: string) =>
+      id === "u-2" ? Promise.reject(new Error("x")) : Promise.resolve({}),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Add all/ }));
+    await act(async () => {});
+    expect(screen.getByText(/Added 1 of 2\. The rest didn’t go through - try again in a moment\./)).toBeInTheDocument();
+
+    confirm.mockClear().mockResolvedValue({});
+    fireEvent.click(screen.getByRole("button", { name: /Add all/ }));
+    await act(async () => {});
+
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(confirm).toHaveBeenCalledWith("u-2");
+  });
+
+  it("offers a way out when every reading stopped", async () => {
+    await settled([{ id: "u-1", status: "failed" }]);
+
+    expect(screen.getByRole("button", { name: "Back to my library" })).toBeInTheDocument();
+  });
+});
+
+/**
+ * C07h's results, as drawn on 12 Oct: each file in the group its own state
+ * puts it in - ready, still being read (ours), or couldn't be added - with
+ * "Replace this file" on a refused one.
+ */
+describe("the results, grouped as C07h draws them", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const MIXED = {
+    acceptedCount: 1,
+    rejectedCount: 1,
+    uploads: [
+      { uploadId: "u-1", filename: "wk1.docx", accepted: true, error: null, status: "processing", stage: "lessons" },
+      { uploadId: null, filename: "Term Overview.key", accepted: false, error: "This is a Keynote file, which we can't open yet.", status: null, stage: null },
+    ],
+  };
+
+  const results = async (rows: { id: string; status: string }[]) => {
+    getToken.mockReturnValue("tok");
+    batch.mockResolvedValue(MIXED);
+    list.mockResolvedValue(rows);
+    render(<BulkIngestion />);
+    drop(2);
+    await act(async () => {});
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+  };
+
+  /** The card or list a group heading introduces. */
+  const groupAfter = (heading: RegExp) =>
+    screen.getAllByText(heading)[0].closest("div")!.nextElementSibling as HTMLElement;
+
+  it("puts a finished file under Ready to go and a refused one under Couldn't be added", async () => {
+    await results([{ id: "u-1", status: "ready" }]);
+
+    expect(groupAfter(/Ready to go · 1 file$/)).toHaveTextContent("wk1.docx");
+    const out = groupAfter(/Couldn.t be added · 1 file$/);
+    expect(out).toHaveTextContent("Term Overview.key");
+    expect(out).toHaveTextContent("This is a Keynote file, which we can't open yet.");
+  });
+
+  it("keeps a file still being read in its own group, never under Ready to go", async () => {
+    await results([{ id: "u-1", status: "processing" }]);
+
+    expect(screen.queryByText(/Ready to go/)).not.toBeInTheDocument();
+    expect(groupAfter(/Still being read · 1 file$/)).toHaveTextContent("wk1.docx");
+  });
+
+  it("draws no quick-look group - nothing on the wire says a lesson needs one", async () => {
+    await results([{ id: "u-1", status: "ready" }]);
+
+    expect(screen.queryByText(/quick look needed/i)).not.toBeInTheDocument();
+  });
+
+  it("sends a replacement in the refused file's place", async () => {
+    create.mockReset().mockResolvedValue({ uploadId: "u-9", status: "processing", stage: "lessons" });
+    await results([{ id: "u-1", status: "ready" }]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Replace this file" }));
+    const input = document.querySelector("input[data-replace]") as HTMLInputElement;
+    const next = new File(["x"], "Term Overview.pdf", { type: "application/pdf" });
+    Object.defineProperty(input, "files", { value: [next], configurable: true });
+    await act(async () => {
+      fireEvent.change(input);
+    });
+
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(create.mock.calls[0][0]).toBe(next);
+    expect(create.mock.calls[0][1]).toBe("term");
+    // The row now describes the new file, and it is no longer refused.
+    expect(screen.getByText("Term Overview.pdf")).toBeInTheDocument();
+    expect(screen.queryByText(/Couldn.t be added/)).not.toBeInTheDocument();
+  });
+
+  it("offers no replacement when the rows and the files sent disagree", async () => {
+    // Positional, like the resend: row i is file i, or nothing is offered.
+    getToken.mockReturnValue("tok");
+    batch.mockResolvedValue(MIXED);
+    list.mockResolvedValue([{ id: "u-1", status: "ready" }]);
+    render(<BulkIngestion />);
+    drop(1);
+    await act(async () => {});
+
+    expect(screen.getByText("Term Overview.key")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Replace this file" })).not.toBeInTheDocument();
   });
 });

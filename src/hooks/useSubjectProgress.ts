@@ -28,12 +28,58 @@ interface SubjectSnapshot {
   /** Null when there was nothing to ask for yet. */
   subject: string | null;
   reflection: string | null;
+  note: string | null;
   lessons: LessonProgress[];
+  topics: SubjectTopics | null;
+  currentTopic: string | null;
+}
+
+/**
+ * The Progress card's topic counts (backend B53, 5 Oct), as the response
+ * states them and never recomputed. COUNTS, NOT SCORES: how many topics the
+ * engine treats as learned, of how many this child has met. The engine owns
+ * the threshold that makes one "done"; nothing here decides it.
+ */
+export interface SubjectTopics {
+  done: number;
+  /** Topics this child HAS MET - not the curriculum, which they have not. */
+  total: number;
+}
+
+/**
+ * Null is the nothing-state (rule 5): a total of 0 is the schema's default
+ * and means "not said", and a pair that contradicts itself is not drawn as
+ * whatever it is closest to.
+ */
+export function topicsFrom(res: {
+  topicsDone?: number | null;
+  topicsTotal?: number | null;
+}): SubjectTopics | null {
+  const done = res.topicsDone;
+  const total = res.topicsTotal;
+  if (
+    typeof done !== "number" ||
+    typeof total !== "number" ||
+    !Number.isInteger(done) ||
+    !Number.isInteger(total) ||
+    total <= 0 ||
+    done < 0 ||
+    done > total
+  ) {
+    return null;
+  }
+  return { done, total };
 }
 
 export interface SubjectProgressState {
   /** The subject's own reflection; null until read. */
   reflection: string | null;
+  /**
+   * The subject's short note for its Progress card (backend B29, 1 Oct).
+   * Null until read, and null when the backend wrote none - the contract's
+   * empty string is "no note", never a line to draw.
+   */
+  note: string | null;
   /**
    * The lessons THIS SUBJECT's history, which is the only place they exist.
    *
@@ -52,6 +98,15 @@ export interface SubjectProgressState {
    * did here.
    */
   lessons: LessonProgress[];
+  /** This subject's topic counts (B53); null until read, or not said. */
+  topics: SubjectTopics | null;
+  /**
+   * The unfinished topic with the most practice behind it (B53) - the
+   * backend's choice, not the first alphabetically. Its own field rather than
+   * part of `topics`, so it stands or falls alone: null until read, and null
+   * for the contract's "" default.
+   */
+  currentTopic: string | null;
   loading: boolean;
   failed: boolean;
 }
@@ -65,9 +120,25 @@ export function useSubjectProgress(
   const run = useCallback(async (): Promise<SubjectSnapshot> => {
     // `useLiveQuery` has no "enabled" switch, so an unknown subject resolves
     // to an empty snapshot rather than a request with nothing in the path.
-    if (!subject) return { subject: null, reflection: null, lessons: [] };
+    if (!subject) {
+      return {
+        subject: null,
+        reflection: null,
+        note: null,
+        lessons: [],
+        topics: null,
+        currentTopic: null,
+      };
+    }
     const res = await studentsApi.subjectProgress(studentId!, subject);
-    return { subject, reflection: res.reflection, lessons: res.lessons ?? [] };
+    return {
+      subject,
+      reflection: res.reflection,
+      note: res.note?.trim() || null,
+      lessons: res.lessons ?? [],
+      topics: topicsFrom(res),
+      currentTopic: res.currentTopic?.trim() || null,
+    };
   }, [studentId, subject]);
 
   const { data, failed, loading } = useLiveQuery<SubjectSnapshot>(run, [
@@ -86,7 +157,10 @@ export function useSubjectProgress(
 
   return {
     reflection: forThisSubject ? (data?.reflection ?? null) : null,
+    note: forThisSubject ? (data?.note ?? null) : null,
     lessons: forThisSubject ? (data?.lessons ?? []) : [],
+    topics: forThisSubject ? (data?.topics ?? null) : null,
+    currentTopic: forThisSubject ? (data?.currentTopic ?? null) : null,
     loading: Boolean(studentId && subject) && loading,
     failed,
   };

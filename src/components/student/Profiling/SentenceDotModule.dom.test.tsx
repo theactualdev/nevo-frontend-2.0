@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen } from "@testing-library/react";
-import { SentenceDotModule } from "./SentenceDotModule";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { SentenceDotModule, dotPositions, scatterDots } from "./SentenceDotModule";
 import { BaselineCapture } from "@/lib/profiling/capture";
+import { AGE_BANDS, dotPairs } from "@/lib/profiling/bands";
 
 /**
  * Module 3 asked children questions and recorded none of their answers.
@@ -26,8 +27,11 @@ const picks = (capture: BaselineCapture, act?: string) =>
 
 /** jsdom has no speech at all, so the P1-3 activity needs one supplied. */
 const spoken: string[] = [];
+/** What was handed to speech, so a test can say when it finished. */
+const utterances: { text: string; onend?: () => void }[] = [];
 function giveJsdomAVoice() {
   spoken.length = 0;
+  utterances.length = 0;
   // Adding what jsdom LACKS, which is safe; replacing what it has is the trap
   // that hangs the worker.
   (
@@ -38,7 +42,10 @@ function giveJsdomAVoice() {
   };
   (window as unknown as { speechSynthesis: unknown }).speechSynthesis = {
     cancel: () => {},
-    speak: (u: { text: string }) => spoken.push(u.text),
+    speak: (u: { text: string; onend?: () => void }) => {
+      spoken.push(u.text);
+      utterances.push(u);
+    },
   };
 }
 
@@ -162,5 +169,439 @@ describe("SentenceDotModule — P1-3 is actually asked something", () => {
     expect(screen.queryByLabelText("A bus")).toBeNull();
     // Straight to the dots, which need no voice.
     expect(screen.getByText("Watch the dots")).toBeVisible();
+  });
+});
+
+describe("SentenceDotModule — the dots have no fixed answer", () => {
+  /*
+   * Every pair drew its larger count on the left, in every band, so the first
+   * button was always right and a child who tapped it every time scored full
+   * marks on a number-sense measure. The side is now drawn per run.
+   */
+  const toTheDots = () => {
+    // No voice, so the P1-3 run goes straight to the dots.
+    const capture = new BaselineCapture("dots");
+    render(
+      <SentenceDotModule band="p13" capture={capture} onComplete={() => {}} />,
+    );
+    act(() => void vi.advanceTimersByTime(1000)); // past the reveal, masked
+    return capture;
+  };
+  const first = () => screen.getByRole("button", { name: /Top|Left/ });
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it("marks the first button wrong when the larger array is on the right", () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.1);
+    const capture = toTheDots();
+
+    fireEvent.click(first());
+
+    const [p] = picks(capture, "dots");
+    expect(p).toMatchObject({ correct: false });
+    expect(Number(p.a)).toBeLessThan(Number(p.b));
+  });
+
+  it("marks it right when the larger array is on the left", () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.9);
+    const capture = toTheDots();
+
+    fireEvent.click(first());
+
+    expect(picks(capture, "dots")[0]).toMatchObject({ correct: true });
+  });
+
+  it("records how close the two counts were", () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.9);
+    const capture = toTheDots();
+
+    fireEvent.click(first());
+
+    // P1-3's first pair is 8 against 4.
+    expect(picks(capture, "dots")[0]).toMatchObject({ ratio: 2 });
+  });
+});
+
+describe("SentenceDotModule — each band's dots", () => {
+  /*
+   * 16px dots in a 200px box for 850ms, for every band. The Dot Comparison
+   * frame gives 22 / 16 / 13 / 10px dots and a 220px box for P1-3, and 09c
+   * gives P1-3 800ms and JSS 500ms.
+   */
+  const dotsOf = () => document.querySelectorAll<HTMLElement>("span.absolute.bg-nevo-violet");
+  const box = () => dotsOf()[0].parentElement!;
+
+  it("draws P1-3 large dots in the larger box", () => {
+    // No voice in jsdom, so P1-3 opens on the dots.
+    render(<SentenceDotModule band="p13" onComplete={() => {}} />);
+
+    expect(dotsOf()[0].className).toContain("size-[22px]");
+    expect(box().className).toContain("sm:size-[220px]");
+  });
+
+  it("draws SS near-threshold dots small", () => {
+    render(<SentenceDotModule band="ss" onComplete={() => {}} />);
+    // Past the passage, which "Not sure" answers.
+    fireEvent.click(screen.getByText("Not sure"));
+    act(() => void vi.advanceTimersByTime(500));
+
+    expect(dotsOf()[0].className).toContain("size-2.5");
+  });
+
+  it("masks JSS's arrays after 500ms, not 850", () => {
+    render(<SentenceDotModule band="jss" onComplete={() => {}} />);
+    for (let i = 0; i < 3; i++) {
+      fireEvent.click(screen.getByText("Not sure"));
+      act(() => void vi.advanceTimersByTime(500));
+    }
+    act(() => void vi.advanceTimersByTime(10));
+    expect(screen.getByText("Watch the dots")).toBeVisible();
+
+    act(() => void vi.advanceTimersByTime(520));
+
+    expect(screen.queryByText("Watch the dots")).toBeNull();
+  });
+
+  it("masks P1-3's after 800ms", () => {
+    render(<SentenceDotModule band="p13" onComplete={() => {}} />);
+    act(() => void vi.advanceTimersByTime(790));
+    expect(screen.getByText("Watch the dots")).toBeVisible();
+
+    act(() => void vi.advanceTimersByTime(20));
+
+    expect(screen.queryByText("Watch the dots")).toBeNull();
+  });
+
+  /*
+   * P4-6 and SS ran the prototype's 850ms while 09c disagreed with it or said
+   * nothing. Design settled both at 600ms on 6 Oct (D75); SS "not shorter:
+   * ratio is already at threshold". The mask is when the dots open for an
+   * answer, so `openAfterMs` on the first dot trial is the display time.
+   */
+  const firstDotDisplay = (band: "p46" | "ss", readings: number) => {
+    const capture = new BaselineCapture(`reveal-${band}`);
+    render(
+      <SentenceDotModule band={band} capture={capture} onComplete={() => {}} />,
+    );
+    for (let i = 0; i < readings; i++) {
+      fireEvent.click(screen.getByText("Not sure"));
+      act(() => void vi.advanceTimersByTime(500));
+    }
+    act(() => void vi.advanceTimersByTime(1_000));
+    return capture.stream.find(
+      (e) => e.kind === "response_open" && e.payload?.act === "dots",
+    )?.payload?.openAfterMs;
+  };
+
+  it("shows the frame's pair, then the two its ratio derives (D76)", () => {
+    // P1-3 ran 7:3 and 9:5 after the frame's 8:4: one easier than 2:1 and
+    // one harder. Its trials 2 and 3 are now 6:3 and 10:5 (see `dotPairs`).
+    const capture = new BaselineCapture("pairs");
+    render(
+      <SentenceDotModule band="p13" capture={capture} onComplete={() => {}} />,
+    );
+    for (let i = 0; i < 3; i++) {
+      act(() => void vi.advanceTimersByTime(1_000)); // past the reveal
+      fireEvent.click(screen.getByRole("button", { name: /Top|Left/ }));
+      act(() => void vi.advanceTimersByTime(500)); // the pressed beat
+    }
+
+    const shown = picks(capture, "dots").map(({ a, b }) => [
+      Math.max(Number(a), Number(b)),
+      Math.min(Number(a), Number(b)),
+    ]);
+    expect(shown).toEqual([
+      [8, 4],
+      [6, 3],
+      [10, 5],
+    ]);
+  });
+
+  it("masks P4-6's after 600ms (D75)", () => {
+    expect(firstDotDisplay("p46", 3)).toBe(600);
+  });
+
+  it("masks SS's after 600ms, no shorter (D75)", () => {
+    expect(firstDotDisplay("ss", 1)).toBe(600);
+  });
+});
+
+describe("SentenceDotModule — a child sees every dot that is counted", () => {
+  /*
+   * Dots went anywhere between 8% and 84% of the box with no spacing, so some
+   * landed on others: SS's 12 read as 11 beside a 13 that read as 10, and
+   * P1-3's 3 read as 2. The count recorded was not the count on screen.
+   * Sizes are the Dot Comparison frame's; the box is the smallest any band
+   * draws, 200px less its 2px border.
+   */
+  const DOT_PX = { p13: 22, p46: 16, jss: 13, ss: 10 } as const;
+  const INNER = 196;
+  const MIN = 1.5;
+  const px = (p: { x: number; y: number }) => ({
+    x: (p.x / 100) * INNER,
+    y: (p.y / 100) * INNER,
+  });
+  /** The closest two centres in an array, in px. */
+  const closest = (dots: { x: number; y: number }[]) => {
+    let best = Infinity;
+    for (let i = 0; i < dots.length; i++)
+      for (let j = i + 1; j < dots.length; j++)
+        best = Math.min(best, Math.hypot(dots[i].x - dots[j].x, dots[i].y - dots[j].y));
+    return best;
+  };
+
+  it("keeps every pair of dots apart, in every band's pairs, on both sides", () => {
+    for (const band of Object.values(AGE_BANDS)) {
+      const d = DOT_PX[band];
+      dotPairs(band).forEach((pair, trial) => {
+        for (const side of [0, 1])
+          for (const count of [pair.a, pair.b]) {
+            const dots = dotPositions(band, trial, side, count).map(px);
+            // Exactly as many as the pair says: only where they go changed.
+            expect(dots).toHaveLength(count);
+            expect(closest(dots), `${band} trial ${trial} side ${side} ${count}`)
+              .toBeGreaterThanOrEqual(d * MIN);
+            // Inside the box, clear of its edge.
+            for (const p of dots) {
+              expect(p.x).toBeGreaterThanOrEqual(14);
+              expect(p.y).toBeGreaterThanOrEqual(14);
+              expect(p.x + d).toBeLessThanOrEqual(INNER - 14 + 1e-9);
+              expect(p.y + d).toBeLessThanOrEqual(INNER - 14 + 1e-9);
+            }
+          }
+      });
+    }
+  });
+
+  it("places them the same way every time", () => {
+    expect(dotPositions("ss", 0, 1, 12)).toEqual(dotPositions("ss", 0, 1, 12));
+  });
+
+  it("falls back to an even lattice where random places run out, still apart", () => {
+    // Sixteen 30px dots: too crowded to place at random, not for the lattice.
+    const dots = scatterDots(16, 7, 30).map(px);
+
+    expect(dots).toHaveLength(16);
+    expect(closest(dots)).toBeGreaterThanOrEqual(30 * MIN);
+  });
+
+  it("draws the arrays it promises, spaced, on screen", () => {
+    // The larger on the right: P1-3's 8, which overlapped there, on side 1.
+    vi.spyOn(Math, "random").mockReturnValue(0.1);
+    render(<SentenceDotModule band="p13" onComplete={() => {}} />);
+
+    const boxes = [
+      ...new Set(
+        [...document.querySelectorAll<HTMLElement>("span.absolute.bg-nevo-violet")].map(
+          (s) => s.parentElement!,
+        ),
+      ),
+    ];
+    const arrays = boxes.map((b) =>
+      [...b.querySelectorAll<HTMLElement>("span")].map((s) =>
+        px({ x: parseFloat(s.style.left), y: parseFloat(s.style.top) }),
+      ),
+    );
+    expect(arrays.map((a) => a.length)).toEqual([4, 8]);
+    for (const a of arrays) expect(closest(a)).toBeGreaterThanOrEqual(22 * MIN);
+    vi.restoreAllMocks();
+  });
+});
+
+describe("SentenceDotModule — the question matches the buttons", () => {
+  it("asks top or bottom on a phone, and which had more from tablet up", () => {
+    // It asked which SIDE had more above buttons reading Top and Bottom.
+    render(<SentenceDotModule band="p13" onComplete={() => {}} />);
+    act(() => void vi.advanceTimersByTime(1000));
+
+    const phone = screen.getByText("Which had more dots: top or bottom?");
+    const wide = screen.getByText("Which had more dots?");
+    expect(phone.className).toContain("sm:hidden");
+    expect(wide.className).toContain("hidden sm:inline");
+    expect(document.body.textContent).not.toMatch(/which side/i);
+  });
+});
+
+describe("SentenceDotModule — 3A says only what a frame gives it", () => {
+  /*
+   * "Listen, then tap the matching picture" and "Read it, then answer" sat
+   * in a bubble over the heard pictures and the passage. No frame has either:
+   * `Nevo Sentence Verify Frame` draws 3A with no avatar row.
+   */
+  const bubble = () => screen.queryByRole("status");
+
+  it("puts no bubble over the heard pictures", () => {
+    giveJsdomAVoice();
+    render(<SentenceDotModule band="p13" onComplete={() => {}} />);
+
+    expect(screen.getByLabelText("A bus")).toBeInTheDocument();
+    expect(bubble()).toBeNull();
+    expect(document.body.textContent).not.toMatch(/listen, then tap/i);
+  });
+
+  it("puts none over the passage", () => {
+    render(<SentenceDotModule band="ss" onComplete={() => {}} />);
+
+    expect(screen.getByText("Why does Ada keep a notebook?")).toBeInTheDocument();
+    expect(bubble()).toBeNull();
+    expect(document.body.textContent).not.toMatch(/read it, then answer/i);
+  });
+
+  it("keeps the prototype's question over a sentence", () => {
+    render(<SentenceDotModule band="p46" onComplete={() => {}} />);
+
+    expect(bubble()?.textContent).toBe("Is this true or false?");
+  });
+});
+
+describe("SentenceDotModule — a new trial paints clean", () => {
+  /*
+   * The buttons eased their colour, and the same button carries on into the
+   * next trial, so the last answer's violet faded out over a fresh one. The
+   * frames move only the scale (`.sv-tap`, `.dc-tap`).
+   */
+  const easesColour = /transition-(colors|all)|transition-\[[^\]]*(background|border|color)/;
+
+  it("draws the next sentence's buttons unpressed, with no colour to fade", () => {
+    render(<SentenceDotModule band="p46" onComplete={() => {}} />);
+    fireEvent.click(screen.getByText("True"));
+    act(() => void vi.advanceTimersByTime(500));
+
+    for (const label of ["True", "False", "Not sure"]) {
+      const b = screen.getByText(label);
+      expect(b.className).not.toContain("bg-nevo-violet");
+      expect(b.className).not.toMatch(easesColour);
+    }
+  });
+
+  it("does the same for the dots' buttons and the heard pictures' I don't know", () => {
+    render(<SentenceDotModule band="p13" onComplete={() => {}} />);
+    act(() => void vi.advanceTimersByTime(1000));
+    for (const b of screen.getAllByRole("button"))
+      expect(b.className).not.toMatch(easesColour);
+    cleanup();
+
+    giveJsdomAVoice();
+    render(<SentenceDotModule band="p13" onComplete={() => {}} />);
+    expect(
+      screen.getByRole("button", { name: /I don.t know/ }).className,
+    ).not.toMatch(easesColour);
+  });
+});
+
+describe("SentenceDotModule — buttons at the frames' sizes", () => {
+  it("draws True, False and Not sure 52px tall, full width on a phone and 168px up", () => {
+    // They were the module's 180x56 default.
+    render(<SentenceDotModule band="p46" onComplete={() => {}} />);
+
+    for (const label of ["True", "False", "Not sure"]) {
+      const b = screen.getByText(label);
+      expect(b.className).toContain("h-[52px]");
+      expect(b.className).toMatch(/(^| )w-full( |$)/);
+      expect(b.className).toContain("sm:w-[168px]");
+    }
+  });
+
+  it("draws the dots' buttons full width at 16px on a phone, 200x64 at 18px up", () => {
+    // They were 170x56 from tablet up, and 300 wide at 18px on a phone.
+    render(<SentenceDotModule band="p13" onComplete={() => {}} />);
+    act(() => void vi.advanceTimersByTime(1000));
+
+    const b = screen.getByRole("button", { name: /Top|Left/ });
+    expect(b.className).toMatch(/(^| )w-full( |$)/);
+    expect(b.className).toContain("text-base");
+    expect(b.className).toContain("sm:h-16");
+    expect(b.className).toContain("sm:w-[200px]");
+    expect(b.className).toContain("sm:text-lg");
+    expect(b.parentElement!.className).not.toContain("max-w-[300px]");
+  });
+});
+
+describe("SentenceDotModule — the listening task has an honest non-answer", () => {
+  it("offers 'I don't know' and records it as declined, never wrong", () => {
+    giveJsdomAVoice();
+    const capture = new BaselineCapture("idk");
+    render(
+      <SentenceDotModule band="p13" capture={capture} onComplete={() => {}} />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /I don.t know/ }));
+
+    const pick = picks(capture, "reading")[0];
+    expect(pick.notSure).toBe(true);
+    expect(pick.correct).toBeUndefined();
+  });
+});
+
+describe("SentenceDotModule — response time starts when the child can answer", () => {
+  /*
+   * rtMs ran from presentation, so it carried the dot reveal (now different
+   * per band) and the device's speech, and the offset went nowhere.
+   */
+  it("times a dot answer from the mask, and says how long the reveal was", () => {
+    const capture = new BaselineCapture("rt-dots");
+    render(
+      <SentenceDotModule band="p13" capture={capture} onComplete={() => {}} />,
+    );
+    act(() => void vi.advanceTimersByTime(800)); // the mask lands
+    act(() => void vi.advanceTimersByTime(300)); // the child thinks
+
+    fireEvent.click(screen.getByRole("button", { name: /Top|Left/ }));
+
+    expect(picks(capture, "dots")[0]).toMatchObject({
+      rtMs: 300,
+      openAfterMs: 800,
+    });
+  });
+
+  it("times a heard answer from the end of the sentence", () => {
+    giveJsdomAVoice();
+    const capture = new BaselineCapture("rt-audio");
+    render(
+      <SentenceDotModule band="p13" capture={capture} onComplete={() => {}} />,
+    );
+    act(() => void vi.advanceTimersByTime(2000)); // the sentence is spoken
+    act(() => utterances[0].onend?.());
+    act(() => void vi.advanceTimersByTime(700));
+
+    fireEvent.click(screen.getByLabelText("A bus"));
+
+    expect(picks(capture, "reading")[0]).toMatchObject({
+      rtMs: 700,
+      openAfterMs: 2000,
+    });
+  });
+
+  it("gives no time at all to an answer made while it was still speaking", () => {
+    // Timing it from presentation would put the device's speech back in.
+    giveJsdomAVoice();
+    const capture = new BaselineCapture("rt-early");
+    render(
+      <SentenceDotModule band="p13" capture={capture} onComplete={() => {}} />,
+    );
+    act(() => void vi.advanceTimersByTime(600));
+
+    fireEvent.click(screen.getByLabelText("A bus"));
+
+    expect(picks(capture, "reading")[0]).toMatchObject({
+      rtMs: null,
+      beforeOpen: true,
+      correct: true,
+    });
+  });
+
+  it("ignores the end of a sentence that was cut off by a replay", () => {
+    giveJsdomAVoice();
+    const capture = new BaselineCapture("rt-replay");
+    render(
+      <SentenceDotModule band="p13" capture={capture} onComplete={() => {}} />,
+    );
+    fireEvent.click(screen.getByLabelText("Play the sentence again"));
+    // The first, cancelled utterance reports its end late.
+    act(() => utterances[0].onend?.());
+
+    fireEvent.click(screen.getByLabelText("A bus"));
+
+    expect(picks(capture, "reading")[0]).toMatchObject({ beforeOpen: true });
   });
 });

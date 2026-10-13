@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { markWarmUpDone, warmUpDoneToday } from "./warmUpDone";
+import { markWarmUpDone, warmUpDoneFor, warmUpDoneToday } from "./warmUpDone";
 
 /**
  * A note that an activity happened, on a device up to six children share.
@@ -135,5 +135,31 @@ describe("when the device will not remember", () => {
     expect(() => markWarmUpDone("child-1")).not.toThrow();
 
     setItem.mockRestore();
+  });
+});
+
+describe("done when the account or this device says so (B10)", () => {
+  it("is done when the account says so, on a tablet that has never seen it", () => {
+    // The second tablet: nothing remembered here, and that is the bug.
+    expect(warmUpDoneFor(true, "child-1")).toBe(true);
+  });
+
+  it("stays done on the tablet that watched it finish, whatever the account says", () => {
+    // A device-task day may not set the account's doneToday; trusting its
+    // "not done" would offer a second run on the same tablet.
+    markWarmUpDone("child-1");
+
+    expect(warmUpDoneFor(false, "child-1")).toBe(true);
+  });
+
+  it("is not done when neither the account nor this device has seen it", () => {
+    expect(warmUpDoneFor(false, "child-1")).toBe(false);
+  });
+
+  it("falls back on this device only when the account has not said", () => {
+    markWarmUpDone("child-1");
+
+    expect(warmUpDoneFor(undefined, "child-1")).toBe(true);
+    expect(warmUpDoneFor(undefined, "child-2")).toBe(false);
   });
 });

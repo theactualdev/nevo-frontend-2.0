@@ -1,12 +1,25 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { authApi } from "@/lib/api";
+import {
+  DOOR_HREF,
+  DOOR_LABEL,
+  doorForRole,
+  knownRole,
+  type ConsoleDoor,
+} from "@/lib/auth/consoleDoor";
 import { classifyLoginFailure } from "@/lib/auth/loginFailure";
 import { useAuth } from "@/hooks";
-import type { UserRole } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { SystemMessage } from "@/components/shared/SystemMessage";
+import {
+  SIGNED_OUT_HOLD_MS,
+  SIGNED_OUT_LINE,
+  SIGNED_OUT_PARAM,
+} from "./signedOut";
 
 /**
  * C02 Teacher Sign-In - the returning teacher's door. Email + password or
@@ -60,8 +73,19 @@ const THROTTLED_MSG =
  */
 const SSO_UNAVAILABLE_MSG =
   "School sign-in isn't set up for Nevo yet. Use your email and password for now - your school admin can tell you when that changes.";
+/**
+ * NEVO, NOT "YOUR SCHOOL'S SIGN-IN". This door is Nevo's own password login,
+ * so a network failure here is ours to own; naming the school's sign-in
+ * pointed a teacher at a system that was never involved.
+ */
 const UNREACHABLE_MSG =
-  "We couldn't reach your school's sign-in right now. Nothing on your end - try again in a moment.";
+  "We couldn't reach Nevo right now. Nothing on your end - try again in a moment.";
+/**
+ * For a role no door serves. The admin door's sentence, word for word - the
+ * two doors refuse the same way.
+ */
+const WRONG_DOOR_MSG =
+  "Those details are right, but this account can’t be used to sign in here. Check with whoever set up your Nevo account.";
 
 type Phase = "idle" | "signing" | "error" | "success";
 
@@ -108,11 +132,34 @@ export function TeacherSignIn() {
     nextParam && nextParam.startsWith("/teacher/")
       ? nextParam
       : "/teacher/dashboard";
+  /** Arrived from signing out, so the door says so for a moment (T228). */
+  const signedOut = searchParams.get(SIGNED_OUT_PARAM) === "1";
+  const [signedOutSaid, setSignedOutSaid] = useState(false);
+  useEffect(() => {
+    if (!signedOut) return;
+    const t = setTimeout(() => {
+      setSignedOutSaid(true);
+      // Off the address too, or a reload would say it again.
+      const rest = new URLSearchParams(searchParams.toString());
+      rest.delete(SIGNED_OUT_PARAM);
+      const q = rest.toString();
+      router.replace(q ? `/auth/teacher?${q}` : "/auth/teacher");
+    }, SIGNED_OUT_HOLD_MS);
+    return () => clearTimeout(t);
+  }, [signedOut, searchParams, router]);
+  /** Which attempt is current, so a late answer to an abandoned one can be told apart. */
+  const attempt = useRef(0);
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
   const [errMsg, setErrMsg] = useState("");
+  /**
+   * Where they belong instead, when the details were right for a different
+   * console. Null for every other failure, and for a role no door serves -
+   * `WRONG_DOOR_MSG` covers that one.
+   */
+  const [wrongDoor, setWrongDoor] = useState<ConsoleDoor | null>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
@@ -132,6 +179,8 @@ export function TeacherSignIn() {
   const submit = () => {
     if (!canSubmit || phase === "signing" || phase === "success") return;
     setPhase("signing");
+    setWrongDoor(null);
+    const mine = ++attempt.current;
     const live = authApi.loginPassword({ email: email.trim(), password: pw });
     const cap = new Promise<never>((_, reject) =>
       timers.current.push(
@@ -140,9 +189,30 @@ export function TeacherSignIn() {
     );
     Promise.race([live, cap])
       .then((session) => {
+        /*
+         * REFUSE AT THE DOOR, NOT AFTER IT - what the admin door has done
+         * since 23 Sep, and this one never did.
+         *
+         * Any role was let in: an admin's details were stored as a session,
+         * shown "You're in", and pushed at `/teacher/dashboard` - where
+         * `proxy.ts` bounced them back here with the session still live, and
+         * round again. `doorForRole` is built on the guard's own rule, so the door
+         * and the guard cannot disagree about who belongs.
+         */
+        const role = knownRole(session.role);
+        const belongs = doorForRole(role);
+        if (belongs !== "teacher" || !role) {
+          setWrongDoor(belongs);
+          setErrMsg(WRONG_DOOR_MSG);
+          setPhase("error");
+          // The login SUCCEEDED, so a session exists. Someone told "not here"
+          // must not leave carrying one; `logout` clears locally regardless.
+          void authApi.logout().catch(() => {});
+          return;
+        }
         signIn({
           id: session.userId,
-          role: session.role as UserRole,
+          role,
           schoolId: "",
           method: "manual",
         });
@@ -152,6 +222,21 @@ export function TeacherSignIn() {
         );
       })
       .catch((err: unknown) => {
+        /*
+         * GAVE UP, BUT THE LOGIN MAY STILL LAND (T206). After the cap the
+         * teacher is told Nevo could not be reached - and the request is still
+         * out. `loginPassword` stores the session it gets, so a late answer
+         * left them signed in behind a screen saying they were not, and the
+         * door's next load bounced them into the console. If it lands, end it;
+         * unless they have since tried again, in which case it is theirs.
+         */
+        if (err instanceof Error && err.message === "timeout") {
+          live
+            .then(() => {
+              if (attempt.current === mine) void authApi.logout().catch(() => {});
+            })
+            .catch(() => {});
+        }
         const failure = classifyLoginFailure(err);
         setErrMsg(
           failure === "paused"
@@ -196,6 +281,8 @@ export function TeacherSignIn() {
 
   const isSuccess = phase === "success";
   const isForm = !isSuccess;
+  /** The one failure that is about the password typed. */
+  const mismatch = phase === "error" && errMsg === MISMATCH_MSG;
 
   return (
     <div className="relative flex min-h-full w-full flex-1 items-center justify-center px-6 py-[88px]">
@@ -210,7 +297,14 @@ export function TeacherSignIn() {
 
       <div className="w-full max-w-[432px]">
         {isForm && (
-          <div className="flex flex-col items-start">
+          <form
+            noValidate
+            onSubmit={(e) => {
+              e.preventDefault();
+              submit();
+            }}
+            className="flex flex-col items-start"
+          >
             {/*
               NO SCHOOL EYEBROW. The frame draws "Corona Secondary School ·
               Lagos" here and this shipped it as a literal, so every teacher at
@@ -226,9 +320,9 @@ export function TeacherSignIn() {
               door made for the same reason (`AdminSignIn.tsx`). When a pre-auth
               lookup exists, both doors get it together.
             */}
-            <h2 className="text-[34px] leading-[1.15] font-semibold tracking-[-0.02em]">
+            <h1 className="text-[34px] leading-[1.15] font-semibold tracking-[-0.02em]">
               Welcome back
-            </h2>
+            </h1>
             <p className="mt-3 text-[16px] leading-[1.55] text-nevo-near-black/70">
               Sign in to your teacher console.
             </p>
@@ -277,7 +371,9 @@ export function TeacherSignIn() {
                 "mt-2 flex h-[52px] w-full items-center rounded-[10px] border-[1.5px] bg-nevo-cream-elevated pr-3.5 pl-4 transition-[border-color] duration-150",
                 // The violet mismatch border owns the field until typing
                 // clears it - even while focused (the frame's error state).
-                phase === "error"
+                // A MISMATCH only (T207): paused, throttled, unreachable and
+                // SSO all marked the password as the thing that was wrong.
+                mismatch
                   ? "border-nevo-violet focus-within:border-nevo-violet"
                   : "border-nevo-near-black/16 focus-within:border-nevo-navy",
               )}
@@ -291,10 +387,8 @@ export function TeacherSignIn() {
                   setPw(e.target.value);
                   clearError();
                 }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") submit();
-                }}
                 placeholder="Enter your password"
+                aria-invalid={mismatch || undefined}
                 className="h-full min-w-0 flex-1 border-none bg-transparent text-[16px] text-nevo-near-black outline-none"
               />
               <button
@@ -324,14 +418,27 @@ export function TeacherSignIn() {
                   </svg>
                 </span>
                 <span className="text-[14px] leading-[1.5] text-nevo-near-black">
-                  {errMsg}
+                  {wrongDoor ? (
+                    <>
+                      Those details are right, but this is the teacher sign-in.
+                      Your account is a {DOOR_LABEL[wrongDoor]} account &ndash;{" "}
+                      <Link
+                        href={DOOR_HREF[wrongDoor]}
+                        className="cursor-pointer font-semibold text-nevo-navy underline underline-offset-2"
+                      >
+                        sign in as a {DOOR_LABEL[wrongDoor]}
+                      </Link>
+                      .
+                    </>
+                  ) : (
+                    errMsg
+                  )}
                 </span>
               </div>
             )}
 
             <button
-              type="button"
-              onClick={submit}
+              type="submit"
               disabled={!canSubmit}
               className={cn(
                 "mt-[30px] flex h-[54px] w-full items-center justify-center rounded-[10px] text-[16px] font-semibold tracking-[-0.005em] transition-[filter] duration-150",
@@ -371,7 +478,7 @@ export function TeacherSignIn() {
                 </>
               )}
             </button>
-          </div>
+          </form>
         )}
 
         {isSuccess && (
@@ -381,9 +488,9 @@ export function TeacherSignIn() {
                 <path d="M5 12.5l4.5 4.5L19 7.5" />
               </svg>
             </span>
-            <h2 className="mt-[26px] text-[30px] font-semibold tracking-[-0.02em]">
+            <h1 className="mt-[26px] text-[30px] font-semibold tracking-[-0.02em]">
               {"You're in"}
-            </h2>
+            </h1>
             <p className="mt-3 text-[16px] leading-[1.55] text-nevo-near-black/70">
               Taking you to your console.
             </p>
@@ -392,6 +499,21 @@ export function TeacherSignIn() {
               {"One moment…"}
             </span>
           </div>
+        )}
+      </div>
+
+      {/* SCRUM-88 step 3, in the console's ONE message pattern (design,
+          12 Oct): the shared bar's place, top centre, for its ~5 seconds. It
+          used to be a bottom-centre 1.5-second one-off. The door is outside
+          the shell, so there is no provider to queue it on; it draws the same
+          bar in the same spot instead. The region is always here, so the
+          words arriving in it are announced. */}
+      <div
+        role="status"
+        className="nevo-text-zoom pointer-events-none fixed inset-x-0 top-4 z-[60] flex flex-col items-center gap-2 px-4"
+      >
+        {signedOut && !signedOutSaid && (
+          <SystemMessage message={{ kind: "confirm", message: SIGNED_OUT_LINE }} />
         )}
       </div>
     </div>

@@ -13,6 +13,7 @@ import {
   SystemMessage,
   type SystemMessageInput,
 } from "./SystemMessage";
+import { MESSAGE_LEAVES_AFTER_MS } from "@/lib/constants/systemMessages";
 
 /**
  * The queue behind SCRUM-152's bar: SM-05's resolve-in-place and SM-06's
@@ -41,8 +42,8 @@ import {
  * describes something still running.
  */
 
-/** Long enough to read a short line twice, per design's own worked example. */
-const LEAVES_AFTER_MS = 5000;
+/** See the constant's own note: one dwell for the console's one bar. */
+const LEAVES_AFTER_MS = MESSAGE_LEAVES_AFTER_MS;
 
 /** SM-06: "stacked, newest at top, capped at three". */
 const MAX_ON_SCREEN = 3;
@@ -76,6 +77,8 @@ export function SystemMessagesProvider({
   const [held, setHeld] = useState<Held[]>([]);
   const nextId = useRef(1);
   const timers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
+  /** Why each message is being held: the pointer is on it, or focus is in it. */
+  const holds = useRef(new Map<number, Set<"pointer" | "focus">>());
 
   const dismiss = useCallback((id: number) => {
     const timer = timers.current.get(id);
@@ -83,6 +86,7 @@ export function SystemMessagesProvider({
       clearTimeout(timer);
       timers.current.delete(id);
     }
+    holds.current.delete(id);
     setHeld((all) => all.filter((h) => h.id !== id));
   }, []);
 
@@ -99,6 +103,7 @@ export function SystemMessagesProvider({
       if (existing) clearTimeout(existing);
       timers.current.delete(id);
       if (!leavesOnItsOwn(message)) return;
+      if (holds.current.get(id)?.size) return;
       timers.current.set(
         id,
         setTimeout(() => dismiss(id), LEAVES_AFTER_MS),
@@ -139,6 +144,29 @@ export function SystemMessagesProvider({
     [arm],
   );
 
+  /*
+   * A CONFIRMATION WAITS FOR WHOEVER IS READING IT (C14). It left after five
+   * seconds whatever was happening, which is not long enough for everyone:
+   * someone reading slowly, or zoomed in, or moving to its button, lost it
+   * mid-sentence. While the pointer is on it or focus is in it, its clock
+   * stops; when both have gone it gets the full five seconds again.
+   */
+  const hold = useCallback((id: number, why: "pointer" | "focus") => {
+    const reasons = holds.current.get(id) ?? new Set();
+    reasons.add(why);
+    holds.current.set(id, reasons);
+    const timer = timers.current.get(id);
+    if (timer) clearTimeout(timer);
+    timers.current.delete(id);
+  }, []);
+  const release = useCallback(
+    (id: number, why: "pointer" | "focus", message: SystemMessageInput) => {
+      holds.current.get(id)?.delete(why);
+      arm(id, message);
+    },
+    [arm],
+  );
+
   const api = useMemo(
     () => ({ show, resolve, dismiss }),
     [show, resolve, dismiss],
@@ -147,24 +175,42 @@ export function SystemMessagesProvider({
   return (
     <Ctx.Provider value={api}>
       {children}
-      {held.length > 0 && (
-        /* Top-centre, clear of the sidebar, riding above the content and
-           leaving the layout beneath untouched - the frame's own placement.
-           `pointer-events-none` on the rail so a bar never swallows a click
-           meant for the page behind it; the bars themselves take theirs back. */
-        <div className="pointer-events-none fixed inset-x-0 top-4 z-[60] flex flex-col items-center gap-2 px-4">
-          {held.map((h) => (
-            <div key={h.id} className="pointer-events-auto">
-              <SystemMessage
-                message={h.message}
-                onDismiss={
-                  leavesOnItsOwn(h.message) ? undefined : () => dismiss(h.id)
-                }
-              />
-            </div>
-          ))}
-        </div>
-      )}
+      {/*
+        Top-centre, clear of the sidebar, riding above the content and leaving
+        the layout beneath untouched - the frame's own placement.
+        `pointer-events-none` on the rail so a bar never swallows a click
+        meant for the page behind it; the bars themselves take theirs back.
+
+        ALWAYS MOUNTED, AND THE ONE LIVE REGION (C14). It used to appear only
+        once it had something to say, so every bar arrived inside a live
+        region that was itself brand new and already full - the case screen
+        readers most often skip. Empty, it draws nothing. `log` because SM-06
+        stacks them in order, newest first.
+
+        It takes the teacher's text size like the page does (C12).
+      */}
+      <div
+        role="log"
+        className="nevo-text-zoom pointer-events-none fixed inset-x-0 top-4 z-[60] flex flex-col items-center gap-2 px-4"
+      >
+        {held.map((h) => (
+          <div
+            key={h.id}
+            className="pointer-events-auto"
+            onMouseEnter={() => hold(h.id, "pointer")}
+            onMouseLeave={() => release(h.id, "pointer", h.message)}
+            onFocus={() => hold(h.id, "focus")}
+            onBlur={() => release(h.id, "focus", h.message)}
+          >
+            <SystemMessage
+              message={h.message}
+              onDismiss={
+                leavesOnItsOwn(h.message) ? undefined : () => dismiss(h.id)
+              }
+            />
+          </div>
+        ))}
+      </div>
     </Ctx.Provider>
   );
 }

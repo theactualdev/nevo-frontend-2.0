@@ -15,6 +15,7 @@ import {
 } from "@/lib/auth/consoleDoor";
 import { classifyLoginFailure, type LoginFailure } from "@/lib/auth/loginFailure";
 import { cn } from "@/lib/utils";
+import { SupportEmailLink } from "../SupportEmail";
 
 /**
  * D02 Admin Sign-In - one door for every admin. Password sign-in is LIVE
@@ -53,8 +54,10 @@ import { cn } from "@/lib/utils";
  * unauthenticated, and HandoverStep in this same console already calls the
  * second. Two wrong entries on one line, one of them already corrected in
  * place - which is the argument for correcting rather than deleting these.
- * TODO(screen): D17 IT Admin Home and D18 Finance Home. The frame routes each
- * persona to their own landing; until those exist everyone lands on Overview.
+ *
+ * D17 IT Admin Home and D18 Finance Home EXIST NOW, and sign-in routes each
+ * persona to their own landing through `adminHomeForScopes` - oversight to the
+ * Overview, IT to Systems overview, billing to Finance home.
  */
 
 const SUCCESS_HOLD_MS = 1400;
@@ -99,12 +102,7 @@ const PAUSED_MSG = (
   <>
     This account isn&rsquo;t open at the moment. Another administrator at your
     school can reopen it. If there isn&rsquo;t one, email{" "}
-    <a
-      href="mailto:support@nevolearning.com"
-      className="font-semibold text-nevo-navy hover:underline"
-    >
-      support@nevolearning.com
-    </a>
+    <SupportEmailLink className="font-semibold text-nevo-navy hover:underline" />
     .
   </>
 );
@@ -189,7 +187,9 @@ export function AdminSignIn() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { signIn } = useAuth();
-  // Same-app paths only, never an open redirect.
+  // The route guard and the session-expired screen append ?next= so the
+  // admin returns where they were headed. Same-app paths only, never an open
+  // redirect.
   const nextParam = searchParams.get("next");
   // `/admin` picks the persona home from the caller's scopes - the Overview
   // is gated on `oversight`, so sending everyone there landed IT and finance

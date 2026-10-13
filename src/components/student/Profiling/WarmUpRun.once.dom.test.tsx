@@ -7,7 +7,7 @@ import { markWarmUpDone } from "@/lib/profiling/warmUpDone";
  * ONE WARM-UP A DAY.
  *
  * It was re-sittable any number of times, and the cost was not cosmetic: every
- * run reduces to a feature vector and submits it, so a child who opened it
+ * run submits a measurement, so a child who opened it
  * four times sent four measurements of the same dimension on the same day -
  * and the engine recalibrates on those. The screen already had the gentle done
  * state design confirmed on 23 Sep; what it lacked was a memory that it had
@@ -18,14 +18,13 @@ import { markWarmUpDone } from "@/lib/profiling/warmUpDone";
  */
 
 const { submit } = vi.hoisted(() => ({ submit: vi.fn() }));
-vi.mock("@/lib/api", () => ({ baselineApi: { submitWithRetry: submit } }));
+vi.mock("@/lib/api", () => ({ baselineApi: { submitTrials: submit } }));
 const { holdBaseline } = vi.hoisted(() => ({ holdBaseline: vi.fn() }));
 vi.mock("@/lib/profiling/pendingBaseline", () => ({ holdBaseline }));
+// These pin the task with the `dimension` prop; the engine's prompt is
+// covered in WarmUpRun.engine.dom.test.tsx.
 vi.mock("@/hooks/useWarmUpDimension", () => ({
-  useWarmUpDimension: (fallback: string) => fallback,
-}));
-vi.mock("@/hooks/useNextLessonHref", () => ({
-  useNextLessonHref: () => "/student/lessons/x",
+  useWarmUpPrompt: () => ({ state: "waiting" }),
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
@@ -51,7 +50,7 @@ const settle = async () => {
 };
 
 const doneHeading = () => screen.queryByText(/That's it for today/i);
-const taskIsOnScreen = () => screen.queryByText("Right") !== null;
+const taskIsOnScreen = () => screen.queryByRole("button", { name: "Right" }) !== null;
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -72,22 +71,21 @@ describe("the first warm-up of the day", () => {
     render(<WarmUpRun dimension="attention" />);
     expect(taskIsOnScreen()).toBe(true);
 
-    fireEvent.click(screen.getByText("Right"));
+    fireEvent.click(screen.getByRole("button", { name: "Right" }));
     await settle();
 
     expect(submit).toHaveBeenCalledTimes(1);
     expect(doneHeading()).toBeInTheDocument();
   });
 
-  it("offers the day's lesson rather than another go", async () => {
-    // Design: "it closes and moves the child into the day's lesson."
+  it("offers the way Home rather than another go", async () => {
+    // Design, 23 Sep: "it closes". Where to went Home on 1 Oct (D18), and the
+    // button reads "Go on" since 6 Oct (D97).
     render(<WarmUpRun dimension="attention" />);
-    fireEvent.click(screen.getByText("Right"));
+    fireEvent.click(screen.getByRole("button", { name: "Right" }));
     await settle();
 
-    expect(
-      screen.getByRole("button", { name: /Start today's lesson/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Go on" })).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /again|retry|another/i }),
     ).toBeNull();
@@ -96,7 +94,7 @@ describe("the first warm-up of the day", () => {
   it("says nothing about how they did", async () => {
     // Ruled explicitly, and it is the line the whole product holds.
     render(<WarmUpRun dimension="attention" />);
-    fireEvent.click(screen.getByText("Left"));
+    fireEvent.click(screen.getByRole("button", { name: "Left" }));
     await settle();
 
     expect(document.body.textContent).not.toMatch(
@@ -116,7 +114,7 @@ describe("coming back the same day", () => {
      * so the whole loop is covered.
      */
     const first = render(<WarmUpRun dimension="attention" />);
-    fireEvent.click(screen.getByText("Right"));
+    fireEvent.click(screen.getByRole("button", { name: "Right" }));
     await settle();
     expect(submit).toHaveBeenCalledTimes(1);
     first.unmount();

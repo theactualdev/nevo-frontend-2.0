@@ -20,8 +20,6 @@ import { studentName } from "./useClassRoster";
  * TODO(api): a single roster-wide read would replace this fan-out.
  */
 
-/** Enough for any real teacher; a guard against a pathological account. */
-const MAX_CLASSES = 12;
 
 export interface DirectoryStudent {
   studentId: string;
@@ -74,8 +72,13 @@ export function useStudentDirectory(): StudentDirectory {
       try {
         const classes = await classesApi.myClasses();
         const settled = await Promise.allSettled(
+          /*
+           * EVERY CLASS. This took the first 12 and dropped the rest without
+           * a word, so a teacher with a thirteenth class could not find its
+           * children in compose or assign - and nothing said they were missing.
+           * A teacher's own classes are the whole point of this list.
+           */
           classes
-            .slice(0, MAX_CLASSES)
             .map((c) =>
               classesApi
                 .classStudents(c.classId)

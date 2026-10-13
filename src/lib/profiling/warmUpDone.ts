@@ -11,12 +11,15 @@ const STORAGE_KEY = "nevo.warmup.done";
  * performance. It closes and moves the child into the day's lesson"* - and the
  * screen already had one; what it did not have was a memory that it happened.
  *
- * ## Why this is a device memory rather than a read
+ * ## The account can say "done"; only this device can't say "not done"
  *
- * **Nothing on the wire says whether today's warm-up is done.**
- * `BaselinePromptResponse` is `{dimension}` and nothing else - re-checked
- * 23 Sep, still the open ask on list S-B 5 - so there is no server answer to
- * this question yet. When there is one, it replaces this and this is deleted.
+ * **The wire says it as of 1 Oct (B10).** `BaselinePromptResponse` carries
+ * `doneToday`, held against the account, so a second tablet sees a warm-up
+ * done on the first - which this memory, being one device's, never could.
+ * See `warmUpDoneFor`: done when the account says so OR this device saw it
+ * finish today. The memory also covers the wait - the prompt still on its way
+ * (so Home's card does not offer a warm-up for a moment and then take it
+ * back), a read that failed, or a deployment without the field.
  *
  * ## Why it is keyed per CHILD
  *
@@ -61,6 +64,25 @@ function read(): DoneMap {
 export function warmUpDoneToday(userId: string | null | undefined): boolean {
   if (!userId || typeof window === "undefined") return false;
   return read()[userId] === today();
+}
+
+/**
+ * Whether today's warm-up is behind this child: done when the account says
+ * so, or when THIS device saw them finish it today.
+ *
+ * EITHER, NOT "THE ACCOUNT WINS". The account's "done" is what fixes the
+ * second tablet (B10). But its "not done" cannot overrule a run this tablet
+ * watched finish: on five days of six the warm-up runs a device task and
+ * answers no served question, and whether that submit sets `doneToday` is
+ * unconfirmed (asked of backend, 1 Oct). Trusting the account's "no" would
+ * offer the same child a second run - and a second measurement - on the very
+ * tablet they finished on, which is the bug this module exists to stop.
+ */
+export function warmUpDoneFor(
+  doneToday: boolean | undefined,
+  userId: string | null | undefined,
+): boolean {
+  return doneToday === true || warmUpDoneToday(userId);
 }
 
 /**

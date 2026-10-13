@@ -14,9 +14,9 @@ import type { Lesson } from "@/lib/types";
  * first frame.
  *
  * Finishing the review put the completion back, which is why this survived.
- * Leaving it partway did not: the lesson stayed demoted, reappeared on Home
- * under "Pick back up" as though unfinished, and the child was invited to redo
- * work they had already done. The record of having completed it was gone.
+ * Leaving it partway did not: the lesson stayed demoted, came back on Home as
+ * unfinished work to pick up, and the child was invited to redo work they had
+ * already done. The record of having completed it was gone.
  *
  * These assert on what is WRITTEN, because nothing on screen differs.
  */
@@ -34,7 +34,6 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
 }));
 vi.mock("@/hooks", () => ({
-  useBreakMonitor: () => ({ due: false, dismiss: vi.fn() }),
   useLesson: () => ({ setActiveLesson: vi.fn() }),
   useSignals: () => ({ trackEvent: vi.fn() }),
 }));
@@ -121,6 +120,50 @@ describe("a review session", () => {
     fireEvent.click(screen.getByRole("button", { name: /leave for now/i }));
 
     expect(statuses()).not.toContain(LESSON_STATUS.EXITED);
+  });
+});
+
+describe("a finished lesson, reopened", () => {
+  /*
+   * Design D22, 1 Oct: reopening a finished lesson never marks it unfinished;
+   * it opens for review. It opened as new work, and the first frame wrote
+   * `in_progress, 0` over the completion - the same demotion the review fix
+   * above closed, reached through the Lessons tab instead.
+   */
+  it("does not report it as in progress when it opens", () => {
+    render(<LessonPlayer lesson={LESSON} plan={null} finished />);
+
+    expect(statuses()).not.toContain(LESSON_STATUS.IN_PROGRESS);
+  });
+
+  it("does not report it as in progress as the child moves through it", () => {
+    render(<LessonPlayer lesson={LESSON} plan={null} finished />);
+
+    next();
+    next();
+
+    expect(statuses()).not.toContain(LESSON_STATUS.IN_PROGRESS);
+  });
+
+  it("does not report it as exited when the child leaves part way", () => {
+    render(<LessonPlayer lesson={LESSON} plan={null} finished />);
+    next();
+
+    fireEvent.click(screen.getByRole("button", { name: "Exit lesson" }));
+    fireEvent.click(screen.getByRole("button", { name: /leave for now/i }));
+
+    expect(statuses()).not.toContain(LESSON_STATUS.EXITED);
+  });
+
+  it("still reports completion when the child finishes it again", () => {
+    // Completed over completed is still true; only the demotion is withheld.
+    render(<LessonPlayer lesson={LESSON} plan={null} finished />);
+
+    next();
+    next();
+    next();
+
+    expect(statuses()).toEqual([LESSON_STATUS.COMPLETED]);
   });
 });
 

@@ -1,12 +1,15 @@
 "use client";
 
-import { notFound, useRouter } from "next/navigation";
+import { useState } from "react";
 import { SampleRegion } from "@/components/shared/SampleRegion";
 import { useHydrated } from "@/hooks/useHydrated";
 import { useStudentLesson } from "@/hooks/useStudentLesson";
+import { LessonError } from "./LessonError";
 import { LessonLoadingSkeleton } from "./LessonLoadingSkeleton";
 import { LessonMessage } from "./LessonMessage";
+import { LessonNotOpened } from "./LessonNotOpened";
 import { LessonPlayer } from "./LessonPlayer";
+import { useLessonExit } from "./LessonExit";
 
 const LESSONS_HREF = "/student/lessons";
 
@@ -59,7 +62,8 @@ export function LessonRoute({
   /** Which concept this review is for, from the due-review chip. */
   reviewConceptId?: string;
 }) {
-  const router = useRouter();
+  // Leaving goes wherever this lesson was opened from - see `useLessonExit`.
+  const exitTo = useLessonExit();
   const {
     lesson,
     live,
@@ -68,12 +72,33 @@ export function LessonRoute({
     failed,
     empty,
     resumeAt,
+    progressRow,
     lastWorkedAt,
     adaptSegments,
     unavailable,
+    recallWithdrawn,
     opensAt,
+    placeUnknown,
+    fromShelf,
+    partial,
+    finished,
   } = useStudentLesson(lessonId);
   const hydrated = useHydrated();
+  /*
+   * SCRUM-178: START AGAIN, AFTER THE SERVER REROUTED THE LESSON. A new
+   * player, so nothing of the run that did not land carries into the next -
+   * its answers, its checks passed, its signal session - and the new one asks
+   * `POST /session` for its session, which after a reroute resumes and
+   * returns the server's rerouted one (backend, 9 Oct). It opens on the
+   * reroute's place rather than the dashboard's row, which was read before
+   * this run and says nothing about it - and at the reroute's depth from its
+   * first frame, rather than when that session answers.
+   */
+  const [rerun, setRerun] = useState<{
+    run: number;
+    at: number;
+    depth: "standard" | "lower";
+  } | null>(null);
 
   // The server cannot read the token, so it cannot yet know whether this
   // lesson resolves. Draw the skeleton rather than deciding wrongly.
@@ -95,25 +120,55 @@ export function LessonRoute({
    * Nothing is said about the work they may already have done: cancelling
    * removes what is ahead, and a child's record of what they finished is still
    * theirs. The summary and review screens are deliberately NOT gated for the
-   * same reason.
+   * same reason. "Anything you already did on it is still saved" went for
+   * D89's reason (6 Oct): this screen confirms no save, so it claims none.
+   *
+   * A DUE REVIEW IS REFUSED ONLY WHEN ITS REVIEWS WERE WITHDRAWN (SCRUM-225,
+   * D39, 8 Oct). A housekeeping cancellation keeps the lesson's review
+   * schedule, so the scheduler still says the review is due, and refusing it
+   * here turned that into a dead end. Only a genuine retraction withdraws the
+   * reviews, and the server says which it was with `recallWithdrawn`.
    */
-  if (unavailable === "cancelled") {
+  if (review ? recallWithdrawn : unavailable === "cancelled") {
     return (
       <LessonMessage
-        title="This one isn’t on your list any more"
-        body="Your teacher took it off. Anything you already did on it is still saved."
+        title="This one isn't on your list any more"
+        body="Your teacher took it off."
         actionLabel="Back to my lessons"
-        onAction={() => router.push(LESSONS_HREF)}
+        onAction={() => exitTo(LESSONS_HREF)}
       />
     );
   }
   if (unavailable === "not_yet") {
     return (
       <LessonMessage
-        title="This one isn’t open yet"
+        title="This one isn't open yet"
         body={opensLine(opensAt)}
         actionLabel="Back to my lessons"
-        onAction={() => router.push(LESSONS_HREF)}
+        onAction={() => exitTo(LESSONS_HREF)}
+      />
+    );
+  }
+
+  /*
+   * THE LESSON LOADED AND THE CHILD'S PLACE IN IT DID NOT.
+   *
+   * Both are what the first frame is made of - the lesson is what it shows,
+   * the dashboard is where it opens and whether it may - so with one of them
+   * missing this is a load that failed, and it says so in the same words.
+   * Opening anyway put `in_progress, 0` over the child's real place on the
+   * first frame, and played a lesson their teacher may have called off.
+   *
+   * Not for a review, which writes no position and is not gated. Not for a
+   * lesson opened from the offline shelf either: offline, the dashboard was
+   * never going to answer, and the child saved it so it would open. That one
+   * opens without writing where it opened - see `placeUnknown` on the player.
+   */
+  if (lesson && placeUnknown && !fromShelf && !review) {
+    return (
+      <LessonError
+        onRetry={() => window.location.reload()}
+        onGoBack={() => exitTo(LESSONS_HREF)}
       />
     );
   }
@@ -121,15 +176,27 @@ export function LessonRoute({
   if (lesson) {
     const player = (
       <LessonPlayer
+        key={rerun?.run}
         assignmentId={assignmentId}
         lesson={lesson}
         plan={plan}
         live={live}
+        finished={finished}
+        partial={partial}
         review={review}
         reviewConceptId={reviewConceptId}
-        startAt={resumeAt ?? 0}
+        startAt={rerun ? rerun.at : (resumeAt ?? 0)}
+        placeUnknown={rerun ? false : placeUnknown}
+        progressRow={rerun ? null : progressRow}
         lastWorkedAt={lastWorkedAt}
         adaptSegments={adaptSegments}
+        depth={rerun?.depth}
+        onStartAgain={
+          live
+            ? (at, depth) =>
+                setRerun((prev) => ({ run: (prev?.run ?? 0) + 1, at, depth }))
+            : undefined
+        }
       />
     );
     // `live` false means this is one of the two authored lessons, which now
@@ -144,14 +211,13 @@ export function LessonRoute({
     );
   }
 
+  // The player frame's own error state, in its own words: the system owns
+  // the failure and the child is told plainly it was nothing they did.
   if (failed) {
     return (
-      <LessonMessage
-        title="We couldn’t open this lesson"
-        body="It hasn’t gone anywhere. Give it a moment and try again."
-        actionLabel="Try again"
-        onAction={() => window.location.reload()}
-        onBack={() => router.push(LESSONS_HREF)}
+      <LessonError
+        onRetry={() => window.location.reload()}
+        onGoBack={() => exitTo(LESSONS_HREF)}
       />
     );
   }
@@ -159,23 +225,22 @@ export function LessonRoute({
   if (empty) {
     return (
       <LessonMessage
-        title="This lesson isn’t ready yet"
-        body="Nevo is still getting it set up. Your teacher will know when it’s ready."
+        title="This lesson isn't ready yet"
+        body="Nevo is still getting it set up. Your teacher will know when it's ready."
         actionLabel="Back to my lessons"
-        onAction={() => router.push(LESSONS_HREF)}
+        onAction={() => exitTo(LESSONS_HREF)}
       />
     );
   }
 
-  // Nothing resolved it. Either the live read said 404, or there was no read
-  // to make - a signed-out visitor on an id the mock registry does not hold.
-  // Both are genuinely "no such lesson", and falling through to `null` here
-  // would render a blank screen instead of saying so.
-  notFound();
+  /*
+   * Nothing resolved it. Either the live read said 404, or there was no read
+   * to make - a signed-out visitor on an id the mock registry does not hold.
+   *
+   * Said here, in frame 28's D90 screen, rather than by `notFound()`. That
+   * dropped the child onto the app's "This page doesn't exist", which is
+   * written for a developer and whose only button is `router.back()` - off the
+   * site entirely on a reload or a QR arrival.
+   */
+  return <LessonNotOpened onBack={() => exitTo(LESSONS_HREF)} />;
 }
-
-/**
- * A calm, full-screen message in the player's own bare frame — the player runs
- * without the shell, so these states carry their own way back rather than
- * relying on a nav that is not on screen.
- */

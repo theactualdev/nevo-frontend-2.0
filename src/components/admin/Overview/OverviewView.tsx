@@ -8,39 +8,43 @@ import {
 } from "@/lib/api/schoolIntelligence";
 import { cn } from "@/lib/utils";
 import { labelHero } from "../Compliance/ndpaClaims";
-import { ssoApi, type SsoStatus } from "@/lib/api/sso";
 import {
   STEP_CONSENT,
-  STEP_SIGNIN,
   STEP_STUDENTS,
   STEP_TEACHERS,
   STEP_WORKSPACE,
   consentRequestsSent,
   gettingStartedSteps,
-  signInChosen,
   teachersOnRoster,
 } from "./overviewGettingStarted";
 import { SetupPausedBanner } from "../SetupPausedBanner";
 import { SchoolCodeCard } from "./SchoolCodeCard";
 import { useSetupGate } from "@/hooks/useSetupGate";
 import {
+  readAcademic,
   readOnboarding,
   schoolApi,
-  type EnrolmentBand,
   type SchoolNarrative,
   type SchoolRosterCounts,
 } from "@/lib/api/school";
 import { glanceRows } from "./overviewGlance";
+import { setUpAgo, type SetUpAgo } from "./setUpAgo";
 import { boardPackText } from "./boardPack";
 import {
   SNAPSHOT_HEADING,
   SNAPSHOT_HEADING_EARLY,
+  pendingTeacherInvites,
   snapshotColumns,
   snapshotTiles,
+  termPeriod,
 } from "./snapshotTiles";
+import { currentTerm, startOfDay } from "../Adaptations/logWindow";
 import { intelligenceApi, type AttentionFlag } from "@/lib/api/intelligence";
+import { invitesApi } from "@/lib/api/invites";
 import { studentsApi, type AdminStudentRow } from "@/lib/api/students";
-import { NoAccess, failureKind } from "../NoAccess";
+import { failureKind } from "../NoAccess";
+import { scopeName } from "../Team/adminScopes";
+import { useCanOpen } from "../Shell/useCanOpen";
 
 /**
  * D04 Overview Dashboard - the first thing a general-oversight admin sees,
@@ -54,9 +58,10 @@ import { NoAccess, failureKind } from "../NoAccess";
  * whole NDPA claim is that Nevo holds no diagnostic label about any child, and
  * this is the number that proves it.
  *
- * WHAT IS NOT. The "worth a glance" roll-up has no endpoint behind it, and
- * renders the frame's copy marked as a sample rather than passing for this
- * school's own position.
+ * THE "WORTH A GLANCE" ROLL-UP IS THIS SCHOOL'S TOO. It once rendered the
+ * frame's copy marked as a sample; two of D04's three rows are now counted
+ * from the roster and the attention flags (`overviewGlance.ts`), and the third
+ * is not drawn - see the TODO below.
  *
  * THE NARRATIVE USED TO BE NAMED HERE TOO, and stopped being true on 7 Sep
  * without this sentence noticing. `GET /api/v1/school/narrative` exists and is
@@ -78,7 +83,7 @@ import { NoAccess, failureKind } from "../NoAccess";
  * are waiting on parent consent" and "2 classes haven't run a lesson yet" -
  * three invented counts, under a note admitting they were invented. D04 draws
  * a different roll-up for that school ("Getting started"), and now so does
- * this: the sample roll-up is live-school only, and the early school gets the
+ * this: the roll-up is live-school only, and the early school gets the
  * checklist. See `overviewGettingStarted.ts` for what a tick is allowed to
  * claim.
  *
@@ -115,14 +120,19 @@ import { NoAccess, failureKind } from "../NoAccess";
 const CARD = "rounded-xl bg-nevo-cream-elevated shadow-[0_2px_8px_rgba(0,0,0,0.06)]";
 
 /**
- * No "failed". A read that fails costs its own card now, and the page renders
- * around it - so the only thing that can still stop the whole screen is a
- * scope this admin does not hold.
+ * No "failed", and no longer "denied". A read that fails costs its own card,
+ * and the page renders around it. A refused one does too: an admin without
+ * `oversight` can still reach this page by a link, and the backend serves the
+ * headcounts and the board summary to any admin - so a refused compliance
+ * read costs the compliance card, not the school.
  */
-type Phase = "loading" | "ready" | "denied";
+type Phase = "loading" | "ready";
 
-/** A card that loads, and fails, on its own. */
-type CardPhase = "loading" | "ready" | "failed";
+/**
+ * A card that loads, and fails, on its own. `denied` is a scope this admin
+ * does not hold - said as such, never as a failure to retry.
+ */
+type CardPhase = "loading" | "ready" | "failed" | "denied";
 
 /** D04's two board-pack glyphs, traced from the frame. */
 function CopyGlyph() {
@@ -186,12 +196,26 @@ export function OverviewView() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [audit, setAudit] = useState<ComplianceAudit | null>(null);
   const [auditPhase, setAuditPhase] = useState<CardPhase>("loading");
+  const mayOpen = useCanOpen();
   const [adaptationTotal, setAdaptationTotal] = useState<number | null>(null);
-  /** The commercial band, for the one denominator that has a source. */
-  const [band, setBand] = useState<EnrolmentBand | undefined>(undefined);
+  /**
+   * This term's adaptation count and the period it names, for the live tile.
+   * Null until read, and null for good when the school has no current term in
+   * Settings - then the tile is absent rather than an all-time total.
+   */
+  const [termAdaptations, setTermAdaptations] = useState<{
+    count: number;
+    period: string;
+  } | null>(null);
+  /** The school's own name, from its record - see `school` below. */
+  const [schoolName, setSchoolName] = useState<string | null>(null);
+  /** When the school finished setting up - D04's early-life "Set up 3 days ago". */
+  const [setUp, setSetUp] = useState<SetUpAgo | null>(null);
   const [narrative, setNarrative] = useState<SchoolNarrative | null>(null);
   const [narrativeFailed, setNarrativeFailed] = useState(false);
   const [counts, setCounts] = useState<SchoolRosterCounts | null>(null);
+  /** Open teacher invitations, for the teachers tile. Null when unread. */
+  const [pendingTeachers, setPendingTeachers] = useState<number | null>(null);
   /*
    * The two roll-up rows that are this school's own. Both stay NULL until a
    * read completes, and a read that fails leaves them null - the row is then
@@ -200,7 +224,6 @@ export function OverviewView() {
    */
   const [roster, setRoster] = useState<AdminStudentRow[] | null>(null);
   /** Read for the getting-started sign-in row only. Null means unread. */
-  const [sso, setSso] = useState<SsoStatus | null>(null);
   const [flags, setFlags] = useState<AttentionFlag[] | null>(null);
 
   const load = useCallback(() => {
@@ -224,26 +247,18 @@ export function OverviewView() {
       // their own failures - neither should take the page down.
       schoolApi.narrative().catch(() => null),
       schoolApi.overview().catch(() => null),
-      /*
-       * FOR THE GETTING-STARTED CHECKLIST'S SIGN-IN ROW, and nothing else on
-       * this screen. Settled like its two neighbours above: a school with no
-       * SSO at all is a 404 here as readily as a 500 is, and neither is worth
-       * a blank dashboard. `signInChosen` treats null as unknown, so the row
-       * simply stays open.
-       */
-      ssoApi.status().catch(() => null),
-    ]).then(([res, log, n, ov, sso]) => {
-      if (!res.ok && failureKind(res.err) === "denied") {
-        setPhase("denied");
-        return;
-      }
+      // The SSO status read that sat here fed only the checklist's sign-in
+      // tick, which went when the row became "Share your school code"
+      // (manual-only launch). One request fewer on every Overview load.
+    ]).then(([res, log, n, ov]) => {
       const a = res.ok ? res.a : null;
       setAudit(a);
-      setAuditPhase(res.ok ? "ready" : "failed");
+      setAuditPhase(
+        res.ok ? "ready" : failureKind(res.err) === "denied" ? "denied" : "failed",
+      );
       setNarrative(n);
       setNarrativeFailed(n === null);
       setCounts(ov ? ov.counts : null);
-      setSso(sso);
       /*
        * NULL WHEN WE DID NOT READ IT, and it used to be `?? 0`. That mattered
        * only once the audit stopped gating the page: a zero here is the signal
@@ -255,12 +270,31 @@ export function OverviewView() {
       setPhase("ready");
     });
 
-    // The band is a fact on the school record rather than a dashboard read,
-    // and feeds one denominator. Its own call, so it can never hold the page.
+    // The school record is its own call, so it can never hold the page. It
+    // names the school, dates the setup, and holds the terms that decide what
+    // "this term" means on the adaptations tile (Lydia, 7 Oct).
     schoolApi
       .get()
-      .then((sc) => setBand(readOnboarding(sc).band))
-      .catch(() => setBand(undefined));
+      .then((sc) => {
+        setSchoolName(sc.name?.trim() || null);
+        setSetUp(setUpAgo(readOnboarding(sc).completedAt, Date.now()));
+        const term = currentTerm(readAcademic(sc).terms ?? [], Date.now());
+        const from = term ? startOfDay(term.from) : null;
+        if (!term || !from) return;
+        schoolIntelligenceApi
+          .adaptationLog({ limit: 1, dateFrom: from.toISOString() })
+          .then((log) => setTermAdaptations({ count: log.total, period: termPeriod(term) }))
+          .catch(() => setTermAdaptations(null));
+      })
+      .catch(() => setSchoolName(null));
+
+    // D04's "N invitations pending" on the teachers tile. Its own read and its
+    // own failure: an admin without the invitations surface still gets the
+    // tile, with the headcount's own words.
+    invitesApi
+      .list()
+      .then((rows) => setPendingTeachers(pendingTeacherInvites(rows, Date.now())))
+      .catch(() => setPendingTeachers(null));
 
     /*
      * THE ROLL-UP READS DO NOT GATE THE PAGE, and they used to.
@@ -299,6 +333,22 @@ export function OverviewView() {
   useEffect(() => {
     load();
   }, [load]);
+
+  /*
+   * The board summary's own retry. Only the compliance card had one, so a
+   * failed summary said "we couldn't load it" and offered nothing but a
+   * page reload - which re-runs every read on the page for one card.
+   */
+  const retryNarrative = () => {
+    setNarrativeFailed(false);
+    schoolApi
+      .narrative()
+      .then((n) => {
+        setNarrative(n);
+        setNarrativeFailed(false);
+      })
+      .catch(() => setNarrativeFailed(true));
+  };
 
   /*
    * "Copy for board pack". Three states, because the browser gets a vote:
@@ -362,7 +412,13 @@ export function OverviewView() {
    */
   const early = adaptationTotal === 0;
   const glance = early ? [] : glanceRows(roster, flags);
-  const school = audit?.schoolName ?? "your school";
+  /*
+   * THE SCHOOL RECORD'S NAME FIRST. This took the name from the compliance
+   * audit alone, so when that one read failed the title - and the board pack
+   * a proprietor copies for governors - said "your school", although the
+   * school record, already read on this page, carries the name.
+   */
+  const school = schoolName ?? audit?.schoolName ?? "your school";
 
   const pack = boardPackText({
     school,
@@ -375,10 +431,13 @@ export function OverviewView() {
 
   const tiles = snapshotTiles({
     studentsProfiled: audit ? audit.studentsProfiled : null,
-    adaptations: adaptationTotal,
+    // Early, the all-time total is the zero that picked the variant. Live, it
+    // is this term's count, named - never the total since setup.
+    adaptations: early ? adaptationTotal : (termAdaptations?.count ?? null),
+    adaptationPeriod: termAdaptations?.period ?? null,
     counts,
-    band,
     early,
+    pendingTeacherInvites: pendingTeachers,
   });
 
   return (
@@ -387,22 +446,19 @@ export function OverviewView() {
         <div className="flex items-start justify-between gap-5">
           <div className="min-w-0">
             <span className="text-[13px] text-nevo-near-black/55 xl:text-[13.5px]">
+              {/* D04's early header: "Set up 3 days ago · Wednesday, 10 July". */}
+              {phase === "ready" && early && setUp ? `Set up ${setUp.short} · ` : ""}
               {todayLine()}
             </span>
             <h2 className="mt-1 text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
               {phase === "ready" ? school : "Overview"}
             </h2>
           </div>
-          {/* The period pill, STATING a scope rather than offering to change
-              one. The frame draws a caret and D04's own handler does nothing
-              with it; there is no period-scoped read to put behind it, and
-              "This half-term" would be untrue of every figure below. This is
-              the scope the figures genuinely have. See the TODO(api) above. */}
-          {phase === "ready" && (
-            <span className="mt-1 hidden shrink-0 rounded-full border-[1.5px] border-nevo-near-black/16 px-3.5 py-2 text-[13.5px] font-medium text-nevo-near-black/60 sm:block">
-              Since setup
-            </span>
-          )}
+          {/* NO PERIOD PILL. It read "Since setup" for the whole page, which
+              stopped being true when "Adaptations made" became this term's
+              (Lydia, 7 Oct) - and "since setup" is the scope she ruled
+              meaningless. The figures are not one period, so each says its
+              own: the adaptations tile names its term, the rest are counts. */}
         </div>
 
         {/* D01b AC-05. Renders only while the address is unconfirmed, and
@@ -415,8 +471,6 @@ export function OverviewView() {
         {phase === "loading" && (
           <div className={cn(CARD, "mt-6 h-[300px] animate-pulse")} />
         )}
-
-        {phase === "denied" && <NoAccess what="the school overview" />}
 
         {phase === "ready" && (
           <>
@@ -434,7 +488,11 @@ export function OverviewView() {
                     Your board summary begins once lessons do
                   </p>
                   <p className="mt-4 max-w-[68ch] text-[15px] leading-[1.7] text-nevo-near-black/78">
-                    There&rsquo;s nothing to report on learning just yet
+                    {/* D04: "Brightgate Academy joined Nevo three days ago, so
+                        there's nothing to report..." - the when, if we have it. */}
+                    {setUp
+                      ? `${school} joined Nevo ${setUp.prose}, so there’s nothing to report on learning just yet`
+                      : "There’s nothing to report on learning just yet"}{" "}
                     &ndash; exactly as expected this early. As your teachers
                     begin running lessons, this space fills with a
                     plain-language account of how your students are getting on,
@@ -470,11 +528,20 @@ export function OverviewView() {
                       ) : null}
                     </>
                   ) : narrativeFailed ? (
-                    <p className="mt-4 max-w-[68ch] text-[15px] leading-[1.7] text-nevo-near-black/62">
-                      We couldn&rsquo;t load your summary just now. Nothing has
-                      changed for {school} &ndash; the figures below are still
-                      live.
-                    </p>
+                    <>
+                      <p className="mt-4 max-w-[68ch] text-[15px] leading-[1.7] text-nevo-near-black/62">
+                        We couldn&rsquo;t load your summary just now. Nothing has
+                        changed for {school} &ndash; the figures below are still
+                        live.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={retryNarrative}
+                        className="mt-2 cursor-pointer text-[13.5px] font-semibold text-nevo-navy hover:underline"
+                      >
+                        Try again
+                      </button>
+                    </>
                   ) : (
                     <div
                       aria-hidden
@@ -560,6 +627,21 @@ export function OverviewView() {
                     What we store &rarr;
                   </Link>
                 </>
+              ) : auditPhase === "denied" ? (
+                /* Not a failure and not a finding: this admin's account does
+                   not include the check. Said once, with who can change it -
+                   the ruling's "the proprietor promotes them". */
+                <>
+                  <h3 className="text-[15px] font-semibold text-nevo-near-black">
+                    Diagnostic labels stored
+                  </h3>
+                  <p className="mt-2 max-w-[56ch] text-sm leading-[1.6] text-nevo-near-black/62">
+                    The compliance check and your school&rsquo;s learning
+                    activity are shown to admins with{" "}
+                    {scopeName("oversight")}. Whoever manages permissions for
+                    your school can add it to your account.
+                  </p>
+                </>
               ) : auditPhase === "failed" ? (
                 /* SCRUM-39's per-card failure, in its own words. It must not
                    read as a compliance finding: nothing about this school's
@@ -615,11 +697,6 @@ export function OverviewView() {
                       >
                         {t.value.toLocaleString("en-GB")}
                       </span>
-                      {t.of && (
-                        <span className="text-[15px] font-medium text-nevo-near-black/40">
-                          {t.of}
-                        </span>
-                      )}
                     </div>
                     <p className="mt-2 text-[14.5px] font-semibold text-nevo-near-black">
                       {t.label}
@@ -627,7 +704,7 @@ export function OverviewView() {
                     <p className="mt-px text-[13px] text-nevo-near-black/58">
                       {t.desc}
                     </p>
-                    {t.href && t.cta && (
+                    {t.href && t.cta && mayOpen(t.href) && (
                       <Link
                         href={t.href}
                         className="mt-3 inline-block text-[13.5px] font-semibold text-nevo-navy hover:underline"
@@ -660,11 +737,13 @@ export function OverviewView() {
                   // from a signal we hold. The rest carry no mark at all rather
                   // than an unticked box, which would assert the school has not
                   // done something we cannot see.
+                  // STEP_SIGNIN ("Share your school code") never ticks: it
+                  // ticked on an SSO connection, which is not what the row
+                  // asks any more, and nothing reports a code being shared.
                   const done =
                     i === STEP_WORKSPACE ||
                     (i === STEP_STUDENTS && (audit?.studentsProfiled ?? 0) > 0) ||
                     (i === STEP_TEACHERS && teachersOnRoster(counts)) ||
-                    (i === STEP_SIGNIN && signInChosen(sso)) ||
                     (i === STEP_CONSENT && consentRequestsSent(roster));
                   const row = (
                     <>
@@ -736,7 +815,7 @@ export function OverviewView() {
                       </div>
                     );
                   }
-                  return k.href ? (
+                  return k.href && mayOpen(k.href) ? (
                     <Link
                       key={k.title}
                       href={k.href}
@@ -754,15 +833,8 @@ export function OverviewView() {
             ) : (
             glance.length > 0 && (
               <div className={cn(CARD, "mt-3 overflow-hidden")}>
-                {glance.map((g, i) => (
-                  <Link
-                    key={g.key}
-                    href={g.href}
-                    className={cn(
-                      "flex items-center gap-4 px-[22px] py-[18px] transition-[filter] hover:brightness-[0.985]",
-                      i < glance.length - 1 && "border-b border-nevo-near-black/7",
-                    )}
-                  >
+                {glance.map((g, i) => {
+                  const body = (
                     <span className="flex min-w-0 flex-1 flex-col">
                       <span className="text-[15px] font-semibold text-nevo-near-black">
                         {g.title}
@@ -771,11 +843,34 @@ export function OverviewView() {
                         {g.sub}
                       </span>
                     </span>
-                    <span className="shrink-0 text-[13.5px] font-semibold text-nevo-navy">
-                      {g.action} &rarr;
-                    </span>
-                  </Link>
-                ))}
+                  );
+                  const rowClass = cn(
+                    "flex items-center gap-4 px-[22px] py-[18px]",
+                    i < glance.length - 1 && "border-b border-nevo-near-black/7",
+                  );
+                  /*
+                   * NO LINK TO A REFUSAL. "Open Learning Support" went to a
+                   * screen that refuses every admin without SENCo - the
+                   * founding admin among them. The row still
+                   * states what the school's own read found.
+                   */
+                  return mayOpen(g.href) ? (
+                    <Link
+                      key={g.key}
+                      href={g.href}
+                      className={cn(rowClass, "transition-[filter] hover:brightness-[0.985]")}
+                    >
+                      {body}
+                      <span className="shrink-0 text-[13.5px] font-semibold text-nevo-navy">
+                        {g.action} &rarr;
+                      </span>
+                    </Link>
+                  ) : (
+                    <div key={g.key} className={rowClass}>
+                      {body}
+                    </div>
+                  );
+                })}
               </div>
             )
             )}

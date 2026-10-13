@@ -52,7 +52,7 @@ const signIn = () =>
   });
 
 const startUpload = async (result: { current: ReturnType<typeof useStagedUpload> }) => {
-  act(() => result.current.start(new File(["x"], "unit.pdf"), "unit"));
+  act(() => void result.current.start(new File(["x"], "unit.pdf"), "unit"));
   await waitFor(() => expect(result.current.uploadId).toBe("u-1"));
   await waitFor(() => expect(result.current.failedPages).toEqual([4, 7]), {
     timeout: 4000,
@@ -91,7 +91,7 @@ describe("faint pages", () => {
     status.mockResolvedValue({ ...READY, failedPages: undefined });
     const { result } = renderHook(() => useStagedUpload());
 
-    act(() => result.current.start(new File(["x"], "unit.pdf"), "unit"));
+    act(() => void result.current.start(new File(["x"], "unit.pdf"), "unit"));
     await waitFor(() => expect(result.current.status).toBe("ready"), {
       timeout: 4000,
     });
@@ -129,7 +129,7 @@ describe("faint pages", () => {
     // `pageNumbers` is minItems 1 on the contract: an empty retry is a 422.
     status.mockResolvedValue({ ...READY, failedPages: [] });
     const { result } = renderHook(() => useStagedUpload());
-    act(() => result.current.start(new File(["x"], "unit.pdf"), "unit"));
+    act(() => void result.current.start(new File(["x"], "unit.pdf"), "unit"));
     await waitFor(() => expect(result.current.status).toBe("ready"), {
       timeout: 4000,
     });
@@ -182,7 +182,7 @@ describe("whose failure it was", () => {
     });
     const { result } = renderHook(() => useStagedUpload());
 
-    act(() => result.current.start(new File(["x"], "unit.pdf"), "unit"));
+    act(() => void result.current.start(new File(["x"], "unit.pdf"), "unit"));
     await waitFor(() => expect(result.current.failed).toBe(true), {
       timeout: 4000,
     });
@@ -197,13 +197,15 @@ describe("whose failure it was", () => {
     create.mockRejectedValue(new Error("network"));
     const { result } = renderHook(() => useStagedUpload());
 
-    act(() => result.current.start(new File(["x"], "unit.pdf"), "unit"));
+    act(() => void result.current.start(new File(["x"], "unit.pdf"), "unit"));
 
     await waitFor(() => expect(result.current.failed).toBe(true));
     expect(result.current.failureKind).toBe("request");
   });
 
-  it("is the request when a poll blows up mid-parse", async () => {
+  it("is the request when the polls keep blowing up mid-parse", async () => {
+    // Three in a row, two seconds apart: one blip is not an outage any more.
+    // The count itself is pinned in useStagedUpload.poll.dom.test.ts.
     create.mockResolvedValue({
       uploadId: "u-1",
       status: "processing",
@@ -212,13 +214,13 @@ describe("whose failure it was", () => {
     status.mockRejectedValue(new Error("502"));
     const { result } = renderHook(() => useStagedUpload());
 
-    act(() => result.current.start(new File(["x"], "unit.pdf"), "unit"));
+    act(() => void result.current.start(new File(["x"], "unit.pdf"), "unit"));
 
     await waitFor(() => expect(result.current.failed).toBe(true), {
-      timeout: 4000,
+      timeout: 9000,
     });
     expect(result.current.failureKind).toBe("request");
-  });
+  }, 12_000);
 
   it("carries no kind at all before anything has gone wrong", async () => {
     const { result } = renderHook(() => useStagedUpload());

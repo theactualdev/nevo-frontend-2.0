@@ -24,12 +24,12 @@ export function ClassPulse() {
         {HOME_PULSE.map((m) => (
           <div
             key={m.head}
-            className="flex flex-row items-center gap-4 rounded-[8px] bg-nevo-cream-inset px-[18px] py-4 xl:flex-1 xl:flex-col xl:items-start xl:gap-0"
+            className="flex flex-row items-center gap-4 rounded-[12px] bg-nevo-cream-inset px-[18px] py-4 xl:flex-1 xl:flex-col xl:items-start xl:gap-0"
           >
             <span className="w-[130px] shrink-0 text-[11px] font-bold tracking-[0.14em] text-nevo-violet uppercase xl:w-auto">
               {m.head}
             </span>
-            <span className="text-[20px] font-bold text-nevo-navy xl:mt-2.5">
+            <span className="text-[20px] font-semibold text-nevo-navy xl:mt-2.5">
               {m.value}
             </span>
             <span className="flex-1 text-[12px] leading-[1.5] text-nevo-near-black/70 xl:mt-1.5 xl:flex-none">

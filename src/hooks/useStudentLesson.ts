@@ -3,13 +3,19 @@
 import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/api/client";
 import { lessonsApi } from "@/lib/api/lessons";
-import { getToken } from "@/lib/auth/session";
+import { getSession, getToken } from "@/lib/auth/session";
+import {
+  isPartialCopy,
+  refreshSavedLesson,
+  savedLesson,
+} from "@/lib/offline/savedLessons";
 import type { AdaptSegment } from "@/lib/api/intelligence";
-import { adaptSegmentsFor } from "@/lib/lessons/adaptation";
+import type { DashboardProgressRow } from "@/lib/api/students";
+import { adaptSegmentsFor, indicatorLevel } from "@/lib/lessons/adaptation";
 import { lessonFromContent } from "@/lib/lessons/fromContent";
 import { getMockAdaptation, getMockLesson } from "@/lib/mocks";
 import type { AdaptationPlan, Lesson } from "@/lib/types";
-import { useAccommodations } from "./useAccommodations";
+import { useAccommodationsState } from "./useAccommodations";
 import {
   unavailableReason,
   type Unavailable,
@@ -18,6 +24,12 @@ import { useAdaptation } from "./useAdaptation";
 import { useHasSession } from "./useHasSession";
 import { useHydrated } from "./useHydrated";
 import { useStudentDashboard } from "./useStudentDashboard";
+
+/**
+ * How long the first frame waits for the engine's opening plan and the child's
+ * accommodations before it opens without them. See `openingPending`.
+ */
+const OPENING_WAIT_MS = 4000;
 
 /**
  * The lesson a student is about to play, live-first.
@@ -57,6 +69,10 @@ interface Resolution {
   missing?: boolean;
   failed?: boolean;
   empty?: boolean;
+  /** Built from the child's offline shelf because the read could not be made. */
+  fromShelf?: boolean;
+  /** That shelf copy lacks what completion needs - see `isPartialCopy`. */
+  partial?: boolean;
 }
 
 export interface StudentLessonState {
@@ -86,6 +102,13 @@ export interface StudentLessonState {
    * there is none, or when the lesson is a mock (whose ids nothing records).
    */
   resumeAt: number | null;
+  /**
+   * The child's newest progress row for this lesson, as the dashboard gave
+   * it: where the check was left (B82) and, once completed, the check-in's
+   * outcome (B84). Null for a mock, when there is none, and when the
+   * dashboard did not answer - never a row made up to stand in for one.
+   */
+  progressRow: DashboardProgressRow | null;
   /** ISO timestamp of their last activity on this lesson, when we know it. */
   lastWorkedAt: string | null;
   /**
@@ -107,8 +130,47 @@ export interface StudentLessonState {
    * about it. See `isOpenToStudent`.
    */
   unavailable: Unavailable | null;
+  /**
+   * Cancelling this lesson's assignment also withdrew its reviews (SCRUM-225,
+   * 8 Oct) - a genuine retraction, not housekeeping. A due review is refused
+   * only on this; a cancelled lesson whose reviews were kept still reviews.
+   */
+  recallWithdrawn: boolean;
   /** When a `not_yet` lesson opens, for a screen that has to say so. */
   opensAt: string | null;
+  /**
+   * The dashboard read FAILED, so where this child got to - and whether their
+   * teacher has called the lesson off - is not known. Not the same as "no
+   * saved place": that is an answer, this is the absence of one.
+   *
+   * It used to read as the first. The player opened at segment 0 and its very
+   * first position write put `in_progress, 0` over the place the child had
+   * actually reached, and a cancelled lesson played because nothing said it
+   * was cancelled. Only ever true for a live lesson.
+   */
+  placeUnknown: boolean;
+  /** Opened from the child's offline shelf, not from a live read. */
+  fromShelf: boolean;
+  /**
+   * Opened from a shelf copy missing its modules, recap or after-lesson check
+   * - a package saved before backend B85 (8 Oct), or one that left any out.
+   * The player never records it completed (Lydia, 6 Oct). A package copy that
+   * carries all three is not partial, and completes as it would online.
+   */
+  partial: boolean;
+  /**
+   * The child has already finished this lesson: their newest progress row
+   * says `completed`, or the assignment does (the feed is recent activity, so
+   * an old completion may have no row left). The same two facts the Lessons
+   * tab reads to file it under Completed.
+   *
+   * Reopening it played it as new work, and the first frame wrote
+   * `in_progress, 0` over the completion - so a child who looked back at a
+   * finished lesson found it on Home as unfinished. Design D22, 1 Oct: it
+   * opens for review and is never marked unfinished. False for a mock, and
+   * whenever the dashboard has not answered.
+   */
+  finished: boolean;
 }
 
 export function useStudentLesson(
@@ -152,9 +214,10 @@ export function useStudentLesson(
    * the fixture for one frame on every hard load.
    */
   const mock = hydrated && !signedIn ? getMockLesson(lessonId) : undefined;
-  // Where they got to last time. Home already promises "About halfway in" off
-  // this same row, so the player has to honour it - a Continue button that
-  // restarts from the beginning is worse than no Continue button.
+  // Where they got to last time. Home already offers this lesson to "Pick up
+  // where you left off" off this same row, so the player has to honour it - a
+  // Continue button that restarts from the beginning is worse than no Continue
+  // button.
   /*
    * `loading` TOO, NOT JUST `data`.
    *
@@ -170,7 +233,11 @@ export function useStudentLesson(
    * ignoring it. A child who stopped at segment seven yesterday could open the
    * lesson today, see segment one, and have their real place gone.
    */
-  const { data: dashboard, loading: dashboardLoading } = useStudentDashboard();
+  const {
+    data: dashboard,
+    loading: dashboardLoading,
+    failed: dashboardFailed,
+  } = useStudentDashboard();
 
   // One piece of state, STAMPED WITH THE ID IT DESCRIBES. Resetting four
   // separate flags at the top of the effect would clear them a render late -
@@ -199,6 +266,10 @@ export function useStudentLesson(
       .detail(lessonId)
       .then((res) => {
         if (cancelled) return;
+        // A lesson the child saved for offline is kept as fresh as their last
+        // online open. Only ever one they chose to save.
+        const owner = getSession()?.userId;
+        if (owner) refreshSavedLesson(owner, res);
         const built = lessonFromContent(res, res.modules ?? []);
         setResolved(
           built
@@ -222,6 +293,27 @@ export function useStudentLesson(
         // them.
         if (err instanceof ApiError && err.status === 404) {
           setResolved({ id: lessonId, missing: true });
+          return;
+        }
+        /*
+         * NO CONNECTION, BUT THE CHILD SAVED IT. The lesson they kept when
+         * they saved it, through the same builder - so it opens exactly as it
+         * would online. Only this child's shelf, and never for a 404: a lesson
+         * the school removed stays removed.
+         */
+        const owner = getSession()?.userId;
+        const kept = owner ? savedLesson(owner, lessonId) : null;
+        const fromShelf = kept
+          ? lessonFromContent(kept.detail, kept.detail.modules ?? [])
+          : null;
+        if (kept && fromShelf) {
+          setResolved({
+            id: lessonId,
+            lesson: fromShelf,
+            adaptSegments: adaptSegmentsFor(kept.detail.segments),
+            fromShelf: true,
+            partial: isPartialCopy(kept.detail),
+          });
         } else {
           setResolved({ id: lessonId, failed: true });
         }
@@ -250,7 +342,40 @@ export function useStudentLesson(
   // Cross-session and slow-moving, so it does not belong on the per-lesson
   // adapt call - and could not ride on it anyway, since that route carries no
   // accommodation field.
-  const accommodations = useAccommodations();
+  const {
+    active: accommodations,
+    settled: accommodationsSettled,
+    support: engineSupport,
+  } = useAccommodationsState();
+  // B103, 9 Oct: where calculation support starts, from the same read.
+  const initialScaffold = indicatorLevel(engineSupport?.initialScaffoldLevel);
+
+  /*
+   * THE FIRST FRAME WAITS FOR WHAT SHAPES IT.
+   *
+   * Loading waited for the lesson and the dashboard only. The engine's
+   * opening plan and the child's accommodations arrived after the first
+   * segment was already showing, so a reading or attention accommodation
+   * reshaped a visible screen (rules 6 and 7) - and the first segment's
+   * starting modality, read once when the player mounts, was lost for good.
+   *
+   * CAPPED, because the client has no request timeout and a lesson that never
+   * opens is worse than one that adapts a moment late. Whatever has not
+   * answered by then is applied when it does.
+   */
+  const adaptWanted = Boolean(live) && options?.adapt !== false;
+  const planSettled =
+    !adaptWanted || adaptation.plan !== null || adaptation.error !== null;
+  const [waitedOutFor, setWaitedOutFor] = useState<string | null>(null);
+  useEffect(() => {
+    if (!live) return;
+    const t = setTimeout(() => setWaitedOutFor(lessonId), OPENING_WAIT_MS);
+    return () => clearTimeout(t);
+  }, [live, lessonId]);
+  const openingPending =
+    Boolean(live) &&
+    !(planSettled && accommodationsSettled) &&
+    waitedOutFor !== lessonId;
 
   // `segmentPosition` is the 0-based index we wrote ourselves, so it round
   // trips - but it is clamped anyway, because a position past the end would
@@ -292,15 +417,25 @@ export function useStudentLesson(
       dashboard?.assignments?.find((a) => a.lesson.id === lessonId)
     : undefined;
   const unavailable = assignment ? unavailableReason(assignment) : null;
+  const finished =
+    Boolean(live) &&
+    (saved?.status === "completed" || assignment?.status === "completed");
 
   return {
+    finished,
     lesson,
     live: Boolean(live),
     resumeAt,
+    progressRow: live ? (saved ?? null) : null,
     lastWorkedAt: saved?.updatedAt ?? null,
     adaptSegments: live ? state.adaptSegments : undefined,
     unavailable,
+    recallWithdrawn: assignment?.recallWithdrawn === true,
     opensAt: assignment?.availableFrom ?? null,
+    placeUnknown: Boolean(live) && !dashboard && dashboardFailed,
+    fromShelf: Boolean(live) && state.fromShelf === true,
+    partial:
+      Boolean(live) && state.fromShelf === true && state.partial === true,
     // A live lesson gets the engine's plan; a mock keeps its authored one.
     // Never crossed: a mock must not borrow a live plan, and a live lesson
     // must not borrow another lesson's authored one.
@@ -314,8 +449,19 @@ export function useStudentLesson(
     // the authored flags it was written with - the walkthrough is a designed
     // demonstration, not a claim about anybody.
     plan: live
-      ? adaptation.plan && accommodations
-        ? { ...adaptation.plan, accommodations }
+      ? accommodations || initialScaffold
+        ? /*
+           * NOT DROPPED WHEN THE ADAPT CALL FAILS. They merged only onto a
+           * non-null plan, so an engine that did not answer took a delivered
+           * accommodation away for the whole lesson - while the teacher's
+           * screen showed it active. They come from a different route; the
+           * plan they ride on can be empty.
+           */
+          {
+            ...(adaptation.plan ?? { lessonId, segments: [] }),
+            ...(accommodations ? { accommodations } : {}),
+            ...(initialScaffold ? { initialScaffold } : {}),
+          }
         : adaptation.plan
       : mock
         ? (getMockAdaptation(lessonId) ?? null)
@@ -333,7 +479,8 @@ export function useStudentLesson(
     loading:
       signedIn &&
       ((!lesson && !missing && !failed && !empty) ||
-        (Boolean(live) && dashboardLoading)),
+        (Boolean(live) && dashboardLoading) ||
+        openingPending),
     // `!mock` still stands, but it can now only be true for a signed-out
     // visitor - who makes no read at all, so none of these are ever set for
     // them anyway. For a signed-in child these are simply the truth.

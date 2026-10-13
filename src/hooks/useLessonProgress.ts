@@ -4,14 +4,22 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   LESSON_STATUS,
   lessonsApi,
+  type LessonProgressResponse,
+  type LessonSessionResponse,
   type LessonStatus,
 } from "@/lib/api/lessons";
-import { getToken } from "@/lib/auth/session";
+import { getSession, getToken } from "@/lib/auth/session";
 import {
+  adoptAnswers,
+  claimSlot,
   clearProgress,
   flushPendingProgress,
   holdProgress,
+  holdsAnswers,
+  sendHeldAnswers,
+  settleAnswers,
 } from "@/lib/lessons/pendingProgress";
+import { randomId } from "@/lib/utils";
 
 /**
  * Writes down where a child has got to in a lesson.
@@ -46,14 +54,21 @@ import {
  *
  * This exists because the offline banner used to tell a child "your progress
  * is saved" at the exact moment it was not.
+ *
+ * NO SESSION IS NOT NO RECORD. A failed `POST /session` left every position
+ * in memory with nothing to retry it, so a lesson opened offline - including
+ * one opened from Downloads, which is what Downloads is for - was recorded as
+ * never played. The session is retried when the connection returns and on
+ * the next move, and meanwhile the position is held with no session, for the
+ * flush to open one if the player has closed by then.
  */
 
 export interface LessonProgressState {
-  /** Report a position. Safe to call before the session exists. */
-  report: (
-    status: LessonStatus,
-    position: { segment?: number; module?: number },
-  ) => void;
+  /**
+   * Report a position. Safe to call before the session exists. `check` is
+   * where the after-lesson check was left (B49), on the write that leaves it.
+   */
+  report: (status: LessonStatus, position: Position) => void;
   /** The completion write did not reach Nevo. */
   completionFailed: boolean;
   /** True once a completion write has landed. */
@@ -64,13 +79,36 @@ export interface LessonProgressState {
    * backend saying progress and signals are one session, not two.
    */
   sessionId: string | null;
+  /**
+   * What the newest write that landed came back with - the only read of a
+   * lesson's progress row the contract has. Carries the check-in's outcome
+   * (B26) after the completion write, and where a check was left (B49).
+   * Null until a write lands; never an older write's answer.
+   */
+  saved: LessonProgressResponse | null;
+  /**
+   * What `POST /session` answered, which says where this lesson's check was
+   * left (B82). Null until the session opens.
+   */
+  opened: LessonSessionResponse | null;
+  /**
+   * This player's own slot for what it holds before any session exists - an
+   * answer given offline is held under it (`holdAnswer` in
+   * `pendingProgress`) and becomes the session's when one opens.
+   */
+  localId: string;
 }
+
+type Position = { segment?: number; module?: number; check?: number };
 
 const IDLE: LessonProgressState = {
   report: () => {},
   completionFailed: false,
   completionSaved: false,
   sessionId: null,
+  saved: null,
+  opened: null,
+  localId: "",
 };
 
 export function useLessonProgress(
@@ -103,6 +141,7 @@ export function useLessonProgress(
     status: LessonStatus;
     segment?: number;
     module?: number;
+    check?: number;
   } | null>(null);
   const seq = useRef(0);
   const landed = useRef(0);
@@ -111,64 +150,121 @@ export function useLessonProgress(
     status: LessonStatus;
     segment?: number;
     module?: number;
+    check?: number;
   } | null>(null);
   const [completionFailed, setCompletionFailed] = useState(false);
   const [completionSaved, setCompletionSaved] = useState(false);
+  const [saved, setSaved] = useState<LessonProgressResponse | null>(null);
+  const [opened, setOpened] = useState<LessonSessionResponse | null>(null);
+  /**
+   * This player's own slot for a position held before any session exists.
+   * Claimed while mounted, so the shell's flush leaves it to us.
+   */
+  const [localId] = useState(() => `local-${randomId()}`);
+  /** The session open failed, so positions are held without one. */
+  const sessionFailed = useRef(false);
+  /** Re-attempts the session open; set by the effect that owns it. */
+  const retryOpen = useRef<(() => void) | null>(null);
 
   const write = useCallback(
-    (status: LessonStatus, position: { segment?: number; module?: number }) => {
+    (status: LessonStatus, position: Position) => {
       const id = sessionId.current;
       if (!id) return;
       const ticket = ++seq.current;
       const completing = status === LESSON_STATUS.COMPLETED;
+      // Whose position this is, taken NOW. A 401 clears the session before
+      // the failure below runs, and reading it then found nobody.
+      const owner = getSession()?.userId ?? null;
 
-      void lessonsApi
-        .saveProgress(lessonId, {
-          sessionId: id,
-          status,
-          // Omitted, never null. Absent says "not from an assignment"; a null
-          // would be us asserting the same thing in a field the backend may
-          // read differently.
-          ...(assignmentId ? { assignmentId } : {}),
-          ...(position.segment !== undefined
-            ? { segmentPosition: position.segment }
-            : {}),
-          ...(position.module !== undefined
-            ? { modulePosition: position.module }
-            : {}),
-        })
-        .then(() => {
-          // A stale response must not overwrite a newer position.
-          if (ticket < landed.current) return;
-          landed.current = ticket;
-          unsent.current = null;
-          // It landed, so nothing is owed for this lesson any more.
-          clearProgress(lessonId);
-          if (completing) {
-            setCompletionSaved(true);
-            setCompletionFailed(false);
-          }
-        })
-        .catch(() => {
-          // Hold the newest unsent position for a reconnect. A completion
-          // outranks a segment position: it is the write that decides whether
-          // the lesson counts.
-          if (!unsent.current || completing) {
-            unsent.current = { status, ...position };
-          }
-          /*
-           * AND OUTSIDE THIS HOOK. `unsent` is a ref and the `online` listener
-           * below lives in the same effect, so both die when the player
-           * unmounts - which is precisely what "Leave for now" does, one line
-           * after firing a write that is already failing. Held in storage as
-           * well, the position survives the exit the dialog promised it would.
-           */
-          if (id) {
-            holdProgress(lessonId, { sessionId: id, status, ...position });
-          }
-          // Only completion is worth telling a child about - see the docblock.
-          if (completing) setCompletionFailed(true);
+      const notSent = (sent: LessonStatus) => {
+        // A newer position already landed; holding this one would replay
+        // the child backwards on the next flush.
+        if (ticket < landed.current) return;
+        // Hold the newest unsent position for a reconnect. A completion
+        // outranks a segment position: it is the write that decides whether
+        // the lesson counts.
+        if (!unsent.current || completing) {
+          unsent.current = { status, ...position };
+        }
+        /*
+         * AND OUTSIDE THIS HOOK. `unsent` is a ref and the `online` listener
+         * below lives in the same effect, so both die when the player
+         * unmounts - which is precisely what "Leave for now" does, one line
+         * after firing a write that is already failing. Held in storage as
+         * well, the position survives the exit the dialog promised it would.
+         */
+        holdProgress(
+          lessonId,
+          {
+            sessionId: id,
+            status: sent,
+            ...position,
+            ...(assignmentId ? { assignmentId } : {}),
+          },
+          owner,
+        );
+        // Only completion is worth telling a child about - see the docblock.
+        if (completing) setCompletionFailed(true);
+      };
+
+      const send = (sent: LessonStatus) =>
+        void lessonsApi
+          .saveProgress(lessonId, {
+            sessionId: id,
+            status: sent,
+            // Omitted, never null. Absent says "not from an assignment"; a
+            // null would be us asserting the same thing in a field the
+            // backend may read differently.
+            ...(assignmentId ? { assignmentId } : {}),
+            ...(position.segment !== undefined
+              ? { segmentPosition: position.segment }
+              : {}),
+            ...(position.module !== undefined
+              ? { modulePosition: position.module }
+              : {}),
+            ...(position.check !== undefined
+              ? { checkPosition: position.check }
+              : {}),
+          })
+          .then((res) => {
+            // A stale response must not overwrite a newer position.
+            if (ticket < landed.current) return;
+            landed.current = ticket;
+            setSaved(res ?? null);
+            unsent.current = null;
+            // It landed, so nothing is owed for THIS SESSION any more. Only
+            // this session's: a completion held from an earlier visit is not
+            // made untrue by today's first segment, and wiping it here is how
+            // a finished lesson went back to being unfinished.
+            clearProgress(lessonId, id);
+            if (completing && sent !== status) {
+              // Written `exited` for a refused answer, below: not completed.
+              settleAnswers(lessonId, id);
+              setCompletionFailed(true);
+            } else if (completing) {
+              setCompletionSaved(true);
+              setCompletionFailed(false);
+            }
+          })
+          .catch(() => notSent(sent));
+
+      /*
+       * A COMPLETION NEVER GOES AHEAD OF ITS ANSWERS (Lydia, 6 Oct): the
+       * engine must not book one with no check data behind it. Answers this
+       * visit holds on the device are sent first; while any is still held
+       * the completion is held with it, and when one has been refused for
+       * good the lesson is written `exited` at the same place instead, so it
+       * comes back. With nothing held - every online visit - it goes at once,
+       * as it always has.
+       */
+      if (completing && holdsAnswers(lessonId, id)) {
+        void sendHeldAnswers(lessonId, id).then((answers) => {
+          if (answers === "held") notSent(status);
+          else send(answers === "refused" ? LESSON_STATUS.EXITED : status);
         });
+        return;
+      }
+      send(status);
     },
     [lessonId, assignmentId],
   );
@@ -176,29 +272,74 @@ export function useLessonProgress(
   useEffect(() => {
     if (!enabled || !getToken()) return;
     let cancelled = false;
+    let opening = false;
+    const release = claimSlot(lessonId, localId);
+    // Taken now for the same reason `write` takes it early - see there.
+    const owner = getSession()?.userId ?? null;
 
-    void lessonsApi
-      .startSession(lessonId)
-      .then((res) => {
-        if (cancelled) return;
-        sessionId.current = res.sessionId;
-        setIssued(res.sessionId);
-        // Anything reported while the session was opening.
-        const held = pending.current;
-        pending.current = null;
-        if (held) write(held.status, held);
-      })
-      .catch(() => {
-        // No session means no progress endpoint to call. A lesson still plays
-        // perfectly well; it just will not be recorded, and the completion
-        // screen is where that gets said.
-        if (!cancelled) setCompletionFailed(true);
-      });
+    const open = () => {
+      if (cancelled || opening || sessionId.current) return;
+      opening = true;
+      void lessonsApi
+        .startSession(lessonId)
+        .then((res) => {
+          opening = false;
+          if (cancelled) return;
+          sessionId.current = res.sessionId;
+          sessionFailed.current = false;
+          setIssued(res.sessionId);
+          setOpened(res);
+          // What was held without a session is ours to send now, under it -
+          // the answers too, first, which a completion below waits for.
+          clearProgress(lessonId, localId);
+          adoptAnswers(lessonId, localId, res.sessionId);
+          if (holdsAnswers(lessonId, res.sessionId)) {
+            void sendHeldAnswers(lessonId, res.sessionId);
+          }
+          // Anything reported while the session was opening.
+          const held = pending.current;
+          pending.current = null;
+          if (held) write(held.status, held);
+        })
+        .catch(() => {
+          opening = false;
+          // No session yet means no progress endpoint to call. The lesson
+          // still plays; the position is held - even if the player has
+          // already closed - and the completion screen is where a missed
+          // save gets said.
+          if (!cancelled) {
+            sessionFailed.current = true;
+            setCompletionFailed(true);
+          }
+          const held = pending.current;
+          if (held) {
+            holdProgress(
+              lessonId,
+              {
+                sessionId: null,
+                localId,
+                ...held,
+                ...(assignmentId ? { assignmentId } : {}),
+              },
+              owner,
+            );
+          }
+        });
+    };
+
+    retryOpen.current = open;
+    open();
+    // The connection came back: try the session again.
+    window.addEventListener("online", open);
 
     return () => {
       cancelled = true;
+      retryOpen.current = null;
+      window.removeEventListener("online", open);
+      // Closed with no session: the flush is welcome to what is held now.
+      release();
     };
-  }, [lessonId, enabled, write]);
+  }, [lessonId, enabled, write, localId, assignmentId]);
 
   // Back online: send whatever never landed.
   useEffect(() => {
@@ -226,13 +367,32 @@ export function useLessonProgress(
       if (!sessionId.current) {
         // Hold the latest only - an older position is never worth sending.
         pending.current = { status, ...position };
+        if (sessionFailed.current) {
+          // Kept past this player, and the session tried again.
+          holdProgress(lessonId, {
+            sessionId: null,
+            localId,
+            status,
+            ...position,
+            ...(assignmentId ? { assignmentId } : {}),
+          });
+          retryOpen.current?.();
+        }
         return;
       }
       write(status, position);
     },
-    [enabled, write],
+    [enabled, write, lessonId, localId, assignmentId],
   );
 
   if (!enabled) return IDLE;
-  return { report, completionFailed, completionSaved, sessionId: issued };
+  return {
+    report,
+    completionFailed,
+    completionSaved,
+    sessionId: issued,
+    saved,
+    opened,
+    localId,
+  };
 }

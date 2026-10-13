@@ -10,6 +10,13 @@ export const SCAFFOLD_LEVELS = {
   MODERATE: "moderate",
   LIGHT: "light",
   MINIMAL: "minimal",
+  /**
+   * The engine's `none` (ScaffoldingLevel, 1 Oct): no support is being given,
+   * and it SAID so. The indicator shows with no circle filled - frontend §4
+   * fills "0 to 4". Not the same as having no level at all, which is the
+   * nothing-state and draws no indicator (rule 5).
+   */
+  NONE: "none",
   /** Indicator hidden entirely. */
   OFF: "off",
 } as const;
@@ -23,5 +30,6 @@ export const SCAFFOLD_FILLED: Record<ScaffoldLevel, number> = {
   [SCAFFOLD_LEVELS.MODERATE]: 3,
   [SCAFFOLD_LEVELS.LIGHT]: 2,
   [SCAFFOLD_LEVELS.MINIMAL]: 1,
+  [SCAFFOLD_LEVELS.NONE]: 0,
   [SCAFFOLD_LEVELS.OFF]: 0,
 };

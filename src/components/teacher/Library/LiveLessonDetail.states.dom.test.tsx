@@ -72,6 +72,7 @@ const kp = (id: string, outstanding: boolean) => ({
 const LESSON = {
   id: "l-9",
   title: "Photosynthesis in Leaves",
+  status: "completed",
   segmentCount: 5,
   segments: [seg(), seg({ id: "s-2", sequenceOrder: 2, title: "Inside the leaf" })],
   confirmationSummary: null,
@@ -290,6 +291,20 @@ describe("the section rows once a teacher has checked them", () => {
     expect(screen.queryByText("Worth a look")).not.toBeInTheDocument();
   });
 
+  it("numbers a flagged section as the list below does, from 1 (T51)", () => {
+    // `sequenceOrder` is the server's sort key and nothing says it starts at
+    // 1. The review list used it as the number, so a 0 read "Section 0" above
+    // "Section 1" for the same section in the list.
+    const FIRST = seg({ id: "s-0", sequenceOrder: 0, title: null, needsReview: true });
+    const SECOND = seg({ id: "s-9", sequenceOrder: 1, title: "Inside the leaf" });
+    sectionReview([FIRST], []);
+
+    showWith([SECOND, FIRST]);
+
+    expect(screen.queryByText("Section 0")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Section 1").length).toBeGreaterThanOrEqual(2);
+  });
+
   it("marks only the section that is still waiting", () => {
     sectionReview([FLAGGED_B], ["s-1"]);
 
@@ -352,5 +367,336 @@ describe("the section rows once a teacher has checked them", () => {
 
     expect(screen.getByText("Checked")).toBeInTheDocument();
     expect(screen.queryByText("Worth a look")).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * WHAT THE PAGE CLAIMS WHEN IT DOES NOT KNOW - or when there is nothing to send.
+ *
+ * Three ways this page said "Ready when you are... Assign it to a class" over
+ * something that was not ready: a failed assignments read, a lesson whose
+ * parse failed or is still running, and the window before the review read
+ * lands. Rule 5 - absence is an instruction, not a gap to fill.
+ */
+describe("when who has this lesson could not be read", () => {
+  const showFailed = () =>
+    render(
+      <LiveLessonDetail
+        lesson={LESSON}
+        modules={[]}
+        assignments={[]}
+        assignmentsFailed
+      />,
+    );
+
+  it("does not say the lesson was never assigned", () => {
+    showFailed();
+
+    expect(screen.queryByText("Ready when you are")).not.toBeInTheDocument();
+  });
+
+  it("says it could not find out, where the schedule would be", () => {
+    showFailed();
+
+    expect(
+      screen.getByText(/couldn’t load who has this lesson just now/),
+    ).toBeInTheDocument();
+  });
+
+  it("says nothing of the kind when the read landed", () => {
+    show();
+
+    expect(screen.queryByText(/couldn’t load who has this lesson/)).not.toBeInTheDocument();
+  });
+});
+
+describe("a lesson with nothing to send", () => {
+  const showAs = (over: Record<string, unknown>) =>
+    render(
+      <LiveLessonDetail
+        lesson={{ ...LESSON, ...over } as LessonDetailResponse}
+        modules={[]}
+        assignments={[]}
+      />,
+    );
+
+  it("is not called ready when its parse failed", () => {
+    showAs({ status: "failed", segments: [], segmentCount: 0 });
+
+    expect(screen.queryByText("Ready when you are")).not.toBeInTheDocument();
+    expect(screen.queryByText(/prepared this lesson into 0 sections/)).not.toBeInTheDocument();
+  });
+
+  it("offers no Assign when its parse failed", () => {
+    showAs({ status: "failed", segments: [], segmentCount: 0 });
+
+    expect(screen.queryByText("Assign to a class")).not.toBeInTheDocument();
+  });
+
+  it("offers no Assign while it is still being read", () => {
+    showAs({ status: "processing" });
+
+    expect(screen.queryByText("Ready when you are")).not.toBeInTheDocument();
+    expect(screen.queryByText("Assign to a class")).not.toBeInTheDocument();
+  });
+
+  it("offers no Assign while it is waiting to be read", () => {
+    showAs({ status: "pending" });
+
+    expect(screen.queryByText("Assign to a class")).not.toBeInTheDocument();
+  });
+
+  it("offers no Assign for a finished lesson with no sections in it", () => {
+    showAs({ segments: [], segmentCount: 0 });
+
+    expect(screen.queryByText("Ready when you are")).not.toBeInTheDocument();
+    expect(screen.queryByText("Assign to a class")).not.toBeInTheDocument();
+  });
+
+  it("is ready when the parse finished with things to review", () => {
+    showAs({ status: "completed_with_review" });
+
+    expect(screen.getByText("Ready when you are")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Assign to a class" })).toBeInTheDocument();
+  });
+});
+
+describe("while the review is still being read", () => {
+  it("is not the ready state yet", () => {
+    reviewState({ loading: true });
+    show();
+
+    expect(screen.queryByText("Ready when you are")).not.toBeInTheDocument();
+  });
+
+  it("holds Assign, so it cannot be pressed into a 409", () => {
+    reviewState({ loading: true });
+    show();
+
+    expect(screen.queryByRole("link", { name: "Assign to a class" })).not.toBeInTheDocument();
+    expect(screen.getByText("Assign to a class")).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("does not explain a refusal nobody has made", () => {
+    reviewState({ loading: true });
+    show();
+
+    expect(screen.queryByText("Still being checked.")).not.toBeInTheDocument();
+    expect(screen.queryByText(/still to check/)).not.toBeInTheDocument();
+  });
+
+  it("lets Assign go the moment the answer is ready", () => {
+    reviewState({ loading: false, ready: true });
+    show();
+
+    expect(screen.getByRole("link", { name: "Assign to a class" })).toBeInTheDocument();
+  });
+});
+
+/**
+ * THE PAGE HANDS THE SCHEDULE ITS CLASS NAMES. The schedule names a group
+ * from the lesson's own classes first; a page that forgot to pass them would
+ * put every group back to "A class" while the class list loads or fails,
+ * with every schedule test still green.
+ */
+describe("the schedule on this page", () => {
+  it("names a group after the class the lesson went to", () => {
+    render(
+      <LiveLessonDetail
+        lesson={LESSON}
+        modules={[]}
+        assignments={[
+          { id: "a-1", studentId: "st-1", classId: "c-1", status: "assigned", dueAt: null, availableFrom: null },
+        ] as never}
+        classes={[{ id: "c-1", name: "Year 7 Blue", yearGroup: null, studentCount: 1 }] as never}
+      />,
+    );
+
+    expect(screen.queryByText(/A class/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * THE ENGINE'S NOTE ON A SECTION, AND THE SUBJECT.
+ *
+ * Class progress carries a note per section and nothing read it; the slowed
+ * section was marked by colour alone. And the header never said what subject
+ * the lesson is, though C06b draws it first.
+ */
+describe("what the page says about each section", () => {
+  const PROGRESS = {
+    lessonId: "l-9",
+    classId: "c-1",
+    slowestSegmentId: "s-2",
+    slowdownNote: null,
+    segments: [
+      {
+        segmentId: "s-2",
+        segmentKey: "k-2",
+        title: "Inside the leaf",
+        sequenceOrder: 2,
+        assignedStudentCount: 7,
+        completionCount: 4,
+        completionRate: 4 / 7,
+        averageTimeSeconds: 300,
+        slowdownCount: 3,
+        note: "Nevo read this section aloud for most of the class.",
+      },
+    ],
+  };
+
+  it("quotes the engine's note under its section", () => {
+    render(
+      <LiveLessonDetail lesson={LESSON} modules={[]} assignments={[]} progress={PROGRESS as never} />,
+    );
+
+    expect(screen.getByText("Nevo read this section aloud for most of the class.")).toBeInTheDocument();
+  });
+
+  it("builds no note of its own from the slowdown count", () => {
+    render(
+      <LiveLessonDetail
+        lesson={LESSON}
+        modules={[]}
+        assignments={[]}
+        progress={{ ...PROGRESS, segments: [{ ...PROGRESS.segments[0], note: null }] } as never}
+      />,
+    );
+
+    expect(screen.queryByText(/slowed here/i)).not.toBeInTheDocument();
+  });
+
+  it("names the subject in the header", () => {
+    render(
+      <LiveLessonDetail
+        lesson={{ ...LESSON, subject: "Biology" } as LessonDetailResponse}
+        modules={[]}
+        assignments={[]}
+      />,
+    );
+
+    expect(screen.getByText(/Biology ·/)).toBeInTheDocument();
+  });
+});
+
+/**
+ * C06b's "Ready · not yet assigned" pill, and its two headings.
+ */
+describe("the ready lesson's pill and headings", () => {
+  it("draws Ready beside the title on a lesson nobody has yet", () => {
+    show();
+
+    expect(screen.getByText("Ready")).toBeInTheDocument();
+  });
+
+  it("draws no Ready once the lesson is assigned", () => {
+    show([{ id: "a-1", studentId: "st-1", classId: "c-1", status: "assigned", dueAt: null, availableFrom: null }]);
+
+    expect(screen.queryByText("Ready")).not.toBeInTheDocument();
+  });
+
+  it("draws no Ready while the review is still being read", () => {
+    reviewState({ loading: true });
+    show();
+
+    expect(screen.queryByText("Ready")).not.toBeInTheDocument();
+  });
+
+  it("draws no Ready while something is waiting", () => {
+    reviewState({ ready: false, outstanding: 2, hadReview: true });
+    show();
+
+    expect(screen.queryByText("Ready")).not.toBeInTheDocument();
+  });
+
+  it("draws no Ready beside Needs review, even when the server would let it go", () => {
+    // The server can say ready while flagged sections are still unapproved.
+    // Both pills at once would contradict each other.
+    reviewState({ ready: true, outstanding: 0 });
+    useSegmentReview.mockReturnValue({
+      outstanding: [],
+      remaining: 2,
+      ready: false,
+      approving: null,
+      failed: null,
+      approve: vi.fn(),
+      isApproved: () => false,
+    });
+    show();
+
+    expect(screen.getByText("Needs review")).toBeInTheDocument();
+    expect(screen.queryByText("Ready")).not.toBeInTheDocument();
+  });
+
+  it("calls the sections what's inside before anyone has worked through them", () => {
+    show();
+
+    expect(screen.getByText("What’s inside")).toBeInTheDocument();
+  });
+
+  it("calls them how the class moved through it once there is progress", () => {
+    render(
+      <LiveLessonDetail
+        lesson={LESSON}
+        modules={[]}
+        assignments={[]}
+        progress={{ lessonId: "l-9", classId: "c-1", slowestSegmentId: null, slowdownNote: null, segments: [] } as never}
+      />,
+    );
+
+    expect(screen.getByText("How the class moved through it")).toBeInTheDocument();
+  });
+});
+
+/**
+ * C06b AT TABLET WIDTH (1024 x 768). Unprefixed classes are the tablet
+ * layout here and `xl:` is desktop. The section rows were a column below
+ * 1280px, so the number sat on a line of its own above every section, and
+ * the header set the actions beside the title where the frame stacks them.
+ */
+describe("at tablet width", () => {
+  it("keeps each section on one line, without the type tag", () => {
+    show();
+    const title = screen.getByText("What a leaf does");
+    const row = title.closest("[class*='py-[13px]']")!;
+
+    expect(row).not.toBeNull();
+    expect(row.className.split(" ")).not.toContain("flex-col");
+    expect(row).toHaveClass("flex", "items-start");
+    expect(title.parentElement!.querySelector("[class*='rounded-full']")).toHaveClass(
+      "hidden",
+      "xl:inline",
+    );
+  });
+
+  it("stacks the header: the actions under the title, beside it from 1280px", () => {
+    show();
+    const header = screen
+      .getByRole("heading", { level: 1, name: "Photosynthesis in Leaves" })
+      .closest("[class*='xl:justify-between']")!;
+
+    expect(header).toHaveClass("flex-col", "xl:flex-row");
+  });
+});
+
+/**
+ * C06b's own treatments, which the live page had drawn differently from both
+ * the frame and the sample page: the ready state is a raised cream card with
+ * a navy check, not a flat tint; a section's number is set at /60, semibold.
+ */
+describe("C06b's treatments", () => {
+  it("draws the ready state as the raised card with its check", () => {
+    show();
+    const card = screen.getByText("Ready when you are").closest("[class*='rounded-[12px]']")!;
+
+    expect(card).toHaveClass("bg-nevo-cream-elevated", "shadow-elevation-1");
+    expect(card.querySelector("svg path")).toHaveAttribute("d", "M20 6L9 17l-5-5");
+  });
+
+  it("sets each section's number as the frame does", () => {
+    show();
+    const row = screen.getByText("What a leaf does").closest("[class*='py-[13px]']")!;
+
+    expect(row.firstElementChild).toHaveClass("font-semibold", "text-nevo-near-black/60");
   });
 });

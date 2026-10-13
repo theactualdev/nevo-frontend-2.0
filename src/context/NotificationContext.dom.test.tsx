@@ -1,5 +1,8 @@
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -7,7 +10,11 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { useContext } from "react";
-import { NotificationContext, NotificationProvider } from "./NotificationContext";
+import {
+  childHref,
+  NotificationContext,
+  NotificationProvider,
+} from "./NotificationContext";
 
 /**
  * THE BELL INVENTED A MESSAGE FROM A NAMED TEACHER.
@@ -55,14 +62,36 @@ vi.mock("@/lib/api/notifications", () => ({
   },
 }));
 
-const token = vi.hoisted(() => ({ value: undefined as string | undefined }));
-vi.mock("@/lib/auth/session", () => ({ getToken: () => token.value }));
+const token = vi.hoisted(() => ({
+  value: undefined as string | undefined,
+  /** Whose token it is - a different child on the same tablet has another. */
+  userId: "student-1",
+  /** Whose kind of session: the bell is a child's, so staff own no feed. */
+  role: "student",
+  listeners: new Set<() => void>(),
+}));
+vi.mock("@/lib/auth/session", () => ({
+  getToken: () => token.value,
+  getSession: () =>
+    token.value ? { userId: token.userId, role: token.role } : null,
+  onSessionChange: (listener: () => void) => {
+    token.listeners.add(listener);
+    return () => token.listeners.delete(listener);
+  },
+}));
+
+/** What `setSession` / `clearSession` announce. */
+const sessionChanged = () => {
+  for (const l of token.listeners) l();
+};
 
 /** One unread row, as the feed returns them. */
 const feedOf = (read: boolean) => ({
   notifications: [
     {
       notificationId: "n-1",
+      // A type addressed to a child - the bell shows no other.
+      type: "lesson_assigned",
       title: "A new lesson is ready",
       description: null,
       createdAt: new Date().toISOString(),
@@ -126,6 +155,9 @@ beforeEach(() => {
   hasSession.value = false;
   hydrated.value = true;
   token.value = undefined;
+  token.userId = "student-1";
+  token.role = "student";
+  token.listeners.clear();
 });
 
 afterEach(() => {
@@ -220,6 +252,87 @@ describe("the live path, which was already right", () => {
 
     expect(shown().count).toBe("0");
     expect(shown().failed).toBe("false");
+  });
+});
+
+describe("a tablet that more than one child signs into", () => {
+  /*
+   * THE PROVIDER IS MOUNTED ONCE, AT THE ROOT. It read the feed when the app
+   * loaded and never again - so a child who signed in afterwards had no bell,
+   * and the next child on the tablet could open the one before them's.
+   */
+  it("loads the feed when a child signs in after the app opened", async () => {
+    hasSession.value = true;
+    listResult.value = Promise.resolve(feedOf(false));
+    mount();
+    expect(shown().count).toBe("0");
+
+    // Signed in with the app already open, as the PIN screen does.
+    token.value = "tok-1";
+    await act(async () => sessionChanged());
+
+    await waitFor(() => expect(shown().count).toBe("1"));
+    expect(shown().unread).toBe("1");
+  });
+
+  it("reads no feed for a teacher or admin, whose console has its own bell", async () => {
+    hasSession.value = true;
+    let calls = 0;
+    listResult.value = {
+      then: (ok: (v: unknown) => unknown) => {
+        calls += 1;
+        return Promise.resolve(feedOf(false)).then(ok);
+      },
+    } as unknown as Promise<unknown>;
+    for (const role of ["teacher", "senco_admin"]) {
+      token.value = `tok-${role}`;
+      token.userId = `${role}-1`;
+      token.role = role;
+      mount();
+      await act(async () => sessionChanged());
+      cleanup();
+    }
+    expect(calls).toBe(0);
+  });
+
+  it("drops the last child's feed the moment another child signs in", async () => {
+    hasSession.value = true;
+    token.value = "tok-1";
+    listResult.value = Promise.resolve(feedOf(false));
+    mount();
+    await waitFor(() => expect(shown().count).toBe("1"));
+
+    // The next child's feed has not answered yet - and the last child's must
+    // not be what they see while it is on its way.
+    listResult.value = new Promise(() => {});
+    token.value = "tok-2";
+    token.userId = "student-2";
+    await act(async () => sessionChanged());
+
+    expect(shown().count).toBe("0");
+    expect(shown().unread).toBe("0");
+  });
+
+  it("does not reload for a token refresh, which is the same child", async () => {
+    hasSession.value = true;
+    token.value = "tok-1";
+    let calls = 0;
+    const feed = feedOf(false);
+    listResult.value = {
+      then: (ok: (v: unknown) => unknown) => {
+        calls += 1;
+        return Promise.resolve(feed).then(ok);
+      },
+    } as unknown as Promise<unknown>;
+    mount();
+    await waitFor(() => expect(shown().count).toBe("1"));
+    const before = calls;
+
+    token.value = "tok-1-refreshed";
+    await act(async () => sessionChanged());
+
+    expect(calls).toBe(before);
+    expect(shown().count).toBe("1");
   });
 });
 
@@ -355,5 +468,203 @@ describe("which branch the bell is on", () => {
     hydrated.value = false;
 
     expect(showing()).toBe("false");
+  });
+});
+
+/**
+ * Backend B34, 1 Oct: four notification types are addressed to a child, and a
+ * child's bell had always been empty because none existed. The feed is scoped
+ * to the recipient; these hold what reaches a child's screen to the four even
+ * if something else arrives.
+ */
+describe("what a child's bell carries", () => {
+  const row = (
+    id: string,
+    type: string,
+    over: Record<string, unknown> = {},
+  ) => ({
+    notificationId: id,
+    type,
+    category: null,
+    title: `Title ${id}`,
+    description: "",
+    createdAt: new Date().toISOString(),
+    read: false,
+    navigatesTo: null,
+    ...over,
+  });
+
+  const Probe4 = () => {
+    const ctx = useContext(NotificationContext)!;
+    return (
+      <div>
+        <span data-testid="unread">{ctx.unreadCount}</span>
+        <ul>
+          {ctx.notifications.map((n) => (
+            <li key={n.id} data-testid={n.id} data-kind={n.kind}>
+              {n.href ?? "no-link"}
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  };
+
+  const mount4 = async (rows: unknown[], unreadCount: number) => {
+    listResult.value = Promise.resolve({ notifications: rows, unreadCount });
+    render(
+      <NotificationProvider>
+        <Probe4 />
+      </NotificationProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("unread").textContent).not.toBe(""),
+    );
+  };
+
+  beforeEach(() => {
+    hydrated.value = true;
+    hasSession.value = true;
+    token.value = "a-real-token";
+  });
+
+  it("shows the four types addressed to a child, each with its mark", async () => {
+    await mount4(
+      [
+        row("a", "lesson_assigned"),
+        row("b", "review_due"),
+        row("c", "teacher_replied"),
+        row("d", "sign_in_changed"),
+      ],
+      4,
+    );
+
+    await waitFor(() => expect(screen.queryByTestId("d")).not.toBeNull());
+    // The frame draws a book and a speech bubble; the other two are undrawn.
+    expect(screen.getByTestId("a").getAttribute("data-kind")).toBe("lesson");
+    expect(screen.getByTestId("b").getAttribute("data-kind")).toBe("other");
+    expect(screen.getByTestId("c").getAttribute("data-kind")).toBe("message");
+    expect(screen.getByTestId("d").getAttribute("data-kind")).toBe("other");
+  });
+
+  it("shows nothing written for teachers, and does not light the dot for it", async () => {
+    // `modality_shift` and `attention_summary` are about a child, for an
+    // adult - the last things a child should read about themselves.
+    await mount4(
+      [
+        row("mine", "lesson_assigned"),
+        row("t1", "modality_shift"),
+        row("t2", "attention_summary"),
+      ],
+      3,
+    );
+
+    await waitFor(() => expect(screen.queryByTestId("mine")).not.toBeNull());
+    expect(screen.queryByTestId("t1")).toBeNull();
+    expect(screen.queryByTestId("t2")).toBeNull();
+    expect(screen.getByTestId("unread").textContent).toBe("1");
+  });
+
+  it("links only into the student console", async () => {
+    await mount4(
+      [
+        row("in", "lesson_assigned", {
+          navigatesTo: "/student/lessons/l-1?assignment=a-1",
+        }),
+        row("out", "teacher_replied", { navigatesTo: "/teacher/connect" }),
+        row("none", "sign_in_changed"),
+      ],
+      3,
+    );
+
+    await waitFor(() => expect(screen.queryByTestId("none")).not.toBeNull());
+    expect(screen.getByTestId("in").textContent).toBe(
+      "/student/lessons/l-1?assignment=a-1",
+    );
+    // A row with nowhere a child may go is not a link - not a link elsewhere.
+    expect(screen.getByTestId("out").textContent).toBe("no-link");
+    expect(screen.getByTestId("none").textContent).toBe("no-link");
+  });
+
+  it("follows backend's four destinations as sent (B86, 8 Oct)", async () => {
+    // Backend now sends our own routes for every student type.
+    await mount4(
+      [
+        row("a", "lesson_assigned", { navigatesTo: "/student/lessons" }),
+        row("b", "review_due", { navigatesTo: "/student/progress" }),
+        row("c", "teacher_replied", { navigatesTo: "/student/connect" }),
+        row("d", "sign_in_changed", { navigatesTo: "/student/profile" }),
+      ],
+      4,
+    );
+
+    await waitFor(() => expect(screen.queryByTestId("d")).not.toBeNull());
+    expect(screen.getByTestId("a").textContent).toBe("/student/lessons");
+    expect(screen.getByTestId("b").textContent).toBe("/student/progress");
+    expect(screen.getByTestId("c").textContent).toBe("/student/connect");
+    expect(screen.getByTestId("d").textContent).toBe("/student/profile");
+  });
+
+  it("still takes rows delivered before B86 to a screen this app has", async () => {
+    /*
+     * Backend B62, 5 Oct: rows written then carry /student/review and
+     * /student/messages, which are not our routes, and a child's feed keeps
+     * them. /student/messages is Connect; /student/review has no screen -
+     * reviews due live on a subject's page, which Progress leads to.
+     */
+    await mount4(
+      [
+        row("a", "lesson_assigned", { navigatesTo: "/student/lessons" }),
+        row("b", "review_due", { navigatesTo: "/student/review" }),
+        row("c", "teacher_replied", { navigatesTo: "/student/messages" }),
+        row("d", "sign_in_changed", { navigatesTo: "/student/profile" }),
+      ],
+      4,
+    );
+
+    await waitFor(() => expect(screen.queryByTestId("d")).not.toBeNull());
+    expect(screen.getByTestId("a").textContent).toBe("/student/lessons");
+    expect(screen.getByTestId("b").textContent).toBe("/student/progress");
+    expect(screen.getByTestId("c").textContent).toBe("/student/connect");
+    expect(screen.getByTestId("d").textContent).toBe("/student/profile");
+  });
+});
+
+describe("where a row's link may go", () => {
+  it("keeps whatever follows a mapped path", () => {
+    expect(childHref("/student/messages?thread=t-1")).toBe(
+      "/student/connect?thread=t-1",
+    );
+    expect(childHref("/student/review/")).toBe("/student/progress");
+  });
+
+  it("leaves our own routes, and paths that merely start alike, alone", () => {
+    expect(childHref("/student/lessons/l-1?assignment=a-1")).toBe(
+      "/student/lessons/l-1?assignment=a-1",
+    );
+    expect(childHref("/student/reviewed")).toBe("/student/reviewed");
+  });
+
+  it("still goes nowhere outside the student console", () => {
+    expect(childHref("/teacher/messages")).toBeNull();
+    expect(childHref("/studentish")).toBeNull();
+    expect(childHref(null)).toBeNull();
+  });
+
+  it("only ever lands on a page that exists", () => {
+    // Every destination a child's row can carry today, after mapping.
+    for (const path of [
+      "/student/lessons",
+      "/student/progress",
+      "/student/connect",
+      "/student/profile",
+      // Rows delivered before B86.
+      "/student/review",
+      "/student/messages",
+    ]) {
+      const href = childHref(path)!;
+      const page = resolve(process.cwd(), `src/app${href}/page.tsx`);
+      expect(existsSync(page), `${path} -> ${href}`).toBe(true);
+    }
   });
 });

@@ -87,13 +87,53 @@ describe("the after-lesson assessment", () => {
         // somebody has to make rather than something that slips in.
         id: "cp-1",
         prompt: "Which is larger?",
+        // Each option keeps its own value (1 Oct): it is what the answer
+        // write sends, and the server marks against it.
         options: [
-          { id: "a", label: "Two-thirds" },
-          { id: "b", label: "Three-fifths" },
+          { id: "a", label: "Two-thirds", value: "a" },
+          { id: "b", label: "Three-fifths", value: "b" },
         ],
         correctId: "a",
       },
     ]);
+  });
+
+  it("carries a spoken question's recording, where the server made it one", () => {
+    const out = lessonFromContent(
+      lesson({
+        assessment: [
+          checkpoint({
+            format: "spoken",
+            promptAudioUrl: "https://cdn.example/cp-1.mp3",
+          }),
+        ],
+      }),
+    );
+
+    expect(out?.assessment?.questions[0].promptAudio).toBe(
+      "https://cdn.example/cp-1.mp3",
+    );
+  });
+
+  it("carries it on a segment's inline check too", () => {
+    const out = lessonFromContent(
+      lesson({
+        segments: [
+          segment({
+            comprehensionCheckpoints: [
+              checkpoint({
+                format: "spoken",
+                promptAudioUrl: "https://cdn.example/seg-cp.mp3",
+              }),
+            ],
+          }),
+        ],
+      }),
+    );
+
+    expect(out?.segments[0].quickCheck?.promptAudio).toBe(
+      "https://cdn.example/seg-cp.mp3",
+    );
   });
 
   it("marks against the option VALUE, not its position", () => {

@@ -21,6 +21,7 @@ import { SectionReview } from "./SectionReview";
 import { LiveStructureTree } from "./LiveStructureTree";
 import { StructureTree } from "./StructureTree";
 import { UploadResult } from "./UploadResult";
+import { MaybeSample, SampleRegion } from "@/components/shared/SampleRegion";
 
 /**
  * Lesson Upload wizard (SCRUM-102.6 reconciled flow, C07g): one flow, two
@@ -204,6 +205,8 @@ const SCOPE_CHIP: Record<ScopeId, string> = {
 const PROCESS_MS = 2400;
 const BLOCK_STAGE_MS = 1150;
 const ACCEPTED = /\.(pdf|docx?|pptx?)$/i;
+/** The file step's own promise: "PDF, Word, or PowerPoint · up to 25 MB". */
+const MAX_BYTES = 25 * 1024 * 1024;
 
 /** Mock outcome of the block parse, read from the file (see header note). */
 function mockBlockOutcome(name: string): FallbackKind | "parsed" {
@@ -227,6 +230,13 @@ export function UploadWizard() {
   const [parseStage, setParseStage] = useState(0);
   const [fallbackKind, setFallbackKind] = useState<FallbackKind>("unreadable");
   const [dragOver, setDragOver] = useState(false);
+  /**
+   * C07's "That file didn't come through" (T65), on the file step where the
+   * frame draws it. A refused file used to land on the could-not-read screen,
+   * which says it "looks like a scan saved in a format we can't open" - a
+   * cause asserted for a proxy's 413 and our own 422 alike.
+   */
+  const [refused, setRefused] = useState(false);
   /** The screen is showing fixture content, never the teacher's own file. */
   const [sample, setSample] = useState(false);
   const staged = useStagedUpload();
@@ -266,6 +276,25 @@ export function UploadWizard() {
     (staged.status === "ready" || staged.status === "confirmed");
 
   /**
+   * The unit's tree is ready - the block path's twin of `singleReview`.
+   *
+   * IT TAKES THE PANE, as the module review and the fallback do. It used to
+   * render inside the body: in a 760px column, inside a scroll, inside the
+   * body's own padding. `LiveStructureTree` is built as a pane - its own
+   * scroll, its commit bar pinned at the foot, its confirm sheet over its own
+   * area - and in there the padding doubled, the bar scrolled away with the
+   * tree, and the sheet anchored to whatever was positioned further up (C07d).
+   */
+  const liveTree =
+    isBlock &&
+    phase === "processing" &&
+    staged.uploadId !== null &&
+    staged.structure !== null &&
+    (staged.status === "ready" || staged.status === "confirmed")
+      ? { uploadId: staged.uploadId, structure: staged.structure }
+      : null;
+
+  /**
    * The fallback screen, and which failure it is about, from either source.
    *
    * The demo beats set a phase; a staged parse reports its failure through a
@@ -280,14 +309,14 @@ export function UploadWizard() {
   const fallback: { kind: FallbackKind } | null =
     phase === "fallback"
       ? { kind: fallbackKind }
-      : !isBlock && phase === "processing" && staged.failed
+      : !isBlock &&
+          phase === "processing" &&
+          staged.failed &&
+          // A refused file goes back to the file step (T65), not here.
+          staged.failureKind !== "file"
         ? {
             kind:
-              staged.failureKind === "request"
-                ? "unreachable"
-                : staged.failureKind === "file"
-                  ? "unreadable"
-                  : "parseFailed",
+              staged.failureKind === "request" ? "unreachable" : "parseFailed",
           }
         : null;
   const stepTotal = scope === null ? "N" : scope === "single" ? 3 : 5;
@@ -343,6 +372,18 @@ export function UploadWizard() {
     setFileName(file.name);
     setSample(false);
     setParsed(null);
+    setRefused(false);
+    /*
+     * CHECKED HERE FIRST (T65). The step promises PDF, Word or PowerPoint up
+     * to 25 MB, and nothing held it to that: a 40 MB file uploaded in full to
+     * be refused, and a drag-and-drop skipped the picker's `accept` entirely.
+     * Signed in only - the walkthrough's beats are driven by the file's name.
+     */
+    if (getToken() && (file.size > MAX_BYTES || !ACCEPTED.test(file.name))) {
+      setRefused(true);
+      setPhase("file");
+      return;
+    }
     setPhase("processing");
 
     // A signed-out visitor has no token, so the designed demo beat stands.
@@ -370,7 +411,16 @@ export function UploadWizard() {
      * upload, which is the step the frame draws as "Looks right, continue".
      */
     if (scope) {
-      staged.start(file, scope === "single" ? "lesson" : scope, subject || undefined);
+      void staged
+        .start(file, scope === "single" ? "lesson" : scope, subject || undefined)
+        .then((outcome) => {
+          // The server's answer about the file belongs where the file was
+          // chosen, as C07 draws it - not on the could-not-read screen.
+          if (outcome !== "refused" || isBlock) return;
+          staged.reset();
+          setRefused(true);
+          setPhase("file");
+        });
       return;
     }
 
@@ -408,9 +458,30 @@ export function UploadWizard() {
     timer.current = setTimeout(tick, BLOCK_STAGE_MS);
   };
 
+  /**
+   * "Try again" after the CONNECTION failed - never a new upload when one exists.
+   *
+   * Both of these used to start over: the fallback resent the file, staging a
+   * second copy of a parse that had very likely finished server-side, and the
+   * unit card reopened the picker. With an upload id the right move is to ask
+   * about THAT upload again. Only when the create itself never landed is there
+   * nothing to ask about, and then the same file goes again - the teacher is
+   * not sent to find it a second time for a failure that was ours.
+   */
+  const tryAgain = () => {
+    if (staged.uploadId && staged.failureKind === "request") {
+      staged.resume();
+      return;
+    }
+    const f = lastFile.current;
+    if (f) startFile(f);
+    else setPhase("file");
+  };
+
   const reset = () => {
     stopTimer();
     staged.reset();
+    setRefused(false);
     setPhase("scope");
     setScope(null);
     setSubject("");
@@ -433,9 +504,9 @@ export function UploadWizard() {
             />
           </div>
         </div>
-        <h2 className="mt-3 text-[21px] font-semibold tracking-[-0.014em] text-nevo-near-black xl:text-2xl">
+        <h1 className="mt-3 text-[21px] font-semibold tracking-[-0.014em] text-nevo-near-black xl:text-2xl">
           {heading}
-        </h2>
+        </h1>
         {phase === "scope" && (
           <p className="mt-1.5 max-w-[560px] text-sm leading-[1.55] text-nevo-near-black/62">
             This just tells us how deeply to break it up. You can change any of
@@ -478,10 +549,12 @@ export function UploadWizard() {
       {/* The designed walkthrough, on fixture content, for a visitor with no
           token. A signed-in teacher reaches the live review above. */}
       {phase === "review" && sample && (
-        <SectionReview
-          onBack={() => setPhase("file")}
-          onDone={() => setPhase("done")}
-        />
+        <SampleRegion kind="teacher:upload-demo-review">
+          <SectionReview
+            onBack={() => setPhase("file")}
+            onDone={() => setPhase("done")}
+          />
+        </SampleRegion>
       )}
 
       {/* THE SINGLE LESSON'S OWN REVIEW - C07g step 3, live. */}
@@ -533,7 +606,66 @@ export function UploadWizard() {
         />
       )}
 
+      {/* The designed structure tree, in place of the route it used to live
+          at. Signed-out only by construction: `blockParsed` is reached from
+          the mocked beats. A pane, like the live tree below - it was inside
+          the body's 860px column, so its commit bar scrolled with it. */}
+      {phase === "demoStructure" && (
+        <SampleRegion kind="teacher:upload-demo-structure">
+          <StructureTree />
+        </SampleRegion>
+      )}
+
+      {/* THE UNIT'S OWN TREE - C07d, live, as a pane (see `liveTree`). */}
+      {liveTree && (
+        <LiveStructureTree
+          uploadId={liveTree.uploadId}
+          structure={liveTree.structure}
+          segments={staged.segments}
+          blockName={blockName}
+          banner={
+            /*
+              FAINT PAGES, SAID OUT LOUD.
+
+              `failedPages` is on the status response and was missing
+              from the client type, so until 18 Sep a teacher whose
+              PDF was partly unreadable got this tree with those pages
+              silently absent from it - a unit that looks complete and
+              is not. The retry endpoint was wrapped the whole time
+              and had nothing to ask for, because the page numbers
+              only exist in the field nobody was reading.
+
+              NOT DRAWN BY DESIGN. C07f covers a parse that failed
+              outright, not one that came back with holes in it, so
+              this is the honest minimum - what is missing, and the
+              one action that fixes it - and it is raised rather than
+              invented further.
+            */
+            staged.failedPages.length > 0 ? (
+              <div className="mb-5 w-full rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4">
+                <p className="text-[14.5px] leading-[1.55] text-nevo-near-black/82">
+                  {faintPagesLine(staged.failedPages)}
+                </p>
+                <button
+                  type="button"
+                  onClick={staged.retryFailedPages}
+                  disabled={staged.retrying}
+                  className="mt-3 inline-flex h-[42px] cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 bg-nevo-cream-elevated px-[18px] text-[14px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6 disabled:cursor-default disabled:opacity-55"
+                >
+                  {staged.retrying
+                    ? "Reading them again…"
+                    : staged.failedPages.length === 1
+                      ? "Read that page again"
+                      : "Read those pages again"}
+                </button>
+              </div>
+            ) : null
+          }
+        />
+      )}
+
       {fallback && (
+        <MaybeSample showing={sample} kind="teacher:upload-demo-fallback">
         <ParseFallback
           kind={fallback.kind}
           failureReason={staged.failureReason}
@@ -542,13 +674,9 @@ export function UploadWizard() {
           onBack={() => setPhase("file")}
           onTryAnother={() => setPhase("file")}
           onContinueAnyway={() => setPhase("blockParsed")}
-          onRetrySameFile={() => {
-            // Read at click time, never during render.
-            const f = lastFile.current;
-            if (f) startFile(f);
-            else setPhase("file");
-          }}
+          onRetrySameFile={tryAgain}
         />
+        </MaybeSample>
       )}
 
       {/*
@@ -565,8 +693,8 @@ export function UploadWizard() {
         760 (a wide row of options is harder to compare, not easier), and the
         steps where they are READING what Nevo produced get 860.
       */}
-      {phase !== "review" && !fallback && !singleReview && (
-        <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-6 py-[22px] xl:px-8 xl:py-7">
+      {phase !== "review" && !fallback && !singleReview && !liveTree && phase !== "demoStructure" && (
+        <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-6 py-6 xl:px-8 xl:py-7">
           <div
             className={cn(
               // `min-h-full` because `ParseProgress` centres itself against
@@ -576,7 +704,7 @@ export function UploadWizard() {
               "w-full min-h-full",
               phase === "file" || phase === "processing"
                 ? "max-w-[760px]"
-                : "max-w-[860px]",
+                : "max-w-[820px]",
             )}
           >
           {phase === "scope" && (
@@ -590,7 +718,7 @@ export function UploadWizard() {
                     onClick={() => setScope(s.id)}
                     aria-pressed={on}
                     className={cn(
-                      "flex w-full cursor-pointer items-start gap-[15px] rounded-[12px] border-2 bg-nevo-cream-elevated p-[18px] text-left transition-[border-color,box-shadow] xl:px-5",
+                      "flex w-full cursor-pointer items-start gap-[15px] rounded-[12px] border-2 bg-nevo-cream-elevated px-5 py-[18px] text-left transition-[border-color,box-shadow]",
                       on
                         ? "border-nevo-navy shadow-[0_4px_16px_rgba(0,0,0,0.1)]"
                         : "border-transparent",
@@ -598,7 +726,7 @@ export function UploadWizard() {
                   >
                     <span
                       className={cn(
-                        "flex size-[42px] shrink-0 items-center justify-center rounded-[11px]",
+                        "flex size-[42px] shrink-0 items-center justify-center rounded-[12px]",
                         on
                           ? "bg-nevo-navy text-nevo-cream"
                           : "bg-nevo-navy/10 text-nevo-navy",
@@ -695,7 +823,10 @@ export function UploadWizard() {
                 </span>
                 <button
                   type="button"
-                  onClick={() => setPhase("scope")}
+                  onClick={() => {
+                    setRefused(false);
+                    setPhase("scope");
+                  }}
                   className="cursor-pointer text-xs text-nevo-navy underline underline-offset-2"
                 >
                   change
@@ -716,6 +847,48 @@ export function UploadWizard() {
                   if (f) startFile(f);
                 }}
               />
+              {refused ? (
+                <>
+                  {/* C07 step 2, "File didn't come through (gentle recovery)". */}
+                  <div
+                    role="alert"
+                    className="mt-5 flex gap-3.5 rounded-[12px] border border-nevo-violet/50 bg-nevo-violet/16 px-[22px] py-5 xl:mt-[22px] xl:gap-4 xl:px-6 xl:py-[22px]"
+                  >
+                    <span className="flex size-[44px] shrink-0 items-center justify-center rounded-[12px] bg-nevo-violet/20 text-nevo-navy">
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                        <path d="M6 2h9l5 5v15H6z" />
+                        <path d="M14 2v6h6" />
+                      </svg>
+                    </span>
+                    <div>
+                      <p className="text-[15.5px] font-semibold text-nevo-near-black xl:text-base">
+                        That file didn&rsquo;t come through.
+                      </p>
+                      <p className="mt-[7px] text-[14px] leading-[1.55] text-nevo-near-black/70 xl:mt-2 xl:text-[14.5px]">
+                        It looks larger than 25 MB, or it isn&rsquo;t a format
+                        we read yet (PDF, Word or PowerPoint). Nothing&rsquo;s
+                        lost - try that one again, or pick another.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex justify-center gap-2.5 xl:mt-[18px]">
+                    <button
+                      type="button"
+                      onClick={() => fileInput.current?.click()}
+                      className="inline-flex h-12 cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/30 px-6 text-[15px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
+                    >
+                      Choose another file
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => lastFile.current && startFile(lastFile.current)}
+                      className="inline-flex h-[46px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[26px] text-[15px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93 xl:h-12 xl:px-[30px] xl:text-[15.5px]"
+                    >
+                      Try again
+                    </button>
+                  </div>
+                </>
+              ) : (
               <button
                 type="button"
                 onClick={() => fileInput.current?.click()}
@@ -731,11 +904,11 @@ export function UploadWizard() {
                   if (f) startFile(f);
                 }}
                 className={cn(
-                  "mt-5 w-full cursor-pointer rounded-[16px] border-2 border-dashed bg-nevo-cream-elevated px-8 py-[52px] text-center transition-[filter,border-color] hover:brightness-[0.985]",
+                  "mt-5 w-full cursor-pointer rounded-[16px] border-2 border-dashed bg-nevo-cream-elevated px-8 py-12 text-center transition-[filter,border-color] hover:brightness-[0.985] xl:py-[52px]",
                   dragOver ? "border-nevo-navy" : "border-nevo-navy/35",
                 )}
               >
-                <span className="inline-flex size-16 items-center justify-center rounded-[16px] bg-nevo-navy/10 text-nevo-navy">
+                <span className="inline-flex size-[58px] items-center justify-center rounded-[16px] bg-nevo-navy/10 text-nevo-navy xl:size-16">
                   <svg
                     width="30"
                     height="30"
@@ -752,7 +925,7 @@ export function UploadWizard() {
                     <path d="M5 20h14" />
                   </svg>
                 </span>
-                <p className="mt-[18px] text-[17px] font-semibold text-nevo-near-black">
+                <p className="mt-4 text-base font-semibold text-nevo-near-black xl:mt-[18px] xl:text-[17px]">
                   Choose a file or drag it here
                 </p>
                 <p className="mt-1.5 text-[13.5px] text-nevo-near-black/55">
@@ -761,69 +934,24 @@ export function UploadWizard() {
                     : "PDF, Word, or PowerPoint · up to 25 MB"}
                 </p>
               </button>
-            </div>
-          )}
-
-          {/* The designed structure tree, in place of the route it used to
-              live at. Signed-out only by construction: `blockParsed` is
-              reached from the mocked beats. */}
-          {phase === "demoStructure" && (
-            <div className="w-full">
-              <StructureTree />
+              )}
             </div>
           )}
 
           {/* A REAL staged upload takes over the block path. `ParseProgress`
-              keeps driving the signed-out demo, which still walks its beats. */}
-          {phase === "processing" && isBlock && staged.uploadId && (
-            <div className="w-full">
-              {staged.structure &&
-              (staged.status === "ready" || staged.status === "confirmed") ? (
-                <>
-                  {/*
-                    FAINT PAGES, SAID OUT LOUD.
+              keeps driving the signed-out demo, which still walks its beats.
 
-                    `failedPages` is on the status response and was missing
-                    from the client type, so until 18 Sep a teacher whose
-                    PDF was partly unreadable got this tree with those pages
-                    silently absent from it - a unit that looks complete and
-                    is not. The retry endpoint was wrapped the whole time
-                    and had nothing to ask for, because the page numbers
-                    only exist in the field nobody was reading.
-
-                    NOT DRAWN BY DESIGN. C07f covers a parse that failed
-                    outright, not one that came back with holes in it, so
-                    this is the honest minimum - what is missing, and the
-                    one action that fixes it - and it is raised rather than
-                    invented further.
-                  */}
-                  {staged.failedPages.length > 0 && (
-                    <div className="mb-5 w-full rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4">
-                      <p className="text-[14.5px] leading-[1.55] text-nevo-near-black/82">
-                        {faintPagesLine(staged.failedPages)}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={staged.retryFailedPages}
-                        disabled={staged.retrying}
-                        className="mt-3 inline-flex h-[42px] cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 bg-nevo-cream-elevated px-[18px] text-[14px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6 disabled:cursor-default disabled:opacity-55"
-                      >
-                        {staged.retrying
-                          ? "Reading them again…"
-                          : staged.failedPages.length === 1
-                            ? "Read that page again"
-                            : "Read those pages again"}
-                      </button>
-                    </div>
-                  )}
-                  <LiveStructureTree
-                    uploadId={staged.uploadId}
-                    structure={staged.structure}
-                    segments={staged.segments}
-                    blockName={blockName}
-                  />
-                </>
-              ) : staged.failed ? (
+              A FAILED ONE TAKES IT OVER TOO, upload id or not. A unit whose
+              file never landed has no id, so it fell through to the demo
+              ladder below - stuck on its first rung for ever, over a failure
+              nobody was told about. */}
+          {phase === "processing" && isBlock && (staged.uploadId || staged.failed) && (
+            /* A flex column at full height, so the ladder - `flex-1` inside -
+               centres both ways as C07e draws it. A plain block here collapsed
+               to the ladder's own height, and only the signed-out demo (one
+               level up, no wrapper) was ever centred. */
+            <div className="flex min-h-full w-full flex-col">
+              {staged.failed ? (
                 /*
                   TWO FAILURES, TWO SENTENCES.
 
@@ -867,6 +995,10 @@ export function UploadWizard() {
                   <button
                     type="button"
                     onClick={() => {
+                      if (staged.failureKind === "request") {
+                        tryAgain();
+                        return;
+                      }
                       staged.reset();
                       setPhase("file");
                     }}
@@ -912,7 +1044,7 @@ export function UploadWizard() {
             </div>
           )}
 
-          {phase === "processing" && isBlock && !staged.uploadId && (
+          {phase === "processing" && isBlock && !staged.uploadId && !staged.failed && (
             <ParseProgress stage={parseStage} />
           )}
 
@@ -938,7 +1070,9 @@ export function UploadWizard() {
                     raised on the ticket; this sentence is deliberately a
                     statement about the work rather than an invitation to go,
                     until there is somewhere to come back from. */}
-                Carry on &mdash; we&rsquo;ll tell you when it&rsquo;s ready.
+                {/* C07j's own line, with its hyphen: no em dashes in
+                    rendered copy (D1). */}
+                Carry on - we&rsquo;ll tell you when it&rsquo;s ready.
                 {/*
                   WHAT THE WAIT IS, SAID ON THE RUNG THAT IS LONG.
 
@@ -957,7 +1091,7 @@ export function UploadWizard() {
                   is happening.
                 */}
                 {singleStage === LONGEST_STAGE &&
-                  " This part is the long one — Nevo is making the pictures and the spoken version, and that runs into minutes."}
+                  " This part is the long one - Nevo is making the pictures and the spoken version, and that runs into minutes."}
                 {/*
                   THE SLOW LINE USED TO BLAME THE DOCUMENT'S LENGTH - "a longer
                   document takes longer to read" - and that is the wrong
@@ -973,6 +1107,7 @@ export function UploadWizard() {
           )}
 
           {phase === "done" && (
+            <MaybeSample showing={sample} kind="teacher:upload-demo-done">
             <div className="w-full rounded-[16px] bg-nevo-cream-elevated p-8 shadow-elevation-1">
               <div className="flex items-center gap-4">
                 <span className="flex size-[52px] shrink-0 items-center justify-center rounded-full bg-nevo-navy motion-safe:animate-nevo-pop">
@@ -991,12 +1126,23 @@ export function UploadWizard() {
                   </svg>
                 </span>
                 <div>
+                  {/*
+                    A REAL LESSON REACHES THIS SCREEN ONLY WHEN IT COULD NOT BE
+                    READ BACK (T82) - the confirm landed, the detail read did
+                    not. It said the lesson was ready and that "read, listen
+                    and watch versions are all built": nothing was known about
+                    any version, and it may still need review. So for a real
+                    lesson, its name and the one thing that is known.
+                  */}
                   <h3 className="text-[19px] font-semibold text-nevo-near-black">
-                    {`"${fileName.replace(/\.[^.]+$/, "")}" is ready`}
+                    {sample
+                      ? `"${fileName.replace(/\.[^.]+$/, "")}" is ready`
+                      : `"${fileName.replace(/\.[^.]+$/, "")}"`}
                   </h3>
                   <p className="mt-1 text-[14.5px] text-nevo-near-black/66">
-                    Read, listen and watch versions are all built. It&rsquo;s in
-                    your library now.
+                    {sample
+                      ? "Read, listen and watch versions are all built. It’s in your library now."
+                      : "It’s in your library now."}
                   </p>
                 </div>
               </div>
@@ -1016,9 +1162,11 @@ export function UploadWizard() {
                 </button>
               </div>
             </div>
+            </MaybeSample>
           )}
 
           {phase === "blockParsed" && (
+            <MaybeSample showing={sample} kind="teacher:upload-demo-parsed">
             <div className="w-full rounded-[16px] bg-nevo-cream-elevated p-8 shadow-elevation-1">
               <div className="flex items-center gap-4">
                 <span className="flex size-[52px] shrink-0 items-center justify-center rounded-full bg-nevo-navy motion-safe:animate-nevo-pop">
@@ -1064,6 +1212,7 @@ export function UploadWizard() {
                 </button>
               </div>
             </div>
+            </MaybeSample>
           )}
           </div>
         </div>

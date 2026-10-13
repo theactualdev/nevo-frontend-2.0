@@ -1,8 +1,35 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { visibleText } from "@/test/visibleText";
 import type { AdminStudentRow, ParentLink } from "@/lib/api/students";
 import { StudentsView } from "./StudentsView";
+
+/*
+ * An admin with ROSTER access - the founding admin's, and enough to send the
+ * consent request (backend, 1 Oct: roster OR senco). What an admin with
+ * neither sees is pinned in `ConsentRole.dom.test.tsx`.
+ */
+let scopes: string[] = ["roster"];
+beforeEach(() => {
+  scopes = ["roster"];
+});
+vi.mock("@/context/PermissionContext", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/context/PermissionContext")>();
+  const { createContext } = await import("react");
+  // The context's DEFAULT, read when no provider is mounted - with a getter,
+  // so each test's `scopes` is the one seen.
+  return {
+    ...actual,
+    PermissionContext: createContext({
+      get scopes() {
+        return scopes;
+      },
+      resolved: true,
+      status: "ready",
+      refresh: () => {},
+    } as never),
+  };
+});
 
 /**
  * The trigger nothing in Nevo had.
@@ -160,7 +187,7 @@ describe("sending a parent the consent request", () => {
     await press();
 
     await waitFor(() =>
-      expect(visibleText(container)).toMatch(/no parent contact on Chisom/i),
+      expect(visibleText(container)).toMatch(/no parent or guardian on Chisom[^.]*record yet. Add one/i),
     );
     // An absent contact is an ordinary state, not a failure, and nothing was
     // posted on its behalf.
@@ -237,5 +264,41 @@ describe("sending a parent the consent request", () => {
       expect(screen.getByText(/only have a phone number/i)).toBeInTheDocument(),
     );
     expect(requestParentConsent).not.toHaveBeenCalled();
+  });
+});
+
+describe("D07's consent column", () => {
+  it("dates the two states the frame dates, and nothing else", async () => {
+    const { consentDateLine } = await import("./ConsentPill");
+    const at = (status: string, timestamp: string | null) => ({ status, timestamp });
+    // The console's one short-date format; ICU may spell September "Sept".
+    expect(consentDateLine(at("confirmed", "2026-09-08T10:00:00Z"))).toMatch(/^Responded 8 Sept?$/);
+    expect(consentDateLine(at("pending", "2026-09-14T10:00:00Z"))).toMatch(/^Invited 14 Sept?$/);
+    expect(consentDateLine(at("not_sent", null))).toBeNull();
+    expect(consentDateLine(at("pending", null))).toBeNull();
+    expect(consentDateLine(at("withdrawn", "2026-09-14T10:00:00Z"))).toBeNull();
+  });
+
+  it("shows the date under the pill on the roster", async () => {
+    list.mockResolvedValue([
+      student({
+        consent: { status: "pending", actorId: null, actorName: null, timestamp: "2026-09-14T10:00:00Z", channel: null },
+      }),
+    ]);
+    const { container } = render(<StudentsView />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/Invited 14 Sep/));
+  });
+
+  it("filters by the pills' own words", async () => {
+    list.mockResolvedValue([student()]);
+    render(<StudentsView />);
+    const filter = (await screen.findByLabelText("Filter by consent")) as HTMLSelectElement;
+    expect(Array.from(filter.options).map((o) => o.textContent)).toEqual([
+      "Any consent",
+      "Confirmed",
+      "Pending",
+      "Not sent",
+      "Withdrawn",
+    ]);
   });
 });

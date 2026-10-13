@@ -25,6 +25,7 @@ const ctx = vi.hoisted(() => ({
     notifications: [] as unknown[],
     unreadCount: 0,
     failed: false,
+    loading: false,
     refresh: vi.fn(),
     markRead: vi.fn(),
     showingSamples: false,
@@ -47,6 +48,7 @@ beforeEach(() => {
     notifications: [],
     unreadCount: 0,
     failed: false,
+    loading: false,
     refresh: vi.fn(),
     markRead: vi.fn(),
     showingSamples: false,
@@ -117,5 +119,89 @@ describe("what the end-to-end sweep can see", () => {
     render(<NotificationBell />);
 
     expect(marks()).toHaveLength(0);
+  });
+});
+
+/**
+ * Board 28 draws each row with a mark: a book for "A new lesson is ready for
+ * you", a speech bubble for a teacher's message. The rows had a dot and no
+ * mark, so a child could not tell a lesson from a message at a glance.
+ */
+describe("each row's mark", () => {
+  const BOOK = "M4 5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2z";
+  const BUBBLE = "M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.5A8 8 0 1 1 21 12z";
+
+  const rowFor = (title: string) =>
+    screen.getByText(title).closest("a, button, div[class*='items-start']")!;
+
+  it("is the frame's book for a lesson and its bubble for a message", () => {
+    ctx.value.notifications = [
+      { id: "n-1", kind: "lesson", title: "A new lesson is ready for you", ago: "2h", read: true },
+      { id: "n-2", kind: "message", title: "Ms Bello replied", ago: "1d", read: true },
+    ];
+
+    openPanel();
+
+    expect(rowFor("A new lesson is ready for you").innerHTML).toContain(BOOK);
+    expect(rowFor("Ms Bello replied").innerHTML).toContain(BUBBLE);
+  });
+
+  it("is the bell's own for a kind the frame does not draw", () => {
+    ctx.value.notifications = [
+      { id: "n-3", kind: "other", title: "Your PIN was reset", ago: "now", read: true },
+    ];
+
+    openPanel();
+
+    const row = rowFor("Your PIN was reset");
+    expect(row.innerHTML).not.toContain(BOOK);
+    expect(row.innerHTML).not.toContain(BUBBLE);
+    expect(row.querySelector("[data-kind='other'] svg")).not.toBeNull();
+  });
+
+  it("carries the unread dot only while the row is unread", () => {
+    ctx.value.notifications = [
+      { id: "n-1", kind: "lesson", title: "Unread one", ago: "2h", read: false },
+      { id: "n-2", kind: "lesson", title: "Read one", ago: "1d", read: true },
+    ];
+
+    openPanel();
+
+    expect(rowFor("Unread one").querySelector("[aria-label='Unread']")).not.toBeNull();
+    expect(rowFor("Read one").querySelector("[aria-label='Unread']")).toBeNull();
+  });
+});
+
+describe("a feed that has not answered yet", () => {
+  it("claims nothing while the read is in flight", () => {
+    // "Nothing new right now" is a statement about the child's feed; before
+    // the feed answers it is a guess, and the same panel opened a second later
+    // could show three new rows.
+    ctx.value = { ...ctx.value, loading: true };
+    openPanel();
+
+    expect(screen.getByRole("status", { name: "Loading" })).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/Nothing new right now/i);
+  });
+});
+
+describe("the panel's place on the screen (board 28)", () => {
+  /*
+   * It hung from the bell at 320 wide on every screen. On a phone the bell
+   * sits beside the avatar, so the card ran 9px off the left of a 375 screen.
+   * The board draws a full-width card 16px in from each edge on a phone, and
+   * a 340 / 360 popover under the bell from tablet up. jsdom lays nothing
+   * out, so what is pinned is which box it hangs from.
+   */
+  it("hangs from the top bar on a phone, not from the bell", () => {
+    openPanel();
+    const panel = screen.getByRole("dialog", { name: "Notifications" });
+
+    expect(panel).toHaveClass("absolute", "inset-x-4", "top-full");
+    expect(panel).toHaveClass("md:right-0", "md:w-[340px]", "lg:w-[360px]");
+    // The bell is positioned only from tablet up, where the panel is its.
+    const bell = screen.getByRole("button", { name: "Notifications" });
+    expect(bell.parentElement).not.toHaveClass("relative");
+    expect(bell.parentElement).toHaveClass("md:relative");
   });
 });

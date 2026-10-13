@@ -29,6 +29,12 @@ import {
   ROW_DIVIDER,
 } from "../Roster/primitives";
 import { NoAccess, failureKind } from "../NoAccess";
+import { BackLink } from "../BackLink";
+import { withBack, type Back } from "../back";
+import { ApiError, apiErrorCode } from "@/lib/api/client";
+import { LEARNING_SUPPORT_REQUIRED } from "@/lib/api/learningSupport";
+import { useLearningSupport } from "../LearningSupport/useLearningSupport";
+import { NEEDS_LEARNING_SUPPORT, UnavailableAction } from "../LearningSupport/Unavailable";
 
 /**
  * D8b Learner Profile - the SENCo's plain-language view of one learner.
@@ -101,11 +107,35 @@ function ReadFailed({
   firstName,
   what,
   onRetry,
+  denied = false,
+  needsLearningSupport = false,
 }: {
   firstName: string;
   what: string;
   onRetry: () => void;
+  /**
+   * Refused for want of Learning Support (SCRUM-247), so the way to it is
+   * named: the role is given on a person's record, not by "whoever manages
+   * permissions" in general, and never by the person themselves.
+   */
+  needsLearningSupport?: boolean;
+  /**
+   * The read was REFUSED (403), not lost. No retry: a refused scope is not
+   * granted by asking again, and "we couldn't read" blamed the system for a
+   * permission decision - the rule #685 applied to the rest of the console.
+   */
+  denied?: boolean;
 }) {
+  if (denied) {
+    return (
+      <p className="m-0 text-sm leading-[1.55] text-nevo-near-black/62">
+        You don&rsquo;t have access to {firstName}&rsquo;s {what}.{" "}
+        {needsLearningSupport
+          ? NEEDS_LEARNING_SUPPORT
+          : "Whoever manages permissions for your school can change that."}
+      </p>
+    );
+  }
   return (
     <div className="m-0 text-sm text-nevo-near-black/62">
       <p className="m-0">
@@ -124,7 +154,14 @@ function ReadFailed({
   );
 }
 
-export function LearnerProfileView({ studentId }: { studentId: string }) {
+export function LearnerProfileView({
+  studentId,
+  back = null,
+}: {
+  studentId: string;
+  /** Where the admin came from - see `back.ts`. */
+  back?: Back | null;
+}) {
   const [phase, setPhase] = useState<Phase>("loading");
   const [student, setStudent] = useState<AdminStudentDetail | null>(null);
   const [classes, setClasses] = useState<AdminClass[]>([]);
@@ -162,6 +199,21 @@ export function LearnerProfileView({ studentId }: { studentId: string }) {
     mastery: false,
     adaptations: false,
   });
+  /** Which of those failures were refusals (403) rather than lost reads. */
+  const [denied, setDenied] = useState({
+    accommodations: false,
+    mastery: false,
+    adaptations: false,
+  });
+  /** The adaptation history was refused for want of Learning Support. */
+  const [roleRefused, setRoleRefused] = useState(false);
+  /*
+   * SCRUM-247: without Learning Support, the adaptation history and the
+   * progress report exporter show as UNAVAILABLE - present, switched off, and
+   * saying why - rather than missing. Known before either is opened.
+   */
+  const { holders: ls } = useLearningSupport();
+  const lacksRole = ls?.viewerHoldsIt === false;
 
   const load = useCallback(() => {
     Promise.all([studentsApi.get(studentId), classesApi.list(true)])
@@ -177,18 +229,31 @@ export function LearnerProfileView({ studentId }: { studentId: string }) {
           mastery: false,
           adaptations: false,
         });
+        setDenied({
+          accommodations: false,
+          mastery: false,
+          adaptations: false,
+        });
+        setRoleRefused(false);
+        const fail = (section: keyof typeof failed) => (err: unknown) => {
+          setFailed((f) => ({ ...f, [section]: true }));
+          if (failureKind(err) === "denied") setDenied((d) => ({ ...d, [section]: true }));
+          if (err instanceof ApiError && apiErrorCode(err.detail) === LEARNING_SUPPORT_REQUIRED) {
+            setRoleRefused(true);
+          }
+        };
         studentsApi
           .accommodations(studentId)
           .then(setAccommodations)
-          .catch(() => setFailed((f) => ({ ...f, accommodations: true })));
+          .catch(fail("accommodations"));
         studentsApi
           .mastery(studentId)
           .then(setMastery)
-          .catch(() => setFailed((f) => ({ ...f, mastery: true })));
+          .catch(fail("mastery"));
         studentsApi
           .adaptations(studentId)
           .then(setAdaptations)
-          .catch(() => setFailed((f) => ({ ...f, adaptations: true })));
+          .catch(fail("adaptations"));
       })
       .catch((err: unknown) => setPhase(failureKind(err)));
   }, [studentId]);
@@ -294,12 +359,7 @@ export function LearnerProfileView({ studentId }: { studentId: string }) {
 
   return (
     <Wrapper>
-      <Link
-        href="/admin/senco"
-        className="text-[13.5px] font-semibold text-nevo-navy hover:opacity-75"
-      >
-        &larr; Back to profiles
-      </Link>
+      <BackLink back={back} fallback={{ href: "/admin/senco", label: "Learning Support" }} />
 
       <div className="mt-3 flex items-center gap-4">
         <Avatar name={name} size={56} />
@@ -324,6 +384,7 @@ export function LearnerProfileView({ studentId }: { studentId: string }) {
             firstName={firstName}
             what="accommodations"
             onRetry={load}
+            denied={denied.accommodations}
           />
         ) : active.length === 0 ? (
           <p className="m-0 text-sm text-nevo-near-black/62">
@@ -408,7 +469,12 @@ export function LearnerProfileView({ studentId }: { studentId: string }) {
             })}
           </ul>
         ) : failed.accommodations && observationsPhase !== "ready" ? (
-          <ReadFailed firstName={firstName} what="signals" onRetry={load} />
+          <ReadFailed
+            firstName={firstName}
+            what="signals"
+            onRetry={load}
+            denied={denied.accommodations}
+          />
         ) : signals.length > 0 ? (
           <>
             {/* The weaker source, and labelled as one. These are signal NAMES
@@ -454,6 +520,7 @@ export function LearnerProfileView({ studentId }: { studentId: string }) {
               firstName={firstName}
               what="concept record"
               onRetry={load}
+              denied={denied.mastery}
             />
           </div>
         ) : mastery.length === 0 ? (
@@ -471,8 +538,13 @@ export function LearnerProfileView({ studentId }: { studentId: string }) {
               0,
               Math.min(1, row.masteryProbabilityReading),
             );
-            const gap = concept - reading;
-            const textIsTheBarrier = gap > 0.15;
+            /*
+             * No "Reading is the barrier here". It was drawn whenever the
+             * concept track led the reading track by more than 0.15 - a
+             * threshold this screen invented (architecture rule 3), turned
+             * into a statement about a named child the engine never made.
+             * Reports dropped its copy of the same label in #573.
+             */
             return (
               <div
                 key={row.conceptId}
@@ -485,11 +557,6 @@ export function LearnerProfileView({ studentId }: { studentId: string }) {
                   <span className="text-[14.5px] font-semibold text-nevo-near-black">
                     {row.conceptName}
                   </span>
-                  {textIsTheBarrier ? (
-                    <span className="flex-none text-[12.5px] font-semibold text-nevo-navy">
-                      Reading is the barrier here
-                    </span>
-                  ) : null}
                 </div>
                 <div className="mt-3 flex flex-col gap-2">
                   <Track
@@ -511,12 +578,14 @@ export function LearnerProfileView({ studentId }: { studentId: string }) {
 
       <SectionLabel>Recent adaptations</SectionLabel>
       <div className={cn(CARD, "mt-2.5")}>
-        {failed.adaptations ? (
+        {failed.adaptations || lacksRole ? (
           <div className="px-6 py-6">
             <ReadFailed
               firstName={firstName}
               what="adaptation history"
               onRetry={load}
+              denied={denied.adaptations || lacksRole}
+              needsLearningSupport={lacksRole || roleRefused}
             />
           </div>
         ) : adaptations.length === 0 ? (
@@ -559,13 +628,26 @@ export function LearnerProfileView({ studentId }: { studentId: string }) {
       </div>
 
       <div className="mt-8 border-t border-nevo-near-black/10 pt-5">
-        <Link href="/admin/senco/export" className={PRIMARY_BTN}>
+        {lacksRole ? (
+          <UnavailableAction label="Create a progress report" what="Progress reports" />
+        ) : (
+        <>
+        <Link
+          // Back on the exporter returns to this profile.
+          href={withBack(`/admin/senco/export?student=${encodeURIComponent(studentId)}`, {
+            href: back ? withBack(`/admin/senco/${studentId}`, back) : `/admin/senco/${studentId}`,
+            label: name,
+          })}
+          className={PRIMARY_BTN}
+        >
           Create a progress report
         </Link>
         <p className="mt-2 max-w-[52ch] text-[13px] leading-[1.5] text-nevo-near-black/55">
           A progress report turns this into plain prose you can review and share
           with {firstName}&rsquo;s guardian.
         </p>
+        </>
+        )}
       </div>
     </Wrapper>
   );

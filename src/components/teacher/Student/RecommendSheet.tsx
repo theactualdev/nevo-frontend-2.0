@@ -1,25 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import type { StudentProfileData } from "@/lib/mocks/teacherStudents";
 import { cn } from "@/lib/utils";
 
 /**
  * C08c Recommend a Lesson - the primary action on a student's profile. Nevo
  * suggests a fitting lesson and says why in a colleague's voice; the teacher
- * confirms which version and adds an optional note. Confirmation is warm and
+ * confirms which lesson and adds an optional note. Confirmation is warm and
  * matter-of-fact, never celebratory.
  *
  * Tablet drops the "Which lesson" label and the note field entirely (frame),
  * so the note is a desktop-only affordance - flagged to design.
  *
- * The success sentence is templated rather than hardcoded: the third option
- * has no version qualifier, and the note clause only earns its place when a
- * note was actually written.
+ * The success sentence is templated rather than hardcoded: the note clause
+ * only earns its place when a note was actually written. There is no format
+ * choice (§3, 12 Oct): the engine picks the delivery per segment.
  */
-
-const optionTitle = (o: { lesson: string; version?: string }) =>
-  o.version ? `${o.lesson} - ${o.version}` : o.lesson;
 
 export function RecommendSheet({
   student,
@@ -61,26 +59,28 @@ export function RecommendSheet({
    * already solved it the right way, with the child's name. This is the same
    * shape, so the two now read alike.
    */
-  const lessonClause = chosen.version
-    ? `"${chosen.lesson}" - the ${chosen.version} version - is now waiting in ${firstName}'s lessons.`
-    : `"${chosen.lesson}" is now waiting in ${firstName}'s lessons.`;
+  const lessonClause = `"${chosen.lesson}" is now waiting in ${firstName}'s lessons.`;
   const noteClause = note.trim() ? " Your note went with it." : "";
 
-  // The desktop reason bolds the lesson-and-version run, per the frame.
+  // The desktop reason bolds the lesson's name, per the frame.
   const [before, after] = rec.suggestDesktop.split(rec.suggestStrong);
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogRef);
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-nevo-near-black/28 p-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-nevo-near-black/28 backdrop-blur-[1.5px] p-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
       onClick={() => !sent && onClose()}
     >
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label={`Recommend a lesson to ${firstName}`}
         onClick={(e) => e.stopPropagation()}
         className={cn(
-          "w-full rounded-2xl bg-nevo-cream shadow-[0_8px_32px_rgba(0,0,0,0.16)] motion-safe:animate-in motion-safe:zoom-in-95 motion-safe:duration-200",
+          "w-full rounded-[16px] bg-nevo-cream shadow-[0_8px_32px_rgba(0,0,0,0.16)] motion-safe:animate-in motion-safe:zoom-in-95 motion-safe:duration-200",
           sent
             ? "flex max-w-[420px] flex-col items-center p-8 text-center xl:p-9"
             : "max-w-[520px] p-7 xl:max-w-[560px] xl:p-[30px]",
@@ -117,7 +117,7 @@ export function RecommendSheet({
                 type="button"
                 onClick={onClose}
                 aria-label="Close"
-                className="flex size-8 cursor-pointer items-center justify-center rounded-[9px] text-nevo-near-black/50 transition-colors hover:bg-nevo-near-black/5 xl:size-[34px]"
+                className="flex size-8 cursor-pointer items-center justify-center rounded-[10px] text-nevo-near-black/50 transition-colors hover:bg-nevo-near-black/5 xl:size-[34px]"
               >
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-5">
                   <path d="M6 6l12 12M18 6L6 18" />
@@ -125,7 +125,7 @@ export function RecommendSheet({
               </button>
             </div>
 
-            <div className="mt-4 rounded-xl border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-4 py-3.5 xl:mt-[18px] xl:px-[18px] xl:py-4">
+            <div className="mt-4 rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-4 py-3.5 xl:mt-[18px] xl:px-[18px] xl:py-4">
               <span className="text-[11.5px] font-semibold tracking-[0.04em] text-nevo-navy uppercase xl:text-xs">
                 Nevo suggests
               </span>
@@ -155,7 +155,7 @@ export function RecommendSheet({
                     aria-pressed={on}
                     className={cn(
                       // A constant 1px border keeps rows from shifting on select.
-                      "flex w-full cursor-pointer items-center gap-[13px] rounded-[11px] border bg-nevo-cream-elevated px-4 py-3.5 text-left",
+                      "flex w-full cursor-pointer items-center gap-[13px] rounded-[12px] border bg-nevo-cream-elevated px-4 py-3.5 text-left",
                       on
                         ? "border-transparent outline-2 -outline-offset-2 outline-nevo-navy"
                         : "border-nevo-near-black/8",
@@ -173,7 +173,7 @@ export function RecommendSheet({
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block text-[14.5px] font-semibold text-nevo-near-black xl:text-[15px]">
-                        {optionTitle(o)}
+                        {o.lesson}
                       </span>
                       <span className="mt-0.5 block text-[12.5px] text-nevo-near-black/58 xl:text-[13px]">
                         {o.meta}

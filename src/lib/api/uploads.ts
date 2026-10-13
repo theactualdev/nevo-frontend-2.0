@@ -80,6 +80,19 @@ export interface StructureLesson {
 
 export interface UploadStructure {
   /**
+   * The unit's own title, editable on C07d's block header as of 12 Oct and
+   * persisted by `PUT structure`. Optional AND nullable in the contract: a
+   * parse that found no title has none, and nothing on this side names it.
+   */
+  title?: string | null;
+  /**
+   * The third level's named rows, IN the document as of 12 Oct, so a segment
+   * rename travels back through `PUT structure` with the rest. Optional: a
+   * job still parsing, or an older upload, carries none - and the status
+   * response's own `segments` is then the only list there is.
+   */
+  segments?: UploadSegment[];
+  /**
    * `lessons` is the real shape as of 1 Sep. `lessonId` and `modules` mirror
    * the FIRST lesson and are kept for compatibility - read `lessons` and let
    * the mirror alone, or a unit of four will read as one.
@@ -112,8 +125,12 @@ export interface UploadStructure {
  */
 export interface UploadSegment {
   segmentKey: string;
-  /** Nullable in the contract - a parse can produce an untitled section. */
+  /**
+   * Nullable in the contract - a parse can produce an untitled segment.
+   * Editable since 12 Oct; a rename is written back on this row.
+   */
   title: string | null;
+  /** `LessonContentType` in the contract. Carried back untouched, never read here. */
   contentType: string;
   sequenceOrder: number;
   estimatedMinutes: number;

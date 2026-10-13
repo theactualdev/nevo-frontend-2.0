@@ -148,7 +148,7 @@ describe("the count it replaces", () => {
 });
 
 describe("the calm early note", () => {
-  const EARLY = /still getting to know/;
+  const EARLY = /not seen enough|Still getting a picture/;
 
   it("appears for a child with nothing observed yet", () => {
     render(

@@ -53,6 +53,10 @@ export const REVIEW_REASON_COPY: Record<SegmentReviewReason, string> = {
     "One of the worked steps has no answer to check a student against.",
   calculation_step_missing_options:
     "One of the worked steps offers a choice but no options to choose from.",
+  // The contract's `Manipulative` is "what a learner drags". Said as that,
+  // not by its name, in the register of the lines above.
+  calculation_variant_missing_manipulative:
+    "The worked steps ask the student to drag something, but nothing came through for them to drag.",
   calculation_segment_has_no_interactive_delivery:
     "This section works through a calculation, but nothing came through for the student to do themselves.",
   model_flagged_for_review:

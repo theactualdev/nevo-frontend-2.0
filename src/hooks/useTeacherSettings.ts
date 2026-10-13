@@ -124,7 +124,17 @@ export function useTeacherSettings(): TeacherSettings {
       email: emailByCategory[category] ?? false,
     }));
     try {
-      await notificationPrefsApi.update(rows);
+      const written = await notificationPrefsApi.update(rows);
+      /*
+       * A 200 IS NOT ALL OF IT (T195). The write reports what it refused in
+       * `rejected`, "so a settings screen can show what landed" - and this
+       * said "Saved" over any 2xx, so a category the server would not take
+       * read as kept. Anything refused is not saved.
+       */
+      if ((written?.rejected?.length ?? 0) > 0) {
+        setSaveState("failed");
+        return false;
+      }
       setSaveState("saved");
       return true;
     } catch {

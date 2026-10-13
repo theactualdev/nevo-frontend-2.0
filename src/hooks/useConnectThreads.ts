@@ -50,6 +50,12 @@ export interface ConnectThread {
   unreadCount: number;
   /** Whether the body has been fetched yet. */
   loaded: boolean;
+  /**
+   * The body was asked for and the read failed. Not an empty conversation -
+   * which is what it rendered as, under a composer inviting a reply to
+   * messages the teacher could not see.
+   */
+  loadFailed?: boolean;
 }
 
 function initialsOf(name: string): string {
@@ -132,6 +138,7 @@ export interface ConnectState {
   send: (
     to: { recipientId: string; recipientType: RecipientType },
     content: string,
+    about?: { name: string; className?: string },
   ) => Promise<string | null>;
 }
 
@@ -180,6 +187,7 @@ export function useConnectThreads(): ConnectState {
                   ? {
                       ...x,
                       loaded: true,
+                      loadFailed: false,
                       // A body with no `messages` is a thread that exists and
                       // has nothing in it yet - the state a just-composed
                       // thread is in. Not a reason to take down Connect.
@@ -192,9 +200,15 @@ export function useConnectThreads(): ConnectState {
           );
         })
         .catch(() => {
-          // Let it be retried: the thread shows an empty body rather than a
-          // half-written one, and reopening asks again.
+          // Let it be retried, and say it failed: reopening asks again, and
+          // until then the thread says so rather than looking empty.
           requested.current.delete(threadId);
+          setLive(
+            (cur) =>
+              cur?.map((x) =>
+                x.id === threadId ? { ...x, loadFailed: true } : x,
+              ) ?? cur,
+          );
         });
     },
     [selfId],
@@ -233,6 +247,12 @@ export function useConnectThreads(): ConnectState {
     async (
       to: { recipientId: string; recipientType: RecipientType },
       content: string,
+      /**
+       * Who the thread is with, when the caller knows - the compose picker
+       * does. A brand-new thread has no row of its own until the list is read
+       * again, and the send response names only its AUTHOR.
+       */
+      about?: { name: string; className?: string },
     ): Promise<string | null> => {
       try {
         const saved = await messagesApi.send({ ...to, content });
@@ -255,9 +275,15 @@ export function useConnectThreads(): ConnectState {
           return [
             {
               id: saved.threadId,
-              studentName: saved.senderName ?? "New conversation",
-              initials: initialsOf(saved.senderName ?? "?"),
-              className: "",
+              /*
+               * NOT `senderName` (T162). That is the message's author - the
+               * teacher - so a conversation they started with a child was
+               * titled with their own name, and their initials, until a
+               * reload. The picker knew the child; it was not passed.
+               */
+              studentName: about?.name ?? "New conversation",
+              initials: initialsOf(about?.name ?? "?"),
+              className: about?.className ?? "",
               preview: `You: ${content}`,
               time: "now",
               messages: [msg],

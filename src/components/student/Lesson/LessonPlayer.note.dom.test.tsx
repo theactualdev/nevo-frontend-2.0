@@ -14,7 +14,6 @@ import type { AdaptationPlan, Lesson } from "@/lib/types";
 
 const { trackEvent } = vi.hoisted(() => ({ trackEvent: vi.fn() }));
 vi.mock("@/hooks", () => ({
-  useBreakMonitor: () => ({ due: false, dismiss: vi.fn() }),
   useLesson: () => ({ setActiveLesson: vi.fn() }),
   useSignals: () => ({ trackEvent }),
 }));
@@ -134,7 +133,7 @@ describe("who it is from", () => {
 
     render(<LessonPlayer lesson={LESSON} plan={PLAN} assignmentId="a-1" />);
 
-    expect(screen.getByText("— Ms Adeyemi")).toBeInTheDocument();
+    expect(screen.getByText("- Ms Adeyemi")).toBeInTheDocument();
   });
 
   it("still shows the words when the name cannot be resolved", () => {
@@ -149,6 +148,22 @@ describe("who it is from", () => {
     render(<LessonPlayer lesson={LESSON} plan={PLAN} assignmentId="a-1" />);
 
     expect(noteOnScreen()).toBeInTheDocument();
-    expect(screen.getByText("— Your teacher")).toBeInTheDocument();
+    expect(screen.getByText("- Your teacher")).toBeInTheDocument();
+  });
+});
+
+describe("under the reading accommodation (D30, audit 46)", () => {
+  it("takes the accommodation's type, and only its type", () => {
+    // "The teacher's note takes typographic support only."
+    render(
+      <LessonPlayer
+        lesson={LESSON}
+        plan={{ ...PLAN, accommodations: { reading: true } }}
+        assignmentId="a-1"
+      />,
+    );
+
+    expect(noteOnScreen()?.className).toContain("leading-[2]");
+    expect(noteOnScreen()?.textContent).toBe(NOTE);
   });
 });

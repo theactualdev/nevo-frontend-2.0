@@ -4,9 +4,11 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { authApi } from "@/lib/api";
+import { RESET_LINK_MINUTES } from "@/lib/constants/passwordReset";
 import { ApiError } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 import { SetPasswordForm } from "./SetPasswordForm";
+import { AuthWordmark, ContactFooter } from "./AuthChrome";
 
 /**
  * Password reset (C02d) - two steps and a failure state, lifted out of the
@@ -76,6 +78,8 @@ export function TeacherPasswordReset({
   const [phase, setPhase] = useState<
     "idle" | "sending" | "sent" | "unreachable"
   >("idle");
+  /** How long the link lasts: the receipt's word, else the contract's (12 Oct). */
+  const [minutes, setMinutes] = useState(RESET_LINK_MINUTES);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
@@ -87,31 +91,37 @@ export function TeacherPasswordReset({
   if (token && !expired) {
     // No email, no school: the reset token is opaque and nothing resolves it
     // to an account, so naming one would mean naming a stranger's.
-    return <SetPasswordForm mode="reset" />;
+    // The links go through, or an admin's reset finished on the teacher door.
+    return (
+      <SetPasswordForm
+        mode="reset"
+        signInHref={signInHref}
+        resetHref={resetHref}
+      />
+    );
   }
 
   // Failure - the link aged out. Always a way forward.
   if (expired) {
     return (
-      <div className="flex w-full max-w-[420px] flex-col items-center px-6 text-center">
+      <div className="flex w-full max-w-[420px] flex-col items-center px-6 text-center xl:px-0">
+        <AuthWordmark />
         <Medallion tone="violet">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <circle cx="12" cy="12" r="9" />
             <path d="M12 7v5l3 2" />
           </svg>
         </Medallion>
-        <h2 className="mt-[22px] text-[28px] leading-[1.15] font-semibold tracking-[-0.02em] text-nevo-near-black">
+        <h1 className="mt-[22px] text-[26px] leading-[1.15] font-semibold tracking-[-0.02em] text-nevo-near-black xl:text-[28px]">
           This link has expired
-        </h2>
-        <p className="mt-3 text-[16px] leading-[1.55] text-nevo-near-black/70">
-          Reset links last 30 minutes, for your security. Nothing is wrong
-          with your account - request a fresh link and we&rsquo;ll send it right
-          over.
+        </h1>
+        <p className="mt-3 text-[15.5px] leading-[1.55] text-nevo-near-black/70 xl:text-[16px]">
+          {`Reset links last ${RESET_LINK_MINUTES} minutes, for your security. Nothing is wrong with your account - request a fresh link and we${"’"}ll send it right over.`}
         </p>
         <button
           type="button"
           onClick={() => router.push(resetHref)}
-          className="mt-7 h-[54px] w-full cursor-pointer rounded-[10px] bg-nevo-navy text-[16px] font-semibold text-nevo-cream transition-[filter,transform] duration-150 hover:brightness-93 active:scale-[0.99]"
+          className="mt-[26px] h-[54px] w-full cursor-pointer rounded-[10px] bg-nevo-navy text-[16px] font-semibold text-nevo-cream transition-[filter,transform] duration-150 hover:brightness-93 active:scale-[0.99]"
         >
           Send a new link
         </button>
@@ -121,6 +131,7 @@ export function TeacherPasswordReset({
         >
           {"← Back to sign in"}
         </Link>
+        <ContactFooter />
       </div>
     );
   }
@@ -128,13 +139,14 @@ export function TeacherPasswordReset({
   // Step A - sent state. Same words whether or not the account exists.
   if (phase === "unreachable") {
     return (
-      <div className="flex w-full max-w-[420px] flex-col items-center px-6 text-center">
+      <div className="flex w-full max-w-[420px] flex-col items-center px-6 text-center xl:px-0">
+        <AuthWordmark />
         <span className="text-[12.5px] font-semibold tracking-[0.14em] text-nevo-violet uppercase">
           Password reset
         </span>
-        <h2 className="mt-3.5 text-[30px] leading-[1.15] font-semibold tracking-[-0.02em] text-nevo-near-black">
+        <h1 className="mt-3.5 text-[30px] leading-[1.15] font-semibold tracking-[-0.02em] text-nevo-near-black">
           We couldn&rsquo;t reach Nevo
-        </h2>
+        </h1>
         <p className="mt-3 text-[16px] leading-[1.55] text-nevo-near-black/70">
           No link has been sent, so there&rsquo;s nothing waiting in your
           inbox. Try again in a moment.
@@ -146,35 +158,38 @@ export function TeacherPasswordReset({
         >
           Try again
         </button>
+        <ContactFooter />
       </div>
     );
   }
 
   if (phase === "sent") {
     return (
-      <div className="flex w-full max-w-[420px] flex-col items-center px-6 text-center motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300">
+      <div className="flex w-full max-w-[420px] flex-col items-center px-6 text-center xl:px-0 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300">
+        <AuthWordmark />
         <Medallion tone="violet">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <path d="M4 6h16v12H4z" />
             <path d="M4 7l8 6 8-6" />
           </svg>
         </Medallion>
-        <h2 className="mt-[22px] text-[28px] leading-[1.15] font-semibold tracking-[-0.02em] text-nevo-near-black">
+        <h1 className="mt-[22px] text-[26px] leading-[1.15] font-semibold tracking-[-0.02em] text-nevo-near-black xl:text-[28px]">
           Check your inbox
-        </h2>
-        <p className="mt-3 text-[16px] leading-[1.55] text-nevo-near-black/70">
+        </h1>
+        <p className="mt-3 text-[15.5px] leading-[1.55] text-nevo-near-black/70 xl:text-[16px]">
           {"If an account exists for "}
           <b className="font-semibold text-nevo-near-black">
             {email.trim() || "that address"}
           </b>
-          {", a reset link is on its way. It expires in 30 minutes."}
+          {`, a reset link is on its way. It expires in ${minutes} minutes.`}
         </p>
         <Link
           href={signInHref}
-          className="mt-6 cursor-pointer text-[14.5px] font-medium text-nevo-navy"
+          className="mt-6 cursor-pointer text-[14.5px] font-medium text-nevo-navy xl:mt-[26px]"
         >
           {"← Back to sign in"}
         </Link>
+        <ContactFooter />
       </div>
     );
   }
@@ -199,7 +214,12 @@ export function TeacherPasswordReset({
       // this screen must not produce.
       authApi
         .requestPasswordReset(email.trim())
-        .then(() => true)
+        .then((receipt) => {
+          // The server's own number when it gives one, else the contract's.
+          const n = receipt?.expiresInMinutes;
+          if (typeof n === "number" && n > 0) setMinutes(n);
+          return true;
+        })
         .catch((err: unknown) =>
           err instanceof ApiError && err.status === 0 ? "unreachable" : true,
         ),
@@ -210,19 +230,27 @@ export function TeacherPasswordReset({
   };
 
   return (
-    <div className="flex w-full max-w-[420px] flex-col items-center px-6 text-center">
+    <form
+      noValidate
+      onSubmit={(e) => {
+        e.preventDefault();
+        send();
+      }}
+      className="flex w-full max-w-[420px] flex-col items-center px-6 text-center xl:px-0"
+    >
+      <AuthWordmark />
       <span className="text-[12.5px] font-semibold tracking-[0.14em] text-nevo-violet uppercase">
         Password reset
       </span>
-      <h2 className="mt-3.5 text-[34px] leading-[1.15] font-semibold tracking-[-0.02em] text-nevo-near-black">
+      <h1 className="mt-3.5 text-[30px] leading-[1.15] font-semibold tracking-[-0.02em] text-nevo-near-black xl:text-[32px]">
         Reset your password
-      </h2>
-      <p className="mt-3 text-[16px] leading-[1.55] text-nevo-near-black/70">
+      </h1>
+      <p className="mt-3 text-[15.5px] leading-[1.55] text-nevo-near-black/70 xl:text-[16px]">
         Enter the email you use for Nevo and we&rsquo;ll send you a link to set
         a new password.
       </p>
 
-      <label htmlFor="reset-email" className="mt-[30px] w-full text-left text-[13.5px] font-semibold text-nevo-near-black/70">
+      <label htmlFor="reset-email" className="mt-[26px] w-full text-left text-[13.5px] font-semibold text-nevo-near-black/70 xl:mt-[28px]">
         Email
       </label>
       <input
@@ -231,19 +259,15 @@ export function TeacherPasswordReset({
         autoComplete="email"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") send();
-        }}
         placeholder="you@yourschool.edu.ng"
         className="mt-2 h-[52px] w-full rounded-[10px] border-[1.5px] border-nevo-near-black/16 bg-nevo-cream-elevated px-4 text-[16px] text-nevo-near-black transition-[border-color,background-color] duration-150 outline-none focus:border-nevo-navy focus:bg-nevo-cream"
       />
 
       <button
-        type="button"
-        onClick={send}
+        type="submit"
         disabled={!valid}
         className={cn(
-          "mt-7 flex h-[54px] w-full items-center justify-center gap-2.5 rounded-[10px] text-[16px] font-semibold transition-[filter] duration-150",
+          "mt-[26px] flex h-[54px] w-full items-center justify-center gap-2.5 rounded-[10px] text-[16px] font-semibold transition-[filter] duration-150",
           valid
             ? "cursor-pointer bg-nevo-navy text-nevo-cream hover:brightness-93"
             : "cursor-not-allowed bg-nevo-navy/32 text-nevo-cream/85",
@@ -265,9 +289,7 @@ export function TeacherPasswordReset({
       >
         {"← Back to sign in"}
       </Link>
-      <p className="mt-5 text-[13px] leading-[1.5] text-nevo-near-black/55">
-        Having trouble? Contact your school administrator.
-      </p>
-    </div>
+      <ContactFooter />
+    </form>
   );
 }

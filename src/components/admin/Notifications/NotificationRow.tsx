@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import type { Notification } from "@/lib/api/notifications";
+import { categoryLabel } from "./categories";
 import { cn } from "@/lib/utils";
 
 /**
@@ -135,12 +136,13 @@ export function NotificationRow({
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-[7px]">
-          <span className="text-[10.5px] font-semibold uppercase tracking-[0.04em] text-nevo-near-black/45">
-            {/* TODO(api): no category on the row, so this names the kind of
-                thing it is from `type` rather than the six SCRUM-100
-                categories, which have no source. */}
-            {notification.type.replace(/_/g, " ")}
-          </span>
+          {/* The category's name (backend B34, 1 Oct), or nothing - never
+              the raw type. See `categoryLabel`. */}
+          {categoryLabel(notification.category) ? (
+            <span className="text-[10.5px] font-semibold uppercase tracking-[0.04em] text-nevo-near-black/45">
+              {categoryLabel(notification.category)}
+            </span>
+          ) : null}
           {unread ? (
             <span
               aria-label="Unread"

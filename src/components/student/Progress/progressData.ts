@@ -2,29 +2,58 @@
 // These are the SIGNED-OUT walkthrough's sentences. A signed-in child never
 // sees them: the growth summary and the per-subject prose come from the
 // backend's own `reflection` (3 Sep), read by `useStudentProgress` and
-// `useSubjectProgress`. TODO(api): the timeline and the session list still
+// `useSubjectProgress`. TODO(api): the session markers and the session list still
 // have no field and remain fixture-only. All framing is plain-language and
 // qualitative — never a percentile, score, or peer comparison.
+
+import type { SubjectTopics } from "@/hooks/useSubjectProgress";
 
 /** Warm, whole-picture summary shown at the top of the Progress tab. */
 export const GROWTH_SUMMARY =
   "You've been building strong reading skills this month, and sticking with maths even when it got tricky.";
 
+/**
+ * One sample subject, shaped like what a real card reads (33a): its concept
+ * names, the subject's note (B29), its topic counts and the topic being worked
+ * on (B53). The counts, topics and notes are the Progress frame's own (as
+ * redrawn on 6 Oct), from its sample subjects.
+ */
 export interface SubjectSummary {
   slug: string;
   name: string;
-  /** Plain-language growth note for the Progress card. */
-  note: string;
+  /** What a live card's line falls back to where no topic is named (D42). */
+  concepts: string[];
+  /** The note at the card's foot (D120); absent, as in the frame, for one. */
+  note?: string;
+  /** Topics met, and how many of them are done. */
+  topics: SubjectTopics;
+  /** The topic being worked on, which takes the card's line. */
+  currentTopic?: string;
 }
 
 export const SUBJECTS: SubjectSummary[] = [
   {
     slug: "mathematics",
     name: "Mathematics",
-    note: "Getting faster at solving problems",
+    concepts: ["Equivalent fractions", "Counting in 5s", "Telling the time"],
+    note: "Fractions are starting to click. You stayed with a tricky one today before it came.",
+    topics: { done: 3, total: 8 },
+    currentTopic: "Equivalent fractions",
   },
-  { slug: "english", name: "English", note: "Reading longer stories with ease" },
-  { slug: "science", name: "Science", note: "Asking more of your own questions" },
+  {
+    slug: "english",
+    name: "English",
+    concepts: ["Rhyming words", "Describing words", "Story beginnings"],
+    note: "A really steady run this term. Reading aloud has got noticeably easier.",
+    topics: { done: 5, total: 5 },
+  },
+  {
+    slug: "science",
+    name: "Science",
+    concepts: ["Osmosis", "Floating and sinking", "The water cycle"],
+    topics: { done: 1, total: 6 },
+    currentTopic: "Osmosis",
+  },
 ];
 
 export interface SessionRow {
@@ -38,8 +67,6 @@ export interface SubjectDetail {
   name: string;
   /** Plain-language reflection on how the subject has been going. */
   prose: string;
-  /** Growth-line markers as [x, y] on a 0–320 × 0–80 canvas (direction, not data). */
-  timeline: [number, number][];
   lessons: SessionRow[];
 }
 
@@ -48,13 +75,6 @@ export const SUBJECT_DETAIL: Record<string, SubjectDetail> = {
     name: "Mathematics",
     prose:
       "You've been getting quicker at problems that used to take a while. Fractions clicked this week. When something's hard, you're staying with it longer before asking for help.",
-    timeline: [
-      [10, 60],
-      [90, 42],
-      [150, 30],
-      [230, 33],
-      [310, 20],
-    ],
     lessons: [
       {
         title: "Adding Fractions",
@@ -82,13 +102,6 @@ export const SUBJECT_DETAIL: Record<string, SubjectDetail> = {
     name: "English",
     prose:
       "Your reading has been stretching to longer stories, and you're noticing describing words on your own. You're taking your time with the tricky sentences instead of skipping them.",
-    timeline: [
-      [10, 58],
-      [90, 46],
-      [150, 34],
-      [230, 28],
-      [310, 18],
-    ],
     lessons: [
       {
         title: "The Lighthouse",
@@ -116,13 +129,6 @@ export const SUBJECT_DETAIL: Record<string, SubjectDetail> = {
     name: "Science",
     prose:
       "You've started asking more of your own questions, and following them up. When an experiment surprised you, you wanted to know why rather than moving on.",
-    timeline: [
-      [10, 62],
-      [90, 50],
-      [150, 38],
-      [230, 30],
-      [310, 22],
-    ],
     lessons: [
       {
         title: "What is Photosynthesis?",

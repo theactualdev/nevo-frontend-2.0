@@ -2,6 +2,7 @@
 
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { READING_BODY, READING_INK } from "./readingSupport";
 
 /**
  * Visual state of an answer card (Lesson Check frame). Resolution follows the
@@ -16,6 +17,7 @@ export function AnswerOption({
   tone,
   trailing,
   onSelect,
+  reading = false,
   className,
 }: {
   label: string;
@@ -24,6 +26,11 @@ export function AnswerOption({
   trailing?: React.ReactNode;
   /** Tap handler; the card is only tappable while `tone` is "idle". */
   onSelect?: () => void;
+  /**
+   * The reading accommodation's typographic half (D30) - see
+   * `readingSupport`. A muted answer keeps its quieter ink.
+   */
+  reading?: boolean;
   className?: string;
 }) {
   return (
@@ -44,7 +51,14 @@ export function AnswerOption({
         className,
       )}
     >
-      <span>{label}</span>
+      <span
+        className={cn(
+          reading && READING_BODY,
+          reading && tone !== "muted" && READING_INK,
+        )}
+      >
+        {label}
+      </span>
       {trailing}
     </button>
   );

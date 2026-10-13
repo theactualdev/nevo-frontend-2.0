@@ -14,8 +14,9 @@ import {
   type SessionRow,
   type StudentProfileData,
 } from "@/lib/mocks/teacherStudents";
-import { OBSERVATION_COPY } from "@/lib/constants/observations";
+import { OBSERVATION_COPY, observationCount } from "@/lib/constants/observations";
 import { cn } from "@/lib/utils";
+import { SummaryChip } from "@/components/teacher/shared/SummaryChip";
 import { MasteryDualTrack } from "./MasteryDualTrack";
 import { RecommendSheet } from "./RecommendSheet";
 import { SessionPanel } from "./SessionPanel";
@@ -23,8 +24,8 @@ import { ShareSheet } from "./ShareSheet";
 
 /**
  * C08 Student Profile (teacher view) - how this student learns, in plain
- * words. Confidence shows as one-to-three quiet dots, never a percentage,
- * and there is zero clinical language: the page has to hold up if a parent
+ * words. There is no confidence rating of any kind (see below), and there is
+ * zero clinical language: the page has to hold up if a parent
  * or the SENCo reads it.
  *
  * Two states, both designed: the full profile for a student with enough
@@ -33,9 +34,10 @@ import { ShareSheet } from "./ShareSheet";
  * seen or Recent sessions sections (no empty cards for them).
  *
  * Desktop and tablet genuinely differ here, per the frame: tablet drops the
- * breadcrumb, stacks the actions into their own wrapping row with a "Share"
- * pill in place of the kebab, and drops Recent sessions entirely. Both
- * divergences are flagged to design rather than smoothed over.
+ * breadcrumb and stacks the actions into their own wrapping row with a "Share"
+ * pill in place of the kebab. Tablet used to drop Recent sessions too, which
+ * left C08d's tablet session panel with nothing to open from; design put the
+ * list back on 8 Oct.
  *
  * THE ESCALATION SHEET STILL CONFIRMS NOTHING HERE, AND THAT IS NOW CORRECT.
  * C14 B5 draws a toast and a quiet "Shared with Learning Support" note, and
@@ -107,11 +109,15 @@ export function StudentProfile({
           {`${student.className} · Roster`}
         </Link>
 
-        {/* Identity + actions */}
+        {/* Identity + actions. C08 tablet: "actions wrap" - into their own
+            row under the name. This stayed a row below 1280px, so on a tablet
+            the actions squeezed in beside the name instead. */}
         <div
           className={cn(
-            "flex items-center gap-3.5 xl:mt-4 xl:gap-4",
-            early ? "mt-3.5" : "xl:flex-wrap xl:items-start xl:justify-between xl:gap-6",
+            "mt-3.5 flex xl:mt-4",
+            early
+              ? "items-center gap-3.5 xl:gap-4"
+              : "flex-col items-start xl:flex-row xl:flex-wrap xl:justify-between xl:gap-6",
           )}
         >
           <div className="flex items-center gap-3.5 xl:gap-4">
@@ -120,14 +126,12 @@ export function StudentProfile({
             </span>
             <div>
               <div className="flex items-center gap-[9px] xl:gap-2.5">
-                <h2 className="text-[22px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[27px]">
+                <h1 className="text-[22px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[27px]">
                   {student.name}
-                </h2>
-                {student.chip && (
-                  <span className="rounded-full bg-nevo-violet/24 px-[9px] py-0.5 text-[11px] font-semibold text-nevo-navy xl:px-[11px] xl:py-[3px] xl:text-xs">
-                    {student.chip}
-                  </span>
-                )}
+                </h1>
+                {/* C08's chip system (12 Oct): the sample's one chip is
+                    Worth a glance, drawn as the live profile draws it. */}
+                {student.chip === "Worth a glance" && <SummaryChip state="glance" />}
               </div>
               <span className="mt-[3px] block text-sm text-nevo-near-black/60 xl:mt-[5px] xl:text-[14.5px]">
                 {student.meta}
@@ -180,7 +184,7 @@ export function StudentProfile({
                       className="fixed inset-0 z-30"
                       onClick={() => setMenuOpen(false)}
                     />
-                    <div className="absolute top-[52px] right-0 z-[31] w-[238px] rounded-xl bg-nevo-cream p-1.5 shadow-[0_8px_32px_rgba(0,0,0,0.16)]">
+                    <div className="absolute top-[52px] right-0 z-[31] w-[238px] rounded-[12px] bg-nevo-cream p-1.5 shadow-[0_8px_32px_rgba(0,0,0,0.16)]">
                       {MENU_ITEMS.map((item) => (
                         <button
                           key={item.label}
@@ -191,7 +195,7 @@ export function StudentProfile({
                               router.push(messageHref);
                             }
                           }}
-                          className="block w-full cursor-pointer rounded-lg px-[13px] py-[11px] text-left text-[14.5px] text-nevo-near-black transition-colors hover:bg-nevo-navy/8"
+                          className="block w-full cursor-pointer rounded-[10px] px-[13px] py-[11px] text-left text-[14.5px] text-nevo-near-black transition-colors hover:bg-nevo-navy/8"
                         >
                           {item.label}
                         </button>
@@ -206,7 +210,7 @@ export function StudentProfile({
 
         {/* Noticing banner (full) or calm callout (early) */}
         {student.noticing && (
-          <div className="mt-[18px] rounded-xl border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4 xl:mt-7 xl:px-5 xl:py-[18px]">
+          <div className="mt-[18px] rounded-[12px] border-l-[3px] border-nevo-violet bg-nevo-violet/16 px-[18px] py-4 xl:mt-7 xl:px-5 xl:py-[18px]">
             <p className="text-sm leading-[1.5] text-nevo-near-black/82 xl:text-[15px] xl:leading-[1.55]">
               <strong className="font-semibold text-nevo-near-black">
                 This week:
@@ -217,7 +221,7 @@ export function StudentProfile({
           </div>
         )}
         {student.earlyNote && (
-          <div className="mt-5 flex items-start gap-3 rounded-xl bg-nevo-violet/16 px-[18px] py-4 xl:mt-[26px] xl:gap-[13px] xl:px-5 xl:py-[18px]">
+          <div className="mt-5 flex items-start gap-3 rounded-[12px] bg-nevo-violet/16 px-[18px] py-4 xl:mt-[26px] xl:gap-[13px] xl:px-5 xl:py-[18px]">
             <span className="mt-px shrink-0 text-nevo-navy">
               <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-5">
                 <circle cx="12" cy="12" r="9" />
@@ -235,7 +239,12 @@ export function StudentProfile({
             "How <name> learns" is the learning-styles framing rule 1 exists to
             keep out of the product, and it sat directly above the cards that
             used to carry the modality claims. The section says what Nevo saw. */}
-        <h3 className="mt-[26px] text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase xl:mt-8 xl:text-sm">
+        <h3
+          className={cn(
+            "mt-[26px] text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase xl:text-sm",
+            early ? "xl:mt-8" : "xl:mt-9",
+          )}
+        >
           What Nevo has noticed
         </h3>
         {/*
@@ -245,18 +254,37 @@ export function StudentProfile({
           and design removed it from C08 on 17 Sep along with the modality
           claim it sat under.
         */}
-        <div className="mt-3.5 flex flex-col gap-3 xl:mt-4 xl:grid xl:grid-cols-2 xl:gap-3.5">
+        {/* C08: two columns on the full profile at desktop, one on a new
+            student's - the early artboard stacks its single card. */}
+        <div
+          className={cn(
+            "mt-3.5 flex flex-col gap-3 xl:mt-4 xl:gap-3.5",
+            !early && "xl:grid xl:grid-cols-2",
+          )}
+        >
           {student.observations.map((pattern) => (
             <div
               key={pattern}
-              className="rounded-xl bg-nevo-cream-elevated px-5 py-[18px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:p-[22px]"
+              className="rounded-[12px] bg-nevo-cream-elevated px-5 py-[18px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:p-[22px]"
             >
-              <p className="font-mono text-[10.5px] tracking-[0.06em] text-nevo-near-black/50 uppercase">
-                {OBSERVATION_COPY[pattern].title}
-              </p>
-              <p className="mt-1.5 text-[15.5px] leading-[1.45] font-medium text-nevo-near-black xl:text-[16.5px]">
-                {OBSERVATION_COPY[pattern].body(firstName)}
-              </p>
+              {/* C08's card: the sentence, and a count only as its own chip
+                  where the copy file allows one. No eyebrow - C08 draws none. */}
+              <div className="flex items-start justify-between gap-4">
+                <p className="text-[15.5px] leading-[1.45] font-medium text-pretty text-nevo-near-black xl:text-[16.5px]">
+                  {OBSERVATION_COPY[pattern].body(firstName)}
+                </p>
+                {(() => {
+                  const chip = observationCount(
+                    pattern,
+                    student.observationCounts?.[pattern],
+                  );
+                  return chip ? (
+                    <span className="shrink-0 rounded-full bg-nevo-violet/24 px-[11px] py-1 text-[12.5px] font-semibold whitespace-nowrap text-nevo-navy">
+                      {chip}
+                    </span>
+                  ) : null;
+                })()}
+              </div>
             </div>
           ))}
         </div>
@@ -276,7 +304,7 @@ export function StudentProfile({
                 {`Two tracks per topic: how well ${firstName} has understood it, and how much the reading load is shaping the result. When the tracks part company, it's usually the reading, not the maths.`}
               </span>
             </p>
-            <div className="mt-3.5 flex flex-col gap-5 rounded-xl bg-nevo-cream-elevated px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-4 xl:gap-[22px] xl:px-[26px] xl:py-6">
+            <div className="mt-3.5 flex flex-col gap-5 rounded-[12px] bg-nevo-cream-elevated px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-4 xl:gap-[22px] xl:px-[26px] xl:py-6">
               {student.concepts.map((c) => (
                 <MasteryDualTrack
                   key={c.name}
@@ -308,7 +336,7 @@ export function StudentProfile({
               {student.evidence.map((e) => (
                 <div
                   key={e.concept}
-                  className="rounded-xl bg-nevo-cream-elevated px-[17px] py-[15px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:px-[18px] xl:py-4"
+                  className="rounded-[12px] bg-nevo-cream-elevated px-[17px] py-[15px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:px-[18px] xl:py-4"
                 >
                   <div className="flex flex-wrap items-center gap-[9px] xl:gap-2.5">
                     <span className="text-[14.5px] font-semibold text-nevo-near-black xl:text-[15px]">
@@ -339,13 +367,13 @@ export function StudentProfile({
           </>
         )}
 
-        {/* Recent sessions - desktop only, per the frame (flagged). */}
+        {/* Recent sessions - at both widths since design's 8 Oct ruling. */}
         {student.sessions.length > 0 && (
-          <div className="hidden xl:block">
-            <h3 className="mt-9 text-sm font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase">
+          <div>
+            <h3 className="mt-[26px] text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase xl:mt-9 xl:text-sm">
               Recent sessions
             </h3>
-            <div className="mt-4 overflow-hidden rounded-xl bg-nevo-cream-elevated shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+            <div className="mt-3.5 overflow-hidden rounded-[12px] bg-nevo-cream-elevated shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-4">
               {student.sessions.map((s, i) => (
                 <button
                   key={s.id}
@@ -357,19 +385,19 @@ export function StudentProfile({
                       "border-b border-nevo-near-black/7",
                   )}
                 >
-                  <span className="w-[70px] shrink-0 pt-0.5 text-[13.5px] text-nevo-near-black/55">
+                  <span className="w-[62px] shrink-0 pt-0.5 text-[13px] text-nevo-near-black/55 xl:w-[70px] xl:text-[13.5px]">
                     {s.date}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block text-[15.5px] font-semibold text-nevo-near-black">
+                    <span className="block text-[14.5px] font-semibold text-nevo-near-black xl:text-[15.5px]">
                       {s.lesson}
                     </span>
-                    <span className="mt-[5px] block text-[14.5px] leading-[1.5] text-nevo-near-black/72">
+                    <span className="mt-[5px] block text-sm leading-[1.5] text-nevo-near-black/72 xl:text-[14.5px]">
                       {s.note}
                     </span>
                   </span>
                   <span className="shrink-0 self-center text-nevo-near-black/40">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-[18px]">
                       <path d="M9 6l6 6-6 6" />
                     </svg>
                   </span>
@@ -394,7 +422,7 @@ export function StudentProfile({
               {(STUDENT_ADAPTATIONS[student.id] ?? []).map((entry) => (
                 <div
                   key={`${entry.date}-${entry.lesson}`}
-                  className="flex items-start gap-3.5 rounded-[8px] bg-nevo-cream-elevated px-[18px] py-4 xl:gap-4"
+                  className="flex items-start gap-3.5 rounded-[12px] bg-nevo-cream-elevated px-[18px] py-4 xl:gap-4"
                 >
                   <span className="w-[46px] shrink-0 pt-px text-[12px] text-nevo-near-black/55">
                     {entry.date}

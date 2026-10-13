@@ -7,23 +7,39 @@ import { Button } from "@/components/shared";
 /**
  * Sign-out confirmation (`Sign Out Modal` - student, gentler variant). A calm
  * check before ending a session, so an accidental tap never signs anyone out:
- * violet log-out badge, "Sign out?", the reassurance that progress is saved,
- * primary Sign out + quiet Stay signed in. Bottom sheet on mobile, centred card
- * on tablet/desktop; honours reduced-motion via the shared sheet.
+ * violet log-out badge, "Sign out?", that they can come back, primary Sign out
+ * + quiet Stay signed in. Bottom sheet on mobile, centred card on
+ * tablet/desktop; honours reduced-motion via the shared sheet.
+ *
+ * A CHILD WHO SIGNS IN THROUGH THEIR SCHOOL HAS NO PIN (D9), so for them the
+ * line loses its PIN and keeps the rest. Removing the false half is the whole
+ * change; nothing new is said in its place.
+ *
+ * NO "YOUR PROGRESS IS SAVED." (D136, 8 Oct): "nothing claims a save that has
+ * not been confirmed", and signing out confirms nothing about any write.
+ *
+ * NO CLOSE CROSS. The Sign Out Modal draws none: "Stay signed in" is its way
+ * out, a full-width 48px button, so the sheet's own corner × was a second
+ * dismiss on a two-button card.
  */
 export function SignOutSheet({
   open,
   onOpenChange,
   onSignOut,
+  sso = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSignOut: () => void;
+  /** Signed in through their school, so there is no PIN to come back with. */
+  sso?: boolean;
 }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
+        data-nevo-console="student"
         side="bottom"
+        showCloseButton={false}
         aria-describedby={undefined}
         className="gap-0 rounded-t-[20px] border-0! bg-nevo-cream px-6 pt-6 pb-8 text-center text-nevo-near-black shadow-[0_-8px_32px_rgba(0,0,0,0.16)] sm:inset-x-auto! sm:top-1/2 sm:bottom-auto! sm:left-1/2! sm:w-[400px] sm:max-w-[calc(100%-48px)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[16px] sm:p-8 sm:shadow-[0_24px_60px_rgba(0,0,0,0.28)]"
       >
@@ -34,7 +50,9 @@ export function SignOutSheet({
           Sign out?
         </SheetTitle>
         <p className="mt-2 text-sm leading-[1.55] text-nevo-near-black/62">
-          You can come back anytime with your PIN. Your progress is saved.
+          {sso
+            ? "You can come back anytime."
+            : "You can come back anytime with your PIN."}
         </p>
 
         <Button className="mt-6 w-full" onClick={onSignOut}>

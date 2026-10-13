@@ -6,8 +6,10 @@ import { api } from "./client";
  * The list carries its own `unreadCount`, so the badge needs no second call;
  * `/unread-count` exists for surfaces that want the number without the feed.
  *
- * `navigatesTo` is a destination for the row. The C13 frame draws rows as
- * inert, so it is typed here and not yet used - flagged to design.
+ * `navigatesTo` is a destination for the row, and nullable. The student,
+ * teacher and admin notification rows all use it: a row with one is a link,
+ * and a row without one is not. The student bell keeps it inside the student
+ * console (`childHref` in `NotificationContext`).
  *
  * `type` was a bare string when this file was written; the backend has since
  * enumerated it as `NotificationType`. It is still typed loosely here on
@@ -25,12 +27,17 @@ import { api } from "./client";
  * whatever arrives rather than to switch on a set of types that was not there,
  * so listing them here is documentation and autocomplete, not dispatch.
  *
- * Still NOT here: a `category` on the row. `NotificationCategory` exists for
- * preferences, but `NotificationResponse` carries only `type`, so the category
- * filter and "mark this category read" remain unbuildable - see the note on
- * `NotificationsView`. Deriving a category from the type would be an invented
- * mapping, and three of SCRUM-100's six admin categories have no enum value to
- * map onto anyway.
+ * A `category` IS ON THE ROW NOW (backend B34, 1 Oct): nullable, and filled
+ * from the backend's own type-to-category map, which was empty until then.
+ * Typed below. Deriving one from the type here would still be an invented
+ * mapping - the server's is the only one.
+ *
+ * THE FOUR STUDENT TYPES (backend B34, 1 Oct). A child's bell was always
+ * empty because nothing was ever addressed to a child. Backend's word is that
+ * none of the four is about performance (the spec describes no payload per
+ * type: each is a title, a description and a nullable `navigatesTo`).
+ * `sign_in_changed` is what tells a child their PIN was reset, rather than
+ * leaving them at a PIN that no longer works.
  */
 export type NotificationType =
   | "attention_summary"
@@ -41,13 +48,24 @@ export type NotificationType =
   | "roster_sync_completed"
   | "roster_sync_needs_attention"
   | "invoice_issued"
-  | "sso_needs_attention";
+  | "sso_needs_attention"
+  | "lesson_assigned"
+  | "review_due"
+  | "teacher_replied"
+  | "sign_in_changed";
 
 export interface Notification {
   notificationId: string;
   recipientId: string;
   recipientRole: string;
   type: NotificationType | (string & {});
+  /**
+   * The contract's full `NotificationCategory` (assignments, messages,
+   * attention, reports, consent, billing, account) - wider than the three
+   * preference toggles `settings.ts` types under that name, so not that type.
+   * Null where the server's map has no stream for the type.
+   */
+  category?: string | null;
   title: string;
   description: string;
   read: boolean;
@@ -74,13 +92,19 @@ export const notificationsApi = {
    * which makes D13b's Archived filter buildable. `limit`/`offset` back the
    * frame's "Show older" rather than numbered pages, so an admin never loses
    * their place.
+   *
+   * `q` searches the whole feed on the server (9 Oct, at most 100
+   * characters), so `total` and `hasMore` describe the matches.
    */
-  list: (options: { archived?: boolean; limit?: number; offset?: number } = {}) =>
+  list: (
+    options: { archived?: boolean; limit?: number; offset?: number; q?: string } = {},
+  ) =>
     api.get<NotificationFeed>("/api/notifications", {
       params: {
         archived: options.archived ? true : undefined,
         limit: options.limit,
         offset: options.offset,
+        q: options.q?.trim() ? options.q.trim().slice(0, 100) : undefined,
       },
     }),
 

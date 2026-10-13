@@ -1,4 +1,5 @@
 import type { PermissionScope } from "@/lib/constants/permissions";
+import { scopeName } from "../Team/adminScopes";
 
 /**
  * School Admin navigation model (`Nevo Admin Sidebar`).
@@ -22,6 +23,14 @@ import type { PermissionScope } from "@/lib/constants/permissions";
  * Five items map straight out of those sentences. Four are not covered by the
  * catalogue and are marked `inferred` below - a guess, made once, in one place,
  * and flagged to design rather than scattered through the screens.
+ *
+ * AN IT ADMIN STAYS NARROW (Lydia, 6 Oct). IT admins see what their own scope
+ * gives them and nothing wider - never Learning Support data. A ruling earlier
+ * the same day ("everything except Settings") was withdrawn, and the rail it
+ * briefly widened for `it_sso` was narrowed back. Do not widen it again: a
+ * screen whose reads the backend happens to serve to any admin is still not
+ * an IT admin's screen. Anyone who needs more is given the scope in Edit
+ * access.
  */
 
 export interface AdminNavItem {
@@ -75,6 +84,33 @@ export function navForScopes(scopes: PermissionScope[]): AdminNavItem[] {
 }
 
 /**
+ * Drill-downs that belong to a rail item but are gated more narrowly than it.
+ * Both read endpoints the backend keeps behind `oversight`.
+ */
+const DRILL_DOWN_SCOPE: Record<string, PermissionScope> = {
+  "/admin/compliance": "oversight",
+  "/admin/adaptations": "oversight",
+};
+
+/**
+ * Whether a link to `href` leads anywhere for this admin.
+ *
+ * A screen offering a link its reader's rail does not include sends them to a
+ * refusal - the Overview's "Open Learning Support" did that to every admin
+ * without SENCo, the founding admin among them. Routes that are not rail
+ * screens (setup, activation) are not this function's to gate.
+ */
+export function canOpen(href: string, scopes: PermissionScope[]): boolean {
+  const under = (p: string) => href === p || href.startsWith(`${p}/`);
+  const drill = Object.entries(DRILL_DOWN_SCOPE).find(([p]) => under(p));
+  if (drill) return scopes.includes(drill[1]);
+  const item = ADMIN_NAV.filter((i) => under(i.href)).sort(
+    (a, b) => b.href.length - a.href.length,
+  )[0];
+  return !item || navForScopes(scopes).includes(item);
+}
+
+/**
  * The longest matching href wins, so `/admin/settings` does not light up while
  * the reader is on a deeper route that merely starts the same way.
  */
@@ -86,6 +122,16 @@ const OWNED_BY: Record<string, string> = {
   "/admin/compliance": "Overview",
   "/admin/adaptations": "Overview",
 };
+
+/**
+ * What an admin's home is called, for "Go to ...". The persona homes are not
+ * all rail items - D17 is off the rail since SSO was deferred - so its own
+ * heading is used.
+ */
+export function homeName(href: string): string | null {
+  if (href === "/admin/sso/home") return "Systems overview";
+  return activeNavLabel(href);
+}
 
 export function activeNavLabel(pathname: string): string | null {
   const owner = Object.entries(OWNED_BY).find(
@@ -103,22 +149,18 @@ export function activeNavLabel(pathname: string): string | null {
  * role and no name, so the job title half of the frame's "Proprietor · General
  * oversight" is not ours to write - but the scope half is real, and comes
  * straight from `permissions/me`.
+ *
+ * THE NAMES ARE D03'S CATALOGUE, NOT A COPY OF IT. This kept its own table -
+ * "General oversight", "Learning support", "IT & SSO" - while the invite sheet
+ * said "General Oversight", "SENCo / Learning Support", "IT / SSO". SCRUM-39's
+ * done-when: "Scope names are byte-identical between this screen, the sidebar
+ * and the invite sheet." One source makes that true by construction.
  */
-const SCOPE_LABELS: Record<PermissionScope, string> = {
-  oversight: "General oversight",
-  roster: "Roster",
-  curriculum: "Curriculum",
-  senco: "Learning support",
-  it_sso: "IT & SSO",
-  billing: "Billing",
-  teacher: "Teacher",
-};
-
 export function scopeSummary(scopes: PermissionScope[]): string {
   if (scopes.length === 0) return "No access yet";
-  if (scopes.length === 1) return SCOPE_LABELS[scopes[0]];
-  if (scopes.includes("oversight")) return "General oversight";
-  return `${SCOPE_LABELS[scopes[0]]} +${scopes.length - 1}`;
+  if (scopes.length === 1) return scopeName(scopes[0]);
+  if (scopes.includes("oversight")) return scopeName("oversight");
+  return `${scopeName(scopes[0])} +${scopes.length - 1}`;
 }
 
 /**
@@ -137,6 +179,10 @@ export function scopeSummary(scopes: PermissionScope[]): string {
  *
  * Oversight wins when present: a proprietor who also holds billing wants the
  * school, not the invoices.
+ *
+ * IT lands on D17, the Systems overview - the one screen its scope is for.
+ * It landed on the Overview for part of 6 Oct, under a ruling withdrawn the
+ * same day; see "an IT admin stays narrow" above.
  */
 export function adminHomeForScopes(scopes: PermissionScope[]): string {
   if (scopes.includes("oversight")) return "/admin/dashboard";

@@ -282,3 +282,56 @@ describe("the activity counts", () => {
     expect(container.innerHTML).not.toMatch(/NaN/);
   });
 });
+
+/**
+ * C03's School code box (30 Sep). It replaced the class code: a child signs
+ * in with the school code and their own Student ID, so it is what a teacher
+ * reads out. From `users/me`'s `school.code`.
+ */
+describe("the school code beside the greeting", () => {
+  beforeEach(() => {
+    useTeacherFlags.mockReturnValue({ flags: [], live: true, failed: false, loading: false, complete: true });
+    useTeacherHome.mockReturnValue({ pulse: [], activity: [], live: true, failed: false });
+  });
+
+  it("shows the teacher's own school code", () => {
+    useCurrentUser.mockReturnValue({ name: "Ms A", school: "E2E Probe School", schoolCode: "K7DQ" });
+    const { getByText } = render(<TeacherHome />);
+
+    expect(getByText("School code")).toBeInTheDocument();
+    expect(getByText("K7DQ")).toBeInTheDocument();
+  });
+
+  it("draws no box when the school has no code", () => {
+    useCurrentUser.mockReturnValue({ name: "Ms A", school: "E2E Probe School", schoolCode: null });
+    const { queryByText } = render(<TeacherHome />);
+
+    expect(queryByText("School code")).not.toBeInTheDocument();
+  });
+
+  it("draws no box on the signed-out walkthrough", () => {
+    useHasSession.mockReturnValue(false);
+    useCurrentUser.mockReturnValue({ name: "Ms A", school: "E2E Probe School", schoolCode: "K7DQ" });
+    const { queryByText } = render(<TeacherHome />);
+
+    expect(queryByText("School code")).not.toBeInTheDocument();
+    expect(queryByText("K7DQ")).not.toBeInTheDocument();
+  });
+});
+
+/** The Build Lock fixes "Wednesday, 10 July" - with the comma en-GB leaves out. */
+describe("the date line", () => {
+  it("reads weekday, then day and month, with a comma between", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 6, 10, 9, 0));
+    try {
+      useTeacherFlags.mockReturnValue({ flags: [], live: true, failed: false, loading: false, complete: true });
+      useTeacherHome.mockReturnValue({ pulse: [], activity: [], live: true, failed: false });
+      const { getByText } = render(<TeacherHome />);
+
+      expect(getByText("Friday, 10 July")).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

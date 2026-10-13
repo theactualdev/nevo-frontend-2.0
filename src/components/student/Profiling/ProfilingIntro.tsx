@@ -1,11 +1,9 @@
 "use client";
 
+import { useContext } from "react";
 import { IllustrationWrapper } from "@/components/shared";
-import {
-  AgeStepper,
-  isAgeInRange,
-} from "@/components/student/Onboarding/AgeStepper";
 import { ProfilingShell } from "./ProfilingShell";
+import { QuestSegments } from "./QuestMap";
 
 /**
  * Profiling intro + complete (BP-01 / BP-DONE) - the bookends of the baseline
@@ -13,9 +11,11 @@ import { ProfilingShell } from "./ProfilingShell";
  * "score" or "ability". No skip, no back. The complete screen shows no results
  * of any kind - a settled figure, not a celebration.
  *
- * The complete copy reports the baseline write rather than assuming it: "your
- * learning space has been personalized" is a claim about the engine, and it is
- * false if the submit never landed. `saved === false` swaps it for the same
+ * The complete copy claims no write. It read "Your learning space has been
+ * personalized", a past-tense claim about the engine that was false whenever
+ * the submit had not landed; design ruled the replacement on 1 Oct
+ * (SCRUM-180), "Nevo has everything it needs to set up your learning space.",
+ * which is true the moment it is read. `saved === false` swaps it for the same
  * plain admission the daily warm-up uses.
  *
  * **THAT BRANCH IS CURRENTLY UNREACHABLE, DELIBERATELY - see `saved` below
@@ -25,28 +25,20 @@ export function ProfilingIntro({
   mode,
   onContinue,
   saved = null,
-  askAge = false,
-  age = "",
-  onAgeChange,
+  waiting = false,
 }: {
   mode: "intro" | "complete";
   onContinue: () => void;
   /**
-   * Ask before starting, because we do not know.
+   * The roster has not answered yet, so the band is not known. No start: a
+   * run begun now would be sized by a guess.
    *
-   * The band decides the grid size, the span ceiling, whether the dual task
-   * runs and which domain questions a child sees. It normally comes from the
-   * age given in onboarding Step 1 - but a child arriving by SSO never sees
-   * that step, and the code fell back to a FIXTURE's "Year 4". Every SSO child
-   * therefore sat the Primary 4-6 baseline: a sixteen-year-old on a 4x4 grid
-   * with no dual task, a seven-year-old asked "What is 15% of 200?".
-   *
-   * Nothing a signed-in child can read carries an age or year group, so it
-   * cannot be derived. One question is cheaper than mis-pitching four modules.
+   * NO AGE QUESTION, EVER (D153, 8 Oct). It asked "How old are you?" when
+   * nothing gave a band. Design: "Name, age and class come from the roster,
+   * and a child is never asked for their own details." See `ProfilingFlow`
+   * for what a child with no band runs instead.
    */
-  askAge?: boolean;
-  age?: string;
-  onAgeChange?: (value: string) => void;
+  waiting?: boolean;
   /**
    * Whether the baseline reached Nevo. Null while it is still resolving, which
    * reads as the settled copy - the child did their part either way and the
@@ -56,7 +48,7 @@ export function ProfilingIntro({
    * purpose; decided 24 Sep.**
    *
    * `ProfilingFlow` is this component's only caller and renders
-   * `mode="complete"` without it, because the reduction is now PARKED
+   * `mode="complete"` without it, because the trials are now PARKED
    * (`holdBaseline`) and delivered once an account exists a screen or two
    * later. That run cannot know whether the write landed, and a screen that
    * cannot know must not claim either answer - so null, which reads settled.
@@ -68,16 +60,18 @@ export function ProfilingIntro({
    * the next person write the sentence again, slightly differently, which is
    * how two apologies for the same failure end up in one product.
    *
-   * **If you are about to start passing this: the settled copy is the thing to
-   * look at first.** "Your learning space has been personalized" already runs
-   * ahead of the write; see the note in `ProfilingFlow`, raised with design
-   * 24 Sep.
+   * The settled copy no longer runs ahead of the write: design replaced the
+   * past-tense "has been personalized" on 1 Oct (SCRUM-180), after it was
+   * raised on 24 Sep.
    */
   saved?: boolean | null;
 }) {
   const complete = mode === "complete";
+  // Every segment the run had, filled: never a count of its own.
+  const segments = useContext(QuestSegments) ?? 0;
+  const blocked = !complete && waiting;
   return (
-    <ProfilingShell filled={complete ? 4 : 0} active={complete ? -1 : 0}>
+    <ProfilingShell filled={complete ? segments : 0} active={complete ? -1 : 0}>
       <div className="flex min-h-0 w-full max-w-[300px] flex-1 flex-col items-center justify-center text-center sm:max-w-[480px]">
         <IllustrationWrapper
           src={
@@ -103,25 +97,23 @@ export function ProfilingIntro({
         <p className="mt-3 max-w-[400px] text-[15px] leading-[1.55] text-pretty text-nevo-near-black sm:text-base">
           {complete
             ? saved === false
-              ? "Thanks for doing that. We couldn’t save it just now — that’s on us, not you."
-              : "Your learning space has been personalized."
-            : "You'll do four quick activities. No tests, no scores. This just helps Nevo work better for you."}
+              ? "Thanks for doing that. We couldn’t save it just now - that’s on us, not you."
+              : "Nevo has everything it needs to set up your learning space."
+            : // The frame's line less "No tests, no scores.": words the
+              // architecture keeps from a child, and design ruled the line
+              // reworded on 1 Oct (D13) without giving words. Removed, not
+              // replaced. AND LESS ITS NUMBER (design, 9 Oct): "The intro
+              // drops the number entirely ... nothing states a quantity the
+              // backend did not give it." The frame still says "four"; only
+              // the number is gone.
+              "You'll do quick activities. This just helps Nevo work better for you."}
         </p>
-        {askAge && !complete && (
-          <div className="mt-6 w-full">
-            <p className="mb-2 text-[15px] font-medium text-nevo-near-black">
-              How old are you?
-            </p>
-            <AgeStepper value={age} onChange={(v) => onAgeChange?.(v)} />
-          </div>
-        )}
-
         <button
           type="button"
-          disabled={askAge && !complete && !isAgeInRange(age)}
+          disabled={blocked}
           onClick={onContinue}
           className={
-            askAge && !complete && !isAgeInRange(age)
+            blocked
               ? "mt-[30px] h-[52px] w-full cursor-not-allowed rounded-[10px] bg-nevo-navy text-base font-semibold text-nevo-cream opacity-40 sm:mt-[34px]"
               : "mt-[30px] h-[52px] w-full cursor-pointer rounded-[10px] bg-nevo-navy text-base font-semibold text-nevo-cream transition-[filter,transform] hover:brightness-109 active:scale-[0.985] sm:mt-[34px]"
           }

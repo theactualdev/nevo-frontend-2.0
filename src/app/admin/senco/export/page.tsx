@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { IepExporterView } from "@/components/admin/Senco/IepExporterView";
+import { readBack } from "@/components/admin/back";
 
 export const metadata: Metadata = {
   title: "Progress report - Nevo",
@@ -7,6 +8,24 @@ export const metadata: Metadata = {
 
 // D8 IEP Exporter. Review is never skippable: a named member of staff reads
 // and checks the draft before anything reaches a family.
-export default function AdminIepExportPage() {
-  return <IepExporterView />;
+//
+// `?student=` opens it on that child - the learner profile's "Create a
+// progress report" links here with it, so a SENCo is not made to find the
+// child they were just looking at a second time.
+export default async function AdminIepExportPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    student?: string | string[];
+    back?: string | string[];
+    backLabel?: string | string[];
+  }>;
+}) {
+  const sp = await searchParams;
+  return (
+    <IepExporterView
+      initialStudentId={typeof sp.student === "string" ? sp.student : ""}
+      back={readBack(sp)}
+    />
+  );
 }

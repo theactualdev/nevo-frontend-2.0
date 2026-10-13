@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { OnboardingState } from "@/lib/api/onboarding";
 import {
+  mergeSpellings,
+  mergesLeftLine,
+  openMerges,
+  templateColumns,
   foundCounts,
   hasStaged,
   mayConfirm,
@@ -152,5 +156,49 @@ describe("rejectedCsv", () => {
     ]);
     expect(csv).toMatch(/"40"/);
     expect(csv).not.toMatch(/undefined/);
+  });
+});
+
+describe("templateColumns", () => {
+  it("reads the first row, without the BOM the server adds for Excel", () => {
+    expect(templateColumns("\uFEFFFirst name,Surname,Class\r\nAmara,Okafor,JSS 1A\r\n")).toEqual([
+      "First name",
+      "Surname",
+      "Class",
+    ]);
+  });
+
+  it("keeps a quoted heading whole, comma and all", () => {
+    expect(templateColumns('Name,"Class, or classes",Email\nx,y,z')).toEqual([
+      "Name",
+      "Class, or classes",
+      "Email",
+    ]);
+    expect(templateColumns('"Say ""hi""",B')).toEqual(['Say "hi"', "B"]);
+  });
+
+  it("is null when there is no header to show", () => {
+    expect(templateColumns("")).toBeNull();
+    expect(templateColumns("\uFEFF\r\nAmara")).toBeNull();
+    expect(templateColumns(" , ,")).toBeNull();
+  });
+});
+
+describe("class questions", () => {
+  const c = (name: string, n: number) => ({ name, normalisedName: name.toLowerCase(), studentCount: n, teacherCount: 0 });
+  const p = { key: "k", proposedName: "JSS 2A", studentCount: 6, reason: "", candidates: [c("JSS2A", 1), c("Jss 2a", 2), c("JSS 2A", 3)] };
+
+  it("names every spelling with what it holds", () => {
+    expect(mergeSpellings(p)).toBe("JSS2A (1 student), Jss 2a (2 students) and JSS 2A (3 students)");
+  });
+
+  it("counts the questions left, and says nothing when there are none", () => {
+    expect(mergesLeftLine(0)).toBeNull();
+    expect(mergesLeftLine(1)).toBe("1 class question still to answer before you can go on.");
+    expect(mergesLeftLine(3)).toBe("3 class questions still to answer before you can go on.");
+  });
+
+  it("reads the server's list, and an absent one as none", () => {
+    expect(openMerges(null)).toEqual([]);
   });
 });

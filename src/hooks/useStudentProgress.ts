@@ -22,8 +22,8 @@ import { useLiveQuery } from "./useLiveQuery";
  * never summarised, reworded or composed from a number here. The whole-student
  * read's `reflection` is about all of a child's learning and belongs on the
  * tab; the subject screen reads its own from the narrowed route, see
- * `useSubjectProgress`. The per-card note ("Getting faster at solving
- * problems") still has no field.
+ * `useSubjectProgress`. So does the per-card `note` (1 Oct), for the same
+ * reason - see `useSubjectProgress`.
  *
  * AND NO NUMBERS REACH THE SCREEN. Screen 22 is explicit - no percentile, no
  * score, no comparison, only direction of travel - so `understanding` and
@@ -41,7 +41,7 @@ export interface ConceptRow {
 }
 
 export interface SubjectProgress {
-  /** URL slug, derived - the contract has no slug of its own. */
+  /** URL segment for the name - the contract has no slug of its own. */
   slug: string;
   name: string;
   concepts: ConceptRow[];
@@ -68,8 +68,30 @@ export interface StudentProgressState {
   live: boolean;
 }
 
+/**
+ * The subject's own name, as one URL path segment.
+ *
+ * It was lowercased with everything outside a-z0-9 turned into "-", which
+ * broke both ways at once: "Yorùbá" became "yor-b-", and two subjects that
+ * differ only in case - grouped apart, exactly, above - shared one link, so
+ * one card always opened the other's page. The name is the only identity the
+ * contract gives a subject, so the link carries it whole.
+ */
 export function subjectSlug(name: string): string {
-  return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  return encodeURIComponent(name.trim());
+}
+
+/**
+ * The subject name a route segment stands for. Next may hand the segment over
+ * decoded or not, so this decodes defensively; a lone "%" in a real name is
+ * kept as written rather than throwing.
+ */
+export function subjectFromSlug(slug: string): string {
+  try {
+    return decodeURIComponent(slug);
+  } catch {
+    return slug;
+  }
 }
 
 /**

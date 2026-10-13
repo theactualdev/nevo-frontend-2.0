@@ -27,6 +27,13 @@ export interface Thread {
    */
   preview?: string;
   messages: Message[];
+  /**
+   * Where a LIVE thread's history read stands. Absent until it is first
+   * asked for. Without it, a conversation still loading and one that failed
+   * both looked like an empty one - "your teacher has never written" - which
+   * is a claim we cannot make. Fixtures carry none: their messages are inline.
+   */
+  history?: "loading" | "loaded" | "failed";
 }
 
 export const THREADS: Thread[] = [

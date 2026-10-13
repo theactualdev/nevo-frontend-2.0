@@ -90,10 +90,17 @@ export function gettingStartedSteps(school: string): StartStep[] {
       href: "/admin/students",
     },
     {
-      title: "Choose how everyone signs in",
-      sub: "Connect Microsoft or Google, or share your school code.",
-      cta: "Set up sign-in",
-      href: "/admin/sso",
+      /*
+       * WAS "Choose how everyone signs in: Connect Microsoft or Google, or
+       * share your school code", linking to /admin/sso. Provider sign-in is
+       * deferred - every school is manual at launch - and that surface came
+       * off the rail on 24 Sep, so the row offered a choice nobody can make
+       * and led somewhere the rest of the console hides. What a manual school
+       * does is share its code, and the code is on this page.
+       */
+      title: "Share your school code",
+      sub: "Staff and students join with it – you'll find it on this page.",
+      cta: "",
     },
     {
       title: "Send parent consent requests",
@@ -113,7 +120,10 @@ export function gettingStartedSteps(school: string): StartStep[] {
        * inverted, and the next person reasoning from the old comment would
        * have reasoned from a falsehood.
        */
-      sub: "Your school records each parent's confirmation here.",
+      // Was "Your school records each parent's confirmation here" - from when
+      // the school warranted consent. Parents give it themselves now, from
+      // the link, and a child's learning waits for it.
+      sub: "Each parent gets a link to give permission. Learning starts when they do.",
       cta: "Send requests",
       href: "/admin/students",
     },

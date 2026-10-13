@@ -176,4 +176,128 @@ describe("what the live row carries onto the card", () => {
 
     expect(first().timeEstimate).toBe("1 section");
   });
+
+  const partWay = (status: string, over: Record<string, unknown> = {}) =>
+    dashboard.mockReturnValue({
+      data: {
+        assignments: [assignment("mid")],
+        recentProgress: [
+          {
+            lessonId: "mid",
+            status,
+            segmentPosition: 2,
+            updatedAt: new Date().toISOString(),
+            ...over,
+          },
+        ],
+      },
+      loading: false,
+      failed: false,
+    });
+  const card = () =>
+    renderHook(() => useStudentLessons()).result.current.lessons[0];
+
+  it("carries the child's place in a lesson part-way through, from the row", () => {
+    /*
+     * Backend B51, 5 Oct: `segmentPosition` is zero-based and the row now
+     * carries `segmentCount`, every segment in the lesson. Position 2 of 10
+     * is "segment 3 of 10", a fifth of the way.
+     */
+    partWay("in_progress", { segmentCount: 10 });
+
+    expect(card().status).toBe("in_progress");
+    expect(card().place).toEqual({ fraction: 0.2, words: "Segment 3 of 10" });
+  });
+
+  it("reads a lesson the child left part-way the same way", () => {
+    partWay("exited", { segmentCount: 4 });
+
+    expect(card().place?.words).toBe("Segment 3 of 4");
+  });
+
+  it("carries no place when the row gives no count", () => {
+    // Design D21: without the true fraction, the card says in progress and
+    // nothing about how far. The summary's own count is not borrowed.
+    partWay("in_progress");
+    expect(card().status).toBe("in_progress");
+    expect(card()).not.toHaveProperty("place");
+
+    partWay("in_progress", { segmentCount: 0 });
+    expect(card()).not.toHaveProperty("place");
+  });
+
+  it("carries no place for a finished lesson", () => {
+    partWay("completed", { segmentCount: 4 });
+
+    expect(card().status).toBe("completed");
+    expect(card()).not.toHaveProperty("place");
+  });
+});
+
+describe("a lesson the child has finished", () => {
+  /*
+   * `completed` is real in the deployed `AssignmentStatus` (25 Sep). The card's
+   * status used to come from the progress feed alone, which is recent activity
+   * rather than a full history - so a lesson finished a while ago had no row
+   * left in it and read "Not started".
+   */
+  it("stays on the list", () => {
+    // `isOpenToStudent` now drops it from Home, where it means "still to do".
+    // This list is the child's whole list, and Completed is one of its chips.
+    read([assignment("done", { status: "completed" })]);
+
+    const { result } = renderHook(() => useStudentLessons());
+
+    expect(titles(result)).toEqual(["done"]);
+  });
+
+  it("reads Completed even with no progress row left for it", () => {
+    read([assignment("done", { status: "completed" })]);
+
+    const { result } = renderHook(() => useStudentLessons());
+
+    expect(result.current.lessons[0].status).toBe("completed");
+  });
+});
+
+describe("the preview's what-you'll-do line", () => {
+  // `description` on the nested summary, shipped 1 Oct and nullable.
+  const withDescription = (description: unknown) =>
+    read([
+      {
+        ...assignment("l"),
+        lesson: { ...lesson("l"), description },
+      },
+    ]);
+
+  it("is the lesson's own, as written", () => {
+    withDescription("Add fractions using pizza.");
+
+    const { result } = renderHook(() => useStudentLessons());
+
+    expect(result.current.lessons[0].description).toBe(
+      "Add fractions using pizza.",
+    );
+  });
+
+  it("is absent when the lesson has none, never filled in", () => {
+    withDescription(null);
+
+    const { result } = renderHook(() => useStudentLessons());
+
+    expect(result.current.lessons[0].description).toBeUndefined();
+  });
+});
+
+describe("which piece of set work a card is", () => {
+  it("carries the assignment, so opening it files progress there", () => {
+    // The preview pushed the bare lesson URL, and the player reads
+    // `?assignment=` only - so a lesson opened from this tab recorded
+    // progress against no assignment and never showed the teacher's note.
+    read([assignment("one")]);
+
+    const { result } = renderHook(() => useStudentLessons());
+
+    expect(result.current.lessons[0]?.assignmentId).toBe("a-one");
+  });
 });

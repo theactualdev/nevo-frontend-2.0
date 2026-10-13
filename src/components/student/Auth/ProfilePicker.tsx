@@ -24,6 +24,13 @@ import { ChildAvatar } from "./ChildAvatar";
  *
  * Portrait and landscape both, because a tray-mounted tablet cannot be turned -
  * the same reason the rotate prompt has a way through.
+ *
+ * THE FRAME'S SPACING WHERE THE FRAME DRAWS IT, which is the tablet: 72px
+ * above and 44 below in portrait, 48 and 34 in landscape, the heading 32px
+ * upright and 30 sideways, the names 23 and 20. A phone keeps the tighter
+ * spacing, and on one narrower than 375 the side padding gives up 8px so two
+ * tiles still sit side by side - 142 + 16 + 142 is 300, and 360 less 32 a
+ * side left 296, which dropped every child into one column.
  */
 export function ProfilePicker({
   entries,
@@ -36,20 +43,20 @@ export function ProfilePicker({
   someoneElseHref: string;
 }) {
   return (
-    <div className="flex min-h-dvh flex-col items-center px-8 pt-10 pb-8 sm:px-14 landscape:px-10 landscape:pt-8">
+    <div className="flex min-h-dvh flex-col items-center px-8 pt-10 pb-8 max-[375px]:px-6 sm:px-14 portrait:sm:pt-[72px] portrait:sm:pb-11 landscape:px-10 landscape:pt-8 lg:landscape:pt-12 lg:landscape:pb-[34px]">
       {/* Combined purple wordmark, cropped from the padded 1080-square file -
           the same crop the PIN beat uses, so the two halves of this door do not
           drift apart. */}
-      <span className="relative block h-[18px] w-[56px] shrink-0 overflow-hidden sm:h-5 sm:w-[62px]">
+      <span className="relative block h-[18px] w-[56px] shrink-0 overflow-hidden sm:h-[22px] sm:w-[68px]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/brand/logo-wordmark-purple.png"
           alt="Nevo"
-          className="absolute block h-[180px] w-[180px] max-w-none -translate-x-[65px] -translate-y-[87px] sm:h-[200px] sm:w-[200px] sm:-translate-x-[73px] sm:-translate-y-[97px]"
+          className="absolute block h-[180px] w-[180px] max-w-none -translate-x-[65px] -translate-y-[87px] sm:h-[220px] sm:w-[220px] sm:-translate-x-[80px] sm:-translate-y-[107px]"
         />
       </span>
 
-      <h1 className="mt-6 mb-8 text-[26px] font-semibold tracking-[-0.015em] text-nevo-near-black sm:mt-10 sm:mb-11 sm:text-[32px] landscape:mt-4 landscape:mb-7">
+      <h1 className="mt-6 mb-8 text-[26px] leading-[normal] font-semibold tracking-[-0.015em] text-nevo-near-black sm:mt-10 sm:mb-11 portrait:sm:text-[32px] landscape:mt-4 landscape:mb-7 landscape:sm:text-[30px] lg:landscape:mt-[26px] lg:landscape:mb-[30px]">
         Who&apos;s learning?
       </h1>
 
@@ -84,7 +91,7 @@ export function ProfilePicker({
               className="size-[92px] portrait:sm:size-[104px]"
             />
             {entry.name && (
-              <span className="text-center text-[20px] font-semibold tracking-[-0.01em] text-wrap-pretty text-nevo-near-black sm:text-[23px]">
+              <span className="text-center text-[20px] leading-[normal] font-semibold tracking-[-0.01em] text-wrap-pretty text-nevo-near-black portrait:sm:text-[23px]">
                 {entry.name}
               </span>
             )}

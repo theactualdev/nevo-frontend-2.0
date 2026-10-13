@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 import { LessonPlayer } from "./LessonPlayer";
 import type { Lesson } from "@/lib/types";
 
@@ -24,7 +30,6 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
 }));
 vi.mock("@/hooks", () => ({
-  useBreakMonitor: () => ({ due: false, dismiss: vi.fn() }),
   useLesson: () => ({ setActiveLesson: vi.fn() }),
   useSignals: () => ({ trackEvent: vi.fn() }),
 }));
@@ -117,5 +122,166 @@ describe("LessonPlayer — focus when the content changes", () => {
     expect(
       (document.activeElement as HTMLElement).getAttribute("aria-label"),
     ).toMatch(/Segment 1 of 3/);
+  });
+});
+
+describe("LessonPlayer — a new segment opens at its top", () => {
+  /*
+   * The column is what scrolls, and it is the same element from segment to
+   * segment - so it kept its place, and focus scrolling its target into view
+   * put the heading under the progress bar. jsdom lays nothing out, so the
+   * column's scroll position is watched where it is set.
+   */
+  const watchColumn = () => {
+    const column = document.querySelector<HTMLElement>(".overflow-y-auto")!;
+    let at = 0;
+    const set = vi.fn((y: number) => {
+      at = y;
+    });
+    Object.defineProperty(column, "scrollTop", {
+      configurable: true,
+      get: () => at,
+      set,
+    });
+    return { scrollTo: (y: number) => (at = y), set, at: () => at };
+  };
+
+  it("puts the column back to the top when the child moves on", () => {
+    render(<LessonPlayer lesson={LESSON} plan={null} />);
+    const column = watchColumn();
+    column.scrollTo(480);
+
+    next();
+
+    expect(column.at()).toBe(0);
+  });
+
+  it("puts it back to the top going back as well", () => {
+    render(<LessonPlayer lesson={LESSON} plan={null} />);
+    next();
+    const column = watchColumn();
+    column.scrollTo(300);
+
+    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+
+    expect(column.at()).toBe(0);
+  });
+
+  it("puts it back to the top when the pace changes the text", () => {
+    const paced = {
+      ...LESSON,
+      segments: [
+        {
+          id: "seg-1",
+          modalities: ["text"],
+          text: {
+            heading: "Numerators",
+            body: { default: "One idea. A second idea. A third idea." },
+          },
+        },
+      ],
+    } as unknown as Lesson;
+    render(<LessonPlayer lesson={paced} plan={null} />);
+    const column = watchColumn();
+    column.scrollTo(220);
+
+    fireEvent.click(screen.getByRole("button", { name: "Slower" }));
+
+    expect(column.at()).toBe(0);
+  });
+
+  it("moves focus without scrolling, so the heading is not pushed under the bar", () => {
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
+    render(<LessonPlayer lesson={LESSON} plan={null} />);
+
+    next();
+
+    expect(focus).toHaveBeenLastCalledWith({ preventScroll: true });
+    focus.mockRestore();
+  });
+});
+
+describe("LessonPlayer — the position is said once per opening (D148)", () => {
+  /*
+   * Design, 8 Oct: speaking "Segment 3 of 10" is fine, but "it reads once
+   * when the segment opens, not on every interaction inside it". The group's
+   * name is what a screen reader says each time focus lands on it or comes
+   * back into it.
+   */
+  const group = () => screen.getByRole("group", { name: /^(?!Lesson pacing)/ });
+  const body = () =>
+    document.activeElement?.getAttribute("role") === "group"
+      ? (document.activeElement as HTMLElement)
+      : null;
+
+  it("is not said again when focus leaves the segment and comes back", () => {
+    render(<LessonPlayer lesson={LESSON} plan={null} />);
+    next();
+    const opened = body()!;
+    expect(opened.getAttribute("aria-label")).toMatch(/Segment 2 of 3/);
+
+    fireEvent.blur(opened, {
+      relatedTarget: screen.getByRole("button", { name: "Exit lesson" }),
+    });
+    opened.focus();
+
+    expect(opened.getAttribute("aria-label")).toBeNull();
+    // Still on screen, where a sighted child reads it.
+    expect(screen.getAllByText("Segment 2 of 3").length).toBeGreaterThan(0);
+  });
+
+  it("is kept while focus only moves inside the segment", () => {
+    render(<LessonPlayer lesson={LESSON} plan={null} />);
+    next();
+    const opened = body()!;
+
+    fireEvent.blur(opened, { relatedTarget: opened.firstElementChild });
+
+    expect(opened.getAttribute("aria-label")).toMatch(/Segment 2 of 3/);
+  });
+
+  it("is said again when the segment is opened again", () => {
+    render(<LessonPlayer lesson={LESSON} plan={null} />);
+    next();
+    fireEvent.blur(body()!, {
+      relatedTarget: screen.getByRole("button", { name: "Previous" }),
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+    next();
+
+    expect(body()!.getAttribute("aria-label")).toMatch(/Segment 2 of 3/);
+  });
+
+  it("is not said again when a new way of showing it rebuilds the segment", () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const both = {
+      ...LESSON,
+      segments: LESSON.segments.map((s) => ({
+        ...s,
+        modalities: ["text", "audio"],
+        audio: { title: s.id, transcript: `Transcript of ${s.id}.` },
+      })),
+    } as unknown as Lesson;
+    render(
+      <LessonPlayer
+        lesson={both}
+        plan={{ lessonId: "lesson-1", segments: [], suggestModality: "audio" }}
+      />,
+    );
+    act(() => {
+      vi.advanceTimersByTime(1600);
+    });
+    expect(group().getAttribute("aria-label")).toMatch(/Segment 1 of 3/);
+
+    fireEvent.click(screen.getByRole("button", { name: "Yes, try it" }));
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+
+    // Rebuilt and focused for the child, without its position.
+    expect(body()).not.toBeNull();
+    expect(body()!.getAttribute("aria-label")).toBeNull();
+    vi.useRealTimers();
   });
 });

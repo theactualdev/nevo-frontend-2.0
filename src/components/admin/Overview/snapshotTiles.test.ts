@@ -1,26 +1,28 @@
 import { describe, expect, it } from "vitest";
+import type { Invitation } from "@/lib/api/invites";
 import type { SchoolRosterCounts } from "@/lib/api/school";
 import {
   SNAPSHOT_HEADING,
+  pendingTeacherInvites,
   snapshotColumns,
   snapshotTiles,
-  studentCeiling,
+  termPeriod,
 } from "./snapshotTiles";
 
 /**
  * What the Overview snapshot is allowed to tell a school about itself.
  *
- * The three that matter most are the three the screen shipped wrong: a
- * denominator taken from a row count rather than the band, a zero muted
- * everywhere rather than in the early state only, and a missing count rendered
- * as 0.
+ * The ones that matter most are the ones the screen shipped wrong: a zero
+ * muted everywhere rather than in the early state only, a missing count
+ * rendered as 0 - and, until Lydia's 7 Oct rulings, a student denominator from
+ * a band that no longer exists and an adaptation total "so far".
  */
 
 const base = {
   studentsProfiled: 12,
   adaptations: 340,
+  adaptationPeriod: "in First term" as string | null,
   counts: null as SchoolRosterCounts | null,
-  band: "boutique" as const,
   early: false,
 };
 
@@ -51,58 +53,35 @@ describe("snapshotTiles", () => {
     expect(keys(tiles)).toEqual(["classes"]);
   });
 
-  describe("denominators", () => {
-    it("come from the band, never from a row count", () => {
-      // SCRUM-39: "Denominators come from the band seat ceiling, not from a
-      // count of rows." A row count would render "287 of 287" everywhere.
-      const tiles = snapshotTiles({
-        ...base,
-        band: "mid_market",
-        counts: { activeStudents: 287 },
-      });
-      expect(tile(tiles, "enrolled").of).toBe("of 500");
+  it("puts no denominator on any tile - the roster is the number (Lydia, 7 Oct)", () => {
+    const tiles = snapshotTiles({
+      ...base,
+      counts: { classes: 14, teachers: 20, activeStudents: 312 },
+    });
+    for (const t of tiles) expect(t).not.toHaveProperty("of");
+    expect(tile(tiles, "enrolled").value).toBe(312);
+  });
+
+  describe("adaptations made, this term (Lydia, 7 Oct)", () => {
+    it("names the term the count covers", () => {
+      expect(tile(snapshotTiles(base), "adaptations").desc).toBe(
+        "across all students in First term",
+      );
     });
 
-    it("are absent for enterprise, whose band is a floor and not a ceiling", () => {
-      // "801+" has no honest number to put after "of".
-      expect(studentCeiling("enterprise")).toBeNull();
-      const tiles = snapshotTiles({
-        ...base,
-        band: "enterprise",
-        counts: { activeStudents: 1200 },
-      });
-      expect(tile(tiles, "enrolled").of).toBeNull();
+    it("is absent on a live school with no term to name, never a total since setup", () => {
+      const tiles = snapshotTiles({ ...base, adaptationPeriod: null });
+      expect(keys(tiles)).not.toContain("adaptations");
     });
 
-    it("are absent when the band could not be read", () => {
-      const tiles = snapshotTiles({
-        ...base,
-        band: undefined,
-        counts: { activeStudents: 40 },
-      });
-      expect(tile(tiles, "enrolled").of).toBeNull();
+    it("keeps the early tile, whose zero needs no period", () => {
+      const tiles = snapshotTiles({ ...base, adaptations: 0, adaptationPeriod: null, early: true });
+      expect(tile(tiles, "adaptations").desc).toBe("once lessons begin");
     });
 
-    it("state the truth for a school over its band", () => {
-      const tiles = snapshotTiles({
-        ...base,
-        band: "boutique",
-        counts: { activeStudents: 312 },
-      });
-      const t = tile(tiles, "enrolled");
-      expect(t.value).toBe(312);
-      expect(t.of).toBe("of 250");
-    });
-
-    it("never appear on a tile with no band behind it", () => {
-      const tiles = snapshotTiles({
-        ...base,
-        counts: { classes: 14, teachers: 20, activeStudents: 5 },
-      });
-      expect(tile(tiles, "classes").of).toBeNull();
-      expect(tile(tiles, "teachers").of).toBeNull();
-      expect(tile(tiles, "profiled").of).toBeNull();
-      expect(tile(tiles, "adaptations").of).toBeNull();
+    it("names a term by the school's own name, or by the day it began", () => {
+      expect(termPeriod({ name: "First term", from: "2026-09-08" })).toBe("in First term");
+      expect(termPeriod({ name: "", from: "2026-09-08" })).toBe("since 8 September 2026");
     });
   });
 
@@ -140,17 +119,17 @@ describe("snapshotTiles", () => {
           .desc,
       ).toBe("once lessons begin");
       expect(tile(snapshotTiles(base), "adaptations").desc).toBe(
-        "across all students so far",
+        "across all students in First term",
       );
     });
   });
 
   describe("the section heading", () => {
-    it("claims no period, because not one figure under it is scoped to one", () => {
+    it("claims no period, because only one figure under it is scoped to one", () => {
       // The frame says "Activity this week" and SCRUM-39's copy line repeats
       // it, both resting on a period-scoped GET overview that is not deployed.
-      // studentsProfiled, adaptationEventsLogged and every roster count are
-      // all-time or point-in-time, so any period word here is false.
+      // Only the adaptations tile is this term's, and it says so in its own
+      // line; a period word in the heading would be false of the rest.
       expect(SNAPSHOT_HEADING).not.toMatch(/week|term|month|today/i);
     });
   });
@@ -175,5 +154,56 @@ describe("snapshotTiles", () => {
         expect(snapshotColumns(n).startsWith("xl:")).toBe(true);
       }
     });
+  });
+});
+
+describe("the teachers tile's open invitations (D04)", () => {
+  const withTeachers = { ...base, counts: { teachers: 18 } as SchoolRosterCounts };
+
+  it("says how many teacher invitations are still open, in the frame's words", () => {
+    expect(tile(snapshotTiles({ ...withTeachers, pendingTeacherInvites: 2 }), "teachers").desc).toBe(
+      "2 invitations pending",
+    );
+    expect(tile(snapshotTiles({ ...withTeachers, pendingTeacherInvites: 1 }), "teachers").desc).toBe(
+      "1 invitation pending",
+    );
+  });
+
+  it("keeps the headcount's own words when none are open, or they could not be read", () => {
+    for (const pendingTeacherInvites of [0, null, undefined]) {
+      expect(tile(snapshotTiles({ ...withTeachers, pendingTeacherInvites }), "teachers").desc).toBe(
+        "with a Nevo account",
+      );
+    }
+  });
+
+  it("counts only live teacher invitations", () => {
+    const now = Date.parse("2026-09-30T12:00:00Z");
+    const inv = (over: Partial<Invitation>): Invitation =>
+      ({
+        id: "i",
+        token: null,
+        role: "teacher",
+        email: "t@school.edu.ng",
+        name: null,
+        status: "pending",
+        expiresAt: "2026-10-30T00:00:00Z",
+        deliveryStatus: null,
+        ...over,
+      }) as Invitation;
+    expect(
+      pendingTeacherInvites(
+        [
+          inv({}),
+          inv({ role: "Teacher" }),
+          inv({ role: "student" }),
+          inv({ status: "accepted" }),
+          inv({ status: "revoked" }),
+          // Pending on the row, but past its date: expired in fact.
+          inv({ expiresAt: "2026-09-01T00:00:00Z" }),
+        ],
+        now,
+      ),
+    ).toBe(2);
   });
 });

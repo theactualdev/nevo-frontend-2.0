@@ -33,7 +33,7 @@ export function ConsoleSessionExpired({
   signInHref: string;
   reason?: SessionEndReason;
 }) {
-  const copy = sessionEndCopy(reason, "staff");
+  const copy = sessionEndCopy(reason);
   return (
     <div className="relative flex min-h-[100dvh] flex-col bg-nevo-cream text-nevo-near-black">
       <div className="absolute top-9 left-11">

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useState } from "react";
-import { ApiError } from "@/lib/api/client";
+import { ApiError, apiErrorCode } from "@/lib/api/client";
 import { setSession } from "@/lib/auth/session";
 import {
   parentApi,
@@ -60,7 +60,22 @@ import {
  * as they were.
  */
 
-type Phase = "idle" | "asking" | "sending" | "done" | "skipped" | "failed" | "gone";
+/**
+ * `conflict`: the address this request went to already belongs to a Nevo
+ * account that is not a parent's - a staff or student sign-in - so the
+ * backend refuses to make it a parent account too (`parent_account_conflict`).
+ * Not "failed": trying again gets the same answer, and the fix is the school's
+ * (a different address), so the page says that rather than "try again".
+ */
+type Phase =
+  | "idle"
+  | "asking"
+  | "sending"
+  | "done"
+  | "skipped"
+  | "failed"
+  | "gone"
+  | "conflict";
 
 const CARD =
   "rounded-[14px] bg-nevo-cream-elevated px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)]";
@@ -116,6 +131,12 @@ export function ParentConsent({
   // Where a copy of the decision actually went, straight from the receipt. The
   // line is rendered only when there IS one - the screen never assumes.
   const [receipt, setReceipt] = useState<ParentContactMethod | null>(null);
+  /**
+   * Consent created the parent account (the server says so since 9 Oct), so
+   * D01b's "We've set up a parent account" is true and what is left is
+   * finishing it - not "set up an account" from nothing.
+   */
+  const [accountCreated, setAccountCreated] = useState(false);
 
   // The API sends the LITERAL string "your child" when the school entered no
   // first name - it is a real row, not a hypothetical - so the name has to be
@@ -176,11 +197,24 @@ export function ParentConsent({
        */
       const res = await parentApi.completeConsent(token, invitation.consentTypes);
       setReceipt(res.receiptSentTo);
+      setAccountCreated(res.parentAccountCreated === true);
       setPhase("done");
     } catch (e) {
       // 404 covers unknown, revoked and expired - the same dead end, and the
       // same fix: the school issues a fresh link.
-      setPhase(e instanceof ApiError && e.status === 404 ? "gone" : "failed");
+      if (e instanceof ApiError && e.status === 404) {
+        setPhase("gone");
+      } else if (
+        e instanceof ApiError &&
+        apiErrorCode(e.detail) === "parent_account_conflict"
+      ) {
+        // Found on 29 Sep sending a test request to an address that was
+        // already an admin's: the page said "try again in a moment", which
+        // could never work.
+        setPhase("conflict");
+      } else {
+        setPhase("failed");
+      }
     }
   }
 
@@ -245,8 +279,21 @@ export function ParentConsent({
             Thank you. That&rsquo;s all we needed.
           </h1>
           <p className="mt-3 max-w-[320px] text-[15px] leading-[1.6] text-nevo-near-black/68">
-            {childLead} can start learning with their class. Set up an account
-            and you can follow how they&rsquo;re getting on, whenever you like.
+            {/* D01b "Consent given · account created", without the frame's
+                "she": no gender is sent. */}
+            {accountCreated ? (
+              <>
+                {childLead} can start learning with their class. We&rsquo;ve set
+                up a parent account so you can follow how they&rsquo;re getting
+                on, whenever you like.
+              </>
+            ) : (
+              <>
+                {childLead} can start learning with their class. Set up an
+                account and you can follow how they&rsquo;re getting on,
+                whenever you like.
+              </>
+            )}
           </p>
 
           <AccountSetup
@@ -277,8 +324,10 @@ export function ParentConsent({
             All done. Thank you.
           </h1>
           <p className="mt-3 max-w-[320px] text-[15px] leading-[1.6] text-nevo-near-black/68">
-            {childLead} can start learning with their class. You can set up an
-            account later from the same link.
+            {childLead} can start learning with their class.{" "}
+            {accountCreated
+              ? "You can finish setting up your account later from the same link."
+              : "You can set up an account later from the same link."}
           </p>
           {receipt && (
             <p className="mt-6 text-[12px] leading-[1.5] text-nevo-near-black/50">
@@ -459,7 +508,20 @@ export function ParentConsent({
           className="mt-3.5 rounded-[10px] bg-nevo-violet/14 px-4 py-3 text-[14px] leading-[1.5] text-nevo-near-black/80"
         >
           We couldn&rsquo;t record that just now. Nothing has changed.
-          please try again in a moment.
+          Please try again in a moment.
+        </p>
+      )}
+
+      {phase === "conflict" && (
+        <p
+          role="alert"
+          className="mt-3.5 rounded-[10px] bg-nevo-violet/14 px-4 py-3 text-[14px] leading-[1.5] text-nevo-near-black/80"
+        >
+          This email address is already used for a different kind of Nevo
+          account &ndash; a staff or student sign-in &ndash; so it can&rsquo;t
+          also be a parent account. Nothing has been recorded. Please ask{" "}
+          {invitation.schoolName} to send the request to a different email
+          address.
         </p>
       )}
 

@@ -4,8 +4,115 @@
  * remain a data-source swap. The calculation co-construction solver is the
  * centrepiece. Content is illustrative, not curriculum-reviewed.
  */
-import { ADJUSTMENT_ACTIONS, BREAK_TYPES, MODALITY, DENSITY, CALC_MODALITY, SCAFFOLD_LEVELS } from "@/lib/constants";
+import { BREAK_TYPES, MODALITY, DENSITY, SCAFFOLD_LEVELS } from "@/lib/constants";
+import type { CalculationVariant as WireCalculationVariant } from "@/lib/api/variants";
+import { calculationFromVariant } from "@/lib/lessons/fromContent";
 import type { AdaptationPlan, Lesson } from "@/lib/types";
+
+/**
+ * The walkthrough's calculation, WRITTEN AS THE PAYLOAD (SCRUM-177) and built
+ * by the same adapter a signed-in child's lesson goes through, so the demo
+ * cannot show a solver the payload path does not.
+ *
+ * Every value the solver shows is one written here: the drawing's marks and
+ * labels, each step's stored answer, the equation each accepted step
+ * assembles, and what each step names while it is asked (17b's choreography,
+ * as `highlights`). Nothing is worked out on screen - not even 2 + 1, whose
+ * bar is written down as the result its last step reveals once accepted.
+ */
+export const ADD_FIFTHS: WireCalculationVariant = {
+  type: "co_construction",
+  conceptId: null,
+  fullEquation: "2/5 + 1/5 = 3/5",
+  expression: "2/5 + 1/5",
+  answer: "3/5",
+  scaffold: {
+    kind: "bar",
+    parts: 5,
+    rows: 3,
+    marks: [2, 1, 3],
+    labels: ["2/5", "1/5", "3/5"],
+  },
+  manipulative: null,
+  steps: [
+    {
+      stepId: "fifths-1",
+      stepNumber: 1,
+      prompt: "What are the bottom numbers (denominators)?",
+      expectedInput: "selection",
+      input: "choice",
+      options: [
+        { value: "5 and 5", label: "5 and 5" },
+        { value: "2 and 1", label: "2 and 1" },
+      ],
+      answer: "5 and 5",
+      targets: [],
+      hint: "Look at the number under each line.",
+      confirmationText:
+        "Both are 5 - the pieces are the same size, so we can add.",
+      visualUpdate: "",
+      // Accepted: the bottom numbers match, so the bottom stays 5.
+      assembles: "2/5 + 1/5 = ?/5",
+      equationState: "2/5 + 1/5 = ?/5",
+      unit: null,
+      narrationAudio: null,
+      highlights: [],
+    },
+    {
+      stepId: "fifths-2",
+      stepNumber: 2,
+      prompt: "What do we add together?",
+      expectedInput: "selection",
+      input: "choice",
+      options: [
+        { value: "tops", label: "The top numbers: 2 and 1" },
+        { value: "bottoms", label: "The bottom numbers: 5 and 5" },
+      ],
+      answer: "tops",
+      targets: [],
+      hint: "We add the numbers above the line.",
+      confirmationText: "",
+      visualUpdate: "",
+      // Accepted: what is left is to add the top numbers.
+      assembles: "2 + 1 = ?",
+      equationState: "2 + 1 = ?",
+      unit: null,
+      narrationAudio: null,
+      // While asked, and beside step 1's confirmation: both bars ring.
+      highlights: [
+        { target: "2/5", role: "active" },
+        { target: "1/5", role: "active" },
+      ],
+    },
+    {
+      stepId: "fifths-3",
+      stepNumber: 3,
+      prompt: "So what is 2 + 1?",
+      expectedInput: "numeric",
+      input: "number",
+      options: [],
+      answer: "3",
+      targets: [],
+      hint: "Just add the two top numbers: 2 + 1.",
+      confirmationText: "",
+      visualUpdate: "",
+      assembles: "2/5 + 1/5 = 3/5",
+      equationState: "2/5 + 1/5 = 3/5",
+      unit: null,
+      narrationAudio: null,
+      // While asked: the bars turn navy, and the "?" is where the answer
+      // goes. The 3/5 bar is the result, kept back until this is accepted.
+      highlights: [
+        { target: "2/5", role: "source" },
+        { target: "1/5", role: "source" },
+        { target: "?", role: "result" },
+        { target: "3/5", role: "result" },
+      ],
+    },
+  ],
+  completionStatement:
+    "When fractions share the same bottom number, you add only the top numbers and keep the bottom the same. So 2/5 + 1/5 = 3/5.",
+};
 
 export const ADDING_FRACTIONS: Lesson = {
   id: "adding-fractions",
@@ -30,7 +137,11 @@ export const ADDING_FRACTIONS: Lesson = {
           "Add the top numbers together.",
           "Keep the bottom number the same.",
         ],
-        keyTerms: ["numerator", "denominator", "whole"],
+        keyTerms: [
+          { term: "numerator" },
+          { term: "denominator" },
+          { term: "whole" },
+        ],
         callouts: {
           [DENSITY.SIMPLIFY]: {
             label: "IN SHORT",
@@ -71,8 +182,7 @@ export const ADDING_FRACTIONS: Lesson = {
         ],
         correctId: "top",
         correctNote: "That's it - add the top numbers and keep the bottom the same.",
-        recoveryNote:
-          "Not quite - you add the top numbers and keep the bottom number. Let's look again. Your progress is saved.",
+        recoveryNote: "Not quite. Let's look again.",
       },
     },
     {
@@ -95,43 +205,8 @@ export const ADDING_FRACTIONS: Lesson = {
         ],
       },
       // Non-null variant → the Interactive modality routes to the solver (17b §8).
-      calculationVariant: "fraction_add_like",
-      calculation: {
-        variant: "fraction_add_like",
-        problem: { expression: "2/5 + 1/5", answer: "3/5" },
-        scaffold: { kind: "fraction_bars", parts: 5, rows: [2, 1] },
-        steps: [
-          {
-            prompt: "What are the bottom numbers (denominators)?",
-            choices: ["5 and 5", "2 and 1"],
-            correct: 0,
-            hint: "Look at the number under each line.",
-            onCorrect: {
-              highlight: "denominators",
-              confirm: "Both are 5 - the pieces are the same size, so we can add.",
-            },
-          },
-          {
-            prompt: "What do we add together?",
-            choices: ["The top numbers: 2 and 1", "The bottom numbers: 5 and 5"],
-            correct: 0,
-            hint: "We add the numbers above the line.",
-          },
-          {
-            prompt: "So what is 2 + 1?",
-            input: "numeric",
-            answer: "3",
-            hint: "Just add the two top numbers: 2 + 1.",
-          },
-        ],
-        completion:
-          "When fractions share the same bottom number, you add only the top numbers and keep the bottom the same. So 2/5 + 1/5 = 3/5.",
-        modalities: [
-          CALC_MODALITY.INTERACTIVE,
-          CALC_MODALITY.AUDIO,
-          CALC_MODALITY.KINESTHETIC,
-        ],
-      },
+      calculationVariant: "co_construction",
+      calculation: calculationFromVariant(ADD_FIFTHS),
     },
     {
       id: "recap",
@@ -200,19 +275,22 @@ export const ADDING_FRACTIONS: Lesson = {
 
 export const ADDING_FRACTIONS_PLAN: AdaptationPlan = {
   lessonId: "adding-fractions",
-  // UDL (37c): reading renders the text spaciously; numerical is carried by
-  // the calc solver's picture-first rendering (bars + notation alongside).
+  // UDL (37c): reading renders the text spaciously. Numerical is listed as
+  // the plan has it; nothing in the player reads it (see AdaptationPlan).
   accommodations: { reading: true, numerical: true },
   segments: [
     // Exercises the other break types: a micro breath after the reading
     // stretch, a movement break after the working one. Scaffold (37a) steps to
-    // full through the co-construction, then eases back. Boredom (37b) shows
-    // the escalation offer here - flying through the reading, minimal support.
-    { segmentId: "intro", startModality: MODALITY.TEXT, density: null, suggestModality: null, breakAfter: BREAK_TYPES.MICRO, scaffold: SCAFFOLD_LEVELS.MINIMAL, adjustment: ADJUSTMENT_ACTIONS.INCREASE_DIFFICULTY },
+    // full through the co-construction, then eases back. The step-up offer
+    // that sat here went with design's 1 Oct ruling (D28): nothing in the
+    // contract can trigger it, so only this demo ever showed it.
+    { segmentId: "intro", startModality: MODALITY.TEXT, density: null, suggestModality: null, breakAfter: BREAK_TYPES.MICRO, scaffold: SCAFFOLD_LEVELS.MINIMAL },
     { segmentId: "calc-add-fifths", startModality: MODALITY.INTERACTIVE, density: null, suggestModality: null, breakAfter: BREAK_TYPES.MOVEMENT, scaffold: SCAFFOLD_LEVELS.FULL },
     // ...and the full rest on the way out of the last segment, so all four
     // break types are reachable in the mock (this one lands before the
     // assessment - a real pause between learning and being asked about it).
-    { segmentId: "recap", startModality: MODALITY.TEXT, density: null, suggestModality: MODALITY.AUDIO, breakAfter: BREAK_TYPES.FULL },
+    // Light is authored here now: it used to arrive from the player's own
+    // "light" fallback, which drew a level the plan never gave (rule 5).
+    { segmentId: "recap", startModality: MODALITY.TEXT, density: null, suggestModality: MODALITY.AUDIO, breakAfter: BREAK_TYPES.FULL, scaffold: SCAFFOLD_LEVELS.LIGHT },
   ],
 };

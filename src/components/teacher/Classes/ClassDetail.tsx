@@ -12,7 +12,6 @@ import {
   OBSERVATIONS_SUBTITLE,
 } from "@/lib/mocks/teacherIntelligence";
 import { cn } from "@/lib/utils";
-import { ClassQrDialog, ClassQrScreen } from "./ClassQr";
 
 /**
  * Class detail (C05 / `Nevo Teacher Classes` frame): back link, class header
@@ -37,15 +36,22 @@ import { ClassQrDialog, ClassQrScreen } from "./ClassQr";
 const TABS = ["Roster", "Lessons"] as const;
 type Tab = (typeof TABS)[number];
 
+/*
+ * Design's status system, as corrected on 12 Oct (C05, C08's chip board):
+ * worth a glance is the soft-violet OUTLINE, the quietest state; flagged is
+ * the navy FILL. It used to be the other way round, and design says never
+ * invert it - fills carry the weight, so what someone is waiting on reads
+ * first.
+ */
 function statusDotClass(status: StudentStatus, small = false): string {
   return cn(
     "shrink-0 rounded-full",
     small ? "size-[9px]" : "size-[11px]",
-    status === "glance" && "bg-nevo-violet",
-    status === "flag" &&
+    status === "glance" &&
       (small
-        ? "border-2 border-nevo-navy bg-transparent"
-        : "border-[2.5px] border-nevo-navy bg-transparent"),
+        ? "border-2 border-nevo-violet bg-transparent"
+        : "border-[2.5px] border-nevo-violet bg-transparent"),
+    status === "flag" && "bg-nevo-navy",
     status === "ok" && "bg-nevo-navy/28",
   );
 }
@@ -65,12 +71,10 @@ function studentHref(name: string): string {
 
 export function ClassDetail({ klass }: { klass: TeacherClass }) {
   const [tab, setTab] = useState<Tab>("Roster");
-  // C12: the dialog is the entry point; projection is the same code, room-sized.
-  const [qr, setQr] = useState<"none" | "dialog" | "screen">("none");
   // This screen renders only while there is no live class list - a real class
-  // goes to `LiveClassDetail` instead - so everything here, the join code
-  // included, is the fixture's own. Nothing live is merged in.
-  const joinCode = klass.joinCode;
+  // goes to `LiveClassDetail` instead - so everything here is the fixture's
+  // own. Nothing live is merged in. There is no class code: design deleted
+  // C12 and C18 on 30 Sep, when children stopped joining by one.
 
   const glanceCount = klass.roster.filter((r) => r.status === "glance").length;
   const flagCount = klass.roster.filter((r) => r.status === "flag").length;
@@ -90,26 +94,13 @@ export function ClassDetail({ klass }: { klass: TeacherClass }) {
 
         <div className="mt-4 flex flex-wrap items-end justify-between gap-5">
           <div>
-            <h2 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
+            <h1 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
               {klass.name}
-            </h2>
+            </h1>
             <span className="mt-[5px] block text-[14.5px] text-nevo-near-black/60">
               {`${klass.subjects} · ${klass.count} students`}
             </span>
           </div>
-          <button
-            type="button"
-            onClick={() => setQr("dialog")}
-            className="inline-flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-[10px] border-[1.5px] border-nevo-navy/35 px-4 text-sm font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
-          >
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <rect x="3" y="3" width="7" height="7" rx="1.5" />
-              <rect x="14" y="3" width="7" height="7" rx="1.5" />
-              <rect x="3" y="14" width="7" height="7" rx="1.5" />
-              <path d="M14 14h3v3h-3zM20 14h1M14 20h3M20 20h1" />
-            </svg>
-            Class code
-          </button>
           {(glanceCount > 0 || flagCount > 0) && (
             <div className="flex gap-4">
               {glanceCount > 0 && (
@@ -175,7 +166,7 @@ export function ClassDetail({ klass }: { klass: TeacherClass }) {
                   >
                     <div className="flex items-center gap-2 xl:w-[26%] xl:shrink-0">
                       {student.status === "glance" && (
-                        <span className="size-2 shrink-0 rounded-full bg-nevo-violet" />
+                        <span className="size-2 shrink-0 rounded-full border-[1.5px] border-nevo-violet" />
                       )}
                       {student.status === "flag" && (
                         <span className="shrink-0 text-nevo-navy">
@@ -202,7 +193,7 @@ export function ClassDetail({ klass }: { klass: TeacherClass }) {
                         {obs.chips.map((chip) => (
                           <span
                             key={chip}
-                            className="inline-flex min-h-7 items-center rounded-[20px] bg-nevo-cream-inset px-3 py-[5px] text-[12px] text-nevo-near-black"
+                            className="inline-flex min-h-7 items-center rounded-full bg-nevo-cream-inset px-3 py-[5px] text-[12px] text-nevo-near-black"
                           >
                             {chip}
                           </span>
@@ -218,7 +209,7 @@ export function ClassDetail({ klass }: { klass: TeacherClass }) {
             </div>
             <div className="mt-4 flex gap-5 text-[12px] text-nevo-near-black/55">
               <span className="flex items-center gap-[7px]">
-                <span className="size-2 shrink-0 rounded-full bg-nevo-violet" />
+                <span className="size-2 shrink-0 rounded-full border-[1.5px] border-nevo-violet" />
                 Worth a glance
               </span>
               <span className="flex items-center gap-[7px]">
@@ -264,21 +255,6 @@ export function ClassDetail({ klass }: { klass: TeacherClass }) {
 
       </div>
 
-      {qr === "dialog" && (
-        <ClassQrDialog
-          className={klass.name}
-          code={joinCode}
-          onClose={() => setQr("none")}
-          onProject={() => setQr("screen")}
-        />
-      )}
-      {qr === "screen" && (
-        <ClassQrScreen
-          className={klass.name}
-          code={joinCode}
-          onClose={() => setQr("none")}
-        />
-      )}
     </div>
   );
 }

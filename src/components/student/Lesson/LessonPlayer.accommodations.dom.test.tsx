@@ -9,6 +9,7 @@ import {
 import { LessonPlayer } from "./LessonPlayer";
 import { SIGNAL_EVENT_TYPES } from "@/lib/constants";
 import type { AdaptationPlan, Lesson } from "@/lib/types";
+import { pageScrolledColumn } from "@/test/readingColumn";
 
 /**
  * The UDL accommodations were computed, shown to the teacher as active, and
@@ -22,22 +23,19 @@ import type { AdaptationPlan, Lesson } from "@/lib/types";
  * and the SEND learner it was built for did not, while the teacher's screen
  * said "Support Nevo has turned on".
  *
- * THE SECOND HALF, AND THE REASON THIS COULD NOT SIMPLY BE SWITCHED ON. The
- * player decides a segment was fully read when its column has no room to
- * scroll. That is right for a whole segment and false for one chunk of one,
- * because a chunk always fits — so turning `attention` on would have reported
- * every chunked segment as fully read the instant it opened, however little of
- * it the child saw. It would have corrupted the signal for exactly the children
- * the accommodation exists to help, since only they are ever chunked.
+ * THE SECOND HALF, AND THE REASON THIS COULD NOT SIMPLY BE SWITCHED ON. A
+ * chunk always fits, so its column has no room to scroll and any scroll of it
+ * reads as the bottom - of one part. Sent as a `scroll` mark, every chunked
+ * segment would report the whole segment read however little the child saw.
+ * It would have corrupted the signal for exactly the children the
+ * accommodation exists to help, since only they are ever chunked.
  *
- * jsdom reports every element as 0×0, so `scrollHeight - clientHeight` is 0 and
- * a segment is "non-scrolling" by default — which is the case under test, and
- * the case that used to report a false 100.
+ * jsdom lays nothing out, so the column is given a height and scrolled the way
+ * the real one is - by the page - with `pageScrolledColumn`.
  */
 
 const { trackEvent } = vi.hoisted(() => ({ trackEvent: vi.fn() }));
 vi.mock("@/hooks", () => ({
-  useBreakMonitor: () => ({ due: false, dismiss: vi.fn() }),
   useLesson: () => ({ setActiveLesson: vi.fn() }),
   useSignals: () => ({ trackEvent }),
 }));
@@ -77,6 +75,19 @@ const LESSON = {
   segments: [segment("seg-1", "Numerators"), segment("seg-2", "Denominators")],
 } as unknown as Lesson;
 
+/** A chunked segment, then one with no text to chunk. */
+const THEN_AUDIO = {
+  ...LESSON,
+  segments: [
+    segment("seg-1", "Numerators"),
+    {
+      id: "seg-2",
+      modalities: ["audio"],
+      audio: { title: "Denominators", transcript: "Listen to this." },
+    },
+  ],
+} as unknown as Lesson;
+
 const planWith = (
   accommodations: AdaptationPlan["accommodations"],
 ): AdaptationPlan => ({ lessonId: "frac-3", segments: [], accommodations });
@@ -98,16 +109,15 @@ const nextPart = () => {
   fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 };
 
-/** The depth reported for a segment when it was left. */
-const depthFor = (segmentId: string) =>
+/** Scroll the page well past a short column, so all of it has been on screen. */
+const scrollColumn = (container: HTMLElement) =>
+  pageScrolledColumn(container, { height: 300 }).scrollPageTo(2_000);
+
+/** The segments a `scroll` mark was sent for. */
+const scrolledSegments = () =>
   trackEvent.mock.calls
-    .filter(
-      (c) =>
-        c[0] === SIGNAL_EVENT_TYPES.TIME_ON_SEGMENT &&
-        c[1]?.segmentId === segmentId,
-    )
-    .map((c) => c[1].scrollDepthPct)
-    .at(-1);
+    .filter((c) => c[0] === SIGNAL_EVENT_TYPES.SCROLL)
+    .map((c) => c[1].segmentId);
 
 beforeEach(() => {
   trackEvent.mockReset();
@@ -125,7 +135,7 @@ describe("an accommodation the plan carries reaches the child", () => {
       <LessonPlayer lesson={LESSON} plan={planWith({ attention: true })} />,
     );
 
-    expect(screen.getByText("Part 1 of 3")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tap to continue" })).toBeInTheDocument();
     expect(screen.getByText("One idea here.")).toBeInTheDocument();
     expect(screen.queryByText(/A third idea here/)).not.toBeInTheDocument();
   });
@@ -137,7 +147,7 @@ describe("an accommodation the plan carries reaches the child", () => {
       <LessonPlayer lesson={LESSON} plan={planWith({ attention: false })} />,
     );
 
-    expect(screen.queryByText("Part 1 of 3")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Tap to continue" })).toBeNull();
     expect(screen.getByText(THREE)).toBeInTheDocument();
   });
 
@@ -145,90 +155,136 @@ describe("an accommodation the plan carries reaches the child", () => {
     // The state every signed-in child was actually in.
     render(<LessonPlayer lesson={LESSON} plan={planWith(undefined)} />);
 
-    expect(screen.queryByText("Part 1 of 3")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Tap to continue" })).toBeNull();
   });
 });
 
 describe("what a chunked segment reports having been read", () => {
-  it("reports a third when the child saw one part of three", () => {
+  it("raises no scroll mark for one part of the body", () => {
     /*
-     * THE ONE THAT MATTERS. Before this, the body fitted on screen — because a
-     * chunk always does — so the player recorded 100 the moment the segment
-     * opened, and a child who read a third was reported as having read all of
-     * it.
+     * THE ONE THAT MATTERS. A chunk always fits, so a scroll of its column
+     * reads as the bottom - and `depthRatio: 1` would tell the engine a child
+     * who saw a third of the segment had read all of it.
      */
-    const { unmount } = render(
+    const { container } = render(
       <LessonPlayer lesson={LESSON} plan={planWith({ attention: true })} />,
     );
 
-    unmount();
+    scrollColumn(container);
 
-    expect(depthFor("seg-1")).toBe(33);
+    expect(scrolledSegments()).toEqual([]);
   });
 
-  it("rises as the child works through the parts", () => {
-    vi.useFakeTimers();
-    try {
-      const { unmount } = render(
-        <LessonPlayer lesson={LESSON} plan={planWith({ attention: true })} />,
-      );
+  it("still raises them for a segment that is not chunked", () => {
+    // The behaviour the chunk rule must not break: an unchunked column that
+    // is scrolled is the segment, and says so.
+    const { container } = render(<LessonPlayer lesson={LESSON} plan={null} />);
 
-      nextPart();
-      unmount();
+    scrollColumn(container);
 
-      expect(depthFor("seg-1")).toBe(67);
-    } finally {
-      vi.useRealTimers();
-    }
+    expect(scrolledSegments()).toEqual(["seg-1", "seg-1", "seg-1", "seg-1"]);
   });
 
-  it("reports all of it once the last part is showing", () => {
-    vi.useFakeTimers();
-    try {
-      const { unmount } = render(
-        <LessonPlayer lesson={LESSON} plan={planWith({ attention: true })} />,
-      );
-
-      nextPart();
-      nextPart();
-      unmount();
-
-      expect(depthFor("seg-1")).toBe(100);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it("still reports an unchunked segment as fully read", () => {
-    /*
-     * The behaviour this fix must not break: a segment that fits and is NOT
-     * chunked is genuinely all on screen, and reporting it as unread was its
-     * own bug, fixed separately. The chunk report must not leak into the
-     * ordinary path.
-     */
-    const { unmount } = render(<LessonPlayer lesson={LESSON} plan={null} />);
-
-    unmount();
-
-    expect(depthFor("seg-1")).toBe(100);
-  });
-
-  it("does not carry one segment's chunk count onto the next", () => {
+  it("does not carry one segment's chunking onto the next", () => {
     /*
      * The report is stamped with a segment id rather than cleared on change,
      * because React runs child effects before parent ones — a reset here would
      * wipe the incoming segment's fresh report instead of the outgoing one's.
-     * This is the test that a stale report cannot be read as the new segment's.
+     * This is the test that a stale report cannot silence the next segment.
+     *
+     * Read to the end first, because Next is only there on the last part now
+     * (37c).
      */
-    const { unmount } = render(
+    vi.useFakeTimers();
+    try {
+      const { container } = render(
+        <LessonPlayer lesson={THEN_AUDIO} plan={planWith({ attention: true })} />,
+      );
+
+      nextPart();
+      nextPart();
+      fireEvent.click(screen.getByRole("button", { name: "Next" }));
+      scrollColumn(container);
+
+      expect(scrolledSegments()).toContain("seg-2");
+      expect(scrolledSegments()).not.toContain("seg-1");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("the way on under the attention accommodation (37c)", () => {
+  /*
+   * The frame draws no chevron row while parts are left: "Tap to continue" is
+   * the only way on. The row was only dimmed, so Next skipped Parts 2 and 3.
+   */
+  it("offers no Next while parts are left", () => {
+    vi.useFakeTimers();
+    try {
+      render(
+        <LessonPlayer lesson={LESSON} plan={planWith({ attention: true })} />,
+      );
+      expect(screen.queryByRole("button", { name: "Next" })).toBeNull();
+
+      nextPart();
+      expect(screen.queryByRole("button", { name: "Next" })).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("brings Next back on the last part, which has no continue of its own", () => {
+    vi.useFakeTimers();
+    try {
+      render(
+        <LessonPlayer lesson={LESSON} plan={planWith({ attention: true })} />,
+      );
+
+      nextPart();
+      nextPart();
+
+      expect(screen.getByRole("button", { name: "Next" })).toBeEnabled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("leaves Next alone when attention is off", () => {
+    render(
+      <LessonPlayer lesson={LESSON} plan={planWith({ attention: false })} />,
+    );
+
+    expect(screen.getByRole("button", { name: "Next" })).toBeEnabled();
+  });
+});
+
+describe("the chrome dim", () => {
+  const header = () =>
+    screen.getByRole("button", { name: "Exit lesson" }).closest("header")!;
+
+  it("is the attention accommodation's 30%", () => {
+    render(
       <LessonPlayer lesson={LESSON} plan={planWith({ attention: true })} />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    unmount();
+    expect(header()).toHaveClass("opacity-30");
+  });
 
-    expect(depthFor("seg-1")).toBe(33);
-    expect(depthFor("seg-2")).toBe(33);
+  it("is applied by no instruction now that modulate_density is gone (SCRUM-180)", () => {
+    render(
+      <LessonPlayer
+        lesson={LESSON}
+        plan={
+          {
+            ...planWith(undefined),
+            adjustment: "modulate_density",
+          } as unknown as AdaptationPlan
+        }
+      />,
+    );
+
+    expect(header().className).not.toMatch(/opacity-\d/);
   });
 });
 
@@ -257,5 +313,62 @@ describe("the breathing pause", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("the reading accommodation beyond the text segment (D30, audit 46)", () => {
+  /*
+   * "Typographic support applies everywhere, with no exceptions." It reached
+   * the text segment and the checks, and a child with reading support met
+   * every picture's caption at 13px and every transcript at the size it was
+   * drawn for everyone else.
+   */
+  const MEDIA = {
+    id: "frac-3",
+    title: "Fractions Lesson 3",
+    segments: [
+      {
+        id: "seg-1",
+        modalities: ["visual"],
+        visual: {
+          heading: "Look closely",
+          art: { id: "not-shipped", alt: "", caption: "A leaf in the sun." },
+        },
+      },
+      {
+        id: "seg-2",
+        modalities: ["audio"],
+        audio: { title: "Listen", transcript: "Listen to this." },
+      },
+    ],
+  } as unknown as Lesson;
+
+  const typeOf = (text: string) => screen.getByText(text).className;
+
+  it("sets a picture's caption in the accommodation's type", () => {
+    render(<LessonPlayer lesson={MEDIA} plan={planWith({ reading: true })} />);
+
+    expect(typeOf("A leaf in the sun.")).toContain("leading-[2]");
+    expect(typeOf("A leaf in the sun.")).toContain("text-[18px]");
+  });
+
+  it("sets a recording's transcript in it", () => {
+    render(<LessonPlayer lesson={MEDIA} plan={planWith({ reading: true })} />);
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Show transcript" }));
+
+    expect(typeOf("Listen to this.")).toContain("leading-[2]");
+    expect(typeOf("Listen to this.")).toContain("text-[18px]");
+    // Never smaller than it is drawn for everyone: 19px on a desktop stays.
+    expect(typeOf("Listen to this.")).toContain("lg:text-[19px]");
+  });
+
+  it("leaves both as drawn when it is off", () => {
+    render(<LessonPlayer lesson={MEDIA} plan={planWith({ reading: false })} />);
+
+    expect(typeOf("A leaf in the sun.")).toContain("text-[13px]");
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Show transcript" }));
+    expect(typeOf("Listen to this.")).not.toContain("leading-[2]");
   });
 });

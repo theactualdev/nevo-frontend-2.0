@@ -110,11 +110,9 @@
   --animate-nevo-pop: nevo-pop 300ms ease-out;
   --animate-nevo-kb-up: nevo-kb-up 220ms cubic-bezier(0.33, 1, 0.68, 1) both;
   --animate-nevo-kb-caret: nevo-kb-caret 1000ms step-end infinite;
-  /* One-shot (SCRUM-94: no perpetual motion inside measured windows). */
-  --animate-nevo-glow: nevo-glow 2s ease-in-out both;
-  --animate-nevo-sparkle: nevo-sparkle 2600ms ease-in-out both;
-  /* Frustration guide (37b): the forward control glows three cycles, then rests. */
-  --animate-nevo-glow-guide: nevo-glow 2s ease-in-out 3 both;
+  /* No glow guide: the forward control's glow under a hint went with design's
+     D124 (6 Oct). Nothing reacts visibly to a child's difficulty. Nor the
+     system density chip's glow and sparkle, with D144 (8 Oct). */
   /* Ask Nevo (26): thinking dots + listening mic - state-bound, end with the state. */
   --animate-nevo-dot: nevo-dot 1200ms ease-in-out infinite;
   --animate-nevo-mic-pulse: nevo-mic-pulse 2000ms ease-in-out infinite;
@@ -279,35 +277,6 @@
   }
 }
 
-/* System-triggered adaptive toggle (Lesson Player) — a steady 3px ring that
- * pulses in and out ("Nevo adjusted this"). */
-@keyframes nevo-glow {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgba(154, 156, 203, 0);
-  }
-  50% {
-    box-shadow: 0 0 0 3px rgba(154, 156, 203, 0.4);
-  }
-}
-
-/* Toggle-group sparkle (Lesson Player frame) — a violet glint on the control's
- * corner while a system recommendation waits, unfollowed. */
-@keyframes nevo-sparkle {
-  0% {
-    opacity: 0;
-    transform: scale(0.5) rotate(-8deg);
-  }
-  35% {
-    opacity: 1;
-    transform: scale(1) rotate(0deg);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(0.85) rotate(6deg);
-  }
-}
-
 /* Baseline profiling (SCRUM-104): the quest map's active circle breathes a
  * soft-violet ring; a playing-back grid tile lifts gently. Both are gated by
  * motion-safe at the point of use. */
@@ -354,24 +323,15 @@
     transform: scale(1.09);
   }
 }
-/* The stretch interstitial's 15s water fill: the level rises bottom-to-top
- * inside the clipped circle while the surface drifts sideways like water.
- * Durations set inline; reduced motion parks the level partway (no rise,
- * no drift). */
-@keyframes nevo-water-rise {
+/* The stretch interstitial's ring (`Nevo Stretch Frame`, `nevoRing`): the
+ * fill sweeps clockwise from empty to full. `--nevo-c` is the circumference,
+ * set on the circle; duration set inline; reduced motion holds it partway. */
+@keyframes nevo-ring-fill {
   from {
-    transform: translateY(100%);
+    stroke-dashoffset: var(--nevo-c);
   }
   to {
-    transform: translateY(0%);
-  }
-}
-@keyframes nevo-water-drift {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-56px);
+    stroke-dashoffset: 0;
   }
 }
 
@@ -493,6 +453,54 @@
   html {
     @apply font-sans;
   }
+
+  /*
+   * THE STUDENT CONSOLE'S FOCUS RING. The rule above leaves every element the
+   * browser's own ring in `--ring` at half strength: a 1px grey that all but
+   * vanishes on cream. No frame specifies focus, so a child moving by keyboard
+   * or switch gets a 2px navy outline, 2px clear of the control.
+   *
+   * In the base layer, so a component that styles its own focus (a field with
+   * `outline-none` and a navy border, a ring) keeps it: any utility beats
+   * this. Scoped by `data-nevo-console="student"`, which the student shell and
+   * each student overlay that portals out of it carry. The teacher and admin
+   * consoles are untouched.
+   */
+  [data-nevo-console="student"] :focus-visible {
+    outline: 2px solid var(--color-nevo-navy);
+    outline-offset: 2px;
+  }
+
+  /*
+   * NEVER WHITE, design's reference says (CLAUDE-reference.md, 12 Oct), and
+   * the page under every screen was `--background`: the component library's
+   * white. It showed wherever a student screen did not paint its own cream -
+   * a phone pulled past its top or bottom, the gap under a short screen.
+   * While a student screen is up, the canvas is cream. Scoped by the same
+   * attribute as the ring above; the teacher and admin consoles are theirs.
+   */
+  html:has([data-nevo-console="student"]),
+  html:has([data-nevo-console="student"]) body {
+    background-color: var(--color-nevo-cream);
+  }
+}
+
+/*
+ * THE SHARED BUTTON TAKES THE STUDENT RING TOO. `Button` (and the shadcn one)
+ * carries its own focus style - `outline-none` and a 3px ring at 35% navy -
+ * and a utility beats the base-layer rule above, which is the point of putting
+ * it there. So one student screen showed two focus styles: the solid navy
+ * outline on fields and a pale ring on buttons. Inside the student console a
+ * button's focus reads as the console's: the same 2px navy outline, with its
+ * pale ring dropped. Unlayered, because it has to win over those utilities;
+ * keyed on `data-slot="button"`, which only the button components set. The
+ * teacher and admin consoles carry no `data-nevo-console`, so they keep the
+ * ring they had.
+ */
+[data-nevo-console="student"] [data-slot="button"]:focus-visible {
+  outline: 2px solid var(--color-nevo-navy);
+  outline-offset: 2px;
+  --tw-ring-shadow: 0 0 #0000;
 }
 
 /* Reduced-motion mode (Design System v2 §10 / §9 accessibility).
@@ -523,9 +531,86 @@ html[data-reduced-motion="true"] *::after {
   scroll-behavior: auto !important;
 }
 
-/* Text Size — the content zoom that scales the app's fixed-px type is applied as
- * a numeric `zoom` on the shell's content region (StudentShell), since
- * `zoom: var(...)` doesn't resolve. No global rule is needed here. */
+/* Text Size — the content zoom that scales the app's fixed-px type. Keyed off
+ * the root attribute rather than set inline from React state, so the boot
+ * script in <head> can apply it before the first paint (rule 6). The numbers
+ * are `TEXT_ZOOM`'s (AccessibilityContext), and a test holds them together.
+ * `m` is the unzoomed default and needs no rule.
+ *
+ * `--nevo-text-zoom` repeats the factor for a screen that must fit the
+ * viewport: zoom scales `100dvh` too, so the lesson player's full-height
+ * column would otherwise outgrow the screen by the same factor and take its
+ * pinned arrows and docked pad below the fold. */
+html[data-text-size="s"] .nevo-text-zoom {
+  zoom: 0.9;
+  --nevo-text-zoom: 0.9;
+}
+html[data-text-size="l"] .nevo-text-zoom {
+  zoom: 1.1;
+  --nevo-text-zoom: 1.1;
+}
+html[data-text-size="xl"] .nevo-text-zoom {
+  zoom: 1.2;
+  --nevo-text-zoom: 1.2;
+}
+
+/* The calculation pad's compact form (NevoKeyboard's `CalcLayout`, which
+ * reads these). Docked under the lesson's pinned arrows, D150's tray leaves
+ * a short screen too little room above it for the step's question, field,
+ * Check and hint link. Short is counted in the player's own pixels, which a
+ * larger text size divides the screen's by: under 760 on a phone and 830
+ * from 640 wide, so 836 and 913 at "l", 912 and 996 at "xl". "s" is taken
+ * with the default. The keys stay 44px, the least any key here is given. */
+@media (max-height: 759.98px) {
+  .nevo-calc-pad {
+    --calc-key: 44px;
+    --calc-gap: 5px;
+    --calc-pad-t: 5px;
+    --calc-pad-b: 11px;
+  }
+}
+@media (max-height: 835.98px) {
+  html[data-text-size="l"] .nevo-calc-pad,
+  html[data-text-size="xl"] .nevo-calc-pad {
+    --calc-key: 44px;
+    --calc-gap: 5px;
+    --calc-pad-t: 5px;
+    --calc-pad-b: 11px;
+  }
+}
+@media (max-height: 911.98px) {
+  html[data-text-size="xl"] .nevo-calc-pad {
+    --calc-key: 44px;
+    --calc-gap: 5px;
+    --calc-pad-t: 5px;
+    --calc-pad-b: 11px;
+  }
+}
+@media (min-width: 640px) and (max-height: 829.98px) {
+  .nevo-calc-pad {
+    --calc-key: 44px;
+    --calc-gap: 5px;
+    --calc-pad-t: 5px;
+    --calc-pad-b: 11px;
+  }
+}
+@media (min-width: 640px) and (max-height: 912.98px) {
+  html[data-text-size="l"] .nevo-calc-pad,
+  html[data-text-size="xl"] .nevo-calc-pad {
+    --calc-key: 44px;
+    --calc-gap: 5px;
+    --calc-pad-t: 5px;
+    --calc-pad-b: 11px;
+  }
+}
+@media (min-width: 640px) and (max-height: 995.98px) {
+  html[data-text-size="xl"] .nevo-calc-pad {
+    --calc-key: 44px;
+    --calc-gap: 5px;
+    --calc-pad-t: 5px;
+    --calc-pad-b: 11px;
+  }
+}
 
 /* High Contrast — a first pass: darken muted text and strengthen the faint
  * borders/dividers so the hierarchy reads at low vision. A full high-contrast
@@ -533,11 +618,19 @@ html[data-reduced-motion="true"] *::after {
 html[data-contrast="high"] {
   --tw-text-opacity: 1;
 }
+/* /42, /48, /62 and /66 were missing, and they carry real sentences: the
+ * sign-out sheet's reassurance, the module boundary's lines, the session-ended
+ * screen. /40 stays out - the flanker activities draw their side arrows in it,
+ * and contrast must not change a calibrated stimulus. */
+html[data-contrast="high"] .text-nevo-near-black\/42,
 html[data-contrast="high"] .text-nevo-near-black\/45,
+html[data-contrast="high"] .text-nevo-near-black\/48,
 html[data-contrast="high"] .text-nevo-near-black\/50,
 html[data-contrast="high"] .text-nevo-near-black\/55,
 html[data-contrast="high"] .text-nevo-near-black\/60,
+html[data-contrast="high"] .text-nevo-near-black\/62,
 html[data-contrast="high"] .text-nevo-near-black\/65,
+html[data-contrast="high"] .text-nevo-near-black\/66,
 html[data-contrast="high"] .text-nevo-near-black\/68,
 html[data-contrast="high"] .text-nevo-near-black\/70,
 html[data-contrast="high"] .text-nevo-near-black\/72 {

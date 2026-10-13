@@ -10,32 +10,51 @@ import { useDraggablePill } from "./useDraggablePill";
 import { useAskNevoHistory } from "@/hooks/useAskNevoHistory";
 import { useHasSession } from "@/hooks/useHasSession";
 import { askNevoApi, asUuid } from "@/lib/api";
-import type {
-  ThreadSummary,
-  ThreadTranscript,
+import {
+  allowanceSpent,
+  type ThreadSummary,
+  type ThreadTranscript,
 } from "@/lib/api/askNevo";
 import { LessonContext } from "@/context/LessonContext";
-import { useAuth } from "@/hooks";
+import { useAuth, useSignals } from "@/hooks";
+import { SIGNAL_EVENT_TYPES } from "@/lib/constants";
 import { cn, randomId } from "@/lib/utils";
 
-/** The minimum "Nevo is thinking" beat - real answers never land jarringly
- *  fast, and the mock fallback keeps its original calm pacing. */
 /**
- * How long the live answer gets before the mock engine takes over.
+ * Board 26's launcher mark, on both the docked button and the corner pill.
+ *
+ * It was the speech bubble, which is Connect's - a child looking for their
+ * teacher and a child looking for Nevo were shown the same picture. The app
+ * shell prototype also draws the bubble; board 26 is Ask Nevo's own frame and
+ * draws this sparkle, and the teacher drawer already uses it.
+ */
+const SPARKLE = (className: string) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden className={className}>
+    <path d="M12 2l1.6 4.8L18 8.4l-4.4 1.6L12 15l-1.6-5L6 8.4l4.4-1.6z" />
+    <circle cx="18.5" cy="17.5" r="2.2" />
+  </svg>
+);
+
+/**
+ * How long the live answer gets before the drawer stops waiting for it. Then
+ * a signed-in child is told plainly that it could not answer
+ * (`COULD_NOT_ANSWER`), and a signed-out visitor gets the sample engine.
  *
  * Raised from 15s. The backend's own documented range for an unauthenticated
  * 401 is 1.0-5.6s and a Render cold start is far slower than that, so 15s sat
  * inside ordinary latency rather than beyond it.
  *
  * The cap now ABORTS the request rather than racing it. A race left the request
- * in flight and discarded an answer that had already arrived; aborting means the
- * mock engine only ever stands in for a request that genuinely ended.
+ * in flight and discarded an answer that had already arrived; aborting means
+ * either fallback only ever stands in for a request that genuinely ended.
  *
  * A cap still belongs here, unlike in `useLiveQuery`: a child watching thinking
- * dots forever is worse than a labelled sample answer. It just has to sit past
- * a cold start, not inside one.
+ * dots forever is worse than being told it did not work. It just has to sit
+ * past a cold start, not inside one.
  */
 const LIVE_TIMEOUT_MS = 30000;
+/** The minimum "Nevo is thinking" beat - real answers never land jarringly
+ *  fast, and the mock fallback keeps its original calm pacing. */
 const THINKING_MS = 1600;
 /** Mic toast lifetime. */
 const TOAST_MS = 3200;
@@ -78,14 +97,44 @@ interface Message {
   interactionId?: string;
   /** A canned stand-in shown because the live assistant didn't answer. */
   sample?: boolean;
+  /** A signed-in child's question the live assistant could not answer. */
+  failed?: boolean;
 }
 
 /**
- * Mock reply engine - calm, canned, and honest about its limits. Now the
- * FALLBACK: the live assistant answers first (`askNevoApi.ask`); without a
- * session (or on any failure) the drawer answers from here so it never goes
- * silent. The cannot-help boundary stays: anything for the teacher is handed
- * to the teacher, never absorbed.
+ * What a SIGNED-IN child is told when the live assistant does not answer.
+ *
+ * They used to be given a canned tutoring reply - fractions and pizza - marked
+ * as a sample in small italics. A child cannot weigh "sample" against an answer
+ * that sounds exactly like help, and the teacher branch of that engine promised
+ * to "let them know" when nothing would. So: no answer, said plainly, with the
+ * blame where it belongs. The sample engine stays for the signed-out
+ * walkthrough, which is a demonstration of the drawer rather than a child.
+ */
+const COULD_NOT_ANSWER =
+  "I couldn't answer that just now - that's on us, not you. Try asking again in a moment.";
+
+/**
+ * What a child is told once the day's questions are used up (design, D45):
+ * "A spent allowance says plainly that the child has asked everything for
+ * today and can ask again tomorrow. It never renders as a connection failure."
+ * The ruling's own words, as near verbatim as a sentence to a child allows.
+ *
+ * "Tomorrow" and nothing more exact. The 429 carries `resetsAt`, but the
+ * ruling says tomorrow, the allowance is a daily one, and a clock time is one
+ * more thing for a child to read wrong. Nor the server's `message`: design
+ * gave the words.
+ */
+const ALLOWANCE_SPENT =
+  "You've asked everything for today. You can ask again tomorrow.";
+
+/**
+ * Mock reply engine - calm, canned, and honest about its limits. The
+ * SIGNED-OUT walkthrough's fallback only: the live assistant is asked first
+ * (`askNevoApi.ask`), and a question it does not answer for a visitor is
+ * answered from here, marked as a sample. A signed-in child is never given
+ * one - see `COULD_NOT_ANSWER`. The cannot-help boundary stays: anything for
+ * the teacher is handed to the teacher, never absorbed.
  */
 function replyFor(text: string): Message {
   const t = text.toLowerCase();
@@ -128,13 +177,30 @@ export function AskNevo() {
   const router = useRouter();
   const pathname = usePathname();
   const { user } = useAuth();
-  // Tolerant read: the drawer lives in the tab shell, OUTSIDE the lesson
-  // route's LessonProvider - the strict useLesson() would throw there. When a
-  // provider is present (future in-player drawer), the active lesson scopes
-  // the question.
+  // Tolerant read: the shell mounts this drawer OUTSIDE any lesson's
+  // LessonProvider, where the strict useLesson() would throw. Inside one -
+  // the lesson layout's `LessonAskNevo` - the active lesson scopes the
+  // question.
   const lessonId = useContext(LessonContext)?.lessonId ?? null;
-  // One conversation thread per mount - continuity for the backend assistant.
-  const threadId = useRef(randomId());
+  /*
+   * THE SERVER'S thread id, the same fix the teacher drawer had.
+   *
+   * This was `useRef(randomId())`: a v4 UUID minted here, sent on every turn,
+   * and never one the backend issued - so the thread it stored carried a
+   * different id and Past conversations could never be matched back to the
+   * conversation on screen. Null until an answer carries one; a first turn has
+   * no thread to continue, which is what null says.
+   */
+  const threadId = useRef<string | null>(null);
+  /*
+   * ASK NEVO'S OWN SIGNAL SESSION, `sessionType: "ask_nevo"` (1 Oct). Design
+   * D29: a child's use of Ask Nevo is signal in its own right. A bare UUID of
+   * ours, as onboarding's is - nothing on the Ask Nevo contract issues one -
+   * and no lesson id even inside a lesson: the question already tells the
+   * server which lesson, and this is not that lesson's stream.
+   */
+  const [signalSession] = useState(() => randomId());
+  const { trackEvent } = useSignals(signalSession, undefined, "ask_nevo");
   const [open, setOpen] = useState(false);
   // One per breakpoint because they are different sizes and clamp differently,
   // but they share a stored offset - only ever one of them is on screen, and a
@@ -189,19 +255,30 @@ export function AskNevo() {
     setInput("");
     recognition.current?.stop();
     setRecording(false);
+    /*
+     * BACK TO THE LIVE THREAD. A question asked from Past conversations was
+     * appended to the conversation underneath, which was hidden - so it, and
+     * its answer, simply vanished. Frame 26 keeps the composer there "to start
+     * something new", and something new is said where it can be seen.
+     */
+    setView("chat");
+    history.closeThread();
     setMessages((m) => [...m, { who: "user", text }]);
     setThinking(true);
 
-    // Live assistant first; the mock engine answers when the backend can't
-    // (no session yet, offline). The answer lands no earlier than the
-    // thinking beat, so a fast response never arrives jarringly.
+    // Live assistant first. When the backend can't answer, a signed-in child
+    // is told so and a signed-out visitor gets the mock engine. The answer
+    // lands no earlier than the thinking beat, so a fast response never
+    // arrives jarringly.
     const beat = new Promise<void>((resolve) => later(resolve, THINKING_MS));
     // Capped by ABORTING the request, not by racing it. A race leaves the
     // request in flight and throws away an answer that did arrive - so a
     // merely slow reply got replaced by a canned one. Aborting means the only
-    // thing the mock engine ever stands in for is a genuine failure.
+    // thing either fallback ever stands in for is a genuine failure.
     const controller = new AbortController();
     later(() => controller.abort(), LIVE_TIMEOUT_MS);
+    /** The day's allowance is spent: not a failure, and never shown as one. */
+    let spent = false;
     const answer = askNevoApi
       .ask(
         {
@@ -216,16 +293,65 @@ export function AskNevo() {
         },
         { signal: controller.signal },
       )
-      .catch(() => null);
+      .catch((cause) => {
+        spent = allowanceSpent(cause);
+        return null;
+      });
+    /*
+     * That the child asked, and where. Never what: their words stay out.
+     *
+     * SENT AS THE ANSWER LANDS, not as the question goes (B93, 8 Oct). The
+     * catalogue's `interactionId` and `questionCategory` are the server's and
+     * arrive with its answer, so the event waits for them - and no longer
+     * than that, not for the thinking beat. A question that got no answer
+     * has neither, and says only what is known: they are left out, not made
+     * up.
+     */
+    const asker = asUuid(user?.id);
+    void answer.then((res) =>
+      trackEvent(SIGNAL_EVENT_TYPES.ASK_NEVO_QUESTION_STUDENT, {
+        ...(res?.interactionId ? { interactionId: res.interactionId } : {}),
+        ...(asker ? { studentId: asker } : {}),
+        currentPage: pathname,
+        ...(res?.questionCategory
+          ? { questionCategory: res.questionCategory }
+          : {}),
+      }),
+    );
     void Promise.all([answer, beat]).then(([res]) => {
       if (!alive.current) return;
+      // Adopt the server's thread so the next turn continues this one. Only
+      // ever set from an answer: one without an id must not drop a thread we
+      // already hold.
+      if (res?.threadId) threadId.current = res.threadId;
+      // The server's own verdict, reported here rather than inside the state
+      // update below, which React may run twice.
+      if (res?.canHelp === false)
+        trackEvent(SIGNAL_EVENT_TYPES.ASK_NEVO_CANNOT_HELP, {
+          interactionId: res.interactionId,
+          role: "student",
+          currentPage: pathname,
+        });
       setMessages((m) => [
         ...m,
         res
-          ? { who: "nevo", text: res.answer, interactionId: res.interactionId }
-          : // Say so. A student cannot tell a canned reply from real tutoring,
-            // and they are the last person who should have to.
-            { ...replyFor(text), sample: true },
+          ? {
+              who: "nevo",
+              text: res.answer,
+              interactionId: res.interactionId,
+              // Frame 26's "Can't help · hands to teacher": the server's own
+              // answer, with the way to the teacher beside it. Strictly
+              // false, so a response that predates the field still reads as
+              // an answer rather than a hand-over.
+              teacherAction: res.canHelp === false,
+            }
+          : spent
+            ? { who: "nevo", text: ALLOWANCE_SPENT }
+            : signedIn
+              ? { who: "nevo", text: COULD_NOT_ANSWER, failed: true }
+              : // Say so. A visitor on the walkthrough cannot tell a canned
+                // reply from real tutoring either, and should not have to.
+                { ...replyFor(text), sample: true },
       ]);
       setThinking(false);
     });
@@ -299,7 +425,7 @@ export function AskNevo() {
           compact.dragging ? "cursor-grabbing" : "active:scale-[0.96]",
         )}
       >
-        <MessageCircle className="size-6" strokeWidth={2} />
+        {SPARKLE("size-6")}
       </button>
       <button
         type="button"
@@ -311,12 +437,13 @@ export function AskNevo() {
           full.dragging ? "cursor-grabbing" : "active:scale-[0.98]",
         )}
       >
-        <MessageCircle className="size-[18px]" strokeWidth={2} />
+        {SPARKLE("size-[18px]")}
         Ask Nevo
       </button>
 
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent
+          data-nevo-console="student"
           side="bottom"
           aria-describedby={undefined}
           // The `!` marks out-shout the stock data-[side=bottom] variants
@@ -324,7 +451,12 @@ export function AskNevo() {
           className="flex h-[88%] flex-col gap-0 rounded-t-[20px] border-0! bg-nevo-cream p-0 text-nevo-near-black shadow-[0_-8px_32px_rgba(0,0,0,0.16)] sm:inset-x-auto! sm:top-0! sm:right-0! sm:left-auto! sm:h-full! sm:w-[412px] sm:rounded-none! sm:shadow-[-8px_0_32px_rgba(0,0,0,0.16)] lg:w-[460px]"
         >
           {/* Header */}
-          <div className="flex h-14 shrink-0 items-center gap-2 border-b border-nevo-near-black/8 px-5">
+          {/*
+            pr-16 CLEARS THE SHEET'S CLOSE BUTTON, which sits absolutely in the
+            top-right corner. The history button was pushed to the right edge
+            underneath it, so tapping "Past conversations" closed the drawer.
+          */}
+          <div className="flex h-14 shrink-0 items-center gap-2 border-b border-nevo-near-black/8 pr-16 pl-5">
             {history.transcript || view === "history" ? (
               <button
                 type="button"
@@ -336,7 +468,9 @@ export function AskNevo() {
                     setView("chat");
                   }
                 }}
-                className="-ml-2 flex size-9 cursor-pointer items-center justify-center rounded-full text-nevo-near-black/70 transition-colors hover:bg-nevo-near-black/6"
+                // 44px to touch; -ml-3 keeps the chevron where the 36px
+                // button drew it.
+                className="-ml-3 flex size-11 cursor-pointer items-center justify-center rounded-full text-nevo-near-black/70 transition-colors hover:bg-nevo-near-black/6"
               >
                 <ChevronLeft className="size-5" strokeWidth={2} />
               </button>
@@ -358,7 +492,7 @@ export function AskNevo() {
                   history.refresh();
                   setView("history");
                 }}
-                className="ml-auto flex size-10 cursor-pointer items-center justify-center rounded-full text-nevo-near-black/60 transition-colors hover:bg-nevo-near-black/6"
+                className="ml-auto flex size-11 cursor-pointer items-center justify-center rounded-full text-nevo-near-black/60 transition-colors hover:bg-nevo-near-black/6"
               >
                 <Clock className="size-[19px]" strokeWidth={2} />
               </button>
@@ -425,8 +559,26 @@ export function AskNevo() {
                     {message.teacherAction && (
                       <button
                         type="button"
-                        onClick={() => router.push("/student/connect")}
-                        className="inline-flex h-10 cursor-pointer items-center gap-2 self-start rounded-[10px] bg-nevo-navy px-4 text-sm font-medium text-nevo-cream transition-[filter] hover:brightness-108 active:scale-[0.98]"
+                        onClick={() => {
+                          // IA 31: "Message my teacher -> closes drawer ->
+                          // Connect Tab". The drawer lives in the shell, so
+                          // without this it stayed open over Connect.
+                          const target = "/student/connect";
+                          trackEvent(SIGNAL_EVENT_TYPES.ASK_NEVO_REDIRECT_USED, {
+                            ...(message.interactionId
+                              ? { interactionId: message.interactionId }
+                              : {}),
+                            role: "student",
+                            currentPage: pathname,
+                            redirectTarget: target,
+                          });
+                          setOpen(false);
+                          // On the teacher's conversation, not just the tab
+                          // (design D109). The answer names no teacher, so
+                          // Connect finds it - see `teacherThreadId`.
+                          router.push(`${target}?to=teacher`);
+                        }}
+                        className="inline-flex h-11 cursor-pointer items-center gap-2 self-start rounded-[10px] bg-nevo-navy px-4 text-sm font-medium text-nevo-cream transition-[filter] hover:brightness-108 active:scale-[0.98]"
                       >
                         <MessageCircle className="size-4" strokeWidth={2} />
                         Message my teacher
@@ -436,11 +588,12 @@ export function AskNevo() {
                 );
                 return (
                   <div key={i} className="flex justify-start">
-                    {/* The canned reply is the one fixture in this lane that
-                        reaches a SIGNED-IN child: `askNevoApi.ask` is called
-                        for everyone, and any failure or the 6s abort answers
-                        from `replyFor()` instead. The italic line above already
-                        says so to the child, which is the half that matters -
+                    {/* The canned reply reaches a SIGNED-OUT visitor only:
+                        `askNevoApi.ask` is called for everyone, a visitor's
+                        failure or `LIVE_TIMEOUT_MS` abort is answered from
+                        `replyFor()`, and a signed-in child's gets
+                        `COULD_NOT_ANSWER` instead. The italic line above
+                        says so to the visitor, which is the half that matters -
                         but only a person can read it, and the end-to-end run
                         meant to catch a console falling back to invented
                         content reads the mark. Marked ONLY when it really is a
@@ -604,12 +757,14 @@ function ThreadList({
     );
   }
 
+  // Frame 26, state 4 - its words and its centring.
   if (threads.length === 0) {
     return (
-      <p className="pt-6 text-center text-sm leading-[1.5] text-nevo-near-black/60">
-        Nothing here yet. Anything you ask will show up so you can look back at
-        it.
-      </p>
+      <div className="flex h-full min-h-[300px] items-center justify-center px-6 text-center">
+        <p className="max-w-[260px] text-[15px] leading-[1.6] text-pretty text-nevo-near-black/55">
+          Your past conversations with Ask Nevo will appear here.
+        </p>
+      </div>
     );
   }
 

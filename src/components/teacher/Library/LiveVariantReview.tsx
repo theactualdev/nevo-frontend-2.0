@@ -99,9 +99,12 @@ function Para({ children }: { children: React.ReactNode }) {
 function VariantBody({
   tab,
   segment,
+  approved,
 }: {
   tab: VariantTab;
   segment: LessonSegment;
+  /** This section has been approved, here or before this screen opened. */
+  approved: boolean;
 }) {
   if (tab === "Text") {
     const v = segment.textVariant;
@@ -150,12 +153,20 @@ function VariantBody({
         )}
         {v.caption && <Para>{v.caption}</Para>}
         {/* The frame draws no sign-off line, but "reviewed by nobody" is the
-            thing a reviewer most wants to know on a review screen. */}
-        <p className="text-[12.5px] text-nevo-near-black/55">
-          {v.reviewedBy
-            ? `Signed off by ${v.reviewedBy}.`
-            : "No one has signed this picture off yet."}
-        </p>
+            thing a reviewer most wants to know on a review screen.
+
+            NOT ONCE IT IS APPROVED (T58). The segment this reads is the one
+            the page loaded with, so a teacher who had just approved the
+            section was told, under their own approval, that nobody had
+            signed the picture off. The name is the server's to give; until
+            it does, an approved section claims nothing either way. */}
+        {(v.reviewedBy || !approved) && (
+          <p className="text-[12.5px] text-nevo-near-black/55">
+            {v.reviewedBy
+              ? `Signed off by ${v.reviewedBy}.`
+              : "No one has signed this picture off yet."}
+          </p>
+        )}
       </div>
     );
   }
@@ -218,7 +229,7 @@ function VariantBody({
             {v.options.map((o, i) => (
               <li
                 key={`${String(o)}-${i}`}
-                className="rounded-[8px] bg-nevo-cream px-3 py-2 text-[13.5px] leading-[1.5] text-nevo-near-black/72"
+                className="rounded-[12px] bg-nevo-cream px-3 py-2 text-[13.5px] leading-[1.5] text-nevo-near-black/72"
               >
                 {String(o)}
               </li>
@@ -263,7 +274,7 @@ function VariantBody({
           {v.steps.map((step, i) => (
             <li
               key={step.stepId}
-              className="flex gap-3 rounded-[8px] bg-nevo-cream px-3 py-2.5"
+              className="flex gap-3 rounded-[12px] bg-nevo-cream px-3 py-2.5"
             >
               <span className="w-5 shrink-0 pt-px text-[12.5px] text-nevo-near-black/45 tabular-nums">
                 {/* The server's own numbering, not the row index: a variant
@@ -336,6 +347,19 @@ export function LiveVariantReview({
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * WHETHER THE LESSON CAN NOW GO TO A CLASS - the server's `readyToAssign`,
+   * read once the last section is approved. Null until it has been read.
+   *
+   * "Every section approved. This lesson can be assigned." was said on the
+   * section count alone. Sections are half of it: a key point Nevo could not
+   * ground holds a lesson back too, and that half is only in the review read.
+   * A teacher told "can be assigned" went back to a greyed-out Assign.
+   */
+  const [assignable, setAssignable] = useState<{
+    ready: boolean;
+    keyPoints: number;
+  } | null>(null);
 
   async function approve() {
     if (approved || busy) return;
@@ -345,6 +369,16 @@ export function LiveVariantReview({
       const res = await lessonsApi.approveSegment(lessonId, segment.id);
       setApproved(true);
       setCounts({ done: res.approvedSegmentCount, total: res.segmentCount });
+      if (res.approvedSegmentCount === res.segmentCount) {
+        // Best-effort: unknown says less, never more. A failed read leaves
+        // "Every section approved." standing alone, which is still true.
+        void lessonsApi
+          .review(lessonId)
+          .then((r) =>
+            setAssignable({ ready: r.readyToAssign, keyPoints: r.outstandingCount }),
+          )
+          .catch(() => {});
+      }
     } catch {
       // Nothing is approved until the server says so. Claiming otherwise is
       // the shape of bug this console has shipped before.
@@ -358,7 +392,8 @@ export function LiveVariantReview({
 
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
-      <div className="mx-auto max-w-[680px] xl:max-w-[820px]">
+      {/* No cap of its own at tablet - it conforms to its host (C16d, 8 Oct). */}
+      <div className="mx-auto xl:max-w-[820px]">
         <Link
           href={`/teacher/lessons/${lessonId}`}
           className="inline-flex cursor-pointer items-center gap-[7px] text-[13px] text-nevo-near-black/55 transition-transform active:scale-[0.99] xl:text-[13.5px]"
@@ -379,16 +414,16 @@ export function LiveVariantReview({
           Lesson Library · Variant review
         </Link>
 
-        <h2 className="mt-0.5 text-[22px] font-semibold tracking-[-0.018em] text-nevo-near-black xl:text-[26px]">
+        <h1 className="mt-0.5 text-[22px] font-semibold tracking-[-0.018em] text-nevo-near-black xl:text-[26px]">
           {`${lessonTitle} · Section ${sectionIndex}`}
-        </h2>
+        </h1>
         {segment.title && (
           <p className="mt-1 text-[14px] text-nevo-near-black/60">
             {segment.title}
           </p>
         )}
 
-        <p className="mt-4 text-[13px] leading-[1.6] text-nevo-near-black/60 italic">
+        <p className="mt-4 text-[13px] leading-[1.6] text-nevo-near-black/60 italic xl:mt-[18px]">
           {VARIANT_ORIENTATION}
         </p>
 
@@ -411,7 +446,7 @@ export function LiveVariantReview({
         )}
 
         <div
-          className="mt-4 flex flex-wrap gap-2 xl:flex-nowrap"
+          className="mt-4 flex gap-1.5 xl:gap-2"
           role="tablist"
           aria-label="Lesson variants"
         >
@@ -423,7 +458,7 @@ export function LiveVariantReview({
               aria-selected={tab === t}
               onClick={() => setTab(t)}
               className={cn(
-                "inline-flex h-9 cursor-pointer items-center rounded-[8px] px-[18px] text-[13px] transition-[background-color,transform] active:scale-[0.99]",
+                "inline-flex h-[38px] flex-1 basis-0 cursor-pointer items-center justify-center rounded-[10px] px-2 text-[12.5px] transition-[background-color,transform] active:scale-[0.99] xl:h-9 xl:flex-none xl:basis-auto xl:justify-start xl:px-[18px] xl:text-[13px]",
                 tab === t
                   ? "bg-nevo-navy font-semibold text-nevo-cream"
                   : "bg-nevo-cream-elevated font-medium text-nevo-near-black/70 hover:bg-nevo-navy/8",
@@ -439,7 +474,7 @@ export function LiveVariantReview({
             {`${tab} variant`}
           </h3>
           <div className="mt-3">
-            <VariantBody tab={tab} segment={segment} />
+            <VariantBody tab={tab} segment={segment} approved={approved} />
           </div>
         </div>
 
@@ -468,7 +503,7 @@ export function LiveVariantReview({
               type="button"
               onClick={approve}
               disabled={busy}
-              className="inline-flex h-11 cursor-pointer items-center rounded-[10px] bg-nevo-navy px-5 text-sm font-semibold text-nevo-cream transition-[filter] hover:brightness-93 disabled:cursor-default disabled:opacity-60"
+              className="inline-flex h-[42px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[18px] text-[13.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93 disabled:cursor-default disabled:opacity-60 xl:h-[46px] xl:px-[22px] xl:text-[14.5px]"
             >
               {busy ? "Approving…" : "Approve this section"}
             </button>
@@ -478,15 +513,64 @@ export function LiveVariantReview({
         {counts && (
           <p className="mt-2.5 text-right text-[13px] text-nevo-near-black/60">
             {counts.done === counts.total
-              ? "Every section approved. This lesson can be assigned."
+              ? assignable?.ready
+                ? "Every section approved. This lesson can be assigned."
+                : assignable && assignable.keyPoints > 0
+                  ? /* The lesson page's own count, in its own words. */
+                    `Every section approved. ${assignable.keyPoints} ${assignable.keyPoints === 1 ? "key point" : "key points"} waiting for you.`
+                  : "Every section approved."
               : `${counts.done} of ${counts.total} sections approved.`}
           </p>
+        )}
+        {/* C07b's end state carries its next step: "Lesson approved", then
+            "Assign to classes". Only when the server says it can go - the
+            line above is the reason; this is the way there. */}
+        {counts && counts.done === counts.total && assignable?.ready && (
+          <div className="mt-3 flex justify-end">
+            <Link
+              href={`/teacher/lessons/assign?lesson=${lessonId}`}
+              className="inline-flex h-[42px] cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[18px] text-[13.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93 xl:h-[46px] xl:px-[22px] xl:text-[14.5px]"
+            >
+              Assign to classes
+            </Link>
+          </div>
         )}
 
         {error && (
           <p className="mt-2.5 text-right text-[13px] leading-[1.5] text-nevo-near-black/72">
             {error}
           </p>
+        )}
+
+        {/*
+          C07b'S SECTION PILLS (T54). Each section was its own URL with no way
+          to the next one but back to the lesson and down the list - six
+          sections, six round trips. The frame draws a pill per section under
+          the review: this one filled, the ones before it tinted, the rest
+          plain. Links rather than buttons, because each is still its own
+          address and the back button should walk them. "Section", as this
+          screen says everywhere else, where the frame says "Segment".
+        */}
+        {segmentCount !== undefined && segmentCount > 1 && (
+          <nav aria-label="Sections" className="mt-4 flex flex-wrap gap-1.5 xl:gap-2">
+            {Array.from({ length: segmentCount }, (_, i) => i + 1).map((n) => (
+              <Link
+                key={n}
+                href={`/teacher/lessons/${lessonId}/variants?section=${n}`}
+                aria-current={n === sectionIndex ? "page" : undefined}
+                className={cn(
+                  "inline-flex h-[30px] cursor-pointer items-center rounded-full px-3 text-[11.5px] transition-[filter] xl:h-8 xl:px-3.5 xl:text-[12px]",
+                  n === sectionIndex
+                    ? "bg-nevo-navy font-semibold text-nevo-cream"
+                    : n < sectionIndex
+                      ? "bg-nevo-violet/12 font-medium text-nevo-navy hover:brightness-95"
+                      : "bg-nevo-cream-elevated font-normal text-nevo-near-black/70 hover:brightness-95",
+                )}
+              >
+                {`Section ${n}`}
+              </Link>
+            ))}
+          </nav>
         )}
       </div>
     </div>

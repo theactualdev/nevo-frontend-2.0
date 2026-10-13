@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, Delete } from "lucide-react";
+import { Delete } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type KeyboardLayout = "qwerty" | "pad";
+export type KeyboardLayout = "qwerty" | "pad" | "calc";
 export type KeyboardComposer = "single" | "multi";
 
 /** Handoff: dock the keyboard behind focus state, debouncing blur ~120ms. */
@@ -46,11 +46,13 @@ export function useNevoKeyboardDock() {
 /**
  * Nevo Keyboard (design frame · "Nevo Keyboard") — the branded on-screen keyboard
  * used wherever the app suppresses the native OS keyboard on web (Product Arch
- * A.12): onboarding text entry, PIN, and the calc numeric answer. Two layouts —
- * `pad` (3×4 numeric) and `qwerty` — sized for mobile (default) and tablet (md+).
+ * A.12): onboarding text entry, PIN, and the calculation's number entry. Three
+ * layouts — `pad` (3×4 numeric), `qwerty`, and `calc` (D150, below) — sized
+ * for mobile (default) and tablet (md+).
  *
  * Presentational only: it emits key presses; the host owns the field state, so
- * the same physical-keyboard path keeps working on desktop (where this is hidden).
+ * the same physical-keyboard path keeps working on desktop (where every layout
+ * but `calc` is hidden).
  * Chrome tones (`#e4ddcc` tray, `#d8d0be` modifier keys) are keyboard-specific,
  * not DS surface tokens.
  */
@@ -92,13 +94,19 @@ export function NevoKeyboard({
   onKey,
   onBackspace,
   onReturn,
-  onDone,
   composer,
   value,
   placeholder = "Type here",
+  uppercase = false,
   className,
-}: {
-  layout: KeyboardLayout;
+}: (
+  | { layout: Exclude<KeyboardLayout, "calc">; onBackspace: () => void }
+  /**
+   * The calculation pad has no delete key: "Delete sits at the field" (D150),
+   * so the host's field deletes, and nothing here can be wired to do it.
+   */
+  | { layout: "calc"; onBackspace?: never }
+) & {
   /**
    * How the keys sit on the screen.
    *
@@ -115,22 +123,18 @@ export function NevoKeyboard({
    * form, and the type says so.
    */
   presentation?: KeyboardPresentation;
-  /** A character key was pressed (letter, digit, or " "). */
+  /** A character key was pressed (letter, digit, "-", "." or " "). */
   onKey: (char: string) => void;
-  onBackspace: () => void;
-  /** The accent "return" key (qwerty only). In `multi` it inserts a newline. */
-  onReturn?: () => void;
   /**
-   * PAD ONLY: a navy check key in the grid's empty bottom-left corner, for
-   * "that's all of it".
+   * The accent "return" key (qwerty only). In `multi` it inserts a newline.
    *
-   * Separate from `onReturn` on purpose. A pad has never drawn a return key,
-   * and callers already pass `onReturn` to one expecting nothing to appear -
-   * the full sign-in does, and has its own Sign in button. This key exists for
-   * the one screen that submits by itself and sometimes cannot: the one-tap
-   * unlock, when a child's PIN is not the length the device remembers.
+   * A PAD HAS NO RETURN OR DONE KEY, and its bottom-left corner stays blank as
+   * the keyboard frame draws it (D54). A check key there served the one-tap
+   * unlock when a child's PIN might not be the length the device remembered;
+   * every PIN is four now and the boxes submit themselves on the fourth digit
+   * (D58), so it had nothing left to do.
    */
-  onDone?: () => void;
+  onReturn?: () => void;
   /**
    * Attach a composer field above the tray (Nevo Keyboard frame) — for fields
    * the docked keyboard would cover, and `multi` for notes. Displays `value`.
@@ -140,11 +144,45 @@ export function NevoKeyboard({
   value?: string;
   /** Composer placeholder while `value` is empty. */
   placeholder?: string;
+  /**
+   * qwerty only: a field that is capitals whatever is typed - a school code,
+   * a Student ID. The letters show and send as capitals and stay that way,
+   * with no shift key: the one-shot shift dropped the tray to lowercase after
+   * the first letter while the field kept upper-casing what arrived.
+   */
+  uppercase?: boolean;
   className?: string;
 }) {
-  // qwerty-only modes: capitalisation + a digits/symbols plane.
+  /*
+   * qwerty-only modes: capitalisation + a digits/symbols plane.
+   *
+   * SHIFT IS ONE-SHOT, armed for the first letter. It started on and stayed
+   * on, so every name and message arrived in capitals - "AMARA" - unless a
+   * child knew to find the shift key after the first letter. A phone's
+   * keyboard capitalises the first letter and drops back by itself, and so
+   * does this one now; tapping shift arms it again for one more letter.
+   */
   const [caps, setCaps] = useState(true);
   const [numeric, setNumeric] = useState(false);
+
+  if (layout === "calc") {
+    /*
+     * SHOWN WHATEVER THE POINTER, unlike every other layout. D150 draws this
+     * pad at desktop as well as on a phone and a tablet, at its own sizes, so
+     * it does not take the `pointer: fine` gate. A laptop's own keys still
+     * type into the host's field; the pad is there beside them.
+     */
+    return (
+      <div
+        role="group"
+        aria-label="On-screen keyboard"
+        onMouseDown={(e) => e.preventDefault()}
+        className={cn("flex flex-col", className)}
+      >
+        <CalcLayout onKey={onKey} />
+      </div>
+    );
+  }
 
   const isMulti = composer === "multi";
   const hasVal = Boolean(value && value.length > 0);
@@ -166,21 +204,19 @@ export function NevoKeyboard({
       )}
     >
       {layout === "pad" ? (
-        <PadLayout
-          block={block}
-          onKey={onKey}
-          onBackspace={onBackspace}
-          onDone={onDone}
-        />
+        <PadLayout block={block} onKey={onKey} onBackspace={onBackspace} />
       ) : (
         <QwertyLayout
-          caps={caps}
+          caps={uppercase || caps}
           numeric={numeric}
           returnLabel={isMulti ? "return ↵" : "return"}
           onKey={onKey}
           onBackspace={onBackspace}
           onReturn={onReturn}
-          onToggleCaps={() => setCaps((c) => !c)}
+          onToggleCaps={uppercase ? undefined : () => setCaps((c) => !c)}
+          onShiftSpent={() => {
+            if (!uppercase) setCaps(false);
+          }}
           onToggleNumeric={() => setNumeric((n) => !n)}
         />
       )}
@@ -324,13 +360,11 @@ function PadLayout({
   block,
   onKey,
   onBackspace,
-  onDone,
 }: {
   /** Content-sized keys rather than a full-width tray. See `presentation`. */
   block: boolean;
   onKey: (d: string) => void;
   onBackspace: () => void;
-  onDone?: () => void;
 }) {
   const grid = [
     ["1", "2", "3"],
@@ -358,22 +392,6 @@ function PadLayout({
       )}
     >
       {grid.flat().map((d, i) => {
-        if (d === "" && onDone) {
-          return (
-            <button
-              key={i}
-              type="button"
-              aria-label="Done"
-              onClick={onDone}
-              className={cn(
-                block ? blockKey : KEY_BASE,
-                "bg-nevo-navy text-nevo-cream",
-              )}
-            >
-              <Check className="size-5" strokeWidth={2.4} />
-            </button>
-          );
-        }
         if (d === "") return <span key={i} aria-hidden />;
         if (d === "⌫") {
           return (
@@ -409,6 +427,91 @@ function PadLayout({
   );
 }
 
+/* ── calc (D150) ────────────────────────────────────────────────────────── */
+
+/**
+ * The calculation keypad (D150, "Nevo Calc Keypad Frame"): "The Nevo pad,
+ * with minus and decimal point." The device's own number keyboard cannot be
+ * relied on - an iPhone's has no minus key, so a child doing subtraction on
+ * one is simply stuck.
+ *
+ * "An input surface, not a calculator": the digits, and below them a minus
+ * sign and a point in the modifier tone. No equals, no operators, no delete
+ * key - delete sits at the field. The PIN pad (`pad`) never gains these keys.
+ *
+ * Sized as the frame's three variants, at the solver's own breakpoints: a
+ * full-width tray on a phone, then 460px (tablet) and 420px (desktop) with
+ * rounded top corners. Keys do not move when pressed; the frame draws none.
+ *
+ * COMPACT WHERE THE SCREEN IS SHORT. Docked under the lesson's arrows, the
+ * frame's tray left a short phone - or any screen at a larger text size -
+ * too little room above it for the question, the field and Check. There the
+ * keys are 44px, the least a child's finger is given anywhere, with closer
+ * rows; the tray is otherwise as drawn. When is globals.css's to say
+ * (`.nevo-calc-pad`), as the custom properties these read.
+ */
+const CALC_ROWS = [
+  ["1", "2", "3"],
+  ["4", "5", "6"],
+  ["7", "8", "9"],
+];
+
+const CALC_KEY =
+  "flex h-[var(--calc-key,56px)] min-w-0 flex-1 cursor-pointer items-center justify-center rounded-lg text-nevo-near-black select-none sm:h-[var(--calc-key,64px)] lg:h-[var(--calc-key,62px)]";
+const CALC_DIGIT = cn(
+  CALC_KEY,
+  "bg-nevo-cream text-[24px] font-normal shadow-[0_1px_1px_rgba(43,43,47,0.28)] sm:text-[28px] lg:text-[27px]",
+);
+const CALC_SIGN = cn(
+  CALC_KEY,
+  "bg-[#d8d0be] text-[26px] font-medium shadow-[0_1px_1px_rgba(43,43,47,0.22)] sm:text-[30px] lg:text-[29px]",
+);
+const CALC_ROW = "flex justify-center gap-2 sm:gap-2.5";
+
+function CalcLayout({ onKey }: { onKey: (c: string) => void }) {
+  return (
+    <div className="nevo-calc-pad mx-auto flex w-full flex-col gap-[var(--calc-gap,10px)] border-t border-nevo-near-black/8 bg-[#e4ddcc] px-2 pt-[var(--calc-pad-t,8px)] pb-[var(--calc-pad-b,14px)] sm:mb-2 sm:max-w-[460px] sm:gap-[var(--calc-gap,12px)] sm:rounded-t-[14px] sm:px-3.5 sm:pt-[var(--calc-pad-t,14px)] sm:pb-[var(--calc-pad-b,20px)] lg:max-w-[420px]">
+      {CALC_ROWS.map((row) => (
+        <div key={row[0]} className={CALC_ROW}>
+          {row.map((d) => (
+            <button
+              key={d}
+              type="button"
+              onClick={() => onKey(d)}
+              className={CALC_DIGIT}
+            >
+              {d}
+            </button>
+          ))}
+        </div>
+      ))}
+      <div className={CALC_ROW}>
+        {/* Drawn as the minus sign; what it types is the hyphen a stored
+            answer is written with. */}
+        <button
+          type="button"
+          aria-label="Minus sign"
+          onClick={() => onKey("-")}
+          className={CALC_SIGN}
+        >
+          {"\u2212"}
+        </button>
+        <button type="button" onClick={() => onKey("0")} className={CALC_DIGIT}>
+          0
+        </button>
+        <button
+          type="button"
+          aria-label="Point"
+          onClick={() => onKey(".")}
+          className={CALC_SIGN}
+        >
+          .
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ── qwerty ─────────────────────────────────────────────────────────────── */
 
 const NUM_ROWS = [
@@ -425,6 +528,7 @@ function QwertyLayout({
   onBackspace,
   onReturn,
   onToggleCaps,
+  onShiftSpent,
   onToggleNumeric,
 }: {
   caps: boolean;
@@ -433,10 +537,16 @@ function QwertyLayout({
   onKey: (c: string) => void;
   onBackspace: () => void;
   onReturn?: () => void;
-  onToggleCaps: () => void;
+  /** Absent for an upper-case field, which has no shift key. */
+  onToggleCaps?: () => void;
+  /** A capital was typed, so the one-shot shift drops back to lowercase. */
+  onShiftSpent: () => void;
   onToggleNumeric: () => void;
 }) {
-  const emit = (c: string) => onKey(caps ? c.toUpperCase() : c.toLowerCase());
+  const emit = (c: string) => {
+    onKey(caps ? c.toUpperCase() : c.toLowerCase());
+    if (caps) onShiftSpent();
+  };
 
   const backspace = (
     <button
@@ -466,13 +576,13 @@ function QwertyLayout({
             <Key key={c} label={c} onClick={() => onKey(c)} />
           ))}
         </div>
+        {/*
+          NO "#+=" KEY. It offered more symbols, there is no symbols page in
+          the frame or in this component, and it called the SHIFT toggle - so
+          tapping it changed nothing on this page and quietly flipped the case
+          of the letters typed after it.
+        */}
         <div className={ROW}>
-          <ModKey
-            label="#+="
-            onClick={onToggleCaps}
-            ariaLabel="More symbols"
-            grow={1.5}
-          />
           {NUM_ROWS[2].map((c) => (
             <Key key={c} label={c} onClick={() => onKey(c)} />
           ))}
@@ -507,13 +617,15 @@ function QwertyLayout({
         ))}
       </div>
       <div className={ROW}>
-        <ModKey
-          onClick={onToggleCaps}
-          grow={1.5}
-          ariaLabel={caps ? "Lowercase" : "Uppercase"}
-        >
-          <span className={cn(!caps && "opacity-45")}>⇧</span>
-        </ModKey>
+        {onToggleCaps && (
+          <ModKey
+            onClick={onToggleCaps}
+            grow={1.5}
+            ariaLabel={caps ? "Lowercase" : "Uppercase"}
+          >
+            <span className={cn(!caps && "opacity-45")}>⇧</span>
+          </ModKey>
+        )}
         {r3.map((c) => (
           <Key key={c} label={show(c)} onClick={() => emit(c)} />
         ))}

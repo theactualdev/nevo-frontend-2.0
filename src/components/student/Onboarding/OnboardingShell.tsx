@@ -5,41 +5,39 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import { ProgressBar } from "@/components/shared";
 
 /**
- * Shared shell for onboarding Steps 1–3 (UI/UX spec B.2): a thin progress line,
- * a back-chevron + wordmark header, and a centered single-column content area.
+ * The shell for 05 Entry and 03 Teacher Join (UI/UX spec B.2): a back-chevron
+ * + wordmark header and a single-column content area centred both ways.
  * Full-viewport, no chrome, solid cream.
  *
- * `fill` makes the content area a fixed-height flex column (no page scroll) so a
- * child can own its own scroll region — e.g. Step 3's pinned search + scrolling
- * class list.
+ * NO PROGRESS LINE. It drew "step 2 of 3" across three steps, and two of them
+ * were deleted on 30 Sep (SCRUM-208). The entry frame draws none, and a line
+ * one step long measures nothing.
+ *
+ * `lifted` is the frame's keyboard-up layout: while the on-screen keyboard is
+ * docked, the content starts at the top so the field being typed into and the
+ * button stay above the tray. Touch only - a fine pointer has a real keyboard
+ * and never shows the tray, so there is nothing to make room for.
+ *
+ * `footer` is where that tray docks, after the content and in the flow, so the
+ * page grows by its height rather than hiding anything under it.
  */
 export function OnboardingShell({
-  step,
-  totalSteps = 3,
   backHref,
-  fill = false,
+  lifted = false,
+  footer,
   children,
 }: {
-  step: number;
-  totalSteps?: number;
   backHref: string;
-  fill?: boolean;
+  lifted?: boolean;
+  footer?: ReactNode;
   children: ReactNode;
 }) {
   const router = useRouter();
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-nevo-cream text-nevo-near-black">
-      {/* Progress — position `step` of `totalSteps` */}
-      <ProgressBar
-        value={step / totalSteps}
-        className="shrink-0"
-        aria-label={`Step ${step} of ${totalSteps}`}
-      />
-
       {/* Header: back + wordmark */}
       <header className="flex h-14 shrink-0 items-center px-4 sm:h-16 sm:px-5 lg:px-6">
         <button
@@ -50,31 +48,40 @@ export function OnboardingShell({
         >
           <ChevronLeft className="size-6" strokeWidth={2} />
         </button>
+        {/*
+          The entry frame's `logoH`: 16px on a phone, 18 on a tablet and 19
+          on a desktop, set as the profiling shell sets its wordmark. It was
+          20, 22 and 24.
+        */}
         <Image
           src="/brand/nevo-wordmark.png"
           alt="Nevo"
           width={344}
           height={116}
-          className="ml-1.5 h-5 w-auto sm:h-[22px] lg:h-6"
+          className="ml-1.5 h-4 w-auto sm:h-[18px] lg:h-[19px]"
         />
       </header>
 
-      {/* Content — single-column, packed to the top of the remaining space */}
-      <div
-        className={cn(
-          "flex flex-1 flex-col items-center px-6 pb-6 sm:pb-10",
-          fill ? "min-h-0 overflow-hidden" : "overflow-y-auto",
-        )}
-      >
+      {/*
+        Content - single column, centred both ways in the space under the
+        header (QA, 30 Sep). `my-auto`, not `justify-center`: auto margins
+        drop to zero when the content is taller than the space, so a long step
+        on a short screen scrolls from its top instead of losing it above the
+        fold. The column is the frame's `innerMax`: 440px on a tablet, 420px
+        on a desktop.
+      */}
+      <div className="flex flex-1 flex-col items-center overflow-y-auto px-6 pb-6 sm:pb-10">
         <div
           className={cn(
-            "flex w-full max-w-full flex-col sm:max-w-[440px]",
-            fill && "min-h-0 flex-1",
+            "my-auto flex w-full max-w-full flex-col sm:max-w-[440px] lg:max-w-[420px]",
+            lifted && "[@media(pointer:coarse)]:my-0 [@media(pointer:coarse)]:pt-4",
           )}
         >
           {children}
         </div>
       </div>
+
+      {footer}
     </div>
   );
 }

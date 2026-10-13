@@ -55,6 +55,9 @@ export function BreakScreen({
   onFeelings?: (feelings: string[]) => void;
 }) {
   const [chosen, setChosen] = useState<ReadonlySet<string>>(() => new Set());
+  // A picture that will not load - a break taken offline - is left out,
+  // never drawn as a broken box with its alt text in it.
+  const [artFailed, setArtFailed] = useState(false);
   // Stamped in the mount effect (render must stay pure).
   const startedAt = useRef(0);
   const started = useRef(false);
@@ -68,12 +71,13 @@ export function BreakScreen({
   useEffect(() => {
     if (started.current) return; // StrictMode double-invoke guard
     started.current = true;
-    startedAt.current = Date.now();
+    // Monotonic (rule 4): the break's length is sent to the engine.
+    startedAt.current = performance.now();
     onStartRef.current?.();
   }, []);
 
   const finish = () => {
-    onEnd?.(Date.now() - startedAt.current);
+    onEnd?.(Math.max(0, Math.round(performance.now() - startedAt.current)));
     onDone();
   };
 
@@ -82,7 +86,7 @@ export function BreakScreen({
   useEffect(() => {
     if (type !== BREAK_TYPES.MICRO) return;
     const t = setTimeout(() => {
-      onEnd?.(Date.now() - startedAt.current);
+      onEnd?.(Math.max(0, Math.round(performance.now() - startedAt.current)));
       onDoneRef.current();
     }, MICRO_HOLD_MS);
     return () => clearTimeout(t);
@@ -102,18 +106,21 @@ export function BreakScreen({
     "flex h-[52px] w-full cursor-pointer items-center justify-center rounded-[10px] bg-nevo-navy text-base font-medium text-nevo-cream transition-[filter,transform] hover:brightness-106 active:scale-[0.98]";
 
   return (
-    <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-nevo-cream px-10 text-center text-nevo-near-black motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-500">
+    <div className="flex min-h-[calc(100dvh/var(--nevo-text-zoom,1))] flex-col items-center justify-center bg-nevo-cream px-10 text-center text-nevo-near-black motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-500">
       {type === BREAK_TYPES.MICRO && (
         <>
-          <IllustrationWrapper
-            src="/illustrations/break-micro.png"
-            alt="A figure sitting calmly with eyes closed"
-            width={1254}
-            height={1254}
-            priority
-            motion="breathe"
-            className="w-[200px] sm:w-[250px]"
-          />
+          {!artFailed && (
+            <IllustrationWrapper
+              src="/illustrations/break-micro.png"
+              alt="A figure sitting calmly with eyes closed"
+              width={1254}
+              height={1254}
+              priority
+              motion="breathe"
+              className="w-[200px] sm:w-[250px]"
+              onError={() => setArtFailed(true)}
+            />
+          )}
           <h2 className="mt-8 text-xl font-medium sm:mt-9 sm:text-2xl">
             Take a breath
           </h2>
@@ -122,14 +129,17 @@ export function BreakScreen({
 
       {type === BREAK_TYPES.MOVEMENT && (
         <>
-          <IllustrationWrapper
-            src="/illustrations/break-movement.png"
-            alt="A figure stretching arms overhead"
-            width={1024}
-            height={1536}
-            priority
-            className="h-[250px] w-auto sm:h-[300px]"
-          />
+          {!artFailed && (
+            <IllustrationWrapper
+              src="/illustrations/break-movement.png"
+              alt="A figure stretching arms overhead"
+              width={1024}
+              height={1536}
+              priority
+              className="h-[250px] w-auto sm:h-[300px]"
+              onError={() => setArtFailed(true)}
+            />
+          )}
           <p className="mt-7 max-w-[280px] text-base leading-[1.5] sm:mt-9 sm:max-w-[360px] sm:text-[17px]">
             Stand up and stretch your arms up high, then reach for your toes.
           </p>
@@ -150,14 +160,17 @@ export function BreakScreen({
 
       {type === BREAK_TYPES.CONSOLIDATION && (
         <>
-          <IllustrationWrapper
-            src="/illustrations/break-consolidation.png"
-            alt="A figure thinking, hand resting on chin"
-            width={1024}
-            height={1536}
-            priority
-            className="mb-6 h-[150px] w-auto sm:mb-7 sm:h-[190px]"
-          />
+          {!artFailed && (
+            <IllustrationWrapper
+              src="/illustrations/break-consolidation.png"
+              alt="A figure thinking, hand resting on chin"
+              width={1024}
+              height={1536}
+              priority
+              className="mb-6 h-[150px] w-auto sm:mb-7 sm:h-[190px]"
+              onError={() => setArtFailed(true)}
+            />
+          )}
           <h2 className="max-w-[300px] text-xl leading-[1.4] font-medium sm:max-w-[440px] sm:text-2xl">
             How are you feeling right now?
           </h2>
@@ -200,14 +213,17 @@ export function BreakScreen({
 
       {type === BREAK_TYPES.FULL && (
         <>
-          <IllustrationWrapper
-            src="/illustrations/break-full.png"
-            alt="A figure lying down resting"
-            width={1536}
-            height={1024}
-            priority
-            className="w-[280px] sm:w-[340px]"
-          />
+          {!artFailed && (
+            <IllustrationWrapper
+              src="/illustrations/break-full.png"
+              alt="A figure lying down resting"
+              width={1536}
+              height={1024}
+              priority
+              className="w-[280px] sm:w-[340px]"
+              onError={() => setArtFailed(true)}
+            />
+          )}
           <p className="mt-8 max-w-[280px] text-base leading-[1.55] sm:mt-9 sm:max-w-[380px] sm:text-[17px]">
             Go and take a proper rest. Have a drink of water. We&apos;ll be
             right here when you&apos;re ready.

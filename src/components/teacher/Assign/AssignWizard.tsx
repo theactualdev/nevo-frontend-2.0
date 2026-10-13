@@ -9,8 +9,11 @@ import { useLessonLibrary } from "@/hooks/useLessonLibrary";
 import { useStudentDirectory } from "@/hooks/useStudentDirectory";
 import { useHasSession } from "@/hooks/useHasSession";
 import { useSystemMessages } from "@/components/shared/SystemMessages";
+import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
 import { useTeacherClasses } from "@/hooks/useTeacherClasses";
 import { cn } from "@/lib/utils";
+import { dayOf, longDay, soonestOpening } from "./pastDate";
+import { MaybeSample } from "@/components/shared/SampleRegion";
 
 /**
  * C07i Lesson Assignment: four steps, each a direct question - conversational
@@ -135,7 +138,7 @@ function CheckCard({
       onClick={onClick}
       aria-pressed={on}
       className={cn(
-        "flex w-full cursor-pointer items-center gap-3.5 rounded-xl bg-nevo-cream-elevated px-[18px] py-4 text-left shadow-[0_2px_8px_rgba(0,0,0,0.06)]",
+        "flex w-full cursor-pointer items-center gap-3.5 rounded-[12px] bg-nevo-cream-elevated px-[18px] py-4 text-left shadow-[0_2px_8px_rgba(0,0,0,0.06)]",
         on && "outline-2 -outline-offset-2 outline-nevo-navy",
       )}
     >
@@ -181,11 +184,11 @@ function Toggle({
 }) {
   const seg = (on: boolean) =>
     cn(
-      "flex-1 cursor-pointer rounded-lg p-3 text-center text-[15px] font-medium transition-colors",
+      "flex-1 cursor-pointer rounded-[10px] p-3 text-center text-[15px] font-medium transition-colors",
       on ? "bg-nevo-navy text-nevo-cream" : "text-nevo-near-black/60",
     );
   return (
-    <div className="mt-[22px] flex rounded-[11px] bg-nevo-navy/8 p-1">
+    <div className="mt-[22px] flex rounded-[12px] bg-nevo-navy/8 p-1">
       <button
         type="button"
         onClick={() => onChange("left")}
@@ -224,14 +227,22 @@ function withNextStep(message: string): string {
   return `${stopped} Open them from your Library and check them.`;
 }
 
-export function AssignWizard({ preselect }: { preselect?: string }) {
+export function AssignWizard({
+  preselect,
+  preselectClass,
+}: {
+  preselect?: string;
+  /** `?class=` - the class the teacher came from, when they came from one. */
+  preselectClass?: string;
+}) {
   const router = useRouter();
   const [step, setStep] = useState<Step>(1);
   const [chosen, setChosen] = useState<Set<string>>(
     () => new Set(preselect ? [preselect] : []),
   );
   const [who, setWho] = useState<"left" | "right">("left"); // left = whole class
-  const [classes, setClasses] = useState<Set<string>>(new Set());
+  /** The teacher's own class choice - null until they touch the list (see `classes`). */
+  const [classChoice, setClassChoice] = useState<Set<string> | null>(null);
   // Recipients are the teacher's real assignments when a session has them.
   /*
    * `loading` WAS DROPPED HERE, and that was the hole.
@@ -279,9 +290,20 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
   // Empty until "Schedule for later" is chosen - see the note above.
   const [date, setDate] = useState("");
   const [time, setTime] = useState("08:00");
+  /**
+   * C07i's "Chosen date has passed": the day to offer instead, or null while
+   * the chosen moment is still ahead. Read in the handlers that change the
+   * date or time and again on the way out - never during render, for the same
+   * reason the default date is not (see the note above).
+   */
+  const [soonest, setSoonest] = useState<string | null>(null);
+  /** The earliest day the date picker offers - today, as of choosing "later". */
+  const [minDay, setMinDay] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const signedIn = useHasSession();
   const [error, setError] = useState("");
+  // Past the first step there are choices a teacher would have to remake.
+  useUnsavedGuard(step > 1);
   /**
    * Where the refusal sends them, when there is somewhere to send them.
    *
@@ -330,13 +352,47 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
    * no way to say "not yet" about one row; a disabled row is a state design has
    * not drawn. Absent is the honest version until they do.
    */
+  /*
+   * AND NOT THE FIXTURES, ONCE SIGNED IN. A failed library read put the
+   * frame's four invented lessons in front of a signed-in teacher - pickable,
+   * unmarked, and refused only at step 4 after classes and a time had been
+   * chosen for them. The walkthrough keeps them; a real teacher is told the
+   * read failed, in the sentence step 4 already used for it.
+   */
   const lessons = live
     ? cards
         .filter((c) => c.kind === "normal")
         .map((c) => ({ id: c.id, title: c.title, meta: c.meta }))
-    : !signedIn || lessonsSample
+    : !signedIn
       ? LESSONS
       : [];
+
+  /*
+   * ONLY WHAT IS OFFERED IS CHOSEN (T106). `?lesson=` seeds the choice before
+   * the library has said anything, and was never checked against it - so a
+   * lesson still parsing, one whose parse died, or one past the first page
+   * had no card to show it was chosen or to un-choose it, Continue went, step
+   * 4 named nobody, and Confirm sent its id. A choice counts only while its
+   * card is on screen.
+   */
+  const offered = new Set(lessons.map((l) => l.id));
+  /** The fixtures stand in for the walkthrough only, never a failed read. */
+  const offeredClasses = signedIn && classesSample ? [] : myClasses;
+  /*
+   * THE CLASS SELECTOR'S DEFAULT (ruled 14 Sep, CONSOLE_INVENTORY item 9; C07i
+   * draws step 2 with its first class ticked): the class the teacher came from,
+   * else the first alphabetically. It holds only until they touch the list -
+   * from then on the choice is theirs, none included. Derived, not seeded, so
+   * a list that arrives after the first render gets its default too.
+   */
+  const firstClass =
+    preselectClass && offeredClasses.some((c) => c.id === preselectClass)
+      ? preselectClass
+      : [...offeredClasses].sort((a, b) =>
+          a.name.localeCompare(b.name, "en-GB", { numeric: true }),
+        )[0]?.id;
+  const classes = classChoice ?? new Set(firstClass ? [firstClass] : []);
+  const picked = [...chosen].filter((id) => offered.has(id));
 
   /** Tomorrow in `YYYY-MM-DD`, local. Called from a handler, never render. */
   const tomorrow = () => {
@@ -355,13 +411,24 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
   const chooseWho = (v: "left" | "right") => {
     setWho(v);
     if (v === "left") setStudents(new Set());
-    else setClasses(new Set());
+    else setClassChoice(new Set());
   };
 
   const chooseWhen = (v: "left" | "right") => {
     setWhen(v);
     // A default only means anything once "later" is actually chosen.
-    if (v === "right" && !date) setDate(tomorrow());
+    const day = v === "right" ? date || tomorrow() : date;
+    if (v === "right" && !date) setDate(day);
+    setMinDay(dayOf(new Date()));
+    setSoonest(v === "right" ? soonestOpening(day, time, new Date()) : null);
+  };
+
+  /** The chosen moment again, now - a lesson can sit on step 4 while it passes. */
+  const stillAhead = () => {
+    if (when !== "right") return true;
+    const s = soonestOpening(date, time, new Date());
+    setSoonest(s);
+    return s === null;
   };
 
   const togIn = <T,>(set: Set<T>, v: T) => {
@@ -373,7 +440,7 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
 
   const canContinue =
     step === 1
-      ? chosen.size > 0
+      ? picked.length > 0
       : step === 2
         ? who === "left"
           ? classes.size > 0
@@ -383,7 +450,7 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
           // - an Invalid Date that printed as "Invalid Date" on step 4 and
           // then threw out of `toISOString()`, leaving Confirm stuck on
           // "Assigning..." for ever with nothing sent and nothing said.
-          when === "left" || (Boolean(date) && Boolean(time));
+          when === "left" || (Boolean(date) && Boolean(time) && !soonest);
 
   const close = () => router.push("/teacher/lessons");
   const say = useSystemMessages();
@@ -436,6 +503,12 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
     // "Available now" sends nothing rather than now-as-a-timestamp: the
     // absence is what "open immediately" means, and a stamped `now` would
     // drift by however long the request takes.
+    // Back to the step that can fix it, rather than sending a past moment.
+    if (!stillAhead()) {
+      setStep(3);
+      return;
+    }
+
     let availableFrom: string | undefined;
     if (when === "right" && date && time) {
       const at = new Date(`${date}T${time}`);
@@ -451,7 +524,7 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
     setSubmitting(true);
     setError("");
     setErrorHref("");
-    const lessonIds = [...chosen];
+    const lessonIds = picked;
     /*
      * ONE REQUEST FOR A STUDENT PICK, one per class otherwise.
      *
@@ -739,9 +812,9 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
                 <path d="M20 6L9 17l-5-5" />
               </svg>
             </div>
-            <h2 className="mt-[18px] text-[23px] font-semibold tracking-[-0.015em] xl:mt-5 xl:text-[26px]">
+            <h1 className="mt-[18px] text-[23px] font-semibold tracking-[-0.015em] xl:mt-5 xl:text-[26px]">
               All set
-            </h2>
+            </h1>
             <p className="mt-3.5 text-base leading-[1.6] text-nevo-near-black/78 xl:mt-4 xl:text-[17px]">
               <strong className="font-semibold text-nevo-near-black">
                 {lessonsText}
@@ -769,9 +842,9 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
       ) : (
         <div className="flex min-h-0 flex-1 justify-center overflow-y-auto px-7 pt-4 pb-7 xl:px-8 xl:pt-5 xl:pb-8">
           <div className="w-full max-w-[540px] xl:max-w-[560px]">
-            <h2 className="mt-2 text-[23px] font-semibold tracking-[-0.015em] xl:mt-3.5 xl:text-[26px]">
+            <h1 className="mt-0 text-[23px] font-semibold tracking-[-0.015em] xl:mt-3.5 xl:text-[26px]">
               {heading}
-            </h2>
+            </h1>
 
             {step === 1 && (
               <div className="mt-[18px] flex flex-col gap-2.5 xl:mt-5 xl:gap-[11px]">
@@ -785,6 +858,32 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
                       className="h-[74px] animate-pulse rounded-[12px] bg-nevo-cream-elevated"
                     />
                   ))}
+                {signedIn && lessonsSample && (
+                  <p className="text-[14px] leading-[1.55] text-nevo-near-black/68">
+                    We couldn&rsquo;t load your lessons, so we can&rsquo;t
+                    assign them. Nothing has been sent - reopen this from your
+                    library and try again.
+                  </p>
+                )}
+                {/* An empty library had no nothing-state: the heading over
+                    nothing and a Continue that would not go. The recommend
+                    sheet's sentence for the same empty shelf. */}
+                {live && cards.length === 0 && (
+                  <p className="text-[14px] leading-[1.55] text-nevo-near-black/68">
+                    Your library is empty, so there is nothing to assign yet.
+                    Upload a lesson and it will appear here.
+                  </p>
+                )}
+                {/* A LIBRARY WITH NOTHING READY (T105). Lessons still being
+                    read, or whose reading stopped, are left off this list - so
+                    "is the library empty" was the wrong question, and a
+                    library of only those drew the heading over nothing. */}
+                {live && cards.length > 0 && lessons.length === 0 && (
+                  <p className="text-[14px] leading-[1.55] text-nevo-near-black/68">
+                    Nothing in your library is ready to assign yet.
+                  </p>
+                )}
+                <MaybeSample showing={!live} kind="teacher:assign-lessons">
                 {lessons.map((l) => (
                   <CheckCard
                     key={l.id}
@@ -794,6 +893,7 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
                     sub={l.meta}
                   />
                 ))}
+                </MaybeSample>
               </div>
             )}
 
@@ -808,11 +908,14 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
                 {classesSample && (
                   /* A signed-in teacher whose class list failed was shown
                      fixture classes, fixture headcounts and sixteen invented
-                     children by name - on the screen that assigns work, with
-                     nothing saying they were not real. */
-                  <p className="mt-3 max-w-[560px] text-[13px] leading-[1.5] text-nevo-near-black/60 italic">
-                    We couldn&rsquo;t reach your school just now, so these are
-                    sample classes. Nothing you pick here will be assigned.
+                     children by name - on the screen that assigns work. Then
+                     marked and noticed, but still pickable, and refused only
+                     at Confirm (T102). Now none are offered, and this says
+                     why in the sentence Confirm already used for it. */
+                  <p className="mt-3 max-w-[560px] text-[14px] leading-[1.55] text-nevo-near-black/68">
+                    We couldn&rsquo;t reach your school, so we can&rsquo;t
+                    assign to your classes. Nothing has been sent - try again
+                    in a moment.
                   </p>
                 )}
                 {who === "left" ? (
@@ -830,11 +933,30 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
                             className="h-[74px] animate-pulse rounded-[12px] bg-nevo-cream-elevated"
                           />
                         ))
-                      : myClasses.map((c) => (
+                      : (
+                        /* The sample classes carry the notice above AND the
+                           mark, so the signed-in end-to-end check can see
+                           them - it could not before. */
+                        <>
+                        {/* No classes yet: Home's sentence, not a heading
+                            over nothing. Only reachable once the read has
+                            answered - loading draws skeletons above, and a
+                            failure or no session serves the fixtures. */}
+                        {myClasses.length === 0 && !classesSample && (
+                          <p className="text-[14px] leading-[1.55] text-nevo-near-black/68">
+                            You don&rsquo;t have any classes yet. When your
+                            school adds you to one, it will appear here.
+                          </p>
+                        )}
+                        <MaybeSample
+                          showing={classesSample || !signedIn}
+                          kind="teacher:assign-classes"
+                        >
+                        {offeredClasses.map((c) => (
                           <CheckCard
                             key={c.id}
                             on={classes.has(c.id)}
-                            onClick={() => setClasses((s) => togIn(s, c.id))}
+                            onClick={() => setClassChoice(togIn(classes, c.id))}
                             title={c.name}
                             sub={
                               c.studentCount != null
@@ -843,6 +965,9 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
                             }
                           />
                         ))}
+                        </MaybeSample>
+                        </>
+                      )}
                   </div>
                 ) : (
                   <div className="mt-4 flex flex-col gap-4 xl:mt-[18px]">
@@ -918,8 +1043,16 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
                           <input
                             type="date"
                             value={date}
-                            onChange={(e) => setDate(e.target.value)}
-                            className="h-[52px] w-full cursor-pointer rounded-[10px] border-[1.5px] border-nevo-near-black/16 bg-nevo-cream-elevated px-4 pr-11 text-[15.5px] font-normal text-nevo-near-black outline-none focus:border-nevo-navy [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0"
+                            min={minDay || undefined}
+                            aria-invalid={soonest ? true : undefined}
+                            onChange={(e) => {
+                              setDate(e.target.value);
+                              setSoonest(soonestOpening(e.target.value, time, new Date()));
+                            }}
+                            className={cn(
+                              "h-[52px] w-full cursor-pointer rounded-[10px] border-[1.5px] border-nevo-near-black/16 bg-nevo-cream-elevated px-4 pr-11 text-[15.5px] font-normal text-nevo-near-black outline-none focus:border-nevo-navy [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0",
+                              soonest && "border-nevo-violet",
+                            )}
                           />
                           <svg
                             className="pointer-events-none absolute top-1/2 right-4 -translate-y-1/2"
@@ -947,7 +1080,10 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
                           <input
                             type="time"
                             value={time}
-                            onChange={(e) => setTime(e.target.value)}
+                            onChange={(e) => {
+                              setTime(e.target.value);
+                              setSoonest(soonestOpening(date, e.target.value, new Date()));
+                            }}
                             className="h-[52px] w-full cursor-pointer rounded-[10px] border-[1.5px] border-nevo-near-black/16 bg-nevo-cream-elevated px-4 pr-11 text-[15.5px] font-normal text-nevo-near-black outline-none focus:border-nevo-navy [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0"
                           />
                           <svg
@@ -968,6 +1104,33 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
                         </span>
                       </label>
                     </div>
+                  </div>
+                )}
+                {/* C07i, "Chosen date has passed": the refusal, and the soonest
+                    day that same time can open, one press away. */}
+                {when === "right" && soonest && (
+                  <div
+                    role="alert"
+                    className="mt-3.5 flex flex-wrap items-center justify-between gap-3.5 rounded-[10px] bg-nevo-violet/14 px-[15px] py-[13px] xl:mt-4 xl:gap-4 xl:px-4 xl:py-[15px]"
+                  >
+                    <p className="min-w-0 flex-[1_1_260px] text-[14.5px] leading-[1.55] text-nevo-near-black/82">
+                      That date has already passed. The soonest you can open
+                      this is{" "}
+                      <strong className="font-semibold text-nevo-near-black">
+                        {longDay(soonest)}
+                      </strong>
+                      .
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDate(soonest);
+                        setSoonest(soonestOpening(soonest, time, new Date()));
+                      }}
+                      className="inline-flex h-10 shrink-0 cursor-pointer items-center rounded-[10px] bg-nevo-navy px-[18px] text-sm font-semibold text-nevo-cream transition-[filter] hover:brightness-93"
+                    >
+                      {`Use ${longDay(soonest)}`}
+                    </button>
                   </div>
                 )}
               </>
@@ -1017,6 +1180,7 @@ export function AssignWizard({ preselect }: { preselect?: string }) {
           disabled={!canContinue}
           onClick={() => {
             if (!canContinue || submitting) return;
+            if (step === 3 && !stillAhead()) return;
             if (step < 4) setStep((s) => (s + 1) as Step);
             else void confirm();
           }}

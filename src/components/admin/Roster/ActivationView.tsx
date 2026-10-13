@@ -4,8 +4,11 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { CostSheet } from "../Billing/CostSheet";
 import { HowToPayPanel } from "../Billing/HowToPayPanel";
+import { InvoiceBreakdown } from "../Billing/InvoiceBreakdown";
 import { ReadFailed } from "../ReadFailed";
-import { CARD } from "./primitives";
+import { NoAccess, failureKind } from "../NoAccess";
+import { SupportEmailLink } from "../SupportEmail";
+import { CARD, CheckIcon } from "./primitives";
 import {
   billingApi,
   type Invoice,
@@ -18,6 +21,8 @@ import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { useSetupGate } from "@/hooks";
 import { billingCurrency, mayActivate, screenFor } from "./activation";
+import { SignInDetailsDownload } from "../Students/SignInDetailsDownload";
+import { ConsentFormDownload } from "../Students/ConsentFormDownload";
 
 /**
  * D24 OB-03 headcount and cost, OB-04 payment, OB-05 activation.
@@ -48,17 +53,22 @@ import { billingCurrency, mayActivate, screenFor } from "./activation";
  * counts hours and decides the school has a problem.
  */
 
-type Phase = "loading" | "ready" | "failed";
+type Phase = "loading" | "ready" | "failed" | "denied";
 
 export function ActivationView() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [state, setState] = useState<OnboardingState | null>(null);
   const [sub, setSub] = useState<Subscription | null>(null);
   const [account, setAccount] = useState<ReceivingAccount | null>(null);
-  const [invoice, setInvoice] = useState<Invoice | null>(null);
+  const [invoices, setInvoices] = useState<Invoice[] | null>(null);
   const [school, setSchool] = useState<School | null>(null);
   const [activating, setActivating] = useState(false);
   const [activateFailed, setActivateFailed] = useState(false);
+  /**
+   * What `activate` answered, when it answered in this visit. OB-05's list is
+   * "What just happened", and on a later visit nothing just did.
+   */
+  const [activated, setActivated] = useState<OnboardingState | null>(null);
   const [rechecking, setRechecking] = useState(false);
   /** A re-read that failed, as distinct from one that found nothing new. */
   const [recheckFailed, setRecheckFailed] = useState(false);
@@ -83,20 +93,43 @@ export function ActivationView() {
         setState(s);
         setPhase("ready");
       })
-      .catch(() => setPhase("failed"));
+      // A 403 is this admin's scope, not a failure: no retry can grant it.
+      .catch((err) => setPhase(failureKind(err) === "denied" ? "denied" : "failed"));
 
     billingApi.subscription().then(setSub).catch(() => setSub(null));
     billingApi.receivingAccount().then(setAccount).catch(() => setAccount(null));
     schoolApi.get().then(setSchool).catch(() => setSchool(null));
     billingApi
       .invoices()
-      .then((rows) => setInvoice(rows[0] ?? null))
-      .catch(() => setInvoice(null));
+      .then((rows) => setInvoices(rows))
+      .catch(() => setInvoices(null));
   }, []);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  /*
+   * "THIS PAGE UPDATES AS SOON AS YOURS CLEARS" (Lydia, 7 Oct) has to be true
+   * of a tab left open overnight. Still no polling and no countdown: the setup
+   * read is simply taken again when the page comes back into view. A re-read
+   * that fails here changes nothing on screen - the last answer stands, and
+   * "Check again" below is where a failed check is said out loud.
+   */
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      onboardingApi
+        .get()
+        .then((s) => {
+          setState(s);
+          refreshGate();
+        })
+        .catch(() => {});
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [refreshGate]);
 
   const recheck = () => {
     setRechecking(true);
@@ -123,6 +156,7 @@ export function ActivationView() {
       .activate()
       .then((s) => {
         setState(s);
+        setActivated(s);
         refreshGate();
       })
       .catch(() => setActivateFailed(true))
@@ -131,6 +165,9 @@ export function ActivationView() {
 
   if (phase === "loading") {
     return <div className={cn(CARD, "mt-5 h-[380px] animate-pulse")} />;
+  }
+  if (phase === "denied") {
+    return <NoAccess className="mt-5" what="your school's activation" />;
   }
   if (phase === "failed" || !state) {
     return (
@@ -145,6 +182,16 @@ export function ActivationView() {
   }
 
   const screen = screenFor(state.stage);
+  /*
+   * THE INVOICE THIS SCHOOL IS PAYING, BY ID. This took the first row of the
+   * invoice list, so a school with more than one invoice could be shown
+   * another invoice's reference and amount to transfer against. The
+   * onboarding state names the invoice raised at confirm; nothing else is
+   * guessed - no id, no invoice card.
+   */
+  const invoice = state.invoiceId
+    ? invoices?.find((i) => i.id === state.invoiceId) ?? null
+    : null;
 
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
@@ -156,7 +203,7 @@ export function ActivationView() {
         {screen === "roster" ? (
           <NothingConfirmedYet />
         ) : screen === "cost" ? (
-          <Cost state={state} sub={sub} />
+          <Cost state={state} sub={sub} invoice={invoice} />
         ) : screen === "waiting" ? (
           <Waiting
             state={state}
@@ -171,7 +218,7 @@ export function ActivationView() {
             onActivate={activate}
           />
         ) : (
-          <Active school={school} />
+          <Active school={school} activated={activated} />
         )}
       </div>
     </div>
@@ -203,9 +250,11 @@ function NothingConfirmedYet() {
 function Cost({
   state,
   sub,
+  invoice,
 }: {
   state: OnboardingState;
   sub: Subscription | null;
+  invoice: Invoice | null;
 }) {
   return (
     <>
@@ -238,7 +287,17 @@ function Cost({
         * draws, and a bare figure under the heading "Your headcount and cost"
         * would be the one number a school checks against its own arithmetic.
         */}
-      {sub?.pricing ? (
+      {/*
+        * THE INVOICE RAISED AT CONFIRM, WHEN THERE IS ONE. The subscription
+        * cost sheet prices "N active students", and before activation the
+        * roster is held, not active - so it could describe a different
+        * headcount from the one this school is about to pay for. The invoice
+        * carries its own students, rate, VAT and period; the cost sheet is
+        * the fallback for a confirm that raised none.
+        */}
+      {invoice ? (
+        <InvoiceBreakdown invoice={invoice} />
+      ) : sub?.pricing ? (
         <div className="mt-4">
           <CostSheet pricing={sub.pricing} />
         </div>
@@ -297,19 +356,19 @@ function Waiting({
         Pay for the year
       </h2>
       <p className="mt-2 max-w-[64ch] text-[15px] leading-[1.55] text-nevo-near-black/68">
-        Transfer the total to Nevo&rsquo;s account using your reference. You
-        don&rsquo;t have to wait here &ndash; we&rsquo;ll email you when it
-        lands.
+        Transfer the total to Nevo&rsquo;s account using your reference.
       </p>
 
       <div className={cn(CARD, "mt-6 px-[26px] py-[22px]")}>
         <h3 className="m-0 text-[17px] font-semibold text-nevo-near-black">
           Waiting for your transfer to arrive
         </h3>
+        {/* Lydia's words, 7 Oct. No email and no timeframe: a transfer is
+            confirmed by a person reading a statement, and nothing is sent
+            when it clears, so a school waiting for an email would pay twice. */}
         <p className="mt-2 max-w-[62ch] text-[14.5px] leading-[1.55] text-nevo-near-black/68">
-          You can close this and come back tomorrow &ndash; it stays right here.
-          Bank transfers usually confirm within a few hours, sometimes
-          overnight, and we&rsquo;ll email you the moment yours clears.
+          We check for transfers through the day. This page updates as soon as
+          yours clears, and there is nothing else for you to do.
         </p>
       </div>
 
@@ -324,10 +383,12 @@ function Waiting({
           Transferred it already?
         </h3>
         <p className="mt-2 max-w-[62ch] text-[14.5px] leading-[1.55] text-nevo-near-black/68">
-          If you&rsquo;ve just made the transfer, it can take a few hours to
-          show &ndash; your place is saved and nothing is lost. If it&rsquo;s
-          been longer than a day, send us your reference and we&rsquo;ll track
-          it down.
+          {/* "It can take a few hours to show" came out with the 7 Oct
+              ruling: no timeframe is promised. When to ask is not a promise
+              about when it lands, so the day stays. */}
+          If you&rsquo;ve just made the transfer, your place is saved and
+          nothing is lost. If it&rsquo;s been longer than a day, send us your
+          reference and we&rsquo;ll track it down.
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <button
@@ -338,12 +399,9 @@ function Waiting({
           >
             {rechecking ? "Checking…" : "Check again"}
           </button>
-          <a
-            href="mailto:support@nevolearning.com"
-            className="h-[44px] cursor-pointer rounded-[10px] px-4 text-sm font-semibold leading-[44px] text-nevo-near-black/70 transition-colors hover:bg-nevo-near-black/[0.05]"
-          >
+          <SupportEmailLink className="h-[44px] cursor-pointer rounded-[10px] px-4 text-sm font-semibold leading-[44px] text-nevo-near-black/70 transition-colors hover:bg-nevo-near-black/[0.05]">
             Contact us
-          </a>
+          </SupportEmailLink>
         </div>
         {recheckFailed ? (
           <p className="mt-3 max-w-[56ch] text-[13.5px] leading-[1.5] text-nevo-navy">
@@ -352,6 +410,10 @@ function Waiting({
           </p>
         ) : null}
       </div>
+
+      {/* OB-04's invoice card and "Download invoice" - the invoice this school
+          is transferring against, with its PDF. */}
+      {invoice ? <InvoiceBreakdown invoice={invoice} /> : null}
 
       <div className="mt-4">
         <HowToPayPanel
@@ -390,8 +452,69 @@ function Waiting({
   );
 }
 
+/**
+ * OB-05's "What just happened", as far as the contract can say it.
+ *
+ * `POST /onboarding/activate` is documented as "Create the accounts, once the
+ * invoice is paid and not before", and answers with the school's
+ * `OnboardingState`. So the accounts it created - students across their
+ * classes, and teachers - are established by the call that just returned, and
+ * the counts are the ones it returned. Nothing is counted here.
+ *
+ * TWO OF THE FRAME'S FOUR ROWS ARE LEFT OUT OR REDUCED, because nothing
+ * backs them:
+ * - "18 teacher invitations sent · Each teacher gets a link to set their
+ *   password". Activate says it creates accounts; it says nothing about
+ *   emailing anyone, and an invitation carries `deliveryStatus` precisely
+ *   because a send can fail to happen. The row says ACCOUNTS CREATED, which
+ *   the contract does establish, and not that anything was sent.
+ * - "Parent consent requests sent" - the response carries no consent field,
+ *   and consent wording is with counsel.
+ *
+ * "Student sign-in details ready · Download or print them to hand out" is
+ * back (9 Oct): `GET /students/sign-in-details` serves them, and the row
+ * carries the download. It shows only when activate created student
+ * accounts, because those are the children on the list.
+ * TODO(api): counts and delivery state for anything activate sends, on the
+ * activate response.
+ */
+type HappenedRow = { label: string; sub: string | null; signIn?: boolean };
+
+function happenedRows(s: OnboardingState): HappenedRow[] {
+  const rows: HappenedRow[] = [];
+  const classes = s.classes.length;
+  if (s.studentCount > 0) {
+    rows.push({
+      label: `${s.studentCount} student ${s.studentCount === 1 ? "account" : "accounts"} created`,
+      sub: classes > 0 ? `Across your ${classes} ${classes === 1 ? "class" : "classes"}` : null,
+    });
+  }
+  if (s.teacherCount > 0) {
+    rows.push({
+      label: `${s.teacherCount} teacher ${s.teacherCount === 1 ? "account" : "accounts"} created`,
+      sub: null,
+    });
+  }
+  if (s.studentCount > 0) {
+    rows.push({
+      label: "Student sign-in details ready",
+      sub: "Download or print them to hand out",
+      signIn: true,
+    });
+  }
+  return rows;
+}
+
 /** OB-05. */
-function Active({ school }: { school: School | null }) {
+function Active({
+  school,
+  activated,
+}: {
+  school: School | null;
+  /** What activate returned in this visit, or null on any later one. */
+  activated: OnboardingState | null;
+}) {
+  const happened = activated ? happenedRows(activated) : [];
   return (
     <>
       <h2 className="mt-1.5 text-[23px] font-semibold tracking-[-0.018em] text-nevo-near-black xl:text-[28px]">
@@ -399,7 +522,45 @@ function Active({ school }: { school: School | null }) {
       </h2>
       <p className="mt-2 max-w-[64ch] text-[15px] leading-[1.55] text-nevo-near-black/68">
         Your payment is confirmed and your school is switched on.
+        {happened.length > 0 ? " Here’s what just happened." : ""}
       </p>
+
+      {happened.length > 0 ? (
+        <>
+          <h3 className="m-0 mt-7 mb-3 text-[13px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase">
+            What just happened
+          </h3>
+          <ul className={cn(CARD, "m-0 list-none overflow-hidden p-0")}>
+            {happened.map((row, i) => (
+              <li
+                key={row.label}
+                className={cn(
+                  "flex items-center gap-3.5 px-[18px] py-4",
+                  i < happened.length - 1 && "border-b border-nevo-near-black/7",
+                )}
+              >
+                <span
+                  aria-hidden="true"
+                  className="flex size-7 flex-none items-center justify-center rounded-full bg-nevo-navy text-nevo-cream"
+                >
+                  <CheckIcon />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px] font-semibold text-nevo-near-black">
+                    {row.label}
+                  </span>
+                  {row.sub ? (
+                    <span className="mt-0.5 block text-[12.5px] text-nevo-near-black/55">
+                      {row.sub}
+                    </span>
+                  ) : null}
+                </span>
+                {row.signIn ? <SignInDetailsDownload /> : null}
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
 
       {/*
         * THE SCHOOL CODE, when there is one. `School.code` is null for SSO
@@ -423,17 +584,18 @@ function Active({ school }: { school: School | null }) {
       ) : null}
 
       {/*
-        * OB-05 ALSO OFFERS THE PAPER CONSENT FORM - *"Some parents won't reply
-        * to the emailed request... download the paper consent form."* It is
-        * ABSENT, and not for want of an endpoint: `GET /api/v1/consents/form`
-        * is deployed.
-        *
-        * Design, 24 Sep: the form is stamped v0.0 DRAFT, three of its sections
-        * are placeholders marked "to be supplied by Nevo's counsel", and
-        * **nothing paper ships** until they return. A download button here
-        * would put an unfinished legal document in a school's hands on the day
-        * they switch on, which is the worst possible day for it.
+        * OB-05's paper consent form, from `GET /api/v1/consents/form`. It was
+        * held while design's 24 Sep ruling - nothing paper ships until
+        * counsel's sections return - stood. Counsel is deferred until the
+        * console is complete (12 Oct), so the form ships with its legal
+        * sections still marked as placeholder by the backend that renders it.
         */}
+      <p className="m-0 mt-6 max-w-[64ch] text-[13.5px] leading-[1.55] text-nevo-near-black/62">
+        Some parents won&rsquo;t reply to the emailed request. You can download
+        the paper consent form and collect it in person &ndash; the written
+        route.
+      </p>
+      <ConsentFormDownload className="mt-2" label="Download the paper consent form" />
 
       <Link
         href="/admin"

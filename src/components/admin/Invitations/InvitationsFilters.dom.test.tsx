@@ -29,7 +29,7 @@ const invite = (over: Partial<Invitation> = {}): Invitation => ({
   email: "amara@school.edu.ng",
   name: "Amara Okafor",
   status: "pending",
-  expiresAt: "2026-12-01T00:00:00Z",
+  expiresAt: "2099-01-01T00:00:00Z", // far off: InvitationsView judges expiry against today
   consentStatus: null,
   deliveryStatus: "sent",
   ...over,
@@ -66,7 +66,11 @@ describe("the status counters", () => {
     await waitFor(() => expect(visibleText(container)).toMatch(/Pending/));
     const text = visibleText(container);
     expect(text).toMatch(/Expired/);
-    expect(text).not.toMatch(/\bInvited\b/);
+    // No "Invited" total among the counters (the table has an Invited column).
+    const counters = Array.from(container.querySelectorAll("button[aria-pressed]")).map(
+      (btn) => btn.textContent ?? "",
+    );
+    expect(counters.some((c) => /Invited/.test(c))).toBe(false);
   });
 
   it("filter the table when pressed, and clear when pressed again", async () => {

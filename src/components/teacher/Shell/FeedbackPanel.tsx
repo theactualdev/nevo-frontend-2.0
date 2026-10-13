@@ -2,6 +2,8 @@
 
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
+import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
 import { ApiError } from "@/lib/api/client";
 import { feedbackApi } from "@/lib/api/feedback";
 import { cn } from "@/lib/utils";
@@ -26,10 +28,15 @@ import { cn } from "@/lib/utils";
  * as `context` - "which screen was this about" is the first question feedback
  * raises.
  *
- * The frame draws no failure state, as it draws none for Set Password. A
- * feedback panel that says "Thank you" while transmitting nothing is the worst
- * version of this screen, so the failure branch here is ours, in the house
- * voice, and keeps the note so it can be sent again. Flagged to design.
+ * THE FAILURE IS THE FRAME'S (drawn 30 Aug, and this said it was not drawn
+ * for a month after): a card ABOVE the note with a retry glyph, "Your
+ * feedback couldn't be sent." / "Your note is still here. Give it another
+ * try in a moment.", and a glyphed Try again in place of Send. Nothing is
+ * thanked for until something is stored, and the note is kept.
+ *
+ * One split stays ours: a note the server REFUSED (422) will fail the same
+ * way however long a teacher waits, so its body says to edit it rather than
+ * to try again in a moment. Flagged to design.
  *
  * Design ruled on the sent state (31 Aug): the 1.5s auto-close stands and
  * "Open again" goes. A button that appears for a second and a half, under a
@@ -44,13 +51,14 @@ const NOTE_MAX = 5000;
 type FeedbackType = "feedback" | "feature";
 
 const PILL_BASE =
-  "inline-flex h-9 cursor-pointer items-center rounded-[20px] px-4 text-[13px] transition-[filter,background-color] active:scale-[0.98]";
+  "inline-flex h-9 cursor-pointer items-center rounded-full px-4 text-[13px] transition-[filter,background-color] active:scale-[0.98]";
 
 export function FeedbackPanel({ onClose }: { onClose: () => void }) {
   const pathname = usePathname();
   const [type, setType] = useState<FeedbackType>("feedback");
   const [text, setText] = useState("");
   const [sent, setSent] = useState(false);
+  useUnsavedGuard(text.trim().length > 0 && !sent);
   const [sending, setSending] = useState(false);
   /**
    * Which KIND of failure, not just that there was one.
@@ -109,18 +117,27 @@ export function FeedbackPanel({ onClose }: { onClose: () => void }) {
   };
 
   const panel =
-    "fixed top-1/2 right-6 z-50 flex w-[360px] max-w-[calc(100vw-3rem)] -translate-y-1/2 flex-col rounded-2xl bg-nevo-cream-inset p-6 shadow-[0_20px_56px_rgba(0,0,0,0.2)]";
+    "fixed top-1/2 right-6 z-50 flex w-[360px] max-w-[calc(100%-3rem)] -translate-y-1/2 flex-col rounded-[16px] bg-nevo-cream-inset p-6 shadow-[0_8px_32px_rgba(0,0,0,0.16)]";
+
+  // Two dialogs take turns in this panel: the form, then its thank-you. Each
+  // takes focus in its turn, and the last to close gives it back (C07).
+  const formRef = useRef<HTMLDivElement>(null);
+  const sentRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(formRef, { active: !sent });
+  useDialogFocus(sentRef, { active: sent });
 
   return (
     <>
       <div
         aria-hidden
         onClick={onClose}
-        className="fixed inset-0 z-40 bg-nevo-near-black/28 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
+        className="fixed inset-0 z-40 bg-nevo-near-black/28 backdrop-blur-[1.5px] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
       />
 
       {sent ? (
         <div
+          ref={sentRef}
+          tabIndex={-1}
           role="dialog"
           aria-label="Feedback sent"
           className={cn(
@@ -142,6 +159,8 @@ export function FeedbackPanel({ onClose }: { onClose: () => void }) {
         </div>
       ) : (
         <div
+          ref={formRef}
+          tabIndex={-1}
           role="dialog"
           aria-modal="true"
           aria-label="Share feedback"
@@ -195,6 +214,30 @@ export function FeedbackPanel({ onClose }: { onClose: () => void }) {
             ))}
           </div>
 
+          {failed && (
+            <div
+              role="alert"
+              className="mt-4 flex items-start gap-2.5 rounded-[10px] bg-nevo-violet/20 px-[15px] py-[13px]"
+            >
+              <span className="mt-px flex shrink-0 text-nevo-navy">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+                  <path d="M21 3v6h-6" />
+                </svg>
+              </span>
+              <div className="min-w-0">
+                <p className="text-[13px] font-semibold text-nevo-navy">
+                  Your feedback couldn&rsquo;t be sent.
+                </p>
+                <p className="mt-1 text-[12.5px] leading-[1.5] text-nevo-near-black/70">
+                  {failure === "refused"
+                    ? "Nevo couldn’t accept that note. It’s still here, so you can edit it and send again."
+                    : "Your note is still here. Give it another try in a moment."}
+                </p>
+              </div>
+            </div>
+          )}
+
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -217,30 +260,30 @@ export function FeedbackPanel({ onClose }: { onClose: () => void }) {
             </p>
           )}
 
-          {/* Ours, not the frame's: the note is kept so it can be sent again,
-              and nothing is thanked for until something is stored. */}
-          {failed && (
-            <p className="mt-3 rounded-[10px] bg-nevo-violet/14 px-3.5 py-3 text-[13px] leading-[1.5] text-nevo-near-black/78">
-              {failure === "unreachable"
-                ? "That didn’t reach us. Your note is still here, so you can try again in a moment."
-                : failure === "refused"
-                  ? "Nevo couldn’t accept that note. It’s still here, so you can edit it and send again."
-                  : "It reached us, but something broke on our end. Your note is still here. Try again in a moment."}
-            </p>
-          )}
-
           <button
             type="button"
             onClick={send}
             disabled={!ready || sending}
             className={cn(
-              "mt-4 flex h-11 w-full items-center justify-center rounded-[10px] bg-nevo-navy text-[13px] font-semibold text-nevo-cream transition-[filter]",
+              "mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-[10px] bg-nevo-navy text-[13px] font-semibold text-nevo-cream transition-[filter]",
               ready && !sending
                 ? "cursor-pointer hover:brightness-[1.06] active:scale-[0.98]"
                 : "cursor-default opacity-50",
             )}
           >
-            {sending ? "Sending…" : failed ? "Try again" : "Send Feedback"}
+            {sending ? (
+              "Sending…"
+            ) : failed ? (
+              <>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+                  <path d="M21 3v6h-6" />
+                </svg>
+                Try again
+              </>
+            ) : (
+              "Send Feedback"
+            )}
           </button>
         </div>
       )}

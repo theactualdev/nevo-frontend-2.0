@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
+import { useSystemMessages } from "@/components/shared/SystemMessages";
 import { Toggle } from "@/components/teacher/shared/Toggle";
 import { useAccessibility } from "@/context/AccessibilityContext";
 import {
@@ -13,7 +14,7 @@ import { cn } from "@/lib/utils";
 import { publishIdentity, uploadPhoto } from "@/hooks/useCurrentUser";
 import { usersApi } from "@/lib/api/users";
 import { useHasSession } from "@/hooks/useHasSession";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useCurrentUserStatus } from "@/hooks/useCurrentUser";
 import { useTeacherSettings } from "@/hooks/useTeacherSettings";
 import { AvatarDisc } from "@/components/shared/AvatarDisc";
 import { EditProfileModal } from "./EditProfileModal";
@@ -25,8 +26,11 @@ import { SignOutModal } from "./SignOutModal";
  *
  * The save model comes from C14 B6, which C11 itself never draws: a "Save
  * changes" button sits in the header, stays disabled until something is
- * actually dirty, and on save a toast confirms while the page stays exactly
- * where it was. Flagged - C11's header is a bare heading.
+ * actually dirty, and on save the shared bar confirms while the page stays
+ * exactly where it was. Flagged - C11's header is a bare heading. (C14 drew a
+ * NevoToast; frame 43 made it the one shared bar, so this screen's own toast
+ * went - including a failed save that cleared itself after three seconds,
+ * where SM-03 says a failure stays until dismissed.)
  *
  * The Accessibility rows drive the app-wide AccessibilityContext, so they do
  * what their own sub-copy promises - "across Nevo", "across the console" -
@@ -41,12 +45,11 @@ import { SignOutModal } from "./SignOutModal";
  */
 
 const SECTION_H3 =
-  "mt-7 text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase xl:mt-8 xl:text-sm";
+  "mt-[26px] text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase xl:mt-8 xl:text-sm";
 
 const CARD =
-  "mt-3.5 overflow-hidden rounded-xl bg-nevo-cream-elevated shadow-[0_2px_8px_rgba(0,0,0,0.06)]";
+  "mt-3 overflow-hidden rounded-[12px] bg-nevo-cream-elevated shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-3.5";
 
-const TOAST_MS = 3000;
 
 export function ProfileSettings() {
   const a11y = useAccessibility();
@@ -61,17 +64,9 @@ export function ProfileSettings() {
   // preview of the frame.
   const signedIn = useHasSession();
   // Name, email, school and subjects - all of it real, all from one call.
-  const identity = useCurrentUser();
+  const { identity, status: identityStatus } = useCurrentUserStatus();
   const [signOutOpen, setSignOutOpen] = useState(false);
-  const [toast, setToast] = useState("");
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(
-    () => () => {
-      if (timer.current) clearTimeout(timer.current);
-    },
-    [],
-  );
+  const say = useSystemMessages();
 
   const flip = (id: string) => {
     notifications.set(
@@ -102,7 +97,7 @@ export function ProfileSettings() {
   };
 
   /**
-   * The toast follows the save's real outcome, not the click. A failed write
+   * The message follows the save's real outcome, not the click. A failed write
    * that says "Settings saved" is the one thing this button must never do,
    * and the row stays dirty so the teacher can try again.
    */
@@ -110,9 +105,11 @@ export function ProfileSettings() {
     if (!dirty || notifications.saveState === "saving") return;
     void notifications.save().then((ok) => {
       if (ok) setDirty(false);
-      setToast(ok ? "Settings saved" : "We couldn’t save that. Try again");
-      if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(() => setToast(""), TOAST_MS);
+      say.show(
+        ok
+          ? { kind: "confirm", message: "Settings saved" }
+          : { kind: "failed", message: "We couldn’t save that. Try again" },
+      );
     });
   };
 
@@ -126,10 +123,10 @@ export function ProfileSettings() {
         )}
       >
         <div className="min-w-0">
-          <span className="text-[15px] font-medium text-nevo-near-black">
+          <span className="text-[14.5px] font-medium text-nevo-near-black xl:text-[15px]">
             {r.label}
           </span>
-          <div className="mt-0.5 text-[13px] text-nevo-near-black/58">
+          <div className="mt-0.5 text-[12.5px] text-nevo-near-black/58 xl:text-[13px]">
             {r.sub}
           </div>
         </div>
@@ -143,11 +140,11 @@ export function ProfileSettings() {
 
   return (
     <div className="relative mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
-      <div className="mx-auto max-w-[680px]">
+      <div className="mx-auto max-w-[600px] xl:max-w-[680px]">
         <div className="flex items-center justify-between gap-4">
-          <h2 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
+          <h1 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
             Profile &amp; account
-          </h2>
+          </h1>
           {/* C14 B6: disabled until something is actually dirty. */}
           <button
             type="button"
@@ -165,7 +162,7 @@ export function ProfileSettings() {
         </div>
 
         {/* Identity */}
-        <div className="mt-5 flex items-center gap-4 rounded-xl bg-nevo-cream-elevated px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-6 xl:gap-[18px] xl:px-[26px] xl:py-6">
+        <div className="mt-5 flex items-center gap-4 rounded-[12px] bg-nevo-cream-elevated px-[22px] py-5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-6 xl:gap-[18px] xl:px-[26px] xl:py-6">
           <AvatarDisc
             photoUrl={signedIn ? identity?.photoUrl : null}
             className="size-14 text-xl font-semibold xl:size-16 xl:text-[22px]"
@@ -182,13 +179,28 @@ export function ProfileSettings() {
             )}
           </AvatarDisc>
           <div className="min-w-0 flex-1">
+            {signedIn && identityStatus === "loading" ? (
+              /* Not "Teacher" and not "not connected" - neither is known
+                 yet. A name-shaped bar until the read answers. */
+              <span
+                aria-busy="true"
+                aria-label="Loading your details"
+                className="block h-5 w-[180px] animate-pulse rounded-[6px] bg-nevo-near-black/9"
+              />
+            ) : signedIn && identityStatus === "failed" ? (
+              <span className="block text-[15px] leading-[1.5] text-nevo-near-black/68">
+                We couldn&rsquo;t load your details just now. Try again in a
+                moment.
+              </span>
+            ) : (
             <span className="text-[17px] font-semibold text-nevo-near-black xl:text-[19px]">
               {signedIn ? (identity?.name ?? "Teacher") : profile.name}
             </span>
-            {signedIn ? (
+            )}
+            {signedIn && identityStatus !== "ready" ? null : signedIn ? (
               <>
                 {(identity?.subjects.length || identity?.school) && (
-                  <div className="mt-[3px] text-sm text-nevo-near-black/60">
+                  <div className="mt-[3px] text-[13.5px] text-nevo-near-black/60 xl:text-sm">
                     <span className="xl:hidden">
                       {identity.subjects.join(" & ") || identity.school}
                     </span>
@@ -200,7 +212,7 @@ export function ProfileSettings() {
                   </div>
                 )}
                 {identity?.email && (
-                  <div className="mt-[3px] truncate text-[13.5px] text-nevo-near-black/50">
+                  <div className="mt-[3px] truncate text-[13px] text-nevo-near-black/50 xl:mt-0.5 xl:text-[13.5px]">
                     {identity.email}
                   </div>
                 )}
@@ -213,13 +225,13 @@ export function ProfileSettings() {
               </>
             ) : (
               <>
-                <div className="mt-[3px] text-sm text-nevo-near-black/60">
+                <div className="mt-[3px] text-[13.5px] text-nevo-near-black/60 xl:text-sm">
                   <span className="xl:hidden">{profile.subjects}</span>
                   <span className="hidden xl:inline">
                     {`${profile.subjects} · ${profile.school}`}
                   </span>
                 </div>
-                <div className="mt-0.5 truncate text-[13.5px] text-nevo-near-black/50">
+                <div className="mt-0.5 truncate text-[13px] text-nevo-near-black/50 xl:text-[13.5px]">
                   {profile.email}
                 </div>
               </>
@@ -234,7 +246,7 @@ export function ProfileSettings() {
             <button
               type="button"
               onClick={() => setEditOpen(true)}
-              className="inline-flex h-10 shrink-0 cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 px-4 text-sm font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
+              className="inline-flex h-[38px] shrink-0 cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 px-[15px] text-[13.5px] font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6 xl:h-10 xl:px-4 xl:text-sm"
             >
               Edit
             </button>
@@ -286,9 +298,9 @@ export function ProfileSettings() {
         <button
           type="button"
           onClick={() => setSignOutOpen(true)}
-          className="mt-7 inline-flex cursor-pointer items-center gap-2.5 text-[15px] font-medium text-nevo-navy transition-colors hover:text-nevo-navy/80 xl:mt-8"
+          className="mt-6 inline-flex cursor-pointer items-center gap-[9px] text-[14.5px] font-medium text-nevo-navy transition-colors hover:text-nevo-navy/80 xl:mt-7 xl:text-[15px]"
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-[19px]">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
             <path d="M16 17l5-5-5-5" />
             <path d="M21 12H9" />
@@ -309,6 +321,9 @@ export function ProfileSettings() {
                   name: identity.name ?? "",
                   email: identity.email ?? "",
                   subjects: identity.subjects.join(", "),
+                  // The fixture's "MA" stood on the avatar of every teacher
+                  // without a photo. Theirs, or nothing.
+                  initials: identity.initials ?? "",
                 }
               : profile
           }
@@ -346,9 +361,7 @@ export function ProfileSettings() {
               // rather than showing the old name until a reload.
               publishIdentity(saved);
               setEditOpen(false);
-              setToast("Profile updated");
-              if (timer.current) clearTimeout(timer.current);
-              timer.current = setTimeout(() => setToast(""), TOAST_MS);
+              say.show({ kind: "confirm", message: "Profile updated" });
               return true;
             } catch {
               return false;
@@ -359,22 +372,6 @@ export function ProfileSettings() {
 
       {signOutOpen && <SignOutModal onStay={() => setSignOutOpen(false)} />}
 
-      {/* C14 NevoToast */}
-      {toast && (
-        <div
-          role="status"
-          className="fixed top-5 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2.5 rounded-full bg-nevo-navy py-3 pr-[22px] pl-[15px] shadow-[0_12px_32px_rgba(0,0,0,0.22)] motion-safe:animate-nevo-pop xl:top-6"
-        >
-          <span className="flex size-[22px] shrink-0 items-center justify-center rounded-full bg-nevo-cream/20 text-nevo-cream">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <path d="M20 6L9 17l-5-5" />
-            </svg>
-          </span>
-          <span className="text-[14.5px] font-semibold whitespace-nowrap text-nevo-cream">
-            {toast}
-          </span>
-        </div>
-      )}
     </div>
   );
 }

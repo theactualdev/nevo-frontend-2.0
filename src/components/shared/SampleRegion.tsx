@@ -1,5 +1,24 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { createContext, useContext, type ReactNode } from "react";
 import { sampleMark } from "@/lib/sampleData";
+
+/**
+ * WHICH SAMPLE REGION THIS IS INSIDE, carried through portals.
+ *
+ * The mark is an attribute on a wrapper, and a sheet is portalled to `body` -
+ * outside every wrapper. So the signed-out preview sheet, with the fixture's
+ * "what you'll do" line in it, rendered unmarked, and the end-to-end detector
+ * could not have seen it leak to a signed-in child. React context follows the
+ * component tree rather than the DOM, so it reaches through the portal; the
+ * sheet reads it and marks its own portalled content (`ui/sheet.tsx`).
+ */
+const SampleKind = createContext<string | null>(null);
+
+/** The kind of the sample region this component sits in, or null. */
+export function useSampleKind(): string | null {
+  return useContext(SampleKind);
+}
 
 /**
  * Wraps a region that is showing SAMPLE data rather than this person's own.
@@ -24,9 +43,11 @@ export function SampleRegion({
   children: ReactNode;
 }) {
   return (
-    <div style={{ display: "contents" }} {...sampleMark(kind)}>
-      {children}
-    </div>
+    <SampleKind.Provider value={kind}>
+      <div style={{ display: "contents" }} {...sampleMark(kind)}>
+        {children}
+      </div>
+    </SampleKind.Provider>
   );
 }
 

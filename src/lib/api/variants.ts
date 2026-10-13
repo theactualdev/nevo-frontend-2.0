@@ -35,11 +35,11 @@ import {
  * generated content, so §4's *"the one place modalities layer rather than
  * switch"* could not happen outside the authored demo.
  *
- * `rows` IS NOT THE PLAYER'S `rows`, and the collision is worth naming: here it
- * is how many rows of pieces to lay out (1-20, default 1); on the player's
- * authored `CalculationSegment.scaffold` it is `number[]`, the numerators of
- * the fractions being added. Mapping one onto the other would draw a bar with
- * as many divisions as there are addends.
+ * `rows` is how many rows of pieces to lay out (1-20, default 1) - the
+ * rendered row count, as on `CalculationScaffold` (B100). `fromContent`
+ * builds the kinds a frame draws: `fraction_bar` (17b, one row), `array`
+ * (D149, `rows` rows of `parts` columns) and `place_value` (D149, its
+ * piece counts per column read from the place-value scaffold).
  */
 export type ManipulativeKind =
   | "fraction_bar"
@@ -60,11 +60,33 @@ export interface Manipulative {
 export interface TextVariant {
   body: string;
   keyPoints: string[];
+  /** SCRUM-224, 8 Oct. Up to 12. */
+  keyTerms?: KeyTerm[];
+  /** SCRUM-224, 8 Oct. Up to 8. */
+  equationCallouts?: EquationCallout[];
+}
+
+/** "A term the child can inspect without leaving the segment." */
+export interface KeyTerm {
+  term: string;
+  definition: string;
+}
+
+/** "An equation kept separate from prose so it can be rendered accessibly." */
+export interface EquationCallout {
+  equation: string;
+  label?: string | null;
 }
 
 export interface VisualVariant {
   type: string;
   imageUrl: string;
+  /** A much smaller copy of `imageUrl` (B47). Null on older pictures. */
+  previewUrl?: string | null;
+  /** The image's own size, in pixels - its aspect ratio, for the frame. */
+  width?: number;
+  height?: number;
+  byteSize?: number;
   storagePath: string;
   prompt: string;
   provider: string;
@@ -118,6 +140,57 @@ export interface ScaffoldImage {
 
 export type CalculationStepInput = "selection" | "numeric" | "text" | "drag";
 
+/**
+ * What the child does at a step (SCRUM-177): tap, pick a choice, or enter a
+ * number. Beside `expectedInput`, which predates it and still says whether a
+ * typed answer is a number or an expression.
+ */
+export type CalculationStepEntry = "tap" | "choice" | "number";
+
+/** The drawings a scaffold can name (SCRUM-177). */
+export type CalculationScaffoldKind =
+  | "bar"
+  | "number_line"
+  | "dots"
+  | "array"
+  | "place_value";
+
+/**
+ * "A calculation drawing described as data, never as a generated image" -
+ * the spec's own description. Backend defined the rest (B100, 8 and 9 Oct):
+ * `rows` is the rendered row count, and `marks` are "overlays/values and do
+ * not create rows", so a bar may carry more marks than rows; `parts` is the
+ * cells in one row, an array's columns; `labels[i]` belongs to `marks[i]`,
+ * or to part i where there are no marks; and place value's marks are "the
+ * piece counts for the columns named by labels". `fromContent` reads them by
+ * that, and draws only what a frame draws.
+ *
+ * ABSENT IS AN INSTRUCTION: no `kind`, no drawing, and the front end infers
+ * none.
+ */
+export interface CalculationScaffold {
+  kind: CalculationScaffoldKind;
+  /** 1-100. */
+  parts: number;
+  /** The physical row count. 1-20, default 1. */
+  rows?: number;
+  marks?: CheckpointScalar[];
+  labels?: string[];
+}
+
+/**
+ * One thing a step's choreography names (B107): 17b's denominators ringed,
+ * numerators to navy, and the result, as data. `target` is "an opaque
+ * renderer target ... such as an equation token, scaffold mark or
+ * manipulative piece id. Match it only to an id carried by the same
+ * calculation; an unknown target is ignored rather than guessed." `role`
+ * defaults to `active`. A step's highlights apply while it is asked.
+ */
+export interface CalculationHighlight {
+  target: string;
+  role?: "active" | "source" | "result";
+}
+
 export interface CalculationStep {
   stepId: string;
   stepNumber: number;
@@ -159,11 +232,39 @@ export interface CalculationStep {
   /** How the equation should read once this step is done. */
   visualUpdate: string;
   equationState: string;
+  /**
+   * SCRUM-177's three, REQUIRED in the spec and optional here only so that
+   * content stored before them reads as what it is: a step that names no
+   * input cannot be drawn, and `fromContent` refuses it rather than guessing.
+   *
+   * `targets` are further acceptable answers the pipeline wrote down (Lydia
+   * on SCRUM-177: every acceptable form of a step is stored, and the child's
+   * entry is matched against that list - nothing is judged at runtime).
+   * `assembles` is the solution as it stands while this step is asked.
+   */
+  input?: CalculationStepEntry;
+  targets?: CheckpointScalar[];
+  assembles?: string;
+  /**
+   * How many pieces a `tap` step builds: a positive whole number (B102).
+   * Null on the other two inputs, and on content stored before it.
+   */
+  tapCount?: number | null;
+  /** What this step's scaffold choreography names (B107). */
+  highlights?: CalculationHighlight[];
 }
 
 export interface CalculationVariant {
   type: string;
+  /** The concept this calculation teaches, when the pipeline named one. */
+  conceptId?: string | null;
+  /**
+   * "The complete solved equation revealed when all co-construction steps
+   * finish" (spec; B101). The answer, so it is never the problem's stand-in.
+   */
   fullEquation: string;
+  /** The problem's notation, "3/5 + 1/5". Required in the spec (SCRUM-177). */
+  expression?: string;
   /**
    * The WHOLE calculation's answer, not any step's.
    *
@@ -174,7 +275,14 @@ export interface CalculationVariant {
    */
   answer?: string | number | boolean | null;
   steps: CalculationStep[];
-  scaffoldImage: ScaffoldImage | null;
+  /**
+   * Gone from the spec with SCRUM-177, which stopped generating an image for
+   * a calculation so a picture can never disagree with the drawn scaffold.
+   * Optional so content stored before it still types.
+   */
+  scaffoldImage?: ScaffoldImage | null;
+  /** The drawing, as data. Null or absent means there is none. */
+  scaffold?: CalculationScaffold | null;
   /** The structure a `drag` step is built on. Null on older content. */
   manipulative?: Manipulative | null;
   completionStatement: string;

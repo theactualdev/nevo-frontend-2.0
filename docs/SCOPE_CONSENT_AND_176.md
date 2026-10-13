@@ -131,7 +131,11 @@ where the questions come from and who marks them.
 
 ## 3. One thing that got more urgent
 
-`docs/BASELINE_EVENTS.md`, written today and cited line by line, is what Teslim
-asked for. It unblocks two things rather than one: SCRUM-175/176 and the
-baseline reduction are the same server-side move, and the server cannot own a
-reduction without knowing what the device emits.
+`docs/BASELINE_EVENTS.md`, written that day and citing the reducers line by line,
+is what Teslim asked for. It unblocks two things rather than one: SCRUM-175/176
+and the baseline reduction are the same server-side move, and the server cannot
+own a reduction without knowing what the device emits.
+
+**Since 6 Oct that page describes something else.** The server owns the
+reduction now: the device sends raw trials to `POST /api/baseline/trials` (B9),
+the reducers it cited are gone, and the page describes the trials instead.

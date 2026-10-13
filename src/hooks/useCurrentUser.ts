@@ -31,9 +31,16 @@ export interface Identity {
   email: string | null;
   /** The school's display name, not its id. */
   school: string | null;
+  /**
+   * The school's code - what a child types to sign in, so what a teacher
+   * reads out. Nullable on `SchoolSummary`, and blank is treated as absent.
+   */
+  schoolCode: string | null;
   subjects: string[];
   /** Their own photo, or null - every avatar falls back to initials. */
   photoUrl: string | null;
+  /** The name they chose to be called (`preferredName`), or null. */
+  chosenName: string | null;
 }
 
 function initialsFrom(name: string): string | null {
@@ -60,12 +67,16 @@ function toIdentity(user: CurrentUser): Identity {
     initials: name ? initialsFrom(name) : null,
     email: user.email,
     school: user.school?.name ?? null,
+    schoolCode: user.school?.code?.trim() || null,
     subjects: user.subjects ?? [],
     photoUrl: user.profileImageUrl ?? null,
+    chosenName: user.preferredName?.trim() || null,
   };
 }
 
 let cache: { userId: string; promise: Promise<Identity | null> } | null = null;
+/** The user whose last read failed - so a screen can say so, not "nobody". */
+let failedFor: string | null = null;
 
 function resolveIdentity(userId: string): Promise<Identity | null> {
   if (cache?.userId !== userId) {
@@ -74,7 +85,18 @@ function resolveIdentity(userId: string): Promise<Identity | null> {
       promise: usersApi
         .me()
         .then(toIdentity)
-        .catch(() => null),
+        .catch(() => {
+          /*
+           * A FAILURE IS NOT KEPT. It was cached like an answer, so one
+           * failed read meant "no identity" on every screen until a full
+           * reload - the profile page claiming the details "aren't
+           * connected yet" for the rest of the session. The next mount asks
+           * again.
+           */
+          if (cache?.userId === userId) cache = null;
+          failedFor = userId;
+          return null;
+        }),
     };
   }
   return cache.promise;
@@ -93,6 +115,7 @@ const listeners = new Set<(next: Identity | null) => void>();
 /** Replace the resolved identity after a successful write. */
 export function publishIdentity(user: CurrentUser): void {
   const next = toIdentity(user);
+  failedFor = null;
   cache = { userId: next.userId, promise: Promise.resolve(next) };
   listeners.forEach((fn) => fn(next));
 }
@@ -135,6 +158,51 @@ export async function uploadPhoto(file: File): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+export interface IdentityStatus {
+  identity: Identity | null;
+  /**
+   * WHICH NULL. `useCurrentUser` answers null while the read is in flight
+   * AND after it fails, and a screen that has to say something about the
+   * teacher cannot tell those apart from null alone - the profile page said
+   * "Teacher" and "Your details aren't connected yet" over both.
+   */
+  status: "loading" | "ready" | "failed";
+}
+
+export function useCurrentUserStatus(): IdentityStatus {
+  const [state, setState] = useState<IdentityStatus>({
+    identity: null,
+    status: "loading",
+  });
+
+  useEffect(() => {
+    const session = getSession();
+    if (!session) return;
+    let alive = true;
+    void resolveIdentity(session.userId).then((value) => {
+      if (!alive) return;
+      setState({
+        identity: value,
+        status: value
+          ? "ready"
+          : failedFor === session.userId
+            ? "failed"
+            : "ready",
+      });
+    });
+    const onPublish = (next: Identity | null) => {
+      if (alive) setState({ identity: next, status: "ready" });
+    };
+    listeners.add(onPublish);
+    return () => {
+      alive = false;
+      listeners.delete(onPublish);
+    };
+  }, []);
+
+  return state;
 }
 
 export function useCurrentUser(): Identity | null {

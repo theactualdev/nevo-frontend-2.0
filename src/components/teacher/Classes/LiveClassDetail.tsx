@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   OBSERVATION_COPY,
   observationCount,
 } from "@/lib/constants/observations";
-import { rosterMarker } from "@/lib/constants/accountStatus";
+import { accountStatus, rosterMarker } from "@/lib/constants/accountStatus";
 import { useTeacherFlags } from "@/hooks/useTeacherFlags";
-import { useState } from "react";
+import { useCallback, useState } from "react";
+import { AskAdminDialog, PinClearedDialog, RosterRowMenu } from "./RosterRowMenu";
+import { useSystemMessages } from "@/components/shared/SystemMessages";
 import { useClassLessons } from "@/hooks/useClassLessons";
 import type { AssignedClass } from "@/lib/api";
 import {
@@ -17,18 +18,26 @@ import {
   useClassRoster,
 } from "@/hooks/useClassRoster";
 import { cn } from "@/lib/utils";
-import { ClassQrDialog } from "./ClassQr";
+import { SummaryChip, SummaryCount } from "@/components/teacher/shared/SummaryChip";
+import { attentionByStudent, rosterCounts } from "@/components/teacher/shared/summaryState";
 
 /**
  * A class the school assigned, drawn from what the backend actually serves:
- * the assignment, the class code, and - since 30 Aug - the real roster from
+ * the assignment and - since 30 Aug - the real roster from
  * `GET /api/v1/classes/{class_id}/students`.
  *
- * What it still does not have is the intelligence layer. The fixture-backed
- * `ClassDetail` shows per-student chips, seats and "worth a glance" dots;
- * none of that has an endpoint, so these rows carry only what is real:
- * who is on the roster, whether Nevo has observed them yet, and when they
- * were last here.
+ * NO CLASS CODE, since design's 30 Sep rulings. A child now signs in with the
+ * school code and their own Student ID, and their roster row exists before
+ * they arrive, so a class code joins nobody to anything. C12 (the QR) and C18
+ * (the code screen) were deleted from the design that day; the button, its
+ * dialog and the `/code` route went with them.
+ *
+ * The fixture-backed `ClassDetail` shows per-student chips, seats and "worth
+ * a glance" dots, and these rows now draw all three from the backend: the
+ * roster read carries `observations` and `seatContext`, and "worth a
+ * glance" is the teacher's own flags from `useTeacherFlags`. Alongside
+ * them, who is on the roster, whether Nevo has observed them yet, and when
+ * they were last here.
  *
  * Rows link to the student's profile, which reads live since the student
  * endpoints were wired.
@@ -42,9 +51,21 @@ import { ClassQrDialog } from "./ClassQr";
  * (backend, 3 Sep), so its contents are guaranteed by the schema rather than
  * by an assurance, and the phrasing for each pattern is ours - it lives in
  * `constants/observations.ts` so the two screens that show them cannot drift.
+ *
+ * CLEARING A FORGOTTEN PIN (SCRUM-216 / SCRUM-217, C05 on 1 Oct). Each row has
+ * C05's menu - View profile, Clear PIN - beside the card rather than inside
+ * it, since a button cannot sit inside a link. The login identifier is always
+ * on the row now (SCRUM-133): it is how a child finds out their ID, by asking
+ * their teacher, and it used to hide whenever the row had a seat.
+ *
+ * WHAT C05 DRAWS THAT THIS DOES NOT, and why. C05 redraws the row as a table -
+ * Student, Student ID / Admission Number, Status - with no observation chips,
+ * and keeps an Activity tab design struck on 16 Sep. Which roster wins is
+ * design's call, so the C16b row stays and gains only what the three tickets
+ * add. "Forgot PIN", a "PIN cleared" that survives a reload and "Ask an admin
+ * about this" all need something the roster read does not carry yet.
  */
 export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
-  const [qr, setQr] = useState<"none" | "dialog">("none");
   /**
    * TWO TABS, NOT THREE. Design ruled on 16 Sep: the Lessons tab ships because
    * the library cannot be filtered by class, so nothing else answers "what has
@@ -54,8 +75,26 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
    * three, was changed to match rather than this one grown to meet it.
    */
   const [tab, setTab] = useState<"roster" | "lessons">("roster");
+  /** Whose row menu is open, by student id. One at a time. */
+  const [menuFor, setMenuFor] = useState<string | null>(null);
+  const closeMenu = useCallback(() => setMenuFor(null), []);
+  /**
+   * Children whose PIN this teacher cleared, this visit. The roster read has
+   * no field for it, so the row's "PIN cleared" lasts until a reload - true
+   * while it shows, because the server has just said so.
+   */
+  const [cleared, setCleared] = useState<Set<string>>(() => new Set());
+  const [clearedName, setClearedName] = useState<string | null>(null);
+  /**
+   * Deactivated children an admin has been asked about, this visit: the day
+   * it was sent, or "" when an earlier request stood. The roster read carries
+   * no field for it yet, so a reload offers the link again - and sending
+   * again is harmless, because the request is idempotent and says so.
+   */
+  const [raised, setRaised] = useState<Map<string, string>>(() => new Map());
+  const [askFor, setAskFor] = useState<{ studentId: string; firstName: string } | null>(null);
+  const say = useSystemMessages();
   const role = klass.role === "co_teacher" ? "Co-teacher" : "Primary teacher";
-  const router = useRouter();
   const { students, loading, failed } = useClassRoster(klass.classId);
   const observed = students.filter(
     (s) => s.profileStatus === "observed",
@@ -66,8 +105,16 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
    * second call. A flag the teacher has for a student in ANOTHER class simply
    * does not match, which is the behaviour we want.
    */
-  const { flags } = useTeacherFlags();
-  const flagFor = new Map(flags.map((f) => [f.studentId, f]));
+  const { flags, failed: flagsFailed, complete: flagsComplete } = useTeacherFlags();
+  const attention = attentionByStudent(flags);
+  /*
+   * C05's header counts, one per state and never summed (design, 12 Oct).
+   * The two read off the flags are left out when that read failed or stopped
+   * short: "0 worth a glance" over a read we do not have is a claim about the
+   * class, and a count over part of the list is a floor said as a total.
+   */
+  const counts = rosterCounts(students, attention, cleared);
+  const flagCountsKnown = !flagsFailed && flagsComplete;
 
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
@@ -92,48 +139,36 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
           My Classes
         </Link>
 
-        <div className="mt-4 flex flex-wrap items-end justify-between gap-5">
+        <div className="mt-3.5 flex flex-wrap items-end justify-between gap-5 xl:mt-4">
           <div>
-            <h2 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
+            <h1 className="text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
               {klass.className}
-            </h2>
-            <span className="mt-[5px] block text-[14.5px] text-nevo-near-black/60">
+            </h1>
+            <span className="mt-1 block text-sm text-nevo-near-black/60 xl:mt-[5px] xl:text-[14.5px]">
               {students.length > 0
                 ? `${role} · ${students.length} ${students.length === 1 ? "student" : "students"}`
                 : `${role} · Synced from your school`}
             </span>
           </div>
-          {klass.classCode && (
-            <button
-              type="button"
-              onClick={() => setQr("dialog")}
-              className="inline-flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-[10px] border-[1.5px] border-nevo-navy/35 px-4 text-sm font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
-            >
-              <svg
-                width="17"
-                height="17"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.9"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden
-              >
-                <rect x="3" y="3" width="7" height="7" rx="1.5" />
-                <rect x="14" y="3" width="7" height="7" rx="1.5" />
-                <rect x="3" y="14" width="7" height="7" rx="1.5" />
-                <path d="M14 14h3v3h-3zM20 14h1M14 20h3M20 20h1" />
-              </svg>
-              Class code
-            </button>
+          {students.length > 0 && (
+            <div className="flex flex-wrap gap-4">
+              {flagCountsKnown && counts.glance > 0 && (
+                <SummaryCount state="glance" count={counts.glance} />
+              )}
+              {flagCountsKnown && counts.flagged > 0 && (
+                <SummaryCount state="flagged" count={counts.flagged} />
+              )}
+              {counts.cantSignIn > 0 && (
+                <SummaryCount state="cantSignIn" count={counts.cantSignIn} />
+              )}
+            </div>
           )}
         </div>
 
 
         {/* Roster / Lessons. Read-only on the Lessons side: design was explicit
             that "Library stays the only place a lesson is created". */}
-        <div className="mt-6 flex gap-1.5" role="tablist" aria-label="Class views">
+        <div className="mt-6 flex gap-1.5 xl:mt-[22px] xl:gap-2.5" role="tablist" aria-label="Class views">
           {(["roster", "lessons"] as const).map((t) => (
             <button
               key={t}
@@ -142,7 +177,7 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
               aria-selected={tab === t}
               onClick={() => setTab(t)}
               className={cn(
-                "h-9 cursor-pointer rounded-[9px] px-3.5 text-[13.5px] font-medium capitalize transition-colors",
+                "h-9 cursor-pointer rounded-[10px] px-3.5 text-[13.5px] font-medium capitalize transition-colors xl:rounded-full xl:px-[15px]",
                 tab === t
                   ? "bg-nevo-navy text-nevo-cream"
                   : "text-nevo-near-black/65 hover:bg-nevo-navy/8",
@@ -169,6 +204,16 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
             <h3 className="mt-7 text-[13.5px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase xl:mt-8 xl:text-sm">
               Student observations
             </h3>
+            {/* The markers come from the flags read. When it failed, every
+                "Worth a glance" vanished with nothing saying so - a roster
+                with no markers reads as a class with nothing worth a glance.
+                Home's sentence for the same failure. */}
+            {flagsFailed && (
+              <p className="mt-2 max-w-[560px] text-[13px] leading-[1.5] text-nevo-near-black/55 italic">
+                We couldn&rsquo;t read what needs your attention just now, so
+                no one below is marked.
+              </p>
+            )}
             {/*
              * C16b's own line, leading the existing profile count rather than
              * stacked above it.
@@ -186,31 +231,78 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
                 ? "Nobody here has been watched long enough for a learning profile yet. That starts with their first lesson."
                 : `Nevo has a learning profile for ${observed} of ${students.length}. The rest build as they work.`}
             </p>
+            {/* C05's line, over the rows that now carry Clear PIN. */}
+            <p className="mt-1.5 max-w-[560px] text-[13px] leading-[1.5] text-nevo-near-black/60 xl:max-w-[640px] xl:text-[13.5px] xl:leading-[1.55]">
+              If a child forgets their PIN, you can clear it and they choose a
+              new one themselves. A deactivated learner can&rsquo;t sign in;
+              your admin manages access.
+            </p>
             <div className="mt-3.5 flex flex-col gap-2 xl:mt-4">
-              {students.map((student) => (
-                <Link
+              {students.map((student, i) => {
+                const href = `/teacher/students/${student.studentId}?class=${klass.classId}`;
+                const firstName = student.firstName?.trim() || studentName(student);
+                const marker = rosterMarker(student.status);
+                const deactivated = accountStatus(student.status) === "deactivated";
+                // Account access comes first and replaces the rest (C05).
+                // Cleared: the server's word since 12 Oct, or this visit's.
+                const pinCleared =
+                  !marker &&
+                  !deactivated &&
+                  (student.pinCleared === true || cleared.has(student.studentId));
+                // Then a PIN the child asked for and nobody has cleared yet.
+                const pinAsked = !marker && !pinCleared && student.pinResetRequested === true;
+                const raisedOn = deactivated ? raised.get(student.studentId) : undefined;
+                // Room on the right for what C05 puts on the row beside the menu.
+                const stripPad = pinAsked
+                  ? "pr-[128px] xl:pr-[140px]"
+                  : deactivated && raisedOn === undefined
+                    ? "pr-[150px] xl:pr-[240px]"
+                    : deactivated
+                      ? "pr-[140px] xl:pr-[220px]"
+                      : null;
+                return (
+                <div
                   key={student.studentId}
-                  href={`/teacher/students/${student.studentId}?class=${klass.classId}`}
+                  className={cn("relative", menuFor === student.studentId && "z-20")}
+                >
+                <Link
+                  href={href}
                   className={cn(
                     "cursor-pointer transition-[filter] hover:brightness-[0.985]",
-                    "flex flex-col rounded-[12px] bg-nevo-cream-elevated px-[18px] py-4 shadow-elevation-1 xl:flex-row xl:items-center xl:gap-4 xl:p-5",
+                    "flex flex-col rounded-[12px] bg-nevo-cream-elevated py-4 pr-14 pl-[18px] shadow-elevation-1 xl:flex-row xl:items-center xl:gap-4 xl:py-5 xl:pr-16 xl:pl-5",
+                    stripPad,
                     student.profileStatus === "observed" &&
                       "border-l-[3px] border-nevo-violet",
                   )}
                 >
-                  <div className="flex min-w-0 items-baseline gap-1.5 xl:w-[36%] xl:shrink-0 xl:flex-col xl:gap-0">
+                  <div className="flex min-w-0 flex-col xl:w-[36%] xl:shrink-0">
                     <span className="truncate text-[15px] font-semibold text-nevo-near-black">
                       {studentName(student)}
                     </span>
-                    {/* `seatContext` is a plain string from the roster read -
-                        "Seat 12" in C16b's own sample - and was also arriving
-                        unused. Preferred over the login identifier here, which
-                        is an account detail rather than something a teacher
-                        looking at a class needs. */}
-                    {(student.seatContext || student.loginIdentifier) && (
-                      <span className="shrink-0 text-[12px] text-nevo-near-black/55 xl:mt-0.5">
-                        <span className="xl:hidden">{"· "}</span>
-                        {student.seatContext || student.loginIdentifier}
+                    {/* The login identifier, ALWAYS (SCRUM-133): it is how
+                        a child finds out their ID - they ask their teacher.
+                        It used to give way to `seatContext`, so a class with
+                        seats showed nobody's ID. The seat sits beside it. */}
+                    {/* And the admission number beside it: sign-in takes
+                        either. LABELLED, because design's reference (30 Sep)
+                        says the identifier is always "Student ID / Admission
+                        Number", both words, everywhere a person reads it - and
+                        an unlabelled "amara.o · BGA/2107" is two codes a
+                        teacher has to guess at. */}
+                    {(student.loginIdentifier || student.admissionNumber || student.seatContext) && (
+                      <span className="mt-0.5 text-[12px] text-nevo-near-black/55 tabular-nums">
+                        {(student.loginIdentifier || student.admissionNumber) && (
+                          <>
+                            <span className="text-nevo-near-black/45">
+                              Student ID / Admission Number
+                            </span>{" "}
+                            {[student.loginIdentifier, student.admissionNumber]
+                              .filter(Boolean)
+                              .join(" · ")}
+                            {student.seatContext && " · "}
+                          </>
+                        )}
+                        {student.seatContext}
                       </span>
                     )}
                   </div>
@@ -296,9 +388,24 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
                    * as a state rather than competing with the attention markers
                    * next to it - and it says its word, like they do.
                    */}
-                  {rosterMarker(student.status) && (
+                  {marker && (
                     <span className="mt-1.5 shrink-0 rounded-full border border-nevo-near-black/22 px-2.5 py-1 text-[12px] font-medium whitespace-nowrap text-nevo-near-black/62 xl:mt-0">
-                      {rosterMarker(student.status)}
+                      {marker}
+                    </span>
+                  )}
+                  {pinCleared && (
+                    <span className="mt-1.5 inline-flex shrink-0 items-center gap-[7px] self-start rounded-full bg-nevo-near-black/7 px-3 py-[5px] text-[13px] font-semibold whitespace-nowrap text-nevo-near-black/60 xl:mt-0 xl:self-auto xl:px-[13px]">
+                      <span className="size-[7px] shrink-0 rounded-full bg-nevo-near-black/30" aria-hidden />
+                      {/* C05 tablet says less than desktop. */}
+                      <span className="xl:hidden">PIN cleared</span>
+                      <span className="hidden xl:inline">PIN cleared &middot; new one not chosen yet</span>
+                    </span>
+                  )}
+                  {/* C05's "Forgot PIN", sent from the child's sign-in screen. */}
+                  {pinAsked && (
+                    <span className="mt-1.5 inline-flex shrink-0 items-center gap-[7px] self-start rounded-full bg-nevo-violet/22 px-3 py-[5px] text-[13px] font-semibold whitespace-nowrap text-nevo-navy xl:mt-0 xl:self-auto xl:px-[13px]">
+                      <span className="size-[7px] shrink-0 rounded-full bg-nevo-violet" aria-hidden />
+                      Forgot PIN
                     </span>
                   )}
                   {/*
@@ -318,26 +425,57 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
                    * simply does not match, which is what we want.
                    */}
                   {(() => {
-                    const flag = flagFor.get(student.studentId);
-                    if (!flag) return null;
+                    // C05's precedence: account access first, then a cleared
+                    // PIN, then attention - "each replaces the next rather
+                    // than stacking". A switched-off child's flag is history,
+                    // not a prompt.
+                    if (marker || pinCleared || pinAsked) return null;
+                    const state = attention.get(student.studentId);
+                    if (!state) return null;
+                    // Design's chip system (12 Oct): Worth a glance is the
+                    // violet OUTLINE, the quietest; a sudden change is the
+                    // navy fill with its arrow, and outranks it.
                     return (
-                      <span
-                        className={cn(
-                          "mt-1.5 shrink-0 rounded-full px-2.5 py-1 text-[12px] font-medium whitespace-nowrap xl:mt-0",
-                          flag.isSudden
-                            ? "bg-nevo-navy text-nevo-cream"
-                            : "bg-nevo-violet/22 text-nevo-navy",
-                        )}
-                      >
-                        {flag.isSudden ? "Sudden change" : "Worth a glance"}
-                      </span>
+                      <SummaryChip
+                        state={state}
+                        className="mt-1.5 self-start xl:mt-0 xl:self-auto"
+                      />
                     );
                   })()}
                   <span className="mt-1 shrink-0 text-[13px] whitespace-nowrap text-nevo-near-black/55 xl:mt-0">
                     {lastSeenLine(student)}
                   </span>
                 </Link>
-              ))}
+                <div className="absolute top-3 right-3 xl:top-0 xl:right-4 xl:bottom-0 xl:flex xl:items-center">
+                  <RosterRowMenu
+                    studentId={student.studentId}
+                    firstName={firstName}
+                    status={student.status}
+                    profileHref={href}
+                    open={menuFor === student.studentId}
+                    up={students.length > 4 && i >= students.length - 4}
+                    onToggle={() =>
+                      setMenuFor((open) =>
+                        open === student.studentId ? null : student.studentId,
+                      )
+                    }
+                    onClose={closeMenu}
+                    onCleared={() => {
+                      setCleared((prev) => new Set(prev).add(student.studentId));
+                      setMenuFor(null);
+                      setClearedName(firstName);
+                    }}
+                    pinAsked={pinAsked}
+                    raised={raisedOn ?? null}
+                    onAsk={() => {
+                      setMenuFor(null);
+                      setAskFor({ studentId: student.studentId, firstName });
+                    }}
+                  />
+                </div>
+                </div>
+                );
+              })}
             </div>
             <div className="mt-4 flex items-center gap-[7px] text-[12px] text-nevo-near-black/55">
               <span className="size-2 shrink-0 rounded-full bg-nevo-violet" />
@@ -373,35 +511,53 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
               <p className="mt-1.5 text-sm leading-[1.55] text-nevo-near-black/68 xl:text-[14.5px]">
                 {failed
                   ? "Nothing has changed for your students. Try again in a moment."
-                  : klass.classCode
-                    ? "Share the class code and your students will appear here as they join."
-                    : "Your students will appear here as your school adds them."}
+                  : "Your students will appear here as your school adds them."}
               </p>
+              {/* "Try again" with nothing to press. The class route's own
+                  failure card has always had the button; this one did not. */}
+              {failed && (
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                  className="mt-4 h-10 cursor-pointer rounded-[10px] border-[1.5px] border-nevo-navy/35 px-4 text-sm font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
+                >
+                  Try again
+                </button>
+              )}
             </div>
           </div>
         )}
         {tab === "lessons" && <LessonsPanel classId={klass.classId} />}
       </div>
 
-      {qr === "dialog" && klass.classCode && (
-        <ClassQrDialog
-          className={klass.className}
-          code={klass.classCode}
-          onClose={() => setQr("none")}
-          /*
-           * Projecting now NAVIGATES, where it used to swap local state for an
-           * overlay with no URL. Design's ruling for the standalone route is
-           * that teachers "project it, read it aloud and return to it", and a
-           * projection you cannot link or reopen fails the third of those: the
-           * teacher who closed it had to walk back through class detail and
-           * the dialog to get it up again.
-           *
-           * The route renders the same `ClassQrScreen`, so nothing about what
-           * is projected changes - only that it now has an address.
-           */
-          onProject={() => router.push(`/teacher/classes/${klass.classId}/code`)}
+      {askFor && (
+        <AskAdminDialog
+          studentId={askFor.studentId}
+          firstName={askFor.firstName}
+          onCancel={() => setAskFor(null)}
+          onSent={(status) => {
+            setRaised((prev) =>
+              new Map(prev).set(
+                askFor.studentId,
+                status === "notified"
+                  ? new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short" })
+                  : "",
+              ),
+            );
+            setAskFor(null);
+            // C05's own confirmation. True for an earlier request too: the
+            // admins were told then.
+            say.show({ kind: "confirm", message: "Your admin has been notified." });
+          }}
         />
       )}
+      {clearedName && (
+        <PinClearedDialog
+          firstName={clearedName}
+          onDone={() => setClearedName(null)}
+        />
+      )}
+
     </div>
   );
 }
@@ -472,7 +628,7 @@ function LessonsPanel({ classId }: { classId: string }) {
            * a teacher acts on the wrong one.
            */}
           {l.opensAt && !l.cancelled && (
-            <span className="shrink-0 rounded-[7px] border border-nevo-navy/25 px-2 py-1 text-[12px] text-nevo-near-black/65">
+            <span className="shrink-0 rounded-full border border-nevo-navy/25 px-2 py-1 text-[12px] text-nevo-near-black/65">
               Opens later
             </span>
           )}

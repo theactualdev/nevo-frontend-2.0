@@ -129,20 +129,41 @@ export function NotificationsPanel({
     };
   }, [onClose]);
 
+  /*
+   * A FAILED WRITE PUTS THE ROWS BACK, as `onArchive` below already did. Both
+   * of these painted rows read before the server answered, and on a refusal
+   * mark-all reverted only its own button while every dot stayed cleared -
+   * and a single row's failure was swallowed outright - so the panel showed
+   * as read what the server still held unread. The full page fixed this for
+   * itself; the panel had not.
+   */
   const markAllRead = () => {
+    const before = rows;
     setAllRead(true);
     setRows((prev) => prev?.map((n) => ({ ...n, read: true })) ?? prev);
     notificationsApi
       .markAllRead()
       .then(onReadStateChanged)
-      .catch(() => setAllRead(false));
+      .catch(() => {
+        setAllRead(false);
+        setRows(before);
+      });
   };
 
   const onRead = (id: string) => {
+    const wasUnread = rows?.some((n) => n.notificationId === id && !n.read) ?? false;
     setRows((prev) =>
       prev?.map((n) => (n.notificationId === id ? { ...n, read: true } : n)) ?? prev,
     );
-    notificationsApi.markRead(id).then(onReadStateChanged).catch(() => undefined);
+    notificationsApi
+      .markRead(id)
+      .then(onReadStateChanged)
+      .catch(() => {
+        if (!wasUnread) return;
+        setRows((prev) =>
+          prev?.map((n) => (n.notificationId === id ? { ...n, read: false } : n)) ?? prev,
+        );
+      });
   };
 
   /*

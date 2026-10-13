@@ -10,6 +10,7 @@ import type {
 } from "@/lib/mocks/teacherLibrary";
 import { VariantReview } from "./VariantReview";
 import { LiveVariantReview } from "./LiveVariantReview";
+import { SampleRegion } from "@/components/shared/SampleRegion";
 
 /**
  * C16d was never actually blocked, and the paragraph that used to sit here
@@ -24,13 +25,11 @@ import { LiveVariantReview } from "./LiveVariantReview";
  *    by `GET /api/v1/lessons/{lesson_id}` and `GET /api/content/lessons/
  *    {lessonId}`, and are typed locally at `lib/api/variants.ts`.
  *
- * So the honest state below is now OVER-honest: it tells a signed-in teacher
- * variants are unavailable when the lesson read they came from carries them.
- * Nothing consumes `variantsApi` yet, which is why this still renders - but
- * that is unbuilt work, no longer a blocker.
- *
- * TODO(api): nothing. TODO(fe): consume the variants off the lesson read and
- * render C16d for a signed-in teacher.
+ * So a signed-in teacher gets C16d for real: the route reads the lesson,
+ * picks the section by its number, and hands it to `LiveVariantReview`. The
+ * fixture screen is for a visitor with no session, and the states at the
+ * bottom are the two genuine misses - a lesson that would not load, and a
+ * section number it does not have.
  */
 export function VariantReviewRoute({
   fixture,
@@ -50,11 +49,14 @@ export function VariantReviewRoute({
 
   if (!getToken() && fixture) {
     const max = fixture.detail.sections.length;
+    // Marked like its siblings - ClassRoute, LessonRoute, StudentRoute.
     return (
-      <VariantReview
-        lesson={fixture}
-        sectionIndex={Math.min(sectionIndex, max)}
-      />
+      <SampleRegion kind="teacher:variant-review">
+        <VariantReview
+          lesson={fixture}
+          sectionIndex={Math.min(sectionIndex, max)}
+        />
+      </SampleRegion>
     );
   }
 
@@ -109,13 +111,13 @@ export function VariantReviewRoute({
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
       <div className="mx-auto max-w-[660px] rounded-[12px] bg-nevo-cream-elevated px-[26px] py-7 shadow-elevation-1">
-        <h2 className="text-[17px] font-semibold text-nevo-near-black">
+        <h1 className="text-[17px] font-semibold text-nevo-near-black">
           {missing
             ? "We couldn’t find this lesson"
             : outOfRange
               ? "This lesson has no section " + sectionIndex
               : "We couldn’t load this lesson"}
-        </h2>
+        </h1>
         <p className="mt-2 text-sm leading-[1.55] text-nevo-near-black/62">
           {missing
             ? "It may have been removed from your library."

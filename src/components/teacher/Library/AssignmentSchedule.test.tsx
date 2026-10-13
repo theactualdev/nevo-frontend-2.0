@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { Assignment } from "@/lib/api/assignments";
 
@@ -10,7 +10,13 @@ const { applyToAssignments, useTeacherClasses } = vi.hoisted(() => ({
 vi.mock("@/lib/api/assignments", () => ({ applyToAssignments }));
 vi.mock("@/hooks/useTeacherClasses", () => ({ useTeacherClasses }));
 
-import { AssignmentSchedule, describeWindow, groupByClass } from "./AssignmentSchedule";
+import {
+  AssignmentSchedule,
+  describeWindow,
+  groupByClass,
+  onDay,
+  toDateInput,
+} from "./AssignmentSchedule";
 
 /**
  * Editing and cancelling an assignment (C06b).
@@ -45,6 +51,19 @@ const CLASS_OF_THREE = [
   row({ id: "a-2", studentId: "s-2" }),
   row({ id: "a-3", studentId: "s-3" }),
 ];
+
+/*
+ * A FIXED TODAY - 20 Sep 2026, before every date these rows carry. The editor
+ * refuses a date moved into the past (C04), so a suite on the real clock would
+ * start failing by itself the day its fixtures went by.
+ */
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(2026, 8, 20, 12, 0));
+});
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 beforeEach(() => {
   applyToAssignments.mockReset();
@@ -457,5 +476,256 @@ describe("a child who has already finished", () => {
     expect(
       screen.queryByRole("button", { name: /Change dates/i }),
     ).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * "TRY THE REST" REPEATS WHAT FAILED, NOT A CANCEL.
+ *
+ * The audit's most severe finding. The retry was hardwired to cancel, so a
+ * partial DATE change or a partial RESTORE, retried, cancelled the lesson for
+ * the children whose write had failed. Only the cancel retry was tested -
+ * which is exactly the one case the hardwiring got right.
+ */
+describe("finishing a write that only partly landed", () => {
+  it("retries a partial date change as a date change", async () => {
+    applyToAssignments.mockResolvedValue({ ok: ["a-1", "a-2"], failed: ["a-3"] });
+    render(<AssignmentSchedule assignments={CLASS_OF_THREE} />);
+    fireEvent.click(screen.getByRole("button", { name: /Change dates/i }));
+    fireEvent.change(screen.getByLabelText(/Due/i), { target: { value: "2026-11-01" } });
+    fireEvent.click(screen.getByRole("button", { name: /Save dates/i }));
+
+    applyToAssignments.mockClear();
+    fireEvent.click(await screen.findByRole("button", { name: /Try the rest/i }));
+
+    expect(applyToAssignments).toHaveBeenCalledTimes(1);
+    expect(applyToAssignments).toHaveBeenCalledWith(
+      ["a-3"],
+      expect.objectContaining({ dueAt: "2026-11-01T00:00:00.000Z" }),
+    );
+    expect(applyToAssignments).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ status: "cancelled" }),
+    );
+  });
+
+  it("retries a partial restore as a restore", async () => {
+    const CANCELLED = CLASS_OF_THREE.map((a) => ({ ...a, status: "cancelled" }));
+    applyToAssignments.mockResolvedValue({ ok: ["a-1"], failed: ["a-2", "a-3"] });
+    render(<AssignmentSchedule assignments={CANCELLED} />);
+    fireEvent.click(screen.getByRole("button", { name: /Set it again/i }));
+
+    applyToAssignments.mockClear();
+    fireEvent.click(await screen.findByRole("button", { name: /Try the rest/i }));
+
+    expect(applyToAssignments).toHaveBeenCalledWith(["a-2", "a-3"], { status: "assigned" });
+  });
+
+  it("still retries a partial cancel as a cancel", async () => {
+    applyToAssignments.mockResolvedValue({ ok: ["a-1", "a-2"], failed: ["a-3"] });
+    render(<AssignmentSchedule assignments={CLASS_OF_THREE} />);
+    openConfirm();
+    fireEvent.click(screen.getByRole("button", { name: /Yes, cancel it/i }));
+
+    applyToAssignments.mockClear();
+    fireEvent.click(await screen.findByRole("button", { name: /Try the rest/i }));
+
+    expect(applyToAssignments).toHaveBeenCalledWith(["a-3"], { status: "cancelled" });
+  });
+
+  it("reports the retried date change honestly when it lands", async () => {
+    applyToAssignments
+      .mockResolvedValueOnce({ ok: ["a-1", "a-2"], failed: ["a-3"] })
+      .mockResolvedValueOnce({ ok: ["a-3"], failed: [] });
+    render(<AssignmentSchedule assignments={CLASS_OF_THREE} />);
+    fireEvent.click(screen.getByRole("button", { name: /Change dates/i }));
+    fireEvent.change(screen.getByLabelText(/Due/i), { target: { value: "2026-11-01" } });
+    fireEvent.click(screen.getByRole("button", { name: /Save dates/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /Try the rest/i }));
+
+    expect(await screen.findByText(/Dates updated/)).toBeInTheDocument();
+    expect(screen.queryByText(/Cancelled/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * "A CLASS". The group names came from the teacher's class list alone - the
+ * fixture three while it loads or after it fails, none of whose ids match a
+ * real class - so the cancel confirmation asked to cancel the lesson "for 7
+ * students in A class". The lesson read names every class it went to.
+ */
+describe("naming the class a group belongs to", () => {
+  it("uses the lesson's own class name while the class list is not in", () => {
+    useTeacherClasses.mockReturnValue({ options: [], live: false, loading: true, sample: false });
+    render(
+      <AssignmentSchedule
+        assignments={CLASS_OF_THREE}
+        classes={[{ id: CLASS_OF_THREE[0].classId as string, name: "Year 7 Blue" }]}
+      />,
+    );
+
+    expect(screen.getAllByText(/Year 7 Blue/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/A class/)).not.toBeInTheDocument();
+  });
+
+  it("never takes a name from a fixture class list", () => {
+    // A fixture whose id happened to collide would name a real group after
+    // an invented class. Only a live list may name anything.
+    useTeacherClasses.mockReturnValue({
+      options: [{ id: CLASS_OF_THREE[0].classId as string, name: "JSS 2A" }],
+      live: false,
+      loading: false,
+      sample: true,
+    });
+    render(<AssignmentSchedule assignments={CLASS_OF_THREE} />);
+
+    expect(screen.queryByText(/JSS 2A/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * C03. The editor read dates in UTC, wrote every date back as midnight UTC,
+ * and sent both fields whichever one moved - so changing a due date moved an
+ * 08:00 opening to 01:00 as well, and a lesson opening just after midnight in
+ * Lagos showed the day before.
+ *
+ * Built from local times, so these hold in whatever zone the run is in.
+ */
+describe("dates in the teacher's own day (C03)", () => {
+  const local = (y: number, m: number, d: number, h = 0, min = 0) =>
+    new Date(y, m - 1, d, h, min).toISOString();
+
+  it("reads the date as the teacher's day, not UTC's", () => {
+    expect(toDateInput(local(2026, 10, 10, 0, 30))).toBe("2026-10-10");
+    expect(toDateInput(local(2026, 10, 10, 23, 30))).toBe("2026-10-10");
+  });
+
+  it("keeps the time a date had when the day moves", () => {
+    const moved = new Date(onDay("2026-10-05", local(2026, 10, 3, 8, 0), "start")!);
+
+    expect([moved.getDate(), moved.getHours(), moved.getMinutes()]).toEqual([5, 8, 0]);
+  });
+
+  it("opens a date that had no time at the start of its day", () => {
+    const opens = new Date(onDay("2026-10-05", null, "start")!);
+
+    expect([opens.getDate(), opens.getHours(), opens.getMinutes()]).toEqual([5, 0, 0]);
+  });
+
+  it("makes a new due date due by the end of its day, not before it starts", () => {
+    const due = new Date(onDay("2026-10-05", null, "end")!);
+
+    expect([due.getDate(), due.getHours(), due.getMinutes()]).toEqual([5, 23, 59]);
+  });
+
+  it("keeps an emptied box as no date", () => {
+    expect(onDay("", local(2026, 10, 3, 8, 0), "start")).toBeNull();
+  });
+
+  it("sends only the date that moved", async () => {
+    applyToAssignments.mockResolvedValue({ ok: ["a-1"], failed: [] });
+    render(<AssignmentSchedule assignments={[row({ availableFrom: local(2026, 10, 3, 8, 0) })]} />);
+    fireEvent.click(screen.getByRole("button", { name: /Change dates/i }));
+    fireEvent.change(screen.getByLabelText(/Due/i), { target: { value: "2026-11-01" } });
+    fireEvent.click(screen.getByRole("button", { name: /Save dates/i }));
+
+    const sent = applyToAssignments.mock.calls[0][1];
+    expect(Object.keys(sent)).toEqual(["dueAt"]);
+    expect(await screen.findByText(/Dates updated/)).toBeInTheDocument();
+  });
+
+  it("offers no Save until something has moved", () => {
+    render(<AssignmentSchedule assignments={[row()]} />);
+    fireEvent.click(screen.getByRole("button", { name: /Change dates/i }));
+
+    expect(screen.getByRole("button", { name: /Save dates/i })).toBeDisabled();
+  });
+});
+
+/**
+ * C04: a date MOVED into the past is refused, with C07i's own sentence. A
+ * date that was already behind - a lesson that opened last week - is left
+ * alone, because nothing about it is being asked for.
+ */
+describe("moving a date into the past", () => {
+  /** Today is 5 Oct: these rows opened on the 3rd and are due on the 10th. */
+  beforeEach(() => {
+    vi.setSystemTime(new Date(2026, 9, 5, 12, 0));
+  });
+  const edit = () => {
+    render(<AssignmentSchedule assignments={CLASS_OF_THREE} />);
+    fireEvent.click(screen.getByRole("button", { name: /Change dates/i }));
+  };
+
+  it("refuses a due date moved behind today", () => {
+    edit();
+    fireEvent.change(screen.getByLabelText(/Due/i), { target: { value: "2026-10-04" } });
+
+    expect(screen.getByRole("alert")).toHaveTextContent("That date has already passed.");
+    expect(screen.getByRole("button", { name: /Save dates/i })).toBeDisabled();
+  });
+
+  it("refuses an opening date moved behind today", () => {
+    edit();
+    fireEvent.change(screen.getByLabelText(/Opens/i), { target: { value: "2026-10-01" } });
+
+    expect(screen.getByRole("alert")).toHaveTextContent("That date has already passed.");
+    expect(screen.getByRole("button", { name: /Save dates/i })).toBeDisabled();
+  });
+
+  it("takes today itself", () => {
+    edit();
+    fireEvent.change(screen.getByLabelText(/Due/i), { target: { value: "2026-10-05" } });
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Save dates/i })).toBeEnabled();
+  });
+
+  it("leaves an opening date that was already behind alone while the due date moves", async () => {
+    applyToAssignments.mockResolvedValue({ ok: ["a-1", "a-2", "a-3"], failed: [] });
+    edit();
+    fireEvent.change(screen.getByLabelText(/Due/i), { target: { value: "2026-10-20" } });
+    fireEvent.click(screen.getByRole("button", { name: /Save dates/i }));
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(applyToAssignments).toHaveBeenCalled();
+    expect(applyToAssignments.mock.calls[0][1]).not.toHaveProperty("availableFrom");
+    await vi.waitFor(() =>
+      expect(screen.queryByRole("button", { name: /Save dates/i })).not.toBeInTheDocument(),
+    );
+  });
+
+  it("offers no day before today in either picker", () => {
+    edit();
+
+    expect(screen.getByLabelText(/Opens/i)).toHaveAttribute("min", "2026-10-05");
+    expect(screen.getByLabelText(/Due/i)).toHaveAttribute("min", "2026-10-05");
+  });
+
+  it("puts the order of the dates first when both are wrong", () => {
+    edit();
+    fireEvent.change(screen.getByLabelText(/Due/i), { target: { value: "2026-10-01" } });
+    fireEvent.change(screen.getByLabelText(/Opens/i), { target: { value: "2026-10-04" } });
+
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    expect(screen.getByRole("alert")).toHaveTextContent(/cannot be due before it opens/i);
+  });
+});
+
+/** C17: dates moved and not yet saved are work too. */
+describe("dates moved but not saved", () => {
+  const leavingAsks = () => {
+    const e = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(e);
+    return e.defaultPrevented;
+  };
+
+  it("make the browser ask before leaving, and only once something moved", () => {
+    render(<AssignmentSchedule assignments={CLASS_OF_THREE} />);
+    fireEvent.click(screen.getByRole("button", { name: /Change dates/i }));
+    expect(leavingAsks()).toBe(false);
+
+    fireEvent.change(screen.getByLabelText(/Due/i), { target: { value: "2026-11-01" } });
+    expect(leavingAsks()).toBe(true);
   });
 });

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { classifyLoginFailure } from "./loginFailure";
+import {
+  classifyLearnerLoginFailure,
+  classifyLoginFailure,
+} from "./loginFailure";
 import { ApiError } from "@/lib/api/client";
 
 /**
@@ -88,5 +91,35 @@ describe("classifyLoginFailure", () => {
 
   it("blames itself when the network never answered", () => {
     expect(classifyLoginFailure(new TypeError("fetch failed"))).toBe("ours");
+  });
+});
+
+/**
+ * B58 and D53: a removed child's right PIN is answered 401 `account_closed`.
+ * Unread, that code fell to "credentials" and the child was told their PIN did
+ * not match. The child's doors read it; the staff doors are left as they were.
+ */
+describe("classifyLearnerLoginFailure", () => {
+  it("knows a closed account from a wrong PIN, and from a paused one", () => {
+    expect(classifyLearnerLoginFailure(refusal("account_closed"))).toBe("closed");
+    expect(classifyLearnerLoginFailure(refusal("account_paused"))).toBe("paused");
+  });
+
+  it("reads every other failure exactly as the staff doors do", () => {
+    for (const cause of [
+      refusal("authentication_failed"),
+      refusal("too_many_attempts"),
+      refusal("some_future_code"),
+      new ApiError(500, "x", { detail: { code: "account_closed" } }),
+      new ApiError(0, "offline"),
+    ]) {
+      expect(classifyLearnerLoginFailure(cause)).toBe(classifyLoginFailure(cause));
+    }
+  });
+
+  it("leaves the staff classifier as it was", () => {
+    // No staff frame draws a closed state, and their doors' maps are typed on
+    // `LoginFailure`, which this ruling does not widen.
+    expect(classifyLoginFailure(refusal("account_closed"))).toBe("credentials");
   });
 });

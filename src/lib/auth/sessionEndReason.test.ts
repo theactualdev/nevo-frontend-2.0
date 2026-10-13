@@ -28,6 +28,12 @@ describe("mapping the wire code", () => {
     expect(sessionEndReason("account_paused")).toBe("paused");
   });
 
+  it("keeps a closed account apart from a paused one (B58)", () => {
+    // Its own 401 code since 5 Oct. Folding it into `paused` is the exact
+    // thing design ruled against (D53): a removed child told "on pause".
+    expect(sessionEndReason("account_closed")).toBe("closed");
+  });
+
   it("falls back to the ordinary screen for a code added after this shipped", () => {
     // The set has already grown once, from four to five. Guessing `paused` or
     // `replaced` would tell someone something specific and false about their
@@ -65,11 +71,8 @@ describe("what each screen says", () => {
   it("tells someone what to do if it was not them", () => {
     // The whole reason this state is drawn separately. Design: "if it was not
     // them they need to know."
-    expect(sessionEndCopy("replaced", "staff").note).toMatch(
+    expect(sessionEndCopy("replaced").note).toMatch(
       /wasn’t you.*school administrator/i,
-    );
-    expect(sessionEndCopy("replaced", "learner").note).toMatch(
-      /wasn’t you.*teacher/i,
     );
   });
 });
@@ -89,25 +92,28 @@ describe("a paused account", () => {
     }
   });
 
-  it("points staff one level up and learners at their teacher", () => {
+  it("points staff one level up", () => {
     // The learner frame says "talk to your teacher". A teacher cannot be told
     // that, which is why this screen was blocked before the ruling.
-    expect(sessionEndCopy("paused", "staff").body).toMatch(
-      /school administrator/i,
-    );
-    expect(sessionEndCopy("paused", "learner").body).toMatch(/your teacher/i);
-    expect(sessionEndCopy("paused", "staff").body).not.toMatch(/your teacher/i);
+    expect(sessionEndCopy("paused").body).toMatch(/school administrator/i);
+    expect(sessionEndCopy("paused").body).not.toMatch(/your teacher/i);
   });
 });
 
 describe("the house copy rule", () => {
   it("writes no dashes anywhere in any state", () => {
     for (const r of ["expired", "revoked", "replaced", "paused"] as const) {
-      for (const a of ["staff", "learner"] as const) {
-        const c = sessionEndCopy(r, a);
-        const all = `${c.heading} ${c.body} ${c.note ?? ""}`;
-        expect(all).not.toMatch(/[—–]|\s-\s/);
-      }
+      const c = sessionEndCopy(r);
+      const all = `${c.heading} ${c.body} ${c.note ?? ""}`;
+      expect(all).not.toMatch(/[—–]|\s-\s/);
     }
+  });
+});
+
+describe("a closed account on the staff screen", () => {
+  it("shows what it showed before the code had a name, because no staff frame draws it", () => {
+    // The learner ruling (D53) is the child's door. Changing what a teacher or
+    // an administrator reads is not something to do under it - raised instead.
+    expect(sessionEndCopy("closed")).toEqual(sessionEndCopy("expired"));
   });
 });

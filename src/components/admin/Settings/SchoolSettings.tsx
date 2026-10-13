@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
   readAcademic,
@@ -65,22 +64,23 @@ import {
 type Phase = "idle" | "saving" | "saved" | "failed";
 type Load = "loading" | "ready" | "failed";
 
+/** SCRUM-99 D12.5's OPTIONS, verbatim - they were paraphrased. */
 const RETENTION: { value: RetentionPolicy; label: string; plain: string }[] = [
   {
     value: "contract",
-    label: "For the length of our contract",
+    label: "Keep for the length of our contract",
     plain:
       "their profile and learning history stay available until your contract with Nevo ends",
   },
   {
     value: "contract_plus_3_years",
-    label: "Our contract, then three more years",
+    label: "Keep for 3 years after our contract ends",
     plain:
       "their profile and learning history stay available until three years after your contract ends",
   },
   {
     value: "contract_plus_7_years",
-    label: "Our contract, then seven more years",
+    label: "Keep for 7 years after our contract ends",
     plain:
       "their profile and learning history stay available until seven years after your contract ends",
   },
@@ -96,7 +96,11 @@ export function SchoolSettings() {
   const [contactPhone, setContactPhone] = useState("");
   const [location, setLocation] = useState("");
   const [retention, setRetention] = useState<RetentionPolicy>("contract");
+  /** Retention is its own section with its own save - SCRUM-99's per-section rule. */
+  const [retentionPhase, setRetentionPhase] = useState<Phase>("idle");
   const [general, setGeneral] = useState<Phase>("idle");
+  /** Which half of the General save failed, when the first half landed. */
+  const [generalNote, setGeneralNote] = useState<string | null>(null);
 
   const [academic, setAcademic] = useState<AcademicConfig>({});
   const [calendar, setCalendar] = useState<Phase>("idle");
@@ -104,26 +108,59 @@ export function SchoolSettings() {
   const [calendarNote, setCalendarNote] = useState<string | null>(null);
 
   const [labels, setLabels] = useState<Record<string, string>>({});
+  /** A preset chosen over custom labels, waiting on the inline confirm. */
+  const [pendingPreset, setPendingPreset] = useState<PresetId | null>(null);
   const [taxonomy, setTaxonomy] = useState<Phase>("idle");
 
-  const hydrate = useCallback((s: School) => {
+  /*
+   * ONE HYDRATOR PER SECTION, AND A SAVE REFRESHES ONLY ITS OWN.
+   *
+   * Every save used to call one `hydrate()` that reset EVERY field on the page
+   * from the server's answer - so a proprietor who edited the school's name,
+   * then set the term dates and saved those first, watched the name snap back
+   * and lost it without a word. Each section is a form of its own (SCRUM-99:
+   * "Each section saves independently"), so each save now only re-reads the
+   * fields it wrote. The server side was never at risk: `saveAcademic` and
+   * `saveContact` merge into what is stored.
+   */
+  const hydrateGeneral = useCallback((s: School) => {
     const contact = readContact(s);
-    const acad = readAcademic(s);
-    setSchool(s);
     setName(s.name);
     setContactEmail(contact.contactEmail ?? "");
     setContactPhone(contact.contactPhone ?? "");
     setLocation(contact.location ?? "");
+  }, []);
+
+  const hydrateRetention = useCallback((s: School) => {
     setRetention(
       RETENTION.some((r) => r.value === s.retentionPolicy)
         ? (s.retentionPolicy as RetentionPolicy)
         : "contract",
     );
-    setAcademic(acad);
+  }, []);
+
+  const hydrateCalendar = useCallback((s: School) => {
+    setAcademic(readAcademic(s));
+  }, []);
+
+  const hydrateTaxonomy = useCallback((s: School) => {
+    const acad = readAcademic(s);
     setLabels(acad.yearGroupLabels ?? {});
     setYearGroupLabels(acad.yearGroupLabels);
-    setLoad("ready");
   }, []);
+
+  /** First load only: every section from the one read. */
+  const hydrate = useCallback(
+    (s: School) => {
+      setSchool(s);
+      hydrateGeneral(s);
+      hydrateRetention(s);
+      hydrateCalendar(s);
+      hydrateTaxonomy(s);
+      setLoad("ready");
+    },
+    [hydrateGeneral, hydrateRetention, hydrateCalendar, hydrateTaxonomy],
+  );
 
   useEffect(() => {
     schoolApi.get().then(hydrate).catch(() => setLoad("failed"));
@@ -148,21 +185,52 @@ export function SchoolSettings() {
 
   const saveGeneral = () => {
     setGeneral("saving");
+    setGeneralNote(null);
+    /*
+     * TWO WRITES, AND A FAILURE HAS TO SAY WHICH. The name goes first; if
+     * the contact details then fail, the first half is already saved - so
+     * "That didn't save. Nothing changed" would be false. (Retention rode
+     * along with the name until it became its own section.)
+     */
+    let firstSaved = false;
     schoolApi
-      .update({ name: name.trim(), retentionPolicy: retention })
-      .then(() =>
-        schoolApi.saveContact({
+      .update({ name: name.trim() })
+      .then(() => {
+        firstSaved = true;
+        return schoolApi.saveContact({
           contactEmail: contactEmail.trim(),
           contactPhone: contactPhone.trim(),
           location: location.trim(),
-        }),
-      )
+        });
+      })
       .then((s) => {
-        hydrate(s);
+        setSchool(s);
+        hydrateGeneral(s);
         setGeneral("saved");
         setTimeout(() => setGeneral("idle"), 2200);
       })
-      .catch(() => setGeneral("failed"));
+      .catch(() => {
+        setGeneralNote(
+          firstSaved
+            ? "The school's name was saved, but the contact details weren't. Try saving again."
+            : null,
+        );
+        setGeneral("failed");
+      });
+  };
+
+  /** Retention alone: one write, and it refreshes only its own field. */
+  const saveRetention = () => {
+    setRetentionPhase("saving");
+    schoolApi
+      .update({ retentionPolicy: retention })
+      .then((s) => {
+        setSchool(s);
+        hydrateRetention(s);
+        setRetentionPhase("saved");
+        setTimeout(() => setRetentionPhase("idle"), 2200);
+      })
+      .catch(() => setRetentionPhase("failed"));
   };
 
   const saveCalendar = () => {
@@ -190,7 +258,8 @@ export function SchoolSettings() {
         termStartDates: termStartDatesFrom(academic.terms ?? []),
       })
       .then((s) => {
-        hydrate(s);
+        setSchool(s);
+        hydrateCalendar(s);
         setCalendar("saved");
         setTimeout(() => setCalendar("idle"), 2200);
       })
@@ -218,7 +287,8 @@ export function SchoolSettings() {
       // disagree with what is on screen.
       .saveAcademic({ yearGroupLabels: labels, taxonomyPreset: preset })
       .then((s) => {
-        hydrate(s);
+        setSchool(s);
+        hydrateTaxonomy(s);
         setTaxonomy("saved");
         setTimeout(() => setTaxonomy("idle"), 2200);
       })
@@ -240,12 +310,54 @@ export function SchoolSettings() {
 
   /** Derived, never a stored claim - see `presetFor`. */
   const preset: PresetId = presetFor(labels);
-  const applyPreset = (id: PresetId) => setLabels(labelsForPreset(id));
+  const applyPreset = (id: PresetId) => {
+    setLabels(labelsForPreset(id));
+    setPendingPreset(null);
+  };
+  /*
+   * SCRUM-99: "Reset to a preset is available and confirms inline, since it
+   * discards custom labels." Pressing a preset card - or "Back to Nigerian" -
+   * replaced a school's own names in one click with no word. From a custom
+   * set it now asks first, and names how many of their names would go.
+   */
+  const choosePreset = (id: PresetId) => {
+    if (preset === "custom") setPendingPreset(id);
+    else applyPreset(id);
+  };
+  const shown = (map: Record<string, string>, yg: (typeof YEAR_GROUPS)[number]) =>
+    map[yg]?.trim() || defaultYearGroupLabel(yg);
+  const replaced = pendingPreset
+    ? YEAR_GROUPS.filter((yg) => shown(labels, yg) !== shown(labelsForPreset(pendingPreset), yg)).length
+    : 0;
+  const pendingName = PRESETS.find((p) => p.id === pendingPreset)?.name ?? "";
+
+  /*
+   * WHAT DIFFERS FROM WHAT IS SAVED, per section - D12.1's "You've changed
+   * something here that isn't saved yet", by that section's Save. Compared
+   * with the school record each save refreshes, so a save clears its own.
+   */
+  const savedContact = readContact(school);
+  const generalDirty =
+    name.trim() !== (school.name ?? "").trim() ||
+    contactEmail.trim() !== (savedContact.contactEmail ?? "") ||
+    contactPhone.trim() !== (savedContact.contactPhone ?? "") ||
+    location.trim() !== (savedContact.location ?? "");
+  const savedRetention = RETENTION.some((r) => r.value === school.retentionPolicy)
+    ? school.retentionPolicy
+    : "contract";
+  const retentionDirty = retention !== savedRetention;
+  const savedAcademic = readAcademic(school);
+  const calendarDirty =
+    JSON.stringify([academic.yearStart ?? "", academic.yearEnd ?? "", academic.terms ?? []]) !==
+    JSON.stringify([savedAcademic.yearStart ?? "", savedAcademic.yearEnd ?? "", savedAcademic.terms ?? []]);
+  const taxonomyDirty = YEAR_GROUPS.some(
+    (yg) => shown(labels, yg) !== shown(savedAcademic.yearGroupLabels ?? {}, yg),
+  );
 
   return (
     <>
       {/* ------------------------------------------------------------ GENERAL */}
-      <SettingsSection title="General">
+      <SettingsSection id="settings-general" title="General">
         <div className="flex flex-col gap-4">
           <div>
             <label htmlFor="set-name" className={S_LABEL}>
@@ -296,10 +408,20 @@ export function SchoolSettings() {
             />
           </div>
         </div>
+
+        {/* General's own save. It sat under Data retention and saved both,
+            so changing the name looked like it needed the retention section,
+            and vice versa. */}
+        <SaveRow
+          phase={general}
+          onSave={saveGeneral}
+          failureNote={generalNote}
+          dirty={generalDirty}
+        />
       </SettingsSection>
 
       {/* ---------------------------------------------------------- RETENTION */}
-      <SettingsSection title="Data retention">
+      <SettingsSection id="settings-retention" title="Data retention">
         <label htmlFor="set-retention" className={S_LABEL}>
           When a student is deactivated, keep their records for…
         </label>
@@ -342,12 +464,18 @@ export function SchoolSettings() {
             Currently {school.retentionDays.toLocaleString()} days.
           </p>
         ) : null}
+        {/* SCRUM-99: "Names the dependents" - what else follows this setting. */}
+        <p className="m-0 mt-2 max-w-[62ch] text-[12.5px] leading-[1.5] text-nevo-near-black/50">
+          It applies to the students under &ldquo;Show deactivated&rdquo; on
+          your roster, and to leaving students when you promote a year.
+        </p>
 
-        <SaveRow phase={general} onSave={saveGeneral} />
+        <SaveRow phase={retentionPhase} onSave={saveRetention} dirty={retentionDirty} />
       </SettingsSection>
 
       {/* --------------------------------------------------- ACADEMIC YEAR */}
       <SettingsSection
+        id="settings-academic-year"
         title="Academic year"
         note="Your terms decide what 'this half-term' means everywhere in Nevo."
       >
@@ -571,11 +699,13 @@ export function SchoolSettings() {
           phase={calendar}
           onSave={saveCalendar}
           disabled={issues.length > 0}
+          dirty={calendarDirty}
         />
       </SettingsSection>
 
       {/* ----------------------------------------------------------- TAXONOMY */}
       <SettingsSection
+        id="settings-year-groups"
         title="What year groups are called"
         note="These are only the names you see. The underlying year groups never change, so student records and comparisons across schools stay exactly as they are."
       >
@@ -584,7 +714,7 @@ export function SchoolSettings() {
             <button
               key={p.id}
               type="button"
-              onClick={() => applyPreset(p.id)}
+              onClick={() => choosePreset(p.id)}
               aria-pressed={preset === p.id}
               className={cn(
                 "cursor-pointer rounded-xl px-4 py-3.5 text-left transition-colors",
@@ -627,11 +757,37 @@ export function SchoolSettings() {
             </p>
             <button
               type="button"
-              onClick={() => applyPreset("nigerian")}
+              onClick={() => choosePreset("nigerian")}
               className="cursor-pointer text-[13px] font-semibold text-nevo-navy hover:opacity-75"
             >
               Back to Nigerian
             </button>
+          </div>
+        ) : null}
+
+        {pendingPreset ? (
+          <div className="mt-4 rounded-[10px] bg-nevo-violet/[0.18] px-4 py-3">
+            <p className="m-0 text-[13.5px] leading-[1.5] text-nevo-navy">
+              Switching to {pendingName} replaces{" "}
+              {replaced === 1 ? "one of your own names" : `${replaced} of your own names`} with
+              its labels. Nothing about the year groups themselves changes.
+            </p>
+            <div className="mt-3 flex gap-2.5">
+              <button
+                type="button"
+                onClick={() => applyPreset(pendingPreset)}
+                className="cursor-pointer rounded-lg bg-nevo-navy px-4 py-2 text-[13.5px] font-semibold text-nevo-cream transition-[filter] hover:brightness-110"
+              >
+                Replace them
+              </button>
+              <button
+                type="button"
+                onClick={() => setPendingPreset(null)}
+                className="cursor-pointer rounded-lg px-4 py-2 text-[13.5px] font-semibold text-nevo-near-black/70 transition-colors hover:bg-nevo-near-black/[0.06]"
+              >
+                Keep mine
+              </button>
+            </div>
           </div>
         ) : null}
 
@@ -658,16 +814,21 @@ export function SchoolSettings() {
             </div>
           ))}
         </div>
+        {/* Was "...and in the teacher and parent views". Neither reads these
+            labels - the promise was ahead of the build - so it names only
+            where they genuinely appear: everywhere in this console, now that
+            the shell installs them (`useYearGroupLabels`). */}
         <p className="m-0 mt-3 text-[12.5px] leading-[1.5] text-nevo-near-black/50">
-          These labels appear on classes, student records, reports, and in the
-          teacher and parent views.
+          These labels appear across your admin console &ndash; on classes,
+          student records, reports, and the names Nevo composes when you add
+          several classes at once.
         </p>
 
-        <SaveRow phase={taxonomy} onSave={saveTaxonomy} />
+        <SaveRow phase={taxonomy} onSave={saveTaxonomy} dirty={taxonomyDirty} />
       </SettingsSection>
 
       {/* ---------------------------------------------------------- PROMOTION */}
-      <SettingsSection title="Moving everyone up a year">
+      <SettingsSection id="settings-promotion" title="Moving everyone up a year">
         <NotBuiltNote>
           Promotion isn&rsquo;t available yet. It needs to move every year group
           up together, retire the leavers, and stay undoable for a week
@@ -676,13 +837,7 @@ export function SchoolSettings() {
           when it lands.
         </NotBuiltNote>
       </SettingsSection>
-
-      <p className="mt-6 text-[13px] text-nevo-near-black/55">
-        Something not working, or missing?{" "}
-        <Link href="/admin/dashboard" className="font-semibold text-nevo-navy hover:opacity-75">
-          Share feedback
-        </Link>
-      </p>
+      {/* "Share feedback" moved to the foot of SettingsView - see there. */}
     </>
   );
 }

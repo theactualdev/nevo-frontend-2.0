@@ -67,22 +67,29 @@ export const ADJUSTMENT_ACTIONS = {
    * player reasons about, not a value the engine sends.
    */
   NONE: "no_action",
-  /**
-   * NOT IN THE CONTRACT'S ENUM, AND HELD RATHER THAN DELETED, on design's
-   * explicit instruction of 23 Sep: *"do not declare it dead yet. Density
-   * dropping belongs to the affective channel, not to pace instructions, and
-   * those were designed as two separate systems."*
+  /*
+   * `modulate_density` WAS HERE, and design ruled it out on 1 Oct (SCRUM-180).
    *
-   * Checked, and the answer went back to design: **there is no separate
-   * affective channel.** `proactiveAdjustment` IS it - `offer_hint` and
-   * `show_socratic_panel` live in the same five-value enum as the three pace
-   * instructions - so there are not two systems on the wire, and this value has
-   * nowhere to arrive from. The dim it drives (`AffectiveLayer`) still works
-   * and is still wired; nothing is deleted until design answers.
+   * It was held from 23 Sep on design's "do not declare it dead yet", while the
+   * question went back to them: there is no separate affective channel for it
+   * to arrive on - `proactiveAdjustment` IS that channel, and its enum has no
+   * such value - so it could never fire. Design's answer was to remove it: the
+   * "dim the screen" state is gone, and if screen comfort matters later it
+   * belongs in the child's device settings, not in an instruction Nevo issues.
+   * The attention accommodation's own 30% dim (37c) is a different thing and
+   * stays.
    */
-  MODULATE_DENSITY: "modulate_density",
-  /** Not in the contract's enum. Held on the same instruction. */
-  INCREASE_DIFFICULTY: "increase_difficulty",
+  /*
+   * `increase_difficulty` WAS HERE, and design retired it on 1 Oct (D28).
+   *
+   * It was held from 23 Sep on the same "do not declare it dead yet" as
+   * `modulate_density`, and drove the "Ready for something harder?" pill. It
+   * was never in `ProactiveAction`, so only the signed-out demo could reach
+   * it. Design's ruling: "a control nothing can trigger is not a feature".
+   * The pill, its per-segment spend and the demo row went with it, and the
+   * contract's `step_up_*` signal types are deliberately not emitted - there
+   * is no step-up for them to describe.
+   */
   /**
    * NOT IN THE ENUM, AND CORRECTLY SO - this one is not a gap.
    *

@@ -37,7 +37,8 @@ export function VariantReview({
 
   return (
     <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
-      <div className="mx-auto max-w-[680px] xl:max-w-[820px]">
+      {/* No cap of its own at tablet - it conforms to its host (C16d, 8 Oct). */}
+      <div className="mx-auto xl:max-w-[820px]">
         <Link
           href={`/teacher/lessons/${lesson.id}`}
           className="inline-flex cursor-pointer items-center gap-[7px] text-[13px] text-nevo-near-black/55 transition-transform active:scale-[0.99] xl:text-[13.5px]"
@@ -48,15 +49,15 @@ export function VariantReview({
           Lesson Library · Variant review
         </Link>
 
-        <h2 className="mt-0.5 text-[22px] font-semibold tracking-[-0.018em] text-nevo-near-black xl:text-[26px]">
+        <h1 className="mt-0.5 text-[22px] font-semibold tracking-[-0.018em] text-nevo-near-black xl:text-[26px]">
           {`${lesson.title} · Section ${sectionIndex}`}
-        </h2>
+        </h1>
 
-        <p className="mt-4 text-[13px] leading-[1.6] text-nevo-near-black/60 italic">
+        <p className="mt-4 text-[13px] leading-[1.6] text-nevo-near-black/60 italic xl:mt-[18px]">
           {VARIANT_ORIENTATION}
         </p>
 
-        <div className="mt-4 flex flex-wrap gap-2 xl:flex-nowrap" role="tablist" aria-label="Lesson variants">
+        <div className="mt-4 flex gap-1.5 xl:gap-2" role="tablist" aria-label="Lesson variants">
           {VARIANT_TABS.map((t) => (
             <button
               key={t}
@@ -65,7 +66,7 @@ export function VariantReview({
               aria-selected={tab === t}
               onClick={() => setTab(t)}
               className={cn(
-                "inline-flex h-9 cursor-pointer items-center rounded-[8px] px-[18px] text-[13px] transition-[background-color,transform] active:scale-[0.99]",
+                "inline-flex h-[38px] flex-1 basis-0 cursor-pointer items-center justify-center rounded-[10px] px-2 text-[12.5px] transition-[background-color,transform] active:scale-[0.99] xl:h-9 xl:flex-none xl:basis-auto xl:justify-start xl:px-[18px] xl:text-[13px]",
                 tab === t
                   ? "bg-nevo-navy font-semibold text-nevo-cream"
                   : "bg-nevo-cream-elevated font-medium text-nevo-near-black/70 hover:bg-nevo-navy/8",

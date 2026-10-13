@@ -1,16 +1,37 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
-import { Button } from "@/components/shared";
+import { XIcon } from "lucide-react";
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { Button, ProgressBar } from "@/components/shared";
+import { lessonHref } from "@/lib/lessons/lessonHref";
 import type { LessonSummary } from "./lessonCatalog";
 
 /**
  * Lesson Preview (screen 21) — a calm look before committing. A bottom sheet on
  * mobile, a centred modal on tablet/desktop, over the dimmed list. Shows the
  * subject, adaptive estimate, a plain-language "what you'll do", and — if the
- * student is partway — a quiet progress bar. The single action starts (or
- * continues) the lesson.
+ * student is partway — says so. The single action starts (or continues) the
+ * lesson.
+ *
+ * THE PARTWAY BAR CAME BACK WITH THE RING (design D21, backend B51). It went
+ * on 1 Oct because its width was a fraction the wire did not carry, and a bar
+ * is read as an amount exactly as a ring is. B51 put the true one on the
+ * progress row, so the frame's bar runs to `lesson.place` - and says
+ * "Segment 3 of 10", never a number. With no place there is no bar; the
+ * frame's line stays either way, because being partway is a fact the progress
+ * row states.
+ *
+ * A FINISHED LESSON (design D100, 6 Oct). 21 now draws it on a phone: a navy
+ * disc with a check, "You finished this one.", and "Look again". The button
+ * does what "Start" did here before (D22) - it opens the lesson from the top,
+ * for review, and the player does not write that open back as unfinished.
+ * Tablet and desktop take it into the centred modal, as the other states do.
  */
 export function LessonPreviewSheet({
   lesson,
@@ -25,21 +46,39 @@ export function LessonPreviewSheet({
   if (!lesson) return null;
 
   const inProgress = lesson.status === "in_progress";
+  const completed = lesson.status === "completed";
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
+        data-nevo-console="student"
         side="bottom"
         aria-describedby={undefined}
-        className="gap-0 rounded-t-[20px] border-0! bg-nevo-cream px-6 pt-5 pb-7 text-nevo-near-black shadow-[0_-8px_32px_rgba(0,0,0,0.16)] sm:inset-x-auto! sm:top-1/2 sm:bottom-auto! sm:left-1/2! sm:w-[480px] sm:max-w-[calc(100%-48px)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[20px] sm:p-8 sm:shadow-[0_8px_32px_rgba(0,0,0,0.16)]"
+        // 21 draws Close in a row of its own, so the sheet's stock corner
+        // button - which sat on the title row - is replaced by that row.
+        showCloseButton={false}
+        className="gap-0 rounded-t-[20px] border-0! bg-nevo-cream px-6 pt-3 pb-7 text-nevo-near-black shadow-[0_-8px_32px_rgba(0,0,0,0.16)] sm:inset-x-auto! sm:top-1/2 sm:bottom-auto! sm:left-1/2! sm:w-[480px] sm:max-w-[calc(100%-48px)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[20px] sm:px-8 sm:pt-5 sm:pb-8 sm:shadow-[0_8px_32px_rgba(0,0,0,0.16)]"
       >
-        <SheetTitle className="pr-12 text-[23px] font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-2xl">
+        {/* 21: the 44px Close at the right of its own row, above the title. */}
+        <div className="-mr-1.5 mb-1 flex shrink-0 justify-end">
+          <SheetClose asChild>
+            <button
+              type="button"
+              className="flex size-11 cursor-pointer items-center justify-center rounded-full bg-nevo-navy/8 text-nevo-navy transition-colors hover:bg-nevo-navy/14"
+            >
+              <XIcon className="size-4" strokeWidth={2.4} />
+              <span className="sr-only">Close</span>
+            </button>
+          </SheetClose>
+        </div>
+
+        <SheetTitle className="text-[23px] font-semibold tracking-[-0.01em] text-nevo-near-black sm:text-2xl">
           {lesson.title}
         </SheetTitle>
 
-        <div className="mt-3.5 flex items-center gap-2.5">
-          {/* Live lessons carry no subject - the chip is dropped rather than
-              drawn empty, and never filled with a guess. */}
+        <div className="mt-3 flex items-center gap-2.5 sm:mt-3.5">
+          {/* A lesson with no subject drops the chip rather than drawing it
+              empty, and never fills it with a guess. */}
           {lesson.subject && (
             <span className="rounded-full bg-nevo-violet/25 px-3 py-1 text-[13px] text-nevo-navy">
               {lesson.subject}
@@ -50,8 +89,8 @@ export function LessonPreviewSheet({
           </span>
         </div>
 
-        {/* Nothing in the contract writes a "what you'll do" for a child, so a
-            live lesson shows none rather than one we invented. */}
+        {/* The lesson's own `description` (1 Oct). Null on the wire means no
+            line, never one we invented. */}
         {lesson.description && (
           <p className="mt-[18px] text-[15px] leading-[1.6] text-nevo-near-black sm:text-base">
             {lesson.description}
@@ -59,24 +98,53 @@ export function LessonPreviewSheet({
         )}
 
         {inProgress && (
-          <>
-            <p className="mt-5 text-sm font-medium text-nevo-near-black">
-              You&apos;re partway through this one
-            </p>
-            <div className="mt-2.5 h-[5px] overflow-hidden rounded-full bg-nevo-navy/14">
-              <div
-                className="h-full rounded-full bg-nevo-violet"
-                style={{ width: `${Math.round((lesson.progress ?? 0) * 100)}%` }}
-              />
-            </div>
-          </>
+          <p className="mt-5 text-sm font-medium text-nevo-near-black sm:mt-[22px]">
+            You&apos;re partway through this one
+          </p>
+        )}
+        {inProgress && lesson.place && (
+          // 21's bar: 5px, violet on a faint navy track.
+          <ProgressBar
+            value={lesson.place.fraction}
+            aria-label={lesson.place.words}
+            className="mt-2.5 h-[5px] bg-nevo-navy/14"
+          />
         )}
 
+        {completed && (
+          // 21's completed row: a 34px navy disc with the frame's own check.
+          <p className="mt-[22px] flex items-center gap-3 text-[15px] font-medium text-nevo-near-black">
+            <span
+              aria-hidden
+              data-finished-disc
+              className="flex size-[34px] shrink-0 items-center justify-center rounded-full bg-nevo-navy"
+            >
+              <svg
+                width="17"
+                height="17"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="text-nevo-cream"
+              >
+                <path d="M5 13l4 4L19 7" />
+              </svg>
+            </span>
+            You finished this one.
+          </p>
+        )}
+
+        {/* 21's button: 16px, where the shared one is 15. */}
         <Button
-          className="mt-7 w-full"
-          onClick={() => router.push(`/student/lessons/${lesson.lessonId}`)}
+          className="mt-7 w-full text-base"
+          onClick={() =>
+            router.push(lessonHref(lesson.lessonId, lesson.assignmentId))
+          }
         >
-          {inProgress ? "Continue" : "Start"}
+          {inProgress ? "Continue" : completed ? "Look again" : "Start"}
         </Button>
       </SheetContent>
     </Sheet>

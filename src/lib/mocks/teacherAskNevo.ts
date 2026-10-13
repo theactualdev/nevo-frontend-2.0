@@ -52,7 +52,7 @@ export const ASK_NEVO_CONTEXTS: Record<AskNevoContext, AskNevoContextData> = {
     ],
     question: "What needs my attention today?",
     answer:
-      "Three things are worth your eye: Tunde stalled on Tuesday and it's worth a quiet word, Amara's taking longer on written parts so listen-first may help, and eight in JSS 2A slowed on the same fractions step. Everything else is steady.",
+      "Three things are worth your eye: Tunde stalled on Tuesday and it's worth a quiet word, Amara's taking longer on written parts, and eight in JSS 2A slowed on the same fractions step. Everything else is steady.",
     action: {
       label: "Open Tunde's profile",
       href: "/teacher/students/tunde-adeyemi",
@@ -126,7 +126,10 @@ export const ASK_NEVO_CONTEXTS: Record<AskNevoContext, AskNevoContextData> = {
     ],
     question: "Is this lesson right for my class?",
     answer:
-      "It's a good fit for JSS 2A. The concept matches where they are, and it opens with a real-world framing. I'll adapt the written-heavy middle section into an audio-led path for the students who have been slowing there.",
+      // Rule 1: this offered an "audio-led path" to the students who had been
+      // slowing - a version chosen for named children. The library answer's
+      // own sentence says what Nevo actually does.
+      "It's a good fit for JSS 2A. The concept matches where they are, and it opens with a real-world framing. Nevo will offer each student whichever version fits the moment.",
     action: { label: "Assign to JSS 2A", href: "/teacher/lessons/assign" },
   },
   insights: {
@@ -174,7 +177,12 @@ export const ASK_NEVO_CONTEXTS: Record<AskNevoContext, AskNevoContextData> = {
 export function contextForPath(pathname: string): AskNevoContext {
   if (/^\/teacher\/students\/[^/]+/.test(pathname)) return "student";
   if (pathname.startsWith("/teacher/classes")) return "classes";
-  if (/^\/teacher\/lessons\/[^/]+/.test(pathname)) return "lesson";
+  // A lesson RECORD, not the assign or upload flows that share its prefix -
+  // which the drawer used to greet with "You're viewing: Fractions in
+  // Everyday Life".
+  if (/^\/teacher\/lessons\/(?!assign\b|upload\b)[^/]+/.test(pathname)) {
+    return "lesson";
+  }
   if (pathname.startsWith("/teacher/lessons")) return "library";
   if (pathname.startsWith("/teacher/insights")) return "insights";
   if (pathname.startsWith("/teacher/connect")) return "connect";
@@ -196,6 +204,67 @@ export function stripForPath(
     if (lesson) return `You're viewing: ${lesson.title}`;
   }
   return ASK_NEVO_CONTEXTS[context].strip;
+}
+
+/**
+ * WHAT A SIGNED-IN TEACHER IS SHOWN on a record page.
+ *
+ * The contexts above are the frame's, and they name the frame's people:
+ * "Ask me about Amara", "What's going on with Amara?", "Insights, JSS 2A".
+ * The strip resolved a real page through the FIXTURE lookups, which find
+ * nothing for a real id, so every real student, lesson and Insights page fell
+ * back to the invented child - and a chip sent that invented name to the live
+ * assistant about a different, real child.
+ *
+ * The drawer has no read of its own for the record's name, so it does not
+ * claim one: the strip names the screen only, and the prompts say "this
+ * student", as the lesson and class contexts already say "this lesson" and
+ * "this class".
+ */
+export function liveContextFor(context: AskNevoContext): AskNevoContextData {
+  const base = ASK_NEVO_CONTEXTS[context];
+  if (context === "student") {
+    return {
+      ...base,
+      lead: "Ask me about this student.",
+      sub: "Their recent sessions, and what Nevo has noticed.",
+      chips: [
+        "What's going on with this student?",
+        "What has Nevo noticed this week?",
+        "Which lesson comes next for this student?",
+      ],
+    };
+  }
+  return base;
+}
+
+/** The strip for a signed-in teacher: the screen, never a record it cannot name. */
+export function liveStripFor(context: AskNevoContext): string | null {
+  if (context === "student" || context === "lesson") return null;
+  if (context === "insights") return "You're on: Insights";
+  return ASK_NEVO_CONTEXTS[context].strip;
+}
+
+/**
+ * The record the teacher has open, as the ids the assistant can scope to.
+ * Only real ids: a fixture slug on the walkthrough is not one, and `asUuid`
+ * keeps it out.
+ */
+export function contextIdsFor(pathname: string): {
+  studentId?: string;
+  classId?: string;
+  lessonId?: string;
+} {
+  const [, , section, id] = pathname.split("/");
+  const uuid =
+    id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+      ? id
+      : null;
+  if (!uuid) return {};
+  if (section === "students") return { studentId: uuid };
+  if (section === "classes") return { classId: uuid };
+  if (section === "lessons") return { lessonId: uuid };
+  return {};
 }
 
 /** Requests outside the assistant's remit get the admin hand-off, verbatim. */

@@ -9,7 +9,10 @@ import {
   type Message,
 } from "@/lib/mocks/teacherConnect";
 import { cn } from "@/lib/utils";
+import { useSystemMessages } from "@/components/shared/SystemMessages";
+import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
 import { ComposeModal } from "./ComposeModal";
+import { MaybeSample } from "@/components/shared/SampleRegion";
 
 /**
  * C10 Connect - individual threads between a teacher and their students, and
@@ -23,8 +26,12 @@ import { ComposeModal } from "./ComposeModal";
  * different one for the same state - illustration, warmer heading and a New
  * message CTA. C14 governs, as it has on the previous two slices; flagged.
  *
- * Sending follows C14 B4: the bubble lands in the thread with a pop, a toast
- * confirms, and the thread stays open.
+ * Sending follows C14 B4: the bubble lands in the thread with a pop, the
+ * shared bar confirms, and the thread stays open. Frame 43 settled that C14's
+ * NevoToast and the system message are one thing - "one shared bar, built once
+ * and used everywhere" - and this screen had its own, which also cleared a
+ * failure after three seconds and drew it with a tick. A failure now stays
+ * until dismissed (SM-03), and the words it was about are put back in the box.
  *
  * Live from `/api/messages/*` - see `useConnectThreads`. The thread list has
  * no message bodies, so opening a thread fetches it; sending posts and shows
@@ -34,10 +41,8 @@ import { ComposeModal } from "./ComposeModal";
  * messages is the worst possible place for one.
  */
 
-const TOAST_MS = 3000;
-
 const PlusIcon = ({ size = 18 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-[18px]">
     <path d="M12 5v14" />
     <path d="M5 12h14" />
   </svg>
@@ -49,18 +54,18 @@ function Bubble({ m, isNew }: { m: Message; isNew?: boolean }) {
       <div className="flex justify-end">
         <div
           className={cn(
-            "max-w-[62%] rounded-[12px_12px_4px_12px] bg-nevo-navy px-4 py-3",
+            "max-w-[72%] xl:max-w-[62%] rounded-[12px_12px_4px_12px] bg-nevo-navy px-3.5 py-[11px] xl:px-4 xl:py-3",
             isNew && "motion-safe:animate-nevo-pop",
           )}
         >
-          <p className="text-[14.5px] leading-[1.5] text-nevo-cream">
+          <p className="text-sm leading-[1.5] text-nevo-cream xl:text-[14.5px]">
             <span className="xl:hidden">{m.textTablet ?? m.text}</span>
             <span className="hidden xl:inline">{m.text}</span>
           </p>
           {m.time && (
-            <div className="mt-[5px] flex items-center justify-end gap-[5px]">
-              <span className="text-[11px] text-nevo-cream/60">{m.time}</span>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="text-nevo-cream/60">
+            <div className="mt-1 flex items-center justify-end gap-1 xl:mt-[5px] xl:gap-[5px]">
+              <span className="text-[10.5px] text-nevo-cream/60 xl:text-[11px]">{m.time}</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="text-nevo-cream/60 xl:size-[13px]">
                 <path d="M5 12.5l4.2 4.2L19 7" />
               </svg>
             </div>
@@ -72,13 +77,13 @@ function Bubble({ m, isNew }: { m: Message; isNew?: boolean }) {
 
   return (
     <div className="flex justify-start">
-      <div className="max-w-[62%] rounded-[12px_12px_12px_4px] bg-nevo-cream-elevated px-4 py-3">
+      <div className="max-w-[72%] xl:max-w-[62%] rounded-[12px_12px_12px_4px] bg-nevo-cream-elevated px-3.5 py-[11px] xl:px-4 xl:py-3">
         {m.label && (
-          <span className="inline-flex items-center gap-[5px] text-[11.5px] font-semibold text-nevo-near-black/50">
+          <span className="hidden items-center gap-[5px] text-[11.5px] font-semibold text-nevo-near-black/50 xl:inline-flex">
             {m.label}
           </span>
         )}
-        <p className="mt-1 text-[14.5px] leading-[1.5] text-nevo-near-black">
+        <p className="text-sm leading-[1.5] text-nevo-near-black xl:mt-1 xl:text-[14.5px]">
           <span className="xl:hidden">{m.textTablet ?? m.text}</span>
           <span className="hidden xl:inline">{m.text}</span>
         </p>
@@ -90,6 +95,7 @@ function Bubble({ m, isNew }: { m: Message; isNew?: boolean }) {
 export function ConnectView() {
   const {
     threads,
+    live,
     sample,
     loading,
     openThread,
@@ -98,6 +104,7 @@ export function ConnectView() {
   } = useConnectThreads();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  useUnsavedGuard(draft.trim().length > 0);
   /*
    * "Send them a message" lands here naming a child.
    *
@@ -121,20 +128,12 @@ export function ConnectView() {
   const linked = params.get("student") ?? undefined;
   const [composeOpen, setComposeOpen] = useState(Boolean(linked));
   const [preset, setPreset] = useState<string | undefined>(linked);
-  const [toast, setToast] = useState("");
+  const say = useSystemMessages();
   const [newestId, setNewestId] = useState<string | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   /** Monotonic id source - Date.now() is impure and the lint rule rejects it. */
   const seq = useRef(0);
   const nextId = () => `sent-${(seq.current += 1)}`;
-
-  useEffect(
-    () => () => {
-      if (timer.current) clearTimeout(timer.current);
-    },
-    [],
-  );
 
   // The list arrives asynchronously, so "the first thread" is derived rather
   // than assigned - setting it from an effect would be a setState during
@@ -142,9 +141,16 @@ export function ConnectView() {
   const active = threads.find((t) => t.id === activeId) ?? threads[0] ?? null;
 
   // The list endpoint carries no message bodies, so opening one fetches it.
+  //
+  // AND THE ONE ON SCREEN IS BEING READ (T167). With nothing chosen yet the
+  // first thread opens by itself - and was never marked read, so its badge
+  // and the bell's dot stayed lit over a conversation the teacher was looking
+  // at. Showing it is reading it, the same as choosing it.
   useEffect(() => {
-    if (active) openThread(active.id);
-  }, [active, openThread]);
+    if (!active) return;
+    openThread(active.id);
+    if (active.unread) markThreadRead(active.id);
+  }, [active, openThread, markThreadRead]);
 
   const selectThread = (id: string) => {
     setActiveId(id);
@@ -155,14 +161,8 @@ export function ConnectView() {
     markThreadRead(id);
   };
 
-  const flashToast = (text: string) => {
-    setToast(text);
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => setToast(""), TOAST_MS);
-  };
-
   /**
-   * C14 B4: the bubble lands, a toast confirms, the thread stays open.
+   * C14 B4: the bubble lands, the bar confirms, the thread stays open.
    *
    * The bubble shown is the message the backend stored, not an optimistic
    * copy - a send that fails says so rather than leaving a message on screen
@@ -172,10 +172,11 @@ export function ConnectView() {
     to: { recipientId: string; recipientType: "student" | "class" },
     text: string,
     toast = true,
+    about?: { name: string; className?: string },
   ) => {
-    const threadId = await sendLive(to, text);
+    const threadId = await sendLive(to, text, about);
     if (!threadId) {
-      if (toast) flashToast("That didn’t send. Try again");
+      if (toast) say.show({ kind: "failed", message: "That didn’t send. Try again" });
       // THROW, do not return. Callers cannot tell success from failure if this
       // resolves either way - which is exactly how the compose modal came to
       // report "Message sent" over a send that never happened.
@@ -183,7 +184,7 @@ export function ConnectView() {
     }
     setActiveId(threadId);
     setNewestId(nextId());
-    if (toast) flashToast("Message sent");
+    if (toast) say.show({ kind: "confirm", message: "Message sent" });
     requestAnimationFrame(() =>
       endRef.current?.scrollIntoView({ block: "end" }),
     );
@@ -193,15 +194,18 @@ export function ConnectView() {
     const text = draft.trim();
     if (!text || !active?.recipientId) return;
     setDraft("");
-    // The inline composer reports failure through the toast `deliver` raises,
-    // so the rejection is handled here rather than surfacing twice.
+    // The inline composer reports failure through the bar `deliver` raises,
+    // so the rejection is handled here rather than surfacing twice - and the
+    // words go back in the box. The box was emptied before the send, so a
+    // failure that says "Try again" used to leave nothing to try again with.
+    // A teacher who has started typing something else keeps that instead.
     void deliver(
       {
         recipientId: active.recipientId,
         recipientType: active.recipientType === "class" ? "class" : "student",
       },
       text,
-    ).catch(() => {});
+    ).catch(() => setDraft((current) => current || text));
   };
 
   /**
@@ -223,6 +227,7 @@ export function ConnectView() {
       { recipientId: student.studentId, recipientType: "student" },
       text,
       false,
+      { name: student.name, className: student.className },
     );
   };
 
@@ -254,9 +259,9 @@ export function ConnectView() {
       {/* Page head */}
       <div className="flex shrink-0 items-center justify-between px-7 pt-[22px] pb-4 xl:px-8 xl:pt-7 xl:pb-5">
         <div className="min-w-0">
-          <h2 className="text-[21px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-2xl">
+          <h1 className="text-[21px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-2xl">
             Connect
-          </h2>
+          </h1>
           {sample && (
             <p className="mt-1 text-[13px] leading-[1.5] text-nevo-near-black/55 italic">
               We couldn&rsquo;t reach your messages, so these are samples.
@@ -268,7 +273,7 @@ export function ConnectView() {
 
       {loading ? (
         <div className="flex min-h-0 flex-1 border-t border-nevo-near-black/8">
-          <div className="w-[260px] shrink-0 space-y-2 border-r border-nevo-near-black/8 p-3 xl:w-[330px]">
+          <div className="w-[264px] shrink-0 space-y-2 border-r border-nevo-near-black/8 p-2.5 xl:w-[330px] xl:p-3">
             {[0, 1, 2, 3].map((i) => (
               <div
                 key={i}
@@ -306,36 +311,42 @@ export function ConnectView() {
           </div>
         </div>
       ) : (
+        /* Invented children and their messages, when the read failed - said
+           in prose above, and now marked, so the signed-in end-to-end check
+           can see it too. */
+        <MaybeSample showing={!live} kind="teacher:connect">
         <div className="flex min-h-0 flex-1 border-t border-nevo-near-black/8">
           {/* Thread list */}
-          <div className="w-[260px] shrink-0 overflow-y-auto border-r border-nevo-near-black/8 p-3 xl:w-[330px]">
+          <div className="w-[264px] shrink-0 overflow-y-auto border-r border-nevo-near-black/8 p-2.5 xl:w-[330px] xl:p-3">
             {threads.map((t) => (
               <button
                 key={t.id}
                 type="button"
                 onClick={() => selectThread(t.id)}
-                aria-current={t.id === activeId}
+                // The thread SHOWN, chosen or not (T167): the first one
+                // opens by itself and was never marked as the open one.
+                aria-current={t.id === active?.id}
                 className={cn(
                   "mb-0.5 flex w-full cursor-pointer items-center gap-2.5 rounded-[10px] px-3 py-2.5 text-left transition-colors xl:gap-3 xl:px-3.5 xl:py-3",
-                  t.id === activeId
+                  t.id === active?.id
                     ? "bg-nevo-navy/9"
                     : "hover:bg-nevo-navy/5",
                 )}
               >
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-nevo-navy/10 text-[13px] font-semibold text-nevo-navy">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-nevo-navy/10 text-xs font-semibold text-nevo-navy xl:size-10 xl:text-[13px]">
                   {t.initials}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-baseline justify-between gap-2">
                     <span
                       className={cn(
-                        "text-[14.5px] text-nevo-near-black",
-                        t.unread ? "font-bold" : "font-semibold",
+                        "text-sm text-nevo-near-black xl:text-[14.5px]",
+                        t.unread ? "font-semibold" : "font-medium",
                       )}
                     >
                       {t.studentName}
                     </span>
-                    <span className="shrink-0 text-[11.5px] text-nevo-near-black/45">
+                    <span className="hidden shrink-0 text-[11.5px] text-nevo-near-black/45 xl:inline">
                       {t.time}
                     </span>
                   </span>
@@ -344,10 +355,10 @@ export function ConnectView() {
                       {t.className}
                     </span>
                   )}
-                  <span className="mt-[3px] flex items-center gap-2">
+                  <span className="mt-0.5 flex items-center gap-2 xl:mt-[3px]">
                     <span
                       className={cn(
-                        "min-w-0 flex-1 truncate text-[13px] leading-[1.4]",
+                        "min-w-0 flex-1 truncate text-[12.5px] leading-[1.4] xl:text-[13px]",
                         t.unread
                           ? "font-medium text-nevo-near-black/80"
                           : "text-nevo-near-black/60",
@@ -369,45 +380,68 @@ export function ConnectView() {
           {/* Thread */}
           {active && (
             <div className="flex min-w-0 flex-1 flex-col">
-              <div className="flex shrink-0 items-center justify-between gap-4 border-b border-nevo-near-black/8 px-6 py-4 xl:px-7 xl:py-[18px]">
-                <div className="flex items-center gap-3">
-                  <span className="flex size-[38px] shrink-0 items-center justify-center rounded-full bg-nevo-navy text-[13px] font-semibold text-nevo-cream">
+              <div className="flex shrink-0 items-center justify-between gap-4 border-b border-nevo-near-black/8 px-[22px] py-3.5 xl:px-7 xl:py-[18px]">
+                <div className="flex items-center gap-2.5 xl:gap-3">
+                  <span className="flex size-[34px] shrink-0 items-center justify-center rounded-full bg-nevo-navy text-xs font-semibold text-nevo-cream xl:size-[38px] xl:text-[13px]">
                     {active.initials}
                   </span>
                   <div>
-                    <span className="text-base font-semibold text-nevo-near-black">
+                    <span className="text-[15px] font-semibold text-nevo-near-black xl:text-base">
                       {active.studentName}
                     </span>
-                    <div className="mt-px text-[12.5px] text-nevo-near-black/55">
+                    <div className="mt-px hidden text-[12.5px] text-nevo-near-black/55 xl:block">
                       {active.className}
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="flex min-h-0 flex-1 flex-col justify-end gap-3.5 overflow-y-auto px-6 py-6 xl:px-7">
+              <div className="flex min-h-0 flex-1 flex-col justify-end gap-3 overflow-y-auto px-[22px] py-5 xl:gap-3.5 xl:px-7 xl:py-6">
                 {/* A thread the list knows about but whose bodies have not
                     arrived yet has no `messages` at all - which is exactly the
                     state a freshly-composed thread is in the instant it is
                     opened. Rendering it as an empty conversation is right;
                     crashing the whole Connect screen was not. */}
-                {(active.messages ?? []).map((m) => (
-                  <Bubble key={m.id} m={m} isNew={m.id === newestId} />
-                ))}
+                {active.loadFailed && !active.loaded ? (
+                  <div className="self-center text-center">
+                    <p className="text-[14px] leading-[1.55] text-nevo-near-black/68">
+                      We couldn&rsquo;t load this conversation just now. Try
+                      again in a moment.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => openThread(active.id)}
+                      className="mt-3 h-10 cursor-pointer rounded-[10px] border-[1.5px] border-nevo-navy/35 px-4 text-sm font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
+                    >
+                      Try again
+                    </button>
+                  </div>
+                ) : !active.loaded ? (
+                  /* Asked for and not back: bubbles without words, not an
+                     empty conversation. */
+                  <div aria-busy="true" aria-label="Loading this conversation" className="flex flex-col gap-3.5">
+                    <div className="h-12 w-[55%] animate-pulse rounded-[14px] bg-nevo-cream-elevated" />
+                    <div className="h-12 w-[45%] animate-pulse self-end rounded-[14px] bg-nevo-navy/10" />
+                  </div>
+                ) : (
+                  (active.messages ?? []).map((m) => (
+                    <Bubble key={m.id} m={m} isNew={m.id === newestId} />
+                  ))
+                )}
                 <div ref={endRef} />
               </div>
 
               {/* A fixture thread has nobody to send to. Rather than a send
                   button that quietly does nothing, the composer says so. */}
               {!active.recipientId ? (
-                <div className="shrink-0 border-t border-nevo-near-black/8 px-6 py-4 xl:px-7">
+                <div className="shrink-0 border-t border-nevo-near-black/8 px-[22px] py-3.5 xl:px-7 xl:py-4">
                   <p className="text-[13.5px] leading-[1.5] text-nevo-near-black/60">
                     This is a sample conversation. Replying will work once we
                     can reach your messages again.
                   </p>
                 </div>
               ) : (
-              <div className="flex shrink-0 items-center gap-3 border-t border-nevo-near-black/8 px-6 py-4 xl:px-7">
+              <div className="flex shrink-0 items-center gap-2.5 border-t border-nevo-near-black/8 px-[22px] py-3.5 xl:gap-3 xl:px-7 xl:py-4">
                 <input
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
@@ -419,7 +453,7 @@ export function ConnectView() {
                   }}
                   placeholder="Write a message…"
                   aria-label={`Message ${active.studentName}`}
-                  className="h-12 flex-1 rounded-[10px] border-[1.5px] border-nevo-near-black/14 bg-nevo-cream-elevated px-4 text-[14.5px] text-nevo-near-black outline-none transition-colors focus:border-nevo-navy"
+                  className="h-11 flex-1 rounded-[10px] border-[1.5px] border-nevo-near-black/14 bg-nevo-cream-elevated px-3.5 text-sm text-nevo-near-black outline-none transition-colors focus:border-nevo-navy xl:h-12 xl:px-4 xl:text-[14.5px]"
                 />
                 <button
                   type="button"
@@ -427,13 +461,13 @@ export function ConnectView() {
                   disabled={!draft.trim()}
                   aria-label="Send"
                   className={cn(
-                    "flex size-12 shrink-0 items-center justify-center rounded-[10px]",
+                    "flex size-11 shrink-0 items-center justify-center rounded-[10px] xl:size-12",
                     draft.trim()
                       ? "cursor-pointer bg-nevo-navy text-nevo-cream transition-[filter] hover:brightness-93"
                       : "cursor-not-allowed bg-nevo-navy/18 text-nevo-near-black/40",
                   )}
                 >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-5">
                     <path d="M22 2L11 13" />
                     <path d="M22 2l-7 20-4-9-9-4z" />
                   </svg>
@@ -443,6 +477,7 @@ export function ConnectView() {
             </div>
           )}
         </div>
+        </MaybeSample>
       )}
 
       {composeOpen && (
@@ -456,22 +491,6 @@ export function ConnectView() {
         />
       )}
 
-      {/* C14 NevoToast */}
-      {toast && (
-        <div
-          role="status"
-          className="fixed top-5 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2.5 rounded-full bg-nevo-navy py-3 pr-[22px] pl-[15px] shadow-[0_12px_32px_rgba(0,0,0,0.22)] motion-safe:animate-nevo-pop xl:top-6"
-        >
-          <span className="flex size-[22px] shrink-0 items-center justify-center rounded-full bg-nevo-cream/20 text-nevo-cream">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <path d="M20 6L9 17l-5-5" />
-            </svg>
-          </span>
-          <span className="text-[14.5px] font-semibold whitespace-nowrap text-nevo-cream">
-            {toast}
-          </span>
-        </div>
-      )}
     </div>
   );
 }

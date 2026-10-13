@@ -21,11 +21,15 @@ export const metadata: Metadata = {
  * guessing the invitee's identity when the link does not name it.
  *
  * `AdminTeamView` builds the link, via `adminActivationLink`.
+ *
+ * `door="admin"` because the form assumed a teacher: an invited admin was told
+ * "Your teacher account is active" and, when the sign-in hop failed, sent to
+ * the teacher door.
  */
 export default function AdminActivatePage() {
   return (
     <Suspense>
-      <SetPasswordForm mode="activation" />
+      <SetPasswordForm mode="activation" door="admin" />
     </Suspense>
   );
 }

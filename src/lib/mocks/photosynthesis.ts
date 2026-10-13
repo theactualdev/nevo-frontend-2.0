@@ -53,7 +53,11 @@ export const PHOTOSYNTHESIS: Lesson = {
           "It draws up water from the roots and takes in carbon dioxide from the air.",
           "Together these make glucose, the plant's food - and oxygen is given out.",
         ],
-        keyTerms: ["chlorophyll", "chloroplast", "glucose"],
+        keyTerms: [
+          { term: "chlorophyll" },
+          { term: "chloroplast" },
+          { term: "glucose" },
+        ],
         callouts: {
           [DENSITY.SIMPLIFY]: {
             label: "IN SHORT",
@@ -101,8 +105,7 @@ export const PHOTOSYNTHESIS: Lesson = {
         ],
         correctId: "co2",
         correctNote: "That's it - plants take in carbon dioxide and give out oxygen.",
-        recoveryNote:
-          "Not quite - oxygen is what plants give out. Let's look again. Your progress is saved.",
+        recoveryNote: "Not quite. Let's look again.",
       },
     },
     {
@@ -126,7 +129,7 @@ export const PHOTOSYNTHESIS: Lesson = {
           "They catch sunlight and turn water and air into sugar.",
           "That sugar is the plant's energy - it grows without ever eating a meal.",
         ],
-        keyTerms: ["chloroplast", "chlorophyll"],
+        keyTerms: [{ term: "chloroplast" }, { term: "chlorophyll" }],
       },
       audio: {
         heading: "Listen to this one",
@@ -145,8 +148,7 @@ export const PHOTOSYNTHESIS: Lesson = {
         ],
         correctId: "sugar",
         correctNote: "That's it - the light becomes sugar, the plant's food.",
-        recoveryNote:
-          "Not quite - water is something the plant takes in. Let's look again. Your progress is saved.",
+        recoveryNote: "Not quite. Let's look again.",
       },
     },
     {
@@ -233,7 +235,7 @@ export const PHOTOSYNTHESIS: Lesson = {
         ],
         correctId: "swc",
         recoveryNote:
-          "That one didn't land - and that's okay. We'll bring it back later. Nothing to fix right now.",
+          "That one didn't land - and that's okay. Nothing to fix right now.",
       },
       {
         prompt: "Where in a plant does photosynthesis mostly happen?",
@@ -245,7 +247,7 @@ export const PHOTOSYNTHESIS: Lesson = {
         ],
         correctId: "leaves",
         recoveryNote:
-          "That one didn't land - and that's okay. We'll bring it back later. Nothing to fix right now.",
+          "That one didn't land - and that's okay. Nothing to fix right now.",
       },
       {
         prompt: "What gas do plants take in to make their food?",
@@ -256,7 +258,7 @@ export const PHOTOSYNTHESIS: Lesson = {
         ],
         correctId: "co2",
         recoveryNote:
-          "That one didn't land - and that's okay. We'll bring it back later. Nothing to fix right now.",
+          "That one didn't land - and that's okay. Nothing to fix right now.",
       },
       {
         prompt: "Which one shows the word equation for photosynthesis?",
@@ -266,7 +268,7 @@ export const PHOTOSYNTHESIS: Lesson = {
         ],
         correctId: "right",
         recoveryNote:
-          "That one didn't land - and that's okay. We'll bring it back later. Nothing to fix right now.",
+          "That one didn't land - and that's okay. Nothing to fix right now.",
       },
     ],
     masteredConcepts: ["What photosynthesis is & needs"],
@@ -308,7 +310,8 @@ export const PHOTOSYNTHESIS_PLAN: AdaptationPlan = {
         "What might the plant make from it?",
       ],
     },
-    // `offer_hint`: the unrequested hint and the guided forward glow. The
+    // `offer_hint`: the unrequested hint (no glow on the forward control -
+    // D124). The
     // OFFERED consolidation break rides its own field, because §4 keeps
     // `offer_break` as a separate action and one segment carries one
     // instruction. Offered, never forced.
@@ -323,9 +326,9 @@ export const PHOTOSYNTHESIS_PLAN: AdaptationPlan = {
         "Start with where the light lands: the leaf. What do you think it does with it?",
       offerBreak: BREAK_TYPES.CONSOLIDATION,
     },
-    // `modulate_density`: softened - density already reduced by the plan,
-    // secondary chrome dims. No offer stacked on a softened segment.
-    { segmentId: "recap", startModality: MODALITY.TEXT, density: DENSITY.SLOWER, suggestModality: null, scaffold: SCAFFOLD_LEVELS.MODERATE, adjustment: ADJUSTMENT_ACTIONS.MODULATE_DENSITY },
+    // Slower, standing - the plan's own density. It carried `modulate_density`
+    // and its chrome dim until design removed that state on 1 Oct (SCRUM-180).
+    { segmentId: "recap", startModality: MODALITY.TEXT, density: DENSITY.SLOWER, suggestModality: null, scaffold: SCAFFOLD_LEVELS.MODERATE },
   ],
 };
 

@@ -84,7 +84,7 @@ export const CATEGORY_META: Record<AdminCategory, CategoryMeta> = {
   },
   account: {
     key: "account",
-    name: "Platform and account",
+    name: "Platform", // SCRUM-100's name (Lydia, 7 Oct: the names people read are ours)
     description: "Maintenance, changes to screens you use, and policy updates",
     scope: null,
     fixedEmail: true,
@@ -146,4 +146,17 @@ export function preferencesIntro(visible: CategoryMeta[], scopes: PermissionScop
     return `You look after ${named[0]}, so that's what's here.`;
   }
   return "Choose what reaches you, and how. You only see the areas your access covers.";
+}
+
+/**
+ * What a notification row is labelled: its category's own name, from the same
+ * table the preferences use. NULL when the server gave no category, or one
+ * this console does not show - and then the row carries no label at all. It
+ * used to print the raw `type` instead, which could put an engine event name
+ * ("MODALITY SHIFT") in front of an admin.
+ */
+export function categoryLabel(category: string | null | undefined): string | null {
+  return category && category in CATEGORY_META
+    ? CATEGORY_META[category as AdminCategory].name
+    : null;
 }

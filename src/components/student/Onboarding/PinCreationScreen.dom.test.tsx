@@ -28,6 +28,13 @@ import { clearSession, setSession } from "@/lib/auth/session";
  * the identical screen.
  */
 
+/*
+ * The first test wears the cold import of the screen and the keyboard. On a
+ * contended worker that passed 5s, and the timeout then cascaded into every
+ * later test because cleanup never ran.
+ */
+vi.setConfig({ testTimeout: 30_000 });
+
 const { setPin, storePin } = vi.hoisted(() => ({
   setPin: vi.fn(),
   storePin: vi.fn(),
@@ -132,5 +139,83 @@ describe("PinCreationScreen — a student changing their own PIN", () => {
     await enterPinTwice();
 
     expect(setPin).not.toHaveBeenCalled();
+  });
+});
+
+describe("PinCreationScreen — the number pad (ruling D)", () => {
+  /*
+   * Design ruled the PIN frame's pad DOCKED and focus-driven: "a focus-driven
+   * pad is transient, and a docked tray reads as transient". It was a
+   * permanent block pad, which is 28c's exception and nobody else's.
+   */
+  const pinField = () =>
+    screen.getByLabelText("Your PIN") as HTMLInputElement;
+
+  it("is up from the start, because the boxes are focused on arrival", () => {
+    render(<PinCreationScreen onComplete={() => {}} />);
+
+    expect(document.activeElement).toBe(pinField());
+    expect(screen.getByRole("button", { name: "5" })).toBeInTheDocument();
+  });
+
+  it("goes away when focus leaves the boxes, and comes back on a tap", async () => {
+    render(
+      <>
+        <PinCreationScreen onComplete={() => {}} />
+        <button type="button">elsewhere</button>
+      </>,
+    );
+
+    act(() => screen.getByRole("button", { name: "elsewhere" }).focus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    expect(screen.queryByRole("button", { name: "5" })).toBeNull();
+
+    act(() => pinField().focus());
+    expect(screen.getByRole("button", { name: "5" })).toBeInTheDocument();
+  });
+
+  it("does not take the digits twice when a keyboard types into the focused field", async () => {
+    // The field is a focus target only; the window listener is what reads
+    // keys. A field that also took them would double every digit.
+    render(<PinCreationScreen storePin={storePin} onComplete={() => {}} />);
+
+    for (const d of "12341234") {
+      fireEvent.keyDown(pinField(), { key: d });
+    }
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+
+    expect(storePin).toHaveBeenCalledWith("1234");
+  });
+});
+
+/**
+ * D115, "the returning-child opening line on PIN creation": 15's "New PIN
+ * after a clear" (`Nevo PIN Frame`, `reset`). "Same screen and components;
+ * only the opening line changes, so it reads as choosing a new PIN rather
+ * than starting again." The routing to it waits on backend (B67).
+ */
+describe("PinCreationScreen - a new PIN after a clear (D115)", () => {
+  it("opens on Choose a new PIN, with everything else as on a first PIN", () => {
+    render(<PinCreationScreen reset storePin={storePin} onComplete={() => {}} />);
+
+    expect(
+      screen.getByRole("heading", { name: "Choose a new PIN" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Create a PIN" })).toBeNull();
+    expect(
+      screen.getByText("You'll use this to log in next time"),
+    ).toBeInTheDocument();
+  });
+
+  it("says Create a PIN on a first PIN", () => {
+    render(<PinCreationScreen storePin={storePin} onComplete={() => {}} />);
+
+    expect(
+      screen.getByRole("heading", { name: "Create a PIN" }),
+    ).toBeInTheDocument();
   });
 });

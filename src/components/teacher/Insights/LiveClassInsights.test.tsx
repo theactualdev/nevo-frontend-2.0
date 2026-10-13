@@ -43,6 +43,7 @@ const state = (over: Partial<ReturnType<typeof useClassInsights>> = {}) => ({
   gathering: false,
   settledWeek: false,
   narrativeFailed: false,
+  sectionFailed: { misconceptions: false, mastery: false, flags: false },
   ...over,
 });
 
@@ -113,7 +114,8 @@ describe("LiveClassInsights - telling the three states apart", () => {
     expect(
       screen.getByText(/A calm week. Everyone is moving through the material./),
     ).toBeInTheDocument();
-    expect(screen.getByText(/A settled week/)).toBeInTheDocument();
+    // The engine owns the settled wording; no line of ours sits under it.
+    expect(screen.queryByText(/A settled week/)).not.toBeInTheDocument();
   });
 
   it("shows the engine's written week, in its own words", () => {
@@ -148,7 +150,11 @@ describe("LiveClassInsights - telling the three states apart", () => {
     expect(screen.queryByText(/Still gathering/)).not.toBeInTheDocument();
   });
 
-  it("says nothing about a missing summary when the sections have content", () => {
+  it("says the summary is missing over real sections too (T158)", () => {
+    // It said nothing here, so the summary - the section a teacher reads
+    // first - went missing without a word whenever anything else had loaded.
+    // A failed read is not an empty one; rule 5's nothing-state is for the
+    // second.
     useClassInsights.mockReturnValue(
       state({
         narrativeFailed: true,
@@ -159,7 +165,41 @@ describe("LiveClassInsights - telling the three states apart", () => {
     );
     render(<LiveClassInsights {...CLASS} />);
 
+    expect(screen.getByText(/couldn’t load this week’s summary/i)).toBeInTheDocument();
+    expect(screen.getByText("Stopped halfway")).toBeInTheDocument();
+  });
+
+  it("says nothing of a summary that did arrive", () => {
+    useClassInsights.mockReturnValue(
+      state({ summary: "Eight students slowed on the same step." }),
+    );
+    render(<LiveClassInsights {...CLASS} />);
+
     expect(screen.queryByText(/couldn’t load this week’s summary/i)).not.toBeInTheDocument();
+  });
+
+  it("says a failed sticking-point read failed, under its own label (T158)", () => {
+    useClassInsights.mockReturnValue(
+      state({
+        flags: [{ id: "f1", name: "Amara", note: "Stopped halfway", isSudden: false }],
+        sectionFailed: { misconceptions: true, mastery: false, flags: false },
+      }),
+    );
+    render(<LiveClassInsights {...CLASS} />);
+
+    expect(screen.getByText("A shared sticking point")).toBeInTheDocument();
+    expect(screen.getAllByText(/couldn’t load this just now/).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("gives a flag card C09's chevron, as the sample cards have (T152)", () => {
+    useClassInsights.mockReturnValue(
+      state({ flags: [{ id: "f1", name: "Amara", studentId: "s-1", note: "Stopped halfway", isSudden: false }] }),
+    );
+    const { container } = render(<LiveClassInsights {...CLASS} />);
+
+    const card = screen.getByRole("link", { name: /Amara/ });
+    expect(card.querySelector("[data-chevron] svg")).not.toBeNull();
+    expect(container.querySelectorAll("[data-chevron]")).toHaveLength(1);
   });
 
   it("prefers the failure message when everything failed", () => {
@@ -222,5 +262,82 @@ describe("LiveClassInsights - with something to say", () => {
 
     expect(screen.queryByText(/Still gathering/)).not.toBeInTheDocument();
     expect(screen.queryByText(/couldn’t load/i)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * A SECTION THAT FAILED ON ITS OWN. Only a failure of all three lists was
+ * said; one failed flags or mastery read just dropped its section - and the
+ * week could still be called settled, "Nothing here needs you", over a flags
+ * read that never arrived.
+ */
+describe("one list that failed while the others landed", () => {
+  const failedOnly = (section: "flags" | "mastery") =>
+    state({
+      summary: "A steady week.",
+      settledWeek: true,
+      sectionFailed: { misconceptions: false, mastery: section === "mastery", flags: section === "flags" },
+    });
+
+  it("keeps the flags section and says it could not be read", () => {
+    useClassInsights.mockReturnValue(failedOnly("flags"));
+    render(<LiveClassInsights {...CLASS} />);
+
+    expect(screen.getByText("Flags")).toBeInTheDocument();
+    expect(screen.getByText(/couldn.t load this just now. Nothing has changed for Year 7 Maths/)).toBeInTheDocument();
+  });
+
+  it("keeps the mastery section and says it could not be read", () => {
+    useClassInsights.mockReturnValue(failedOnly("mastery"));
+    render(<LiveClassInsights {...CLASS} />);
+
+    expect(screen.getByText("Where the class stands")).toBeInTheDocument();
+    expect(screen.getByText(/couldn.t load this just now/)).toBeInTheDocument();
+  });
+
+  it("does not call the week settled over a read that never arrived", () => {
+    useClassInsights.mockReturnValue(failedOnly("flags"));
+    render(<LiveClassInsights {...CLASS} />);
+
+    expect(screen.queryByText(/Nothing here needs you/)).not.toBeInTheDocument();
+  });
+
+  it("says a settled week in the engine's own words, and adds none of ours", () => {
+    useClassInsights.mockReturnValue(state({ summary: "A steady week.", settledWeek: true }));
+    render(<LiveClassInsights {...CLASS} />);
+
+    expect(screen.getByText("A steady week.")).toBeInTheDocument();
+    expect(screen.queryByText(/Nothing here needs you/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/couldn.t load this just now/)).not.toBeInTheDocument();
+  });
+});
+
+describe("a flag card in Flags", () => {
+  it("opens the student it is about", () => {
+    useClassInsights.mockReturnValue(
+      state({
+        flags: [{ id: "f-1", studentId: "s-7", name: "Ada Obi", note: "Slower on written work.", isSudden: false }],
+      }),
+    );
+    render(<LiveClassInsights {...CLASS} />);
+
+    expect(screen.getByRole("link", { name: /Ada Obi/ })).toHaveAttribute("href", "/teacher/students/s-7");
+  });
+});
+
+/** C09's headings, as the fixture screen next door has always had them. */
+describe("the headings", () => {
+  it("heads the written week with the class it is about", () => {
+    useClassInsights.mockReturnValue(state({ summary: "Most of the class is through fractions." }));
+    render(<LiveClassInsights {...CLASS} />);
+
+    expect(screen.getByRole("heading", { name: `This week in ${CLASS.className}` })).toBeInTheDocument();
+  });
+
+  it("draws no written-week heading when there is no written week", () => {
+    useClassInsights.mockReturnValue(state({ summary: null }));
+    render(<LiveClassInsights {...CLASS} />);
+
+    expect(screen.queryByRole("heading", { name: /This week in/ })).not.toBeInTheDocument();
   });
 });

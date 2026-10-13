@@ -5,9 +5,10 @@ export const metadata: Metadata = {
   title: "Systems overview - Nevo",
 };
 
-// D17 IT Admin Home - where an IT administrator lands. Sits UNDER /admin/sso so
-// `activeNavLabel`'s longest-prefix rule lights the IT & SSO rail item without
-// a new nav row, which is what the frame draws.
+// D17 IT Admin Home - where an IT administrator lands, from sign-in through
+// `adminHomeForScopes`; a "no access" page links back here by `homeName`. It
+// sits under /admin/sso to light the IT & SSO rail item, which has been off
+// the rail since 24 Sep, so no rail row lights here now.
 export default function AdminItHomePage() {
   return <ItHomeView />;
 }

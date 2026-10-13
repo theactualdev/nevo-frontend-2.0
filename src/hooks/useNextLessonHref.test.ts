@@ -79,6 +79,7 @@ describe("useNextLessonHref", () => {
          */
         { status: "cancelled", availableFrom: null, lesson: { id: "done-1" } },
         {
+          id: "asg-9",
           status: "assigned",
           availableFrom: null,
           lesson: { id: "real-lesson" },
@@ -89,7 +90,10 @@ describe("useNextLessonHref", () => {
 
     const { result } = renderHook(() => useNextLessonHref());
 
-    expect(result.current).toBe("/student/lessons/real-lesson");
+    // With the assignment, or the player files the work under nothing and
+    // never shows the teacher's note. "You're In" and the warm-up both land
+    // here, so this is the first lesson many children ever open.
+    expect(result.current).toBe("/student/lessons/real-lesson?assignment=asg-9");
   });
 
   it("sends a signed-in child with nothing set to their lessons list", () => {
@@ -115,10 +119,10 @@ describe("useNextLessonHref", () => {
 /**
  * The button could hand a child into a lesson their teacher had called off.
  *
- * `.find((a) => a.status !== "completed")` looked like a filter and was not:
- * `AssignmentStatus` is `"assigned" | "cancelled"` and has no "completed"
- * member, so the comparison was always true and the FIRST assignment won
- * whatever its state. This is the button at the end of onboarding and at the
+ * `.find((a) => a.status !== "completed")` filtered out finished work and
+ * nothing else: a cancelled assignment, or one not open yet, passed it, so the
+ * first unfinished assignment won whatever else was true of it. This is the
+ * button at the end of onboarding and at the
  * end of the daily warm-up, so it is the first lesson many children ever open.
  */
 describe("useNextLessonHref — what a teacher has actually set", () => {

@@ -124,3 +124,25 @@ describe("what block does NOT change", () => {
     expect(container.innerHTML).toContain("pointer:fine");
   });
 });
+
+describe("the pad's bottom-left corner (D54, D58)", () => {
+  it.each(["docked", "block"] as const)(
+    "is blank, as the frame draws it: %s",
+    (presentation) => {
+      // It held a navy check key for the one-tap unlock. Every PIN is four
+      // digits now and the boxes send themselves on the fourth.
+      render(
+        <NevoKeyboard
+          layout="pad"
+          presentation={presentation}
+          onKey={noop}
+          onBackspace={noop}
+        />,
+      );
+
+      expect(screen.queryByRole("button", { name: "Done" })).toBeNull();
+      // Ten digits and delete, and nothing else.
+      expect(screen.getAllByRole("button")).toHaveLength(11);
+    },
+  );
+});

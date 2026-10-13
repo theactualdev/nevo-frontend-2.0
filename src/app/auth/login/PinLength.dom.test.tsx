@@ -1,3 +1,4 @@
+import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   act,
@@ -12,18 +13,22 @@ import { ApiError } from "@/lib/api/client";
 import { clearSession } from "@/lib/auth/session";
 
 /**
- * FOUR-DIGIT PINS, ON A SCREEN THAT SUBMITS BY ITSELF.
+ * FOUR DIGITS, FOUR BOXES (D58, 6 Oct).
  *
- * The one-tap unlock sends the PIN the moment the boxes fill (28c). That was
- * safe while every PIN was six. From 25 Sep a new PIN is four, while every
- * earlier one - and every adult's reset - is still six, so the screen has to
- * know WHICH, per child, or it sends two-thirds of a six-digit PIN and tells
- * the child it did not match.
- *
- * What these pin down is that a remembered length can cost a child one retry
- * and can never lock them out: the length is a hint, the check key is always
- * there, and a PIN that did not match stops the hint being trusted.
+ * The one-tap unlock sends the PIN the moment the boxes fill (28c). It used to
+ * draw whatever length the device remembered for a child - six for one it
+ * predated - and after a PIN that did not match, grew the boxes up to eight
+ * and waited for the check key. Design: "SCRUM-179 settles it and the
+ * six-digit reference is stale wherever it appears." Five to eight were only
+ * ever a 422 from `PinLoginRequest`.
  */
+
+/*
+ * The page's imports are paid by the first test on a cold worker, and on a
+ * contended machine that alone ran past the 5s default. The same allowance
+ * the other door suites give themselves.
+ */
+vi.setConfig({ testTimeout: 30_000 });
 
 /*
  * ONE router and ONE roster array for the whole file. The page's hydrate
@@ -43,12 +48,16 @@ const { loginPin } = vi.hoisted(() => ({ loginPin: vi.fn() }));
 vi.mock("@/lib/api", () => ({ authApi: { loginPin } }));
 vi.mock("@/lib/auth/entryGate", () => ({
   studentDestination: async () => "/student/dashboard",
+  WAITING_ROUTE: "/student/waiting",
 }));
 
 const roster = vi.hoisted(() => ({
   pinLength: undefined as number | undefined,
   rememberChild: vi.fn(),
-  entries: [{ id: "a", name: "Ada", shapeIndex: 0 }],
+  entries: [
+    { id: "a", name: "Ada", shapeIndex: 0 },
+    { id: "k", name: "Kofi", shapeIndex: 1 },
+  ],
 }));
 vi.mock("@/lib/auth/deviceRoster", () => ({
   SHAPE_COUNT: 6,
@@ -96,6 +105,11 @@ async function tap(digits: string) {
   }
 }
 
+/** The four boxes are drawn, not inputs: each is a 10px-radius tile. */
+const boxes = () =>
+  document.querySelectorAll("main .rounded-\\[10px\\].border-\\[1\\.5px\\]")
+    .length;
+
 const sentPins = () => loginPin.mock.calls.map(([body]) => body.pin);
 
 beforeEach(() => {
@@ -109,96 +123,163 @@ afterEach(() => {
   cleanup();
 });
 
-describe("the one-tap unlock, now that a PIN may be four or six", () => {
-  it("submits a four-digit PIN on the fourth digit for a child who has one", async () => {
-    roster.pinLength = 4;
+describe("the one-tap unlock, now that every PIN is four", () => {
+  it("draws four boxes and submits on the fourth digit", async () => {
     loginPin.mockResolvedValue(SESSION);
     await chooseAda();
 
+    expect(boxes()).toBe(4);
     await tap("1234");
 
     await waitFor(() => expect(sentPins()).toEqual(["1234"]));
   });
 
-  it("waits for six from a child remembered before four-digit PINs existed", async () => {
-    // No recorded length means an older device, and every PIN it has seen
-    // was six. Submitting at four is the 31 Aug lockout.
+  it("draws four for a child the device remembers as six", async () => {
+    // A device that recorded six (or recorded nothing, from before 25 Sep)
+    // used to draw six boxes and wait for the last two.
+    roster.pinLength = 6;
     loginPin.mockResolvedValue(SESSION);
     await chooseAda();
 
+    expect(boxes()).toBe(4);
     await tap("1234");
-    expect(loginPin).not.toHaveBeenCalled();
-
-    await tap("56");
-    await waitFor(() => expect(sentPins()).toEqual(["123456"]));
-  });
-
-  it("lets a child whose PIN is shorter than remembered send it with the check key", async () => {
-    // A child who changed a six-digit PIN to a new four-digit one, on a
-    // device that still remembers six.
-    loginPin.mockResolvedValue(SESSION);
-    await chooseAda();
-
-    await tap("1234");
-    fireEvent.click(screen.getByRole("button", { name: "Done" }));
 
     await waitFor(() => expect(sentPins()).toEqual(["1234"]));
   });
 
-  it("does not send fewer than four digits, which the server would refuse by shape", async () => {
+  it("never sends more than four, whatever a keyboard types", async () => {
+    // A hardware keyboard can land several digits in one event; the fifth
+    // and sixth are a shape the server 422s.
+    loginPin.mockResolvedValue(SESSION);
     await chooseAda();
 
-    await tap("123");
-    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    fireEvent.change(
+      document.querySelector('input[aria-label="PIN"]') as HTMLInputElement,
+      { target: { value: "123456" } },
+    );
 
-    expect(loginPin).not.toHaveBeenCalled();
+    await waitFor(() => expect(sentPins()).toEqual(["1234"]));
   });
 
-  it("stops trusting the remembered length after a PIN that did not match", async () => {
-    /*
-     * THE RESET CASE. The device remembers four; an adult has since reset the
-     * PIN, and resets issue six. Trusting four forever would submit the first
-     * four digits of the new PIN on every attempt and lock the child out of
-     * this screen for good.
-     */
-    roster.pinLength = 4;
+  it("still submits on the fourth digit after a PIN that did not match", async () => {
+    // The boxes used to stop trusting the length here, grow to eight, and
+    // wait for the check key.
     loginPin.mockRejectedValueOnce(wrongPin()).mockResolvedValue(SESSION);
     await chooseAda();
 
     await tap("1234");
     await screen.findByText(/didn't match/);
 
-    await tap("1234");
-    expect(loginPin).toHaveBeenCalledTimes(1);
+    expect(boxes()).toBe(4);
+    await tap("5678");
 
-    await tap("56");
-    fireEvent.click(screen.getByRole("button", { name: "Done" }));
-    await waitFor(() => expect(sentPins()).toEqual(["1234", "123456"]));
+    await waitFor(() => expect(sentPins()).toEqual(["1234", "5678"]));
   });
 
-  it("records the length that worked, so tomorrow's boxes are right", async () => {
+  it("draws no Done key: the fourth digit is what sends the PIN (D54, D58)", async () => {
+    // The keyboard frame leaves the pad's bottom-left corner blank, and with
+    // every PIN four digits long a check key there had nothing to finish.
+    await chooseAda();
+
+    expect(screen.queryByRole("button", { name: "Done" })).toBeNull();
+  });
+
+  it("sends nothing for a hardware keyboard's Enter", async () => {
+    // The laptop path: digits and Backspace on the hidden field, and the
+    // fourth digit sends. Enter has no PIN to finish.
+    await chooseAda();
+    const field = document.querySelector(
+      'input[aria-label="PIN"]',
+    ) as HTMLInputElement;
+
+    fireEvent.change(field, { target: { value: "123" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+
+    expect(loginPin).not.toHaveBeenCalled();
+  });
+
+  it("remembers no length for the child, and never the PIN", async () => {
+    // "The length arrives with the PIN rather than being remembered by the
+    // device" (D58, 4 Oct).
+    loginPin.mockResolvedValue(SESSION);
+    await chooseAda();
+
+    await tap("9753");
+
+    await waitFor(() => expect(roster.rememberChild).toHaveBeenCalled());
+    expect(roster.rememberChild.mock.calls[0][0]).not.toHaveProperty(
+      "pinLength",
+    );
+    expect(JSON.stringify(roster.rememberChild.mock.calls)).not.toContain(
+      "9753",
+    );
+  });
+});
+
+describe("which account a remembered child is", () => {
+  it("is recorded on the first unlock, so a signed-in screen can find this child", async () => {
+    // Without it, every signed-in screen fell back to whichever child the
+    // device remembered last - and called this child by that child's name.
     loginPin.mockResolvedValue(SESSION);
     await chooseAda();
 
     await tap("1234");
-    fireEvent.click(screen.getByRole("button", { name: "Done" }));
 
     await waitFor(() =>
       expect(roster.rememberChild).toHaveBeenCalledWith(
-        expect.objectContaining({ loginIdentifier: "ada.o", pinLength: 4 }),
+        expect.objectContaining({ userId: "student-1" }),
       ),
     );
   });
+});
 
-  it("records the length, never the PIN", async () => {
-    loginPin.mockResolvedValue(SESSION);
-    await chooseAda();
-
-    await tap("123456");
-
-    await waitFor(() => expect(roster.rememberChild).toHaveBeenCalled());
-    expect(JSON.stringify(roster.rememberChild.mock.calls)).not.toContain(
-      "123456",
+/**
+ * ONE ENTRY, ONE ATTEMPT. The fourth digit used to send the PIN from inside
+ * the `setDigits` updater, and React runs an updater twice under StrictMode
+ * (and may on a concurrent replay), so every entry was posted twice: two
+ * attempts towards `too_many_attempts`, and a second login that could replace
+ * the session the first had made.
+ */
+describe("one entry, one attempt", () => {
+  it.each([
+    ["", false],
+    [" under StrictMode", true],
+  ])("posts a four-digit entry exactly once%s", async (_, strict) => {
+    loginPin.mockRejectedValue(wrongPin());
+    render(
+      strict ? (
+        <StrictMode>
+          <LoginPage />
+        </StrictMode>
+      ) : (
+        <LoginPage />
+      ),
     );
+    fireEvent.click(await screen.findByRole("button", { name: "Ada" }));
+    await screen.findByText("Enter your PIN to keep going");
+
+    await tap("1234");
+    await screen.findByText(/didn.t match/);
+    await act(async () => {});
+
+    expect(loginPin).toHaveBeenCalledTimes(1);
+  });
+
+  it("posts the next entry once too, after a refusal", async () => {
+    loginPin.mockRejectedValueOnce(wrongPin()).mockResolvedValue(SESSION);
+    render(
+      <StrictMode>
+        <LoginPage />
+      </StrictMode>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Ada" }));
+    await screen.findByText("Enter your PIN to keep going");
+
+    await tap("1234");
+    await screen.findByText(/didn.t match/);
+    await tap("5678");
+    await waitFor(() => expect(roster.rememberChild).toHaveBeenCalled());
+
+    expect(sentPins()).toEqual(["1234", "5678"]);
   });
 });

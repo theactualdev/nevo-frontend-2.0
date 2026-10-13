@@ -8,7 +8,6 @@
 import type {
   AdjustmentAction,
   BreakType,
-  CalcModality,
   Density,
   Modality,
   ScaffoldLevel,
@@ -32,12 +31,32 @@ export interface TextContent {
    * the density's `body` string becomes the lead line above them.
    */
   slowerSteps?: string[];
-  /** Expand surfaces key terms as violet chips under the fuller prose. */
-  keyTerms?: string[];
+  /**
+   * Key terms, as violet chips beside the standard text and under Expand.
+   * A term with a `definition` opens it in place when tapped (design, 9 Oct);
+   * the authored demo's terms carry none and stay plain chips.
+   */
+  keyTerms?: { term: string; definition?: string }[];
   /** Per-density callout (e.g. Simplify "IN SHORT", Expand "WORD EQUATION"). */
   callouts?: Partial<
     Record<Density | "default", { label: string; text: string; sub?: string }>
   >;
+  /**
+   * The payload's key points (`TextVariant.keyPoints`, SCRUM-224): the frame's
+   * "IN SHORT" box. Design, D24: "The boxes stay. They are key points."
+   */
+  keyPoints?: string[];
+  /**
+   * The payload's equation callouts (`TextVariant.equationCallouts`): the
+   * frame's "WORD EQUATION" box, one per equation, under Expand.
+   */
+  equations?: { equation: string; label?: string }[];
+  /**
+   * Where the server breaks `body.default` for reading (SCRUM-234), in order.
+   * Absent is one body. They describe the default body only, so a reshape
+   * never reads through them.
+   */
+  readingChunks?: { id: string; text: string }[];
 }
 
 /** Visual modality — an illustration and/or a simple input→output diagram. */
@@ -50,7 +69,21 @@ export interface VisualContent {
    * answer to missing produced assets: real art, never a wireframe box.
    */
   art?: { id: string; alt: string; caption?: string };
-  illustration?: { src: string; alt: string; caption?: string };
+  illustration?: {
+    src: string;
+    alt: string;
+    caption?: string;
+    /** Identifies the stored object, so an expired `src` can be re-issued. */
+    storagePath?: string;
+    /**
+     * A much smaller copy of the same picture (B47), painted while `src`
+     * arrives on a slow connection. Absent means there is none.
+     */
+    previewSrc?: string;
+    /** The asset's own pixel size, when the wire carries it. */
+    width?: number;
+    height?: number;
+  };
   /** e.g. Photosynthesis "TAKES IN → GIVES OUT". */
   diagram?: {
     inLabel: string;
@@ -69,6 +102,8 @@ export interface AudioContent {
   title?: string;
   /** Backend-produced asset ref; absent in the mock (UI animates a placeholder). */
   src?: string;
+  /** Identifies the stored clip, so an expired `src` can be re-issued. */
+  storagePath?: string;
   durationSec?: number;
   transcript: string;
 }
@@ -86,119 +121,215 @@ export interface InteractiveContent {
 
 // ── Comprehension check (inline Quick Check) ────────────────────────────────
 
+/** One answer a check offers. */
+export interface AnswerChoice {
+  id: string;
+  label: string;
+  /**
+   * The checkpoint option's own value, which is what `POST /attempts` sends:
+   * the server marks it against the key, and `id` is a string of it. Absent on
+   * the authored demo checks, which have no checkpoint behind them.
+   */
+  value?: string | number | boolean;
+}
+
 export interface QuickCheck {
+  /**
+   * The checkpoint it was built from, so an answer can say which one it
+   * answered. Absent on the authored demo checks, which have none.
+   */
+  id?: string;
   question: string;
-  options: { id: string; label: string }[];
+  options: AnswerChoice[];
   correctId: string;
   /** Navy note on a correct answer. */
   correctNote: string;
   /** Soft-violet (never red) note on a miss — always reassures continuity. */
   recoveryNote: string;
+  /**
+   * The recording a SPOKEN check plays (B16). Present only when the server
+   * set the checkpoint's format to spoken and sent one; the printed question
+   * stays on screen either way.
+   */
+  promptAudio?: string;
+  /**
+   * The concept the check is about, from its checkpoint. A review session
+   * skips the after-lesson questions - its inline checks ARE the recall - so
+   * this is the only place a review learns which answers were about the
+   * concept it was opened for. Never rendered.
+   */
+  conceptId?: string;
 }
 
-// ── Calculation subsystem (17b §9 — co-construction) ────────────────────────
+// ── Calculation subsystem (17b co-construction, SCRUM-181 on SCRUM-177) ─────
 
-/** Which calculation the solver co-constructs; non-null triggers the seam (§8). */
-export type CalculationVariant = "fraction_add_like" | (string & {});
+/**
+ * The wire's `CalculationVariant.type`, which is `co_construction` - the tag
+ * that routes the Interactive modality to the solver (17b §8).
+ */
+export type CalculationVariant = "co_construction" | (string & {});
 
-export interface CalcCardStep {
-  prompt: string;
-  choices: string[];
-  /** Index into `choices`. */
-  correct: number;
-  hint: string;
-  onCorrect?: { highlight?: string; confirm?: string };
-}
-
-export interface CalcNumericStep {
-  prompt: string;
-  input: "numeric";
-  answer: string;
-  hint: string;
-  /** "naira", "years", "%" - shown beside the field where the wire gives one. */
-  unit?: string | null;
+/**
+ * One quantity a scaffold draws: the wire's `marks[i]`, named by its
+ * `labels[i]` where there is one. A count, as the pipeline wrote it - never
+ * one this app worked out.
+ */
+export interface ScaffoldQuantity {
+  count: number;
+  label?: string;
 }
 
 /**
- * A step whose answer is an expression rather than a number.
+ * The drawing beside the notation, as the payload describes it (SCRUM-177,
+ * read by backend's 9 Oct definitions - see `scaffoldFor`).
  *
- * ADDED FOR REAL CONTENT. The player knew two kinds of step, cards and a
- * numeric finish, because the only calculation that existed was
- * `fraction_add_like`. The backend's algebra lesson answers "3x - 4" and "3x"
- * before it answers 5, so two of its three steps had no kind to be - and a
- * mapper that dropped them would have left a child solving the last third of
- * an equation.
+ * Only the kinds a frame draws are here, each named as the wire names it:
+ *  - `bar` is 17b's fraction bars (D149's "fraction_bars"): `rows` bars of
+ *    `parts` cells. Its quantities are one to a bar where there are as many
+ *    as bars, and otherwise all on its one bar, end to end;
+ *  - `array` is D149's `rows` rows of `parts` square places, its
+ *    quantities filling them end to end in reading order;
+ *  - `dots` is D149's `rows` rows of `parts` round places, its quantities
+ *    filling them end to end in reading order, as the array does;
+ *  - `place_value` is D149's three columns of flats, rods and units, a
+ *    quantity to each, largest first;
+ *  - `number_line` is D149's line of `parts` positions ("cells or
+ *    positions in one row"), a marker at each quantity's position.
  *
- * Separate from `CalcNumericStep` because the keypad differs: an expression
- * needs letters and an operator, a number does not.
+ * `partLabels` name the parts of a scaffold with no marks: "label[i] belongs
+ * to mark[i] when marks are present, otherwise to scaffold part i".
  */
-export interface CalcTextStep {
+export type CalcScaffold =
+  | {
+      kind: "bar";
+      parts: number;
+      rows: number;
+      quantities: ScaffoldQuantity[];
+      partLabels: string[];
+    }
+  | {
+      kind: "array";
+      parts: number;
+      rows: number;
+      quantities: ScaffoldQuantity[];
+      partLabels: string[];
+    }
+  | {
+      kind: "dots";
+      parts: number;
+      rows: number;
+      quantities: ScaffoldQuantity[];
+      partLabels: string[];
+    }
+  | { kind: "place_value"; places: ScaffoldQuantity[] }
+  | {
+      kind: "number_line";
+      parts: number;
+      points: ScaffoldQuantity[];
+      partLabels: string[];
+    };
+
+/** Narration for one step: the clip, and how to re-issue its link. */
+export interface CalcNarration {
+  src: string;
+  storagePath?: string;
+}
+
+/**
+ * One thing a step does to the screen while it is asked (B107), as the wire
+ * names it: `active` is 17b's violet ring, `source` its navy, `result` the
+ * result. `target` is "an opaque renderer target", matched only to an
+ * element the same calculation carries - see `emphasisAt`.
+ */
+export interface CalcHighlight {
+  target: string;
+  role: "active" | "source" | "result";
+}
+
+interface CalcStepBase {
+  /** The wire's `stepId` - what `calculation_step_response` names. */
+  stepId: string;
   prompt: string;
-  input: "text";
-  answer: string;
+  /** Empty where the step has none, and then no hint is offered. */
   hint: string;
-  unit?: string | null;
+  /** The solution as it stands while this step is asked. May be empty. */
+  assembles: string;
+  /** How the equation reads once this step is done. May be empty. */
+  equationState: string;
+  /** What this step's answer does to the drawing. Empty means nothing. */
+  highlights: CalcHighlight[];
+  narration?: CalcNarration;
 }
 
-export type CalculationStep = CalcCardStep | CalcNumericStep | CalcTextStep;
-
-export function isNumericStep(step: CalculationStep): step is CalcNumericStep {
-  return "input" in step && step.input === "numeric";
+/**
+ * A step the child answers by picking.
+ *
+ * `accepted` is every option value the pipeline stored as right - the step's
+ * `answer` and its `targets` - so a pick is matched against that list, never
+ * reasoned about.
+ */
+export interface CalcChoiceStep extends CalcStepBase {
+  input: "choice";
+  options: { value: string; label: string }[];
+  accepted: string[];
+  /** Shown with the confirmed pick, where the step carries one. */
+  confirm?: string;
 }
 
-export function isTextStep(step: CalculationStep): step is CalcTextStep {
-  return "input" in step && step.input === "text";
+/**
+ * A step the child types into. `entry` is the wire's `expectedInput` read for
+ * the keyboard it needs: an expression ("3x - 4") takes letters and an
+ * operator; a number takes digits, a minus sign and a decimal point.
+ */
+export interface CalcNumberStep extends CalcStepBase {
+  input: "number";
+  entry: "numeric" | "text";
+  accepted: string[];
+  /** "naira", "years", "%" - shown beside the field where the wire gives one. */
+  unit?: string;
 }
 
-/** Card steps are the ones the student picks from rather than types into. */
-export function isCardStep(step: CalculationStep): step is CalcCardStep {
-  return !("input" in step);
+/**
+ * A step the child builds by tapping pieces into the manipulative (17b §6).
+ * `target` is the wire's `tapCount` (B102), a whole number of pieces the bar
+ * or the array holds - never read out of an answer. A place-value build is
+ * done when each column holds its own count instead, and nothing sums them.
+ */
+export interface CalcTapStep extends CalcStepBase {
+  input: "tap";
+  target: number;
 }
+
+export type CalculationStep = CalcChoiceStep | CalcNumberStep | CalcTapStep;
 
 export interface CalculationSegment {
   variant: CalculationVariant;
+  /** The concept taught, for the hint events. Omitted when the wire has none. */
+  conceptId?: string;
+  /** The problem's notation, shown before any step has assembled anything. */
+  expression: string;
   /**
-   * `answer` is the whole calculation's answer, and it is OPTIONAL because the
-   * wire's is. The solver shows it only where it has one; it never derives it
-   * from the last step, which is a different claim.
+   * The complete solved equation (B101), shown once every step is done and
+   * never before. Empty means the last step's `equationState` stands.
    */
-  problem: { expression: string; answer?: string };
+  fullEquation: string;
+  /** The drawing. Absent means the payload carries none this app can draw. */
+  scaffold?: CalcScaffold;
   /**
-   * The drawn scaffold - fraction bars today.
-   *
-   * OPTIONAL, and this is the change real content forced. `fraction_add_like`
-   * is an authored variant with `{parts, rows}`; the deployed contract has no
-   * such field for anything else, only a generated `scaffoldImage` and a
-   * per-step `equationState` string. A calculation that is not two like
-   * fractions has no bars to draw, and drawing some anyway would be inventing
-   * a picture of a child's problem.
+   * What a `tap` step builds on: 17b's fraction bar, one row of `parts`;
+   * D149's array, `rows` rows of `parts` square places; D149's number
+   * line, `parts` positions to hop along; or D149's place value, its
+   * columns and their piece counts taken from the scaffold.
+   * `pieceLabels[i]` names piece i, for a highlight to find; none is drawn.
    */
-  scaffold?: { kind: string; parts: number; rows: number[] };
-  /**
-   * The generated manipulative a `drag` step is built on (21 Sep).
-   *
-   * SEPARATE FROM `scaffold` ABOVE, deliberately. That one is the authored
-   * demo's, and its `rows` is `number[]` - the numerators of the fractions
-   * being added. The wire's `rows` is a count of piece rows. Folding them into
-   * one field would draw a bar with as many divisions as there are addends.
-   *
-   * `target` is how many pieces the child places, resolved from the drag
-   * step's own answer rather than computed here - rule 3 keeps the frontend
-   * out of deciding what a correct quantity is.
-   */
-  manipulative?: { kind: string; parts: number; target: number };
-  /**
-   * How the equation should read as the child works, one entry per step, plus
-   * the opening state at index 0 where the backend gives one. Authored
-   * fraction content has none and renders its own bars instead.
-   */
-  equationStates?: string[];
+  manipulative?:
+    | { kind: "fraction_bar"; parts: number; pieceLabels: string[] }
+    | { kind: "array"; parts: number; rows: number; pieceLabels: string[] }
+    | { kind: "number_line"; parts: number; pieceLabels: string[] }
+    | { kind: "place_value"; columns: ScaffoldQuantity[] };
   steps: CalculationStep[];
+  /** Shown once the solution has assembled. Empty means nothing is said. */
   completion: string;
-  /** Per-step narration asset refs — producer-generated content. */
-  narration?: string[];
-  /** Available layers (interactive always; audio/kinesthetic optional). */
-  modalities: CalcModality[];
 }
 
 // ── Segment + lesson ────────────────────────────────────────────────────────
@@ -245,10 +376,12 @@ export interface AssessmentQuestion {
    */
   id?: string;
   prompt: string;
-  options: { id: string; label: string }[];
+  options: AnswerChoice[];
   correctId: string;
   /** Soft-violet recovery note (never a score). */
   recoveryNote?: string;
+  /** A spoken question's recording - see `QuickCheck.promptAudio`. */
+  promptAudio?: string;
   /**
    * The concept this question is about, straight from the checkpoint.
    *
@@ -329,6 +462,21 @@ export interface Lesson {
 
 // ── Adaptation plan (personalization overlay — §4) ──────────────────────────
 
+/** The engine's `DensityLevel`, exactly. */
+export type DensityLevel = "low" | "medium" | "high";
+
+/**
+ * One guided prompt the socratic panel shows (`GuidedPrompt`, 1 Oct). Unlike
+ * a guided question it has an id, so the child's reply can be sent - the
+ * option they picked, or how much they wrote, never the words.
+ */
+export interface GuidedPrompt {
+  id: string;
+  prompt: string;
+  /** Absent when the prompt is answered in the child's own words. */
+  options?: string[];
+}
+
 export interface SegmentAdaptation {
   segmentId: string;
   /** Modality the player opens this segment in. */
@@ -345,10 +493,18 @@ export interface SegmentAdaptation {
   breakAfter?: BreakType | null;
   /**
    * Scaffold indicator level for this segment (37a) - the support the system
-   * is quietly giving, generated from behaviour server-side. Defaults to
-   * "light" when absent.
+   * is quietly giving, generated from behaviour server-side. Absent means the
+   * engine said nothing, and the indicator shows nothing (rule 5) - it no
+   * longer defaults to "light".
    */
   scaffold?: ScaffoldLevel;
+  /**
+   * The engine's `DensityLevel` for this segment. NOT `density` above, which
+   * is which authored reshape of the text the child reads. Rendered only as
+   * spacing - how many elements sit in view at once - and never as a label or
+   * a chip (design, D25). Absent renders the segment as it always has.
+   */
+  densityLevel?: DensityLevel;
   /**
    * The engine's instruction for this segment, in §4's own vocabulary.
    *
@@ -391,6 +547,12 @@ export interface AdaptationPlan {
    */
   adjustment?: AdjustmentAction | null;
   /**
+   * The engine's one modality suggestion for this answer, lesson-level like
+   * the wire's `modalitySuggestion`. The per-segment `suggestModality` is the
+   * authored seam; this is offered once, where it can render.
+   */
+  suggestModality?: Modality | null;
+  /**
    * The hint `offer_hint` shows, when the engine sent one.
    *
    * Carried ONLY when the action is `offer_hint` - see `toAdaptationPlan`. The
@@ -400,6 +562,12 @@ export interface AdaptationPlan {
   hint?: string | null;
   /** Likewise, the questions `show_socratic_panel` opens. */
   guidedQuestions?: string[];
+  /**
+   * The same panel's answerable prompts, beside `guidedQuestions` on the wire.
+   * Where both arrive the prompts are shown, because only they can be replied
+   * to - see `SocraticPanel`.
+   */
+  guidedPrompts?: GuidedPrompt[];
   /**
    * Active UDL accommodations (37c / SCRUM-71, backend-owned). Cross-session
    * delivery themes, never a label.
@@ -428,4 +596,12 @@ export interface AdaptationPlan {
     reading?: boolean;
     numerical?: boolean;
   };
+  /**
+   * Where calculation support starts for this child, as the indicator draws
+   * it: `engineConfig.support.initialScaffoldLevel` from the session-start
+   * read, "Client-applied starting level for calculation scaffolds" (B103,
+   * 9 Oct). Shown only while the solver is on screen and nothing more
+   * specific has been said for the segment. Absent is no level.
+   */
+  initialScaffold?: ScaffoldLevel;
 }

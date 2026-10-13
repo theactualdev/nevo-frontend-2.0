@@ -4,25 +4,21 @@ import { api } from "./client";
  * The school record, and the sign-up that creates one (D1 · SCRUM-39).
  *
  * ============================================================================
- * THREE ONBOARDING DECISIONS HAVE NO FIELD OF THEIR OWN, AND LIVE IN `profile`.
+ * ONBOARDING ANSWERS WITH NO FIELD OF THEIR OWN LIVE IN `profile`.
  *
- * SCRUM-39 asks for `PATCH school.authMethod`, `PATCH school.band`, and a
- * DPA acceptance carrying `{schoolId, adminId, dpa_version, acceptedAt}`.
- * None of the three exists: `PATCH /api/v1/school` accepts only
- * `{name, profile, academicConfig, retentionPolicy}`, and `profile` is an
- * untyped `object`.
+ * SCRUM-39 asked for three: `PATCH school.authMethod`, `PATCH school.band`,
+ * and a DPA acceptance. Two have resolved since. The DPA acceptance is a typed
+ * record (7 Sep, `GET/POST /school/dpa-acceptance` - see `acceptDpa`), and the
+ * band is retired with flat pricing. The sign-in method is cut from
+ * onboarding (Lydia, 7 Oct). `authMethod` stays on the type below only so an
+ * older school's record still reads back; nothing writes it.
  *
- * They are therefore written into `profile` under the `onboarding` key, with
- * the shape below. THIS IS A PROVISIONAL CONTRACT, invented here because the
- * alternative was losing the answers, and it needs backend to ratify or
- * replace it. Two consequences worth knowing:
- *
- *   - nothing validates these keys, so a typo is silent. They are written
- *     through `ONBOARDING_PROFILE_KEY` and this interface, never inline.
- *   - the DPA acceptance is a COMPLIANCE RECORD. An untyped blob is not where
- *     a signed agreement should live, and D22's NDPA surface will eventually
- *     need to read the accepted version from somewhere trustworthy. This is
- *     the most important of the three to give a real home.
+ * `PATCH /api/v1/school` accepts only `{name, profile, academicConfig,
+ * retentionPolicy}`, and `profile` is an untyped `object`, so what remains is
+ * written under its `onboarding` key, with the shape below. THIS IS A
+ * PROVISIONAL CONTRACT that backend needs to ratify or replace. Nothing
+ * validates these keys, so a typo is silent: they are written through
+ * `ONBOARDING_PROFILE_KEY` and this interface, never inline.
  * ============================================================================
  */
 
@@ -116,6 +112,24 @@ export interface DpaAcceptance {
   acceptedByUserId: string;
   acceptedByName: string;
   acceptedAt: string;
+}
+
+/**
+ * The agreement as the SERVER states it (`GET /school/dpa-agreement`, 8 Oct):
+ * its current version, the parties, this school's address and contract
+ * dates, and a short summary. NOT the clause text - that is still counsel's
+ * to finish, and stays in `lib/mocks/dpa.ts` until it arrives.
+ */
+export interface DpaAgreement {
+  version: string;
+  schoolId: string;
+  schoolName: string;
+  schoolAddress: string | null;
+  contractStart: string | null;
+  contractEnd: string | null;
+  controller?: string;
+  processor?: string;
+  summary: string[];
 }
 
 /** What `POST /schools/register` answers with. */
@@ -251,6 +265,8 @@ export const schoolApi = {
    */
   dpaAcceptance: () =>
     api.get<DpaAcceptance>("/api/v1/school/dpa-acceptance"),
+  /** GET /api/v1/school/dpa-agreement - the version a school accepts. */
+  dpaAgreement: () => api.get<DpaAgreement>("/api/v1/school/dpa-agreement"),
   acceptDpa: (version: string) =>
     api.post<DpaAcceptance>("/api/v1/school/dpa-acceptance", { version }),
   narrative: () => api.get<SchoolNarrative>("/api/v1/school/narrative"),

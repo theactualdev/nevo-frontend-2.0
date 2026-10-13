@@ -1,4 +1,5 @@
 import { api } from "./client";
+import type { AccommodationType } from "./students";
 
 /**
  * Intelligence Framework endpoints (FE Architecture §1 & §4): learner profile,
@@ -52,6 +53,7 @@ export interface AdaptSegment {
   /** At least one - the contract sets minItems: 1. */
   availableModalities: string[];
   conceptId?: string | null;
+  /** `exclusiveMinimum: 0` - a 0 is a 422, so "no estimate" is omitted. */
   estimatedMinutes?: number | null;
   /**
    * Which rewrites this segment actually has, so the engine does not instruct
@@ -99,13 +101,17 @@ export type AdaptationMode = "lesson_load" | "in_lesson";
  *
  * ONLY OBSERVED FACTS ARE TYPED HERE. The contract also accepts
  * `engagementScore`, `engagementBaseline`, `comprehensionScore`,
- * `sessionAverageComprehension`, `consecutiveErrors`, `accuracyBelowBaseline`
- * and `responseTimeBelowBaseline`. Every one of those is a MEASUREMENT of a
- * child that this app cannot make: nothing defines engagement client-side,
- * there is no baseline to compare against, and comprehension needs marked
- * checkpoints, which no lesson currently carries. Sending a number we invented
- * would be worse than sending nothing - the engine would act on it, and a
- * child would be adapted against a figure we made up.
+ * `sessionAverageComprehension`, `accuracyBelowBaseline` and
+ * `responseTimeBelowBaseline`. Every one of those is a MEASUREMENT of a child
+ * that this app cannot make: nothing defines engagement client-side, there is
+ * no baseline to compare against, and a comprehension score is a score - the
+ * checks are marked, but turning marks into a number is the engine's job.
+ * Sending a number we invented would be worse than sending nothing - the
+ * engine would act on it, and a child would be adapted against a figure we
+ * made up.
+ *
+ * `consecutiveErrors` used to be listed with them and is not one: it is a
+ * count of wrong answers in a row, as observed as a replay count.
  *
  * What is here is time, position and what the child actually did. Checked
  * against the deployed engine: those alone earn a real break -
@@ -122,7 +128,13 @@ export interface RuntimeSignals {
   currentSegmentElapsedSeconds?: number | null;
   midpointReached?: boolean;
   replayCountOnSegment?: number;
+  consecutiveErrors?: number;
   sessionModalityShiftCount?: number | null;
+  /**
+   * Since an adaptation was last APPLIED ON SCREEN (B42) - not decided, not
+   * asked for. Null when none has been this session. See
+   * `useRuntimeAdaptation`.
+   */
   secondsSinceLastAdaptation?: number | null;
   /** Modalities the child was offered and turned down. */
   declinedModalities?: string[];
@@ -145,7 +157,7 @@ export interface SegmentAdaptationResponse {
   modality: string;
   /** `DensityLevel` - low | medium | high. NOT the player's Density. */
   density: string;
-  /** `ScaffoldingLevel` - light | standard | strong. */
+  /** `ScaffoldingLevel` - none | light | standard | strong. */
   scaffolding: string;
   priority: number;
 }
@@ -195,8 +207,92 @@ export interface AdaptResponse {
     reason: string;
     hint?: string | null;
     guidedQuestions?: string[];
+    /** `GuidedPrompt[]` (1 Oct): the same questions, answerable. */
+    guidedPrompts?: { id: string; prompt: string; options?: string[] }[];
+    /**
+     * The segment this instruction is for (B46): always the one the request
+     * named, and where the engine ever means another it says so here.
+     */
+    segmentId?: string | null;
   } | null;
   modalitySuggestion: ModalitySuggestionResponse | null;
+}
+
+/**
+ * `GuidedAnswerRequest` - a child's reply to one guided prompt.
+ *
+ * THEIR WORDS ARE NOT IN IT, by the contract's design: "the panel sends the
+ * option they picked, or how much they wrote, and the words stay where they
+ * were typed." So `responseLength` is a count and there is no text field to
+ * fill, even by mistake.
+ */
+export interface GuidedAnswerRequest {
+  studentId: string;
+  sessionId?: string | null;
+  promptId: string;
+  conceptId?: string | null;
+  /** The option picked, for a prompt that offers options. */
+  option?: string | null;
+  /** How much the child wrote, for a prompt that has none. 0 to 10000. */
+  responseLength?: number | null;
+  /** The contract's default is `moved_on`; sent explicitly all the same. */
+  outcome: "moved_on" | "asked_again" | "abandoned";
+}
+
+/**
+ * `EngineConfig` - the engine's settings for one child, typed since B24.
+ *
+ * TWO HALVES, as backend split them on 9 Oct (B103). `reading` and `pacing`
+ * are the server's own inference parameters, "returned for transparency
+ * rather than direct UI control": a reading speed, a word target, how long a
+ * pause is. The client reports timing and applies none of them, and a number
+ * about a child's reading or attention is never rendered (Zero-Tag).
+ *
+ * `support` is the client's to apply, and each field is acted on only as far
+ * as the spec says what it does:
+ * - `initialScaffoldLevel`, "Client-applied starting level for calculation
+ *   scaffolds": the scaffold indicator's level while the solver is on screen,
+ *   until something more specific is said (`AdaptationPlan.initialScaffold`).
+ * - `comprehensionCheckInterval`, "Client-applied maximum segments between
+ *   available comprehension checks": NOT ACTED ON. The player already offers
+ *   every check a lesson carries and holds none back; it cannot close a gap
+ *   the content leaves without inventing a check. Asked.
+ * - `numberProblemsStepByStep` and `shorterTextBlocks`: no description in
+ *   the spec, so NOT ACTED ON. The solver already gives one step at a time
+ *   whatever the flag says (17b), and where a passage breaks is the
+ *   backend's (SCRUM-236), so choosing a split from a bare flag would be the
+ *   client deciding it. Asked.
+ */
+export interface EngineConfig {
+  version?: number;
+  reading?: { targetWordsPerMinute?: number; segmentWordTarget?: number };
+  pacing?: { responseTimeTargetMs?: number; attentionWindowMinutes?: number };
+  support?: {
+    /** `ScaffoldingLevel`. */
+    initialScaffoldLevel?: "none" | "light" | "standard" | "strong";
+    comprehensionCheckInterval?: number;
+    numberProblemsStepByStep?: boolean;
+    shorterTextBlocks?: boolean;
+  };
+  generatedFromBaselineAt?: string | null;
+}
+
+/**
+ * `SessionStateResponse` - everything a lesson needs at the moment it starts
+ * (B24): the engine's configuration, the accommodations and the consent
+ * state, from one read at one moment so they cannot disagree.
+ *
+ * A child with no baseline yet is `configured: false` with the engine's
+ * defaults, never nulls. `accommodations` and `consentState` are outside
+ * the schema's `required` list, so either may be absent.
+ */
+export interface SessionState {
+  studentId: string;
+  configured: boolean;
+  engineConfig: EngineConfig;
+  baselineVersion: number | null;
+  accommodations?: AccommodationType[];
+  consentState?: "given" | "pending" | "withdrawn";
 }
 
 export const intelligenceApi = {
@@ -291,4 +387,28 @@ export const intelligenceApi = {
     api.post<AttentionFlag>(`/api/intelligence/flags/${flagId}/acknowledge`),
   getRecommendations: (studentId: string) =>
     api.get(`/api/intelligence/recommendations/${studentId}`),
+
+  /**
+   * Send a child's reply to a guided prompt (B19).
+   *
+   * The server carries it onto the signal stream as
+   * `guided_question_answered` - the route's own description says so - which
+   * is why the player does not also emit that type: the engine would read
+   * one reply as two.
+   */
+  answerGuidedQuestion: (body: GuidedAnswerRequest) =>
+    api.post<{ recorded: boolean; promptId: string }>(
+      "/api/intelligence/guided-questions/answer",
+      body,
+    ),
+
+  /**
+   * The session-start read. GET /api/session/state/{student_id} (B24)
+   *
+   * Frontend §1 and §4: read when a lesson opens, and the accommodations it
+   * carries are applied before the first screen (rule 6). See
+   * `useAccommodationsState`, its caller.
+   */
+  sessionState: (studentId: string) =>
+    api.get<SessionState>(`/api/session/state/${studentId}`),
 };

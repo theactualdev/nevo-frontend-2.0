@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { PinCreationScreen } from "./PinCreationScreen";
+import { ApiError } from "@/lib/api/client";
 import { STUDENT_PIN_LENGTH } from "@/lib/constants";
 
 /**
@@ -25,6 +26,10 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/lib/api", () => ({ authApi: { setPin: vi.fn() } }));
 vi.mock("@/lib/auth/session", () => ({ getSession: () => null }));
+
+// The first render pays for the keypad's import; under a loaded worker that
+// alone outran the 5s default, and the timeout took the file down with it.
+vi.setConfig({ testTimeout: 30_000 });
 
 /** The screen waits this long before it writes. */
 const SAVE_DELAY_MS = 1200;
@@ -65,14 +70,17 @@ describe("when the write fails", () => {
     await renderFailing();
 
     expect(alertText()).not.toMatch(/type it again/i);
+    // Nothing to type into: frame 15 hides the rows (D61).
+    expect(screen.queryByText("Type it again to confirm")).toBeNull();
+    expect(screen.queryByLabelText("Your PIN")).toBeNull();
   });
 
-  it("says the failure is ours, and points at who can help", async () => {
-    // A child cannot clear a 403 or a dropped network. Their teacher can.
+  it("says the failure is ours, and that the PIN is kept", async () => {
+    // Frame 15's didn't-save state (D61), verbatim.
     await renderFailing();
 
-    expect(alertText()).toMatch(/that.s on us, not you/i);
-    expect(alertText()).toMatch(/teacher can help/i);
+    expect(alertText()).toContain("That didn't save");
+    expect(alertText()).toContain("Your PIN is kept. That's on us - try again.");
   });
 
   it("did try to store the PIN before saying so", async () => {
@@ -97,6 +105,90 @@ describe("when the two entries do not match", () => {
     }
 
     expect(alertText()).toMatch(/didn.t match/i);
-    expect(alertText()).not.toMatch(/on us/i);
+    expect(alertText()).not.toMatch(/on us|didn.t save/i);
+  });
+});
+
+/** A refusal as the PIN route sends it: `{detail: {code, message}}`. */
+const refused = (status: number, code?: string) =>
+  new ApiError(
+    status,
+    "refused",
+    code ? { detail: { code, message: "said by the server" } } : undefined,
+  );
+
+describe("when the PIN route says why (B68)", () => {
+  const renderRefused = async (
+    cause: unknown,
+    onRefused?: (refusal: string) => void,
+  ) => {
+    const storePin = vi.fn().mockRejectedValue(cause);
+    render(
+      <PinCreationScreen
+        storePin={storePin}
+        onRefused={onRefused}
+        onComplete={vi.fn()}
+      />,
+    );
+    enter(SIX);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SAVE_DELAY_MS + 50);
+    });
+    return storePin;
+  };
+
+  /*
+   * D154 (9 Oct), which "holds everywhere a child enters a PIN": "a pause,
+   * not a lockout ... no blame, no red, no error". It was "That didn't save"
+   * with D68's wait line under it.
+   */
+  it("pauses a throttled child, with the rows held and no failure said (D154)", async () => {
+    await renderRefused(refused(429, "too_many_attempts"));
+
+    expect(
+      screen.getByRole("heading", { name: "Let's take a moment" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Try your PIN again in a moment. No rush."),
+    ).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(
+      /didn.t save|on us|wait a moment before/,
+    );
+    // Not an error: nothing is announced as one.
+    expect(screen.queryByRole("alert")).toBeNull();
+    // Both rows, held: dimmed, empty, inert.
+    expect(document.querySelectorAll("[data-held-pin]")).toHaveLength(2);
+    expect(screen.queryByLabelText("Your PIN")).toBeNull();
+    // The PIN is still kept: the button sends it again once they have waited.
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+  });
+
+  it.each([
+    ["a child who has a PIN", refused(409, "pin_already_set"), "has-pin"],
+    ["a pair that names nobody", refused(404, "entry_not_found"), "not-found"],
+    ["consent that has not come", refused(403, "consent_pending"), "consent"],
+    ["the age check", refused(403, "age_check_pending"), "age-check"],
+  ])("hands %s to the caller, and shows no failure of its own", async (_, cause, expected) => {
+    const onRefused = vi.fn();
+    await renderRefused(cause, onRefused);
+
+    expect(onRefused).toHaveBeenCalledTimes(1);
+    expect(onRefused).toHaveBeenCalledWith(expected);
+    expect(alertText()).not.toContain("That didn't save");
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("is the not-saved state for those refusals when no caller takes them", async () => {
+    await renderRefused(refused(409, "pin_already_set"));
+
+    expect(alertText()).toContain("Your PIN is kept. That's on us - try again.");
+  });
+
+  it("is the not-saved state for a refusal that does not name itself", async () => {
+    const onRefused = vi.fn();
+    await renderRefused(refused(409), onRefused);
+
+    expect(onRefused).not.toHaveBeenCalled();
+    expect(alertText()).toContain("Your PIN is kept. That's on us - try again.");
   });
 });

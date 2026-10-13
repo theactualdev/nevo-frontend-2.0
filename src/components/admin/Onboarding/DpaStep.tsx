@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { schoolApi } from "@/lib/api/school";
-import { DPA_BADGE, DPA_VERSION, DPA_VERSION_LINE, dpaFor } from "@/lib/mocks/dpa";
+import { schoolApi, type DpaAgreement } from "@/lib/api/school";
+import { DPA_BADGE, dpaFor, dpaVersionLine } from "@/lib/mocks/dpa";
+import { longDate } from "@/lib/dates";
+import { ReadFailed } from "../ReadFailed";
 import { cn } from "@/lib/utils";
 import { CheckIcon, Spinner } from "../Roster/primitives";
 import { StepHeading, WIZARD_PRIMARY, WIZARD_SECONDARY } from "./OnboardingWizard";
@@ -20,10 +22,17 @@ import { StepHeading, WIZARD_PRIMARY, WIZARD_SECONDARY } from "./OnboardingWizar
  * button position depends on the document's length, because counsel's final
  * wording will be longer than this placeholder.
  *
- * THE VERSION IS STORED, NOT ASSUMED. `DPA_VERSION` travels with the
- * acceptance, because D12 and the D22 NDPA compliance surface later display
- * which version a school actually agreed to. If the words change and the
- * version does not, that record silently becomes a lie.
+ * THE VERSION IS THE SERVER'S, AND IT IS WHAT IS STORED (8 Oct). The version a
+ * school accepts comes from `GET /school/dpa-agreement`, because D12 and the
+ * D22 NDPA compliance surface later display which version a school agreed to.
+ * It was a local "0.9-draft" the backend - whose current version is "2026-10"
+ * - had never heard of. With no version read, nothing is accepted: Continue
+ * waits, and the read offers a retry.
+ *
+ * THE SERVER'S DETAILS LEAD THE PANE: the parties, this school's address and
+ * contract dates, and the server's short summary - the variables the template
+ * could only leave as named blanks. The clause text below them is untouched:
+ * it is counsel's, still marked placeholder, and not this file's to reword.
  *
  * THE ACCEPTANCE IS NOW A REAL RECORD (backend, 7 Sep).
  * `POST /api/v1/school/dpa-acceptance` takes the version and stores the
@@ -33,9 +42,8 @@ import { StepHeading, WIZARD_PRIMARY, WIZARD_SECONDARY } from "./OnboardingWizar
  * worst-kept of the three things this wizard stored precisely because it is a
  * compliance record of an agreement a school signed.
  *
- * TODO(api): SCRUM-39 also asks for `GET dpa {version, html}` so the TEXT comes
- * from the server. It does not exist, so the wording is still local and still
- * marked placeholder - counsel has not returned final copy.
+ * The CLAUSE TEXT is still local: the agreement read carries the version and
+ * the details, not counsel's wording, which has not been returned yet.
  */
 
 type Phase = "idle" | "saving" | "failed";
@@ -58,6 +66,22 @@ export function DpaStep({
   const [phase, setPhase] = useState<Phase>("idle");
   const [notAccepted, setNotAccepted] = useState(false);
   const pane = useRef<HTMLDivElement>(null);
+  const [agreement, setAgreement] = useState<
+    { state: "loading" } | { state: "ready"; value: DpaAgreement } | { state: "failed" }
+  >({ state: "loading" });
+
+  const readAgreement = () =>
+    schoolApi
+      .dpaAgreement()
+      .then((value) => setAgreement({ state: "ready", value }))
+      .catch(() => setAgreement({ state: "failed" }));
+  const retryAgreement = () => {
+    setAgreement({ state: "loading" });
+    readAgreement();
+  };
+  useEffect(() => {
+    readAgreement();
+  }, []);
 
   const clauses = dpaFor(schoolName);
 
@@ -90,11 +114,12 @@ export function DpaStep({
       return;
     }
     setNotAccepted(false);
+    if (agreement.state !== "ready") return;
     setPhase("saving");
     // The typed record, not the profile blob. The backend stamps the admin and
     // the time from the session, so neither is sent - and neither can drift.
     schoolApi
-      .acceptDpa(DPA_VERSION)
+      .acceptDpa(agreement.value.version)
       .then(() => onDone())
       .catch(() => setPhase("failed"));
   };
@@ -110,6 +135,14 @@ export function DpaStep({
         {DPA_BADGE}
       </p>
 
+      {agreement.state === "failed" ? (
+        <ReadFailed
+          className="mt-3"
+          what="the agreement's version and details, so it can't be accepted yet"
+          onRetry={retryAgreement}
+        />
+      ) : null}
+
       <div className="relative mt-4">
         <div
           ref={pane}
@@ -117,6 +150,7 @@ export function DpaStep({
           tabIndex={0}
           className="max-h-[420px] overflow-y-auto rounded-xl bg-nevo-cream-elevated px-7 py-[26px] outline-none max-lg:max-h-[340px]"
         >
+          {agreement.state === "ready" ? <AgreementDetails agreement={agreement.value} /> : null}
           {clauses.map((c) => (
             <section key={c.num} className="mb-6 last:mb-0">
               <h2 className="m-0 text-[15px] font-semibold text-nevo-navy">
@@ -130,9 +164,11 @@ export function DpaStep({
           <p className="m-0 mt-8 text-center text-[12.5px] text-nevo-near-black/45">
             &mdash; End of agreement &mdash;
           </p>
-          <p className="m-0 mt-2 text-center text-[12px] text-nevo-near-black/40">
-            {DPA_VERSION_LINE}
-          </p>
+          {agreement.state === "ready" ? (
+            <p className="m-0 mt-2 text-center text-[12px] text-nevo-near-black/40">
+              {dpaVersionLine(agreement.value.version)}
+            </p>
+          ) : null}
         </div>
 
         {!readToEnd ? (
@@ -215,7 +251,7 @@ export function DpaStep({
         <button
           type="button"
           onClick={accept}
-          disabled={!readToEnd || phase === "saving"}
+          disabled={!readToEnd || phase === "saving" || agreement.state !== "ready"}
           className={WIZARD_PRIMARY}
         >
           {phase === "saving" ? (
@@ -234,5 +270,43 @@ export function DpaStep({
         ) : null}
       </div>
     </>
+  );
+}
+
+/**
+ * The agreement's particulars, as the server states them. A field it does not
+ * have is left off rather than filled with a plausible blank: a legal document
+ * with an invented date in it is worse than one that says less.
+ */
+function AgreementDetails({ agreement }: { agreement: DpaAgreement }) {
+  const start = longDate(agreement.contractStart);
+  const end = longDate(agreement.contractEnd);
+  const term = start && end ? `${start} to ${end}` : start ? `From ${start}` : null;
+  const rows: [string, string][] = [
+    ["Data controller", [agreement.schoolName, agreement.schoolAddress].filter(Boolean).join(", ")],
+    ...(agreement.processor ? ([["Data processor", agreement.processor]] as [string, string][]) : []),
+    ...(term ? ([["Contract", term]] as [string, string][]) : []),
+  ];
+  return (
+    <section className="mb-7 border-b border-nevo-near-black/10 pb-6">
+      <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-5 gap-y-2 text-[14px] leading-[1.55]">
+        {rows.map(([label, value]) => (
+          <div key={label} className="contents">
+            <dt className="font-semibold text-nevo-navy">{label}</dt>
+            <dd className="m-0 text-nevo-near-black/80">{value}</dd>
+          </div>
+        ))}
+      </dl>
+      {agreement.summary.length > 0 ? (
+        <>
+          <h2 className="m-0 mt-5 text-[15px] font-semibold text-nevo-navy">In short</h2>
+          <ul className="m-0 mt-2 list-disc space-y-1.5 pl-5 text-[14.5px] leading-[1.6] text-nevo-near-black/80">
+            {agreement.summary.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+    </section>
   );
 }

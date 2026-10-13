@@ -61,6 +61,8 @@ export function helpSeekingLine(
     interactionCount: number;
     periodDays: number;
     categories: Record<string, number>;
+    /** The server's own words for each category key (12 Oct). */
+    categoryLabels?: Record<string, string>;
     privacy: string;
   } | null,
 ): string {
@@ -78,8 +80,40 @@ export function helpSeekingLine(
   const times = `${ev.interactionCount} ${ev.interactionCount === 1 ? "time" : "times"}`;
   const ranked = Object.entries(ev.categories ?? {}).sort((a, b) => b[1] - a[1]);
   const clear = ranked.length > 0 && (ranked.length === 1 || ranked[0][1] > ranked[1][1]);
-  const tail = clear ? `, mostly about ${ranked[0][0]}` : "";
+  /*
+   * A CODE IS NOT A TOPIC (T142). The categories are an untyped map, and the
+   * one vocabulary on the contract near them is Ask Nevo's own tokens -
+   * `lesson_help`, `class_planning` - so this could tell a teacher a child
+   * asked "mostly about lesson_help". A key with an underscore is a code, and
+   * the line stops before it rather than printing it or guessing its words.
+   * The words for each are a backend/design ask.
+   */
+  /*
+   * THE SERVER NAMES THEM NOW (12 Oct): `categoryLabels` carries a phrase for
+   * each key - "Lesson help", "Class planning". Lower-cased to sit inside the
+   * sentence. A key it has no phrase for still stops the line before it.
+   */
+  const top = clear ? ranked[0][0] : null;
+  const label = top ? ev.categoryLabels?.[top]?.trim() : undefined;
+  const topic = label
+    ? label.charAt(0).toLowerCase() + label.slice(1)
+    : top && !top.includes("_")
+      ? top
+      : null;
+  const tail = topic ? `, mostly about ${topic}` : "";
   return `Asked Nevo for help ${times} ${period}${tail}.`;
+}
+
+/** Where one background read stands. */
+export type ReadState = "loading" | "ready" | "failed";
+
+/** The reads that fill a profile in, each allowed to fail on its own. */
+export interface ProfileReads {
+  learnerProfile: ReadState;
+  mastery: ReadState;
+  recommendations: ReadState;
+  adaptations: ReadState;
+  accommodations: ReadState;
 }
 
 export interface StudentProfileState {
@@ -96,6 +130,15 @@ export interface StudentProfileState {
   accommodations: Accommodations | null;
   /** `observed` once Nevo has watched enough to adapt. */
   observed: boolean;
+  /**
+   * WHERE EACH ENRICHMENT READ STANDS. Every one of them was swallowed, so
+   * "not back yet" and "failed" both read as "nothing there" - and a child
+   * with weeks of history was told, while the reads were in flight or after
+   * they failed, that Nevo was "still getting to know" them, with "No profile
+   * yet" under their name. Optional so a fixture state needs none: absent
+   * means every read is in.
+   */
+  reads?: ProfileReads;
   loading: boolean;
   missing: boolean;
   failed: boolean;
@@ -109,11 +152,19 @@ export function useStudentProfile(studentId: string): StudentProfileState {
   const [evidence, setEvidence] = useState<ConversationEvidence | null>(null);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [adaptations, setAdaptations] = useState<StudentAdaptation[]>([]);
-  const [sessions, setSessions] = useState<LessonProgress[]>([]);
+  // Never filled on the live path - see the note where the progress read was.
+  const [sessions] = useState<LessonProgress[]>([]);
   const [accommodations, setAccommodations] = useState<Accommodations | null>(
     null,
   );
   const [observed, setObserved] = useState(false);
+  const [reads, setReads] = useState<ProfileReads>({
+    learnerProfile: "loading",
+    mastery: "loading",
+    recommendations: "loading",
+    adaptations: "loading",
+    accommodations: "loading",
+  });
   const [missing, setMissing] = useState(false);
   const [failed, setFailed] = useState(false);
   const signedIn = useHasSession();
@@ -131,17 +182,32 @@ export function useStudentProfile(studentId: string): StudentProfileState {
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        if (err instanceof ApiError && err.status === 404) setMissing(true);
-        else setFailed(true);
+        /*
+         * NOT A RETRY FOR A STUDENT WHO CANNOT BE SHOWN. The spec answers a
+         * malformed id with 422, and a child outside this teacher's classes
+         * with 403. Both read as "we couldn't load this - try again", a retry
+         * that can never work. Only an answer that might change is a retry.
+         */
+        if (
+          err instanceof ApiError &&
+          (err.status === 404 || err.status === 422 || err.status === 403)
+        ) {
+          setMissing(true);
+        } else setFailed(true);
       });
 
-    // Enrichment. Each is allowed to fail on its own.
+    // Enrichment. Each is allowed to fail on its own - and each now SAYS
+    // whether it did, rather than leaving its empty default to speak.
+    const settle = (key: keyof ProfileReads, to: ReadState) => {
+      if (!cancelled) setReads((r) => ({ ...r, [key]: to }));
+    };
     void studentsApi
       .mastery(studentId)
       .then((rows) => {
         if (!cancelled) setMastery(rows);
+        settle("mastery", "ready");
       })
-      .catch(() => {});
+      .catch(() => settle("mastery", "failed"));
     void conversationEvidenceApi
       .forStudent(studentId)
       .then((res) => {
@@ -152,39 +218,39 @@ export function useStudentProfile(studentId: string): StudentProfileState {
       .recommendations(studentId)
       .then((rows) => {
         if (!cancelled) setRecommendations(rows);
+        settle("recommendations", "ready");
       })
-      .catch(() => {});
+      .catch(() => settle("recommendations", "failed"));
     void studentsApi
       .adaptations(studentId)
       .then((rows) => {
         // A suppressed adaptation is one Nevo considered and withheld; the
         // section is what actually happened for this student.
         if (!cancelled) setAdaptations(rows.filter((a) => !a.suppressed));
+        settle("adaptations", "ready");
       })
-      .catch(() => {});
-    void studentsApi
-      .progress(studentId)
-      .then((p) => {
-        if (cancelled) return;
-        setSessions(
-          [...p.lessons].sort(
-            (a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt),
-          ),
-        );
-      })
-      .catch(() => {});
+      .catch(() => settle("adaptations", "failed"));
+    /*
+     * NO PROGRESS READ. `GET /api/students/{id}/progress` was fetched on
+     * every profile open and nothing rendered it: the live profile reads the
+     * real sessions list instead. A request whose answer goes nowhere is load
+     * on the server and a failure nobody can see. `sessions` stays on the
+     * state, empty, for the fixture profile that still reads its own.
+     */
     void studentsApi
       .accommodations(studentId)
       .then((a) => {
         if (!cancelled) setAccommodations(a);
+        settle("accommodations", "ready");
       })
-      .catch(() => {});
+      .catch(() => settle("accommodations", "failed"));
     void studentsApi
       .learnerProfile(studentId)
       .then((p) => {
         if (!cancelled) setObserved(p.status === "observed");
+        settle("learnerProfile", "ready");
       })
-      .catch(() => {});
+      .catch(() => settle("learnerProfile", "failed"));
 
     return () => {
       cancelled = true;
@@ -194,13 +260,15 @@ export function useStudentProfile(studentId: string): StudentProfileState {
   return {
     helpSeeking: helpSeekingLine(evidence),
     profile,
-    concepts: mastery.map((m) => ({
+    // A row the engine could not name is a bar with no label - nothing a
+    // teacher can act on - so it is left out rather than drawn blank.
+    concepts: mastery.filter((m) => m.conceptName).map((m) => ({
       conceptId: m.conceptId,
       // Straight from the mastery read since 31 Aug. It used to be resolved
       // through a second, best-effort `/api/concepts` call whose failure was
       // swallowed - and when it failed a teacher was shown a raw UUID as the
       // name of the concept their student was struggling with.
-      name: m.conceptName,
+      name: m.conceptName as string,
       understanding: pct(m.masteryProbabilityConcept),
       reading: pct(m.masteryProbabilityReading),
       practiceCount: m.practiceCount,
@@ -210,6 +278,7 @@ export function useStudentProfile(studentId: string): StudentProfileState {
     sessions,
     accommodations,
     observed,
+    reads,
     loading,
     missing,
     failed,

@@ -12,11 +12,11 @@
  */
 
 import { deviceClockSkewMs } from "@/lib/api/serverClock";
-import { rememberChild } from "./deviceRoster";
+import { rememberChild, rememberedChildren } from "./deviceRoster";
 
 const SESSION_KEY = "nevo.auth.session";
 const PROFILE_KEY = "nevo.auth.profile";
-/** Set when the student renames themselves and no remembered profile exists. */
+/** Prefix for the name a child chose, stored per account (`.<userId>`). */
 const DISPLAY_NAME_KEY = "nevo.auth.displayName";
 
 /**
@@ -48,12 +48,29 @@ function deleteRoleCookie(): void {
   document.cookie = `${ROLE_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax`;
 }
 
+function hasRoleCookie(): boolean {
+  if (typeof document === "undefined") return false;
+  const prefix = `${ROLE_COOKIE}=`;
+  return document.cookie
+    .split(";")
+    .map((c) => c.trim())
+    .some((c) => c.startsWith(prefix) && c.length > prefix.length);
+}
+
 export interface StoredSession {
   token: string;
   /** ISO timestamp from the backend's `expiresAt`. */
   expiresAt: string;
   userId: string;
   role: string;
+  /**
+   * How this account signed in, when the door that stored it knows. Only the
+   * SSO callback says, and onboarding branches on it: an SSO child skips the
+   * name, school and class steps and the PIN. It lived only in React state, so
+   * a reload mid-onboarding put an SSO child on the manual path with an empty
+   * draft. A refresh of the same account keeps it - see `setSession`.
+   */
+  method?: "sso" | "manual";
 }
 
 /**
@@ -112,24 +129,27 @@ export interface RememberedProfile {
   /** Avatar initials, e.g. "AK". */
   initials: string;
   /**
+   * The account this entry signs in as, recorded the first time a sign-in
+   * succeeds from it. Never shown - it is how a signed-in screen finds ITS
+   * child's entry on a shared tablet, rather than whichever child the device
+   * happened to remember last. Absent on entries from before 30 Sep; the next
+   * sign-in fills it.
+   */
+  userId?: string;
+  /**
    * How many digits this child's PIN had the last time it opened this device.
    * The LENGTH, never the PIN.
    *
-   * The one-tap unlock submits the moment the boxes fill, so it has to know
-   * how many boxes to draw - and since 25 Sep that is no longer one number:
-   * new PINs are four, every earlier one and every administrator's reset is
-   * six. Absent on a child remembered before then, which means six; see
-   * `LEGACY_PIN_LENGTH`.
-   *
-   * It is a hint, not a rule. The unlock screen still takes anything the
-   * server would, and stops trusting this after a PIN that did not match,
-   * because the likeliest reason is an adult resetting it to another length.
+   * NO LONGER WRITTEN OR READ (D58, 6 Oct): "Four digits, four boxes", so
+   * every PIN door draws four whatever a device remembers. Left on the type
+   * so an entry stored before then still reads.
    */
   pinLength?: number;
 }
 
 let session: StoredSession | null = null;
 let hydrated = false;
+let orphanedRoleCookie = false;
 
 function hydrate(): void {
   if (hydrated || typeof window === "undefined") return;
@@ -140,6 +160,38 @@ function hydrate(): void {
   } catch {
     session = null;
   }
+  /*
+   * A ROLE WITH NO SESSION BEHIND IT.
+   *
+   * `setSession` writes the cookie, then the token, and a token write that
+   * fails is swallowed - private browsing, a full disk, site data cleared
+   * without its cookies. The tab carries on in memory; the next reload does
+   * not. The guard then let the child through to the tabs on the cookie,
+   * every screen found no token and drew the signed-out walkthrough, and the
+   * PIN door bounced them straight back to it because the cookie still said
+   * "student". Signed in as far as the server could tell, signed out as far
+   * as the app could, and no way to the one screen that would fix it.
+   *
+   * The cookie only ever mirrors this session, so with no session here it
+   * describes nothing. Dropping it opens the doors again, and the shell sends
+   * the child to one.
+   */
+  if (!session && hasRoleCookie()) {
+    orphanedRoleCookie = true;
+    deleteRoleCookie();
+  }
+}
+
+/**
+ * Did this page load arrive on a role cookie whose session was gone?
+ *
+ * True at most for the load that found it - the cookie is deleted in the same
+ * breath - and only ever about THIS device's storage. A session that expired
+ * clears its own cookie and is not this.
+ */
+export function arrivedWithoutSession(): boolean {
+  hydrate();
+  return orphanedRoleCookie;
 }
 
 export function getSession(): StoredSession | null {
@@ -152,7 +204,13 @@ export function getToken(): string | undefined {
   return getSession()?.token;
 }
 
-export function setSession(next: StoredSession): void {
+export function setSession(incoming: StoredSession): void {
+  hydrate();
+  // A token refresh is the same account and does not say how it signed in.
+  const method =
+    incoming.method ??
+    (session?.userId === incoming.userId ? session.method : undefined);
+  const next = method ? { ...incoming, method } : incoming;
   hydrated = true;
   session = next;
   writeRoleCookie(next.role, next.expiresAt);
@@ -161,6 +219,7 @@ export function setSession(next: StoredSession): void {
   } catch {
     // Private mode etc. - the in-memory session still works for this tab.
   }
+  announceSessionChange();
 }
 
 export function clearSession(): void {
@@ -172,6 +231,70 @@ export function clearSession(): void {
   } catch {
     // ignore
   }
+  announceSessionChange();
+}
+
+const SESSION_EVENT = "nevo:session-change";
+
+/**
+ * Deferred a microtask, not dispatched inline: `getSession()` clears an expired
+ * session while it is being READ, which can be during a render, and a listener
+ * setting state from inside another component's render is an error.
+ */
+function announceSessionChange(): void {
+  if (typeof window === "undefined") return;
+  queueMicrotask(() => {
+    try {
+      window.dispatchEvent(new Event(SESSION_EVENT));
+    } catch {
+      // An environment without events has nothing listening either.
+    }
+  });
+}
+
+/**
+ * Be told when the signed-in account may have changed - in this tab (sign-in,
+ * sign-out, a hand-over) or another one (`storage`).
+ *
+ * THE TABLET IS SHARED, AND NOTHING USED TO NOTICE WHO WAS HOLDING IT. Anything
+ * mounted once at the root - the notification feed, the accessibility
+ * preferences - read the session when the app loaded and never again, so the
+ * next child to sign in inherited the last child's feed and text size. Each
+ * listener re-reads `getSession()` and compares the user id itself: a token
+ * refresh fires this too, and is the same child.
+ */
+/**
+ * Who ANOTHER tab says is signed in now, from a `storage` event.
+ *
+ * This tab cannot answer that from `getSession()`: the session is read from
+ * storage once per page load and held in memory, so a sign-out in the next tab
+ * leaves this one holding the old account until something reloads it.
+ *
+ * `undefined` when the event is not about the session at all; `null` when
+ * nobody is signed in any more - removed, cleared, or unreadable.
+ */
+export function sessionUserIdFromStorage(event: {
+  key: string | null;
+  newValue: string | null;
+}): string | null | undefined {
+  if (event.key !== null && event.key !== SESSION_KEY) return undefined;
+  if (!event.newValue) return null;
+  try {
+    return (JSON.parse(event.newValue) as StoredSession).userId ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function onSessionChange(listener: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+  const handler = () => listener();
+  window.addEventListener(SESSION_EVENT, handler);
+  window.addEventListener("storage", handler);
+  return () => {
+    window.removeEventListener(SESSION_EVENT, handler);
+    window.removeEventListener("storage", handler);
+  };
 }
 
 export function getRememberedProfile(): RememberedProfile | null {
@@ -196,7 +319,8 @@ export function getRememberedProfile(): RememberedProfile | null {
  * would empty out school by school as those aged out.
  *
  * The legacy key is still written because `getRememberedProfile` still backs
- * `ForgotPinScreen` and `ProfileSettings`' sign-out destination.
+ * `setStoredDisplayName`. It no longer picks a door: sign-out and Forgot PIN
+ * both go to `/auth/login`, which handles a device that remembers nobody.
  */
 export function rememberProfile(profile: RememberedProfile): void {
   try {
@@ -208,38 +332,59 @@ export function rememberProfile(profile: RememberedProfile): void {
 }
 
 /**
- * The name the student is shown as. The student app does not yet read the
- * profile endpoint, so the edit on the profile screen persists to the device: it updates the
- * remembered profile when the device has one, and falls back to its own key
- * otherwise. Without this the screen flashed "Saved" and forgot the name on
- * the next load.
+ * The name the SIGNED-IN child chose for themselves, as this device holds it.
  *
- * TODO(api): `GET /api/v1/users/me` exists and returns the real name - the
- * teacher console reads it through `useCurrentUser`. The student app has not
- * been moved onto it yet.
+ * KEYED BY ACCOUNT, because the tablet is shared. This used to read the one
+ * legacy remembered profile - which is whichever child the device remembered
+ * LAST, not the child holding it. So a child who unlocked through the picker
+ * was called by another child's name on Home, the sidebar and Profile, and a
+ * rename wrote itself into that other child's entry. Now: the name saved under
+ * this account's id, else this account's own roster entry, else nothing - and
+ * the caller falls back to the account itself (`users/me`, settings).
  */
 export function getStoredDisplayName(): string | null {
   if (typeof window === "undefined") return null;
-  const remembered = getRememberedProfile();
-  if (remembered?.displayName) return remembered.displayName;
+  const userId = getSession()?.userId;
+  if (!userId) return null;
   try {
-    return window.localStorage.getItem(DISPLAY_NAME_KEY);
+    const chosen = window.localStorage.getItem(`${DISPLAY_NAME_KEY}.${userId}`);
+    if (chosen?.trim()) return chosen.trim();
   } catch {
-    return null;
+    // Unreadable storage is no stored name; the account still has one.
   }
+  const own = rememberedChildren().find((c) => c.userId === userId);
+  return own?.displayName?.trim() || null;
 }
 
+/**
+ * Save the name the signed-in child chose, for THIS child only.
+ *
+ * Written under the account's id, and into the roster entry that belongs to
+ * this account so the picker learns it too. An entry is only ever matched by
+ * account id - never by "the one the device remembers", which is the bug this
+ * replaces. The legacy single-profile key is updated only when it is provably
+ * the same child.
+ */
 export function setStoredDisplayName(name: string, initials: string): void {
   const trimmed = name.trim();
-  if (!trimmed) return;
-  const remembered = getRememberedProfile();
-  if (remembered) {
-    rememberProfile({ ...remembered, displayName: trimmed, initials });
-    return;
-  }
+  const userId = getSession()?.userId;
+  if (!trimmed || !userId) return;
   try {
-    window.localStorage.setItem(DISPLAY_NAME_KEY, trimmed);
+    window.localStorage.setItem(`${DISPLAY_NAME_KEY}.${userId}`, trimmed);
   } catch {
     // Private mode - the name simply will not survive this session.
+  }
+  const own = rememberedChildren().find((c) => c.userId === userId);
+  if (own) rememberChild({ ...own, displayName: trimmed, initials });
+  const legacy = getRememberedProfile();
+  if (legacy?.userId === userId) {
+    try {
+      window.localStorage.setItem(
+        PROFILE_KEY,
+        JSON.stringify({ ...legacy, displayName: trimmed, initials }),
+      );
+    } catch {
+      // ignore
+    }
   }
 }

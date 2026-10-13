@@ -198,6 +198,17 @@ export type ConsentDeliveryStatus =
   | "sent"
   | "failed";
 
+/**
+ * What this console asks a parent for: using Nevo, and nothing else.
+ *
+ * One type because the student gate names one (`requiredType` on
+ * `GET /students/me/consent-gate`), and because the parent page will only
+ * render a request that asks one thing - a single "Yes" cannot honestly grant
+ * four. Camera, offline storage and cross-border transfer are asked separately
+ * or not at all, when counsel and design say how.
+ */
+export const REQUESTED_CONSENT_TYPES: ConsentType[] = ["data_processing"];
+
 export interface ParentConsentRequestReceipt {
   invitationId: string;
   parentLinkId: string;
@@ -205,6 +216,19 @@ export interface ParentConsentRequestReceipt {
   consentTypes: ConsentType[];
   deliveryStatus: ConsentDeliveryStatus;
   expiresAt: string;
+}
+
+/**
+ * One child's outcome from the bulk route. `queued` with the same receipt the
+ * single route returns, or not queued with the server's own code and words -
+ * `parent_already_refused` among them.
+ */
+export interface BulkParentConsentResult {
+  studentId: string;
+  queued: boolean;
+  request: ParentConsentRequestReceipt | null;
+  errorCode: string | null;
+  errorMessage: string | null;
 }
 
 export interface ParentLink {
@@ -218,7 +242,106 @@ export interface ParentLink {
   accountCreated: boolean;
 }
 
+/**
+ * What a signed paper form says (D25 PC-02). The parent is the one who
+ * consented; the school is recorded as the uploader, never as the consenting
+ * party.
+ */
+export interface WrittenConsentDraft {
+  /** As written on the form, 2-255 characters. */
+  parentName: string;
+  /** 2-80 characters, free text on the contract. */
+  parentRelationship: string;
+  /** The date on the form, YYYY-MM-DD. A date after today is refused. */
+  signedOn: string;
+  /** The photograph or PDF of the signed page. Optional on the contract. */
+  form?: File | null;
+}
+
+/** What the backend recorded (201). */
+export interface WrittenConsentRecord {
+  studentId: string;
+  consentTypes: ConsentType[];
+  parentName: string;
+  parentRelationship: string;
+  signedOn: string;
+  noticeVersion: string;
+  method: "written" | "verbal" | "email" | "digital";
+  evidenceStoragePath: string | null;
+  uploadedBy: string;
+  uploadedAt: string;
+  /** True when the parent was told, so withdrawing stays as easy as consenting. */
+  parentNotified: boolean;
+}
+
+/** What a parent asked for, as the rights log records it. */
+export type RightsLogRequestType = "request_data" | "object" | "withdraw_consent";
+
+/**
+ * One request in the school's parent rights log. `studentName` and
+ * `parentName` are typed because they are sent, and are NOT rendered: D22b
+ * allows a category, a date and a status, and nothing that identifies anyone.
+ */
+export interface ParentRightLogRow {
+  id: string;
+  studentId: string;
+  studentName: string;
+  parentId: string;
+  parentName: string;
+  requestType: RightsLogRequestType;
+  /** Whether the parent gave a reason. The text itself is not served. */
+  reasonRecorded: boolean;
+  /** A free string with no documented values - see `ParentRequests`. */
+  status: string;
+  createdAt: string;
+  resolvedAt: string | null;
+}
+
+/** `GET /consents/rights-log`: a page of the log, newest first. */
+export interface ParentRightLog {
+  entries: ParentRightLogRow[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 export const consentsApi = {
+  /**
+   * What parents have asked of this school - data requests, objections and
+   * withdrawals - newest first. `limit` is 1-100.
+   */
+  rightsLog: (options: { limit?: number; offset?: number } = {}) =>
+    api.get<ParentRightLog>("/api/v1/consents/rights-log", {
+      params: { limit: options.limit, offset: options.offset },
+    }),
+
+  /**
+   * Record a signed form against a child (multipart, 9 Oct). Any admin may.
+   * The consent recorded is the one the console asks for everywhere,
+   * `REQUESTED_CONSENT_TYPES`, which is also the one tick box on the printed
+   * form. `noticeVersion` is left to the server's default.
+   */
+  recordWrittenConsent: (studentId: string, draft: WrittenConsentDraft) => {
+    const body = new FormData();
+    body.append("parentName", draft.parentName.trim());
+    body.append("parentRelationship", draft.parentRelationship.trim());
+    body.append("signedOn", draft.signedOn);
+    for (const type of REQUESTED_CONSENT_TYPES) body.append("consentTypes", type);
+    if (draft.form) body.append("form", draft.form);
+    return api.post<WrittenConsentRecord>(
+      `/api/v1/students/${encodeURIComponent(studentId)}/consents/written`,
+      body,
+    );
+  },
+
+  /**
+   * The printable consent form (D25a) as a PDF, rendered by the backend - with
+   * the child's name on it when `studentId` is given. Its legal sections are
+   * placeholder until counsel's text arrives; that is the backend's to update.
+   */
+  consentForm: (studentId?: string) =>
+    api.blob("/api/v1/consents/form", { params: { studentId } }),
+
   /**
    * The student's own consent record. NOT an onboarding gate - onboarding no
    * longer calls this, because under the ruling it has nothing to decide.
@@ -238,7 +361,21 @@ export const consentsApi = {
       payload,
     ),
 
-  /** Admin surface: send a parent the consent request (SCRUM-80). */
+  /**
+   * Admin surface: send a parent the consent request (SCRUM-80).
+   *
+   * ALSO HOW A GUARDIAN GETS ONTO A RECORD. There is no endpoint that writes a
+   * guardian directly; this one takes a name and contact and answers with a
+   * `parentLinkId`, so for a student with nobody on record it creates the
+   * guardian and sends them the request in one step. `addGuardian` below is
+   * that use, named for what the school is doing.
+   *
+   * THE TYPES ARE ALWAYS STATED. They were optional here and omitted by every
+   * caller, so what a parent was asked came from a backend default the spec
+   * does not document - and the parent page refuses any request asking for
+   * more than one thing. Sending `REQUESTED_CONSENT_TYPES` means a request
+   * this console sends is always one the parent page can render.
+   */
   requestParentConsent: (
     studentId: string,
     payload: {
@@ -250,7 +387,39 @@ export const consentsApi = {
   ) =>
     api.post<ParentConsentRequestReceipt>(
       `/api/v1/students/${studentId}/parent-consent-requests`,
-      payload,
+      { consentTypes: REQUESTED_CONSENT_TYPES, ...payload },
+    ),
+
+  /**
+   * D07's bulk send, as one call (backend, 8 Oct): up to 500 requests, each
+   * answered with its own outcome under a 207. Same body per child as the
+   * single route, types always stated for the same reason.
+   */
+  requestParentConsentBulk: (
+    requests: {
+      studentId: string;
+      parentName: string;
+      parentContact: string;
+      contactMethod: ParentContactMethod;
+    }[],
+  ) =>
+    api.post<BulkParentConsentResult[]>("/api/v1/consents/parent-consent-requests/bulk", {
+      requests: requests.map((r) => ({ consentTypes: REQUESTED_CONSENT_TYPES, ...r })),
+    }),
+
+  /**
+   * Put a guardian on a student's record, and send them the consent request.
+   * See `requestParentConsent` - it is the same call.
+   */
+  addGuardian: (studentId: string, guardian: { name: string; email: string }) =>
+    api.post<ParentConsentRequestReceipt>(
+      `/api/v1/students/${studentId}/parent-consent-requests`,
+      {
+        parentName: guardian.name,
+        parentContact: guardian.email,
+        contactMethod: "email" satisfies ParentContactMethod,
+        consentTypes: REQUESTED_CONSENT_TYPES,
+      },
     ),
 
   /**

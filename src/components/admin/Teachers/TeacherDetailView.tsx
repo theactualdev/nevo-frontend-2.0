@@ -17,6 +17,7 @@ import {
   CARD,
   GHOST_BTN,
   PausedNote,
+  PlusIcon,
   PRIMARY_BTN,
   ROW_DIVIDER,
   RolePill,
@@ -24,9 +25,22 @@ import {
   TEXT_ACTION,
 } from "../Roster/primitives";
 import { useSetupGate } from "@/hooks";
+import { AssignTeachingSheet } from "../Classes/AssignTeachingSheet";
 import { RemoveAccessSheet } from "./RemoveAccessSheet";
+import { TeacherSubjects } from "./TeacherSubjects";
 import { StatusPill, isInvited } from "./status";
 import { NoAccess, failureKind } from "../NoAccess";
+import { BackLink } from "../BackLink";
+import { withBack, type Back } from "../back";
+import { activeLine, lastActiveCard } from "../Team/teamLines";
+import { ApiError, apiErrorMessage } from "@/lib/api/client";
+import { holderFor } from "@/lib/api/learningSupport";
+import { getSession } from "@/lib/auth/session";
+import { useLearningSupport } from "../LearningSupport/useLearningSupport";
+import {
+  LearningSupportLine,
+  lastHolderAccessLine,
+} from "../LearningSupport/LearningSupportLine";
 
 /**
  * D6 teacher detail - oversight, not performance review.
@@ -42,14 +56,15 @@ import { NoAccess, failureKind } from "../NoAccess";
  * "students at risk", no averages, no engagement figure. If you find yourself
  * adding a second number to that card, stop.
  *
- * TODO(api): `GET /api/v1/teachers/{id}` returns `{id,name,email,status,classIds}`
- * and nothing more. Two things the frame draws therefore cannot be built:
- *   - the LAST ACTIVE stat card (no timestamp anywhere on the route), so the
- *     frame's three cards render as two rather than inventing a third
- *   - the header's "Active today" line, which is the same missing timestamp
- * Both re-verified against the deployed spec on 11 Sep: the only `lastSeenAt`
- * in the contract is on `GET /api/v1/auth/sessions`, which is the caller's own
- * device list and takes no teacher id.
+ * LAST ACTIVE IS ON THE READ NOW (8 Oct). `GET /api/v1/teachers/{id}` carries
+ * `lastActiveAt` (and `subjects`, `classCount`), so D06's third card - "Last
+ * active", "Today" over the time - and the header's "Active today" render.
+ * Both were held back while the route returned only `{id,name,email,status,
+ * classIds}`; with no timestamp the card is left off, never drawn empty.
+ *
+ * RESTORING ACCESS TOO. `POST /teachers/{id}/restore` landed with it, so a
+ * removed teacher's page offers it, and D06b's "you can restore their access
+ * whenever you need to" is back in the removal copy.
  *
  * THE DATES ARE ON THE ROWS NOW. A third bullet here used to read "ASSIGNMENT
  * HISTORY, which has no endpoint at all", and `GET /api/v1/teachers/{id}
@@ -60,6 +75,13 @@ import { NoAccess, failureKind } from "../NoAccess";
  * for the reasoning. What is genuinely missing is the actor and every ENDED
  * assignment, so the dates describe what is still true and claim nothing more.
  *
+ * LEARNING SUPPORT IS ON THE TEACHER'S RECORD (SCRUM-247; D03b, design
+ * 9d0ff6b). A school's learning support staff are usually teachers, so it is
+ * the same permission line as on an administrator's record, under
+ * "Permissions". The grant takes a user id, and a teacher's `id` is theirs.
+ * D03b also draws "Upload to the shared library" and "Listed in the parent
+ * directory" there; nothing stores either yet, so they are with design.
+ *
  * The Students headcount is summed client-side from each class's
  * `studentCount`, because no teacher-level aggregate exists. (This said
  * `student_headcount`, naming a field that was never the one in play.)
@@ -67,15 +89,38 @@ import { NoAccess, failureKind } from "../NoAccess";
 
 type Phase = "loading" | "ready" | "failed" | "denied";
 
-export function TeacherDetailView({ teacherId }: { teacherId: string }) {
+export function TeacherDetailView({
+  teacherId,
+  back = null,
+}: {
+  teacherId: string;
+  /** Where the admin came from - see `back.ts`. */
+  back?: Back | null;
+}) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>("loading");
   const [teacher, setTeacher] = useState<TeacherDetail | null>(null);
   const [held, setHeld] = useState<AssignedClass[]>([]);
   const [allClasses, setAllClasses] = useState<AdminClass[]>([]);
   const [removing, setRemoving] = useState(false);
-  /** D24 / D01b: removing access pauses while setup is unfinished. */
+  const [assigning, setAssigning] = useState(false);
+  /** D24 / D01b: assigning and removing access pause while setup is unfinished. */
   const { writesPaused } = useSetupGate();
+  const [restoring, setRestoring] = useState(false);
+  const [restoreFailed, setRestoreFailed] = useState<string | null>(null);
+  const [now] = useState(() => Date.now());
+  const [me] = useState(() => getSession()?.userId ?? null);
+  const { holders: ls, setHolders: setLs } = useLearningSupport();
+  /*
+   * THE ONLY HOLDER KEEPS THEIR ACCESS (SCRUM-248). Said before the sheet
+   * opens, because the sheet hands classes over first and revokes last: a
+   * refusal at the end would leave the classes moved and the teacher still
+   * in. Nobody else holding it is the server's rule, read from its own list.
+   */
+  const onlyHolder =
+    ls !== null &&
+    holderFor(ls, teacherId) !== null &&
+    !ls.holders.some((h) => h.userId !== teacherId);
 
   const load = useCallback(() => {
     Promise.all([
@@ -172,16 +217,29 @@ export function TeacherDetailView({ teacherId }: { teacherId: string }) {
     ),
   );
   const firstName = teacher.name.split(" ").filter(Boolean).slice(-1)[0] ?? teacher.name;
+  const lastSeen = lastActiveCard(teacher.lastActiveAt, now);
+
+  const restoreAccess = () => {
+    setRestoring(true);
+    setRestoreFailed(null);
+    teachersApi
+      .restore(teacher.id)
+      .then(() => load())
+      .catch((err: unknown) =>
+        setRestoreFailed(
+          (err instanceof ApiError && apiErrorMessage(err.detail)) ||
+            "That didn't go through, and nothing has changed. Try again in a moment.",
+        ),
+      )
+      .finally(() => setRestoring(false));
+  };
   const invited = isInvited(teacher.status);
+  /** A deactivated teacher cannot open a console to teach anything in. */
+  const canAssign = teacher.status !== "deactivated";
 
   return (
     <Wrapper>
-      <Link
-        href="/admin/teachers"
-        className="text-[13.5px] font-semibold text-nevo-navy hover:opacity-75"
-      >
-        &larr; Teachers
-      </Link>
+      <BackLink back={back} fallback={{ href: "/admin/teachers", label: "Teachers" }} />
 
       <div className="mt-3 flex items-center gap-4">
         <Avatar name={teacher.name} email={teacher.email} size={56} />
@@ -190,7 +248,8 @@ export function TeacherDetailView({ teacherId }: { teacherId: string }) {
             {teacher.name}
           </h2>
           <div className="mt-[3px] truncate text-sm text-nevo-near-black/62">
-            {[teacher.email, "Teacher"].filter(Boolean).join(" · ")}
+            {/* D06's header line, now last-active is on the read (8 Oct). */}
+            {[teacher.email, "Teacher", activeLine(teacher.lastActiveAt, now)].filter(Boolean).join(" · ")}
           </div>
         </div>
         <StatusPill status={teacher.status} />
@@ -205,7 +264,8 @@ export function TeacherDetailView({ teacherId }: { teacherId: string }) {
         </p>
       ) : null}
 
-      {/* Two cards, not the frame's three - see the note at the top of the file. */}
+      {/* D06's three cards. Last active joined on 8 Oct; with no timestamp
+          it is left off rather than drawn empty. */}
       <div className="mt-7 flex gap-3.5 max-lg:flex-col">
         <StatCard
           value={String(activeHeld.length)}
@@ -225,6 +285,7 @@ export function TeacherDetailView({ teacherId }: { teacherId: string }) {
              rather than presenting a short number as the total. */
           sub={unknown ? "in the classes we could read" : "in their classes"}
         />
+        {lastSeen ? <StatCard value={lastSeen.value} label="Last active" sub={lastSeen.sub} /> : null}
       </div>
 
       <p className="mt-4 flex items-start gap-2 text-[13px] leading-[1.55] text-nevo-near-black/60">
@@ -237,9 +298,38 @@ export function TeacherDetailView({ teacherId }: { teacherId: string }) {
         </span>
       </p>
 
+      {/* Before Classes, as class detail puts its subjects before its
+          teachers: an assignment needs a subject the teacher holds, so this
+          list is what makes "Assign to a class" possible. */}
+      <div className="mt-[30px]">
+        <SectionHeading>Subjects they teach</SectionHeading>
+      </div>
+      <div className={cn(CARD, "mt-3.5 px-[22px] py-5")}>
+        <TeacherSubjects
+          key={(teacher.subjects ?? []).join("\u0000")}
+          teacher={teacher}
+          editable={canAssign && !writesPaused}
+          onSaved={load}
+        />
+      </div>
+
       <div className="mt-[30px] flex items-center justify-between gap-4">
         <SectionHeading>Classes</SectionHeading>
+        {/* SCRUM-40's second door onto D5c. This was a link back to Classes,
+            leaving the admin to find the class and start again from there. */}
+        {canAssign ? (
+          <button
+            type="button"
+            onClick={() => setAssigning(true)}
+            disabled={writesPaused}
+            className={TEXT_ACTION}
+          >
+            <PlusIcon size={15} />
+            Assign to a class
+          </button>
+        ) : null}
       </div>
+      {canAssign ? <PausedNote className="mt-2" /> : null}
 
       <div className={cn(CARD, "mt-3.5")}>
         {held.length === 0 ? (
@@ -247,9 +337,6 @@ export function TeacherDetailView({ teacherId }: { teacherId: string }) {
             <p className="m-0 text-sm text-nevo-near-black/62">
               {teacher.name} doesn&rsquo;t hold any classes yet.
             </p>
-            <Link href="/admin/classes" className={cn(TEXT_ACTION, "mt-2.5")}>
-              Assign one from a class
-            </Link>
           </div>
         ) : (
           held.map((h, i) => {
@@ -260,6 +347,8 @@ export function TeacherDetailView({ teacherId }: { teacherId: string }) {
             const started = longDate(h.assignedAt);
             const meta = [
               info?.archivedAt ? "Archived" : null,
+              // The subject this assignment teaches (8 Oct), when it has one.
+              h.subject?.trim() || null,
               yearGroupLabel(info?.yearGroup),
               info ? `${info.studentCount} ${info.studentCount === 1 ? "student" : "students"}` : null,
               started ? `assigned ${started}` : null,
@@ -269,7 +358,11 @@ export function TeacherDetailView({ teacherId }: { teacherId: string }) {
             return (
               <Link
                 key={h.assignmentId}
-                href={`/admin/classes/${h.classId}`}
+                // Back on the class returns to this teacher.
+                href={withBack(`/admin/classes/${h.classId}`, {
+                  href: back ? withBack(`/admin/teachers/${teacher.id}`, back) : `/admin/teachers/${teacher.id}`,
+                  label: teacher.name,
+                })}
                 className={cn(
                   "flex items-center gap-3.5 px-[22px] py-[15px] transition-colors hover:bg-nevo-navy/[0.03]",
                   i < held.length - 1 && ROW_DIVIDER,
@@ -301,29 +394,105 @@ export function TeacherDetailView({ teacherId }: { teacherId: string }) {
         the change, or assignments that have ended.
       </p>
 
+      {/* Not for an invitation still open: there is nobody to hold it yet. */}
+      {ls && !invited ? (
+        <>
+          <div className="mt-[30px]">
+            <SectionHeading>Permissions</SectionHeading>
+          </div>
+          <div className={cn(CARD, "mt-3.5")}>
+            <LearningSupportLine
+              className="px-5 py-4 max-lg:px-[18px] max-lg:py-3.5"
+              person={{ userId: teacher.id, name: teacher.name }}
+              holders={ls}
+              you={teacher.id === me}
+              me={me}
+              canGive={canAssign && !writesPaused}
+              canRemove={!writesPaused}
+              onChange={setLs}
+            />
+          </div>
+        </>
+      ) : null}
+
       {/* Removing access is quiet, below a rule, and never a red button. */}
       <div className="mt-[26px] border-t border-nevo-near-black/10 pt-5">
-        <PausedNote className="mb-4" />
-        <button
-          type="button"
-          onClick={() => setRemoving(true)}
-          disabled={writesPaused}
-          className={TEXT_ACTION}
-        >
-          Remove admin-side access
-        </button>
-        <p className="mt-1.5 max-w-[520px] text-[13px] leading-[1.5] text-nevo-near-black/55">
-          {firstName} will no longer be able to open their Nevo console. Their
-          classes and notes stay with the school, and you can restore access
-          later.
-        </p>
+        {teacher.status === "deactivated" ? (
+          /* A deactivated teacher's page used to offer "Remove admin-side
+             access" again - an action that had already happened. */
+          <>
+            <p className="m-0 max-w-[520px] text-[13.5px] leading-[1.55] text-nevo-near-black/62">
+              {firstName}&rsquo;s console access has been removed. Their classes
+              and notes stay with the school.
+            </p>
+            {/* The undo that could not be offered until 8 Oct, when
+                `POST /teachers/{id}/restore` landed. Access comes back; any
+                classes handed over stay with whoever has them now. */}
+            <button
+              type="button"
+              onClick={restoreAccess}
+              disabled={writesPaused || restoring}
+              className={cn(TEXT_ACTION, "mt-3")}
+            >
+              {restoring ? "Restoring…" : "Restore access"}
+            </button>
+            {restoreFailed ? (
+              <p role="status" className="mt-1.5 max-w-[520px] text-[13px] leading-[1.5] text-nevo-near-black/62">
+                {restoreFailed}
+              </p>
+            ) : null}
+          </>
+        ) : (
+          <>
+            {/* The paused note sits once, under Classes, as class detail's
+                sits once under its header. */}
+            <button
+              type="button"
+              onClick={() => setRemoving(true)}
+              disabled={writesPaused || onlyHolder}
+              className={TEXT_ACTION}
+            >
+              Remove admin-side access
+            </button>
+            {onlyHolder ? (
+              <p className="mt-1.5 max-w-[520px] text-[13px] leading-[1.5] text-nevo-near-black/62">
+                {lastHolderAccessLine(teacher.name)}
+              </p>
+            ) : null}
+            {/* D06b's promise is back: `POST /teachers/{id}/restore` landed
+                on 8 Oct, so the undo exists. */}
+            <p className="mt-1.5 max-w-[520px] text-[13px] leading-[1.5] text-nevo-near-black/55">
+              {firstName} will no longer be able to open their Nevo console.
+              Their classes and notes stay with the school, and you can restore
+              their access whenever you need to.
+            </p>
+          </>
+        )}
       </div>
+
+      {assigning ? (
+        <AssignTeachingSheet
+          door={{ kind: "teacher", teacher: { id: teacher.id, name: teacher.name }, held }}
+          classes={allClasses}
+          onClose={() => setAssigning(false)}
+          onAssigned={() => {
+            setAssigning(false);
+            load();
+          }}
+        />
+      ) : null}
 
       {removing ? (
         <RemoveAccessSheet
           teacher={teacher}
           held={held}
-          onClose={() => setRemoving(false)}
+          classes={allClasses}
+          onClose={(changed) => {
+            setRemoving(false);
+            // A partial hand-over moved some classes: re-read, so reopening
+            // plans from what is actually left.
+            if (changed) load();
+          }}
           onRemoved={() => router.push("/admin/teachers")}
         />
       ) : null}

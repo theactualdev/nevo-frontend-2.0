@@ -143,15 +143,19 @@ const Mark = ({ state }: { state: "done" | "running" | "waiting" }) => {
   );
 };
 
+/*
+ * NO STOPPED RUNG (design, 12 Oct). LU-05 used to draw a reading that stopped
+ * as the list "as it stood", with " - stopped" on the stage. Design replaced
+ * it: "A reading stops - routes to the Try-again screen, no frozen ladder."
+ * The wizard had routed there since 18 Sep and never passed the prop, so the
+ * frozen ladder was code nothing reached. It is gone, so nothing can.
+ */
 export function ProcessingStages({
   lessonName,
   current,
-  /** The stage that stopped, when one did (LU-05). */
-  failedAt,
 }: {
   lessonName: string;
   current: StageKey;
-  failedAt?: StageKey | null;
 }) {
   const at = PROCESSING_STAGES.findIndex((s) => s.key === current);
 
@@ -165,21 +169,9 @@ export function ProcessingStages({
 
       <ul className="mt-4 flex list-none flex-col gap-[18px] p-0">
         {PROCESSING_STAGES.map((s, i) => {
-          const stopped = failedAt === s.key;
-          const state = stopped
-            ? "waiting"
-            : i < at
-              ? "done"
-              : i === at
-                ? "running"
-                : "waiting";
+          const state = i < at ? "done" : i === at ? "running" : "waiting";
           return (
             <li key={s.key} className="flex items-center gap-3.5">
-              {/* `state` already carries the stop: `stopped` short-circuits
-                  it to "waiting", and every stage after the failure is
-                  "waiting" anyway. A second guard here read as load-bearing
-                  and was not - a mutation run removing it changed nothing,
-                  which is how it was found. */}
               <Mark state={state} />
               <span
                 className={cn(
@@ -194,14 +186,6 @@ export function ProcessingStages({
                 )}
               >
                 {s.label}
-                {stopped && (
-                  /* LU-05 names the stage it happened at, in the list as it
-                     stood. No red anywhere - a parse that stopped is not an
-                     alarm, and the earlier stages really did finish. */
-                  <span className="text-nevo-near-black/55">
-                    {" — stopped"}
-                  </span>
-                )}
               </span>
             </li>
           );

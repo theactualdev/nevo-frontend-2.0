@@ -254,3 +254,37 @@ describe("ClassDetailView restore reload window", () => {
     expect(restore).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("removing a teacher from the class, while it happens", () => {
+  it("says it is working and cannot be pressed twice", async () => {
+    current = klass();
+    classTeachers.mockResolvedValue([teacher]);
+    removeAssignment.mockReset();
+    removeAssignment.mockReturnValue(new Promise(() => {}));
+
+    render(<ClassDetailView classId="c1" />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Remove Folake Adeyemi from this class/i }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Remove from this class" }));
+
+    const working = await screen.findByRole("button", { name: "Removing…" });
+    expect(working).toBeDisabled();
+    fireEvent.click(working);
+    expect(removeAssignment).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Keep them" })).toBeDisabled();
+  });
+});
+
+describe("ClassDetailView's teacher rows (8 Oct)", () => {
+  it("say what each assignment teaches, and nothing for an older one", async () => {
+    current = klass();
+    classTeachers.mockResolvedValue([
+      { ...teacher, assignmentId: "a1", subjectId: "sub-bio", subject: "Biology" },
+      { ...teacher, assignmentId: "a2", teacherId: "t2", firstName: "Bisi", lastName: "Bello", subjectId: null, subject: null },
+    ]);
+    const { container } = render(<ClassDetailView classId="c1" />);
+    await waitFor(() => expect(visibleText(container)).toMatch(/Teaches Biology/));
+    expect(visibleText(container).match(/Teaches /g)).toHaveLength(1);
+  });
+});

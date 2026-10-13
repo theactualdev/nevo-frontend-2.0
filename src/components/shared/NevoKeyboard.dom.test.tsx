@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { NevoKeyboard } from "./NevoKeyboard";
 
 /**
@@ -29,6 +29,136 @@ import { NevoKeyboard } from "./NevoKeyboard";
  */
 
 const noop = () => {};
+
+afterEach(() => cleanup());
+
+/**
+ * Shift started on and stayed on, so a child typing their name got "AMARA",
+ * and the numbers page's "#+=" key - which offered a symbols page that does
+ * not exist - flipped the case of everything typed after it.
+ */
+describe("NevoKeyboard qwerty case", () => {
+  const typeKeys = (...labels: string[]) =>
+    labels.forEach((label) =>
+      fireEvent.click(screen.getByRole("button", { name: label })),
+    );
+
+  it("capitalises the first letter, then drops back to lowercase", () => {
+    const onKey = vi.fn();
+    render(<NevoKeyboard layout="qwerty" onKey={onKey} onBackspace={noop} />);
+
+    typeKeys("A", "m", "a", "r", "a");
+
+    expect(onKey.mock.calls.map(([c]) => c).join("")).toBe("Amara");
+  });
+
+  it("arms shift for one more capital when the child taps it", () => {
+    const onKey = vi.fn();
+    render(<NevoKeyboard layout="qwerty" onKey={onKey} onBackspace={noop} />);
+
+    typeKeys("A", "d", "a", "space");
+    fireEvent.click(screen.getByRole("button", { name: "Uppercase" }));
+    typeKeys("O", "b", "i");
+
+    expect(onKey.mock.calls.map(([c]) => c).join("")).toBe("Ada Obi");
+  });
+
+  it("offers no key for a symbols page that does not exist", () => {
+    render(<NevoKeyboard layout="qwerty" onKey={noop} onBackspace={noop} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "123" }));
+
+    expect(screen.queryByRole("button", { name: "More symbols" })).toBeNull();
+    expect(screen.queryByText("#+=")).toBeNull();
+  });
+
+  it("stays in capitals for an upper-case field, with no shift to spend", () => {
+    // A school code's cells upper-case everything; the tray showed lowercase
+    // from the second letter on, so the keys did not match the field.
+    const onKey = vi.fn();
+    render(
+      <NevoKeyboard layout="qwerty" uppercase onKey={onKey} onBackspace={noop} />,
+    );
+
+    typeKeys("K", "D", "Q");
+
+    expect(onKey.mock.calls.map(([c]) => c).join("")).toBe("KDQ");
+    expect(screen.getByRole("button", { name: "W" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^(Uppercase|Lowercase)$/ })).toBeNull();
+  });
+
+  it("comes back from the numbers page in the case it left", () => {
+    const onKey = vi.fn();
+    render(<NevoKeyboard layout="qwerty" onKey={onKey} onBackspace={noop} />);
+
+    typeKeys("A", "123", "1", "ABC", "b");
+
+    expect(onKey.mock.calls.map(([c]) => c).join("")).toBe("A1b");
+  });
+});
+
+/**
+ * D150: "The Nevo pad, with minus and decimal point." The calculation's number
+ * entry took the device's numeric keyboard, and an iPhone's has no minus key.
+ */
+describe("NevoKeyboard calc pad", () => {
+  const press = (name: string) =>
+    fireEvent.click(screen.getByRole("button", { name }));
+
+  it("types digits, a minus sign and a point", () => {
+    const onKey = vi.fn();
+    render(<NevoKeyboard layout="calc" onKey={onKey} />);
+
+    for (const key of ["Minus sign", "1", "2", "Point", "0", "5"]) press(key);
+
+    // The hyphen and full stop a stored answer is written with.
+    expect(onKey.mock.calls.map(([c]) => c).join("")).toBe("-12.05");
+    expect(screen.getByRole("button", { name: "Minus sign" })).toHaveTextContent(
+      "\u2212",
+    );
+  });
+
+  it("is an input surface, not a calculator: no operators, no delete", () => {
+    render(<NevoKeyboard layout="calc" onKey={noop} />);
+
+    const keys = screen.getAllByRole("button").map((b) => b.textContent);
+    expect(keys).toEqual([
+      ...["1", "2", "3", "4", "5", "6", "7", "8", "9"],
+      "\u2212",
+      "0",
+      ".",
+    ]);
+    // "Delete sits at the field."
+    expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
+  });
+
+  it("is shown whatever the pointer, as D150 draws it at desktop", () => {
+    render(<NevoKeyboard layout="calc" onKey={noop} />);
+
+    const kb = screen.getByRole("group", { name: "On-screen keyboard" });
+    expect(kb.className).not.toContain("[@media(pointer:fine)]:hidden");
+  });
+
+  it("never reaches the PIN pad, docked or in the screen", () => {
+    for (const presentation of ["docked", "block"] as const) {
+      render(
+        <NevoKeyboard
+          layout="pad"
+          presentation={presentation}
+          onKey={noop}
+          onBackspace={noop}
+        />,
+      );
+
+      expect(screen.queryByRole("button", { name: "Minus sign" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Point" })).toBeNull();
+      expect(screen.queryByText("\u2212")).toBeNull();
+      expect(screen.queryByText("-")).toBeNull();
+      expect(screen.queryByText(".")).toBeNull();
+      cleanup();
+    }
+  });
+});
 
 describe("NevoKeyboard visibility", () => {
   it("hides itself where a real keyboard exists", () => {

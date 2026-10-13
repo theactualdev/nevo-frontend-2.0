@@ -38,7 +38,13 @@ export interface Assignment {
   lesson: LessonSummary;
   studentId: string;
   classId: string | null;
-  status: string;
+  /**
+   * The spec's enum (T253) - a bare `string` is how "completed" went unhandled.
+   * Open, as `NotificationType` is: the student screens deliberately treat a
+   * status the backend adds tomorrow as nothing in particular, and a closed
+   * union would make that case untestable rather than handled.
+   */
+  status: AssignmentStatus | (string & {});
   /** When it OPENS. Shipped 31 Aug; required on the read. */
   availableFrom: string | null;
   /** When it is DUE - a different thing. */
@@ -91,6 +97,18 @@ export interface Assignment {
    */
   assignedByName?: string | null;
   assignedById?: string | null;
+  /**
+   * WHETHER CANCELLING THIS ALSO WITHDREW ITS REVIEWS (SCRUM-225, 8 Oct).
+   *
+   * A cancellation now carries a fixed reason. A housekeeping one keeps the
+   * lesson's spaced-review schedule; a genuine retraction withdraws it. The
+   * server turns the reason into this flag, so the child's screens read the
+   * flag and never the reason - `cancellationReason` is deliberately not
+   * typed here, because mapping reasons to behaviour would be the client
+   * deciding what the server already decided. Defaults to false, and is not
+   * in the schema's `required` list.
+   */
+  recallWithdrawn?: boolean;
   assignedAt: string;
 }
 

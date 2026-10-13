@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
+import { useUnsavedGuard } from "@/hooks/useUnsavedGuard";
 import { AvatarDisc } from "@/components/shared/AvatarDisc";
 import type { TeacherProfile } from "@/lib/mocks/teacherProfile";
 
@@ -41,6 +43,9 @@ export function EditProfileModal({
   const [subjects, setSubjects] = useState(profile.subjects);
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
+  // C17: a changed name or subjects line, not yet saved. The photo is not -
+  // it uploads the moment it is picked.
+  useUnsavedGuard(name !== profile.name || subjects !== profile.subjects);
   const fileInput = useRef<HTMLInputElement>(null);
   const [photo, setPhoto] = useState<string | null>(photoUrl ?? null);
   const [photoState, setPhotoState] = useState<"idle" | "sending" | "failed">(
@@ -60,8 +65,15 @@ export function EditProfileModal({
    * dismiss in the same breath, which would have reported a saved profile
    * over a failed PATCH the moment there was a PATCH to fail.
    */
+  /*
+   * A NAME IS REQUIRED (T194). A blank one saved - `ProfilePatch` sets no
+   * minimum - and the rail then called the teacher "Teacher" with a note that
+   * their details were not connected. Save waits for a name rather than
+   * explaining itself, because no screen draws the sentence it would need.
+   */
+  const named = name.trim().length > 0;
   const submit = async () => {
-    if (saving) return;
+    if (saving || !named) return;
     setSaving(true);
     setFailed(false);
     const ok = await onSave({
@@ -86,17 +98,21 @@ export function EditProfileModal({
   const label =
     "text-xs font-semibold tracking-[0.03em] text-nevo-near-black/55 uppercase";
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogRef);
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-nevo-near-black/50 p-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-nevo-near-black/50 backdrop-blur-[1.5px] p-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
       onClick={onCancel}
     >
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label="Edit profile"
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-[460px] rounded-2xl bg-nevo-cream px-[30px] py-7 shadow-[0_24px_60px_rgba(0,0,0,0.3)] motion-safe:animate-in motion-safe:zoom-in-95 motion-safe:duration-200"
+        className="w-full max-w-[460px] rounded-[16px] bg-nevo-cream px-[30px] py-7 shadow-[0_8px_32px_rgba(0,0,0,0.16)] motion-safe:animate-in motion-safe:zoom-in-95 motion-safe:duration-200"
       >
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold text-nevo-near-black">
@@ -164,6 +180,13 @@ export function EditProfileModal({
           </p>
         )}
 
+        <form
+          noValidate
+          onSubmit={(e) => {
+            e.preventDefault();
+            void submit();
+          }}
+        >
         <div className="mt-5 flex flex-col gap-4">
           <label className="block">
             <span className={label}>Full name</span>
@@ -201,11 +224,9 @@ export function EditProfileModal({
 
         <div className="mt-6 flex gap-3">
           <button
-            type="button"
-            onClick={() =>
-              void submit()
-            }
-            className="h-12 flex-1 cursor-pointer rounded-[10px] bg-nevo-navy text-[15px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93"
+            type="submit"
+            disabled={!named}
+            className="h-12 flex-1 cursor-pointer rounded-[10px] bg-nevo-navy text-[15px] font-semibold text-nevo-cream transition-[filter] hover:brightness-93 disabled:cursor-not-allowed disabled:opacity-55"
           >
             {saving ? "Saving…" : failed ? "Try again" : "Save changes"}
           </button>
@@ -217,6 +238,7 @@ export function EditProfileModal({
             Cancel
           </button>
         </div>
+        </form>
       </div>
     </div>
   );

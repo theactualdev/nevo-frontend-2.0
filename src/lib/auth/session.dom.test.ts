@@ -1,11 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   clearSession,
   getRememberedProfile,
   getSession,
+  getStoredDisplayName,
   getToken,
   rememberProfile,
   setSession,
+  setStoredDisplayName,
 } from "./session";
 
 /**
@@ -95,5 +97,156 @@ describe("session store", () => {
     window.localStorage.setItem("nevo.auth.session", "{not json");
     expect(() => getSession()).not.toThrow();
     expect(getSession()).toBeNull();
+  });
+});
+
+describe("how a session signed in", () => {
+  /*
+   * Onboarding branches on it - an SSO child skips three steps and the PIN -
+   * and it lived only in React state, so a reload put an SSO child on the
+   * manual path. It is kept with the session now.
+   */
+  it("is kept with the session, so a reload still knows it", () => {
+    setSession({ ...session(future()), method: "sso" });
+
+    expect(
+      JSON.parse(window.localStorage.getItem("nevo.auth.session") ?? "{}"),
+    ).toMatchObject({ method: "sso" });
+  });
+
+  it("survives a token refresh, which does not say how anyone signed in", () => {
+    setSession({ ...session(future()), method: "sso" });
+    // `authApi.refresh` stores the login shape, which has no method.
+    setSession({ ...session(future()), token: "tok-refreshed" });
+
+    expect(getSession()).toMatchObject({ token: "tok-refreshed", method: "sso" });
+  });
+
+  it("is never handed to a different account", () => {
+    setSession({ ...session(future()), method: "sso" });
+    setSession({ ...session(future()), userId: "user-2" });
+
+    expect(getSession()?.method).toBeUndefined();
+  });
+});
+
+describe("the name a child is called on a shared tablet", () => {
+  /*
+   * The name used to come from the ONE legacy remembered profile - whichever
+   * child the device remembered last. A child unlocking through the picker was
+   * called by another child's name everywhere, and renaming themselves
+   * overwrote that other child.
+   */
+  const as = (userId: string) =>
+    setSession({ ...session(future()), userId, role: "student" });
+
+  const remember = (loginIdentifier: string, displayName: string, userId?: string) =>
+    rememberProfile({
+      schoolCode: "NEVO-1",
+      loginIdentifier,
+      displayName,
+      initials: displayName.slice(0, 2).toUpperCase(),
+      ...(userId ? { userId } : {}),
+    });
+
+  it("is never the last child the device remembered", () => {
+    window.localStorage.clear();
+    remember("ada.o", "Ada", "ada");
+    remember("bayo.k", "Bayo", "bayo");
+    as("ada");
+
+    expect(getStoredDisplayName()).toBe("Ada");
+  });
+
+  it("says nothing rather than guessing, for an entry that predates account ids", () => {
+    window.localStorage.clear();
+    remember("bayo.k", "Bayo");
+    as("ada");
+
+    expect(getStoredDisplayName()).toBeNull();
+  });
+
+  it("renames only the child who is signed in", () => {
+    window.localStorage.clear();
+    remember("ada.o", "Ada", "ada");
+    remember("bayo.k", "Bayo", "bayo");
+    as("ada");
+
+    setStoredDisplayName("Adaeze", "AD");
+
+    expect(getStoredDisplayName()).toBe("Adaeze");
+    as("bayo");
+    expect(getStoredDisplayName()).toBe("Bayo");
+    // And the legacy single profile - Bayo's, the last remembered - untouched.
+    expect(getRememberedProfile()?.displayName).toBe("Bayo");
+  });
+
+  it("is nobody's when nobody is signed in", () => {
+    window.localStorage.clear();
+    clearSession();
+    remember("ada.o", "Ada", "ada");
+
+    expect(getStoredDisplayName()).toBeNull();
+  });
+});
+
+/**
+ * A role cookie with no session behind it.
+ *
+ * `setSession` writes the cookie and then the token, and swallows a token
+ * write that fails. After a reload the route guard let the child through on
+ * the cookie, every screen found no token and drew the signed-out walkthrough,
+ * and the PIN door bounced them back to it - signed in for the server, signed
+ * out for the app, locked out of the screen that would fix it.
+ *
+ * `hydrate` runs once per page load, so each case loads the module fresh.
+ */
+describe("a page load that finds the role cookie but no session", () => {
+  const ROLE = "nevo.role";
+  const cookieSays = () =>
+    document.cookie
+      .split(";")
+      .map((c) => c.trim())
+      .find((c) => c.startsWith(`${ROLE}=`) && c.length > ROLE.length + 1);
+
+  const freshLoad = async () => {
+    vi.resetModules();
+    return import("./session");
+  };
+
+  it("drops the cookie, so the door lets the child back in", async () => {
+    window.localStorage.clear();
+    document.cookie = `${ROLE}=student; Path=/`;
+
+    const fresh = await freshLoad();
+
+    expect(fresh.getSession()).toBeNull();
+    expect(cookieSays()).toBeUndefined();
+    expect(fresh.arrivedWithoutSession()).toBe(true);
+  });
+
+  it("leaves the cookie alone when the session is there", async () => {
+    window.localStorage.clear();
+    window.localStorage.setItem(
+      "nevo.auth.session",
+      JSON.stringify(session(future())),
+    );
+    document.cookie = `${ROLE}=teacher; Path=/`;
+
+    const fresh = await freshLoad();
+
+    expect(fresh.getSession()?.token).toBe("tok-abc");
+    expect(cookieSays()).toBe(`${ROLE}=teacher`);
+    expect(fresh.arrivedWithoutSession()).toBe(false);
+    fresh.clearSession();
+  });
+
+  it("says nothing happened on a device with neither", async () => {
+    window.localStorage.clear();
+    document.cookie = `${ROLE}=; Path=/; Max-Age=0`;
+
+    const fresh = await freshLoad();
+
+    expect(fresh.arrivedWithoutSession()).toBe(false);
   });
 });

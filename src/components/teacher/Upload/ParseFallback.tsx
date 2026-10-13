@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 /**
@@ -61,8 +62,25 @@ const READ_LESSONS = [
 
 const ghostBtn =
   "inline-flex cursor-pointer items-center gap-[7px] rounded-[10px] border-[1.5px] border-nevo-near-black/18 px-[15px] py-[9px] text-[13.5px] font-semibold text-nevo-near-black transition-colors hover:bg-nevo-near-black/5";
+/*
+ * LU-05's second way forward (design, 12 Oct): beside the try-again action,
+ * a way out of the upload altogether. The foot's Back steps one screen;
+ * this leaves the wizard for the library, which is where a teacher who has
+ * given up on this file wants to be.
+ */
+function BackToLibrary() {
+  return (
+    <Link
+      href="/teacher/lessons"
+      className="inline-flex cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/30 px-[18px] py-[9.5px] text-sm font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
+    >
+      Back to my library
+    </Link>
+  );
+}
+
 const ghostBtnSm =
-  "inline-flex cursor-pointer items-center gap-[7px] rounded-[9px] border-[1.5px] border-nevo-navy/30 px-[13px] py-2 text-[12.5px] font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/6";
+  "inline-flex cursor-pointer items-center gap-[7px] rounded-[10px] border-[1.5px] border-nevo-navy/30 px-[13px] py-2 text-[12.5px] font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/6";
 
 /**
  * The backend's reference for this failure, offered quietly.
@@ -123,10 +141,10 @@ export function ParseFallback({
   const [formatsOpen, setFormatsOpen] = useState(false);
   return (
     <>
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-[22px] xl:px-8 xl:py-7">
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-[22px] xl:px-8 xl:py-[26px]">
         {kind === "noBoundary" && (
           <div className="max-w-[600px]">
-            <div className="flex items-start gap-3 rounded-xl bg-nevo-violet/14 px-[17px] py-[15px]">
+            <div className="flex items-start gap-3 rounded-[12px] bg-nevo-violet/14 px-[17px] py-[15px]">
               <span className="mt-px shrink-0 text-nevo-navy">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                   <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z" />
@@ -155,7 +173,7 @@ export function ParseFallback({
             </div>
 
             {splitOpened && (
-              <div className="mt-3 rounded-[9px] border-l-[3px] border-nevo-violet bg-nevo-navy/6 px-[15px] py-3 text-[13px] leading-[1.5] text-nevo-near-black/75">
+              <div className="mt-3 rounded-[10px] border-l-[3px] border-nevo-violet bg-nevo-navy/6 px-[15px] py-3 text-[13px] leading-[1.5] text-nevo-near-black/75">
                 Opening the editable tree - drag a section out to start a
                 second lesson. Nothing is committed until you&rsquo;re happy.
               </div>
@@ -164,7 +182,7 @@ export function ParseFallback({
             <div className="mt-[18px] font-mono text-[10.5px] tracking-[0.12em] text-nevo-near-black/42">
               FLOWS STRAIGHT INTO THE SECTION PARSE (SCRUM-101)
             </div>
-            <div className="mt-2.5 rounded-xl bg-nevo-cream-elevated px-[18px] py-4 shadow-[0_2px_10px_rgba(0,0,0,0.05)]">
+            <div className="mt-2.5 rounded-[12px] bg-nevo-cream-elevated px-[18px] py-4 shadow-[0_2px_10px_rgba(0,0,0,0.05)]">
               <div className="flex items-center gap-[11px]">
                 <span className="shrink-0 font-mono text-[10px] font-bold tracking-[0.1em] text-nevo-violet">
                   LESSON 1
@@ -180,7 +198,7 @@ export function ParseFallback({
                 {FLAT_SEGMENTS.map((s) => (
                   <div
                     key={s.n}
-                    className="flex items-center gap-2.5 rounded-lg bg-nevo-cream/55 px-3 py-[9px]"
+                    className="flex items-center gap-2.5 rounded-[12px] bg-nevo-cream/55 px-3 py-[9px]"
                   >
                     <span className="flex size-[22px] shrink-0 items-center justify-center rounded-[6px] bg-nevo-navy/10 text-[11px] font-semibold text-nevo-navy">
                       {s.n}
@@ -200,7 +218,7 @@ export function ParseFallback({
 
         {kind === "partial" && (
           <div className="max-w-[600px]">
-            <div className="flex items-start gap-3 rounded-xl bg-nevo-violet/14 px-[17px] py-[15px]">
+            <div className="flex items-start gap-3 rounded-[12px] bg-nevo-violet/14 px-[17px] py-[15px]">
               <span className="mt-px shrink-0 text-nevo-navy">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                   <path d="M6 3h9l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
@@ -339,6 +357,7 @@ export function ParseFallback({
                 </svg>
                 Try this file again
               </button>
+              <BackToLibrary />
               {/* "Try another file" belongs to the UNREADABLE screen, where a
                   different document is genuinely the remedy. Offering it here
                   tells a teacher their file was the problem when we have just
@@ -369,8 +388,10 @@ export function ParseFallback({
             <div className="mt-[22px] flex flex-wrap items-center justify-center gap-3">
               <button
                 type="button"
-                /* "Try again" resends the same file. It used to reopen the
-                   picker, which contradicted the sentence above it. */
+                /* "Try again" asks about the same upload again, or resends
+                   the same file when it never landed - the wizard decides.
+                   It used to reopen the picker, which contradicted the
+                   sentence above it. */
                 onClick={onRetrySameFile}
                 className="inline-flex cursor-pointer items-center gap-2 rounded-[10px] bg-nevo-navy px-[18px] py-[11px] text-sm font-semibold text-nevo-cream transition-[filter] hover:brightness-93"
               >
@@ -380,6 +401,7 @@ export function ParseFallback({
                 </svg>
                 Try again
               </button>
+              <BackToLibrary />
             </div>
           </div>
         )}
@@ -422,12 +444,15 @@ export function ParseFallback({
               </button>
             </div>
             {formatsOpen && (
-              <div className="mt-4 max-w-[420px] rounded-[11px] bg-nevo-navy/6 px-[17px] py-3.5 text-left">
+              <div className="mt-4 max-w-[420px] rounded-[10px] bg-nevo-navy/6 px-[17px] py-3.5 text-left">
                 <div className="text-[12.5px] font-semibold text-nevo-navy">
                   We can read:
                 </div>
                 <div className="mt-1.5 text-[13px] leading-[1.6] text-nevo-near-black/72">
-                  PDF, Word (.docx), and clear photos or scans (JPG, PNG). For
+                  {/* What the picker actually takes. This listed JPG and
+                      PNG, which the picker refuses, and left out
+                      PowerPoint, which it accepts. */}
+                  PDF, Word (.doc, .docx) and PowerPoint (.ppt, .pptx). For
                   scans, brighter and straighter pages read best.
                 </div>
               </div>
