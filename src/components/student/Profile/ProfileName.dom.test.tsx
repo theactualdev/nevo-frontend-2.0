@@ -333,3 +333,57 @@ describe("an accessibility choice", () => {
     );
   });
 });
+
+/**
+ * Design, 13 Oct: "Profile's text-size buttons, the name's Change link and
+ * the switches are all at least 44px." Each is drawn smaller - the switch
+ * 30px tall, a segment about 31, Change a line of text - so each carries a
+ * 44px hit area and looks as it did. jsdom lays nothing out, so this pins the
+ * classes that make the area.
+ */
+describe("Profile's small controls", () => {
+  /** A 44px-tall pseudo-element centred on a positioned control. */
+  const tallHitArea = (el: HTMLElement) => {
+    const classes = el.className.split(/\s+/);
+    return (
+      classes.includes("relative") &&
+      classes.includes("after:absolute") &&
+      classes.includes("after:h-11") &&
+      classes.includes("after:top-1/2") &&
+      classes.includes("after:-translate-y-1/2")
+    );
+  };
+
+  it("gives every text-size button a 44px-tall target, the gaps closed and no neighbour overlapped", async () => {
+    me.mockResolvedValue(account(null));
+    renderProfile();
+    await screen.findByText("Tobi");
+
+    for (const label of ["S", "M", "L", "XL"]) {
+      const button = screen.getByRole("button", { name: label });
+      expect(tallHitArea(button)).toBe(true);
+      // Half the pill's 4px gap on each side, and no further.
+      expect(button.className).toContain("after:-inset-x-0.5");
+    }
+  });
+
+  it("gives both switches a 44px-tall target", async () => {
+    me.mockResolvedValue(account(null));
+    renderProfile();
+    await screen.findByText("Tobi");
+
+    for (const name of ["Reduced motion", "High contrast"]) {
+      expect(tallHitArea(screen.getByRole("switch", { name }))).toBe(true);
+    }
+  });
+
+  it("makes the name's Change 44px tall", async () => {
+    me.mockResolvedValue(account(null));
+    renderProfile();
+    await screen.findByText("Tobi");
+
+    expect(screen.getByRole("button", { name: "Change" }).className).toContain(
+      "min-h-11",
+    );
+  });
+});
