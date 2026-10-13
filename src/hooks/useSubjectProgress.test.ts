@@ -97,7 +97,9 @@ describe("a subject's topics", () => {
     expect(result.current.currentTopic).toBe("Equivalent fractions");
   });
 
-  it("are nothing when the backend sent its defaults", async () => {
+  it("are no topic met when the backend counts 0 of 0", async () => {
+    // D180, 13 Oct: "The data counts topics met", and none met is the card's
+    // "Nothing started yet" - an answer, not silence.
     subjectProgress.mockResolvedValue({
       ...reply(undefined),
       topicsDone: 0,
@@ -108,8 +110,17 @@ describe("a subject's topics", () => {
     const { result } = renderHook(() => useSubjectProgress("Mathematics"));
 
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.topics).toBeNull();
+    expect(result.current.topics).toEqual({ done: 0, total: 0 });
     expect(result.current.currentTopic).toBeNull();
+  });
+
+  it("are nothing when the response carries no counts", async () => {
+    subjectProgress.mockResolvedValue(reply(undefined));
+
+    const { result } = renderHook(() => useSubjectProgress("Mathematics"));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.topics).toBeNull();
   });
 
   it("are nothing when the counts contradict each other", () => {

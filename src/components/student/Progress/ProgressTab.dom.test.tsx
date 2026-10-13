@@ -402,9 +402,9 @@ describe("the note at the foot of each subject card", () => {
  * on X". The total is topics this child has met.
  *
  * NEVER AS A NUMBER (design D119, 6 Oct): "No counts on a child's card, in
- * any form. '0 of 4' and '5 of 5' both read as a grade". 33a's lines for none
- * and all-done speak of topics SET, which the wire does not count, so they
- * are not drawn either; asked.
+ * any form. '0 of 4' and '5 of 5' both read as a grade". 33a's all-done line
+ * speaks of topics SET, which the wire does not count, so it is not drawn.
+ * Its "Nothing started yet" is, since D180 (13 Oct), for no topic met.
  */
 describe("the topics on a subject card", () => {
   const card = (name: string) =>
@@ -470,8 +470,8 @@ describe("the topics on a subject card", () => {
     },
   );
 
-  it("draws nothing of the topics when the backend counted none", () => {
-    // Rule 5: 0 is the schema's default, so absent and 0 alike draw nothing.
+  it("draws nothing of the topics when the backend sent no counts", () => {
+    // Rule 5: counts the response did not carry draw nothing.
     state({ subjects: [subject("Mathematics", ["Fractions"])] });
     narrowed.bySubject = {
       Mathematics: { note: "A note about maths", topics: null },
@@ -482,7 +482,50 @@ describe("the topics on a subject card", () => {
     const maths = card("Mathematics");
     expect(footNote(maths)).toHaveTextContent("A note about maths");
     expect(maths.querySelector("[data-topic-marks]")).toBeNull();
-    expect(maths.textContent).not.toMatch(/topics|Working on/);
+    expect(maths.textContent).not.toMatch(/topics|Working on|Nothing started/);
+  });
+
+  it("says Nothing started yet when the data counts no topic met", () => {
+    // D180, 13 Oct, verbatim: "Nothing met: Nothing started yet". The line
+    // under the name, where 33a's "none" card draws it - and no count.
+    state({ subjects: [subject("Mathematics", ["Fractions"])] });
+    narrowed.bySubject = {
+      Mathematics: { note: null, topics: { done: 0, total: 0 }, currentTopic: null },
+    };
+
+    render(<ProgressTab />);
+
+    const maths = card("Mathematics");
+    expect(within(maths).getByText("Nothing started yet")).toBeInTheDocument();
+    expect(maths.querySelector("[data-topic-marks]")).toBeNull();
+    expect(maths.textContent).not.toMatch(
+      /\d|Ready when you are|More topics to come|New topics appear/,
+    );
+  });
+
+  it("says Working on, not Nothing started, when a topic is named", () => {
+    state({ subjects: [subject("Mathematics", ["Fractions"])] });
+    narrowed.bySubject = {
+      Mathematics: { note: null, topics: { done: 0, total: 0 }, currentTopic: "Halves" },
+    };
+
+    render(<ProgressTab />);
+
+    const maths = card("Mathematics");
+    expect(within(maths).getByText("Working on Halves")).toBeInTheDocument();
+    expect(maths.textContent).not.toMatch(/Nothing started/);
+  });
+
+  it("does not say Nothing started yet when the subject's read failed", () => {
+    // A failed read is not "no topic met": the concept names stand.
+    state({ subjects: [subject("Mathematics", ["Fractions"])] });
+    narrowed.bySubject = { Mathematics: { note: null, failed: true } };
+
+    render(<ProgressTab />);
+
+    const maths = card("Mathematics");
+    expect(within(maths).getByText("Fractions")).toBeInTheDocument();
+    expect(maths.textContent).not.toMatch(/Nothing started/);
   });
 
   it("says no 'Working on' with nothing after it", () => {
@@ -501,8 +544,7 @@ describe("the topics on a subject card", () => {
   });
 
   it("claims nothing started when none of the topics met is done yet", () => {
-    // 33a's line for that state speaks of topics set, which the wire does
-    // not count. Asked of design.
+    // Four topics met is not "nothing met" (D180), whatever is done.
     state({ subjects: [subject("Mathematics", ["Fractions"])] });
     narrowed.bySubject = {
       Mathematics: {
@@ -544,8 +586,8 @@ describe("the topics on a subject card", () => {
   });
 
   it("says Ready when you are under the squares when nothing is done and nothing is named", () => {
-    // 33a's "none" state (851d58f). Not its "Nothing started yet", which
-    // speaks of topics set; the line above stays the concept names.
+    // 33a's "none" state (851d58f). Not "Nothing started yet", which D180
+    // keeps for no topic met; the line above stays the concept names.
     state({ subjects: [subject("Mathematics", ["Fractions"])] });
     narrowed.bySubject = {
       Mathematics: { note: null, topics: { done: 0, total: 4 }, currentTopic: null },

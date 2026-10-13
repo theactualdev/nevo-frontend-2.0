@@ -61,7 +61,8 @@ import { GROWTH_SUMMARY, SUBJECTS } from "./progressData";
  * per topic the child has MET. They are never printed as a number: design
  * D119, 6 Oct, "No counts on a child's card, in any form. '0 of 4' and '5 of
  * 5' both read as a grade". Each card reads its subject's own, from the
- * narrowed route; absent counts draw nothing at all.
+ * narrowed route; absent counts draw nothing at all, and a count of no topic
+ * met says "Nothing started yet" (D180, 13 Oct).
  */
 export function ProgressTab() {
   const signedIn = useHasSession();
@@ -189,7 +190,7 @@ function LiveSubjectCard({
     .slice(0, 3)
     .map((c) => c.name)
     .join(" · ");
-  const line = cardLine(own.currentTopic, names);
+  const line = cardLine(own.currentTopic, names, own.topics);
   return (
     <SubjectCard
       href={`/student/progress/${subject.slug}`}
@@ -210,14 +211,29 @@ function LiveSubjectCard({
  * value. The signed-out walkthrough reads its line through this too, so it
  * cannot drift from what a real card says.
  *
- * NOT 33a'S OTHER TWO LINES HERE. "Nothing started yet" and "Everything set
- * so far is done" speak of topics SET, and the wire counts topics MET, so
- * neither takes this slot. Design answered D119 in the slot UNDER the
- * squares instead, in words with no count (851d58f): see `TOPICS_LINE`.
+ * "NOTHING STARTED YET" WHEN NO TOPIC HAS BEEN MET (D180, 13 Oct): "The data
+ * counts topics met, so the line says what the data knows and nothing else.
+ * Nothing met: Nothing started yet". It was left out while it was read as
+ * 33a's "none" state, which speaks of topics SET. A topic named as being
+ * worked on still wins: that is the backend saying one has been met.
+ *
+ * NOT 33a'S "Everything set so far is done", which speaks of topics SET, and
+ * NOT D180's count of topics met for every other card: held, against D119's
+ * "No counts on a child's card, in any form". Design answered D119 in the
+ * slot UNDER the squares, in words with no count (851d58f): see `TOPICS_LINE`.
  */
-function cardLine(currentTopic: string | null | undefined, otherwise: string) {
-  return currentTopic ? `Working on ${currentTopic}` : otherwise;
+function cardLine(
+  currentTopic: string | null | undefined,
+  otherwise: string,
+  topics?: SubjectTopics | null,
+) {
+  if (currentTopic) return `Working on ${currentTopic}`;
+  if (topics?.total === 0) return NOTHING_MET;
+  return otherwise;
 }
+
+/** D180, verbatim: the card's line when the data counts no topic met. */
+const NOTHING_MET = "Nothing started yet";
 
 /** The read failed - not the same as having done nothing. */
 function CouldNotLoad() {
@@ -335,6 +351,9 @@ function SubjectCard({
   note?: string | null;
 }) {
   const said = note?.trim();
+  // No topic met is no square to draw and no state under them to name: the
+  // line above says it (D180).
+  const marked = topics && topics.total > 0 ? topics : null;
   return (
     <Link
       href={href}
@@ -351,10 +370,10 @@ function SubjectCard({
         >
           {line ?? " "}
         </p>
-        {topics && <TopicMarks topics={topics} working={working} />}
-        {topics && (
+        {marked && <TopicMarks topics={marked} working={working} />}
+        {marked && (
           <p className="mt-2 text-[13px] text-nevo-near-black/55">
-            {topicsLine(topics, working)}
+            {topicsLine(marked, working)}
           </p>
         )}
         {/* 33a, D120: the note at the foot, below a hairline, behind a soft
