@@ -3,8 +3,11 @@
 import { useState } from "react";
 import { ApiError, apiErrorMessage } from "@/lib/api/client";
 import {
+  LAST_LEARNING_SUPPORT_HOLDER,
+  SELF_GRANT_FORBIDDEN,
   holderFor,
   learningSupportApi,
+  refusedWith,
   type LearningSupportHolder,
   type LearningSupportHolders,
 } from "@/lib/api/learningSupport";
@@ -19,8 +22,7 @@ import { cn } from "@/lib/utils";
  * Compliance, which is a reporting surface.
  *
  * WHAT: whether they hold it, and where they do, who gave it and when. The
- * holders list carries the granter's user id only, so the name comes from
- * whoever the screen can already name; a granter it cannot name is left out
+ * holder carries the granter's name since 13 Oct; one without it is left out
  * rather than guessed, and the date still shows.
  *
  * NEVER SELF-GRANTED. The backend allows an administrator to give it to
@@ -28,17 +30,12 @@ import { cn } from "@/lib/utils";
  * offers no control at all - "an admin without it gets it from another admin".
  *
  * THE LAST HOLDER. Removing it from the only person who holds it is refused by
- * the backend (SCRUM-248, with Teslim) and said here as what happened and
- * what to do. Until that guard's code is published, any 409 from the removal
- * is read as it, since it is the only conflict the ruling gives that route.
+ * the backend (SCRUM-248, 409 `last_learning_support_holder`, 13 Oct) and
+ * said here as what happened and what to do.
  */
 
-export function givenLine(
-  held: LearningSupportHolder,
-  me: string | null,
-  nameOf: (userId: string) => string | null,
-): string | null {
-  const by = held.grantedBy === me ? "you" : nameOf(held.grantedBy);
+export function givenLine(held: LearningSupportHolder, me: string | null): string | null {
+  const by = held.grantedBy === me ? "you" : held.grantedByName?.trim() || null;
   const on = longDate(held.grantedAt);
   if (by && on) return `Given by ${by} on ${on}`;
   if (on) return `Given on ${on}`;
@@ -52,6 +49,13 @@ export function lastHolderLine(name: string): string {
   return `${name} is the only person in your school with Learning Support, so it can't be removed. Give Learning Support to someone else first, then remove it from ${name}.`;
 }
 
+/** The same refusal, met by taking the person's access away. */
+export function lastHolderAccessLine(name: string): string {
+  return `${name} is the only person in your school with Learning Support, so their access can't be removed. Give Learning Support to someone else first, then remove their access.`;
+}
+
+const SELF_GRANT = "Learning Support has to be given by another administrator.";
+
 type Asking = "give" | "remove" | null;
 
 export function LearningSupportRecord({
@@ -59,7 +63,6 @@ export function LearningSupportRecord({
   holders,
   you,
   me,
-  nameOf,
   canGive,
   canRemove,
   onChange,
@@ -71,8 +74,6 @@ export function LearningSupportRecord({
   you: boolean;
   /** The viewer's user id, so a grant they made reads "Given by you". */
   me: string | null;
-  /** A granter's name, by user id, or null when this screen cannot name them. */
-  nameOf: (userId: string) => string | null;
   /** Whether "Give" may be offered (an active person, writes not paused). */
   canGive: boolean;
   /** Whether "Remove" may be offered. */
@@ -86,7 +87,7 @@ export function LearningSupportRecord({
   const [refusal, setRefusal] = useState<string | null>(null);
 
   const held = holderFor(holders, person.userId);
-  const given = held ? givenLine(held, me, nameOf) : null;
+  const given = held ? givenLine(held, me) : null;
   const offer: Asking = you ? null : held ? (canRemove ? "remove" : null) : canGive ? "give" : null;
 
   const confirm = () => {
@@ -102,8 +103,12 @@ export function LearningSupportRecord({
       })
       .catch((err: unknown) => {
         setAsking(null);
-        if (removing && err instanceof ApiError && err.status === 409) {
+        if (removing && refusedWith(err, LAST_LEARNING_SUPPORT_HOLDER)) {
           setRefusal(lastHolderLine(person.name));
+          return;
+        }
+        if (refusedWith(err, SELF_GRANT_FORBIDDEN)) {
+          setRefusal(SELF_GRANT);
           return;
         }
         setRefusal((err instanceof ApiError && apiErrorMessage(err.detail)) || FAILED);

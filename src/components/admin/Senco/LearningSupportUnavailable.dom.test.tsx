@@ -115,4 +115,13 @@ describe("the progress report exporter, without Learning Support", () => {
     expect(visibleText(container)).toMatch(/It needs Learning Support/);
     expect(screen.queryByRole("combobox")).toBeNull();
   });
+
+  it("says the same when the server refuses along the way", async () => {
+    // Every export route enforces the role since 13 Oct (Teslim, ab78139).
+    holders.mockReturnValue(new Promise(() => {}));
+    list.mockRejectedValue(ROLE_REFUSAL);
+    render(<IepExporterView />);
+    expect(await screen.findByText(/Progress reports aren.t available to you/)).toBeInTheDocument();
+    expect(screen.queryByText(/You don.t have access to the IEP exporter/)).toBeNull();
+  });
 });

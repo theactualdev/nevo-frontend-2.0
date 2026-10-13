@@ -14,6 +14,9 @@ import { PRIMARY_BTN } from "../Roster/primitives";
  */
 export const NEEDS_LEARNING_SUPPORT =
   "It needs Learning Support, which another administrator can give you on your record in Admin Team.";
+/** How to get it, for a line that has already said what needs it. */
+export const GET_LEARNING_SUPPORT =
+  "Another administrator can give it to you on your record in Admin Team.";
 
 export function UnavailableAction({
   label,
@@ -41,7 +44,7 @@ export function UnavailableAction({
         {label}
       </button>
       <p id={why} className="m-0 max-w-[44ch] text-[12.5px] leading-[1.5] text-nevo-near-black/58">
-        {`${what} need Learning Support. Another administrator can give it to you on your record in Admin Team.`}
+        {`${what} need Learning Support. ${GET_LEARNING_SUPPORT}`}
       </p>
     </div>
   );

@@ -16,6 +16,7 @@ import { BackLink } from "../BackLink";
 import type { Back } from "../back";
 import { useLearningSupport } from "../LearningSupport/useLearningSupport";
 import { NEEDS_LEARNING_SUPPORT } from "../LearningSupport/Unavailable";
+import { LEARNING_SUPPORT_REQUIRED, refusedWith } from "@/lib/api/learningSupport";
 import {
   Avatar,
   CARD,
@@ -190,10 +191,12 @@ export function IepExporterView({
   /*
    * SCRUM-247: without Learning Support the exporter is unavailable - the page
    * is still here and says why, rather than a picker that would draft a child's
-   * report for someone the school has not chosen to see it. The backend does
-   * not gate these routes on the role yet; asked of Teslim.
+   * report for someone the school has not chosen to see it. Every export
+   * route enforces the role server-side since 13 Oct, so a refusal met along
+   * the way says the same thing.
    */
   const { holders: ls } = useLearningSupport();
+  const [roleRefused, setRoleRefused] = useState(false);
   const [guardians, setGuardians] = useState<ParentLink[]>([]);
   const [guardiansFailed, setGuardiansFailed] = useState(false);
   const [shareFailed, setShareFailed] = useState(false);
@@ -218,6 +221,7 @@ export function IepExporterView({
    */
   const [denied, setDenied] = useState(false);
   const failWith = (err: unknown) => {
+    if (refusedWith(err, LEARNING_SUPPORT_REQUIRED)) setRoleRefused(true);
     if (failureKind(err) === "denied") setDenied(true);
     setPhase("failed");
   };
@@ -269,6 +273,7 @@ export function IepExporterView({
         setStudentId((cur) => (rows.some((r) => r.id === cur) ? cur : ""));
       })
       .catch((err: unknown) => {
+        if (refusedWith(err, LEARNING_SUPPORT_REQUIRED)) setRoleRefused(true);
         if (failureKind(err) === "denied") setDenied(true);
         setStudents([]);
         setStudentsFailed(true);
@@ -444,6 +449,7 @@ export function IepExporterView({
           setPhase("final");
           return;
         }
+        if (refusedWith(err, LEARNING_SUPPORT_REQUIRED)) setRoleRefused(true);
         if (failureKind(err) === "denied") setDenied(true);
         // A failed SHARE is the one write here whose outcome the client
         // genuinely cannot know: a transport failure (ApiError status 0) can
@@ -463,7 +469,7 @@ export function IepExporterView({
       });
   };
 
-  if (ls?.viewerHoldsIt === false) {
+  if (ls?.viewerHoldsIt === false || roleRefused) {
     return (
       <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
         <div className="mx-auto max-w-[780px]">

@@ -1,4 +1,4 @@
-import { api } from "./client";
+import { api, ApiError, apiErrorCode } from "./client";
 
 /**
  * Learning Support (SCRUM-247): who may open the learning support view of a
@@ -18,8 +18,10 @@ export interface LearningSupportHolder {
   name: string;
   role: string;
   grantedAt: string;
-  /** The granter's user id. The server sends no name with it. */
+  /** The granter's user id. */
   grantedBy: string;
+  /** The granter's name, since 13 Oct (Teslim, ab78139). */
+  grantedByName?: string | null;
 }
 
 export interface LearningSupportHolders {
@@ -28,8 +30,24 @@ export interface LearningSupportHolders {
   viewerHoldsIt: boolean;
 }
 
-/** The refusal an administrator without the role meets on the learning support reads. */
+/**
+ * The refusal anyone without the role meets on the learning support reads,
+ * the progress report routes and flag acknowledgement - every staff role since
+ * 13 Oct, teachers included.
+ */
 export const LEARNING_SUPPORT_REQUIRED = "learning_support_role_required";
+/**
+ * 409 (SCRUM-248): the operation would leave the school with nobody holding
+ * it - removing the role from the final holder, or deactivating them.
+ */
+export const LAST_LEARNING_SUPPORT_HOLDER = "last_learning_support_holder";
+/** 403: a grant to yourself. The console never offers one. */
+export const SELF_GRANT_FORBIDDEN = "learning_support_self_grant_forbidden";
+
+/** Whether an error is the server refusing with this code. */
+export function refusedWith(err: unknown, code: string): boolean {
+  return err instanceof ApiError && apiErrorCode(err.detail) === code;
+}
 
 export const learningSupportApi = {
   /** `GET /api/v1/learning-support/holders` - any school member may ask. */

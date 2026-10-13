@@ -6,6 +6,8 @@ import { yearGroupLabel } from "@/lib/constants/yearGroups";
 import { teachersApi, type TeacherDetail, type TeacherSummary } from "@/lib/api/teachers";
 import { cn } from "@/lib/utils";
 import { isActive } from "./status";
+import { LAST_LEARNING_SUPPORT_HOLDER, refusedWith } from "@/lib/api/learningSupport";
+import { lastHolderAccessLine } from "../LearningSupport/LearningSupportRecord";
 import {
   CheckIcon,
   FailureLine,
@@ -98,6 +100,13 @@ export function RemoveAccessSheet({
     Object.fromEntries(held.map((h) => [h.assignmentId, { kind: "unresolved" } as Resolution])),
   );
   const [phase, setPhase] = useState<Phase>("idle");
+  /*
+   * Refused because they are the school's only Learning Support holder
+   * (SCRUM-248). The teacher page says so before this sheet opens; this is the
+   * case where someone else removed theirs in the meantime. No retry: the
+   * answer will not change until somebody else holds it.
+   */
+  const [lastHolder, setLastHolder] = useState(false);
   const [applied, setApplied] = useState(0);
   /** Every way out of the sheet says whether anything moved on the way. */
   const close = () => onClose(applied > 0);
@@ -170,9 +179,10 @@ export function RemoveAccessSheet({
       // Let the confirmation be read before the sheet goes, matching the
       // assign flow's own settle.
       setTimeout(onRemoved, 1400);
-    } catch {
+    } catch (err: unknown) {
       // Nothing was revoked - that call is last and only runs if the loop
       // completed. Say which it is rather than claiming nothing changed.
+      setLastHolder(refusedWith(err, LAST_LEARNING_SUPPORT_HOLDER));
       setPhase(done > 0 ? "partial" : "failed");
     }
   };
@@ -203,12 +213,20 @@ export function RemoveAccessSheet({
           ) : phase === "failed" ? (
             <>
               <FailureLine>
-                That didn&rsquo;t complete, and nothing has changed.
-                We&rsquo;re on it.
+                {lastHolder ? (
+                  lastHolderAccessLine(teacher.name)
+                ) : (
+                  <>
+                    That didn&rsquo;t complete, and nothing has changed.
+                    We&rsquo;re on it.
+                  </>
+                )}
               </FailureLine>
-              <button type="button" onClick={apply} className={PRIMARY_BTN}>
-                Try again
-              </button>
+              {lastHolder ? null : (
+                <button type="button" onClick={apply} className={PRIMARY_BTN}>
+                  Try again
+                </button>
+              )}
               {/* SCRUM-40: "Primary 'Try again', secondary 'Close'." A failure with
                   one way out holds the sheet open until it succeeds. */}
               <button type="button" onClick={close} className={GHOST_BTN}>
@@ -271,8 +289,15 @@ export function RemoveAccessSheet({
           <>
             <FailureLine>
               {applied} of {held.length} classes were handed over before this
-              stopped. {firstName} still has access - nothing was revoked. You
-              can pick up where it left off.
+              stopped.{" "}
+              {lastHolder ? (
+                lastHolderAccessLine(teacher.name)
+              ) : (
+                <>
+                  {firstName} still has access - nothing was revoked. You can
+                  pick up where it left off.
+                </>
+              )}
             </FailureLine>
             <button type="button" onClick={close} className={PRIMARY_BTN}>
               Close
@@ -281,12 +306,20 @@ export function RemoveAccessSheet({
         ) : phase === "failed" ? (
           <>
             <FailureLine>
-              That didn&rsquo;t complete, and nothing has changed. We&rsquo;re
-              on it.
+              {lastHolder ? (
+                lastHolderAccessLine(teacher.name)
+              ) : (
+                <>
+                  That didn&rsquo;t complete, and nothing has changed.
+                  We&rsquo;re on it.
+                </>
+              )}
             </FailureLine>
-            <button type="button" onClick={apply} className={PRIMARY_BTN}>
-              Try again
-            </button>
+            {lastHolder ? null : (
+              <button type="button" onClick={apply} className={PRIMARY_BTN}>
+                Try again
+              </button>
+            )}
             {/* SCRUM-40: "Primary 'Try again', secondary 'Close'." A failure with
                 one way out holds the sheet open until it succeeds. */}
             <button type="button" onClick={close} className={GHOST_BTN}>
