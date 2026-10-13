@@ -20,6 +20,9 @@ const PHONE_READY: readonly RegExp[] = [
   /^\/teacher\/students\/[^/]+\/clear-pin\/?$/,
   // B2 - a child's profile, from an attention notification.
   /^\/teacher\/students\/[^/]+\/?$/,
+  // B4/B5 - a thread, from a reply notification. Connect itself decides: a
+  // named thread is laid out for a phone, the list is not (ConnectView).
+  /^\/teacher\/connect\/?$/,
 ];
 
 /**
