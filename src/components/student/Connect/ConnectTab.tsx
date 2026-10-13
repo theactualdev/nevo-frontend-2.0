@@ -276,6 +276,9 @@ export function ConnectTab({
             width={1021}
             height={812}
             sizes="300px"
+            // The state's largest paint (`preload`, which Next 16 has in
+            // place of the deprecated `priority`).
+            preload
             className="h-auto w-[220px] shrink-0 sm:w-[280px] lg:w-[300px]"
           />
           <h2 className="mt-[26px] max-w-[290px] text-[19px] font-medium leading-[1.35] text-nevo-near-black sm:mt-[30px] sm:max-w-[400px] sm:text-[22px] lg:mt-8 lg:max-w-[440px] lg:text-2xl">
@@ -670,12 +673,13 @@ function MessageStatusLine({
   //
   // The only way to resend, so a 44px target: it was the 16px line of text.
   // The negative margin keeps the line where it was; `z-10` keeps the next
-  // message from sitting over the bottom of the target.
+  // message from sitting over the bottom of the target. The darker violet
+  // (D210): soft violet is 2.34:1 as 12px text on cream.
   return (
     <button
       type="button"
       onClick={onRetry}
-      className="relative z-10 -my-3.5 flex min-h-11 cursor-pointer items-center gap-1.5 px-1 text-xs text-nevo-violet"
+      className="relative z-10 -my-3.5 flex min-h-11 cursor-pointer items-center gap-1.5 px-1 text-xs text-nevo-violet-text"
     >
       <span className="size-1.5 rounded-full bg-nevo-violet" />
       Didn&apos;t send - tap to try again

@@ -237,9 +237,13 @@ describe("[185] [D104] a conversation's own read", () => {
     await act(async () => post.reject(new Error("offline")));
     expect(screen.getByText(/Didn.t send - tap to try again/)).toBeTruthy();
     // The only way to resend, so a 44px target, not the 16px line of text.
-    expect(
-      screen.getByRole("button", { name: /Didn.t send - tap to try again/ }),
-    ).toHaveClass("min-h-11");
+    const retry = screen.getByRole("button", {
+      name: /Didn.t send - tap to try again/,
+    });
+    expect(retry).toHaveClass("min-h-11");
+    // The darker violet (D210): soft violet is 2.34:1 as 12px text on cream.
+    expect(retry.className.split(" ")).toContain("text-nevo-violet-text");
+    expect(retry.className.split(" ")).not.toContain("text-nevo-violet");
   });
 });
 
@@ -329,6 +333,10 @@ describe("[79] a child nobody has written to", () => {
     expect(screen.getByPlaceholderText("Write a message")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Send" })).toBeTruthy();
     expect(screen.queryByText(/will be able to message you/)).toBeNull();
+    // The state's largest paint is fetched up front, not lazily.
+    expect(
+      screen.getByAltText("Two figures standing side by side"),
+    ).not.toHaveAttribute("loading", "lazy");
   });
 
   it("sees an empty thread's row say there are no messages yet", async () => {
