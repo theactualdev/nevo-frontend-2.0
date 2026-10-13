@@ -24,6 +24,7 @@ import {
 import { ONBOARDING_SIGNAL_TYPES } from "@/lib/constants";
 import { randomId } from "@/lib/utils";
 import { ProfilingFlow } from "@/components/student/Profiling/ProfilingFlow";
+import { Letterbox } from "@/components/student/Shell/Letterbox";
 import {
   WaitingOnConsent,
   type WaitingHold,
@@ -180,17 +181,36 @@ export function ObservedInteractionSequence() {
     }
   };
 
+  /*
+   * THE TABLET FRAME AT DESKTOP WIDTH (D207) goes on the holds, the
+   * Transition and the profiling run, which are pre-login screens, and not on
+   * the notice, PIN creation or You're In, which are drawn on the signed-in
+   * canvas with desktop compositions. So it is placed per screen here rather
+   * than over the whole route - see `Letterbox`.
+   */
   // 05's hold for the age check, with its Back, as 05 would show it.
-  if (held === "age-check") return <AgeCheckHold />;
-  if (held) return <WaitingOnConsent hold={held} />;
+  if (held === "age-check")
+    return (
+      <Letterbox>
+        <AgeCheckHold />
+      </Letterbox>
+    );
+  if (held)
+    return (
+      <Letterbox>
+        <WaitingOnConsent hold={held} />
+      </Letterbox>
+    );
 
   if (phase === "transition") {
     return (
-      <TransitionScreen
-        path={isSso ? "sso" : "manual"}
-        onDone={() => setPhase("activities")}
-        track={trackEvent}
-      />
+      <Letterbox>
+        <TransitionScreen
+          path={isSso ? "sso" : "manual"}
+          onDone={() => setPhase("activities")}
+          track={trackEvent}
+        />
+      </Letterbox>
     );
   }
 
@@ -208,16 +228,18 @@ export function ObservedInteractionSequence() {
 
   if (index === 0) {
     return (
-      <ProfilingFlow
-        track={profiling.trackEvent}
-        runId={profilingSessionId}
-        ownerUserId={ssoOwner}
-        onDone={(runSessionId) => {
-          parkedRunRef.current = runSessionId;
-          if (ssoOwner) void deliverBaseline(ssoOwner, runSessionId);
-          advance();
-        }}
-      />
+      <Letterbox>
+        <ProfilingFlow
+          track={profiling.trackEvent}
+          runId={profilingSessionId}
+          ownerUserId={ssoOwner}
+          onDone={(runSessionId) => {
+            parkedRunRef.current = runSessionId;
+            if (ssoOwner) void deliverBaseline(ssoOwner, runSessionId);
+            advance();
+          }}
+        />
+      </Letterbox>
     );
   }
 
