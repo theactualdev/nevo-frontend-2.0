@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ReadFailed } from "../ReadFailed";
 import { NoAccess, failureKind } from "../NoAccess";
-import { CARD } from "./primitives";
+import { Avatar, CARD } from "./primitives";
 import {
   onboardingApi,
   type ClassMergeProposal,
@@ -60,13 +60,10 @@ import {
  * read shows no list - never a remembered one.
  *
  * ============================================================================
- * ONE THING THE FRAME DRAWS THAT NOTHING CAN FILL:
- *
- * - **"Teachers found"**, a panel of names and initials. `OnboardingState`
- *   carries `teacherCount` and no teacher list, so the count renders and the
- *   panel does not.
- *   TODO(api): the derived teachers, the way `classes` carries the derived
- *   classes.
+ * "TEACHERS FOUND" IS BUILT, REDUCED (13 Oct). `OnboardingState.teachersFound`
+ * (9 Oct) is a list of names, so the panel draws each name and its initials.
+ * D24 also draws the classes each teacher takes, and an edit pencil; nothing
+ * carries the first and no route edits a found teacher, so neither is drawn.
  */
 
 type Phase = "loading" | "ready" | "failed" | "denied";
@@ -736,12 +733,25 @@ function WhatNevoFound({
         </>
       ) : null}
 
-      {/*
-        * "Teachers found" - the frame's panel of names and initials - is
-        * ABSENT. `OnboardingState` carries `teacherCount` and no teacher list,
-        * so the count is in the tiles above and the panel is not invented.
-        * See the header's TODO(api).
-        */}
+      {/* D24's "Teachers found", reduced to the names the file gave: see the
+          header. Absent when the server sent none, never an empty panel. */}
+      {state.teachersFound && state.teachersFound.length > 0 ? (
+        <>
+          <h3 className="mt-9 text-[13px] font-semibold tracking-[0.05em] text-nevo-near-black/50 uppercase">
+            Teachers found
+          </h3>
+          <ul className={cn(CARD, "m-0 mt-3 list-none divide-y divide-nevo-near-black/7 p-0")}>
+            {state.teachersFound.map((name, i) => (
+              <li key={`${name}-${i}`} className="flex items-center gap-3 px-[22px] py-3">
+                <Avatar name={name} size={34} />
+                <span className="min-w-0 truncate text-[14.5px] font-semibold text-nevo-near-black">
+                  {name}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
 
       {mergesLeft ? (
         /* Why Confirm is closed, said where the button is. */

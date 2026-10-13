@@ -306,9 +306,21 @@ describe("OB-02 what Nevo found", () => {
   });
 
   it("does not draw a teachers panel it has no names for", async () => {
-    // `OnboardingState` carries `teacherCount` and no teacher list.
+    // An older answer, or a file with no teachers in it: no list, no panel.
     const { container } = await reachFound();
     expect(visibleText(container)).not.toMatch(/Teachers found/i);
+  });
+
+  it("names every teacher the file gave, as D24's Teachers found (9 Oct field)", async () => {
+    get.mockResolvedValue({ ...READ, teachersFound: ["Adunni Okafor", "Bola Eze"] });
+    render(<RosterImportView />);
+    fireEvent.click(await screen.findByRole("button", { name: /See what Nevo found/i }));
+    expect(await screen.findByText("Teachers found")).toBeInTheDocument();
+    const list = screen.getByRole("list");
+    expect(list).toHaveTextContent("Adunni Okafor");
+    expect(list).toHaveTextContent("Bola Eze");
+    // Names only: nothing carries the classes D24 draws under each.
+    expect(list.querySelectorAll("li")).toHaveLength(2);
   });
 
   it("hides the rows-to-fix section entirely on a clean file", async () => {
