@@ -484,16 +484,22 @@ const CALC_OWN = new Set([..."0123456789", "-", "−", "."]);
  * THE PAD, EXTENDED BY THE STEP (design, 9 Oct; B108): "the step says which
  * characters it needs and the pad carries those". Each key the step names
  * that the pad does not already carry, in the order named, in the sign keys'
- * tone and three to a row like the digits, above them. No frame draws them
- * yet; this is the least that keeps them the pad's own keys. Each types
- * exactly the character it shows.
+ * tone, above the digits. No frame draws them yet; this is the least that
+ * keeps them the pad's own keys. Each types exactly the character it shows.
+ *
+ * Where there is room they sit three to a row at the digits' widths. On a
+ * short screen the compact pad packs them as tightly as 44px keys allow
+ * (`--calc-step-cols`), and a pad they make taller goes compact sooner:
+ * `data-step-rows` tells globals.css how many rows they add.
  */
-function stepRows(keys: readonly string[] | undefined): string[][] {
-  const extra = (keys ?? []).filter((k) => !CALC_OWN.has(k));
-  const rows: string[][] = [];
-  for (let i = 0; i < extra.length; i += 3) rows.push(extra.slice(i, i + 3));
-  return rows;
-}
+const stepKeys = (keys: readonly string[] | undefined) =>
+  (keys ?? []).filter((k) => !CALC_OWN.has(k));
+
+/** The rows the step's keys take where there is room; 3 stands for more. */
+const stepRows = (count: number) => Math.min(3, Math.ceil(count / 3));
+
+const STEP_KEYS =
+  "grid gap-x-[var(--calc-step-gap,8px)] gap-y-[var(--calc-gap,10px)] [grid-template-columns:var(--calc-step-cols,repeat(3,minmax(0,1fr)))] sm:gap-x-[var(--calc-step-gap,10px)] sm:gap-y-[var(--calc-gap,12px)]";
 
 function CalcLayout({
   keys,
@@ -502,11 +508,15 @@ function CalcLayout({
   keys?: readonly string[];
   onKey: (c: string) => void;
 }) {
+  const extra = stepKeys(keys);
   return (
-    <div className="nevo-calc-pad mx-auto flex w-full flex-col gap-[var(--calc-gap,10px)] border-t border-nevo-near-black/8 bg-[#e4ddcc] px-2 pt-[var(--calc-pad-t,8px)] pb-[var(--calc-pad-b,14px)] sm:mb-2 sm:max-w-[460px] sm:gap-[var(--calc-gap,12px)] sm:rounded-t-[16px] sm:px-3.5 sm:pt-[var(--calc-pad-t,14px)] sm:pb-[var(--calc-pad-b,20px)] lg:max-w-[420px]">
-      {stepRows(keys).map((row) => (
-        <div key={row.join("")} data-step-keys className={CALC_ROW}>
-          {row.map((k) => (
+    <div
+      data-step-rows={extra.length > 0 ? stepRows(extra.length) : undefined}
+      className="nevo-calc-pad mx-auto flex w-full flex-col gap-[var(--calc-gap,10px)] border-t border-nevo-near-black/8 bg-[#e4ddcc] px-2 pt-[var(--calc-pad-t,8px)] pb-[var(--calc-pad-b,14px)] sm:mb-2 sm:max-w-[460px] sm:gap-[var(--calc-gap,12px)] sm:rounded-t-[16px] sm:px-3.5 sm:pt-[var(--calc-pad-t,14px)] sm:pb-[var(--calc-pad-b,20px)] lg:max-w-[420px]"
+    >
+      {extra.length > 0 && (
+        <div data-step-keys className={STEP_KEYS}>
+          {extra.map((k) => (
             <button
               key={k}
               type="button"
@@ -516,12 +526,8 @@ function CalcLayout({
               {k}
             </button>
           ))}
-          {/* A short row keeps the digits' widths. */}
-          {Array.from({ length: 3 - row.length }).map((_, i) => (
-            <span key={i} aria-hidden className="min-w-0 flex-1" />
-          ))}
         </div>
-      ))}
+      )}
       {CALC_ROWS.map((row) => (
         <div key={row[0]} className={CALC_ROW}>
           {row.map((d) => (
