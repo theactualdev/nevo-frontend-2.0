@@ -18,36 +18,6 @@ import type { SectionType } from "./teacherLibrary";
  * fixtures back the signed-out screens only.
  */
 
-/* ---- C16a Class Learning Pulse (Home, above the lesson list) ---- */
-
-export interface PulseMetric {
-  head: string;
-  value: string;
-  desc: string;
-}
-
-export const PULSE_LABEL = "Class learning pulse";
-export const PULSE_SUBTITLE =
-  "How your class is engaging with lessons this week.";
-
-export const HOME_PULSE: PulseMetric[] = [
-  {
-    head: "Engagement",
-    value: "Above 75%",
-    desc: "25 of 28 students engaged consistently across sessions this week.",
-  },
-  {
-    head: "Comprehension",
-    value: "Below 50%",
-    desc: "Most students are moving through the current sequence at their own pace. 4 may benefit from a review session.",
-  },
-  {
-    head: "Focus",
-    value: "50 to 75%",
-    desc: "Attention patterns are stable across the class. No signs of widespread fatigue or disengagement.",
-  },
-];
-
 /* ---- C16b Student Observations (replaces the plain class-detail roster) ---- */
 
 export interface StudentObservation {
