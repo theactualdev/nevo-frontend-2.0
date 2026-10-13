@@ -6,6 +6,7 @@ import { useSessionRefresh } from "@/hooks/useSessionRefresh";
 import { useSessionElsewhere } from "./sessionElsewhere";
 import { AskNevo } from "./AskNevo";
 import { SystemMessagesProvider } from "@/components/shared/SystemMessages";
+import { UnsavedChangesProvider } from "./UnsavedChanges";
 import { TeacherSidebar } from "./TeacherSidebar";
 
 /**
@@ -65,6 +66,8 @@ export function TeacherShell({ children }: { children: React.ReactNode }) {
        content, clear of the sidebar, and any screen inside the shell can say
        what happened without routing a prop down to it. */
     <SystemMessagesProvider>
+    {/* C18: unsaved work registers here, and the sidebar asks before it goes. */}
+    <UnsavedChangesProvider>
     <div className="flex h-dvh flex-row overflow-hidden bg-nevo-cream text-nevo-near-black">
       <TeacherSidebar />
       {/*
@@ -87,6 +90,7 @@ export function TeacherShell({ children }: { children: React.ReactNode }) {
       {/* C15: Ask Nevo floats on every console surface except upload. */}
       {!inUpload && <AskNevo />}
     </div>
+    </UnsavedChangesProvider>
     </SystemMessagesProvider>
   );
 }

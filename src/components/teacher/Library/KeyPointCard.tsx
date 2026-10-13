@@ -151,7 +151,7 @@ export function KeyPointCard({
   const open = openedAt === version;
   const editing = editingAt === version;
   // C17: a rewording in progress is the teacher's own words, unsent.
-  useUnsavedGuard(editing && draft !== keyPoint.text);
+  useUnsavedGuard(editing && draft !== keyPoint.text, "lesson");
   const confirmingRemove = removingAt === version;
   const setOpen = (next: boolean) => setOpenedAt(next ? version : null);
   const setEditing = (next: boolean) => setEditingAt(next ? version : null);

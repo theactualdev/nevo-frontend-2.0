@@ -13,7 +13,11 @@ const { useSessionLapse, useSessionRefresh, useSessionElsewhere, usePathname } =
 vi.mock("@/hooks/useSessionLapse", () => ({ useSessionLapse }));
 vi.mock("@/hooks/useSessionRefresh", () => ({ useSessionRefresh }));
 vi.mock("./sessionElsewhere", () => ({ useSessionElsewhere }));
-vi.mock("next/navigation", () => ({ usePathname }));
+// The shell holds C18's leave confirmation, which navigates with the router.
+vi.mock("next/navigation", () => ({
+  usePathname,
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
+}));
 vi.mock("./AskNevo", () => ({ AskNevo: () => null }));
 vi.mock("./TeacherSidebar", () => ({ TeacherSidebar: () => null }));
 

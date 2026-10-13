@@ -407,7 +407,7 @@ function DateForm({
   if (due !== toDateInput(dueAt)) changes.dueAt = onDay(due, dueAt, "end");
   const unchanged = Object.keys(changes).length === 0;
   // C17: dates moved and not yet saved.
-  useUnsavedGuard(!unchanged);
+  useUnsavedGuard(!unchanged, "lesson");
   const movedIntoPast =
     (opens !== toDateInput(availableFrom) && Boolean(opens) && opens < today) ||
     (due !== toDateInput(dueAt) && Boolean(due) && due < today);
