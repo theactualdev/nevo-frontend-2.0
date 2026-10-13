@@ -149,6 +149,85 @@ const REVIEW: { title: string; reason: string }[] = [
   },
 ];
 
+/** C07h's "Couldn't be added" files, as drawn on 12 Oct. Sample only. */
+const REFUSED: { file: string; reason: string }[] = [
+  {
+    file: "Term Overview.key",
+    reason: "This is a Keynote file, which we can't open yet. A PDF or PowerPoint export of it will come straight in.",
+  },
+  {
+    file: "Scheme of Work (scan).pdf",
+    reason: "We started reading this but couldn't make out the text - it looks like a photo of a page. A clearer copy usually does it.",
+  },
+];
+
+/** C07h's group heading: a small mark, then the group and its count. */
+function GroupHead({
+  mark,
+  tablet,
+  desktop,
+  first = false,
+}: {
+  mark: "ready" | "reading" | "refused" | "look";
+  tablet: string;
+  desktop: string;
+  first?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-2.5",
+        first ? "mt-[22px] xl:mt-6" : "mt-[22px] xl:mt-[26px]",
+      )}
+    >
+      {mark === "ready" && (
+        <span className="text-nevo-navy">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M20 6L9 17l-5-5" />
+          </svg>
+        </span>
+      )}
+      {mark === "reading" && (
+        <span
+          aria-hidden
+          className="block size-[17px] rounded-full border-2 border-nevo-navy/20 border-t-nevo-navy motion-safe:animate-spin motion-safe:[animation-duration:1s] xl:size-[18px]"
+        />
+      )}
+      {(mark === "refused" || mark === "look") && (
+        <span
+          className={cn(
+            "flex size-[17px] items-center justify-center rounded-full border-2 text-nevo-navy xl:size-[18px]",
+            mark === "refused" ? "border-nevo-navy" : "border-nevo-violet",
+          )}
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            {mark === "refused" ? (
+              <path d="M6 12h12" />
+            ) : (
+              <>
+                <path d="M12 8v5" />
+                <path d="M12 16h.01" />
+              </>
+            )}
+          </svg>
+        </span>
+      )}
+      <h3 className="text-[13.5px] font-semibold tracking-[0.02em] text-nevo-near-black/60 uppercase xl:text-sm">
+        <span className="xl:hidden">{tablet}</span>
+        <span className="hidden xl:inline">{desktop}</span>
+      </h3>
+    </div>
+  );
+}
+
+const fileCount = (n: number) => `${n} ${n === 1 ? "file" : "files"}`;
+
+/** C07h's card for a file that did not get in: navy rule, name, reason, action. */
+const REFUSED_CARD =
+  "flex items-start gap-3 rounded-[12px] border-l-[3px] border-nevo-navy bg-nevo-cream-elevated px-[18px] py-3.5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:items-center xl:gap-4 xl:px-5 xl:py-4";
+const REFUSED_ACTION =
+  "inline-flex h-9 shrink-0 cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 px-[13px] text-[12.5px] font-semibold whitespace-nowrap text-nevo-navy transition-colors hover:bg-nevo-navy/6 disabled:cursor-default disabled:opacity-55 xl:h-10 xl:px-4 xl:text-[13.5px]";
+
 /** The parse's own name for an upload, once it has one. */
 function titleOf(
   uploadId: string | null,
@@ -413,7 +492,22 @@ export function BulkIngestion() {
    * because a mismatch would re-upload the wrong document - and doing nothing
    * is the only safe answer to not knowing which file a row is.
    */
-  const resendOne = (i: number) => {
+  const resendOne = (i: number) => sendInPlace(i, sentFiles.current[i]);
+
+  /**
+   * C07h's "Replace this file" (12 Oct), for a file the batch refused: the
+   * teacher picks another and it goes in that row's place, through the same
+   * single-upload route the resend uses. The row then describes the new file,
+   * name and all, and is asked about like any other accepted upload.
+   */
+  const replaceInput = useRef<HTMLInputElement>(null);
+  const [replaceFor, setReplaceFor] = useState<number | null>(null);
+  const replaceOne = (i: number, file: File) => {
+    sentFiles.current[i] = file;
+    sendInPlace(i, file);
+  };
+
+  function sendInPlace(i: number, file: File | undefined) {
     /*
      * THE LENGTH CHECK IS IN THE RENDER, not here, and it was in both until a
      * mutation run removed this copy and killed nothing. It could not: the
@@ -421,7 +515,6 @@ export function BulkIngestion() {
      * the same render's values, so this one was unreachable. A guard that
      * cannot fail reads as load-bearing to the next person and is not.
      */
-    const file = sentFiles.current[i];
     if (!file || resending !== null) return;
     setResending(i);
     setBatchError("");
@@ -438,7 +531,13 @@ export function BulkIngestion() {
                 ...prev,
                 uploads: prev.uploads.map((u, j) =>
                   j === i
-                    ? { ...u, uploadId: res.uploadId, accepted: true, error: null }
+                    ? {
+                        ...u,
+                        filename: file.name,
+                        uploadId: res.uploadId,
+                        accepted: true,
+                        error: null,
+                      }
                     : u,
                 ),
               }
@@ -506,9 +605,13 @@ export function BulkIngestion() {
   const close = () => router.push("/teacher/lessons");
   const say = useSystemMessages();
   /*
-   * A WAY OUT OF A BATCH WITH NOTHING TO ADD. When every file was refused,
-   * "Add all" was disabled and the close control lived only on the drop zone -
-   * on a full-screen takeover, so the only exit was the browser's back button.
+   * A WAY OUT OF EVERY BATCH. When every file was refused, "Add all" was
+   * disabled and the close control lived only on the drop zone - on a
+   * full-screen takeover, so the only exit was the browser's back button. A
+   * close then appeared for that case alone; C07h (12 Oct) puts "Back to my
+   * library" in the foot of every results screen instead, and the convention
+   * behind it is design's: no screen leaves a teacher with only the browser's
+   * back button.
    */
   const accepted = (batch?.uploads ?? []).filter((u) => u.accepted && u.uploadId);
   /** Still asking the parse about some of them, so the batch is not settled. */
@@ -516,8 +619,6 @@ export function BulkIngestion() {
   const readyToAdd = accepted.filter(
     (u) => readyOf(u.uploadId, outcomes) && !added.has(u.uploadId as string),
   ).length;
-  // Every file refused, or every reading stopped: the same dead end.
-  const nothingToAdd = batch !== null && !stillReading && readyToAdd === 0;
   const addDisabled = committing || (batch !== null && (stillReading || readyToAdd === 0));
 
   return (
@@ -526,19 +627,7 @@ export function BulkIngestion() {
       <div className="flex h-16 shrink-0 items-center justify-between border-b border-nevo-near-black/8 px-7 xl:h-[72px] xl:px-8">
         {phase === "results" ? (
           <>
-            <span className="flex items-center gap-2 text-[14.5px] font-medium text-nevo-near-black/70 xl:text-[15px]">
-              {nothingToAdd && (
-                <button
-                  type="button"
-                  onClick={close}
-                  aria-label="Close"
-                  className="flex size-10 cursor-pointer items-center justify-center rounded-[10px] text-nevo-near-black/60 transition-colors hover:bg-nevo-near-black/5"
-                >
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                    <path d="M6 6l12 12M18 6L6 18" />
-                  </svg>
-                </button>
-              )}
+            <span className="text-[14.5px] font-medium text-nevo-near-black/70 xl:text-[15px]">
               Add a term&rsquo;s material
             </span>
             <button
@@ -739,51 +828,62 @@ export function BulkIngestion() {
                   </p>
                 )}
 
-                {/* Per FILE, because that is what the endpoint reports. A
-                    rejected file carries the server's own reason and sits on
-                    its own line - it has not sunk the others. */}
-                <div className="mt-[22px] overflow-hidden rounded-[12px] bg-nevo-cream-elevated shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-6">
-                  {batch.uploads.map((u, i) => (
+                {/*
+                  C07h'S GROUPS (12 Oct), per FILE, because that is what the
+                  endpoint reports - design draws lessons, and a batch reports
+                  files. Each file sits in the group its own state puts it in:
+                  - Ready to go: the reading finished.
+                  - Still being read: ours. C07h shows results once parsing
+                    ends; this screen gets them as soon as the files are
+                    taken, so a file can still be mid-read here.
+                  - Couldn't be added: refused at the door (the server's own
+                    reason, and C07h's "Replace this file"), or taken and then
+                    the reading stopped (design, 24 Sep: the row owns it, and
+                    "Send this one again").
+                  C07h's "A quick look needed" group is not drawn: nothing on
+                  the wire says a lesson needs a look, and absence is an
+                  instruction.
+                */}
+                {(() => {
+                  const rows = batch.uploads.map((u, i) => ({ u, i }));
+                  const ready = rows.filter(
+                    ({ u }) =>
+                      u.accepted &&
+                      !readingOf(u.uploadId, outcomes) &&
+                      !diedOf(u.uploadId, outcomes),
+                  );
+                  const reading = rows.filter(
+                    ({ u }) => u.accepted && readingOf(u.uploadId, outcomes),
+                  );
+                  const out = rows.filter(
+                    ({ u }) => !u.accepted || diedOf(u.uploadId, outcomes),
+                  );
+                  // Positional, so only when the rows and the files sent agree
+                  // (see `sendInPlace`).
+                  const canAct = submitted === batch.uploads.length;
+                  const listRow = (
+                    { u, i }: { u: (typeof batch.uploads)[number]; i: number },
+                    last: boolean,
+                    waiting: boolean,
+                  ) => (
                     <div
                       key={`${u.filename}-${i}`}
                       className={cn(
                         "flex items-start gap-3 px-[18px] py-3 xl:gap-3.5 xl:px-5 xl:py-3.5",
-                        i < batch.uploads.length - 1 &&
-                          "border-b border-nevo-near-black/7",
+                        !last && "border-b border-nevo-near-black/7",
                       )}
                     >
-                      <span
-                        className={cn(
-                          "mt-px shrink-0",
-                          u.accepted && !diedOf(u.uploadId, outcomes)
-                            ? "text-nevo-navy"
-                            : "text-nevo-violet",
-                        )}
-                      >
-                        {u.accepted && readingOf(u.uploadId, outcomes) ? (
+                      <span className="mt-px shrink-0 text-nevo-navy">
+                        {waiting ? (
                           /* Still being read: the waiting mark, never the
                              tick - the tick is for a reading that finished. */
                           <span
                             data-reading
                             className="mt-px block size-[15px] rounded-full border-2 border-nevo-navy/20 border-t-nevo-navy motion-safe:animate-spin motion-safe:[animation-duration:1s]"
                           />
-                        ) : u.accepted && !diedOf(u.uploadId, outcomes) ? (
+                        ) : (
                           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                             <path d="M20 6L9 17l-5-5" />
-                          </svg>
-                        ) : u.accepted ? (
-                          /* A READING THAT STOPPED, not a flawed page. The
-                             same mark the single-lesson failure screen uses,
-                             because it is the same event. Violet, never red -
-                             the frame is explicit about that. */
-                          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                            <path d="M4 5a2 2 0 0 1 2-2h5v16H6a2 2 0 0 0-2 2z" />
-                            <path d="M15 8v8M19 8v8" />
-                          </svg>
-                        ) : (
-                          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                            <circle cx="12" cy="12" r="9" />
-                            <path d="M12 8v5M12 16h.01" />
                           </svg>
                         )}
                       </span>
@@ -800,73 +900,135 @@ export function BulkIngestion() {
                             {u.filename}
                           </div>
                         )}
-                        {!u.accepted && (
-                          <div className="mt-[3px] text-[13px] leading-[1.45] text-nevo-near-black/62">
-                            {u.error ?? "Nevo couldn’t read this one."}
-                          </div>
-                        )}
-                        {/*
-                          ACCEPTED, THEN FAILED - the state design ruled into
-                          existence on 24 Sep. *"The row has to change and own
-                          it... keeping the filename and looking like the others
-                          is the worst version, because the teacher walks away
-                          believing it worked."*
-                          It says the file WAS taken, that the reading is what
-                          stopped, why when the server said, and offers the one
-                          action that exists.
-                        */}
-                        {u.accepted && diedOf(u.uploadId, outcomes) && (
-                          <div className="mt-[3px]">
-                            <div className="text-[13px] leading-[1.45] text-nevo-near-black/62">
-                              {/* `failureReason` is the field that promises
-                                  prose. `error` is a driver exception and is
-                                  not shown anywhere. */}
-                              {diedOf(u.uploadId, outcomes)?.failureReason ??
-                                "We took this one, and the reading stopped partway. That is ours to sort out."}
-                            </div>
-                            {diedOf(u.uploadId, outcomes)?.incidentId && (
-                              <div className="mt-[3px] text-[12px] text-nevo-near-black/50">
-                                {"If you tell us about this, quote "}
-                                <span className="font-mono text-nevo-near-black/70">
-                                  {diedOf(u.uploadId, outcomes)?.incidentId}
-                                </span>
-                                {"."}
-                              </div>
-                            )}
-                            {/* `submitted` RATHER THAN THE REF'S LENGTH, and
-                                not a style choice: reading a ref during render
-                                is a lint error here, and rightly - a render
-                                that depends on a ref does not re-run when the
-                                ref changes. The count is already state, set
-                                from the same files. */}
-                            {submitted === batch.uploads.length && (
-                              <button
-                                type="button"
-                                onClick={() => resendOne(i)}
-                                disabled={resending !== null}
-                                className="mt-2 inline-flex cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/30 px-[11px] py-[5px] text-[12px] font-semibold whitespace-nowrap text-nevo-navy transition-colors hover:bg-nevo-navy/6 disabled:cursor-default disabled:opacity-55"
-                              >
-                                {resending === i
-                                  ? "Sending\u2026"
-                                  : "Send this one again"}
-                              </button>
-                            )}
-                          </div>
-                        )}
                       </div>
                     </div>
-                  ))}
-                </div>
+                  );
+                  return (
+                    <>
+                      {ready.length > 0 && (
+                        <>
+                          <GroupHead
+                            first
+                            mark="ready"
+                            tablet={`Ready \u00b7 ${ready.length}`}
+                            desktop={`Ready to go \u00b7 ${fileCount(ready.length)}`}
+                          />
+                          <div className="mt-3 overflow-hidden rounded-[12px] bg-nevo-cream-elevated shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-3.5">
+                            {ready.map((r, k) => listRow(r, k === ready.length - 1, false))}
+                          </div>
+                        </>
+                      )}
+                      {reading.length > 0 && (
+                        <>
+                          <GroupHead
+                            first={ready.length === 0}
+                            mark="reading"
+                            tablet={`Being read \u00b7 ${reading.length}`}
+                            desktop={`Still being read \u00b7 ${fileCount(reading.length)}`}
+                          />
+                          <div className="mt-3 overflow-hidden rounded-[12px] bg-nevo-cream-elevated shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:mt-3.5">
+                            {reading.map((r, k) => listRow(r, k === reading.length - 1, true))}
+                          </div>
+                        </>
+                      )}
+                      {out.length > 0 && (
+                        <>
+                          <GroupHead
+                            first={ready.length === 0 && reading.length === 0}
+                            mark="refused"
+                            tablet={`Couldn\u2019t be added \u00b7 ${out.length}`}
+                            desktop={`Couldn\u2019t be added \u00b7 ${fileCount(out.length)}`}
+                          />
+                          <div className="mt-3 flex flex-col gap-2.5 xl:mt-3.5 xl:gap-[11px]">
+                            {out.map(({ u, i }) => {
+                              const died = u.accepted ? diedOf(u.uploadId, outcomes) : undefined;
+                              return (
+                                <div key={`${u.filename}-${i}`} className={REFUSED_CARD}>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="truncate text-[14.5px] font-semibold text-nevo-near-black xl:text-[15px]">
+                                      {u.filename}
+                                    </div>
+                                    <p className="mt-1 text-[13px] leading-[1.45] text-nevo-near-black/66 xl:text-[13.5px]">
+                                      {/* A refusal carries the server's own
+                                          reason. A reading that stopped carries
+                                          `failureReason`, the field that
+                                          promises prose - never `error`, a
+                                          driver exception shown nowhere. */}
+                                      {died
+                                        ? (died.failureReason ??
+                                          "We took this one, and the reading stopped partway. That is ours to sort out.")
+                                        : (u.error ?? "Nevo couldn\u2019t read this one.")}
+                                    </p>
+                                    {died?.incidentId && (
+                                      <div className="mt-[3px] text-[12px] text-nevo-near-black/50">
+                                        {"If you tell us about this, quote "}
+                                        <span className="font-mono text-nevo-near-black/70">
+                                          {died.incidentId}
+                                        </span>
+                                        {"."}
+                                      </div>
+                                    )}
+                                  </div>
+                                  {/* The one action each has. Refused at the
+                                      door: a different file is the remedy
+                                      (C07h). Taken and then stopped: the file
+                                      was fine, so the same one again. */}
+                                  {canAct &&
+                                    (died ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => resendOne(i)}
+                                        disabled={resending !== null}
+                                        className={REFUSED_ACTION}
+                                      >
+                                        {resending === i ? "Sending\u2026" : "Send this one again"}
+                                      </button>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setReplaceFor(i);
+                                          replaceInput.current?.click();
+                                        }}
+                                        disabled={resending !== null}
+                                        className={REFUSED_ACTION}
+                                      >
+                                        {resending === i ? "Sending\u2026" : "Replace this file"}
+                                      </button>
+                                    ))}
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <input
+                            ref={replaceInput}
+                            data-replace
+                            type="file"
+                            accept=".pdf,.doc,.docx,.ppt,.pptx"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              e.target.value = "";
+                              if (file && replaceFor !== null) replaceOne(replaceFor, file);
+                              setReplaceFor(null);
+                            }}
+                          />
+                        </>
+                      )}
+                    </>
+                  );
+                })()}
               </>
             ) : (
             <SampleRegion kind="teacher:bulk-demo-summary">
             <p className="mt-[9px] text-[14.5px] leading-[1.55] text-nevo-near-black/66 xl:mt-2.5 xl:text-[15.5px]">
               <span className="xl:hidden">
-                Eleven came through cleanly. Two need a quick look.
+                Eleven came through cleanly. Two need a quick look, and two we
+                couldn&rsquo;t add.
               </span>
               <span className="hidden xl:inline">
-                Eleven lessons came through cleanly. Two just need a quick look
-                from you before they&rsquo;re ready.
+                Eleven lessons came through cleanly. Two just need a quick
+                look, and two files we couldn&rsquo;t add.
               </span>
             </p>
             </SampleRegion>
@@ -943,9 +1105,48 @@ export function BulkIngestion() {
                 </div>
               ))}
             </div>
+
+            <GroupHead
+              mark="refused"
+              tablet={`Couldn\u2019t be added \u00b7 ${REFUSED.length}`}
+              desktop={`Couldn\u2019t be added \u00b7 ${fileCount(REFUSED.length)}`}
+            />
+            <div className="mt-3 flex flex-col gap-2.5 xl:mt-3.5 xl:gap-[11px]">
+              {REFUSED.map((x) => (
+                <div key={x.file} className={REFUSED_CARD}>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[14.5px] font-semibold xl:text-[15px]">
+                      {x.file}
+                    </div>
+                    <p className="mt-1 text-[13px] leading-[1.45] text-nevo-near-black/66 xl:text-[13.5px]">
+                      {x.reason}
+                    </p>
+                  </div>
+                  {/* The sample's action is drawn, not wired: there is no
+                      file behind a sample row to replace. */}
+                  <span className="inline-flex h-9 shrink-0 items-center rounded-[10px] border-[1.5px] border-nevo-navy/35 px-[13px] text-[12.5px] font-semibold whitespace-nowrap text-nevo-navy xl:h-10 xl:px-4 xl:text-[13.5px]">
+                    Replace this file
+                  </span>
+                </div>
+              ))}
+            </div>
             </SampleRegion>
             )}
           </div>
+        </div>
+      )}
+      {phase === "results" && (
+        <div className="flex shrink-0 items-center border-t border-nevo-near-black/9 bg-nevo-cream px-7 py-3.5 xl:px-8 xl:py-4">
+          <button
+            type="button"
+            onClick={close}
+            className="inline-flex h-[42px] cursor-pointer items-center gap-2 rounded-[10px] border-[1.5px] border-nevo-navy/30 px-[18px] text-sm font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6 xl:h-11 xl:px-5 xl:text-[14.5px]"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-[17px]">
+              <path d="M15 6l-6 6 6 6" />
+            </svg>
+            Back to my library
+          </button>
         </div>
       )}
     </div>
