@@ -186,6 +186,8 @@ export function WarmUpRun({
   const [done, setDone] = useState(false);
   // null until the write settles; false means it never reached Nevo.
   const [saved, setSaved] = useState<boolean | null>(null);
+  /** This run's write is on its way: sent, and not yet settled. */
+  const [sending, setSending] = useState(false);
   /*
    * Nothing was kept, by choice: the guardian withdrew. The done state then
    * says nothing about saving - not "Today's warm-up didn't save", which would
@@ -421,9 +423,11 @@ export function WarmUpRun({
         // and the rest must not linger on the device. What is parked above is
         // the trials, not the raw capture.
         .finally(() => void capture.purge());
-      void Promise.all([submittedOk, answered]).then(([sent, heard]) =>
-        setSaved(sent && heard),
-      );
+      setSending(true);
+      void Promise.all([submittedOk, answered]).then(([sent, heard]) => {
+        setSaved(sent && heard);
+        setSending(false);
+      });
     }
     // `withdrawn` belongs here: without it this closes over the value from the
     // first render, which is always false, and a withdrawal that resolved
@@ -441,8 +445,15 @@ export function WarmUpRun({
             check and a 19px title. Tablet and desktop draw 80px, a 40px
             check and 22px.
           */}
+          {/*
+            NO SUCCESS CHECK BEFORE WE KNOW IT WORKED (design, 13 Oct). While
+            the write is in flight the badge spot holds the working spinner;
+            once it settles, the check, or D126's mark if it failed.
+          */}
           {unsaved ? (
             <SaveFailedMark />
+          ) : sending ? (
+            <SavingMark />
           ) : (
             <span className="flex size-16 items-center justify-center rounded-full bg-nevo-navy motion-safe:animate-nevo-pop sm:size-20">
               <Check className="size-8 text-nevo-cream sm:size-10" strokeWidth={2.4} />
@@ -550,6 +561,25 @@ function SaveFailedMark() {
       className="flex size-16 items-center justify-center rounded-full bg-nevo-violet/22 sm:size-20"
     >
       <span className="h-[3px] w-[26px] rounded-full bg-nevo-navy sm:w-8" />
+    </span>
+  );
+}
+
+/**
+ * The working spinner in the badge's spot while the write is in flight: the
+ * house `nevoSpin`, a navy ring on a faint navy track, at the size PIN
+ * creation's saving state draws it (`Nevo PIN Frame`: 44px, a 3px ring at
+ * 18%, 900ms). It stands in a box the badge's size so nothing moves when the
+ * badge replaces it.
+ */
+function SavingMark() {
+  return (
+    <span
+      data-testid="warmup-saving-mark"
+      aria-hidden
+      className="flex size-16 items-center justify-center sm:size-20"
+    >
+      <span className="block size-11 rounded-full border-[3px] border-nevo-navy/18 border-t-nevo-navy motion-safe:animate-spin motion-safe:[animation-duration:900ms]" />
     </span>
   );
 }
