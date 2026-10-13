@@ -47,14 +47,9 @@ export interface SubjectTopics {
 }
 
 /**
- * Null is the nothing-state (rule 5): counts the response did not carry, and
- * a pair that contradicts itself, are not drawn as whatever they are closest
- * to.
- *
- * ZERO MET IS AN ANSWER (D180, 13 Oct): "The data counts topics met, so the
- * line says what the data knows". A response that counts 0 of 0 has said the
- * child has met no topic in this subject, and the card says "Nothing started
- * yet" for it - so it is kept, as 0 of 0, rather than read as silence.
+ * Null is the nothing-state (rule 5): a total of 0 is the schema's default
+ * and means "not said", and a pair that contradicts itself is not drawn as
+ * whatever it is closest to.
  */
 export function topicsFrom(res: {
   topicsDone?: number | null;
@@ -67,7 +62,7 @@ export function topicsFrom(res: {
     typeof total !== "number" ||
     !Number.isInteger(done) ||
     !Number.isInteger(total) ||
-    total < 0 ||
+    total <= 0 ||
     done < 0 ||
     done > total
   ) {
