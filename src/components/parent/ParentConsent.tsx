@@ -131,6 +131,12 @@ export function ParentConsent({
   // Where a copy of the decision actually went, straight from the receipt. The
   // line is rendered only when there IS one - the screen never assumes.
   const [receipt, setReceipt] = useState<ParentContactMethod | null>(null);
+  /**
+   * Consent created the parent account (the server says so since 9 Oct), so
+   * D01b's "We've set up a parent account" is true and what is left is
+   * finishing it - not "set up an account" from nothing.
+   */
+  const [accountCreated, setAccountCreated] = useState(false);
 
   // The API sends the LITERAL string "your child" when the school entered no
   // first name - it is a real row, not a hypothetical - so the name has to be
@@ -191,6 +197,7 @@ export function ParentConsent({
        */
       const res = await parentApi.completeConsent(token, invitation.consentTypes);
       setReceipt(res.receiptSentTo);
+      setAccountCreated(res.parentAccountCreated === true);
       setPhase("done");
     } catch (e) {
       // 404 covers unknown, revoked and expired - the same dead end, and the
@@ -272,8 +279,21 @@ export function ParentConsent({
             Thank you. That&rsquo;s all we needed.
           </h1>
           <p className="mt-3 max-w-[320px] text-[15px] leading-[1.6] text-nevo-near-black/68">
-            {childLead} can start learning with their class. Set up an account
-            and you can follow how they&rsquo;re getting on, whenever you like.
+            {/* D01b "Consent given · account created", without the frame's
+                "she": no gender is sent. */}
+            {accountCreated ? (
+              <>
+                {childLead} can start learning with their class. We&rsquo;ve set
+                up a parent account so you can follow how they&rsquo;re getting
+                on, whenever you like.
+              </>
+            ) : (
+              <>
+                {childLead} can start learning with their class. Set up an
+                account and you can follow how they&rsquo;re getting on,
+                whenever you like.
+              </>
+            )}
           </p>
 
           <AccountSetup
@@ -304,8 +324,10 @@ export function ParentConsent({
             All done. Thank you.
           </h1>
           <p className="mt-3 max-w-[320px] text-[15px] leading-[1.6] text-nevo-near-black/68">
-            {childLead} can start learning with their class. You can set up an
-            account later from the same link.
+            {childLead} can start learning with their class.{" "}
+            {accountCreated
+              ? "You can finish setting up your account later from the same link."
+              : "You can set up an account later from the same link."}
           </p>
           {receipt && (
             <p className="mt-6 text-[12px] leading-[1.5] text-nevo-near-black/50">

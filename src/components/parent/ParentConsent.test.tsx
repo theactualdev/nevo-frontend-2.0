@@ -501,6 +501,44 @@ describe("setting up a parent account", () => {
   });
 });
 
+/**
+ * Consent creates the parent account (9 Oct handoff, item 14), so the thank-you
+ * says what D01b's "Consent given · account created" says - and finishing it
+ * is what is left, not setting one up from nothing.
+ */
+describe("an account the consent created", () => {
+  beforeEach(() => {
+    completeConsent.mockResolvedValue({
+      invitationId: "inv-1",
+      parentLinkId: "pl-1",
+      parentId: "p-1",
+      studentId: "s-1",
+      confirmedTypes: ["data_processing"],
+      completedAt: "2026-09-08T10:00:00Z",
+      receiptSentTo: null,
+      parentAccountCreated: true,
+      parentAccountReady: false,
+    });
+  });
+
+  it("says one has been set up", async () => {
+    render(<ParentConsent token={TOKEN} invitation={inv()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Yes, I give my consent/ }));
+    expect(await screen.findByText(/We.ve set up a parent account so you can follow/)).toBeInTheDocument();
+    expect(screen.queryByText(/Set up an account and you can follow/)).toBeNull();
+  });
+
+  it("says it can be finished later, not set up", async () => {
+    render(<ParentConsent token={TOKEN} invitation={inv()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Yes, I give my consent/ }));
+    await screen.findByText(/that[’']s all we needed/i);
+    fireEvent.click(screen.getByRole("button", { name: /Maybe later/i }));
+    expect(
+      screen.getByText(/finish setting up your account later from the same link/i),
+    ).toBeInTheDocument();
+  });
+});
+
 describe("having a question first", () => {
   it("shows the school's own phone and email when it has them", () => {
     render(
