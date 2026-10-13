@@ -18,11 +18,6 @@ import { LiveSessionPanel } from "./LiveSessionPanel";
 import { LiveRecommendSheet } from "./LiveRecommendSheet";
 import { LiveShareSheet } from "./LiveShareSheet";
 import type { StudentProfileState } from "@/hooks/useStudentProfile";
-import {
-  ADAPTATIONS_FOOTNOTE_DESKTOP_TAIL,
-  ADAPTATIONS_FOOTNOTE_MAIN,
-  ADAPTATIONS_LABEL,
-} from "@/lib/mocks/teacherIntelligence";
 import { cn } from "@/lib/utils";
 import { MasteryDualTrack } from "./MasteryDualTrack";
 import { PhoneRosterBar } from "@/components/teacher/Shell/PhoneBackBar";
@@ -638,61 +633,6 @@ export function LiveStudentProfile({
           </>
         )}
 
-        {/* C16c - what Nevo quietly adjusted, and why. BELOW the lesson
-            history, where C16c places it; it sat above the sessions. The
-            frame draws no "After noticing" line, and `trigger` is a free
-            string nobody has reviewed for this screen, so it is not shown. */}
-        {adaptations.length === 0 && read("adaptations") === "failed" && (
-          <>
-            <h3 className="mt-8 block text-[11px] font-bold tracking-[0.14em] text-nevo-violet uppercase xl:mt-7">
-              {ADAPTATIONS_LABEL}
-            </h3>
-            <p className="mt-3 text-[14px] leading-[1.55] text-nevo-near-black/68">
-              {failedLine}
-            </p>
-          </>
-        )}
-
-        {adaptations.length > 0 && (
-          <>
-            <h3 className="mt-8 block text-[11px] font-bold tracking-[0.14em] text-nevo-violet uppercase xl:mt-7">
-              {ADAPTATIONS_LABEL}
-            </h3>
-            <p className="mt-2 text-[13px] text-nevo-near-black/60">
-              {`Nevo quietly adjusts lessons based on how each student learns. Here is what has happened for ${name.split(" ")[0] || "them"} recently.`}
-            </p>
-            <div className="mt-3.5 flex flex-col gap-2 xl:mt-4">
-              {adaptations.map((entry) => (
-                <div
-                  key={entry.id}
-                  className="flex items-start gap-3.5 rounded-[12px] bg-nevo-cream-elevated px-[18px] py-4 xl:gap-4"
-                >
-                  <span className="w-[46px] shrink-0 pt-px text-[12px] text-nevo-near-black/55">
-                    {new Date(entry.timestamp).toLocaleDateString("en-GB", {
-                      day: "numeric",
-                      month: "short",
-                    })}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <span className="block text-[13px] font-semibold text-nevo-near-black">
-                      {entry.lessonTitle}
-                    </span>
-                    <p className="mt-1 text-[13px] leading-[1.55] text-nevo-near-black/72">
-                      {entry.adaptation}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <p className="mt-4 text-[12px] leading-[1.55] text-nevo-near-black/55 italic">
-              {ADAPTATIONS_FOOTNOTE_MAIN}
-              <span className="hidden xl:inline">
-                {" "}
-                {ADAPTATIONS_FOOTNOTE_DESKTOP_TAIL}
-              </span>
-            </p>
-          </>
-        )}
 
         {/* C08's help-seeking line, per design (1 Sep): the activity section,
             below the engagement data, one plain line at the surrounding scale
@@ -706,6 +646,79 @@ export function LiveStudentProfile({
           <p className="mt-8 text-[14.5px] leading-[1.55] text-nevo-near-black/72">
             {state.helpSeeking}
           </p>
+        )}
+
+        {/*
+          C20's LEARNING SUPPORT SECTION (design, 12 Oct), for a viewer who
+          holds the role, below the teaching views. Without the role it is
+          absent - "no locked panel, no greyed section, no line explaining
+          what is missing" - and its reads are never made.
+
+          It takes over C16c, "How Nevo has adapted for this student", which
+          every teacher saw from the same route: C20 makes adaptation history
+          holders-only, and the server refuses everyone else since ab78139.
+
+          Not drawn yet, each for a reason:
+          - "Flagged concerns" needs a teacher's read of escalations, which
+            is with backend (B-4).
+          - "Visible to you only" is with design: the line under it says an
+            administrator with the role sees the same record.
+          - So the line is C20's tablet one, which claims no concerns.
+        */}
+        {state.learningSupport && (
+          <section
+            aria-labelledby="learning-support-heading"
+            className="mt-[30px] border-t border-nevo-near-black/10 pt-[22px] xl:mt-10 xl:pt-7"
+          >
+            <h3
+              id="learning-support-heading"
+              className="text-[14px] font-semibold tracking-[0.04em] text-nevo-near-black/55 uppercase"
+            >
+              Learning support
+            </h3>
+            <p className="mt-2.5 max-w-[640px] text-[14px] leading-[1.55] text-nevo-near-black/60">
+              {`The same record an administrator with the role sees for ${first}.`}
+            </p>
+
+            <h4 className="mt-[26px] text-[13px] font-semibold tracking-[0.03em] text-nevo-near-black/50 uppercase">
+              Adaptation history
+            </h4>
+            {adaptations.length > 0 ? (
+              <div className="mt-3.5 overflow-hidden rounded-[12px] bg-nevo-cream-elevated shadow-elevation-1">
+                {adaptations.map((entry, i) => (
+                  <div
+                    key={entry.id}
+                    className={cn(
+                      "flex items-start gap-3.5 px-[18px] py-[15px] xl:gap-4 xl:px-[22px] xl:py-4",
+                      i < adaptations.length - 1 && "border-b border-nevo-near-black/7",
+                    )}
+                  >
+                    <span className="w-[112px] shrink-0 pt-px text-[13px] text-nevo-near-black/55">
+                      {new Date(entry.timestamp).toLocaleDateString("en-GB", {
+                        day: "numeric",
+                        month: "long",
+                      })}
+                    </span>
+                    {/* Nevo's own sentence for what it changed, as C20 rows
+                        carry it - never assembled here. */}
+                    <p className="min-w-0 flex-1 text-[14.5px] leading-[1.55] text-pretty text-nevo-near-black/82">
+                      {entry.adaptation}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : read("adaptations") === "failed" ? (
+              <p className="mt-3 text-[14px] leading-[1.55] text-nevo-near-black/68">
+                {failedLine}
+              </p>
+            ) : read("adaptations") === "ready" ? (
+              <p className="mt-3 text-[14px] leading-[1.55] text-nevo-near-black/60">
+                {`Nevo hasn’t changed anything in ${first}’s lessons yet.`}
+              </p>
+            ) : (
+              <div aria-busy="true" className="mt-3.5 h-[104px] animate-pulse rounded-[12px] bg-nevo-cream-elevated" />
+            )}
+          </section>
         )}
         </div>
 

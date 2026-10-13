@@ -5,7 +5,8 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { roleLabel } from "@/lib/constants/permissions";
-import { MOCK_TEACHER, TEACHER_NAV, type TeacherNavItem } from "./teacherNav";
+import { MOCK_TEACHER, teacherNav, type TeacherNavItem } from "./teacherNav";
+import { useHoldsLearningSupport } from "@/hooks/useLearningSupport";
 import { useHasSession } from "@/hooks/useHasSession";
 import { useHydrated } from "@/hooks/useHydrated";
 import { MaybeSample } from "@/components/shared/SampleRegion";
@@ -73,6 +74,12 @@ const ICONS: Record<TeacherNavItem["name"], React.ReactNode> = {
   Connect: (
     <svg {...STROKE} aria-hidden>
       <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.5A8 8 0 1 1 21 12z" />
+    </svg>
+  ),
+  // C20's heart, from `Nevo Teacher Sidebar` (design, 12 Oct).
+  "Learning Support": (
+    <svg {...STROKE} aria-hidden>
+      <path d="M12 20s-6.5-4.2-9-8.5A5 5 0 0 1 12 6a5 5 0 0 1 9 6.5C18.5 15.8 12 20 12 20z" />
     </svg>
   ),
 };
@@ -178,6 +185,8 @@ export function TeacherSidebar() {
   const pathname = usePathname();
   // C18: a sidebar link asks first while a screen holds unsaved work.
   const leaveGuard = useLeaveGuard();
+  // C20: Learning Support, last, for a teacher who holds the role.
+  const holdsLearningSupport = useHoldsLearningSupport();
   // C13: the bell opens a popover; the dot is a badge, never a count, and it
   // reflects live unread state, from `/api/notifications`'s own unreadCount.
   const {
@@ -319,7 +328,7 @@ export function TeacherSidebar() {
 
       {/* Tabs */}
       <nav className="mt-8 flex flex-1 flex-col gap-1">
-        {TEACHER_NAV.map((item) => {
+        {teacherNav(holdsLearningSupport).map((item) => {
           const on = pathname.startsWith(item.href);
           return (
             <Link
