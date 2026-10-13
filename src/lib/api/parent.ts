@@ -119,6 +119,14 @@ export interface ParentConsentCompletion {
    * route, so the screen never guesses.
    */
   receiptSentTo: ParentContactMethod | null;
+  /**
+   * Whether giving consent created the parent's account (9 Oct handoff, item
+   * 14). It does, and says so; sign-in is switched on only once the parent
+   * verifies a code or sets a password (`parentAccountReady`). An older answer
+   * carries neither, and then the screen claims no account.
+   */
+  parentAccountCreated?: boolean;
+  parentAccountReady?: boolean;
 }
 
 
