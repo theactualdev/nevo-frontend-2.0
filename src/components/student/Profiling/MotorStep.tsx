@@ -309,14 +309,7 @@ export function MotorStep({
           {LINE}
         </p>
       )}
-      {/*
-        90% of the screen's width, or of its height if that is less. The
-        width is `--nevo-vw`: the tablet frame's from 1024 wide (D207), the
-        window's below. `90vw` on a touch screen 1024 wide - an iPad Pro held
-        upright - drew a 922px square in the 768px frame, and cut off the
-        outer targets.
-      */}
-      <div className="absolute top-1/2 left-1/2 size-[min(calc(var(--nevo-vw,1vw)*90),90dvh)] -translate-x-1/2 translate-y-[calc(-50%+24px)] rounded-[12px] bg-nevo-cream-elevated">
+      <div className="absolute top-1/2 left-1/2 size-[min(90vw,90dvh)] -translate-x-1/2 translate-y-[calc(-50%+24px)] rounded-[12px] bg-nevo-cream-elevated">
         {ready && demo !== "done" && (
           <Demonstration beat={demo} target={TARGET[n] ?? TARGET[4]} />
         )}

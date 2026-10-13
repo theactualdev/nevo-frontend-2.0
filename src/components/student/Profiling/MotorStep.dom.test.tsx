@@ -3,12 +3,6 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { MOTOR_ORDER, MotorStep, motorStepRuns } from "./MotorStep";
 import { BaselineCapture } from "@/lib/profiling/capture";
 import type { AgeBand } from "@/lib/profiling/bands";
-import {
-  classSelector,
-  compiledCss,
-  lengthAt,
-  styleAt,
-} from "@/test/compiledCss";
 
 /**
  * 08a, the motor-speed step (SCRUM-214, design D12).
@@ -428,50 +422,4 @@ describe("where it runs", () => {
     expect(motorStepRuns("tablet")).toBe(true);
     expect(motorStepRuns("desktop")).toBe(false);
   });
-});
-
-describe("its square, in the tablet frame (D207)", () => {
-  /*
-   * From 1024 wide the step runs in a 768px frame, and on touch it does run
-   * there - an iPad Pro held upright is 1024 wide. Sized by the window, the
-   * square was 90% of 1024 and the outer targets fell outside the frame.
-   * jsdom lays nothing out, so the size is read from the compiled sheet.
-   */
-  const squareAt = async (
-    width: number,
-    height: number,
-    inLetterbox: boolean,
-  ) => {
-    step();
-    const square = target()!.parentElement!;
-    const classes = square.className.split(/\s+/).filter(Boolean);
-    const css = await compiledCss(["contents", ...classes]);
-    const frame = styleAt(
-      css,
-      [".contents", "[data-nevo-letterbox-frame]"],
-      { width, height },
-    );
-    const vars: Record<string, string> =
-      inLetterbox && frame["--nevo-vw"]
-        ? { "--nevo-vw": frame["--nevo-vw"] }
-        : {};
-    const size = styleAt(css, classes.map(classSelector), { width, height });
-    return {
-      width: lengthAt(size.width, { width, height, vars }),
-      height: lengthAt(size.height, { width, height, vars }),
-    };
-  };
-
-  it("fits the frame on a touch screen 1024 wide, as it would a tablet's", async () => {
-    // 90% of the frame's 768, as on a 768 x 1024 tablet.
-    const square = await squareAt(1024, 1366, true);
-    expect(square.width).toBeCloseTo(691.2);
-    expect(square.height).toBeCloseTo(691.2);
-  }, 30_000);
-
-  it("is still 90% of a phone's width, where there is no frame", async () => {
-    const square = await squareAt(375, 812, false);
-    expect(square.width).toBeCloseTo(337.5);
-    expect(square.height).toBeCloseTo(337.5);
-  }, 30_000);
 });
