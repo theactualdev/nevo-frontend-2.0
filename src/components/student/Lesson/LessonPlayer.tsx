@@ -477,14 +477,13 @@ export function LessonPlayer({
    * for each hand-off, so a second one arrives open as the first did.
    * `answeredRight` is read where the reply lands, which state is not: a
    * hand-off for an earlier miss arriving after a right answer is moot.
-   * `handedOff` is the checks the server moved the child past
-   * (`advanceAfterHandoff`) - never counted as passed.
+   * `handedOff` is the checks the server moved the child past - every
+   * hand-off moves them past (B128) - never counted as passed.
    */
   const [handoff, setHandoff] = useState<{
     segmentId: string;
     run: number;
     prompts: PanelPrompt[];
-    advance: boolean;
   } | null>(null);
   const [handedOff, setHandedOff] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -1626,9 +1625,9 @@ export function LessonPlayer({
 
   /** Next chevron — an unpassed Quick Check intercepts the advance. */
   const handleNext = () => {
-    // Next past a hand-off the server moved on from is Keep going by
-    // another way: the panel goes with the segment, as it does there.
-    if (handoffHere?.advance) {
+    // Next past a hand-off is Keep going by another way: the panel goes
+    // with the segment, as it does there.
+    if (handoffHere) {
       keepGoingAfterHandoff();
       return;
     }
@@ -1650,9 +1649,15 @@ export function LessonPlayer({
    * closes, and the panel arrives open with the server's prompts and nothing
    * to accept or decline. Prompts with no id or no words are not drawn; a
    * hand-off with none left draws nothing (rule 5), and the check stays.
+   *
+   * B128 (13 Oct): "advanceAfterHandoff is true whenever a Socratic handoff
+   * exists. False means there is no handoff." So a reply without it is no
+   * hand-off at all, whatever else it carries: no panel, and the check stays
+   * the way on. There is no panel that ends nowhere.
    */
   const handOffFrom = (segmentId: string, stored: LessonQuestionAttempt) => {
     if (stored.handoffTo !== "socratic_panel") return;
+    if (stored.advanceAfterHandoff !== true) return;
     if (answeredRight.current.has(segmentId)) return;
     const prompts = (stored.guidedPrompts ?? []).flatMap((p) =>
       p?.id && p.prompt?.trim() ? [{ id: p.id, prompt: p.prompt }] : [],
@@ -1661,27 +1666,23 @@ export function LessonPlayer({
     setCheckOpen(false);
     /*
      * "FORWARD, NEVER BACK TO THE QUESTION" (38a §2) holds from the moment the
-     * server says to move on, not only once Keep going is pressed: a child who
+     * hand-off arrives, not only once Keep going is pressed: a child who
      * closes the panel and taps Next goes forward too, never into the check
      * and its old wrong pick. Still not passed, and the misses still stand.
      */
-    if (stored.advanceAfterHandoff === true)
-      setHandedOff((prev) => new Set(prev).add(segmentId));
+    setHandedOff((prev) => new Set(prev).add(segmentId));
     setHandoff((prev) => ({
       segmentId,
       run: (prev?.run ?? 0) + 1,
       prompts,
-      advance: stored.advanceAfterHandoff === true,
     }));
   };
 
   /*
-   * 38a's return: "forward, never back to the question". Only when the server
-   * said to move on after it (`advanceAfterHandoff`); otherwise the panel has
-   * no ending and the check is still the way on. Moving on is not passing:
-   * the check is never marked passed, its misses stand for the review, and
-   * the panel on screen already made a right answer later `after_hint` - so
-   * nothing records this as known first time.
+   * 38a's return: "forward, never back to the question". Moving on is not
+   * passing: the check is never marked passed, its misses stand for the
+   * review, and the panel on screen already made a right answer later
+   * `after_hint` - so nothing records this as known first time.
    */
   const keepGoingAfterHandoff = () => {
     setHandedOff((prev) => new Set(prev).add(segment.id));
@@ -2689,9 +2690,7 @@ export function LessonPlayer({
                     ? () => setCheckOpen(true)
                     : undefined
                 }
-                onKeepGoing={
-                  handoffHere?.advance ? keepGoingAfterHandoff : undefined
-                }
+                onKeepGoing={handoffHere ? keepGoingAfterHandoff : undefined}
                 onShown={(promptIds) => {
                   // Reached through the panel is not reached first time: a
                   // check answered after it reports as after help (B28).

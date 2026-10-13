@@ -16,7 +16,8 @@ import type { Lesson } from "@/lib/types";
  * never counts attempts and never decides for itself". The panel arrives
  * open, with the server's prompts and nothing to accept or decline, and once
  * they are worked through the child goes "forward, never back to the
- * question" - when the server said to (`advanceAfterHandoff`). What the child
+ * question". B128, 13 Oct: `advanceAfterHandoff` "is true whenever a
+ * Socratic handoff exists. False means there is no handoff." What the child
  * did is reported as it was: "a concept reached this way is never recorded as
  * mastered first time".
  */
@@ -294,24 +295,26 @@ describe("the server hands a child off from the quick check (B94)", () => {
     );
   });
 
-  it("offers no way on when the server did not say to move on", async () => {
-    saveAttempt.mockResolvedValue(
-      reply({ ...HANDOFF, advanceAfterHandoff: false }),
-    );
-    render(<LessonPlayer lesson={LESSON} plan={null} live />);
-    next();
-    await miss();
-    await screen.findByText(PROMPT);
+  it.each([
+    ["false", { advanceAfterHandoff: false }],
+    ["absent, the contract's default false", { advanceAfterHandoff: undefined }],
+  ])(
+    "opens no panel when advanceAfterHandoff is %s: there is no hand-off (B128)",
+    async (_, over) => {
+      saveAttempt.mockResolvedValue(reply({ ...HANDOFF, ...over }));
+      render(<LessonPlayer lesson={LESSON} plan={null} live />);
+      next();
 
-    workThrough();
+      await miss();
+      await new Promise((r) => setTimeout(r, 0));
 
-    expect(screen.queryByRole("button", { name: "Keep going" })).toBeNull();
-    expect(screen.queryByText("Let's keep going.")).toBeNull();
-    // The check is still the way on.
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
-    next();
-    expect(checkOnScreen()).toBeTruthy();
-  });
+      // No panel that ends nowhere: the check stays, and is still the way on.
+      expect(screen.queryByText(PROMPT)).toBeNull();
+      expect(screen.queryByText(/think it through/i)).toBeNull();
+      expect(checkOnScreen()).toBeTruthy();
+      expect(applied.ref?.current.count).toBe(0);
+    },
+  );
 
   it("counts no misses of its own: without the server's word nothing hands off", async () => {
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
@@ -359,40 +362,6 @@ describe("the server hands a child off from the quick check (B94)", () => {
 });
 
 describe("what a hand-off records (38a)", () => {
-  it("is never first time for the review, even with a right answer after it", async () => {
-    // Handed off, worked through, then back to the check and right on the
-    // first pick of the new round: help was on screen, so it is not first
-    // time - and the misses before it stand.
-    const REVIEW = { ...LESSON, assessment: undefined } as unknown as Lesson;
-    saveAttempt.mockResolvedValue(
-      reply({ ...HANDOFF, advanceAfterHandoff: false }),
-    );
-    render(
-      <LessonPlayer
-        lesson={REVIEW}
-        plan={null}
-        review
-        reviewConceptId="concept-1"
-        live
-      />,
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Begin review" }));
-    next();
-    await miss();
-    await screen.findByText(PROMPT);
-    workThrough();
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
-    saveAttempt.mockResolvedValue(reply({ correct: true }));
-    next();
-    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
-    fireEvent.click(screen.getByRole("button", { name: /The numerator/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Keep going" }));
-    next();
-
-    await waitFor(() => expect(recordReview).toHaveBeenCalled());
-    expect(recordReview.mock.calls[0][0].outcome).not.toBe("first_time");
-  });
-
   it("is never the check passed when the child moves on through it", async () => {
     const REVIEW = { ...LESSON, assessment: undefined } as unknown as Lesson;
     saveAttempt.mockResolvedValue(reply(HANDOFF));
@@ -438,21 +407,27 @@ describe("a hand-off panel is an adaptation applied (B74)", () => {
   });
 
   it("counts once per segment, however often it arrives there", async () => {
-    saveAttempt.mockResolvedValue(
-      reply({ ...HANDOFF, advanceAfterHandoff: false }),
+    // Two misses in flight, and the server hands off on both replies: the
+    // panel arrives again, and it is the same panel applied once.
+    const lands: ((row: unknown) => void)[] = [];
+    saveAttempt.mockImplementation(
+      () => new Promise((resolve) => lands.push(resolve)),
     );
     render(<LessonPlayer lesson={LESSON} plan={null} live />);
     next();
     await miss();
-    await screen.findByText(PROMPT);
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
-
-    // Back into the check, another miss, and the server hands off again.
-    next();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     await miss();
-    await waitFor(() => expect(checkOnScreen()).toBeNull());
+
+    lands[0](reply(HANDOFF));
     expect(await screen.findByText(PROMPT)).toBeTruthy();
+    lands[1](reply({ ...HANDOFF, attemptNumber: 4 }));
+    // On screen a second time: the panel arrived again.
+    await waitFor(() =>
+      expect(
+        trackEvent.mock.calls.filter((c) => c[0] === "guided_question_shown"),
+      ).toHaveLength(2),
+    );
 
     expect(applied.ref?.current.count).toBe(1);
   });
