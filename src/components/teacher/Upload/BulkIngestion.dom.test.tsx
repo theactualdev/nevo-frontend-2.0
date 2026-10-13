@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 
-const { batch, status, list, create, getToken, confirm } = vi.hoisted(() => ({
+const { batch, status, list, create, getToken, confirm, push } = vi.hoisted(() => ({
+  push: vi.fn(),
   confirm: vi.fn(),
   batch: vi.fn(),
   status: vi.fn(),
@@ -15,7 +16,7 @@ vi.mock("@/lib/api/uploads", () => ({
 vi.mock("@/lib/api/lessons", () => ({ lessonsApi: { detail: vi.fn() } }));
 vi.mock("@/lib/auth/session", () => ({ getToken }));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
+  useRouter: () => ({ push, replace: vi.fn(), prefetch: vi.fn() }),
 }));
 
 import { BulkIngestion } from "./BulkIngestion";
@@ -532,16 +533,22 @@ describe("the end of a batch", () => {
     ],
   };
 
+  // C07h (12 Oct): "Back to my library" in the foot of every results
+  // screen - design's convention that no screen leaves a teacher with only
+  // the browser's back button. It replaces the close that appeared for the
+  // all-refused case alone.
   it("offers a way out when every file was refused", async () => {
     getToken.mockReturnValue("tok");
     batch.mockResolvedValue(ALL_REFUSED);
+    push.mockReset();
     render(<BulkIngestion />);
     drop(2);
 
-    expect(await screen.findByRole("button", { name: "Close" })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Back to my library" }));
+    expect(push).toHaveBeenCalledWith("/teacher/lessons");
   });
 
-  it("offers no close over a batch that still has something to add", async () => {
+  it("offers the same way out over a batch that still has something to add", async () => {
     getToken.mockReturnValue("tok");
     batch.mockResolvedValue(ONE_ACCEPTED);
     status.mockReturnValue(new Promise(() => {}));
@@ -549,6 +556,7 @@ describe("the end of a batch", () => {
     drop(1);
 
     await screen.findByText(/sent for reading/);
+    expect(screen.getByRole("button", { name: "Back to my library" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Close" })).not.toBeInTheDocument();
   });
 });
@@ -668,6 +676,96 @@ describe("a batch that went in", () => {
   it("offers a way out when every reading stopped", async () => {
     await settled([{ id: "u-1", status: "failed" }]);
 
-    expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Back to my library" })).toBeInTheDocument();
+  });
+});
+
+/**
+ * C07h's results, as drawn on 12 Oct: each file in the group its own state
+ * puts it in - ready, still being read (ours), or couldn't be added - with
+ * "Replace this file" on a refused one.
+ */
+describe("the results, grouped as C07h draws them", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const MIXED = {
+    acceptedCount: 1,
+    rejectedCount: 1,
+    uploads: [
+      { uploadId: "u-1", filename: "wk1.docx", accepted: true, error: null, status: "processing", stage: "lessons" },
+      { uploadId: null, filename: "Term Overview.key", accepted: false, error: "This is a Keynote file, which we can't open yet.", status: null, stage: null },
+    ],
+  };
+
+  const results = async (rows: { id: string; status: string }[]) => {
+    getToken.mockReturnValue("tok");
+    batch.mockResolvedValue(MIXED);
+    list.mockResolvedValue(rows);
+    render(<BulkIngestion />);
+    drop(2);
+    await act(async () => {});
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+  };
+
+  /** The card or list a group heading introduces. */
+  const groupAfter = (heading: RegExp) =>
+    screen.getAllByText(heading)[0].closest("div")!.nextElementSibling as HTMLElement;
+
+  it("puts a finished file under Ready to go and a refused one under Couldn't be added", async () => {
+    await results([{ id: "u-1", status: "ready" }]);
+
+    expect(groupAfter(/Ready to go · 1 file$/)).toHaveTextContent("wk1.docx");
+    const out = groupAfter(/Couldn.t be added · 1 file$/);
+    expect(out).toHaveTextContent("Term Overview.key");
+    expect(out).toHaveTextContent("This is a Keynote file, which we can't open yet.");
+  });
+
+  it("keeps a file still being read in its own group, never under Ready to go", async () => {
+    await results([{ id: "u-1", status: "processing" }]);
+
+    expect(screen.queryByText(/Ready to go/)).not.toBeInTheDocument();
+    expect(groupAfter(/Still being read · 1 file$/)).toHaveTextContent("wk1.docx");
+  });
+
+  it("draws no quick-look group - nothing on the wire says a lesson needs one", async () => {
+    await results([{ id: "u-1", status: "ready" }]);
+
+    expect(screen.queryByText(/quick look needed/i)).not.toBeInTheDocument();
+  });
+
+  it("sends a replacement in the refused file's place", async () => {
+    create.mockReset().mockResolvedValue({ uploadId: "u-9", status: "processing", stage: "lessons" });
+    await results([{ id: "u-1", status: "ready" }]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Replace this file" }));
+    const input = document.querySelector("input[data-replace]") as HTMLInputElement;
+    const next = new File(["x"], "Term Overview.pdf", { type: "application/pdf" });
+    Object.defineProperty(input, "files", { value: [next], configurable: true });
+    await act(async () => {
+      fireEvent.change(input);
+    });
+
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(create.mock.calls[0][0]).toBe(next);
+    expect(create.mock.calls[0][1]).toBe("term");
+    // The row now describes the new file, and it is no longer refused.
+    expect(screen.getByText("Term Overview.pdf")).toBeInTheDocument();
+    expect(screen.queryByText(/Couldn.t be added/)).not.toBeInTheDocument();
+  });
+
+  it("offers no replacement when the rows and the files sent disagree", async () => {
+    // Positional, like the resend: row i is file i, or nothing is offered.
+    getToken.mockReturnValue("tok");
+    batch.mockResolvedValue(MIXED);
+    list.mockResolvedValue([{ id: "u-1", status: "ready" }]);
+    render(<BulkIngestion />);
+    drop(1);
+    await act(async () => {});
+
+    expect(screen.getByText("Term Overview.key")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Replace this file" })).not.toBeInTheDocument();
   });
 });
