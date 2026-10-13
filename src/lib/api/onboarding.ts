@@ -127,6 +127,12 @@ export interface OnboardingState {
    */
   classMerges?: ClassMergeProposal[];
   teacherCount: number;
+  /**
+   * The teachers the file named, by name only (since 9 Oct). D24 draws each
+   * with the classes they teach; nothing carries that, so the names stand
+   * alone.
+   */
+  teachersFound?: string[];
   studentCount: number;
   rejected: RejectedRow[];
   invoiceId: string | null;
