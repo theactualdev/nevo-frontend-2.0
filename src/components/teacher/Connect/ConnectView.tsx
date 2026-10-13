@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { BiggerScreen, usePhoneOwnBar } from "@/components/teacher/Shell/PhoneShell";
 import { IllustrationWrapper } from "@/components/shared/IllustrationWrapper";
 import { useConnectThreads } from "@/hooks/useConnectThreads";
 import {
@@ -54,7 +56,7 @@ function Bubble({ m, isNew }: { m: Message; isNew?: boolean }) {
       <div className="flex justify-end">
         <div
           className={cn(
-            "max-w-[72%] xl:max-w-[62%] rounded-[12px_12px_4px_12px] bg-nevo-navy px-3.5 py-[11px] xl:px-4 xl:py-3",
+            "max-w-[72%] max-md:max-w-[80%] xl:max-w-[62%] rounded-[12px_12px_4px_12px] bg-nevo-navy px-3.5 py-[11px] xl:px-4 xl:py-3",
             isNew && "motion-safe:animate-nevo-pop",
           )}
         >
@@ -77,7 +79,7 @@ function Bubble({ m, isNew }: { m: Message; isNew?: boolean }) {
 
   return (
     <div className="flex justify-start">
-      <div className="max-w-[72%] xl:max-w-[62%] rounded-[12px_12px_12px_4px] bg-nevo-cream-elevated px-3.5 py-[11px] xl:px-4 xl:py-3">
+      <div className="max-w-[72%] max-md:max-w-[80%] xl:max-w-[62%] rounded-[12px_12px_12px_4px] bg-nevo-cream-elevated px-3.5 py-[11px] xl:px-4 xl:py-3">
         {m.label && (
           <span className="hidden items-center gap-[5px] text-[11.5px] font-semibold text-nevo-near-black/50 xl:inline-flex">
             {m.label}
@@ -102,7 +104,14 @@ export function ConnectView() {
     send: sendLive,
     markThreadRead,
   } = useConnectThreads();
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const params = useSearchParams();
+  /*
+   * C19 B4 (design, 12 Oct): a reply notification opens ONE thread on a
+   * phone, named in the link (`?thread=`). Seeded like `?student=` below -
+   * in the initialiser, because the link is always a fresh mount.
+   */
+  const linkedThread = params.get("thread") ?? null;
+  const [activeId, setActiveId] = useState<string | null>(linkedThread);
   const [draft, setDraft] = useState("");
   useUnsavedGuard(draft.trim().length > 0);
   /*
@@ -124,7 +133,6 @@ export function ConnectView() {
    * opens compose - the teacher can search - rather than swallowing the
    * click and looking broken.
    */
-  const params = useSearchParams();
   const linked = params.get("student") ?? undefined;
   const [composeOpen, setComposeOpen] = useState(Boolean(linked));
   const [preset, setPreset] = useState<string | undefined>(linked);
@@ -139,6 +147,19 @@ export function ConnectView() {
   // than assigned - setting it from an effect would be a setState during
   // render's shadow, which this codebase rules out.
   const active = threads.find((t) => t.id === activeId) ?? threads[0] ?? null;
+  /*
+   * WHAT A PHONE SEES. Only the thread the link named - never "the first
+   * thread", which on a phone would be a conversation nobody asked to open.
+   * Without one, Connect is a bigger-screen page: C19 draws the thread and the
+   * reply, not the list.
+   */
+  const phoneThread = Boolean(linkedThread) && active?.id === linkedThread;
+  // Still reading the list: wait, rather than flash the bigger-screen state
+  // over the thread the notification is about to show.
+  const phoneWaiting = Boolean(linkedThread) && loading;
+  const phoneShows = phoneThread || phoneWaiting;
+  // The shell's bar stands aside only once B4's own bar is on screen.
+  usePhoneOwnBar(phoneThread);
 
   // The list endpoint carries no message bodies, so opening one fetches it.
   //
@@ -256,8 +277,11 @@ export function ConnectView() {
 
   return (
     <div className="relative flex min-h-full flex-1 flex-col">
-      {/* Page head */}
-      <div className="flex shrink-0 items-center justify-between px-7 pt-[22px] pb-4 xl:px-8 xl:pt-7 xl:pb-5">
+      {/* On a phone with no thread named: the shared state (C19 D1). */}
+      {!phoneShows && <BiggerScreen />}
+      <div className={cn("contents", !phoneShows && "max-md:hidden")}>
+      {/* Page head - the tablet's and the desktop's. */}
+      <div className="flex shrink-0 items-center justify-between px-7 pt-[22px] pb-4 max-md:hidden xl:px-8 xl:pt-7 xl:pb-5">
         <div className="min-w-0">
           <h1 className="text-[21px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-2xl">
             Connect
@@ -272,8 +296,8 @@ export function ConnectView() {
       </div>
 
       {loading ? (
-        <div className="flex min-h-0 flex-1 border-t border-nevo-near-black/8">
-          <div className="w-[264px] shrink-0 space-y-2 border-r border-nevo-near-black/8 p-2.5 xl:w-[330px] xl:p-3">
+        <div className="flex min-h-0 flex-1 border-t border-nevo-near-black/8 max-md:border-t-0">
+          <div className="w-[264px] shrink-0 space-y-2 border-r border-nevo-near-black/8 p-2.5 max-md:hidden xl:w-[330px] xl:p-3">
             {[0, 1, 2, 3].map((i) => (
               <div
                 key={i}
@@ -281,7 +305,14 @@ export function ConnectView() {
               />
             ))}
           </div>
-          <div className="flex-1" />
+          <div className="flex-1">
+            {/* A phone waiting on the thread it was sent to: bubbles without
+                words, as the thread's own loading state draws them. */}
+            <div aria-busy="true" className="flex h-full flex-col justify-end gap-3 px-[18px] py-4 md:hidden">
+              <div className="h-12 w-[55%] animate-pulse rounded-[14px] bg-nevo-cream-elevated" />
+              <div className="h-12 w-[45%] animate-pulse self-end rounded-[14px] bg-nevo-navy/10" />
+            </div>
+          </div>
         </div>
       ) : threads.length === 0 ? (
         /* C14 A4 - the governing empty state. */
@@ -315,9 +346,9 @@ export function ConnectView() {
            in prose above, and now marked, so the signed-in end-to-end check
            can see it too. */
         <MaybeSample showing={!live} kind="teacher:connect">
-        <div className="flex min-h-0 flex-1 border-t border-nevo-near-black/8">
-          {/* Thread list */}
-          <div className="w-[264px] shrink-0 overflow-y-auto border-r border-nevo-near-black/8 p-2.5 xl:w-[330px] xl:p-3">
+        <div className="flex min-h-0 flex-1 border-t border-nevo-near-black/8 max-md:border-t-0">
+          {/* Thread list - not on a phone (B4 is the thread alone). */}
+          <div className="w-[264px] shrink-0 overflow-y-auto border-r border-nevo-near-black/8 p-2.5 max-md:hidden xl:w-[330px] xl:p-3">
             {threads.map((t) => (
               <button
                 key={t.id}
@@ -380,13 +411,24 @@ export function ConnectView() {
           {/* Thread */}
           {active && (
             <div className="flex min-w-0 flex-1 flex-col">
-              <div className="flex shrink-0 items-center justify-between gap-4 border-b border-nevo-near-black/8 px-[22px] py-3.5 xl:px-7 xl:py-[18px]">
-                <div className="flex items-center gap-2.5 xl:gap-3">
-                  <span className="flex size-[34px] shrink-0 items-center justify-center rounded-full bg-nevo-navy text-xs font-semibold text-nevo-cream xl:size-[38px] xl:text-[13px]">
+              <div className="flex shrink-0 items-center justify-between gap-4 border-b border-nevo-near-black/8 px-[22px] py-3.5 max-md:border-b-0 max-md:px-4 max-md:pt-3 max-md:pb-3 xl:px-7 xl:py-[18px]">
+                <div className="flex min-w-0 items-center gap-2.5 max-md:gap-3 xl:gap-3">
+                  {/* B4's back, in place of the menu. Home: on a phone the
+                      list behind this thread is a bigger-screen page. */}
+                  <Link
+                    href="/teacher/dashboard"
+                    aria-label="Back to Home"
+                    className="flex size-[34px] shrink-0 items-center justify-center rounded-[10px] text-nevo-navy md:hidden"
+                  >
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                      <path d="M15 6l-6 6 6 6" />
+                    </svg>
+                  </Link>
+                  <span className="flex size-[34px] shrink-0 items-center justify-center rounded-full bg-nevo-navy text-xs font-semibold text-nevo-cream max-md:size-[30px] max-md:text-[11.5px] xl:size-[38px] xl:text-[13px]">
                     {active.initials}
                   </span>
-                  <div>
-                    <span className="text-[15px] font-semibold text-nevo-near-black xl:text-base">
+                  <div className="min-w-0">
+                    <span className="truncate text-[15px] font-semibold text-nevo-near-black max-md:text-[17px] max-md:tracking-[-0.01em] xl:text-base">
                       {active.studentName}
                     </span>
                     <div className="mt-px hidden text-[12.5px] text-nevo-near-black/55 xl:block">
@@ -396,7 +438,7 @@ export function ConnectView() {
                 </div>
               </div>
 
-              <div className="flex min-h-0 flex-1 flex-col justify-end gap-3 overflow-y-auto px-[22px] py-5 xl:gap-3.5 xl:px-7 xl:py-6">
+              <div className="flex min-h-0 flex-1 flex-col justify-end gap-3 overflow-y-auto px-[22px] py-5 max-md:px-[18px] max-md:py-4 xl:gap-3.5 xl:px-7 xl:py-6">
                 {/* A thread the list knows about but whose bodies have not
                     arrived yet has no `messages` at all - which is exactly the
                     state a freshly-composed thread is in the instant it is
@@ -441,7 +483,7 @@ export function ConnectView() {
                   </p>
                 </div>
               ) : (
-              <div className="flex shrink-0 items-center gap-2.5 border-t border-nevo-near-black/8 px-[22px] py-3.5 xl:gap-3 xl:px-7 xl:py-4">
+              <div className="flex shrink-0 items-center gap-2.5 border-t border-nevo-near-black/8 px-[22px] py-3.5 max-md:px-4 max-md:py-3 xl:gap-3 xl:px-7 xl:py-4">
                 <input
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
@@ -453,7 +495,7 @@ export function ConnectView() {
                   }}
                   placeholder="Write a message…"
                   aria-label={`Message ${active.studentName}`}
-                  className="h-11 flex-1 rounded-[10px] border-[1.5px] border-nevo-near-black/14 bg-nevo-cream-elevated px-3.5 text-sm text-nevo-near-black outline-none transition-colors focus:border-nevo-navy xl:h-12 xl:px-4 xl:text-[14.5px]"
+                  className="h-11 flex-1 rounded-[10px] border-[1.5px] border-nevo-near-black/14 bg-nevo-cream-elevated px-3.5 text-sm text-nevo-near-black outline-none transition-colors focus:border-nevo-navy max-md:rounded-full max-md:px-4 xl:h-12 xl:px-4 xl:text-[14.5px]"
                 />
                 <button
                   type="button"
@@ -461,7 +503,7 @@ export function ConnectView() {
                   disabled={!draft.trim()}
                   aria-label="Send"
                   className={cn(
-                    "flex size-11 shrink-0 items-center justify-center rounded-[10px] xl:size-12",
+                    "flex size-11 shrink-0 items-center justify-center rounded-[10px] max-md:rounded-full xl:size-12",
                     draft.trim()
                       ? "cursor-pointer bg-nevo-navy text-nevo-cream transition-[filter] hover:brightness-93"
                       : "cursor-not-allowed bg-nevo-navy/18 text-nevo-near-black/40",
@@ -479,6 +521,7 @@ export function ConnectView() {
         </div>
         </MaybeSample>
       )}
+      </div>
 
       {composeOpen && (
         <ComposeModal
