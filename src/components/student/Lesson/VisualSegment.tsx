@@ -35,6 +35,16 @@ import { type MediaFailReason, useMediaSource } from "./useMediaSource";
 const PICTURE =
   "h-[82%] w-auto max-w-[94%] object-contain [grid-area:1/1]";
 
+/**
+ * THE CARD FILLS THE READING COLUMN AT 3:2 (design, 13 Oct). It sat at a
+ * fixed 180px, 220 from tablet, which is diagram size: a real photograph was
+ * shrunk to fit it. The surface, corners and shadow are the frame's card as
+ * before; the art, the picture and the quiet tile all take the same place, so
+ * a picture that fails leaves nothing to jump.
+ */
+const CARD =
+  "aspect-[3/2] w-full overflow-hidden rounded-[12px] bg-nevo-cream-elevated shadow-elevation-1";
+
 export function VisualSegment({
   content,
   reading = false,
@@ -95,19 +105,19 @@ export function VisualSegment({
           <div
             role="img"
             aria-label={content.art.alt}
-            className="flex h-[180px] items-center justify-center overflow-hidden rounded-[12px] bg-nevo-cream-elevated shadow-elevation-1 sm:h-[220px]"
+            className={cn(CARD, "flex items-center justify-center")}
           >
             {inlineArt}
           </div>
         ) : content.illustration && media.src && !media.failed ? (
           /*
            * On the frame's card, as the inline art is: 12px corners on
-           * cream-elevated with the soft shadow, the column's width and 180
-           * high (220 from tablet), the picture centred at 82% of that and
-           * no wider than 94% of the card. One cell, so the full picture
-           * lands exactly over its small copy.
+           * cream-elevated with the soft shadow, the column's width at 3:2,
+           * the picture centred at 82% of its height and no wider than 94% of
+           * the card. One cell, so the full picture lands exactly over its
+           * small copy.
            */
-          <div className="grid h-[180px] grid-rows-1 place-items-center overflow-hidden rounded-[12px] bg-nevo-cream-elevated shadow-elevation-1 sm:h-[220px]">
+          <div className={cn(CARD, "grid grid-rows-1 place-items-center")}>
             {preview && (
               <IllustrationWrapper
                 src={preview}
@@ -133,7 +143,7 @@ export function VisualSegment({
         ) : (
           // No art at all, or art that would not load — a quiet
           // cream-elevated tile (calm, finished-looking).
-          <div className="flex h-[180px] items-center justify-center rounded-[12px] bg-nevo-cream-elevated shadow-elevation-1 sm:h-[220px]">
+          <div className={cn(CARD, "flex items-center justify-center")}>
             <Leaf className="size-[46px] text-nevo-violet" strokeWidth={1.6} />
           </div>
         )}

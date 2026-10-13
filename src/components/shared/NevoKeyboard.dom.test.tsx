@@ -132,6 +132,14 @@ describe("NevoKeyboard calc pad", () => {
     expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
   });
 
+  it("rounds the tray's top corners at the sheet radius, 16 (design, 13 Oct)", () => {
+    render(<NevoKeyboard layout="calc" onKey={noop} />);
+
+    const tray = document.querySelector(".nevo-calc-pad");
+    expect(tray?.className.split(" ")).toContain("sm:rounded-t-[16px]");
+    expect(tray?.className).not.toContain("rounded-t-[14px]");
+  });
+
   it("is shown whatever the pointer, as D150 draws it at desktop", () => {
     render(<NevoKeyboard layout="calc" onKey={noop} />);
 

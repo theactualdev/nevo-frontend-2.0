@@ -344,3 +344,42 @@ describe("reading support on the introduction", () => {
     expect(intro).toMatch(/(^|\s)lg:text-\[19px\]/);
   });
 });
+
+describe("the picture's card (design, 13 Oct)", () => {
+  /*
+   * It sat at a fixed 180px, 220 from tablet - diagram size, so a real
+   * photograph was shrunk to fit. It fills the reading column at 3:2 now.
+   * jsdom lays nothing out, so the rule is asserted where it lives.
+   */
+  const card = (inner: Element | null) =>
+    inner?.closest("figure")?.firstElementChild;
+  const atThreeTwo = (el: Element | null | undefined) => {
+    expect(el?.className).toMatch(/\baspect-\[3\/2\]/);
+    expect(el?.className).toMatch(/\bw-full\b/);
+    expect(el?.className).not.toMatch(/h-\[180px\]|h-\[220px\]/);
+    // The card's surface and corners, as before.
+    expect(el?.className).toMatch(/\bbg-nevo-cream-elevated\b/);
+  };
+
+  it("fills the reading column at 3:2 for a picture", () => {
+    render(<VisualSegment content={CONTENT} />);
+    atThreeTwo(card(picture()));
+  });
+
+  it("and for the quiet tile in its place, so nothing jumps when one fails", () => {
+    render(<VisualSegment content={{ heading: "The leaf" }} />);
+    atThreeTwo(document.querySelector("figure > div"));
+  });
+
+  it("and for the shipped art", () => {
+    render(
+      <VisualSegment
+        content={{
+          heading: "The leaf",
+          art: { id: "leaf-photosynthesis", alt: "A leaf", caption: "A leaf" },
+        }}
+      />,
+    );
+    atThreeTwo(screen.getByRole("img", { name: "A leaf" }));
+  });
+});

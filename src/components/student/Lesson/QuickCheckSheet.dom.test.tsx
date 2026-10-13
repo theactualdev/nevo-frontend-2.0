@@ -171,3 +171,24 @@ describe("the reading accommodation on a quick check (D30)", () => {
     ).not.toContain("tracking-[0.01em]");
   });
 });
+
+describe("the sheet's look (design, 13 Oct)", () => {
+  it("rounds its top corners at the sheet radius, 16", () => {
+    mount();
+
+    const className =
+      (content.props as { className?: string } | null)?.className ?? "";
+    expect(className.split(" ")).toContain("rounded-t-[16px]");
+    expect(className).not.toContain("rounded-t-[20px]");
+  });
+
+  it("sets the retry note in the darker violet, never soft violet on cream (D210)", () => {
+    mount();
+
+    fireEvent.click(screen.getByRole("button", { name: "Oxygen" }));
+
+    const note = screen.getByRole("status");
+    expect(note.className.split(" ")).toContain("text-nevo-violet-text");
+    expect(note.className.split(" ")).not.toContain("text-nevo-violet");
+  });
+});

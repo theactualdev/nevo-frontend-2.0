@@ -1556,6 +1556,9 @@ function HintPill({
  * heavier after a miss; a control that grows when a child gets something
  * wrong is this screen reacting to their difficulty, which is the engine's
  * call to make (B18) and nobody's to show.
+ *
+ * IN THE DARKER VIOLET (D210, 13 Oct). Soft violet is 2.34:1 on cream, which
+ * fails as text; #5b5e8f is the same hue made readable, as text only.
  */
 function HintLink({ onClick }: { onClick: () => void }) {
   return (
@@ -1563,7 +1566,7 @@ function HintLink({ onClick }: { onClick: () => void }) {
       <button
         type="button"
         onClick={onClick}
-        className="min-h-11 cursor-pointer px-2 text-[13px] text-nevo-violet"
+        className="min-h-11 cursor-pointer px-2 text-[13px] text-nevo-violet-text"
       >
         Need a hint?
       </button>
@@ -1598,14 +1601,16 @@ function BuildTray({
         <span className="font-mono text-[10px] tracking-[0.06em] text-nevo-near-black/50 uppercase">
           The total
         </span>
-        <div aria-hidden className="mt-3 flex gap-[5px]">
+        {/* D149's piece, as design landed it on 13 Oct: 46px places with
+            6px between, at every width. They were 17b's bar height plus 6
+            (34 / 40 / 36), 5px apart. */}
+        <div aria-hidden className="mt-3 flex gap-1.5">
           {Array.from({ length: parts }).map((_, i) => (
             <span
               key={i}
               data-build-place
               className={cn(
-                // Frame: barH + 6 per variant (34 / 40 / 36).
-                "h-[34px] flex-1 rounded-md transition-colors duration-200 sm:h-10 lg:h-9",
+                "h-[46px] flex-1 rounded-md transition-colors duration-200",
                 i < placed
                   ? "bg-nevo-navy"
                   : "border-2 border-dashed border-nevo-navy/30 bg-nevo-near-black/[0.05]",
