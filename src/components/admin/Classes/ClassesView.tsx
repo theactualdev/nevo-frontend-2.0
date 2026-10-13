@@ -29,6 +29,7 @@ import { BulkClassSheet } from "./BulkClassSheet";
 import { ClassFormSheet } from "./ClassFormSheet";
 import { AssignTeachingSheet } from "./AssignTeachingSheet";
 import { NoAccess, failureKind } from "../NoAccess";
+import { SubjectSpellings } from "./SubjectSpellings";
 
 /**
  * D5 Classes - the list a school actually works from.
@@ -303,6 +304,9 @@ export function ClassesView() {
             </button>
           </div>
         ) : null}
+
+        {/* D05: the spelling questions sit under the heading, above the list. */}
+        {phase === "ready" ? <SubjectSpellings paused={writesPaused} /> : null}
 
         {phase === "ready" && classes.length === 0 && !showArchived ? (
           <EmptyState

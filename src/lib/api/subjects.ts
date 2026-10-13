@@ -24,9 +24,37 @@ export interface SchoolSubject {
   removable?: boolean | null;
 }
 
+/**
+ * "Maths and Mathematics, same subject or different?" - one pair of spellings
+ * the school's files used, still waiting on an answer. Until it is answered
+ * the two are already one subject, `keptName` the fuller spelling.
+ */
+export interface SpellingQuestion {
+  id: string;
+  keptName: string;
+  otherName: string;
+  question: string;
+}
+
 export const subjectsApi = {
   /** GET /api/v1/subjects - what this school can put on a class or a teacher. */
   list: () => api.get<SchoolSubject[]>("/api/v1/subjects"),
+
+  /** GET /api/v1/subjects/spelling-questions - every pair still open. */
+  spellingQuestions: () =>
+    api.get<SpellingQuestion[]>("/api/v1/subjects/spelling-questions"),
+
+  /**
+   * Settle one pair: `same` lets the fold stand; not same splits the other
+   * spelling back out as the school's own subject. Answers with the subjects
+   * as they now stand. 409 `question_already_answered` if someone got there
+   * first.
+   */
+  answerSpelling: (questionId: string, same: boolean) =>
+    api.post<SchoolSubject[]>(
+      `/api/v1/subjects/spelling-questions/${encodeURIComponent(questionId)}`,
+      { same },
+    ),
 };
 
 /**
