@@ -18,6 +18,7 @@ import {
   pausesInPlace,
 } from "@/lib/auth/accountPause";
 import { withdrawnDoor } from "@/lib/auth/consentHold";
+import { closeRememberedChild } from "@/lib/auth/deviceRoster";
 import { noteServerClock } from "./serverClock";
 import { isAdminRole } from "@/lib/constants/permissions";
 import { API_ORIGIN } from "./upstream";
@@ -253,6 +254,11 @@ function handleAuthFailure(
   // session it signed the admin out mid-form and sent them to "your session
   // has ended". The screen shows it under the field instead.
   if (code === "current_password_incorrect") return;
+  // D178: a closed child's tile leaves this device's picker now, while the
+  // session can still say whose it is. Both ways on from here - 28d in place,
+  // or the session-ended door - forget who it was.
+  const closedId = code === "account_closed" ? getSession()?.userId : null;
+  if (closedId) closeRememberedChild({ userId: closedId });
   // A child's pause is shown where they are (28b), over the lesson, rather
   // than by leaving it. The session stays until they tap Okay - see
   // `accountPause.ts` for why, and for the case with nothing to draw it.

@@ -60,6 +60,7 @@ const roster = vi.hoisted(() => ({
   }[],
   displayName: "Ada" as string | undefined,
   rememberChild: vi.fn(),
+  closeRememberedChild: vi.fn(),
 }));
 vi.mock("@/lib/auth/deviceRoster", () => ({
   SHAPE_COUNT: 6,
@@ -78,6 +79,11 @@ vi.mock("@/lib/auth/deviceRoster", () => ({
         }
       : null,
   rememberChild: roster.rememberChild,
+  // As the roster does: the closed child has no row from now on (D178).
+  closeRememberedChild: (which: { id?: string }) => {
+    roster.closeRememberedChild(which);
+    roster.entries = roster.entries.filter((e) => e.id !== which.id);
+  },
 }));
 
 const SESSION = {
@@ -112,6 +118,7 @@ beforeEach(() => {
   router.replace.mockReset();
   studentDestination.mockClear();
   roster.rememberChild.mockReset();
+  roster.closeRememberedChild.mockReset();
   roster.entries = TWO;
   roster.displayName = "Ada";
   window.history.pushState({}, "", "/auth/login");
@@ -219,6 +226,38 @@ describe("the PIN step, as 28c-3 and 28c-5 draw it", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText("Enter your PIN to keep going")).toBeNull();
     expect(screen.queryByText(/ask your teacher/)).toBeNull();
+  });
+
+  /*
+   * D177 and D199 (13 Oct): "Navy everywhere", the door included, and "the
+   * frame's grey and the build's violet both go". The door drew near-black
+   * dots on cream, and turned its empty boxes violet after a miss.
+   */
+  it("fills its boxes solid navy with a cream dot, and recolours none after a miss", async () => {
+    loginPin.mockRejectedValue(
+      new ApiError(401, "Unauthorized", {
+        detail: { code: "authentication_failed", message: "no" },
+      }),
+    );
+    await chooseAda();
+    const boxes = () =>
+      Array.from(document.querySelectorAll<HTMLElement>("[data-pin-box]"));
+
+    await tap("12");
+    expect(boxes().map((b) => b.dataset.pinBox)).toEqual([
+      "filled",
+      "filled",
+      "caret",
+      "empty",
+    ]);
+    expect(boxes()[0].className).toContain("bg-nevo-navy");
+    expect(boxes()[0].firstElementChild?.className).toContain("bg-nevo-cream");
+    expect(boxes()[3].className).toContain("border-nevo-navy/30");
+
+    await tap("34");
+    await screen.findByText("That PIN didn't match. Have another go.");
+    expect(boxes()).toHaveLength(4);
+    for (const box of boxes()) expect(box.className).not.toMatch(/violet/);
   });
 
   it("has exactly one way back to the picker, in either orientation", async () => {
@@ -656,24 +695,50 @@ describe("a closed account at the door", () => {
     expect(screen.queryAllByRole("link")).toHaveLength(0);
   });
 
-  it("goes back to the picker, where the device still remembers everyone", async () => {
-    // Nothing is forgotten on the way: the roster is the device's, and the
-    // closed child's face stays on it until it ages out.
+  /*
+   * D178 (13 Oct): "Remove the tile when the account closes. Do not keep it
+   * for 30 days." It stayed, and every tap on it led back to 28d.
+   */
+  it("goes back to the picker without the closed child's tile, and every other child still on it", async () => {
     loginPin.mockRejectedValue(closed());
     await chooseAda();
     await tap("1234");
+    await screen.findByRole("heading", { name: "Your account is closed" });
+
+    // The closure is recorded against this child's row, and no other.
+    expect(roster.closeRememberedChild).toHaveBeenCalledTimes(1);
+    expect(roster.closeRememberedChild).toHaveBeenCalledWith({ id: "a" });
 
     fireEvent.click(
-      await screen.findByRole("button", {
-        name: "Someone else using this device?",
-      }),
+      screen.getByRole("button", { name: "Someone else using this device?" }),
     );
 
     expect(await screen.findByText("Who's learning?")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Ada" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Ada" })).toBeNull();
     expect(screen.getByRole("button", { name: "Kofi" })).toBeInTheDocument();
     expect(screen.queryByText(/account is closed/)).toBeNull();
     expect(signIn).not.toHaveBeenCalled();
+  });
+
+  it("closes no tile for a PIN that did not match, or a pause", async () => {
+    loginPin
+      .mockRejectedValueOnce(
+        new ApiError(401, "Unauthorized", {
+          detail: { code: "authentication_failed", message: "no" },
+        }),
+      )
+      .mockRejectedValueOnce(
+        new ApiError(401, "Unauthorized", {
+          detail: { code: "account_paused", message: "paused" },
+        }),
+      );
+    await chooseAda();
+    await tap("1234");
+    await screen.findByText("That PIN didn't match. Have another go.");
+    await tap("1234");
+    await screen.findByRole("button", { name: "Back to sign in" });
+
+    expect(roster.closeRememberedChild).not.toHaveBeenCalled();
   });
 });
 

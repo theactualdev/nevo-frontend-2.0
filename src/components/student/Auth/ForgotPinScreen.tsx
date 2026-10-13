@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useHydrated } from "@/hooks/useHydrated";
-import { rememberedChildren } from "@/lib/auth/deviceRoster";
+import { pickerEntries } from "@/lib/auth/deviceRoster";
 import { withNext } from "@/lib/auth/nextPath";
 import { LetMyTeacherKnow } from "./LetMyTeacherKnow";
 
@@ -59,7 +59,9 @@ export function ForgotPinScreen({
 }) {
   const hydrated = useHydrated();
   const back = forgotPinWayBack(
-    !hydrated || rememberedChildren().length > 0,
+    // Anyone the picker would SHOW: a closed child's entry lingers on the
+    // device with no tile (D178), and a picker of nobody is 28c-2.
+    !hydrated || pickerEntries().length > 0,
     next,
   );
 

@@ -381,6 +381,81 @@ describe("a child paused mid-lesson", () => {
     unregister();
   });
 
+  /*
+   * D178 (13 Oct): "Remove the tile when the account closes. Do not keep it
+   * for 30 days." A closure that lands mid-session is the only moment the
+   * device still knows whose it is, on either way on from it.
+   */
+  it.each([
+    ["over the page (28d in place)", true],
+    ["at the session-ended door", false],
+  ])(
+    "takes a closed child's tile off the picker %s, and no one else's",
+    async (_, hosted) => {
+      asStudent();
+      window.localStorage.clear();
+      const roster = await import("@/lib/auth/deviceRoster");
+      roster.rememberChild({
+        schoolCode: "NEVO-1",
+        loginIdentifier: "ada.o",
+        displayName: "Ada",
+        initials: "AO",
+        userId: "student-1",
+      });
+      roster.rememberChild({
+        schoolCode: "NEVO-1",
+        loginIdentifier: "kofi.b",
+        displayName: "Kofi",
+        initials: "KB",
+        userId: "student-2",
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(
+          async () =>
+            new Response(
+              JSON.stringify({
+                detail: { code: "account_closed", message: "x" },
+              }),
+              { status: 401, headers: { "Content-Type": "application/json" } },
+            ),
+        ),
+      );
+      const { api } = await freshClient();
+      const pause = await import("@/lib/auth/accountPause");
+      const unregister = hosted ? pause.registerPauseHost() : () => {};
+
+      await expect(api.get("/api/v1/lessons/x")).rejects.toThrow();
+
+      expect(roster.pickerEntries().map((e) => e.name)).toEqual(["Kofi"]);
+      unregister();
+      window.localStorage.clear();
+    },
+  );
+
+  it("closes no tile for a pause", async () => {
+    asStudent();
+    window.localStorage.clear();
+    const roster = await import("@/lib/auth/deviceRoster");
+    roster.rememberChild({
+      schoolCode: "NEVO-1",
+      loginIdentifier: "ada.o",
+      displayName: "Ada",
+      initials: "AO",
+      userId: "student-1",
+    });
+    vi.stubGlobal("fetch", paused());
+    const { api } = await freshClient();
+    const pause = await import("@/lib/auth/accountPause");
+    const unregister = pause.registerPauseHost();
+
+    await expect(api.get("/api/v1/lessons/x")).rejects.toThrow();
+
+    expect(roster.pickerEntries().map((e) => e.name)).toEqual(["Ada"]);
+    unregister();
+    window.localStorage.clear();
+  });
+
   it("leaves a paused teacher on their own door", async () => {
     // Staff have a frame of their own for this; 28b is the child's.
     vi.stubGlobal("fetch", paused());

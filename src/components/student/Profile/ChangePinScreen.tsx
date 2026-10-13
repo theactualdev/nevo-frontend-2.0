@@ -135,7 +135,6 @@ function CurrentPinStep({
           filled={pin.length}
           offset={0}
           caretAt={pin.length}
-          error={wrong}
           length={STUDENT_PIN_LENGTH}
           className={FRAME_27_ROW}
         />
@@ -271,7 +270,6 @@ function NewPinStep({
           filled={digits.length}
           offset={again ? STUDENT_PIN_LENGTH : 0}
           caretAt={digits.length}
-          error={again && error}
           className={FRAME_27_ROW}
         />
         <p role="alert" className="mt-4 min-h-5 text-sm text-nevo-violet">

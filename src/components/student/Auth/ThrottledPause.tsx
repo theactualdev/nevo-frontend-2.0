@@ -1,5 +1,6 @@
 import { STUDENT_PIN_LENGTH } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { PinBox } from "./PinBox";
 
 /** D154, `Nevo Login Frame`'s `throttled` state, verbatim. */
 export const THROTTLED_PAUSE_COPY = {
@@ -44,13 +45,12 @@ export function HeldPinBoxes({
       data-held-pin
       className={cn("flex justify-center gap-3.5 opacity-35", className)}
     >
+      {/* The one PIN box (D177), empty, and flat as D154 draws it. */}
       {Array.from({ length }, (_, i) => (
-        <div
+        <PinBox
           key={i}
-          className={cn(
-            "rounded-[10px] border-[1.5px] border-nevo-near-black/20 bg-nevo-cream",
-            boxClassName,
-          )}
+          filled={false}
+          className={cn("shadow-none", boxClassName)}
         />
       ))}
     </div>

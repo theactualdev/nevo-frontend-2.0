@@ -4,6 +4,7 @@ import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { Check } from "lucide-react";
 import { NevoKeyboard, useNevoKeyboardDock } from "@/components/shared";
 import { Wordmark } from "@/components/shared/BrandMarks";
+import { PinBox } from "@/components/student/Auth/PinBox";
 import {
   HeldPinBoxes,
   THROTTLED_PAUSE_COPY,
@@ -454,7 +455,6 @@ export function PinCreationScreen({
                 filled={digits.length}
                 offset={0}
                 caretAt={digits.length}
-                error={false}
               />
               <p className="mt-7 mb-3 text-sm font-medium">
                 Type it again to confirm
@@ -463,7 +463,6 @@ export function PinCreationScreen({
                 filled={digits.length}
                 offset={STUDENT_PIN_LENGTH}
                 caretAt={digits.length}
-                error={error}
               />
             </div>
             <p role="alert" className="mt-4 min-h-5 text-sm text-nevo-violet">
@@ -506,21 +505,23 @@ export function PinCreationScreen({
  *
  * Exported because the change-PIN flow's first step draws the same boxes for
  * the CURRENT pin. Two copies of "what a PIN entry looks like" eventually
- * disagree about the caret, the error colour or the box count, and a child
- * would meet two different-looking PIN rows inside one flow.
+ * disagree about the caret, the fill or the box count, and a child would meet
+ * two different-looking PIN rows inside one flow. The box itself is `PinBox`,
+ * the one every PIN screen draws (D177).
+ *
+ * NO ERROR COLOUR (D199): a mismatch is said by the line under the rows, and
+ * the boxes stay as they are.
  */
 export function PinRow({
   filled,
   offset,
   caretAt,
-  error,
   length = STUDENT_PIN_LENGTH,
   className,
 }: {
   filled: number;
   offset: number;
   caretAt: number;
-  error: boolean;
   /**
    * How many boxes. Defaults to the length a new PIN is created at; a row
    * that CHECKS an existing PIN passes more, because that PIN may be longer.
@@ -539,29 +540,13 @@ export function PinRow({
     >
       {Array.from({ length }, (_, i) => {
         const idx = offset + i;
-        const isFilled = filled > idx;
-        const isActive = idx === caretAt;
         return (
-          <div
+          <PinBox
             key={idx}
-            className={cn(
-              "flex size-12 items-center justify-center rounded-[10px] border-[1.5px] bg-nevo-cream shadow-[0_2px_8px_rgba(0,0,0,0.05)]",
-              /*
-               * A FILLED BOX KEEPS THE NAVY BORDER, as frame 27's Change PIN
-               * draws it - on PIN creation too (D132, 8 Oct): "the same
-               * component doing the same job". Only the caret's box was navy.
-               */
-              isActive || isFilled
-                ? "border-nevo-navy"
-                : error
-                  ? "border-nevo-violet"
-                  : "border-nevo-near-black/20",
-            )}
-          >
-            {isFilled && (
-              <span className="size-3 rounded-full bg-nevo-near-black" />
-            )}
-          </div>
+            filled={filled > idx}
+            caret={idx === caretAt}
+            className="size-12"
+          />
         );
       })}
     </div>
