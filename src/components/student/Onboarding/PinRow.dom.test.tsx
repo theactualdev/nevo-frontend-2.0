@@ -64,6 +64,10 @@ describe("PIN creation after the two rows did not match", () => {
     expect(container.textContent).toContain(
       "Those didn't match - let's try once more",
     );
+    // In the darker violet (D210): soft violet fails contrast on cream.
+    const line = container.querySelector('[role="alert"]')!;
+    expect(line.className).toContain("text-nevo-violet-text");
+    expect(line.className).not.toMatch(/text-nevo-violet(?!-text)/);
     const drawn = boxes(container);
     expect(drawn).toHaveLength(8);
     for (const box of drawn) expect(box.className).not.toMatch(/violet|grey/);

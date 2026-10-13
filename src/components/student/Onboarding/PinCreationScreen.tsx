@@ -81,13 +81,14 @@ export function pinReducer(state: PinState, action: PinAction): PinState {
  * draws its own steps around the same reducer and rows, and a second copy of
  * these is how the two would drift.
  *
- * `PIN_NOT_SAVED_COPY` is Change PIN's line now, and only its: frame 27 draws
- * no failed save, so it keeps what it had. PIN Creation has frame 15's own
- * state (D61) - see `PIN_SAVE_FAILED_COPY`.
+ * `PIN_NOT_SAVED_COPY` is Change PIN's line, and only its: design's 13 Oct
+ * note, "Change PIN's failed save now reads 'That's on us, not you. Try
+ * again.' and the false claim that the PIN was kept is gone." It said "Your
+ * teacher can help", which no teacher can for a write that failed on our side.
+ * PIN Creation has frame 15's own state (D61) - see `PIN_SAVE_FAILED_COPY`.
  */
 export const PIN_MISMATCH_COPY = "Those didn't match - let's try once more";
-export const PIN_NOT_SAVED_COPY =
-  "We couldn't save that just now - that's on us, not you. Your teacher can help.";
+export const PIN_NOT_SAVED_COPY = "That's on us, not you. Try again.";
 
 /** Frame 15's saving and didn't-save states (D61), verbatim. */
 export const PIN_SAVING_COPY = "Saving your PIN…";
@@ -465,7 +466,9 @@ export function PinCreationScreen({
                 caretAt={digits.length}
               />
             </div>
-            <p role="alert" className="mt-4 min-h-5 text-sm text-nevo-violet">
+            {/* The darker violet (D210): soft violet fails contrast as
+                text on cream. */}
+            <p role="alert" className="mt-4 min-h-5 text-sm text-nevo-violet-text">
               {/*
                 ONLY THE CHILD'S OWN MISTAKE IS SAID HERE.
 
