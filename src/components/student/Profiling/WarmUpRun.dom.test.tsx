@@ -207,20 +207,21 @@ describe("WarmUpRun — the dot arrays, as the warm-up frame draws them", () => 
     ).toEqual(["Left", "Right"]);
   });
 
-  it("wraps each array's dots in rows, so none can sit on another", () => {
-    // A random scatter let dots land on each other, and a child counted
-    // fewer than were recorded. The frame wraps them 10px apart inside a
-    // 14px pad; P4-6's frame pair is 9 against 5, every one of them drawn.
+  it("scatters each array's dots as the baseline does, rather than in rows (D197)", () => {
+    // A random scatter once let dots land on each other, so the frame's rows
+    // came in. Design, 13 Oct: the warm-up "scatters them the way the
+    // baseline does instead of flowing them in rows", which keeps every two
+    // 1.5 dots apart (spacing by band in WarmUpRun.band). P4-6's frame pair
+    // is 9 against 5, every one of them drawn.
     render(<WarmUpRun dimension="ans" />);
 
     const boxes = screen.getAllByTestId("warmup-dot-box");
     for (const box of boxes) {
-      expect(box.className).toMatch(/(^| )flex-wrap( |$)/);
-      expect(box.className).toContain("gap-2.5");
-      expect(box.className).toContain("p-3.5");
-      for (const dot of box.querySelectorAll("span")) {
-        expect(dot.className).not.toMatch(/absolute/);
-        expect(dot.getAttribute("style")).toBeNull();
+      expect(box.className).not.toMatch(/flex-wrap|gap-2\.5|p-3\.5/);
+      for (const dot of box.querySelectorAll<HTMLElement>("span")) {
+        expect(dot.className).toContain("absolute");
+        expect(dot.style.left).toMatch(/%$/);
+        expect(dot.style.top).toMatch(/%$/);
       }
     }
     expect(

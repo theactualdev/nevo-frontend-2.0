@@ -47,6 +47,7 @@ import {
 import {
   HeardPictures,
   hasSpeech,
+  scatterDots,
   speak,
   stopSpeaking,
   warmUpDots,
@@ -77,6 +78,13 @@ const PICK_BEAT_MS = 440;
  */
 const NUDGE_MS = 1500;
 const MAX_MISSES = 3;
+/**
+ * The inside of the dot task's smaller box, the phone's 150px less its 2px
+ * border, which the dots' spacing is worked out for (D197).
+ */
+const DOT_BOX_INNER_PX = 146;
+/** Each side's fixed seed, so a re-render never moves a dot that is showing. */
+const warmUpDotSeed = (side: number) => 11 + side * 29;
 
 /**
  * The line above a task: the frame's `prompt`, 16px on a phone and 18px from
@@ -1313,6 +1321,7 @@ function WarmUpDots({
   pair,
   revealMs,
   dot,
+  px,
   onOpen,
   onPick,
   onDone,
@@ -1322,6 +1331,8 @@ function WarmUpDots({
   revealMs: number;
   /** The band's dot size. */
   dot: string;
+  /** The same, in px, which the spacing is measured in. */
+  px: number;
   onOpen: () => void;
   onPick: (choice: string, detail: Record<string, unknown>) => void;
   onDone: () => void;
@@ -1377,25 +1388,30 @@ function WarmUpDots({
         stacked on a phone, under buttons reading Top and Bottom, which no
         warm-up frame draws.
 
-        THE FRAME'S ARRANGEMENT, not the baseline's scatter: each box is
-        padded 14px and its dots wrap in rows 10px apart, centred (`dotBox`).
-        So no two dots can touch, and the count a child sees is the count
-        recorded. The frame's dots vary from 14 to 20px; each is the band's
-        own size here (D81).
+        SCATTERED AS THE BASELINE SCATTERS THEM (D197, 13 Oct). The dots
+        flowed in rows 10px apart, which design replaced: "the warm-up
+        scatters them the way the baseline does instead of flowing them in
+        rows". `scatterDots` keeps every two at least 1.5 dots apart, worked
+        out for the phone's 150px box and placed as percentages, so the
+        200px box only spreads them further. The count is the pair's, as
+        before. Each dot is the band's own size (D81).
       */}
       <div className="flex justify-center gap-[18px] sm:gap-7">
         {counts.map((count, side) => (
           <div
             key={side}
             data-testid="warmup-dot-box"
-            className="relative flex size-[150px] flex-wrap content-center justify-center gap-2.5 overflow-hidden rounded-[12px] border-2 border-nevo-navy bg-nevo-cream p-3.5 sm:size-[200px]"
+            className="relative size-[150px] overflow-hidden rounded-[12px] border-2 border-nevo-navy bg-nevo-cream sm:size-[200px]"
           >
-            {Array.from({ length: count }, (_, i) => (
-              <span
-                key={i}
-                className={cn("shrink-0 rounded-full bg-nevo-violet", dot)}
-              />
-            ))}
+            {scatterDots(count, warmUpDotSeed(side), px, DOT_BOX_INNER_PX).map(
+              (d, i) => (
+                <span
+                  key={i}
+                  className={cn("absolute rounded-full bg-nevo-violet", dot)}
+                  style={{ left: `${d.x}%`, top: `${d.y}%` }}
+                />
+              ),
+            )}
             {masked && (
               <div className="absolute inset-0 bg-nevo-cream-elevated" />
             )}
