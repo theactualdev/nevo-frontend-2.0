@@ -24,7 +24,11 @@ import { EditAccessPanel, ScopeChecklist } from "./EditAccess";
 import { useSupportEmail } from "../SupportEmail";
 import type { LearningSupportHolders } from "@/lib/api/learningSupport";
 import { useLearningSupport } from "../LearningSupport/useLearningSupport";
-import { LearningSupportRecord } from "../LearningSupport/LearningSupportRecord";
+import {
+  LearningSupportRecord,
+  lastHolderAccessLine,
+} from "../LearningSupport/LearningSupportRecord";
+import { LAST_LEARNING_SUPPORT_HOLDER, refusedWith } from "@/lib/api/learningSupport";
 import {
   FOUNDING_LOCK_LINE,
   seatWords,
@@ -102,12 +106,6 @@ function ScopePill({ label, locked = false }: { label: string; locked?: boolean 
 function displayName(m: TeamMember): string {
   const full = [m.firstName, m.lastName].filter(Boolean).join(" ").trim();
   return full || m.email || "Invited admin";
-}
-
-/** A team member's name by user id - who gave Learning Support, say. */
-function nameIn(team: TeamMember[], userId: string): string | null {
-  const m = team.find((t) => t.userId === userId);
-  return m ? displayName(m) : null;
 }
 
 export function AdminTeamView() {
@@ -313,7 +311,6 @@ function MemberRow({
   ls = null,
   onLs,
   me = null,
-  nameOf = () => null,
 }: {
   m: TeamMember;
   last: boolean;
@@ -328,8 +325,6 @@ function MemberRow({
   /** Absent where Learning Support cannot be changed from here. */
   onLs?: (next: LearningSupportHolders) => void;
   me?: string | null;
-  /** A granter's name by user id, from the team itself. */
-  nameOf?: (userId: string) => string | null;
 }) {
   const name = displayName(m);
   const { writesPaused } = useSetupGate();
@@ -349,8 +344,12 @@ function MemberRow({
       })
       .catch((err: unknown) =>
         setRefusal(
-          (err instanceof ApiError && apiErrorMessage(err.detail)) ||
-            "That didn't go through, and nothing has changed. Try again in a moment.",
+          // SCRUM-248: deactivating the final Learning Support holder is
+          // refused, and said as what happened and what to do.
+          refusedWith(err, LAST_LEARNING_SUPPORT_HOLDER)
+            ? lastHolderAccessLine(name)
+            : (err instanceof ApiError && apiErrorMessage(err.detail)) ||
+                "That didn't go through, and nothing has changed. Try again in a moment.",
         ),
       )
       .finally(() => setWorking(false));
@@ -410,7 +409,6 @@ function MemberRow({
             holders={ls}
             you={you}
             me={me}
-            nameOf={nameOf}
             canGive={Boolean(onLs) && !deactivated && !writesPaused}
             canRemove={Boolean(onLs) && !writesPaused}
             onChange={(next) => onLs?.(next)}
@@ -665,7 +663,6 @@ function TeamList({
             ls={ls}
             onLs={onLs}
             me={me}
-            nameOf={(id) => nameIn(team, id)}
           />
         ))}
       </div>
@@ -703,7 +700,6 @@ function JustYou({
             you={member.userId === me}
             ls={ls}
             me={me}
-            nameOf={(id) => nameIn([member], id)}
           />
         </div>
       )}

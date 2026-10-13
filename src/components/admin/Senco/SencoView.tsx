@@ -19,7 +19,8 @@ import {
 import { schoolIntelligenceApi } from "@/lib/api/schoolIntelligence";
 import { NoAccess, failureKind } from "../NoAccess";
 import { useLearningSupport } from "../LearningSupport/useLearningSupport";
-import { UnavailableAction } from "../LearningSupport/Unavailable";
+import { GET_LEARNING_SUPPORT, UnavailableAction } from "../LearningSupport/Unavailable";
+import { LEARNING_SUPPORT_REQUIRED, refusedWith } from "@/lib/api/learningSupport";
 import { WriteFailed } from "../WriteFailed";
 import {
   Avatar,
@@ -134,7 +135,13 @@ export function SencoView() {
   const [view, setView] = useState<View>("attention");
   /** SCRUM-247: without Learning Support the exporter is unavailable, not missing. */
   const { holders: ls } = useLearningSupport();
-  const lacksRole = ls?.viewerHoldsIt === false;
+  /*
+   * Marking a flag as seen needs it too (13 Oct): only a holder can say
+   * learning support saw it. Known up front from the holders read, or learned
+   * from the refusal itself when that read did not answer.
+   */
+  const [ackRefused, setAckRefused] = useState(false);
+  const lacksRole = ls?.viewerHoldsIt === false || ackRefused;
   const [flags, setFlags] = useState<AttentionFlag[]>([]);
   /**
    * Whether `flags` is every flag, or only the pages we managed to read.
@@ -338,7 +345,10 @@ export function SencoView() {
           prev.map((f) => (f.id === flagId ? { ...f, acknowledged: true } : f)),
         ),
       )
-      .catch(() => setAckFailed(true))
+      .catch((err: unknown) => {
+        if (refusedWith(err, LEARNING_SUPPORT_REQUIRED)) setAckRefused(true);
+        else setAckFailed(true);
+      })
       .finally(() => setAcking(null));
   };
 
@@ -494,6 +504,14 @@ export function SencoView() {
             </div>
           ) : (
             <>
+              {lacksRole ? (
+                <p
+                  id="ack-needs-learning-support"
+                  className="mt-6 max-w-[62ch] text-[13px] leading-[1.55] text-nevo-near-black/62"
+                >
+                  {`Marking a flag as seen needs Learning Support. ${GET_LEARNING_SUPPORT}`}
+                </p>
+              ) : null}
               <div className="mt-7 flex items-center justify-between gap-4">
                 <SectionHeading>Flagged by Nevo</SectionHeading>
                 <span className="text-[13px] text-nevo-near-black/50">
@@ -547,7 +565,8 @@ export function SencoView() {
                         <button
                           type="button"
                           onClick={() => acknowledge(f.id)}
-                          disabled={acking !== null}
+                          disabled={acking !== null || lacksRole}
+                          aria-describedby={lacksRole ? "ack-needs-learning-support" : undefined}
                           className="cursor-pointer text-[13px] font-semibold text-nevo-near-black/55 transition-opacity hover:text-nevo-near-black/80 disabled:cursor-wait disabled:opacity-50"
                         >
                           {acking === f.id ? "Marking…" : "Mark as seen"}

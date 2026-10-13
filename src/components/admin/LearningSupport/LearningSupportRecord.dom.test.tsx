@@ -18,13 +18,16 @@ import { LearningSupportRecord } from "./LearningSupportRecord";
  */
 
 const ADA = { userId: "u-ada", name: "Ada Obi" };
-const held = (grantedBy: string): LearningSupportHolders => ({
-  holders: [{ userId: "u-ada", name: "Ada Obi", role: "other_admin", grantedAt: "2026-10-03T09:00:00Z", grantedBy }],
+const held = (grantedBy: string, grantedByName: string | null = null): LearningSupportHolders => ({
+  holders: [
+    { userId: "u-ada", name: "Ada Obi", role: "other_admin", grantedAt: "2026-10-03T09:00:00Z", grantedBy, grantedByName },
+  ],
   viewerHoldsIt: false,
 });
 const nobody: LearningSupportHolders = { holders: [], viewerHoldsIt: false };
-const names: Record<string, string> = { "u-bisi": "Bisi Adebayo" };
-const nameOf = (id: string) => names[id] ?? null;
+const LAST = new ApiError(409, "Conflict", {
+  detail: { code: "last_learning_support_holder", message: "Grant Learning Support to another person before removing the final holder." },
+});
 
 const show = (props: Partial<Parameters<typeof LearningSupportRecord>[0]> = {}) => {
   const onChange = vi.fn();
@@ -34,7 +37,6 @@ const show = (props: Partial<Parameters<typeof LearningSupportRecord>[0]> = {}) 
       holders={nobody}
       you={false}
       me="u-me"
-      nameOf={nameOf}
       canGive
       canRemove
       onChange={onChange}
@@ -51,7 +53,7 @@ beforeEach(() => {
 
 describe("the record", () => {
   it("says who gave it and when", () => {
-    show({ holders: held("u-bisi") });
+    show({ holders: held("u-bisi", "Bisi Adebayo") });
     expect(screen.getByText(/Given by Bisi Adebayo on 3 October 2026/)).toBeInTheDocument();
   });
 
@@ -85,6 +87,22 @@ describe("no self-granting", () => {
   });
 });
 
+describe("a self-grant the server refuses", () => {
+  it("says who can give it, should one ever be attempted", async () => {
+    grant.mockRejectedValue(
+      new ApiError(403, "Forbidden", {
+        detail: { code: "learning_support_self_grant_forbidden", message: "Learning Support must be granted by another administrator." },
+      }),
+    );
+    show();
+    fireEvent.click(screen.getByRole("button", { name: "Give Learning Support" }));
+    fireEvent.click(screen.getByRole("button", { name: "Give Learning Support" }));
+    expect(
+      await screen.findByText("Learning Support has to be given by another administrator."),
+    ).toBeInTheDocument();
+  });
+});
+
 describe("giving it", () => {
   it("asks first, then sends the person's id and shows the list the server returns", async () => {
     const after = held("u-me");
@@ -115,7 +133,7 @@ describe("giving it", () => {
 
 describe("removing it", () => {
   it("refuses the last holder in a sentence that says what to do", async () => {
-    remove.mockRejectedValue(new ApiError(409, "Conflict", { detail: { code: "x", message: "y" } }));
+    remove.mockRejectedValue(LAST);
     const onChange = show({ holders: held("u-bisi") });
 
     fireEvent.click(screen.getByRole("button", { name: "Remove Learning Support" }));
@@ -127,6 +145,17 @@ describe("removing it", () => {
       ),
     ).toBeInTheDocument();
     expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("reads only the last-holder code as the last holder, not any 409", async () => {
+    remove.mockRejectedValue(
+      new ApiError(409, "Conflict", { detail: { code: "something_else", message: "Something else is in the way." } }),
+    );
+    show({ holders: held("u-bisi") });
+    fireEvent.click(screen.getByRole("button", { name: "Remove Learning Support" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove Learning Support" }));
+    expect(await screen.findByText("Something else is in the way.")).toBeInTheDocument();
+    expect(screen.queryByText(/only person in your school/)).toBeNull();
   });
 
   it("shows the server's own reason for any other refusal", async () => {

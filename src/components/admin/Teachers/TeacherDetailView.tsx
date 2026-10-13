@@ -34,11 +34,13 @@ import { BackLink } from "../BackLink";
 import { withBack, type Back } from "../back";
 import { activeLine, lastActiveCard } from "../Team/teamLines";
 import { ApiError, apiErrorMessage } from "@/lib/api/client";
-import { teamApi, type TeamMember } from "@/lib/api/team";
 import { holderFor } from "@/lib/api/learningSupport";
 import { getSession } from "@/lib/auth/session";
 import { useLearningSupport } from "../LearningSupport/useLearningSupport";
-import { LearningSupportRecord } from "../LearningSupport/LearningSupportRecord";
+import {
+  LearningSupportRecord,
+  lastHolderAccessLine,
+} from "../LearningSupport/LearningSupportRecord";
 
 /**
  * D6 teacher detail - oversight, not performance review.
@@ -108,30 +110,15 @@ export function TeacherDetailView({
   const [me] = useState(() => getSession()?.userId ?? null);
   const { holders: ls, setHolders: setLs } = useLearningSupport();
   /*
-   * WHO GAVE IT, BY NAME. The holders list carries the granter's id only, and
-   * a granter is always an administrator, so the team names them. Read only
-   * when this teacher holds it; refused or failed, the date still shows.
+   * THE ONLY HOLDER KEEPS THEIR ACCESS (SCRUM-248). Said before the sheet
+   * opens, because the sheet hands classes over first and revokes last: a
+   * refusal at the end would leave the classes moved and the teacher still
+   * in. Nobody else holding it is the server's rule, read from its own list.
    */
-  const grantedBy = holderFor(ls, teacherId)?.grantedBy ?? null;
-  const [admins, setAdmins] = useState<TeamMember[]>([]);
-  useEffect(() => {
-    if (!grantedBy) return;
-    let alive = true;
-    teamApi
-      .list()
-      .then((t) => {
-        if (alive) setAdmins(t.members);
-      })
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, [grantedBy]);
-  const nameOf = (userId: string) => {
-    const m = admins.find((a) => a.userId === userId);
-    if (!m) return null;
-    return [m.firstName, m.lastName].filter(Boolean).join(" ").trim() || m.email || null;
-  };
+  const onlyHolder =
+    ls !== null &&
+    holderFor(ls, teacherId) !== null &&
+    !ls.holders.some((h) => h.userId !== teacherId);
 
   const load = useCallback(() => {
     Promise.all([
@@ -417,7 +404,6 @@ export function TeacherDetailView({
               holders={ls}
               you={teacher.id === me}
               me={me}
-              nameOf={nameOf}
               canGive={canAssign && !writesPaused}
               canRemove={!writesPaused}
               onChange={setLs}
@@ -460,11 +446,16 @@ export function TeacherDetailView({
             <button
               type="button"
               onClick={() => setRemoving(true)}
-              disabled={writesPaused}
+              disabled={writesPaused || onlyHolder}
               className={TEXT_ACTION}
             >
               Remove admin-side access
             </button>
+            {onlyHolder ? (
+              <p className="mt-1.5 max-w-[520px] text-[13px] leading-[1.5] text-nevo-near-black/62">
+                {lastHolderAccessLine(teacher.name)}
+              </p>
+            ) : null}
             {/* D06b's promise is back: `POST /teachers/{id}/restore` landed
                 on 8 Oct, so the undo exists. */}
             <p className="mt-1.5 max-w-[520px] text-[13px] leading-[1.5] text-nevo-near-black/55">
