@@ -74,7 +74,10 @@ type Busy = { key: string; kind: "dates" | "cancel" } | null;
 /**
  * SCRUM-225's prompt. The ticket's own words for the reasons, in its two
  * groups, with what each group does to a child's reviews - which is the whole
- * reason the question is asked. No frame draws this; raised with design.
+ * reason the question is asked. No frame draws this. The question and the two
+ * headings are Lydia's (13 Oct): the question records what happened to the
+ * assignment rather than putting the teacher on the spot, and the headings
+ * answer it. The consequence lines are approved as written.
  */
 const REASONS: {
   heading: string;
@@ -82,7 +85,7 @@ const REASONS: {
   options: { value: CancellationReason; label: string }[];
 }[] = [
   {
-    heading: "The teaching stands",
+    heading: "The lesson still counts",
     outcome: "Students keep their reviews of what it taught.",
     options: [
       { value: "finished_with", label: "Finished with" },
@@ -92,7 +95,7 @@ const REASONS: {
     ],
   },
   {
-    heading: "It is being taken back",
+    heading: "Take the lesson back",
     outcome: "Their reviews of what it taught are withdrawn.",
     options: [
       { value: "wrong_content", label: "Wrong content" },
@@ -366,7 +369,7 @@ export function AssignmentSchedule({
                   </p>
                   <fieldset className="mt-3.5">
                     <legend className="text-[13.5px] font-semibold text-nevo-near-black">
-                      Why are you cancelling it?
+                      Why is this being cancelled?
                     </legend>
                     <div className="mt-2.5 flex flex-col gap-3">
                       {REASONS.map((group) => (

@@ -221,7 +221,7 @@ describe("cancelling", () => {
     render(<AssignmentSchedule assignments={CLASS_OF_THREE} />);
     openConfirm();
 
-    expect(screen.getByRole("group", { name: "Why are you cancelling it?" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Why is this being cancelled?" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Yes, cancel it/i })).toBeDisabled();
 
     confirmCancel("Wrong class");
@@ -243,6 +243,8 @@ describe("cancelling", () => {
     ]) {
       expect(screen.getByRole("radio", { name: r })).toBeInTheDocument();
     }
+    expect(screen.getByText("The lesson still counts")).toBeInTheDocument();
+    expect(screen.getByText("Take the lesson back")).toBeInTheDocument();
     expect(screen.getByText("Students keep their reviews of what it taught.")).toBeInTheDocument();
     expect(screen.getByText("Their reviews of what it taught are withdrawn.")).toBeInTheDocument();
   });
