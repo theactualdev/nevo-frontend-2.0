@@ -49,11 +49,15 @@ export function DownloadsTab() {
   const [statuses, setStatuses] = useState<Record<string, DownloadStatus>>(() =>
     Object.fromEntries(ITEMS.map((i) => [i.id, "available" as DownloadStatus])),
   );
+  /** The finished button was pressed, so it says why it did nothing. */
+  const [explained, setExplained] = useState(false);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   useEffect(() => {
     const active = timers.current;
     return () => active.forEach(clearTimeout);
   }, []);
+
+  const allDone = ITEMS.every((i) => statuses[i.id] === "downloaded");
 
   const finishAfter = (id: string, delay: number) => {
     timers.current.push(
@@ -69,6 +73,7 @@ export function DownloadsTab() {
     if (status === "downloading") return;
     if (status === "downloaded") {
       setStatuses((s) => ({ ...s, [id]: "available" })); // remove
+      setExplained(false);
       return;
     }
     setStatuses((s) => ({ ...s, [id]: "downloading" }));
@@ -76,6 +81,10 @@ export function DownloadsTab() {
   };
 
   const downloadAll = () => {
+    if (allDone) {
+      setExplained(true);
+      return;
+    }
     const pending = ITEMS.filter((i) => statuses[i.id] === "available");
     if (pending.length === 0) return;
     setStatuses((s) => {
@@ -86,8 +95,6 @@ export function DownloadsTab() {
     // Stagger completion so it feels like real progress, not a flip.
     pending.forEach((i, n) => finishAfter(i.id, DOWNLOAD_MS + n * 600));
   };
-
-  const allDone = ITEMS.every((i) => statuses[i.id] === "downloaded");
 
   // Nothing renders until we know who is looking - SSR cannot read the token,
   // and a frame of "Saved offline" is the claim this gate exists to prevent.
@@ -104,14 +111,26 @@ export function DownloadsTab() {
       <div className="max-w-[640px]">
       <h1 className={TAB_TITLE}>Downloads</h1>
 
+      {/*
+        FINISHED, NOT BLOCKED, SO NEVER GREY (D211, 13 Oct): it "still stays
+        pressable and still says so rather than going grey." Pressed with
+        everything saved, it answers in place, in the ruling's one line.
+      */}
       <button
         type="button"
         onClick={downloadAll}
-        disabled={allDone}
-        className="mt-5 h-[52px] w-full cursor-pointer rounded-[12px] bg-nevo-navy text-[15px] font-medium text-nevo-cream transition-[filter] hover:brightness-110 disabled:cursor-default disabled:opacity-40"
+        className="mt-5 h-[52px] w-full cursor-pointer rounded-[12px] bg-nevo-navy text-[15px] font-medium text-nevo-cream transition-[filter] hover:brightness-110"
       >
         {allDone ? "All lessons saved for offline" : "Download today's lessons"}
       </button>
+      {allDone && explained && (
+        <p
+          role="status"
+          className="mt-3 rounded-[10px] bg-nevo-violet/14 px-[15px] py-[13px] text-[14px] leading-[1.5] text-nevo-near-black/80"
+        >
+          Everything&apos;s already saved.
+        </p>
+      )}
 
       <ul className="mt-3">
         {ITEMS.map((item) => (

@@ -131,16 +131,43 @@ describe("saving a lesson for offline", () => {
   });
 
   it("says so when it could not be saved, and claims nothing", async () => {
-    downloadLesson.mockRejectedValue(new Error("offline"));
+    downloadLesson.mockRejectedValue(new Error("500"));
     render(<SavedLessons />);
 
     fireEvent.click(
       screen.getByRole("button", { name: "Save Adding fractions for offline" }),
     );
 
-    expect(await screen.findByText(/couldn.t be saved/)).toBeVisible();
+    // D181, 13 Oct, verbatim: a server failure does not blame the connection.
+    const said = await screen.findByText(
+      "That didn't save. Try again in a moment.",
+    );
+    expect(said).toBeVisible();
+    expect(said).toHaveAttribute("role", "status");
     expect(savedLesson("ada", "l1")).toBeNull();
     expect(screen.queryByText("Open")).toBeNull();
+  });
+
+  it("names the connection only when the browser says there is none", async () => {
+    downloadLesson.mockRejectedValue(new TypeError("Failed to fetch"));
+    const onLine = vi.spyOn(window.navigator, "onLine", "get");
+    onLine.mockReturnValue(false);
+    try {
+      render(<SavedLessons />);
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "Save Adding fractions for offline" }),
+      );
+
+      expect(
+        await screen.findByText(
+          "That lesson couldn't be saved just now. Try again when you're connected.",
+        ),
+      ).toBeVisible();
+      expect(savedLesson("ada", "l1")).toBeNull();
+    } finally {
+      onLine.mockRestore();
+    }
   });
 
 });

@@ -78,8 +78,10 @@ export function StudentFeedbackScreen() {
         <ChevronLeft className="size-6 text-nevo-near-black" strokeWidth={2} />
       </button>
 
-      {/* Panel surface is Cream Elevated 2 (#e5dfd3) - raised-on-raised (DS tokens). */}
-      <div className="flex w-[360px] max-w-full min-h-[300px] flex-col rounded-[16px] bg-[#e5dfd3] p-6 shadow-[0_20px_56px_rgba(0,0,0,0.2)]">
+      {/* Panel surface is Cream Elevated 2 (#e5dfd3) - raised-on-raised (DS tokens).
+          Its shadow is Level 3, the most any surface takes: design capped the
+          feedback frame there on 13 Oct, from 0 20px 56px at 0.2. */}
+      <div className="flex w-[360px] max-w-full min-h-[300px] flex-col rounded-[16px] bg-[#e5dfd3] p-6 shadow-elevation-3">
         {sent ? (
           <div className="m-auto text-center">
             <span className="inline-flex size-14 items-center justify-center rounded-full bg-nevo-navy motion-safe:animate-nevo-pop">
