@@ -320,7 +320,7 @@ export function TeacherSignIn() {
               door made for the same reason (`AdminSignIn.tsx`). When a pre-auth
               lookup exists, both doors get it together.
             */}
-            <h1 className="text-[34px] leading-[1.15] font-semibold tracking-[-0.02em]">
+            <h1 className="text-[34px] leading-[1.15] font-semibold tracking-[-0.02em] max-md:text-[28px]">
               Welcome back
             </h1>
             <p className="mt-3 text-[16px] leading-[1.55] text-nevo-near-black/70">
