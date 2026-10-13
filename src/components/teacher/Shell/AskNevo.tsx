@@ -25,6 +25,7 @@ import {
 import { useHasSession } from "@/hooks/useHasSession";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { MOCK_TEACHER } from "./teacherNav";
+import { OPEN_ASK_NEVO } from "./phoneLayouts";
 import { useAskNevoClass } from "./askNevoScope";
 
 /**
@@ -114,6 +115,15 @@ export function AskNevo() {
    */
   const threadId = useRef<string | null>(null);
   const [open, setOpen] = useState(false);
+  /*
+   * C19: on a phone there is no pill - the drawer lists Ask Nevo with the
+   * tabs, and opening it from there arrives here.
+   */
+  useEffect(() => {
+    const onOpen = () => setOpen(true);
+    window.addEventListener(OPEN_ASK_NEVO, onOpen);
+    return () => window.removeEventListener(OPEN_ASK_NEVO, onOpen);
+  }, []);
   const [mode, setMode] = useState<Mode>("chat");
   const [threads, setThreads] = useState<ThreadSummary[] | null>(null);
   const [threadsFailed, setThreadsFailed] = useState(false);
@@ -352,7 +362,7 @@ export function AskNevo() {
           aria-label="Ask Nevo"
           title="Ask Nevo"
           onClick={() => setOpen(true)}
-          className="fixed right-6 bottom-6 z-30 flex h-[52px] cursor-pointer items-center gap-2.5 rounded-full bg-nevo-navy px-[22px] text-[15px] font-medium text-nevo-cream shadow-[0_8px_32px_rgba(0,0,0,0.16)] transition-[transform,filter] duration-[140ms] hover:brightness-108 active:scale-105"
+          className="fixed right-6 bottom-6 z-30 flex h-[52px] max-md:hidden cursor-pointer items-center gap-2.5 rounded-full bg-nevo-navy px-[22px] text-[15px] font-medium text-nevo-cream shadow-[0_8px_32px_rgba(0,0,0,0.16)] transition-[transform,filter] duration-[140ms] hover:brightness-108 active:scale-105"
         >
           {SPARKLE(22)}
           Ask Nevo

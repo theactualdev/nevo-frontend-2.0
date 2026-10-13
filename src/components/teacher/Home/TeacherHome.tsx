@@ -103,19 +103,22 @@ export function TeacherHome() {
   const hasFlags = flagCount > 0;
 
   return (
-    <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
+    /* C19 B1 on a phone: 18px edges under the app bar, which names the page. */
+    <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] max-md:px-[18px] max-md:pt-1.5 max-md:pb-[22px] xl:px-[52px] xl:py-11">
       <div className="mx-auto max-w-[940px]">
         <div className="flex items-start justify-between gap-[18px] xl:gap-6">
           <div className="min-w-0">
-            <span className="text-[13px] text-nevo-near-black/55 xl:text-[13.5px]">
+            {/* B1 draws no date line and no school code: on a phone this
+                is a page a notification opened, finished one-handed. */}
+            <span className="text-[13px] text-nevo-near-black/55 max-md:hidden xl:text-[13.5px]">
               {todayLine()}
             </span>
-            <h1 className="mt-1 text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black xl:text-[26px]">
+            <h1 className="mt-1 text-[23px] font-semibold tracking-[-0.015em] text-nevo-near-black max-md:mt-1 max-md:text-[22px] xl:text-[26px]">
               {greetName ? `Welcome back, ${greetName}` : "Welcome back"}
             </h1>
           </div>
           {signedIn && identity?.schoolCode && (
-            <div className="flex shrink-0 flex-col items-end gap-1 rounded-[12px] bg-nevo-cream-elevated px-3.5 py-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] xl:px-4 xl:py-3">
+            <div className="flex shrink-0 flex-col items-end gap-1 rounded-[12px] bg-nevo-cream-elevated px-3.5 py-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] max-md:hidden xl:px-4 xl:py-3">
               <span className="text-xs font-semibold tracking-[0.05em] text-nevo-near-black/55 uppercase">
                 School code
               </span>
@@ -130,9 +133,15 @@ export function TeacherHome() {
         {/* The count is said only when it is the whole count. A fixture
             count is the walkthrough's own; a live one needs every page. */}
         {hasFlags && (fixtureFlags.length > 0 || flagsComplete) && (
-          <p className="mt-2 hidden text-[15.5px] leading-[1.55] text-nevo-near-black/60 xl:block">
-            {`${flagCount} ${flagCount === 1 ? "thing is" : "things are"} worth your eye before first period. Everything else is running smoothly.`}
-          </p>
+          <>
+            <p className="mt-2 hidden text-[15.5px] leading-[1.55] text-nevo-near-black/60 xl:block">
+              {`${flagCount} ${flagCount === 1 ? "thing is" : "things are"} worth your eye before first period. Everything else is running smoothly.`}
+            </p>
+            {/* B1's shorter line, for a phone. */}
+            <p className="mt-1.5 text-[14px] leading-[1.5] text-nevo-near-black/60 md:hidden">
+              {`${flagCount} ${flagCount === 1 ? "thing is" : "things are"} worth your eye. Everything else is steady.`}
+            </p>
+          </>
         )}
 
         {noClasses ? (
@@ -158,7 +167,10 @@ export function TeacherHome() {
           )
         )}
 
-        {/* C16a: the pulse leads - class weather first, specifics below. */}
+        {/* C16a: the pulse leads - class weather first, specifics below.
+            Not on a phone: C19's B1 is the greeting and "Worth your
+            attention" alone, the page a notification opens. */}
+        <div className="max-md:hidden">
         {!noClasses &&
           (homeLive
             ? pulse.map((p) => <LiveClassPulse key={p.classId} pulse={p} />)
@@ -177,6 +189,7 @@ export function TeacherHome() {
                   <ClassPulse />
                 </SampleRegion>
               ))}
+        </div>
 
         {/* All of this is class-derived. With no classes there is nothing
             truthful to put here - including the calm no-flags card, which
@@ -287,6 +300,9 @@ export function TeacherHome() {
               </div>
             )}
 
+            {/* B1 again: classes and activity are the tablet's and the
+                desktop's. */}
+            <div className="max-md:hidden">
             <h3 className={cn(SECTION_H, "mt-[30px] xl:mt-10")}>My classes</h3>
             <HomeClasses />
 
@@ -399,6 +415,7 @@ export function TeacherHome() {
             </div>
             </SampleRegion>
             )}
+            </div>
           </>
         )}
       </div>

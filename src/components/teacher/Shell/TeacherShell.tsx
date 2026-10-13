@@ -8,6 +8,8 @@ import { AskNevo } from "./AskNevo";
 import { SystemMessagesProvider } from "@/components/shared/SystemMessages";
 import { UnsavedChangesProvider } from "./UnsavedChanges";
 import { TeacherSidebar } from "./TeacherSidebar";
+import { BiggerScreen, PhoneShell } from "./PhoneShell";
+import { hasPhoneLayout } from "./phoneLayouts";
 
 /**
  * Teacher Console chrome: the nav rail plus the floating Ask Nevo drawer on
@@ -60,6 +62,13 @@ export function TeacherShell({ children }: { children: React.ReactNode }) {
    * leaving the flow is what brings the pill back, with no state to reset.
    */
   const inUpload = pathname.startsWith("/teacher/lessons/upload");
+  /*
+   * C19 (design, 12 Oct): on a phone, only the screens drawn for one are
+   * laid out for one, and every other shows the shared "needs a bigger
+   * screen" state. Decided in CSS - `max-md:` and `md:` - so the server's
+   * markup is already right and nothing jumps when the page hydrates.
+   */
+  const phoneReady = hasPhoneLayout(pathname);
 
   return (
     /* SCRUM-152's bar is console-wide by construction: it rides above the
@@ -68,8 +77,12 @@ export function TeacherShell({ children }: { children: React.ReactNode }) {
     <SystemMessagesProvider>
     {/* C18: unsaved work registers here, and the sidebar asks before it goes. */}
     <UnsavedChangesProvider>
-    <div className="flex h-dvh flex-row overflow-hidden bg-nevo-cream text-nevo-near-black">
-      <TeacherSidebar />
+    <div className="flex h-dvh flex-row overflow-hidden bg-nevo-cream text-nevo-near-black max-md:flex-col">
+      {/* The rail at tablet and desktop; the app bar and drawer on a phone. */}
+      <div className="contents max-md:hidden">
+        <TeacherSidebar />
+      </div>
+      <PhoneShell />
       {/*
         "Larger text" is a console-wide preference, so the zoom lives on the
         shell, not one page. The rail keeps its own scale, as in the student
@@ -85,7 +98,14 @@ export function TeacherShell({ children }: { children: React.ReactNode }) {
         React - and each of those overlays carries it too.
       */}
       <main className="nevo-text-zoom flex min-w-0 flex-1 flex-col overflow-y-auto">
-        {children}
+        {phoneReady ? (
+          children
+        ) : (
+          <>
+            <div className="contents max-md:hidden">{children}</div>
+            <BiggerScreen />
+          </>
+        )}
       </main>
       {/* C15: Ask Nevo floats on every console surface except upload. */}
       {!inUpload && <AskNevo />}
