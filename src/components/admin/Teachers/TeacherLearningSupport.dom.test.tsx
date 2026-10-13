@@ -5,7 +5,8 @@ import type { TeacherDetail } from "@/lib/api/teachers";
 
 /**
  * SCRUM-247: a school's learning support staff are usually teachers, so
- * Learning Support is given on the teacher's own record too.
+ * Learning Support is given on the teacher's own record too - D03b's same
+ * line, at the same weight, under "Permissions" (design 9d0ff6b).
  */
 
 const { teacher, holders, grant } = vi.hoisted(() => ({
@@ -62,11 +63,13 @@ const folake = (over: Partial<TeacherDetail> = {}): TeacherDetail =>
     ...over,
   }) as TeacherDetail;
 
+/** This year, so the line never carries one. */
+const YEAR = new Date().getFullYear();
 const FOLAKE_HOLDS = {
   userId: "t1",
   name: "Folake Adeyemi",
   role: "teacher",
-  grantedAt: "2026-10-03T09:00:00Z",
+  grantedAt: `${YEAR}-10-03T09:00:00Z`,
   grantedBy: "u-bisi",
   grantedByName: "Bisi Adebayo",
 };
@@ -74,7 +77,7 @@ const BISI_HOLDS = {
   userId: "u-bisi",
   name: "Bisi Adebayo",
   role: "senco_admin",
-  grantedAt: "2026-10-01T09:00:00Z",
+  grantedAt: `${YEAR}-10-01T09:00:00Z`,
   grantedBy: "u-founder",
   grantedByName: "Ngozi Eze",
 };
@@ -89,16 +92,16 @@ describe("Learning Support on a teacher's record", () => {
   it("can be given, by user id - a teacher's id is theirs", async () => {
     grant.mockResolvedValue({
       holders: [
-        { userId: "t1", name: "Folake Adeyemi", role: "teacher", grantedAt: "2026-10-12T09:00:00Z", grantedBy: "u-me" },
+        { userId: "t1", name: "Folake Adeyemi", role: "teacher", grantedAt: `${YEAR}-10-12T09:00:00Z`, grantedBy: "u-me" },
       ],
       viewerHoldsIt: true,
     });
     render(<TeacherDetailView teacherId="t1" />);
-    fireEvent.click(await screen.findByRole("button", { name: "Give Learning Support" }));
-    fireEvent.click(screen.getByRole("button", { name: "Give Learning Support" }));
+    expect(await screen.findByText("Permissions")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("switch", { name: "Learning Support for Folake Adeyemi" }));
 
     await waitFor(() => expect(grant).toHaveBeenCalledWith("t1"));
-    expect(await screen.findByText(/Given by you on 12 October 2026/)).toBeInTheDocument();
+    expect(await screen.findByText("Granted by you · 12 October")).toBeInTheDocument();
   });
 
   it("names who gave it", async () => {
@@ -107,8 +110,11 @@ describe("Learning Support on a teacher's record", () => {
       viewerHoldsIt: true,
     });
     render(<TeacherDetailView teacherId="t1" />);
-    expect(await screen.findByText(/Given by Bisi Adebayo on 3 October 2026/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Remove Learning Support" })).toBeInTheDocument();
+    expect(await screen.findByText("Granted by Bisi Adebayo · 3 October")).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Learning Support for Folake Adeyemi" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
   });
 
   it("keeps the only holder's access, and says why before anything is handed over", async () => {
@@ -125,7 +131,7 @@ describe("Learning Support on a teacher's record", () => {
   it("lets their access go once somebody else holds it too", async () => {
     holders.mockResolvedValue({ holders: [FOLAKE_HOLDS, BISI_HOLDS], viewerHoldsIt: true });
     render(<TeacherDetailView teacherId="t1" />);
-    await screen.findByText(/Given by Bisi Adebayo/);
+    await screen.findByText(/Granted by Bisi Adebayo/);
     expect(screen.getByRole("button", { name: "Remove admin-side access" })).toBeEnabled();
     expect(screen.queryByText(/only person in your school/)).toBeNull();
   });
@@ -135,5 +141,6 @@ describe("Learning Support on a teacher's record", () => {
     render(<TeacherDetailView teacherId="t1" />);
     await screen.findByText("Folake Adeyemi");
     expect(screen.queryByText("Learning Support")).toBeNull();
+    expect(screen.queryByText("Permissions")).toBeNull();
   });
 });

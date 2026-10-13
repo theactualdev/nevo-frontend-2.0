@@ -38,9 +38,9 @@ import { holderFor } from "@/lib/api/learningSupport";
 import { getSession } from "@/lib/auth/session";
 import { useLearningSupport } from "../LearningSupport/useLearningSupport";
 import {
-  LearningSupportRecord,
+  LearningSupportLine,
   lastHolderAccessLine,
-} from "../LearningSupport/LearningSupportRecord";
+} from "../LearningSupport/LearningSupportLine";
 
 /**
  * D6 teacher detail - oversight, not performance review.
@@ -75,10 +75,12 @@ import {
  * for the reasoning. What is genuinely missing is the actor and every ENDED
  * assignment, so the dates describe what is still true and claim nothing more.
  *
- * LEARNING SUPPORT IS ON THE TEACHER'S RECORD (SCRUM-247, 12 Oct). A
- * school's learning support staff are usually teachers, so an administrator
- * gives and removes it here as well as in Admin Team. The grant takes a user
- * id, and a teacher's `id` is theirs.
+ * LEARNING SUPPORT IS ON THE TEACHER'S RECORD (SCRUM-247; D03b, design
+ * 9d0ff6b). A school's learning support staff are usually teachers, so it is
+ * the same permission line as on an administrator's record, under
+ * "Permissions". The grant takes a user id, and a teacher's `id` is theirs.
+ * D03b also draws "Upload to the shared library" and "Listed in the parent
+ * directory" there; nothing stores either yet, so they are with design.
  *
  * The Students headcount is summed client-side from each class's
  * `studentCount`, because no teacher-level aggregate exists. (This said
@@ -396,10 +398,11 @@ export function TeacherDetailView({
       {ls && !invited ? (
         <>
           <div className="mt-[30px]">
-            <SectionHeading>Learning Support</SectionHeading>
+            <SectionHeading>Permissions</SectionHeading>
           </div>
-          <div className={cn(CARD, "mt-3.5 px-[22px] py-5")}>
-            <LearningSupportRecord
+          <div className={cn(CARD, "mt-3.5")}>
+            <LearningSupportLine
+              className="px-5 py-4 max-lg:px-[18px] max-lg:py-3.5"
               person={{ userId: teacher.id, name: teacher.name }}
               holders={ls}
               you={teacher.id === me}

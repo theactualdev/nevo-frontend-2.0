@@ -1,7 +1,10 @@
 "use client";
 
-import { useState, type Dispatch, type SetStateAction } from "react";
+import { useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { teamApi, type TeamMember } from "@/lib/api/team";
+import { holderFor, type LearningSupportHolders } from "@/lib/api/learningSupport";
+import { getSession } from "@/lib/auth/session";
+import { LearningSupportLine } from "../LearningSupport/LearningSupportLine";
 import type { PermissionScope } from "@/lib/constants/permissions";
 import { cn } from "@/lib/utils";
 import { FOUNDING_LOCK_LINE, SCOPE_CATALOGUE } from "./adminScopes";
@@ -25,17 +28,21 @@ export function ScopeChecklist({
   disabled,
   locked = [],
   lockedReason,
+  replace,
 }: {
   on: Set<PermissionScope>;
   setOn: Dispatch<SetStateAction<Set<PermissionScope>>>;
   disabled: boolean;
   locked?: PermissionScope[];
   lockedReason?: string;
+  /** A line drawn in one scope's place - D03b's Learning Support, in senco's. */
+  replace?: { scope: PermissionScope; line: ReactNode };
 }) {
   const [heldAtOpen] = useState(() => new Set(on));
   return (
     <div className="mt-2.5 flex flex-col gap-2">
       {SCOPE_CATALOGUE.filter((s) => s.grantable !== false || heldAtOpen.has(s.scope)).map((s) => {
+        if (replace?.scope === s.scope) return <div key={s.scope}>{replace.line}</div>;
         const isLocked = locked.includes(s.scope);
         const checked = isLocked || on.has(s.scope);
         return (
@@ -102,17 +109,36 @@ export function ScopeChecklist({
 export function EditAccessPanel({
   member,
   name,
+  ls = null,
+  onLs,
   onCancel,
   onSaved,
 }: {
   member: TeamMember;
   name: string;
+  /** Who holds Learning Support; null keeps the old senco checkbox. */
+  ls?: LearningSupportHolders | null;
+  onLs?: (next: LearningSupportHolders) => void;
   onCancel: () => void;
   onSaved: () => void;
 }) {
   const [on, setOn] = useState<Set<PermissionScope>>(() => new Set(member.scopes));
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [me] = useState(() => getSession()?.userId ?? null);
+  /*
+   * D03b: LEARNING SUPPORT IS ONE LINE AMONG THESE, and it stands where the
+   * "SENCo / Learning Support" scope was ticked. The backend gives the senco
+   * scope with the role and takes it away with it, so two lines would be two
+   * controls for one thing. Its toggle answers at once, as D03b draws it; the
+   * scopes still wait for Save.
+   *
+   * An invitation still open keeps the checkbox: nobody can hold the role
+   * before they have joined.
+   */
+  const asLine = ls !== null && member.status.toLowerCase() !== "invited";
+  /** The role as it stands now, if the toggle has moved it in this sheet. */
+  const [lsNow, setLsNow] = useState<boolean | null>(null);
 
   const none = on.size === 0;
   const unchanged =
@@ -122,8 +148,13 @@ export function EditAccessPanel({
     if (none || unchanged || saving) return;
     setSaving(true);
     setFailed(false);
+    // The senco scope follows the role: a toggle in this sheet has already
+    // moved it on the server, and Save must not move it back.
+    const scopes = new Set(on);
+    if (lsNow === true) scopes.add("senco");
+    if (lsNow === false) scopes.delete("senco");
     teamApi
-      .updateScopes(member.userId, [...on])
+      .updateScopes(member.userId, [...scopes])
       .then(() => onSaved())
       .catch(() => setFailed(true))
       .finally(() => setSaving(false));
@@ -151,7 +182,8 @@ export function EditAccessPanel({
         ) : null}
 
         <span className="mt-7 block text-[13px] font-semibold text-nevo-near-black/70">
-          What can they access?
+          {/* D03b's "What she can access" - with no gender sent, the first name. */}
+          {`What ${member.firstName?.trim() || name} can access`}
         </span>
         <ScopeChecklist
           on={on}
@@ -159,6 +191,28 @@ export function EditAccessPanel({
           disabled={saving}
           locked={member.founding ? ["oversight"] : []}
           lockedReason={FOUNDING_LOCK_LINE}
+          replace={
+            asLine && ls
+              ? {
+                  scope: "senco",
+                  line: (
+                    <LearningSupportLine
+                      className="rounded-[10px] bg-nevo-cream-elevated px-[15px] py-[13px]"
+                      person={{ userId: member.userId, name }}
+                      holders={ls}
+                      you={member.userId === me}
+                      me={me}
+                      canGive={member.status.toLowerCase() === "active" && !saving}
+                      canRemove={!saving}
+                      onChange={(next) => {
+                        setLsNow(holderFor(next, member.userId) !== null);
+                        onLs?.(next);
+                      }}
+                    />
+                  ),
+                }
+              : undefined
+          }
         />
 
         {none ? (

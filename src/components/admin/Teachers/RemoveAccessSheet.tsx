@@ -7,7 +7,7 @@ import { teachersApi, type TeacherDetail, type TeacherSummary } from "@/lib/api/
 import { cn } from "@/lib/utils";
 import { isActive } from "./status";
 import { LAST_LEARNING_SUPPORT_HOLDER, refusedWith } from "@/lib/api/learningSupport";
-import { lastHolderAccessLine } from "../LearningSupport/LearningSupportRecord";
+import { lastHolderAccessLine } from "../LearningSupport/LearningSupportLine";
 import {
   CheckIcon,
   FailureLine,
