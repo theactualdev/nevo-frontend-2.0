@@ -389,11 +389,33 @@ describe("a calculation's signals", () => {
 
   it("holds the forward chevron until the solution has assembled", () => {
     render(<LessonPlayer lesson={lessonWith([step()])} plan={PLAN} />);
-    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+    tap("Next");
+    // Held: still on the calculation.
+    expect(screen.getByText("What are the denominators?")).toBeInTheDocument();
 
     tap("4 and 4");
     tap("Check my answer");
+    tap("Next");
 
-    expect(screen.getByRole("button", { name: "Next" })).toBeEnabled();
+    expect(screen.getByRole("heading", { name: "After" })).toBeInTheDocument();
+  });
+
+  it("keeps Next pressable while a step is unsolved, and says why in place (D211)", () => {
+    const ONE_MORE_BIT = "There's one more bit to do first.";
+    render(<LessonPlayer lesson={lessonWith([step()])} plan={PLAN} />);
+    const next = screen.getByRole("button", { name: "Next" });
+
+    // Not greyed out, and nothing said until it is pressed.
+    expect(next).toBeEnabled();
+    expect(next.className).not.toMatch(/cursor-not-allowed/);
+    expect(screen.queryByText(ONE_MORE_BIT)).toBeNull();
+
+    tap("Next");
+    expect(screen.getByText(ONE_MORE_BIT)).toBeInTheDocument();
+
+    // Solved: the line has nothing left to say, and Next goes on.
+    tap("4 and 4");
+    tap("Check my answer");
+    expect(screen.queryByText(ONE_MORE_BIT)).toBeNull();
   });
 });

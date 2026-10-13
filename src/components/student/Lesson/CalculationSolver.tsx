@@ -15,6 +15,7 @@ import type {
 } from "@/lib/types";
 import { isStoredAnswer } from "@/lib/lessons/storedAnswer";
 import { cn } from "@/lib/utils";
+import { NO_SOUND, PressedLine } from "./PressedLine";
 import { READING_BODY, READING_HEADING, READING_INK } from "./readingSupport";
 import { revealIn, scrollerOf, type Stretch } from "./revealStep";
 import { useMediaSource, type MediaFailReason } from "./useMediaSource";
@@ -1909,6 +1910,14 @@ function StepNarration({
   onFailed?: (reason: MediaFailReason) => void;
 }) {
   const media = useMediaSource(clip.src, clip.storagePath, onFailed);
+  /*
+   * PRESSABLE, NOT GREYED (D211). Play on a step whose recording did not load
+   * says so in place, in Lydia's line, for this load of it; a load retried
+   * when the connection returns, and failing again, is said again when
+   * pressed. The step itself is all on screen either way.
+   */
+  const [toldFor, setToldFor] = useState<string | null>(null);
+  const told = media.failed && toldFor === media.key;
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const [pct, setPct] = useState(0);
@@ -1936,8 +1945,12 @@ function StepNarration({
   };
 
   const toggle = () => {
+    if (media.failed) {
+      setToldFor(media.key);
+      return;
+    }
     const el = audioRef.current;
-    if (media.failed || !el) return;
+    if (!el) return;
     if (playing) {
       el.pause();
       return;
@@ -1958,7 +1971,8 @@ function StepNarration({
   };
 
   return (
-    <div className="mb-4 flex items-center gap-3 rounded-[12px] bg-nevo-cream-elevated px-3 py-2.5 shadow-elevation-1">
+    // Wraps only to give the pressed line (D211) a row of its own.
+    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-[12px] bg-nevo-cream-elevated px-3 py-2.5 shadow-elevation-1">
       {!media.failed && (
         <audio
           // Keyed so a re-issued link actually reloads.
@@ -1987,14 +2001,8 @@ function StepNarration({
       <button
         type="button"
         aria-label={playing ? "Pause narration" : "Play narration"}
-        disabled={media.failed}
         onClick={toggle}
-        className={cn(
-          "flex size-11 shrink-0 items-center justify-center rounded-full bg-nevo-navy text-nevo-cream transition-transform",
-          media.failed
-            ? "cursor-not-allowed opacity-40"
-            : "cursor-pointer active:scale-[0.98]",
-        )}
+        className="flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full bg-nevo-navy text-nevo-cream transition-transform active:scale-[0.98]"
       >
         {playing ? (
           <Pause className="size-[18px]" fill="currentColor" strokeWidth={0} />
@@ -2034,6 +2042,7 @@ function StepNarration({
           </div>
         </div>
       )}
+      {told && <PressedLine className="basis-full">{NO_SOUND}</PressedLine>}
     </div>
   );
 }

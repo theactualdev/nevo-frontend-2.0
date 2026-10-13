@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Pause, Play } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { NO_SOUND, PressedLine } from "./PressedLine";
 import { useMediaSource } from "./useMediaSource";
 
 /** 17a's narration-bar silhouette - 20 bars, explicit px heights. */
@@ -26,8 +26,9 @@ const BAR_HEIGHTS = [6, 10, 13, 8, 14, 10, 12, 7, 13, 9, 11, 14, 8, 12, 10, 7, 1
  * refuses to start sound without a tap simply leaves it ready to press.
  *
  * A recording that will not load says so, in the words the lesson's own audio
- * uses, and the control goes quiet. One fresh attempt when the connection
- * returns - see `useMediaSource`.
+ * uses, and the control stays pressable and says so again when pressed
+ * (D211). One fresh attempt when the connection returns - see
+ * `useMediaSource`.
  *
  * THE LABEL IS "LISTEN", THEN "LISTEN AGAIN" (design D95, 6 Oct): "'Listen
  * again' where the child has already heard it, 'Listen' where they have not.
@@ -52,6 +53,13 @@ export function SpokenPrompt({
   // connection comes back.
   const media = useMediaSource(src, undefined);
   const failed = media.failed;
+  /*
+   * PRESSABLE, NOT GREYED (D211). Listen on a prompt that did not load says
+   * so in place, in Lydia's line, for this load of it - a load retried when
+   * the connection returns, and failing again, is said again when pressed.
+   */
+  const [toldFor, setToldFor] = useState<string | null>(null);
+  const told = failed && toldFor === media.key;
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const [pct, setPct] = useState(0);
@@ -81,8 +89,12 @@ export function SpokenPrompt({
   };
 
   const toggle = () => {
+    if (failed) {
+      setToldFor(media.key);
+      return;
+    }
     const el = audioRef.current;
-    if (failed || !el) return;
+    if (!el) return;
     if (playing) {
       el.pause();
       return;
@@ -100,7 +112,8 @@ export function SpokenPrompt({
   };
 
   return (
-    <div className="flex items-center gap-3 rounded-[12px] bg-nevo-cream-elevated px-3 py-2.5 shadow-elevation-1">
+    // Wraps only to give the pressed line (D211) a row of its own.
+    <div className="flex flex-wrap items-center gap-3 rounded-[12px] bg-nevo-cream-elevated px-3 py-2.5 shadow-elevation-1">
       {!failed && (
         <audio
           // Keyed so a re-issued link actually reloads.
@@ -132,14 +145,8 @@ export function SpokenPrompt({
       <button
         type="button"
         aria-label={playing ? "Pause" : label}
-        disabled={failed}
         onClick={toggle}
-        className={cn(
-          "flex size-11 shrink-0 items-center justify-center rounded-full bg-nevo-navy text-nevo-cream transition-transform",
-          failed
-            ? "cursor-not-allowed opacity-40"
-            : "cursor-pointer active:scale-[0.98]",
-        )}
+        className="flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full bg-nevo-navy text-nevo-cream transition-transform active:scale-[0.98]"
       >
         {playing ? (
           <Pause className="size-[18px]" fill="currentColor" strokeWidth={0} />
@@ -179,6 +186,7 @@ export function SpokenPrompt({
           </div>
         </div>
       )}
+      {told && <PressedLine className="basis-full">{NO_SOUND}</PressedLine>}
     </div>
   );
 }

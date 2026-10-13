@@ -1177,6 +1177,23 @@ describe("the narration layer", () => {
     expect(onReplay).toHaveBeenCalledTimes(1);
     expect(onAudioBusy.mock.calls).toEqual([["start"], ["end"], ["start"]]);
   });
+
+  it("keeps Play pressable when the recording did not load, and says so when pressed (D211)", () => {
+    const NO_SOUND = "The sound didn't load. Try again in a moment.";
+    listen({});
+    fireEvent.error(audio()!);
+    const button = screen.getByRole("button", { name: "Play narration" });
+
+    // Not greyed: pressable, and nothing said until it is pressed.
+    expect(button).toBeEnabled();
+    expect(button.className).not.toMatch(/opacity-40|cursor-not-allowed/);
+    expect(screen.queryByText(NO_SOUND)).toBeNull();
+
+    fireEvent.click(button);
+
+    expect(screen.getByText(NO_SOUND)).toBeInTheDocument();
+    expect(play).not.toHaveBeenCalled();
+  });
 });
 
 describe("reading support (D30)", () => {

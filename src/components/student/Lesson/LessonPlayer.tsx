@@ -109,6 +109,7 @@ import { LessonMessage } from "./LessonMessage";
 import { ModalitySuggestionPill } from "./ModalitySuggestionPill";
 import { ModuleBoundaryScreen } from "./ModuleBoundaryScreen";
 import { OfflineBanner } from "./OfflineBanner";
+import { ONE_MORE_BIT, PressedLine } from "./PressedLine";
 import { ScaffoldIndicator } from "./ScaffoldIndicator";
 import { QuickCheckSheet } from "./QuickCheckSheet";
 import { ReviewEntryScreen } from "./ReviewEntryScreen";
@@ -2134,8 +2135,13 @@ export function LessonPlayer({
    * completion screen, so that lesson could not be finished at all. On the
    * last segment forward goes to the assessment when there is one and to
    * completion when there is not; `continueAdvance` already knew both.
+   *
+   * AND IT HOLDS IT PRESSABLE (Lydia, D211, 13 Oct). Greyed, it read as
+   * broken; pressed, it now says why in place, in her line, until the solve
+   * is done or the child moves on.
    */
-  const nextDisabled = calcBlocking;
+  const [heldNextOn, setHeldNextOn] = useState<string | null>(null);
+  const nextHeld = calcBlocking && heldNextOn === segment.id;
 
   /*
    * 37c: UNDER THE ATTENTION ACCOMMODATION, "TAP TO CONTINUE" IS THE WAY ON.
@@ -2951,6 +2957,16 @@ export function LessonPlayer({
           reacts to a hint: the forward control's glow went with design's
           D124 (6 Oct), "Anything that reacts visibly to a child's difficulty
           tells them they are being watched." */}
+      {nextHeld && (
+        <div className="shrink-0 px-3.5 pt-2">
+          <PressedLine
+            reading={readingOn}
+            className="mx-auto w-full text-center sm:max-w-[560px] lg:max-w-[600px]"
+          >
+            {ONE_MORE_BIT}
+          </PressedLine>
+        </div>
+      )}
       <nav
         aria-hidden={partsLeft || undefined}
         inert={partsLeft}
@@ -2971,8 +2987,10 @@ export function LessonPlayer({
         />
         <ChevronButton
           dir="next"
-          disabled={nextDisabled}
-          onClick={handleNext}
+          disabled={false}
+          onClick={
+            calcBlocking ? () => setHeldNextOn(segment.id) : handleNext
+          }
         />
       </nav>
 
