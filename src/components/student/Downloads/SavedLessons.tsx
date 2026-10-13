@@ -23,6 +23,7 @@ import {
 import { LessonExitProvider } from "@/components/student/Lesson/LessonExit";
 import { LessonRoute } from "@/components/student/Lesson/LessonRoute";
 import { TAB_PAGE, TAB_TITLE } from "@/components/student/Shell/TabPage";
+import { BulkSaveButton } from "./BulkSaveButton";
 
 /**
  * Downloads for a signed-in child.
@@ -189,14 +190,18 @@ export function SavedLessons() {
         {textOnly && <> Pictures and sound aren&apos;t saved.</>}
       </p>
 
-      {unsaved.length > 0 && !failed && (
-        <button
-          type="button"
-          onClick={() => void saveAll()}
-          className="mt-5 h-[52px] w-full cursor-pointer rounded-[12px] bg-nevo-navy text-[15px] font-medium text-nevo-cream transition-[filter] hover:brightness-110"
-        >
-          Save all my lessons
-        </button>
+      {/*
+        STAYS WHEN EVERYTHING IS SAVED (D211, 13 Oct), finished rather than
+        gone: see `BulkSaveButton`. "Everything" is only claimed once the
+        lesson list has answered - while it is in flight the rows are the shelf
+        alone, all of them saved - and never over a failed read.
+      */}
+      {!failed && (unsaved.length > 0 || (!loading && rows.length > 0)) && (
+        <BulkSaveButton
+          finished={unsaved.length === 0}
+          label="Save all my lessons"
+          onSave={() => void saveAll()}
+        />
       )}
 
       {/* The readable violet: the surface one is 2.3:1 on cream. */}

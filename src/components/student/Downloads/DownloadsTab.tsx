@@ -7,6 +7,7 @@ import { useHydrated } from "@/hooks/useHydrated";
 import { SampleRegion } from "@/components/shared/SampleRegion";
 import { cn } from "@/lib/utils";
 import { TAB_PAGE, TAB_TITLE } from "@/components/student/Shell/TabPage";
+import { BulkSaveButton } from "./BulkSaveButton";
 import { SavedLessons } from "./SavedLessons";
 
 type DownloadStatus = "available" | "downloading" | "downloaded";
@@ -49,8 +50,6 @@ export function DownloadsTab() {
   const [statuses, setStatuses] = useState<Record<string, DownloadStatus>>(() =>
     Object.fromEntries(ITEMS.map((i) => [i.id, "available" as DownloadStatus])),
   );
-  /** The finished button was pressed, so it says why it did nothing. */
-  const [explained, setExplained] = useState(false);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   useEffect(() => {
     const active = timers.current;
@@ -73,7 +72,6 @@ export function DownloadsTab() {
     if (status === "downloading") return;
     if (status === "downloaded") {
       setStatuses((s) => ({ ...s, [id]: "available" })); // remove
-      setExplained(false);
       return;
     }
     setStatuses((s) => ({ ...s, [id]: "downloading" }));
@@ -81,10 +79,6 @@ export function DownloadsTab() {
   };
 
   const downloadAll = () => {
-    if (allDone) {
-      setExplained(true);
-      return;
-    }
     const pending = ITEMS.filter((i) => statuses[i.id] === "available");
     if (pending.length === 0) return;
     setStatuses((s) => {
@@ -111,26 +105,12 @@ export function DownloadsTab() {
       <div className="max-w-[640px]">
       <h1 className={TAB_TITLE}>Downloads</h1>
 
-      {/*
-        FINISHED, NOT BLOCKED, SO NEVER GREY (D211, 13 Oct): it "still stays
-        pressable and still says so rather than going grey." Pressed with
-        everything saved, it answers in place, in the ruling's one line.
-      */}
-      <button
-        type="button"
-        onClick={downloadAll}
-        className="mt-5 h-[52px] w-full cursor-pointer rounded-[12px] bg-nevo-navy text-[15px] font-medium text-nevo-cream transition-[filter] hover:brightness-110"
-      >
-        {allDone ? "All lessons saved for offline" : "Download today's lessons"}
-      </button>
-      {allDone && explained && (
-        <p
-          role="status"
-          className="mt-3 rounded-[10px] bg-nevo-violet/14 px-[15px] py-[13px] text-[14px] leading-[1.5] text-nevo-near-black/80"
-        >
-          Everything&apos;s already saved.
-        </p>
-      )}
+      {/* Finished, not blocked, so never grey (D211): see `BulkSaveButton`. */}
+      <BulkSaveButton
+        finished={allDone}
+        label="Download today's lessons"
+        onSave={downloadAll}
+      />
 
       <ul className="mt-3">
         {ITEMS.map((item) => (
