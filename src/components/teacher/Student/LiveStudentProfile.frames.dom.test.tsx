@@ -109,13 +109,19 @@ describe("the way back", () => {
       <LiveStudentProfile studentId="s-1" classId="c-1" classHref="/teacher/classes/c-1" state={STATE()} />,
     );
 
-    expect(screen.getByRole("link", { name: "JSS 2B · Roster" })).toHaveAttribute("href", "/teacher/classes/c-1");
+    // Twice since C19: the page's own link, and the phone's back bar. Both
+    // go to the same place under the same name.
+    const back = screen.getAllByRole("link", { name: "JSS 2B · Roster" });
+    expect(back).toHaveLength(2);
+    for (const b of back) expect(b).toHaveAttribute("href", "/teacher/classes/c-1");
   });
 
   it("is My Classes when the profile was opened without one", () => {
     render(<LiveStudentProfile studentId="s-1" state={STATE()} />);
 
-    expect(screen.getByRole("link", { name: "My Classes" })).toHaveAttribute("href", "/teacher/classes");
+    const back = screen.getAllByRole("link", { name: "My Classes" });
+    expect(back).toHaveLength(2);
+    for (const b of back) expect(b).toHaveAttribute("href", "/teacher/classes");
   });
 });
 

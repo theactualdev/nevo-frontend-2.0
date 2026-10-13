@@ -25,6 +25,7 @@ import {
 } from "@/lib/mocks/teacherIntelligence";
 import { cn } from "@/lib/utils";
 import { MasteryDualTrack } from "./MasteryDualTrack";
+import { PhoneRosterBar } from "@/components/teacher/Shell/PhoneBackBar";
 
 /**
  * C08 Student Profile for a real student.
@@ -213,11 +214,14 @@ export function LiveStudentProfile({
   const failedLine = `We couldn${"’"}t load these just now. Nothing has changed for ${student.firstName ?? "them"}, so you can try again in a moment.`;
 
   return (
-    <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
+    /* C19 B2 on a phone: the back bar in place of the menu, 18px edges, and
+       only what B2 draws - who this is, what Nevo noticed, and Recommend. */
+    <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] max-md:px-[18px] max-md:pt-0 max-md:pb-[22px] xl:px-[52px] xl:py-11">
       <div className="mx-auto xl:max-w-[900px]">
+        <PhoneRosterBar classId={classId} />
         <Link
           href={classHref ?? "/teacher/classes"}
-          className="inline-flex cursor-pointer items-center gap-[7px] text-[13.5px] text-nevo-near-black/60 transition-transform active:scale-[0.99] xl:text-sm"
+          className="inline-flex cursor-pointer items-center gap-[7px] text-[13.5px] text-nevo-near-black/60 transition-transform active:scale-[0.99] max-md:hidden xl:text-sm"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="xl:size-[17px]">
             <path d="M15 6l-6 6 6 6" />
@@ -273,7 +277,7 @@ export function LiveStudentProfile({
 
           {/* C08's order: the primary action first. `flex-wrap` since 15 Sep -
               a third action turned a bare row into one that ran off a tablet. */}
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2.5 max-md:hidden">
             <button
               type="button"
               onClick={() => setRecommending(true)}
@@ -434,6 +438,20 @@ export function LiveStudentProfile({
           </>
         )}
 
+        {/* B2's one action, at the foot where a thumb is. The header's row
+            of three is the tablet's and the desktop's. */}
+        <button
+          type="button"
+          onClick={() => setRecommending(true)}
+          className="mt-[18px] flex h-[54px] w-full cursor-pointer items-center justify-center rounded-[10px] bg-nevo-navy text-base font-semibold text-nevo-cream transition-[filter] hover:brightness-93 md:hidden"
+        >
+          Recommend a lesson
+        </button>
+
+        {/* B2 draws none of what follows: mastery, what Nevo is offering,
+            sessions, adaptations and the help-seeking line are for a bigger
+            screen. */}
+        <div className="max-md:hidden">
         {concepts.length === 0 && read("mastery") === "failed" && (
           <>
             <h3 className={cn(SECTION_H, "mt-[26px] xl:mt-9")}>Concept mastery</h3>
@@ -689,6 +707,7 @@ export function LiveStudentProfile({
             {state.helpSeeking}
           </p>
         )}
+        </div>
 
 
         {/*

@@ -7,7 +7,12 @@ import { hasPhoneLayout, ownsPhoneBar, phoneTitle } from "./phoneLayouts";
  * route joins the list only once it is laid out for 375 wide.
  */
 describe("which screens a phone is given", () => {
-  it.each(["/teacher/dashboard", "/teacher/help", "/teacher/students/s-1/clear-pin"])("lays out %s", (path) => {
+  it.each([
+    "/teacher/dashboard",
+    "/teacher/help",
+    "/teacher/students/s-1/clear-pin",
+    "/teacher/students/s-1",
+  ])("lays out %s", (path) => {
     expect(hasPhoneLayout(path)).toBe(true);
   });
 
@@ -17,8 +22,9 @@ describe("which screens a phone is given", () => {
     "/teacher/lessons/upload",
     "/teacher/classes/c-1",
     "/teacher/profile",
-    // Not yet: these join when their phone layouts land.
-    "/teacher/students/s-1",
+    // B2 is the profile alone - the recommend route stays for a bigger screen.
+    "/teacher/students/s-1/recommend",
+    // Not yet: joins when its phone layout lands.
     "/teacher/connect",
   ])("sends %s to the bigger-screen state", (path) => {
     expect(hasPhoneLayout(path)).toBe(false);
@@ -44,6 +50,7 @@ describe("the phone app bar's title", () => {
 describe("screens that bring their own phone bar", () => {
   it("lets the one-thumb Clear PIN draw its back bar (B3)", () => {
     expect(ownsPhoneBar("/teacher/students/s-1/clear-pin")).toBe(true);
+    expect(ownsPhoneBar("/teacher/students/s-1")).toBe(true);
     expect(ownsPhoneBar("/teacher/dashboard")).toBe(false);
   });
 });

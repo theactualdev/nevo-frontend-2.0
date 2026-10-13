@@ -45,7 +45,8 @@ const STATE: StudentProfileState = {
 };
 
 const ACTIONS = [
-  () => screen.getByRole("button", { name: "Recommend a lesson" }),
+  // The header's: C19's phone has a second, at the foot (B2), later in the page.
+  () => screen.getAllByRole("button", { name: "Recommend a lesson" })[0],
   () => screen.getByRole("button", { name: "Flag for support" }),
   () => screen.getByRole("link", { name: "Send them a message" }),
 ];
