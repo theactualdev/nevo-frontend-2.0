@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { AttentionFlag } from "@/lib/api/intelligence";
 import type { AdminStudentRow } from "@/lib/api/students";
+import type { ClassActivity } from "@/lib/api/school";
 import {
   awaitingParentReply,
+  classesWithoutALesson,
   glanceRows,
   learnersWithOpenFlags,
+  nameClasses,
 } from "./overviewGlance";
 
 /**
@@ -116,5 +119,48 @@ describe("glanceRows", () => {
         /\b(struggl\w*|at risk|concern\w*|behind|weak)\b/i,
       );
     }
+  });
+});
+
+/**
+ * D04's third row, ruled v1.5 while nothing carried it; `classActivity`
+ * (9 Oct) does, and it was taken up on 13 Oct.
+ */
+const cls = (name: string, lastActivityAt: string | null): ClassActivity => ({
+  classId: `c-${name}`,
+  className: name,
+  lastActivityAt,
+});
+
+describe("classes that haven't run a lesson", () => {
+  it("are the ones nobody has started a lesson in", () => {
+    expect(
+      classesWithoutALesson([cls("JSS 1A", "2026-10-01T09:00:00Z"), cls("JSS 1B", null), cls("SS 2 Arts", null)]),
+    ).toEqual(["JSS 1B", "SS 2 Arts"]);
+  });
+
+  it("are named as D04 names them, and summed past three", () => {
+    expect(nameClasses(["JSS 1B"])).toBe("JSS 1B");
+    expect(nameClasses(["JSS 1B", "SS 2 Arts"])).toBe("JSS 1B and SS 2 Arts");
+    expect(nameClasses(["A", "B", "C"])).toBe("A, B and C");
+    expect(nameClasses(["A", "B", "C", "D", "E"])).toBe("A, B, C and 2 more");
+  });
+
+  it("come third, in D04's words", () => {
+    const rows = glanceRows([student("a", "pending")], [flag("1", "s1")], [cls("JSS 1B", null), cls("SS 2 Arts", null)]);
+    expect(rows.map((r) => r.key)).toEqual(["consent", "flags", "classes"]);
+    expect(rows[2].title).toBe("2 classes haven't run a lesson yet");
+    expect(rows[2].sub).toBe("JSS 1B and SS 2 Arts - might be worth a nudge to their teachers.");
+    expect(rows[2].href).toBe("/admin/classes");
+  });
+
+  it("read naturally at one", () => {
+    expect(glanceRows(null, null, [cls("JSS 1B", null)])[0].title).toBe("1 class hasn't run a lesson yet");
+  });
+
+  it("are not drawn when every class has had one, or the read had none to give", () => {
+    expect(glanceRows(null, null, [cls("JSS 1A", "2026-10-01T09:00:00Z")])).toEqual([]);
+    expect(glanceRows(null, null, null)).toEqual([]);
+    expect(glanceRows(null, null, [])).toEqual([]);
   });
 });

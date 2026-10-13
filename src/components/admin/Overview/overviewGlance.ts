@@ -1,14 +1,16 @@
 import type { AttentionFlag } from "@/lib/api/intelligence";
+import type { ClassActivity } from "@/lib/api/school";
 import type { AdminStudentRow } from "@/lib/api/students";
 
 /**
- * "Worth a glance" — the two rows that are this school's, and the one that is not.
+ * "Worth a glance" — D04's three rows, all this school's now.
  *
- * D04 draws three. All three were fixture, under a note admitting it. Two have
- * sources and are computed here; the third ("classes that haven't run a lesson")
- * has none, and the nearest proxy is one adaptation-log call per class, which is
- * a different claim. It is not drawn: an invented row, even under a note, is
- * still a school being shown class names that are not theirs.
+ * All three were fixture once, under a note admitting it. The third ("classes
+ * that haven't run a lesson") had no source and was ruled v1.5; since 9 Oct
+ * `GET /school/overview` carries `classActivity`, each live class with the
+ * latest lesson any of its learners started, and Olayinka took it up on 13 Oct
+ * ("build all"). A class whose time is null is one where nobody has started a
+ * lesson - which is what "hasn't run a lesson yet" says, and no more.
  *
  * EVERY COUNT HERE CAN BE ABSENT, AND ABSENT IS NOT ZERO. A read that failed, or
  * one we could not finish, returns `null` and the row does not render. The
@@ -60,9 +62,28 @@ export function learnersWithOpenFlags(flags: AttentionFlag[]): number {
  * is not something worth a glance, and D04's list is things needing attention
  * rather than a dashboard of every figure.
  */
+/** The classes nobody has started a lesson in, in the server's (name) order. */
+export function classesWithoutALesson(activity: ClassActivity[]): string[] {
+  return activity.filter((c) => c.lastActivityAt === null).map((c) => c.className);
+}
+
+/** How many class names the row spells out before "and N more". */
+const NAMED_CLASSES = 3;
+
+const AND = new Intl.ListFormat("en-GB", { style: "long", type: "conjunction" });
+
+/** "JSS 1B and SSS 2 Arts", or "JSS 1A, JSS 1B, JSS 2A and 4 more". */
+export function nameClasses(names: string[]): string {
+  const rest = names.slice(NAMED_CLASSES);
+  return AND.format(
+    rest.length ? [...names.slice(0, NAMED_CLASSES), `${rest.length} more`] : names,
+  );
+}
+
 export function glanceRows(
   students: AdminStudentRow[] | null,
   flags: AttentionFlag[] | null,
+  activity: ClassActivity[] | null = null,
 ): GlanceRow[] {
   const rows: GlanceRow[] = [];
 
@@ -93,6 +114,22 @@ export function glanceRows(
         sub: "Learning Support lists them, with what Nevo noticed and when.",
         action: "Open Learning Support",
         href: "/admin/senco",
+      });
+    }
+  }
+
+  if (activity) {
+    const quiet = classesWithoutALesson(activity);
+    if (quiet.length > 0) {
+      const n = quiet.length;
+      rows.push({
+        key: "classes",
+        title: `${n} ${n === 1 ? "class hasn't" : "classes haven't"} run a lesson yet`,
+        // D04's sub-line. Names the classes, never a teacher: the nudge is the
+        // admin's to give, and nothing here says why a class is quiet.
+        sub: `${nameClasses(quiet)} - might be worth a nudge to their teachers.`,
+        action: "View Classes",
+        href: "/admin/classes",
       });
     }
   }

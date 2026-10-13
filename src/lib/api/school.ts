@@ -100,9 +100,21 @@ export interface SchoolRosterCounts {
   classes?: number;
 }
 
+/**
+ * One live class and when anything last happened in it: the latest lesson any
+ * of its learners started. Null means none of them has started one yet.
+ */
+export interface ClassActivity {
+  classId: string;
+  className: string;
+  lastActivityAt: string | null;
+}
+
 export interface SchoolOverview {
   schoolId: string;
   counts: SchoolRosterCounts;
+  /** Every live class, by name (9 Oct handoff). Absent on an older answer. */
+  classActivity?: ClassActivity[];
 }
 
 export interface DpaAcceptance {
