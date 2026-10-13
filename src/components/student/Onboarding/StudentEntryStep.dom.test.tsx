@@ -379,16 +379,70 @@ describe("the lookup", () => {
     }
   });
 
-  it("reads a dropped network and a rate limit the same way", async () => {
-    for (const err of [new Error("offline"), new ApiError(429, "slow down")]) {
-      lookup.mockReset().mockRejectedValue(err);
-      render(<StudentEntryStep framing="school" />);
+  it("reads a dropped network as a lookup we could not run", async () => {
+    lookup.mockRejectedValue(new Error("offline"));
+    render(<StudentEntryStep framing="school" />);
 
-      await enterAndSubmit();
+    await enterAndSubmit();
 
-      expect(message()).toBe(ENTRY_UNCHECKED_COPY);
-      cleanup();
-    }
+    expect(message()).toBe(ENTRY_UNCHECKED_COPY);
+  });
+});
+
+/*
+ * The lookup's 429 `too_many_attempts` (declared 13 Oct) is D154's pause, in
+ * D156's words: "One wording everywhere a pause is shown". It said "press
+ * Continue to try again", which sends a child further into the lockout.
+ */
+describe("too many attempts", () => {
+  const pauseNote = "Let's wait a little before trying again.";
+
+  it.each([
+    ["a 429", new ApiError(429, "slow down")],
+    [
+      "too_many_attempts on another status",
+      new ApiError(401, "refused", {
+        detail: { code: "too_many_attempts", message: "said" },
+      }),
+    ],
+  ])("pauses on %s, in the door's words, with no way to press again", async (_, err) => {
+    lookup.mockRejectedValue(err);
+    render(<StudentEntryStep framing="school" />);
+
+    await enterAndSubmit();
+
+    expect(
+      screen.getByRole("heading", { name: "Let's take a moment" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(pauseNote)).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/press Continue|Try again/);
+    expect(
+      screen.queryByRole("button", { name: /^(Continue|Try again)$/ }),
+    ).toBeNull();
+    // No retry time is sent, so none is named.
+    expect(screen.getByText(pauseNote).textContent).not.toMatch(/\d/);
+  });
+
+  it("holds what was typed, as the PIN door holds its boxes, until the child leaves", async () => {
+    lookup.mockRejectedValue(new ApiError(429, "slow down"));
+    render(<StudentEntryStep framing="school" />);
+    await enterAndSubmit();
+
+    expect(cells().map((c) => c.value)).toEqual(["K", "7", "D", "Q"]);
+    expect(idField().value).toBe("BGA/2031");
+    expect(idField().readOnly).toBe(true);
+    expect(cells()[0].readOnly).toBe(true);
+
+    // Neither an edit nor Enter asks again, and nothing ends it on a timer.
+    typeInto(idField(), "BGA/2013");
+    fireEvent.keyDown(idField(), { key: "Enter" });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10 * 60 * 1000);
+    });
+
+    expect(idField().value).toBe("BGA/2031");
+    expect(lookup).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(pauseNote)).toBeInTheDocument();
   });
 });
 
