@@ -27,7 +27,9 @@ export interface WarmUpItem {
  *    flight).
  *  - `none`: a signed-in child, and the engine named nothing this screen can
  *    run - the read failed, or the dimension is not one of our six, or the
- *    day's task is the question and none was served.
+ *    day's task is the question and none was served. In that last case the
+ *    engine did name a task, and `cannotPresent` says which: it goes to the
+ *    engine as skipped (B117).
  *  - `ready`: run this. `live` is false only for the signed-out walkthrough.
  *
  * `doneToday` is the account's answer to "has this child done today's?" (B10,
@@ -36,7 +38,7 @@ export interface WarmUpItem {
  */
 export type WarmUpPrompt =
   | { state: "waiting" }
-  | { state: "none"; doneToday?: boolean }
+  | { state: "none"; doneToday?: boolean; cannotPresent?: "domain" }
   | {
       state: "ready";
       dimension: BaselineDimension;
@@ -143,8 +145,11 @@ export function toPrompt(res: Partial<RecalibratePrompt>): WarmUpPrompt {
       : null;
   // The subject-knowledge task has no device version: it IS a served
   // question. Without one there is nothing to ask, and the frame's fixture is
-  // not this child's question.
-  if (dimension === "domain" && !item) return { state: "none", ...done };
+  // not this child's question. It is still a task the engine named and this
+  // screen could not give, so it is said to be one (B117).
+  if (dimension === "domain" && !item) {
+    return { state: "none", cannotPresent: "domain", ...done };
+  }
   return {
     state: "ready",
     dimension: dimension as BaselineDimension,

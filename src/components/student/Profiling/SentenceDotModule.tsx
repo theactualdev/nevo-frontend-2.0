@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { dotPairs, type AgeBand, type DotPair } from "@/lib/profiling/bands";
@@ -434,11 +434,31 @@ export function SentenceDotModule({
    * Settled once, at mount, so the run cannot change shape underneath a child.
    * A browser with no speech cannot present the audio activity honestly, and
    * miming it produced three-way guesses filed as a reading measure - so the
-   * activity is dropped and the module runs its dot half alone. Nothing is
-   * recorded for reading, so no reading trial is sent: "not measured", never
-   * a zero.
+   * activity is dropped and the module runs its dot half alone: "not
+   * measured", never a zero.
    */
   const [canHear] = useState(() => mode !== "audio" || hasSpeech());
+  /*
+   * AND THE ENGINE IS TOLD IT WAS NOT PRESENTED (B117, 13 Oct): "skipped
+   * means an activity could not be presented". Nothing was recorded, so
+   * nothing was sent, and a reading the device could not take looked like
+   * one nobody tried to take. Each heard trial goes as skipped
+   * (`baselineTrials`), where it would have run: before the dots. Once, by
+   * the ref, however often the effect runs.
+   */
+  const toldUnheard = useRef(false);
+  useEffect(() => {
+    if (canHear || toldUnheard.current) return;
+    toldUnheard.current = true;
+    AUDIO_TRIALS.forEach((_, trial) =>
+      capture?.record("unpresented", {
+        module: "sentence_dot",
+        act: "reading",
+        mode,
+        trial,
+      }),
+    );
+  }, [canHear, capture, mode]);
   const sentences = SENTENCES[band] ?? SENTENCES.p46;
   const readingCount =
     mode === "sentence"

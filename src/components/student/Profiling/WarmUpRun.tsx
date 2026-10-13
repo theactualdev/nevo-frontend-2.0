@@ -207,25 +207,36 @@ export function WarmUpRun({
    * the answer arrived, and STOPS the capture, so nothing the child does after
    * it is recorded or written to the device either.
    */
-  const { withdrawn } = useConsentGate();
+  const { withdrawn, known: consentKnown } = useConsentGate();
   useEffect(() => {
     if (withdrawn) void capture.stop();
   }, [withdrawn, capture]);
   const started = useRef(false);
   const submitted = useRef(false);
+  /** This mount has told the engine its task could not be given. */
+  const reported = useRef(false);
   /*
    * A HEARD ROUND NEEDS A VOICE. P1-3's reading round is a sentence heard, as
    * in the baseline (D81). Where the device cannot speak, the baseline skips
    * that activity rather than mime it, and the warm-up shows its nothing-state
    * for the same reason: it never puts another task in place of the one the
    * engine asked for. Settled on the client only, like everything that waits
-   * on `hydrated` here.
+   * on `hydrated` here. Both now tell the engine it was skipped (B117).
    */
   const unheard =
     dimension === "reading" &&
     !item &&
     warmUpReading(band ?? FRAME_BAND).mode === "audio" &&
     !(hydrated && hasSpeech());
+  /**
+   * The task the engine named that this screen cannot give: the heard round
+   * above, or the question task with no question to ask (`cannotPresent`).
+   */
+  const cannotPresent: BaselineDimension | null = unheard
+    ? "reading"
+    : prompt.state === "none"
+      ? (prompt.cannotPresent ?? null)
+      : null;
 
   /*
    * ONE WARM-UP A DAY, AND THE CHECK HAS TO HAPPEN BEFORE THE RUN STARTS.
@@ -260,12 +271,71 @@ export function WarmUpRun({
     started.current = true;
     capture.record("warmup_start", {
       dimension,
-      ...(band ? { band } : {}),
+      /*
+       * The band the task was sized for (B118, 13 Oct): the roster's, never
+       * the Primary 4-6 default. Nor for a served question, which is the
+       * engine's item as it came and is not sized here at all.
+       */
+      ...(band && !item ? { band } : {}),
       // The device, read once here, goes beside the trials (B76).
       formFactor: formFactor(),
       ...(item ? { itemId: item.itemId } : {}),
     });
   }, [capture, dimension, item, doneToday, band, bandSettled, unheard]);
+
+  /*
+   * A TASK THIS SCREEN CANNOT GIVE IS STILL REPORTED (B117, 13 Oct): "skipped
+   * means an activity could not be presented". The child sees the
+   * nothing-state as before (D139); the engine is now told why, rather than
+   * hearing nothing and asking again. One skipped trial for the task it named,
+   * with the band only where the task was sized by one: the heard round is
+   * P1-3's, and the question task is not sized here.
+   *
+   * Only for a signed-in child, on a day not already done, once consent has
+   * ANSWERED and is not withdrawn: this goes the moment the screen opens, so
+   * the run's later check of `withdrawn` would always read false here.
+   *
+   * SENT, NEVER PARKED. The parking slot holds one record, and a report that
+   * nothing was presented must not displace a real run waiting to go up. The
+   * send itself still retries a blip (`submitTrials`).
+   */
+  useEffect(() => {
+    // `hydrated`: before it, `unheard` cannot yet know the device can speak.
+    if (!hydrated || !cannotPresent || !bandSettled) return;
+    if (!consentKnown || withdrawn) return;
+    if (reported.current || started.current) return;
+    const owner = getSession()?.userId ?? null;
+    if (!owner || warmUpDoneFor(doneToday, owner)) return;
+    reported.current = true;
+    capture.record("warmup_start", {
+      dimension: cannotPresent,
+      ...(unheard && band ? { band } : {}),
+      formFactor: formFactor(),
+    });
+    capture.record("unpresented", {
+      module: "warmup",
+      act: cannotPresent,
+      ...(unheard ? { mode: "audio" } : {}),
+    });
+    void baselineApi
+      .submitTrials(
+        capture.sessionId,
+        baselineTrials(capture),
+        baselineRunContext(capture),
+      )
+      .catch(() => false)
+      .finally(() => void capture.purge());
+  }, [
+    hydrated,
+    capture,
+    cannotPresent,
+    unheard,
+    band,
+    bandSettled,
+    consentKnown,
+    withdrawn,
+    doneToday,
+  ]);
 
   /*
    * Derived during render rather than set from an effect.

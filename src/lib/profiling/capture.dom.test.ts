@@ -412,6 +412,55 @@ describe("baselineTrials - the motor-speed step's samples (PR #645)", () => {
   });
 });
 
+/*
+ * BACKEND, 13 OCT (B117): "skipped means an activity could not be presented
+ * or a motor target was left untapped. 'Not sure' is a response, not a skip."
+ * An activity the device could not present sent nothing at all, so the
+ * engine could not tell a reading it was never given from one nobody tried.
+ */
+describe("baselineTrials - an activity the device could not present (B117)", () => {
+  const skippedTrial = (dimension: string, condition: string | null) => ({
+    dimension,
+    condition,
+    response: null,
+    correct: null,
+    responseTimeMs: null,
+    probeItemId: null,
+    skipped: true,
+  });
+
+  it("goes as skipped, one per trial not presented, where it would have run", () => {
+    // P1-3's heard sentences on a device with no speech, then the dots.
+    const c = new BaselineCapture("u1");
+    for (const trial of [0, 1]) {
+      c.record("unpresented", { module: "sentence_dot", act: "reading", mode: "audio", trial });
+    }
+    pick(c, "dots", { choice: 0, rtMs: 700, a: 8, b: 4, ratio: 2, correct: true });
+
+    expect(baselineTrials(c)).toEqual([
+      skippedTrial("reading", "audio"),
+      skippedTrial("reading", "audio"),
+      { dimension: "ans", condition: "ratio_2", response: "0", correct: true, responseTimeMs: 700, probeItemId: null },
+    ]);
+  });
+
+  it("names a warm-up's task by its own dimension", () => {
+    const c = new BaselineCapture("u2");
+    c.record("unpresented", { module: "warmup", act: "domain" });
+
+    expect(baselineTrials(c)).toEqual([skippedTrial("domain", null)]);
+  });
+
+  it("never skips a 'Not sure', which is a response", () => {
+    const c = new BaselineCapture("u3");
+    pick(c, "reading", { choice: 3, rtMs: 900, mode: "audio", notSure: true });
+
+    const [t] = baselineTrials(c);
+    expect(t).toMatchObject({ response: "not_sure", correct: null, responseTimeMs: 900 });
+    expect(t).not.toHaveProperty("skipped");
+  });
+});
+
 describe("baselineRunContext - what the run was built for and sat on (B76)", () => {
   it("is the onboarding run's band and device, as the contract names them", () => {
     const c = new BaselineCapture("r1");

@@ -41,9 +41,12 @@ vi.mock("@/hooks/useRosterBand", () => ({
   useRosterBand: () => ({ band: null, settled: true }),
 }));
 
-const consent = vi.hoisted(() => ({ withdrawn: false }));
+const consent = vi.hoisted(() => ({ withdrawn: false, known: true }));
 vi.mock("@/hooks/useConsentGate", () => ({
-  useConsentGate: () => ({ withdrawn: consent.withdrawn, known: true }),
+  useConsentGate: () => ({
+    withdrawn: consent.withdrawn,
+    known: consent.known,
+  }),
 }));
 
 const { push } = vi.hoisted(() => ({ push: vi.fn() }));
@@ -80,6 +83,7 @@ beforeEach(() => {
   holdBaseline.mockReset();
   push.mockReset();
   consent.withdrawn = false;
+  consent.known = true;
   engine.prompt = { state: "waiting" };
   window.localStorage.clear();
   clearSession();
@@ -238,6 +242,81 @@ describe("WarmUpRun — the question the engine served", () => {
       itemId: "item-7",
       value: "opt-b",
     });
+  });
+});
+
+/*
+ * B117, 13 Oct: "skipped means an activity could not be presented". The engine
+ * named the question task and no question this screen could ask came with it;
+ * the run showed the nothing-state and told the engine nothing.
+ */
+describe("WarmUpRun — a task the engine named and this screen cannot give (B117)", () => {
+  const unaskable: WarmUpPrompt = { state: "none", cannotPresent: "domain" };
+
+  it("keeps the nothing-state, and tells the engine the task was skipped", async () => {
+    signIn();
+    engine.prompt = unaskable;
+    render(<WarmUpRun />);
+    await settle();
+
+    expect(screen.queryAllByRole("button")).toHaveLength(1);
+    expect(submit).toHaveBeenCalledTimes(1);
+    expect(trials()).toEqual([
+      {
+        dimension: "domain",
+        condition: null,
+        response: null,
+        correct: null,
+        responseTimeMs: null,
+        probeItemId: null,
+        skipped: true,
+      },
+    ]);
+    // Not sized by any band here, so none is claimed (B118).
+    expect(submit.mock.calls[0][2]).toEqual({ formFactor: "desktop_cursor" });
+    // Nothing happened, so the account is not told today's task is done.
+    expect(deviceTaskDone).not.toHaveBeenCalled();
+    expect(answerPrompt).not.toHaveBeenCalled();
+    expect(holdBaseline).not.toHaveBeenCalled();
+  });
+
+  it("waits for consent to answer before it says anything", async () => {
+    signIn();
+    consent.known = false;
+    engine.prompt = unaskable;
+    render(<WarmUpRun />);
+    await settle();
+
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it("says nothing for a withdrawn guardian's child", async () => {
+    signIn();
+    consent.withdrawn = true;
+    engine.prompt = unaskable;
+    render(<WarmUpRun />);
+    await settle();
+
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it("says nothing on a day the account says is done", async () => {
+    signIn();
+    engine.prompt = { ...unaskable, doneToday: true };
+    render(<WarmUpRun />);
+    await settle();
+
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it("says nothing when the engine named no task at all", async () => {
+    // A failed read or an unknown dimension: nothing to say was skipped.
+    signIn();
+    engine.prompt = { state: "none" };
+    render(<WarmUpRun />);
+    await settle();
+
+    expect(submit).not.toHaveBeenCalled();
   });
 });
 

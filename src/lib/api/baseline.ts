@@ -65,8 +65,9 @@ export interface BaselineTrial {
   responseTimeMs: number | null;
   probeItemId: string | null;
   /**
-   * A trial put in front of the child that they did not answer (8 Oct, B76).
-   * Sent only where the capture recorded one; absent is the contract's false.
+   * A trial the device could not present, or a motor target left untapped
+   * (B117, 13 Oct). Sent only where the capture recorded one; absent is the
+   * contract's false. A "Not sure" is a response, never a skip.
    */
   skipped?: boolean;
 }
@@ -77,7 +78,10 @@ export interface BaselineTrial {
  * not record it, and the contract reads a missing one as not told.
  */
 export interface BaselineRunContext {
-  /** The spec's closed `AgeBand`, the set the roster already sends. */
+  /**
+   * The spec's closed `AgeBand`, the set the roster already sends: the band
+   * the task was sized for, and only a band the server gave (B118).
+   */
   ageBand?:
     | "early_primary"
     | "upper_primary"
