@@ -54,19 +54,27 @@ vi.mock("@/context/AccessibilityContext", () => ({
 }));
 
 /*
- * THREE SENTENCES, DELIBERATELY. `chunk()` returns the body unsplit when it
- * holds fewer than two sentences, which takes the single-part branch and
- * renders a plain paragraph with no parts, no pause and no continue control.
- * The factory the sibling suites use produces a one-sentence body, so an
- * attention test built on it would exercise none of this and quietly assert
- * nothing.
+ * THREE CHUNKS, DELIBERATELY. The parts are the server's reading chunks and
+ * nothing else (B114): a body with fewer than two is drawn whole, with no
+ * parts, no pause and no continue control. The factory the sibling suites use
+ * produces a body with none, so an attention test built on it would exercise
+ * none of this and quietly assert nothing.
  */
 const THREE = "One idea here. A second idea here. A third idea here.";
+const CHUNKS = [
+  { id: "c1", text: "One idea here." },
+  { id: "c2", text: "A second idea here." },
+  { id: "c3", text: "A third idea here." },
+];
 
-const segment = (id: string, heading: string) => ({
+const segment = (
+  id: string,
+  heading: string,
+  readingChunks: { id: string; text: string }[] = CHUNKS,
+) => ({
   id,
   modalities: ["text"] as const,
-  text: { heading, body: { default: THREE } },
+  text: { heading, body: { default: THREE }, readingChunks },
 });
 
 const LESSON = {
@@ -148,7 +156,8 @@ describe("an accommodation the plan carries reaches the child", () => {
     );
 
     expect(screen.queryByRole("button", { name: "Tap to continue" })).toBeNull();
-    expect(screen.getByText(THREE)).toBeInTheDocument();
+    for (const { text } of CHUNKS)
+      expect(screen.getByText(text)).toBeInTheDocument();
   });
 
   it("leaves the body whole when the plan carries no accommodations at all", () => {
@@ -184,6 +193,39 @@ describe("what a chunked segment reports having been read", () => {
 
     expect(scrolledSegments()).toEqual(["seg-1", "seg-1", "seg-1", "seg-1"]);
   });
+
+  /*
+   * B114: NO CHUNKS, NO PARTS - and then the body is the segment, read by its
+   * scroll like any other. It used to be cut into sentences on the device.
+   */
+  it.each([
+    ["no chunks", []],
+    ["one chunk", [{ id: "c1", text: THREE }]],
+  ])(
+    "draws a body with %s whole under attention, and reads it by its scroll",
+    (_, chunks) => {
+      const { container } = render(
+        <LessonPlayer
+          lesson={
+            {
+              ...LESSON,
+              segments: [segment("seg-1", "Numerators", chunks)],
+            } as unknown as Lesson
+          }
+          plan={planWith({ attention: true })}
+        />,
+      );
+
+      expect(
+        screen.queryByRole("button", { name: "Tap to continue" }),
+      ).toBeNull();
+      expect(screen.getByText(THREE)).toBeInTheDocument();
+      // Not one part claiming to be all of it: the column's own scroll says
+      // how far down the child read.
+      scrollColumn(container);
+      expect(scrolledSegments()).toEqual(["seg-1", "seg-1", "seg-1", "seg-1"]);
+    },
+  );
 
   it("does not carry one segment's chunking onto the next", () => {
     /*

@@ -136,8 +136,8 @@ describe("reading through the server's chunks", () => {
   });
 
   it("offers no Slower for a body the server sent as one chunk", () => {
-    // Three sentences would split on the device. The server's one chunk wins,
-    // so Slower would re-render the same block: a control that does nothing.
+    // Three sentences, and the server's one chunk: Slower would re-render the
+    // same block, a control that does nothing.
     render(
       <LessonPlayer lesson={lessonWith([{ id: "c1", text: BODY }])} plan={PLAN} />,
     );
@@ -147,8 +147,8 @@ describe("reading through the server's chunks", () => {
 
   it("leaves chunks that are not the text shown out of the gate and the stream", () => {
     // A simpler text standing in for the standard body: the server's one
-    // chunk is of words not on screen, so Slower is the device's three parts
-    // and no chunk is ever watched.
+    // chunk is of words not on screen, so the body reads whole - never cut
+    // on the device instead (B114) - and no chunk is ever watched.
     render(
       <LessonPlayer
         lesson={lessonWith([{ id: "c1", text: "Some other words entirely." }])}
@@ -156,7 +156,8 @@ describe("reading through the server's chunks", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "Slower" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Slower" })).toBeNull();
+    expect(screen.getByText(BODY)).toBeInTheDocument();
     expect(watchers.every((w) => w.targets.length === 0)).toBe(true);
     expect(viewed()).toEqual([]);
   });

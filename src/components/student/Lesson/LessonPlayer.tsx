@@ -1773,10 +1773,11 @@ export function LessonPlayer({
    *
    * SLOWER IS DIFFERENT, as of 17 Sep, because it is not a rewording. Design:
    * "Slower is about how much arrives at once, which is segmentation and
-   * pacing rather than wording." Chunking regroups sentences the lesson
-   * already has, so it is available on live content, and the gate is whether
-   * chunking would change anything - a one-sentence segment still offers
-   * nothing rather than a control that does nothing.
+   * pacing rather than wording." It takes the body in the server's reading
+   * chunks, so it is available on live content, and the gate is whether
+   * that would change anything - a body sent as one chunk, or none, offers
+   * nothing rather than a control that does nothing. Nothing is split here
+   * to make parts (B114).
    *
    * AND ONLY WHILE THE TEXT IS WHAT IS ON SCREEN. Each of the three reshapes
    * the text and nothing else, so a lone "Slower" over a picture, a recording
