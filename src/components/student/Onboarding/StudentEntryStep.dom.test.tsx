@@ -89,6 +89,15 @@ const matched = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
+/** A miss, as the live lookup answers one (declared since 13 Oct, B124). */
+const notFound = () =>
+  new ApiError(404, "not found", {
+    detail: {
+      code: "entry_not_found",
+      message: "That did not match. Check the code and the ID with your teacher.",
+    },
+  });
+
 const cells = () =>
   screen.getAllByLabelText(/School code, character/) as HTMLInputElement[];
 const idField = () =>
@@ -249,7 +258,7 @@ describe("the lookup", () => {
   });
 
   it("does not say which of the two was wrong when they do not match", async () => {
-    lookup.mockRejectedValue(new ApiError(404, "not found"));
+    lookup.mockRejectedValue(notFound());
     render(<StudentEntryStep framing="school" />);
 
     await enterAndSubmit();
@@ -260,7 +269,7 @@ describe("the lookup", () => {
   });
 
   it("keeps both values as typed and offers Try again", async () => {
-    lookup.mockRejectedValue(new ApiError(404, "not found"));
+    lookup.mockRejectedValue(notFound());
     render(<StudentEntryStep framing="school" />);
 
     await enterAndSubmit();
@@ -272,7 +281,7 @@ describe("the lookup", () => {
   });
 
   it("asks again on Try again", async () => {
-    lookup.mockRejectedValueOnce(new ApiError(404, "not found"));
+    lookup.mockRejectedValueOnce(notFound());
     lookup.mockResolvedValueOnce(matched());
     render(<StudentEntryStep framing="school" />);
     await enterAndSubmit();
@@ -285,7 +294,7 @@ describe("the lookup", () => {
   });
 
   it("goes back to Continue once the child changes what they typed", async () => {
-    lookup.mockRejectedValue(new ApiError(404, "not found"));
+    lookup.mockRejectedValue(notFound());
     render(<StudentEntryStep framing="school" />);
     await enterAndSubmit();
 
@@ -339,13 +348,35 @@ describe("the lookup", () => {
   });
 
   it("still tints the fields for a real miss", async () => {
-    lookup.mockRejectedValue(new ApiError(404, "not found"));
+    lookup.mockRejectedValue(notFound());
     render(<StudentEntryStep framing="school" />);
 
     await enterAndSubmit();
 
     expect(idField().parentElement?.className).toContain("border-nevo-violet");
     expect(cells()[0].className).toContain("border-nevo-violet");
+  });
+
+  /*
+   * B124: the miss is 404 `entry_not_found`, by code. Any 4xx used to be read
+   * as one, so a 404 from a lost route sent a child to their teacher to
+   * re-check two things that were right.
+   */
+  it("reads only entry_not_found as a miss, not any 4xx", async () => {
+    for (const err of [
+      new ApiError(404, "Not Found", { detail: "Not Found" }),
+      new ApiError(422, "invalid", { detail: [{ msg: "too short" }] }),
+      new ApiError(409, "refused", { detail: { code: "something_else" } }),
+    ]) {
+      lookup.mockReset().mockRejectedValue(err);
+      render(<StudentEntryStep framing="school" />);
+
+      await enterAndSubmit();
+
+      expect(message(), String(err.status)).toBe(ENTRY_UNCHECKED_COPY);
+      expect(continueButton()).toHaveTextContent("Continue");
+      cleanup();
+    }
   });
 
   it("reads a dropped network and a rate limit the same way", async () => {

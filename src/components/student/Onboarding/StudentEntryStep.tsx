@@ -15,7 +15,7 @@ import {
   type WaitingHold,
 } from "@/components/student/Entry/WaitingOnConsent";
 import { useSignals } from "@/hooks";
-import { ApiError } from "@/lib/api/client";
+import { ApiError, apiErrorCode } from "@/lib/api/client";
 import {
   studentEntryApi,
   type StudentEntryState,
@@ -96,16 +96,19 @@ export const ENTRY_UNCHECKED_COPY =
 /**
  * Did the server answer about the pair, rather than fail to answer?
  *
- * The spec declares only the 200 and a 422, so what an unmatched pair gets is
- * not written down. Any 4xx is read as the server's answer about what was
- * typed; a 5xx, a dropped network and a 429 say nothing about it.
+ * BY CODE (B124, 13 Oct): the spec now declares a pair that names nobody as
+ * 404 `entry_not_found`, and that is the only miss. This used to read any 4xx
+ * but a 429 as one, because the miss was not written down - so a 404 from a
+ * deploy that lost the route sent a child to their teacher to re-check two
+ * things that were right. Anything else - a 5xx, a dropped network, a 429, a
+ * 4xx without the code - says nothing about what was typed. The PIN route
+ * reads its refusals the same way (`entryPinRefusal`).
  */
 function answeredAboutThePair(err: unknown): boolean {
   return (
     err instanceof ApiError &&
-    err.status >= 400 &&
-    err.status < 500 &&
-    err.status !== 429
+    err.status === 404 &&
+    apiErrorCode(err.detail) === "entry_not_found"
   );
 }
 
