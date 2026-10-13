@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 /**
@@ -61,6 +62,23 @@ const READ_LESSONS = [
 
 const ghostBtn =
   "inline-flex cursor-pointer items-center gap-[7px] rounded-[10px] border-[1.5px] border-nevo-near-black/18 px-[15px] py-[9px] text-[13.5px] font-semibold text-nevo-near-black transition-colors hover:bg-nevo-near-black/5";
+/*
+ * LU-05's second way forward (design, 12 Oct): beside the try-again action,
+ * a way out of the upload altogether. The foot's Back steps one screen;
+ * this leaves the wizard for the library, which is where a teacher who has
+ * given up on this file wants to be.
+ */
+function BackToLibrary() {
+  return (
+    <Link
+      href="/teacher/lessons"
+      className="inline-flex cursor-pointer items-center rounded-[10px] border-[1.5px] border-nevo-navy/30 px-[18px] py-[9.5px] text-sm font-medium text-nevo-navy transition-colors hover:bg-nevo-navy/6"
+    >
+      Back to my library
+    </Link>
+  );
+}
+
 const ghostBtnSm =
   "inline-flex cursor-pointer items-center gap-[7px] rounded-[10px] border-[1.5px] border-nevo-navy/30 px-[13px] py-2 text-[12.5px] font-semibold text-nevo-navy transition-colors hover:bg-nevo-navy/6";
 
@@ -339,6 +357,7 @@ export function ParseFallback({
                 </svg>
                 Try this file again
               </button>
+              <BackToLibrary />
               {/* "Try another file" belongs to the UNREADABLE screen, where a
                   different document is genuinely the remedy. Offering it here
                   tells a teacher their file was the problem when we have just
@@ -382,6 +401,7 @@ export function ParseFallback({
                 </svg>
                 Try again
               </button>
+              <BackToLibrary />
             </div>
           </div>
         )}
