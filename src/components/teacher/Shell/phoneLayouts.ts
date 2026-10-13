@@ -16,7 +16,19 @@ const PHONE_READY: readonly RegExp[] = [
   /^\/teacher\/dashboard\/?$/,
   // A6 - help is reachable signed out, from any link.
   /^\/teacher\/help\/?$/,
+  // B3 - the one-thumb Clear PIN a "forgot PIN" notification opens.
+  /^\/teacher\/students\/[^/]+\/clear-pin\/?$/,
 ];
+
+/**
+ * Screens that draw their own phone bar - a back arrow and where it goes, in
+ * place of the menu (C19 B2, B3, B4) - so the shell's bar stands aside.
+ */
+const OWNS_PHONE_BAR: readonly RegExp[] = [/^\/teacher\/students\/[^/]+\/clear-pin\/?$/];
+
+export function ownsPhoneBar(pathname: string): boolean {
+  return OWNS_PHONE_BAR.some((r) => r.test(pathname));
+}
 
 /** Ask Nevo listens for this; the phone drawer's row sends it (C19 C1). */
 export const OPEN_ASK_NEVO = "nevo:open-ask-nevo";

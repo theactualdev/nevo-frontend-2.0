@@ -11,7 +11,7 @@ import { useHydrated } from "@/hooks/useHydrated";
 import { SignOutModal } from "@/components/teacher/Profile/SignOutModal";
 import { cn } from "@/lib/utils";
 import { MOCK_TEACHER, TEACHER_NAV } from "./teacherNav";
-import { OPEN_ASK_NEVO, phoneTitle } from "./phoneLayouts";
+import { OPEN_ASK_NEVO, ownsPhoneBar, phoneTitle } from "./phoneLayouts";
 import { useLeaveGuard } from "./UnsavedChanges";
 
 /**
@@ -53,6 +53,9 @@ export function PhoneShell() {
     setSeen(pathname);
     setOpen(false);
   }
+
+  // A screen with its own back bar (C19 B2-B4) draws it in place of this one.
+  if (ownsPhoneBar(pathname)) return null;
 
   return (
     <div className="flex shrink-0 items-center gap-3 px-4 pt-3 pb-3 md:hidden">

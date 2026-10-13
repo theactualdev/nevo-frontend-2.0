@@ -37,6 +37,13 @@ describe("the phone app bar", () => {
     expect(screen.getByText("MA")).toBeInTheDocument();
   });
 
+  it("stands aside where a screen draws its own back bar (B3)", () => {
+    usePathname.mockReturnValue("/teacher/students/s-1/clear-pin");
+    const { container } = render(<PhoneShell />);
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
   it("carries no disc away from Home", () => {
     usePathname.mockReturnValue("/teacher/insights");
     render(<PhoneShell />);
