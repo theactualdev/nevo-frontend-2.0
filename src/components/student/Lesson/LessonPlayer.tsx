@@ -2104,6 +2104,16 @@ export function LessonPlayer({
    */
   const verdictPending =
     live && !progress.completionSaved && !progress.completionFailed;
+  /*
+   * D183: AND THEN THE RESULT CANNOT BE READ, and says so in Lydia's words.
+   * Try again sends the completion again (`resend`), and while that is on its
+   * way the screen stays as it is rather than flicking back to a blank result.
+   */
+  const [rereadAsked, setRereadAsked] = useState(false);
+  const resultUnread =
+    live &&
+    resultStateFrom(progress.saved) === null &&
+    (progress.completionFailed || (rereadAsked && verdictPending));
 
   const requestExit = () => {
     trackEvent(SIGNAL_EVENT_TYPES.EXIT_ATTEMPT, { segmentId: segment.id });
@@ -2193,6 +2203,17 @@ export function LessonPlayer({
         resumeAt={checkResume?.at}
         result={live ? resultStateFrom(progress.saved) : undefined}
         resultPending={verdictPending}
+        resultUnread={resultUnread}
+        onReread={() => {
+          setRereadAsked(true);
+          progress.resend();
+        }}
+        onBackToLessons={() => {
+          // The check is finished either way: the completion is held and
+          // goes when it can (`useLessonProgress`).
+          setEnding(finishedAs);
+          exitTo(LESSONS_HREF);
+        }}
         outcome={live ? checkOutcomeFrom(progress.saved) : null}
         onComplete={finishCheck}
         onLeave={(checkPosition) => {
