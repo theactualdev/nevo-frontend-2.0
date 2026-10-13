@@ -253,10 +253,12 @@ export interface GuidedAnswerRequest {
  * - `initialScaffoldLevel`, "Client-applied starting level for calculation
  *   scaffolds": the scaffold indicator's level while the solver is on screen,
  *   until something more specific is said (`AdaptationPlan.initialScaffold`).
- * - `comprehensionCheckInterval`, "Client-applied maximum segments between
- *   available comprehension checks": NOT ACTED ON. The player already offers
- *   every check a lesson carries and holds none back; it cannot close a gap
- *   the content leaves without inventing a check. Asked.
+ * - `comprehensionCheckInterval`, "Maximum desired gap between authored
+ *   checks. The client never invents a question; it presents the next
+ *   checkpoint carried by the lesson" (B115, 13 Oct): NOT ACTED ON, because
+ *   there is nothing to act on. The player already offers every check a
+ *   lesson carries and holds none back, and a gap the content leaves is for
+ *   parsing and teacher review to fill.
  * - `numberProblemsStepByStep`: no description in the spec, so NOT ACTED
  *   ON. The solver already gives one step at a time whatever the flag says
  *   (17b). Asked.

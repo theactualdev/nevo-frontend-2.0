@@ -140,6 +140,12 @@ export interface OfflinePackage {
   title: string;
   version?: string | null;
   modules?: LessonModule[];
+  /**
+   * Always sent since B121 (13 Oct), null for a lesson with no recap - which
+   * "does not prevent offline completion". Optional here all the same: it is
+   * outside the schema's `required` list, and a copy saved before then has
+   * none, which `isPartialCopy` reads as not sent.
+   */
   recap?: string | null;
   assessment?: ComprehensionCheckpoint[];
   segments?: OfflinePackageSegment[];
