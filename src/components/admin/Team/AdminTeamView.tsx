@@ -25,9 +25,9 @@ import { useSupportEmail } from "../SupportEmail";
 import type { LearningSupportHolders } from "@/lib/api/learningSupport";
 import { useLearningSupport } from "../LearningSupport/useLearningSupport";
 import {
-  LearningSupportRecord,
+  LearningSupportLine,
   lastHolderAccessLine,
-} from "../LearningSupport/LearningSupportRecord";
+} from "../LearningSupport/LearningSupportLine";
 import { LAST_LEARNING_SUPPORT_HOLDER, refusedWith } from "@/lib/api/learningSupport";
 import {
   FOUNDING_LOCK_LINE,
@@ -62,9 +62,11 @@ import {
  * admin, an SSO-managed team, and a restore past the seats - each with its
  * own message, which is shown as it stands.
  *
- * LEARNING SUPPORT LIVES ON EACH ROW (SCRUM-247, 12 Oct): whether the person
- * holds it, who gave it and when, and Give / Remove on anyone but yourself.
- * See `LearningSupportRecord`.
+ * LEARNING SUPPORT IS ONE PERMISSION ON THE PERSON'S RECORD (SCRUM-247; D03b,
+ * design 9d0ff6b): a toggle in their access sheet, where the "SENCo / Learning
+ * Support" scope used to be ticked - the backend now gives and takes that
+ * scope with the role. Your own row says whether you hold it, and offers
+ * nothing to press. See `LearningSupportLine`.
  *
  * (Two more used to be listed. The SCHOOL NAME was never missing - the school
  * record this screen already reads for the band carries it - and the seat
@@ -205,7 +207,6 @@ export function AdminTeamView() {
             onEdit={setEditing}
             onChanged={fetchTeam}
             ls={ls}
-            onLs={setLs}
           />
         )}
       </div>
@@ -236,6 +237,12 @@ export function AdminTeamView() {
         <EditAccessPanel
           member={editing}
           name={displayName(editing)}
+          ls={ls}
+          onLs={(next) => {
+            setLs(next);
+            // The senco scope moved with the role: the row's pills re-read.
+            fetchTeam();
+          }}
           onCancel={() => setEditing(null)}
           onSaved={() => {
             setEditing(null);
@@ -309,7 +316,6 @@ function MemberRow({
   onEdit,
   onChanged,
   ls = null,
-  onLs,
   me = null,
 }: {
   m: TeamMember;
@@ -322,8 +328,6 @@ function MemberRow({
   onChanged?: () => void;
   /** Who holds Learning Support, or null when that is not known. */
   ls?: LearningSupportHolders | null;
-  /** Absent where Learning Support cannot be changed from here. */
-  onLs?: (next: LearningSupportHolders) => void;
   me?: string | null;
 }) {
   const name = displayName(m);
@@ -402,16 +406,18 @@ function MemberRow({
           )}
         </span>
         {/* Not for an invitation still open: there is nobody to hold it yet. */}
-        {ls && !pending ? (
-          <LearningSupportRecord
-            className="mt-1"
+        {/* D03b: your own record is status only. Anyone else's is changed
+            in their access sheet, beside their other permissions. */}
+        {ls && you ? (
+          <LearningSupportLine
+            className="mt-2 max-w-[460px] rounded-[10px] bg-nevo-cream px-[15px] py-[11px]"
             person={{ userId: m.userId, name }}
             holders={ls}
-            you={you}
+            you
             me={me}
-            canGive={Boolean(onLs) && !deactivated && !writesPaused}
-            canRemove={Boolean(onLs) && !writesPaused}
-            onChange={(next) => onLs?.(next)}
+            canGive={false}
+            canRemove={false}
+            onChange={() => {}}
           />
         ) : null}
       </span>
@@ -511,7 +517,6 @@ function TeamList({
   onEdit,
   onChanged,
   ls,
-  onLs,
 }: {
   team: TeamMember[];
   /** The school's name, or null when its record could not be read. */
@@ -522,7 +527,6 @@ function TeamList({
   onEdit: (m: TeamMember) => void;
   onChanged: () => void;
   ls: LearningSupportHolders | null;
-  onLs: (next: LearningSupportHolders) => void;
 }) {
   /*
    * WHO CAN ADMINISTER, AND WHO USES A SEAT: everyone not deactivated. A
@@ -661,7 +665,6 @@ function TeamList({
             onEdit={m.userId === me ? undefined : () => onEdit(m)}
             onChanged={onChanged}
             ls={ls}
-            onLs={onLs}
             me={me}
           />
         ))}
