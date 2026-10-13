@@ -6,7 +6,8 @@ import type { Lesson } from "@/lib/types";
 /**
  * B98 + SCRUM-178/181: how the check went is the server's word, and when it
  * says nothing landed and reroutes the lesson, the child is told so in
- * design's words and offered Start again, which follows the reroute.
+ * design's words and offered one way on, "Let's try it another way"
+ * (Lydia, D155, 13 Oct), which follows the reroute.
  *
  * `resultState` is derived server-side from the newest marked attempt per
  * problem; the client's own count of right answers decides nothing now.
@@ -159,7 +160,7 @@ describe("the server says nothing landed and reroutes (SCRUM-181)", () => {
     return onStartAgain;
   };
 
-  it("says so in design's words, with Start again and nothing else", () => {
+  it("says so in design's words, with one action that goes forward (D155)", () => {
     const { rerender } = render(
       <LessonPlayer lesson={LESSON} plan={null} live onStartAgain={vi.fn()} />,
     );
@@ -173,7 +174,7 @@ describe("the server says nothing landed and reroutes (SCRUM-181)", () => {
     expect(screen.getByRole("heading", { name: HEADING })).toBeTruthy();
     expect(screen.getByText(BODY)).toBeTruthy();
     expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual([
-      "Start again",
+      "Let's try it another way",
     ]);
     // No score, count or percentage.
     expect(document.body.textContent).not.toMatch(/\d|%/);
@@ -192,7 +193,7 @@ describe("the server says nothing landed and reroutes (SCRUM-181)", () => {
       }),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Start again" }));
+    fireEvent.click(screen.getByRole("button", { name: "Let's try it another way" }));
 
     expect(onStartAgain).toHaveBeenCalledWith(0, "lower");
     // The run that did not land ended completed, as the server wrote it.

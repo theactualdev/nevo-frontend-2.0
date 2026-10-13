@@ -62,8 +62,12 @@ export function ModuleBoundaryScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const isLast = nextModuleIndex === moduleCount - 1;
-  const heading = `You've finished ${moduleName(finished, "done", false)}. Ready for ${moduleName(next, "next", isLast)}?`;
+  /*
+   * ONE TITLE, AS WRITTEN (Lydia, D186, 13 Oct): "Drop the article before the
+   * title and drop the second title entirely, since real titles are already
+   * noun phrases." The next module is "the next part", whatever it is called.
+   */
+  const heading = `You've finished ${moduleName(finished)}. Ready for the next part?`;
 
   const recap = showRecap ? finished.recap : undefined;
   const preview = showRecap ? next.preview : undefined;
