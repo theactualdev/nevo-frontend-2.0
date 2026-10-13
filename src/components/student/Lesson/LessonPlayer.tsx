@@ -2137,8 +2137,9 @@ export function LessonPlayer({
    * completion when there is not; `continueAdvance` already knew both.
    *
    * AND IT HOLDS IT PRESSABLE (Lydia, D211, 13 Oct). Greyed, it read as
-   * broken; pressed, it now says why in place, in her line, until the solve
-   * is done or the child moves on.
+   * broken; pressed, it now says why in place, in her line - until the child
+   * next acts on the step, when it has done its job: on a short phone at a
+   * large text size its row put the step's field out of view.
    */
   const [heldNextOn, setHeldNextOn] = useState<string | null>(null);
   const nextHeld = calcBlocking && heldNextOn === segment.id;
@@ -2828,6 +2829,9 @@ export function LessonPlayer({
                   stepId,
                 })
               }
+              // D211's line has done its job once the child acts on the
+              // step, and the column wants its room back for the step.
+              onCalcAct={() => setHeldNextOn(null)}
               onCalcHint={() => {
                 /*
                  * THE HINT A CHILD OPENS WAS SILENT (audit 44). Opening it is
@@ -2957,11 +2961,13 @@ export function LessonPlayer({
           reacts to a hint: the forward control's glow went with design's
           D124 (6 Oct), "Anything that reacts visibly to a child's difficulty
           tells them they are being watched." */}
+      {/* In line with the step above it: the reading column's box, then
+          the solver's narrower one. */}
       {nextHeld && (
-        <div className="shrink-0 px-3.5 pt-2">
+        <div className="mx-auto w-full max-w-full shrink-0 px-6 pt-2 sm:max-w-[620px] sm:px-8 lg:max-w-[680px] lg:px-10">
           <PressedLine
             reading={readingOn}
-            className="mx-auto w-full text-center sm:max-w-[560px] lg:max-w-[600px]"
+            className="mx-auto text-center sm:max-w-[560px] lg:max-w-[600px]"
           >
             {ONE_MORE_BIT}
           </PressedLine>
@@ -3024,6 +3030,7 @@ function SegmentBody({
   onCalcStep,
   onPiecePlaced,
   onCalcHint,
+  onCalcAct,
 }: {
   segment: LessonSegment;
   modality: Modality;
@@ -3051,6 +3058,8 @@ function SegmentBody({
   onPiecePlaced: (stepId: string) => void;
   /** The child opened a calculation step's hint themselves. */
   onCalcHint: () => void;
+  /** The child did something in a calculation step - see `CalculationSolver`. */
+  onCalcAct: () => void;
 }) {
   if (modality === MODALITY.TEXT && segment.text)
     return (
@@ -3099,6 +3108,7 @@ function SegmentBody({
           onStepAnswered={onCalcStep}
           onPiecePlaced={onPiecePlaced}
           onHintOpened={onCalcHint}
+          onAct={onCalcAct}
           // A step's narration is the segment's narration: the same four
           // signals the audio card sends, from the same handlers.
           onReplay={onReplay}

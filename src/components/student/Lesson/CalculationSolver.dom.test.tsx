@@ -100,6 +100,7 @@ const show = (calc: CalculationSegment = build(), reading = false) => {
     onStepAnswered: vi.fn(),
     onPiecePlaced: vi.fn(),
     onHintOpened: vi.fn(),
+    onAct: vi.fn(),
   };
   render(
     <CalculationSolver calculation={calc} reading={reading} {...props} />,
@@ -309,6 +310,30 @@ describe("the hint", () => {
     ).toBeInTheDocument();
     expect(props.onHintOpened).toHaveBeenCalledWith("s1");
     expect(screen.queryByRole("button", { name: "Need a hint?" })).toBeNull();
+  });
+
+  it("tells the host when the child picks, types, or opens the hint (D211)", () => {
+    const picking = show();
+    tap("4 and 4");
+    expect(picking.onAct).toHaveBeenCalledTimes(1);
+    tap("Need a hint?");
+    expect(picking.onAct).toHaveBeenCalledTimes(2);
+    cleanup();
+
+    const typing = show(
+      build({
+        steps: [
+          step({
+            input: "number",
+            expectedInput: "numeric",
+            options: [],
+            answer: "3",
+          }),
+        ],
+      }),
+    );
+    tap("3");
+    expect(typing.onAct).toHaveBeenCalledTimes(1);
   });
 
   it("offers no hint on a step that has none", () => {
@@ -644,6 +669,15 @@ describe("building with pieces", () => {
     expect(props.onPiecePlaced).toHaveBeenCalledTimes(3);
     expect(props.onStepAnswered).toHaveBeenCalledWith("b1", true);
     expect(props.onSolved).toHaveBeenCalled();
+  });
+
+  it("tells the host each time the child acts on the step (D211)", () => {
+    const props = show(build({ steps: [BUILD] }));
+    expect(props.onAct).not.toHaveBeenCalled();
+
+    placeOne();
+
+    expect(props.onAct).toHaveBeenCalledTimes(1);
   });
 
   it("lays its places at D149's 46px, 6px apart, at every width (design, 13 Oct)", () => {
@@ -1214,6 +1248,26 @@ describe("the narration layer", () => {
 
     expect(screen.getByText(NO_SOUND)).toBeInTheDocument();
     expect(play).not.toHaveBeenCalled();
+  });
+
+  it("says it in the failure line's place, beside Play, so the card barely grows (D211)", () => {
+    listen({});
+    fireEvent.error(audio()!);
+    const button = screen.getByRole("button", { name: "Play narration" });
+
+    fireEvent.click(button);
+
+    const line = screen.getByText("The sound didn't load. Try again in a moment.");
+    // In the row, not a row of its own under it: a row of its own pushed the
+    // drawing and the options down by about 68px.
+    expect(line.parentElement).toBe(button.parentElement);
+    expect(button.parentElement?.className).not.toContain("flex-wrap");
+    expect(screen.queryByText("Couldn't load this recording")).toBeNull();
+    // The row's own 13px, in the reference's panel.
+    expect(line.className.split(" ")).toEqual(
+      expect.arrayContaining(["text-[13px]", "rounded-[10px]", "bg-nevo-violet/14"]),
+    );
+    expect(line.className.split(" ")).not.toContain("text-sm");
   });
 });
 

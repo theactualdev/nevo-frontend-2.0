@@ -122,12 +122,17 @@ describe("a recording that will not load", () => {
       screen.queryByText("The sound didn't load. Try again in a moment."),
     ).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Listen" }));
+    const listen = screen.getByRole("button", { name: "Listen" });
+    fireEvent.click(listen);
 
-    expect(
-      screen.getByText("The sound didn't load. Try again in a moment."),
-    ).toBeTruthy();
+    const line = screen.getByText(
+      "The sound didn't load. Try again in a moment.",
+    );
     expect(play).not.toHaveBeenCalled();
+    // In the failure line's place beside the control, so the card barely
+    // grows and the question under it barely moves.
+    expect(line.parentElement).toBe(listen.parentElement);
+    expect(screen.queryByText("Couldn't load this recording")).toBeNull();
   });
 
   it("is not called broken when the browser only wants a tap first", async () => {
