@@ -771,6 +771,10 @@ export function LessonPlayer({
   const [closedHints, setClosedHints] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+  // Hint cards that have come into view, keyed the same way (B131).
+  const [seenHints, setSeenHints] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   /*
    * WHAT THE ENGINE IS TOLD THE CHILD DID, as counts - see `RuntimeState`.
    * State rather than refs because the request is built from what renders.
@@ -1350,19 +1354,22 @@ export function LessonPlayer({
    * still on screen - see `advancePastSegment`. The solver's "Need a hint?"
    * is the hint a child opens, and sends its own pair - see `onCalcHint`.
    *
+   * ON SCREEN IS IN VIEW (B131): "hint_offered fires when the hint becomes
+   * visible, not when the engine response arrives." The card under the
+   * content counts from when it first comes into view (`HintOverlay`'s
+   * `onSeen`), so a card below the fold the child never scrolled to was
+   * neither offered nor used.
+   *
    * ON A CALCULATION THE HINT IS THE SOLVER'S, in the step's hint place, and
    * a solved calculation has no step left to show it beside - so from then it
    * is not on screen, and neither offered nor used.
    */
+  const onSolver = modality === MODALITY.INTERACTIVE && isCalculation(segment);
   const hintOnScreen =
     segmentShowing &&
     hintHere &&
     Boolean(hintText) &&
-    !(
-      modality === MODALITY.INTERACTIVE &&
-      isCalculation(segment) &&
-      solvedCalcs.has(segment.id)
-    );
+    (onSolver ? !solvedCalcs.has(segment.id) : seenHints.has(hintKey));
   const offeredHints = useRef<Set<string>>(new Set());
   const usedHints = useRef<Set<string>>(new Set());
   useEffect(() => {
@@ -2861,6 +2868,11 @@ export function LessonPlayer({
               hint={hintText}
               onClose={() =>
                 setClosedHints((prev) => new Set(prev).add(hintKey))
+              }
+              onSeen={() =>
+                setSeenHints((prev) =>
+                  prev.has(hintKey) ? prev : new Set(prev).add(hintKey),
+                )
               }
             />
           )}
