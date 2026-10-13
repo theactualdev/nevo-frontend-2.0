@@ -245,6 +245,81 @@ describe("what the child sees", () => {
 
     expect(target()!.className).not.toMatch(/animate|transition|duration/);
   });
+
+  describe("held sideways, the ground stays clear of the line", () => {
+    /*
+     * 08a draws portrait only. On a tablet held sideways (after "My device
+     * doesn't turn") the short side is the height, and at 1180x820 the ground
+     * was a 738px square with its top at 65px - over the line at 96px, so a
+     * child past Primary 3 never saw their one instruction. jsdom lays nothing
+     * out, so this reads the geometry the classes state.
+     */
+    const ground = () => screen.getByTestId("motor-ground").className.split(" ");
+    const line = () =>
+      screen.getByText("Tap the square each time you see it.").className.split(" ");
+    /** The number in the one class that matches, or NaN. */
+    const num = (classes: string[], re: RegExp) => {
+      const hit = classes.map((c) => c.match(re)).find(Boolean);
+      return hit ? Number(hit[1]) : NaN;
+    };
+
+    it("keeps 08a's portrait ground exactly as drawn", () => {
+      step();
+
+      expect(ground()).toEqual(
+        expect.arrayContaining([
+          "top-1/2",
+          "left-1/2",
+          "size-[min(90vw,90dvh)]",
+          "-translate-x-1/2",
+          "translate-y-[calc(-50%+24px)]",
+        ]),
+      );
+      // Every landscape rule is behind the orientation query.
+      for (const c of ground().filter((c) => /dvh-|top-\[|translate-y-0/.test(c)))
+        expect(c).toMatch(/landscape:/);
+    });
+
+    it("starts the ground below the line's band, on a phone and from tablet up", () => {
+      step();
+      // The line's band: its top plus one line at its 1.4 line height.
+      expect(line()).toEqual(
+        expect.arrayContaining(["top-[72px]", "text-[17px]", "leading-[1.4]", "sm:top-24", "sm:text-xl"]),
+      );
+      const lineEnd = { phone: 72 + 17 * 1.4, tablet: 96 + 20 * 1.4 };
+
+      const top = {
+        phone: num(ground(), /^max-sm:landscape:top-\[(\d+)px\]$/),
+        tablet: num(ground(), /^sm:landscape:top-\[(\d+)px\]$/),
+      };
+      const reserved = {
+        phone: num(ground(), /^max-sm:landscape:size-\[min\(90vw,calc\(100dvh-(\d+)px\)\)\]$/),
+        tablet: num(ground(), /^sm:landscape:size-\[min\(90vw,calc\(100dvh-(\d+)px\)\)\]$/),
+      };
+      for (const at of ["phone", "tablet"] as const) {
+        expect(top[at], at).toBeGreaterThan(lineEnd[at]);
+        // Its foot stays on the screen: the height it leaves out covers its top.
+        expect(reserved[at], at).toBeGreaterThan(top[at]);
+        expect(ground()).toContain(
+          `${at === "phone" ? "max-sm" : "sm"}:landscape:translate-y-0`,
+        );
+      }
+
+      // The reported tablet, 1180x820: a 648px ground from 148px to 796px,
+      // clear of the line that ends at 124px.
+      const side = Math.min(0.9 * 1180, 820 - reserved.tablet);
+      expect(side).toBe(648);
+      expect(top.tablet + side).toBeLessThanOrEqual(820);
+    });
+
+    it("still places the target as a share of the ground, so a smaller ground only scales it", () => {
+      step();
+      paint();
+
+      expect(target()!.style.left).toMatch(/%$/);
+      expect(target()!.style.top).toMatch(/%$/);
+    });
+  });
 });
 
 describe("Primary 1-3", () => {
