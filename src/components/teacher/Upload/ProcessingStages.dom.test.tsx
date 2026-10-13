@@ -153,53 +153,20 @@ describe("what the ladder shows", () => {
   });
 });
 
-describe("a stage that stopped", () => {
-  it("names the one it happened at", () => {
-    render(
-      <ProcessingStages lessonName="L" current="reading" failedAt="reading" />,
-    );
-
-    expect(screen.getByText(/stopped/)).toBeInTheDocument();
-  });
-
-  it("leaves the earlier stages standing as complete", () => {
-    // LU-05: "the stage list is drawn as it stood". Those stages really did
-    // finish, and blanking them would tell a teacher the whole thing failed.
-    render(
-      <ProcessingStages lessonName="L" current="sections" failedAt="sections" />,
-    );
-
-    expect(screen.getByText("Receiving the file")).toBeInTheDocument();
-    expect(screen.getByText("Reading the document")).toBeInTheDocument();
-  });
-
-  it("does not mark the stage it stopped at as done", () => {
-    const { container } = render(
-      <ProcessingStages lessonName="L" current="reading" failedAt="reading" />,
-    );
-
-    // One completed mark - "Receiving the file" - and not two.
-    expect(container.querySelectorAll(".bg-nevo-navy")).toHaveLength(1);
-  });
-
-  it("stops the motion, because nothing is happening any more", () => {
-    /*
-     * The other half of the same guard, and a mutation run is what showed
-     * the count above could not see it: a stopped stage was still drawn as
-     * the RUNNING one, spinner and all. Motion on this screen means work is
-     * happening - LU-01 puts it on the running stage and nowhere else - so a
-     * stage that has stopped must not keep it.
-     *
-     * The selector is an attribute match, not `.animate-spin`: the class is
-     * `motion-safe:animate-spin`, so a class selector finds nothing and the
-     * assertion passes over anything at all. The paired test below is what
-     * proves this one can fail.
-     */
-    const { container } = render(
-      <ProcessingStages lessonName="L" current="sections" failedAt="sections" />,
-    );
-
-    expect(container.querySelectorAll('[class*="animate-spin"]')).toHaveLength(0);
+describe("a reading that stops (LU-05, 12 Oct)", () => {
+  /*
+   * Design replaced the frozen ladder: "A reading stops - routes to the
+   * Try-again screen, no frozen ladder." The list can no longer be told a
+   * stage stopped, so every state it can draw is one of the running ones.
+   */
+  it("never draws a stopped stage", () => {
+    for (const current of ["reading", "sections"] as const) {
+      const { container, unmount } = render(
+        <ProcessingStages lessonName="L" current={current} />,
+      );
+      expect(container.textContent).not.toMatch(/stopped/);
+      unmount();
+    }
   });
 
   it("keeps the motion while it is genuinely running", () => {
