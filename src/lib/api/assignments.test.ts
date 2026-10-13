@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { patch } = vi.hoisted(() => ({ patch: vi.fn() }));
-vi.mock("./client", () => ({ api: { patch, get: vi.fn(), post: vi.fn() } }));
+const { patch, del } = vi.hoisted(() => ({ patch: vi.fn(), del: vi.fn() }));
+vi.mock("./client", () => ({ api: { patch, del, get: vi.fn(), post: vi.fn() } }));
 
-import { applyToAssignments, assignmentsApi } from "./assignments";
+import { applyToAssignments, assignmentsApi, cancelAssignments } from "./assignments";
 
 /**
  * An assignment is per-student even when a teacher created it for a class, so
@@ -75,5 +75,29 @@ describe("applyToAssignments", () => {
 
     expect(ok).toEqual([]);
     expect(failed).toEqual(["a", "b"]);
+  });
+});
+
+/**
+ * SCRUM-225: a cancellation is a DELETE that carries its reason, and it keeps
+ * the row - so it is safe now, where it used to drop the record.
+ */
+describe("cancelling with a reason", () => {
+  beforeEach(() => del.mockReset());
+
+  it("sends the reason in the body, for each assignment", async () => {
+    del.mockResolvedValue(undefined);
+    await cancelAssignments(["a-1", "a 2"], "housekeeping");
+
+    expect(del).toHaveBeenCalledWith("/api/v1/assignments/a-1", { body: { reason: "housekeeping" } });
+    expect(del).toHaveBeenCalledWith("/api/v1/assignments/a%202", { body: { reason: "housekeeping" } });
+  });
+
+  it("reports what landed and what did not, never all-or-nothing", async () => {
+    del.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("down"));
+    expect(await cancelAssignments(["a-1", "a-2"], "wrong_class")).toEqual({
+      ok: ["a-1"],
+      failed: ["a-2"],
+    });
   });
 });
