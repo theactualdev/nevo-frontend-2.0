@@ -280,6 +280,10 @@ describe("a wrong current PIN", () => {
       screen.getByRole("heading", { name: /Enter your current PIN/i }),
     ).toBeInTheDocument();
     expect(screen.getByText(/not your current PIN/i)).toBeInTheDocument();
+    // In the darker violet (D210): soft violet fails contrast on cream.
+    expect(screen.getByText(/not your current PIN/i).className).toContain(
+      "text-nevo-violet-text",
+    );
   });
 
   it("does not say the change worked, and does not leave the screen", async () => {
@@ -319,5 +323,25 @@ describe("a failure that is not theirs", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(/on us, not you/);
     expect(screen.queryByText("Your PIN is updated")).toBeNull();
     expect(push).not.toHaveBeenCalled();
+  });
+
+  it("reads design's 13 Oct line, verbatim, and claims nothing was kept", async () => {
+    // "Change PIN's failed save now reads 'That's on us, not you. Try
+    // again.' and the false claim that the PIN was kept is gone."
+    setPin.mockRejectedValue(new TypeError("fetch failed"));
+
+    render(<ChangePinScreen />);
+    passStepOne();
+    await enterNewPinTwice();
+    await readTheConfirmation();
+
+    expect(screen.getByRole("alert").textContent).toBe(
+      "That's on us, not you. Try again.",
+    );
+    // In the darker violet (D210): soft violet fails contrast on cream.
+    expect(screen.getByRole("alert").className).toContain(
+      "text-nevo-violet-text",
+    );
+    expect(document.body.textContent).not.toMatch(/kept|teacher can help/i);
   });
 });

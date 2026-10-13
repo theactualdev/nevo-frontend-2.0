@@ -4,8 +4,8 @@ import { ApiError, apiErrorCode } from "@/lib/api/client";
  * Whether a failed PIN change was the CHILD's current PIN being wrong.
  *
  * **THE DISTINCTION IS THE WHOLE POINT, and this codebase has already been
- * caught on its mirror image.** `PinCreationScreen` renders *"we couldn't save
- * that just now - that's on us, not you"* for a failed write, and that copy
+ * caught on its mirror image.** Change PIN says *"That's on us, not you. Try
+ * again."* for a failed write (`PIN_NOT_SAVED_COPY`), and that copy
  * exists because the previous version blamed a child for a write failure they
  * could not fix by retyping. A wrong current PIN is the opposite case: it IS
  * the child's, retyping IS the fix, and telling them it was our fault sends

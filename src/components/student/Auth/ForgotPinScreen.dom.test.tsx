@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import ForgotPinPage from "@/app/auth/forgot-pin/page";
+import { closeRememberedChild } from "@/lib/auth/deviceRoster";
 import { rememberProfile } from "@/lib/auth/session";
 
 /**
@@ -61,6 +62,19 @@ describe("Forgot PIN", () => {
     expect(
       screen.getByRole("link", { name: "Back to sign in" }),
     ).toHaveAttribute("href", "/auth/login");
+  });
+
+  it("goes to the entry screen when the only child it remembers has closed (D178, D123)", async () => {
+    // Their entry lingers, but the picker has no tile for them: it would be
+    // 28c-2, a picker of nobody, one tap further from the entry screen.
+    rememberAda();
+    closeRememberedChild({ schoolCode: "NEVO-1", loginIdentifier: "ada.o" });
+    await page();
+
+    expect(screen.getByRole("link", { name: "Back" })).toHaveAttribute(
+      "href",
+      "/student/onboarding/school",
+    );
   });
 
   it("keeps where the child was going", async () => {

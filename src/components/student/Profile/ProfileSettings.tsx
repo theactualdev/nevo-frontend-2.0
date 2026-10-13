@@ -27,6 +27,21 @@ const TEXT_SIZES = [
 ] as const;
 
 /**
+ * 44px TO TAP, THE DRAWING UNCHANGED (13 Oct). Design's landed note:
+ * "Profile's text-size buttons, the name's Change link and the switches are
+ * all at least 44px." The switch is drawn 30px tall and a text-size segment
+ * about 31, so each gets an invisible 44px-tall hit area centred on it, and
+ * looks exactly as it did. A segment's reaches 2px either side, which closes
+ * the gaps between them without overlapping a neighbour.
+ *
+ * WAITING ON FRAMES: whether design also widened the segments. Each is
+ * 32-36px wide as drawn, and four 44px-wide targets do not fit in the pill
+ * without changing its drawing.
+ */
+const TAP_44_TALL =
+  "relative after:absolute after:top-1/2 after:h-11 after:-translate-y-1/2 after:content-['']";
+
+/**
  * Profile & Settings (screen 27). Read-only learning preferences (observed, not
  * self-reported), accessibility controls, and account. Every change is
  * acknowledged with a quiet "Saved" pill, once it is kept.
@@ -137,6 +152,7 @@ export function ProfileSettings() {
             savedOnceKept(setReducedMotion(v));
           }}
           aria-label="Reduced motion"
+          className={cn(TAP_44_TALL, "after:inset-x-0")}
         />
       </SettingRow>
 
@@ -154,6 +170,8 @@ export function ProfileSettings() {
                 }}
                 className={cn(
                   "min-w-8 cursor-pointer rounded-full px-2.5 py-1.5 text-[13px] font-medium transition-colors",
+                  TAP_44_TALL,
+                  "after:-inset-x-0.5",
                   textSize === size.id
                     ? "bg-nevo-navy text-nevo-cream"
                     : "text-nevo-near-black",
@@ -177,6 +195,7 @@ export function ProfileSettings() {
             savedOnceKept(setHighContrast(v));
           }}
           aria-label="High contrast"
+          className={cn(TAP_44_TALL, "after:inset-x-0")}
         />
       </SettingRow>
 
@@ -267,7 +286,8 @@ export function ProfileSettings() {
                 nameBefore.current = name || stored.name;
                 setEditingName(true);
               }}
-              className="cursor-pointer text-[15px] font-medium text-nevo-navy"
+              // 44px tall, centred in the row: the row is the disc's 56.
+              className="inline-flex min-h-11 cursor-pointer items-center text-[15px] font-medium text-nevo-navy"
             >
               Change
             </button>

@@ -3,6 +3,7 @@ import {
   AGE_OUT_DAYS,
   MAX_REMEMBERED,
   childById,
+  closeRememberedChild,
   pickerEntries,
   rememberChild,
   rememberedChildren,
@@ -314,5 +315,100 @@ describe("the length of a child's PIN (D58)", () => {
     rememberChild({ ...child("ada.o", "Ada"), pinLength: 4 });
 
     expect(pickerEntries()[0]).not.toHaveProperty("pinLength");
+  });
+});
+
+/**
+ * D178 (13 Oct): "Remove the tile when the account closes. Do not keep it for
+ * 30 days." The tile stayed until its thirty days ran out, and every tap on it
+ * led back to Account Closed. "The 30 day window stays as what it already is:
+ * how long the account's data lingers on the device before it drops off."
+ */
+describe("a child whose account closed", () => {
+  const twoAndAda = () =>
+    seed([
+      { ...entry("a", "ada.o", daysAgo(1), "Ada"), userId: "u-ada" },
+      { ...entry("k", "kofi.b", daysAgo(2), "Kofi"), userId: "u-kofi" },
+      { ...entry("t", "tolu.a", daysAgo(3), "Tolu"), userId: "u-tolu" },
+    ]);
+
+  it.each([
+    ["the picker's own row (28c)", { id: "a" }],
+    ["the signed-in account (mid-session)", { userId: "u-ada" }],
+    ["the pair 00c sent", { schoolCode: "NEVO-1", loginIdentifier: "ada.o" }],
+  ])("leaves the picker at once, found by %s", (_, which) => {
+    twoAndAda();
+
+    closeRememberedChild(which);
+
+    expect(pickerEntries().map((e) => e.name)).toEqual(["Kofi", "Tolu"]);
+  });
+
+  it("leaves every other child exactly as it was", () => {
+    twoAndAda();
+    const before = JSON.parse(window.localStorage.getItem(KEY)!) as {
+      id: string;
+    }[];
+
+    closeRememberedChild({ id: "a" });
+
+    const after = JSON.parse(window.localStorage.getItem(KEY)!) as {
+      id: string;
+    }[];
+    expect(after.filter((c) => c.id !== "a")).toEqual(
+      before.filter((c) => c.id !== "a"),
+    );
+  });
+
+  it("keeps their data on the device for the same thirty days", () => {
+    twoAndAda();
+    const stamped = childById("a")?.lastUsedAt;
+
+    closeRememberedChild({ id: "a" });
+
+    // Still stored, and the clock not restarted.
+    expect(childById("a")?.lastUsedAt).toBe(stamped);
+    expect(rememberedChildren()).toHaveLength(3);
+  });
+
+  it("does not add a child the device never remembered", () => {
+    twoAndAda();
+
+    closeRememberedChild({ schoolCode: "NEVO-1", loginIdentifier: "zara.n" });
+    closeRememberedChild({ userId: "u-zara" });
+
+    expect(rememberedChildren()).toHaveLength(3);
+    expect(pickerEntries()).toHaveLength(3);
+  });
+
+  it("comes back with a sign-in that works, which only an open account can make", () => {
+    twoAndAda();
+    closeRememberedChild({ id: "a" });
+
+    rememberChild(child("ada.o", "Ada"));
+
+    expect(pickerEntries().map((e) => e.name)).toContain("Ada");
+  });
+
+  it("is the first to go when the device is full, not a child who can still sign in", () => {
+    seed(
+      ["a", "b", "c", "d", "e", "f"].map((id, i) =>
+        entry(id, `${id}.x`, daysAgo(i + 1), id.toUpperCase()),
+      ),
+    );
+    // The freshest of the six closes.
+    closeRememberedChild({ id: "a" });
+
+    rememberChild(child("new.x", "New"));
+
+    // The least recently used open child keeps their tile.
+    expect(pickerEntries().map((e) => e.name)).toEqual([
+      "New",
+      "B",
+      "C",
+      "D",
+      "E",
+      "F",
+    ]);
   });
 });

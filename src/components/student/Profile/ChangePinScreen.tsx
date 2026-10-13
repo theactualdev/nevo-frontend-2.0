@@ -135,12 +135,13 @@ function CurrentPinStep({
           filled={pin.length}
           offset={0}
           caretAt={pin.length}
-          error={wrong}
           length={STUDENT_PIN_LENGTH}
           className={FRAME_27_ROW}
         />
 
-        <p role="alert" className="mt-4 min-h-5 text-sm text-nevo-violet">
+        {/* The darker violet (D210), on both steps' lines: soft violet
+            fails contrast as text on cream. */}
+        <p role="alert" className="mt-4 min-h-5 text-sm text-nevo-violet-text">
           {/*
             Named as the child's, because it is. The mirror of the save-failure
             copy on the next step, which is careful never to blame them for a
@@ -172,8 +173,9 @@ function CurrentPinStep({
  * mismatch keeps them there with the first PIN kept (the IA: "mismatch:
  * inline error, stays on Step 3"). Back from step 3 is step 2, emptied.
  *
- * NOT DRAWN: a failed save. Frame 27 has none, so it keeps the shared
- * not-saved line, on step 3, with the new PIN kept.
+ * A FAILED SAVE says "That's on us, not you. Try again." (design, 13 Oct),
+ * on step 3, and nothing about what was kept. The first new PIN stays in the
+ * reducer so only step 3 is typed again, which is what "Try again" asks.
  *
  * Mounted fresh each time step 1 hands over, so a half-typed new PIN never
  * survives a trip back.
@@ -271,10 +273,9 @@ function NewPinStep({
           filled={digits.length}
           offset={again ? STUDENT_PIN_LENGTH : 0}
           caretAt={digits.length}
-          error={again && error}
           className={FRAME_27_ROW}
         />
-        <p role="alert" className="mt-4 min-h-5 text-sm text-nevo-violet">
+        <p role="alert" className="mt-4 min-h-5 text-sm text-nevo-violet-text">
           {error ? PIN_MISMATCH_COPY : saveFailed ? PIN_NOT_SAVED_COPY : ""}
         </p>
       </div>

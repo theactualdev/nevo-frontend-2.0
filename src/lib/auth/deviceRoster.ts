@@ -79,6 +79,21 @@ export interface RememberedChild extends RememberedProfile {
    * screen 28c-2, which is a supported path rather than a broken one.
    */
   lastUsedAt: string;
+  /**
+   * The account was closed (`account_closed`), at a door or mid-session.
+   *
+   * D178 (13 Oct): "Remove the tile when the account closes. Do not keep it
+   * for 30 days." The child has been told once, on Account Closed, and after
+   * that the tile has no job - every tap leads back to the same screen - so
+   * the picker stops showing it at once (`pickerEntries`).
+   *
+   * THE ENTRY ITSELF STAYS until its thirty days run out: "The 30 day window
+   * stays as what it already is: how long the account's data lingers on the
+   * device before it drops off." So it is marked, not deleted, and closing it
+   * does not restamp `lastUsedAt`. A successful sign-in clears the mark
+   * (`rememberChild`), since only an open account can make one.
+   */
+  closed?: true;
 }
 
 /** Everything a component may know about a remembered child. */
@@ -191,14 +206,46 @@ export function rememberedChildren(): RememberedChild[] {
 
 /**
  * The picker's rows. A name, a shape and an opaque id - nothing else leaves
- * this module, so nothing else can reach a screen.
+ * this module, so nothing else can reach a screen. A closed account has no
+ * row (D178).
  */
 export function pickerEntries(): PickerEntry[] {
-  return rememberedChildren().map((c) => ({
+  return rememberedChildren()
+    .filter((c) => !c.closed)
+    .map((c) => ({
     id: c.id,
-    ...(c.displayName?.trim() ? { name: c.displayName.trim() } : {}),
-    shapeIndex: c.shapeIndex,
-  }));
+      ...(c.displayName?.trim() ? { name: c.displayName.trim() } : {}),
+      shapeIndex: c.shapeIndex,
+    }));
+}
+
+/** Which remembered child an `account_closed` was about, as each place knows it. */
+export type ClosedAccount =
+  /** The picker's own row: the PIN door (28c). */
+  | { id: string }
+  /** The signed-in account: a closure that lands mid-session. */
+  | { userId: string }
+  /** The pair the full sign-in (00c) sent. */
+  | { schoolCode: string; loginIdentifier: string };
+
+/**
+ * Take a closed child's tile off this device's picker (D178).
+ *
+ * Marks the entry, and nothing else: the thirty-day window it lingers for is
+ * unchanged, and every other child on the device is left exactly as it was.
+ * A child the device never remembered is not added.
+ */
+export function closeRememberedChild(which: ClosedAccount): void {
+  const isThem = (c: RememberedChild): boolean =>
+    "id" in which
+      ? c.id === which.id
+      : "userId" in which
+        ? Boolean(which.userId) && c.userId === which.userId
+        : c.schoolCode === which.schoolCode.trim() &&
+          c.loginIdentifier === which.loginIdentifier.trim();
+  const stored = read();
+  if (!stored.some(isThem)) return;
+  write(stored.map((c) => (isThem(c) ? { ...c, closed: true } : c)));
 }
 
 /** The full entry behind a picker row, for the moment a PIN is submitted. */
@@ -264,8 +311,20 @@ export function rememberChild(profile: RememberedProfile): RememberedChild[] {
    * - the field stays on the type - and sheds it at its next sign-in.
    */
   delete updated.pinLength;
+  // Signed in, so open: a closed mark from before is not this account any more.
+  delete updated.closed;
 
-  const next = [updated, ...rest].slice(0, MAX_REMEMBERED);
+  /*
+   * A CLOSED ENTRY GOES FIRST when the device is full. It shows on no picker
+   * (D178) and is only waiting out its thirty days, so it must not cost a
+   * child who can still sign in their tile.
+   */
+  const all = [updated, ...rest];
+  const next = (
+    all.length > MAX_REMEMBERED
+      ? [...all.filter((c) => !c.closed), ...all.filter((c) => c.closed)]
+      : all
+  ).slice(0, MAX_REMEMBERED);
   write(next);
   return next;
 }

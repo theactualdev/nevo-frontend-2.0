@@ -5,8 +5,8 @@ import { ApiError } from "@/lib/api/client";
 /**
  * Which of two sentences a child reads.
  *
- * `PinCreationScreen` says *"we couldn't save that just now - that's on us,
- * not you"* for a rejected write, and that copy exists because an earlier
+ * Change PIN says *"That's on us, not you. Try again."* for a rejected
+ * write, and that copy exists because an earlier
  * version blamed a child for a failure no retype could fix. A wrong current
  * PIN is the mirror case: it IS theirs, retyping IS the fix, and calling it
  * our fault sends them to find an adult about something they could have

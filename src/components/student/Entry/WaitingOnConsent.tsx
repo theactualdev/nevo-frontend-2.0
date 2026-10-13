@@ -1,4 +1,12 @@
+"use client";
+
+import { ChevronLeft } from "lucide-react";
+import { useAuth } from "@/hooks";
+import { getSession } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
+
+/** Where 00d's Back goes (D189): the device picker, for whoever is next. */
+export const WAITING_WAY_BACK = "/auth/login";
 
 /**
  * Frame 00d / SE-01 - Waiting on Consent.
@@ -15,9 +23,21 @@ import { cn } from "@/lib/utils";
  * another day; they close the link and come back. Anything that re-checks on a
  * timer re-creates the screen this replaces.
  *
- * There is no way onward from here ON PURPOSE. Every other dead end in this app
- * offers a way out, and this one must not: the only thing that changes this
- * state is an adult, elsewhere.
+ * There is no way ONWARD from here on purpose: the only thing that changes
+ * this state is an adult, elsewhere.
+ *
+ * BUT THERE IS A WAY BACK (D189, 13 Oct). Lydia: "Waiting on consent is a
+ * genuine dead end and gets fixed ... Yes, give it Back, same as the age-check
+ * hold. On a shared tablet one child waiting on consent currently holds the
+ * device hostage for everyone else until the app is restarted. Back goes to
+ * the device picker." So the age-check hold's Back - the chevron, top left -
+ * and it leaves; it moves nothing along.
+ *
+ * A child sent here from a door is SIGNED IN, so Back signs them out first,
+ * by a hard navigation, as every sign-out is: the route guard would read the
+ * student cookie, send them to Home, and the consent gate would send them
+ * straight back here. A child held in place on 05 Entry has no session to
+ * end.
  *
  * Primary case is the shared classroom tablet at 768x1024, which is why the
  * copy is centred in the viewport rather than near the top.
@@ -56,12 +76,29 @@ export function WaitingOnConsent({
   /** What holds the child. Changes the words only, never the screen. */
   hold?: WaitingHold;
 } = {}) {
+  const { signOut } = useAuth();
+  const back = () => {
+    if (getSession()) signOut();
+    window.location.assign(WAITING_WAY_BACK);
+  };
+
   return (
     <div className="flex min-h-dvh flex-col bg-nevo-cream">
-      {/* Same cropped wordmark as the PIN beat and the picker, so the doors do
-          not drift apart. */}
-      <div className="flex h-[60px] shrink-0 items-center px-[22px]">
-        <span className="relative block h-[15px] w-12 overflow-hidden">
+      {/* The age-check hold's Back (D189), then the same cropped wordmark as
+          the PIN beat and the picker, so the doors do not drift apart. */}
+      <div className="flex h-[60px] shrink-0 items-center px-4">
+        <button
+          type="button"
+          aria-label="Back"
+          onClick={back}
+          className="flex size-11 cursor-pointer items-center justify-center rounded-[10px] transition-colors hover:bg-nevo-near-black/[0.06] active:bg-nevo-near-black/[0.12]"
+        >
+          <ChevronLeft
+            className="size-6 text-nevo-near-black"
+            strokeWidth={2}
+          />
+        </button>
+        <span className="relative ml-1.5 block h-[15px] w-12 overflow-hidden">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/brand/logo-wordmark-purple.png"

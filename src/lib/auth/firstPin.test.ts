@@ -117,6 +117,10 @@ describe("entryPinRefusal (B68)", () => {
   it.each([
     ["a 429 with its code", "throttled", refusal(429, "too_many_attempts")],
     ["a 429 with no code, which is still a rate limit", "throttled", refusal(429)],
+    // D156: the pause wherever PIN creation can be throttled, by status or
+    // by the code the PIN door's own 401 carries.
+    ["too_many_attempts on a 401", "throttled", refusal(401, "too_many_attempts")],
+    ["too_many_attempts on a 403", "throttled", refusal(403, "too_many_attempts")],
     ["pin_not_cleared", "has-pin", refusal(409, "pin_not_cleared")],
     ["pin_already_set", "has-pin", refusal(409, "pin_already_set")],
     ["entry_not_found", "not-found", refusal(404, "entry_not_found")],
