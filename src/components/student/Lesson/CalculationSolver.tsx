@@ -901,10 +901,13 @@ const piecesRinged = (
   );
 };
 
-/** The drawing of a named token: the ring, the weight, the result's box. */
+/**
+ * The drawing of a named token: the ring (the solver frame's `eqTokenStyle`,
+ * 3px out), the weight, the result's box.
+ */
 const tokenClass = (ring: boolean, bold: boolean, box: boolean) =>
   cn(
-    ring && "rounded-md outline-2 outline-offset-4 outline-nevo-violet",
+    ring && "rounded-md outline-2 outline-offset-3 outline-nevo-violet",
     bold && "font-bold",
     box &&
       "inline-block rounded-[10px] border-2 border-dashed border-nevo-navy/40 px-2",
@@ -917,8 +920,14 @@ const tokenClass = (ring: boolean, bold: boolean, box: boolean) =>
  * frame's dashed box around the "?" still to find. The text is unchanged,
  * but for its minus signs: see `minusSigns`.
  *
+ * THE ANSWER, ONCE ACCEPTED, IS SET AT 700 (D204: "700 weight covers ... the
+ * calculation answer"). Which token is the answer is the payload's to say: a
+ * `result` an accepted step named (B127), and nothing this screen picks out.
+ *
  * The flat string of a lesson stored before equation tokens: its words are
- * matched only there (see `keysOf`).
+ * matched only there (see `keysOf`). So `fullEquation` on a lesson with ids,
+ * a flat string carrying none, has no token a result can name, and its
+ * answer keeps the line's weight.
  */
 function Notation({ line, emphasis }: { line: string; emphasis: Emphasis }) {
   return (
@@ -927,7 +936,8 @@ function Notation({ line, emphasis }: { line: string; emphasis: Emphasis }) {
         // Named by the token as written; only its drawing changes.
         const keys = keysOf(emphasis, [], [token]);
         const ring = names(emphasis.ring, keys);
-        const bold = names(emphasis.navy, keys);
+        const bold =
+          names(emphasis.navy, keys) || names(emphasis.revealed, keys);
         const box = names(emphasis.result, keys);
         const shown = minusSigns(token);
         // A token nothing names stays plain text.
@@ -950,6 +960,7 @@ function Notation({ line, emphasis }: { line: string; emphasis: Emphasis }) {
  * the payload hides until acceptance is the frame's dashed box with its "?",
  * the place the answer goes - and so is any token a later step's `result`
  * still holds back. Its text is not on the page until the step is accepted.
+ * Then, named by an accepted step's `result`, it is the answer, at 700.
  */
 function TokenNotation({
   tokens,
@@ -965,9 +976,11 @@ function TokenNotation({
       {tokens.map((t, i) => {
         const keys = [t.id];
         const ring = names(emphasis.ring, keys);
-        const bold = names(emphasis.navy, keys);
         const held =
           (!accepted && t.hidden) || names(emphasis.withheld, keys);
+        const bold =
+          names(emphasis.navy, keys) ||
+          (!held && names(emphasis.revealed, keys));
         const box = held || names(emphasis.result, keys);
         return (
           <span key={i}>
@@ -1382,8 +1395,13 @@ function fillOf(kind: CellScaffold["kind"], mark: number, several: boolean) {
  * 17b's fraction bars and D149's array, from the payload's `rows`, `parts`,
  * marks and labels (see `scaffoldFor`). What the asked step names changes in
  * place: a ring in violet, a bar's cells to navy, and a result - kept back
- * until it is accepted - that fills in navy, a bar to itself below a rule.
- * Nothing turns navy because the solve finished.
+ * until it is accepted - that arrives as a bar to itself below a rule, its
+ * label in navy. Nothing turns navy because the solve finished.
+ *
+ * A RESULT ARRIVES IN SOFT VIOLET, NOT NAVY (D164: "the moment the child is
+ * right the bars return to Soft Violet"; the solver frame's `mkBar` draws
+ * its result row unemphasised). It stayed navy for good once accepted, which
+ * held the step's emphasis after the step was over.
  *
  * A label sits where its mark is: at the start of a bar that is its mark's
  * own (17b), under its cells where one bar carries several marks, and a
@@ -1417,8 +1435,11 @@ function CellRows({
       ? `repeat(${parts}, minmax(0, 1fr))`
       : `repeat(${parts}, minmax(0, 40px))`,
   };
-  /** D149: 5px between a bar's cells, 10 between squares, 8 between dots. */
-  const gap = bar ? "gap-[5px]" : dots ? "justify-center gap-2" : "justify-center gap-2.5";
+  /**
+   * 6px between a bar's cells (the solver frame, 13 Oct; D167), 10 between
+   * squares and 8 between dots (D149).
+   */
+  const gap = bar ? "gap-1.5" : dots ? "justify-center gap-2" : "justify-center gap-2.5";
   const labelClass = (strong: boolean) =>
     cn(
       "text-sm transition-colors sm:text-[15px]",
@@ -1493,9 +1514,7 @@ function CellRows({
                 const navy =
                   bar &&
                   filled &&
-                  (names(emphasis.navy, keys) ||
-                    names(emphasis.revealed, keys) ||
-                    names(emphasis.navy, part(col)));
+                  (names(emphasis.navy, keys) || names(emphasis.navy, part(col)));
                 const fill =
                   mark == null
                     ? ""
