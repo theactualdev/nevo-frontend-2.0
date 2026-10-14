@@ -10,10 +10,12 @@ import {
   HOME_ACTIVITY,
   HOME_FLAGS,
 } from "@/lib/mocks/teacherHome";
+import { SAMPLE_PULSE } from "@/lib/mocks/teacherIntelligence";
 import { cn } from "@/lib/utils";
 import { useTeacherFlags } from "@/hooks/useTeacherFlags";
 import { useTeacherHome } from "@/hooks/useTeacherHome";
 import { SampleRegion } from "@/components/shared/SampleRegion";
+import { LiveClassPulse } from "./LiveClassPulse";
 import { LiveFlagCard } from "./LiveFlagCard";
 import { HomeClasses } from "./HomeClasses";
 import { FlagCard } from "./FlagCard";
@@ -34,13 +36,11 @@ import { FlagCard } from "./FlagCard";
  *   - the flags are LIVE, from `/api/intelligence/flags`. An empty list is a
  *     real calm morning and gets C03's own no-flags card, not fixtures - which
  *     is the whole point: "nothing needs you" is only reassuring if it is true.
- *   - the activity list is live too, from `GET /api/v1/teachers/me/home` -
- *     the endpoint backend shipped against the blockers list.
- *   - C16a's CLASS PULSE IS NOT DRAWN, live or sample. The same read sends its
- *     three numbers, and every way of putting them into words was a cutoff of
- *     ours. Lydia ruled on 13 Oct that nothing replaces the old bands until
- *     backend sends its own words, and that a group with nothing usable shows
- *     nothing rather than a placeholder. See `useTeacherHome`.
+ *   - the pulse and the activity list are live too, from
+ *     `GET /api/v1/teachers/me/home` - the endpoint backend shipped against
+ *     the blockers list. The pulse prints the engine's own word per metric
+ *     (B-6, 14 Oct), never a band of ours, and repeats per class because that
+ *     is how it arrives; see `LiveClassPulse`.
  *   - the greeting uses the teacher's real name, from `GET /api/v1/users/me`,
  *     and falls back to a nameless welcome rather than the fixture persona.
  *   - the SCHOOL CODE sits beside it (C03, 30 Sep), from the same read's
@@ -88,6 +88,7 @@ export function TeacherHome() {
     complete: flagsComplete,
   } = useTeacherFlags();
   const {
+    pulse,
     activity,
     live: homeLive,
     failed: homeFailed,
@@ -159,11 +160,31 @@ export function TeacherHome() {
               {showFixtureHome && showFixtureFlags
                 ? "We couldn’t read your class activity just now, so what’s below is a sample."
                 : showFixtureHome
-                  ? "We couldn’t read your class activity just now, so the recent activity below is a sample."
+                  ? "We couldn’t read your class activity just now, so the pulse and recent activity are samples."
                   : "We couldn’t read what needs your attention just now, so the flagged students below are a sample."}
             </p>
           )
         )}
+
+        {/* C16a: the pulse leads - class weather first, specifics below.
+            Not on a phone: C19's B1 is the greeting and "Worth your
+            attention" alone, the page a notification opens. */}
+        <div className="max-md:hidden">
+        {!noClasses &&
+          (homeLive
+            ? pulse.map((p) => <LiveClassPulse key={p.classId} pulse={p} />)
+            : showFixtureHome && (
+                /*
+                 * MARKED, so the signed-in e2e walk, which asserts zero
+                 * sample marks on /teacher/dashboard, can see it. The sample
+                 * goes through the live component, in the words backend
+                 * really sends.
+                 */
+                <SampleRegion kind="teacher:home-pulse">
+                  <LiveClassPulse pulse={SAMPLE_PULSE} />
+                </SampleRegion>
+              ))}
+        </div>
 
         {/* All of this is class-derived. With no classes there is nothing
             truthful to put here - including the calm no-flags card, which

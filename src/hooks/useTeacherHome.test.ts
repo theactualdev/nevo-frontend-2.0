@@ -5,24 +5,54 @@ import {
 } from "./useTeacherHome";
 
 /**
- * The class pulse, which is not drawn (Lydia, 13 Oct).
+ * The class pulse prints the engine's words and never its numbers.
  *
- * Its three numbers used to leave here as "Above 75%", "50 to 75%" and
- * "Below 50%" - cutoffs of our own. Nothing replaces them until backend sends
- * its own words, so the numbers must not leave this hook in any form.
+ * The numbers used to leave here as "Above 75%", "50 to 75%" and "Below 50%" -
+ * cutoffs of our own, struck by Lydia on 13 Oct. Backend now sends a label per
+ * metric (B-6, 14 Oct) and owns the boundaries, so the label is passed through
+ * untouched and the number is not passed at all.
  */
 describe("the class pulse", () => {
-  it("carries the class and its headcount, and none of the engine's numbers", () => {
-    expect(
-      toPulse({
-        classId: "c-1",
-        className: "JSS 2A",
-        studentCount: 28,
-        engagement: 0.82,
-        comprehension: 0.41,
-        focus: 0.6,
-      } as Parameters<typeof toPulse>[0]),
-    ).toEqual({ classId: "c-1", className: "JSS 2A", studentCount: 28 });
+  const row = (over: Record<string, unknown> = {}) =>
+    ({
+      classId: "c-1",
+      className: "JSS 2A",
+      studentCount: 28,
+      engagement: 82,
+      comprehension: 41,
+      focus: 60,
+      engagementLabel: "Steady",
+      comprehensionLabel: "May benefit from support",
+      focusLabel: "Mixed",
+      ...over,
+    }) as Parameters<typeof toPulse>[0];
+
+  it("carries each metric's label exactly as backend sent it", () => {
+    expect(toPulse(row()).tiles).toEqual([
+      { head: "Engagement", label: "Steady" },
+      { head: "Comprehension", label: "May benefit from support" },
+      { head: "Focus", label: "Mixed" },
+    ]);
+  });
+
+  it("does not decide anything from the numbers", () => {
+    // Numbers that a cutoff of ours would have read the other way round.
+    const flipped = toPulse(row({ engagement: 5, comprehension: 99, focus: 50 }));
+    expect(flipped.tiles.map((t) => t.label)).toEqual([
+      "Steady",
+      "May benefit from support",
+      "Mixed",
+    ]);
+    expect(JSON.stringify(flipped)).not.toMatch(/\b(5|99|50|82|41|60)\b/);
+  });
+
+  it("leaves out a metric backend sent no word for, rather than filling it in", () => {
+    const pulse = toPulse(row({ comprehensionLabel: null, focusLabel: undefined }));
+    expect(pulse.tiles).toEqual([{ head: "Engagement", label: "Steady" }]);
+  });
+
+  it("keeps the headcount, which My Classes shows", () => {
+    expect(toPulse(row()).studentCount).toBe(28);
   });
 });
 

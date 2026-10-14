@@ -12,25 +12,33 @@ import { useLiveQuery } from "./useLiveQuery";
 /**
  * Home's activity list, and each class's headcount from the same read.
  *
- * THE CLASS PULSE IS NOT READ. The endpoint returns `engagement`,
- * `comprehension` and `focus` as bare numbers, and C16a's tiles must say
- * something a teacher can act on. Turning the numbers into words meant cutoffs
- * of our own: first "Strong / Steady / Building" (out, design 10 Sep), then
- * "Above 75%", "50 to 75%" and "Below 50%" (accepted for launch, design
- * 17 Sep). Lydia ruled on 13 Oct that both are out: no invented band, no
- * computed share, and nothing replaces them until backend sends its own
- * words. "If backend sends nothing usable, the group shows nothing rather than
- * a placeholder." So the three numbers are not read at all, and Home draws no
- * pulse. Asked of backend: the engine's own words for each group.
+ * THE CLASS PULSE PRINTS THE ENGINE'S WORDS, AND NEVER ITS NUMBERS. The
+ * endpoint returns `engagement`, `comprehension` and `focus` as numbers.
+ * Turning those into words meant cutoffs of our own: first "Strong / Steady /
+ * Building" (out, design 10 Sep), then "Above 75%", "50 to 75%" and
+ * "Below 50%" (accepted for launch 17 Sep, struck by Lydia 13 Oct, who ruled
+ * that nothing replaces them until backend sends its own words). Backend now
+ * does (B-6, Teslim 14 Oct): a label per metric, with the boundaries its own.
+ * So each tile carries that label as sent, the numbers are never read, and a
+ * metric whose label did not arrive has no tile - "the group shows nothing
+ * rather than a placeholder".
  *
- * `studentCount` still is: it is a count, not a judgement, and My Classes
+ * `studentCount` is read too: it is a count, not a judgement, and My Classes
  * shows it.
  */
+
+export interface PulseTile {
+  head: string;
+  /** The engine's own word, printed as sent. */
+  label: string;
+}
 
 export interface ClassPulse {
   classId: string;
   className: string;
   studentCount: number;
+  /** Only the metrics backend labelled, in C16a's order. */
+  tiles: PulseTile[];
 }
 
 export interface HomeActivity {
@@ -67,10 +75,19 @@ export const __toActivityForTest = (row: Parameters<typeof toActivity>[0]) =>
   toActivity(row);
 
 function toPulse(row: ClassPulseRow): ClassPulse {
+  const tiles: PulseTile[] = [];
+  for (const [head, label] of [
+    ["Engagement", row.engagementLabel],
+    ["Comprehension", row.comprehensionLabel],
+    ["Focus", row.focusLabel],
+  ] as const) {
+    if (typeof label === "string" && label.trim()) tiles.push({ head, label });
+  }
   return {
     classId: row.classId,
     className: row.className,
     studentCount: row.studentCount,
+    tiles,
   };
 }
 
