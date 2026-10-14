@@ -207,20 +207,21 @@ describe("WarmUpRun — the dot arrays, as the warm-up frame draws them", () => 
     ).toEqual(["Left", "Right"]);
   });
 
-  it("wraps each array's dots in rows, so none can sit on another", () => {
-    // A random scatter let dots land on each other, and a child counted
-    // fewer than were recorded. The frame wraps them 10px apart inside a
-    // 14px pad; P4-6's frame pair is 9 against 5, every one of them drawn.
+  it("scatters each array's dots as the baseline does, rather than in rows (D197)", () => {
+    // A random scatter once let dots land on each other, so the frame's rows
+    // came in. Design, 13 Oct: the warm-up "scatters them the way the
+    // baseline does instead of flowing them in rows", which keeps every two
+    // 1.5 dots apart (spacing by band in WarmUpRun.band). P4-6's frame pair
+    // is 9 against 5, every one of them drawn.
     render(<WarmUpRun dimension="ans" />);
 
     const boxes = screen.getAllByTestId("warmup-dot-box");
     for (const box of boxes) {
-      expect(box.className).toMatch(/(^| )flex-wrap( |$)/);
-      expect(box.className).toContain("gap-2.5");
-      expect(box.className).toContain("p-3.5");
-      for (const dot of box.querySelectorAll("span")) {
-        expect(dot.className).not.toMatch(/absolute/);
-        expect(dot.getAttribute("style")).toBeNull();
+      expect(box.className).not.toMatch(/flex-wrap|gap-2\.5|p-3\.5/);
+      for (const dot of box.querySelectorAll<HTMLElement>("span")) {
+        expect(dot.className).toContain("absolute");
+        expect(dot.style.left).toMatch(/%$/);
+        expect(dot.style.top).toMatch(/%$/);
       }
     }
     expect(
@@ -309,6 +310,57 @@ describe("WarmUpRun — the done state claims no save", () => {
     expect(screen.getByText("That's it for today")).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/saved|didn't save|couldn't save/i);
     expect(screen.queryByTestId("warmup-save-failed-mark")).toBeNull();
+  });
+
+  it("holds the working spinner in the badge spot while the write is in flight, never the check", async () => {
+    // Design, 13 Oct: "A save in flight shows the working spinner in the
+    // badge spot rather than a success check before we know it worked."
+    submit.mockReturnValue(new Promise(() => {}));
+    await sitTheTileTask();
+    await settle();
+
+    const title = screen.getByText("That's it for today");
+    const spot = title.parentElement!.previousElementSibling!;
+    expect(spot).toBe(screen.getByTestId("warmup-saving-mark"));
+    expect(spot.querySelector("svg")).toBeNull();
+    // The badge's own size, so nothing moves when the badge replaces it.
+    expect(spot.className).toMatch(/(^| )size-16( |$)/);
+    expect(spot.className).toContain("sm:size-20");
+    // The house spinner: a navy ring on a faint navy track.
+    const ring = spot.firstElementChild!;
+    expect(ring.className).toContain("border-nevo-navy/18");
+    expect(ring.className).toContain("border-t-nevo-navy");
+    expect(ring.className).toContain("motion-safe:animate-spin");
+  });
+
+  it("swaps the spinner for the check once the write lands", async () => {
+    let land!: (ok: boolean) => void;
+    submit.mockReturnValue(new Promise<boolean>((r) => (land = r)));
+    await sitTheTileTask();
+    await settle();
+    expect(screen.getByTestId("warmup-saving-mark")).toBeInTheDocument();
+
+    await act(async () => land(true));
+
+    expect(screen.queryByTestId("warmup-saving-mark")).toBeNull();
+    const badge = screen.getByText("That's it for today").parentElement!
+      .previousElementSibling!;
+    expect(badge.className).toContain("bg-nevo-navy");
+    expect(badge.querySelector("svg")).not.toBeNull();
+  });
+
+  it("swaps the spinner for D126's mark, not the check, when the write fails", async () => {
+    let land!: (ok: boolean) => void;
+    submit.mockReturnValue(new Promise<boolean>((r) => (land = r)));
+    await sitTheTileTask();
+    await settle();
+    expect(screen.getByTestId("warmup-saving-mark")).toBeInTheDocument();
+
+    await act(async () => land(false));
+
+    expect(screen.queryByTestId("warmup-saving-mark")).toBeNull();
+    expect(screen.getByTestId("warmup-save-failed-mark")).toBeInTheDocument();
+    expect(document.querySelector("svg.lucide-check")).toBeNull();
   });
 
   it("is the title and Go on once the write lands, with no body line (D80, D97)", async () => {

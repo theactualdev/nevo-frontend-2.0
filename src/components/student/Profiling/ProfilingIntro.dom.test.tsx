@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ProfilingIntro } from "./ProfilingIntro";
 
 /**
@@ -100,10 +100,66 @@ describe("while the roster is still being read", () => {
   it("neither asks the age nor lets the run start", () => {
     // A run begun now would be sized by a guess. And no age question, then
     // or ever (D153).
-    render(<ProfilingIntro mode="intro" onContinue={() => {}} waiting />);
+    const onContinue = vi.fn();
+    render(<ProfilingIntro mode="intro" onContinue={onContinue} waiting />);
+
+    fireEvent.click(screen.getByRole("button", { name: /let's go/i }));
 
     expect(screen.queryByText(/how old are you/i)).toBeNull();
-    expect(screen.getByRole("button", { name: /let's go/i })).toBeDisabled();
+    expect(onContinue).not.toHaveBeenCalled();
+  });
+
+  it("stays pressable and says Nearly ready. in place when pressed (D211)", () => {
+    // It was greyed out and inert, which reads as broken.
+    render(<ProfilingIntro mode="intro" onContinue={() => {}} waiting />);
+    const go = screen.getByRole("button", { name: /let's go/i });
+
+    expect(go).not.toBeDisabled();
+    expect(go.className).toContain("cursor-pointer");
+    expect(go.className).not.toMatch(/opacity|cursor-not-allowed/);
+    expect(screen.queryByText("Nearly ready.")).toBeNull();
+
+    fireEvent.click(go);
+
+    const line = screen.getByRole("status");
+    expect(line).toHaveTextContent(/^Nearly ready\.$/);
+    // The reference's pressable-not-disabled panel, inside the same card.
+    expect(line.className).toContain("bg-nevo-violet/14");
+    expect(line.className).toContain("rounded-[10px]");
+    expect(line.className).toContain("px-[15px]");
+    expect(line.className).toContain("py-[13px]");
+    expect(line.parentElement).toBe(go.parentElement);
+  });
+
+  it("starts on the next press once the band is known, and the line goes", () => {
+    const onContinue = vi.fn();
+    const { rerender } = render(
+      <ProfilingIntro mode="intro" onContinue={onContinue} waiting />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /let's go/i }));
+    expect(screen.getByText("Nearly ready.")).toBeInTheDocument();
+
+    rerender(<ProfilingIntro mode="intro" onContinue={onContinue} />);
+    expect(screen.queryByText("Nearly ready.")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /let's go/i }));
+
+    expect(onContinue).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("the end-of-baseline button (D171, 13 Oct)", () => {
+  it("says Let's finish setting up, since the notice and the PIN come next", () => {
+    // "Start my first lesson" is not true: the learning notice and PIN
+    // creation come first.
+    const onContinue = vi.fn();
+    render(<ProfilingIntro mode="complete" onContinue={onContinue} />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Let's finish setting up" }),
+    );
+
+    expect(onContinue).toHaveBeenCalledTimes(1);
+    expect(document.body.textContent).not.toMatch(/first lesson/i);
   });
 });
 

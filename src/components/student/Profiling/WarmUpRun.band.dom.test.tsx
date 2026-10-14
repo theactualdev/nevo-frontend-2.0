@@ -404,6 +404,51 @@ describe("the dot task, by band (D81)", () => {
     expect(firstDot().className).toContain("size-[22px]");
   });
 
+  it("scatters each band's dots as the baseline does, 1.5 dots apart on the phone's box (D197)", () => {
+    // They flowed in rows 10px apart. Design: "the warm-up scatters them the
+    // way the baseline does instead of flowing them in rows". Measured on
+    // the phone's 150px box, the smaller, less its 2px border.
+    const INNER = 146;
+    const sizes = { p13: 22, p46: 16, jss: 13, ss: 10 } as const;
+    const expected = { p13: [8, 4], p46: [9, 5], jss: [12, 8], ss: [13, 12] };
+    for (const band of ["p13", "p46", "jss", "ss"] as const) {
+      roster.value = { band, settled: true };
+      render(<WarmUpRun dimension="ans" />);
+      const d = sizes[band];
+
+      // Counts unchanged: only where the dots go is new.
+      expect(arrays()).toEqual(expected[band]);
+      for (const box of screen.getAllByTestId("warmup-dot-box")) {
+        expect(box.className).not.toMatch(/flex-wrap/);
+        const dots = [...box.querySelectorAll<HTMLElement>("span.rounded-full")].map(
+          (s) => {
+            expect(s.className).toContain("absolute");
+            return {
+              x: (parseFloat(s.style.left) / 100) * INNER,
+              y: (parseFloat(s.style.top) / 100) * INNER,
+            };
+          },
+        );
+        let closest = Infinity;
+        for (let i = 0; i < dots.length; i++)
+          for (let j = i + 1; j < dots.length; j++)
+            closest = Math.min(
+              closest,
+              Math.hypot(dots[i].x - dots[j].x, dots[i].y - dots[j].y),
+            );
+        expect(closest, band).toBeGreaterThanOrEqual(d * 1.5);
+        // Inside the box, clear of its edge, as the baseline keeps them.
+        for (const p of dots) {
+          expect(p.x).toBeGreaterThanOrEqual(14);
+          expect(p.y).toBeGreaterThanOrEqual(14);
+          expect(p.x + d).toBeLessThanOrEqual(INNER - 14 + 1e-9);
+          expect(p.y + d).toBeLessThanOrEqual(INNER - 14 + 1e-9);
+        }
+      }
+      cleanup();
+    }
+  });
+
   it("masks the junior secondary band's arrays after its 500ms, not 850", () => {
     roster.value = { band: "jss", settled: true };
     render(<WarmUpRun dimension="ans" />);

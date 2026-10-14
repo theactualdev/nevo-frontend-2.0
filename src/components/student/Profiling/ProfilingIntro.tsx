@@ -1,6 +1,6 @@
 "use client";
 
-import { useContext } from "react";
+import { useContext, useState } from "react";
 import { IllustrationWrapper } from "@/components/shared";
 import { ProfilingShell } from "./ProfilingShell";
 import { QuestSegments } from "./QuestMap";
@@ -32,6 +32,10 @@ export function ProfilingIntro({
   /**
    * The roster has not answered yet, so the band is not known. No start: a
    * run begun now would be sized by a guess.
+   *
+   * PRESSABLE, NOT DISABLED (D211, 13 Oct). The button sat greyed out while
+   * the band loaded, which reads as broken. It stays live, and a press says
+   * "Nearly ready." in place instead of starting.
    *
    * NO AGE QUESTION, EVER (D153, 8 Oct). It asked "How old are you?" when
    * nothing gave a band. Design: "Name, age and class come from the roster,
@@ -70,6 +74,8 @@ export function ProfilingIntro({
   // Every segment the run had, filled: never a count of its own.
   const segments = useContext(QuestSegments) ?? 0;
   const blocked = !complete && waiting;
+  /** Pressed while blocked; the line shows only while it still is. */
+  const [pressedEarly, setPressedEarly] = useState(false);
   return (
     <ProfilingShell filled={complete ? segments : 0} active={complete ? -1 : 0}>
       <div className="flex min-h-0 w-full max-w-[300px] flex-1 flex-col items-center justify-center text-center sm:max-w-[480px]">
@@ -110,16 +116,28 @@ export function ProfilingIntro({
         </p>
         <button
           type="button"
-          disabled={blocked}
-          onClick={onContinue}
-          className={
-            blocked
-              ? "mt-[30px] h-[52px] w-full cursor-not-allowed rounded-[10px] bg-nevo-navy text-base font-semibold text-nevo-cream opacity-40 sm:mt-[34px]"
-              : "mt-[30px] h-[52px] w-full cursor-pointer rounded-[10px] bg-nevo-navy text-base font-semibold text-nevo-cream transition-[filter,transform] hover:brightness-109 active:scale-[0.985] sm:mt-[34px]"
-          }
+          onClick={() => (blocked ? setPressedEarly(true) : onContinue())}
+          className="mt-[30px] h-[52px] w-full cursor-pointer rounded-[10px] bg-nevo-navy text-base font-semibold text-nevo-cream transition-[filter,transform] hover:brightness-109 active:scale-[0.985] sm:mt-[34px]"
         >
-          {complete ? "Start my first lesson" : "Let's go"}
+          {/*
+            D171 (13 Oct): "Start my first lesson" was not true, since the
+            learning notice and PIN creation come next.
+          */}
+          {complete ? "Let's finish setting up" : "Let's go"}
         </button>
+        {/*
+          D211's line, in the reference's violet-tinted panel (radius 10,
+          padding 13-15px) under the button it answers. A status, so it is
+          heard as well as seen.
+        */}
+        {blocked && pressedEarly && (
+          <p
+            role="status"
+            className="mt-3.5 w-full rounded-[10px] bg-nevo-violet/14 px-[15px] py-[13px] text-[15px] leading-[1.5] text-nevo-violet-text"
+          >
+            Nearly ready.
+          </p>
+        )}
       </div>
     </ProfilingShell>
   );

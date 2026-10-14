@@ -72,6 +72,33 @@ type DemoBeat = "target" | (typeof DEMO_BEATS)[number][0];
 
 /** 08a's one line. No speed words: a comfortable pace is the comparator. */
 const LINE = "Tap the square each time you see it.";
+
+/**
+ * Where the line sits: 72px down at 17px on a phone, 96px down at 20px from
+ * `sm` up, both at a 1.4 line height. So its band ends at about 96px, and
+ * at 124px from `sm` up.
+ */
+const LINE_CLASS =
+  "absolute inset-x-6 top-[72px] m-0 text-center text-[17px] leading-[1.4] font-medium sm:top-24 sm:text-xl";
+
+/**
+ * The ground: 08a's square at 90% of the screen's short side, centred 24px
+ * low. That is the portrait drawing, and it is unchanged.
+ *
+ * IN LANDSCAPE IT COVERED THE LINE. 08a draws portrait only, and on a tablet
+ * held sideways (a child who pressed "My device doesn't turn") the short side
+ * is the height: at 1180x820 the square was 738px with its top at 65px, over
+ * the line at 96px, so a child past Primary 3 never saw their only
+ * instruction. In landscape the ground now starts 24px below the line's band
+ * (120px on a phone, 148px from `sm` up) and takes the height left, less the
+ * same 24px at the foot. Targets sit at fractions of the ground, so a smaller
+ * ground only scales where they land; their size is the band's, as before.
+ *
+ * The same for every band, P1-3 included, whose line slot is kept empty so
+ * the ground does not move.
+ */
+const GROUND_CLASS =
+  "absolute top-1/2 left-1/2 size-[min(90vw,90dvh)] -translate-x-1/2 translate-y-[calc(-50%+24px)] rounded-[12px] bg-nevo-cream-elevated max-sm:landscape:top-[120px] max-sm:landscape:size-[min(90vw,calc(100dvh-144px))] max-sm:landscape:translate-y-0 sm:landscape:top-[148px] sm:landscape:size-[min(90vw,calc(100dvh-172px))] sm:landscape:translate-y-0";
 /** Primary 1-3 hear it instead, once, in 08a's spoken wording. */
 const SPOKEN_LINE = "Touch the square each time you see it.";
 
@@ -305,11 +332,9 @@ export function MotorStep({
   return (
     <div className="relative h-[100dvh] w-full touch-manipulation overflow-hidden bg-nevo-cream text-nevo-near-black select-none [-webkit-tap-highlight-color:transparent]">
       {!spoken && (
-        <p className="absolute inset-x-6 top-[72px] m-0 text-center text-[17px] leading-[1.4] font-medium sm:top-24 sm:text-xl">
-          {LINE}
-        </p>
+        <p className={LINE_CLASS}>{LINE}</p>
       )}
-      <div className="absolute top-1/2 left-1/2 size-[min(90vw,90dvh)] -translate-x-1/2 translate-y-[calc(-50%+24px)] rounded-[12px] bg-nevo-cream-elevated">
+      <div data-testid="motor-ground" className={GROUND_CLASS}>
         {ready && demo !== "done" && (
           <Demonstration beat={demo} target={TARGET[n] ?? TARGET[4]} />
         )}

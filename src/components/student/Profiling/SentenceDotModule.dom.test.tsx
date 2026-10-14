@@ -447,10 +447,17 @@ describe("SentenceDotModule — 3A says only what a frame gives it", () => {
     expect(document.body.textContent).not.toMatch(/read it, then answer/i);
   });
 
-  it("keeps the prototype's question over a sentence", () => {
-    render(<SentenceDotModule band="p46" onComplete={() => {}} />);
+  it("puts none over a sentence either, in any band that reads one (D198)", () => {
+    // "Is this true or false?" was the playable prototype's (11:324). Lydia,
+    // 13 Oct: "Drop it. It came from the prototype, no frame draws it."
+    for (const band of ["p46", "jss"] as const) {
+      render(<SentenceDotModule band={band} onComplete={() => {}} />);
 
-    expect(bubble()?.textContent).toBe("Is this true or false?");
+      expect(screen.getByRole("button", { name: "True" })).toBeInTheDocument();
+      expect(bubble()).toBeNull();
+      expect(document.body.textContent).not.toMatch(/true or false/i);
+      cleanup();
+    }
   });
 });
 
