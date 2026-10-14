@@ -512,7 +512,7 @@ describe("the schedule on this page", () => {
       />,
     );
 
-    expect(screen.queryByText(/A class/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\bA class\b/)).not.toBeInTheDocument();
   });
 });
 

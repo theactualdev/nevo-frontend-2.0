@@ -224,7 +224,7 @@ function sufficiencyVerdict(node, src) {
   // A row count, or a bare numeric comparison, inside the verdict.
   return /\.length\s*(===|!==|==|!=|>=|<=|>|<)\s*\d/.test(text) ||
     /\d\s*(===|!==|==|!=|>=|<=|>|<)\s*\w+\.length/.test(text) ||
-    /\w+\s*(>=|<=|>|<)\s*\d/.test(text);
+    /\b\w+\s*(>=|<=|>|<)\s*\d/.test(text);
 }
 
 /**

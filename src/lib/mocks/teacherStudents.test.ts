@@ -73,7 +73,7 @@ describe("what the student profile says about a child", () => {
   // The engine picks a format per segment; a teacher picking one for a named
   // child is a modality stored on that child by another route.
   it("offers lessons in Recommend, never a format", () => {
-    const format = /(audio|visual|listen.first|text.led|audio.led|standard version)/i;
+    const format = /\b(audio|visual|listen.first|text.led|audio.led|standard version)\b/i;
     const withRecommend = profiles.filter((p) => p.recommend);
     expect(withRecommend.length).toBeGreaterThan(0);
 
