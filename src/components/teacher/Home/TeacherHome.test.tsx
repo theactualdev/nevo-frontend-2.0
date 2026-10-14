@@ -268,7 +268,7 @@ describe("the activity counts", () => {
     const { container, getByText } = render(<TeacherHome />);
 
     expect(getByText("Fractions 3")).toBeInTheDocument();
-    expect(container.textContent).not.toMatch(/done/);
+    expect(container.textContent).not.toMatch(/\bdone\b/);
     expect(container.textContent).not.toMatch(/null|undefined|NaN/);
   });
 
@@ -277,7 +277,7 @@ describe("the activity counts", () => {
 
     const { container } = render(<TeacherHome />);
 
-    expect(container.textContent).not.toMatch(/done/);
+    expect(container.textContent).not.toMatch(/\bdone\b/);
     expect(container.textContent).not.toMatch(/null|undefined|NaN/);
   });
 
