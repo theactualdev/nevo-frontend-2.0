@@ -916,12 +916,17 @@ test.describe("a signed-in student", () => {
     /*
      * THE ONE FIXED WAIT IN THIS FILE, and it guards two absences that no
      * element can announce. The engine's answer has just arrived; what the
-     * page does with it comes a moment later. When the engine names no task
-     * the screen does not change at all - the nothing-state was already up -
-     * so there is nothing to wait FOR, only things that must not happen: a
-     * task the engine never named appearing in its place (the weekday
-     * rotation used to fill exactly this gap, and submit it), and a write.
+     * page does with it comes a moment later. The wait itself has its own
+     * screen now (D169, "Getting your warm-up ready"), so the page is gated
+     * on that leaving; but when the engine names no task, what replaces it is
+     * the nothing-state, and the things that must not happen after that have
+     * nothing to wait FOR: a task the engine never named appearing in its
+     * place (the weekday rotation used to fill exactly this gap, and submit
+     * it), and a write.
      */
+    await expect(page.getByText("Getting your warm-up ready")).toHaveCount(0, {
+      timeout: LIVE_MS,
+    });
     await page.waitForTimeout(1_000);
 
     // The header belongs to a run (12, D126): it heads a task, and the done

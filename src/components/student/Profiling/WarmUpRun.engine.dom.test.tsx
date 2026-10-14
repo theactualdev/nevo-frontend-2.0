@@ -96,10 +96,14 @@ afterEach(() => {
 });
 
 describe("WarmUpRun — without the engine's answer", () => {
-  it("runs no task while the prompt is on its way", () => {
+  it("runs no task while the prompt is on its way, and says it is getting one ready (D169)", () => {
+    // It showed the nothing-state here, which "reads as nothing today".
     render(<WarmUpRun />);
 
     expect(screen.queryByText(/Watch the tiles|Same, or different/)).toBeNull();
+    expect(screen.getByText("Getting your warm-up ready")).toBeInTheDocument();
+    expect(screen.getByTestId("warmup-loading-mark")).toBeInTheDocument();
+    // Only the way Home, held under it (Q12's reason).
     expect(screen.queryAllByRole("button")).toHaveLength(1);
   });
 
@@ -111,6 +115,9 @@ describe("WarmUpRun — without the engine's answer", () => {
     await settle(5000);
 
     expect(screen.queryAllByRole("button")).toHaveLength(1);
+    // Told nothing is not still asking.
+    expect(screen.queryByText("Getting your warm-up ready")).toBeNull();
+    expect(screen.queryByTestId("warmup-loading-mark")).toBeNull();
     expect(submit).not.toHaveBeenCalled();
     expect(holdBaseline).not.toHaveBeenCalled();
   });
@@ -453,12 +460,13 @@ describe("WarmUpRun — done today, on the account (B10)", () => {
 
   it("claims nothing while the prompt is still on its way", () => {
     // The memory could say done and the account then say otherwise; "That's
-    // it for today" followed by a task is worse than the nothing-state.
+    // it for today" followed by a task is worse than the loading state.
     signIn();
     markWarmUpDone("child-1");
     render(<WarmUpRun />);
 
     expect(screen.queryByText(/That's it for today/)).toBeNull();
+    expect(screen.getByText("Getting your warm-up ready")).toBeInTheDocument();
     expect(homeButton()).toBeInTheDocument();
   });
 });
