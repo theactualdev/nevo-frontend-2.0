@@ -7,7 +7,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { HomeDashboard, homeDate } from "./HomeDashboard";
+import { HomeDashboard } from "./HomeDashboard";
 import { SAMPLE_ATTR } from "@/lib/sampleData";
 import { clearSession, setSession } from "@/lib/auth/session";
 import { markWarmUpDone } from "@/lib/profiling/warmUpDone";
@@ -986,20 +986,38 @@ describe("what Home says when there is nothing, or nothing left", () => {
   });
 });
 
-describe("the date over the greeting", () => {
+describe("no date over the greeting", () => {
   /*
-   * Nevo Home Frame draws "TUESDAY · 3 JULY". It read "SUNDAY 11 OCTOBER",
-   * or "Sunday, October 11" on a device set to US English - the shape was the
-   * locale's. The names are the device's; the shape is the frame's.
+   * Nevo Home Frame, 13 Oct: the "TUESDAY · 3 JULY" eyebrow is removed and
+   * the greeting is first. Home drew today's date over "Welcome back" in
+   * every state, including the failed read.
    */
-  it("is the weekday, a middle dot, then the day and the month", () => {
-    const tuesday = new Date(2026, 6, 7);
-    expect(homeDate(tuesday, "en-GB")).toBe("Tuesday · 7 July");
-    expect(homeDate(tuesday, "en-US")).toBe("Tuesday · 7 July");
+  const today = () =>
+    new RegExp(
+      new Intl.DateTimeFormat(undefined, { weekday: "long" }).format(
+        new Date(),
+      ),
+      "i",
+    );
+
+  it("puts the greeting first, with no date over it", async () => {
+    dashboard.useStudentDashboard.mockReturnValue({
+      data: null,
+      failed: false,
+      loading: false,
+    });
+
+    render(<HomeDashboard />);
+
+    const greeting = await screen.findByRole("heading", {
+      level: 1,
+      name: /Welcome back/,
+    });
+    expect(greeting.previousElementSibling).toBeNull();
+    expect(document.body.textContent).not.toMatch(today());
   });
 
-  it("stays over the greeting when the lessons could not be read", async () => {
-    // The date is the clock's, not the read's, so a failed read keeps it.
+  it("dates nothing when the lessons could not be read either", async () => {
     signIn();
     dashboard.useStudentDashboard.mockReturnValue({
       data: null,
@@ -1012,21 +1030,25 @@ describe("the date over the greeting", () => {
     expect(
       await screen.findByText("We couldn't load your lessons just now"),
     ).toBeInTheDocument();
-    expect(screen.getByText(homeDate(new Date()))).toBeInTheDocument();
+    const greeting = screen.getByRole("heading", {
+      level: 1,
+      name: /Welcome back/,
+    });
+    expect(greeting.previousElementSibling).toBeNull();
+    expect(document.body.textContent).not.toMatch(today());
   });
 });
 
 describe("Home with nothing set, on a short screen", () => {
   /*
-   * 29's figure is 290 tall on a phone, but 29 draws it alone; Home stacks it
-   * under the greeting and the warm-up card. At full height it pushed the
-   * only line on the screen past the bottom of a phone (heading at 709-760
-   * against a fold at 633) and of a 1280x832 desktop. The figure now gives
-   * way: the page is the screen's height (`basis-0`, `min-h-0` down the
-   * chain) and the figure may shrink (`min-h-0`), drawn whole
-   * (`object-contain`). Measured in Chromium with the built CSS: heading
-   * 533-585 on a 375x812 phone, 615-680 at 1280x832, and the tablet keeps the
-   * full 350. jsdom lays nothing out, so the chain is pinned here.
+   * 29 drew the figure alone at 290 on a phone; Home stacks it under the
+   * greeting and the warm-up card, and at full height it pushed the only line
+   * on the screen past the bottom of a phone and of a 1280x832 desktop. So
+   * the figure gives way: the page is the screen's height (`basis-0`,
+   * `min-h-0` down the chain) and the figure may shrink (`min-h-0`), drawn
+   * whole (`object-contain`). 29 now draws Home's own stack (13 Oct), with
+   * the figure at 190 / 300 / 250, and the rule that it gives way stands.
+   * jsdom lays nothing out, so the chain is pinned here.
    */
   it("lets the figure shrink so the line stays on screen", async () => {
     signIn();
@@ -1043,7 +1065,13 @@ describe("Home with nothing set, on a short screen", () => {
 
     const block = line.parentElement!;
     const figure = block.querySelector("img")!;
-    expect(figure).toHaveClass("min-h-0", "object-contain", "h-[290px]");
+    expect(figure).toHaveClass(
+      "min-h-0",
+      "object-contain",
+      "h-[190px]",
+      "md:h-[300px]",
+      "lg:h-[250px]",
+    );
     expect(figure).not.toHaveClass("shrink-0");
     expect(line).toHaveClass("shrink-0");
     // Every box from the figure's block up to the page is the screen's

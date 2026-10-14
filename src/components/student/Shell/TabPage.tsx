@@ -43,15 +43,34 @@ export function TabEmpty({
   art,
   line,
   children,
+  className,
+  lineClassName,
 }: {
   art: ReactNode;
   line: string;
   children?: ReactNode;
+  /**
+   * The block's padding and the line's margin, where a screen's own block is
+   * drawn differently - Home's, under its greeting and warm-up card. The
+   * paddings are split by side so an override replaces one cleanly.
+   */
+  className?: string;
+  lineClassName?: string;
 }) {
   return (
-    <div className="flex min-h-0 flex-1 basis-0 flex-col items-center justify-center px-5 py-6 text-center md:px-0">
+    <div
+      className={cn(
+        "flex min-h-0 flex-1 basis-0 flex-col items-center justify-center px-5 pt-6 pb-6 text-center md:px-0",
+        className,
+      )}
+    >
       {art}
-      <h2 className="mt-7 max-w-[280px] shrink-0 text-[19px] font-medium leading-[1.35] text-nevo-near-black md:mt-8 md:max-w-[360px] md:text-[22px] lg:max-w-[400px] lg:text-2xl">
+      <h2
+        className={cn(
+          "mt-7 max-w-[280px] shrink-0 text-[19px] font-medium leading-[1.35] text-nevo-near-black md:mt-8 md:max-w-[360px] md:text-[22px] lg:max-w-[400px] lg:text-2xl",
+          lineClassName,
+        )}
+      >
         {line}
       </h2>
       {children}
