@@ -117,11 +117,17 @@ describe("the admission number", () => {
 });
 
 describe("a child who asked for a new PIN", () => {
-  it("is marked Forgot PIN, with Clear PIN out on the row", () => {
+  /*
+   * Lydia, 13 Oct: the row says the consequence, Can't sign in, in the chip
+   * system's muted treatment - not C05's violet "Forgot PIN", which names a
+   * cause nobody knows.
+   */
+  it("is marked Can't sign in, with Clear PIN out on the row", () => {
     roster(row({ pinResetRequested: true }));
     render(<LiveClassDetail klass={klass} />);
 
-    expect(screen.getByText("Forgot PIN")).toBeInTheDocument();
+    expect(screen.getByText("Can't sign in")).toBeInTheDocument();
+    expect(screen.queryByText("Forgot PIN")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Clear PIN" })).toBeInTheDocument();
   });
 
@@ -132,7 +138,7 @@ describe("a child who asked for a new PIN", () => {
 
     expect(await screen.findByRole("dialog", { name: "Amara’s PIN is cleared" })).toBeInTheDocument();
     expect(clearPin).toHaveBeenCalledWith("s-1");
-    expect(screen.queryByText("Forgot PIN")).not.toBeInTheDocument();
+    expect(screen.queryByText("Can't sign in")).not.toBeInTheDocument();
   });
 
   it("takes the place of the attention marker, as C05 orders them", () => {
@@ -146,7 +152,7 @@ describe("a child who asked for a new PIN", () => {
   it("is not offered a Clear PIN when nothing was asked", () => {
     render(<LiveClassDetail klass={klass} />);
 
-    expect(screen.queryByText("Forgot PIN")).not.toBeInTheDocument();
+    expect(screen.queryByText("Can't sign in")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Clear PIN" })).not.toBeInTheDocument();
   });
 });
@@ -158,7 +164,7 @@ describe("a PIN that is cleared and not yet chosen", () => {
 
     expect(screen.getByText(/PIN cleared · new one not chosen yet/)).toBeInTheDocument();
     // The request it answered is not shown twice.
-    expect(screen.queryByText("Forgot PIN")).not.toBeInTheDocument();
+    expect(screen.queryByText("Can't sign in")).not.toBeInTheDocument();
   });
 });
 
@@ -171,7 +177,7 @@ describe("a deactivated child", () => {
     render(<LiveClassDetail klass={klass} />);
 
     expect(screen.getByText("Deactivated")).toBeInTheDocument();
-    expect(screen.queryByText("Forgot PIN")).not.toBeInTheDocument();
+    expect(screen.queryByText("Can't sign in")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Clear PIN" })).not.toBeInTheDocument();
   });
 

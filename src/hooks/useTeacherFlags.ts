@@ -26,13 +26,13 @@ import { useStudentDirectory } from "./useStudentDirectory";
  * deferred the flag card's sparkline AND its second action to v1.5 - so the
  * card ships without them deliberately, and neither field is read.
  *
- * ACKNOWLEDGEMENT IS THE TAP. Design ruled on 2 Sep that there is no
- * acknowledge control and there never will be one: tapping the flag card
- * opens the student's profile AND marks the flag seen, in the same action.
- * "The teacher doesn't know, doesn't care." So this hook's existing filter is
- * what gives the write its effect - an acknowledged flag drops out of "Worth
- * your attention" the next time the section loads, which is precisely the
- * "it stops asking" the endpoint was built for.
+ * THE TAP IS NOT THE ACKNOWLEDGEMENT any more. Design ruled on 2 Sep that
+ * tapping the card marked the flag seen; Lydia ruled on 13 Oct that a class
+ * teacher's tap means "I have read this" and clears the card from their own
+ * view only, while acknowledging is learning support's act. So the card no
+ * longer acknowledges (see `LiveFlagCard`), and this filter still drops a
+ * flag once learning support has acknowledged it. Filtering on the viewer's
+ * own read waits on backend: the flag carries no per-viewer read state.
  *
  * That is why `studentId` is carried through: the card needs somewhere to go,
  * and the flag endpoint names a student by id only.

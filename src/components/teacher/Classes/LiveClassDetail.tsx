@@ -62,8 +62,9 @@ import { attentionByStudent, rosterCounts } from "@/components/teacher/shared/su
  * Student, Student ID / Admission Number, Status - with no observation chips,
  * and keeps an Activity tab design struck on 16 Sep. Which roster wins is
  * design's call, so the C16b row stays and gains only what the three tickets
- * add. "Forgot PIN", a "PIN cleared" that survives a reload and "Ask an admin
- * about this" all need something the roster read does not carry yet.
+ * add. Can't sign in for a PIN request, a "PIN cleared" that survives a reload
+ * and "Ask an admin about this" all need something the roster read did not
+ * carry until 12 Oct.
  */
 export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
   /**
@@ -401,12 +402,20 @@ export function LiveClassDetail({ klass }: { klass: AssignedClass }) {
                       <span className="hidden xl:inline">PIN cleared &middot; new one not chosen yet</span>
                     </span>
                   )}
-                  {/* C05's "Forgot PIN", sent from the child's sign-in screen. */}
+                  {/*
+                   * A child who asked for a new PIN from the sign-in screen.
+                   * C05 drew this as a violet "Forgot PIN" pill. Lydia ruled
+                   * on 13 Oct that it is the chip system's Can't sign in under
+                   * an older name: "Forgot PIN" names a cause nobody knows, and
+                   * what the teacher needs is the consequence. So it is that
+                   * chip, in its muted treatment, because it is operational
+                   * rather than about learning. The header already counts it.
+                   */}
                   {pinAsked && (
-                    <span className="mt-1.5 inline-flex shrink-0 items-center gap-[7px] self-start rounded-full bg-nevo-violet/22 px-3 py-[5px] text-[13px] font-semibold whitespace-nowrap text-nevo-navy xl:mt-0 xl:self-auto xl:px-[13px]">
-                      <span className="size-[7px] shrink-0 rounded-full bg-nevo-violet" aria-hidden />
-                      Forgot PIN
-                    </span>
+                    <SummaryChip
+                      state="cantSignIn"
+                      className="mt-1.5 self-start xl:mt-0 xl:self-auto"
+                    />
                   )}
                   {/*
                    * C16b's two markers, LABELLED rather than coloured.
