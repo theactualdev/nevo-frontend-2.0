@@ -14,10 +14,13 @@ import {
  *
  * Two things here are load-bearing and easy to miss:
  *
- * `interactiveVariant.answerKey` carries the SAME nullable union as a
- * comprehension checkpoint, and the same rule applies - null means unmarkable,
- * never wrong. `markInteractive` below routes through the checkpoint marker so
- * there is one implementation of that judgement, not two that can drift.
+ * `interactiveVariant` comes in TWO FORMS (Teslim, 14 Oct): the activity
+ * SCRUM-134 introduced (a title, what is needed, ordered steps, the outcome)
+ * and the question every earlier lesson carries (`answerKey` with the SAME
+ * nullable union as a comprehension checkpoint - null means unmarkable, never
+ * wrong). `type` tells them apart. `markInteractive` below routes the
+ * question form through the checkpoint marker so there is one implementation
+ * of that judgement, not two that can drift.
  *
  * Audio and visual URLs can EXPIRE. Both carry `urlExpiresInSeconds`, and
  * audio adds `requiresAuthentication`; a private Supabase URL that has aged
@@ -128,7 +131,35 @@ export interface AudioVariant {
   stepId: string | null;
 }
 
-export interface InteractiveVariant {
+/** One step of an activity, in order. */
+export interface InteractiveActivityStep {
+  id: string;
+  instruction: string;
+}
+
+/**
+ * AN ACTIVITY (SCRUM-134; backend bb59b37, 13 Oct, written by the parser since
+ * 0064010, 14 Oct). Something to DO, with the outcome a child should see at
+ * the end. Nothing here is marked right or wrong.
+ */
+export interface InteractiveActivityVariant {
+  type: "activity";
+  title: string;
+  /** What is needed. Often empty. */
+  materials: string[];
+  steps: InteractiveActivityStep[];
+  /** What should happen by the end. */
+  outcome: string;
+}
+
+/**
+ * A QUESTION - the form every lesson parsed before 13 Oct carries, kept by
+ * backend alongside the activity ("Please retain the existing question
+ * renderer", Teslim 14 Oct). The contract calls it
+ * `LegacyInteractiveQuestionVariant`; its `type` defaults to
+ * `practice_problem`.
+ */
+export interface InteractiveQuestionVariant {
   type: string;
   prompt: string;
   expectedInteraction: string;
@@ -136,6 +167,13 @@ export interface InteractiveVariant {
   /** NULL MEANS UNMARKABLE - see `markInteractive`. */
   answerKey: CheckpointScalar | CheckpointScalar[] | null;
   instructions: string | null;
+}
+
+export type InteractiveVariant = InteractiveActivityVariant | InteractiveQuestionVariant;
+
+/** Which form this is. `type` is the contract's own discriminator. */
+export function isActivity(v: InteractiveVariant): v is InteractiveActivityVariant {
+  return v.type === "activity";
 }
 
 export interface ScaffoldImage {
@@ -393,7 +431,8 @@ export interface SegmentVariants {
  * whatever the interaction was called.
  */
 export function markInteractive(
-  variant: Pick<InteractiveVariant, "answerKey">,
+  // The question form only: an activity carries no answer key.
+  variant: Pick<InteractiveQuestionVariant, "answerKey">,
   response: CheckpointScalar | CheckpointScalar[] | null | undefined,
 ): MarkResult {
   return markCheckpoint(

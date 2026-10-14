@@ -19,6 +19,8 @@ describe("why a section wants a look", () => {
   });
 
   it("covers all sixteen", () => {
-    expect(Object.keys(REVIEW_REASON_COPY)).toHaveLength(16);
+    // Teslim's complete list, 14 Oct: seventeen.
+    expect(Object.keys(REVIEW_REASON_COPY)).toHaveLength(17);
+    expect(reasonCopy("interactive_activity_missing")).not.toMatch(/doesn.t recognise/);
   });
 });

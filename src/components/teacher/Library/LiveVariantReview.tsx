@@ -13,6 +13,7 @@ import {
   type VariantTab,
 } from "@/lib/mocks/teacherIntelligence";
 import { reasonCopy } from "@/lib/constants/reviewReasons";
+import { isActivity } from "@/lib/api/variants";
 import { cn } from "@/lib/utils";
 
 /**
@@ -270,25 +271,84 @@ function VariantBody({
           Nevo has not generated an interactive version of this section.
         </Empty>
       );
+    /*
+     * TWO FORMS (Teslim, 14 Oct). A lesson parsed since 13 Oct carries an
+     * ACTIVITY; every earlier one carries a QUESTION, and backend keeps both.
+     * This tab drew only the question - `v.options.length` - so an activity,
+     * which has no options, threw and took the review down with it.
+     *
+     * The question is drawn as it always was. The activity shows its title,
+     * what is needed, the steps in order and the outcome to look for. No frame
+     * draws an activity yet, so it is laid out like the other tabs and
+     * nothing more; its two labels are ours, raised with design. Both read
+     * defensively: a field the server left out is left out here.
+     */
+    if (!isActivity(v)) {
+      const options = Array.isArray(v.options) ? v.options : [];
+      return (
+        <div className="flex flex-col gap-2.5">
+          {v.prompt && <Para>{v.prompt}</Para>}
+          {v.instructions && <Para>{v.instructions}</Para>}
+          {options.length > 0 && (
+            <ul className="mt-0.5 flex flex-col gap-1.5">
+              {options.map((o, i) => (
+                <li
+                  key={`${String(o)}-${i}`}
+                  className="rounded-[12px] bg-nevo-cream px-3 py-2 text-[13.5px] leading-[1.5] text-nevo-near-black/72"
+                >
+                  {String(o)}
+                </li>
+              ))}
+            </ul>
+          )}
+          {v.expectedInteraction && (
+            <p className="text-[12.5px] text-nevo-near-black/55">
+              {`Students respond by: ${v.expectedInteraction}.`}
+            </p>
+          )}
+        </div>
+      );
+    }
+    const materials = Array.isArray(v.materials) ? v.materials.filter(Boolean) : [];
+    const steps = Array.isArray(v.steps) ? v.steps.filter((s) => s?.instruction) : [];
     return (
       <div className="flex flex-col gap-2.5">
-        <Para>{v.prompt}</Para>
-        {v.instructions && <Para>{v.instructions}</Para>}
-        {v.options.length > 0 && (
-          <ul className="mt-0.5 flex flex-col gap-1.5">
-            {v.options.map((o, i) => (
+        {v.title && (
+          <p className="text-[14.5px] font-semibold text-nevo-near-black">{v.title}</p>
+        )}
+        {materials.length > 0 && (
+          <div>
+            <p className="text-[12.5px] font-semibold text-nevo-near-black/55">
+              What&rsquo;s needed
+            </p>
+            <ul className="mt-1 flex flex-wrap gap-1.5">
+              {materials.map((m, i) => (
+                <li
+                  key={`${m}-${i}`}
+                  className="rounded-full bg-nevo-cream px-3 py-1 text-[13px] text-nevo-near-black/72"
+                >
+                  {m}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {steps.length > 0 && (
+          <ol className="flex flex-col gap-1.5">
+            {steps.map((s, i) => (
               <li
-                key={`${String(o)}-${i}`}
-                className="rounded-[12px] bg-nevo-cream px-3 py-2 text-[13.5px] leading-[1.5] text-nevo-near-black/72"
+                key={s.id || i}
+                className="flex gap-2.5 rounded-[12px] bg-nevo-cream px-3 py-2 text-[13.5px] leading-[1.5] text-nevo-near-black/72"
               >
-                {String(o)}
+                <span className="shrink-0 font-semibold text-nevo-navy">{i + 1}</span>
+                <span>{s.instruction}</span>
               </li>
             ))}
-          </ul>
+          </ol>
         )}
-        {v.expectedInteraction && (
-          <p className="text-[12.5px] text-nevo-near-black/55">
-            {`Students respond by: ${v.expectedInteraction}.`}
+        {v.outcome && (
+          <p className="text-[12.5px] leading-[1.5] text-nevo-near-black/60">
+            {`By the end: ${v.outcome}`}
           </p>
         )}
       </div>

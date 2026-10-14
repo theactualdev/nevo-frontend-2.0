@@ -25,6 +25,10 @@ export const REVIEW_REASON_COPY: Record<SegmentReviewReason, string> = {
     "Nevo could not read this lesson's structure on its own, so this section was split by a simpler rule. Worth checking the section starts and ends where you would put them.",
   fewer_than_two_modalities:
     "Only one way of presenting this section came through, so there is little for Nevo to choose between when a student needs it differently.",
+  // Ours (14 Oct), for design to confirm or replace. Backend drops the
+  // interactive version when the activity came back incomplete.
+  interactive_activity_missing:
+    "Nevo could not write a complete activity for this section, so it has no interactive version.",
   audio_generation_failed: "The narrated version did not generate.",
   calculation_audio_generation_failed:
     "The narration for the worked steps did not generate.",
