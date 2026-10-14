@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { permissionsApi } from "@/lib/api";
+import type { AdminAccessLevel } from "@/lib/api/permissions";
 import { getToken } from "@/lib/auth/session";
 import { ALL_PERMISSION_SCOPES, type PermissionScope } from "@/lib/constants";
 
@@ -47,6 +48,8 @@ export type PermissionStatus = "loading" | "ready" | "failed" | "skipped";
 
 export interface PermissionContextValue {
   scopes: PermissionScope[];
+  /** Senior or standard; null until known, and for anyone not an admin. */
+  adminAccessLevel?: AdminAccessLevel | null;
   /** True once `permissions/me` has answered (or been skipped). */
   resolved: boolean;
   /** Why the scope list looks the way it does. */
@@ -61,6 +64,7 @@ export const PermissionContext = createContext<PermissionContextValue | undefine
 
 export function PermissionProvider({ children }: { children: ReactNode }) {
   const [scopes, setScopes] = useState<PermissionScope[]>([]);
+  const [adminAccessLevel, setAdminAccessLevel] = useState<AdminAccessLevel | null>(null);
   const [status, setStatus] = useState<PermissionStatus>("loading");
   const [nonce, setNonce] = useState(0);
   const pathname = usePathname();
@@ -114,6 +118,7 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
             (ALL_PERMISSION_SCOPES as string[]).includes(s),
           ),
         );
+        setAdminAccessLevel(me.adminAccessLevel ?? null);
         answered.current = true;
         settle("ready");
       })
@@ -133,8 +138,8 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
   }, [pathname, nonce]);
 
   const value = useMemo<PermissionContextValue>(
-    () => ({ scopes, resolved: status !== "loading", status, refresh }),
-    [scopes, status, refresh],
+    () => ({ scopes, adminAccessLevel, resolved: status !== "loading", status, refresh }),
+    [scopes, adminAccessLevel, status, refresh],
   );
   return (
     <PermissionContext.Provider value={value}>

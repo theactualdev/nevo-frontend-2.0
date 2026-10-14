@@ -15,7 +15,8 @@ import {
   defaultYearGroupLabel,
   setYearGroupLabels,
 } from "@/lib/constants/yearGroups";
-import { ApiError, apiErrorMessage } from "@/lib/api/client";
+import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
+import { SENIOR_ADMIN_REQUIRED, type AdminAccessLevel } from "@/lib/api/permissions";
 import { cn } from "@/lib/utils";
 import { CARD } from "../Roster/primitives";
 import {
@@ -87,8 +88,26 @@ const RETENTION: { value: RetentionPolicy; label: string; plain: string }[] = [
 ];
 
 
-export function SchoolSettings() {
+/** The server refusing a settings change to anyone but a senior admin. */
+function seniorOnly(err: unknown): boolean {
+  return err instanceof ApiError && apiErrorCode(err.detail) === SENIOR_ADMIN_REQUIRED;
+}
+
+export function SchoolSettings({
+  accessLevel = null,
+}: {
+  /**
+   * SENIOR-ONLY SINCE 13 OCT. Every save on this page is `PATCH /school`,
+   * which answers 403 `senior_admin_required` to a standard admin. Known up
+   * front from `permissions/me`; null when it isn't, and then the refusal
+   * itself says so.
+   */
+  accessLevel?: AdminAccessLevel | null;
+} = {}) {
   const [load, setLoad] = useState<Load>("loading");
+  /** A save the server refused for want of a senior admin. Nothing moved. */
+  const [seniorRefused, setSeniorRefused] = useState(false);
+  const readOnly = accessLevel === "standard" || seniorRefused;
   const [school, setSchool] = useState<School | null>(null);
 
   const [name, setName] = useState("");
@@ -209,7 +228,14 @@ export function SchoolSettings() {
         setGeneral("saved");
         setTimeout(() => setGeneral("idle"), 2200);
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        // A refusal is not a failure: no "try again", and it is said once,
+        // above the sections, rather than under this Save.
+        if (!firstSaved && seniorOnly(err)) {
+          setSeniorRefused(true);
+          setGeneral("idle");
+          return;
+        }
         setGeneralNote(
           firstSaved
             ? "The school's name was saved, but the contact details weren't. Try saving again."
@@ -230,7 +256,14 @@ export function SchoolSettings() {
         setRetentionPhase("saved");
         setTimeout(() => setRetentionPhase("idle"), 2200);
       })
-      .catch(() => setRetentionPhase("failed"));
+      .catch((err: unknown) => {
+        if (seniorOnly(err)) {
+          setSeniorRefused(true);
+          setRetentionPhase("idle");
+          return;
+        }
+        setRetentionPhase("failed");
+      });
   };
 
   const saveCalendar = () => {
@@ -264,6 +297,11 @@ export function SchoolSettings() {
         setTimeout(() => setCalendar("idle"), 2200);
       })
       .catch((err: unknown) => {
+        if (seniorOnly(err)) {
+          setSeniorRefused(true);
+          setCalendar("idle");
+          return;
+        }
         /*
          * THE 422 HERE SAYS SOMETHING WORTH REPEATING. A fourth term start is
          * refused because billing issues one invoice per term start, and
@@ -292,7 +330,14 @@ export function SchoolSettings() {
         setTaxonomy("saved");
         setTimeout(() => setTaxonomy("idle"), 2200);
       })
-      .catch(() => setTaxonomy("failed"));
+      .catch((err: unknown) => {
+        if (seniorOnly(err)) {
+          setSeniorRefused(true);
+          setTaxonomy("idle");
+          return;
+        }
+        setTaxonomy("failed");
+      });
   };
 
   const terms = academic.terms ?? [];
@@ -356,6 +401,23 @@ export function SchoolSettings() {
 
   return (
     <>
+      {readOnly ? (
+        <p
+          id="settings-senior-only"
+          role="status"
+          className="m-0 mt-5 rounded-[10px] bg-nevo-violet/16 px-4 py-3 text-[13.5px] leading-[1.55] text-nevo-near-black/78"
+        >
+          Only a senior administrator can change your school&rsquo;s settings,
+          so you can read them here but not change them. Your school&rsquo;s
+          founding administrator, marked Founding in Admin Team, is one.
+        </p>
+      ) : null}
+      {/* Every field and Save below goes quiet at once for a standard admin. */}
+      <fieldset
+        disabled={readOnly}
+        aria-describedby={readOnly ? "settings-senior-only" : undefined}
+        className="m-0 min-w-0 border-0 p-0"
+      >
       {/* ------------------------------------------------------------ GENERAL */}
       <SettingsSection id="settings-general" title="General">
         <div className="flex flex-col gap-4">
@@ -837,6 +899,7 @@ export function SchoolSettings() {
           when it lands.
         </NotBuiltNote>
       </SettingsSection>
+      </fieldset>
       {/* "Share feedback" moved to the foot of SettingsView - see there. */}
     </>
   );
