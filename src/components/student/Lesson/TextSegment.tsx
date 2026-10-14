@@ -10,7 +10,7 @@ import {
   type RefObject,
 } from "react";
 import { DENSITY, type Density } from "@/lib/constants";
-import { bodyParts, chunksForBody } from "@/lib/lessons/chunk";
+import { chunksForBody } from "@/lib/lessons/chunk";
 import { PARAGRAPH_GAP, paragraphsOf } from "@/lib/lessons/paragraphs";
 import {
   chunkCrossing,
@@ -40,15 +40,20 @@ const PAUSE_REVEAL_MS = 4_000;
  * UDL accommodations (37c) adjust delivery, never diagnose:
  * - `reading`: the body sits on a softer card, larger and airier (18px,
  *   line-height 2, +0.02em letter-spacing, 95% opacity).
- * - `attention`: multi-sentence bodies become short tap-to-continue parts with
- *   a calm breathing pause between them - no timer pressure anywhere.
+ * - `attention`: a body the server broke into reading chunks becomes short
+ *   tap-to-continue parts with a calm breathing pause between them - no timer
+ *   pressure anywhere.
  *
  * SLOWER REACHES THAT SAME FLOW WHEN NOTHING IS AUTHORED (17 Sep). Design:
  * "Slower is about how much arrives at once, which is segmentation and pacing
  * rather than wording." A parsed lesson has one body and no `slowerSteps`, so
  * the control used to be absent on every live lesson - the child had no way to
- * ask for less at a time. Chunking regroups sentences the lesson already has,
- * so it needs no authored content and invents none.
+ * ask for less at a time. The server's chunks already break the body, so it
+ * needs no authored content and invents none.
+ *
+ * NOTHING IS SPLIT HERE (B114, 13 Oct): "The client must not split text." The
+ * parts are the server's chunks of the text on screen, and a body with fewer
+ * than two reads whole in either flow - see `lib/lessons/chunk`.
  *
  * TWO THINGS THIS IS NOT. It is not the `attention` accommodation: that is
  * engine-owned, applied before the first screen, and never written from here.
@@ -62,8 +67,7 @@ const PAUSE_REVEAL_MS = 4_000;
  * between, and nothing else: "Nothing on screen tells a child the chunking
  * exists - no chunk numbers... no marker that follows where they have read."
  * The rule is decorative to a screen reader too. The tap-to-continue flow
- * above takes its parts from them as well. With none, everything is as it
- * was.
+ * above takes its parts from them as well. With none, the body is one block.
  */
 export function TextSegment({
   content,
@@ -129,8 +133,7 @@ export function TextSegment({
   /*
    * The server's chunks are of the standard body, so they are asked of the
    * text actually shown. A reshape, or any other text standing in for the
-   * standard body, reads as it always has - one block, or the on-device
-   * parts - and reports no chunk it is not showing.
+   * standard body, reads whole and reports no chunk it is not showing.
    */
   const chunks = chunksForBody(body, content.readingChunks);
   /*
@@ -139,6 +142,15 @@ export function TextSegment({
    * child reads the same idea twice and the second time in pieces.
    */
   const chunkedForSlower = density === DENSITY.SLOWER && !steps;
+  /*
+   * A PART AT A TIME ONLY WHERE THERE ARE PARTS. One chunk, or none, is the
+   * body whole, drawn as it is for every other child - not the flow with a
+   * single part. That flow tells the player its one part is all the body, so
+   * a long body arriving whole there was reported read the moment it opened,
+   * and the column's own scroll, the true reading, was kept quiet.
+   */
+  const inParts =
+    (attention || chunkedForSlower) && chunks !== undefined && chunks.length > 1;
 
   /*
    * Reading support is merged over the standard type, never put in its place:
@@ -151,10 +163,9 @@ export function TextSegment({
     reading && [READING_BODY, READING_INK],
   );
 
-  const bodyBlock = attention || chunkedForSlower ? (
+  const bodyBlock = inParts ? (
     <ChunkedBody
       key={body}
-      body={body}
       chunks={chunks}
       className={bodyType}
       reading={reading}
@@ -484,10 +495,10 @@ function useChunkViews(
  * (37c), which the engine owns, and the child picking Slower, which the child
  * owns. The flow on screen is the same; what differs is who asked.
  *
- * THE PARTS ARE THE SERVER'S CHUNKS where the body came with them
- * (SCRUM-234), and B23's on-device split only where it did not. Each part
- * that is a server chunk reports as one: `entered` as it shows, `passed` when
- * the child taps on from it.
+ * THE PARTS ARE THE SERVER'S CHUNKS (SCRUM-234), two or more of them - the
+ * segment shows a body with fewer whole, and never splits one itself (B114).
+ * Each part reports as its chunk: `entered` as it shows, `passed` when the
+ * child taps on from it.
  *
  * NO COUNT OF THE PARTS. It read "Part 1 of 3", and with the server's chunks
  * that counted chunks. Design, 9 Oct: "Drop it... nothing about chunking is
@@ -495,26 +506,24 @@ function useChunkViews(
  * and the last part simply has none.
  */
 function ChunkedBody({
-  body,
   chunks,
   className,
   reading,
   onReadProgress,
   onChunkSeen,
 }: {
-  body: string;
-  chunks?: readonly { id: string; text: string }[];
+  chunks: readonly { id: string; text: string }[];
   className: string;
   reading: boolean;
   onReadProgress?: (pct: number) => void;
   onChunkSeen?: OnChunkSeen;
 }) {
-  const parts = bodyParts(body, chunks);
+  const parts = chunks.map((c) => c.text);
   const [part, setPart] = useState(0);
   const [pausing, setPausing] = useState(false);
   const [pauseReady, setPauseReady] = useState(false);
   const shown = useRef<HTMLElement>(null);
-  const chunkId = chunks?.[part]?.id;
+  const chunkId = chunks[part]?.id;
   const markPassed = useChunkViews(
     shown,
     onChunkSeen,
@@ -548,21 +557,6 @@ function ChunkedBody({
     const t = setTimeout(() => setPauseReady(true), PAUSE_REVEAL_MS);
     return () => clearTimeout(t);
   }, [pausing]);
-
-  if (parts.length === 1) {
-    return (
-      <div
-        ref={shown as RefObject<HTMLDivElement | null>}
-        data-chunk-id={chunkId}
-        className={cn(
-          "mt-4",
-          reading && "rounded-[12px] bg-[#e5dfd3] px-5 py-4",
-        )}
-      >
-        <Paragraphs text={body} className={className} />
-      </div>
-    );
-  }
 
   if (pausing) {
     return (

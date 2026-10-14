@@ -536,16 +536,48 @@ export function SocraticPanel({
  * rather than a faint unlabelled X. Support a child cannot dismiss becomes an
  * obstruction." So the control says what it does, in words, at 44px. The
  * player decides how long closed lasts - for that hint, on that segment.
+ *
+ * SEEN WHEN IT COMES INTO VIEW, NOT WHEN IT IS DRAWN (B131, 13 Oct):
+ * "hint_offered fires when the hint becomes visible, not when the engine
+ * response arrives." The card sits under the segment, so under a long one it
+ * is below the fold until the child scrolls down to it. `onSeen` says when it
+ * first enters the screen. With no IntersectionObserver to ask, it counts as
+ * seen as it is drawn, as a row in Downloads does.
  */
 export function HintOverlay({
   hint,
   onClose,
+  onSeen,
 }: {
   hint: string;
   onClose: () => void;
+  onSeen?: () => void;
 }) {
+  const card = useRef<HTMLDivElement>(null);
+  const seen = useRef(onSeen);
+  useEffect(() => {
+    seen.current = onSeen;
+  });
+  useEffect(() => {
+    const el = card.current;
+    if (!el) return;
+    if (typeof IntersectionObserver === "undefined") {
+      seen.current?.();
+      return;
+    }
+    const watcher = new IntersectionObserver((entries) => {
+      if (!entries.some((e) => e.isIntersecting)) return;
+      watcher.disconnect();
+      seen.current?.();
+    });
+    watcher.observe(el);
+    return () => watcher.disconnect();
+  }, [hint]);
   return (
-    <div className="mt-4 rounded-[8px] border-l-[3px] border-nevo-violet bg-[#e5dfd3] px-4 pt-3.5 pb-1">
+    <div
+      ref={card}
+      className="mt-4 rounded-[8px] border-l-[3px] border-nevo-violet bg-[#e5dfd3] px-4 pt-3.5 pb-1"
+    >
       <p className="text-sm leading-[1.5] text-nevo-near-black">{hint}</p>
       <div className="flex justify-end">
         <button

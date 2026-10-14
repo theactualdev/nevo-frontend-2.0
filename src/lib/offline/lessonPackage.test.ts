@@ -434,6 +434,19 @@ describe("telling a partial copy from the whole lesson", () => {
     expect(isPartialCopy(kept!)).toBe(false);
   });
 
+  it("is whole when its recap is null and the rest came: null is no recap, and completes (B121)", async () => {
+    // Backend, 13 Oct: "Offline packages always contain recap; it is
+    // explicitly null when absent." A lesson with modules and a check and no
+    // recap is a whole lesson, not a copy missing one.
+    const kept = await lessonFromPackage(
+      pkg(JSON.stringify(lesson({ ...ending(), recap: null }))),
+      ID,
+    );
+
+    expect(kept).toHaveProperty("recap", null);
+    expect(isPartialCopy(kept!)).toBe(false);
+  });
+
   it.each(["modules", "recap", "assessment"])(
     "is partial when only %s is missing",
     async (missing) => {

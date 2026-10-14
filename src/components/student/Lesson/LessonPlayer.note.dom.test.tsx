@@ -46,7 +46,15 @@ const LESSON: Lesson = {
     {
       id: "seg-1",
       modalities: ["text"],
-      text: { heading: "Inside a leaf", body: { default: FULL, simplify: SHORT } },
+      text: {
+        heading: "Inside a leaf",
+        body: { default: FULL, simplify: SHORT },
+        // The server's chunks, which are all Slower takes parts from.
+        readingChunks: [
+          { id: "c1", text: "One idea here." },
+          { id: "c2", text: "A second idea here. A third idea here." },
+        ],
+      },
     },
     {
       id: "seg-2",

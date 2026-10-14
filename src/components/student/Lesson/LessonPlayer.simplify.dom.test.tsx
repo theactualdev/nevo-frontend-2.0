@@ -266,10 +266,35 @@ describe("an instruction the content cannot honour", () => {
 describe("Slower, which needs no authored content", () => {
   it("reaches a live lesson when the engine asks for it", () => {
     // Slower is segmentation rather than wording, so the chunked flow delivers
-    // it from the body the lesson already has.
-    render(<LessonPlayer lesson={LIVE} plan={planWith("slower")} />);
+    // it from the server's reading chunks of the body.
+    const chunked = {
+      ...LIVE,
+      segments: [
+        {
+          ...LIVE.segments[0],
+          text: {
+            ...LIVE.segments[0].text!,
+            readingChunks: [
+              { id: "c1", text: "One idea here." },
+              { id: "c2", text: "A second idea here. A third idea here." },
+            ],
+          },
+        },
+      ],
+    } as Lesson;
+    render(<LessonPlayer lesson={chunked} plan={planWith("slower")} />);
 
     expect(chip("Tap to continue")).toBeInTheDocument();
+  });
+
+  it("leaves a body the server sent no chunks for whole (B114)", () => {
+    // "The client must not split text." Nothing to take a part at a time, so
+    // the engine's Slower is the body as it is, and nothing claims otherwise.
+    render(<LessonPlayer lesson={LIVE} plan={planWith("slower")} />);
+
+    expect(chip("Tap to continue")).toBeNull();
+    expect(body()).toContain(FULL);
+    expect(chip("Slower")).toBeNull();
   });
 });
 
