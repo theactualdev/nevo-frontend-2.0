@@ -87,6 +87,13 @@ export interface ClassCorrection {
  * naira total for four hundred students does not survive a round trip through
  * a float. It is rendered, never arithmetic'd.
  */
+/** One teacher the roster file named, and the classes it gave them. */
+export interface FoundTeacher {
+  name: string;
+  email: string | null;
+  classes: string[];
+}
+
 /** One of the several spellings a single class arrived under. */
 export interface ClassMergeCandidate {
   name: string;
@@ -128,11 +135,12 @@ export interface OnboardingState {
   classMerges?: ClassMergeProposal[];
   teacherCount: number;
   /**
-   * The teachers the file named, by name only (since 9 Oct). D24 draws each
-   * with the classes they teach; nothing carries that, so the names stand
-   * alone.
+   * The teachers the file named, by name only (since 9 Oct). Kept for an
+   * older answer; `teacherDetailsFound` is read first.
    */
   teachersFound?: string[];
+  /** Each found teacher with the classes the file gave them (14 Oct). */
+  teacherDetailsFound?: FoundTeacher[];
   studentCount: number;
   rejected: RejectedRow[];
   invoiceId: string | null;

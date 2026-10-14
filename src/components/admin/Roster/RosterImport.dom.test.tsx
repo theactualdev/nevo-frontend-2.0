@@ -311,6 +311,25 @@ describe("OB-02 what Nevo found", () => {
     expect(visibleText(container)).not.toMatch(/Teachers found/i);
   });
 
+  it("gives each found teacher their classes, as D24 draws them (14 Oct)", async () => {
+    get.mockResolvedValue({
+      ...READ,
+      teachersFound: ["Adunni Okafor"],
+      teacherDetailsFound: [
+        { name: "Adunni Okafor", email: "a.okafor@school.edu.ng", classes: ["JSS 2A", "JSS 2B"] },
+        { name: "Bola Eze", email: null, classes: [] },
+      ],
+    });
+    render(<RosterImportView />);
+    fireEvent.click(await screen.findByRole("button", { name: /See what Nevo found/i }));
+    expect(await screen.findByText("Teachers found")).toBeInTheDocument();
+    const list = screen.getByRole("list");
+    expect(list).toHaveTextContent("Adunni Okafor");
+    expect(list).toHaveTextContent("JSS 2A · JSS 2B");
+    // The details win over the bare names, and a teacher with no classes has no line.
+    expect(list.querySelectorAll("li")).toHaveLength(2);
+  });
+
   it("names every teacher the file gave, as D24's Teachers found (9 Oct field)", async () => {
     get.mockResolvedValue({ ...READ, teachersFound: ["Adunni Okafor", "Bola Eze"] });
     render(<RosterImportView />);
