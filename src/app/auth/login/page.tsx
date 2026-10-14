@@ -23,12 +23,14 @@ import {
 import { WrongDoorScreen } from "@/components/student/Auth/WrongDoorScreen";
 import {
   childById,
+  closeRememberedChild,
   pickerEntries,
   rememberChild,
   type PickerEntry,
   type RememberedChild,
 } from "@/lib/auth/deviceRoster";
 import { ChildAvatar } from "@/components/student/Auth/ChildAvatar";
+import { PinBox } from "@/components/student/Auth/PinBox";
 import { ProfilePicker } from "@/components/student/Auth/ProfilePicker";
 import { useAuth } from "@/hooks";
 import { studentDestination } from "@/lib/auth/entryGate";
@@ -316,7 +318,11 @@ export default function LoginPage() {
         // we sent a shape it rejects - the PIN length is the live example -
         // and anything else is the network or the server. Only the first is
         // about the child.
-        setError(classifyLearnerLoginFailure(cause));
+        const failure = classifyLearnerLoginFailure(cause);
+        // D178: told once, on 28d, and their tile leaves the picker now
+        // rather than sitting there for thirty days leading back to it.
+        if (failure === "closed") closeRememberedChild({ id: remembered.id });
+        setError(failure);
       } finally {
         if (!leaving) setChecking(false);
       }
@@ -435,13 +441,15 @@ export default function LoginPage() {
    * A closed account is 28d, never on pause (D53, D116), and terminal for the
    * child: the frame draws no sign-in route on it. Its one line, "Someone else
    * using this device?" (7 Oct), goes back to the same picker, for whoever is
-   * next.
+   * next - without the closed child's tile on it (D178).
    */
   const toPicker = {
     onBack: () => {
       setError(null);
       setDigits("");
       setChosen(null);
+      // Read again: a closed child's tile has gone (D178).
+      setEntries(pickerEntries());
     },
   };
   if (error === "closed") return <AccountClosedScreen toPicker={toPicker} />;
@@ -651,28 +659,19 @@ export default function LoginPage() {
               Enter your PIN to keep going
             </p>
           )}
-          {/* Four, for every child (D58). */}
+          {/* Four, for every child (D58), in the one box every PIN screen
+              draws (D177). A miss is said by the line above, never by
+              recolouring a box (D199). */}
           <div className="mt-8 flex flex-wrap justify-center gap-3.5 sm:mt-[34px] sm:gap-4 lg:landscape:mt-[26px] max-lg:[@media(max-height:800px)]:mt-4">
-            {Array.from({ length: STUDENT_PIN_LENGTH }, (_, i) => {
-              const active = i === digits.length && !checking;
-              return (
-                <div
-                  key={i}
-                  className={cn(
-                    "flex size-12 items-center justify-center rounded-[10px] border-[1.5px] bg-nevo-cream shadow-[0_2px_8px_rgba(0,0,0,0.05)] sm:size-[58px]",
-                    active
-                      ? "border-nevo-navy"
-                      : error
-                        ? "border-nevo-violet"
-                        : "border-nevo-near-black/20",
-                  )}
-                >
-                  {digits.length > i && (
-                    <span className="block size-3 rounded-full bg-nevo-near-black sm:size-[13px]" />
-                  )}
-                </div>
-              );
-            })}
+            {Array.from({ length: STUDENT_PIN_LENGTH }, (_, i) => (
+              <PinBox
+                key={i}
+                filled={digits.length > i}
+                caret={i === digits.length && !checking}
+                className="size-12 sm:size-[58px]"
+                dotClassName="size-3 sm:size-[13px]"
+              />
+            ))}
           </div>
           {/*
             THE PAD SITS IN THE SCREEN, under the boxes it fills in portrait and

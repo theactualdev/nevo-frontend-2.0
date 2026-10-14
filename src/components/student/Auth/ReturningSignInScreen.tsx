@@ -14,6 +14,7 @@ import {
 import { doorForRole, knownRole } from "@/lib/auth/consoleDoor";
 import { withNext } from "@/lib/auth/nextPath";
 import { SCHOOL_CODE_LENGTH, placeSchoolCode } from "@/lib/auth/schoolCode";
+import { closeRememberedChild } from "@/lib/auth/deviceRoster";
 import { rememberProfile } from "@/lib/auth/session";
 import {
   clearSignInHandoff,
@@ -25,6 +26,7 @@ import { STUDENT_PIN_LENGTH } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { AccountClosedScreen } from "./AccountClosedScreen";
 import { AccountOnPauseScreen } from "./AccountOnPauseScreen";
+import { PinBox } from "./PinBox";
 import { SignedInHereScreen } from "./SignedInHereScreen";
 import {
   SIGN_IN_OURS_COPY,
@@ -462,6 +464,11 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
        * the PIN is not coming back.
        */
       if (failure !== "credentials" && failure !== "ours") setDigits("");
+      // D178: if this device remembers them, their tile leaves its picker
+      // now, not in thirty days. One the device never knew is not added.
+      if (failure === "closed") {
+        closeRememberedChild({ schoolCode: school, loginIdentifier: identifier });
+      }
       setError(failure);
     } finally {
       if (!leaving) setChecking(false);
@@ -748,28 +755,25 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
                 role="group"
                 aria-labelledby="returning-pin-label"
               >
-                {/* Four boxes, for every child (D58). */}
+                {/* Four boxes, for every child (D58), in the one box every
+                    PIN screen draws (D177). A miss recolours none of them
+                    (D199): the line under the fields says it. */}
                 {Array.from({ length: STUDENT_PIN_LENGTH }, (_, i) => {
                   // The caret's box, while the PIN is what is being typed:
-                  // not while a code cell or the Student ID has focus.
-                  const active =
-                    pad.open && i === digits.length && !checking;
+                  // not while a code cell or the Student ID has focus. 00c
+                  // draws its caret 2px.
+                  const caret = pad.open && i === digits.length && !checking;
                   return (
-                    <div
+                    <PinBox
                       key={i}
+                      filled={digits.length > i}
+                      caret={caret}
                       className={cn(
-                        "flex size-[58px] items-center justify-center rounded-[10px] bg-nevo-cream shadow-[0_2px_8px_rgba(0,0,0,0.05)] sm:size-[66px]",
-                        active
-                          ? "border-2 border-nevo-navy"
-                          : error
-                            ? "border-[1.5px] border-nevo-violet"
-                            : "border-[1.5px] border-nevo-near-black/20",
+                        "size-[58px] sm:size-[66px]",
+                        caret && "border-2",
                       )}
-                    >
-                      {digits.length > i && (
-                        <span className="block size-[13px] rounded-full bg-nevo-near-black sm:size-3.5" />
-                      )}
-                    </div>
+                      dotClassName="size-[13px] sm:size-3.5"
+                    />
                   );
                 })}
               </div>

@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
-import { WaitingOnConsent } from "./WaitingOnConsent";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { WAITING_WAY_BACK, WaitingOnConsent } from "./WaitingOnConsent";
+import { clearSession, setSession } from "@/lib/auth/session";
+
+const signOut = vi.hoisted(() => vi.fn());
+vi.mock("@/hooks", () => ({ useAuth: () => ({ signOut }) }));
 
 /**
  * THE ASSERTIONS THAT MATTER HERE ARE ABSENCES.
@@ -15,6 +19,8 @@ import { WaitingOnConsent } from "./WaitingOnConsent";
 
 afterEach(() => {
   cleanup();
+  clearSession();
+  signOut.mockReset();
 });
 
 describe("what it says", () => {
@@ -40,13 +46,58 @@ describe("what it says", () => {
   });
 });
 
-describe("what it deliberately does not do", () => {
-  it("offers no way onward - no button, no link", () => {
-    // Every other dead end in this app offers a way out. This one must not:
-    // the only thing that changes this state is an adult, elsewhere.
+/**
+ * D189 (13 Oct): "Waiting on consent is a genuine dead end and gets fixed ...
+ * give it Back, same as the age-check hold. On a shared tablet one child
+ * waiting on consent currently holds the device hostage for everyone else
+ * until the app is restarted. Back goes to the device picker."
+ */
+describe("its way back", () => {
+  it("is the age-check hold's Back, and the only thing to press", () => {
     render(<WaitingOnConsent />);
 
-    expect(screen.queryAllByRole("button")).toHaveLength(0);
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Back" }).className).toContain(
+      "size-11",
+    );
+    expect(screen.queryAllByRole("link")).toHaveLength(0);
+  });
+
+  it("goes to the device picker", () => {
+    expect(WAITING_WAY_BACK).toBe("/auth/login");
+  });
+
+  it("signs a child sent here from a door out first, so the picker is not bounced back here", () => {
+    setSession({
+      token: "tok",
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+      userId: "student-1",
+      role: "student",
+    });
+    render(<WaitingOnConsent />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+
+    expect(signOut).toHaveBeenCalledTimes(1);
+  });
+
+  it("has nobody to sign out for a child held in place on 05 Entry", () => {
+    render(<WaitingOnConsent />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+
+    expect(signOut).not.toHaveBeenCalled();
+  });
+});
+
+describe("what it deliberately does not do", () => {
+  it("offers no way onward - Back leaves, and nothing else is there to press", () => {
+    // The only thing that changes this state is an adult, elsewhere.
+    render(<WaitingOnConsent />);
+
+    expect(
+      screen.queryByRole("button", { name: /continue|try|check|start/i }),
+    ).toBeNull();
     expect(screen.queryAllByRole("link")).toHaveLength(0);
   });
 
@@ -97,7 +148,7 @@ describe("the breathing mark", () => {
     // loses nothing either.
     render(<WaitingOnConsent />);
 
-    const mark = document.querySelector("[aria-hidden='true']");
+    const mark = document.querySelector("span[aria-hidden='true']");
 
     expect(mark).toBeTruthy();
     expect(mark?.className).toContain("motion-safe:animate-nevo-breathe");
@@ -143,7 +194,10 @@ describe("held at the age check", () => {
 
     render(<WaitingOnConsent hold="age-check" />);
 
-    expect(screen.queryAllByRole("button")).toHaveLength(0);
+    // Back, and only Back (D189).
+    expect(
+      screen.getAllByRole("button").map((b) => b.getAttribute("aria-label")),
+    ).toEqual(["Back"]);
     expect(screen.queryAllByRole("link")).toHaveLength(0);
     expect(screen.queryByRole("status")).toBeNull();
     expect(setInterval).not.toHaveBeenCalled();

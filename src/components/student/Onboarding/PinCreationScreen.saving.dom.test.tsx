@@ -28,9 +28,9 @@ const settle = (ms: number) =>
     await vi.advanceTimersByTimeAsync(ms);
   });
 
-/** Filled boxes are the ones holding a dot. */
+/** Filled boxes, as `PinBox` marks them. */
 const filledBoxes = () =>
-  document.querySelectorAll("span.rounded-full.bg-nevo-near-black").length;
+  document.querySelectorAll('[data-pin-box="filled"]').length;
 
 const allSet = () => screen.queryByRole("heading", { name: "You're all set" });
 

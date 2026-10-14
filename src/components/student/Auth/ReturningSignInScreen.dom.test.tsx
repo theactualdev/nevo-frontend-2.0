@@ -9,6 +9,7 @@ import {
 import { ApiError } from "@/lib/api/client";
 import * as authApiModule from "@/lib/api";
 import { clearSession, getRememberedProfile } from "@/lib/auth/session";
+import { pickerEntries, rememberChild } from "@/lib/auth/deviceRoster";
 import {
   clearSignInHandoff,
   handSignInOver,
@@ -104,9 +105,12 @@ const cells = () =>
 const codeValue = () => cells().map((c) => c.value).join("");
 const idField = () =>
   screen.getByLabelText("Student ID / Admission Number") as HTMLInputElement;
-/** The PIN boxes' dots. */
+/** The PIN boxes, as `PinBox` draws them. */
+const pinBoxes = () =>
+  Array.from(document.querySelectorAll<HTMLElement>("[data-pin-box]"));
+/** The filled ones: navy, with a cream dot (D177). */
 const pinDots = () =>
-  document.querySelectorAll("span.rounded-full.bg-nevo-near-black").length;
+  pinBoxes().filter((b) => b.dataset.pinBox === "filled").length;
 
 function fill({ school = "K7DQ", user = "amara.k" } = {}) {
   // Typed into the first cell, a code runs on across all four, as a paste does.
@@ -370,6 +374,31 @@ describe("ReturningSignInScreen — when it does not work", () => {
     expect(screen.getByRole("button", { name: "Try again" })).toBeEnabled();
   });
 
+  /*
+   * D177 and D199 (13 Oct): a filled box is solid navy with a cream dot,
+   * "whether the last attempt was wrong or not, and the error is carried by
+   * the error line, not by recolouring the boxes". 00c drew near-black dots
+   * on cream and turned its boxes violet after a miss. Whether the PIN stays
+   * after a miss is not this: that is held, and unchanged.
+   */
+  it("keeps its filled boxes navy after a miss, with no violet and no grey", async () => {
+    loginPin.mockRejectedValue(refusal("authentication_failed"));
+    render(<ReturningSignInScreen />);
+    fill();
+    for (const box of pinBoxes()) {
+      expect(box.className).toContain("bg-nevo-navy");
+      expect(box.firstElementChild?.className).toContain("bg-nevo-cream");
+    }
+
+    await signInNow();
+
+    expect(pinBoxes()).toHaveLength(4);
+    for (const box of pinBoxes()) {
+      expect(box.className).toContain("bg-nevo-navy");
+      expect(box.className).not.toMatch(/violet|near-black/);
+    }
+  });
+
   it("sends the same three again from Try again, with nothing retyped", async () => {
     loginPin
       .mockRejectedValueOnce(refusal("authentication_failed"))
@@ -437,6 +466,26 @@ describe("ReturningSignInScreen — when it does not work", () => {
     expect(screen.queryAllByRole("button")).toHaveLength(0);
   });
 
+  it("takes a closed child this device remembers off its picker, and no one else (D178)", async () => {
+    // "Remove the tile when the account closes. Do not keep it for 30 days."
+    const remember = (loginIdentifier: string, displayName: string) =>
+      rememberChild({
+        schoolCode: "K7DQ",
+        loginIdentifier,
+        displayName,
+        initials: "XX",
+      });
+    remember("amara.k", "Amara");
+    remember("kofi.b", "Kofi");
+    loginPin.mockRejectedValue(refusal("account_closed"));
+    render(<ReturningSignInScreen />);
+    fill();
+
+    await signInNow();
+
+    expect(pickerEntries().map((e) => e.name)).toEqual(["Kofi"]);
+  });
+
   it("does not remember a device it failed to sign into", async () => {
     // Remembering here would send the child to a PIN unlock for an account they
     // never proved was theirs.
@@ -475,7 +524,7 @@ describe("ReturningSignInScreen — when it does not work", () => {
       screen.getByRole("heading", { name: "Let's take a moment" }),
     ).toBeVisible();
     expect(
-      screen.getByText("Try your PIN again in a moment. No rush."),
+      screen.getByText("Let's wait a little before trying again."),
     ).toBeVisible();
     expect(screen.queryByText(/didn.t match|wait a moment before/)).toBeNull();
     // The PIN boxes held, the fields as typed, and no button to press again.
@@ -710,8 +759,7 @@ describe("signing in on a device with a real keyboard", () => {
       'input[aria-labelledby="returning-pin-label"]',
     ) as HTMLInputElement;
 
-  const filledBoxes = () =>
-    document.querySelectorAll("span.rounded-full.bg-nevo-near-black").length;
+  const filledBoxes = pinDots;
 
   it("has a PIN field a keyboard can reach at all", () => {
     render(<ReturningSignInScreen />);

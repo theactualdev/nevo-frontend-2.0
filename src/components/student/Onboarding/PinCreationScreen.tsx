@@ -4,6 +4,7 @@ import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { Check } from "lucide-react";
 import { NevoKeyboard, useNevoKeyboardDock } from "@/components/shared";
 import { Wordmark } from "@/components/shared/BrandMarks";
+import { PinBox } from "@/components/student/Auth/PinBox";
 import {
   HeldPinBoxes,
   THROTTLED_PAUSE_COPY,
@@ -80,13 +81,14 @@ export function pinReducer(state: PinState, action: PinAction): PinState {
  * draws its own steps around the same reducer and rows, and a second copy of
  * these is how the two would drift.
  *
- * `PIN_NOT_SAVED_COPY` is Change PIN's line now, and only its: frame 27 draws
- * no failed save, so it keeps what it had. PIN Creation has frame 15's own
- * state (D61) - see `PIN_SAVE_FAILED_COPY`.
+ * `PIN_NOT_SAVED_COPY` is Change PIN's line, and only its: design's 13 Oct
+ * note, "Change PIN's failed save now reads 'That's on us, not you. Try
+ * again.' and the false claim that the PIN was kept is gone." It said "Your
+ * teacher can help", which no teacher can for a write that failed on our side.
+ * PIN Creation has frame 15's own state (D61) - see `PIN_SAVE_FAILED_COPY`.
  */
 export const PIN_MISMATCH_COPY = "Those didn't match - let's try once more";
-export const PIN_NOT_SAVED_COPY =
-  "We couldn't save that just now - that's on us, not you. Your teacher can help.";
+export const PIN_NOT_SAVED_COPY = "That's on us, not you. Try again.";
 
 /** Frame 15's saving and didn't-save states (D61), verbatim. */
 export const PIN_SAVING_COPY = "Saving your PIN…";
@@ -454,7 +456,6 @@ export function PinCreationScreen({
                 filled={digits.length}
                 offset={0}
                 caretAt={digits.length}
-                error={false}
               />
               <p className="mt-7 mb-3 text-sm font-medium">
                 Type it again to confirm
@@ -463,10 +464,11 @@ export function PinCreationScreen({
                 filled={digits.length}
                 offset={STUDENT_PIN_LENGTH}
                 caretAt={digits.length}
-                error={error}
               />
             </div>
-            <p role="alert" className="mt-4 min-h-5 text-sm text-nevo-violet">
+            {/* The darker violet (D210): soft violet fails contrast as
+                text on cream. */}
+            <p role="alert" className="mt-4 min-h-5 text-sm text-nevo-violet-text">
               {/*
                 ONLY THE CHILD'S OWN MISTAKE IS SAID HERE.
 
@@ -506,21 +508,23 @@ export function PinCreationScreen({
  *
  * Exported because the change-PIN flow's first step draws the same boxes for
  * the CURRENT pin. Two copies of "what a PIN entry looks like" eventually
- * disagree about the caret, the error colour or the box count, and a child
- * would meet two different-looking PIN rows inside one flow.
+ * disagree about the caret, the fill or the box count, and a child would meet
+ * two different-looking PIN rows inside one flow. The box itself is `PinBox`,
+ * the one every PIN screen draws (D177).
+ *
+ * NO ERROR COLOUR (D199): a mismatch is said by the line under the rows, and
+ * the boxes stay as they are.
  */
 export function PinRow({
   filled,
   offset,
   caretAt,
-  error,
   length = STUDENT_PIN_LENGTH,
   className,
 }: {
   filled: number;
   offset: number;
   caretAt: number;
-  error: boolean;
   /**
    * How many boxes. Defaults to the length a new PIN is created at; a row
    * that CHECKS an existing PIN passes more, because that PIN may be longer.
@@ -539,29 +543,13 @@ export function PinRow({
     >
       {Array.from({ length }, (_, i) => {
         const idx = offset + i;
-        const isFilled = filled > idx;
-        const isActive = idx === caretAt;
         return (
-          <div
+          <PinBox
             key={idx}
-            className={cn(
-              "flex size-12 items-center justify-center rounded-[10px] border-[1.5px] bg-nevo-cream shadow-[0_2px_8px_rgba(0,0,0,0.05)]",
-              /*
-               * A FILLED BOX KEEPS THE NAVY BORDER, as frame 27's Change PIN
-               * draws it - on PIN creation too (D132, 8 Oct): "the same
-               * component doing the same job". Only the caret's box was navy.
-               */
-              isActive || isFilled
-                ? "border-nevo-navy"
-                : error
-                  ? "border-nevo-violet"
-                  : "border-nevo-near-black/20",
-            )}
-          >
-            {isFilled && (
-              <span className="size-3 rounded-full bg-nevo-near-black" />
-            )}
-          </div>
+            filled={filled > idx}
+            caret={idx === caretAt}
+            className="size-12"
+          />
         );
       })}
     </div>

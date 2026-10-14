@@ -82,9 +82,9 @@ export function startEntrySession(res: StudentEntrySession): void {
  * Since 8 Oct the spec names each refusal, and each tells the child something
  * different. "That didn't save - that's on us" was true of none of them:
  *
- * - `throttled`: 429 (`too_many_attempts`). D68's wait line, in place of
- *   "That's on us - try again", which tells a child to do the one thing that
- *   extends a lockout.
+ * - `throttled`: 429 (`too_many_attempts`). D154's pause, in D156's words, in
+ *   place of "That's on us - try again", which tells a child to do the one
+ *   thing that extends a lockout.
  * - `has-pin`: 409 (`pin_not_cleared`, `pin_already_set`). The child has a
  *   PIN, so the honest door is sign-in, with what they typed carried over.
  * - `not-found`: 404 (`entry_not_found`). The pair no longer names anyone,
@@ -98,7 +98,9 @@ export function startEntrySession(res: StudentEntrySession): void {
  * with no code, says nothing about this child, and reading it as "no such
  * child" or "already has a PIN" would tell them something false about
  * themselves - so those fall to `failed`. HTTP 429 means "too many requests"
- * whoever sends it, so waiting is true of every one.
+ * whoever sends it, so waiting is true of every one - and so is
+ * `too_many_attempts` on any status, which is how the PIN door's own 401
+ * names a throttle.
  */
 export type EntryPinRefusal =
   | "throttled"
@@ -113,8 +115,8 @@ export type EntryPinElsewhere = Exclude<EntryPinRefusal, "throttled" | "failed">
 
 export function entryPinRefusal(cause: unknown): EntryPinRefusal {
   if (!(cause instanceof ApiError)) return "failed";
-  if (cause.status === 429) return "throttled";
   const code = apiErrorCode(cause.detail);
+  if (cause.status === 429 || code === "too_many_attempts") return "throttled";
   switch (cause.status) {
     case 409:
       return code === "pin_not_cleared" || code === "pin_already_set"
