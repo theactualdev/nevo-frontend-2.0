@@ -24,9 +24,8 @@ import { suddenish } from "./useTeacherFlags";
  *
  * ACKNOWLEDGED FLAGS ARE DROPPED, the same rule "Worth your attention" on the
  * dashboard follows: the banner is what still wants the teacher, not a
- * history. Nothing here acknowledges anything - design ruled (2 Sep) that the
- * tap on the dashboard card is the acknowledgement, and opening a profile is
- * not that tap.
+ * history. Nothing here acknowledges anything: acknowledging is learning
+ * support's act (Lydia, 13 Oct), and opening a profile is not it.
  *
  * NO WINDOW IS CLAIMED. The frame labels this "This week:" and the contract
  * cannot support it: a flag carries `generatedAt`, the route declares no

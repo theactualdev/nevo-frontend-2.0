@@ -474,16 +474,21 @@ export function ConnectView() {
               </div>
 
               {/* A fixture thread has nobody to send to. Rather than a send
-                  button that quietly does nothing, the composer says so. */}
+                  button that quietly does nothing, the composer says so.
+
+                  Both bars leave 84px below them, as C10 does since 13 Oct
+                  (design 0ea55e4): the Ask Nevo button floats over the
+                  bottom right of the page and sat on top of Send. A phone has
+                  no floating button, so it keeps its own padding. */}
               {!active.recipientId ? (
-                <div className="shrink-0 border-t border-nevo-near-black/8 px-[22px] py-3.5 xl:px-7 xl:py-4">
+                <div className="shrink-0 border-t border-nevo-near-black/8 px-[22px] pt-3.5 pb-[84px] max-md:py-3.5 xl:px-7 xl:pt-4">
                   <p className="text-[13.5px] leading-[1.5] text-nevo-near-black/60">
                     This is a sample conversation. Replying will work once we
                     can reach your messages again.
                   </p>
                 </div>
               ) : (
-              <div className="flex shrink-0 items-center gap-2.5 border-t border-nevo-near-black/8 px-[22px] py-3.5 max-md:px-4 max-md:py-3 xl:gap-3 xl:px-7 xl:py-4">
+              <div className="flex shrink-0 items-center gap-2.5 border-t border-nevo-near-black/8 px-[22px] pt-3.5 pb-[84px] max-md:px-4 max-md:py-3 xl:gap-3 xl:px-7 xl:pt-4">
                 <input
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}

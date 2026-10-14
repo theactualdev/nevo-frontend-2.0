@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import type { TeacherFlag } from "@/hooks/useTeacherFlags";
-import { intelligenceApi } from "@/lib/api/intelligence";
 import { cn } from "@/lib/utils";
 
 /**
@@ -13,18 +12,27 @@ import { cn } from "@/lib/utils";
  * series, no target - so this card keeps what is real: the accent, who it is
  * about, what Nevo noticed, when, and the one action that works.
  *
- * THE CARD IS THE ACKNOWLEDGEMENT. Design ruled on 2 Sep that a teacher never
- * sees an acknowledge button: tapping the card opens the student's profile and
- * marks the flag seen in the same action. So the tap fires
- * `POST /api/intelligence/flags/{id}/acknowledge` and navigates, and
- * `useTeacherFlags` already filters acknowledged flags out - which is what
- * makes the flag stop asking.
+ * THE TAP IS NOT AN ACKNOWLEDGEMENT, and no longer sends one. Design ruled on
+ * 2 Sep that the tap opened the profile and marked the flag seen, so it used to
+ * fire `POST /api/intelligence/flags/{id}/acknowledge`. Lydia ruled on 13 Oct
+ * that this let two different acts share one control:
  *
- * The write is deliberately not awaited and its failure is deliberately
- * silent. There is no UI for an outcome the teacher was never told about, and
- * blocking navigation on a background write would make a tap feel broken. A
- * failed acknowledge simply leaves the flag where it was, to be shown again -
- * which is the safe direction to fail in.
+ * - a class teacher tapping a flag on their own Home means "I have read this
+ *   about my student". It clears the card from THEIR view and nothing else;
+ * - a Learning Support holder acknowledging a flag means "learning support has
+ *   seen this and is on it". That is what produces the dated line on the
+ *   profile, and only a holder can do it (the server refuses anyone else
+ *   since backend ab78139).
+ *
+ * So the tap only opens the profile, for every teacher, holder or not. Sending
+ * the acknowledgement would refuse a class teacher, and for a holder it would
+ * record "learning support is on it" from a tap that meant "I've read it".
+ *
+ * WHAT IS NOT BUILT: clearing the card from the tapper's own view. The flag
+ * read has no per-viewer "read" state and there is no call to set one, so
+ * there is nothing true to filter on. Raised with backend. Until it lands the
+ * card stays until the flag is acknowledged, which is the state a class
+ * teacher without the role was already in.
  *
  * An earlier note here said the profile could not be linked because
  * `/teacher/students/{id}` resolved against fixtures and would 404 on a real
@@ -91,9 +99,6 @@ export function LiveFlagCard({ flag }: { flag: TeacherFlag }) {
           */}
         <Link
           href={`/teacher/students/${flag.studentId}`}
-          onClick={() => {
-            void intelligenceApi.acknowledgeFlag(flag.id).catch(() => {});
-          }}
           className="text-[13.5px] font-semibold text-nevo-navy after:absolute after:inset-0 after:rounded-[12px] after:content-[''] focus-visible:outline-none xl:text-[14.5px]"
         >
           <span className="sr-only">

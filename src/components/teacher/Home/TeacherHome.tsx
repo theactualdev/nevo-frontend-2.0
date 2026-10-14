@@ -14,8 +14,6 @@ import { cn } from "@/lib/utils";
 import { useTeacherFlags } from "@/hooks/useTeacherFlags";
 import { useTeacherHome } from "@/hooks/useTeacherHome";
 import { SampleRegion } from "@/components/shared/SampleRegion";
-import { ClassPulse } from "./ClassPulse";
-import { LiveClassPulse } from "./LiveClassPulse";
 import { LiveFlagCard } from "./LiveFlagCard";
 import { HomeClasses } from "./HomeClasses";
 import { FlagCard } from "./FlagCard";
@@ -26,7 +24,7 @@ import { FlagCard } from "./FlagCard";
  * good-to-know note, the class trio, recent activity, and the Ask Nevo drawer.
  * Content column caps at 1040px centred, inner 940px.
  *
- * The flags are live; the pulse, the class trio and the activity list are not.
+ * The flags, the class trio and the activity list are live.
  * The page reads what it has to decide what it is honestly allowed to say:
  *
  *   - a real teacher with no classes gets the greeting and a line saying so,
@@ -36,10 +34,13 @@ import { FlagCard } from "./FlagCard";
  *   - the flags are LIVE, from `/api/intelligence/flags`. An empty list is a
  *     real calm morning and gets C03's own no-flags card, not fixtures - which
  *     is the whole point: "nothing needs you" is only reassuring if it is true.
- *   - the pulse and the activity list are live too, from
- *     `GET /api/v1/teachers/me/home` - the endpoint backend shipped against
- *     the blockers list. The pulse repeats per class, because that is how it
- *     arrives; see `LiveClassPulse`.
+ *   - the activity list is live too, from `GET /api/v1/teachers/me/home` -
+ *     the endpoint backend shipped against the blockers list.
+ *   - C16a's CLASS PULSE IS NOT DRAWN, live or sample. The same read sends its
+ *     three numbers, and every way of putting them into words was a cutoff of
+ *     ours. Lydia ruled on 13 Oct that nothing replaces the old bands until
+ *     backend sends its own words, and that a group with nothing usable shows
+ *     nothing rather than a placeholder. See `useTeacherHome`.
  *   - the greeting uses the teacher's real name, from `GET /api/v1/users/me`,
  *     and falls back to a nameless welcome rather than the fixture persona.
  *   - the SCHOOL CODE sits beside it (C03, 30 Sep), from the same read's
@@ -48,8 +49,6 @@ import { FlagCard } from "./FlagCard";
  *     class code. No code, no box - and never on the signed-out walkthrough,
  *     where a sample code would be one a child could type.
  *
- * TODO(design): the pulse's number-to-word banding is ours - see
- * `useTeacherHome`.
  */
 
 const SECTION_H =
@@ -89,7 +88,6 @@ export function TeacherHome() {
     complete: flagsComplete,
   } = useTeacherFlags();
   const {
-    pulse,
     activity,
     live: homeLive,
     failed: homeFailed,
@@ -161,35 +159,11 @@ export function TeacherHome() {
               {showFixtureHome && showFixtureFlags
                 ? "We couldn’t read your class activity just now, so what’s below is a sample."
                 : showFixtureHome
-                  ? "We couldn’t read your class activity just now, so the pulse and recent activity are samples."
+                  ? "We couldn’t read your class activity just now, so the recent activity below is a sample."
                   : "We couldn’t read what needs your attention just now, so the flagged students below are a sample."}
             </p>
           )
         )}
-
-        {/* C16a: the pulse leads - class weather first, specifics below.
-            Not on a phone: C19's B1 is the greeting and "Worth your
-            attention" alone, the page a notification opens. */}
-        <div className="max-md:hidden">
-        {!noClasses &&
-          (homeLive
-            ? pulse.map((p) => <LiveClassPulse key={p.classId} pulse={p} />)
-            : showFixtureHome && (
-                /*
-                 * MARKED, and it was not until 14 Sep. Home rendered fixtures
-                 * on a failed read - correctly, per the fallback design - but
-                 * emitted no `data-nevo-sample` anywhere, while every sibling
-                 * surface did. `e2e/teacher-signed-in.spec.ts` walks
-                 * `/teacher/dashboard` asserting zero sample marks, so that
-                 * assertion PASSED VACUOUSLY on the one screen a teacher opens
-                 * first. An assertion that cannot fail is worse than none,
-                 * because it is counted as coverage.
-                 */
-                <SampleRegion kind="teacher:home-pulse">
-                  <ClassPulse />
-                </SampleRegion>
-              ))}
-        </div>
 
         {/* All of this is class-derived. With no classes there is nothing
             truthful to put here - including the calm no-flags card, which
