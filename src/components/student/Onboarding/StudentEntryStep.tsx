@@ -9,13 +9,17 @@ import {
   NevoKeyboard,
   useNevoKeyboardDock,
 } from "@/components/shared";
+import {
+  THROTTLED_PAUSE_COPY,
+  ThrottleNote,
+} from "@/components/student/Auth/ThrottledPause";
 import { ConsentWithdrawn } from "@/components/student/Entry/ConsentWithdrawn";
 import {
   WaitingOnConsent,
   type WaitingHold,
 } from "@/components/student/Entry/WaitingOnConsent";
 import { useSignals } from "@/hooks";
-import { ApiError } from "@/lib/api/client";
+import { ApiError, apiErrorCode } from "@/lib/api/client";
 import {
   studentEntryApi,
   type StudentEntryState,
@@ -96,16 +100,32 @@ export const ENTRY_UNCHECKED_COPY =
 /**
  * Did the server answer about the pair, rather than fail to answer?
  *
- * The spec declares only the 200 and a 422, so what an unmatched pair gets is
- * not written down. Any 4xx is read as the server's answer about what was
- * typed; a 5xx, a dropped network and a 429 say nothing about it.
+ * BY CODE (B124, 13 Oct): the spec now declares a pair that names nobody as
+ * 404 `entry_not_found`, and that is the only miss. This used to read any 4xx
+ * but a 429 as one, because the miss was not written down - so a 404 from a
+ * deploy that lost the route sent a child to their teacher to re-check two
+ * things that were right. Anything else - a 5xx, a dropped network, a 4xx
+ * without the code - says nothing about what was typed, and a rate limit is
+ * its own state (`isThrottle`). The PIN route reads its refusals the same way
+ * (`entryPinRefusal`).
  */
 function answeredAboutThePair(err: unknown): boolean {
   return (
     err instanceof ApiError &&
-    err.status >= 400 &&
-    err.status < 500 &&
-    err.status !== 429
+    err.status === 404 &&
+    apiErrorCode(err.detail) === "entry_not_found"
+  );
+}
+
+/**
+ * The lookup's `too_many_attempts` (429, declared since 13 Oct), read as the
+ * PIN route reads it: HTTP 429 means "too many requests" whoever sends it, and
+ * the code means the same on any status.
+ */
+function isThrottle(err: unknown): boolean {
+  return (
+    err instanceof ApiError &&
+    (err.status === 429 || apiErrorCode(err.detail) === "too_many_attempts")
   );
 }
 
@@ -135,6 +155,7 @@ function answeredAboutThePair(err: unknown): boolean {
  * A MISS keeps both values as typed and turns Continue into "Try again". It
  * never says which field was wrong. A lookup we could not run is not a miss:
  * it says nothing typed is wrong, and leaves the fields and Continue alone.
+ * Too many attempts is neither: it is D154's pause (see `throttled`).
  *
  * The keyboard docks on focus (touch only), as the frame draws it, and the
  * illustration makes way for it.
@@ -162,6 +183,16 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
    * never be told to re-check what they typed because our request failed.
    */
   const [trouble, setTrouble] = useState(false);
+  /**
+   * D154's pause, in D156's words, for a lookup refused as too many attempts.
+   * "We couldn't check just now ... press Continue to try again" told the
+   * child to do the one thing that extends a lockout. Held as the PIN door
+   * holds its own: the heading slot takes the pause, what was typed stays but
+   * cannot change, Continue and the tray go, and the note says to wait. No
+   * retry time is sent, so none is named and nothing ends it on a timer; it
+   * lasts until the child leaves by Back.
+   */
+  const [throttled, setThrottled] = useState(false);
   /**
    * Matched, and held - by consent that has not come, by consent that has
    * gone (00e, D117), or by the age check - drawn in place.
@@ -198,8 +229,8 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
     return openBusyWindow(trackEvent, BUSY_REASON.CONTENT_LOADING);
   }, [status, trackEvent]);
 
-  /** Checking, or matched and on the way out: what was typed is settled. */
-  const locked = status === "pending" || status === "success";
+  /** Checking, matched and on the way out, or paused: what was typed is settled. */
+  const locked = status === "pending" || status === "success" || throttled;
   const schoolCode = code.join("");
   const id = admissionNumber.trim();
   const ready = schoolCode.length === SCHOOL_CODE_LENGTH && id.length > 0;
@@ -349,6 +380,11 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
       },
       (err: unknown) => {
         if (!alive.current) return;
+        if (isThrottle(err)) {
+          setThrottled(true);
+          setStatus("idle");
+          return;
+        }
         setTrouble(!answeredAboutThePair(err));
         setStatus("error");
       },
@@ -376,8 +412,9 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
   }
 
   const { heading, sub } = FRAMING[framing];
-  // The frame takes the tray down once the child has been found.
-  const keyboardUp = pad.open && status !== "success";
+  // The frame takes the tray down once the child has been found, and the
+  // pause takes it down as the PIN door's does.
+  const keyboardUp = pad.open && status !== "success" && !throttled;
   /** The server answered, and the pair matched nobody. Not a lookup we could not run. */
   const missed = status === "error" && !trouble;
   const message =
@@ -444,11 +481,13 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
           keyboardUp && "[@media(pointer:coarse)]:mt-0",
         )}
       >
-        {heading}
+        {throttled ? THROTTLED_PAUSE_COPY.heading : heading}
       </h2>
-      <p className="mt-2 text-center text-[15px] leading-normal text-nevo-near-black/62 sm:text-base">
-        {sub}
-      </p>
+      {!throttled && (
+        <p className="mt-2 text-center text-[15px] leading-normal text-nevo-near-black/62 sm:text-base">
+          {sub}
+        </p>
+      )}
 
       <label
         id="entry-code-label"
@@ -552,23 +591,29 @@ export function StudentEntryStep({ framing }: { framing: EntryFraming }) {
         )}
       </div>
 
-      <div role="status" className="mt-3 min-h-11">
-        {message && (
-          <p className="text-[14.5px] leading-[1.45] text-nevo-navy">
-            {message}
-          </p>
-        )}
-      </div>
+      {throttled ? (
+        <ThrottleNote className="mt-3 max-w-none" />
+      ) : (
+        <>
+          <div role="status" className="mt-3 min-h-11">
+            {message && (
+              <p className="text-[14.5px] leading-[1.45] text-nevo-navy">
+                {message}
+              </p>
+            )}
+          </div>
 
-      <div className="pt-2">
-        <Button
-          onClick={submit}
-          disabled={!ready || locked}
-          className="w-full text-base"
-        >
-          {missed ? "Try again" : "Continue"}
-        </Button>
-      </div>
+          <div className="pt-2">
+            <Button
+              onClick={submit}
+              disabled={!ready || locked}
+              className="w-full text-base"
+            >
+              {missed ? "Try again" : "Continue"}
+            </Button>
+          </div>
+        </>
+      )}
     </OnboardingShell>
   );
 }

@@ -505,7 +505,8 @@ export interface LessonProgressRequest {
   /**
    * Where a child left the after-lesson check: the index of the next question
    * to ask (B49). Sent on the exit write and nowhere else, so the write that
-   * leaves a check is the one that says where.
+   * leaves a check is the one that says where. Left out, the stored one is
+   * kept (B122, 13 Oct), so a segment write never clears it.
    */
   checkPosition?: number | null;
   status: LessonStatus;
@@ -633,7 +634,10 @@ export interface LessonQuestionAttempt {
    */
   handoffTo?: "socratic_panel" | null;
   guidedPrompts?: SocraticHandoffPrompt[];
-  /** Default false on the contract. */
+  /**
+   * Default false on the contract. True whenever there is a hand-off; false
+   * means there is none (B128), so the player opens no panel without it.
+   */
   advanceAfterHandoff?: boolean;
 }
 

@@ -160,14 +160,15 @@ describe("text on screen that is not the body the chunks were cut from", () => {
     expect(container.querySelector("[data-chunk-id]")).toBeNull();
   });
 
-  it("parts it on the device, as before chunks existed", () => {
+  it("reads it whole under attention too, never cut on the device (B114)", () => {
+    // "The client must not split text." Its three sentences were three parts
+    // of the client's own making; with no chunks of its own it is one body.
     const { container } = render(
       <TextSegment content={standIn} density={null} attention />,
     );
 
-    // The first of the device's three parts, alone.
-    expect(screen.getByText("Plants feed themselves on light.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Tap to continue" })).toBeInTheDocument();
+    expect(screen.getByText(SHOWN).tagName).toBe("P");
+    expect(screen.queryByRole("button", { name: "Tap to continue" })).toBeNull();
     expect(container.querySelector("[data-chunk-id]")).toBeNull();
   });
 
@@ -248,9 +249,9 @@ describe("reporting where the child has read (reading_chunk_viewed)", () => {
 });
 
 describe("the tap-to-continue flow, on the server's chunks", () => {
-  it("takes its parts from the chunks rather than splitting on the device", () => {
-    // On-device, three sentences become three parts too - so two chunks of
-    // unequal size is what tells the two apart.
+  it("takes its parts from the chunks, as sent", () => {
+    // Two chunks of unequal size: the parts are where the server broke the
+    // body, not one per sentence.
     const two = [
       { id: "c1", text: "Plants make their own food. They use sunlight to do it." },
       { id: "c2", text: "Oxygen is what they give out." },
@@ -266,8 +267,7 @@ describe("the tap-to-continue flow, on the server's chunks", () => {
 
   it("counts nothing: no part number and no total", () => {
     // Design, 9 Oct: "Drop it. It counts the server's chunks, and nothing
-    // about chunking is ever surfaced to a child." Nor does it count the
-    // device's parts in its place.
+    // about chunking is ever surfaced to a child."
     for (const over of [{ readingChunks: CHUNKS }, {}]) {
       const { container, unmount } = render(
         <TextSegment content={content(over)} density={null} attention />,
@@ -343,7 +343,14 @@ describe("the payload's boxes, where the frame draws them (SCRUM-224, D24)", () 
   });
 
   it("keeps them when the standard body arrives in parts", () => {
-    render(<TextSegment content={boxes} density={null} attention />);
+    render(
+      <TextSegment
+        content={{ ...boxes, readingChunks: CHUNKS }}
+        density={null}
+        attention
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Tap to continue" })).toBeInTheDocument();
 
     expect(screen.getByText("6CO2 + 6H2O → C6H12O6 + 6O2")).toBeInTheDocument();
   });

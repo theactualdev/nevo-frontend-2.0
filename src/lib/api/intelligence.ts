@@ -253,15 +253,21 @@ export interface GuidedAnswerRequest {
  * - `initialScaffoldLevel`, "Client-applied starting level for calculation
  *   scaffolds": the scaffold indicator's level while the solver is on screen,
  *   until something more specific is said (`AdaptationPlan.initialScaffold`).
- * - `comprehensionCheckInterval`, "Client-applied maximum segments between
- *   available comprehension checks": NOT ACTED ON. The player already offers
- *   every check a lesson carries and holds none back; it cannot close a gap
- *   the content leaves without inventing a check. Asked.
- * - `numberProblemsStepByStep` and `shorterTextBlocks`: no description in
- *   the spec, so NOT ACTED ON. The solver already gives one step at a time
- *   whatever the flag says (17b), and where a passage breaks is the
- *   backend's (SCRUM-236), so choosing a split from a bare flag would be the
- *   client deciding it. Asked.
+ * - `comprehensionCheckInterval`, "Maximum desired gap between authored
+ *   checks. The client never invents a question; it presents the next
+ *   checkpoint carried by the lesson" (B115, 13 Oct): NOT ACTED ON, because
+ *   there is nothing to act on. The player already offers every check a
+ *   lesson carries and holds none back, and a gap the content leaves is for
+ *   parsing and teacher review to fill.
+ * - `numberProblemsStepByStep`: no description in the spec, so NOT ACTED
+ *   ON. The solver already gives one step at a time whatever the flag says
+ *   (17b). Asked.
+ * - `shorterTextBlocks` (B114, 13 Oct): "use the readingChunks supplied by
+ *   the server. The client must not split prose itself." Nothing reads the
+ *   flag, because nothing needs to: every passage that came with chunks is
+ *   already drawn in them (17c, SCRUM-237), for every child, and no view
+ *   splits a body that came without. What `false` should take away, and
+ *   whether `true` should do more, is asked.
  */
 export interface EngineConfig {
   version?: number;

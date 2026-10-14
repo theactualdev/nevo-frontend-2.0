@@ -988,6 +988,27 @@ describe("the form as 00c draws it", () => {
 
     expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
   });
+
+  it("sends nothing on Enter while the pause is up, from any field", async () => {
+    // Another attempt is the one thing that extends a lockout, and Enter in
+    // the code or the Student ID still reaches `submit`.
+    loginPin.mockRejectedValue(refusal("too_many_attempts"));
+    render(<ReturningSignInScreen />);
+    fill();
+    await signInNow();
+    expect(loginPin).toHaveBeenCalledTimes(1);
+
+    fireEvent.keyDown(cells()[0], { key: "Enter" });
+    fireEvent.keyDown(idField(), { key: "Enter" });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50);
+    });
+
+    expect(loginPin).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByText("Let's wait a little before trying again."),
+    ).toBeVisible();
+  });
 });
 
 describe("one keyboard at a time (ruling D)", () => {

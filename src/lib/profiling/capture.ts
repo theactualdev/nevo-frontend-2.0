@@ -268,11 +268,18 @@ const text = (value: unknown): string | null =>
  *    such. The median is the server's to take. This is where the step's
  *    samples leave, rather than in a feature of their own.
  *  - A MOTOR TARGET LEFT UNTAPPED (`motor_end` with reason `idle`): the step
- *    ended itself after ten seconds on a painted target. That target is the
- *    one trial the capture records as put in front of the child and not
- *    answered, so it goes as `skipped` (B76, 8 Oct), with no response and no
- *    time. Nothing else is marked skipped: a "Not sure" is an answer, and an
- *    activity the device could not present was never in front of anyone.
+ *    ended itself after ten seconds on a painted target. That target goes as
+ *    `skipped` (B76, 8 Oct), with no response and no time.
+ *  - AN ACTIVITY THE DEVICE COULD NOT PRESENT (`unpresented`): P1-3's heard
+ *    sentences on a device with no speech, in the baseline and the warm-up,
+ *    and a warm-up task this screen has nothing to show for. Backend, 13 Oct
+ *    (B117): "skipped means an activity could not be presented or a motor
+ *    target was left untapped." These sent nothing, so a reading the device
+ *    could not take looked the same as one nobody tried to take. Each goes
+ *    as one skipped trial per trial not presented, with its dimension and
+ *    condition and nothing else.
+ *  - Nothing else is skipped. "Not sure" is a response, not a skip (B117),
+ *    and goes as `not_sure`, above.
  *
  * Not carried, because `BaselineTrial` has no field for them: coordinates
  * (B14, above) and the intervals between the taps inside a recall.
@@ -393,6 +400,19 @@ export function baselineTrials(capture: BaselineCapture): BaselineTrial[] {
           skipped: true,
         });
         break;
+      case "unpresented": {
+        const act = String(p.act);
+        trials.push({
+          dimension: DIMENSION_OF_ACT[act] ?? act.slice(0, 60),
+          condition: conditionOf(e),
+          response: null,
+          correct: null,
+          responseTimeMs: null,
+          probeItemId: null,
+          skipped: true,
+        });
+        break;
+      }
     }
   }
   return trials;
@@ -413,16 +433,23 @@ const CONTRACT_FORM_FACTOR: Record<
  * its trials (B76, 8 Oct). Read from the capture, so it says only what the
  * run recorded:
  *
- *  - `ageBand`: the band on `run_start` (onboarding) or `warmup_start`. The
- *    warm-up records one only when the roster gave it; with none it runs the
- *    frame's Primary 4-6 version as a default, and that default is not sent
- *    as the child's age band.
+ *  - `ageBand`: the band on `run_start` (onboarding) or `warmup_start`, which
+ *    each records only when the server gave one. With none, both run Primary
+ *    4-6 as a default, and that default is not sent as the child's age band.
+ *    The spec, 13 Oct (B118): "Omit it when the roster band was unavailable;
+ *    a client fallback must not be recorded as the child's band."
  *  - `formFactor`: the device `formFactor()` read when the run started. Its
  *    "desktop" is a pointer that is not coarse, so it is the contract's
  *    cursor, and the other two are touch.
  *  - `motorStepSkipped`: true where `motor_skipped` was recorded (a cursor
  *    device, 08a), false where the step ran to its end. A run with neither,
  *    which is the warm-up, has no motor step and leaves the key out.
+ *  - `motorSamplesMs`: every tap the step took, in the order taken, as whole
+ *    milliseconds - sent whenever the step ran, and only then. Backend, 13 Oct
+ *    (B119): "motorStepSkipped: false does not mean the motor step ran.
+ *    motorSamplesMs proves it ran." Nothing sent it, so every child's step
+ *    read as one that never ran. The two practice taps are the first two, as
+ *    the step's fixed order puts them; the median is still the server's.
  */
 export function baselineRunContext(
   capture: BaselineCapture,
@@ -437,9 +464,18 @@ export function baselineRunContext(
       : undefined;
   const skippedStep = capture.ofKind("motor_skipped").length > 0;
   const ranStep = capture.ofKind("motor_end").length > 0;
+  const samples = ranStep
+    ? capture
+        .ofKind("motor_tap")
+        .map((e) => ms(e.payload?.latencyMs))
+        .filter((v): v is number => v !== null)
+        // The contract's cap, which is the step's eight targets.
+        .slice(0, 8)
+    : null;
   return {
     ...(ageBand ? { ageBand } : {}),
     ...(formFactor ? { formFactor } : {}),
     ...(skippedStep || ranStep ? { motorStepSkipped: skippedStep } : {}),
+    ...(samples ? { motorSamplesMs: samples } : {}),
   };
 }

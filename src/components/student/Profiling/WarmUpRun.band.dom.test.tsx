@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { WarmUpRun } from "./WarmUpRun";
 import type { RosterBand } from "@/hooks/useRosterBand";
+import type { WarmUpPrompt } from "@/hooks/useWarmUpDimension";
+import { clearSession, setSession } from "@/lib/auth/session";
+import { markWarmUpDone } from "@/lib/profiling/warmUpDone";
 
 /**
  * ONE WARM-UP FOR EVERY AGE (D17, 1 Oct), AND THEN HALF A BAND (D81, 6 Oct).
@@ -26,9 +29,17 @@ import type { RosterBand } from "@/hooks/useRosterBand";
 
 const { submit } = vi.hoisted(() => ({ submit: vi.fn() }));
 vi.mock("@/lib/api", () => ({ baselineApi: { submitTrials: submit } }));
-vi.mock("@/lib/profiling/pendingBaseline", () => ({ holdBaseline: vi.fn() }));
+const { holdBaseline } = vi.hoisted(() => ({ holdBaseline: vi.fn() }));
+vi.mock("@/lib/profiling/pendingBaseline", () => ({ holdBaseline }));
+const engine = vi.hoisted(() => ({
+  prompt: { state: "waiting" } as WarmUpPrompt,
+}));
 vi.mock("@/hooks/useWarmUpDimension", () => ({
-  useWarmUpPrompt: () => ({ state: "waiting" }),
+  useWarmUpPrompt: () => engine.prompt,
+}));
+// Consent has answered, and not withdrawn: a skip report waits for that.
+vi.mock("@/hooks/useConsentGate", () => ({
+  useConsentGate: () => ({ withdrawn: false, known: true }),
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
@@ -109,12 +120,23 @@ function takeAwayItsVoice() {
     .SpeechSynthesisUtterance;
 }
 
+const signIn = () =>
+  setSession({
+    token: "tok",
+    expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    userId: "child-1",
+    role: "student",
+  });
+
 beforeEach(() => {
   vi.useFakeTimers();
   submit.mockReset();
   submit.mockResolvedValue(true);
+  holdBaseline.mockReset();
+  engine.prompt = { state: "waiting" };
   roster.value = { band: null, settled: true };
   window.localStorage.clear();
+  clearSession();
 });
 
 afterEach(() => {
@@ -122,6 +144,7 @@ afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
   takeAwayItsVoice();
+  clearSession();
 });
 
 describe("the tile task, by band", () => {
@@ -367,7 +390,7 @@ describe("the reading task for Primary 1-3 is heard (D81)", () => {
     });
   });
 
-  it("shows the nothing-state on a device that cannot speak, and sends nothing", async () => {
+  it("shows the nothing-state on a device that cannot speak, with no task in its place (D139)", async () => {
     takeAwayItsVoice();
     render(<WarmUpRun dimension="reading" />);
     await wait(2000);
@@ -375,7 +398,108 @@ describe("the reading task for Primary 1-3 is heard (D81)", () => {
     expect(screen.getAllByRole("button")).toHaveLength(1);
     expect(screen.getByRole("button", { name: "Home" })).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/Garri|True or false/);
+  });
+
+  /*
+   * B117, 13 Oct: "skipped means an activity could not be presented". It sent
+   * nothing, so the engine heard nothing and would ask for the same again.
+   */
+  it("tells the engine the heard round could not be given, once, with its band", async () => {
+    takeAwayItsVoice();
+    signIn();
+    render(<WarmUpRun dimension="reading" />);
+    await wait(2000);
+
+    expect(submit).toHaveBeenCalledTimes(1);
+    expect(trials()).toEqual([
+      {
+        dimension: "reading",
+        condition: "audio",
+        response: null,
+        correct: null,
+        responseTimeMs: null,
+        probeItemId: null,
+        skipped: true,
+      },
+    ]);
+    // P1-3 is why it is heard, so it is the band the round was sized for.
+    expect(context()).toEqual({
+      ageBand: "early_primary",
+      formFactor: "desktop_cursor",
+    });
+    // Sent, never parked: it must not take a real run's place in the slot.
+    expect(holdBaseline).not.toHaveBeenCalled();
+  });
+
+  it("does not park the report when its write fails", async () => {
+    takeAwayItsVoice();
+    signIn();
+    submit.mockResolvedValue(false);
+    render(<WarmUpRun dimension="reading" />);
+    await wait(2000);
+
+    expect(submit).toHaveBeenCalledTimes(1);
+    expect(holdBaseline).not.toHaveBeenCalled();
+  });
+
+  it("reports nothing on a day already done", async () => {
+    takeAwayItsVoice();
+    signIn();
+    markWarmUpDone("child-1");
+    render(<WarmUpRun dimension="reading" />);
+    await wait(2000);
+
     expect(submit).not.toHaveBeenCalled();
+  });
+
+  it("reports nothing skipped where the device can speak", async () => {
+    signIn();
+    render(<WarmUpRun dimension="reading" />);
+    await wait(2000);
+
+    expect(submit).not.toHaveBeenCalled();
+  });
+});
+
+describe("the band beside a served question (B118)", () => {
+  /*
+   * B118, 13 Oct: "ageBand is the band the activity was sized for. Omit it
+   * when unknown." A served question is the engine's item as it came; the
+   * device sizes nothing about it, so it claims no band.
+   */
+  it("claims none, whatever the roster's band", async () => {
+    roster.value = { band: "ss", settled: true };
+    engine.prompt = {
+      state: "ready",
+      dimension: "domain",
+      live: true,
+      item: {
+        itemId: "6f1c2b0e-8a7d-4e57-9b8e-2c4d5f6a7b8c",
+        question: "What is 7 times 8?",
+        options: [
+          { value: "opt-a", label: "54" },
+          { value: "opt-b", label: "56" },
+        ],
+      },
+    };
+    render(<WarmUpRun />);
+
+    fireEvent.click(screen.getByText("56"));
+    await wait(1000);
+
+    expect(submitted()).toMatchObject({ dimension: "domain", response: "opt-b" });
+    expect(context()).toEqual({ formFactor: "desktop_cursor" });
+  });
+
+  it("claims none for a question task it could not give either (B117)", async () => {
+    signIn();
+    roster.value = { band: "ss", settled: true };
+    engine.prompt = { state: "none", cannotPresent: "domain" };
+    render(<WarmUpRun />);
+    await wait(1000);
+
+    expect(submitted()).toMatchObject({ dimension: "domain", skipped: true });
+    expect(context()).toEqual({ formFactor: "desktop_cursor" });
   });
 });
 

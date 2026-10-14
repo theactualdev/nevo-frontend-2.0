@@ -147,8 +147,26 @@ describe("toPrompt", () => {
 
   it("runs nothing for the question task when no question came", () => {
     // The frame's fixture is not this child's question.
-    expect(toPrompt({ ...served, question: "" })).toEqual({ state: "none" });
-    expect(toPrompt({ ...served, options: [] })).toEqual({ state: "none" });
+    expect(toPrompt({ ...served, question: "" })).toMatchObject({ state: "none" });
+    expect(toPrompt({ ...served, options: [] })).toMatchObject({ state: "none" });
+  });
+
+  it("says the question task was named and could not be given (B117)", () => {
+    // Backend, 13 Oct: "skipped means an activity could not be presented".
+    // The engine asked for one, so the run reports it rather than saying
+    // nothing, which is what a failed read or an unknown dimension gets.
+    expect(toPrompt({ ...served, question: "" })).toEqual({
+      state: "none",
+      cannotPresent: "domain",
+    });
+    expect(toPrompt({ ...served, options: [], doneToday: false })).toEqual({
+      state: "none",
+      cannotPresent: "domain",
+      doneToday: false,
+    });
+    expect(toPrompt({ ...served, dimension: "mood" })).not.toHaveProperty(
+      "cannotPresent",
+    );
   });
 
   it("runs another dimension's own task when no question was served", () => {
@@ -167,14 +185,17 @@ describe("toPrompt - the served flag decides (B65)", () => {
     expect(
       toPrompt({ ...served, dimension: "attention", served: false }),
     ).toMatchObject({ state: "ready", dimension: "attention", item: null });
-    expect(toPrompt({ ...served, served: false })).toEqual({ state: "none" });
+    expect(toPrompt({ ...served, served: false })).toEqual({
+      state: "none",
+      cannotPresent: "domain",
+    });
   });
 
   it("reads an absent flag as not served, rather than inferring one", () => {
     const { served: _flag, ...unsaid } = served;
     void _flag;
 
-    expect(toPrompt(unsaid)).toEqual({ state: "none" });
+    expect(toPrompt(unsaid)).toEqual({ state: "none", cannotPresent: "domain" });
     expect(toPrompt({ ...unsaid, dimension: "ps" })).toMatchObject({
       state: "ready",
       item: null,
@@ -217,6 +238,7 @@ describe("toPrompt - a device day's id is never a probe item (B79, B81)", () => 
     // The question task has no device version, so there is nothing to run.
     expect(toPrompt({ ...served, itemId: "device:domain" })).toEqual({
       state: "none",
+      cannotPresent: "domain",
     });
   });
 

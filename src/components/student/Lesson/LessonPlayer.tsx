@@ -135,6 +135,26 @@ const DENSITIES: { id: Density; label: string }[] = [
   { id: DENSITY.SLOWER, label: "Slower" },
 ];
 
+/**
+ * The pace chips a segment's text can deliver: Simplify and Expand where an
+ * authored reshape exists, Slower where one does or the server's reading
+ * chunks break the body - see `textChips`.
+ */
+const densitiesFor = (segment: LessonSegment) =>
+  DENSITIES.filter(({ id }) =>
+    id === DENSITY.SLOWER
+      ? segment.text?.body[id] !== undefined ||
+        isChunkable(segment.text?.body.default, segment.text?.readingChunks)
+      : segment.text?.body[id] !== undefined,
+  );
+
+/** What holds the chip row's height, unseen, on a segment that has none. */
+const HELD_CHIPS: ToggleSegment[] = DENSITIES.map(({ id, label }) => ({
+  id,
+  label,
+  state: "default",
+}));
+
 // Each density is its own event type in the backend ingest contract.
 const DENSITY_TRIGGER: Record<Density, SignalEventType> = {
   [DENSITY.SIMPLIFY]: SIGNAL_EVENT_TYPES.SIMPLIFY_TRIGGER,
@@ -478,14 +498,13 @@ export function LessonPlayer({
    * for each hand-off, so a second one arrives open as the first did.
    * `answeredRight` is read where the reply lands, which state is not: a
    * hand-off for an earlier miss arriving after a right answer is moot.
-   * `handedOff` is the checks the server moved the child past
-   * (`advanceAfterHandoff`) - never counted as passed.
+   * `handedOff` is the checks the server moved the child past - every
+   * hand-off moves them past (B128) - never counted as passed.
    */
   const [handoff, setHandoff] = useState<{
     segmentId: string;
     run: number;
     prompts: PanelPrompt[];
-    advance: boolean;
   } | null>(null);
   const [handedOff, setHandedOff] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -771,6 +790,10 @@ export function LessonPlayer({
   );
   // Hints the child closed, by segment and hint - see `hintHere`.
   const [closedHints, setClosedHints] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  // Hint cards that have come into view, keyed the same way (B131).
+  const [seenHints, setSeenHints] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
   /*
@@ -1352,6 +1375,12 @@ export function LessonPlayer({
    * still on screen - see `advancePastSegment`. The solver's "Need a hint?"
    * is the hint a child opens, and sends its own pair - see `onCalcHint`.
    *
+   * ON SCREEN IS IN VIEW (B131): "hint_offered fires when the hint becomes
+   * visible, not when the engine response arrives." The card under the
+   * content counts from when it first comes into view (`HintOverlay`'s
+   * `onSeen`), so a card below the fold the child never scrolled to was
+   * neither offered nor used.
+   *
    * ON A CALCULATION THE HINT IS THE SOLVER'S, in the step's hint place, and
    * only the solver knows when it is drawn: never beside a step's
    * confirmation, which holds the step's place, nor after the solve. So the
@@ -1360,7 +1389,11 @@ export function LessonPlayer({
    */
   const solverShowing = modality === MODALITY.INTERACTIVE && isCalculation(segment);
   const hintOnScreen =
-    segmentShowing && hintHere && Boolean(hintText) && !solverShowing;
+    segmentShowing &&
+    hintHere &&
+    Boolean(hintText) &&
+    !solverShowing &&
+    seenHints.has(hintKey);
   const offeredHints = useRef<Set<string>>(new Set());
   const usedHints = useRef<Set<string>>(new Set());
   /** The engine's hint went on screen: once per hint per segment. */
@@ -1630,9 +1663,9 @@ export function LessonPlayer({
 
   /** Next chevron — an unpassed Quick Check intercepts the advance. */
   const handleNext = () => {
-    // Next past a hand-off the server moved on from is Keep going by
-    // another way: the panel goes with the segment, as it does there.
-    if (handoffHere?.advance) {
+    // Next past a hand-off is Keep going by another way: the panel goes
+    // with the segment, as it does there.
+    if (handoffHere) {
       keepGoingAfterHandoff();
       return;
     }
@@ -1654,9 +1687,15 @@ export function LessonPlayer({
    * closes, and the panel arrives open with the server's prompts and nothing
    * to accept or decline. Prompts with no id or no words are not drawn; a
    * hand-off with none left draws nothing (rule 5), and the check stays.
+   *
+   * B128 (13 Oct): "advanceAfterHandoff is true whenever a Socratic handoff
+   * exists. False means there is no handoff." So a reply without it is no
+   * hand-off at all, whatever else it carries: no panel, and the check stays
+   * the way on. There is no panel that ends nowhere.
    */
   const handOffFrom = (segmentId: string, stored: LessonQuestionAttempt) => {
     if (stored.handoffTo !== "socratic_panel") return;
+    if (stored.advanceAfterHandoff !== true) return;
     if (answeredRight.current.has(segmentId)) return;
     const prompts = (stored.guidedPrompts ?? []).flatMap((p) =>
       p?.id && p.prompt?.trim() ? [{ id: p.id, prompt: p.prompt }] : [],
@@ -1665,27 +1704,23 @@ export function LessonPlayer({
     setCheckOpen(false);
     /*
      * "FORWARD, NEVER BACK TO THE QUESTION" (38a §2) holds from the moment the
-     * server says to move on, not only once Keep going is pressed: a child who
+     * hand-off arrives, not only once Keep going is pressed: a child who
      * closes the panel and taps Next goes forward too, never into the check
      * and its old wrong pick. Still not passed, and the misses still stand.
      */
-    if (stored.advanceAfterHandoff === true)
-      setHandedOff((prev) => new Set(prev).add(segmentId));
+    setHandedOff((prev) => new Set(prev).add(segmentId));
     setHandoff((prev) => ({
       segmentId,
       run: (prev?.run ?? 0) + 1,
       prompts,
-      advance: stored.advanceAfterHandoff === true,
     }));
   };
 
   /*
-   * 38a's return: "forward, never back to the question". Only when the server
-   * said to move on after it (`advanceAfterHandoff`); otherwise the panel has
-   * no ending and the check is still the way on. Moving on is not passing:
-   * the check is never marked passed, its misses stand for the review, and
-   * the panel on screen already made a right answer later `after_hint` - so
-   * nothing records this as known first time.
+   * 38a's return: "forward, never back to the question". Moving on is not
+   * passing: the check is never marked passed, its misses stand for the
+   * review, and the panel on screen already made a right answer later
+   * `after_hint` - so nothing records this as known first time.
    */
   const keepGoingAfterHandoff = () => {
     setHandedOff((prev) => new Set(prev).add(segment.id));
@@ -1777,10 +1812,11 @@ export function LessonPlayer({
    *
    * SLOWER IS DIFFERENT, as of 17 Sep, because it is not a rewording. Design:
    * "Slower is about how much arrives at once, which is segmentation and
-   * pacing rather than wording." Chunking regroups sentences the lesson
-   * already has, so it is available on live content, and the gate is whether
-   * chunking would change anything - a one-sentence segment still offers
-   * nothing rather than a control that does nothing.
+   * pacing rather than wording." It takes the body in the server's reading
+   * chunks, so it is available on live content, and the gate is whether
+   * that would change anything - a body sent as one chunk, or none, offers
+   * nothing rather than a control that does nothing. Nothing is split here
+   * to make parts (B114).
    *
    * AND ONLY WHILE THE TEXT IS WHAT IS ON SCREEN. Each of the three reshapes
    * the text and nothing else, so a lone "Slower" over a picture, a recording
@@ -1788,18 +1824,27 @@ export function LessonPlayer({
    * told the engine they had asked (`slower_trigger`). 17a draws no density
    * pill on the calculation player.
    */
-  const textChips: ToggleSegment[] = DENSITIES.filter(({ id }) =>
-    id === DENSITY.SLOWER
-      ? segment.text?.body[id] !== undefined ||
-        isChunkable(segment.text?.body.default, segment.text?.readingChunks)
-      : segment.text?.body[id] !== undefined,
-  ).map(({ id, label }) => ({
-    id,
-    label,
-    state:
-      density === id ? "manual" : systemDensity === id ? "system" : "default",
-  }));
+  const textChips: ToggleSegment[] = densitiesFor(segment).map(
+    ({ id, label }) => ({
+      id,
+      label,
+      state:
+        density === id ? "manual" : systemDensity === id ? "system" : "default",
+    }),
+  );
   const densitySegments = modality === MODALITY.TEXT ? textChips : [];
+  /*
+   * THE CHIP ROW'S HEIGHT IS THE LESSON'S, NOT THE SEGMENT'S. Whether a
+   * segment offers a chip is down to its own content - since B114, whether
+   * the server broke its body into chunks - so taking the row away on a
+   * segment with none lifted the position line, the progress and the column
+   * 62px from one segment to the next. A lesson with a chip anywhere holds
+   * the row on every segment; a lesson with none has no row at all.
+   */
+  const chipsInLesson = useMemo(
+    () => lesson.segments.some((s) => densitiesFor(s).length > 0),
+    [lesson],
+  );
 
   /*
    * B45: KEPT AS THE SCREEN CHANGES, READ AS THE CHILD LEAVES. React runs a
@@ -2562,14 +2607,13 @@ export function LessonPlayer({
             Absent entirely when the segment has no reshapes to offer, rather
             than an empty pill rail.
 
-            HELD, UNSEEN, OVER A PICTURE OR A RECORDING of a segment whose
-            text has chips: those have to go there, and taking the row with
-            them lifted the position line and the progress 62px between a
-            text segment and the next - a change of version is felt, not
-            seen (rule 7). Not on the solver: 17a draws no row there, and it
-            needs the room. */}
-        {(densitySegments.length > 0 ||
-          (textChips.length > 0 && !calcShowing)) && (
+            HELD, UNSEEN, WHERE THIS SCREEN HAS NO CHIPS IN A LESSON THAT HAS
+            THEM - over a picture or a recording, or on a segment whose text
+            offers none (`chipsInLesson`): taking the row away lifted the
+            position line and the progress 62px between one segment and the
+            next - a change of version is felt, not seen (rule 7). Not on the
+            solver: 17a draws no row there, and it needs the room. */}
+        {(densitySegments.length > 0 || (chipsInLesson && !calcShowing)) && (
           <div
             className={cn(
               "flex justify-end",
@@ -2580,7 +2624,11 @@ export function LessonPlayer({
           >
             <AdaptiveToggleBar
               segments={
-                densitySegments.length > 0 ? densitySegments : textChips
+                densitySegments.length > 0
+                  ? densitySegments
+                  : textChips.length > 0
+                    ? textChips
+                    : HELD_CHIPS
               }
               onSelect={pickDensity}
             />
@@ -2696,9 +2744,7 @@ export function LessonPlayer({
                     ? () => setCheckOpen(true)
                     : undefined
                 }
-                onKeepGoing={
-                  handoffHere?.advance ? keepGoingAfterHandoff : undefined
-                }
+                onKeepGoing={handoffHere ? keepGoingAfterHandoff : undefined}
                 onShown={(promptIds) => {
                   // Reached through the panel is not reached first time: a
                   // check answered after it reports as after help (B28).
@@ -2893,6 +2939,11 @@ export function LessonPlayer({
               hint={hintText}
               onClose={() =>
                 setClosedHints((prev) => new Set(prev).add(hintKey))
+              }
+              onSeen={() =>
+                setSeenHints((prev) =>
+                  prev.has(hintKey) ? prev : new Set(prev).add(hintKey),
+                )
               }
             />
           )}

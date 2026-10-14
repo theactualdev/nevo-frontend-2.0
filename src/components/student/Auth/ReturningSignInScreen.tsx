@@ -340,7 +340,13 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
   );
 
   const submit = useCallback(async () => {
-    if (!ready || checking) return;
+    /*
+     * Held while D154's pause is up, as the PIN door's keys are: Enter in the
+     * code or the Student ID still reaches here, and another attempt is the
+     * one thing that extends a lockout. Not left to the cleared PIN making
+     * `ready` false - a refusal that keeps the PIN would reopen it.
+     */
+    if (!ready || checking || error === "throttled") return;
     setChecking(true);
     setError(null);
     // Leaving for the waiting screen: the button stays busy until it lands.
@@ -473,7 +479,7 @@ export function ReturningSignInScreen({ next }: { next?: string }) {
     } finally {
       if (!leaving) setChecking(false);
     }
-  }, [ready, checking, school, identifier, digits, signIn, next, goOn]);
+  }, [ready, checking, error, school, identifier, digits, signIn, next, goOn]);
 
   /*
    * A paused account takes the whole screen, exactly as it does at the PIN

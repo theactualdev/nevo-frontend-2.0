@@ -236,6 +236,86 @@ describe("hint_offered", () => {
 
     expect(sent("hint_used")).toEqual([]);
   });
+
+  describe("when the card comes into view (B131)", () => {
+    /*
+     * "hint_offered fires when the hint becomes visible, not when the engine
+     * response arrives." The card sits under the segment, so under a long one
+     * it is below the fold until the child scrolls down to it.
+     */
+    type Report = (entries: Partial<IntersectionObserverEntry>[]) => void;
+    let watchers: { report: Report; targets: Element[]; on: boolean }[];
+    beforeEach(() => {
+      watchers = [];
+      vi.stubGlobal(
+        "IntersectionObserver",
+        class {
+          w: (typeof watchers)[number];
+          constructor(report: Report) {
+            this.w = { report, targets: [], on: true };
+            watchers.push(this.w);
+          }
+          observe(el: Element) {
+            this.w.targets.push(el);
+          }
+          disconnect() {
+            this.w.on = false;
+          }
+        },
+      );
+    });
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    /** The live watch on the hint card reports it in view, or not. */
+    const cardInView = (inView: boolean) => {
+      const w = watchers.find(
+        (x) => x.on && x.targets.some((t) => t.textContent?.includes(HINT)),
+      );
+      if (!w) return;
+      act(() =>
+        w.report([{ target: w.targets[0], isIntersecting: inView }]),
+      );
+    };
+    const hinted = {
+      lessonId: "l-1",
+      segments: [],
+      adjustment: "offer_hint",
+      hint: HINT,
+    } as AdaptationPlan;
+
+    it("is not sent while the card is below the fold, and is once it shows", () => {
+      render(<LessonPlayer lesson={TWO} plan={hinted} />);
+      expect(screen.getByText(HINT)).toBeInTheDocument();
+      expect(sent("hint_offered")).toEqual([]);
+
+      cardInView(false);
+      expect(sent("hint_offered")).toEqual([]);
+
+      cardInView(true);
+      cardInView(true);
+      expect(sent("hint_offered")).toEqual([{ segmentId: "seg-1" }]);
+    });
+
+    it("is no hint used when the child moves on without ever seeing it", () => {
+      render(<LessonPlayer lesson={TWO} plan={hinted} />);
+
+      next();
+
+      expect(sent("hint_offered")).toEqual([]);
+      expect(sent("hint_used")).toEqual([]);
+    });
+
+    it("is a hint used when the child moves on after it showed", () => {
+      render(<LessonPlayer lesson={TWO} plan={hinted} />);
+      cardInView(true);
+
+      next();
+
+      expect(sent("hint_used")).toEqual([{ segmentId: "seg-1" }]);
+    });
+  });
 });
 
 // ── B19 / B20 ──────────────────────────────────────────────────────────────

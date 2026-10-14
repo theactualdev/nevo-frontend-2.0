@@ -17,8 +17,8 @@ import { pageScrolledColumn } from "@/test/readingColumn";
  * Design's ruling, 17 Sep: "Slower is about how much arrives at once, which is
  * segmentation and pacing rather than wording." The player already had that
  * mechanism - the chunked flow the `attention` accommodation uses - built from
- * the body the lesson already has. So Slower needs no authored content and
- * reaches live lessons today.
+ * the server's reading chunks of the body (never a split of the client's own,
+ * B114). So Slower needs no authored content and reaches live lessons today.
  *
  * WHY IT MATTERS MORE THAN ITS SIZE. Design again: in a system that
  * deliberately tells a child nothing about what it is doing, the control is the
@@ -48,8 +48,13 @@ vi.mock("@/context/AccessibilityContext", () => ({
   TEXT_ZOOM: { regular: 1 },
 }));
 
-/** Three sentences. A body with fewer than two chunks to itself. */
+/** Three sentences, and the server's three reading chunks of them. */
 const THREE = "One idea here. A second idea here. A third idea here.";
+const CHUNKS = [
+  { id: "c1", text: "One idea here." },
+  { id: "c2", text: "A second idea here." },
+  { id: "c3", text: "A third idea here." },
+];
 const ONE = "Only one idea here.";
 
 const lessonWith = (text: Record<string, unknown>, second = false): Lesson =>
@@ -63,15 +68,23 @@ const lessonWith = (text: Record<string, unknown>, second = false): Lesson =>
             {
               id: "seg-2",
               modalities: ["text"],
-              text: { heading: "Next", body: { default: THREE } },
+              text: {
+                heading: "Next",
+                body: { default: THREE },
+                readingChunks: CHUNKS,
+              },
             },
           ]
         : []),
     ],
   }) as unknown as Lesson;
 
-/** A live lesson's shape: one body, no reshapes, no accommodations. */
-const LIVE = lessonWith({ heading: "Inside a leaf", body: { default: THREE } });
+/** A live lesson's shape: one body, its chunks, no reshapes, no accommodations. */
+const LIVE = lessonWith({
+  heading: "Inside a leaf",
+  body: { default: THREE },
+  readingChunks: CHUNKS,
+});
 const PLAN: AdaptationPlan = { lessonId: "photo-1", segments: [] };
 
 const slowerChip = () => screen.queryByRole("button", { name: "Slower" });
@@ -176,6 +189,21 @@ describe("a child asking for less at a time, on a live lesson", () => {
 
     expect(slowerChip()).toBeNull();
   });
+
+  it("does not split a body the server sent no chunks for (B114)", () => {
+    // "The client must not split text." Three sentences used to be three
+    // parts cut on the device; with no chunks they are one body, so Slower
+    // would change nothing and is not offered.
+    render(
+      <LessonPlayer
+        lesson={lessonWith({ heading: "Inside a leaf", body: { default: THREE } })}
+        plan={PLAN}
+      />,
+    );
+
+    expect(slowerChip()).toBeNull();
+    expect(continueChip()).toBeNull();
+  });
 });
 
 describe("only while the text is on screen", () => {
@@ -192,7 +220,11 @@ describe("only while the text is on screen", () => {
         {
           id: "seg-1",
           modalities: ["text", "visual", "audio"],
-          text: { heading: "Inside a leaf", body: { default: THREE } },
+          text: {
+            heading: "Inside a leaf",
+            body: { default: THREE },
+            readingChunks: CHUNKS,
+          },
           visual: {
             heading: "The leaf",
             illustration: { src: "https://cdn.example/leaf.png", alt: "A leaf" },
@@ -223,6 +255,74 @@ describe("only while the text is on screen", () => {
   );
 });
 
+describe("the chip row's height is the lesson's, not the segment's", () => {
+  /*
+   * Since B114 a segment offers Slower only where the server broke its body
+   * into chunks, so a lesson can have chips on one segment and none on the
+   * next. Taking the row away there moved the position line, the progress
+   * and the column 62px between the two (round 12's R4, back).
+   */
+  const twoSegments = (secondChunks?: typeof CHUNKS) =>
+    ({
+      id: "photo-1",
+      title: "Photosynthesis",
+      segments: [
+        {
+          id: "seg-1",
+          modalities: ["text"],
+          text: { heading: "Inside a leaf", body: { default: THREE }, readingChunks: CHUNKS },
+        },
+        {
+          id: "seg-2",
+          modalities: ["text"],
+          text: {
+            heading: "Next",
+            body: { default: THREE },
+            ...(secondChunks ? { readingChunks: secondChunks } : {}),
+          },
+        },
+      ],
+    }) as unknown as Lesson;
+  /** The header's own rows: what sets where the column starts. */
+  const headerRows = () =>
+    [...document.querySelector("header")!.children].map((row) =>
+      row.className.replace(/\binvisible\b/, "").trim(),
+    );
+  const chipRow = () => document.querySelector("header > .justify-end");
+
+  it("keeps the header's rows, so the column top, from a segment with chips to one without", () => {
+    render(<LessonPlayer lesson={twoSegments()} plan={PLAN} />);
+    const before = headerRows();
+    expect(slowerChip()).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(screen.getByRole("heading", { name: "Next" })).toBeInTheDocument();
+    expect(headerRows()).toEqual(before);
+    // Held, unseen and out of reach: nothing on it to tap.
+    expect(chipRow()).toHaveClass("invisible");
+    expect(chipRow()).toHaveAttribute("aria-hidden", "true");
+    expect(chipRow()).toHaveAttribute("inert");
+    expect(slowerChip()).toBeNull();
+  });
+
+  it("draws no row anywhere in a lesson with no chips", () => {
+    // Frame 17: absent rather than an empty pill rail.
+    const none = {
+      ...twoSegments(),
+      segments: twoSegments().segments.map((s) => ({
+        ...s,
+        text: { heading: s.text!.heading, body: { default: THREE } },
+      })),
+    } as unknown as Lesson;
+    render(<LessonPlayer lesson={none} plan={PLAN} />);
+    expect(chipRow()).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(chipRow()).toBeNull();
+  });
+});
+
 describe("the choice holds for the lesson, and no further", () => {
   it("is still in force on the next segment", () => {
     /*
@@ -236,7 +336,11 @@ describe("the choice holds for the lesson, and no further", () => {
     render(
       <LessonPlayer
         lesson={lessonWith(
-          { heading: "Inside a leaf", body: { default: THREE } },
+          {
+            heading: "Inside a leaf",
+            body: { default: THREE },
+            readingChunks: CHUNKS,
+          },
           true,
         )}
         plan={PLAN}
@@ -256,6 +360,7 @@ describe("the choice holds for the lesson, and no further", () => {
     const lesson = lessonWith({
       heading: "Inside a leaf",
       body: { default: THREE },
+      readingChunks: CHUNKS,
     });
     render(<LessonPlayer lesson={lesson} plan={PLAN} />);
     fireEvent.click(slowerChip()!);
@@ -282,7 +387,11 @@ describe("the choice holds for the lesson, and no further", () => {
     render(
       <LessonPlayer
         lesson={lessonWith(
-          { heading: "Inside a leaf", body: { default: THREE } },
+          {
+            heading: "Inside a leaf",
+            body: { default: THREE },
+            readingChunks: CHUNKS,
+          },
           true,
         )}
         plan={planned}

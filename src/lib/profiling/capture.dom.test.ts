@@ -412,6 +412,55 @@ describe("baselineTrials - the motor-speed step's samples (PR #645)", () => {
   });
 });
 
+/*
+ * BACKEND, 13 OCT (B117): "skipped means an activity could not be presented
+ * or a motor target was left untapped. 'Not sure' is a response, not a skip."
+ * An activity the device could not present sent nothing at all, so the
+ * engine could not tell a reading it was never given from one nobody tried.
+ */
+describe("baselineTrials - an activity the device could not present (B117)", () => {
+  const skippedTrial = (dimension: string, condition: string | null) => ({
+    dimension,
+    condition,
+    response: null,
+    correct: null,
+    responseTimeMs: null,
+    probeItemId: null,
+    skipped: true,
+  });
+
+  it("goes as skipped, one per trial not presented, where it would have run", () => {
+    // P1-3's heard sentences on a device with no speech, then the dots.
+    const c = new BaselineCapture("u1");
+    for (const trial of [0, 1]) {
+      c.record("unpresented", { module: "sentence_dot", act: "reading", mode: "audio", trial });
+    }
+    pick(c, "dots", { choice: 0, rtMs: 700, a: 8, b: 4, ratio: 2, correct: true });
+
+    expect(baselineTrials(c)).toEqual([
+      skippedTrial("reading", "audio"),
+      skippedTrial("reading", "audio"),
+      { dimension: "ans", condition: "ratio_2", response: "0", correct: true, responseTimeMs: 700, probeItemId: null },
+    ]);
+  });
+
+  it("names a warm-up's task by its own dimension", () => {
+    const c = new BaselineCapture("u2");
+    c.record("unpresented", { module: "warmup", act: "domain" });
+
+    expect(baselineTrials(c)).toEqual([skippedTrial("domain", null)]);
+  });
+
+  it("never skips a 'Not sure', which is a response", () => {
+    const c = new BaselineCapture("u3");
+    pick(c, "reading", { choice: 3, rtMs: 900, mode: "audio", notSure: true });
+
+    const [t] = baselineTrials(c);
+    expect(t).toMatchObject({ response: "not_sure", correct: null, responseTimeMs: 900 });
+    expect(t).not.toHaveProperty("skipped");
+  });
+});
+
 describe("baselineRunContext - what the run was built for and sat on (B76)", () => {
   it("is the onboarding run's band and device, as the contract names them", () => {
     const c = new BaselineCapture("r1");
@@ -422,6 +471,8 @@ describe("baselineRunContext - what the run was built for and sat on (B76)", () 
       ageBand: "junior_secondary",
       formFactor: "tablet_touch",
       motorStepSkipped: false,
+      // The step ran and took no tap: see the B119 tests below.
+      motorSamplesMs: [],
     });
   });
 
@@ -470,6 +521,59 @@ describe("baselineRunContext - what the run was built for and sat on (B76)", () 
     const odd = new BaselineCapture("w3");
     odd.record("run_start", { band: "year4", formFactor: "watch" });
     expect(baselineRunContext(odd)).toEqual({});
+  });
+});
+
+/*
+ * BACKEND, 13 OCT (B119): "motorStepSkipped: false does not mean the motor
+ * step ran. motorSamplesMs proves it ran." Nothing sent it, so every child's
+ * step read as one that never ran.
+ */
+describe("baselineRunContext - the motor step's samples prove it ran (B119)", () => {
+  const tap = (c: BaselineCapture, target: number, latencyMs: number) =>
+    c.record("motor_tap", { target, cell: target, latencyMs, practice: target < 2, formFactor: "tablet" });
+
+  it("sends every tap the step took, in whole milliseconds and the order taken", () => {
+    const c = new BaselineCapture("s1");
+    c.record("run_start", { band: "p46", formFactor: "tablet" });
+    tap(c, 0, 812.4);
+    tap(c, 1, 455.6);
+    tap(c, 2, 430);
+    c.record("motor_end", { reason: "complete", grid: 4, formFactor: "tablet" });
+
+    // The practice taps are the first two, by the step's fixed order; no median.
+    expect(baselineRunContext(c)).toEqual({
+      ageBand: "upper_primary",
+      formFactor: "tablet_touch",
+      motorStepSkipped: false,
+      motorSamplesMs: [812, 456, 430],
+    });
+  });
+
+  it("sends the samples there are when the step ended itself", () => {
+    const c = new BaselineCapture("s2");
+    tap(c, 0, 500);
+    c.record("motor_end", { reason: "idle", grid: 4, formFactor: "tablet", target: 1, practice: true });
+
+    expect(baselineRunContext(c).motorSamplesMs).toEqual([500]);
+  });
+
+  it("sends none where the step did not run, skipped or absent", () => {
+    const cursor = new BaselineCapture("s3");
+    cursor.record("run_start", { band: "ss", formFactor: "desktop" });
+    cursor.record("motor_skipped", { reason: "cursor", formFactor: "desktop" });
+    expect(baselineRunContext(cursor)).not.toHaveProperty("motorSamplesMs");
+
+    const warmUp = new BaselineCapture("s4");
+    warmUp.record("warmup_start", { dimension: "wmc", formFactor: "tablet" });
+    expect(baselineRunContext(warmUp)).not.toHaveProperty("motorSamplesMs");
+  });
+
+  it("never sends a tap from a step that did not end, as no run that ran it could", () => {
+    // A tap with no end is not a step that ran: nothing proves it.
+    const c = new BaselineCapture("s5");
+    tap(c, 0, 400);
+    expect(baselineRunContext(c)).not.toHaveProperty("motorSamplesMs");
   });
 });
 

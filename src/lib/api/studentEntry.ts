@@ -68,9 +68,10 @@ export interface StudentEntryState {
   accountReady: boolean;
   /**
    * A teacher cleared this child's PIN (SCRUM-216, B67), so they choose a new
-   * one rather than sitting a first run. No description in the spec: read as
-   * its name says. Optional because the contract defaults it to false rather
-   * than requiring it. See `entryRoute`.
+   * one rather than sitting a first run. Confirmed by backend on 13 Oct
+   * (B123): a teacher cleared it and no replacement exists, and it returns to
+   * false once a new PIN is chosen. Optional because the contract defaults it
+   * to false rather than requiring it. See `entryRoute`.
    */
   pinCleared?: boolean;
   /**
@@ -126,9 +127,10 @@ export const studentEntryApi = {
    * that polled, and a held child is told to come back rather than kept at a
    * spinner for a decision an adult makes on another day.
    *
-   * The spec declares only the 200 and a 422. What a pair that names nobody
-   * answers with is not written down - see the entry step, which reads any
-   * other 4xx as the server's answer about the pair.
+   * A pair that names nobody is 404 `entry_not_found`, declared since 13 Oct
+   * (B124), beside 422, 429 `too_many_attempts` and 503
+   * `entry_check_failed`. Only the 404 is an answer about the pair - see the
+   * entry step.
    */
   lookup: (payload: StudentEntryLookup) =>
     api.post<StudentEntryState>("/api/v1/student-entry/lookup", payload),

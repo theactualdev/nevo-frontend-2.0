@@ -177,6 +177,11 @@ describe("LessonPlayer — a new segment opens at its top", () => {
           text: {
             heading: "Numerators",
             body: { default: "One idea. A second idea. A third idea." },
+            // The server's chunks, which are all Slower takes parts from.
+            readingChunks: [
+              { id: "c1", text: "One idea." },
+              { id: "c2", text: "A second idea. A third idea." },
+            ],
           },
         },
       ],

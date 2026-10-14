@@ -190,6 +190,40 @@ describe("on a touch device", () => {
       ageBand: "upper_primary",
       formFactor: "tablet_touch",
       motorStepSkipped: false,
+      // B119, 13 Oct: the samples are what prove the step ran.
+      motorSamplesMs: [413, 388, 371],
+    });
+  });
+});
+
+/*
+ * THE BAND IS THE ONE THE SERVER GAVE (B118, 13 Oct). The spec: "Omit it when
+ * the roster band was unavailable; a client fallback must not be recorded as
+ * the child's band." The run sent its Primary 4-6 default as `upper_primary`.
+ */
+describe("the band beside the trials (B118)", () => {
+  it("is left out when the server gave none, though the run is sized Primary 4-6", () => {
+    clearOnboardingDraft();
+    mergeOnboardingDraft({ name: "Amara" });
+    render(<ProfilingFlow onDone={vi.fn()} />);
+    letsGo();
+    sitTheModules();
+
+    expect(holdBaseline.mock.calls[0][3]).toEqual({
+      formFactor: "desktop_cursor",
+      motorStepSkipped: true,
+    });
+  });
+
+  it("is the entry lookup's band when that is what the server gave", () => {
+    clearOnboardingDraft();
+    mergeOnboardingDraft({ name: "Amara", ageBand: "junior_secondary" });
+    render(<ProfilingFlow onDone={vi.fn()} />);
+    letsGo();
+    sitTheModules();
+
+    expect(holdBaseline.mock.calls[0][3]).toMatchObject({
+      ageBand: "junior_secondary",
     });
   });
 });

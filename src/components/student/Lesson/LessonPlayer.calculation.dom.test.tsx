@@ -360,6 +360,10 @@ describe("a calculation's signals", () => {
     lesson.segments[0].text = {
       heading: "Adding",
       body: { default: "One idea here. A second idea here. A third idea here." },
+      readingChunks: [
+        { id: "c1", text: "One idea here." },
+        { id: "c2", text: "A second idea here. A third idea here." },
+      ],
     } as Lesson["segments"][number]["text"];
     render(<LessonPlayer lesson={lesson} plan={PLAN} />);
 

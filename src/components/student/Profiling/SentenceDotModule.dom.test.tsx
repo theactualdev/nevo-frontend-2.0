@@ -1,7 +1,8 @@
+import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { SentenceDotModule, dotPositions, scatterDots } from "./SentenceDotModule";
-import { BaselineCapture } from "@/lib/profiling/capture";
+import { BaselineCapture, baselineTrials } from "@/lib/profiling/capture";
 import { AGE_BANDS, dotPairs } from "@/lib/profiling/bands";
 
 /**
@@ -169,6 +170,52 @@ describe("SentenceDotModule — P1-3 is actually asked something", () => {
     expect(screen.queryByLabelText("A bus")).toBeNull();
     // Straight to the dots, which need no voice.
     expect(screen.getByText("Watch the dots")).toBeVisible();
+  });
+
+  /*
+   * B117, 13 Oct: "skipped means an activity could not be presented". It sent
+   * nothing, so the engine could not tell a reading the device could not give
+   * from one nobody tried to give.
+   */
+  it("tells the engine each heard trial was not presented, once (B117)", () => {
+    const capture = new BaselineCapture("s7");
+    // Strict mode runs the effect twice; the report still goes once.
+    render(
+      <StrictMode>
+        <SentenceDotModule band="p13" capture={capture} onComplete={() => {}} />
+      </StrictMode>,
+    );
+
+    const skipped = {
+      dimension: "reading",
+      condition: "audio",
+      response: null,
+      correct: null,
+      responseTimeMs: null,
+      probeItemId: null,
+      skipped: true,
+    };
+    expect(baselineTrials(capture)).toEqual([skipped, skipped]);
+  });
+
+  it("reports nothing skipped on a device that can speak", () => {
+    giveJsdomAVoice();
+    const capture = new BaselineCapture("s8");
+    render(
+      <SentenceDotModule band="p13" capture={capture} onComplete={() => {}} />,
+    );
+
+    expect(capture.ofKind("unpresented")).toEqual([]);
+  });
+
+  it("reports nothing skipped for a band that reads its sentences", () => {
+    // Only the heard activity needs a voice; a sentence read needs none.
+    const capture = new BaselineCapture("s9");
+    render(
+      <SentenceDotModule band="p46" capture={capture} onComplete={() => {}} />,
+    );
+
+    expect(capture.ofKind("unpresented")).toEqual([]);
   });
 });
 
