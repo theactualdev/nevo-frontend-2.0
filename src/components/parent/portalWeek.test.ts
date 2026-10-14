@@ -173,19 +173,18 @@ describe("cardCopy", () => {
  * `window.kind`, so D02a's foot and B4's "Since setup" are drawn.
  */
 describe("the foot line", () => {
-  it("B1: the total, up from last week when a topic was mastered this week", () => {
+  it("B1: the server's total, and no comparison with last week (Lydia, L5)", () => {
+    // "The comparison is not sent. Do not compute it on the device."
     const s = subject({ covered: ["x"], masteredThisWindow: ["Equivalent fractions"], masteredBeforeWindow: 4, masteredSoFar: 5 });
-    expect(footLine(s, "week")).toBe("5 topics mastered so far, up from 4 last week");
-  });
-
-  it("B1: the same as last week when none was", () => {
-    const s = subject({ covered: ["x"], masteredBeforeWindow: 3, masteredSoFar: 3 });
-    expect(footLine(s, "week")).toBe("3 topics mastered so far, same as last week");
+    expect(footLine(s, "week")).toBe("5 topics mastered so far");
+    expect(footLine(subject({ covered: ["x"], masteredBeforeWindow: 3, masteredSoFar: 3 }), "week")).toBe(
+      "3 topics mastered so far",
+    );
   });
 
   it("reads naturally at one, and says none yet at zero", () => {
     expect(footLine(subject({ covered: ["x"], masteredSoFar: 1, masteredBeforeWindow: 1 }), "week")).toBe(
-      "1 topic mastered so far, same as last week",
+      "1 topic mastered so far",
     );
     expect(footLine(subject({ covered: ["x"], masteredSoFar: 0, masteredBeforeWindow: 0 }), "week")).toBe(
       "No topics mastered yet",

@@ -194,12 +194,13 @@ function soFar(n: number): string {
 }
 
 /**
- * D02a's foot, state by state. A week with work in it: the total, and whether
- * it moved ("up from 4 last week" / "same as last week" - moved means a topic
- * was mastered this week, which the card already names). A subject with
- * nothing this week: when its last lesson was. A break or a Monday: the total
- * alone. Since setup, or not started: no foot. No total from the server, no
+ * D02a's foot, state by state. A week with work in it, a break or a Monday:
+ * the server's total. A subject with nothing this week: when its last lesson
+ * was. Since setup, or not started: no foot. No total from the server, no
  * total on the card.
+ *
+ * NO "UP FROM 4 LAST WEEK" (Lydia, L5, 14 Oct): "the comparison is not sent.
+ * Do not compute it on the device." D02a draws it; the ruling wins.
  */
 export function footLine(s: SubjectProgress, kind: WeekKind): string | null {
   if (s.state === "not_started" || kind === "since_setup" || kind === "first") return null;
@@ -209,11 +210,7 @@ export function footLine(s: SubjectProgress, kind: WeekKind): string | null {
     const when = s.lastLessonAt ? lessonDay(s.lastLessonAt) : null;
     return when ? `Last lesson ${when}` : null;
   }
-  if (total === null) return null;
-  if (total === 0) return soFar(0);
-  return s.masteredThisWindow.length
-    ? `${soFar(total)}, up from ${s.masteredBeforeWindow} last week`
-    : `${soFar(total)}, same as last week`;
+  return total === null ? null : soFar(total);
 }
 
 /** One subject's card. A line with nothing in it is left out, never blank. */

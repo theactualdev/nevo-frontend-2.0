@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/api/client";
 import { getSession } from "@/lib/auth/session";
@@ -152,7 +153,7 @@ export function ParentHome() {
   const selectedChild = children.find((c) => c.studentId === selected) ?? null;
 
   return (
-    <Shell>
+    <Shell dataHref={`/parent-portal/data${selected ? `?child=${encodeURIComponent(selected)}` : ""}`}>
       {children.length > 1 && (
         <div className="mb-6 flex flex-wrap gap-2">
           {children.map((c) => {
@@ -208,10 +209,21 @@ function Card({ children }: { children: React.ReactNode }) {
 }
 
 /** D02's portal frame: the wordmark bar, then the page at its three widths. */
-function Shell({ children }: { children: React.ReactNode }) {
+function Shell({
+  children,
+  dataHref,
+}: {
+  children: React.ReactNode;
+  /**
+   * L6 (Lydia, 14 Oct): a signed-in parent's route to D01c, where account
+   * matters sit - the right of the bar, where D02 puts the parent's initials.
+   * Only once the parent has a child to ask about.
+   */
+  dataHref?: string;
+}) {
   return (
     <main className="min-h-dvh bg-nevo-cream text-nevo-near-black">
-      <div className="flex h-14 items-center border-b border-nevo-near-black/8 px-5 md:h-16 md:px-10 lg:h-[66px] lg:px-12">
+      <div className="flex h-14 items-center justify-between gap-4 border-b border-nevo-near-black/8 px-5 md:h-16 md:px-10 lg:h-[66px] lg:px-12">
         <Image
           src="/brand/nevo-wordmark.png"
           alt="Nevo"
@@ -220,6 +232,14 @@ function Shell({ children }: { children: React.ReactNode }) {
           priority
           className="h-[15px] w-auto"
         />
+        {dataHref ? (
+          <Link
+            href={dataHref}
+            className="text-[14px] font-semibold text-nevo-navy hover:opacity-75"
+          >
+            Your child&rsquo;s data
+          </Link>
+        ) : null}
       </div>
       <div className="px-4 pt-[22px] pb-7 md:px-12 md:pt-9 md:pb-10 lg:py-10">
         <div className="mx-auto w-full md:max-w-[640px] lg:max-w-[760px]">
