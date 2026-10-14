@@ -9,7 +9,7 @@ import {
   type LearnerObservation,
 } from "@/lib/api/classes";
 import { intelligenceApi, type AttentionFlag } from "@/lib/api/intelligence";
-import { ESCALATION_PAGE, escalationsApi, type Escalation } from "@/lib/api/escalations";
+import { escalationsApi, type Escalation } from "@/lib/api/escalations";
 import { teachersApi } from "@/lib/api/teachers";
 import { TeacherConcerns } from "./TeacherConcerns";
 import { studentsApi, type AdminStudentRow } from "@/lib/api/students";
@@ -142,6 +142,8 @@ export function SencoView() {
   const [flags, setFlags] = useState<AttentionFlag[]>([]);
   /** Teachers' concerns: null until read, and a failed read is its own state. */
   const [concerns, setConcerns] = useState<Escalation[] | null>(null);
+  /** Whether `concerns` is every open one, so a count and "none" are true. */
+  const [concernsRead, setConcernsRead] = useState(false);
   const [concernsFailed, setConcernsFailed] = useState(false);
   /** Who raised each concern, by teacher id; empty when the list can't be read. */
   const [teacherNames, setTeacherNames] = useState<Record<string, string>>({});
@@ -198,9 +200,10 @@ export function SencoView() {
 
   const loadConcerns = useCallback(() => {
     escalationsApi
-      .list()
-      .then((rows) => {
-        setConcerns(rows);
+      .allOpen()
+      .then(({ open, complete }) => {
+        setConcerns(open);
+        setConcernsRead(complete);
         setConcernsFailed(false);
       })
       .catch(() => {
@@ -315,7 +318,7 @@ export function SencoView() {
     [concerns],
   );
   /** Every concern was read, so a count is a total and "none" is true. */
-  const concernsComplete = concerns !== null && concerns.length < ESCALATION_PAGE;
+  const concernsComplete = concerns !== null && concernsRead;
   const concernsClear = concernsComplete && openConcerns.length === 0;
 
   /** The year groups this school's classes actually use, in enum order. */

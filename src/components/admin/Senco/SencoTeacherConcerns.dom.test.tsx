@@ -10,8 +10,8 @@ import type { AttentionFlag } from "@/lib/api/intelligence";
  * until Olayinka deferred them on 12 Oct.
  */
 
-const { list, acknowledge, getFlags, holders } = vi.hoisted(() => ({
-  list: vi.fn(),
+const { allOpen, acknowledge, getFlags, holders } = vi.hoisted(() => ({
+  allOpen: vi.fn(),
   acknowledge: vi.fn(),
   getFlags: vi.fn(),
   holders: vi.fn(),
@@ -23,7 +23,7 @@ vi.mock("@/lib/api/escalations", async (importOriginal) => {
     ...actual,
     escalationsApi: {
       ...actual.escalationsApi,
-      list: () => list(),
+      allOpen: () => allOpen(),
       acknowledge: (id: string) => acknowledge(id),
     },
   };
@@ -103,7 +103,8 @@ const flag: AttentionFlag = {
 const EMPTY = /Nothing needs your attention right now/;
 
 beforeEach(() => {
-  list.mockReset().mockResolvedValue([concern("e1"), concern("e0", { acknowledged: true })]);
+  // The server filters to open ones (`openOnly=true`, 14 Oct).
+  allOpen.mockReset().mockResolvedValue({ open: [concern("e1")], complete: true });
   acknowledge.mockReset();
   getFlags.mockResolvedValue([flag]);
   holders.mockResolvedValue({ holders: [], viewerHoldsIt: true });
@@ -143,20 +144,18 @@ describe("Escalated by a teacher", () => {
   });
 
   it("says so when the concerns can't be read, and never says nothing is waiting", async () => {
-    list.mockRejectedValue(new Error("down"));
+    allOpen.mockRejectedValue(new Error("down"));
     getFlags.mockResolvedValue([]);
     const { container } = render(<SencoView />);
     expect(await screen.findByText(/couldn.t read teachers.? concerns just now/)).toBeInTheDocument();
     expect(visibleText(container)).not.toMatch(EMPTY);
   });
 
-  it("gives no count and no all-clear on a full page, which may have left some behind", async () => {
-    list.mockResolvedValue(
-      Array.from({ length: 100 }, (_, i) => concern(`e${i}`, { acknowledged: true })),
-    );
+  it("gives no count and no all-clear when the pages ran out before the end", async () => {
+    allOpen.mockResolvedValue({ open: [], complete: false });
     getFlags.mockResolvedValue([]);
     const { container } = render(<SencoView />);
-    await waitFor(() => expect(list).toHaveBeenCalled());
+    await waitFor(() => expect(allOpen).toHaveBeenCalled());
     // Give every read time to land: the all-clear, if it were coming, would.
     await act(async () => {
       await new Promise((r) => setTimeout(r, 50));
@@ -165,7 +164,7 @@ describe("Escalated by a teacher", () => {
   });
 
   it("says nothing is waiting only when both reads came back empty", async () => {
-    list.mockResolvedValue([concern("e0", { acknowledged: true })]);
+    allOpen.mockResolvedValue({ open: [], complete: true });
     getFlags.mockResolvedValue([]);
     render(<SencoView />);
     expect(await screen.findByText(EMPTY)).toBeInTheDocument();

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ApiError, apiErrorMessage } from "@/lib/api/client";
+import { ApiError, apiErrorCode, apiErrorMessage } from "@/lib/api/client";
 import { subjectsApi, type SchoolSubject } from "@/lib/api/subjects";
 import { teachersApi, type TeacherDetail } from "@/lib/api/teachers";
 import { ReadFailed } from "../ReadFailed";
@@ -23,7 +23,9 @@ import { FailureLine, GHOST_BTN, PRIMARY_BTN } from "../Roster/primitives";
  * not its own write. Removing a subject the teacher is still assigned to is
  * refused by the server ("that would leave an assignment naming a subject its
  * teacher does not hold"); the refusal is shown in its own words and the
- * draft is kept.
+ * draft is kept. Since 14 Oct that refusal has its own code (409
+ * `subject_in_use_by_assignment`), so when one subject was taken off the
+ * sentence names it and says what to do first.
  *
  * Names, not ids: the PUT takes names, and `TeacherDetail.subjects` reads them
  * back as names. The school list supplies the spelling shown.
@@ -88,7 +90,18 @@ export function TeacherSubjects({
         onSaved();
       })
       .catch((err: unknown) => {
-        setNote(err instanceof ApiError ? apiErrorMessage(err.detail) : null);
+        const removed = held.filter((name) => !draft.includes(name));
+        if (
+          err instanceof ApiError &&
+          apiErrorCode(err.detail) === "subject_in_use_by_assignment" &&
+          removed.length === 1
+        ) {
+          setNote(
+            `${teacher.name} still teaches ${removed[0]} to a class, so it stays on their list. Give that class's ${removed[0]} to another teacher first, then remove it here.`,
+          );
+        } else {
+          setNote(err instanceof ApiError ? apiErrorMessage(err.detail) : null);
+        }
         setPhase("failed");
       });
   };

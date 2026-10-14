@@ -100,6 +100,25 @@ describe("Subjects they teach", () => {
     expect(screen.getByRole("button", { name: "Save subjects" })).toBeEnabled();
   });
 
+  it("names the subject when the refusal is the in-use code (14 Oct)", async () => {
+    setSubjects.mockRejectedValue(
+      new ApiError(409, "Conflict", {
+        detail: {
+          code: "subject_in_use_by_assignment",
+          message: "This teacher is still assigned to a class for that subject. Remove the assignment first.",
+        },
+      }),
+    );
+    const { container } = render(<TeacherSubjects teacher={TEACHER} editable onSaved={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Remove Mathematics" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save subjects" }));
+    await waitFor(() =>
+      expect(visibleText(container)).toMatch(
+        /Funmi Adeyemi still teaches Mathematics to a class, so it stays on their list\. Give that class.s Mathematics to another teacher first, then remove it here\./,
+      ),
+    );
+  });
+
   it("falls back to its own line when the server gives no reason", async () => {
     setSubjects.mockRejectedValue(new TypeError("Failed to fetch"));
     const { container } = render(<TeacherSubjects teacher={TEACHER} editable onSaved={vi.fn()} />);

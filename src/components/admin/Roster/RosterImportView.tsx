@@ -60,10 +60,10 @@ import {
  * read shows no list - never a remembered one.
  *
  * ============================================================================
- * "TEACHERS FOUND" IS BUILT, REDUCED (13 Oct). `OnboardingState.teachersFound`
- * (9 Oct) is a list of names, so the panel draws each name and its initials.
- * D24 also draws the classes each teacher takes, and an edit pencil; nothing
- * carries the first and no route edits a found teacher, so neither is drawn.
+ * "TEACHERS FOUND" (D24). Each teacher with their initials and, since 14 Oct
+ * (`teacherDetailsFound`), the classes the file gave them - "JSS 2A · JSS 2B".
+ * An older answer carries names only (`teachersFound`), and then the names
+ * stand alone. D24's edit pencil is not drawn: no route edits a found teacher.
  */
 
 type Phase = "loading" | "ready" | "failed" | "denied";
@@ -617,6 +617,10 @@ function WhatNevoFound({
   const toFix = toFixLabel(counts.toFix);
   const merges = openMerges(state);
   const mergesLeft = mergesLeftLine(merges.length);
+  /** The details when the server sends them, else the names alone. */
+  const found =
+    state.teacherDetailsFound ??
+    (state.teachersFound ?? []).map((name) => ({ name, email: null, classes: [] as string[] }));
 
   return (
     <>
@@ -733,19 +737,26 @@ function WhatNevoFound({
         </>
       ) : null}
 
-      {/* D24's "Teachers found", reduced to the names the file gave: see the
-          header. Absent when the server sent none, never an empty panel. */}
-      {state.teachersFound && state.teachersFound.length > 0 ? (
+      {/* D24's "Teachers found": see the header. Absent when the server sent
+          none, never an empty panel. */}
+      {found.length > 0 ? (
         <>
           <h3 className="mt-9 text-[13px] font-semibold tracking-[0.05em] text-nevo-near-black/50 uppercase">
             Teachers found
           </h3>
           <ul className={cn(CARD, "m-0 mt-3 list-none divide-y divide-nevo-near-black/7 p-0")}>
-            {state.teachersFound.map((name, i) => (
-              <li key={`${name}-${i}`} className="flex items-center gap-3 px-[22px] py-3">
-                <Avatar name={name} size={34} />
-                <span className="min-w-0 truncate text-[14.5px] font-semibold text-nevo-near-black">
-                  {name}
+            {found.map((t, i) => (
+              <li key={`${t.name}-${i}`} className="flex items-center gap-3 px-[22px] py-3">
+                <Avatar name={t.name} email={t.email} size={34} />
+                <span className="flex min-w-0 flex-col">
+                  <span className="truncate text-[14.5px] font-semibold text-nevo-near-black">
+                    {t.name}
+                  </span>
+                  {t.classes.length > 0 ? (
+                    <span className="truncate text-[13px] text-nevo-near-black/60">
+                      {t.classes.join(" · ")}
+                    </span>
+                  ) : null}
                 </span>
               </li>
             ))}
