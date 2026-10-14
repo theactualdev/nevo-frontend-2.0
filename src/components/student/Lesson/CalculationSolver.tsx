@@ -4,11 +4,13 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, Delete, Pause, Play } from "lucide-react";
 import { Button, NevoKeyboard } from "@/components/shared";
+import { SCAFFOLD_LEVELS, type ScaffoldLevel } from "@/lib/constants";
 import type {
   CalcHighlight,
   CalcNarration,
   CalcNumberStep,
   CalcScaffold,
+  CalcToken,
   CalculationSegment,
   CalculationStep,
   ScaffoldQuantity,
@@ -47,6 +49,12 @@ import { useMediaSource, type MediaFailReason } from "./useMediaSource";
  * the player hands it here to show (`engineHint`). What stays is the child's
  * own "Need a hint?", which opens this step's hint because they asked.
  *
+ * HOW MUCH SUPPORT IS THE ENGINE'S LEVEL, the one the support dots show
+ * (B116): "strong shows scaffold, prompt and available hint; standard shows
+ * scaffold and prompt; light shows prompt and equation without the
+ * scaffold; none shows the authored problem with no added support". See
+ * `supportAt`.
+ *
  * No evaluative colour ever - never red or green, never a cross. A miss is a
  * soft violet ring pulse and nothing else. No score, percentage or counter.
  *
@@ -64,6 +72,8 @@ export function CalculationSolver({
   onStepAnswered,
   onPiecePlaced,
   onHintOpened,
+  onHintShown,
+  onHintUsed,
   onAct,
   onReplay,
   onNarrationPlayed,
@@ -73,8 +83,15 @@ export function CalculationSolver({
   engineHint,
   onEngineHintClosed,
   onSystemScroll,
+  level = null,
 }: {
   calculation: CalculationSegment;
+  /**
+   * The support level the dots show (B116) - the engine config's
+   * `initialScaffoldLevel` until something more specific is said. Null is
+   * no level, and the calculation is drawn as the payload carries it.
+   */
+  level?: ScaffoldLevel | null;
   /**
    * The engine's unrequested hint (`offer_hint`), shown where 17a draws one -
    * "Step 2 · hint auto-shown": the pill above the response. It sat under the
@@ -107,6 +124,18 @@ export function CalculationSolver({
   /** The child opened this step's hint themselves. */
   onHintOpened?: (stepId: string) => void;
   /**
+   * A hint the child did not ask for came on screen (B131): the step's own,
+   * shown by a strong level, or the engine's. Only as it is actually drawn -
+   * never while a confirmation stands in the step's place, or after the solve.
+   */
+  onHintShown?: (from: "step" | "engine", stepId: string) => void;
+  /**
+   * The child submitted the step with that hint still on screen (B130) -
+   * once a step, and not for a hint they opened, which was used as they
+   * opened it.
+   */
+  onHintUsed?: (from: "step" | "engine", stepId: string) => void;
+  /**
    * The child did something in the step: a key, an option, a piece, or the
    * hint. The host's held-Next line (D211) has done its job by then.
    */
@@ -131,6 +160,8 @@ export function CalculationSolver({
   const [index, setIndex] = useState(0);
   const [phase, setPhase] = useState<"ask" | "confirmed" | "done">("ask");
   const [hintOpen, setHintOpen] = useState(false);
+  /** The child closed the hint a strong level showed them, on this step. */
+  const [levelHintClosed, setLevelHintClosed] = useState(false);
   // Choice steps: selecting is not answering (SCRUM-94.3). The child picks,
   // can change their mind, then commits - a changed selection before commit
   // is itself a hesitation signal worth having.
@@ -164,9 +195,18 @@ export function CalculationSolver({
    * that show beside its confirmation - 17b's ring on "s1-correct".
    */
   const accepted = asking ? index - 1 : index;
-  const line = equationAt(calculation, accepted, done);
-  const emphasis = emphasisAt(steps, accepted + 1, accepted);
+  const line = lineAt(calculation, index, phase);
+  const emphasis = emphasisAt(
+    steps,
+    accepted + 1,
+    accepted,
+    calculation.byId === true,
+  );
   const manipulative = calculation.manipulative;
+  const support = supportAt(level);
+  /** A strong level's hint: this step's own, shown without being asked for. */
+  const levelHint = support.hint && !levelHintClosed && step.hint !== "";
+  const pad = step.input === "number" && usesPad(step);
   /** The tap step's pieces are all placed: what "That's the total" waits on. */
   const built =
     step.input === "tap" &&
@@ -188,7 +228,7 @@ export function CalculationSolver({
   useEffect(() => {
     systemScrolled.current = onSystemScroll;
   }, [onSystemScroll]);
-  const padStep = asking && step.input === "number" && step.entry === "numeric";
+  const padStep = asking && pad;
   const live = typed.trim().length > 0;
   useEffect(() => {
     const block = response.current;
@@ -206,12 +246,41 @@ export function CalculationSolver({
     const watch = new ResizeObserver(show);
     watch.observe(scroller);
     return () => watch.disconnect();
-  }, [padStep, step.stepId, live, engineHint, hintOpen]);
+  }, [padStep, step.stepId, live, engineHint, hintOpen, levelHint]);
   // A build's "That's the total", as it arrives where the tray was.
   useEffect(() => {
     const block = response.current;
     if (built && block && revealIn(block, BUILT)) systemScrolled.current?.();
   }, [built]);
+
+  /*
+   * A HINT IS OFFERED AS IT COMES ON SCREEN (B131), not as the engine's
+   * answer arrives: one sent while a confirmation held the step's place was
+   * reported before any pill showed. The pills are drawn only while a step is
+   * asked, so that is when they are reported - once a step, by the step that
+   * shows them, and the host keeps the engine's to once a hint.
+   */
+  const hintShown = useRef(onHintShown);
+  useEffect(() => {
+    hintShown.current = onHintShown;
+  }, [onHintShown]);
+  const reported = useRef<Set<string>>(new Set());
+  const levelHintOnScreen = asking && levelHint;
+  const engineHintOnScreen = asking && Boolean(engineHint);
+  useEffect(() => {
+    const key = `step:${step.stepId}`;
+    if (!levelHintOnScreen || reported.current.has(key)) return;
+    reported.current.add(key);
+    hintShown.current?.("step", step.stepId);
+  }, [levelHintOnScreen, step.stepId]);
+  useEffect(() => {
+    const key = `engine:${step.stepId}:${engineHint}`;
+    if (!engineHintOnScreen || reported.current.has(key)) return;
+    reported.current.add(key);
+    hintShown.current?.("engine", step.stepId);
+  }, [engineHintOnScreen, engineHint, step.stepId]);
+  /** The step a hint was last used on: B130's "once per step". */
+  const usedOn = useRef<string | null>(null);
 
   const advance = () => {
     if (index === lastIndex) {
@@ -222,6 +291,7 @@ export function CalculationSolver({
     setIndex(index + 1);
     setPhase("ask");
     setHintOpen(false);
+    setLevelHintClosed(false);
     setChosen(null);
     setTyped("");
     setPlaced(0);
@@ -231,6 +301,16 @@ export function CalculationSolver({
 
   // SCRUM-94.3: every step ends on a tap the child chooses to make.
   const answer = (correct: boolean) => {
+    /*
+     * B130: "hint_used fires when the child submits a calculation step after
+     * using the hint" - read in full, still on screen as they submit. A hint
+     * they closed was not used; one they opened was used as they opened it.
+     */
+    const from = levelHint ? "step" : engineHint ? "engine" : null;
+    if (from && usedOn.current !== step.stepId) {
+      usedOn.current = step.stepId;
+      onHintUsed?.(from, step.stepId);
+    }
     onStepAnswered?.(step.stepId, correct);
     if (!correct) {
       setNudge((n) => n + 1);
@@ -247,6 +327,8 @@ export function CalculationSolver({
 
   const openHint = () => {
     setHintOpen(true);
+    // Opened is used (the catalogue's "opened one they had to open").
+    usedOn.current = step.stepId;
     onHintOpened?.(step.stepId);
     onAct?.();
   };
@@ -309,8 +391,9 @@ export function CalculationSolver({
           />
         ))}
 
-      {/* SCAFFOLD - persistent; the payload's drawing, with its values */}
-      {calculation.scaffold && (
+      {/* SCAFFOLD - persistent; the payload's drawing, with its values,
+          where the level draws one (B116) */}
+      {calculation.scaffold && support.scaffold && (
         <ScaffoldCard
           scaffold={calculation.scaffold}
           emphasis={emphasis}
@@ -327,16 +410,24 @@ export function CalculationSolver({
         aria-live="polite"
         className="mt-[18px] flex min-h-[52px] items-center justify-center"
       >
-        {line && (
+        {line.key && (
           <div
-            key={line}
+            key={line.key}
             className={cn(
               // 17a's `eq`: 30, and 40 from the tablet up.
               "text-center text-[30px] font-medium tracking-[-0.01em] text-nevo-navy sm:text-[40px] motion-safe:animate-nevo-reveal",
               reading && READING_HEADING,
             )}
           >
-            <Notation line={line} emphasis={emphasis} />
+            {line.tokens ? (
+              <TokenNotation
+                tokens={line.tokens}
+                accepted={line.accepted}
+                emphasis={emphasis}
+              />
+            ) : (
+              <Notation line={line.key} emphasis={emphasis} />
+            )}
           </div>
         )}
       </div>
@@ -402,6 +493,19 @@ export function CalculationSolver({
             {hintOpen && step.hint && (
               <HintPill text={step.hint} reading={reading} />
             )}
+            {/*
+              A STRONG LEVEL'S HINT CARRIES CLOSE, as the engine's does: it
+              is support the child did not ask for, and "support a child
+              cannot dismiss becomes an obstruction" (D29). Closed, their own
+              "Need a hint?" is back.
+            */}
+            {!hintOpen && levelHint && (
+              <HintPill
+                text={step.hint}
+                reading={reading}
+                onClose={() => setLevelHintClosed(true)}
+              />
+            )}
 
             {step.input === "choice" && (
               <>
@@ -461,23 +565,26 @@ export function CalculationSolver({
 
             {step.input === "tap" && (
               <>
-                {manipulative?.kind === "array" && (
+                {(manipulative?.kind === "array" ||
+                  manipulative?.kind === "counters") && (
                   <ArrayBuild
+                    round={manipulative.kind === "counters"}
                     rows={manipulative.rows}
                     parts={manipulative.parts}
                     target={step.target}
                     placed={placed}
                     onPlace={place}
-                    ringed={piecesRinged(manipulative.pieceLabels, emphasis)}
+                    ringed={piecesRinged(manipulative, emphasis)}
                   />
                 )}
                 {manipulative?.kind === "number_line" && (
                   <LineBuild
                     parts={manipulative.parts}
+                    start={manipulative.start}
                     target={step.target}
                     placed={placed}
                     onPlace={place}
-                    ringed={piecesRinged(manipulative.pieceLabels, emphasis)}
+                    ringed={piecesRinged(manipulative, emphasis)}
                   />
                 )}
                 {manipulative?.kind === "place_value" && (
@@ -494,7 +601,7 @@ export function CalculationSolver({
                     target={step.target}
                     placed={placed}
                     onPlace={place}
-                    ringed={piecesRinged(manipulative.pieceLabels, emphasis)}
+                    ringed={piecesRinged(manipulative, emphasis)}
                   />
                 )}
                 {built && (
@@ -510,14 +617,16 @@ export function CalculationSolver({
             )}
 
             {/* 17a: no "Need a hint?" while a hint is showing. */}
-            {!hintOpen && !engineHint && step.hint && (
+            {!hintOpen && !levelHint && !engineHint && step.hint && (
               <HintLink onClick={openHint} />
             )}
 
-            {/* D150: the Nevo pad, docked at the foot of the screen. */}
-            {step.input === "number" && step.entry === "numeric" && (
+            {/* D150: the Nevo pad, docked at the foot of the screen, with
+                the keys the step names (B108). */}
+            {step.input === "number" && pad && (
               <DockedPad
                 dock={padDock}
+                keys={step.keys}
                 onKey={(c) => type((t) => t + c)}
               />
             )}
@@ -568,21 +677,93 @@ const BUILT: Stretch[] = [
  */
 function DockedPad({
   dock,
+  keys,
   onKey,
 }: {
   dock: HTMLElement | null | undefined;
+  keys?: string[];
   onKey: (c: string) => void;
 }) {
   if (dock === undefined)
-    return <NevoKeyboard layout="calc" onKey={onKey} className="mt-6" />;
-  return dock && createPortal(<NevoKeyboard layout="calc" onKey={onKey} />, dock);
+    return <NevoKeyboard layout="calc" keys={keys} onKey={onKey} className="mt-6" />;
+  return (
+    dock &&
+    createPortal(<NevoKeyboard layout="calc" keys={keys} onKey={onKey} />, dock)
+  );
+}
+
+/**
+ * Does a typed step take the Nevo pad? A number does, and so does any step
+ * that names its keys (B108) - an expression's "x" or "+" added to the pad.
+ * An expression stored before `requiredCharacters` names none, and keeps the
+ * device's keyboard: see `NumberEntry`.
+ */
+const usesPad = (step: CalcNumberStep) =>
+  step.entry === "numeric" || step.keys !== undefined;
+
+/**
+ * What the support level draws (B116), as the spec defines each:
+ *  - strong (the dots' full): the scaffold, the prompt, and the step's hint
+ *    shown without being asked for;
+ *  - standard (moderate): the scaffold and the prompt;
+ *  - light: "prompt and equation without the scaffold";
+ *  - none: "the authored problem with no added support" - no scaffold and
+ *    no hint shown. The scaffolds engine's `independent` (minimal), the
+ *    least support it names, is drawn the same.
+ * The child's own "Need a hint?" is theirs at every level (17a). No level is
+ * no adaptation: the calculation as the payload carries it.
+ */
+function supportAt(level: ScaffoldLevel | null): {
+  scaffold: boolean;
+  hint: boolean;
+} {
+  const bare =
+    level === SCAFFOLD_LEVELS.LIGHT ||
+    level === SCAFFOLD_LEVELS.MINIMAL ||
+    level === SCAFFOLD_LEVELS.NONE;
+  return { scaffold: !bare, hint: level === SCAFFOLD_LEVELS.FULL };
+}
+
+/**
+ * The equation line on screen, and the string that keys its reveal.
+ *
+ * A STEP WITH TOKENS DRAWS ITS OWN LINE (B109): while it is asked, with the
+ * tokens it keeps back drawn as the place its answer goes; once accepted,
+ * whole - "once accepted, render assembles", the same line with nothing held
+ * back. A step with none - a lesson stored before them - draws the flat
+ * string, as it did (`equationAt`). Once every step is done it is
+ * `fullEquation` where there is one.
+ */
+function lineAt(
+  calculation: CalculationSegment,
+  index: number,
+  phase: "ask" | "confirmed" | "done",
+): { key: string; tokens?: CalcToken[]; accepted: boolean } {
+  const { steps } = calculation;
+  const done = phase === "done";
+  if (done && calculation.fullEquation) {
+    return { key: calculation.fullEquation, accepted: true };
+  }
+  const accepted = phase !== "ask";
+  const tokens = steps[index]?.tokens;
+  if (tokens) {
+    const key = tokens
+      .map((t) => (!accepted && t.hidden ? `[${t.id}]` : t.text))
+      .join(" ");
+    return { key, tokens, accepted };
+  }
+  return {
+    key: equationAt(calculation, accepted ? index : index - 1, done),
+    accepted,
+  };
 }
 
 /**
  * The solution as it stands: the problem's notation, then the `assembles` of
  * each step accepted so far - backend, 9 Oct: "Once accepted, render
  * assembles". `equationState` stands in only for a step whose `assembles` is
- * empty. `accepted` is the last step accepted, -1 before any.
+ * empty (B110: "use assembles; fall back to equationState for older
+ * lessons"). `accepted` is the last step accepted, -1 before any.
  *
  * Once every step is done it is `fullEquation`, "the complete solved equation
  * revealed after all construction steps finish" (B101) - 17b's equation
@@ -614,6 +795,8 @@ interface Emphasis {
   revealed: ReadonlySet<string>;
   /** A `result` target no accepted step has named yet: not drawn. */
   withheld: ReadonlySet<string>;
+  /** Whether targets name ids (B109) - see `keysOf`. */
+  byId: boolean;
 }
 
 /**
@@ -625,22 +808,23 @@ interface Emphasis {
  * end once the last is done, when none apply.
  *
  * A TARGET IS "AN OPAQUE RENDERER TARGET ... MATCH IT ONLY TO AN ID CARRIED BY
- * THE SAME CALCULATION; AN UNKNOWN TARGET IS IGNORED RATHER THAN GUESSED". The
- * calculation carries no ids for its parts, so a target is matched, exactly,
- * against what does name each one: a token of the equation on screen, a
- * scaffold mark's label (or a part's, where there are no marks), a
- * manipulative piece's label. Nothing else is tried - not a mark's value or
- * its position, which "0" or "3" could name by accident - and a target that
- * matches nothing changes nothing.
+ * THE SAME CALCULATION; AN UNKNOWN TARGET IS IGNORED RATHER THAN GUESSED".
+ * The ids are the equation tokens', the marks', the labels' and the build
+ * pieces' (B109), and a target is matched to them and nothing else - see
+ * `keysOf`. A target that matches nothing changes nothing.
  *
- * A RESULT IS NEVER SHOWN EARLY. A mark a `result` highlight names is the
- * answer, so it is kept back until a step that names it is accepted, and
- * stays once it has been - the same rule as `fullEquation`.
+ * A RESULT IS NEVER SHOWN EARLY (B127). A mark, a label or a token a
+ * `result` highlight names is the answer, so it is kept back until a step
+ * that names it is accepted, and stays once it has been - the same rule as
+ * `fullEquation`. What is kept back is what the payload's `result`
+ * highlights and `resultTargetId` say, never what this screen takes to be
+ * the answer.
  */
 function emphasisAt(
   steps: CalculationStep[],
   asked: number,
   accepted: number,
+  byId: boolean,
 ): Emphasis {
   const named = (
     step: CalculationStep | undefined,
@@ -660,20 +844,71 @@ function emphasisAt(
     withheld: new Set(
       steps.flatMap((s) => named(s, "result")).filter((t) => !revealed.has(t)),
     ),
+    byId,
   };
 }
 
+/**
+ * The targets that name one thing on screen: its ids (B109) - or, ONLY ON A
+ * LESSON STORED BEFORE THE IDS (`CalculationSegment.byId` unset), the words
+ * that name it: a token of the equation as written, a mark's or a part's
+ * label, a piece's label. That text match is the fallback for older lessons
+ * and nothing else; a lesson with ids is never matched by its words, which
+ * "0" or "3" could name by accident.
+ */
+const keysOf = (
+  emphasis: Emphasis,
+  ids: (string | undefined)[],
+  words: (string | undefined)[],
+): string[] =>
+  (emphasis.byId ? ids : words).filter((k): k is string => Boolean(k));
+
+/** What names a mark: its own id and its label's, or its label's words. */
+const markKeys = (emphasis: Emphasis, q: ScaffoldQuantity | undefined) =>
+  q ? keysOf(emphasis, [q.id, q.labelId], [q.label]) : [];
+
+/** What names a part of a scaffold with no marks: its label's id, or words. */
+const partKeys = (
+  emphasis: Emphasis,
+  labels: string[],
+  ids: string[] | undefined,
+  part: number,
+) => keysOf(emphasis, [ids?.[part]], [labels[part]]);
+
+/** Does the emphasis set name any of these keys? */
+const names = (set: ReadonlySet<string>, keys: readonly string[]) =>
+  keys.some((k) => set.has(k));
+
 /** Is this quantity drawn yet - not a result still kept back? */
 const drawnNow = (emphasis: Emphasis) => (q: ScaffoldQuantity) =>
-  !q.label || !emphasis.withheld.has(q.label);
+  !names(emphasis.withheld, markKeys(emphasis, q));
 
-/** Does the emphasis set name this label? An unlabelled thing is never named. */
-const names = (set: ReadonlySet<string>, label: string | undefined) =>
-  label != null && label !== "" && set.has(label);
+/** The pieces of a build an `active` highlight names, by id or label. */
+const piecesRinged = (
+  build: { pieceLabels: string[]; pieceIds?: string[] },
+  emphasis: Emphasis,
+) => {
+  const count = Math.max(build.pieceLabels.length, build.pieceIds?.length ?? 0);
+  return new Set(
+    Array.from({ length: count }).flatMap((_, i) =>
+      names(
+        emphasis.ring,
+        keysOf(emphasis, [build.pieceIds?.[i]], [build.pieceLabels[i]]),
+      )
+        ? [i]
+        : [],
+    ),
+  );
+};
 
-/** The pieces of a build an `active` highlight names, by their labels. */
-const piecesRinged = (labels: string[], emphasis: Emphasis) =>
-  new Set(labels.flatMap((l, i) => (names(emphasis.ring, l) ? [i] : [])));
+/** The drawing of a named token: the ring, the weight, the result's box. */
+const tokenClass = (ring: boolean, bold: boolean, box: boolean) =>
+  cn(
+    ring && "rounded-md outline-2 outline-offset-4 outline-nevo-violet",
+    bold && "font-bold",
+    box &&
+      "inline-block rounded-[10px] border-2 border-dashed border-nevo-navy/40 px-2",
+  );
 
 /**
  * The equation, token by token as written - split at its spaces, nothing
@@ -681,29 +916,71 @@ const piecesRinged = (labels: string[], emphasis: Emphasis) =>
  * `source` the weight the frame gives the assembled answer, and `result` the
  * frame's dashed box around the "?" still to find. The text is unchanged,
  * but for its minus signs: see `minusSigns`.
+ *
+ * The flat string of a lesson stored before equation tokens: its words are
+ * matched only there (see `keysOf`).
  */
 function Notation({ line, emphasis }: { line: string; emphasis: Emphasis }) {
   return (
     <>
       {line.split(/(\s+)/).map((token, i) => {
         // Named by the token as written; only its drawing changes.
-        const ring = names(emphasis.ring, token);
-        const bold = names(emphasis.navy, token);
-        const box = names(emphasis.result, token);
+        const keys = keysOf(emphasis, [], [token]);
+        const ring = names(emphasis.ring, keys);
+        const bold = names(emphasis.navy, keys);
+        const box = names(emphasis.result, keys);
         const shown = minusSigns(token);
         // A token nothing names stays plain text.
         if (!ring && !bold && !box) return shown;
         return (
-          <span
-            key={i}
-            className={cn(
-              ring && "rounded-md outline-2 outline-offset-4 outline-nevo-violet",
-              bold && "font-bold",
-              box &&
-                "inline-block rounded-[10px] border-2 border-dashed border-nevo-navy/40 px-2",
-            )}
-          >
+          <span key={i} className={tokenClass(ring, bold, box)}>
             {shown}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
+/**
+ * The equation from its tokens (B109), each named by its id - "highlights
+ * ring the equation tokens as well as the bars" (design, 13 Oct).
+ *
+ * A TOKEN KEPT BACK IS NEVER DRAWN (B127): while its step is asked, a token
+ * the payload hides until acceptance is the frame's dashed box with its "?",
+ * the place the answer goes - and so is any token a later step's `result`
+ * still holds back. Its text is not on the page until the step is accepted.
+ */
+function TokenNotation({
+  tokens,
+  accepted,
+  emphasis,
+}: {
+  tokens: CalcToken[];
+  accepted: boolean;
+  emphasis: Emphasis;
+}) {
+  return (
+    <>
+      {tokens.map((t, i) => {
+        const keys = [t.id];
+        const ring = names(emphasis.ring, keys);
+        const bold = names(emphasis.navy, keys);
+        const held =
+          (!accepted && t.hidden) || names(emphasis.withheld, keys);
+        const box = held || names(emphasis.result, keys);
+        return (
+          <span key={i}>
+            {i > 0 && " "}
+            <span
+              data-token={t.id}
+              className={cn(
+                tokenClass(ring, bold, box),
+                held && "text-nevo-navy/55",
+              )}
+            >
+              {held ? "?" : minusSigns(t.text)}
+            </span>
           </span>
         );
       })}
@@ -766,12 +1043,16 @@ function Nudged({
  * screen, and a laptop's own keys still type straight into the field. Delete
  * sits at the field, as the keypad frame draws it.
  *
- * AN EXPRESSION ("3x - 4") STILL TAKES THE DEVICE'S FULL KEYBOARD, for now.
+ * AN EXPRESSION ("3x - 4") TAKES THE NEVO PAD TOO, EXTENDED BY THE STEP.
  * Design ruled on 9 Oct: "The Nevo pad, extended by the step ... the step
- * says which characters it needs and the pad carries those." No step says so
- * yet - the wire's `expectedInput` is only "text" - and reading the
- * characters off the stored answer would be this screen deciding what the
- * child may type. So it waits on that field (asked of backend).
+ * says which characters it needs and the pad carries those." It does now:
+ * `requiredCharacters` (B108), "the exact non-digit keys the Nevo pad must
+ * add", and empty means the standard pad.
+ *
+ * THE DEVICE'S KEYBOARD IS KEPT FOR ONE CASE ONLY: an expression stored
+ * before that field, which names no keys at all. The standard pad would leave
+ * a child on a phone with no way to type its "x", and reading the keys off
+ * the stored answer would be this screen deciding what the child may type.
  */
 function NumberEntry({
   step,
@@ -788,7 +1069,7 @@ function NumberEntry({
   onChange: (value: string) => void;
   onCommit: () => void;
 }) {
-  if (step.entry === "numeric") {
+  if (usesPad(step)) {
     return (
       <PadEntry
         step={step}
@@ -959,14 +1240,18 @@ function PadEntry({
           </div>
           <Unit unit={step.unit} reading={reading} />
         </Nudged>
-        <p
-          className={cn(
-            "max-w-[360px] text-center text-[13.5px] leading-[1.5] text-pretty text-nevo-near-black/60 sm:text-[15px]",
-            reading && [READING_BODY, READING_INK],
-          )}
-        >
-          Type the number you worked out. You can use a minus sign or a point.
-        </p>
+        {/* D150's line is about a number. An expression has none drawn, and
+            none is written for it here. */}
+        {step.entry === "numeric" && (
+          <p
+            className={cn(
+              "max-w-[360px] text-center text-[13.5px] leading-[1.5] text-pretty text-nevo-near-black/60 sm:text-[15px]",
+              reading && [READING_BODY, READING_INK],
+            )}
+          >
+            Type the number you worked out. You can use a minus sign or a point.
+          </p>
+        )}
       </div>
     </EntryForm>
   );
@@ -1011,7 +1296,15 @@ function ScaffoldCard({
           <NumberLine
             parts={scaffold.parts}
             points={scaffold.points.filter(shown)}
-            partLabels={scaffold.partLabels}
+            // A part's label a `result` still holds back is not drawn (B127).
+            partLabels={scaffold.partLabels.map((label, at) =>
+              names(
+                emphasis.withheld,
+                partKeys(emphasis, scaffold.partLabels, scaffold.partLabelIds, at),
+              )
+                ? ""
+                : label,
+            )}
             emphasis={emphasis}
             reading={reading}
           />
@@ -1105,16 +1398,19 @@ function CellRows({
   emphasis: Emphasis;
   reading: boolean;
 }) {
-  const { kind, parts, rows, quantities, partLabels } = scaffold;
+  const { kind, parts, rows, quantities, partLabels, partLabelIds } = scaffold;
   const bar = kind === "bar";
   const grid = cellsOf(scaffold);
   const oneToABar = bar && quantities.length > 0 && quantities.length === rows;
   const rowLabelled = oneToABar && quantities.some((q) => q.label);
   const several = !oneToABar && quantities.length > 1;
-  const labelOf = (mark: number | null) =>
-    mark == null ? undefined : quantities[mark]?.label;
+  /** What names a mark - see `markKeys`. */
+  const keysOfMark = (mark: number | null) =>
+    mark == null ? [] : markKeys(emphasis, quantities[mark]);
   const hidden = (mark: number | null) =>
-    names(emphasis.withheld, labelOf(mark));
+    names(emphasis.withheld, keysOfMark(mark));
+  const part = (col: number) =>
+    partKeys(emphasis, partLabels, partLabelIds, col);
   const dots = kind === "dots";
   const columns = {
     gridTemplateColumns: bar
@@ -1153,14 +1449,15 @@ function CellRows({
          * row only once the solve is done (`sc-if done`).
          */
         if (own && hidden(row)) return null;
-        const result = names(emphasis.revealed, own?.label);
+        const ownKeys = markKeys(emphasis, own);
+        const result = names(emphasis.revealed, ownKeys);
         /*
          * A RING ON A BAR'S OWN MARK RINGS THE WHOLE BAR. 17a's `mkBar` rings
          * every cell of the bar, filled or not: what the step points at is the
          * bar - its four quarters - not the one quarter it holds. Where one
          * bar carries several marks, a ring stays on its mark's own cells.
          */
-        const wholeBar = names(emphasis.ring, own?.label);
+        const wholeBar = names(emphasis.ring, ownKeys);
         return (
           <div
             key={row}
@@ -1174,7 +1471,7 @@ function CellRows({
               <span
                 className={cn(
                   "min-w-[34px] shrink-0",
-                  labelClass(result || names(emphasis.navy, own?.label)),
+                  labelClass(result || names(emphasis.navy, ownKeys)),
                 )}
               >
                 {own?.label}
@@ -1187,18 +1484,18 @@ function CellRows({
               style={columns}
             >
               {cells.map((mark, col) => {
-                const label = labelOf(mark);
+                const keys = keysOfMark(mark);
                 const filled = mark != null && !hidden(mark);
                 const ring =
                   wholeBar ||
-                  (filled && names(emphasis.ring, label)) ||
-                  names(emphasis.ring, partLabels[col]);
+                  (filled && names(emphasis.ring, keys)) ||
+                  names(emphasis.ring, part(col));
                 const navy =
                   bar &&
                   filled &&
-                  (names(emphasis.navy, label) ||
-                    names(emphasis.revealed, label) ||
-                    names(emphasis.navy, partLabels[col]));
+                  (names(emphasis.navy, keys) ||
+                    names(emphasis.revealed, keys) ||
+                    names(emphasis.navy, part(col)));
                 const fill =
                   mark == null
                     ? ""
@@ -1243,8 +1540,8 @@ function CellRows({
                 className={cn(
                   "text-center",
                   labelClass(
-                    names(emphasis.navy, quantities[mark].label) ||
-                      names(emphasis.revealed, quantities[mark].label),
+                    names(emphasis.navy, keysOfMark(mark)) ||
+                      names(emphasis.revealed, keysOfMark(mark)),
                   ),
                 )}
                 style={{ gridColumn: `${at + 1} / span ${span}` }}
@@ -1257,15 +1554,16 @@ function CellRows({
       )}
       {partLabels.length > 0 && (
         <div className={cn("grid", gap)} style={columns}>
+          {/* A part's label a `result` still holds back is not drawn (B127). */}
           {partLabels.map((label, col) => (
             <span
               key={col}
               className={cn(
                 "text-center",
-                labelClass(names(emphasis.navy, label)),
+                labelClass(names(emphasis.navy, part(col))),
               )}
             >
-              {label}
+              {names(emphasis.withheld, part(col)) ? null : label}
             </span>
           ))}
         </div>
@@ -1405,7 +1703,10 @@ function PlaceValue({
         if (!shape || !shown(place)) return null;
         return (
           <div key={i} className="flex flex-col items-center gap-2.5">
-            <PieceStack shape={shape} ringed={names(emphasis.ring, place.label)}>
+            <PieceStack
+              shape={shape}
+              ringed={names(emphasis.ring, markKeys(emphasis, place))}
+            >
               {Array.from({ length: place.count }).map((_, n) => (
                 <Piece key={n} shape={shape} placed />
               ))}
@@ -1502,7 +1803,7 @@ function NumberLine({
             key={i}
             aria-hidden
             data-bead
-            className={cn(BEAD, names(emphasis.ring, p.label) && RING)}
+            className={cn(BEAD, names(emphasis.ring, markKeys(emphasis, p)) && RING)}
             style={{ left: along(p.count, parts) }}
           />
         ))}
@@ -1698,8 +1999,14 @@ function TrayPiece({
  * reading order as the child taps the one piece the tray offers. "Nothing
  * marks right or wrong while building", and the tray goes once the stored
  * count is placed, as the bar's does.
+ *
+ * `round` is the counters build (B112), D149's dots: "Fill the frame with
+ * counters: tap to drop a dot into the next empty space" - the same rows and
+ * the same reading order, its places dashed circles 8px apart, a 34px dot to
+ * a filled one, and the tray's piece a dot.
  */
 function ArrayBuild({
+  round = false,
   rows,
   parts,
   target,
@@ -1707,6 +2014,7 @@ function ArrayBuild({
   onPlace,
   ringed,
 }: {
+  round?: boolean;
   rows: number;
   parts: number;
   target: number;
@@ -1720,16 +2028,41 @@ function ArrayBuild({
         <span className="font-mono text-[10px] tracking-[0.06em] text-nevo-near-black/50 uppercase">
           The total
         </span>
-        <div aria-hidden className="mt-3 flex flex-col gap-2.5">
+        <div
+          aria-hidden
+          className={cn("mt-3 flex flex-col", round ? "gap-2" : "gap-2.5")}
+        >
           {Array.from({ length: rows }).map((_, row) => (
             <div
               key={row}
               data-build-row
-              className="flex justify-center gap-2.5"
+              className={cn("flex justify-center", round ? "gap-2" : "gap-2.5")}
             >
               {Array.from({ length: parts }).map((_, cell) => {
                 // Reading order: a row fills before the next one starts.
                 const at = row * parts + cell;
+                if (round) {
+                  return (
+                    <span
+                      key={cell}
+                      data-build-dot={at < placed ? "filled" : "empty"}
+                      className={cn(
+                        COUNTER,
+                        at >= placed && DOT_EMPTY,
+                        ringed.has(at) && RING,
+                      )}
+                    >
+                      {at < placed && (
+                        <span
+                          className={cn(
+                            "size-[85%] rounded-full bg-nevo-navy",
+                            ARRAY_INSET,
+                          )}
+                        />
+                      )}
+                    </span>
+                  );
+                }
                 return (
                   <span
                     key={cell}
@@ -1748,7 +2081,7 @@ function ArrayBuild({
       {placed < target && (
         <TapToAdd>
           <TrayPiece
-            shape="size-[34px] rounded-lg"
+            shape={round ? "size-[34px] rounded-full" : "size-[34px] rounded-lg"}
             label="Tap to add"
             onPlace={onPlace}
           />
@@ -1757,6 +2090,10 @@ function ArrayBuild({
     </>
   );
 }
+
+/** D149's round place for a counter, at its 40px where the row has room. */
+const COUNTER =
+  "flex aspect-square min-w-0 flex-[0_1_40px] items-center justify-center rounded-full transition-colors duration-200";
 
 /**
  * A place-value build (D149): each column's places, as many as the
@@ -1842,19 +2179,21 @@ function PlaceValueBuild({
 
 /**
  * A number-line build (D149): "count along the line in steps: tap to add a
- * hop and move the marker on". The marker starts on the line's first
- * position, as a bar fills from its first cell - the wire carries no other
- * start - and moves one position a tap, until the stored count of hops is
- * made. A position the asked step names by its label is ringed.
+ * hop and move the marker on". The marker starts on the scaffold's `start`
+ * (B111) - its first position on a lesson that names none - and moves one
+ * position a tap, until the stored count of hops is made. A position the
+ * asked step names is ringed.
  */
 function LineBuild({
   parts,
+  start,
   target,
   placed,
   onPlace,
   ringed,
 }: {
   parts: number;
+  start: number;
   target: number;
   placed: number;
   onPlace: () => void;
@@ -1883,7 +2222,7 @@ function LineBuild({
             aria-hidden
             data-bead
             className={BEAD}
-            style={{ left: along(placed, parts) }}
+            style={{ left: along(start + placed, parts) }}
           />
         </div>
       </div>

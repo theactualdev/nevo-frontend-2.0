@@ -26,6 +26,7 @@ import {
   type BusyReason,
   type Density,
   type Modality,
+  type ScaffoldLevel,
   type SignalEventType,
 } from "@/lib/constants";
 import { useLesson, useSignals } from "@/hooks";
@@ -1381,24 +1382,36 @@ export function LessonPlayer({
    * neither offered nor used.
    *
    * ON A CALCULATION THE HINT IS THE SOLVER'S, in the step's hint place, and
-   * a solved calculation has no step left to show it beside - so from then it
-   * is not on screen, and neither offered nor used.
+   * only the solver knows when it is drawn: never beside a step's
+   * confirmation, which holds the step's place, nor after the solve. So the
+   * solver reports it as it shows (B131, `offerHint`), and its use as the
+   * child submits a step with it on screen (B130) - not here.
    */
-  const onSolver = modality === MODALITY.INTERACTIVE && isCalculation(segment);
+  const solverShowing = modality === MODALITY.INTERACTIVE && isCalculation(segment);
   const hintOnScreen =
     segmentShowing &&
     hintHere &&
     Boolean(hintText) &&
-    (onSolver ? !solvedCalcs.has(segment.id) : seenHints.has(hintKey));
+    !solverShowing &&
+    seenHints.has(hintKey);
   const offeredHints = useRef<Set<string>>(new Set());
   const usedHints = useRef<Set<string>>(new Set());
+  /** The engine's hint went on screen: once per hint per segment. */
+  const offerHint = useCallback(
+    (segmentId: string, key: string) => {
+      if (offeredHints.current.has(key)) return;
+      offeredHints.current.add(key);
+      trackEvent(SIGNAL_EVENT_TYPES.HINT_OFFERED, { segmentId });
+      // An unrequested hint on screen is an adaptation applied (B42).
+      noteApplied();
+      // A right answer to this segment's check is `after_hint` now (B28).
+      hintedSegments.current.add(segmentId);
+    },
+    [trackEvent, noteApplied],
+  );
   useEffect(() => {
-    if (!hintOnScreen || offeredHints.current.has(hintKey)) return;
-    offeredHints.current.add(hintKey);
-    trackEvent(SIGNAL_EVENT_TYPES.HINT_OFFERED, { segmentId: segment.id });
-    // An unrequested hint on screen is an adaptation applied (B42).
-    noteApplied();
-  }, [hintOnScreen, hintKey, segment.id, trackEvent, noteApplied]);
+    if (hintOnScreen) offerHint(segment.id, hintKey);
+  }, [hintOnScreen, hintKey, segment.id, offerHint]);
 
   /*
    * B74 (8 Oct): A RENDERED SOCRATIC PANEL IS AN ADAPTATION APPLIED, counted
@@ -1453,9 +1466,7 @@ export function LessonPlayer({
   const attentionOn = Boolean(plan?.accommodations?.attention);
   // A hint seen before the check is answered makes a right answer `after_hint`
   // rather than `first_time` (B28) - only the first lengthens the interval.
-  useEffect(() => {
-    if (hintOnScreen) hintedSegments.current.add(segment.id);
-  }, [hintOnScreen, segment.id]);
+  // `offerHint` marks it as the hint is offered; the solver's own, as shown.
 
   // Break OFFERS (B.7): the plan names a break type to OFFER on this segment,
   // or the engine suggests one mid-lesson. One ask on screen at a time - an
@@ -2164,6 +2175,17 @@ export function LessonPlayer({
   const calcShowing =
     modality === MODALITY.INTERACTIVE && isCalculation(segment);
   const calcBlocking = calcShowing && !solvedCalcs.has(segment.id);
+  /*
+   * THE SUPPORT LEVEL, ONE VALUE FOR THE DOTS AND THE SOLVER (B116). The
+   * engine config's starting level is "client-applied ... Support dots only
+   * reflect this state", so the solver draws to exactly what the dots show -
+   * see the indicator below for the order the sources are read in.
+   */
+  const supportLevel =
+    conceptScaffold ??
+    segPlan?.scaffold ??
+    (calcShowing ? plan?.initialScaffold : undefined) ??
+    null;
 
   /*
    * ONLY AN UNSOLVED CALCULATION HOLDS THE FORWARD CHEVRON.
@@ -2576,17 +2598,10 @@ export function LessonPlayer({
             `initialScaffold` is the engine config's "starting level for
             calculation scaffolds", which the client applies - so it shows
             while a calculation is being worked and nothing more specific has
-            been said for the segment, and on no other screen.
+            been said for the segment, and on no other screen. The solver
+            draws to the same level (`supportLevel`).
           */}
-          <ScaffoldIndicator
-            key={`scaf-${segment.id}`}
-            level={
-              conceptScaffold ??
-              segPlan?.scaffold ??
-              (calcShowing ? plan?.initialScaffold : undefined) ??
-              null
-            }
-          />
+          <ScaffoldIndicator key={`scaf-${segment.id}`} level={supportLevel} />
         </div>
         {/* Frame: the density toggle sits alone on its own right-aligned row.
             Absent entirely when the segment has no reshapes to offer, rather
@@ -2806,6 +2821,7 @@ export function LessonPlayer({
               segment={segment}
               modality={modality}
               padDock={padDock}
+              supportLevel={supportLevel}
               onSystemScroll={systemScrolled}
               engineHint={hintHere && hintText ? hintText : undefined}
               onEngineHintClosed={() =>
@@ -2890,6 +2906,29 @@ export function LessonPlayer({
                 });
                 // A right answer to this segment's check is `after_hint` now.
                 hintedSegments.current.add(segment.id);
+              }}
+              onCalcHintShown={(from) => {
+                // B131: as it is drawn. The engine's, once per hint.
+                if (from === "engine") {
+                  offerHint(segment.id, hintKey);
+                  return;
+                }
+                // A strong level's own hint, shown without being asked for.
+                const conceptId = segment.calculation?.conceptId;
+                trackEvent(SIGNAL_EVENT_TYPES.HINT_OFFERED, {
+                  segmentId: segment.id,
+                  ...(conceptId ? { conceptId } : {}),
+                });
+                hintedSegments.current.add(segment.id);
+              }}
+              onCalcHintUsed={(from) => {
+                // B130: the step submitted with it on screen, once a step.
+                const conceptId =
+                  from === "step" ? segment.calculation?.conceptId : undefined;
+                trackEvent(SIGNAL_EVENT_TYPES.HINT_USED, {
+                  segmentId: segment.id,
+                  ...(conceptId ? { conceptId } : {}),
+                });
               }}
             />
           </div>
@@ -3057,6 +3096,7 @@ function SegmentBody({
   segment,
   modality,
   padDock,
+  supportLevel,
   engineHint,
   onEngineHintClosed,
   onSystemScroll,
@@ -3074,12 +3114,16 @@ function SegmentBody({
   onCalcStep,
   onPiecePlaced,
   onCalcHint,
+  onCalcHintShown,
+  onCalcHintUsed,
   onCalcAct,
 }: {
   segment: LessonSegment;
   modality: Modality;
   /** Where the solver docks its number pad - see `CalculationSolver`. */
   padDock: HTMLElement | null;
+  /** The level the support dots show, which the solver draws to (B116). */
+  supportLevel: ScaffoldLevel | null;
   /** The engine's `offer_hint` text, which the solver shows as its own. */
   engineHint?: string;
   onEngineHintClosed: () => void;
@@ -3102,6 +3146,10 @@ function SegmentBody({
   onPiecePlaced: (stepId: string) => void;
   /** The child opened a calculation step's hint themselves. */
   onCalcHint: () => void;
+  /** A hint the child did not ask for came on screen in the solver (B131). */
+  onCalcHintShown: (from: "step" | "engine") => void;
+  /** A step was submitted with that hint on screen (B130). */
+  onCalcHintUsed: (from: "step" | "engine") => void;
   /** The child did something in a calculation step - see `CalculationSolver`. */
   onCalcAct: () => void;
 }) {
@@ -3143,6 +3191,7 @@ function SegmentBody({
         <CalculationSolver
           calculation={segment.calculation}
           padDock={padDock}
+          level={supportLevel}
           engineHint={engineHint}
           onEngineHintClosed={onEngineHintClosed}
           onSystemScroll={onSystemScroll}
@@ -3152,6 +3201,8 @@ function SegmentBody({
           onStepAnswered={onCalcStep}
           onPiecePlaced={onPiecePlaced}
           onHintOpened={onCalcHint}
+          onHintShown={onCalcHintShown}
+          onHintUsed={onCalcHintUsed}
           onAct={onCalcAct}
           // A step's narration is the segment's narration: the same four
           // signals the audio card sends, from the same handlers.

@@ -12,6 +12,7 @@ export type {
   CalcScaffold,
   CalcNarration,
   CalcHighlight,
+  CalcToken,
   ScaffoldQuantity,
   CalculationStep,
   CalculationSegment,

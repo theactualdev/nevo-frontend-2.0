@@ -99,13 +99,21 @@ export function NevoKeyboard({
   placeholder = "Type here",
   uppercase = false,
   className,
+  keys,
 }: (
-  | { layout: Exclude<KeyboardLayout, "calc">; onBackspace: () => void }
+  | {
+      layout: Exclude<KeyboardLayout, "calc">;
+      onBackspace: () => void;
+      keys?: never;
+    }
   /**
    * The calculation pad has no delete key: "Delete sits at the field" (D150),
    * so the host's field deletes, and nothing here can be wired to do it.
+   *
+   * `keys` are the step's own (B108): "the exact non-digit keys the Nevo pad
+   * must add for this step". See `CalcLayout`.
    */
-  | { layout: "calc"; onBackspace?: never }
+  | { layout: "calc"; onBackspace?: never; keys?: readonly string[] }
 ) & {
   /**
    * How the keys sit on the screen.
@@ -179,7 +187,7 @@ export function NevoKeyboard({
         onMouseDown={(e) => e.preventDefault()}
         className={cn("flex flex-col", className)}
       >
-        <CalcLayout onKey={onKey} />
+        <CalcLayout keys={keys} onKey={onKey} />
       </div>
     );
   }
@@ -469,9 +477,57 @@ const CALC_SIGN = cn(
 );
 const CALC_ROW = "flex justify-center gap-2 sm:gap-2.5";
 
-function CalcLayout({ onKey }: { onKey: (c: string) => void }) {
+/** What the pad carries whatever the step: its digits, minus sign and point. */
+const CALC_OWN = new Set([..."0123456789", "-", "−", "."]);
+
+/**
+ * THE PAD, EXTENDED BY THE STEP (design, 9 Oct; B108): "the step says which
+ * characters it needs and the pad carries those". Each key the step names
+ * that the pad does not already carry, in the order named, in the sign keys'
+ * tone, above the digits. No frame draws them yet; this is the least that
+ * keeps them the pad's own keys. Each types exactly the character it shows.
+ *
+ * Where there is room they sit three to a row at the digits' widths. On a
+ * short screen the compact pad packs them as tightly as 44px keys allow
+ * (`--calc-step-cols`), and a pad they make taller goes compact sooner:
+ * `data-step-rows` tells globals.css how many rows they add.
+ */
+const stepKeys = (keys: readonly string[] | undefined) =>
+  (keys ?? []).filter((k) => !CALC_OWN.has(k));
+
+/** The rows the step's keys take where there is room; 3 stands for more. */
+const stepRows = (count: number) => Math.min(3, Math.ceil(count / 3));
+
+const STEP_KEYS =
+  "grid gap-x-[var(--calc-step-gap,8px)] gap-y-[var(--calc-gap,10px)] [grid-template-columns:var(--calc-step-cols,repeat(3,minmax(0,1fr)))] sm:gap-x-[var(--calc-step-gap,10px)] sm:gap-y-[var(--calc-gap,12px)]";
+
+function CalcLayout({
+  keys,
+  onKey,
+}: {
+  keys?: readonly string[];
+  onKey: (c: string) => void;
+}) {
+  const extra = stepKeys(keys);
   return (
-    <div className="nevo-calc-pad mx-auto flex w-full flex-col gap-[var(--calc-gap,10px)] border-t border-nevo-near-black/8 bg-[#e4ddcc] px-2 pt-[var(--calc-pad-t,8px)] pb-[var(--calc-pad-b,14px)] sm:mb-2 sm:max-w-[460px] sm:gap-[var(--calc-gap,12px)] sm:rounded-t-[16px] sm:px-3.5 sm:pt-[var(--calc-pad-t,14px)] sm:pb-[var(--calc-pad-b,20px)] lg:max-w-[420px]">
+    <div
+      data-step-rows={extra.length > 0 ? stepRows(extra.length) : undefined}
+      className="nevo-calc-pad mx-auto flex w-full flex-col gap-[var(--calc-gap,10px)] border-t border-nevo-near-black/8 bg-[#e4ddcc] px-2 pt-[var(--calc-pad-t,8px)] pb-[var(--calc-pad-b,14px)] sm:mb-2 sm:max-w-[460px] sm:gap-[var(--calc-gap,12px)] sm:rounded-t-[16px] sm:px-3.5 sm:pt-[var(--calc-pad-t,14px)] sm:pb-[var(--calc-pad-b,20px)] lg:max-w-[420px]"
+    >
+      {extra.length > 0 && (
+        <div data-step-keys className={STEP_KEYS}>
+          {extra.map((k) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => onKey(k)}
+              className={CALC_SIGN}
+            >
+              {k}
+            </button>
+          ))}
+        </div>
+      )}
       {CALC_ROWS.map((row) => (
         <div key={row[0]} className={CALC_ROW}>
           {row.map((d) => (

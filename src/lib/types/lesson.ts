@@ -177,6 +177,10 @@ export type CalculationVariant = "co_construction" | (string & {});
 export interface ScaffoldQuantity {
   count: number;
   label?: string;
+  /** The mark's id (`markIds[i]`, B109), for a highlight to name it by. */
+  id?: string;
+  /** Its label's id (`labelIds[i]`): naming the label names the mark. */
+  labelId?: string;
 }
 
 /**
@@ -198,6 +202,7 @@ export interface ScaffoldQuantity {
  *
  * `partLabels` name the parts of a scaffold with no marks: "label[i] belongs
  * to mark[i] when marks are present, otherwise to scaffold part i".
+ * `partLabelIds[i]` is that label's id (B109), where the payload gives ids.
  */
 export type CalcScaffold =
   | {
@@ -206,6 +211,7 @@ export type CalcScaffold =
       rows: number;
       quantities: ScaffoldQuantity[];
       partLabels: string[];
+      partLabelIds?: string[];
     }
   | {
       kind: "array";
@@ -213,6 +219,7 @@ export type CalcScaffold =
       rows: number;
       quantities: ScaffoldQuantity[];
       partLabels: string[];
+      partLabelIds?: string[];
     }
   | {
       kind: "dots";
@@ -220,6 +227,7 @@ export type CalcScaffold =
       rows: number;
       quantities: ScaffoldQuantity[];
       partLabels: string[];
+      partLabelIds?: string[];
     }
   | { kind: "place_value"; places: ScaffoldQuantity[] }
   | {
@@ -227,6 +235,7 @@ export type CalcScaffold =
       parts: number;
       points: ScaffoldQuantity[];
       partLabels: string[];
+      partLabelIds?: string[];
     };
 
 /** Narration for one step: the clip, and how to re-issue its link. */
@@ -246,16 +255,34 @@ export interface CalcHighlight {
   role: "active" | "source" | "result";
 }
 
+/**
+ * One token of a step's equation line (B109): its id, for a highlight to
+ * name, and its text. `hidden` is a token kept back until the step is
+ * accepted - flagged `hiddenUntilAccepted`, or the step's `resultTargetId`
+ * (B127).
+ */
+export interface CalcToken {
+  id: string;
+  text: string;
+  hidden: boolean;
+}
+
 interface CalcStepBase {
   /** The wire's `stepId` - what `calculation_step_response` names. */
   stepId: string;
   prompt: string;
   /** Empty where the step has none, and then no hint is offered. */
   hint: string;
-  /** The solution as it stands while this step is asked. May be empty. */
+  /** The equation once this step is accepted (B110). May be empty. */
   assembles: string;
-  /** How the equation reads once this step is done. May be empty. */
+  /** Read only where `assembles` is empty (older lessons). May be empty. */
   equationState: string;
+  /**
+   * The step's equation line as tokens (B109): drawn while the step is
+   * asked, its hidden tokens kept back, and whole once it is accepted.
+   * Absent on older lessons, which draw the flat string.
+   */
+  tokens?: CalcToken[];
   /** What this step's answer does to the drawing. Empty means nothing. */
   highlights: CalcHighlight[];
   narration?: CalcNarration;
@@ -277,13 +304,17 @@ export interface CalcChoiceStep extends CalcStepBase {
 }
 
 /**
- * A step the child types into. `entry` is the wire's `expectedInput` read for
- * the keyboard it needs: an expression ("3x - 4") takes letters and an
- * operator; a number takes digits, a minus sign and a decimal point.
+ * A step the child types into. `entry` is the wire's `expectedInput`: a
+ * number or an expression ("3x - 4"). `keys` is the step's
+ * `requiredCharacters` (B108), the keys the Nevo pad adds to its digits,
+ * minus sign and point - empty for the standard pad. Absent on a lesson
+ * stored before the field, where an expression has nothing saying what it
+ * needs (see `NumberEntry`).
  */
 export interface CalcNumberStep extends CalcStepBase {
   input: "number";
   entry: "numeric" | "text";
+  keys?: string[];
   accepted: string[];
   /** "naira", "years", "%" - shown beside the field where the wire gives one. */
   unit?: string;
@@ -317,16 +348,43 @@ export interface CalculationSegment {
   scaffold?: CalcScaffold;
   /**
    * What a `tap` step builds on: 17b's fraction bar, one row of `parts`;
-   * D149's array, `rows` rows of `parts` square places; D149's number
-   * line, `parts` positions to hop along; or D149's place value, its
-   * columns and their piece counts taken from the scaffold.
+   * D149's array, `rows` rows of `parts` square places; D149's counters,
+   * the same rows of round places; D149's number line, `parts` positions
+   * to hop along from `start`; or D149's place value, its columns and their
+   * piece counts taken from the scaffold.
    * `pieceLabels[i]` names piece i, for a highlight to find; none is drawn.
+   * `pieceIds[i]` is its id (B109), where the payload gives ids.
    */
   manipulative?:
-    | { kind: "fraction_bar"; parts: number; pieceLabels: string[] }
-    | { kind: "array"; parts: number; rows: number; pieceLabels: string[] }
-    | { kind: "number_line"; parts: number; pieceLabels: string[] }
+    | {
+        kind: "fraction_bar";
+        parts: number;
+        pieceLabels: string[];
+        pieceIds?: string[];
+      }
+    | {
+        kind: "array" | "counters";
+        parts: number;
+        rows: number;
+        pieceLabels: string[];
+        pieceIds?: string[];
+      }
+    | {
+        kind: "number_line";
+        parts: number;
+        /** The position the marker starts on (B111). */
+        start: number;
+        pieceLabels: string[];
+        pieceIds?: string[];
+      }
     | { kind: "place_value"; columns: ScaffoldQuantity[] };
+  /**
+   * HIGHLIGHTS NAME IDS (B109). Set where the calculation carries any - its
+   * equation tokens, its marks', labels' or pieces' ids - and then a target
+   * is matched to an id and nothing else. Absent on a lesson stored before
+   * the ids, whose targets are matched to the words on screen instead.
+   */
+  byId?: true;
   steps: CalculationStep[];
   /** Shown once the solution has assembled. Empty means nothing is said. */
   completion: string;

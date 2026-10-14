@@ -298,6 +298,70 @@ describe("a calculation from the payload", () => {
 
     expect(calc?.steps.map((s) => s.highlights)).toEqual([[], []]);
   });
+
+  it("carries a step's equation tokens, its result kept back as the payload says (B109, B127)", () => {
+    const calc = calcOf(
+      algebra({
+        steps: [
+          step({
+            resultTargetId: "t-left",
+            equationTokens: [
+              { id: "t-left", text: "3x - 4" },
+              { id: "t-eq", text: " = " },
+              { id: "t-right", text: "11", hiddenUntilAccepted: true },
+            ],
+          }),
+        ],
+      }),
+    );
+
+    expect(calc?.steps[0].tokens).toEqual([
+      // Hidden because it is the step's result, flagged or not.
+      { id: "t-left", text: "3x - 4", hidden: true },
+      { id: "t-eq", text: "=", hidden: false },
+      { id: "t-right", text: "11", hidden: true },
+    ]);
+    expect(calc?.byId).toBe(true);
+  });
+
+  it("draws the flat string where a step's tokens cannot all be named", () => {
+    const calc = calcOf(
+      algebra({
+        steps: [
+          step({ equationTokens: [{ id: "a", text: "3x" }, { id: " ", text: "=" }] }),
+          step({ stepId: "st-2", equationTokens: [] }),
+        ],
+      }),
+    );
+
+    expect(calc?.steps.map((s) => s.tokens)).toEqual([undefined, undefined]);
+  });
+
+  it("matches by words only on a lesson written before ids (B109)", () => {
+    // Nothing in the fixture carries an id: the fallback is the old lesson's.
+    expect(calcOf(algebra())).not.toHaveProperty("byId");
+    expect(calcOf(algebra({ steps: [step({ resultTargetId: "r1" })] }))?.byId).toBe(
+      true,
+    );
+    expect(
+      calcOf(
+        algebra({ scaffold: { kind: "bar", parts: 4, marks: [1], markIds: ["m1"] } }),
+      )?.byId,
+    ).toBe(true);
+  });
+
+  it("gives a typed step the pad keys it names, once each (B108)", () => {
+    const keysOf = (requiredCharacters: unknown) => {
+      const s = calcOf(algebra({ steps: [step({ requiredCharacters })] }))?.steps[0];
+      return s?.input === "number" ? s.keys : "not a number step";
+    };
+
+    expect(keysOf(["x", " + ", "x", ""])).toEqual(["x", "+"]);
+    // Empty is the standard pad, and is said.
+    expect(keysOf([])).toEqual([]);
+    // A lesson stored before the field says nothing either way.
+    expect(keysOf(undefined)).toBeUndefined();
+  });
 });
 
 describe("a calculation this app cannot honestly draw or mark", () => {
@@ -471,10 +535,80 @@ describe("a tap step and what it builds on", () => {
     expect(line(4)?.manipulative).toEqual({
       kind: "number_line",
       parts: 5,
+      // No number-line scaffold says otherwise: its first position (B111).
+      start: 0,
       pieceLabels: ["a"],
     });
     // Five positions have room for four hops.
     expect(line(5)).toBeUndefined();
+  });
+
+  it("starts a number-line build at its scaffold's start (B111)", () => {
+    const from = (start: unknown, tapCount = 2) =>
+      calcOf(
+        quarters({
+          scaffold: { kind: "number_line", parts: 6, start },
+          manipulative: { kind: "number_line", parts: 6 },
+          steps: [step({ input: "tap", tapCount })],
+        }),
+      );
+
+    expect(from(2)?.manipulative).toMatchObject({ kind: "number_line", start: 2 });
+    expect(from("3")?.manipulative).toMatchObject({ start: 3 });
+    // "Older payloads default to 0."
+    expect(from(null)?.manipulative).toMatchObject({ start: 0 });
+    expect(from(undefined)?.manipulative).toMatchObject({ start: 0 });
+    // From 2 on a line of six positions there is room for three hops.
+    expect(from(2, 3)?.steps[0]).toMatchObject({ target: 3 });
+    expect(from(2, 4)).toBeUndefined();
+    // A start that names no position, or leaves no hop, is not moved.
+    for (const start of [2.5, -1, "two", true, 5, 9]) {
+      expect(from(start), String(start)).toBeUndefined();
+    }
+  });
+
+  it("builds counters into D149's dots: rows of parts round places (B112)", () => {
+    const counters = (tapCount: number) =>
+      calcOf(
+        quarters({
+          manipulative: { kind: "counters", parts: 5, rows: 2, labels: [] },
+          steps: [step({ input: "tap", tapCount })],
+        }),
+      );
+
+    expect(counters(6)?.manipulative).toEqual({
+      kind: "counters",
+      parts: 5,
+      rows: 2,
+      pieceLabels: [],
+    });
+    expect(counters(10)?.steps[0]).toMatchObject({ input: "tap", target: 10 });
+    expect(counters(11)).toBeUndefined();
+  });
+
+  it("reads the scaffold's bar and dots as the builds they name (B112)", () => {
+    const kindOf = (manipulative: unknown) =>
+      calcOf(
+        quarters({ manipulative, steps: [step({ input: "tap", tapCount: 2 })] }),
+      )?.manipulative?.kind;
+
+    expect(kindOf({ kind: "bar", parts: 4 })).toBe("fraction_bar");
+    expect(kindOf({ kind: "dots", parts: 5, rows: 2 })).toBe("counters");
+  });
+
+  it("pairs a build's piece ids with its pieces, or reads none (B109)", () => {
+    const ids = (pieceIds: string[]) =>
+      calcOf(
+        quarters({
+          manipulative: { kind: "fraction_bar", parts: 4, pieceIds },
+        }),
+      )?.manipulative;
+
+    expect(ids(["p1", "p2", "p3", "p4"])).toMatchObject({
+      pieceIds: ["p1", "p2", "p3", "p4"],
+    });
+    // Three ids for four pieces: which piece each names is not said.
+    expect(ids(["p1", "p2", "p3"])).not.toHaveProperty("pieceIds");
   });
 
   it("builds place value into the place-value scaffold's columns, and nowhere else", () => {
@@ -506,10 +640,9 @@ describe("a tap step and what it builds on", () => {
     expect(placeValue({ kind: "place_value", parts: 1, marks: [0, 0, 0] })).toBeUndefined();
   });
 
-  it("builds no kind the wire names without a frame", () => {
-    // D149 says `counters` arrives as dots, which `Manipulative` cannot name.
+  it("builds no kind outside the wire's five", () => {
     expect(
-      calcOf(quarters({ manipulative: { kind: "counters", parts: 4, rows: 1 } })),
+      calcOf(quarters({ manipulative: { kind: "pie", parts: 4, rows: 1 } })),
     ).toBeUndefined();
   });
 
@@ -602,6 +735,33 @@ describe("the scaffold drawing", () => {
       expect(calc?.scaffold, kind).toBeUndefined();
       expect(calc?.steps.length, kind).toBeGreaterThan(0);
     }
+  });
+
+  it("names each mark and label by its id where the payload gives them (B109)", () => {
+    expect(
+      drawn({
+        kind: "bar",
+        parts: 4,
+        rows: 2,
+        marks: [1, 2],
+        labels: ["1/4"],
+        markIds: ["m1", "m2"],
+        labelIds: ["l1"],
+      }),
+    ).toMatchObject({
+      quantities: [
+        { count: 1, label: "1/4", id: "m1", labelId: "l1" },
+        { count: 2, id: "m2" },
+      ],
+    });
+    // Labels with no marks are a part's, and so are their ids.
+    expect(
+      drawn({ kind: "number_line", parts: 3, labels: ["0", "", "2"], labelIds: ["a", "b", "c"] }),
+    ).toMatchObject({ partLabels: ["0", "", "2"], partLabelIds: ["a", "b", "c"] });
+    // Ids that do not pair one to one name nothing.
+    const unpaired = drawn({ kind: "bar", parts: 4, rows: 2, marks: [1, 2], markIds: ["m1"] });
+    expect(unpaired).toMatchObject({ quantities: [{ count: 1 }, { count: 2 }] });
+    expect(JSON.stringify(unpaired)).not.toContain("m1");
   });
 
   it("draws nothing when the payload carries no scaffold", () => {

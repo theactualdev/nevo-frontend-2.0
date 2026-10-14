@@ -66,7 +66,10 @@ const step = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-const variant = (steps: ReturnType<typeof step>[]) =>
+const variant = (
+  steps: ReturnType<typeof step>[],
+  over: Record<string, unknown> = {},
+) =>
   ({
     type: "co_construction",
     conceptId: "c-1",
@@ -77,9 +80,13 @@ const variant = (steps: ReturnType<typeof step>[]) =>
     manipulative: { kind: "fraction_bar", parts: 4, rows: 1, labels: [] },
     steps,
     completionStatement: "",
+    ...over,
   }) as unknown as CalculationVariant;
 
-const lessonWith = (steps: ReturnType<typeof step>[]): Lesson =>
+const lessonWith = (
+  steps: ReturnType<typeof step>[],
+  over: Record<string, unknown> = {},
+): Lesson =>
   ({
     id: "l-1",
     title: "Fractions",
@@ -89,7 +96,7 @@ const lessonWith = (steps: ReturnType<typeof step>[]): Lesson =>
         modalities: ["text", "interactive"],
         text: { heading: "Adding", body: { default: "Add them." } },
         calculationVariant: "co_construction",
-        calculation: calculationFromVariant(variant(steps)),
+        calculation: calculationFromVariant(variant(steps, over)),
       },
       {
         id: "after",
@@ -389,6 +396,106 @@ describe("a calculation's signals", () => {
     tap("Close hint");
     expect(screen.queryByText(HINT)).toBeNull();
     expect(screen.getByRole("button", { name: "Need a hint?" })).toBeInTheDocument();
+  });
+
+  const TWO_STEPS = () => [
+    step({ confirmationText: "Both are quarters." }),
+    step({
+      stepId: "s2",
+      prompt: "What do we add?",
+      options: [
+        { value: "tops", label: "The numerators" },
+        { value: "bottoms", label: "The denominators" },
+      ],
+      answer: "tops",
+    }),
+  ];
+  const ENGINE_HINT = "Look at the number under each line.";
+
+  it("sends hint_offered as the engine's hint shows, not while a confirmation holds its place (B131)", () => {
+    const lesson = lessonWith(TWO_STEPS());
+    const { rerender } = render(<LessonPlayer lesson={lesson} plan={PLAN} />);
+    tap("4 and 4");
+    tap("Check my answer");
+
+    // The engine's answer arrives beside step 1's confirmation.
+    rerender(
+      <LessonPlayer
+        lesson={lesson}
+        plan={{ ...PLAN, adjustment: ADJUSTMENT_ACTIONS.OFFER_HINT, hint: ENGINE_HINT }}
+      />,
+    );
+    expect(screen.queryByText(ENGINE_HINT)).toBeNull();
+    expect(sent("hint_offered")).toEqual([]);
+
+    tap("Next step");
+    expect(screen.getByText(ENGINE_HINT)).toBeInTheDocument();
+    expect(sent("hint_offered")).toEqual([{ segmentId: "calc-1" }]);
+  });
+
+  it("sends hint_used as a step is submitted with the engine's hint on screen, once a step (B130)", () => {
+    render(
+      <LessonPlayer
+        lesson={lessonWith(TWO_STEPS().map((s) => ({ ...s, confirmationText: "" })))}
+        plan={{ ...PLAN, adjustment: ADJUSTMENT_ACTIONS.OFFER_HINT, hint: ENGINE_HINT }}
+      />,
+    );
+
+    tap("1 and 2");
+    tap("Check my answer");
+    // No move to another screen needed.
+    expect(sent("hint_used")).toEqual([{ segmentId: "calc-1" }]);
+    tap("4 and 4");
+    tap("Check my answer");
+    expect(sent("hint_used")).toHaveLength(1);
+
+    tap("The numerators");
+    tap("Check my answer");
+    expect(sent("hint_used")).toHaveLength(2);
+    // Offered once: the same hint, on screen throughout.
+    expect(sent("hint_offered")).toEqual([{ segmentId: "calc-1" }]);
+  });
+
+  it("draws the solver to the level the support dots show (B116)", () => {
+    const BARS = { scaffold: { kind: "bar", parts: 4, rows: 2, marks: [1, 2] } };
+    const dots = () =>
+      document.querySelectorAll("[data-scaffold-indicator] .bg-nevo-navy").length;
+
+    render(
+      <LessonPlayer
+        lesson={lessonWith([step()], BARS)}
+        plan={{ ...PLAN, initialScaffold: "light" }}
+      />,
+    );
+    expect(dots()).toBe(2);
+    expect(screen.queryByText("Picture it")).toBeNull();
+    cleanup();
+
+    render(
+      <LessonPlayer
+        lesson={lessonWith([step()], BARS)}
+        plan={{ ...PLAN, initialScaffold: "moderate" }}
+      />,
+    );
+    expect(dots()).toBe(3);
+    expect(screen.getByText("Picture it")).toBeInTheDocument();
+  });
+
+  it("offers a strong level's hint as it shows, and counts it used on submit (B116, B130)", () => {
+    render(
+      <LessonPlayer
+        lesson={lessonWith([step()])}
+        plan={{ ...PLAN, initialScaffold: "full" }}
+      />,
+    );
+
+    expect(screen.getByText("Look at the bottom number of each fraction.")).toBeInTheDocument();
+    expect(sent("hint_offered")).toEqual([{ segmentId: "calc-1", conceptId: "c-1" }]);
+    expect(sent("hint_used")).toEqual([]);
+
+    tap("4 and 4");
+    tap("Check my answer");
+    expect(sent("hint_used")).toEqual([{ segmentId: "calc-1", conceptId: "c-1" }]);
   });
 
   it("holds the forward chevron until the solution has assembled", () => {
