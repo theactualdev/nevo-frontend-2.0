@@ -727,12 +727,20 @@ function supportAt(level: ScaffoldLevel | null): {
 /**
  * The equation line on screen, and the string that keys its reveal.
  *
- * A STEP WITH TOKENS DRAWS ITS OWN LINE (B109): while it is asked, with the
- * tokens it keeps back drawn as the place its answer goes; once accepted,
- * whole - "once accepted, render assembles", the same line with nothing held
- * back. A step with none - a lesson stored before them - draws the flat
- * string, as it did (`equationAt`). Once every step is done it is
- * `fullEquation` where there is one.
+ * A STEP WHOSE TOKENS CARRY ITS LINE DRAWS IT FROM THEM (B109): while it is
+ * asked, with the tokens it keeps back drawn as the place its answer goes;
+ * once accepted, whole - "once accepted, render assembles", the same line
+ * with nothing held back. Any other step draws the flat string, as it did
+ * before tokens (`equationAt`). Once every step is done it is `fullEquation`
+ * where there is one.
+ *
+ * TOKENS THAT ARE ONLY THE STEP'S OWN ANSWER CARRY NO LINE. Backend sends
+ * every step exactly one token: its answer, hidden until accepted. Drawn as
+ * the line, that put a lone "?" where the problem's notation was for the
+ * whole step, and then the bare answer where its `assembles` should be. So
+ * tokens draw the line only where at least one of them is shown while the
+ * step is asked; the answer stays back either way (B127), since the flat
+ * line before acceptance is the problem or an earlier step's `assembles`.
  */
 function lineAt(
   calculation: CalculationSegment,
@@ -746,7 +754,7 @@ function lineAt(
   }
   const accepted = phase !== "ask";
   const tokens = steps[index]?.tokens;
-  if (tokens) {
+  if (tokens?.some((t) => !t.hidden)) {
     const key = tokens
       .map((t) => (!accepted && t.hidden ? `[${t.id}]` : t.text))
       .join(" ");
