@@ -86,7 +86,7 @@ export function VariantReviewRoute({
     return (
       <div className="mx-auto w-full max-w-[1040px] px-[38px] py-[34px] xl:px-[52px] xl:py-11">
         <div className="mx-auto flex max-w-[680px] flex-col gap-4 xl:max-w-[820px]">
-          <div className="h-8 w-[62%] animate-pulse rounded-[8px] bg-nevo-cream-elevated" />
+          <div className="h-8 w-[62%] animate-pulse rounded-[10px] bg-nevo-cream-elevated" />
           <div className="h-[220px] animate-pulse rounded-[12px] bg-nevo-cream-elevated" />
         </div>
       </div>

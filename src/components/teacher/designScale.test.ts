@@ -37,6 +37,21 @@ describe("the teacher console's design scale", () => {
     expect(offenders.map((p) => relative(root, p))).toEqual([]);
   });
 
+  /*
+   * Design's 13 Oct note: "small radii snap to 10". The frames drew 6 to 9px
+   * corners on checkboxes, number badges and loading bars, between the scale's
+   * steps; they take the button and input step, 10. A 3px sparkline bar is a
+   * mark, not a corner, so it is left alone. `rounded-sm` and `rounded-md` are
+   * 6px and 8px off the shared 10px token, so they count too.
+   */
+  it("uses no corner between 4px and 9px", () => {
+    const offenders = files(root).filter((p) =>
+      /\brounded(-[tblrse]{1,2})?-(sm|md|\[[4-9](\.5)?px\])/.test(readFileSync(p, "utf8")),
+    );
+
+    expect(offenders.map((p) => relative(root, p))).toEqual([]);
+  });
+
   it("renders no em dash", () => {
     const offenders = files(root).filter((p) =>
       /—|&mdash;|\u2014/.test(code(readFileSync(p, "utf8"))),

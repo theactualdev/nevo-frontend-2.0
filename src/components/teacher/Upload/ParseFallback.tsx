@@ -200,7 +200,7 @@ export function ParseFallback({
                     key={s.n}
                     className="flex items-center gap-2.5 rounded-[12px] bg-nevo-cream/55 px-3 py-[9px]"
                   >
-                    <span className="flex size-[22px] shrink-0 items-center justify-center rounded-[6px] bg-nevo-navy/10 text-[11px] font-semibold text-nevo-navy">
+                    <span className="flex size-[22px] shrink-0 items-center justify-center rounded-[10px] bg-nevo-navy/10 text-[11px] font-semibold text-nevo-navy">
                       {s.n}
                     </span>
                     <span className="min-w-0 flex-1 text-[13px] text-nevo-near-black">

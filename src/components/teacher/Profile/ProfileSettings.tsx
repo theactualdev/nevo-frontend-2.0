@@ -185,7 +185,7 @@ export function ProfileSettings() {
               <span
                 aria-busy="true"
                 aria-label="Loading your details"
-                className="block h-5 w-[180px] animate-pulse rounded-[6px] bg-nevo-near-black/9"
+                className="block h-5 w-[180px] animate-pulse rounded-[10px] bg-nevo-near-black/9"
               />
             ) : signedIn && identityStatus === "failed" ? (
               <span className="block text-[15px] leading-[1.5] text-nevo-near-black/68">

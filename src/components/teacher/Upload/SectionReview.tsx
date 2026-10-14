@@ -67,7 +67,7 @@ const inputBase =
 function SegRow({ s }: { s: Segment }) {
   return (
     <>
-      <span className="flex size-6 shrink-0 items-center justify-center rounded-[7px] bg-nevo-navy/10 text-xs font-semibold text-nevo-navy">
+      <span className="flex size-6 shrink-0 items-center justify-center rounded-[10px] bg-nevo-navy/10 text-xs font-semibold text-nevo-navy">
         {s.id}
       </span>
       <span className="min-w-0 flex-1 text-sm text-nevo-near-black">
