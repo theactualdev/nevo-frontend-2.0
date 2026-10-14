@@ -10,64 +10,27 @@ import {
 import { useLiveQuery } from "./useLiveQuery";
 
 /**
- * C16a's class pulse and Home's activity list.
+ * Home's activity list, and each class's headcount from the same read.
  *
- * BANDING IS OURS. The endpoint returns `engagement`, `comprehension` and
- * `focus` as numbers; C16a's tiles must read as words. The thresholds below
- * are a frontend decision - the API states no bands and the frame names no
- * cutoffs - so they are in one place, documented, and flagged to design
- * rather than scattered through the component.
+ * THE CLASS PULSE IS NOT READ. The endpoint returns `engagement`,
+ * `comprehension` and `focus` as bare numbers, and C16a's tiles must say
+ * something a teacher can act on. Turning the numbers into words meant cutoffs
+ * of our own: first "Strong / Steady / Building" (out, design 10 Sep), then
+ * "Above 75%", "50 to 75%" and "Below 50%" (accepted for launch, design
+ * 17 Sep). Lydia ruled on 13 Oct that both are out: no invented band, no
+ * computed share, and nothing replaces them until backend sends its own
+ * words. "If backend sends nothing usable, the group shows nothing rather than
+ * a placeholder." So the three numbers are not read at all, and Home draws no
+ * pulse. Asked of backend: the engine's own words for each group.
  *
- * A metric of `null` is "not enough yet to say", which is different from a
- * low score and must never read as one.
+ * `studentCount` still is: it is a count, not a judgement, and My Classes
+ * shows it.
  */
-
-/**
- * The pulse bands, HIGH TO LOW.
- *
- * These used to read "Strong", "Steady" and "Building" - words this frontend
- * invented and then showed to a teacher as a judgement about their class.
- * Design ruled on 10 Sep that we must not do that: the cutoffs are ours, they
- * have never been ratified, and dressing an unratified threshold in a word like
- * "Strong" states an opinion as a fact.
- *
- * So the label is DERIVED FROM THE CUTOFF rather than written beside it. That
- * is deliberate and it is the point of the change: a hand-written label can
- * drift from the number it describes, and the first version of this change did
- * exactly that - design's wording said "50 to 75%" while the code's middle
- * cutoff was 0.45, so a class at 47% would have been labelled "50 to 75%". A
- * label generated from `min` cannot say something the threshold does not.
- *
- * THE CUTOFFS THEMSELVES ARE STILL PROVISIONAL. Design is defining them from
- * the engine spec. When those land, change the numbers here and the labels
- * follow on their own.
- */
-const BANDS: { min: number }[] = [{ min: 0.75 }, { min: 0.5 }, { min: 0 }];
-
-/** "Above 75%", "50 to 75%", "Below 50%" - read straight off the thresholds. */
-function bandLabel(index: number): string {
-  const pct = (v: number) => `${Math.round(v * 100)}%`;
-  const min = BANDS[index].min;
-  const above = BANDS[index - 1];
-  if (!above) return `Above ${pct(min)}`;
-  if (min === 0) return `Below ${pct(above.min)}`;
-  // "50 to 75%", not "50% to 75%" - design's wording, one sign at the end.
-  return `${Math.round(min * 100)} to ${pct(above.min)}`;
-}
-
-export interface PulseTile {
-  head: string;
-  /** Null when the metric is - the tile says so rather than scoring it. */
-  value: string | null;
-}
 
 export interface ClassPulse {
   classId: string;
   className: string;
   studentCount: number;
-  tiles: PulseTile[];
-  /** No metric has enough behind it yet. */
-  quiet: boolean;
 }
 
 export interface HomeActivity {
@@ -88,10 +51,10 @@ export interface HomeActivity {
   totalCount: number | null;
 }
 
-/** Exported for tests only - the band boundaries are the thing worth pinning. */
-export const __bandForTest = (v: number | null) => band(v);
+/** Exported for its test: it is what keeps the engine's numbers off screen. */
+export const __toPulseForTest = (row: ClassPulseRow) => toPulse(row);
 /**
- * Exported for its test, like `band` above.
+ * Exported for its test.
  *
  * The mapper is where `completedCount` and `totalCount` were being dropped -
  * they were absent from `ActivityRow`, so the poll discarded them before any
@@ -103,25 +66,11 @@ export const __bandForTest = (v: number | null) => band(v);
 export const __toActivityForTest = (row: Parameters<typeof toActivity>[0]) =>
   toActivity(row);
 
-function band(v: number | null): string | null {
-  if (v === null || Number.isNaN(v)) return null;
-  const clamped = Math.max(0, Math.min(1, v));
-  const i = BANDS.findIndex((b) => clamped >= b.min);
-  return bandLabel(i === -1 ? BANDS.length - 1 : i);
-}
-
 function toPulse(row: ClassPulseRow): ClassPulse {
-  const tiles = [
-    { head: "Engagement", value: band(row.engagement) },
-    { head: "Comprehension", value: band(row.comprehension) },
-    { head: "Focus", value: band(row.focus) },
-  ];
   return {
     classId: row.classId,
     className: row.className,
     studentCount: row.studentCount,
-    tiles,
-    quiet: tiles.every((t) => t.value === null),
   };
 }
 

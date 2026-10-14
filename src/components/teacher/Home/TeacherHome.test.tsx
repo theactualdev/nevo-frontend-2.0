@@ -66,10 +66,10 @@ describe("a signed-in teacher whose reads succeeded", () => {
    *
    * The first draft of this test passed `pulse: []` and `flags: []`, so the
    * page rendered nothing that a stray mark could attach to - and a deliberate
-   * mutation that wrapped the LIVE pulse in a SampleRegion passed clean. The
-   * test could not fail in the direction that matters, which is the same
-   * vacuity defect this whole file exists to fix. A teacher's real pulse and a
-   * real flag are on screen below, so a mark on either is caught.
+   * mutation that wrapped the then-live pulse in a SampleRegion passed clean.
+   * The test could not fail in the direction that matters, which is the same
+   * vacuity defect this whole file exists to fix. A teacher's real activity and
+   * a real flag are on screen below, so a mark on either is caught.
    */
   beforeEach(() => {
     useTeacherFlags.mockReturnValue({
@@ -88,23 +88,9 @@ describe("a signed-in teacher whose reads succeeded", () => {
       failed: false,
     });
     useTeacherHome.mockReturnValue({
-      // `useTeacherHome` hands out a SHAPED pulse - tiles already banded into
-      // words - not the raw `ClassPulseRow`. Mocking the wire shape here would
-      // crash on `pulse.tiles.map`, which is its own small lesson: mock what
-      // the hook returns, not what the endpoint sends.
-      pulse: [
-        {
-          classId: "c-1",
-          className: "E2E Probe Class",
-          studentCount: 28,
-          tiles: [
-            { head: "Engagement", value: "Above 75%" },
-            { head: "Comprehension", value: "Below 50%" },
-            { head: "Focus", value: "50 to 75%" },
-          ],
-          quiet: false,
-        },
-      ],
+      // Mock what the hook returns, not what the endpoint sends: the pulse
+      // is the class and its headcount, with the engine's numbers left behind.
+      pulse: [{ classId: "c-1", className: "E2E Probe Class", studentCount: 28 }],
       activity: [
         {
           id: "a-1",
@@ -133,6 +119,18 @@ describe("a signed-in teacher whose reads succeeded", () => {
     expect(getByText("E2E Probe Class")).toBeInTheDocument();
     expect(getByText(/Taking longer on written segments/)).toBeInTheDocument();
   });
+
+  /*
+   * Lydia, 13 Oct: no invented band and no computed share, and a group with
+   * nothing usable shows nothing rather than a placeholder. The read still
+   * arrives, so this pins that none of it is drawn.
+   */
+  it("draws no class pulse, and no band or share for one", () => {
+    const { container, queryByText } = render(<TeacherHome />);
+
+    expect(queryByText(/class learning pulse/i)).not.toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/Above 75%|50 to 75%|Below 50%|Engagement|Comprehension/);
+  });
 });
 
 describe("a signed-in teacher whose reads FAILED", () => {
@@ -156,7 +154,8 @@ describe("a signed-in teacher whose reads FAILED", () => {
     );
 
     expect(marks.length).toBeGreaterThan(0);
-    expect(marks).toContain("teacher:home-pulse");
+    // No pulse, sample or otherwise: there is nothing true to draw yet.
+    expect(marks).not.toContain("teacher:home-pulse");
     expect(marks).toContain("teacher:home-flags");
     expect(marks).toContain("teacher:home-activity");
   });
