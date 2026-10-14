@@ -11,16 +11,12 @@ import type { ChildSubjectProgress, SubjectProgress } from "@/lib/api/parent";
  * the subjects the server sent: all of them not started (B6), none with
  * anything in them (B2, or B7 on a Monday with nothing yet).
  *
+ * THE FOOT LINE AND "SINCE SETUP" ARE BUILT (14 Oct). The server now sends
+ * `masteredSoFar` (its own total, so the card adds nothing up), `lastLessonAt`
+ * and `window.kind`. Each card's foot follows D02a state by state - see
+ * `footLine`. An older answer without them gets no foot, as before.
+ *
  * WHAT IS LEFT OFF, against the frame:
- * - THE FOOT LINE ("5 topics mastered so far, up from 4 last week"). The "5"
- *   is `masteredBeforeWindow` plus the names in `masteredThisWindow` - a sum
- *   the client would be doing, on a figure about a named child. Asked of
- *   backend as a field instead. The names mastered this week are on the card.
- * - "Last lesson Thu 14 Jan" (B2's foot): no field carries a last lesson.
- * - B4's "Since setup". The contract's window is a Monday-to-Sunday week for
- *   `terms_not_set` too, so "since setup" would describe a period the numbers
- *   do not cover. That week renders as a week, with no quiet-week or break
- *   panel - the one claim B4 exists to avoid.
  * - The class in the eyebrow ("· JSS 2A") and the parent's initials: no
  *   parent read carries either.
  * - Pronouns. The frame's copy says "she" and "her"; nothing sends a
@@ -30,6 +26,8 @@ import type { ChildSubjectProgress, SubjectProgress } from "@/lib/api/parent";
 export type WeekKind =
   /** B1, B5, and any week with something in it. */
   | "week"
+  /** B4: the school set no term dates, so the figures run from setup. */
+  | "since_setup"
   /** B2: school was on and nothing has come through. */
   | "quiet"
   /** B3: a break. Never "quiet". */
@@ -48,6 +46,7 @@ export function weekKind(p: ChildSubjectProgress, today: string): WeekKind {
   const subjects = p.subjects;
   if (subjects.length === 0) return "none";
   if (subjects.every((s) => s.state === "not_started")) return "first";
+  if (p.window.kind === "since_setup") return "since_setup";
   if (p.window.state === "in_break") return "break";
   if (subjects.some(hasWork)) return "week";
   if (p.window.inProgress && p.window.startsOn === today) return "monday";
@@ -65,6 +64,8 @@ export function dayLabel(iso: string): string {
 
 /** The card's dated label: "Mon 18 to today", "Today, Mon 25". */
 export function whenLabel(p: ChildSubjectProgress, today: string): string {
+  // D02 B4: no week and no term is claimed for a school without term dates.
+  if (p.window.kind === "since_setup") return "Since setup";
   const { startsOn, endsOn, inProgress } = p.window;
   if (inProgress && startsOn === today) return `Today, ${dayLabel(startsOn)}`;
   if (inProgress) return `${dayLabel(startsOn)} to today`;
@@ -149,6 +150,13 @@ export function weekCopy(
         },
       };
     }
+    case "since_setup":
+      // D02 B4, without the frame's pronoun: none is sent.
+      return {
+        heading: `${child.possessive} subjects`,
+        sub: `What ${child.mid} has covered and mastered since ${schoolName} set up Nevo.`,
+        panel: null,
+      };
     case "none":
       return {
         heading: `${child.possessive} subjects`,
@@ -168,6 +176,44 @@ export interface CardCopy {
   covered: string | null;
   mastered: string | null;
   note: string | null;
+  /** D02a's foot: the running total, or the last lesson. Null for none. */
+  foot: string | null;
+}
+
+/** "Thu 14 Jan", on this device's calendar. */
+export function lessonDay(iso: string): string | null {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+}
+
+/** "5 topics mastered so far", or D02's "No topics mastered yet". */
+function soFar(n: number): string {
+  if (n === 0) return "No topics mastered yet";
+  return `${n} ${n === 1 ? "topic" : "topics"} mastered so far`;
+}
+
+/**
+ * D02a's foot, state by state. A week with work in it: the total, and whether
+ * it moved ("up from 4 last week" / "same as last week" - moved means a topic
+ * was mastered this week, which the card already names). A subject with
+ * nothing this week: when its last lesson was. A break or a Monday: the total
+ * alone. Since setup, or not started: no foot. No total from the server, no
+ * total on the card.
+ */
+export function footLine(s: SubjectProgress, kind: WeekKind): string | null {
+  if (s.state === "not_started" || kind === "since_setup" || kind === "first") return null;
+  const total = typeof s.masteredSoFar === "number" ? s.masteredSoFar : null;
+  if (kind === "break" || kind === "monday") return total === null ? null : soFar(total);
+  if (!hasWork(s)) {
+    const when = s.lastLessonAt ? lessonDay(s.lastLessonAt) : null;
+    return when ? `Last lesson ${when}` : null;
+  }
+  if (total === null) return null;
+  if (total === 0) return soFar(0);
+  return s.masteredThisWindow.length
+    ? `${soFar(total)}, up from ${s.masteredBeforeWindow} last week`
+    : `${soFar(total)}, same as last week`;
 }
 
 /** One subject's card. A line with nothing in it is left out, never blank. */
@@ -181,6 +227,7 @@ export function cardCopy(
     covered: s.covered.length ? s.covered.join(", ") : null,
     mastered: s.masteredThisWindow.length ? s.masteredThisWindow.join(", ") : null,
     note: null,
+    foot: footLine(s, kind),
   };
   if (s.state === "not_started") {
     return {
@@ -199,7 +246,9 @@ export function cardCopy(
         ? "No lessons yet this week"
         : kind === "quiet"
           ? "No lessons this week so far"
-          : "No lessons in this subject this week";
+          : kind === "since_setup"
+            ? "No lessons in this subject since setup"
+            : "No lessons in this subject this week";
   return { ...base, note };
 }
 
