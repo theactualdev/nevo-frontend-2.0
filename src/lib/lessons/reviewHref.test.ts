@@ -55,6 +55,8 @@ describe("readReviewBack", () => {
     ["somewhere else in the student app", "/student/dashboard"],
     ["two segments", "/student/progress/maths/extra"],
     ["a backslash", "/student/progress/maths\\..\\x"],
+    ["an encoded slash", "/student/progress/Science%2F..%2F..%2Fadmin"],
+    ["an encoded backslash", "/student/progress/%5C%5Cexample.com"],
     ["a query", "/student/progress/maths?x=1"],
     ["a script", "javascript:alert(1)"],
     ["a broken escape", "/student/progress/%E0%A4%A"],

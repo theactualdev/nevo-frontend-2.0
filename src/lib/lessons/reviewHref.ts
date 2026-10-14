@@ -34,14 +34,17 @@ export function readReviewBack(
   if (typeof back !== "string" || !back.startsWith(SUBJECT_DETAIL)) return null;
   const segment = back.slice(SUBJECT_DETAIL.length);
   if (!SUBJECT_SEGMENT.test(segment)) return null;
-  // A URL resolves `%2e%2e` as `..`, so the dot segments are refused decoded.
+  // A URL resolves `%2e%2e` as `..`, so the dot segments are refused decoded,
+  // and so is a subject that decodes to a path of its own (`%2F`, `%5C`):
+  // no subject is named with a slash, and the page would show it as one.
   let subject: string;
   try {
     subject = decodeURIComponent(segment);
   } catch {
     return null;
   }
-  return subject === "." || subject === ".." ? null : back;
+  if (subject === "." || subject === "..") return null;
+  return /[/\\]/.test(subject) ? null : back;
 }
 
 /**
