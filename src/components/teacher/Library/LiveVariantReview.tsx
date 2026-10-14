@@ -270,25 +270,57 @@ function VariantBody({
           Nevo has not generated an interactive version of this section.
         </Empty>
       );
+    /*
+     * AN ACTIVITY, NOT A QUESTION (backend bb59b37, 13 Oct). This drew the old
+     * question - `v.options.length` - and the activity has no options, so
+     * opening this tab on any lesson read since then threw and took the
+     * review down with it. It now shows what the activity is: its title, what
+     * is needed, the steps in order and the outcome to look for.
+     *
+     * No frame draws an activity yet, so this is laid out like the other
+     * tabs and nothing more; the two labels are ours, raised with design.
+     * Read defensively: a field the server left out is left out here.
+     */
+    const materials = Array.isArray(v.materials) ? v.materials.filter(Boolean) : [];
+    const steps = Array.isArray(v.steps) ? v.steps.filter((s) => s?.instruction) : [];
     return (
       <div className="flex flex-col gap-2.5">
-        <Para>{v.prompt}</Para>
-        {v.instructions && <Para>{v.instructions}</Para>}
-        {v.options.length > 0 && (
-          <ul className="mt-0.5 flex flex-col gap-1.5">
-            {v.options.map((o, i) => (
+        {v.title && (
+          <p className="text-[14.5px] font-semibold text-nevo-near-black">{v.title}</p>
+        )}
+        {materials.length > 0 && (
+          <div>
+            <p className="text-[12.5px] font-semibold text-nevo-near-black/55">
+              What&rsquo;s needed
+            </p>
+            <ul className="mt-1 flex flex-wrap gap-1.5">
+              {materials.map((m, i) => (
+                <li
+                  key={`${m}-${i}`}
+                  className="rounded-full bg-nevo-cream px-3 py-1 text-[13px] text-nevo-near-black/72"
+                >
+                  {m}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {steps.length > 0 && (
+          <ol className="flex flex-col gap-1.5">
+            {steps.map((s, i) => (
               <li
-                key={`${String(o)}-${i}`}
-                className="rounded-[12px] bg-nevo-cream px-3 py-2 text-[13.5px] leading-[1.5] text-nevo-near-black/72"
+                key={s.id || i}
+                className="flex gap-2.5 rounded-[12px] bg-nevo-cream px-3 py-2 text-[13.5px] leading-[1.5] text-nevo-near-black/72"
               >
-                {String(o)}
+                <span className="shrink-0 font-semibold text-nevo-navy">{i + 1}</span>
+                <span>{s.instruction}</span>
               </li>
             ))}
-          </ul>
+          </ol>
         )}
-        {v.expectedInteraction && (
-          <p className="text-[12.5px] text-nevo-near-black/55">
-            {`Students respond by: ${v.expectedInteraction}.`}
+        {v.outcome && (
+          <p className="text-[12.5px] leading-[1.5] text-nevo-near-black/60">
+            {`By the end: ${v.outcome}`}
           </p>
         )}
       </div>

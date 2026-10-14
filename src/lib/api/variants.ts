@@ -14,10 +14,10 @@ import {
  *
  * Two things here are load-bearing and easy to miss:
  *
- * `interactiveVariant.answerKey` carries the SAME nullable union as a
- * comprehension checkpoint, and the same rule applies - null means unmarkable,
- * never wrong. `markInteractive` below routes through the checkpoint marker so
- * there is one implementation of that judgement, not two that can drift.
+ * `interactiveVariant` is an ACTIVITY since backend bb59b37 (13 Oct), not a
+ * question: a title, what is needed, ordered steps and the outcome to look
+ * for. It has no options and no answer key - comprehension questions live in
+ * `comprehensionCheckpoints`. See `InteractiveVariant`.
  *
  * Audio and visual URLs can EXPIRE. Both carry `urlExpiresInSeconds`, and
  * audio adds `requiresAuthentication`; a private Supabase URL that has aged
@@ -128,14 +128,27 @@ export interface AudioVariant {
   stepId: string | null;
 }
 
+/** One step of an activity, in order. */
+export interface InteractiveActivityStep {
+  id: string;
+  instruction: string;
+}
+
+/**
+ * THE INTERACTIVE FORM IS AN ACTIVITY (backend bb59b37, 13 Oct; the parser
+ * writes it since 0064010, 14 Oct). It used to be a question - prompt,
+ * options, answer key - and the deployed contract no longer has any of that.
+ * Something to DO, with the outcome a child should see at the end. Nothing
+ * here is marked right or wrong.
+ */
 export interface InteractiveVariant {
-  type: string;
-  prompt: string;
-  expectedInteraction: string;
-  options: CheckpointOption[];
-  /** NULL MEANS UNMARKABLE - see `markInteractive`. */
-  answerKey: CheckpointScalar | CheckpointScalar[] | null;
-  instructions: string | null;
+  type: "activity" | (string & {});
+  title: string;
+  /** What is needed. Often empty. */
+  materials: string[];
+  steps: InteractiveActivityStep[];
+  /** What should happen by the end. */
+  outcome: string;
 }
 
 export interface ScaffoldImage {
@@ -393,7 +406,9 @@ export interface SegmentVariants {
  * whatever the interaction was called.
  */
 export function markInteractive(
-  variant: Pick<InteractiveVariant, "answerKey">,
+  // Its own shape: the activity form carries no answer key (13 Oct), so
+  // nothing in the product marks an interactive segment today.
+  variant: { answerKey: CheckpointScalar | CheckpointScalar[] | null },
   response: CheckpointScalar | CheckpointScalar[] | null | undefined,
 ): MarkResult {
   return markCheckpoint(
